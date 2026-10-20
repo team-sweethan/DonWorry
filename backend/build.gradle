@@ -47,6 +47,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.1'   // 모듈 안 계층 규칙 검사
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

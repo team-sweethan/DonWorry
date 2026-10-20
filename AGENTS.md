@@ -24,6 +24,7 @@
 - 다른 모듈은 `api/` 패키지만 쓴다. `entity/` · `repository/` 직접 참조 금지
 - 두 모듈이 서로 호출하면 안 된다 (순환). 역방향 알림은 이벤트로 보낸다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
+- 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
 - 다른 모듈 테이블에 FK를 걸지 않는다 (UUID 칸만)
 - 테이블은 Flyway로만 바꾼다. 이미 main에 들어간 마이그레이션 파일은 고치지 않고 새 번호를 추가한다
 - 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다
@@ -43,7 +44,7 @@
 ## 5. 검사 명령
 
 ```bash
-cd backend   && ./gradlew check                      # 컴파일 + 모듈 경계
+cd backend   && ./gradlew check                      # 컴파일 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
 cd frontend  && npm run lint && npm run format:check && npm run build
 cd ai-server && uv run ruff check . && uv run pytest
 ```
