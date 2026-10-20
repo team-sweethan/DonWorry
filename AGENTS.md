@@ -5,10 +5,24 @@
 ## 1. 정본 위치
 
 - 상태값 · API 명세 · ERD → Notion (`1 상태값` / `2 API 명세서` / `3 ERD`)
+- 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
+- 실제로 돌아가는 검사 규칙 → `build.gradle`, `.oxlintrc.json`, `pyproject.toml`, `.github/workflows/`
 - 담당 · 진행 상황 → GitHub Issue
 
-## 2. 담당
+Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어긋나면 임의로 한쪽을 고치지 말고 영향 범위를 적어 공유한다.
+
+## 2. 결정됨 ≠ 구현됨 ≠ 검증됨
+
+| 상태 | 뜻 |
+| --- | --- |
+| 결정됨 | Notion 또는 ADR에 적힘 |
+| 구현됨 | 해당 파일이 Git에 있음 |
+| 검증됨 | 명령을 돌려 통과한 결과가 있음 |
+
+돌려보지 않은 것을 "완료"라고 쓰지 않는다. 확인 못 한 것은 PR의 "미검증"에 적는다.
+
+## 3. 담당
 
 | 모듈 | 담당 |
 | --- | --- |
@@ -19,7 +33,7 @@
 | `payment` | P5 시은 |
 | `settlement` | P6 민정 |
 
-## 3. Backend 규칙
+## 4. Backend 규칙
 
 - 다른 모듈은 `api/` 패키지만 쓴다. `entity/` · `repository/` 직접 참조 금지
 - 두 모듈이 서로 호출하면 안 된다 (순환). 역방향 알림은 이벤트로 보낸다
@@ -30,18 +44,40 @@
 - 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다
 - 현재는 ERD 확정 전이라 Flyway 꺼짐, `ddl-auto: update` 사용. 확정 후 위 Flyway 규칙 적용
 
-## 4. 작업 순서
+## 5. Frontend 규칙
+
+- HTTP 호출은 `src/api/`에만 둔다. 화면에서 직접 `fetch`하지 않는다
+- `any`를 쓰지 않는다 (oxlint가 막는다)
+- 결제 승인 · FDS 점수 · 권한 판정은 백엔드 몫이다. 화면 가드는 편의일 뿐 인가가 아니다
+- CakeShop 화면은 CakeShop 저장소 소유다. 여기에 만들지 않는다
+
+## 6. AI Server 규칙
+
+- controller → service → agent 역할을 섞지 않는다
+- Agent는 허용 목록에 있는 읽기 전용 Tool만 호출한다. 결제 승인 · 데이터 변경은 하지 않는다
+- 요청 · 응답은 Pydantic 모델로 받고 내보낸다
+- LLM 호출은 `LlmClient` 경계를 지난다. 제공자를 바꿀 때 service를 고치지 않는다
+
+## 7. 작업 순서
 
 브랜치: `feature/*` → `dev` (개발 통합) → `main` (시연·배포 기준)
 
-1. Issue 확인 → `dev`에서 `feature/<이슈번호>-<작업>` 브랜치 생성
-2. 바꾼 영역의 검사 명령 실행
-3. `dev`로 PR — 템플릿의 "미검증" 칸을 비우지 않는다
-4. `dev` → `main` 병합은 시연·마일스톤 때만 (팀 합의)
+1. `git status`, `git log --oneline -5`로 현재 위치 확인
+2. Issue 확인 → `dev`에서 `feature/<이슈번호>-<작업>` 브랜치 생성
+3. 테스트 결과를 볼 때는 어느 커밋에서 나온 결과인지 확인한다. 오래된 결과를 현재 상태로 믿지 않는다
+4. 문서와 코드가 충돌하면 고치기 전에 영향 범위부터 공유한다
+5. 바꾼 영역의 검사 명령 실행
+6. `dev`로 PR — 템플릿의 "미검증" 칸을 비우지 않는다
+7. `dev` → `main` 병합은 시연·마일스톤 때만 (팀 합의)
 
 `main` · `dev`에 직접 push하지 않는다.
 
-## 5. 검사 명령
+## 8. 설계를 바꿀 때
+
+모듈 경계 · 의존 방향 · 저장 방식 · 외부 계약 · 기술 선택을 바꾸면 [`docs/decisions/`](docs/decisions/)에 ADR을 남긴다.
+버린 대안과 이유를 반드시 적고, 영향 범위(API · DB · 화면 · 테스트)를 같은 PR에서 함께 고친다.
+
+## 9. 검사 명령
 
 ```bash
 cd backend   && ./gradlew check                      # 컴파일 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
@@ -49,7 +85,11 @@ cd frontend  && npm run lint && npm run format:check && npm run build
 cd ai-server && uv run ruff check . && uv run pytest
 ```
 
-## 6. AI 도구를 쓸 때
+CI가 무엇을 하는지와 자주 겪는 문제는 [`.github/workflows/README.md`](.github/workflows/README.md).
 
+## 10. AI 도구를 쓸 때
+
+- 지시서만으로 규칙이 지켜진다고 보지 않는다. 실제 강제는 CI와 리뷰다
+- 작업 완료 표시를 그대로 믿지 않는다. 코드 · Git · 검증 결과로 대조한다
 - 돌려보지 않은 것을 "완료"라고 쓰지 않는다
 - 모르는 것은 추측하지 않고 모른다고 적는다

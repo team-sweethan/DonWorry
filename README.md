@@ -2,7 +2,7 @@
 
 CakeShop 결제를 받아 **결제(PG) → FDS 위험평가 → 보안 케이스 조사 → AI 보고서 → 직원 판정 → 매입·정산**까지 처리하는 2차 프로젝트.
 
-작업 규칙은 [AGENTS.md](AGENTS.md)를 먼저 읽는다.
+작업 규칙은 [AGENTS.md](AGENTS.md)를 먼저 읽는다. 설계 결정은 [docs/decisions/](docs/decisions/), CI 설명은 [.github/workflows/README.md](.github/workflows/README.md).
 
 ## 구성
 
