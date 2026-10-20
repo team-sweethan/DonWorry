@@ -1,0 +1,556 @@
+:root {
+  font-family:
+    Pretendard,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #0f172a;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --dw-primary: #2563eb;
+  --dw-accent: #3b82f6;
+  --dw-sidebar: #172554;
+  --dw-canvas: #f5f7fb;
+  --dw-border: #e2e8f0;
+  --dw-header-height: 56px;
+  --dw-sidebar-width: 220px;
+  --dw-content-padding: 32px;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+body {
+  min-width: 320px;
+}
+a {
+  color: inherit;
+}
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.dw-implementation-area {
+  display: grid;
+  place-items: center;
+  min-height: max(
+    360px,
+    calc(100vh - var(--dw-header-height) - 2 * var(--dw-content-padding) - 88px)
+  );
+  padding: 48px 32px;
+  border: 2px dashed #93c5fd;
+  border-radius: 8px;
+  background: #eff6ff;
+  text-align: center;
+}
+.dw-implementation-area h2 {
+  margin: 0 0 10px;
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 650;
+}
+.dw-implementation-area p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤 */
+.admin-viewport {
+  min-width: 1280px;
+  min-height: 100vh;
+}
+.dw-header {
+  position: fixed;
+  z-index: 100;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--dw-header-height);
+  min-width: 1280px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--dw-border);
+  background: white;
+}
+.dw-brand {
+  width: var(--dw-sidebar-width);
+  flex: 0 0 var(--dw-sidebar-width);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 28px;
+  color: var(--dw-primary);
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  text-decoration: none;
+}
+.dw-header-center {
+  flex: 1;
+  text-align: center;
+  min-width: 90px;
+}
+.dw-header-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 13px;
+  padding: 0 24px 0 12px;
+}
+.dw-user-name {
+  font-weight: 650;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dw-muted-label {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+.dw-role-pill {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dw-header .ant-btn {
+  box-shadow: none;
+}
+.dw-sidebar {
+  position: fixed;
+  top: var(--dw-header-height);
+  bottom: 0;
+  left: 0;
+  width: var(--dw-sidebar-width);
+  background: var(--dw-sidebar);
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+  overflow-y: auto;
+  z-index: 90;
+  padding: 22px 12px 16px;
+}
+.dw-nav-group {
+  margin-bottom: 21px;
+}
+.dw-nav-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #95a5ca;
+  margin: 0 12px 8px;
+}
+.dw-nav-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 13px;
+  border-radius: 5px;
+  color: #c8d5ee;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 550;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.dw-nav-link:hover {
+  color: white;
+  background: #20366b;
+}
+.dw-nav-link.active {
+  color: white;
+  background: #2563eb;
+  font-weight: 650;
+}
+.dw-sidebar-bottom {
+  margin-top: auto;
+  padding-top: 16px;
+}
+.dw-sidebar-tip {
+  color: #b5c5eb;
+  border: 1px solid #34477d;
+  background: #1e3164;
+  border-radius: 6px;
+  padding: 13px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.dw-sidebar-tip strong {
+  display: block;
+  margin-bottom: 2px;
+  color: white;
+}
+.dw-main {
+  margin-left: var(--dw-sidebar-width);
+  padding: calc(var(--dw-header-height) + var(--dw-content-padding)) var(--dw-content-padding)
+    var(--dw-content-padding);
+  background: var(--dw-canvas);
+  min-height: 100vh;
+}
+.dw-container {
+  max-width: 1720px;
+  margin: 0 auto;
+}
+.dw-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  min-height: 51px;
+}
+.dw-page-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -0.7px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+.dw-page-description {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.dw-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dw-section-title {
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.3px;
+}
+.dw-panel {
+  border: 1px solid var(--dw-border);
+  background: white;
+  border-radius: 8px;
+}
+.dw-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dw-stat-card {
+  padding: 20px 22px;
+}
+.dw-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+.dw-stat-value {
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+.dw-stat-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.dw-table-card .ant-card-body {
+  padding: 0;
+}
+.dw-table-toolbar {
+  padding: 20px 22px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dw-table-toolbar h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+.dw-table-toolbar p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.dw-table-card .ant-table-wrapper {
+  padding: 0 2px;
+}
+.dw-table-card .ant-pagination {
+  padding: 0 19px 18px;
+}
+.dw-section-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+}
+.dw-info-list {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 13px 12px;
+  font-size: 13px;
+}
+.dw-info-list .k {
+  color: #64748b;
+}
+.dw-info-list .v {
+  color: #0f172a;
+  font-weight: 600;
+}
+.dw-api-note {
+  color: #64748b;
+  padding: 11px 14px;
+  font-size: 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+.dw-demo-label {
+  display: inline-flex;
+  background: #fef9c3;
+  color: #854d0e;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.dw-error-view {
+  background: white;
+  border: 1px solid var(--dw-border);
+  border-radius: 8px;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+/* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
+.dw-login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  background: #f5f7fb;
+}
+.dw-login-layout {
+  width: 100%;
+  max-width: 1040px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: white;
+  border: 1px solid var(--dw-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(23, 37, 84, 0.08);
+}
+.dw-login-intro {
+  display: flex;
+  flex-direction: column;
+  padding: 44px;
+  color: white;
+  background: radial-gradient(ellipse at top right, #284d91, transparent 65%), #172554;
+}
+.dw-login-brand {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.dw-login-brand span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 500;
+  color: #b5c5eb;
+}
+.dw-login-intro-body {
+  margin: auto 0;
+  padding: 48px 0;
+}
+.dw-login-symbol {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  background: #ffffff14;
+  border: 1px solid #ffffff26;
+  border-radius: 16px;
+  font-size: 30px;
+  color: #bfdbfe;
+  margin-bottom: 28px;
+}
+.dw-login-eyebrow {
+  font-size: 12px;
+  color: #bfdbfe;
+  letter-spacing: 1px;
+}
+.dw-login-intro h1 {
+  font-size: 29px;
+  line-height: 1.6;
+  letter-spacing: -1px;
+  margin: 14px 0;
+}
+.dw-login-copy {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #c8d5ee;
+}
+.dw-login-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+.dw-login-features span {
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #ffffff0d;
+  border: 1px solid #ffffff26;
+  color: #dbeafe;
+}
+.dw-login-intro-footer {
+  font-size: 12px;
+  color: #b5c5eb;
+  margin: 0;
+}
+.dw-login-box {
+  min-width: 0;
+  padding: 48px 44px;
+}
+.dw-login-box h2 {
+  margin: 16px 0 8px;
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+.dw-login-description {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0 0 30px;
+  line-height: 1.7;
+}
+.dw-login-box .ant-input-prefix {
+  color: #94a3b8;
+  margin-right: 10px;
+}
+.dw-login-error {
+  margin-bottom: 20px;
+}
+.dw-login-demo {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--dw-border);
+}
+.dw-login-demo h3 {
+  margin: 0 0 7px;
+  font-size: 13px;
+}
+.dw-login-demo p {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0 0 14px;
+  line-height: 1.7;
+}
+.dw-login-demo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dw-login-demo .dw-login-credentials {
+  margin: 12px 0 0;
+  font-size: 11px;
+}
+.dw-login-notice {
+  margin: 24px 0 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.8;
+}
+@media (max-width: 760px) {
+  .dw-login-shell {
+    padding: 20px 16px;
+  }
+  .dw-login-layout {
+    max-width: 460px;
+    grid-template-columns: 1fr;
+  }
+  .dw-login-intro {
+    padding: 24px 28px;
+  }
+  .dw-login-intro-body,
+  .dw-login-intro-footer {
+    display: none;
+  }
+  .dw-login-brand span {
+    display: inline;
+    margin-left: 12px;
+  }
+  .dw-login-box {
+    padding: 28px;
+  }
+}
+.dw-code-snippet {
+  margin-top: 9px;
+  font-size: 12px;
+  padding: 12px;
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 6px;
+  font-family: ui-monospace, monospace;
+}
+.dw-spec-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+}
+.dw-swatch {
+  height: 62px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 6px;
+}
+.dw-spec-label {
+  font-size: 11px;
+  color: #64748b;
+}
+.dw-spec-code {
+  font-size: 10px;
+  color: #475569;
+  font-family: ui-monospace, monospace;
+}
+@media (max-width: 1390px) {
+  .dw-header-tools {
+    gap: 8px;
+    padding-right: 16px;
+  }
+  .dw-stat-grid {
+    gap: 12px;
+  }
+}

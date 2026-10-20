@@ -161,6 +161,12 @@ npm run dev
 
 `http://localhost:5173`에서 열립니다. `/api`로 시작하는 요청은 백엔드(8081)로 전달됩니다.
 
+프론트는 로컬 시연 로그인과 공통 헤더·사이드바를 제공하며, 업무 본문에는
+페이지 제목과 옅은 파란 배경·점선 테두리의 **담당자 구현 영역**을 표시합니다.
+Mock 업무 화면은 현재 경로에 연결하지 않았습니다. 실제 인증·업무 API는 연동 전입니다.
+시연 계정·실행 방법은 [프론트 README](frontend/README.md),
+담당 페이지 연결 방법은 [공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)를 참고합니다.
+
 ### 6. ai-server 실행
 
 ```bash
@@ -327,11 +333,12 @@ flowchart BT
 
 - 모듈 5개 골격과 모듈 경계·계층 자동 검사
 - 개발용 DB(Docker Compose), CI 3개, PR 템플릿, 작업 규칙
-- frontend 홈 화면, ai-server `/health`
+- frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·담당자 구현 영역·공통 UI 가이드
+- ai-server `/health`
 
 **아직 없는 것**
 
 - 업무 테이블 — ERD 확정 후 Flyway로 추가 (지금은 Flyway 꺼짐, `ddl-auto: update` 임시 사용)
-- 로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`)
+- 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
 - 업무 API·화면·AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

@@ -29,3 +29,4 @@
 | 번호 | 제목 | 상태 |
 | --- | --- | --- |
 | [0001](0001-module-dependency-direction.md) | 모듈 간 의존 방향 | 제안 — 팀 합의 필요 |
+| [0002](0002-frontend-common-layout.md) | Ant Design 기반 프론트 공통 레이아웃 | 제안 — 구현 반영, 팀 디자인 승인 필요 |
