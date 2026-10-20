@@ -235,8 +235,48 @@ DonWorry/
 | `payment` | 시은 | 결제 접수·상태 전이·모의 카드사 |
 | `settlement` | 민정 | 매입·정산·환불 마감 |
 
-모듈마다 `api/ · controller/ · service/ · repository/ · entity/ · dto/` 폴더를 둡니다.
-요청은 `Controller → Service → Repository → DB` 순서로 흐르고, **다른 모듈은 상대의 `api/` 패키지(인터페이스·record·이벤트)로만 호출**합니다.
+### 모듈 하나의 내부 구조
+
+모든 모듈은 같은 폴더 구성을 따릅니다. `identity`를 예로 들면 다음과 같습니다. 클래스 이름은 들어갈 내용을 보여주는 예시입니다.
+
+```
+identity/
+├── package-info.java     # 모듈 선언 (@ApplicationModule) — 담당·책임 주석
+├── api/                  # 🔓 다른 모듈에 공개 — 인터페이스·record·이벤트만
+│   ├── TenantReader.java        # 예) 가맹점 조회 인터페이스
+│   ├── TenantSummary.java       # 예) 조회 결과 record (엔티티 대신 내보내는 모양)
+│   └── CurrentUser.java         # 예) 로그인 사용자·역할 조회
+├── controller/           # 🔒 HTTP 요청 수신 — Service만 호출
+│   └── AuthController.java      # 예) POST /api/auth/login
+├── service/              # 🔒 업무 로직·트랜잭션, api 인터페이스의 구현체
+│   ├── AuthService.java
+│   └── TenantReaderImpl.java    # 예) TenantReader 구현 (다른 모듈은 이 클래스를 모름)
+├── repository/           # 🔒 DB 조회·저장 (Spring Data JPA)
+│   └── PlatformUserRepository.java
+├── entity/               # 🔒 테이블과 1:1 매핑
+│   ├── PlatformUser.java
+│   └── Tenant.java
+├── dto/                  # 🔒 요청·응답 모양
+│   ├── LoginRequest.java
+│   └── MeResponse.java
+└── security/             # 🔒 identity 전용 — SecurityConfig
+```
+
+🔓 = 다른 모듈이 import 가능 · 🔒 = 이 모듈 안에서만 사용 (어기면 `./gradlew check` 실패)
+
+```mermaid
+flowchart LR
+    subgraph identity
+        direction LR
+        C[controller] --> S[service] --> R[repository] --> DB[(DB)]
+        A["api<br/>TenantReader"] -. 구현 .-> S
+    end
+    O["다른 모듈<br/>(예: settlement)"] --> A
+```
+
+- 화면·외부 요청은 `controller → service → repository` 순서로 흐릅니다. Controller는 Repository·Entity를 직접 쓰지 않습니다.
+- 다른 모듈은 `api/`의 인터페이스만 주입받아 호출합니다. 실제로 실행되는 것은 `service/`의 구현체이고, Spring이 연결해 줍니다.
+- 엔티티는 `api/` 밖으로 내보내지 않습니다. 다른 모듈에 줄 데이터는 `api/`의 record로 만듭니다.
 
 ## Architecture
 

@@ -5,10 +5,14 @@
 | `backend.yml` | `backend` | `./gradlew check` — 컴파일 · ModularityTests(모듈 경계 · 순환) · ArchitectureTests(계층) |
 | `frontend.yml` | `frontend` | `npm ci` · oxlint · Prettier `--check` · `tsc` + 빌드 |
 | `ai-server.yml` | `ai-server` | `uv sync --locked` · ruff · pytest |
+| `docs.yml` | `docs` | Markdown 상대 링크가 실제 파일을 가리키는지 (`.github/scripts/check_md_links.py`) |
 
 ## 언제 도나
 
-- **PR**: 세 개 모두 항상 실행 — 필수 검사가 "대기 중"으로 멈추지 않게
+- **PR**: `backend` · `frontend` · `ai-server`는 항상 시작하지만, 첫 단계에서 자기 폴더가 바뀌었는지 보고 안 바뀌었으면 나머지를 건너뛰고 약 10초 만에 통과한다
+  - 경로 필터로 아예 안 돌리면 필수 검사가 "대기 중"으로 남아 병합이 막히기 때문
+  - 예) README만 고친 PR → 세 개 모두 바로 통과, `docs`만 실제 검사
+- **PR · push의 `docs`**: `.md` 파일이 바뀔 때만 실행. 필수 검사가 아니다
 - **`main` · `dev` push**: 바뀐 폴더의 워크플로만 실행 (경로 필터)
 
 ## 설계 의도
