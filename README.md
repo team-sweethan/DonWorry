@@ -8,7 +8,7 @@ CakeShop 결제를 받아 **결제(PG) → FDS 위험평가 → 보안 케이스
 
 | 폴더 | 기술 | 포트 |
 | --- | --- | --- |
-| `backend/` | Java 21 · Spring Boot 3.5 · Spring Modulith 1.4 · MariaDB · Flyway | 8081 |
+| `backend/` | Java 21 · Spring Boot 4.1 · Spring Modulith 2.1 · MariaDB · Flyway | 8081 |
 | `frontend/` | React 19 · TypeScript 7 · Vite 8 · oxlint · Prettier | 5173 |
 | `ai-server/` | Python 3.13 · FastAPI · uv · ruff · pytest | 8000 |
 | `docker-compose.yml` | MariaDB 11.8 (개발용) | 3307 |
@@ -71,6 +71,7 @@ uv run ruff check . && uv run pytest
 ## 아직 없는 것
 
 - 업무 테이블 — ERD 확정 후 Flyway로 추가
+- Flyway 비활성화 + `ddl-auto: update` 임시 사용 — ERD 확정 후 `validate` + Flyway로 전환
 - 로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`)
 - 화면 — 홈 하나
 - AI 보고서 API — 보고서 단위 확정 후

@@ -14,21 +14,21 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate            # 테이블은 Flyway만 만든다. 엔티티는 검사만
+      ddl-auto: update              # ERD 확정 전 임시 — 확정 후 validate + Flyway
     properties:
       hibernate:
         jdbc:
           time_zone: UTC            # ERD 공통 규칙: DATETIME(6)에 UTC 저장
 
   flyway:
-    enabled: true
+    enabled: false                # ERD 확정 후 true
     locations: classpath:db/migration
 
   modulith:
     events:
       jdbc:
         schema-initialization:
-          enabled: false            # 이벤트 테이블은 Modulith가 아니라 Flyway V1이 만든다
+          enabled: true             # 이벤트 테이블을 Modulith가 생성 (Flyway 꺼진 동안)
 
 server:
   port: ${DONWORRY_PORT:8081}       # CakeShop 8080과 겹치지 않게

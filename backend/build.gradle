@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.16'
+    id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -18,7 +18,7 @@ configurations {
 repositories { mavenCentral() }
 
 dependencyManagement {
-    imports { mavenBom 'org.springframework.modulith:spring-modulith-bom:1.4.13' }
+    imports { mavenBom 'org.springframework.modulith:spring-modulith-bom:2.1.1' }
 }
 
 dependencies {
@@ -29,7 +29,7 @@ dependencies {
 
     // DB — 스키마는 Flyway만 바꾼다
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'   // Boot 4: Flyway 자동 설정이 별도 모듈
     implementation 'org.flywaydb:flyway-mysql'          // MariaDB 지원
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
