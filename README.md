@@ -358,16 +358,6 @@ flowchart BT
   - 위층의 동기 호출: investigation → payment(금융 조치 요청), settlement → payment(CAPTURE 접수 확인)
 - 점선은 ai-server와의 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
 - 이 방향은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)에서 **제안 단계**이며 팀 합의 후 확정합니다.
-- 테이블 소유 (Notion fds 정본 설계 3.9, ERD Baseline v1 — FDS 연계 최소 8개)
-
-  | 모듈 | 테이블 |
-  | --- | --- |
-  | payment (P5) | `payment` |
-  | fds (P2) | `fds_evaluation` |
-  | investigation (P3) | `security_case` · `case_payment` · `payment_decision` · `action_handoff` · `case_history` |
-  | investigation/report (P4) | `ai_report` |
-
-  같은 담당의 테이블끼리만 물리 FK, 담당이 다르면 ID만 저장하는 논리 참조입니다(같은 investigation 안의 P3 ↔ P4도 논리 참조). P1 직원·가맹점, CakeShop 주문, P5·P6 금융 실행 상세 테이블은 각 담당이 따로 설계합니다.
 - 자동 검사
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
   - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
@@ -387,6 +377,7 @@ flowchart BT
 - 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
 - 🗃️ **[Flyway 사용 가이드](docs/flyway.md)**: 테이블 추가 순서, 내 앱이 붙은 DB 확인, 로컬 DB 초기화, 오류별 해결
 - ⚙️ **[CI 설명서](.github/workflows/README.md)**: 워크플로별 검사 내용과 겪은 문제
+- 🗂️ **[ERD](docs/erd/README.md)**: 테이블 소유·관계·컬럼 (Notion 설계 3.9 확정 후 작성), 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
 - 📝 **Notion fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신·ERD(설계 3.9, Baseline v1) 정본. 정산 관리 업무 정본은 작성 중
