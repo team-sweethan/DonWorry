@@ -4,7 +4,9 @@
 
 ## 1. 정본 위치
 
-- 상태값 · API 명세 · ERD → Notion (`1 상태값` / `2 API 명세서` / `3 ERD`)
+- 업무 흐름 · 상태값 · 모듈 간 통신 → Notion **FDS 공동 업무** 페이지 (업무분석 / 기획 / 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
+- ERD → 확정 중. 확정되면 이 줄을 갱신한다
+- 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
 - 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
 - 실제로 돌아가는 검사 규칙 → `build.gradle`, `.oxlintrc.json`, `pyproject.toml`, `.github/workflows/`
@@ -36,10 +38,12 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 ## 4. Backend 규칙
 
 - 다른 모듈은 `api/` 패키지만 쓴다. `entity/` · `repository/` 직접 참조 금지
-- 두 모듈이 서로 호출하면 안 된다 (순환). 역방향 알림은 이벤트로 보낸다
+- 두 모듈이 서로 호출하면 안 된다 (순환). 역방향 알림은 커밋 후 이벤트로 보낸다
+- 이벤트 타입은 보내는 모듈의 `api/`에 둔다. 받는 쪽은 같은 이벤트가 두 번 와도 한 번만 반영한다 (멱등)
+- 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
-- 다른 모듈 테이블에 FK를 걸지 않는다 (UUID 칸만)
+- 다른 모듈 테이블에 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조)
 - 테이블은 Flyway로만 바꾼다. 이미 main에 들어간 마이그레이션 파일은 고치지 않고 새 번호를 추가한다
 - 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다
 - 현재는 ERD 확정 전이라 Flyway 꺼짐, `ddl-auto: update` 사용. 확정 후 위 Flyway 규칙 적용
@@ -55,6 +59,8 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 
 - controller → service → agent 역할을 섞지 않는다
 - Agent는 허용 목록에 있는 읽기 전용 Tool만 호출한다. 결제 승인 · 데이터 변경은 하지 않는다
+- Spring을 부를 때는 `investigation/report`의 내부 Tool API만 쓴다. DB에 직접 접속하지 않는다 ([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md))
+- 보고서 생성이 실패해도 자동으로 ACCEPT / REJECT 하지 않는다. 판정은 직원이 한다
 - 요청 · 응답은 Pydantic 모델로 받고 내보낸다
 - LLM 호출은 `LlmClient` 경계를 지난다. 제공자를 바꿀 때 service를 고치지 않는다
 

@@ -1,6 +1,6 @@
 # DonWorry
 
-DonWorry는 케이크 주문 서비스 CakeShop에서 발생한 결제를 받아 **PG 승인 → FDS 위험평가 → 보안 케이스 조사 → AI 조사 보고서 → 직원 판정 → 매입·정산**까지 하나의 흐름으로 처리하는 결제 대행(PG)·이상거래 탐지 백오피스입니다. 의심 결제를 바로 거절하지 않고 보안 직원이 근거를 보고 판단하도록 돕는 데 초점을 둡니다.
+DonWorry는 케이크 주문 서비스 CakeShop에서 발생한 결제를 받아 **FDS 위험평가 → 카드 승인·매입 보류 → Case 조사 → AI 조사 보고서 → 결제별 직원 판정 → 매입·승인 취소 인계 → 정산**까지 하나의 흐름으로 처리하는 결제 대행(PG)·이상거래 탐지 백오피스입니다. 의심 결제를 바로 거절하지 않고, 카드 승인은 받되 매입을 보류한 채 보안 직원이 근거를 보고 결제마다 판단하도록 돕는 데 초점을 둡니다.
 
 Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서버로 구성된 모노레포입니다.
 
@@ -21,45 +21,58 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 
 - CakeShop(1차 프로젝트)과 연동하는 **2차 팀 프로젝트**이며, 6명이 업무 모듈을 하나씩 맡아 개발합니다.
 - 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다.
-- 1차 목표는 **의심 결제가 보류되고, 보안 직원이 AI 보고서를 참고해 판정하고, 결과가 CakeShop에 반영되는 시연 경로**를 완성하는 것입니다.
+- 1차 목표는 **의심 결제가 승인 후 매입 보류(HELD)되고, 보안 직원이 AI 보고서를 참고해 결제별로 판정하고, 매입 또는 승인 취소가 담당 모듈에 인계되는 시연 경로**를 완성하는 것입니다.
+- 업무 흐름·상태값·통신 방식의 정본은 Notion **FDS 공동 업무** 페이지(업무분석 · 기획 · 설계)입니다. 이 README는 그 요약입니다.
 
 ## Features
 
 > 아래는 1차 MVP 범위입니다. 현재 저장소는 골격 단계이며 기능은 **구현 예정**입니다.
 
-- **결제(PG)** — CakeShop 결제 세션 생성, 모의 카드사 승인·취소, 결제 상태 관리(REQUESTED · HELD · APPROVED · DECLINED · CANCELED), 보류 30분 만료
-- **FDS 위험평가** — 규칙 3개(고액 +35 · 신규 카드 +30 · 10분 내 3회 +25)로 점수를 매겨 50점 미만 ALLOW / 50~80 HOLD / 80 초과 REJECT, 카드·기기 차단 목록
-- **보안 케이스 조사** — 같은 가맹점·고객의 경보를 첫 경보부터 30분 안에서 하나의 케이스로 묶고, 보안 직원이 보류 결제를 진행·취소 판정
-- **AI 조사 보고서** — 케이스의 근거를 모아 FastAPI 서버가 보고서를 생성. AI는 판단을 돕기만 하고 결제를 바꾸지 않음
-- **매입·정산** — 승인 결제 매입, 픽업 후 72시간 환불 마감이 지나면 정산 확정, 수수료 계산
-- **사장님 결과 조회** — 직원이 검토·공개한 케이스 결과와 정산 내역 조회
+- **결제(PG) · P5** — CakeShop 결제 세션, FDS 평가 요청, 모의 카드사 승인, REVIEW 승인 건의 매입 보류(HELD), 승인 취소(VOID), 결제 상태 관리(DENIED · DECLINED · HELD · CAPTURED · VOIDED · EXPIRED), CakeShop 결과 통지
+- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 승인하지 않음. 점수·적중 규칙·규칙 버전 보존
+- **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계가 모두 확인되면 Case 종료
+- **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사. 읽기 전용 Tool로 증거 조회. 총 3회 실패하면 직원이 직접 조사해 판정. AI는 결제를 바꾸지 않음
+- **매입 · 정산 · P6** — CAPTURE 요청 접수·실행, 매입 배치, 수수료, 정산
+- **조사 기한** — Case 최초 생성 후 24시간을 내부 목표로 경고(권장값, 확정 아님). 기한 초과만으로 자동 판정하지 않음
 
 ## 핵심 흐름
 
-의심 결제가 보류되었다가 보안 직원 판정으로 반려되는 시연 시나리오입니다.
+의심 결제가 승인 후 매입 보류되고, 보안 직원 판정이 금융 조치로 인계되는 시연 시나리오입니다. 이벤트 이름은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)의 제안입니다.
 
 ```mermaid
 sequenceDiagram
     participant C as CakeShop
-    participant P as payment
-    participant F as fds
-    participant I as investigation
+    participant P as payment (P5)
+    participant F as fds (P2)
+    participant I as investigation (P3·P4)
     participant A as ai-server
-    actor S as 보안 직원
+    participant S as settlement (P6)
+    actor U as 보안 직원
 
     C->>P: 결제 요청
-    P->>F: 위험 평가
-    F-->>P: 60점 → HOLD
-    P->>P: 결제 HELD (30분 보류)
-    F--)I: 경보 발생 (이벤트)
-    I->>I: 케이스 생성 또는 연결
-    I->>A: AI 조사 보고서 요청
-    A-->>I: 보고서
-    S->>I: 보고서 확인 후 취소 판정
-    I->>P: 결정 실행 요청
-    P->>P: 결제 CANCELED
-    C->>P: 결제 상태 조회 → 거절 반영
+    P->>F: 위험 평가 (동기)
+    F-->>P: 65점 → REVIEW
+    P->>P: 모의 카드 승인 성공 → HELD (매입 보류)
+    P--)I: PaymentHeld (이벤트)
+    I->>I: Case 생성 또는 30분 내 Case에 병합
+    I->>A: AI 조사 요청 (202 접수)
+    A->>I: Tool API로 증거 조회 (읽기 전용)
+    A-->>I: 보고서 v1
+    U->>I: 결제별 ACCEPT / REJECT
+    I->>I: 판정과 인계 REQUESTED 저장 (커밋)
+    I->>P: 금융 조치 요청 (동기)
+    alt ACCEPT
+        P--)S: CaptureRequested (이벤트)
+        S->>P: CAPTURE 요청 영속 접수 확인
+    else REJECT
+        P->>P: VOID 요청 영속 접수
+    end
+    P--)I: 인계 결과 (이벤트)
+    I->>I: 모든 결제 인계 ACCEPTED → Case CLOSED
 ```
+
+- Case `CLOSED`는 결제 완료가 아닙니다. 실제 매입·취소 결과는 결제 상태(`CAPTURED` · `VOIDED`)로 따로 확인하며, Case 종료 전후 어느 때든 끝날 수 있습니다.
+- DENY는 카드 승인 없이 `DENIED`, 카드 승인 실패는 `DECLINED`이며 둘 다 Case를 만들지 않습니다.
 
 ## Tech Stack
 
@@ -234,12 +247,12 @@ DonWorry/
 
 | 모듈 | 담당 | 책임 |
 | --- | --- | --- |
-| `identity` | 주환 (+ frontend) | 인증·계정·가맹점·권한 |
-| `fds` | 정후 | 위험 점수·ALLOW/HOLD/REJECT·경보·차단 목록 |
-| `investigation` | 수민 | 케이스·보류 결제 판정·조치·사장님 공개 |
-| `investigation/report` | 현규 (+ ai-server) | AI 조사 보고서 |
-| `payment` | 시은 | 결제 접수·상태 전이·모의 카드사 |
-| `settlement` | 민정 | 매입·정산·환불 마감 |
+| `identity` | 주환 (+ frontend) | 가맹점·직원 계정·권한·인증, 로그인·기기 보안 신호 제공 |
+| `fds` | 정후 | 위험 점수·ALLOW/REVIEW/DENY/ERROR·평가 근거 |
+| `investigation` | 수민 | Case 생성·병합·결제별 판정·금융 조치 인계·Case 종료 |
+| `investigation/report` | 현규 (+ ai-server) | AI 조사 보고서·버전·재시도, AI Tool API |
+| `payment` | 시은 | 결제 접수·카드 승인·HELD·VOID·결제 상태·CakeShop 통지 |
+| `settlement` | 민정 | CAPTURE 실행·매입 배치·수수료·정산 |
 
 ### 모듈 하나의 내부 구조
 
@@ -300,11 +313,17 @@ flowchart BT
     payment --> identity
     investigation --> payment
     investigation --> fds
+    investigation --> identity
     settlement --> payment
-    investigation -. HTTP .-> ai
+    settlement --> identity
+    investigation -. "HTTP 조사 요청" .-> ai
+    ai -. "HTTP Tool API·결과" .-> investigation
 ```
 
-- 화살표는 "호출한다(의존한다)" 방향입니다. 직접 호출은 아래층으로만 하고, 아래층이 위층에 알릴 일은 이벤트(`AlertRaised`, `PaymentHoldExpired`, `PaymentCanceled`)로 보냅니다.
+- 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 아래층이 위층에 알릴 일은 커밋 후 이벤트로 보냅니다.
+  - `payment` 발행: `PaymentHeld` → investigation, `CaptureRequested` → settlement, 인계 결과 → investigation
+  - 위층의 동기 호출: investigation → payment(금융 조치 요청), settlement → payment(CAPTURE 접수 확인)
+- 점선은 ai-server와의 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
 - 이 방향은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)에서 **제안 단계**이며 팀 합의 후 확정합니다.
 - 자동 검사
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
@@ -325,7 +344,8 @@ flowchart BT
 - 📘 [AGENTS.md](AGENTS.md) — 작업 규칙 (사람·AI 공통)
 - 🏛️ [docs/decisions/](docs/decisions/) — 설계 결정 기록 (ADR)
 - ⚙️ [.github/workflows/README.md](.github/workflows/README.md) — CI 설명과 겪은 문제
-- 📝 Notion — `1 상태값` · `2 API 명세서` · `3 ERD` (팀 Notion 워크스페이스)
+- 💳 [docs/payment/](docs/payment/README.md) — P5 결제 설계 초안
+- 📝 Notion — **FDS 공동 업무** 페이지(업무분석 · 기획 · 설계): 업무 흐름·상태값·통신 정본. ERD는 확정 중
 
 ## 현재 상태
 

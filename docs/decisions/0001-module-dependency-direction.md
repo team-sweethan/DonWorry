@@ -1,54 +1,69 @@
 # 0001. 모듈 간 의존 방향
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-20
-- **관련:** Notion `2 API 명세서`, `3 ERD`
-- **영향 받는 담당:** 전원 (특히 P2 정후 · P5 시은 · P6 민정 · P3 수민)
+- **날짜:** 2026-10-20 (2026-10-21 재작성: 채택된 FDS 업무 흐름 반영)
+- **관련:** Notion FDS 공동 업무 — 설계 3.2 데이터 소유권 · 3.10 Spring Modulith 통신 설계, [ADR-0009](0009-ai-investigation-call-structure.md)
+- **영향 받는 담당:** 전원
 
 ## 배경
 
-팀 API 명세 · ERD를 그대로 구현하면 모듈끼리 서로 호출하는 곳이 네 군데 생긴다.
-Spring Modulith는 모듈 단위로 의존을 세므로 서로 다른 기능이어도 순환으로 판정하고 `ModularityTests`(`verify()`)가 실패한다.
+Spring Modulith는 모듈 단위로 의존을 세므로, 두 모듈이 서로를 호출하면 기능이 달라도 순환으로 판정하고 `ModularityTests`(`verify()`)가 실패한다.
 
-| # | 정방향 | 역방향 |
-| --- | --- | --- |
-| ① | payment → fds: 위험 평가 호출 | fds → payment: 경보 화면의 결제 상태 조회, 규칙용 결제 이력 조회 |
-| ② | payment → settlement: 취소 가능 여부 조회 · 취소 반영 | settlement → payment: 매입 대상 조회 · 결제 행 잠금 |
-| ③ | fds → investigation: 경보 전달 | investigation → fds: 근거 조회 |
-| ④ | investigation → P4: 보고서 요청 | P4 → investigation: 완료 통보 · 결정 확인 |
+2026-10-21 팀이 FDS 업무 흐름을 채택했다. REVIEW 결제는 카드 승인 후 매입을 보류(HELD)하고, 직원이 결제별로 ACCEPT / REJECT 판정한 뒤 매입(CAPTURE) 또는 승인 취소(VOID)를 담당 모듈에 인계한다. 모듈 간 통신 방향은 설계 3.10에 [확정]으로 정해졌다. 이 ADR은 그 통신을 모듈 의존 그래프와 공개 `api/`·이벤트 표로 옮긴다.
 
 업무 코드가 0줄인 지금 방향을 정하면 고칠 코드가 없다.
 
 ## 결정
 
-**4층 구조. 직접 호출(공개 `api/` 인터페이스)은 아래층으로만, 아래층이 위층에 알릴 일은 이벤트로 보낸다.**
+**직접 호출(공개 `api/` 인터페이스)은 아래 방향으로만, 아래층이 위층에 알릴 일은 커밋 후 이벤트로 보낸다.**
 
-```
-investigation (P3·P4)   settlement (P6)      ← 위층: 아무도 부르지 않음 (공개 api 없음)
-            \               /
-             payment (P5)
-              /       \
-        fds (P2)       \
-              \         \
-              identity (P1)                  ← 맨 아래: 모두가 의존
+```mermaid
+flowchart BT
+    identity["identity (P1)"]
+    fds["fds (P2)"]
+    payment["payment (P5)"]
+    investigation["investigation (P3·P4)"]
+    settlement["settlement (P6)"]
+
+    fds --> identity
+    payment --> fds
+    payment --> identity
+    investigation --> payment
+    investigation --> fds
+    investigation --> identity
+    settlement --> payment
+    settlement --> identity
 ```
 
-| 모듈 | 의존(직접 호출) | 공개 `api/` | 발행 이벤트 | 수신 이벤트 |
+| 모듈 | 직접 호출(의존) | 공개 `api/` (이름은 예시) | 발행 이벤트 | 구독 이벤트 |
 | --- | --- | --- | --- | --- |
-| identity | 없음 | `TenantReader`, `CurrentUser` | — | — |
-| fds | identity | `FdsEvaluator`, `AlertReader`, `BlockCommand` | `AlertRaised` | — |
-| payment | fds, identity | `PaymentReader`, `ReviewExecutor`, `SettlementGate` | `PaymentHoldExpired`, `PaymentCanceled` | — |
-| investigation | payment, fds, identity (+ ai-server HTTP) | 없음 | — | `AlertRaised`, `PaymentHoldExpired` |
-| settlement | payment, identity | 없음 | — | `PaymentCanceled` |
+| identity | 없음 | `TenantReader`, `CurrentStaff`, `SecuritySignalReader` | — | — |
+| fds | identity | `FdsEvaluator`, `FdsEvidenceReader` | — | — |
+| payment | fds, identity | `PaymentReader`, `FinancialActionPort`, `CaptureIntakePort` | `PaymentHeld`, `CaptureRequested`, `HandoffResult` | — |
+| investigation (+report) | payment, fds, identity (+ ai-server HTTP) | 없음 | — | `PaymentHeld`, `HandoffResult` |
+| settlement | payment, identity | 없음 | — | `CaptureRequested` |
+
+설계 3.10의 통신을 이렇게 구현한다.
+
+| 설계 3.10 | 방식 | 의존 방향 |
+| --- | --- | --- |
+| P5 → P2 위험 평가 | `FdsEvaluator` 동기 호출 | payment → fds |
+| P5 → P3 HELD 발생 | `PaymentHeld` 이벤트 | investigation이 payment 타입 구독 |
+| P3 → P4 AI 조사 | 같은 모듈 내부 호출 | — |
+| P4 ↔ FastAPI | HTTP, [ADR-0009](0009-ai-investigation-call-structure.md) | 모듈 의존 아님 |
+| P3 → P5 금융 조치 요청 | `FinancialActionPort` 동기 호출, P3 커밋 후 | investigation → payment |
+| P5 → P6 CAPTURE 요청 | `CaptureRequested` 이벤트 | settlement가 payment 타입 구독 |
+| P6 → P5 CAPTURE 접수 확인 | `CaptureIntakePort` 동기 호출 | settlement → payment |
+| P5 → P3 접수 결과 | `HandoffResult` 이벤트 | investigation이 payment 타입 구독 |
 
 이벤트 타입은 **보내는 쪽 `api/`**에 둔다. 받는 쪽이 그 타입을 import하므로 의존 방향은 여전히 아래로 향한다.
 
-순환 해소:
+순환을 만들지 않기 위한 규칙:
 
-- ① fds는 payment를 조회하지 않는다. payment가 평가 요청에 재료(`cardFingerprint`, `deviceId`, `customerRef`, `amount`, 같은 카드 과거 승인 여부)를 담아 넘긴다. "10분 내 3회"는 fds가 자기 평가 기록으로 센다. 경보 목록 · 상세 화면 API는 investigation으로 옮긴다
-- ② settlement가 픽업 정보를 받으면 환불 마감을 `SettlementGate.registerRefundDeadline()`으로 payment에 넣는다. payment는 취소 가능 여부를 혼자 판단하고 `PaymentCanceled`를 발행한다
-- ③ 경보 전달은 `AlertRaised` 이벤트
-- ④ P4 코드는 `investigation/report` 하위 패키지 (같은 모듈)
+- fds는 payment를 조회하지 않는다. payment가 평가 요청에 재료(고객·가맹점·금액·카드·기기 등)를 담아 넘긴다. "단기간 반복 결제" 같은 규칙은 fds가 자기 평가 기록으로 센다
+- payment는 investigation · settlement를 호출하지 않는다. 알릴 일은 이벤트로 보낸다
+- 여러 모듈 데이터를 합치는 조회 화면 API(예: 거래 목록에 Case 번호 표시)는 위층(investigation)에 두거나 프론트가 API를 나눠 부른다. payment에 두지 않는다
+- 로그인·기기 보안 신호는 identity가 제공하고 fds가 읽는다 (설계 5.7)
 
 ## 고려한 대안
 
@@ -57,21 +72,46 @@ investigation (P3·P4)   settlement (P6)      ← 위층: 아무도 부르지 �
 | 순환을 허용하고 `verify()`를 끈다 | 모듈 경계 검사 자체를 버리게 된다. 6명이 동시에 개발하면 얽힘이 빠르게 늘어난다 |
 | 공통 모듈(`common`)에 공유 타입을 모은다 | 6번째 모듈이 생기고, 잡동사니 서랍이 되면 다시 순환이 생긴다 |
 | 모든 모듈 간 통신을 이벤트로 | 결제 중 FDS 평가처럼 결과를 바로 받아야 하는 호출이 비동기가 되어 흐름이 복잡해진다 |
-| P4를 별도 모듈로 | investigation과 서로 호출해 순환 ④가 생긴다 |
+| fds가 경보 이벤트(`AlertRaised`)를 보내 Case 생성 | 평가는 카드 승인 전에 일어난다. 승인 실패(`DECLINED`)한 REVIEW 건도 경보가 되는데, 설계 2.2는 이 건을 Case 대상에서 제외한다. 승인까지 확정된 `PaymentHeld`가 맞다 |
+| P5 → P6 동기 포트로 같은 트랜잭션 처리 (ADR-0003 초안) | 설계 3.10이 이벤트 + 접수 확인 API로 확정했다 |
+| P4를 별도 모듈로 | investigation과 서로 호출해 순환이 생긴다 |
+
+## 2026-10-20 제안에서 바뀐 것
+
+| 이전 | 지금 | 이유 |
+| --- | --- | --- |
+| 이벤트 `AlertRaised` · `PaymentHoldExpired` · `PaymentCanceled` | `PaymentHeld` · `CaptureRequested` · `HandoffResult` | 승인 전 보류·30분 만료·환불 모델을 버리고 승인 후 매입 보류 모델 채택 |
+| payment api `ReviewExecutor` · `SettlementGate`, settlement의 환불 마감 등록 | `FinancialActionPort` · `CaptureIntakePort` | 판정은 인계 요청으로, 매입은 P6 접수 확인으로 바뀜 |
+| investigation → payment · fds · identity | 같음, identity 사용 이유 명시(판정 직원 `staff_id`) | 설계 2.8 판정 기록 |
+| 경보 목록 · 상세 API를 investigation으로 이동 | 조합 조회 API는 위층에 둔다는 일반 규칙 | 경보 화면 자체가 업무 흐름에서 빠짐 |
+
+## P5 초안 ADR과의 관계
+
+`docs/payment/`와 ADR-0003 ~ 0008(P5 초안)은 이 흐름이 채택되기 전에 작성되었다. 아래는 다르다. 이 ADR은 해당 초안을 고치지 않으며, P5 담당과 합의해 정리한다.
+
+| P5 초안 | 이 ADR · 채택 흐름 |
+| --- | --- |
+| ADR-0003: P6가 P5 소유 포트를 구현, 취소를 같은 트랜잭션으로 | P5 → P6 이벤트, P6 → P5 접수 확인 API |
+| ADR-0007: P3 판정과 P5 실행 공동 커밋 | P3가 판정과 `action_handoff(REQUESTED)`를 커밋한 뒤 P5 호출 (설계 3.8) |
+| ADR-0004: `EXPIRED` = 승인 전 주문 기한 만료 | `EXPIRED` = 카드 승인 만료 (설계 3.3) |
+| 상태값 `HOLD` · `REJECT` · `APPROVED` · `CANCELED` | `REVIEW` · `DENY` / `HELD` · `CAPTURED` · `VOIDED` · `DENIED` |
+| 미결 Q07(Case 생성 기준) | HELD 확정 이벤트로 생성 (설계 3.10) |
 
 ## 영향
 
-- API: 경보 목록 · 상세(P2-API-03 · 04)의 제공 모듈이 fds → investigation으로 바뀜. 위험 평가 요청에 판단 재료 칸 추가
-- DB: payment에 환불 마감 칸 추가 필요 (settlement가 등록)
-- 화면: 없음 (URL은 그대로 둘 수 있음)
+- API: payment 공개 api가 조치 요청 · CAPTURE 접수 확인 중심으로 바뀜. 조합 조회 API는 investigation에 둠
+- DB: 이 ADR로 새 테이블이 생기지 않음. 모듈 간 참조는 ID 값만 저장(FK 없음)
+- 화면: 거래 목록의 Case 번호 등 조합 정보는 investigation API 또는 프론트 조합
 - 테스트: 합의 후 각 모듈 `package-info.java`에 `allowedDependencies`를 넣어 `verify()`로 강제
-- 문서: Notion API 명세 · ERD의 해당 행 갱신
+- 이벤트 신뢰성: 커밋 후 발행 · 유실 재발행은 Modulith 이벤트 발행 기록(event publication registry)으로 처리. 재발행 설정은 공통 이벤트 담당(P2)과 별도 작업
+- 문서: README Architecture · 핵심 흐름 갱신 (이 PR)
 
 ## 합의가 필요한 것
 
-1. 신규 카드 판단 재료를 payment가 계산해 넘긴다 — 정후 · 시은
-2. 경보 목록 · 상세 API를 investigation으로 옮긴다 — 정후 · 수민
-3. 환불 마감을 settlement가 payment에 등록한다 — 시은 · 민정
+1. 이벤트 3종의 이름 · 페이로드 · 멱등 키 — 시은 · 수민 · 민정
+2. P5 초안(ADR-0003 · 0004 · 0007, 상태값)과 이 흐름의 정리 — 시은
+3. fds가 identity에서 읽을 보안 신호 범위 — 정후 · 주환
+4. 조합 조회 화면 API의 위치 — 정후 · 수민 · 시은
 
 ## 검증
 

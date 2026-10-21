@@ -30,3 +30,10 @@
 | --- | --- | --- |
 | [0001](0001-module-dependency-direction.md) | 모듈 간 의존 방향 | 제안 — 팀 합의 필요 |
 | [0002](0002-frontend-common-layout.md) | Ant Design 기반 프론트 공통 레이아웃 | 제안 — 구현 반영, 팀 디자인 승인 필요 |
+| [0003](0003-payment-settlement-cancellation-contract.md) | P5–P6 취소 계약의 의존 방향과 원자성 | 제안 — P5 초안, 팀 합의 대기 |
+| [0004](0004-payment-expiry-state.md) | 미승인 결제 만료 상태 분리 | 제안 — P5 초안, 팀 합의 대기 |
+| [0005](0005-checkout-token-reissue.md) | checkout 토큰 재발급 | 제안 — P5 초안, 팀 합의 대기 |
+| [0006](0006-fds-attempt-persistence.md) | FDS 실제 시도 기록의 독립 저장 | 제안 — P5 초안, 팀 합의 대기 |
+| [0007](0007-review-payment-atomicity.md) | P3 결정과 P5 실행의 공동 커밋 | 제안 — P5 초안, 팀 합의 대기 |
+| [0008](0008-capture-candidate-rescan.md) | 매입 후보의 실행별 재조회 | 제안 — P5 초안, 팀 합의 대기 |
+| [0009](0009-ai-investigation-call-structure.md) | AI 조사 호출 구조 (Spring ↔ FastAPI) | 제안 — 팀 합의 필요 |
