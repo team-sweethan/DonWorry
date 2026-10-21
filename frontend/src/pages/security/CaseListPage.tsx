@@ -46,7 +46,11 @@ export function CaseListPage() {
     }
   }, [merchant, refreshKey])
   const loading = result?.merchant !== merchant || result.refreshKey !== refreshKey
-  const cases = useMemo(() => result?.cases ?? [], [result])
+  // 다른 가맹점의 응답은 표시하지 않는다. 같은 가맹점 새로고침 중에는 기존 목록을 유지한다.
+  const cases = useMemo(
+    () => (result?.merchant === merchant ? result.cases : []),
+    [result, merchant],
+  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
