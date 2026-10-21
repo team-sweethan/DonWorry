@@ -121,13 +121,15 @@ function Sidebar() {
 }
 
 export function AdminLayout() {
+  const location = useLocation()
   return (
     <div className="admin-viewport">
       <Header />
       <Sidebar />
       <main className="dw-main" id="main">
         <div className="dw-container">
-          <ScreenErrorBoundary>
+          {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
+          <ScreenErrorBoundary key={location.pathname}>
             <Outlet />
           </ScreenErrorBoundary>
         </div>

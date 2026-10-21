@@ -72,19 +72,21 @@ textarea {
   line-height: 1.6;
 }
 
-/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤 */
+/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤.
+   헤더·사이드바는 fixed가 아닌 sticky — fixed면 가로 스크롤 시 헤더 오른쪽(로그아웃)이 잘린 채 남는다. */
 .admin-viewport {
+  display: grid;
+  grid-template-columns: var(--dw-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--dw-header-height) 1fr;
   min-width: 1280px;
   min-height: 100vh;
 }
 .dw-header {
-  position: fixed;
+  position: sticky;
   z-index: 100;
   top: 0;
-  left: 0;
-  right: 0;
+  grid-column: 1 / -1;
   height: var(--dw-header-height);
-  min-width: 1280px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -139,11 +141,9 @@ textarea {
   box-shadow: none;
 }
 .dw-sidebar {
-  position: fixed;
+  position: sticky;
   top: var(--dw-header-height);
-  bottom: 0;
-  left: 0;
-  width: var(--dw-sidebar-width);
+  height: calc(100vh - var(--dw-header-height));
   background: var(--dw-sidebar);
   display: flex;
   flex-direction: column;
@@ -206,11 +206,9 @@ textarea {
   color: white;
 }
 .dw-main {
-  margin-left: var(--dw-sidebar-width);
-  padding: calc(var(--dw-header-height) + var(--dw-content-padding)) var(--dw-content-padding)
-    var(--dw-content-padding);
+  min-width: 0;
+  padding: var(--dw-content-padding);
   background: var(--dw-canvas);
-  min-height: 100vh;
 }
 .dw-container {
   max-width: 1720px;
