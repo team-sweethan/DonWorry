@@ -73,7 +73,7 @@ flowchart BT
 | 공통 모듈(`common`)에 공유 타입을 모은다 | 6번째 모듈이 생기고, 잡동사니 서랍이 되면 다시 순환이 생긴다 |
 | 모든 모듈 간 통신을 이벤트로 | 결제 중 FDS 평가처럼 결과를 바로 받아야 하는 호출이 비동기가 되어 흐름이 복잡해진다 |
 | fds가 경보 이벤트(`AlertRaised`)를 보내 Case 생성 | 평가는 카드 승인 전에 일어난다. 승인 실패(`DECLINED`)한 REVIEW 건도 경보가 되는데, 설계 2.2는 이 건을 Case 대상에서 제외한다. 승인까지 확정된 `PaymentHeld`가 맞다 |
-| P5 → P6 동기 포트로 같은 트랜잭션 처리 (ADR-0003 초안) | 설계 3.10이 이벤트 + 접수 확인 API로 확정했다 |
+| P5 → P6 동기 포트로 같은 트랜잭션 처리 | 설계 3.10이 이벤트 + 접수 확인 API로 확정했다 |
 | P4를 별도 모듈로 | investigation과 서로 호출해 순환이 생긴다 |
 
 ## 2026-10-20 제안에서 바뀐 것
@@ -84,18 +84,6 @@ flowchart BT
 | payment api `ReviewExecutor` · `SettlementGate`, settlement의 환불 마감 등록 | `FinancialActionPort` · `CaptureIntakePort` | 판정은 인계 요청으로, 매입은 P6 접수 확인으로 바뀜 |
 | investigation → payment · fds · identity | 같음, identity 사용 이유 명시(판정 직원 `staff_id`) | 설계 2.8 판정 기록 |
 | 경보 목록 · 상세 API를 investigation으로 이동 | 조합 조회 API는 위층에 둔다는 일반 규칙 | 경보 화면 자체가 업무 흐름에서 빠짐 |
-
-## P5 초안 ADR과의 관계
-
-`docs/payment/`와 ADR-0003 ~ 0008(P5 초안)은 이 흐름이 채택되기 전에 작성되었다. 아래는 다르다. 이 ADR은 해당 초안을 고치지 않으며, P5 담당과 합의해 정리한다.
-
-| P5 초안 | 이 ADR · 채택 흐름 |
-| --- | --- |
-| ADR-0003: P6가 P5 소유 포트를 구현, 취소를 같은 트랜잭션으로 | P5 → P6 이벤트, P6 → P5 접수 확인 API |
-| ADR-0007: P3 판정과 P5 실행 공동 커밋 | P3가 판정과 `action_handoff(REQUESTED)`를 커밋한 뒤 P5 호출 (설계 3.8) |
-| ADR-0004: `EXPIRED` = 승인 전 주문 기한 만료 | `EXPIRED` = 카드 승인 만료 (설계 3.3) |
-| 상태값 `HOLD` · `REJECT` · `APPROVED` · `CANCELED` | `REVIEW` · `DENY` / `HELD` · `CAPTURED` · `VOIDED` · `DENIED` |
-| 미결 Q07(Case 생성 기준) | HELD 확정 이벤트로 생성 (설계 3.10) |
 
 ## 영향
 
@@ -109,7 +97,7 @@ flowchart BT
 ## 합의가 필요한 것
 
 1. 이벤트 3종의 이름 · 페이로드 · 멱등 키 — 시은 · 수민 · 민정
-2. P5 초안(ADR-0003 · 0004 · 0007, 상태값)과 이 흐름의 정리 — 시은
+2. P5/P6의 접수·실행 상세 저장 및 금융 실행 결과 계약 — 시은 · 민정 ([P5 설계](../payment/design.md))
 3. fds가 identity에서 읽을 보안 신호 범위 — 정후 · 주환
 4. 조합 조회 화면 API의 위치 — 정후 · 수민 · 시은
 
