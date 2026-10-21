@@ -135,21 +135,10 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 ```
 
 테이블은 백엔드를 실행할 때 Flyway가 `backend/src/main/resources/db/migration/`의 파일을 순서대로 적용해 만듭니다.
+테이블 추가 순서, 로컬 DB 초기화, 오류 해결은 **[Flyway 사용 가이드](docs/flyway.md)** 를 봅니다.
 
-> **Flyway 전환(#23) 이전에 DB를 띄운 적이 있다면** 한 번 초기화가 필요합니다. 예전에는 Modulith가 `EVENT_PUBLICATION` 테이블을 직접 만들어서, 그대로 두면 Flyway가 "이력 없는 비어 있지 않은 스키마"로 보고 기동을 멈춥니다.
->
-> ```bash
-> docker compose down -v && docker compose up -d
-> ```
->
-> 직접 설치한 MariaDB라면 `donworry` DB를 지우고 위 SQL로 다시 만듭니다.
-
-새 마이그레이션은 파일을 직접 만들지 않고 태스크로 만듭니다 (규칙: [AGENTS.md 4절](AGENTS.md#4-backend-규칙)).
-
-```bash
-cd backend
-./gradlew newMigration -Pdesc=add_ai_report_table     # Windows: .\gradlew.bat newMigration -Pdesc=...
-```
+> **Flyway 전환(#23) 이전에 앱을 띄운 적이 있다면** `Found non-empty schema` 에러로 기동이 멈춥니다. 한 번 초기화가 필요합니다.
+> 직접 설치한 MariaDB를 쓰고 있다면 `docker compose down -v`로는 해결되지 않습니다. 앱이 어느 DB에 붙었는지부터 확인합니다 → [가이드 3·4절](docs/flyway.md#3-내-앱이-어느-db에-붙었는지-확인)
 
 ### 3. 개인 설정 (필요할 때만)
 
@@ -237,6 +226,7 @@ cd ai-server && uv run ruff check . && uv run pytest
 - **`docker compose up`이 포트 충돌로 실패** — PC에 직접 설치한 MariaDB나 MySQL이 3307을 쓰고 있습니다. 그 서비스를 중지하거나, 직접 설치한 DB를 쓰고 `application-local.yml`로 접속 정보를 맞춥니다.
 - **`Access denied for user 'donworry'@'localhost'`** — DB 계정 비밀번호가 기본값과 다릅니다. `application-local.yml`에 실제 비밀번호를 넣습니다.
 - **3306에 접속했는데 MariaDB가 아님** — 한 PC에 MySQL과 MariaDB가 함께 있으면 MySQL이 3306을 차지합니다. MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`로 실제 포트를 확인합니다.
+- **Flyway·DB 초기화 관련 오류** (`Found non-empty schema`, `checksum mismatch`, `Schema-validation`, `Unknown server host '127'` 등) — [Flyway 사용 가이드 6절](docs/flyway.md#6-문제-해결)
 - **`Unable to delete directory ...build\test-results`** — OneDrive가 `build/` 폴더를 잠근 경우입니다. `backend/build`를 지우고 다시 실행하고, 반복되면 프로젝트를 OneDrive 밖으로 옮깁니다.
 - **CI에서 `uv.lock` 관련 실패** — 라이브러리를 추가했다면 갱신된 `uv.lock`을 함께 커밋합니다.
 - **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 설명서](.github/workflows/README.md).

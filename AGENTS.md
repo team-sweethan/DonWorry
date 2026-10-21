@@ -8,6 +8,7 @@
 - 정산 관리 업무(실제 CAPTURE 실행 · 매입 배치 · 수수료 · 정산)와 P5 · P6 금융 실행 상세 → **정본 작성 중**. fds 정본은 이 범위를 정하지 않는다 (fds 정본 §5.9 제외 · 설계 3.3 제외 범위). 확정되면 이 줄을 갱신한다
 - ERD(FDS 연계 범위) → Notion **fds 정본 · 03 설계 §3.9** (Baseline v1, 8개 테이블). 정산 · 금융 실행 테이블은 미포함. DB 원칙 · INSERT/UPDATE 예시는 **04 DB 설계 및 데이터 매핑** (구현 가이드, 3.9를 대체하지 않음). ERD를 바꿀 때는 3.9를 먼저 합의 · 수정한다
 - 1차 CakeShop 연동 저장소 → https://github.com/team-sweethan/cakeshop_refactoring (DonWorry 연동에 맞게 수정 중)
+- Flyway 사용법·로컬 DB 문제 해결 → [`docs/flyway.md`](docs/flyway.md)
 - 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
 - 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
@@ -52,6 +53,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(UTC) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
 - 한 마이그레이션은 하나의 배포 가능한 스키마 전환만 담는다. 서로 의존하는 마이그레이션은 같은 PR에 넣는다 (`out-of-order`는 순서를 보장하지 않는다)
 - 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가한다. ERD(설계 3.9)에 없는 컬럼·테이블은 3.9 합의 후 추가한다
+- 작업 순서·로컬 DB 초기화·오류 해결 → [`docs/flyway.md`](docs/flyway.md)
 
 ## 5. Frontend 규칙
 
