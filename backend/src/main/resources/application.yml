@@ -14,21 +14,26 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update              # Flyway 전환 전 임시 (ERD Baseline v1 나옴) — 전환 후 validate
+      ddl-auto: validate            # 테이블은 Flyway만 만든다. Entity와 스키마가 어긋나면 기동 실패
     properties:
       hibernate:
         jdbc:
           time_zone: UTC            # ERD 공통 규칙: DATETIME(6)에 UTC 저장
 
   flyway:
-    enabled: false                # 팀이 전환 시점을 정하면 true
+    enabled: true
     locations: classpath:db/migration
+    validate-on-migrate: true       # 이미 적용된 파일이 바뀌면 기동 실패
+    clean-disabled: true            # flyway clean으로 DB가 통째로 지워지는 것을 막는다
+    # 파일명 타임스탬프는 '만든 시각'이라 병합 순서와 다를 수 있다
+    # 늦게 병합된 낮은 버전도 적용되게 허용한다 (의존 순서까지 보장하지는 않음)
+    out-of-order: true
 
   modulith:
     events:
       jdbc:
         schema-initialization:
-          enabled: true             # 이벤트 테이블을 Modulith가 생성 (Flyway 꺼진 동안)
+          enabled: false            # EVENT_PUBLICATION 테이블은 Flyway migration이 만든다
 
 server:
   port: ${DONWORRY_PORT:8081}       # CakeShop 8080과 겹치지 않게

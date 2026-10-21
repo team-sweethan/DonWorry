@@ -86,7 +86,7 @@ sequenceDiagram
 | | Spring Data JPA · Spring Security · Lombok | Boot 관리 |
 | | Gradle | 9.3.0 (Wrapper) |
 | Database | MariaDB | 11.8 (Docker Compose) |
-| | Flyway | Boot 관리 (현재 비활성화) |
+| | Flyway | Boot 관리 |
 | Frontend | React · React Router | 19 · 7 |
 | | TypeScript · Vite | 7 · 8 |
 | | oxlint · Prettier | — |
@@ -132,6 +132,23 @@ Docker 없이 직접 설치한 MariaDB를 쓴다면 관리자 계정으로 한 �
 CREATE DATABASE donworry CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'donworry'@'%' IDENTIFIED BY 'donworry';
 GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
+```
+
+테이블은 백엔드를 실행할 때 Flyway가 `backend/src/main/resources/db/migration/`의 파일을 순서대로 적용해 만듭니다.
+
+> **Flyway 전환(#23) 이전에 DB를 띄운 적이 있다면** 한 번 초기화가 필요합니다. 예전에는 Modulith가 `EVENT_PUBLICATION` 테이블을 직접 만들어서, 그대로 두면 Flyway가 "이력 없는 비어 있지 않은 스키마"로 보고 기동을 멈춥니다.
+>
+> ```bash
+> docker compose down -v && docker compose up -d
+> ```
+>
+> 직접 설치한 MariaDB라면 `donworry` DB를 지우고 위 SQL로 다시 만듭니다.
+
+새 마이그레이션은 파일을 직접 만들지 않고 태스크로 만듭니다 (규칙: [AGENTS.md 4절](AGENTS.md#4-backend-규칙)).
+
+```bash
+cd backend
+./gradlew newMigration -Pdesc=add_ai_report_table     # Windows: .\gradlew.bat newMigration -Pdesc=...
 ```
 
 ### 3. 개인 설정 (필요할 때만)
@@ -370,7 +387,7 @@ flowchart BT
 
 **아직 없는 것**
 
-- 업무 테이블 — ERD Baseline v1(8개 테이블)은 나왔고, Flyway 전환 시점을 정한 뒤 마이그레이션으로 추가 (지금은 Flyway 꺼짐, `ddl-auto: update` 임시 사용)
+- 업무 테이블 — ERD Baseline v1(8개 테이블)은 나왔고, 각 소유 담당이 Flyway 마이그레이션으로 추가 (Flyway는 켜짐, 지금은 Modulith 이벤트 테이블만 있음)
 - 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
 - 업무 API·화면·AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

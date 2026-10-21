@@ -48,9 +48,10 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
   - 예외: `investigation` 모듈 안이라도 P4의 `ai_report`와 P3 테이블(`security_case` · `payment_decision`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
-- 테이블은 Flyway로만 바꾼다. 이미 main에 들어간 마이그레이션 파일은 고치지 않고 새 번호를 추가한다
-- 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다
-- 현재는 Flyway 꺼짐, `ddl-auto: update` 사용. ERD Baseline v1이 나왔으므로 Flyway 전환 시점을 팀이 정하면 위 규칙 적용
+- 테이블은 Flyway로만 바꾼다 (`ddl-auto: validate`). 이미 `dev`에 병합된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다 (CI가 검사)
+- 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(UTC) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
+- 한 마이그레이션은 하나의 배포 가능한 스키마 전환만 담는다. 서로 의존하는 마이그레이션은 같은 PR에 넣는다 (`out-of-order`는 순서를 보장하지 않는다)
+- 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가한다. ERD(설계 3.9)에 없는 컬럼·테이블은 3.9 합의 후 추가한다
 
 ## 5. Frontend 규칙
 
@@ -92,6 +93,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 
 ```bash
 cd backend   && ./gradlew check                      # 컴파일 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
+cd backend   && ./gradlew mariaDbTest                # Docker 필요 — MariaDB 컨테이너에 Flyway 전체 적용 + JPA validate
 cd frontend  && npm run lint && npm run format:check && npm run build
 cd ai-server && uv run ruff check . && uv run pytest
 ```
@@ -119,5 +121,5 @@ CI가 무엇을 하는지와 자주 겪는 문제는 [`.github/workflows/README.
 - 리뷰만 요청받은 경우 검토와 검증을 수행한다. 별도 수정 요청 없이 7절의 브랜치 생성·구현·PR 생성 절차를 진행하지 않는다.
 - PR 변경과 관련 코드·테스트를 확인하고, 이번 변경이 새로 만들거나 악화한 결함과 적용 가능한 기존 규칙 위반을 중심으로 지적한다. 무관한 기존 문제나 취향에 따른 스타일 변경·리팩터링은 요구하지 않는다.
 - 각 지적에는 문제 위치, 발생 조건, 영향과 수정 방향을 설명한다. 저장소 규칙 위반을 지적할 때는 해당 절을 근거로 들고, 8절에 따른 설계 변경 근거도 함께 확인한다.
-- 확인하지 못한 Notion 내용이나 미확정 ERD를 추정하여 위반으로 판단하지 않는다. 4절에 명시된 ERD 확정 전 Flyway 비활성화·`ddl-auto: update` 예외를 존중한다. 문서와 코드가 충돌하면 근거와 영향 범위를 설명한다.
+- 확인하지 못한 Notion 내용이나 미확정 ERD를 추정하여 위반으로 판단하지 않는다. 4절의 Flyway 마이그레이션 규칙을 기준으로 판단한다. 문서와 코드가 충돌하면 근거와 영향 범위를 설명한다.
 - 검증 결과는 2·7·10절에 따라 검토 대상 커밋의 실행 근거로 판단한다. 실행하지 못한 검사는 미검증으로 표시하고, 코드만 읽고 테스트가 통과했다고 쓰지 않는다.

@@ -26,6 +26,27 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "backend/ 변경 없음 — 검사 생략"
           fi
+      # 병합된 migration을 고치면 다른 PC의 DB와 체크섬이 어긋나 기동이 깨진다 — 추가만 허용
+      - if: steps.changes.outputs.run == 'true' && github.event_name == 'pull_request'
+        name: migration 불변·이름 규칙 검사
+        working-directory: .
+        run: |
+          sql='backend/src/main/resources/db/migration/*.sql'   # .gitkeep 등 SQL 외 파일은 제외
+          base="origin/${{ github.base_ref }}"
+          # 소문자 a = 추가(A)를 뺀 모든 변경(수정·삭제·이름변경·형식변경)
+          changed=$(git diff --diff-filter=a --name-only "$base...HEAD" -- "$sql")
+          if [ -n "$changed" ]; then
+            echo "::error::병합된 migration을 수정/삭제했습니다. 되돌리고 새 migration을 추가하세요 (./gradlew newMigration -Pdesc=...)"
+            echo "$changed" | while read -r f; do echo "::error file=$f::병합된 migration은 수정할 수 없습니다"; done
+            exit 1
+          fi
+          # 새 파일은 newMigration이 만든 이름 형식이어야 한다
+          bad=$(git diff --diff-filter=A --name-only "$base...HEAD" -- "$sql" | xargs -r -n1 basename | grep -vE '^V[0-9]{8}_[0-9]{6}__[a-z0-9]+(_[a-z0-9]+)*\.sql$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::migration 파일명이 규칙과 다릅니다: $bad (./gradlew newMigration -Pdesc=... 로 생성)"
+            exit 1
+          fi
+          echo "migration 규칙 통과"
       - if: steps.changes.outputs.run == 'true'
         uses: actions/setup-java@v4
         with:
@@ -37,3 +58,15 @@ jobs:
         run: chmod +x gradlew      # Windows에서 커밋해도 실행 권한 문제 없게
       - if: steps.changes.outputs.run == 'true'
         run: ./gradlew check       # 컴파일 + ModularityTests + ArchitectureTests
+      # 러너의 Docker로 MariaDB 11.8을 띄워 migration 전체 적용 + JPA validate
+      - if: steps.changes.outputs.run == 'true'
+        run: ./gradlew mariaDbTest
+      - if: failure() && steps.changes.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/build/reports/tests/
+            backend/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
