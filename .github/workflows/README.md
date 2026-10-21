@@ -30,4 +30,4 @@
 
 ## 아직 없는 것
 
-- DB가 필요한 검사(Flyway 전체 적용 + JPA `validate`) — ERD 확정 후 Flyway를 켤 때 추가
+- DB가 필요한 검사(Flyway 전체 적용 + JPA `validate`) — Flyway를 켤 때 추가 (ERD Baseline v1은 나옴, 전환 시점 미정)

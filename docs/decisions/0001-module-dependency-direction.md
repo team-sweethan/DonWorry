@@ -2,7 +2,7 @@
 
 - **상태:** 제안 — 팀 합의 필요
 - **날짜:** 2026-10-20 (2026-10-21 재작성: 채택된 FDS 업무 흐름 반영)
-- **관련:** Notion FDS 공동 업무 — 설계 3.2 데이터 소유권 · 3.10 Spring Modulith 통신 설계, [ADR-0009](0009-ai-investigation-call-structure.md)
+- **관련:** Notion fds 정본 — 03 설계 3.2 데이터 소유권 · 3.9 ERD · 3.10 Spring Modulith 통신 설계, 04 DB 설계 §1 · §3, [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** 전원
 
 ## 배경
@@ -60,10 +60,13 @@ flowchart BT
 
 순환을 만들지 않기 위한 규칙:
 
-- fds는 payment를 조회하지 않는다. payment가 평가 요청에 재료(고객·가맹점·금액·카드·기기 등)를 담아 넘긴다. "단기간 반복 결제" 같은 규칙은 fds가 자기 평가 기록으로 센다
+- fds는 payment를 조회하지 않는다. payment가 평가 요청에 재료(`payment_id`·고객·가맹점·금액·카드·기기 등)를 담아 넘긴다. "단기간 반복 결제" 같은 규칙은 fds가 자기 평가 기록으로 센다
+  - 04 DB 설계 §3.2의 "`fds_evaluation.payment_id`는 P5 공개 계약으로 확인"은 **P5가 `FdsEvaluator`를 호출하며 넘긴 `payment_id`를 그대로 저장하는 것**으로 충족한다. fds가 payment를 다시 호출하면 순환이 된다
 - payment는 investigation · settlement를 호출하지 않는다. 알릴 일은 이벤트로 보낸다
 - 여러 모듈 데이터를 합치는 조회 화면 API(예: 거래 목록에 Case 번호 표시)는 위층(investigation)에 두거나 프론트가 API를 나눠 부른다. payment에 두지 않는다
 - 로그인·기기 보안 신호는 identity가 제공하고 fds가 읽는다 (설계 5.7)
+
+**범위:** 위 표는 fds 정본이 정한 FDS 연계 통신(P5 ↔ P6는 CAPTURE 요청 · 영속 접수 확인까지)만 다룬다. 실제 CAPTURE 실행 결과를 P6 → P5로 전달하는 방식, 매입 배치 · 수수료 · 정산의 모듈 간 통신은 **정산 관리 정본이 작성 중이라 정하지 않았다.** 정본이 나오면 의존 방향(settlement → payment)을 유지하는지 이 ADR에서 다시 확인한다
 
 ## 고려한 대안
 
@@ -100,7 +103,7 @@ flowchart BT
 ## 영향
 
 - API: payment 공개 api가 조치 요청 · CAPTURE 접수 확인 중심으로 바뀜. 조합 조회 API는 investigation에 둠
-- DB: 이 ADR로 새 테이블이 생기지 않음. 모듈 간 참조는 ID 값만 저장(FK 없음)
+- DB: 이 ADR로 새 테이블이 생기지 않음. 04 DB 설계 §1 원칙대로 같은 모듈 안은 물리 FK, 모듈 간 참조는 ID 값만 저장(FK 없음). `ai_report` ↔ `security_case` · `payment_decision`은 둘 다 investigation 안이지만 P3 · P4 소유가 달라 논리 참조로 둔다(설계 3.9)
 - 화면: 거래 목록의 Case 번호 등 조합 정보는 investigation API 또는 프론트 조합
 - 테스트: 합의 후 각 모듈 `package-info.java`에 `allowedDependencies`를 넣어 `verify()`로 강제
 - 이벤트 신뢰성: 커밋 후 발행 · 유실 재발행은 Modulith 이벤트 발행 기록(event publication registry)으로 처리. 재발행 설정은 공통 이벤트 담당(P2)과 별도 작업

@@ -14,14 +14,14 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update              # ERD 확정 전 임시 — 확정 후 validate + Flyway
+      ddl-auto: update              # Flyway 전환 전 임시 (ERD Baseline v1 나옴) — 전환 후 validate
     properties:
       hibernate:
         jdbc:
           time_zone: UTC            # ERD 공통 규칙: DATETIME(6)에 UTC 저장
 
   flyway:
-    enabled: false                # ERD 확정 후 true
+    enabled: false                # 팀이 전환 시점을 정하면 true
     locations: classpath:db/migration
 
   modulith:

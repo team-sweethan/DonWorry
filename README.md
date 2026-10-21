@@ -22,17 +22,19 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 - CakeShop(1차 프로젝트)과 연동하는 **2차 팀 프로젝트**이며, 6명이 업무 모듈을 하나씩 맡아 개발합니다.
 - 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다.
 - 1차 목표는 **의심 결제가 승인 후 매입 보류(HELD)되고, 보안 직원이 AI 보고서를 참고해 결제별로 판정하고, 매입 또는 승인 취소가 담당 모듈에 인계되는 시연 경로**를 완성하는 것입니다.
-- 업무 흐름·상태값·통신 방식의 정본은 Notion **FDS 공동 업무** 페이지(업무분석 · 기획 · 설계)입니다. 이 README는 그 요약입니다.
+- FDS 연계 업무(위험평가 → HELD → Case·AI 조사 → 직원 판정 → 금융 조치 인계)의 흐름·상태값·통신 방식·ERD 정본은 Notion **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계, DB 구현 가이드는 04)입니다. 이 README는 그 요약입니다.
+- 정산 관리 업무(실제 매입 실행·매입 배치·수수료·정산)의 정본은 **작성 중**입니다. 아래 P6 항목과 settlement 관련 내용은 FDS 정본에 나온 인계 경계까지만 반영했습니다.
+- 1차 CakeShop 연동 저장소: [team-sweethan/cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중)
 
 ## Features
 
 > 아래는 1차 MVP 범위입니다. 현재 저장소는 골격 단계이며 기능은 **구현 예정**입니다.
 
 - **결제(PG) · P5** — CakeShop 결제 세션, FDS 평가 요청, 모의 카드사 승인, REVIEW 승인 건의 매입 보류(HELD), 승인 취소(VOID), 결제 상태 관리(DENIED · DECLINED · HELD · CAPTURED · VOIDED · EXPIRED), CakeShop 결과 통지
-- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 승인하지 않음. 점수·적중 규칙·규칙 버전 보존
+- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 자동 ALLOW하지 않음. 결제별 평가 이력(점수·판정·평가 시각·오류 코드) 보존. 규칙 버전·Rule별 적중 근거 저장 구조는 추후 검토
 - **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계가 모두 확인되면 Case 종료
-- **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사. 읽기 전용 Tool로 증거 조회. 총 3회 실패하면 직원이 직접 조사해 판정. AI는 결제를 바꾸지 않음
-- **매입 · 정산 · P6** — CAPTURE 요청 접수·실행, 매입 배치, 수수료, 정산
+- **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사(이전 버전 보존). 읽기 전용 Tool로 증거 조회, 증거 출처는 보고서 JSON 안에 기록. 총 3회 실패하면 직원이 직접 조사해 판정(`report_id` 없이 사유에 근거 기록). AI는 결제를 바꾸지 않음
+- **매입 · 정산 · P6** — CAPTURE 요청 접수·실행, 매입 배치, 수수료, 정산 (정산 정본 작성 중 — 현재는 FDS 정본의 CAPTURE 요청 영속 접수 경계만 확정)
 - **조사 기한** — Case 최초 생성 후 24시간을 내부 목표로 경고(권장값, 확정 아님). 기한 초과만으로 자동 판정하지 않음
 
 ## 핵심 흐름
@@ -229,9 +231,9 @@ DonWorry/
 ├── backend/                     # Spring Boot + Spring Modulith (8081)
 │   └── src/main/java/com/donworry/
 │       ├── identity/            # 로그인·계정·가맹점·권한
-│       ├── fds/                 # 위험 평가·경보·차단 목록
-│       ├── investigation/       # 케이스·보류 결제 판정·조치·공개
-│       │   └── report/          # AI 보고서 요청·FastAPI 호출
+│       ├── fds/                 # 위험 평가·평가 이력
+│       ├── investigation/       # Case 생성·병합·결제별 판정·금융 조치 인계
+│       │   └── report/          # AI 보고서·FastAPI 호출·AI Tool API (controller·service·… 같은 구성)
 │       ├── payment/             # 결제 접수·상태·모의 카드사
 │       └── settlement/          # 매입·정산
 ├── frontend/                    # React + Vite (5173)
@@ -325,6 +327,16 @@ flowchart BT
   - 위층의 동기 호출: investigation → payment(금융 조치 요청), settlement → payment(CAPTURE 접수 확인)
 - 점선은 ai-server와의 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
 - 이 방향은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)에서 **제안 단계**이며 팀 합의 후 확정합니다.
+- 테이블 소유 (Notion fds 정본 설계 3.9, ERD Baseline v1 — FDS 연계 최소 8개)
+
+  | 모듈 | 테이블 |
+  | --- | --- |
+  | payment (P5) | `payment` |
+  | fds (P2) | `fds_evaluation` |
+  | investigation (P3) | `security_case` · `case_payment` · `payment_decision` · `action_handoff` · `case_history` |
+  | investigation/report (P4) | `ai_report` |
+
+  같은 모듈 안은 물리 FK, 모듈 사이는 ID만 저장하는 논리 참조입니다. P1 직원·가맹점, CakeShop 주문, P5·P6 금융 실행 상세 테이블은 각 담당이 따로 설계합니다.
 - 자동 검사
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
   - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
@@ -345,7 +357,7 @@ flowchart BT
 - 🏛️ [docs/decisions/](docs/decisions/) — 설계 결정 기록 (ADR)
 - ⚙️ [.github/workflows/README.md](.github/workflows/README.md) — CI 설명과 겪은 문제
 - 💳 [docs/payment/](docs/payment/README.md) — P5 결제 설계 초안
-- 📝 Notion — **FDS 공동 업무** 페이지(업무분석 · 기획 · 설계): 업무 흐름·상태값·통신 정본. ERD는 확정 중
+- 📝 Notion — **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신·ERD(설계 3.9, Baseline v1) 정본. 정산 관리 업무 정본은 작성 중
 
 ## 현재 상태
 
@@ -358,7 +370,7 @@ flowchart BT
 
 **아직 없는 것**
 
-- 업무 테이블 — ERD 확정 후 Flyway로 추가 (지금은 Flyway 꺼짐, `ddl-auto: update` 임시 사용)
+- 업무 테이블 — ERD Baseline v1(8개 테이블)은 나왔고, Flyway 전환 시점을 정한 뒤 마이그레이션으로 추가 (지금은 Flyway 꺼짐, `ddl-auto: update` 임시 사용)
 - 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
 - 업무 API·화면·AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

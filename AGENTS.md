@@ -4,8 +4,10 @@
 
 ## 1. 정본 위치
 
-- 업무 흐름 · 상태값 · 모듈 간 통신 → Notion **FDS 공동 업무** 페이지 (업무분석 / 기획 / 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
-- ERD → 확정 중. 확정되면 이 줄을 갱신한다
+- FDS 연계 업무(평가 → HELD → Case · AI 조사 → 직원 판정 → 금융 조치 인계 · 접수 확인)의 흐름 · 상태값 · 모듈 간 통신 → Notion **fds 정본** 페이지 (01 업무분석 / 02 기획 / 03 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
+- 정산 관리 업무(실제 CAPTURE 실행 · 매입 배치 · 수수료 · 정산)와 P5 · P6 금융 실행 상세 → **정본 작성 중**. fds 정본은 이 범위를 정하지 않는다 (fds 정본 §5.9 제외 · 설계 3.3 제외 범위). 확정되면 이 줄을 갱신한다
+- ERD(FDS 연계 범위) → Notion **fds 정본 · 03 설계 §3.9** (Baseline v1, 8개 테이블). 정산 · 금융 실행 테이블은 미포함. DB 원칙 · INSERT/UPDATE 예시는 **04 DB 설계 및 데이터 매핑** (구현 가이드, 3.9를 대체하지 않음). ERD를 바꿀 때는 3.9를 먼저 합의 · 수정한다
+- 1차 CakeShop 연동 저장소 → https://github.com/team-sweethan/cakeshop_refactoring (DonWorry 연동에 맞게 수정 중)
 - 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
 - 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
@@ -43,10 +45,11 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
-- 다른 모듈 테이블에 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조)
+- 같은 모듈 안 테이블끼리는 물리 FK를 건다. 다른 모듈 테이블에는 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 모듈 `api/`로)
+- 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
 - 테이블은 Flyway로만 바꾼다. 이미 main에 들어간 마이그레이션 파일은 고치지 않고 새 번호를 추가한다
 - 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다
-- 현재는 ERD 확정 전이라 Flyway 꺼짐, `ddl-auto: update` 사용. 확정 후 위 Flyway 규칙 적용
+- 현재는 Flyway 꺼짐, `ddl-auto: update` 사용. ERD Baseline v1이 나왔으므로 Flyway 전환 시점을 팀이 정하면 위 규칙 적용
 
 ## 5. Frontend 규칙
 
@@ -61,6 +64,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - Agent는 허용 목록에 있는 읽기 전용 Tool만 호출한다. 결제 승인 · 데이터 변경은 하지 않는다
 - Spring을 부를 때는 `investigation/report`의 내부 Tool API만 쓴다. DB에 직접 접속하지 않는다 ([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md))
 - 보고서 생성이 실패해도 자동으로 ACCEPT / REJECT 하지 않는다. 판정은 직원이 한다
+- 보고서는 `report_version`별로 쌓고 덮어쓰지 않는다. 증거 출처 · 조회 시각은 `report_body` JSON 안에 둔다 (별도 `evidence_refs` 컬럼 없음)
 - 요청 · 응답은 Pydantic 모델로 받고 내보낸다
 - LLM 호출은 `LlmClient` 경계를 지난다. 제공자를 바꿀 때 service를 고치지 않는다
 
