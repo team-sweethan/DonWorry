@@ -11,10 +11,10 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 - [핵심 흐름](#핵심-흐름)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
-- [Architecture](#architecture)
 - [Contributing](#contributing)
-- [문서](#문서)
+- [Architecture & Developer Playbook](#architecture--developer-playbook)
 - [현재 상태](#현재-상태)
 
 ## Overview
@@ -231,6 +231,18 @@ cd ai-server && uv run ruff check . && uv run pytest
 - **CI에서 `uv.lock` 관련 실패** — 라이브러리를 추가했다면 갱신된 `uv.lock`을 함께 커밋합니다.
 - **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 설명서](.github/workflows/README.md).
 
+## Quick Start
+
+설치를 마쳤다면 다음 흐름으로 지금 있는 화면을 확인할 수 있습니다. 업무 기능이 구현되면 이 절을 보강합니다.
+
+1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 백엔드 없이도 화면을 볼 수 있습니다.
+2. 보안 직원 `security` / `demo1234`로 로그인해 **Case 목록 → Case 상세** 목업과 역할별 메뉴를 확인합니다.
+3. 사장님 `owner` / `demo1234`로 로그인해 사장님 메뉴를 확인합니다.
+4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
+5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 사용 가이드 5절](docs/flyway.md#5-적용-결과-확인)).
+
+시연 계정은 로컬 확인 전용이며 실제 인증·인가를 제공하지 않습니다. 자세한 내용은 [프론트 README](frontend/README.md)를 봅니다.
+
 ## Project Structure
 
 ```
@@ -306,7 +318,19 @@ flowchart LR
 - 다른 모듈은 `api/`의 인터페이스만 주입받아 호출합니다. 실제로 실행되는 것은 `service/`의 구현체이고, Spring이 연결해 줍니다.
 - 엔티티는 `api/` 밖으로 내보내지 않습니다. 다른 모듈에 줄 데이터는 `api/`의 record로 만듭니다.
 
-## Architecture
+## Contributing
+
+1. 작업 전에 [AGENTS.md](AGENTS.md)를 읽습니다.
+2. GitHub Issue를 확인하고 `dev`에서 `feature/<이슈번호>-<작업>` 브랜치를 만듭니다.
+3. 바꾼 영역의 검사 명령을 돌립니다([7. 빌드와 테스트](#7-빌드와-테스트)).
+4. `dev`로 PR을 엽니다. 템플릿의 "미검증" 칸을 비우지 않습니다.
+5. CI 3개(`backend` · `frontend` · `ai-server`) 통과와 승인 1명 후 병합합니다.
+6. `main`·`dev`에 직접 push하지 않습니다. `dev → main`은 시연·마일스톤 때 합칩니다.
+7. 모듈 경계·의존 방향·기술 선택을 바꾸면 [ADR](docs/decisions/)을 남깁니다.
+
+## Architecture & Developer Playbook
+
+### 모듈 의존 방향
 
 ```mermaid
 flowchart BT
@@ -348,23 +372,24 @@ flowchart BT
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
   - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
 
-## Contributing
+### 기술 선택 배경
 
-1. 작업 전에 [AGENTS.md](AGENTS.md)를 읽습니다.
-2. GitHub Issue를 확인하고 `dev`에서 `feature/<이슈번호>-<작업>` 브랜치를 만듭니다.
-3. 바꾼 영역의 검사 명령을 돌립니다([7. 빌드와 테스트](#7-빌드와-테스트)).
-4. `dev`로 PR을 엽니다. 템플릿의 "미검증" 칸을 비우지 않습니다.
-5. CI 3개(`backend` · `frontend` · `ai-server`) 통과와 승인 1명 후 병합합니다.
-6. `main`·`dev`에 직접 push하지 않습니다. `dev → main`은 시연·마일스톤 때 합칩니다.
-7. 모듈 경계·의존 방향·기술 선택을 바꾸면 [ADR](docs/decisions/)을 남깁니다.
+설계 결정과 버린 대안은 [ADR](docs/decisions/README.md)로 남깁니다. 상태가 "제안"인 결정은 팀 합의 전입니다.
 
-## 문서
+- 🧩 **[모듈 간 의존 방향 (ADR-0001)](docs/decisions/0001-module-dependency-direction.md)**: 모듈 사이 호출 방향과 역방향 알림을 이벤트로 보내는 이유
+- 🎨 **[Ant Design 기반 프론트 공통 레이아웃 (ADR-0002)](docs/decisions/0002-frontend-common-layout.md)**: 공통 헤더·사이드바·담당자 구현 영역 구성
+- 🤖 **[AI 조사 호출 구조 (ADR-0009)](docs/decisions/0009-ai-investigation-call-structure.md)**: Spring ↔ FastAPI 비동기 호출, 읽기 전용 Tool API, 보고서 버전 관리
+- 💳 **[P5 요청·금융 작업·이력의 최소 저장 분리 (ADR-0010)](docs/decisions/0010-payment-operation-storage.md)**: 결제 보조 테이블 저장안
+- 🗄️ **[Flyway 전환과 마이그레이션 버전 규칙 (ADR-0011)](docs/decisions/0011-flyway-migration-versioning.md)**: `ddl-auto: validate`, 타임스탬프 버전, CI 검사를 고른 이유
 
-- 📘 [AGENTS.md](AGENTS.md) — 작업 규칙 (사람·AI 공통)
-- 🏛️ [docs/decisions/](docs/decisions/) — 설계 결정 기록 (ADR)
-- ⚙️ [.github/workflows/README.md](.github/workflows/README.md) — CI 설명과 겪은 문제
-- 💳 [docs/payment/](docs/payment/README.md) — P5 결제 설계 초안
-- 📝 Notion — **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신·ERD(설계 3.9, Baseline v1) 정본. 정산 관리 업무 정본은 작성 중
+### 개발 규칙과 가이드
+
+- 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
+- 🗃️ **[Flyway 사용 가이드](docs/flyway.md)**: 테이블 추가 순서, 내 앱이 붙은 DB 확인, 로컬 DB 초기화, 오류별 해결
+- ⚙️ **[CI 설명서](.github/workflows/README.md)**: 워크플로별 검사 내용과 겪은 문제
+- 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
+- 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
+- 📝 **Notion fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신·ERD(설계 3.9, Baseline v1) 정본. 정산 관리 업무 정본은 작성 중
 
 ## 현재 상태
 
