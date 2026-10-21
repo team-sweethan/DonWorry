@@ -6,7 +6,7 @@ import type {
   SubmitDecisionsRequest,
 } from '../types/case'
 import { isMergeOpen, latestReport } from '../utils/caseRules'
-import { buildReportBody, caseStore, MOCK_STAFF_ID } from './mock/caseMock'
+import { buildReportBody, caseStore, MOCK_STAFF_ID, reviewPayment } from './mock/caseMock'
 
 /**
  * P3 Case 조회·판정 API. 백엔드 계약 전이라 목업 저장소를 읽고 쓴다.
@@ -64,13 +64,22 @@ export async function submitDecisions(caseId: string, request: SubmitDecisionsRe
   if (detail.securityCase.evidenceVersion !== request.evidenceVersion) {
     throw new CaseVersionConflictError()
   }
-  const now = new Date().toISOString()
-  for (const input of request.decisions) {
+  // 요청 전체를 먼저 검증하고, 통과했을 때만 한꺼번에 반영한다 (한 트랜잭션, 설계 3.8).
+  const seen = new Set<string>()
+  const targets = request.decisions.map((input) => {
     const target = detail.payments.find((p) => p.casePaymentId === input.casePaymentId)
     if (!target) throw new Error(`결제 ${input.casePaymentId}는 이 Case 소속이 아닙니다.`)
-    if (detail.decisions.some((d) => d.casePaymentId === input.casePaymentId)) {
+    if (
+      seen.has(input.casePaymentId) ||
+      detail.decisions.some((d) => d.casePaymentId === input.casePaymentId)
+    ) {
       throw new Error(`${target.paymentId}는 이미 판정되었습니다.`)
     }
+    seen.add(input.casePaymentId)
+    return { input, target }
+  })
+  const now = new Date().toISOString()
+  for (const { input, target } of targets) {
     const decisionId = `DEC-${input.casePaymentId}`
     const actionType: ActionHandoff['actionType'] = input.decision === 'ACCEPT' ? 'CAPTURE' : 'VOID'
     detail.decisions.push({
@@ -102,26 +111,24 @@ export async function submitDecisions(caseId: string, request: SubmitDecisionsRe
   updateStatus(detail)
 }
 
-/** 시연 전용: 열람 중 같은 고객의 결제가 병합되는 상황을 만든다. 실제 API에는 없다. */
-export async function demoMergePayment(caseId: string) {
+/**
+ * 시연 전용: 열람 중 같은 고객의 보류 결제(고액 + 10분 내 반복 = 60점)가 병합되는 상황을 만든다.
+ * 실제 API에는 없다. 병합 조건이 안 맞아 거부되면 false.
+ */
+export async function demoMergePayment(caseId: string): Promise<boolean> {
   await wait()
   const detail = find(caseId)
   // 병합 조건(기획 2.4): 최초 생성 후 30분 미만, 직원 판정 전
-  if (!detail || !isMergeOpen(detail.securityCase.createdAt, detail.decisions.length)) return
+  if (!detail || !isMergeOpen(detail.securityCase.createdAt, detail.decisions.length)) return false
   const seq = detail.payments.length + 1
   const now = new Date().toISOString()
   const paymentId = `PAY-${caseId.slice(5)}-${seq}`
-  detail.payments.push({
-    casePaymentId: `CP-${caseId.slice(5)}-${seq}`,
-    paymentId,
-    linkedAt: now,
-    amount: 70_000,
-    paymentStatus: 'HELD',
-    requestedAt: now,
-    riskScore: 69,
-    fdsResult: 'REVIEW',
-    ruleHits: ['단기간 반복 결제'],
-  })
+  detail.payments.push(
+    reviewPayment(`CP-${caseId.slice(5)}-${seq}`, paymentId, 540_000, now, [
+      'HIGH_AMOUNT',
+      'RAPID_REPEAT',
+    ]),
+  )
   detail.securityCase.evidenceVersion += 1
   addHistory(detail, 'PAYMENT_LINKED', 'SYSTEM', { paymentId })
   const reportVersion = (latestReport(detail.reports)?.reportVersion ?? 0) + 1
@@ -136,6 +143,7 @@ export async function demoMergePayment(caseId: string) {
     completedAt: null,
   })
   updateStatus(detail)
+  return true
 }
 
 function find(caseId: string) {
@@ -149,7 +157,7 @@ function settle(detail: CaseDetail) {
     if (r.status === 'RUNNING' && now - Date.parse(r.createdAt) > REPORT_MOCK_DURATION_MS) {
       r.status = 'SUCCEEDED'
       r.completedAt = new Date().toISOString()
-      r.reportBody = buildReportBody(detail, r.reportVersion, r.completedAt)
+      r.reportBody = buildReportBody(detail, r, r.completedAt)
     }
   }
   for (const h of detail.handoffs) {

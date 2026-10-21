@@ -41,16 +41,16 @@ export type DecisionMode =
 /**
  * 직원 판정 가능 여부 (기획 2.5·2.8, 설계 3.5).
  * - 최신 보고서가 현재 증거 버전으로 정상 생성됨 → 그 보고서 기준 판정
- * - 최신 보고서가 총 3회 시도 후 FAILED → 수동 판정 (reportId = null)
- * - 그 외(생성 중·구버전) → 판정 보류
+ * - 최신 보고서가 현재 증거 버전으로 총 3회 시도 후 FAILED → 수동 판정 (reportId = null)
+ * - 그 외(생성 중·구버전 성공·구버전 실패) → 판정 보류
  */
 export function decisionMode(evidenceVersion: number, reports: AiReport[]): DecisionMode {
   const latest = latestReport(reports)
   if (!latest) return { kind: 'blocked', message: 'AI 보고서가 아직 요청되지 않았습니다.' }
-  if (latest.status === 'FAILED') return { kind: 'manual' }
-  if (latest.status !== 'SUCCEEDED')
+  if (latest.status === 'PENDING' || latest.status === 'RUNNING')
     return { kind: 'blocked', message: '최신 AI 보고서 생성 후 판정할 수 있습니다.' }
+  // 성공·실패 모두 현재 증거를 조사한 결과여야 판정 근거가 된다 (설계 3.11).
   if (latest.evidenceVersion !== evidenceVersion)
     return { kind: 'blocked', message: '보고서가 현재 증거 버전과 다릅니다. 재조사 후 판정하세요.' }
-  return { kind: 'normal', report: latest }
+  return latest.status === 'FAILED' ? { kind: 'manual' } : { kind: 'normal', report: latest }
 }

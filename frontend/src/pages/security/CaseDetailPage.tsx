@@ -29,12 +29,22 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   const { merchant } = useDemo()
   const { toast } = useFeedback()
-  const [detail, setDetail] = useState<CaseDetail | null | undefined>(undefined)
-
-  const load = useCallback(() => {
-    getCase(id, merchant).then(setDetail)
-  }, [id, merchant])
-  useEffect(load, [load])
+  const [refreshKey, setRefreshKey] = useState(0)
+  // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
+  // 늦게 도착한 이전 범위의 응답은 버린다.
+  const scope = `${merchant}/${id}`
+  const [loaded, setLoaded] = useState<{ scope: string; detail: CaseDetail | null } | null>(null)
+  useEffect(() => {
+    let alive = true
+    getCase(id, merchant).then((result) => {
+      if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
+    })
+    return () => {
+      alive = false
+    }
+  }, [id, merchant, refreshKey])
+  const detail = loaded?.scope === scope ? loaded.detail : undefined
+  const load = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   const waiting =
     !!detail &&
@@ -72,8 +82,13 @@ export function CaseDetailPage() {
   }
 
   const handleDemoMerge = async () => {
-    await demoMergePayment(securityCase.caseId)
-    toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
+    // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
+    if (await demoMergePayment(securityCase.caseId)) {
+      toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
+    } else {
+      toast.error('병합 기한(30분)이 지났거나 판정이 시작되어 병합되지 않았습니다.')
+      load()
+    }
   }
 
   return (
@@ -173,7 +188,9 @@ export function CaseDetailPage() {
             reports={reports}
             evidenceVersion={securityCase.evidenceVersion}
           />
+          {/* 증거 버전이 바뀌면 이전 판정 초안을 버리고 새 내용으로 다시 판정하게 한다 (설계 3.5). */}
           <DecisionPanel
+            key={securityCase.evidenceVersion}
             payments={payments}
             decisions={decisions}
             mode={mode}
