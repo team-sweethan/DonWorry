@@ -105,7 +105,15 @@ CI가 무엇을 하는지와 자주 겪는 문제는 [`.github/workflows/README.
 - 돌려보지 않은 것을 "완료"라고 쓰지 않는다
 - 모르는 것은 추측하지 않고 모른다고 적는다
 
-## 11. Code Review Rules
+## Code Review Rules
+### Review Output Language (Mandatory)
+
+- All GitHub Pull Request code review comments MUST be written in Korean (한국어).
+- Review finding titles, descriptions, explanations, summaries, and suggested fixes MUST be written in Korean.
+- Do NOT write review findings in English.
+- Preserve original code identifiers, file paths, API names, commands, and error messages.
+- Priority labels such as P0, P1, P2, and P3 may remain in English.
+- These language rules apply to both automatic Codex reviews and reviews triggered by `@codex review`.
 
 - 리뷰 제목과 설명은 한국어로 작성한다. 코드 식별자, 파일 경로, 명령어와 오류 메시지는 원문을 유지한다.
 - 리뷰만 요청받은 경우 검토와 검증을 수행한다. 별도 수정 요청 없이 7절의 브랜치 생성·구현·PR 생성 절차를 진행하지 않는다.
