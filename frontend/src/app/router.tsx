@@ -6,6 +6,8 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
+import { CaseDetailPage } from '../pages/security/CaseDetailPage'
+import { CaseListPage } from '../pages/security/CaseListPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -33,9 +35,9 @@ export const router = createBrowserRouter([
         path: '/security',
         element: <RoleRoute allowed="security" />,
         children: [
-          { index: true, element: <Navigate to="incidents" replace /> },
-          { path: 'incidents', element: <EmptyPage title="사건 목록" /> },
-          { path: 'incidents/:id', element: <EmptyPage title="사건 상세" /> },
+          { index: true, element: <Navigate to="cases" replace /> },
+          { path: 'cases', element: <CaseListPage /> },
+          { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'alerts', element: <EmptyPage title="경보" /> },
           { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
         ],

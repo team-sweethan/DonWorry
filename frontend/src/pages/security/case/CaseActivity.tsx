@@ -1,0 +1,117 @@
+import { Card, Table, Timeline, Typography } from 'antd'
+import type { ActionHandoff, CaseHistory, CasePayment, PaymentDecision } from '../../../types/case'
+import {
+  actionTypeLabel,
+  dateTime,
+  handoffStatusLabel,
+  historyEventLabel,
+  paymentStatusLabel,
+} from './caseLabels'
+import { CodeTag } from './CodeTag'
+
+/**
+ * 결제별 금융 조치 인계 (설계 3.8). ACCEPTED는 담당 모듈의 영속 접수이며 실제 매입·취소 성공이 아니다.
+ * 실제 결과는 P5 결제 상태로 따로 보여준다.
+ */
+export function HandoffCard({
+  payments,
+  decisions,
+  handoffs,
+}: {
+  payments: CasePayment[]
+  decisions: PaymentDecision[]
+  handoffs: ActionHandoff[]
+}) {
+  const rows = handoffs.map((h) => {
+    const decision = decisions.find((d) => d.decisionId === h.decisionId)
+    const payment = payments.find((p) => p.casePaymentId === decision?.casePaymentId)
+    return { ...h, payment }
+  })
+  return (
+    <Card
+      title={<span className="dw-section-title">금융 조치 인계</span>}
+      style={{ borderColor: '#E2E8F0' }}
+    >
+      <Table
+        size="small"
+        rowKey="handoffId"
+        pagination={false}
+        dataSource={rows}
+        locale={{ emptyText: '판정된 결제가 없습니다.' }}
+        columns={[
+          { title: '결제', key: 'payment', render: (_, r) => r.payment?.paymentId ?? '-' },
+          {
+            title: '조치',
+            dataIndex: 'actionType',
+            render: (v: ActionHandoff['actionType']) => actionTypeLabel[v],
+          },
+          {
+            title: '인계 상태',
+            dataIndex: 'status',
+            render: (v: ActionHandoff['status'], r) => (
+              <>
+                <CodeTag value={handoffStatusLabel[v]} />
+                {r.lastErrorCode && (
+                  <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>
+                    {r.lastErrorCode}
+                  </div>
+                )}
+              </>
+            ),
+          },
+          {
+            title: '접수 작업 ID',
+            dataIndex: 'targetOperationId',
+            render: (v: string | null) => v ?? '-',
+          },
+          {
+            title: '실제 결제 상태 (P5)',
+            key: 'paymentStatus',
+            render: (_, r) =>
+              r.payment ? <CodeTag value={paymentStatusLabel[r.payment.paymentStatus]} /> : '-',
+          },
+        ]}
+      />
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '12px 0 0' }}>
+        모든 결제의 인계가 접수 완료되면 Case가 종료됩니다. Case 종료는 실제 매입·취소 완료를 뜻하지
+        않으며, 실행 결과는 P5·P6가 결제 상태로 반영합니다.
+      </Typography.Paragraph>
+    </Card>
+  )
+}
+
+/** case_history — INSERT 전용 감사 이력을 시간순으로 보여준다. */
+export function HistoryCard({ history }: { history: CaseHistory[] }) {
+  const sorted = [...history].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
+  return (
+    <Card
+      title={<span className="dw-section-title">Case 이력</span>}
+      style={{ borderColor: '#E2E8F0' }}
+    >
+      <Timeline
+        items={sorted.map((h) => ({
+          color:
+            h.eventType === 'HANDOFF_FAILED'
+              ? 'red'
+              : h.eventType === 'CASE_CLOSED'
+                ? 'green'
+                : 'blue',
+          children: (
+            <div style={{ fontSize: 13 }}>
+              <strong>{historyEventLabel[h.eventType]}</strong>
+              {Object.keys(h.eventData).length > 0 && (
+                <span style={{ color: '#475569' }}>
+                  {' '}
+                  · {Object.values(h.eventData).join(' · ')}
+                </span>
+              )}
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                {dateTime(h.createdAt)} · {h.actorType === 'STAFF' ? h.actorId : '시스템'}
+              </div>
+            </div>
+          ),
+        }))}
+      />
+    </Card>
+  )
+}
