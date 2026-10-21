@@ -31,17 +31,17 @@ sequenceDiagram
 
     P3->>R: 조사 요청 (caseId · 증거 버전, 방식 미정 §5.3)
     R->>R: ai_report PENDING 저장 (report_version + 1)
-    R->>A: POST /investigations (reportId, caseId, evidenceVersion)
+    R->>A: POST /investigations (reportId, attempt, caseId, evidenceVersion)
     A-->>R: 202 Accepted
-    R->>R: RUNNING
+    R->>R: RUNNING (PENDING일 때만 — 조건부 UPDATE)
     loop Agent가 필요한 증거만
         A->>R: GET /internal/ai/tools/{tool}?caseId=…
         R->>R: Case 소속 결제 · 가맹점 범위 검증
         R->>O: 소유 모듈 공개 api 조회
         R-->>A: 필요한 최소 정보
     end
-    A->>R: POST /internal/ai/reports/{reportId}/result
-    R->>R: 구조 검증 → SUCCEEDED 저장
+    A->>R: POST /internal/ai/reports/{reportId}/result (attempt)
+    R->>R: 구조 검증 → SUCCEEDED 저장 (PENDING · RUNNING일 때만)
     R->>P3: 완료 통지 (방식 미정 §5.3) · 증거 버전이 바뀌었으면 다음 버전 PENDING
 ```
 
@@ -52,7 +52,7 @@ sequenceDiagram
 | 작업 ID | `report_id`. 별도 job ID 컬럼을 만들지 않는다 (3.9⑤ 8개 컬럼 유지) |
 | 인증 | 서비스 간 키(헤더). 직원 로그인과 별개. 키는 환경 변수, 저장소에 올리지 않는다 |
 | 권한 | Tool은 GET만. 결제 · 판정 · Case 상태를 바꾸는 Tool은 만들지 않는다 |
-| 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구 |
+| 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 번호 `attempt`를 함께 싣는다 (결정 2) |
 | 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
 
 ## 결정 2 — `ai_report` 8개 컬럼으로 상태 · 재시도 · 실패 다루기
@@ -60,23 +60,32 @@ sequenceDiagram
 | 상태 | 언제 | 채우는 컬럼 |
 | --- | --- | --- |
 | `PENDING` | P4가 조사 요청을 받아 행 생성 | `report_version` = 해당 Case 최대값 + 1, `evidence_version` = 요청 시점 Case 증거 버전, `created_at` |
-| `RUNNING` | FastAPI가 `202`로 접수 | — |
-| `SUCCEEDED` | 결과 콜백이 구조 검증 통과 | `report_body`(보고서 JSON), `completed_at` |
+| `RUNNING` | FastAPI가 `202`로 접수. **`PENDING`일 때만** 바꾼다 | — |
+| `SUCCEEDED` | 결과 콜백이 구조 검증 통과. **`PENDING` · `RUNNING`일 때만** 바꾼다 | `report_body`(보고서 JSON), `completed_at` |
 | `FAILED` | 총 3회 시도 모두 실패 | `report_body`에 `error` 객체(실패 코드 · 사유 · 시도 횟수 · 마지막 시도 시각), `completed_at` = 실패 확정 시각 |
 
+- **상태 변경은 모두 조건부 UPDATE로 한다.** `WHERE report_id = ? AND status IN (…)`처럼 바꿔도 되는 이전 상태를 조건에 넣고, 변경 건수가 0이면 "이미 처리됨"으로 본다. 끝난 상태(`SUCCEEDED` · `FAILED`)는 어떤 경로로도 덮어쓰지 않는다
+  - 예) 202 응답 직후 FastAPI가 바로 끝나 성공 콜백이 먼저 `SUCCEEDED`를 저장하면, 뒤이은 `RUNNING` UPDATE는 조건(`status = 'PENDING'`)이 맞지 않아 0건 변경으로 끝난다. 그래서 콜백은 `PENDING`에서도 받는다
+- **시도마다 번호 `attempt`(1 · 2 · 3)를 붙인다.** Spring은 보고서별 "현재 시도 번호"를 기억하고, 콜백 · 조회 결과의 `attempt`와 비교한다
+  - 현재 시도가 아닌 콜백의 **실패**는 무시한다. 그 시도는 이미 타임아웃으로 실패 1회로 셌다 (같은 실패를 두 번 세지 않음)
+  - 현재 시도가 아닌 콜백의 **성공**은 행이 아직 `PENDING` · `RUNNING`이면 받는다. 같은 증거를 분석한 정상 결과다
+  - 행이 끝난 상태면 어떤 시도의 콜백이든 무시한다. `FAILED` 뒤에 늦게 온 성공도 뒤집지 않는다 (직원이 이미 수동 조사로 넘어갔을 수 있음)
+  - 새 시도를 보내기 전에 FastAPI에 이전 시도 취소를 요청한다. 취소가 실패해도 진행하며, 위 규칙이 늦은 콜백을 처리한다
 - **재시도는 같은 행에서 한다.** 같은 증거를 다시 분석하는 것이므로 `report_version`을 올리지 않는다. `UNIQUE(case_id, report_version)`과 충돌하지 않는다
 - **한 번의 시도 실패**로 세는 것: FastAPI가 202를 주지 않음(연결 실패 · 5xx · 타임아웃), FastAPI가 실패 결과를 보냄, 결과가 시간 안에 오지 않고 조회로도 완료가 아님, 결과가 구조 검증에 실패함
 - **시도 횟수는 실행 중에는 Spring 프로세스 안에서 센다.** 최종 실패 때만 `report_body.error.attempts`에 남긴다. 컬럼을 늘리지 않기 위한 선택이며, 아래 "한계"를 받아들인다
 - **실패 사유 위치:** 기획 2.5의 "실패 사유 기록"은 `report_body.error`로 충족한다 (별도 컬럼 없음)
 - **AI 실패는 자동 판정으로 이어지지 않는다.** `FAILED`를 P3에 알리고, 직원이 직접 조사해 `report_id = NULL`로 판정한다 (설계 3.7)
 
-**한계:** 실행 중 서버가 재시작되면 메모리의 시도 횟수가 사라진다. 재시작 시 오래된 `PENDING` · `RUNNING` 행은 조회로 상태를 확인하고, 확인되지 않으면 처음부터 다시 3회를 시도한다. 횟수를 엄밀히 지켜야 한다고 팀이 정하면 `attempt_count` 컬럼 추가를 설계 3.9에 먼저 제안한다.
+**한계:** 실행 중 서버가 재시작되면 메모리의 시도 횟수 · 현재 시도 번호가 사라진다. 재시작 시 오래된 `PENDING` · `RUNNING` 행은 조회로 상태를 확인하고, 확인되지 않으면 처음부터 다시 3회를 시도한다. 횟수를 엄밀히 지켜야 한다고 팀이 정하면 `attempt_count` 컬럼 추가를 설계 3.9에 먼저 제안한다.
 
 ## 결정 3 — 같은 Case의 중복 실행 방지와 버전
 
 - 같은 Case에 `PENDING` · `RUNNING` 행이 있으면 새 행을 만들지 않는다. 요청은 "최신 증거 버전 기록"으로만 남는다 (설계 3.5)
 - 실행이 끝나면(`SUCCEEDED` · `FAILED`) 그 행의 `evidence_version`과 현재 Case 증거 버전을 비교한다. 다르면 다음 `report_version`을 `PENDING`으로 만든다
-- 늦게 도착한 결과는 자기 행에만 쓴다. 다른 버전 행을 덮어쓰지 않는다. 이미 `SUCCEEDED`인 행에 같은 결과가 다시 오면 무시한다(멱등)
+- **동시 요청으로 버전 번호가 겹치면 다시 읽어 합류한다.** 같은 Case에 요청 두 개가 동시에 와서 둘 다 "진행 중 없음 · 최대 버전 1"을 보면 둘 다 v2를 저장하려 한다. 늦은 쪽은 `UNIQUE(case_id, report_version)` 위반을 받는데, 이를 오류로 끝내지 않고 진행 중인 행을 다시 읽어 그 작업에 합류한 것으로 처리한다
+  - 늦은 쪽이 더 새 증거 버전을 가져왔어도 빠지지 않는다. 바로 아래 "끝나면 비교" 규칙이 다음 버전을 예약한다
+- 늦게 도착한 결과는 자기 행에만 쓴다. 다른 버전 행을 덮어쓰지 않는다. 끝난 행에 오는 결과는 무시한다(멱등, 결정 2 조건부 UPDATE)
 - "최신 보고서" = Case 최대 `report_version`이면서 `evidence_version`이 현재 Case 증거 버전과 같은 `SUCCEEDED` 행
 
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)
@@ -130,6 +139,8 @@ investigation/report/
 | 동기 HTTP 한 번으로 보고서를 받음 | 생성 시간이 길어 타임아웃 위험이 있다. 설계 3.7이 비동기 접수(202)를 정했다 |
 | 결과 조회(polling)만 사용 | 완료가 늦게 반영되고 Spring에 주기 작업이 필요하다. 콜백 유실 복구용으로만 쓴다 |
 | 별도 job ID · `attempt_count` · `error_message` 컬럼 추가 | 설계 3.9⑤가 8개 컬럼으로 확정했다. `report_id`와 `report_body.error`로 충분하다. 재시작 때 횟수 보존이 필요해지면 그때 3.9 변경을 제안한다 |
+| `RUNNING`을 FastAPI 호출 전에 저장 | 콜백과의 순서 경합은 막지만, 호출이 실패해도 "진행 중"이 먼저 기록된다. `RUNNING` = "FastAPI가 접수함"이라는 뜻을 유지하고, 경합은 조건부 UPDATE로 막는다 |
+| 버전 번호를 정할 때 `security_case` 행을 잠금(`SELECT … FOR UPDATE`) | 동시 요청을 한 줄로 세울 수 있지만 P3 소유 테이블을 P4가 잠그게 된다. UNIQUE 위반 시 다시 읽어 합류하는 방식으로 충분하다 |
 | 재시도마다 새 `report_version` 행 | 같은 증거를 다시 분석하는 것인데 버전이 늘어 "v1 · v2"의 뜻(증거가 바뀜)이 흐려진다 |
 
 ## 영향
@@ -140,7 +151,7 @@ investigation/report/
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
 - 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시
-- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지
+- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 이전 시도의 늦은 실패 콜백이 횟수에 다시 더해지지 않는지, 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지
 - 문서: README Architecture · AGENTS.md §6
 
 ## 검증

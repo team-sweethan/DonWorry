@@ -45,7 +45,8 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
-- 같은 모듈 안 테이블끼리는 물리 FK를 건다. 다른 모듈 테이블에는 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 모듈 `api/`로)
+- 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
+  - 예외: `investigation` 모듈 안이라도 P4의 `ai_report`와 P3 테이블(`security_case` · `payment_decision`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
 - 테이블은 Flyway로만 바꾼다. 이미 main에 들어간 마이그레이션 파일은 고치지 않고 새 번호를 추가한다
 - 마이그레이션 번호는 PR 병합 직전에 main 최신 번호를 보고 정한다

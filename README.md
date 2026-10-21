@@ -336,7 +336,7 @@ flowchart BT
   | investigation (P3) | `security_case` · `case_payment` · `payment_decision` · `action_handoff` · `case_history` |
   | investigation/report (P4) | `ai_report` |
 
-  같은 모듈 안은 물리 FK, 모듈 사이는 ID만 저장하는 논리 참조입니다. P1 직원·가맹점, CakeShop 주문, P5·P6 금융 실행 상세 테이블은 각 담당이 따로 설계합니다.
+  같은 담당의 테이블끼리만 물리 FK, 담당이 다르면 ID만 저장하는 논리 참조입니다(같은 investigation 안의 P3 ↔ P4도 논리 참조). P1 직원·가맹점, CakeShop 주문, P5·P6 금융 실행 상세 테이블은 각 담당이 따로 설계합니다.
 - 자동 검사
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
   - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
