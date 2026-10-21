@@ -16,8 +16,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 // 빈 MariaDB에서 앱을 기동해 migration 전체 적용 + JPA validate를 확인한다
 // 컨텍스트가 뜨는 것 자체가 1차 검사: SQL 오류·버전 충돌·Entity 불일치면 여기서 실패
+// 웹 환경은 기본값(MOCK) — NONE이면 SecurityConfig가 받는 HttpSecurity Bean이 없어 기동 실패
 @Tag("mariadb")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
 class FlywayMigrationTests {
 
