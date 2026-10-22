@@ -9,13 +9,30 @@ public final class PaymentRules {
     private PaymentRules() {}
 
     // P2·P3 공개 DTO가 확정되기 전 사용하는 내부 입력 타입이다.
-    public enum FdsVerdict { ALLOW, REVIEW, DENY, ERROR }
+    public enum FdsVerdict {
+        ALLOW,
+        REVIEW,
+        DENY,
+        ERROR
+    }
 
-    public enum AuthorizationOutcome { SUCCEEDED, DECLINED, TECHNICAL_FAILURE }
+    public enum AuthorizationOutcome {
+        SUCCEEDED,
+        DECLINED,
+        TECHNICAL_FAILURE
+    }
 
-    public enum AuthorizationStatus { NOT_REQUESTED, SUCCEEDED, DECLINED, UNKNOWN }
+    public enum AuthorizationStatus {
+        NOT_REQUESTED,
+        SUCCEEDED,
+        DECLINED,
+        UNKNOWN
+    }
 
-    public enum StaffDecision { ACCEPT, REJECT }
+    public enum StaffDecision {
+        ACCEPT,
+        REJECT
+    }
 
     public enum NextStep {
         NONE,
@@ -33,13 +50,13 @@ public final class PaymentRules {
             Objects.requireNonNull(status, "status");
             Objects.requireNonNull(authorizationStatus, "authorizationStatus");
             boolean consistent = switch (status) {
-                case PENDING -> authorizationStatus == AuthorizationStatus.NOT_REQUESTED
-                        || authorizationStatus == AuthorizationStatus.SUCCEEDED
-                        || authorizationStatus == AuthorizationStatus.UNKNOWN;
+                case PENDING ->
+                    authorizationStatus == AuthorizationStatus.NOT_REQUESTED
+                            || authorizationStatus == AuthorizationStatus.SUCCEEDED
+                            || authorizationStatus == AuthorizationStatus.UNKNOWN;
                 case DENIED -> authorizationStatus == AuthorizationStatus.NOT_REQUESTED;
                 case DECLINED -> authorizationStatus == AuthorizationStatus.DECLINED;
-                case HELD, CAPTURED, VOIDED, EXPIRED ->
-                        authorizationStatus == AuthorizationStatus.SUCCEEDED;
+                case HELD, CAPTURED, VOIDED, EXPIRED -> authorizationStatus == AuthorizationStatus.SUCCEEDED;
             };
             if (!consistent) {
                 throw new IllegalArgumentException("결제 상태와 승인 결과가 일치하지 않습니다");
@@ -63,8 +80,8 @@ public final class PaymentRules {
         Objects.requireNonNull(verdict, "verdict");
         return switch (verdict) {
             case ALLOW, REVIEW -> new Decision(state, NextStep.REQUEST_AUTHORIZATION);
-            case DENY -> new Decision(
-                    new State(PaymentStatus.DENIED, AuthorizationStatus.NOT_REQUESTED), NextStep.NONE);
+            case DENY ->
+                new Decision(new State(PaymentStatus.DENIED, AuthorizationStatus.NOT_REQUESTED), NextStep.NONE);
             case ERROR -> new Decision(state, NextStep.RECORD_FDS_ERROR);
         };
     }
@@ -78,16 +95,19 @@ public final class PaymentRules {
             throw new IllegalArgumentException("ALLOW 또는 REVIEW일 때만 승인 결과를 처리할 수 있습니다");
         }
         return switch (outcome) {
-            case SUCCEEDED -> verdict == FdsVerdict.REVIEW
-                    ? new Decision(new State(PaymentStatus.HELD, AuthorizationStatus.SUCCEEDED),
-                            NextStep.NOTIFY_HELD)
-                    : new Decision(new State(PaymentStatus.PENDING, AuthorizationStatus.SUCCEEDED),
-                            NextStep.REQUEST_CAPTURE);
-            case DECLINED -> new Decision(
-                    new State(PaymentStatus.DECLINED, AuthorizationStatus.DECLINED), NextStep.NONE);
-            case TECHNICAL_FAILURE -> new Decision(
-                    new State(PaymentStatus.PENDING, AuthorizationStatus.UNKNOWN),
-                    NextStep.RECONCILE_AUTHORIZATION);
+            case SUCCEEDED ->
+                verdict == FdsVerdict.REVIEW
+                        ? new Decision(
+                                new State(PaymentStatus.HELD, AuthorizationStatus.SUCCEEDED), NextStep.NOTIFY_HELD)
+                        : new Decision(
+                                new State(PaymentStatus.PENDING, AuthorizationStatus.SUCCEEDED),
+                                NextStep.REQUEST_CAPTURE);
+            case DECLINED ->
+                new Decision(new State(PaymentStatus.DECLINED, AuthorizationStatus.DECLINED), NextStep.NONE);
+            case TECHNICAL_FAILURE ->
+                new Decision(
+                        new State(PaymentStatus.PENDING, AuthorizationStatus.UNKNOWN),
+                        NextStep.RECONCILE_AUTHORIZATION);
         };
     }
 

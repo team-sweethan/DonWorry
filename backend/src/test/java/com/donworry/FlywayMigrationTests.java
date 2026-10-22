@@ -3,7 +3,6 @@ package com.donworry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
-
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;

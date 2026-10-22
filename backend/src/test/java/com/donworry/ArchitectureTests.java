@@ -17,8 +17,12 @@ class ArchitectureTests {
 
     @Test
     void controller는_repository를_직접_호출하지_않는다() {
-        noClasses().that().resideInAPackage("..controller..")
-                .should().dependOnClassesThat().resideInAPackage("..repository..")
+        noClasses()
+                .that()
+                .resideInAPackage("..controller..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..repository..")
                 .because("Controller → Service → Repository 순서를 지킨다")
                 .allowEmptyShould(true)
                 .check(classes);
@@ -26,8 +30,12 @@ class ArchitectureTests {
 
     @Test
     void controller는_entity에_의존하지_않는다() {
-        noClasses().that().resideInAPackage("..controller..")
-                .should().dependOnClassesThat().resideInAPackage("..entity..")
+        noClasses()
+                .that()
+                .resideInAPackage("..controller..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("..entity..")
                 .because("화면·외부 응답은 DTO로 내보낸다")
                 .allowEmptyShould(true)
                 .check(classes);
@@ -35,8 +43,12 @@ class ArchitectureTests {
 
     @Test
     void entity는_controller와_service에_의존하지_않는다() {
-        noClasses().that().resideInAPackage("..entity..")
-                .should().dependOnClassesThat().resideInAnyPackage("..controller..", "..service..")
+        noClasses()
+                .that()
+                .resideInAPackage("..entity..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("..controller..", "..service..")
                 .because("엔티티는 데이터만 담고 위 계층을 모른다")
                 .allowEmptyShould(true)
                 .check(classes);
