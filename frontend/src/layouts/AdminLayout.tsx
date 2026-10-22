@@ -63,7 +63,7 @@ function Header() {
           icon={<LogoutOutlined />}
           onClick={() => {
             logout()
-            navigate('/login')
+            navigate('/demo/login')
           }}
         >
           로그아웃

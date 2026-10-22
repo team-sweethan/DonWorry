@@ -4,6 +4,7 @@ import { useDemo } from '../demo/DemoContext'
 import { AdminLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
+import { LoginPage } from '../pages/auth/LoginPage'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
@@ -13,7 +14,7 @@ import { AlertListPage } from '../pages/security/AlertListPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
-  return loggedIn ? <AdminLayout /> : <Navigate to="/login" replace />
+  return loggedIn ? <AdminLayout /> : <Navigate to="/demo/login" replace />
 }
 
 function RoleRoute({ allowed }: { allowed: Role }) {
@@ -28,7 +29,8 @@ function RoleHome() {
 
 // 시연용 역할 분기이며, 실제 권한 검사는 서버 연동 시 구현한다.
 export const router = createBrowserRouter([
-  { path: '/login', element: <DemoLoginPage /> },
+  { path: '/login', element: <LoginPage /> },
+  { path: '/demo/login', element: <DemoLoginPage /> },
   {
     element: <DemoSession />,
     children: [
