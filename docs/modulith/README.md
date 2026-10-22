@@ -19,7 +19,7 @@
 | [02-why.md](02-why.md) | 왜 채택했나 — 4주 · 6명 프로젝트에서의 선택 |
 | [03-module-structure.md](03-module-structure.md) | 우리 모듈 5개와 패키지 규칙, `@ApplicationModule` · `@NamedInterface` |
 | [04-dependency-and-events.md](04-dependency-and-events.md) | 의존 방향, 동기 호출 vs 이벤트, 이벤트 클래스 위치, 이벤트 발행 기록 |
-| [05-verification.md](05-verification.md) | `verify()`가 막는 것과 못 막는 것, `allowedDependencies` 적용 계획 |
+| [05-verification.md](05-verification.md) | `verify()`가 막는 것과 못 막는 것, `allowedDependencies`(모듈별 허용 의존) |
 
 ## 관련 문서
 

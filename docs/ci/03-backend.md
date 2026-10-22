@@ -62,8 +62,9 @@ DB 없이 코드 모양과 클래스 구조만 검사합니다. `spotlessCheck`�
 | --- | --- |
 | 다른 모듈은 공개 `api/` 패키지만 쓴다 | `investigation`이 `payment.entity.Payment`를 import |
 | 모듈 간 순환 의존 금지 | `payment` → `settlement` 호출 + `settlement` → `payment` 호출 |
+| 허용된 방향으로만 의존 (ADR-0012) | `fds`가 `investigation.api`를 import |
 
-- 모듈이 **어느 방향**으로 의존해야 하는지(허용 목록)는 아직 강제하지 않습니다. 팀 합의 후 각 모듈 `package-info.java`에 `allowedDependencies`(허용 의존 목록)를 넣을 예정입니다
+- 모듈이 **어느 방향**으로 의존해도 되는지는 각 모듈 `package-info.java`의 `allowedDependencies`(허용 의존 목록)로 검사합니다 ([Modulith 05 3절](../modulith/05-verification.md#3-alloweddependencies--모듈별-허용-의존))
 - 같은 테스트가 `build/spring-modulith-docs/`에 모듈 관계도(PlantUML)도 만듭니다
 
 ### `ArchitectureTests` — 모듈 **안** 계층 규칙 (ArchUnit)

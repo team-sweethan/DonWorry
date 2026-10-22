@@ -26,7 +26,7 @@
 | 코드 모양 (들여쓰기 · 줄바꿈 · import) | 🤖 `spotlessCheck` | [ADR-0013](../decisions/0013-code-formatter.md) |
 | 모듈 경계 (`api/`만 사용) · 순환 금지 | 🤖 `ModularityTests` | [Modulith 05](../modulith/05-verification.md) |
 | 계층 (Controller → Service → Repository) | 🤖 `ArchitectureTests` | [CI 03 3절](../ci/03-backend.md#3-gradlew-check) |
-| 모듈 간 의존 방향 | 📄 (자동 강제는 팀 합의 후) | [ADR-0012](../decisions/0012-payment-settlement-dependency.md) |
+| 모듈 간 의존 방향 | 🤖 `ModularityTests` (`allowedDependencies`) | [ADR-0012](../decisions/0012-payment-settlement-dependency.md), [Modulith 05 3절](../modulith/05-verification.md#3-alloweddependencies--모듈별-허용-의존) |
 | 이벤트 클래스 위치 · 멱등 | 📄 | [Modulith 04](../modulith/04-dependency-and-events.md) |
 | 모듈 안 패키지 구조 | 📄 | [Modulith 03](../modulith/03-module-structure.md) |
 | Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그 · 주석 | 📄 일부 `합의` (`@Builder` · 외부 HTTP 호출 · 테스트 작성), 나머지 `합의 전` | [02 코드 작성 규칙](02-code.md) |

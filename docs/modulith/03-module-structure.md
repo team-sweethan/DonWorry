@@ -136,7 +136,7 @@ package com.donworry.payment.api;
 
 | 어노테이션 | 붙는 곳 | 뜻 |
 | --- | --- | --- |
-| `@ApplicationModule` | 모듈 최상위 패키지 | 이 패키지가 모듈 하나. `displayName`은 관계도에 표시되는 이름. 나중에 `allowedDependencies`(허용 의존 목록)도 여기에 적는다 ([05](05-verification.md#3-alloweddependencies-적용-계획)) |
+| `@ApplicationModule` | 모듈 최상위 패키지 | 이 패키지가 모듈 하나. `displayName`은 관계도에 표시되는 이름. `allowedDependencies`(허용 의존 목록)도 여기에 적는다 ([05](05-verification.md#3-alloweddependencies--모듈별-허용-의존)) |
 | `@NamedInterface("api")` | `api/` 패키지 | 이 패키지를 `api`라는 이름의 공개 창구로 지정. 하위 패키지는 기본으로 비공개라서, 공개하려면 이 표시가 필요 |
 
 다음: [04 의존 방향과 이벤트](04-dependency-and-events.md)

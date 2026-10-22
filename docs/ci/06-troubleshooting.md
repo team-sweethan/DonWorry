@@ -10,7 +10,7 @@
 | 공통 | 첫 실행이 5분 이상 걸림 | Gradle 캐시 업로드 | [A2](#a2-첫-실행이-5분-넘게-걸림) |
 | backend | `./gradlew: Permission denied` | Windows 커밋으로 실행 권한 빠짐 | [B1](#b1-gradlew-실행-권한-없음) |
 | backend | `병합된 migration을 수정/삭제했습니다` · `migration 파일명이 규칙과 다릅니다` | migration 규칙 위반 | [B2](#b2-migration-검사-실패) |
-| backend | `ModularityTests` 실패 (`non-exposed type`, `Cycle detected`) | 다른 모듈 내부 접근, 순환 의존 | [B3](#b3-modularitytests-실패) |
+| backend | `ModularityTests` 실패 (`non-exposed type`, `Cycle detected`, `Allowed targets`) | 다른 모듈 내부 접근, 순환 의존, 허용되지 않은 방향 | [B3](#b3-modularitytests-실패) |
 | backend | `ArchitectureTests` 실패 (`Architecture Violation`) | 모듈 안 계층 규칙 위반 | [B4](#b4-architecturetests-실패) |
 | backend | `mariaDbTest` 실패 | SQL 오류, Entity ↔ 테이블 불일치 | [B5](#b5-mariadbtest-실패) |
 | backend | `spotlessJavaCheck FAILED` · `format violations` | 코드 모양 불일치 | [B6](#b6-spotlesscheck-실패) |
@@ -79,6 +79,7 @@ migration 파일명이 규칙과 다릅니다: V3__create_ai_report.sql (./gradl
 ```text
 - Module 'investigation' depends on non-exposed type com.donworry.payment.entity.Payment within module 'payment'!
 - Cycle detected: Slice payment -> Slice settlement -> Slice payment
+- Module 'fds' depends on named interface(s) 'investigation :: api' via com.donworry.fds.service.CaseLookup -> com.donworry.investigation.api.CaseQuery. Allowed targets: identity :: api.
 ```
 
 **원인과 해결**
@@ -86,6 +87,7 @@ migration 파일명이 규칙과 다릅니다: V3__create_ai_report.sql (./gradl
 | 메시지 | 원인 | 해결 |
 | --- | --- | --- |
 | `depends on non-exposed type` | 다른 모듈의 `entity` · `repository` · `service` 등 **공개되지 않은 클래스**를 import | 그 모듈의 공개 `api/` 패키지에 있는 인터페이스·DTO만 씁니다. 필요한 것이 없으면 그 모듈 담당에게 `api/` 추가를 요청합니다 |
+| `Allowed targets: ...` | ADR-0012에서 허용하지 않은 방향의 모듈을 import (`Allowed targets`가 이 모듈이 쓸 수 있는 목록) | 그 의존이 정말 필요한지 확인합니다. 반대 방향 알림이면 이벤트로 바꾸고, 새 의존이 꼭 필요하면 ADR 개정(팀 합의) 후 모듈 `package-info.java`의 `allowedDependencies`에 추가합니다 ([Modulith 05 3절](../modulith/05-verification.md#3-alloweddependencies--모듈별-허용-의존)) |
 | `Cycle detected` | 두 모듈이 서로를 호출 (순환) | 아래층이 위층에 알릴 일은 **커밋 후 이벤트**로 보냅니다 ([AGENTS.md 4절](../../AGENTS.md#4-backend-규칙), [ADR-0012](../decisions/0012-payment-settlement-dependency.md)) |
 
 로컬 확인: `backend/`에서 `./gradlew test --tests com.donworry.ModularityTests`
