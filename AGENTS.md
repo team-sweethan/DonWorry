@@ -4,6 +4,25 @@
 
 ## 1. 정본 위치
 
+### 작업별로 먼저 읽을 문서
+
+하려는 작업에 해당하는 줄의 문서만 먼저 읽는다. `docs/` 전체나 긴 문서 전체를 미리 읽지 않는다.
+그 문서와 현재 코드로 결정할 수 없을 때만 아래 "정본 목록"의 관련 문서를 더 읽는다.
+
+| 하려는 작업 | 먼저 읽을 문서 |
+| --- | --- |
+| DB 테이블 추가·변경 | [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md) 1·5·6절, [`docs/erd/`](docs/erd/README.md) (작업 순서는 이 파일 4절) |
+| 다른 모듈 호출, 이벤트 발행·구독 | [`docs/modulith/04-dependency-and-events.md`](docs/modulith/04-dependency-and-events.md), [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md) |
+| 모듈 안 클래스·패키지 배치 | [`docs/modulith/03-module-structure.md`](docs/modulith/03-module-structure.md) |
+| 내 모듈 기능 개발 | `docs/<모듈>/`이 있으면 그 README (예: [`docs/payment/`](docs/payment/README.md)). 없으면 현재 코드 |
+| AI 조사·FastAPI 연동 | [ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md) (규칙은 이 파일 6절) |
+| CI 실패 | [`docs/ci/06-troubleshooting.md`](docs/ci/06-troubleshooting.md) |
+| Flyway·로컬 DB 오류 | [`docs/flyway/06-troubleshooting.md`](docs/flyway/06-troubleshooting.md) |
+| 모듈 경계·의존 방향·저장 방식·외부 계약 변경 | [`docs/decisions/`](docs/decisions/README.md) (규칙은 이 파일 8절) |
+| 코드·PR 리뷰 | 이 파일 맨 아래 Code Review Rules |
+
+### 정본 목록
+
 - FDS 연계 업무(평가 → HELD → Case · AI 조사 → 직원 판정 → 금융 조치 인계 · 접수 확인)의 흐름 · 상태값 · 모듈 간 통신 → Notion **fds 정본** 페이지 (01 업무분석 / 02 기획 / 03 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
 - 정산 관리 업무(실제 CAPTURE 실행 · 매입 배치 · 수수료 · 정산)와 P5 · P6 금융 실행 상세 → **정본 작성 중**. fds 정본은 이 범위를 정하지 않는다 (fds 정본 §5.9 제외 · 설계 3.3 제외 범위). 확정되면 이 줄을 갱신한다
 - ERD(FDS 연계 범위) → Notion **fds 정본 · 03 설계 §3.9** (Baseline v1, 8개 테이블). 정산 · 금융 실행 테이블은 미포함. DB 원칙 · INSERT/UPDATE 예시는 **04 DB 설계 및 데이터 매핑** (구현 가이드, 3.9를 대체하지 않음). ERD를 바꿀 때는 3.9를 먼저 합의 · 수정한다
@@ -95,6 +114,11 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 5. 바꾼 영역의 검사 명령 실행
 6. `dev`로 PR — 템플릿의 "미검증" 칸을 비우지 않는다
 7. `dev` → `main` 병합은 시연·마일스톤 때만 (팀 합의)
+8. 작업을 마치면 이 형식으로 보고한다 (사람·AI 공통, PR 본문과 같은 항목)
+   - 변경 파일과 무엇을 바꿨는지
+   - 실행한 검사 명령과 결과
+   - 실행하지 못한 검사 (미검증)
+   - 문서·코드에 답이 없어 사람이 정해야 할 것, 다른 담당 계약에 닿는 것
 
 `main` · `dev`에 직접 push하지 않는다.
 

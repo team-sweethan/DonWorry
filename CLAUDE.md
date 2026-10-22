@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+@AGENTS.md
+
 작업 규칙은 [AGENTS.md](AGENTS.md)에 있다. 먼저 읽을 것.
 규칙을 고칠 때는 AGENTS.md만 고친다 (두 곳에 쓰면 한쪽이 낡는다).
 
