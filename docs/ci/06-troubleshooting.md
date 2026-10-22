@@ -74,7 +74,7 @@ migration 파일명이 규칙과 다릅니다: V3__create_ai_report.sql (./gradl
 
 ### B3. ModularityTests 실패
 
-**증상** `./gradlew check`에서 `ModularityTests > 모듈_경계와_순환_의존을_검사한다()`가 실패합니다. 메시지는 대략 이런 형태입니다.
+**증상** `./gradlew check`에서 `ModularityTests > modules_respectBoundariesAndAllowedDependencies()`가 실패합니다. 메시지는 대략 이런 형태입니다.
 
 ```text
 - Module 'investigation' depends on non-exposed type com.donworry.payment.entity.Payment within module 'payment'!

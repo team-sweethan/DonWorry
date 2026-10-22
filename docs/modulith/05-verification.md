@@ -10,13 +10,13 @@
 static final ApplicationModules modules = ApplicationModules.of(DonWorryApplication.class);
 
 @Test
-void 모듈_경계와_순환_의존을_검사한다() {
+void modules_respectBoundariesAndAllowedDependencies() {
     modules.verify();
 }
 ```
 
 - `./gradlew check`에 포함되어 **DB 없이** 돕니다. PR마다 CI에서도 돕니다 ([CI 03](../ci/03-backend.md#modularitytests--모듈-사이-규칙-spring-modulith))
-- 같은 클래스의 `모듈_관계도를_생성한다()`가 `build/spring-modulith-docs/`에 모듈 관계도(PlantUML)를 만듭니다
+- 같은 클래스의 `modules_writeDiagrams()`가 `build/spring-modulith-docs/`에 모듈 관계도(PlantUML)를 만듭니다
 
 ## 2. 막는 것 / 못 막는 것
 

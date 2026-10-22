@@ -161,14 +161,19 @@ throw new BusinessException(ReportErrorCode.REPORT_NOT_FOUND);
 - 버그는 재현 테스트(지금 실패하는 테스트)부터 쓰고, 고친 뒤 통과를 확인한다
 - 통과시키려고 테스트를 지우거나 약하게 바꾸지 않는다 (예: assert 삭제, 기대값을 실제 결과에 맞춰 수정, `@Disabled`)
 
-### 테스트 이름 `합의 전`
+### 테스트 이름 `합의`
 
-- 한글 메서드 이름 `상황_결과` 형식. `@DisplayName`은 쓰지 않는다
-- 지금 `PaymentRulesTests`가 쓰는 방식이다
+- 메서드 이름은 영어 `대상_조건_결과`, 각 부분은 camelCase. 조건이 없으면 `대상_결과`
+- 설명은 `@Test` 바로 위에 `//` 한글 한 줄로 쓴다. `@DisplayName`은 쓰지 않는다
 
 ```java
+// 이미 매입된 결제는 다시 승인하지 않는다
 @Test
-void ALLOW_승인_성공은_최종_매입_성공이_아니며_재승인하지_않는다() { ... }
+void approve_whenAlreadyCaptured_throwsException() { ... }
+
+// controller는 repository를 직접 호출하지 않는다
+@Test
+void controller_doesNotAccessRepository() { ... }
 ```
 
 ## 7. 로그 `합의 전`
