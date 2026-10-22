@@ -20,7 +20,7 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 ## Overview
 
 - CakeShop(1차 프로젝트)과 연동하는 **2차 팀 프로젝트**이며, 6명이 업무 모듈을 하나씩 맡아 개발합니다.
-- 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다.
+- 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다 ([Modulith 문서](docs/modulith/README.md)).
 - 1차 목표는 **의심 결제가 승인 후 매입 보류(HELD)되고, 보안 직원이 AI 보고서를 참고해 결제별로 판정하고, 매입 또는 승인 취소가 담당 모듈에 인계되는 시연 경로**를 완성하는 것입니다.
 - FDS 연계 업무(위험평가 → HELD → Case·AI 조사 → 직원 판정 → 금융 조치 인계)의 흐름·상태값·통신 방식·ERD 정본은 Notion **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계, DB 구현 가이드는 04)입니다. 이 README는 그 요약입니다.
 - 정산 관리 업무(실제 매입 실행·매입 배치·수수료·정산)의 정본은 **작성 중**입니다. 아래 P6 항목과 settlement 관련 내용은 FDS 정본에 나온 인계 경계까지만 반영했습니다.
@@ -378,6 +378,7 @@ flowchart BT
 ### 개발 규칙과 가이드
 
 - 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
+- 🧱 **[Spring Modulith 문서](docs/modulith/README.md)**: 모듈러 모놀리스 개념, 채택 이유, 모듈·패키지 구조, 의존 방향과 이벤트, 검사
 - 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
 - ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
 - 🗂️ **[ERD](docs/erd/README.md)**: 테이블 소유·관계·컬럼 (Notion 설계 3.9 확정 후 작성), 모듈 간 참조 규칙

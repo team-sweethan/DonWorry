@@ -10,6 +10,7 @@
 - 1차 CakeShop 연동 저장소 → https://github.com/team-sweethan/cakeshop_refactoring (DonWorry 연동에 맞게 수정 중)
 - Flyway 개념·사용법·로컬 DB 문제 해결 → [`docs/flyway/`](docs/flyway/README.md)
 - 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
+- Spring Modulith 개념·모듈 구조·의존 방향·이벤트 → [`docs/modulith/`](docs/modulith/README.md)
 - 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
 - 실제로 돌아가는 검사 규칙 → `build.gradle`, `.oxlintrc.json`, `pyproject.toml`, `.github/workflows/`
