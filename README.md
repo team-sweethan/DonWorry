@@ -367,9 +367,9 @@ flowchart TB
 
 **있는 것**
 
-- 모듈re/62-sync-docs 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
+- 모듈 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
 - 업무 테이블 14개와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
-- 서비스 CI 3개와 문서 CI 1개, PR 템플릿, 작업 규칙
+- 서비스 CI 3개와 문서 CI 1개, PR · 이슈 템플릿, 작업 규칙
 - P5 `PaymentStatus`·`PaymentRules`와 순수 규칙 단위 테스트
 - frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·Case/경보 목업·담당자 구현 영역·공통 UI 가이드
 - ai-server `/health`
