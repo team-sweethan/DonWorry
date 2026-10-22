@@ -54,7 +54,7 @@ ADMIN 로그인 MVP는 브라우저 새로고침 후에도 로그인 상태를 �
 
 ## 검증
 
-2026-10-22, `98bfa61`에서 분기한 `feature/72-session-security`의 미커밋 구현 상태에서 실행했다.
+2026-10-22, `feature/72-session-security`에서 실행했다. Gradle 검사는 `a195dd7`과 같은 코드에서 다시 돌렸고, `bootRun`·`curl`은 `9f0c912`과 같은 코드에서 확인했다(이후 `src/main` 변경 없음).
 
 - `cd backend && ./gradlew spotlessApply check mariaDbTest`: 통과. 일반 테스트 64개(보안 MVC 테스트 7개 포함), MariaDB 테스트 13개, 실패·오류·건너뜀 0개. 모듈 경계·계층 검사와 Flyway 전체 적용·JPA validate를 포함한다.
 - Boot 4의 MVC 보안 슬라이스 자동 설정을 위해 기존 `spring-security-test` 직접 의존을 `spring-boot-starter-security-test`로 바꾸고 `spring-boot-starter-webmvc-test`를 추가했다. 최초 검증에서 드러난 `HttpSecurity` Bean 누락을 보완한 뒤 위 전체 검사를 통과했다.
