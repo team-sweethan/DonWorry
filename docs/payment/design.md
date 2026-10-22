@@ -1,7 +1,8 @@
 # P5 1차 시연 설계
 
 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
-실제 클래스명·DTO 필드명·URL·HTTP 코드·물리 스키마는 합의 전 확정하지 않는다.
+현재 테이블·컬럼·타입은 migration SQL, 모듈 의존 방향과 이벤트 타입 위치는 ADR-0012를 따른다.
+새 보조 저장·DTO 필드명·URL·HTTP 코드·복구 세부는 합의 전 제안이다.
 
 ## 1. 결제 흐름과 상태
 
@@ -44,7 +45,7 @@ HELD 1건도 통지한다. Case 병합의 30분은 P3 정책이며 P5 만료 시
 ACCEPT 접수 이후에도 실제 매입 성공 전까지 HELD를 유지하는 안을 제안한다(C3·C4 합의 대기). 별도 APPROVED 상태를 추가하지 않고,
 상태만으로 매입을 허용하지 않는다. 해당 승인과 직원 ACCEPT에 연결된 유효 조치 요청이 있어야 한다.
 
-### W1 내부 규칙 작업본
+### W1 내부 규칙 구현
 
 - [PaymentStatus](../../backend/src/main/java/com/donworry/payment/entity/PaymentStatus.java): 정본의 결제 상태 7개. JPA Entity가 아닌 enum이다.
 - [PaymentRules](../../backend/src/main/java/com/donworry/payment/service/PaymentRules.java): 저장·호출·발행 없이 다음 상태와 다음 단계를 반환하는 순수 규칙이다.
@@ -57,10 +58,10 @@ ACCEPT 접수 이후에도 실제 매입 성공 전까지 HELD를 유지하는 �
 
 ## 2. 데이터 소유권과 최소 저장
 
-FDS 연계 기준에서 P5가 소유하는 테이블은 `payment`다. 두 컬럼 제외 후 전체는
-`payment(8) + fds_evaluation(6) + security_case(8) + case_payment(4) + ai_report(8) + payment_decision(7) + action_handoff(9) + case_history(7) = 57`이다.
+현재 P5가 소유하는 테이블은 `payments`이며, [생성 SQL](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql)에 8개 컬럼이 있다.
+전체 업무 테이블 14개의 소유·관계는 [ERD](../erd/README.md)를 따른다. 초기 FDS Baseline의 테이블·컬럼 합계는 현재 스키마 집계로 사용하지 않는다.
 
-| payment 컬럼 | 의미 |
+| payments 컬럼 | 의미 |
 | --- | --- |
 | payment_id | P5 결제 식별자 |
 | merchant_id | 가맹점 원천 식별자, 다른 모듈 물리 FK 없음 |
@@ -72,42 +73,43 @@ FDS 연계 기준에서 P5가 소유하는 테이블은 `payment`다. 두 컬럼
 | created_at | 최초 결제 접수 시각 |
 
 `auth_expires_at`은 사용하지 않는다. P2의 `rule_set_version`도 이번 범위에 없다.
-타입·길이·유니크 범위·금액 단위는 C1에서 확정한다. 가이드의 9/7/59개 표기는 두 컬럼 제외 전 개수다.
-모듈 내부는 물리 FK, 모듈 간은 ID 논리 참조를 사용한다. 핵심 기록을 임의 삭제하지 않는다.
+기존 컬럼 타입·길이는 SQL 기준이다. PK와 참조 ID는 `BIGINT`, 금액은 원 단위 `BIGINT`, 시각은 UTC `DATETIME(6)`이다.
+현재 `payments`에는 주문·요청 키 UNIQUE가 없다. 주문별 중복 접수 정책과 보조 저장 제약은 C1·C6에서 정한다.
+같은 소유 담당의 테이블끼리만 물리 FK를 사용하고, 담당이 다르면 ID 논리 참조를 사용한다. 같은 investigation 안의 P3/P4도 논리 참조다. 핵심 기록을 임의 삭제하지 않는다.
 
 ### 2.1. 최소 저장 구조 제안 — 팀 합의 대기
 
-정본의 payment 8개 컬럼은 유지하고 **P5 보조 테이블 3개**를 제안한다.
-총 4개는 P5 내부 저장안이며, FDS Baseline의 8개 테이블·57개 컬럼에 보조 테이블을 포함한 수가 아니다.
-물리 타입·길이·DDL은 미확정이다. 선택 이유·대안은 [ADR-0010](../decisions/0010-payment-operation-storage.md)에 기록한다.
+현재 `payments` 8개 컬럼은 유지하고 **P5 보조 테이블 3개**를 제안한다.
+보조 3개는 현재 업무 테이블 14개에 포함되어 있지 않다. 추가하려면 Notion 담당 ERD 합의와 새 migration이 필요하다.
+제안도 복수 테이블명·BIGINT AUTO_INCREMENT PK·원 단위 금액·UTC 시각의 공통 규칙을 따른다. 아래 필드는 검토안이며 새 테이블 채택·세부 길이·DDL은 미확정이다. 선택 이유·대안은 [ADR-0010](../decisions/0010-payment-operation-storage.md)에 기록한다.
 
 | 저장소 | 저장할 것 | 소유·제약 |
 | --- | --- | --- |
-| payment | 현재 결제 상태·승인 참조와 정본 8개 컬럼 | P5. 다른 모듈 FK 없음 |
-| payment_request | CakeShop 원 요청, 요청 재생 기준, 채택한 FDS 판정 | P5. 결제 최초 생성과 같은 커밋 |
-| payment_operation | AUTH/VOID 실행과 CAPTURE 중계 요청의 현재 접수·실행 결과 | P5. CAPTURE 실제 실행 정본은 P6 |
-| payment_history | 상태·접수·실행 시도·실패·결과의 변경 사실 | P5. INSERT 전용, 해당 업무 변경과 같은 커밋 |
+| payments | 현재 결제 상태·승인 참조와 현재 SQL의 8개 컬럼 | P5. 다른 모듈 FK 없음 |
+| payment_requests | CakeShop 원 요청, 요청 재생 기준, 채택한 FDS 판정 | P5. 결제 최초 생성과 같은 커밋 |
+| payment_operations | AUTH/VOID 실행과 CAPTURE 중계 요청의 현재 접수·실행 결과 | P5. CAPTURE 실제 실행 정본은 P6 |
+| payment_histories | 상태·접수·실행 시도·실패·결과의 변경 사실 | P5. INSERT 전용, 해당 업무 변경과 같은 커밋 |
 
-P3의 action_handoff, P6의 CAPTURE 작업을 P5 테이블로 옮기지 않는다.
+P3의 action_handoffs, P6의 CAPTURE 작업을 P5 테이블로 옮기지 않는다.
 공통 이벤트 발행 기록은 별도 인프라다. 아래 보조 테이블만 만든다고 이벤트 전달이 보장되는 것은 아니다(C5).
 
-#### payment_request — 최초 결제 요청
+#### payment_requests — 최초 결제 요청
 
 | 필드 | 논리 타입·NULL | 목적 |
 | --- | --- | --- |
-| request_id | UUID, 필수·PK | P5 접수 ID. P2 evaluationRequestId로도 사용 |
-| payment_id | UUID, 필수·내부 FK·UNIQUE | 생성한 결제 1건 |
-| merchant_id | String, 필수·논리 참조 | 가맹점별 요청 키의 UNIQUE 범위. payment의 가맹점과 일치 |
-| idempotency_key | String, 필수 | CakeShop 요청 키. 가맹점·결제접수 범위에서 유일 |
+| request_id | Long(BIGINT), 필수·PK | P5 접수 ID. P2 evaluationRequestId로도 사용 |
+| payment_id | Long(BIGINT), 필수·내부 FK·UNIQUE | 생성한 결제 1건 |
+| merchant_id | Long(BIGINT), 필수·논리 참조 | 가맹점별 요청 키의 UNIQUE 범위. payments의 가맹점과 일치 |
+| idempotency_key | UUID, 필수·제안 | CakeShop 요청 키. 가맹점·결제접수 범위에서 유일. 외부 표현은 C1에서 확인 |
 | request_hash | String, 필수 | 인증된 가맹점·고객·주문·금액·모의 카드·신호 스냅샷을 정규화한 해시 |
-| request_data | JSON, 필수 | 모의 카드 참조·허용된 위험 신호 등 재개에 필요한 최소 입력. 금액·주문 정본은 payment |
-| evaluation_id / fds_result | P2 식별자 / 판정, 평가 전 NULL | P2가 반환한 평가 참조와 이 요청에 채택한 결과. P2 평가 정본을 대체하지 않음 |
+| request_data | JSON, 필수 | 모의 카드 참조·허용된 위험 신호 등 재개에 필요한 최소 입력. 금액·주문 정본은 payments |
+| evaluation_id / fds_result | Long(BIGINT) / 판정, 평가 전 NULL | P2가 반환한 평가 참조와 이 요청에 채택한 결과. P2 평가 정본을 대체하지 않음 |
 | processing_status | Enum, 필수 | RECEIVED / FDS_ERROR / EVALUATED / PROCESSED 제안 |
 | last_error_code | String, 선택 | 기술 실패·복구 이유. 위험 판정과 별개 |
 | created_at / updated_at | Instant, 필수 | 접수·갱신 시각 |
 
 `UNIQUE(payment_id)`와 가맹점별 요청 키 제약이 필요하다. merchant_id 중복 저장은 요청 키 제약을 위한 것이며
-payment와의 일치는 같은 생성 트랜잭션에서 검증한다.
+payments와의 일치는 같은 생성 트랜잭션에서 검증한다.
 구체 제약은 `UNIQUE(merchant_id, idempotency_key)`다. 같은 주문·다른 키의 중복 결제 허용 여부는 C1 미결이며 자동 병합하지 않는다.
 카드번호·CVC·인증 토큰 원문은 request_data에 저장하지 않는다. 실제 카드 데이터는 이번 범위 밖이다.
 
@@ -116,18 +118,18 @@ FDS_ERROR 뒤 같은 요청 재시도는 C2 계약에 따라 같은 evaluationRe
 새 평가 허용 시점은 별도 합의하며, 승인 이후 최신 평가를 다시 읽어 승인 경로를 변경하지 않는다.
 평가 결과 중복·시각 동률의 선택은 P2 계약으로 정하고, P5는 실제 처리에 채택한 evaluation_id를 보존한다.
 
-#### payment_operation — 금융 조치와 중계
+#### payment_operations — 금융 조치와 중계
 
 | 필드 | 논리 타입·NULL | 목적 |
 | --- | --- | --- |
-| operation_id | UUID, 필수·PK | P5 작업/중계 식별자. 이벤트·조회·모의 실행의 안정적인 키 |
-| payment_id | UUID, 필수·내부 FK | 대상 결제 |
+| operation_id | Long(BIGINT), 필수·PK | P5 작업/중계 식별자. 이벤트·조회·모의 실행의 안정적인 키 |
+| payment_id | Long(BIGINT), 필수·내부 FK | 대상 결제 |
 | operation_type | Enum, 필수 | AUTH / CAPTURE / VOID. AUTH는 P5 내부 승인 작업 |
 | origin | Enum, 필수 | CHECKOUT / FDS_ALLOW / STAFF_DECISION |
-| decision_id | P3 식별자, 직원 조치에만 필수 | 논리 참조. P3 판정 증빙, ALLOW는 NULL |
-| idempotency_key / request_hash | String, 필수 | 조치별 동일 요청 재생·충돌 검출 |
+| decision_id | Long(BIGINT), 직원 조치에만 필수 | 논리 참조. P3 판정 증빙, ALLOW는 NULL |
+| idempotency_key / request_hash | UUID / String, 필수·제안 | 조치별 동일 요청 재생·충돌 검출 |
 | acceptance_status | Enum, 필수 | WAITING / ACCEPTED / REJECTED. **최종 담당 모듈의 접수**만 표현 |
-| target_operation_id | String, 접수 확인 전 NULL | AUTH/VOID는 P5 operation_id, CAPTURE는 P6 작업 ID |
+| target_operation_id | Long(BIGINT), 접수 확인 전 NULL | AUTH/VOID는 P5 operation_id, CAPTURE는 P6 작업 ID |
 | execution_status | Enum, 필수 | NOT_STARTED / RUNNING / SUCCEEDED / FAILED / UNKNOWN |
 | attempt_no | Integer, 필수·최초 0 | 실행 시도 순서. CAPTURE는 P6가 전달한 순서 |
 | result_ref | String, 성공 전 NULL | AUTH 승인 참조, VOID 취소 참조, CAPTURE는 P6 성공 결과 참조 |
@@ -147,30 +149,30 @@ CAPTURE는 WAITING으로 되돌려 재발행하고 최종 담당 접수를 다�
 키는 다른 결제·조치에 재사용할 수 없고, 요청 해시에는 가맹점·결제·판정·조치가 포함된다.
 같은 결제·같은 조치를 다른 키로 보내면 새 작업으로 만들지 않고 충돌로 반환한다. 복구는 원 키·원 작업을 사용한다.
 한 결제의 CAPTURE와 VOID는 서로 다른 종류여서 위 유니크만으로 상호 배제를 보장하지 못한다.
-payment 행을 잠그고 기존 조치·승인·판정을 확인하여 첫 유효 조치만 선택한다. UNKNOWN이나 실행 실패만으로 반대 조치를 허용하지 않는다.
+payments 행을 잠그고 기존 조치·승인·판정을 확인하여 첫 유효 조치만 선택한다. UNKNOWN이나 실행 실패만으로 반대 조치를 허용하지 않는다.
 P6도 원 CAPTURE 작업을 다시 사용하고 실행 직전 승인·선택 조치의 일치 여부를 검증한다(C4).
 
 AUTH/VOID의 MVP 모의 실행은 P5 내부 Java 처리와 operation 결과 저장을 같은 DB 트랜잭션으로 묶는 안이다.
 모의 실행이 외부 상태를 바꾸지 않는다는 전제이며 실제 카드사에도 적용되는 보장은 아니다.
 P6는 CAPTURE 실행·원장과 승인 참조의 검증을 소유한다. P5가 매입을 대신 실행하지 않는다.
 
-#### payment_history — 기본 감사와 결과 순서
+#### payment_histories — 기본 감사와 결과 순서
 
 | 필드 | 논리 타입·NULL | 목적 |
 | --- | --- | --- |
-| history_id | UUID, 필수·PK | 이력 식별자 |
-| payment_id / sequence_no | UUID / Long, 필수 | 내부 FK, 결제별 증가 순서. UNIQUE(payment_id, sequence_no) |
-| operation_id | UUID, 선택·내부 FK | 금융 작업 관련 이력인 경우 |
+| history_id | Long(BIGINT), 필수·PK | 이력 식별자 |
+| payment_id / sequence_no | Long / Long, 필수 | 내부 FK, 결제별 증가 순서. UNIQUE(payment_id, sequence_no) |
+| operation_id | Long(BIGINT), 선택·내부 FK | 금융 작업 관련 이력인 경우 |
 | event_type | Enum, 필수 | PAYMENT_CREATED / FDS_FAILED / FDS_SELECTED / AUTH_RESULT / HELD_CONFIRMED / OPERATION_ACCEPTANCE / EXECUTION_ATTEMPT / EXECUTION_RESULT |
 | event_data | JSON, 필수 | 이전/이후 상태, 시도 번호, 결과·오류·소스 메시지 ID 등 필요한 변경 사실 |
 | created_at | Instant, 필수 | 해당 기록 시각 |
 
-payment 행 잠금 아래 순서를 배정한다. 한 트랜잭션의 상태·조치 변경과 이력을 함께 저장한다.
+payments 행 잠금 아래 순서를 배정한다. 한 트랜잭션의 상태·조치 변경과 이력을 함께 저장한다.
 실행 실패도 별도 결과 기록 트랜잭션을 커밋하여 남긴다. 업무 전체 롤백으로 실패 원인을 지우지 않는다.
 재실행 중 사라진 RUNNING은 UNKNOWN으로 추적하고 실제 결과를 대조한 후 재시도한다.
 CAPTURE 결과의 원 eventId·attemptNo·결과 해시를 보존해 동일 소스의 모순 결과를 검출한다.
 접수 변경마다 해당 이력의 sequence_no를 receiptVersion으로 발행한다. P3는 최신 receiptVersion을 기록·비교하고 오래된 결과를 적용하지 않는다.
-P3의 저장 위치는 기존 case_history.event_data 활용 또는 합의된 별도 방식이며 action_handoff 정본에 컬럼을 임의 추가하지 않는다.
+P3의 저장 위치는 기존 case_histories.event_data 활용 또는 합의된 별도 방식이며 action_handoffs 정본에 컬럼을 임의 추가하지 않는다.
 
 HELD·접수 결과·CakeShop 통지 이벤트는 해당 커밋의 불변 스냅샷으로 발행하고 발행 기록을 함께 남긴다.
 CakeShop의 version은 상태·승인 참조 등 공개 조회 스냅샷이 변경된 이력의 sequence_no를 사용한다. 현재 조회도 해당 마지막 공개 변경 버전을 반환한다. 같은 통지 재전송은 원 eventId/version을 유지한다.
@@ -179,16 +181,16 @@ Registry의 이력/보존과 업무 이력의 보존은 별개다. 성공 업무
 
 ## 3. 모듈 간 DTO 초안 — 필드·상태 모두 제안
 
-기본 타입안은 P5 생성 ID=UUID, 타 모듈/외부 참조=String, 시각=Instant(UTC), 금액=Long(원 단위 양수)다. UUID를 String 참조로 전달할 때는 표준 UUID 문자열로 변환한다.
-KRW 단일 통화·최댓값·DB 타입은 C1 합의 전 가정이다. 모든 DTO의 enum도 아래 범위만 제안하며 실제 Java 코드는 아직 없다.
+기존 DB의 PK·참조 ID는 BIGINT이므로 내부 Java 계약은 Long을 기준으로 검토한다. 이벤트 식별자(eventId)와 멱등 키는 업무 PK와 구분하며 UUID를 제안한다. P3 action_handoffs.idempotency_key는 이미 SQL의 UUID 타입이다.
+시각은 Instant(UTC), 금액은 Long(원 단위)으로 다룬다. 외부 JSON의 ID·멱등 키 표현과 금액 최댓값은 C1에서 합의한다. 아래 DTO 이름·필드·enum은 세부 검토안이며 실제 Java 코드는 아직 없다.
 `필수`는 값 누락 불가, `선택`은 NULL 가능이다. 인증 주체는 신뢰된 컨텍스트로 받아 DTO의 merchantId와 대조한다.
 
 ### 3.1. P2 평가 — fds/api 소유
 
 | DTO | 필수 필드 | 선택 필드·규칙 |
 | --- | --- | --- |
-| FdsEvaluationRequest | evaluationRequestId(UUID=request_id), paymentId(UUID), merchantId(String), customerRef(String), orderRef(String), amount(Long), requestedAt(Instant), signals(RiskSignals) | signals의 실제 확보 값만 전달. 아래 최소 필드안의 채택 여부는 P2/P1 계약. 모르는 신호를 false/0으로 만들지 않음 |
-| FdsEvaluationResponse | evaluationRequestId(UUID), evaluationId(String), result(ALLOW/REVIEW/DENY/ERROR), evaluatedAt(Instant) | riskScore(Integer, ERROR 시 NULL 가능), errorCode(String, ERROR 시 필수). rule_set_version 없음 |
+| FdsEvaluationRequest | evaluationRequestId(Long=request_id, 제안), paymentId(Long), merchantId(Long), customerRef(String), orderRef(String), amount(Long), requestedAt(Instant), signals(RiskSignals) | signals의 실제 확보 값만 전달. 아래 최소 필드안의 채택 여부는 P2/P1 계약. 모르는 신호를 false/0으로 만들지 않음 |
+| FdsEvaluationResponse | evaluationRequestId(Long), evaluationId(Long), result(ALLOW/REVIEW/DENY/ERROR), evaluatedAt(Instant) | riskScore(Integer, ERROR 시 NULL 가능), errorCode(String, ERROR 시 필수). rule_set_version 없음 |
 
 RiskSignals의 최소 필드안은 cardRef(String, 필수·모의 카드 참조), deviceRef(String, 선택),
 recentPasswordResetAt(Instant, 선택), newShippingAddress(Boolean, 선택)이다. 카드/기기 신규 여부·반복 횟수는 P2가 확보한 근거로 계산한다.
@@ -201,10 +203,10 @@ P2는 요청 재료로 평가하고 P5 Entity·Repository를 역참조하지 않
 
 | DTO | 필수 필드 | 선택 필드·규칙 |
 | --- | --- | --- |
-| PaymentHeld 이벤트 | eventId(UUID), occurredAt(Instant), paymentId(UUID), merchantId(String), customerRef(String), orderRef(String), amount(Long), authorizationRef(String), evaluationId(String) | HELD 커밋 후 발행. occurredAt은 HELD 확정 시각. 같은 결제 재전달은 원 eventId 유지 |
-| FinancialActionRequest | paymentId(UUID), merchantId(String), decisionId(String), actionType(CAPTURE/VOID), idempotencyKey(String) | P3의 커밋된 ACCEPT→CAPTURE, REJECT→VOID만 전달. 직원 사유·AI 본문은 복제하지 않음 |
-| ActionReceipt / HandoffResult 이벤트 | p5OperationId(UUID), paymentId(UUID), merchantId(String), decisionId(String), actionType, targetModule(P5/P6), acceptanceStatus(WAITING/ACCEPTED/REJECTED), receiptVersion(Long), recordedAt(Instant) | targetOperationId(String)·acceptedAt(Instant)은 ACCEPTED 시 필수. errorCode는 REJECTED 시 필수. 이벤트에는 eventId·occurredAt 추가 |
-| ActionStatusQuery | merchantId(String), idempotencyKey(String) | 해당 STAFF_DECISION 요청 키로 조회. 없으면 NOT_FOUND라는 조회 결과이며 접수 거절로 간주하지 않음 |
+| PaymentHeld 이벤트 | eventId(UUID), occurredAt(Instant), paymentId(Long), merchantId(Long), customerRef(String), orderRef(String), amount(Long), authorizationRef(String), evaluationId(Long) | HELD와 발행 기록을 같은 트랜잭션에 저장하고 커밋 후 전달. occurredAt은 HELD 확정 시각. 같은 결제 재전달은 원 eventId 유지 |
+| FinancialActionRequest | paymentId(Long), merchantId(Long), decisionId(Long), actionType(CAPTURE/VOID), idempotencyKey(UUID) | P3의 커밋된 ACCEPT→CAPTURE, REJECT→VOID만 전달. 직원 사유·AI 본문은 복제하지 않음 |
+| ActionReceipt / HandoffResult 이벤트 | p5OperationId(Long), paymentId(Long), merchantId(Long), decisionId(Long), actionType, targetModule(P5/P6), acceptanceStatus(WAITING/ACCEPTED/REJECTED), receiptVersion(Long), recordedAt(Instant) | targetOperationId(Long)·acceptedAt(Instant)은 ACCEPTED 시 필수. errorCode는 REJECTED 시 필수. 이벤트에는 eventId·occurredAt 추가 |
+| ActionStatusQuery | merchantId(Long), idempotencyKey(UUID) | 해당 STAFF_DECISION 요청 키로 조회. 없으면 NOT_FOUND라는 조회 결과이며 접수 거절로 간주하지 않음 |
 
 키 충돌·잘못된 조치는 업무 오류로 응답하며 기존 작업을 변경하지 않는다. HTTP 상태 코드는 별도 매핑 대상이다.
 P3는 WAITING→REQUESTED, ACCEPTED→ACCEPTED, REJECTED→FAILED로 자신의 action_handoff를 반영한다.
@@ -212,27 +214,39 @@ P5 동기 응답의 CAPTURE WAITING은 P6 영속 접수 완료가 아니다. VOI
 조회 결과와 결과 이벤트의 업무 필드는 동일하게 유지한다. ALLOW 경로에는 decisionId가 없어 P3 인계 결과를 발행하지 않는다.
 P5는 P3를 조회해 판정을 재검증하지 않고 인증된 P3 호출과 decisionId·action 매핑 계약을 신뢰한다.
 
-### 3.3. P6 CAPTURE·접수·실행 결과 — payment/api 소유
+### 3.3. P6 CAPTURE·접수·실행 결과 — settlement/api 소유
 
-| DTO | 필수 필드 | 선택 필드·규칙 |
+[ADR-0012](../decisions/0012-payment-settlement-dependency.md)에 따라 요청·접수 결과·실행 결과 이벤트 타입은 모두 `settlement.api`에 둔다.
+P5가 CAPTURE 요청을 발행하고 P6가 접수·실행 결과를 발행한다. P6는 P5의 공개 포트를 호출하거나 타입을 import하지 않는다.
+아래 필드·이벤트 이름은 C4 검토안이다. 기존 초안의 `CaptureAcceptanceRequest`·`CaptureExecutionResultRequest` 동기 요청과
+`CaptureExecutionCheck`·`ResultAck` 왕복 계약은 현재 방향에 맞지 않아 사용하지 않는다.
+
+| 이벤트 | 필수 필드안 | 선택 필드·규칙안 |
 | --- | --- | --- |
-| CaptureRequested 이벤트 | eventId(UUID), occurredAt(Instant), p5OperationId(UUID), paymentId(UUID), merchantId(String), amount(Long), authorizationRef(String), idempotencyKey(String), origin(FDS_ALLOW/STAFF_DECISION) | decisionId(String): STAFF_DECISION에만 필수. P6 중복 기준은 p5OperationId, 키/본문 일치도 확인 |
-| CaptureAcceptanceRequest | p5OperationId(UUID), paymentId(UUID), merchantId(String), acceptanceStatus(ACCEPTED/REJECTED), sourceVersion(Long≥1), recordedAt(Instant) | targetOperationId(String)·acceptedAt(Instant)은 ACCEPTED 시 필수. errorCode는 REJECTED 시 필수. P6 작업 저장 커밋 후 호출 |
-| CaptureExecutionResultRequest | eventId(UUID), p5OperationId(UUID), paymentId(UUID), merchantId(String), targetOperationId(String), authorizationRef(String), amount(Long), attemptNo(Integer≥1), executionStatus(SUCCEEDED/FAILED/UNKNOWN), occurredAt(Instant) | resultRef(String)는 성공 시 필수, errorCode는 FAILED/UNKNOWN 시 필수. 성공은 원 승인·금액과 일치해야 함 |
-| CaptureExecutionCheck / CaptureExecutionPermission | 입력 p5OperationId·paymentId·merchantId·authorizationRef, 출력 allowed(Boolean)·reasonCode(String) | 원 요청·승인·선택 조치·현재 결과를 확인. 재실행은 원 작업만 허용하며 UNKNOWN이면 대조 우선. P6 실행 직전 호출하는 안(C4) |
-| ResultAck | p5OperationId(UUID), outcome(APPLIED/DUPLICATE/RECONCILIATION_REQUIRED) | 식별자·금액·결과 충돌은 별도 오류. 재확인이 필요한 결과를 성공 반영했다고 응답하지 않음 |
+| CaptureRequested | eventId(UUID), occurredAt(Instant), p5OperationId(Long), paymentId(Long), merchantId(Long), orderRef(String), amount(Long), authorizationRef(String), idempotencyKey(UUID), origin(FDS_ALLOW/STAFF_DECISION) | decisionId(Long): STAFF_DECISION에만 필수. P6 중복 기준은 p5OperationId 제안과 기존 `captures.payment_id` UNIQUE를 함께 검토. orderRef는 P6 `captures.order_id`에 매핑하며 이벤트 필드명을 orderId로 할지는 C4에서 확정 |
+| 매입 접수 결과 (이름 미정) | eventId(UUID), p5OperationId(Long), paymentId(Long), merchantId(Long), acceptanceStatus(ACCEPTED/REJECTED), sourceVersion(Long≥1), occurredAt(Instant) | targetOperationId(Long)·acceptedAt(Instant)은 ACCEPTED 시 필수. errorCode는 REJECTED 시 필수. P6 작업·접수 결과와 발행 기록을 함께 저장하고 커밋 후 전달 |
+| 매입 실행 결과 (이름 미정) | eventId(UUID), p5OperationId(Long), paymentId(Long), merchantId(Long), targetOperationId(Long), authorizationRef(String), amount(Long), attemptNo(Integer≥1), executionStatus(SUCCEEDED/FAILED/UNKNOWN), occurredAt(Instant) | resultRef(String)는 성공 시 필수, errorCode는 FAILED/UNKNOWN 시 필수. 성공은 원 승인·금액과 일치해야 함 |
 
-P5는 요청 ID·결제·가맹점·P6 작업의 일치와 조치 유형을 검증한다. 성공 결과의 승인 참조·금액도 원 CAPTURE 요청과 일치해야 한다. 같은 작업·동일 접수 확인은 중복 성공 응답이다.
-P6의 sourceVersion은 접수 결과 변경 순서이며 동일 버전의 다른 본문은 충돌이다. 최신 소스 버전과 본문은 payment_history에 보존한다.
+P5는 요청 ID·결제·가맹점·P6 작업의 일치와 조치 유형을 검증한다. 성공 결과의 승인 참조·금액도 원 CAPTURE 요청과 일치해야 한다.
+같은 작업·동일 접수 결과 이벤트는 중복 반영하지 않는다. 이는 이벤트 소비자의 멱등 처리이며 P6에 대한 동기 응답 계약이 아니다.
+P6의 sourceVersion은 접수 결과 변경 순서라는 제안이며 동일 버전의 다른 본문은 충돌로 다룬다. 최신 소스 버전과 본문은 payment_histories 보존안으로 검토한다.
 낮은 버전은 재적용하지 않는다. ACCEPTED 후 거절로 되돌리거나 서로 다른 targetOperationId로 덮어쓰지 않는다. 모순이면 기록·대조한다.
-결과가 접수 확인보다 먼저 오면 **P6가 커밋된 ACCEPTED 확인을 먼저 재전송하고 결과를 재시도하는 안**을 제안한다.
-P5는 RECONCILIATION_REQUIRED를 반환하며 해당 결과를 적용 완료로 보거나 P3 접수 완료를 추론하지 않는다.
 
-같은 eventId의 동일 본문은 DUPLICATE, 다른 본문은 충돌이다. 낮은 attemptNo의 실패/불명 결과는 이력으로만 남기고 현재 상태를 되돌리지 않는다.
-낮은 시도의 늦은 성공이 확인된 실패·새 시도와 모순되면 자동 무시하지 않고 추가 실행 중지·대조 대상으로 남긴다.
+결과가 접수 확인보다 먼저 도착할 때의 보관·재처리 방식은 C4·C5에서 정한다. 접수 근거가 없는데 P3 인계 완료를 통지하거나,
+미반영 결과 이벤트를 처리 완료로 기록해 유실시키지 않도록 검증해야 한다. 동기 `ResultAck` 반환을 전제로 한 이전 재전송안은 적용하지 않는다.
+필요한 경우 P5가 P6 공개 API를 조회하는 방향은 허용되지만, 포트·필드·재시도 정책은 아직 미정이다.
+
+같은 eventId의 동일 본문은 중복 처리하고, 다른 본문은 충돌로 다룬다. 낮은 attemptNo의 실패/불명 결과는 이력으로만 남기고 현재 상태를 되돌리지 않는 안이다.
+낮은 시도의 늦은 성공이 확인된 실패·새 시도와 모순되면 추가 실행 중지·대조가 필요하다.
 같은 시도 UNKNOWN→확인된 SUCCEEDED/FAILED는 허용하되, 확인된 성공을 실패로 덮어쓰지 않는다.
-새 시도는 이전 시도가 확인된 실패일 때만 허용한다. UNKNOWN에서는 원 작업 상태를 확인하고 무조건 재매입하지 않는다.
-P6의 안정적인 작업 ID·시도 번호·결과 재전달 보장은 C4 합의가 필요하다.
+새 시도는 이전 시도가 확인된 실패일 때만 허용하며 UNKNOWN에서는 원 작업 상태를 확인한다.
+이 순서·재시도 정책과 P6 작업 ID·시도 번호의 저장 방식은 C4 합의가 필요하다.
+
+P6 실행 직전 검증은 요청 이벤트의 승인·판정 정보와 P6 소유 데이터로 설계한다. 필요한 근거가 부족하면 이벤트 필드를 C4에서 보강한다.
+P6가 P5를 역호출하는 방식은 사용하지 않는다. P5 접수 제어와 P6 실행 사이의 CAPTURE/VOID 경합 제어는 아직 합의·검증 전이다.
+
+P6 담당 ERD는 1차에 PROCESSING 선행 커밋 없이 즉시 매입 후 저장한다고 명시한다. 위 접수 결과 이벤트의 근거가 되는 커밋과
+실행 실패 시의 영속 기록·이벤트 발행 시점은 C4에서 맞춰야 한다. 접수 성공과 실행 성공의 의미를 합치지 않으며, `COMPLETED` 이벤트만으로 인계 확인 계약을 대체하지 않는다.
 
 ### 3.4. 읽기 계약과 외부 연결
 
@@ -254,7 +268,7 @@ P5가 Case를 역조회하거나 FastAPI에 금융 변경 Tool을 제공하지 �
 | --- | --- |
 | 결제 접수 | PENDING을 먼저 커밋한 뒤 FDS 평가. 이후 실패로 최초 접수 자체를 없애지 않음 |
 | 승인 결과 | 승인 성공 참조·상태·후속 이벤트 발행 기록의 일관성 확보. 내부 모의 AUTH/VOID는 작업 결과와 같은 DB 커밋을 제안. 구현·실패 주입은 C6 확인 필요 |
-| P3 판정 | P3가 판정·action_handoff REQUESTED·감사 이력을 같은 트랜잭션으로 저장하고 커밋 후 P5 호출 |
+| P3 판정 | P3가 판정·action_handoffs REQUESTED·감사 이력을 같은 트랜잭션으로 저장하고 커밋 후 P5 호출 |
 | P5 조치 접수 | 같은 키·같은 내용은 기존 접수 재생. 다른 내용은 충돌. 접수 기록과 필요한 발행 기록 커밋 후 응답 |
 | CAPTURE 인계 | P6의 작업 영속 저장 확인 전에는 최종 접수 완료로 통지하지 않음. P6 확인 후 P3 결과 통지 |
 | VOID 인계 | P5 VOID 작업 영속 저장 확인으로 접수 완료. 실행 완료를 기다리지 않음. 동기 응답으로도 접수 확인 가능 |
@@ -265,12 +279,12 @@ P3 인계의 REQUESTED/ACCEPTED/FAILED는 P3 상태이며 P5 결제 상태에 �
 확인된 거절/인계 실패만 실패로 통지한다. 접수 후 실행 실패를 인계 실패로 되돌리지 않는다.
 
 커밋 후 이벤트는 유실 복구 가능한 발행 기록을 사용한다. 정본은 Modulith Event Publication Registry 또는 Outbox를 허용하며,
-저장소 ADR-0001은 Registry를 제안한다. 의존성·초기화 설정의 존재만으로 전달 보장을 검증했다고 볼 수 없다(C5).
+현재 저장소에는 JDBC Event Publication Registry 의존성과 Flyway 이벤트 테이블이 있다 ([이벤트 문서](../modulith/04-dependency-and-events.md)). 업무 발행·리스너·재발행은 아직 구현되지 않았으므로 전달 보장은 미검증이다(C5).
 HELD 이벤트 누락, P6 접수 확인 누락, P3 결과 통지 누락에 각각 재전달/조회·대조 경로를 마련한다.
-P3/P5/P6 전체를 한 트랜잭션으로 묶지 않는다. P6 접수 확인은 P6 커밋 후 별도 P5 트랜잭션으로 반영한다.
+P3/P5/P6 전체를 한 트랜잭션으로 묶지 않는다. P6 접수 결과 이벤트는 P6 커밋 후 별도 P5 트랜잭션으로 반영한다.
 
 실행이 접수 결과보다 먼저 도착할 수 있다. 요청·작업 ID로 대조하고 이전/중복 결과가 최종 상태를 덮어쓰지 않도록 한다.
-접수 정보가 누락된 결과는 §3.3의 재확인·재전송안으로 처리하며 C4 합의 전 확정하지 않는다.
+접수 정보가 누락된 결과의 보관·대조·재처리 계약은 §3.3과 같이 C4·C5 합의 전이다.
 매입과 VOID는 동일 승인에서 동시에 성공할 수 없도록 P5 접수 제어와 P6 실행 직전 검증을 함께 설계한다.
 P5의 짧은 DB 잠금만으로 비동기 P6 실행 전체가 보호된다고 가정하지 않는다.
 

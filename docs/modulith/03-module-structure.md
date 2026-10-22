@@ -13,7 +13,7 @@
 | `investigation` | P3 수민 | Case 생성 · 병합 · 결제별 판정 · 금융 조치 인계 |
 | `investigation.report` | P4 현규 | AI 조사 보고서 · 버전 · 재시도, FastAPI 호출, AI Tool API |
 | `payment` | P5 시은 | 결제 접수 · 카드 승인 · HELD · VOID · 결제 상태 |
-| `settlement` | P6 민정 | CAPTURE 실행 · 매입 배치 · 수수료 · 정산 |
+| `settlement` | P6 민정 | CAPTURE 즉시 실행 · 수수료 · 정산 예정금 (픽업·정산 완료 배치는 2차) |
 
 ### `investigation.report`(P4)가 별도 모듈이 아닌 이유
 

@@ -1,11 +1,13 @@
 # 0013. 코드 모양 자동 정리 도구 (Java: palantir-java-format, Python: ruff format)
 
-- **상태:** 제안
+- **상태:** 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요
 - **날짜:** 2026-10-22
 - **관련:** Issue #50
 - **영향 받는 담당:** P1~P6 전원 (backend · ai-server 코드를 고치는 모든 PR)
 
 ## 배경
+
+아래는 도입 당시 배경이다. 현재 backend의 Spotless와 ai-server의 ruff 모양 검사가 코드·CI에 반영되어 있다.
 
 - frontend는 Prettier와 CI `format:check`로 코드 모양이 이미 강제된다. backend는 포매터가 없고, ai-server는 `ruff check`(규칙 검사)만 하고 모양 검사는 하지 않는다.
 - 6명과 AI 도구가 같은 파일을 고친다. 모양 기준이 없으면 들여쓰기·줄바꿈 차이가 diff(변경 내역)에 섞여 리뷰와 충돌 해결이 어려워진다.

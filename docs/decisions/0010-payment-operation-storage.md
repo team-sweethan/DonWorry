@@ -2,34 +2,35 @@
 
 - **상태:** 제안 — P5 초안, C1·C3·C4·C6 팀 합의 대기. 구현 없음
 - **날짜:** 2026-10-21
-- **관련:** [P5 설계 §2](../payment/design.md), Notion FDS 공동 업무 설계 §3.9·DB Baseline v1, 사용자 최소 저장 구조·DTO 초안 요청. 관련 Issue 미연결
+- **관련:** [P5 설계 §2](../payment/design.md), Notion FDS 설계 §3.9·P5 담당 ERD, [ADR-0012](0012-payment-settlement-dependency.md), 문서 최신화 #62 (저장안 채택·구현 Issue와 구분)
 - **영향 받는 담당:** P5 시은, P2 정후, P3 수민, P6 민정, P1·CakeShop·DB 담당
 
 ## 배경
 
-정본의 payment는 두 컬럼 제외 후 8개 컬럼이다. 이것만으로는 최초 요청의 중복 처리,
+현재 `payments`는 [생성 SQL](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql)의 8개 컬럼이다. 이것만으로는 최초 요청의 중복 처리,
 CAPTURE 중계·VOID 접수와 실제 실행, 응답 유실·재기동 이후 복구를 구분해 증명하기 어렵다.
 정본은 P5/P6의 금융 실행 상세 저장을 별도 설계 범위로 남겨두었다.
 
 ## 결정 제안
 
-payment를 유지하고 P5 내부에 payment_request·payment_operation·payment_history를 추가하는 안을 제안한다.
+`payments`를 유지하고 P5 내부에 `payment_requests`·`payment_operations`·`payment_histories`를 추가하는 안을 제안한다.
 원 요청, 금융 작업의 현재 접수/실행 결과, 변경 이력을 각각 보존한다. CAPTURE 실행 정본과 P3 인계 정본은 각 담당 모듈에 둔다.
 최초 범위는 결제별 AUTH 1개와 CAPTURE 또는 VOID 한 방향의 작업으로 제한하고 재시도는 같은 작업을 사용한다.
-물리 타입·길이·스키마·기술별 트랜잭션 구현은 팀 승인 후 정한다.
+복수 테이블명·BIGINT PK·참조 ID·원 단위 금액·UTC 시각은 현행 공통 규칙을 따른다.
+보조 저장 3개의 채택·세부 길이·제약·트랜잭션 구현은 담당 ERD 합의 후 정한다. 현재 SQL에는 없다.
 
 ## 고려한 대안
 
 | 대안 | 이번 초안에서 선택하지 않은 이유 |
 | --- | --- |
-| payment에 모든 처리 컬럼 추가 | 정본의 최소 결제 구조를 바꾸고 AUTH·CAPTURE·VOID의 여러 생명주기를 한 행에 섞음 |
+| payments에 모든 처리 컬럼 추가 | 정본의 최소 결제 구조를 바꾸고 AUTH·CAPTURE·VOID의 여러 생명주기를 한 행에 섞음 |
 | 이벤트 발행 기록만 보존 | 업무 키·금융 접수와 실행 상태의 조회 정본으로 쓰기 어렵고 이벤트 보존 정책에 업무 복구가 종속됨 |
 | 별도의 시도·응답·멱등·감사 테이블을 각각 생성 | 1차 시연에는 테이블과 상태 관리가 과다함. 기본 시도 결과는 history에 보존하고 현재 값은 operation에 유지 |
 
 ## 영향
 
-- API: P5 operation_id와 P6 작업 ID 구분, 접수 버전·실행 시도 번호·업무 키를 공유 계약으로 확인해야 한다.
-- DB: 보조 3개는 P5 내부 FK 사용. 모듈 간 물리 FK 없음. FDS Baseline의 8개 테이블·57개 컬럼 수와 별도로 관리한다.
+- API: P5 operation_id와 P6 작업 ID 구분, 접수 버전·실행 시도 번호·업무 키를 공유 계약으로 확인해야 한다. P5/P6 간 요청·결과 이벤트는 `settlement.api`에 두며 P6는 P5를 호출하지 않는다 (ADR-0012).
+- DB: 보조 3개는 P5 내부 FK 사용. 모듈 간 물리 FK 없음. 현재 업무 테이블 14개에 포함되지 않은 제안이다.
 - 동시성: UNIQUE만으로 CAPTURE/VOID 상호 배제가 되지 않는다. 결제 잠금과 P6 실행 계약이 필요하다.
 - 화면: 접수 성공과 실행 성공을 구분한 조회가 가능하다. 원 요청·이력 보존량과 개인정보 최소화 관리가 필요하다.
 - 테스트: 재전송·재기동·실패 이력·접수/실행 순서 역전·반대 조치 경합 검증을 추가한다.
@@ -37,5 +38,5 @@ payment를 유지하고 P5 내부에 payment_request·payment_operation·payment
 
 ## 검증
 
-업무 동작·DB·Java 컴파일은 미검증이다. 문서 검사는 [검증 문서](../payment/verification.md)에 기록한다.
+이 보조 저장안의 업무 동작·DB·Java 구현은 미검증이다. 기존 스키마 검사 결과와 구분하며, 문서 검사는 [검증 문서](../payment/verification.md)에 기록한다.
 이 ADR은 저장안 제안이며 ERD·Notion 정본을 무단 변경하거나 채택된 것으로 표시하지 않는다.

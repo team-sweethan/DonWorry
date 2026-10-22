@@ -23,7 +23,7 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 - 서버를 여러 개로 나누지 않고, **하나의 Spring Boot 앱을 모듈 5개로 나누는 모듈러 모놀리스** 구조를 씁니다. 모듈 경계는 Spring Modulith 테스트로 강제합니다 ([Modulith 문서](docs/modulith/README.md)).
 - 1차 목표는 **의심 결제가 승인 후 매입 보류(HELD)되고, 보안 직원이 AI 보고서를 참고해 결제별로 판정하고, 매입 또는 승인 취소가 담당 모듈에 인계되는 시연 경로**를 완성하는 것입니다.
 - FDS 연계 업무(위험평가 → HELD → Case·AI 조사 → 직원 판정 → 금융 조치 인계)의 흐름·상태값·통신 방식 정본은 Notion **fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계, DB 구현 가이드는 04)입니다. 테이블·컬럼(ERD) 정본은 Notion **팀페이지 / ERD**입니다 ([ERD 요약](docs/erd/README.md)). 이 README는 그 요약입니다.
-- 정산 관리 업무(실제 매입 실행·매입 배치·수수료·정산)의 정본은 **작성 중**입니다. 아래 P6 항목과 settlement 관련 내용은 FDS 정본에 나온 인계 경계까지만 반영했습니다.
+- P6 담당 ERD의 1차 범위는 이벤트 수신 후 즉시 매입·수수료 계산·정산 예정금 저장입니다. 픽업 정보와 정산 완료 배치는 2차 범위입니다. Notion 출처와 FDS 인계 계약의 남은 차이는 [문서 대조 현황](docs/README.md)에 기록했습니다.
 - 1차 CakeShop 연동 저장소: [team-sweethan/cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중)
 
 ## Features
@@ -31,10 +31,10 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 > 아래는 1차 MVP 범위입니다. 현재 저장소는 골격 단계이며 기능은 **구현 예정**입니다.
 
 - **결제(PG) · P5** — CakeShop 결제 세션, FDS 평가 요청, 모의 카드사 승인, REVIEW 승인 건의 매입 보류(HELD), 승인 취소(VOID), 결제 상태 관리(DENIED · DECLINED · HELD · CAPTURED · VOIDED · EXPIRED), CakeShop 결과 통지
-- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 자동 ALLOW하지 않음. 결제별 평가 이력(점수·판정·평가 시각·오류 코드) 보존. 규칙 버전·Rule별 적중 근거 저장 구조는 추후 검토
+- **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 자동 ALLOW하지 않음. 결제별 평가 이력은 `fds_evaluations`, 룰별 실행 결과·점수·근거는 `fds_rule_hits`에 저장하는 스키마가 있음. 평가·저장 로직은 미구현이며 `rule_set_version` 컬럼은 없음
 - **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계가 모두 확인되면 Case 종료
 - **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사(이전 버전 보존). 읽기 전용 Tool로 증거 조회, 증거 출처는 보고서 JSON 안에 기록. 총 3회 실패하면 직원이 직접 조사해 판정(`report_id` 없이 사유에 근거 기록). AI는 결제를 바꾸지 않음
-- **매입 · 정산 · P6** — CAPTURE 요청 접수·실행, 매입 배치, 수수료, 정산 (정산 정본 작성 중 — 현재는 FDS 정본의 CAPTURE 요청 영속 접수 경계만 확정)
+- **매입 · 정산 · P6** — CAPTURE 요청 이벤트 수신 후 즉시 매입, 수수료·정산 예정금 계산 및 `SCHEDULED` 저장. 별도 일일 매입 배치는 두지 않음. 픽업·정산 완료·취소 연동은 2차 범위이며, 영속 접수 결과와 실행 결과의 세부 계약은 확인 필요
 - **조사 기한** — Case 최초 생성 후 24시간을 내부 목표로 경고(권장값, 확정 아님). 기한 초과만으로 자동 판정하지 않음
 
 ## 핵심 흐름
@@ -92,7 +92,7 @@ sequenceDiagram
 | | oxlint · Prettier | — |
 | AI Server | Python · FastAPI | 3.13 · — |
 | | uv · ruff · pytest | — |
-| CI | GitHub Actions | 서비스별 3개 |
+| CI | GitHub Actions | 서비스별 3개 + 문서 검사 1개 |
 
 정확한 버전은 `backend/build.gradle`, `frontend/package.json`, `ai-server/pyproject.toml`을 기준으로 합니다.
 
@@ -182,9 +182,10 @@ npm run dev
 
 `http://localhost:5173`에서 열립니다. `/api`로 시작하는 요청은 백엔드(8081)로 전달됩니다.
 
-프론트는 로컬 시연 로그인과 공통 헤더·사이드바를 제공하며, 업무 본문에는
-페이지 제목과 옅은 파란 배경·점선 테두리의 **담당자 구현 영역**을 표시합니다.
-Mock 업무 화면은 현재 경로에 연결하지 않았습니다. 실제 인증·업무 API는 연동 전입니다.
+프론트는 로컬 시연 로그인과 공통 헤더·사이드바를 제공합니다.
+보안 직원의 **Case 목록·상세와 경보 목록·상세**는 목업 데이터로 동작합니다.
+거래 내역·사장님 조치 결과·정산 현황은 `EmptyPage`의 **담당자 구현 영역**입니다.
+실제 인증·업무 API는 연동 전입니다.
 시연 계정·실행 방법은 [프론트 README](frontend/README.md),
 담당 페이지 연결 방법은 [공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)를 참고합니다.
 
@@ -236,7 +237,7 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 설치를 마쳤다면 다음 흐름으로 지금 있는 화면을 확인할 수 있습니다. 업무 기능이 구현되면 이 절을 보강합니다.
 
 1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 백엔드 없이도 화면을 볼 수 있습니다.
-2. 보안 직원 `security` / `demo1234`로 로그인해 **Case 목록 → Case 상세** 목업과 역할별 메뉴를 확인합니다.
+2. 보안 직원 `security` / `demo1234`로 로그인해 **Case 목록 → Case 상세**, **경보 목록 → 경보 상세** 목업과 역할별 메뉴를 확인합니다.
 3. 사장님 `owner` / `demo1234`로 로그인해 사장님 메뉴를 확인합니다.
 4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
 5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
@@ -280,7 +281,7 @@ DonWorry/
 | `investigation` | 수민 | Case 생성·병합·결제별 판정·금융 조치 인계·Case 종료 |
 | `investigation/report` | 현규 (+ ai-server) | AI 조사 보고서·버전·재시도, AI Tool API |
 | `payment` | 시은 | 결제 접수·카드 승인·HELD·VOID·결제 상태·CakeShop 통지 |
-| `settlement` | 민정 | CAPTURE 실행·매입 배치·수수료·정산 |
+| `settlement` | 민정 | CAPTURE 즉시 실행·수수료·정산 예정금. 픽업·정산 완료 배치는 2차 |
 
 ### 모듈 하나의 내부 구조
 
@@ -337,7 +338,7 @@ flowchart TB
 
 - 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 반대 방향으로 알릴 일은 커밋 후 이벤트로 보냅니다. `보류` 점선은 필요해지면 추가할 의존입니다.
 - ai-server와의 점선은 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
-- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 채택했습니다. 이벤트 클래스 위치와 동기 호출·이벤트 선택 기준은 [Modulith 문서 04](docs/modulith/04-dependency-and-events.md), 자동 검사와 방향 강제 계획은 [Modulith 문서 05](docs/modulith/05-verification.md)를 봅니다.
+- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 채택했고, 각 모듈의 `allowedDependencies`로 검사합니다 (#60). 이벤트 클래스 위치와 동기 호출·이벤트 선택 기준은 [Modulith 문서 04](docs/modulith/04-dependency-and-events.md), 검사 범위는 [Modulith 문서 05](docs/modulith/05-verification.md)를 봅니다.
 
 ### 기술 선택 배경
 
@@ -359,21 +360,23 @@ flowchart TB
 - 🗂️ **[ERD](docs/erd/README.md)**: 1차 MVP 테이블 14개의 소유·관계(ERD 그림)·공통 타입 규칙, 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
-- 📝 **Notion fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신 정본. 정산 관리 업무 정본은 작성 중
+- 📝 **[문서 정본과 대조 현황](docs/README.md)**: Notion FDS 정본·담당 ERD·P6 상세 설계 링크, 현재 구현과 출처 간 차이·담당 확인 사항
 - 🗄️ **Notion 팀페이지 / ERD** (P1~P6 담당별 페이지): 테이블·컬럼 합의 정본
 
 ## 현재 상태
 
 **있는 것**
 
-- 모듈 5개 골격과 모듈 경계·계층 자동 검사
-- 개발용 DB(Docker Compose), CI 3개, PR 템플릿, 작업 규칙
-- frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·담당자 구현 영역·공통 UI 가이드
+- 모듈 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
+- 업무 테이블 14개와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
+- 서비스 CI 3개와 문서 CI 1개, PR 템플릿, 작업 규칙
+- P5 `PaymentStatus`·`PaymentRules`와 순수 규칙 단위 테스트
+- frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·Case/경보 목업·담당자 구현 영역·공통 UI 가이드
 - ai-server `/health`
 
 **아직 없는 것**
 
 - 업무 Entity·Repository — 테이블 14개는 Flyway로 만들어져 있고(#56), Java Entity는 각 담당이 기능 개발 때 추가
 - 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
-- 업무 API·화면·AI 보고서 생성
+- 실제 업무 API·이벤트 연동, 서버 데이터에 연결된 업무 화면, AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

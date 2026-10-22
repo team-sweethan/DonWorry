@@ -32,8 +32,17 @@
 | [0002](0002-frontend-common-layout.md) | Ant Design 기반 프론트 공통 레이아웃 | 제안 — 구현 반영, 팀 디자인 승인 필요 |
 | [0009](0009-ai-investigation-call-structure.md) | AI 조사 호출 구조 (Spring ↔ FastAPI) | 제안 — 팀 합의 필요 |
 | [0010](0010-payment-operation-storage.md) | P5 요청·금융 작업·이력의 최소 저장 분리 | 제안 — 저장 구조·DTO 검토 대기 |
-| [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 팀 합의 필요 |
+| [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 채택 |
-| [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 팀 합의 필요 |
+| [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
+
+## 현재 적용 상태와 기록의 구분
+
+2026-10-22, `ba9427f` 기준으로 ADR-0011의 Flyway·버전 생성·DB 검사와 ADR-0013의 포매터·CI 검사가 구현되어 있습니다.
+AGENTS에 적힌 적용 규칙은 따르되, 구현·병합 사실만으로 ADR 상태를 `채택`으로 바꾸지 않습니다.
+
+ADR-0012의 허용 의존 목록은 #60에서 구현됐습니다. 채택된 ADR 본문의 도입 당시 검증 계획은 보존하며, 현재 검사 범위는 [Modulith 05](../modulith/05-verification.md)를 봅니다.
+ADR-0001은 이전 결정의 기록입니다. 현재 구현 안내에서 의존 방향을 설명할 때는 ADR-0012를 참조합니다.
+Notion에 남은 이전 설명과 미결 계약은 [문서 대조 현황](../README.md)에 기록합니다.
 
 0003~0008은 미채택 P5 초안으로, 1차 시연 문서 재작성 시 삭제했다. 이전 내용은 Git 이력(`2d84406`)에서 확인할 수 있으며 번호를 재사용하지 않는다.

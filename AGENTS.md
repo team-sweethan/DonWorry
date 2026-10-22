@@ -25,7 +25,7 @@
 ### 정본 목록
 
 - FDS 연계 업무(평가 → HELD → Case · AI 조사 → 직원 판정 → 금융 조치 인계 · 접수 확인)의 흐름 · 상태값 · 모듈 간 통신 → Notion **fds 정본** 페이지 (01 업무분석 / 02 기획 / 03 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
-- 정산 관리 업무(실제 CAPTURE 실행 · 매입 배치 · 수수료 · 정산)와 P5 · P6 금융 실행 상세 → **정본 작성 중**. fds 정본은 이 범위를 정하지 않는다 (fds 정본 §5.9 제외 · 설계 3.3 제외 범위). 확정되면 이 줄을 갱신한다
+- 정산 관리 업무 → Notion **P6 매입·정산 상세 설계와 담당 ERD**. 1차는 이벤트 수신 후 즉시 매입·수수료·정산 예정금(SCHEDULED), 픽업·정산 완료 배치는 2차다. P5 · P6 영속 접수 확인·실행 복구 상세는 합의가 남아 있다. 출처와 차이는 [문서 대조 현황](docs/README.md)에 기록한다
 - ERD → Notion **팀페이지 / ERD** (P1~P6 담당별 페이지, 1차 MVP 14개 테이블). 저장소 요약은 [`docs/erd/`](docs/erd/README.md), 실제 컬럼 · 타입은 migration SQL이 기준이다. ERD를 바꿀 때는 해당 담당 페이지를 먼저 합의 · 수정한다. DB 원칙 · INSERT/UPDATE 예시는 fds 정본 **04 DB 설계 및 데이터 매핑** (구현 가이드)
 - 1차 CakeShop 연동 저장소 → https://github.com/team-sweethan/cakeshop_refactoring (DonWorry 연동에 맞게 수정 중)
 - Flyway 개념·사용법·로컬 DB 문제 해결 → [`docs/flyway/`](docs/flyway/README.md)
@@ -38,6 +38,7 @@
 - 담당 · 진행 상황 → GitHub Issue
 
 Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어긋나면 임의로 한쪽을 고치지 말고 영향 범위를 적어 공유한다.
+현재 제공된 Notion 정본·담당 ERD 링크와 확인된 불일치는 [문서 정본과 대조 현황](docs/README.md)을 본다.
 
 ## 2. 결정됨 ≠ 구현됨 ≠ 검증됨
 

@@ -92,7 +92,8 @@ cd backend
 
 ## 4. 첫 migration — `EVENT_PUBLICATION`
 
-현재 저장소의 유일한 migration은 `V20261021_215412__create_event_publication_table.sql`입니다.
+첫 migration은 `V20261021_215412__create_event_publication_table.sql`입니다.
+이후 Issue #56에서 업무 테이블 14개의 생성 migration이 추가되었습니다. 현재 테이블별 파일은 [ERD 2절](../erd/README.md#2-테이블-소유)을 봅니다.
 
 - 이 파일은 한국 시간으로 바꾸기 전에 만들어 버전이 UTC 기준입니다. 이후 파일은 항상 이보다 큰 숫자라 순서 문제가 없고, 병합된 파일이라 고치지 않습니다
 

@@ -1,11 +1,13 @@
 # 0011. Flyway 전환과 마이그레이션 버전 규칙
 
-- **상태:** 제안
+- **상태:** 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요
 - **날짜:** 2026-10-22
 - **관련:** Issue #23, Notion fds 정본 03 설계 §3.1(Flyway 기반 스키마 변경)·§3.9(ERD Baseline v1), 1차 CakeShop `docs/flyway_make_sample.md`
 - **영향 받는 담당:** P1~P6 전원 (모든 테이블 추가가 이 규칙을 따름)
 
 ## 배경
+
+아래는 도입 당시 배경이다. 현재는 업무 테이블 14개의 SQL과 이벤트 테이블이 있으며, 현행 목록은 [ERD](../erd/README.md)를 따른다.
 
 - `build.gradle`에 Flyway 의존성은 있었지만 `flyway.enabled: false`, `ddl-auto: update`로 운영했다. Entity를 바꾸면 Hibernate가 각자 PC의 DB를 조용히 바꿔, 팀원마다 스키마가 달라질 수 있다.
 - ERD Baseline v1(8개 테이블)이 나와 각 담당이 업무 테이블을 만들기 시작할 시점이다. 테이블이 생기기 전에 바꾸면 기존 데이터 이관이 필요 없다.
