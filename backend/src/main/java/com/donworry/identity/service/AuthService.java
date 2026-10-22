@@ -29,8 +29,8 @@ public class AuthService {
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
         String loginId = input.loginId().trim().toLowerCase(Locale.ROOT);
-        // 제어 문자로 로그인 로그에 임의의 줄을 삽입하지 못하게 한다.
-        String logLoginId = loginId.replaceAll("[\\p{Cntrl}]", "_");
+        // 제어 문자 · Unicode 줄 구분자 · 방향 제어 문자로 로그에 가짜 줄을 넣거나 내용을 뒤집지 못하게 한다.
+        String logLoginId = loginId.replaceAll("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]", "_");
         try {
             var result = authenticationManager.authenticate(
                     UsernamePasswordAuthenticationToken.unauthenticated(loginId, input.password()));
