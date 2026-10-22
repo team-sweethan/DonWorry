@@ -258,8 +258,113 @@ textarea {
   gap: 16px;
   margin-bottom: 20px;
 }
+.dw-alert-tabs {
+  padding: 0 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.dw-score-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dw-score-row > strong {
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -1.5px;
+}
+.dw-score-row > span {
+  color: #64748b;
+}
+.dw-score-scale {
+  position: relative;
+  display: flex;
+  flex: 1;
+  height: 12px;
+  overflow: visible;
+  border-radius: 6px;
+}
+.dw-score-scale > div {
+  height: 12px;
+}
+.dw-score-allow {
+  width: 50%;
+  background: #bbf7d0;
+  border-radius: 6px 0 0 6px;
+}
+.dw-score-review {
+  width: 30%;
+  background: #fde68a;
+}
+.dw-score-deny {
+  width: 20%;
+  background: #fecaca;
+  border-radius: 0 6px 6px 0;
+}
+.dw-score-scale i {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: #0f172a;
+}
+.dw-score-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 0 79px;
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-flow > div {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dw-flow > div::before {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  background: #fff;
+  content: '';
+}
+.dw-flow > div:not(:last-child)::after {
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  width: 2px;
+  height: 19px;
+  background: #e2e8f0;
+  content: '';
+}
+.dw-flow span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
 .dw-stat-card {
   padding: 20px 22px;
+}
+.dw-stat-card-button {
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dw-stat-card-button:hover {
+  border-color: #93c5fd;
 }
 .dw-stat-label {
   font-size: 12px;
