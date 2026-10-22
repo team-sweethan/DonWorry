@@ -57,7 +57,7 @@ jobs:
       - if: steps.changes.outputs.run == 'true'
         run: chmod +x gradlew      # Windows에서 커밋해도 실행 권한 문제 없게
       - if: steps.changes.outputs.run == 'true'
-        run: ./gradlew check       # 컴파일 + ModularityTests + ArchitectureTests
+        run: ./gradlew check       # 컴파일 + 코드 모양(spotlessCheck) + ModularityTests + ArchitectureTests
       # 러너의 Docker로 MariaDB 11.8을 띄워 migration 전체 적용 + JPA validate
       - if: steps.changes.outputs.run == 'true'
         run: ./gradlew mariaDbTest

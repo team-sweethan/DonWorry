@@ -13,16 +13,19 @@
    ▼
 ① uv sync --locked   ← uv.lock 그대로 설치
    ▼
-② uv run ruff check . ← 코드 규칙 검사
+② uv run ruff check .          ← 코드 규칙 검사
    ▼
-③ uv run pytest       ← tests/ 아래 테스트 실행
+③ uv run ruff format --check . ← 코드 모양 검사
+   ▼
+④ uv run pytest                ← tests/ 아래 테스트 실행
 ```
 
 | 단계 | 하는 일 | 실패하면 의심할 것 | 로컬에서 똑같이 (`ai-server/`에서) |
 | --- | --- | --- | --- |
 | ① `uv sync --locked` | 잠금 파일 기준 설치 | `pyproject.toml`만 고치고 `uv.lock`을 커밋 안 함 | `uv sync --locked` |
 | ② ruff | lint 규칙 검사 | import 정렬, 안 쓰는 import, 오래된 문법 | `uv run ruff check .` → 고치기: `uv run ruff check --fix .` |
-| ③ pytest | 테스트 실행 | 테스트 실패 | `uv run pytest` |
+| ③ ruff format | 코드 모양 검사 (고치지 않고 다르면 실패) | `ruff format`을 안 돌림 | `uv run ruff format --check .` → 고치기: `uv run ruff format .` |
+| ④ pytest | 테스트 실행 | 테스트 실패 | `uv run pytest` |
 
 ### `uv sync --locked`
 

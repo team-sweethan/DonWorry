@@ -13,11 +13,13 @@
 | backend | `ModularityTests` 실패 (`non-exposed type`, `Cycle detected`) | 다른 모듈 내부 접근, 순환 의존 | [B3](#b3-modularitytests-실패) |
 | backend | `ArchitectureTests` 실패 (`Architecture Violation`) | 모듈 안 계층 규칙 위반 | [B4](#b4-architecturetests-실패) |
 | backend | `mariaDbTest` 실패 | SQL 오류, Entity ↔ 테이블 불일치 | [B5](#b5-mariadbtest-실패) |
+| backend | `spotlessJavaCheck FAILED` · `format violations` | 코드 모양 불일치 | [B6](#b6-spotlesscheck-실패) |
 | frontend | `npm ci` 실패 (`in sync`) | `package-lock.json` 미커밋 | [C1](#c1-npm-ci-실패) |
 | frontend | `npm run lint` 실패 (`no-explicit-any` 등) | oxlint 규칙 위반 | [C2](#c2-lint-실패) |
 | frontend | `Code style issues found` | Prettier 포맷 불일치 | [C3](#c3-formatcheck-실패) |
 | ai-server | `The lockfile at uv.lock needs to be updated` | `uv.lock` 미커밋 | [D1](#d1-uvlock-불일치) |
 | ai-server | `ruff check` 실패 (`F401`, `I001` 등) | ruff 규칙 위반 | [D2](#d2-ruff-실패) |
+| ai-server | `Would reformat:` | 코드 모양 불일치 | [D3](#d3-ruff-format-실패) |
 | docs | `깨진 링크:` | 없는 파일을 가리키는 링크 | [E1](#e1-깨진-링크) |
 
 ## A. 공통
@@ -128,6 +130,31 @@ Method <com.donworry...SomeController.list()> calls method <com.donworry...SomeR
 
 로컬에서 똑같이: Docker Desktop을 켜고 `backend/`에서 `./gradlew mariaDbTest`
 
+### B6. spotlessCheck 실패
+
+**증상**
+
+```text
+> Task :spotlessJavaCheck FAILED
+> The following files had format violations:
+      src\main\java\com\donworry\identity\security\SecurityConfig.java
+          -········http
+          -················.csrf(csrf·->·csrf.disable())
+          +········http.csrf(csrf·->·csrf.disable())
+  Run 'gradlew.bat spotlessApply' to fix all violations.
+```
+
+**원인** 커밋 전에 `spotlessApply`를 돌리지 않아 코드 모양(들여쓰기·줄바꿈·import 순서)이 기준과 다릅니다.
+
+`-`는 지금 코드, `+`는 포매터가 원하는 모양, `·`는 공백입니다.
+
+**해결** `backend/`에서 `./gradlew spotlessApply`를 돌리고 바뀐 파일을 커밋합니다.
+
+| 함께 보이는 문구 | 원인 | 해결 |
+| --- | --- | --- |
+| 로컬에서 `spotlessApply`가 Java 21 문법(record 패턴 등)에서 실패 | Gradle을 실행하는 JDK가 21이 아님 | `java -version`과 `JAVA_HOME`을 JDK 21로 맞춤 |
+| 정리할 때마다 같은 파일이 다시 바뀜 | IntelliJ 자동 정렬과 포매터가 다름 | IntelliJ에 palantir-java-format 플러그인을 켜거나, 저장 후 `spotlessApply`만 사용 |
+
 ## C. frontend
 
 ### C1. npm ci 실패
@@ -194,6 +221,17 @@ I001 [*] Import block is un-sorted or un-formatted
 ```
 
 **해결** `ai-server/`에서 `uv run ruff check --fix .`를 돌립니다. `[*]`가 붙은 항목은 자동으로 고쳐집니다. 남은 것은 메시지를 보고 직접 고칩니다. 규칙 설명은 [05 ai-server](05-ai-server-and-docs.md#ruff-규칙)에 있습니다.
+
+### D3. ruff format 실패
+
+**증상**
+
+```text
+Would reformat: app/main.py
+1 file would be reformatted
+```
+
+**해결** `ai-server/`에서 `uv run ruff format .`을 돌리고 바뀐 파일을 커밋합니다.
 
 ## E. docs
 

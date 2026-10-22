@@ -6,9 +6,9 @@
 
 | 워크플로 파일 | job 이름 | 검사 대상 폴더 | 하는 일 (순서대로) | 상세 |
 | --- | --- | --- | --- | --- |
-| `backend.yml` | `backend` | `backend/` | (PR) migration 검사 → `./gradlew check` → `./gradlew mariaDbTest` | [03](03-backend.md) |
+| `backend.yml` | `backend` | `backend/` | (PR) migration 검사 → `./gradlew check`(코드 모양 포함) → `./gradlew mariaDbTest` | [03](03-backend.md) |
 | `frontend.yml` | `frontend` | `frontend/` | `npm ci` → oxlint → Prettier 검사 → 타입 검사 + 빌드 | [04](04-frontend.md) |
-| `ai-server.yml` | `ai-server` | `ai-server/` | `uv sync --locked` → ruff → pytest | [05](05-ai-server-and-docs.md#1-ai-server) |
+| `ai-server.yml` | `ai-server` | `ai-server/` | `uv sync --locked` → ruff 규칙 검사 → ruff 모양 검사 → pytest | [05](05-ai-server-and-docs.md#1-ai-server) |
 | `docs.yml` | `docs` | 모든 `*.md` | Markdown 상대 링크 검사 | [05](05-ai-server-and-docs.md#2-docs) |
 
 ## 2. 실행 조건

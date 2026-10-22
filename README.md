@@ -204,12 +204,12 @@ uv run uvicorn app.main:app --reload --port 8000
 PR을 올리기 전에 바꾼 영역의 검사를 돌립니다. CI도 같은 검사를 합니다.
 
 ```bash
-cd backend   && ./gradlew check        # Windows: .\gradlew.bat check
+cd backend   && ./gradlew spotlessApply check   # Windows: .\gradlew.bat spotlessApply check
 cd frontend  && npm run lint && npm run format:check && npm run build
-cd ai-server && uv run ruff check . && uv run pytest
+cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 ```
 
-`./gradlew check`는 DB 없이 돌아갑니다. 모듈 관계도는 `./gradlew test` 후 `backend/build/spring-modulith-docs/`에 생깁니다.
+`spotlessApply`와 `ruff format`은 코드 모양(들여쓰기·줄바꿈)을 자동으로 맞춥니다 ([ADR-0013](docs/decisions/0013-code-formatter.md)). `./gradlew check`는 DB 없이 돌아갑니다. 모듈 관계도는 `./gradlew test` 후 `backend/build/spring-modulith-docs/`에 생깁니다.
 
 ### 실행 포트
 

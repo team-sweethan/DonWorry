@@ -66,6 +66,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
+- 코드 모양(들여쓰기·줄바꿈·import 순서)은 손으로 맞추지 않는다. 커밋 전 `./gradlew spotlessApply` (palantir-java-format, [ADR-0013](docs/decisions/0013-code-formatter.md))
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
   - 예외: `investigation` 모듈 안이라도 P4의 `ai_report`와 P3 테이블(`security_case` · `payment_decision`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
@@ -101,6 +102,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 보고서 생성이 실패해도 자동으로 ACCEPT / REJECT 하지 않는다. 판정은 직원이 한다
 - 보고서는 `report_version`별로 쌓고 덮어쓰지 않는다. 증거 출처 · 조회 시각은 `report_body` JSON 안에 둔다 (별도 `evidence_refs` 컬럼 없음)
 - 요청 · 응답은 Pydantic 모델로 받고 내보낸다
+- 코드 모양은 손으로 맞추지 않는다. 커밋 전 `uv run ruff format .`
 - LLM 호출은 `LlmClient` 경계를 지난다. 제공자를 바꿀 때 service를 고치지 않는다
 
 ## 7. 작업 순서
@@ -130,10 +132,11 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 ## 9. 검사 명령
 
 ```bash
-cd backend   && ./gradlew check                      # 컴파일 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
+cd backend   && ./gradlew spotlessApply              # 코드 모양 자동 정리 (check 전에)
+cd backend   && ./gradlew check                      # 컴파일 + 코드 모양 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
 cd backend   && ./gradlew mariaDbTest                # Docker 필요 — MariaDB 컨테이너에 Flyway 전체 적용 + JPA validate
 cd frontend  && npm run lint && npm run format:check && npm run build
-cd ai-server && uv run ruff check . && uv run pytest
+cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 ```
 
 CI가 무엇을 하는지와 자주 겪는 문제는 [`docs/ci/`](docs/ci/README.md).

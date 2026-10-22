@@ -37,4 +37,6 @@ jobs:
       - if: steps.changes.outputs.run == 'true'
         run: uv run ruff check .
       - if: steps.changes.outputs.run == 'true'
+        run: uv run ruff format --check .   # 코드 모양 검사 — 고치기: uv run ruff format .
+      - if: steps.changes.outputs.run == 'true'
         run: uv run pytest

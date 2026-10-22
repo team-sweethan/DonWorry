@@ -34,5 +34,6 @@
 | [0010](0010-payment-operation-storage.md) | P5 요청·금융 작업·이력의 최소 저장 분리 | 제안 — 저장 구조·DTO 검토 대기 |
 | [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 팀 합의 필요 |
 | [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 채택 |
+| [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 팀 합의 필요 |
 
 0003~0008은 미채택 P5 초안으로, 1차 시연 문서 재작성 시 삭제했다. 이전 내용은 Git 이력(`2d84406`)에서 확인할 수 있으며 번호를 재사용하지 않는다.

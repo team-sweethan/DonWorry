@@ -14,7 +14,7 @@
    ▼
    Java 21 · Gradle 준비
    ▼
-② ./gradlew check        ← DB 없이: 컴파일 + 모듈 경계 검사 + 계층 검사
+② ./gradlew check        ← DB 없이: 컴파일 + 코드 모양 + 모듈 경계 검사 + 계층 검사
    ▼
 ③ ./gradlew mariaDbTest  ← Docker로 MariaDB 11.8을 띄워 Flyway 전체 적용 + JPA validate
    ▼ (실패했을 때만)
@@ -24,7 +24,7 @@
 | 단계 | 하는 일 | 실패하면 의심할 것 | 로컬에서 똑같이 (`backend/`에서) |
 | --- | --- | --- | --- |
 | ① migration 검사 | 병합된 migration 수정·삭제, 규칙 밖 파일명 차단 | 병합된 SQL을 고침, 파일 이름을 직접 지음 | (git 비교라 로컬 명령 없음) |
-| ② `check` | 컴파일, `ModularityTests`, `ArchitectureTests` | 컴파일 오류, 다른 모듈 내부 접근, 순환, 계층 위반 | `./gradlew check` |
+| ② `check` | 컴파일, `spotlessCheck`, `ModularityTests`, `ArchitectureTests` | 컴파일 오류, `spotlessApply` 안 돌림, 다른 모듈 내부 접근, 순환, 계층 위반 | `./gradlew spotlessApply check` |
 | ③ `mariaDbTest` | 빈 MariaDB에 migration 전체 적용 + Entity 검사 | SQL 오류, Entity ↔ 테이블 불일치 | `./gradlew mariaDbTest` (Docker Desktop 필요) |
 
 Windows에서는 `./gradlew` 대신 `.\gradlew.bat`을 씁니다.
@@ -42,9 +42,19 @@ PR이 `dev`(PR 대상 브랜치)와 비교해 `backend/src/main/resources/db/mig
 
 ## 3. `./gradlew check`
 
-DB 없이 클래스 구조만 검사합니다. 컴파일 후 `test` 태스크가 아래 두 테스트를 돌립니다 (`@Tag("mariadb")` 테스트는 제외).
+DB 없이 코드 모양과 클래스 구조만 검사합니다. `spotlessCheck`가 코드 모양을 보고, 컴파일 후 `test` 태스크가 아래 두 테스트를 돌립니다 (`@Tag("mariadb")` 테스트는 제외).
 
 새 테스트는 `backend/src/test` 아래에 넣기만 하면 이 단계에 자동으로 포함됩니다. 워크플로를 고칠 필요가 없습니다. DB가 필요한 테스트라면 `@Tag("mariadb")`를 붙여 ③으로 보냅니다.
+
+### `spotlessCheck` — 코드 모양 (palantir-java-format)
+
+| 규칙 | 예 |
+| --- | --- |
+| 들여쓰기 4칸, 한 줄 120자 | 긴 메서드 호출은 자동으로 줄을 나눈다 |
+| import 정리 | 안 쓰는 import 제거, 순서 고정 |
+
+- 사람이 맞추지 않습니다. 커밋 전에 `./gradlew spotlessApply`를 돌리면 파일이 고쳐집니다
+- 왜 이 도구를 골랐는지는 [ADR-0013](../decisions/0013-code-formatter.md)에 있습니다
 
 ### `ModularityTests` — 모듈 **사이** 규칙 (Spring Modulith)
 
