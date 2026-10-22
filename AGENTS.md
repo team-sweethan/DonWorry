@@ -100,7 +100,7 @@ cd frontend  && npm run lint && npm run format:check && npm run build
 cd ai-server && uv run ruff check . && uv run pytest
 ```
 
-CI가 무엇을 하는지와 자주 겪는 문제는 [`.github/workflows/README.md`](.github/workflows/README.md).
+CI가 무엇을 하는지와 자주 겪는 문제는 [`docs/ci/`](docs/ci/README.md).
 
 ## 10. AI 도구를 쓸 때
 

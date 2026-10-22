@@ -229,7 +229,7 @@ cd ai-server && uv run ruff check . && uv run pytest
 - **Flyway·DB 초기화 관련 오류** (`Found non-empty schema`, `checksum mismatch`, `Schema-validation`, `Unknown server host '127'` 등) — [Flyway 문제 해결](docs/flyway/06-troubleshooting.md)
 - **`Unable to delete directory ...build\test-results`** — OneDrive가 `build/` 폴더를 잠근 경우입니다. `backend/build`를 지우고 다시 실행하고, 반복되면 프로젝트를 OneDrive 밖으로 옮깁니다.
 - **CI에서 `uv.lock` 관련 실패** — 라이브러리를 추가했다면 갱신된 `uv.lock`을 함께 커밋합니다.
-- **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 설명서](.github/workflows/README.md).
+- **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 문제 해결](docs/ci/06-troubleshooting.md#a2-첫-실행이-5분-넘게-걸림).
 
 ## Quick Start
 
@@ -376,7 +376,7 @@ flowchart BT
 
 - 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
 - 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
-- ⚙️ **[CI 설명서](.github/workflows/README.md)**: 워크플로별 검사 내용과 겪은 문제
+- ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
 - 🗂️ **[ERD](docs/erd/README.md)**: 테이블 소유·관계·컬럼 (Notion 설계 3.9 확정 후 작성), 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
