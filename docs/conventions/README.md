@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | 브랜치 이름 · 병합 흐름 (`feature/*` → `dev` → `main`) | 📄 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
 | `main` · `dev` 직접 push 금지 | 🤖 GitHub 저장소 설정 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
+| 이슈 형식 (작업 · 버그) · 제목 `[feat\|fix\|docs\|chore\|test] 요약` | 📄 | [이슈 템플릿](../../.github/ISSUE_TEMPLATE/) |
 | PR 본문 형식 · "미검증" 칸 | 📄 | [PR 템플릿](../../.github/pull_request_template.md) |
 | 필수 검사 (`backend` · `frontend` · `ai-server`) | 🤖 | [CI 02 4절](../ci/02-overview.md#4-필수-검사와-job-이름) |
 | 작업 완료 보고 형식 | 📄 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
