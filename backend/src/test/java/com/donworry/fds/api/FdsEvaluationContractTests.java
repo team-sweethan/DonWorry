@@ -20,6 +20,20 @@ class FdsEvaluationContractTests {
         assertThat(request.paymentRequestedAt()).isEqualTo(requestedAt);
     }
 
+    // 계약 필수값 누락은 P5가 한 종류의 예외로 처리할 수 있게 IllegalArgumentException으로 통일한다.
+    @Test
+    void request_whenRequiredValueIsNull_throwsIllegalArgumentException() {
+        var requestId = UUID.randomUUID();
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        assertThatThrownBy(() -> new FdsEvaluationRequest(null, 101L, "hong-gildong", 150_000L, requestedAt))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, null, "hong-gildong", 150_000L, requestedAt))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, "hong-gildong", 150_000L, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     // ERROR는 점수 대신 실패 코드를 반환해 P5가 정상 판정과 구분한다.
     @Test
     void response_whenErrorWithoutScoreAndWithErrorCode_createsResponse() {
