@@ -20,7 +20,7 @@
 `report`는 `investigation` **안의 하위 패키지**라서 Modulith는 둘을 한 모듈로 봅니다.
 
 - P3가 P4에 조사를 요청하고, P4는 P3의 Case · 판정 정보를 읽습니다. 별도 모듈이면 서로를 호출해 **순환**이 됩니다
-- 대신 **데이터 소유권은 나눕니다.** P3 코드는 `ai_report` 리포지토리를 직접 쓰지 않고, `ai_report` ↔ `security_case` 사이도 FK 없는 논리 참조입니다 ([AGENTS.md 4절](../../AGENTS.md#4-backend-규칙))
+- 대신 **데이터 소유권은 나눕니다.** P3 코드는 `ai_reports` 리포지토리를 직접 쓰지 않고, `ai_reports` ↔ `security_cases` 사이도 FK 없는 논리 참조입니다 ([AGENTS.md 4절](../../AGENTS.md#4-backend-규칙))
 
 ## 2. 모듈 안 패키지 규칙
 

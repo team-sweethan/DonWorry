@@ -80,7 +80,7 @@ export function HandoffCard({
   )
 }
 
-/** case_history — INSERT 전용 감사 이력을 시간순으로 보여준다. */
+/** case_histories — INSERT 전용 감사 이력을 시간순으로 보여준다. */
 export function HistoryCard({ history }: { history: CaseHistory[] }) {
   const sorted = [...history].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
   return (

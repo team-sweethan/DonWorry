@@ -34,7 +34,7 @@ export type SecurityCase = {
   closedAt: string | null
 }
 
-/** case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가. */
+/** case_payments + 조회로 합친 P5 결제 정보·P2 FDS 평가. */
 export type CasePayment = {
   casePaymentId: string
   paymentId: string
