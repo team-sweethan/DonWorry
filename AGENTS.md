@@ -14,7 +14,7 @@
 | DB 테이블 추가·변경 | [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md) 1·5·6절, [`docs/erd/`](docs/erd/README.md) (작업 순서는 이 파일 4절) |
 | 다른 모듈 호출, 이벤트 발행·구독 | [`docs/modulith/04-dependency-and-events.md`](docs/modulith/04-dependency-and-events.md), [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md) |
 | 모듈 안 클래스·패키지 배치 | [`docs/modulith/03-module-structure.md`](docs/modulith/03-module-structure.md) |
-| 코드 작성 (Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그) | [`docs/conventions.md`](docs/conventions.md) — `합의` 항목은 따르고, `합의 전`은 초안이라 리뷰 대상이며, `보류`는 담당에게 묻는다 |
+| 코드 작성 (Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그) | [`docs/conventions/02-code.md`](docs/conventions/02-code.md) — `합의` 항목은 따르고, `합의 전`은 초안이라 리뷰 대상이며, `보류`는 담당에게 묻는다 |
 | 내 모듈 기능 개발 | `docs/<모듈>/`이 있으면 그 README (예: [`docs/payment/`](docs/payment/README.md)). 없으면 현재 코드 |
 | AI 조사·FastAPI 연동 | [ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md) (규칙은 이 파일 6절) |
 | CI 실패 | [`docs/ci/06-troubleshooting.md`](docs/ci/06-troubleshooting.md) |
@@ -32,6 +32,7 @@
 - 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
 - Spring Modulith 개념·모듈 구조·의존 방향·이벤트 → [`docs/modulith/`](docs/modulith/README.md)
 - 설계 결정과 그 이유 → [`docs/decisions/`](docs/decisions/) (ADR)
+- 팀 규칙이 어디에 있고 무엇이 자동 강제되는지 → [`docs/conventions/`](docs/conventions/README.md) (규칙 지도)
 - DB 스키마 → `backend/src/main/resources/db/migration/`
 - 실제로 돌아가는 검사 규칙 → `build.gradle`, `.oxlintrc.json`, `pyproject.toml`, `.github/workflows/`
 - 담당 · 진행 상황 → GitHub Issue

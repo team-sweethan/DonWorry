@@ -1,4 +1,6 @@
-# 코드 컨벤션
+# 02. 코드 작성 규칙
+
+[← 규칙 지도](README.md)
 
 포매터·자동 검사가 정하지 못하는 **팀 선택**만 적는다. 사람·AI 공통으로 따른다.
 
@@ -12,11 +14,11 @@
 
 | 대상 | 어디서 정하나 |
 | --- | --- |
-| 들여쓰기 · 줄바꿈 · import 순서 | 포매터가 자동으로 맞춘다 — 커밋 전 `./gradlew spotlessApply` ([ADR-0013](decisions/0013-code-formatter.md)) |
-| 모듈 경계 · 패키지 구조 · 계층 | [Modulith 03](modulith/03-module-structure.md#2-모듈-안-패키지-규칙), AGENTS.md 4절 (테스트가 검사) |
-| 이벤트 · 모듈 간 호출 | [Modulith 04](modulith/04-dependency-and-events.md) |
-| 테이블 · 마이그레이션 | [Flyway 05](flyway/05-guide.md) |
-| ID · 금액 · 시각 타입 | 미정 — [P5 결제 문서 C1](payment/README.md#구현-전에-필요한-최소-계약) |
+| 들여쓰기 · 줄바꿈 · import 순서 | 포매터가 자동으로 맞춘다 — 커밋 전 `./gradlew spotlessApply` ([ADR-0013](../decisions/0013-code-formatter.md)) |
+| 모듈 경계 · 패키지 구조 · 계층 | [Modulith 03](../modulith/03-module-structure.md#2-모듈-안-패키지-규칙), AGENTS.md 4절 (테스트가 검사) |
+| 이벤트 · 모듈 간 호출 | [Modulith 04](../modulith/04-dependency-and-events.md) |
+| 테이블 · 마이그레이션 | [Flyway 05](../flyway/05-guide.md) |
+| ID · 금액 · 시각 타입 | 미정 — [P5 결제 문서 C1](../payment/README.md#구현-전에-필요한-최소-계약) |
 
 ## 1. Lombok `합의 전`
 
@@ -38,7 +40,7 @@ public void hold() {
 - 요청 · 응답 DTO는 `record`로 만든다
 - 화면 · 외부 HTTP용(`dto/`) 이름은 `XxxRequest` · `XxxResponse`
 - Entity → DTO 변환은 DTO의 정적 메서드 `XxxResponse.from(entity)`
-- 다른 모듈에 공개하는 `api/` record는 [Modulith 03](modulith/03-module-structure.md#2-모듈-안-패키지-규칙)을 따른다
+- 다른 모듈에 공개하는 `api/` record는 [Modulith 03](../modulith/03-module-structure.md#2-모듈-안-패키지-규칙)을 따른다
 
 ```java
 public record ReportResponse(Long id, String status) {
@@ -95,7 +97,7 @@ throw new BusinessException(ReportErrorCode.REPORT_NOT_FOUND);
 - `@Transactional`은 Service에만 붙인다. Controller · Repository에는 붙이지 않는다
 - 조회만 하는 메서드는 `@Transactional(readOnly = true)`
 
-이유: 이벤트는 보낸 쪽 트랜잭션이 커밋된 뒤에 처리된다 ([Modulith 04](modulith/04-dependency-and-events.md)). 트랜잭션 경계가 Service에 모여 있어야 언제 커밋되는지 보인다.
+이유: 이벤트는 보낸 쪽 트랜잭션이 커밋된 뒤에 처리된다 ([Modulith 04](../modulith/04-dependency-and-events.md)). 트랜잭션 경계가 Service에 모여 있어야 언제 커밋되는지 보인다.
 
 ## 5. 이름 `합의 전`
 
