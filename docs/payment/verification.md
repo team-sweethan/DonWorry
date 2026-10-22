@@ -107,6 +107,17 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - MariaDB 11.8에서 기존 Flyway 전체 적용·JPA validate, ID 자동 생성, 커밋 후 새 트랜잭션의 전체 필드 재조회, 상태 문자열·UTC 시각의 실제 저장값을 확인.
 - Repository·저장 서비스·입력 인증·가맹점 존재 확인·요청 멱등성·P2 호출은 아직 구현·검증하지 않았다. Entity 매핑 테스트를 결제 접수 전체 검증으로 해석하지 않는다.
 
+## #71 Repository 단계 실행 기록
+
+2026-10-22, `feature/71-payment-persistence`, 기준 커밋 `41c75d1` + Repository·테스트 미커밋 작업본에서 실행했다.
+
+- 실행: `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL.
+- `check`: 기존 단위·구조 검사 총 57건 통과. 실패·오류·건너뜀 0.
+- `mariaDbTest`: [PaymentRepositoryTests](../../backend/src/test/java/com/donworry/payment/repository/PaymentRepositoryTests.java) 3건과 기존 Flyway·Entity 매핑 검사 4건으로 총 7건 통과. 실패·오류·건너뜀 0.
+- 실제 MariaDB 11.8에서 Repository Bean 생성, 저장 커밋 후 새 트랜잭션의 ID 조회·전체 필드 보존, 롤백된 결제 미저장, 없는 ID의 빈 조회 결과를 확인.
+- Repository는 저장·ID 조회만 노출한다. 트랜잭션 경계는 테스트에서 지정했으며 업무 저장 서비스는 후속 단계다.
+- 업무 입력 인증·가맹점 존재 확인·요청 멱등성·P2 호출·실제 결제 접수 흐름은 미검증이다. 다른 담당 계약 변경은 없다.
+
 ## W1 실행 기록
 
 2026-10-21, `feature/p5-state-rules`, 기준 커밋 `b3e5799` + W1 미커밋 작업본에서 실행했다.
