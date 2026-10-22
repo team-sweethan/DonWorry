@@ -1,7 +1,8 @@
 import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
 import { Button, Select, Tooltip } from 'antd'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { navByRole, roles, type Role } from '../config/navigation'
+import type { ReactNode } from 'react'
+import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
 import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
@@ -73,13 +74,12 @@ function Header() {
   )
 }
 
-function Sidebar() {
-  const { role } = useDemo()
+function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean }) {
   const location = useLocation()
   return (
     <aside className="dw-sidebar" aria-label="주 메뉴">
       <nav>
-        {navByRole[role].map((group) => (
+        {groups.map((group) => (
           <div className="dw-nav-group" key={group.title}>
             <div className="dw-nav-heading">{group.title}</div>
             {group.items.map((item) => (
@@ -96,41 +96,58 @@ function Sidebar() {
           </div>
         ))}
       </nav>
-      <div className="dw-sidebar-bottom">
-        <div className="dw-sidebar-tip">
-          <strong>공통 관리 화면 v1.0</strong>
-          <div>프론트 디자인 시스템 샘플</div>
-          <div style={{ marginTop: 5 }}>API 미연결 · 로컬 시연 데이터</div>
-          <NavLink
-            to="/dev/components"
-            style={{
-              display: 'inline-flex',
-              color: '#BFDBFE',
-              marginTop: 8,
-              textDecoration: 'underline',
-              alignItems: 'center',
-              gap: 4,
-            }}
-          >
-            <SettingOutlined /> UI 컴포넌트 보기
-          </NavLink>
+      {demo && (
+        <div className="dw-sidebar-bottom">
+          <div className="dw-sidebar-tip">
+            <strong>공통 관리 화면 v1.0</strong>
+            <div>프론트 디자인 시스템 샘플</div>
+            <div style={{ marginTop: 5 }}>API 미연결 · 로컬 시연 데이터</div>
+            <NavLink
+              to="/dev/components"
+              style={{
+                display: 'inline-flex',
+                color: '#BFDBFE',
+                marginTop: 8,
+                textDecoration: 'underline',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <SettingOutlined /> UI 컴포넌트 보기
+            </NavLink>
+          </div>
         </div>
-      </div>
+      )}
     </aside>
   )
 }
 
 export function AdminLayout() {
+  const { role } = useDemo()
+  return <ManagementLayout header={<Header />} groups={navByRole[role]} demo />
+}
+
+export function ManagementLayout({
+  header,
+  groups,
+  demo = false,
+  children,
+}: {
+  header: ReactNode
+  groups: NavGroup[]
+  demo?: boolean
+  children?: ReactNode
+}) {
   const location = useLocation()
   return (
     <div className="admin-viewport">
-      <Header />
-      <Sidebar />
+      {header}
+      <Sidebar groups={groups} demo={demo} />
       <main className="dw-main" id="main">
         <div className="dw-container">
           {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
           <ScreenErrorBoundary key={location.pathname}>
-            <Outlet />
+            {children ?? <Outlet />}
           </ScreenErrorBoundary>
         </div>
       </main>

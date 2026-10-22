@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react'
 import { Alert, Button, Form, Input } from 'antd'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
+import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 
 export type LoginValues = { loginId: string; password: string }
-// 실제 로그인 호출은 TASK 05에서 연결한다. 연결 전에는 onSubmit 없이 준비 중 안내만 보여준다.
 type LoginPageProps = { onSubmit?: (values: LoginValues) => Promise<void> }
-type Feedback = 'ready' | 'invalid' | 'network'
+type Feedback = 'ready' | 'invalid' | 'input' | 'network'
 
 const feedbackMessages: Record<Feedback, string> = {
   ready: '로그인 기능 연결 준비 중입니다.',
+  input: '아이디와 비밀번호를 확인해 주세요.',
   invalid: '아이디 또는 비밀번호가 올바르지 않습니다.',
   network: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
 }
@@ -31,7 +32,13 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
     try {
       await onSubmit({ loginId: values.loginId.trim(), password: values.password })
     } catch (error) {
-      setFeedback(error instanceof InvalidCredentialsError ? 'invalid' : 'network')
+      setFeedback(
+        error instanceof InvalidCredentialsError
+          ? 'invalid'
+          : error instanceof ApiError && error.status === 400
+            ? 'input'
+            : 'network',
+      )
     } finally {
       submittingRef.current = false
       setSubmitting(false)

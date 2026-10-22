@@ -1,0 +1,230 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { ApiError } from '../src/api/client.ts'
+import { createAuthStore } from '../src/auth/authStore.ts'
+import type { AuthUser } from '../src/types/auth.ts'
+
+const user: AuthUser = {
+  userId: 1,
+  loginId: 'admin',
+  displayName: '관리자 테스트',
+  role: 'ADMIN',
+  merchantId: null,
+  tenantScope: 'ALL',
+  permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
+}
+const unauthorized = () => new ApiError(401, 'AUTH_001')
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
+  return { promise, resolve, reject }
+}
+function setup(overrides: Partial<Parameters<typeof createAuthStore>[0]> = {}) {
+  return createAuthStore({
+    login: async () => user,
+    getMe: async () => user,
+    logout: async () => {},
+    ...overrides,
+  })
+}
+
+// 최초 비로그인 확인은 만료 안내 없이 로그인 화면으로 넘긴다.
+test('check_whenInitiallyUnauthorized_becomesAnonymousWithoutExpiry', async () => {
+  const store = setup({
+    getMe: async () => {
+      throw unauthorized()
+    },
+  })
+  await store.check('initial')
+  assert.equal(store.getSnapshot().status, 'anonymous')
+  assert.equal(store.getSnapshot().expired, false)
+  assert.equal(store.getSnapshot().checkedKey, 'initial')
+})
+
+// 로그인 후 확인한 401은 사용자 정보를 지우고 안내를 한 번만 만든다.
+test('check_whenSessionExpires_clearsUserAndSignalsOnce', async () => {
+  const store = setup({
+    getMe: async () => {
+      throw unauthorized()
+    },
+  })
+  await store.login('admin', 'secret')
+  await store.check('next')
+  assert.equal(store.getSnapshot().user, null)
+  assert.equal(store.getSnapshot().expired, true)
+  store.consumeExpired()
+  store.expire()
+  assert.equal(store.getSnapshot().expired, false)
+})
+
+// 서버 장애는 인증 정보를 지우지 않으며 재시도로 복구할 수 있다.
+test('check_whenServerFails_keepsUserAndRetries', async () => {
+  let fails = true
+  const store = setup({
+    getMe: async () => {
+      if (fails) throw new ApiError(500)
+      return user
+    },
+  })
+  await store.login('admin', 'secret')
+  await store.check('finance')
+  assert.equal(store.getSnapshot().user, user)
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(store.getSnapshot().error, 'unavailable')
+  fails = false
+  await store.check('finance')
+  assert.equal(store.getSnapshot().error, null)
+})
+
+// 초기 네트워크 오류도 비로그인으로 단정하지 않는다.
+test('check_whenInitialNetworkFails_preservesUnknownState', async () => {
+  const store = setup({
+    getMe: async () => {
+      throw new TypeError('offline')
+    },
+  })
+  await store.check('login')
+  assert.equal(store.getSnapshot().status, 'loading')
+  assert.equal(store.getSnapshot().error, 'unavailable')
+})
+
+// 동일 경로 확인은 합치며 새 경로는 응답 전까지 확인 완료로 표시하지 않는다.
+test('check_whenPending_deduplicatesAndInvalidatesCheckedRoute', async () => {
+  const pending = deferred<AuthUser>()
+  let calls = 0
+  const store = setup({
+    getMe: () => {
+      calls++
+      return pending.promise
+    },
+  })
+  const first = store.check('fds')
+  assert.equal(first, store.check('fds'))
+  assert.equal(calls, 1)
+  assert.equal(store.getSnapshot().checkedKey, null)
+  pending.resolve(user)
+  await first
+  assert.equal(store.getSnapshot().checkedKey, 'fds')
+  const next = store.check('finance')
+  assert.equal(store.getSnapshot().checkedKey, null)
+  await next
+})
+
+// 이전 경로의 늦은 응답이 현재 경로의 확인 결과를 덮어쓰지 않는다.
+test('check_whenOlderRouteReturnsLast_ignoresOldResult', async () => {
+  const old = deferred<AuthUser>()
+  let calls = 0
+  const store = setup({ getMe: () => (++calls === 1 ? old.promise : Promise.resolve(user)) })
+  const first = store.check('fds')
+  await store.check('finance')
+  old.reject(unauthorized())
+  await first
+  assert.equal(store.getSnapshot().checkedKey, 'finance')
+  assert.equal(store.getSnapshot().user, user)
+})
+
+// 로그아웃 이후 과거의 내 정보 성공 응답으로 재인증되지 않는다.
+test('logout_whenOldMeReturnsLate_staysAnonymous', async () => {
+  const pending = deferred<AuthUser>()
+  const store = setup({ getMe: () => pending.promise })
+  await store.login('admin', 'secret')
+  const checking = store.check('fds')
+  await store.logout()
+  pending.resolve(user)
+  await checking
+  assert.equal(store.getSnapshot().user, null)
+  assert.equal(store.getSnapshot().status, 'anonymous')
+})
+
+// 로그아웃 실패는 인증을 유지하고 중복 요청은 한 번만 보낸다.
+test('logout_whenRequestFails_keepsSessionAndAllowsRetry', async () => {
+  const pending = deferred<void>()
+  let calls = 0
+  const store = setup({
+    logout: () => {
+      calls++
+      return calls === 1 ? pending.promise : Promise.resolve()
+    },
+  })
+  await store.login('admin', 'secret')
+  const first = store.logout()
+  assert.equal(store.logout(), first)
+  assert.equal(calls, 1)
+  assert.equal(store.getSnapshot().loggingOut, true)
+  pending.reject(new TypeError('offline'))
+  await assert.rejects(first)
+  assert.equal(store.getSnapshot().user, user)
+  assert.equal(store.getSnapshot().loggingOut, false)
+  await store.logout()
+  assert.equal(store.getSnapshot().user, null)
+})
+
+// 재로그인 전에 시작한 내 정보의 늦은 401은 새 세션을 지우지 않는다.
+test('login_whenOldMeFailsLate_preservesNewSession', async () => {
+  const pending = deferred<AuthUser>()
+  const store = setup({ getMe: () => pending.promise })
+  const checking = store.check('old')
+  await store.login('admin', 'secret')
+  pending.reject(unauthorized())
+  await checking
+  assert.equal(store.getSnapshot().user, user)
+  assert.equal(store.getSnapshot().expired, false)
+})
+
+// 403은 세션 만료와 구분하고 다른 역할도 원래 역할로 보관한다.
+test('check_whenForbidden_preservesAuthentication', async () => {
+  const operator: AuthUser = { ...user, role: 'OPERATOR', tenantScope: null, permissions: [] }
+  const store = setup({
+    login: async () => operator,
+    getMe: async () => {
+      throw new ApiError(403, 'AUTH_002')
+    },
+  })
+  await store.login('operator', 'secret')
+  await store.check('admin')
+  assert.equal(store.getSnapshot().error, 'forbidden')
+  assert.equal(store.getSnapshot().user?.role, 'OPERATOR')
+  assert.equal(store.getSnapshot().expired, false)
+})
+
+// 메뉴 이동 중 로그아웃이 실패해도 경로 확인은 재개되어 로딩에 갇히지 않는다.
+test('check_whenLogoutFailsDuringNavigation_resumesSessionCheck', async () => {
+  const pending = deferred<void>()
+  const store = setup({ logout: () => pending.promise })
+  await store.login('admin', 'secret')
+  const loggingOut = store.logout()
+  const checking = store.check('finance')
+  pending.reject(new TypeError('offline'))
+  await assert.rejects(loggingOut)
+  await checking
+  assert.equal(store.getSnapshot().checkedKey, 'finance')
+  assert.equal(store.getSnapshot().user, user)
+})
+
+// 경로 확인 중 시작한 로그아웃이 실패해도 버린 확인을 다시 해 로딩에 갇히지 않는다.
+test('logout_whenFailsAfterRouteCheckStarted_rechecksRoute', async () => {
+  const pendingMe = deferred<AuthUser>()
+  const pendingLogout = deferred<void>()
+  let meCalls = 0
+  const store = setup({
+    getMe: () => (++meCalls === 1 ? pendingMe.promise : Promise.resolve(user)),
+    logout: () => pendingLogout.promise,
+  })
+  await store.login('admin', 'secret')
+  const checking = store.check('finance')
+  const loggingOut = store.logout()
+  pendingMe.resolve(user)
+  await checking
+  assert.equal(store.getSnapshot().checkedKey, null)
+  pendingLogout.reject(new TypeError('offline'))
+  await assert.rejects(loggingOut)
+  // 화면은 경로가 같아 check를 다시 부르지 않으므로 스토어가 스스로 복구해야 한다.
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(meCalls, 2)
+  assert.equal(store.getSnapshot().checkedKey, 'finance')
+  assert.equal(store.getSnapshot().user, user)
+})

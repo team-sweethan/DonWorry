@@ -4,6 +4,7 @@ import koKR from 'antd/locale/ko_KR'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ko'
 import { RouterProvider } from 'react-router-dom'
+import { AuthProvider } from '../auth/AuthContext'
 import { DemoProvider } from '../demo/DemoContext'
 import { antdTheme } from '../styles/theme'
 import { router } from './router'
@@ -12,13 +13,15 @@ import '../styles/global.css'
 
 dayjs.locale('ko')
 
-/** 기존 앱을 감싸는 공통 디자인 테마. 아직 실제 인증은 연결하지 않았음. */
+/** 공통 디자인 테마와 실제 인증 · 시연 상태를 제공한다. */
 export function App() {
   return (
     <ConfigProvider locale={koKR} theme={antdTheme}>
       <AntApp message={{ top: 72, maxCount: 3 }}>
         <DemoProvider>
-          <RouterProvider router={router} />
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
         </DemoProvider>
       </AntApp>
     </ConfigProvider>

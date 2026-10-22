@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

@@ -18,3 +18,17 @@ export const navByRole: Record<Role, NavGroup[]> = {
     { title: '자금', items: [{ label: '정산 현황', path: '/owner/settlements' }] },
   ],
 }
+
+export const adminNavigation = {
+  label: '관리자',
+  landing: '/admin/fds',
+  groups: [
+    {
+      title: '관리',
+      items: [
+        { label: 'FDS', path: '/admin/fds' },
+        { label: '자금관리', path: '/admin/finance' },
+      ],
+    },
+  ] satisfies NavGroup[],
+}

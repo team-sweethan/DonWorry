@@ -1,0 +1,14 @@
+# 인증 검증
+
+`npm run test`는 `tsconfig.test.json`으로 테스트 타입을 검사한 뒤 Node 기본 테스트 러너로 API 오류 처리와 인증 상태 전이를 검사한다. Node 22.6 이상이 필요하며 별도 테스트 라이브러리는 쓰지 않는다.
+
+- `authStore.test.ts`: HTTP 경계(`login` · `getMe` · `logout`)만 대체하고 실제 상태 관리 코드를 실행한다
+- `client.test.ts`: `fetch` 응답만 대체한다
+
+## 작성 시 주의
+
+- 테스트가 불러오는 `src/` 파일(`api/client.ts` · `api/auth.ts` · `auth/authStore.ts` · `types/auth.ts`)과 그 파일이 다시 불러오는 파일은 import에 `.ts` 확장자를 붙인다. Node의 타입 제거 실행은 확장자 없는 경로를 찾지 못한다
+- 같은 이유로 이 파일들에는 React · antd · `.tsx`를 import하지 않는다. 화면 동작은 브라우저에서 확인한다
+- `enum` · 매개변수 속성처럼 타입 제거만으로 실행할 수 없는 문법은 쓰지 않는다 (`erasableSyntaxOnly`)
+
+실행 결과와 미검증 항목은 이 파일이 아니라 PR 본문의 "테스트 결과" · "미검증"에 기록한다.

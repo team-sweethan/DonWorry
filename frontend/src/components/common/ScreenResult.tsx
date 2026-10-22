@@ -1,9 +1,19 @@
 import { Button, Result } from 'antd'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { roles } from '../../config/navigation'
 import { useDemo } from '../../demo/DemoContext'
 
-export function ScreenResult({ kind }: { kind: '403' | '404' | '500' }) {
+export function ScreenResult({
+  kind,
+  homePath,
+  action,
+}: {
+  kind: '403' | '404' | '500'
+  homePath?: string
+  // 홈으로 가도 같은 화면이 나오는 경우 기본 버튼 대신 쓴다.
+  action?: ReactNode
+}) {
   const navigate = useNavigate()
   const { role } = useDemo()
   const heading =
@@ -25,14 +35,18 @@ export function ScreenResult({ kind }: { kind: '403' | '404' | '500' }) {
         title={heading}
         subTitle={sub}
         extra={
-          <Button
-            type="primary"
-            onClick={() =>
-              kind === '500' ? window.location.reload() : navigate(roles[role].landing)
-            }
-          >
-            {kind === '500' ? '다시 시도' : '내 홈으로 이동'}
-          </Button>
+          action ?? (
+            <Button
+              type="primary"
+              onClick={() =>
+                kind === '500'
+                  ? window.location.reload()
+                  : navigate(homePath ?? roles[role].landing)
+              }
+            >
+              {kind === '500' ? '다시 시도' : '내 홈으로 이동'}
+            </Button>
+          )
         }
       />
     </div>

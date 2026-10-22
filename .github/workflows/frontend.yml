@@ -39,4 +39,6 @@ jobs:
       - if: steps.changes.outputs.run == 'true'
         run: npm run format:check
       - if: steps.changes.outputs.run == 'true'
+        run: npm run test
+      - if: steps.changes.outputs.run == 'true'
         run: npm run build         # 타입 검사 포함
