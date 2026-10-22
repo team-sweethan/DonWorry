@@ -1,0 +1,86 @@
+package com.donworry.fds.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+
+import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsResult;
+import com.donworry.fds.api.FdsRuleHitOutcome;
+import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.repository.FdsEvaluationRepository;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class FdsEvaluationQueryServiceTests {
+
+    @Mock
+    private FdsEvaluationRepository evaluationRepository;
+
+    @Test
+    // 판정을 지정하면 해당 평가 이력만 반환한다.
+    void list_resultFilter_returnsMatchingEvaluations() {
+        var review = evaluation(101L, FdsResult.REVIEW);
+        var allow = evaluation(102L, FdsResult.ALLOW);
+        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        given(evaluationRepository.findAllByOrderByEvaluatedAtDesc()).willReturn(List.of(review, allow));
+
+        var result = queryService.list(FdsResult.REVIEW);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().paymentId()).isEqualTo(101L);
+        assertThat(result.getFirst().result()).isEqualTo(FdsResult.REVIEW);
+    }
+
+    @Test
+    // 상세 조회는 룰 근거와 동일 결제 이력을 함께 반환한다.
+    void detail_existingEvaluation_returnsRuleHitsAndHistory() {
+        var evaluation = evaluation(101L, FdsResult.REVIEW);
+        evaluation.addRuleHit(
+                "HIGH_AMOUNT",
+                FdsRuleHitOutcome.MATCH,
+                35,
+                "고액 결제",
+                "{\"amountGte\":150000,\"score\":35}",
+                "{\"amount\":150000}",
+                null,
+                null);
+        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
+        given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+
+        var result = queryService.detail(1L);
+
+        assertThat(result.evaluation().paymentId()).isEqualTo(101L);
+        assertThat(result.ruleHits()).singleElement().satisfies(hit -> {
+            assertThat(hit.ruleCode()).isEqualTo("HIGH_AMOUNT");
+            assertThat(hit.appliedScore()).isEqualTo(35);
+            assertThat(hit.observedValue()).isEqualTo("{\"amount\":150000}");
+            assertThat(hit.thresholdSnapshot()).isEqualTo("{\"amountGte\":150000,\"score\":35}");
+        });
+        assertThat(result.history()).hasSize(1);
+    }
+
+    @Test
+    // 없는 평가 ID는 조회 실패 예외를 반환한다.
+    void detail_missingEvaluation_throwsNotFoundException() {
+        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        given(evaluationRepository.findById(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> queryService.detail(999L)).isInstanceOf(FdsEvaluationNotFoundException.class);
+    }
+
+    private FdsEvaluation evaluation(Long paymentId, FdsResult result) {
+        var requestedAt = Instant.now();
+        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", 150_000L, requestedAt);
+        return FdsEvaluation.completed(
+                request, result, result == FdsResult.REVIEW ? 60 : 0, requestedAt.plusSeconds(1));
+    }
+}
