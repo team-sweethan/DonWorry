@@ -35,6 +35,7 @@
 | [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 채택 |
 | [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
+| [0014](0014-fds-evaluation-api-contract.md) | P5 → P2 FDS 평가 공개 계약 | 제안 — P2·P5 필드·오류 처리 합의 필요 |
 
 ## 현재 적용 상태와 기록의 구분
 
