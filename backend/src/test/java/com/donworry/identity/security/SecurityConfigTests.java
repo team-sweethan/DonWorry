@@ -20,7 +20,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,6 +38,9 @@ import tools.jackson.databind.json.JsonMapper;
     SecurityProblemResponseWriter.class
 })
 class SecurityConfigTests {
+
+    @MockitoBean
+    UserDetailsService userDetailsService;
 
     @Autowired
     MockMvc mockMvc;
