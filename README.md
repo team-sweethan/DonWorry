@@ -135,10 +135,10 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 ```
 
 테이블은 백엔드를 실행할 때 Flyway가 `backend/src/main/resources/db/migration/`의 파일을 순서대로 적용해 만듭니다.
-테이블 추가 순서, 로컬 DB 초기화, 오류 해결은 **[Flyway 사용 가이드](docs/flyway.md)** 를 봅니다.
+테이블 추가 순서, 로컬 DB 초기화, 오류 해결은 **[Flyway 문서](docs/flyway/README.md)** 를 봅니다.
 
 > **Flyway 전환(#23) 이전에 앱을 띄운 적이 있다면** `Found non-empty schema` 에러로 기동이 멈춥니다. 한 번 초기화가 필요합니다.
-> 직접 설치한 MariaDB를 쓰고 있다면 `docker compose down -v`로는 해결되지 않습니다. 앱이 어느 DB에 붙었는지부터 확인합니다 → [가이드 3·4절](docs/flyway.md#3-내-앱이-어느-db에-붙었는지-확인)
+> 직접 설치한 MariaDB를 쓰고 있다면 `docker compose down -v`로는 해결되지 않습니다. 앱이 어느 DB에 붙었는지부터 확인합니다 → [작업 가이드 2·3절](docs/flyway/05-guide.md#2-내-앱이-어느-db에-붙었는지-확인)
 
 ### 3. 개인 설정 (필요할 때만)
 
@@ -226,7 +226,7 @@ cd ai-server && uv run ruff check . && uv run pytest
 - **`docker compose up`이 포트 충돌로 실패** — PC에 직접 설치한 MariaDB나 MySQL이 3307을 쓰고 있습니다. 그 서비스를 중지하거나, 직접 설치한 DB를 쓰고 `application-local.yml`로 접속 정보를 맞춥니다.
 - **`Access denied for user 'donworry'@'localhost'`** — DB 계정 비밀번호가 기본값과 다릅니다. `application-local.yml`에 실제 비밀번호를 넣습니다.
 - **3306에 접속했는데 MariaDB가 아님** — 한 PC에 MySQL과 MariaDB가 함께 있으면 MySQL이 3306을 차지합니다. MariaDB 접속 후 `SHOW VARIABLES LIKE 'port';`로 실제 포트를 확인합니다.
-- **Flyway·DB 초기화 관련 오류** (`Found non-empty schema`, `checksum mismatch`, `Schema-validation`, `Unknown server host '127'` 등) — [Flyway 사용 가이드 6절](docs/flyway.md#6-문제-해결)
+- **Flyway·DB 초기화 관련 오류** (`Found non-empty schema`, `checksum mismatch`, `Schema-validation`, `Unknown server host '127'` 등) — [Flyway 문제 해결](docs/flyway/06-troubleshooting.md)
 - **`Unable to delete directory ...build\test-results`** — OneDrive가 `build/` 폴더를 잠근 경우입니다. `backend/build`를 지우고 다시 실행하고, 반복되면 프로젝트를 OneDrive 밖으로 옮깁니다.
 - **CI에서 `uv.lock` 관련 실패** — 라이브러리를 추가했다면 갱신된 `uv.lock`을 함께 커밋합니다.
 - **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 설명서](.github/workflows/README.md).
@@ -239,7 +239,7 @@ cd ai-server && uv run ruff check . && uv run pytest
 2. 보안 직원 `security` / `demo1234`로 로그인해 **Case 목록 → Case 상세** 목업과 역할별 메뉴를 확인합니다.
 3. 사장님 `owner` / `demo1234`로 로그인해 사장님 메뉴를 확인합니다.
 4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
-5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 사용 가이드 5절](docs/flyway.md#5-적용-결과-확인)).
+5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
 
 시연 계정은 로컬 확인 전용이며 실제 인증·인가를 제공하지 않습니다. 자세한 내용은 [프론트 README](frontend/README.md)를 봅니다.
 
@@ -375,7 +375,7 @@ flowchart BT
 ### 개발 규칙과 가이드
 
 - 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
-- 🗃️ **[Flyway 사용 가이드](docs/flyway.md)**: 테이블 추가 순서, 내 앱이 붙은 DB 확인, 로컬 DB 초기화, 오류별 해결
+- 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
 - ⚙️ **[CI 설명서](.github/workflows/README.md)**: 워크플로별 검사 내용과 겪은 문제
 - 🗂️ **[ERD](docs/erd/README.md)**: 테이블 소유·관계·컬럼 (Notion 설계 3.9 확정 후 작성), 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
