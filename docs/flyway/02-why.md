@@ -55,13 +55,13 @@ dev 최신이 V2인 상태에서
 타임스탬프(**만든 시각**)를 버전으로 쓰면 초 단위까지 겹칠 일이 거의 없습니다.
 
 ```text
-  팀원 A: V20261022_013012__create_security_case.sql
-  팀원 B: V20261022_020544__create_ai_report.sql
+  팀원 A: V20261022_103012__create_security_case.sql
+  팀원 B: V20261022_110544__create_ai_report.sql
 ```
 
 1차 CakeShop도 같은 방식이었습니다. DonWorry는 여기에 두 가지를 더했습니다.
 
-- PC 시간대와 상관없이 같은 순서가 되도록 **UTC 시각**으로 찍습니다 (CakeShop은 PC 로컬 시각)
+- 시각을 **한국 시간(`Asia/Seoul`)으로 고정**해서 찍습니다. CakeShop은 "실행한 PC의 시간대"라 클라우드·CI(기본 UTC)에서 만든 파일과 섞일 수 있었지만, DonWorry는 코드에 시간대를 적어 두어 누가 어디서 만들어도 같은 기준입니다
 - 이름을 손으로 짓지 않고 `./gradlew newMigration`이 만들게 해서 형식 실수를 없앴습니다
 
 ## 5. 고려했지만 버린 대안 (요약)

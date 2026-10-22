@@ -20,7 +20,7 @@
 ```text
 db/migration/
 ├── V20261021_215412__create_event_publication_table.sql   ← 이미 적용됨
-└── V20261022_013012__create_ai_report_table.sql           ← 새로 추가 → 다음 기동 때 실행
+└── V20261022_103012__create_ai_report_table.sql           ← 새로 추가 → 다음 기동 때 실행
 ```
 
 - 파일 이름 = `V` + **버전** + `__`(밑줄 두 개) + **설명** + `.sql`
@@ -39,7 +39,7 @@ version          | description                    | checksum    | success
 다음 기동 때 Flyway는 이 표와 폴더 안 파일 목록을 비교해서, **표에 없는 파일만** 실행합니다.
 
 ```text
-폴더:   V..215412  V..013012
+폴더:   V..215412  V..103012
 이력표: V..215412
            └─ 같음 → 건너뜀
                        └─ 이력표에 없음 → 실행 후 이력표에 추가

@@ -97,10 +97,10 @@ tasks.register('newMigration') {
             )
         }
 
-        // ERD 공통 규칙(UTC 저장)에 맞춰 버전도 UTC 시각으로 찍는다
+        // 팀이 파일 이름을 바로 읽을 수 있게 한국 시간으로 찍는다. PC·CI 시간대와 상관없이 Asia/Seoul 고정
         def formatter = java.time.format.DateTimeFormatter.ofPattern('yyyyMMdd_HHmmss')
         def existing = (migrationDir.listFiles() ?: new File[0])*.name
-        def stamp = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)
+        def stamp = java.time.LocalDateTime.now(java.time.ZoneId.of('Asia/Seoul'))
         // 같은 초의 버전이 있으면 설명이 달라도 충돌하므로 버전 접두어로 비교한다
         while (existing.any { it.startsWith('V' + stamp.format(formatter) + '__') }) {
             stamp = stamp.plusSeconds(1)
@@ -110,7 +110,7 @@ tasks.register('newMigration') {
         migrationDir.mkdirs()
         target.setText("""\
 -- ${desc}
--- 생성: ${stamp.format(java.time.format.DateTimeFormatter.ofPattern('yyyy-MM-dd HH:mm:ss'))} UTC
+-- 생성: ${stamp.format(java.time.format.DateTimeFormatter.ofPattern('yyyy-MM-dd HH:mm:ss'))} KST
 --
 -- 규칙
 -- * dev에 병합된 뒤에는 이 파일을 고치지 않는다. 바꿀 것이 있으면 새 migration을 만든다

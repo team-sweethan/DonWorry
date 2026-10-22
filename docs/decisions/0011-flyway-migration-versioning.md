@@ -18,7 +18,8 @@ Flyway를 켜고 `ddl-auto: validate`로 바꾼다. 마이그레이션 버전은
 
 세부:
 
-- 타임스탬프는 UTC로 찍는다. PC 시간대 설정과 상관없이 같은 순서가 되고, ERD 공통 규칙(UTC 저장)과도 맞는다. (CakeShop은 PC 로컬 시각)
+- 타임스탬프는 **한국 시간(`Asia/Seoul`)으로 고정**해 찍는다. `newMigration` 코드에 시간대를 직접 적으므로 PC·CI·클라우드의 시간대 설정과 상관없이 모두 같은 기준이 되고, 파일 이름을 만든 시각 그대로 읽을 수 있다 (팀 전원이 한국에 있음). (2026-10-22 UTC에서 변경. CakeShop은 PC 로컬 시각)
+- Gradle을 실행할 수 없는 환경(일부 AI 작업 환경)에서만 `TZ=Asia/Seoul date +%Y%m%d_%H%M%S` 등 한국 시간 고정 명령으로 버전을 만든다 (AGENTS.md 4절)
 - `validate-on-migrate: true`, `clean-disabled: true`.
 - CI(`backend.yml`)가 PR에서 병합된 migration의 수정·삭제와 규칙 밖 파일명을 막는다.
 - CI가 `./gradlew mariaDbTest`로 MariaDB 11.8 컨테이너(Testcontainers)에 앱을 기동해 migration 전체 적용·체크섬·JPA `validate`를 검사한다. 1차 CakeShop의 `mariaDbTest` 분리 방식을 따르고, 로컬 `check`는 Docker 없이 돌게 둔다.
@@ -28,6 +29,8 @@ Flyway를 켜고 `ddl-auto: validate`로 바꾼다. 마이그레이션 버전은
 
 | 대안 | 버린 이유 |
 | --- | --- |
+| 타임스탬프를 UTC로 (이 ADR의 첫 결정) | 모두 같은 기준이라 순서 문제는 없지만, 파일 이름을 읽을 때마다 9시간을 더해야 한다. 한국 시간도 코드에 고정하면 같은 효과 |
+| 타임스탬프를 PC 로컬 시각으로 (CakeShop) | CI·클라우드 AI 환경은 기본이 UTC라 PC에서 만든 파일과 시간대가 섞여 순서가 어긋난다 |
 | 순번 `V1`, `V2`… (기존 AGENTS.md 규칙) | 동시 작업 시 번호 충돌이 잦고, 병합 직전 파일명을 바꾸는 수작업이 필요하다. 바꾸는 걸 잊으면 Flyway가 같은 버전 두 개로 기동 실패 |
 | `ddl-auto: update` 유지, 나중에 전환 | 테이블이 쌓인 뒤 전환하면 각자 PC의 서로 다른 스키마를 baseline으로 맞추는 작업이 생긴다. 지금은 테이블이 없어 비용이 0 |
 | 8개 테이블 전체를 V0 하나로 작성 | 다른 담당 테이블의 물리 타입을 한 명이 정하게 된다. 타입 미확정(C1) 상태라 각 담당이 정하는 편이 맞다 |
@@ -39,6 +42,7 @@ Flyway를 켜고 `ddl-auto: validate`로 바꾼다. 마이그레이션 버전은
 ## 영향
 
 - API: 없음
+- 버전 시간대: 첫 migration `V20261021_215412`는 UTC로 만들었다. 이후 한국 시간 파일은 항상 이보다 큰 숫자라 순서 문제가 없고, 파일은 병합됐으므로 고치지 않는다. 한국 시간 전환 전 UTC로 만든 미병합 파일도 `out-of-order: true`로 적용된다
 - DB: `EVENT_PUBLICATION` 생성 migration 추가 (Modulith 2.1.1 `schemas/v2/schema-mariadb.sql`과 같은 정의). 기존 로컬 DB는 한 번 초기화 필요 (README "DB 실행")
 - 화면: 없음
 - 테스트: `./gradlew check`는 그대로 DB 없이. `FlywayMigrationTests`(`@Tag("mariadb")`)를 `mariaDbTest` 태스크로 분리하고 CI에서 실행. 테스트 의존성 `spring-boot-testcontainers`·`testcontainers-mariadb` 추가

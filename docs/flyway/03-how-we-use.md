@@ -51,7 +51,7 @@ spring:
 ## 2. 파일 이름 규칙
 
 ```text
-V20261022_013012__create_ai_report_table.sql
+V20261022_103012__create_ai_report_table.sql
 │└──────┬──────┘ │└─────────┬──────────┘
 │     버전       │         설명
 접두어 V         밑줄 두 개(__)로 버전과 설명을 구분
@@ -59,10 +59,11 @@ V20261022_013012__create_ai_report_table.sql
 
 | 부분 | 규칙 |
 | --- | --- |
-| 버전 | 파일을 **만든 시각(UTC)** `yyyyMMdd_HHmmss`. Flyway는 `_`를 `.`으로 읽어 `20261022.013012`로 표시 |
+| 버전 | 파일을 **만든 시각(한국 시간)** `yyyyMMdd_HHmmss`. Flyway는 `_`를 `.`으로 읽어 `20261022.103012`로 표시 |
 | 설명 | 소문자 `snake_case`. 로그에서는 `_`가 공백으로 보임 (`create ai report table`) |
 
-- UTC를 쓰는 이유: PC 시간대 설정이 달라도 같은 순서가 되고, ERD 공통 규칙(시각은 UTC 저장)과도 맞습니다
+- 한국 시간으로 고정한 이유: 파일 이름을 만든 시각 그대로 읽을 수 있고, 코드에 `Asia/Seoul`을 적어 두어 PC·CI 시간대가 달라도 모두 같은 기준이 됩니다. 기준이 섞이면(누구는 UTC, 누구는 한국 시간) 만든 순서와 실행 순서가 9시간 어긋납니다
+- DB에 저장하는 시각 데이터는 별개로 UTC입니다 (`hibernate.jdbc.time_zone: UTC`). 파일 이름 규칙과 섞지 않습니다
 - 파일 이름은 **직접 짓지 않습니다**. 아래 `newMigration`으로 만듭니다. 규칙 밖의 이름은 CI가 막습니다 ([04](04-tests.md#4-ci-migration-검사))
 
 ## 3. `newMigration` 태스크
@@ -70,18 +71,18 @@ V20261022_013012__create_ai_report_table.sql
 ```bash
 cd backend
 ./gradlew newMigration -Pdesc=create_ai_report_table      # Windows: .\gradlew.bat newMigration -Pdesc=...
-# created: src/main/resources/db/migration/V20261022_013012__create_ai_report_table.sql
+# created: src/main/resources/db/migration/V20261022_103012__create_ai_report_table.sql
 ```
 
 `backend/build.gradle`에 있는 태스크이며, 이렇게 동작합니다.
 
 1. `-Pdesc`가 비었거나 소문자 `snake_case`가 아니면 실패
-2. 현재 UTC 시각으로 버전을 만들고, 같은 초의 파일이 이미 있으면 1초씩 미룸
+2. 현재 한국 시간으로 버전을 만들고, 같은 초의 파일이 이미 있으면 1초씩 미룸
 3. 아래 머리말이 들어간 빈 SQL 파일을 만듦
 
 ```sql
 -- create_ai_report_table
--- 생성: 2026-10-22 01:30:12 UTC
+-- 생성: 2026-10-22 10:30:12 KST
 --
 -- 규칙
 -- * dev에 병합된 뒤에는 이 파일을 고치지 않는다. 바꿀 것이 있으면 새 migration을 만든다
@@ -92,6 +93,8 @@ cd backend
 ## 4. 첫 migration — `EVENT_PUBLICATION`
 
 현재 저장소의 유일한 migration은 `V20261021_215412__create_event_publication_table.sql`입니다.
+
+- 이 파일은 한국 시간으로 바꾸기 전에 만들어 버전이 UTC 기준입니다. 이후 파일은 항상 이보다 큰 숫자라 순서 문제가 없고, 병합된 파일이라 고치지 않습니다
 
 - Spring Modulith가 모듈 간 이벤트를 "보냈다 / 처리됐다"로 기록하는 테이블입니다 (이벤트 유실 시 재발행용)
 - 원래는 Modulith가 기동 때 직접 만들었지만, Flyway 이력 밖의 테이블이 되지 않도록 migration으로 옮겼습니다. Modulith 2.1.1이 제공하는 MariaDB용 정의와 같습니다

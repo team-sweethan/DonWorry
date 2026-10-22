@@ -51,10 +51,21 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
   - 예외: `investigation` 모듈 안이라도 P4의 `ai_report`와 P3 테이블(`security_case` · `payment_decision`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
 - 테이블은 Flyway로만 바꾼다 (`ddl-auto: validate`). 이미 `dev`에 병합된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다 (CI가 검사)
-- 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(UTC) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
+- 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(한국 시간, `Asia/Seoul` 고정) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
 - 한 마이그레이션은 하나의 배포 가능한 스키마 전환만 담는다. 서로 의존하는 마이그레이션은 같은 PR에 넣는다 (`out-of-order`는 순서를 보장하지 않는다)
 - 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가한다. ERD(설계 3.9)에 없는 컬럼·테이블은 3.9 합의 후 추가한다
 - 작업 순서·로컬 DB 초기화 → [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md), 오류 해결 → [`docs/flyway/06-troubleshooting.md`](docs/flyway/06-troubleshooting.md)
+
+### DB(테이블) 변경 작업 순서 — 사람·AI 공통
+
+1. [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md)를 먼저 읽는다
+2. 기존 스키마는 `backend/src/main/resources/db/migration/*.sql`을 버전 순으로 전부 읽어 확인한다. 특정 테이블은 그 이름이 나오는 파일을 모두 찾아 `CREATE`와 이후 `ALTER`를 합쳐 본다
+3. [`docs/erd/`](docs/erd/README.md)에서 내 소유 테이블·컬럼인지 확인한다. 문서에 없거나 비어 있으면 추측해서 만들지 말고 사람에게 확인한다. 다른 담당 소유 테이블이면 진행하지 않고 소유 담당 확인을 요청한다
+4. `./gradlew newMigration -Pdesc=<snake_case>`로 파일 생성 → SQL 작성 → Entity 작성 (컬럼 이름·타입을 SQL에 맞춤)
+5. `./gradlew check mariaDbTest`. 실행하지 못한 검사는 미검증으로 보고한다
+6. Gradle을 실행할 수 없는 환경에서만 아래 명령으로 버전을 만들고, `newMigration`이 넣는 머리말 주석을 그대로 붙인다. 시간대 옵션을 빼면 UTC로 찍혀 순서가 어긋난다
+   - bash: `TZ=Asia/Seoul date +%Y%m%d_%H%M%S`
+   - PowerShell: `[TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow,'Korea Standard Time').ToString('yyyyMMdd_HHmmss')`
 
 ## 5. Frontend 규칙
 
