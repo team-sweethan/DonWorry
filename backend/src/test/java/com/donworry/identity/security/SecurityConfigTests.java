@@ -18,13 +18,18 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.json.JsonMapper;
 
-@WebMvcTest
+// 다른 모듈 Controller가 추가돼도 이 테스트가 그 의존 Bean을 요구하지 않도록 확인용 Controller만 올린다
+@WebMvcTest(controllers = SecurityConfigTests.ProbeController.class)
 @Import({
+    SecurityConfigTests.ProbeController.class,
     SecurityConfig.class,
     JsonAuthenticationEntryPoint.class,
     JsonAccessDeniedHandler.class,
@@ -71,8 +76,9 @@ class SecurityConfigTests {
         context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("admin", null, List.of()));
         securityContextRepository.saveContext(context, request, new MockHttpServletResponse());
 
-        // /me 컨트롤러 구현은 TASK 03이므로 필터 통과 뒤에는 404다.
-        mockMvc.perform(get("/api/auth/me").session(session)).andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string("admin"));
     }
 
     // 일반 API는 비로그인 상태에서도 인증으로 차단하지 않는다
@@ -117,5 +123,15 @@ class SecurityConfigTests {
         assertThat(body.path("detail").asString()).isEqualTo("권한이 없습니다.");
         assertThat(body.path("code").asString()).isEqualTo("AUTH_002");
         assertThat(response.getRedirectedUrl()).isNull();
+    }
+
+    // 실제 /me 컨트롤러는 TASK 03(#76)에서 만든다. 필터 통과 여부만 확인하는 테스트용 대역이다
+    @RestController
+    static class ProbeController {
+
+        @GetMapping("/api/auth/me")
+        String me(Authentication authentication) {
+            return authentication.getName();
+        }
     }
 }
