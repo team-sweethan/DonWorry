@@ -20,7 +20,9 @@
 | 테이블 · 마이그레이션 | [Flyway 05](../flyway/05-guide.md) |
 | 테이블 이름 · ID · 금액 · 시각 타입 | [ERD 1절 공통 규칙](../erd/README.md#공통-규칙) |
 
-## 1. Lombok `합의 전`
+## 1. Lombok
+
+### Entity · 의존성 주입 `합의 전`
 
 - Entity: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`
 - Entity에 `@Setter` · `@Data` 쓰지 않는다. 상태 변경은 이름 있는 메서드로만 한다
@@ -34,6 +36,39 @@ public void hold() {
 ```
 
 이유: setter가 열려 있으면 어느 코드가 상태를 바꿨는지 추적할 수 없다. 결제 · 판정 상태는 바뀐 경로가 분명해야 한다.
+
+### `@Builder` `합의`
+
+| 대상 | 생성 방법 |
+| --- | --- |
+| DTO · 테스트 데이터 · 필드가 많은(대략 4개 이상) 객체 | `@Builder` 기본. record에도 바로 붙인다 |
+| Entity | `@Builder(access = AccessLevel.PRIVATE)`를 **생성자에만** 붙이고, 밖에서는 이름 있는 정적 메서드로 만든다. 필수 값은 정적 메서드 인자로 받는다 |
+| 필드 2~3개짜리 작은 객체 | 생성자 |
+
+- builder는 생성할 때만 쓴다. 생성 후 상태 변경은 이름 있는 메서드로 한다 (위 규칙)
+- `id` · 초기 상태처럼 밖에서 정하면 안 되는 값은 builder 인자에서 뺀다
+
+```java
+// 밖에서는 AiReport.pending(...)으로만 만든다 — 필수 값은 인자로 강제
+public static AiReport pending(Long caseId, int reportVersion, int evidenceVersion) {
+    return AiReport.builder()
+            .caseId(caseId)
+            .reportVersion(reportVersion)
+            .evidenceVersion(evidenceVersion)
+            .build();
+}
+
+// builder는 생성자에만, private으로 — 밖에서 builder()를 직접 쓰지 못하게 하고 id·상태는 열지 않는다
+@Builder(access = AccessLevel.PRIVATE)
+private AiReport(Long caseId, int reportVersion, int evidenceVersion) {
+    this.caseId = caseId;
+    this.reportVersion = reportVersion;
+    this.evidenceVersion = evidenceVersion;
+    this.status = ReportStatus.PENDING;
+}
+```
+
+이유: 빌더는 필수 값을 빼먹어도 컴파일된다(저장할 때 NOT NULL 위반으로 실패). 정적 메서드 인자로 받으면 빠뜨린 값을 컴파일 단계에서 막는다.
 
 ## 2. DTO `합의 전`
 
@@ -92,12 +127,21 @@ throw new BusinessException(ReportErrorCode.REPORT_NOT_FOUND);
 
 `ErrorCode` · `BusinessException` · 공통 처리기(`@RestControllerAdvice`)는 어느 업무 모듈에도 속하지 않는다. 모든 모듈이 쓰는 공유 패키지(예: `common`)와 그 담당을 정한 뒤 만든다. 그 전까지 각자 공통 클래스를 만들지 않는다.
 
-## 4. 트랜잭션 `합의 전`
+## 4. 트랜잭션
+
+### `@Transactional` 위치 `합의 전`
 
 - `@Transactional`은 Service에만 붙인다. Controller · Repository에는 붙이지 않는다
 - 조회만 하는 메서드는 `@Transactional(readOnly = true)`
 
 이유: 이벤트는 보낸 쪽 트랜잭션이 커밋된 뒤에 처리된다 ([Modulith 04](../modulith/04-dependency-and-events.md)). 트랜잭션 경계가 Service에 모여 있어야 언제 커밋되는지 보인다.
+
+### 트랜잭션 안에서 외부 HTTP 호출 금지 `합의`
+
+- 트랜잭션 안에서 외부 HTTP(FastAPI · CakeShop)를 부르지 않는다
+- 먼저 상태를 저장 · 커밋하고, 커밋 뒤에 호출한다 (예: `PENDING` 저장 → 커밋 → FastAPI 호출, 또는 커밋 후 이벤트 리스너)
+
+이유: 응답을 기다리는 동안 DB 연결을 붙잡고 있고, 롤백해도 이미 보낸 요청은 취소되지 않는다. AI 조사 호출도 이 순서를 따른다 ([ADR-0009 결정 1](../decisions/0009-ai-investigation-call-structure.md#결정-1--호출-구조)).
 
 ## 5. 이름 `합의 전`
 
@@ -109,7 +153,15 @@ throw new BusinessException(ReportErrorCode.REPORT_NOT_FOUND);
 | 상수 · enum 값 | 대문자 + 밑줄 | `PAYMENT_EXPIRED`, `HELD` |
 | JSON 필드 | camelCase (Java 필드 이름 그대로) | `paymentId` |
 
-## 6. 테스트 이름 `합의 전`
+## 6. 테스트
+
+### 테스트 작성 `합의`
+
+- 새 기능 · 버그 수정에는 테스트를 넣는다
+- 버그는 재현 테스트(지금 실패하는 테스트)부터 쓰고, 고친 뒤 통과를 확인한다
+- 통과시키려고 테스트를 지우거나 약하게 바꾸지 않는다 (예: assert 삭제, 기대값을 실제 결과에 맞춰 수정, `@Disabled`)
+
+### 테스트 이름 `합의 전`
 
 - 한글 메서드 이름 `상황_결과` 형식. `@DisplayName`은 쓰지 않는다
 - 지금 `PaymentRulesTests`가 쓰는 방식이다
