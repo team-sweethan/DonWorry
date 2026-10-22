@@ -12,7 +12,7 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useMemo, useState } from 'react'
+import { type MouseEvent, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -141,7 +141,10 @@ export function AlertListPage() {
         <Button
           type="link"
           style={{ padding: 0, fontWeight: 700 }}
-          onClick={() => navigate(`/security/alerts/${value}`)}
+          onClick={(event: MouseEvent<HTMLElement>) => {
+            event.stopPropagation()
+            navigate(`/security/alerts/${value}`)
+          }}
         >
           {value}
         </Button>
