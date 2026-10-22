@@ -18,7 +18,7 @@
 | 모듈 경계 · 패키지 구조 · 계층 | [Modulith 03](../modulith/03-module-structure.md#2-모듈-안-패키지-규칙), AGENTS.md 4절 (테스트가 검사) |
 | 이벤트 · 모듈 간 호출 | [Modulith 04](../modulith/04-dependency-and-events.md) |
 | 테이블 · 마이그레이션 | [Flyway 05](../flyway/05-guide.md) |
-| ID · 금액 · 시각 타입 | 미정 — [P5 결제 문서 C1](../payment/README.md#구현-전에-필요한-최소-계약) |
+| 테이블 이름 · ID · 금액 · 시각 타입 | [ERD 1절 공통 규칙](../erd/README.md#공통-규칙) |
 
 ## 1. Lombok `합의 전`
 

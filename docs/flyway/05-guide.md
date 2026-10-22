@@ -15,7 +15,7 @@
 
 ## 1. 테이블 추가 순서
 
-P4 `ai_report`를 예로 듭니다.
+P4 `ai_reports`를 예로 듭니다. (1차 MVP 테이블은 이미 만들어져 있습니다. 새 테이블을 추가할 때 같은 순서를 따릅니다)
 
 **① dev 최신화 → 이슈 브랜치**
 
@@ -33,19 +33,19 @@ git switch -c feature/31-ai-report-table
 
 ```bash
 cd backend
-./gradlew newMigration -Pdesc=create_ai_report_table      # Windows: .\gradlew.bat newMigration -Pdesc=...
-# created: src/main/resources/db/migration/V20261022_103012__create_ai_report_table.sql
+./gradlew newMigration -Pdesc=create_ai_report_tables     # Windows: .\gradlew.bat newMigration -Pdesc=...
+# created: src/main/resources/db/migration/V20261022_103012__create_ai_report_tables.sql
 ```
 
 설명(`-Pdesc`)은 소문자 `snake_case`만 됩니다. 버전은 생성 시각(한국 시간)이 자동으로 붙습니다.
 
-**③ SQL 작성** — Notion 설계 3.9(ERD 정본)에 있는 **내 소유 테이블**만 씁니다.
+**③ SQL 작성** — Notion 팀페이지 / ERD(정본)에 있는 **내 소유 테이블**만 씁니다.
 
 ```sql
-CREATE TABLE ai_report
+CREATE TABLE ai_reports
 (
     report_id        BIGINT      NOT NULL AUTO_INCREMENT,
-    case_id          BIGINT      NOT NULL,        -- P3 security_case 논리 참조라 FK 없음
+    case_id          BIGINT      NOT NULL,        -- P3 security_cases 논리 참조라 FK 없음
     report_version   INT         NOT NULL,
     evidence_version INT         NOT NULL,
     status           VARCHAR(20) NOT NULL,
@@ -53,14 +53,14 @@ CREATE TABLE ai_report
     created_at       DATETIME(6) NOT NULL,        -- UTC 저장
     completed_at     DATETIME(6) NULL,
     PRIMARY KEY (report_id),
-    UNIQUE KEY uk_ai_report_case_version (case_id, report_version)
+    CONSTRAINT uk_ai_reports_case_version UNIQUE (case_id, report_version)
 );
 ```
 
-> 위 타입은 예시입니다. ID·금액·시각 물리 타입은 아직 미확정입니다 (`docs/payment/README.md` C1).
+> 테이블 이름 · PK · 타입 · 제약 이름 규칙은 [ERD 1절 공통 규칙](../erd/README.md#공통-규칙)을 따릅니다.
 
 - 다른 담당 테이블로 FK를 걸지 않습니다. 같은 담당 테이블끼리만 FK를 겁니다
-- ERD에 없는 컬럼·테이블은 3.9 합의 후 추가합니다
+- ERD에 없는 컬럼·테이블은 Notion 담당 페이지 합의 후 추가합니다
 - 한 파일에는 하나의 스키마 전환만 넣습니다 (테이블 생성 + 그 테이블의 인덱스 정도)
 - 팀 기준 MariaDB는 **11.8**입니다. 더 새 버전에서만 되는 문법을 쓰지 않습니다
 
@@ -93,7 +93,7 @@ PR 본문의 "다른 담당에 영향"에 새 테이블을 적습니다.
 ```
 
 ```sql
-ALTER TABLE ai_report ADD COLUMN attempt_count INT NOT NULL DEFAULT 0;
+ALTER TABLE ai_reports ADD COLUMN attempt_count INT NOT NULL DEFAULT 0;
 ```
 
 ## 2. 내 앱이 어느 DB에 붙었는지 확인
@@ -193,12 +193,12 @@ docker compose exec mariadb mariadb -udonworry -pdonworry donworry -e "SELECT ve
 
 ```powershell
 # Windows PowerShell (저장소 루트에서)
-Select-String -Path backend\src\main\resources\db\migration\*.sql -Pattern "ai_report" -List | Select-Object Path
+Select-String -Path backend\src\main\resources\db\migration\*.sql -Pattern "ai_reports" -List | Select-Object Path
 ```
 
 ```bash
 # bash
-grep -l "ai_report" backend/src/main/resources/db/migration/*.sql
+grep -l "ai_reports" backend/src/main/resources/db/migration/*.sql
 ```
 
 찾은 파일을 위에서부터 읽으며 `CREATE TABLE` → `ALTER TABLE`(컬럼 추가·변경·삭제) → 인덱스 순으로 합쳐서 봅니다.
@@ -210,7 +210,7 @@ grep -l "ai_report" backend/src/main/resources/db/migration/*.sql
 ```sql
 USE donworry;
 SHOW TABLES;
-SHOW CREATE TABLE ai_report;   -- 컬럼·타입·제약·인덱스가 모두 나옴
+SHOW CREATE TABLE ai_reports;   -- 컬럼·타입·제약·인덱스가 모두 나옴
 ```
 
 내 로컬 DB에는 **내 브랜치의 병합 전 migration**도 적용돼 있을 수 있습니다. dev 기준 모양은 5-1(파일)로 확인합니다.

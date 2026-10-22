@@ -40,7 +40,7 @@ GitHub 설정에서 `backend` · `frontend` · `ai-server`는 **필수 검사**�
 | PR 내용 | backend | frontend | ai-server | docs |
 | --- | --- | --- | --- | --- |
 | README만 수정 | 건너뜀 ✅ | 건너뜀 ✅ | 건너뜀 ✅ | **실제 검사** |
-| `ai_report` Entity + migration 추가 | **실제 검사** | 건너뜀 ✅ | 건너뜀 ✅ | 안 돎 |
+| `ai_reports` Entity + migration 추가 | **실제 검사** | 건너뜀 ✅ | 건너뜀 ✅ | 안 돎 |
 | 화면 + API를 함께 수정 | **실제 검사** | **실제 검사** | 건너뜀 ✅ | 안 돎 |
 | AI 프롬프트 수정 + 설계 문서 수정 | 건너뜀 ✅ | 건너뜀 ✅ | **실제 검사** | **실제 검사** |
 

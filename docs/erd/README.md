@@ -1,7 +1,6 @@
 # ERD
 
-> **상태: 작성 예정** — Notion fds 정본 · 03 설계 §3.9 (ERD Baseline v1)가 확정되면 2~4절을 채웁니다.
-> 1·5·6절은 이미 정해진 규칙이라 지금 적어 둡니다.
+> **상태: 1차 MVP 반영** — Notion 팀페이지 / ERD(P1~P6 담당별 페이지) 기준 업무 테이블 14개를 Flyway로 생성했습니다 (Issue #56).
 
 ## 목차
 
@@ -14,22 +13,77 @@
 
 ## 1. 범위와 정본
 
-- 정본(기준 문서)은 Notion **fds 정본 · 03 설계 §3.9**입니다. 이 문서는 그 내용을 저장소에서 보기 쉽게 옮긴 사본이며, 둘이 다르면 3.9가 기준입니다
-- DB 원칙과 INSERT/UPDATE 예시는 Notion **04 DB 설계 및 데이터 매핑**에 있습니다 (구현 가이드이며 3.9를 대체하지 않음)
-- 범위는 FDS 연계 업무 테이블입니다. 정산 관리·금융 실행 상세 테이블(P5·P6), P1 직원·가맹점, CakeShop 주문 테이블은 각 담당이 따로 설계하며 정해지면 이 문서에 추가합니다
-- 실제 DB에 있는 테이블의 기준은 `backend/src/main/resources/db/migration/`의 SQL입니다
+- 합의 정본(무엇을 만들지)은 Notion **팀페이지 / ERD**의 담당별 페이지(P1~P6)입니다
+- 실제 DB의 기준(지금 무엇이 있는지)은 `backend/src/main/resources/db/migration/`의 SQL입니다. 이 문서는 소유 · 관계만 요약하고 컬럼은 복사하지 않습니다
+- DB 원칙과 INSERT/UPDATE 예시는 Notion fds 정본 **04 DB 설계 및 데이터 매핑**에 있습니다 (구현 가이드)
+
+### 공통 규칙
+
+| 대상 | 규칙 | 예 |
+| --- | --- | --- |
+| 테이블 이름 | 복수 · snake_case | `payments`, `security_cases` |
+| PK | `BIGINT AUTO_INCREMENT` 단일 컬럼 | `payment_id` |
+| 다른 테이블 ID | `BIGINT` (가리키는 PK와 같은 타입) | `merchant_id` |
+| 상태 · 유형 | `VARCHAR` + JPA `EnumType.STRING` (enum을 이름 문자열로 저장) | `status VARCHAR(30)` |
+| 시각 | `DATETIME(6)`, UTC로 저장 (`hibernate.jdbc.time_zone: UTC`) | `created_at` |
+| 금액 | `BIGINT`, 원(KRW) 정수 | `amount` |
+| 비율 | `DECIMAL(9,6)`, 0~1 | `pg_fee_rate` |
+| 구조가 자유로운 값 | `JSON` (MariaDB가 형식을 검사) | `report_body` |
+| 중복 방지 키 | MariaDB `UUID` | `idempotency_key` |
+| 제약 · 인덱스 이름 | `uk_<테이블>_<컬럼>` · `fk_<테이블>_<대상>` · `idx_<테이블>_<용도>` | `uk_ai_reports_case_version` |
+
+### 1차 생성 때 Notion 양식과 다르게 적용한 것
+
+| 대상 | 양식 | migration | 이유 |
+| --- | --- | --- | --- |
+| P1 테이블 이름 | `merchant` · `platform_user` · `user_permission` | `merchants` · `platform_users` · `user_permissions` | 테이블 이름은 복수 |
+| `user_permissions` PK | `(user_id, permission_code)` 복합 PK | `permission_id` 단일 PK + `UNIQUE(user_id, permission_code)` | PK는 `BIGINT` |
+| `fds_rule_hits.applied_score` | 기본값 0 검토 | `DEFAULT 0` | 미적중이면 0 |
+| `security_cases.evidence_version` | 초기값 1 검토 | `DEFAULT 1` | 양식 제안값 |
 
 ## 2. 테이블 소유
 
-작성 예정 — 모듈 | 담당 | 테이블 형식으로 정리합니다.
+| 모듈 | 담당 | 테이블 | migration |
+| --- | --- | --- | --- |
+| `identity` | P1 주환 | `merchants`, `platform_users`, `user_permissions` | [create_identity_tables](../../backend/src/main/resources/db/migration/V20261022_143019__create_identity_tables.sql) |
+| `payment` | P5 시은 | `payments` | [create_payment_tables](../../backend/src/main/resources/db/migration/V20261022_143024__create_payment_tables.sql) |
+| `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits` | [create_fds_tables](../../backend/src/main/resources/db/migration/V20261022_143028__create_fds_tables.sql) |
+| `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [create_investigation_tables](../../backend/src/main/resources/db/migration/V20261022_143033__create_investigation_tables.sql) |
+| `investigation/report` | P4 현규 | `ai_reports` | [create_ai_report_tables](../../backend/src/main/resources/db/migration/V20261022_143038__create_ai_report_tables.sql) |
+| `settlement` | P6 민정 | `captures`, `settlements` | [create_settlement_tables](../../backend/src/main/resources/db/migration/V20261022_143043__create_settlement_tables.sql) |
+| (공통) | — | `EVENT_PUBLICATION` (Modulith 이벤트 기록) | [create_event_publication_table](../../backend/src/main/resources/db/migration/V20261021_215412__create_event_publication_table.sql) |
 
 ## 3. ERD 그림
 
-작성 예정 — mermaid `erDiagram`으로 그립니다.
+실선은 물리 FK(DB가 검사), 점선은 논리 참조(ID 값만 저장, FK 없음)입니다.
+
+```mermaid
+erDiagram
+    merchants ||--o{ platform_users : "merchant_id"
+    platform_users ||--o{ user_permissions : "user_id"
+
+    fds_evaluations ||--o{ fds_rule_hits : "evaluation_id"
+
+    security_cases ||--o{ case_payments : "case_id"
+    case_payments ||--o| payment_decisions : "case_payment_id"
+    payment_decisions ||--o| action_handoffs : "decision_id"
+    security_cases ||--o{ case_histories : "case_id"
+
+    captures ||--o| settlements : "capture_id"
+
+    merchants ||..o{ payments : "merchant_id"
+    payments ||..o{ fds_evaluations : "payment_id"
+    payments ||..o| case_payments : "payment_id"
+    security_cases ||..o{ ai_reports : "case_id"
+    ai_reports |o..o{ payment_decisions : "report_id"
+    payments ||..o| captures : "payment_id"
+```
+
+그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id`(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
 
 ## 4. 테이블별 컬럼
 
-작성 예정 — 테이블마다 소제목을 하나씩 두고 컬럼·타입·제약·설명을 표로 정리합니다.
+컬럼 · 타입 · 제약은 2절 표의 migration 파일을 봅니다. 설명과 업무 제약(예: "재시도 시 `requested_at` 유지")은 Notion 담당 페이지를 봅니다. 로컬 DB에서는 `SHOW CREATE TABLE <테이블>;`로 확인합니다 ([Flyway 05 5절](../flyway/05-guide.md#5-기존-스키마-확인하는-법)).
 
 ## 5. 모듈 간 참조 규칙
 
@@ -37,15 +91,15 @@
 
 | 관계 | 참조 방식 | 예시 |
 | --- | --- | --- |
-| 같은 소유 담당의 테이블끼리 | 물리 FK(외래 키 제약을 DB에 건다) | `security_case` ↔ `case_payment` (둘 다 P3) |
-| 소유 담당이 다른 테이블 | 논리 참조(ID 값만 저장, FK 없음) | `fds_evaluation.payment_id` (P2 → P5) |
-| 같은 `investigation` 모듈 안의 P3 ↔ P4 | 논리 참조 (예외) | `ai_report` ↔ `security_case` · `payment_decision` |
+| 같은 소유 담당의 테이블끼리 | 물리 FK(외래 키 제약을 DB에 건다) | `security_cases` ↔ `case_payments` (둘 다 P3) |
+| 소유 담당이 다른 테이블 | 논리 참조(ID 값만 저장, FK 없음) | `fds_evaluations.payment_id` (P2 → P5) |
+| 같은 `investigation` 모듈 안의 P3 ↔ P4 | 논리 참조 (예외) | `ai_reports` ↔ `security_cases` · `payment_decisions` |
 
 - 논리 참조 대상의 존재 확인은 DB가 아니라 소유 담당 모듈의 공개 `api/`로 합니다
-- 참조되는 금융·조사 기록(결제·평가·Case·판정·인계·보고서)은 물리 삭제하지 않습니다
+- 참조되는 금융·조사 기록(결제·평가·Case·판정·인계·보고서)은 물리 삭제하지 않습니다. 그래서 FK에 `ON DELETE` 옵션을 두지 않습니다 (참조 중이면 삭제 거부)
 
 ## 6. 변경 절차
 
-1. Notion 설계 3.9에서 먼저 합의·수정합니다. 3.9에 없는 테이블·컬럼은 추가하지 않습니다
-2. 소유 담당이 Flyway 마이그레이션을 추가합니다 → [Flyway 작업 가이드 1절](../flyway/05-guide.md#1-테이블-추가-순서)
-3. 같은 PR에서 이 문서의 2~4절을 갱신합니다
+1. Notion 팀페이지 / ERD의 담당 페이지에서 먼저 합의·수정합니다. 페이지에 없는 테이블·컬럼은 추가하지 않습니다
+2. 소유 담당이 새 Flyway 마이그레이션(`ALTER` 등)을 추가합니다. 병합된 파일은 고치지 않습니다 → [Flyway 작업 가이드 1절](../flyway/05-guide.md#1-테이블-추가-순서)
+3. 테이블이 늘거나 관계가 바뀌면 같은 PR에서 이 문서의 2·3절을 갱신합니다

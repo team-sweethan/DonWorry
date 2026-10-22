@@ -26,7 +26,7 @@
 
 - FDS 연계 업무(평가 → HELD → Case · AI 조사 → 직원 판정 → 금융 조치 인계 · 접수 확인)의 흐름 · 상태값 · 모듈 간 통신 → Notion **fds 정본** 페이지 (01 업무분석 / 02 기획 / 03 설계). 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
 - 정산 관리 업무(실제 CAPTURE 실행 · 매입 배치 · 수수료 · 정산)와 P5 · P6 금융 실행 상세 → **정본 작성 중**. fds 정본은 이 범위를 정하지 않는다 (fds 정본 §5.9 제외 · 설계 3.3 제외 범위). 확정되면 이 줄을 갱신한다
-- ERD(FDS 연계 범위) → Notion **fds 정본 · 03 설계 §3.9** (Baseline v1, 8개 테이블). 정산 · 금융 실행 테이블은 미포함. DB 원칙 · INSERT/UPDATE 예시는 **04 DB 설계 및 데이터 매핑** (구현 가이드, 3.9를 대체하지 않음). ERD를 바꿀 때는 3.9를 먼저 합의 · 수정한다
+- ERD → Notion **팀페이지 / ERD** (P1~P6 담당별 페이지, 1차 MVP 14개 테이블). 저장소 요약은 [`docs/erd/`](docs/erd/README.md), 실제 컬럼 · 타입은 migration SQL이 기준이다. ERD를 바꿀 때는 해당 담당 페이지를 먼저 합의 · 수정한다. DB 원칙 · INSERT/UPDATE 예시는 fds 정본 **04 DB 설계 및 데이터 매핑** (구현 가이드)
 - 1차 CakeShop 연동 저장소 → https://github.com/team-sweethan/cakeshop_refactoring (DonWorry 연동에 맞게 수정 중)
 - Flyway 개념·사용법·로컬 DB 문제 해결 → [`docs/flyway/`](docs/flyway/README.md)
 - 모듈별 상세 설계 → `docs/<모듈>/` (예: [`docs/payment/`](docs/payment/README.md))
@@ -70,12 +70,13 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
 - 코드 모양(들여쓰기·줄바꿈·import 순서)은 손으로 맞추지 않는다. 커밋 전 `./gradlew spotlessApply` (palantir-java-format, [ADR-0013](docs/decisions/0013-code-formatter.md))
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
-  - 예외: `investigation` 모듈 안이라도 P4의 `ai_report`와 P3 테이블(`security_case` · `payment_decision`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
+  - 예외: `investigation` 모듈 안이라도 P4의 `ai_reports`와 P3 테이블(`security_cases` · `payment_decisions`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
 - 테이블은 Flyway로만 바꾼다 (`ddl-auto: validate`). 이미 `dev`에 병합된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다 (CI가 검사)
 - 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(한국 시간, `Asia/Seoul` 고정) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
 - 한 마이그레이션은 하나의 배포 가능한 스키마 전환만 담는다. 서로 의존하는 마이그레이션은 같은 PR에 넣는다 (`out-of-order`는 순서를 보장하지 않는다)
-- 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가한다. ERD(설계 3.9)에 없는 컬럼·테이블은 3.9 합의 후 추가한다
+- 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가 · 변경한다 (1차 MVP 초기 14개 테이블만 Issue #56에서 일괄 생성). ERD(Notion 팀페이지 / ERD)에 없는 컬럼 · 테이블은 담당 페이지 합의 후 추가한다
+- 테이블 이름은 복수, PK는 `BIGINT AUTO_INCREMENT`, 상태는 `VARCHAR`(EnumType.STRING), 시각은 UTC `DATETIME(6)`, 금액은 원 단위 `BIGINT` ([`docs/erd/` 1절](docs/erd/README.md#공통-규칙))
 - 작업 순서·로컬 DB 초기화 → [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md), 오류 해결 → [`docs/flyway/06-troubleshooting.md`](docs/flyway/06-troubleshooting.md)
 
 ### DB(테이블) 변경 작업 순서 — 사람·AI 공통

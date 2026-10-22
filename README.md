@@ -356,10 +356,11 @@ flowchart TB
 - 🧱 **[Spring Modulith 문서](docs/modulith/README.md)**: 모듈러 모놀리스 개념, 채택 이유, 모듈·패키지 구조, 의존 방향과 이벤트, 검사
 - 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
 - ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
-- 🗂️ **[ERD](docs/erd/README.md)**: 테이블 소유·관계·컬럼 (Notion 설계 3.9 확정 후 작성), 모듈 간 참조 규칙
+- 🗂️ **[ERD](docs/erd/README.md)**: 1차 MVP 테이블 14개의 소유·관계(ERD 그림)·공통 타입 규칙, 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
-- 📝 **Notion fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신·ERD(설계 3.9, Baseline v1) 정본. 정산 관리 업무 정본은 작성 중
+- 📝 **Notion fds 정본** 페이지(01 업무분석 · 02 기획 · 03 설계 · 04 DB 설계 및 데이터 매핑): FDS 연계 업무의 흐름·상태값·통신 정본. 정산 관리 업무 정본은 작성 중
+- 🗄️ **Notion 팀페이지 / ERD** (P1~P6 담당별 페이지): 테이블·컬럼 합의 정본
 
 ## 현재 상태
 
@@ -372,7 +373,7 @@ flowchart TB
 
 **아직 없는 것**
 
-- 업무 테이블 — ERD Baseline v1(8개 테이블)은 나왔고, 각 소유 담당이 Flyway 마이그레이션으로 추가 (Flyway는 켜짐, 지금은 Modulith 이벤트 테이블만 있음)
+- 업무 Entity·Repository — 테이블 14개는 Flyway로 만들어져 있고(#56), Java Entity는 각 담당이 기능 개발 때 추가
 - 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
 - 업무 API·화면·AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

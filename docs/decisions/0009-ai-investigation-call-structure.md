@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_report` 8개 컬럼에 맞춤)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0001](0001-module-dependency-direction.md)
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정), P2 · P5(Tool이 읽는 공개 api 제공)
 
@@ -14,7 +14,7 @@
 - 결과는 콜백 또는 작업 결과 조회로 받고, Spring이 검증 · 저장한다
 - FastAPI는 DB에 직접 접근하지 않고, 금융 상태를 바꾸지 못한다
 
-설계 3.9⑤는 `ai_report`를 8개 컬럼(`report_id` · `case_id` · `report_version` · `evidence_version` · `status` · `report_body` · `created_at` · `completed_at`)으로 확정했다. 작업 ID · 시도 횟수 · 실패 사유 컬럼은 없고, "시도 횟수 저장 방식은 P4 내부 설계에서 결정"으로 남겼다. 공통 페이지 §5.3(P3 ↔ P4) · §5.4(AI Tool)는 개발 전 결정 항목이 비어 있다.
+설계 3.9⑤는 `ai_reports`를 8개 컬럼(`report_id` · `case_id` · `report_version` · `evidence_version` · `status` · `report_body` · `created_at` · `completed_at`)으로 확정했다. 작업 ID · 시도 횟수 · 실패 사유 컬럼은 없고, "시도 횟수 저장 방식은 P4 내부 설계에서 결정"으로 남겼다. 공통 페이지 §5.3(P3 ↔ P4) · §5.4(AI Tool)는 개발 전 결정 항목이 비어 있다.
 
 이 ADR은 (1) FastAPI ↔ Spring 호출의 위치 · 인증, (2) 8개 컬럼 안에서 상태 · 재시도 · 실패를 다루는 방법을 정한다. §5.3 · §5.4는 합의 전이라 미정으로 남긴다.
 
@@ -30,7 +30,7 @@ sequenceDiagram
     participant O as payment · fds · identity api
 
     P3->>R: 조사 요청 (caseId · 증거 버전, 방식 미정 §5.3)
-    R->>R: ai_report PENDING 저장 (report_version + 1)
+    R->>R: ai_reports PENDING 저장 (report_version + 1)
     R->>A: POST /investigations (reportId, attemptId, caseId, evidenceVersion)
     A-->>R: 202 Accepted
     R->>R: RUNNING (PENDING일 때만 — 조건부 UPDATE)
@@ -55,7 +55,7 @@ sequenceDiagram
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
 | 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
 
-## 결정 2 — `ai_report` 8개 컬럼으로 상태 · 재시도 · 실패 다루기
+## 결정 2 — `ai_reports` 8개 컬럼으로 상태 · 재시도 · 실패 다루기
 
 | 상태 | 언제 | 채우는 컬럼 |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ sequenceDiagram
 
 이 ADR이 전제하는 것은 정본에 이미 있는 내용뿐이다.
 
-- 둘 다 `investigation` 모듈 안이라 Modulith 의존 문제는 없다. 다만 테이블 소유가 달라(설계 3.9) P4는 `security_case` · `case_payment`를, P3는 `ai_report`를 직접 바꾸지 않는다
+- 둘 다 `investigation` 모듈 안이라 Modulith 의존 문제는 없다. 다만 테이블 소유가 달라(설계 3.9) P4는 `security_cases` · `case_payments`를, P3는 `ai_reports`를 직접 바꾸지 않는다
 - 조사 요청 입력에는 최소 `caseId` · 증거 버전이 들어간다 (§5.3)
 - 결정 3은 P3가 증거 버전을 커밋한 **뒤에** 조사를 요청한다고 전제한다. 요청 방식을 정할 때 이 순서를 함께 합의한다
 - P4는 조사 완료 · 실패를 P3가 알 수 있게 해야 한다 (§5.3, 설계 3.7 "P3가 최신 보고서 확인 가능")
@@ -129,7 +129,7 @@ investigation/report/
 ├── controller/   # /internal/ai/tools/* · /internal/ai/reports/{reportId}/result
 ├── service/      # 조사 요청 · 재시도 · 버전 비교 · Tool 조합 조회
 ├── client/       # FastAPI HTTP 호출
-├── repository/   # ai_report
+├── repository/   # ai_reports
 ├── entity/       # AiReport
 └── dto/          # Tool 응답 · 결과 콜백 · report_body 구조
 ```
@@ -148,13 +148,13 @@ investigation/report/
 | 시도 번호(1 · 2 · 3)로 콜백 구분 | 서버 재시작 후 번호가 다시 1부터 시작해 재시작 전 콜백과 겹친다. UUID 토큰은 겹치지 않고 컬럼도 필요 없다 |
 | 이전 시도 취소 API(`DELETE /investigations/…`) | 현재 토큰만 받는 규칙으로 늦은 콜백이 이미 무시된다. 계약을 하나 더 늘릴 이유가 MVP에서는 작다 |
 | 최신 요청 증거 버전을 따로 저장(watermark 컬럼) | 설계 3.9⑤ 8개 컬럼을 바꿔야 한다. 종료 커밋 후 비교 순서로 같은 효과를 낸다 |
-| 버전 번호를 정할 때 `security_case` 행을 잠금(`SELECT … FOR UPDATE`) | 동시 요청을 한 줄로 세울 수 있지만 P3 소유 테이블을 P4가 잠그게 된다. UNIQUE 위반 시 다시 읽어 합류하는 방식으로 충분하다 |
+| 버전 번호를 정할 때 `security_cases` 행을 잠금(`SELECT … FOR UPDATE`) | 동시 요청을 한 줄로 세울 수 있지만 P3 소유 테이블을 P4가 잠그게 된다. UNIQUE 위반 시 다시 읽어 합류하는 방식으로 충분하다 |
 | 재시도마다 새 `report_version` 행 | 같은 증거를 다시 분석하는 것인데 버전이 늘어 "v1 · v2"의 뜻(증거가 바뀜)이 흐려진다 |
 
 ## 영향
 
 - API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
-- DB: `ai_report`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_case`에 대한 논리 참조
+- DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `identity/security/SecurityConfig`에서 `/internal/ai/**`를 서비스 키 인증으로 분리해야 한다 — P1과 협의
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)

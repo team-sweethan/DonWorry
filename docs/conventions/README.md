@@ -40,8 +40,8 @@
 | Entity ↔ 테이블 일치 | 🤖 `mariaDbTest` | [Flyway 04](../flyway/04-tests.md) |
 | 테이블 추가 순서 · 작성 기준 | 📄 | [Flyway 05](../flyway/05-guide.md), [AGENTS.md 4절](../../AGENTS.md#4-backend-규칙) |
 | 소유 담당이 다르면 FK 금지 · 물리 삭제 금지 | 📄 | [AGENTS.md 4절](../../AGENTS.md#4-backend-규칙) |
-| 테이블 소유 · 컬럼 | ⏳ 작성 예정 | [ERD](../erd/README.md) |
-| ID · 금액 · 시각 타입 | ⏳ | [P5 결제 문서 C1](../payment/README.md#구현-전에-필요한-최소-계약) |
+| 테이블 소유 · 관계 | 📄 | [ERD 2 · 3절](../erd/README.md#2-테이블-소유) |
+| 테이블 이름 · PK · 타입 공통 규칙 | 📄 | [ERD 1절](../erd/README.md#공통-규칙) |
 
 ## 4. Frontend
 
