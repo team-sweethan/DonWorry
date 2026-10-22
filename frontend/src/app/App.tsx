@@ -7,6 +7,7 @@ import { RouterProvider } from 'react-router-dom'
 import { DemoProvider } from '../demo/DemoContext'
 import { antdTheme } from '../styles/theme'
 import { router } from './router'
+import '../styles/alert.css'
 import '../styles/global.css'
 
 dayjs.locale('ko')

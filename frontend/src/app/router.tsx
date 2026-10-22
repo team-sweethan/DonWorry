@@ -8,7 +8,8 @@ import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
-import { AlertDetailPage, AlertListPage } from '../pages/security/AlertPages'
+import { AlertDetailPage } from '../pages/security/AlertDetailPage'
+import { AlertListPage } from '../pages/security/AlertListPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
