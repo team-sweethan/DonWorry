@@ -1,6 +1,6 @@
 # P5 1차 시연 검증 기준
 
-**W1 순수 규칙 테스트 42건의 과거 실행 기록은 아래에 보존한다.** 아래 T01~T15는 전체 시나리오 기준이며, 해당 분기의 단위 판단 이외 업무 저장·모듈 연동은 미구현·미실행이다.
+**W1 순수 규칙 테스트 42건의 과거 실행 기록은 아래에 보존한다.** #71 Entity 단계의 생성·DB 매핑 검증은 아래 실행 기록을 따른다. 아래 T01~T15는 전체 시나리오 기준이며, 저장 서비스·모듈 연동까지 구현·검증됐다는 뜻은 아니다.
 현재 업무 테이블 생성 SQL의 존재·스키마 검사는 실제 결제 저장·인계 동작의 검증과 구분한다.
 정책과 계약은 [설계](design.md), 작업 W번호·미결 C번호는 [README](README.md)를 따른다.
 
@@ -95,6 +95,17 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - 이번 저장·DTO 초안: P5 문서 3개·ADR-0010·ADR 목록의 markdownlint 오류 0(MD013·MD060 제외).
 - 새 결제 흐름 Mermaid 1개: Mermaid 12.2.0 문법 파싱 통과.
 - 필드·ID·NULL 조건·DTO 상관관계의 문서 대조 및 변경 문서 공백 검사 통과. GitHub 실제 렌더링·업무 코드·DB·모듈 연동은 미검증.
+
+## #71 Entity 단계 실행 기록
+
+2026-10-22, `feature/71-payment-persistence`, 기준 커밋 `e9ab2eb` + Entity·테스트 미커밋 작업본에서 실행했다.
+
+- 실행: `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL.
+- `check`: PaymentTests 10건, 기존 PaymentRulesTests 42건, 구조 검사 5건으로 총 57건 통과. 실패·오류·건너뜀 0.
+- `mariaDbTest`: 기존 Flyway 검사 3건과 [PaymentMappingTests](../../backend/src/test/java/com/donworry/payment/entity/PaymentMappingTests.java) 1건으로 총 4건 통과. 실패·오류·건너뜀 0.
+- 생성 시 ID·승인 참조가 NULL이고 상태가 PENDING임을 확인. 필수값 누락·참조 길이 초과 거절과 DATETIME(6) 정밀도 처리 검증.
+- MariaDB 11.8에서 기존 Flyway 전체 적용·JPA validate, ID 자동 생성, 커밋 후 새 트랜잭션의 전체 필드 재조회, 상태 문자열·UTC 시각의 실제 저장값을 확인.
+- Repository·저장 서비스·입력 인증·가맹점 존재 확인·요청 멱등성·P2 호출은 아직 구현·검증하지 않았다. Entity 매핑 테스트를 결제 접수 전체 검증으로 해석하지 않는다.
 
 ## W1 실행 기록
 
