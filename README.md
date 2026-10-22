@@ -259,8 +259,14 @@ DonWorry/
 │   └── src/ app/ · api/ · pages/{auth,security,operator}/ · components/
 ├── ai-server/                   # FastAPI (8000)
 │   └── app/ controller/ · service/ · agent/ · schemas/
-├── docs/decisions/              # 설계 결정 기록 (ADR)
-├── .github/                     # CI 3개 · PR 템플릿
+├── docs/
+│   ├── decisions/               # 설계 결정 기록 (ADR)
+│   ├── modulith/                # 모듈 구조·의존 방향·이벤트 설명
+│   ├── flyway/                  # DB migration 개념·가이드·문제 해결
+│   ├── ci/                      # CI 개념·워크플로별 검사·문제 해결
+│   ├── erd/                     # 테이블 설계 (ERD 확정 후 작성)
+│   └── payment/                 # P5 결제 설계
+├── .github/                     # CI 워크플로 4개 · PR 템플릿
 ├── docker-compose.yml           # 개발용 MariaDB
 ├── AGENTS.md                    # 작업 규칙
 └── README.md
@@ -277,46 +283,21 @@ DonWorry/
 
 ### 모듈 하나의 내부 구조
 
-모든 모듈은 같은 폴더 구성을 따릅니다. `identity`를 예로 들면 다음과 같습니다. 클래스 이름은 들어갈 내용을 보여주는 예시입니다.
+모든 모듈은 같은 폴더 구성을 따릅니다.
 
 ```
-identity/
+<모듈>/
 ├── package-info.java     # 모듈 선언 (@ApplicationModule) — 담당·책임 주석
 ├── api/                  # 🔓 다른 모듈에 공개 — 인터페이스·record·이벤트만
-│   ├── TenantReader.java        # 예) 가맹점 조회 인터페이스
-│   ├── TenantSummary.java       # 예) 조회 결과 record (엔티티 대신 내보내는 모양)
-│   └── CurrentUser.java         # 예) 로그인 사용자·역할 조회
 ├── controller/           # 🔒 HTTP 요청 수신 — Service만 호출
-│   └── AuthController.java      # 예) POST /api/auth/login
 ├── service/              # 🔒 업무 로직·트랜잭션, api 인터페이스의 구현체
-│   ├── AuthService.java
-│   └── TenantReaderImpl.java    # 예) TenantReader 구현 (다른 모듈은 이 클래스를 모름)
 ├── repository/           # 🔒 DB 조회·저장 (Spring Data JPA)
-│   └── PlatformUserRepository.java
 ├── entity/               # 🔒 테이블과 1:1 매핑
-│   ├── PlatformUser.java
-│   └── Tenant.java
-├── dto/                  # 🔒 요청·응답 모양
-│   ├── LoginRequest.java
-│   └── MeResponse.java
-└── security/             # 🔒 identity 전용 — SecurityConfig
+└── dto/                  # 🔒 요청·응답 모양
 ```
 
 🔓 = 다른 모듈이 import 가능 · 🔒 = 이 모듈 안에서만 사용 (어기면 `./gradlew check` 실패)
-
-```mermaid
-flowchart LR
-    subgraph identity
-        direction LR
-        C[controller] --> S[service] --> R[repository] --> DB[(DB)]
-        A["api<br/>TenantReader"] -. 구현 .-> S
-    end
-    O["다른 모듈<br/>(예: settlement)"] --> A
-```
-
-- 화면·외부 요청은 `controller → service → repository` 순서로 흐릅니다. Controller는 Repository·Entity를 직접 쓰지 않습니다.
-- 다른 모듈은 `api/`의 인터페이스만 주입받아 호출합니다. 실제로 실행되는 것은 `service/`의 구현체이고, Spring이 연결해 줍니다.
-- 엔티티는 `api/` 밖으로 내보내지 않습니다. 다른 모듈에 줄 데이터는 `api/`의 record로 만듭니다.
+예시 클래스가 들어간 실제 모양과 규칙은 [Modulith 문서 03 모듈 구조](docs/modulith/03-module-structure.md)를 봅니다.
 
 ## Contributing
 
@@ -353,17 +334,9 @@ flowchart TB
     ai -. "HTTP Tool API·결과" .-> investigation
 ```
 
-- 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 아래층이 위층에 알릴 일은 커밋 후 이벤트로 보냅니다.
-  - 이벤트는 양방향으로 오가지만, 이벤트 타입은 상대가 import해도 되는 쪽(의존 화살표를 받는 쪽) 모듈의 `api/`에 두어 코드 의존은 화살표 방향으로만 생깁니다
-  - `payment` 발행: `PaymentHeld`·인계 결과 → investigation, `CaptureRequested`(타입은 `settlement.api`) → settlement
-  - `settlement` 발행: 매입 접수 결과·매입 실행 결과 → payment
-  - 위층의 동기 호출: investigation → payment(금융 조치 요청), payment → settlement(취소 전 정산 상태 확인, 2차 MVP)
-- 점선 `보류`: settlement가 가맹점 정보(수수료율 등)를 identity에서 읽어야 할 때 추가합니다.
-- 점선은 ai-server와의 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
-- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 **채택**했습니다 (정산 완료 후 취소 금지 때문에 기존 `settlement → payment`를 뒤집음). 방향 강제(`allowedDependencies`)는 팀 합의 후 코드에 넣습니다.
-- 자동 검사
-  - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
-  - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
+- 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 반대 방향으로 알릴 일은 커밋 후 이벤트로 보냅니다. `보류` 점선은 필요해지면 추가할 의존입니다.
+- ai-server와의 점선은 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
+- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 채택했습니다. 이벤트 클래스 위치와 동기 호출·이벤트 선택 기준은 [Modulith 문서 04](docs/modulith/04-dependency-and-events.md), 자동 검사와 방향 강제 계획은 [Modulith 문서 05](docs/modulith/05-verification.md)를 봅니다.
 
 ### 기술 선택 배경
 

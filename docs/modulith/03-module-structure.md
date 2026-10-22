@@ -50,6 +50,49 @@ com.donworry.payment
 - 모듈 최상위 패키지(`com.donworry.payment` 바로 아래)에도 Modulith는 공개로 취급하므로, 여기에는 `package-info.java` 외의 클래스를 두지 않습니다
 - 모듈 안 계층 규칙(Controller → Service → Repository)은 Modulith가 아니라 `ArchitectureTests`가 검사합니다 ([CI 03](../ci/03-backend.md#architecturetests--모듈-안-계층-규칙-archunit))
 
+### 예: identity 모듈의 실제 모양
+
+클래스 이름은 들어갈 내용을 보여주는 예시입니다. `security/`는 identity에만 있는 패키지입니다.
+
+```
+identity/
+├── package-info.java     # 모듈 선언 (@ApplicationModule) — 담당·책임 주석
+├── api/                  # 🔓 다른 모듈에 공개 — 인터페이스·record·이벤트만
+│   ├── TenantReader.java        # 예) 가맹점 조회 인터페이스
+│   ├── TenantSummary.java       # 예) 조회 결과 record (엔티티 대신 내보내는 모양)
+│   └── CurrentUser.java         # 예) 로그인 사용자·역할 조회
+├── controller/           # 🔒 HTTP 요청 수신 — Service만 호출
+│   └── AuthController.java      # 예) POST /api/auth/login
+├── service/              # 🔒 업무 로직·트랜잭션, api 인터페이스의 구현체
+│   ├── AuthService.java
+│   └── TenantReaderImpl.java    # 예) TenantReader 구현 (다른 모듈은 이 클래스를 모름)
+├── repository/           # 🔒 DB 조회·저장 (Spring Data JPA)
+│   └── PlatformUserRepository.java
+├── entity/               # 🔒 테이블과 1:1 매핑
+│   ├── PlatformUser.java
+│   └── Tenant.java
+├── dto/                  # 🔒 요청·응답 모양
+│   ├── LoginRequest.java
+│   └── MeResponse.java
+└── security/             # 🔒 identity 전용 — SecurityConfig
+```
+
+🔓 = 다른 모듈이 import 가능 · 🔒 = 이 모듈 안에서만 사용 (어기면 `./gradlew check` 실패)
+
+```mermaid
+flowchart LR
+    subgraph identity
+        direction LR
+        C[controller] --> S[service] --> R[repository] --> DB[(DB)]
+        A["api<br/>TenantReader"] -. 구현 .-> S
+    end
+    O["다른 모듈<br/>(예: fds)"] --> A
+```
+
+- 화면·외부 요청은 `controller → service → repository` 순서로 흐릅니다. Controller는 Repository·Entity를 직접 쓰지 않습니다.
+- 다른 모듈은 `api/`의 인터페이스만 주입받아 호출합니다. 실제로 실행되는 것은 `service/`의 구현체이고, Spring이 연결해 줍니다.
+- 엔티티는 `api/` 밖으로 내보내지 않습니다. 다른 모듈에 줄 데이터는 `api/`의 record로 만듭니다.
+
 ### 예: payment가 fds에 평가를 요청
 
 ```java
