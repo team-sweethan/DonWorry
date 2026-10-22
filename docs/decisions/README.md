@@ -35,7 +35,7 @@
 | [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 채택 |
 | [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
-| [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 제안 — 구현 반영, 팀 리뷰 필요 |
+| [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 채택 |
 
 ## 현재 적용 상태와 기록의 구분
 

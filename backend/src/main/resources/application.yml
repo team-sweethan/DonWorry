@@ -39,7 +39,7 @@ server:
   port: ${DONWORRY_PORT:8081}       # CakeShop 8080과 겹치지 않게
   servlet:
     session:
-      timeout: 30m                 # MVP 제안값, PR 리뷰에서 확정
+      timeout: 30m                 # 비활동 만료 (ADR-0014)
       cookie:
         http-only: true
         same-site: lax
