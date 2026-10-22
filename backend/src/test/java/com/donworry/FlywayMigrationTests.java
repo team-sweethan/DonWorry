@@ -27,8 +27,9 @@ class FlywayMigrationTests {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    // 모든 migration이 성공으로 적용되고 대기 중인 것이 없다
     @Test
-    void 모든_migration이_성공으로_적용되고_대기중인_것이_없다() {
+    void migrations_allApplied_noPending() {
         MigrationInfo[] applied = flyway.info().applied();
 
         assertThat(applied).isNotEmpty();
@@ -38,14 +39,16 @@ class FlywayMigrationTests {
         assertThat(flyway.info().pending()).isEmpty();
     }
 
+    // 적용된 migration과 파일의 체크섬이 일치한다
     @Test
-    void 적용된_migration과_파일의_체크섬이_일치한다() {
+    void migrations_applied_checksumsMatchFiles() {
         // 병합된 파일을 고치면 여기서 잡힌다 (CI의 git diff 검사와 이중 방어)
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     }
 
+    // Modulith 이벤트 테이블은 Flyway가 대문자 이름으로 만든다
     @Test
-    void Modulith_이벤트_테이블은_Flyway가_대문자_이름으로_만든다() {
+    void eventPublicationTable_createdByFlyway_inUppercase() {
         // Modulith SQL이 EVENT_PUBLICATION을 대문자로 조회하므로 이름이 정확히 같아야 한다
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)

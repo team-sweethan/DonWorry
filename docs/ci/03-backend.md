@@ -71,9 +71,9 @@ DB 없이 코드 모양과 클래스 구조만 검사합니다. `spotlessCheck`�
 
 | 테스트 | 규칙 | 이유 |
 | --- | --- | --- |
-| `controller는_repository를_직접_호출하지_않는다` | `..controller..` → `..repository..` 금지 | Controller → Service → Repository 순서를 지킨다 |
-| `controller는_entity에_의존하지_않는다` | `..controller..` → `..entity..` 금지 | 화면·외부 응답은 DTO로 내보낸다 |
-| `entity는_controller와_service에_의존하지_않는다` | `..entity..` → `..controller..`·`..service..` 금지 | 엔티티는 데이터만 담고 위 계층을 모른다 |
+| `controller_doesNotAccessRepository` | `..controller..` → `..repository..` 금지 | Controller → Service → Repository 순서를 지킨다 |
+| `controller_doesNotDependOnEntity` | `..controller..` → `..entity..` 금지 | 화면·외부 응답은 DTO로 내보낸다 |
+| `entity_doesNotDependOnControllerOrService` | `..entity..` → `..controller..`·`..service..` 금지 | 엔티티는 데이터만 담고 위 계층을 모른다 |
 
 아직 클래스가 없는 패키지도 통과하도록 `allowEmptyShould(true)`가 붙어 있습니다.
 

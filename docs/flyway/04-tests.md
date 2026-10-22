@@ -28,9 +28,9 @@
 
 | 테스트 | 확인하는 것 | 이걸로 잡는 사고 |
 | --- | --- | --- |
-| `모든_migration이_성공으로_적용되고_대기중인_것이_없다` | 모든 파일이 성공(또는 `out-of-order` 성공) 상태, 실행 대기 중인 파일 0개 | 일부 파일이 실패·누락된 채 넘어감 |
-| `적용된_migration과_파일의_체크섬이_일치한다` | 이력표의 체크섬 = 현재 파일의 체크섬 | 적용된 파일을 수정함 (③ CI 검사와 이중 방어) |
-| `Modulith_이벤트_테이블은_Flyway가_대문자_이름으로_만든다` | `EVENT_PUBLICATION`이 대문자 이름 그대로 존재 | 이름이 소문자로 바뀌어 리눅스 운영 DB에서 Modulith 이벤트 저장 실패 |
+| `migrations_allApplied_noPending` | 모든 파일이 성공(또는 `out-of-order` 성공) 상태, 실행 대기 중인 파일 0개 | 일부 파일이 실패·누락된 채 넘어감 |
+| `migrations_applied_checksumsMatchFiles` | 이력표의 체크섬 = 현재 파일의 체크섬 | 적용된 파일을 수정함 (③ CI 검사와 이중 방어) |
+| `eventPublicationTable_createdByFlyway_inUppercase` | `EVENT_PUBLICATION`이 대문자 이름 그대로 존재 | 이름이 소문자로 바뀌어 리눅스 운영 DB에서 Modulith 이벤트 저장 실패 |
 
 ## 3. Testcontainers — DB를 누가 띄우나
 

@@ -14,6 +14,7 @@
 | --- | --- | --- |
 | 브랜치 이름 · 병합 흐름 (`feature/*` → `dev` → `main`) | 📄 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
 | `main` · `dev` 직접 push 금지 | 🤖 GitHub 저장소 설정 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
+| 이슈 형식 (작업 · 버그) · 제목 `[feat\|fix\|docs\|chore\|test] 요약` | 📄 | [이슈 템플릿](../../.github/ISSUE_TEMPLATE/) |
 | PR 본문 형식 · "미검증" 칸 | 📄 | [PR 템플릿](../../.github/pull_request_template.md) |
 | 필수 검사 (`backend` · `frontend` · `ai-server`) | 🤖 | [CI 02 4절](../ci/02-overview.md#4-필수-검사와-job-이름) |
 | 작업 완료 보고 형식 | 📄 | [AGENTS.md 7절](../../AGENTS.md#7-작업-순서) |
@@ -29,7 +30,7 @@
 | 모듈 간 의존 방향 | 🤖 `ModularityTests` (`allowedDependencies`) | [ADR-0012](../decisions/0012-payment-settlement-dependency.md), [Modulith 05 3절](../modulith/05-verification.md#3-alloweddependencies--모듈별-허용-의존) |
 | 이벤트 클래스 위치 · 멱등 | 📄 | [Modulith 04](../modulith/04-dependency-and-events.md) |
 | 모듈 안 패키지 구조 | 📄 | [Modulith 03](../modulith/03-module-structure.md) |
-| Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그 · 주석 | 📄 일부 `합의` (`@Builder` · 외부 HTTP 호출 · 테스트 작성), 나머지 `합의 전` | [02 코드 작성 규칙](02-code.md) |
+| Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그 · 주석 | 📄 일부 `합의` (`@Builder` · 외부 HTTP 호출 · 테스트 작성 · 테스트 이름), 나머지 `합의 전` | [02 코드 작성 규칙](02-code.md) |
 | 공통 에러 클래스 위치 | ⏳ | [02 코드 작성 규칙 3절](02-code.md#공통-클래스-위치-보류) |
 
 ## 3. DB

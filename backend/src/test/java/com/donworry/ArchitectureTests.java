@@ -15,8 +15,9 @@ class ArchitectureTests {
             .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
             .importPackages("com.donworry");
 
+    // controller는 repository를 직접 호출하지 않는다
     @Test
-    void controller는_repository를_직접_호출하지_않는다() {
+    void controller_doesNotAccessRepository() {
         noClasses()
                 .that()
                 .resideInAPackage("..controller..")
@@ -28,8 +29,9 @@ class ArchitectureTests {
                 .check(classes);
     }
 
+    // controller는 entity에 의존하지 않는다
     @Test
-    void controller는_entity에_의존하지_않는다() {
+    void controller_doesNotDependOnEntity() {
         noClasses()
                 .that()
                 .resideInAPackage("..controller..")
@@ -41,8 +43,9 @@ class ArchitectureTests {
                 .check(classes);
     }
 
+    // entity는 controller와 service에 의존하지 않는다
     @Test
-    void entity는_controller와_service에_의존하지_않는다() {
+    void entity_doesNotDependOnControllerOrService() {
         noClasses()
                 .that()
                 .resideInAPackage("..entity..")

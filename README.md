@@ -268,7 +268,7 @@ DonWorry/
 │   ├── ci/                      # CI 개념·워크플로별 검사·문제 해결
 │   ├── erd/                     # 테이블 소유·관계·공통 타입 규칙
 │   └── payment/                 # P5 결제 설계
-├── .github/                     # CI 워크플로 4개 · PR 템플릿
+├── .github/                     # CI 워크플로 4개 · PR · 이슈 템플릿
 ├── docker-compose.yml           # 개발용 MariaDB
 ├── AGENTS.md                    # 작업 규칙
 └── README.md
@@ -367,7 +367,7 @@ flowchart TB
 
 **있는 것**
 
-- 모듈 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
+- 모듈re/62-sync-docs 5개 골격과 모듈 경계·의존 방향·계층 자동 검사
 - 업무 테이블 14개와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
 - 서비스 CI 3개와 문서 CI 1개, PR 템플릿, 작업 규칙
 - P5 `PaymentStatus`·`PaymentRules`와 순수 규칙 단위 테스트
