@@ -42,7 +42,7 @@ Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어�
 
 - 다른 모듈은 `api/` 패키지만 쓴다. `entity/` · `repository/` 직접 참조 금지
 - 두 모듈이 서로 호출하면 안 된다 (순환). 역방향 알림은 커밋 후 이벤트로 보낸다
-- 이벤트 타입은 보내는 모듈의 `api/`에 둔다. 받는 쪽은 같은 이벤트가 두 번 와도 한 번만 반영한다 (멱등)
+- 이벤트 타입은 두 모듈 중 상대가 import해도 되는 쪽(의존 화살표를 받는 쪽)의 `api/`에 둔다 ([ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)). 받는 쪽은 같은 이벤트가 두 번 와도 한 번만 반영한다 (멱등)
 - 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다

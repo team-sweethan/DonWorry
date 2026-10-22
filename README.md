@@ -39,7 +39,7 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 
 ## 핵심 흐름
 
-의심 결제가 승인 후 매입 보류되고, 보안 직원 판정이 금융 조치로 인계되는 시연 시나리오입니다. 이벤트 이름은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)의 제안입니다.
+의심 결제가 승인 후 매입 보류되고, 보안 직원 판정이 금융 조치로 인계되는 시연 시나리오입니다. 모듈 간 통신 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)를 따르며, 이벤트 이름·필드는 아직 합의 중입니다.
 
 ```mermaid
 sequenceDiagram
@@ -65,7 +65,7 @@ sequenceDiagram
     I->>P: 금융 조치 요청 (동기)
     alt ACCEPT
         P--)S: CaptureRequested (이벤트)
-        S->>P: CAPTURE 요청 영속 접수 확인
+        S--)P: CAPTURE 요청 영속 접수 결과 (이벤트)
     else REJECT
         P->>P: VOID 요청 영속 접수
     end
@@ -347,17 +347,20 @@ flowchart BT
     investigation --> payment
     investigation --> fds
     investigation --> identity
-    settlement --> payment
-    settlement --> identity
+    payment --> settlement
+    settlement -. "보류" .-> identity
     investigation -. "HTTP 조사 요청" .-> ai
     ai -. "HTTP Tool API·결과" .-> investigation
 ```
 
 - 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 아래층이 위층에 알릴 일은 커밋 후 이벤트로 보냅니다.
-  - `payment` 발행: `PaymentHeld` → investigation, `CaptureRequested` → settlement, 인계 결과 → investigation
-  - 위층의 동기 호출: investigation → payment(금융 조치 요청), settlement → payment(CAPTURE 접수 확인)
+  - 이벤트는 양방향으로 오가지만, 이벤트 타입은 상대가 import해도 되는 쪽(의존 화살표를 받는 쪽) 모듈의 `api/`에 두어 코드 의존은 화살표 방향으로만 생깁니다
+  - `payment` 발행: `PaymentHeld`·인계 결과 → investigation, `CaptureRequested`(타입은 `settlement.api`) → settlement
+  - `settlement` 발행: 매입 접수 결과·매입 실행 결과 → payment
+  - 위층의 동기 호출: investigation → payment(금융 조치 요청), payment → settlement(취소 전 정산 상태 확인, 2차 MVP)
+- 점선 `보류`: settlement가 가맹점 정보(수수료율 등)를 identity에서 읽어야 할 때 추가합니다.
 - 점선은 ai-server와의 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
-- 이 방향은 [ADR-0001](docs/decisions/0001-module-dependency-direction.md)에서 **제안 단계**이며 팀 합의 후 확정합니다.
+- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 **채택**했습니다 (정산 완료 후 취소 금지 때문에 기존 `settlement → payment`를 뒤집음). 방향 강제(`allowedDependencies`)는 팀 합의 후 코드에 넣습니다.
 - 자동 검사
   - `ModularityTests` — 모듈 간 순환 의존, 다른 모듈 내부(`entity`·`repository` 등) 접근 금지
   - `ArchitectureTests` — 모듈 안 계층 규칙(Controller가 Repository·Entity를 직접 쓰지 않음)
@@ -366,7 +369,7 @@ flowchart BT
 
 설계 결정과 버린 대안은 [ADR](docs/decisions/README.md)로 남깁니다. 상태가 "제안"인 결정은 팀 합의 전입니다.
 
-- 🧩 **[모듈 간 의존 방향 (ADR-0001)](docs/decisions/0001-module-dependency-direction.md)**: 모듈 사이 호출 방향과 역방향 알림을 이벤트로 보내는 이유
+- 🧩 **[모듈 간 의존 방향 (ADR-0012)](docs/decisions/0012-payment-settlement-dependency.md)**: 모듈 사이 호출 방향, 역방향 알림을 이벤트로 보내는 이유, `payment → settlement`로 바꾼 이유 (ADR-0001 대체)
 - 🎨 **[Ant Design 기반 프론트 공통 레이아웃 (ADR-0002)](docs/decisions/0002-frontend-common-layout.md)**: 공통 헤더·사이드바·담당자 구현 영역 구성
 - 🤖 **[AI 조사 호출 구조 (ADR-0009)](docs/decisions/0009-ai-investigation-call-structure.md)**: Spring ↔ FastAPI 비동기 호출, 읽기 전용 Tool API, 보고서 버전 관리
 - 💳 **[P5 요청·금융 작업·이력의 최소 저장 분리 (ADR-0010)](docs/decisions/0010-payment-operation-storage.md)**: 결제 보조 테이블 저장안

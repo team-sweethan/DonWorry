@@ -84,7 +84,7 @@ migration 파일명이 규칙과 다릅니다: V3__create_ai_report.sql (./gradl
 | 메시지 | 원인 | 해결 |
 | --- | --- | --- |
 | `depends on non-exposed type` | 다른 모듈의 `entity` · `repository` · `service` 등 **공개되지 않은 클래스**를 import | 그 모듈의 공개 `api/` 패키지에 있는 인터페이스·DTO만 씁니다. 필요한 것이 없으면 그 모듈 담당에게 `api/` 추가를 요청합니다 |
-| `Cycle detected` | 두 모듈이 서로를 호출 (순환) | 아래층이 위층에 알릴 일은 **커밋 후 이벤트**로 보냅니다 ([AGENTS.md 4절](../../AGENTS.md#4-backend-규칙), [ADR-0001](../decisions/0001-module-dependency-direction.md)) |
+| `Cycle detected` | 두 모듈이 서로를 호출 (순환) | 아래층이 위층에 알릴 일은 **커밋 후 이벤트**로 보냅니다 ([AGENTS.md 4절](../../AGENTS.md#4-backend-규칙), [ADR-0012](../decisions/0012-payment-settlement-dependency.md)) |
 
 로컬 확인: `backend/`에서 `./gradlew test --tests com.donworry.ModularityTests`
 

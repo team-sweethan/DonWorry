@@ -1,6 +1,6 @@
 # 0001. 모듈 간 의존 방향
 
-- **상태:** 제안 — 팀 합의 필요
+- **상태:** 대체됨 (→ [0012](0012-payment-settlement-dependency.md))
 - **날짜:** 2026-10-20 (2026-10-21 재작성: 채택된 FDS 업무 흐름 반영)
 - **관련:** Notion fds 정본 — 03 설계 3.2 데이터 소유권 · 3.9 ERD · 3.10 Spring Modulith 통신 설계, 04 DB 설계 §1 · §3, [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** 전원
