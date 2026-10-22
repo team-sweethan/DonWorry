@@ -1,7 +1,7 @@
 # P5 Payment — 1차 시연 문서
 
 최초 작성: 2026-10-21 · 최신화: 2026-10-22 (#62) · 코드·SQL 대조 기준: `ba9427f` · 담당: P5 시은.
-**W1 내부 규칙·단위 테스트와 `payments` 생성 SQL이 저장소에 있다. #71에서 Payment Entity와 매핑 테스트를 추가했고, 현재 작업본에 PaymentRepository와 DB 테스트를 추가했다. 저장 서비스·HTTP·모듈 연동은 미구현이다.**
+**W1 내부 규칙·단위 테스트와 `payments` 생성 SQL이 저장소에 있다. #71에서 Payment Entity·Repository와 DB 테스트를 추가했고, 현재 작업본에 최초 PENDING 저장 서비스를 추가했다. HTTP·모듈 연동은 미구현이다.**
 과거 테스트 실행 근거와 미검증 범위는 [검증 문서](verification.md)에 구분해 기록한다.
 
 ## 문서와 근거
@@ -63,7 +63,9 @@ ADR-0010은 제안이며 C1~C7의 합의를 대신하지 않는다. 특히 P6 �
 
 ## 구현 순서와 완료 기준
 
-W1 코드는 저장소에 반영되어 있고, W2~W6의 업무 흐름은 아직 완성되지 않았다. W2의 기반인 `payments` 생성 SQL은 #56에서 추가됐다. #71의 [Payment Entity](../../backend/src/main/java/com/donworry/payment/entity/Payment.java)는 최초 PENDING 생성과 기존 SQL 매핑까지 구현했다. 현재 작업본의 [PaymentRepository](../../backend/src/main/java/com/donworry/payment/repository/PaymentRepository.java)는 저장·ID 조회만 제공하며 물리 삭제 메서드는 노출하지 않는다. 저장 서비스는 후속 단계다. I/T 번호는 [검증 문서](verification.md)의 불변식/테스트다.
+W1 코드는 저장소에 반영되어 있고, W2~W6의 업무 흐름은 아직 완성되지 않았다. W2의 기반인 `payments` 생성 SQL은 #56에서 추가됐다. #71의 [Payment Entity](../../backend/src/main/java/com/donworry/payment/entity/Payment.java)는 최초 PENDING 생성과 기존 SQL 매핑까지 구현했다. [PaymentRepository](../../backend/src/main/java/com/donworry/payment/repository/PaymentRepository.java)는 저장·ID 조회만 제공하며 물리 삭제 메서드는 노출하지 않는다. 현재 작업본의 [PaymentCreationService](../../backend/src/main/java/com/donworry/payment/service/PaymentCreationService.java)는 내부 입력으로 최초 PENDING을 저장하고 ID를 반환한다. I/T 번호는 [검증 문서](verification.md)의 불변식/테스트다.
+
+`PaymentCreationService.createPending(merchantId, customerRef, orderRef, amount)`는 Spring Bean을 통해 호출한다. 생성 시각은 서비스가 정하며, `REQUIRES_NEW`로 최초 저장을 별도 커밋하므로 호출자 롤백에도 PENDING은 남는다. 향후 평가 호출은 이 메서드 반환 후 연결한다. 이는 내부 저장 기반이며 가맹점 존재·권한·신뢰할 금액 검증이나 주문 중복 방지를 제공하는 외부 접수 API가 아니다. C1·C6 합의와 후속 구현은 여전히 필요하다.
 공유 계약이 필요한 작업은 아래 C 항목의 해당 답변을 먼저 확보한다.
 
 | 작업 | 선행 조건 | 완료 조건·검증 연결 |
