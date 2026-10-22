@@ -9,7 +9,7 @@
 화살표는 **"import해도 된다(호출해도 된다)"** 는 허락입니다. 화살표 반대 방향의 import는 금지입니다.
 
 ```mermaid
-flowchart BT
+flowchart TB
     identity["identity (P1)"]
     fds["fds (P2)"]
     settlement["settlement (P6)"]

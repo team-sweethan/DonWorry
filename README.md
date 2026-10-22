@@ -333,7 +333,7 @@ flowchart LR
 ### 모듈 의존 방향
 
 ```mermaid
-flowchart BT
+flowchart TB
     identity["identity"]
     fds["fds"]
     payment["payment"]

@@ -20,7 +20,7 @@ P5 · P6 논의 결과 의존 방향을 `payment → settlement`로 뒤집기로
 **직접 호출(공개 `api/` 인터페이스)과 이벤트 타입 import는 아래 방향으로만 한다. 반대 방향으로 알릴 일은 커밋 후 이벤트로 보낸다.**
 
 ```mermaid
-flowchart BT
+flowchart TB
     identity["identity (P1)"]
     fds["fds (P2)"]
     settlement["settlement (P6)"]
