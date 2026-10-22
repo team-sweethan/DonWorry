@@ -260,6 +260,7 @@ DonWorry/
 ├── ai-server/                   # FastAPI (8000)
 │   └── app/ controller/ · service/ · agent/ · schemas/
 ├── docs/
+│   ├── conventions.md           # 코드 컨벤션 (팀 선택 규칙)
 │   ├── decisions/               # 설계 결정 기록 (ADR)
 │   ├── modulith/                # 모듈 구조·의존 방향·이벤트 설명
 │   ├── flyway/                  # DB migration 개념·가이드·문제 해결
@@ -351,6 +352,7 @@ flowchart TB
 ### 개발 규칙과 가이드
 
 - 📘 **[AGENTS.md](AGENTS.md)**: 사람·AI 공통 작업 규칙 — 정본 위치, 담당, 모듈·계층 규칙, 작업 순서, 검사 명령
+- ✍️ **[코드 컨벤션](docs/conventions.md)**: Lombok · DTO · 에러 응답 · 트랜잭션 · 이름 · 테스트 · 로그 · 주석 (팀 합의 중)
 - 🧱 **[Spring Modulith 문서](docs/modulith/README.md)**: 모듈러 모놀리스 개념, 채택 이유, 모듈·패키지 구조, 의존 방향과 이벤트, 검사
 - 🗃️ **[Flyway 문서](docs/flyway/README.md)**: 개념, 채택 이유, 우리 설정, 검사(테스트·CI), 작업 가이드, 문제 해결
 - ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
