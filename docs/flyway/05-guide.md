@@ -33,8 +33,8 @@ git switch -c feature/31-ai-report-table
 
 ```bash
 cd backend
-./gradlew newMigration -Pdesc=create_ai_report_tables     # Windows: .\gradlew.bat newMigration -Pdesc=...
-# created: src/main/resources/db/migration/V20261022_103012__create_ai_report_tables.sql
+./gradlew newMigration -Pdesc=create_ai_reports_table     # Windows: .\gradlew.bat newMigration -Pdesc=...
+# created: src/main/resources/db/migration/V20261022_103012__create_ai_reports_table.sql
 ```
 
 설명(`-Pdesc`)은 소문자 `snake_case`만 됩니다. 버전은 생성 시각(한국 시간)이 자동으로 붙습니다.

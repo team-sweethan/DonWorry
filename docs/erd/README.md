@@ -43,23 +43,23 @@
 
 ## 2. 테이블 소유
 
-| 모듈 | 담당 | 테이블 | migration |
+| 모듈 | 담당 | 테이블 | migration (테이블 순서대로, 테이블당 1개) |
 | --- | --- | --- | --- |
-| `identity` | P1 주환 | `merchants`, `platform_users`, `user_permissions` | [create_identity_tables](../../backend/src/main/resources/db/migration/V20261022_143019__create_identity_tables.sql) |
-| `payment` | P5 시은 | `payments` | [create_payment_tables](../../backend/src/main/resources/db/migration/V20261022_143024__create_payment_tables.sql) |
-| `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits` | [create_fds_tables](../../backend/src/main/resources/db/migration/V20261022_143028__create_fds_tables.sql) |
-| `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [create_investigation_tables](../../backend/src/main/resources/db/migration/V20261022_143033__create_investigation_tables.sql) |
-| `investigation/report` | P4 현규 | `ai_reports` | [create_ai_report_tables](../../backend/src/main/resources/db/migration/V20261022_143038__create_ai_report_tables.sql) |
-| `settlement` | P6 민정 | `captures`, `settlements` | [create_settlement_tables](../../backend/src/main/resources/db/migration/V20261022_143043__create_settlement_tables.sql) |
+| `identity` | P1 주환 | `merchants`, `platform_users`, `user_permissions` | [20261022_145055](../../backend/src/main/resources/db/migration/V20261022_145055__create_merchants_table.sql) · [20261022_145057](../../backend/src/main/resources/db/migration/V20261022_145057__create_platform_users_table.sql) · [20261022_145059](../../backend/src/main/resources/db/migration/V20261022_145059__create_user_permissions_table.sql) |
+| `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
+| `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) |
+| `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
+| `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
+| `settlement` | P6 민정 | `captures`, `settlements` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
 | (공통) | — | `EVENT_PUBLICATION` (Modulith 이벤트 기록) | [create_event_publication_table](../../backend/src/main/resources/db/migration/V20261021_215412__create_event_publication_table.sql) |
 
 ## 3. ERD 그림
 
-실선은 물리 FK(DB가 검사), 점선은 논리 참조(ID 값만 저장, FK 없음)입니다.
+실선은 물리 FK(DB가 검사), 점선은 논리 참조(ID 값만 저장, FK 없음)입니다. `|o`는 0 또는 1(NULL 허용), `||`는 정확히 1입니다.
 
 ```mermaid
 erDiagram
-    merchants ||--o{ platform_users : "merchant_id"
+    merchants |o--o{ platform_users : "merchant_id"
     platform_users ||--o{ user_permissions : "user_id"
 
     fds_evaluations ||--o{ fds_rule_hits : "evaluation_id"
