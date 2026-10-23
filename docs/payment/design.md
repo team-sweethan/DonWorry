@@ -97,7 +97,7 @@ P3의 action_handoffs, P6의 CAPTURE 작업을 P5 테이블로 옮기지 않는�
 
 | 필드 | 논리 타입·NULL | 목적 |
 | --- | --- | --- |
-| request_id | Long(BIGINT), 필수·PK | P5 접수 ID. P2 evaluationRequestId로도 사용 |
+| request_id | Long(BIGINT), 필수·PK | P5 접수 ID. P2 evaluationRequestId(UUID)와는 별도 식별자 |
 | payment_id | Long(BIGINT), 필수·내부 FK·UNIQUE | 생성한 결제 1건 |
 | merchant_id | Long(BIGINT), 필수·논리 참조 | 가맹점별 요청 키의 UNIQUE 범위. payments의 가맹점과 일치 |
 | idempotency_key | UUID, 필수·제안 | CakeShop 요청 키. 가맹점·결제접수 범위에서 유일. 외부 표현은 C1에서 확인 |
@@ -182,19 +182,21 @@ Registry의 이력/보존과 업무 이력의 보존은 별개다. 성공 업무
 ## 3. 모듈 간 DTO 초안 — 필드·상태 모두 제안
 
 기존 DB의 PK·참조 ID는 BIGINT이므로 내부 Java 계약은 Long을 기준으로 검토한다. 이벤트 식별자(eventId)와 멱등 키는 업무 PK와 구분하며 UUID를 제안한다. P3 action_handoffs.idempotency_key는 이미 SQL의 UUID 타입이다.
-시각은 Instant(UTC), 금액은 Long(원 단위)으로 다룬다. 외부 JSON의 ID·멱등 키 표현과 금액 최댓값은 C1에서 합의한다. 아래 DTO 이름·필드·enum은 세부 검토안이며 실제 Java 코드는 아직 없다.
+시각은 Instant(UTC), 금액은 Long(원 단위)으로 다룬다. 외부 JSON의 ID·멱등 키 표현과 금액 최댓값은 C1에서 합의한다. P2 평가 공개 DTO는 §3.1의 현재 코드를 따르며, 나머지 DTO 이름·필드·enum은 세부 검토안이다.
 `필수`는 값 누락 불가, `선택`은 NULL 가능이다. 인증 주체는 신뢰된 컨텍스트로 받아 DTO의 merchantId와 대조한다.
 
 ### 3.1. P2 평가 — fds/api 소유
 
+현재 공개 계약은 [FDS 계약 ADR](../decisions/0014-fds-evaluation-api-contract.md)과 `fds.api` 코드를 따른다. ADR 상태는 제안이며, 재시작 이후 멱등 보장·오류 코드 목록은 별도 합의 대상이다.
+
 | DTO | 필수 필드 | 선택 필드·규칙 |
 | --- | --- | --- |
-| FdsEvaluationRequest | evaluationRequestId(Long=request_id, 제안), paymentId(Long), merchantId(Long), customerRef(String), orderRef(String), amount(Long), requestedAt(Instant), signals(RiskSignals) | signals의 실제 확보 값만 전달. 아래 최소 필드안의 채택 여부는 P2/P1 계약. 모르는 신호를 false/0으로 만들지 않음 |
-| FdsEvaluationResponse | evaluationRequestId(Long), evaluationId(Long), result(ALLOW/REVIEW/DENY/ERROR), evaluatedAt(Instant) | riskScore(Integer, ERROR 시 NULL 가능), errorCode(String, ERROR 시 필수). rule_set_version 없음 |
+| FdsEvaluationRequest | evaluationRequestId(UUID), paymentId(Long, 양수), customerRef(String, 공백 불가), amount(long, 양수), paymentRequestedAt(Instant) | 모든 필드 필수. paymentRequestedAt은 결제 요청 시각이며 평가 완료 시각과 구분 |
+| FdsEvaluationResponse | evaluationRequestId(UUID), evaluationId(Long), result(ALLOW/REVIEW/DENY/ERROR), evaluatedAt(Instant) | 정상 결과는 riskScore(Integer) 0 이상·errorCode null. ERROR는 riskScore null·errorCode 필수 |
 
-RiskSignals의 최소 필드안은 cardRef(String, 필수·모의 카드 참조), deviceRef(String, 선택),
-recentPasswordResetAt(Instant, 선택), newShippingAddress(Boolean, 선택)이다. 카드/기기 신규 여부·반복 횟수는 P2가 확보한 근거로 계산한다.
-선택 필드 NULL은 미확보/미확인이며 안전한 신호라는 뜻이 아니다. P1/CakeShop에서 실제 제공·검증 가능한 필드만 C2 합의 후 사용한다.
+기존 초안의 merchantId·orderRef·RiskSignals는 현재 P2 요청 DTO에 없다. 추가가 필요하면 P2와 계약을 먼저 합의한다.
+P5 내부 입력은 `payment.service.PaymentEvaluationInput`으로 준비하며 요청 ID와 결제 요청 시각을 전달받아 보존한다. 고정된 모의 값은 테스트 코드에만 둔다.
+요청 형식 오류는 IllegalArgumentException으로 거절한다. 기록 가능한 평가 실패는 ERROR 응답, 응답을 만들 수 없는 호출 실패는 예외로 전달한다. 자동 재시도는 이번 호출 구현에 포함하지 않는다.
 
 동일 evaluationRequestId의 기술 재전송과 명시적 재평가를 구분한다. 응답의 요청·결제 연관성을 확인한 뒤 저장한다.
 P2는 요청 재료로 평가하고 P5 Entity·Repository를 역참조하지 않는다.
