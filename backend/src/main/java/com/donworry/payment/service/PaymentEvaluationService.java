@@ -6,12 +6,31 @@ import com.donworry.fds.api.FdsEvaluator;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
-// P2 구현 Bean과 결제 흐름을 연결할 때 Spring Bean으로 등록한다.
+// 실제 결제 흐름을 연결할 때 Spring Bean으로 등록한다.
 @RequiredArgsConstructor
 public class PaymentEvaluationService {
 
     @NonNull
     private final FdsEvaluator fdsEvaluator;
+
+    public PaymentEvaluationResult evaluateAndDecide(PaymentRules.State state, PaymentEvaluationInput input) {
+        PaymentRules.requireUnapprovedPending(state);
+        var evaluation = evaluate(input);
+        if (evaluation == null) {
+            throw new IllegalStateException("FDS 평가 응답이 없습니다");
+        }
+        if (!input.evaluationRequestId().equals(evaluation.evaluationRequestId())) {
+            throw new IllegalStateException("FDS 평가 응답의 요청 ID가 일치하지 않습니다");
+        }
+
+        var verdict = switch (evaluation.result()) {
+            case ALLOW -> PaymentRules.FdsVerdict.ALLOW;
+            case REVIEW -> PaymentRules.FdsVerdict.REVIEW;
+            case DENY -> PaymentRules.FdsVerdict.DENY;
+            case ERROR -> PaymentRules.FdsVerdict.ERROR;
+        };
+        return new PaymentEvaluationResult(evaluation, PaymentRules.afterFds(state, verdict));
+    }
 
     public FdsEvaluationResponse evaluate(PaymentEvaluationInput input) {
         if (input == null) {

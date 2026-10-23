@@ -196,11 +196,35 @@ Registry의 이력/보존과 업무 이력의 보존은 별개다. 성공 업무
 
 기존 초안의 merchantId·orderRef·RiskSignals는 현재 P2 요청 DTO에 없다. 추가가 필요하면 P2와 계약을 먼저 합의한다.
 P5 내부 입력은 `payment.service.PaymentEvaluationInput`으로 준비하며 요청 ID와 결제 요청 시각을 전달받아 보존한다. 고정된 모의 값은 테스트 코드에만 둔다.
-`PaymentEvaluationService`는 이 입력을 공개 요청 DTO로 변환해 `FdsEvaluator.evaluate()`를 한 번 호출하고 응답을 그대로 반환한다. 현재 P2 구현 Bean이 없어 생성자 주입을 받는 일반 클래스로 작성했으며, Spring Bean 등록과 실제 결제 흐름 연결은 P2 구현 준비 후 수행한다. 테스트 대역은 테스트 코드에만 둔다. 이 서비스는 결제 저장·승인·상태 분기를 수행하지 않는다.
+`PaymentEvaluationService`는 이 입력을 공개 요청 DTO로 변환해 `FdsEvaluator.evaluate()`를 한 번 호출하고 응답을 그대로 반환한다. P5 호출 서비스는 생성자 주입을 받는 일반 클래스이며, 현재 P2에는 #87의 평가 구현 Bean이 있다. P5 Spring Bean 등록과 실제 결제 흐름 연결은 별도 작업이다. 테스트 대역은 테스트 코드에만 둔다. 현재 호출 메서드는 결제 저장·승인·상태 분기를 수행하지 않는다.
 요청 형식 오류는 IllegalArgumentException으로 거절한다. 기록 가능한 평가 실패는 ERROR 응답, 응답을 만들 수 없는 호출 실패는 예외로 전달한다. 자동 재시도는 이번 호출 구현에 포함하지 않는다.
 
 동일 evaluationRequestId의 기술 재전송과 명시적 재평가를 구분한다. 응답의 요청·결제 연관성을 확인한 뒤 저장한다.
 P2는 요청 재료로 평가하고 P5 Entity·Repository를 역참조하지 않는다.
+
+#### #94 호출·분기 연결 구현
+
+`PaymentEvaluationService`에 다음 메서드를 추가했다. 기존 `evaluate(input)`의 응답 반환 계약은 유지한다.
+
+```java
+PaymentEvaluationResult evaluateAndDecide(
+        PaymentRules.State state, PaymentEvaluationInput input);
+
+record PaymentEvaluationResult(
+        FdsEvaluationResponse evaluation, PaymentRules.Decision decision) {}
+```
+
+반환 record는 P5의 `service` 패키지에 둔다. ALLOW·REVIEW는 모두 승인 요청 판단을 반환하지만 승인 성공 후 처리가 다르므로, 원래 판정·평가 ID·오류 코드를 포함한 응답과 판단을 함께 보존한다. `Decision`만 반환하면 이 정보가 사라져 후속 승인 처리에 부족하다. P2 공개 DTO나 외부 API 계약은 변경하지 않는다.
+
+처리 순서는 다음과 같다.
+
+1. state·input 누락과 승인 전 PENDING 조건을 검사한다. 부적합하면 P2를 호출하지 않는다. 상태 조건은 같은 패키지에 공개한 `PaymentRules.requireUnapprovedPending()` 검증을 재사용한다.
+2. 기존 `evaluate(input)`으로 평가를 한 번 호출한다.
+3. null 응답 또는 요청·응답의 evaluationRequestId 불일치는 IllegalStateException으로 거절한다. P2 호출 예외는 원래 예외를 전달하며 자동 재시도하지 않는다.
+4. 응답의 FdsResult를 switch로 P5 FdsVerdict에 명시적으로 매핑한다. 점수로 판정을 다시 계산하지 않는다.
+5. `PaymentRules.afterFds(state, verdict)`를 호출하고 원 응답과 Decision을 함께 반환한다.
+
+ALLOW·REVIEW는 PENDING 유지·REQUEST_AUTHORIZATION, DENY는 DENIED·NONE, ERROR는 PENDING 유지·RECORD_FDS_ERROR다. 오류 기록·승인 요청은 필요한 다음 단계의 판단이며 실제 저장·실행은 하지 않는다. 현재 State에는 paymentId가 없으므로 State와 입력이 같은 결제라는 보장은 후속 결제 흐름에서 같은 저장 데이터로 구성해 확보해야 한다.
 
 ### 3.2. P3 HELD·직원 조치 — payment/api 소유
 

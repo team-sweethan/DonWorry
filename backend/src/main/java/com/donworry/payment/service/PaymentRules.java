@@ -124,7 +124,7 @@ public final class PaymentRules {
         };
     }
 
-    private static void requireUnapprovedPending(State state) {
+    static void requireUnapprovedPending(State state) {
         Objects.requireNonNull(state, "state");
         if (state.status() != PaymentStatus.PENDING
                 || state.authorizationStatus() != AuthorizationStatus.NOT_REQUESTED) {
