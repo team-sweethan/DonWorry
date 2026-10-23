@@ -23,7 +23,7 @@ const owner = (permissions: string[]): AuthUser => ({
 
 test('역할별 첫 화면으로 보낸다', () => {
   assert.equal(sessionNavigation(admin).landing, '/admin/fds')
-  assert.equal(sessionNavigation(staff).landing, '/security/cases')
+  assert.equal(sessionNavigation(staff).landing, '/security/transactions')
   assert.equal(sessionNavigation(owner(['FDS_VIEW', 'FINANCE_VIEW'])).landing, '/owner/actions')
 })
 
