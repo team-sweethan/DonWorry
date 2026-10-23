@@ -10,6 +10,7 @@ import {
   submitDecisions,
 } from '../../api/cases'
 import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -30,6 +31,7 @@ export function CaseDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { merchant } = useDemo()
+  const { user } = useAuth()
   const { toast } = useFeedback()
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
   const { message } = App.useApp()
@@ -91,8 +93,13 @@ export function CaseDetailPage() {
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
+    // 화면은 로그인 가드 안에 있지만, 세션이 만료돼 사용자가 비면 판정을 보내지 않는다
+    if (!user) {
+      toast.error('로그인 정보를 확인할 수 없습니다. 다시 로그인한 뒤 판정하세요.')
+      return false
+    }
     try {
-      await submitDecisions(securityCase.caseId, request)
+      await submitDecisions(securityCase.caseId, user.userId, request)
       toast.success('판정을 확정했습니다. 금융 조치 인계 접수를 확인하고 있습니다.')
       load()
       return true
@@ -137,15 +144,13 @@ export function CaseDetailPage() {
     }
     load()
   }
-  // 현재 증거 버전 보고서가 없고 생성 중인 것도 없을 때만 다시 요청할 수 있다
+  // 현재 증거 버전 보고서가 없을 때만 다시 요청할 수 있다 — 백엔드 requestMissing과 같은 조건
   // (목 보고서가 서버 재시작으로 비었거나 커밋 뒤 보고서 요청이 실패한 경우)
+  // 이전 버전 보고서가 생성 중이어도 현재 버전 요청이 없으면 복구할 수 있어야 한다
   const latest = latestReport(reports)
   const reportMissing =
     securityCase.status !== 'CLOSED' &&
-    (!latest ||
-      (latest.evidenceVersion < securityCase.evidenceVersion &&
-        latest.status !== 'PENDING' &&
-        latest.status !== 'RUNNING'))
+    (!latest || latest.evidenceVersion < securityCase.evidenceVersion)
 
   return (
     <>

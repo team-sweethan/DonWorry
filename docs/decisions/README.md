@@ -40,6 +40,7 @@
 | [0016](0016-capture-request-event-contract.md) | 1차 MVP 매입 요청 이벤트 계약 | 채택 — P6 요청 계약 |
 | [0017](0017-capture-completed-event-contract.md) | 1차 MVP 매입 완료 이벤트 계약 | 채택 — P5 수신 구현 별도 |
 | [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
+| [0019](0019-security-case-http-contract.md) | P3 Case 조회 · 판정 HTTP 계약 | 제안 — 팀 합의 필요 |
 
 ## 현재 적용 상태와 기록의 구분
 

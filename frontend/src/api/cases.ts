@@ -10,7 +10,6 @@ import type {
   SecurityCase,
   SubmitDecisionsRequest,
 } from '../types/case'
-import { getMe } from './auth'
 import { api, ApiError } from './client'
 
 /**
@@ -94,15 +93,21 @@ export async function getCase(caseId: string, _merchant: string): Promise<CaseDe
   }
 }
 
-export async function submitDecisions(caseId: string, request: SubmitDecisionsRequest) {
-  // 판정 직원은 세션 사용자다. 백엔드가 세션에서 읽기 전까지 요청에 담는다 (#98)
-  const me = await getMe()
+/**
+ * 판정 직원은 세션 사용자다. 백엔드가 세션에서 읽기 전까지 요청에 담는다 (#98).
+ * staffId는 AuthProvider가 확인한 사용자를 쓴다 — 여기서 /auth/me를 다시 부르면 그 401이 세션 만료 처리로 전달되지 않는다.
+ */
+export async function submitDecisions(
+  caseId: string,
+  staffId: number,
+  request: SubmitDecisionsRequest,
+) {
   try {
     await api<ServerDetail>(`/security-cases/${caseId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        staffId: me.userId,
+        staffId,
         evidenceVersion: request.evidenceVersion,
         reportId: request.reportId === null ? null : Number(request.reportId),
         decisions: request.decisions.map((d) => ({
