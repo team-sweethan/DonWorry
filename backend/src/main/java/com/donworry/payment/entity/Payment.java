@@ -71,6 +71,42 @@ public class Payment {
         this.status = PaymentStatus.PENDING;
     }
 
+    public void requireUnapprovedPending() {
+        if (status != PaymentStatus.PENDING || authorizationRef != null) {
+            throw new IllegalStateException("승인 결과가 없는 PENDING 결제에만 적용할 수 있습니다");
+        }
+    }
+
+    public void deny() {
+        requireUnapprovedPending();
+        status = PaymentStatus.DENIED;
+    }
+
+    public void recordAuthorizationSuccess(String reference, boolean hold) {
+        requireUnapprovedPending();
+        if (reference == null || reference.isBlank()) {
+            throw new IllegalArgumentException("authorizationRef must not be blank");
+        }
+        authorizationRef = requireReference(reference, "authorizationRef");
+        status = hold ? PaymentStatus.HELD : PaymentStatus.PENDING;
+    }
+
+    public void declineAuthorization() {
+        requireUnapprovedPending();
+        status = PaymentStatus.DECLINED;
+    }
+
+    public void completeCapture() {
+        if (authorizationRef == null
+                || authorizationRef.isBlank()
+                || authorizationRef.codePointCount(0, authorizationRef.length()) > 100
+                || (status != PaymentStatus.PENDING && status != PaymentStatus.CAPTURED)) {
+            throw new IllegalStateException("승인된 PENDING 또는 CAPTURED 결제에만 매입 완료를 적용할 수 있습니다");
+        }
+        // 완료 표시가 유실되어 재전달돼도 기존 승인 참조와 상태를 보존한다.
+        status = PaymentStatus.CAPTURED;
+    }
+
     private static String requireReference(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.codePointCount(0, value.length()) > 100) {

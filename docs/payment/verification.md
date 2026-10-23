@@ -1,84 +1,54 @@
-# P5 1차 시연 검증 기준
+# P5 1차 MVP 검증 계획과 실행 기록
 
-**W1 순수 규칙 테스트 42건의 과거 실행 기록은 아래에 보존한다.** #71의 Entity·Repository·최초 PENDING 저장 서비스 검증은 아래 단계별 실행 기록을 따른다. 아래 T01~T15는 전체 시나리오 기준이며, 평가·승인·모듈 연동까지 구현·검증됐다는 뜻은 아니다.
-현재 업무 테이블 생성 SQL의 존재·스키마 검사는 실제 결제 저장·인계 동작의 검증과 구분한다.
-정책과 계약은 [설계](design.md), 작업 W번호·미결 C번호는 [README](README.md)를 따른다.
+2026-10-23 · #104. 아래 M 항목은 [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) 제안을 채택한 뒤 구현할 검증 계획이며 실행 결과가 아니다. 기존 I/T 번호에 대한 과거 기록은 당시 의미로 보존한다. 이전 계획은 Git `ae28a7c`에 남아 있다.
 
-## 필수 불변식
+## 필수 검증 계획
 
-| ID | 항상 지킬 조건 | 테스트 |
+| ID | 상황 | 관찰할 결과 |
 | --- | --- | --- |
-| I01 | FDS 전에 PENDING이 영속 저장된다. ERROR·타임아웃은 자동 ALLOW·DENIED·DECLINED로 처리하지 않고 승인하지 않는다 | T01·T02 |
-| I02 | DENY는 승인 없이 DENIED, 승인 업무 거절은 DECLINED. 두 결과 모두 Case 생성 없음 | T02·T04 |
-| I03 | REVIEW 승인 성공만 HELD로 통지한다. 1건도 대상이며 직원 ACCEPT 전 CAPTURE 금지 | T03·T04·T09 |
-| I04 | 같은 업무 요청 재전송으로 승인·접수·실행·결과 반영 효과가 중복되지 않는다. 같은 키의 다른 내용은 충돌 | T08 |
-| I05 | ALLOW는 승인 후 CAPTURE 요청, 직원 ACCEPT는 재승인 없이 CAPTURE 요청, REJECT는 VOID 요청이다 | T01·T05·T06 |
-| I06 | ACCEPT는 P6 작업, REJECT는 P5 VOID 작업의 영속 접수가 확인되어야 최종 접수 완료로 통지한다 | T05·T06·T09 |
-| I07 | 실제 매입 성공 전 CAPTURED, 실제 VOID 성공 전 VOIDED를 기록하지 않는다. Case CLOSED와 금융 실행 완료는 별개다 | T01·T07·T11 |
-| I08 | 동일 승인에 대한 매입·VOID가 중복 성공하지 않는다. 중복·역순 결과가 최종 상태를 되돌리지 않는다 | T08·T10 |
-| I09 | 커밋되지 않은 결과를 발행하지 않고, 커밋 후 유실·중복·응답 유실을 영속 기록으로 복구할 수 있다 | T08·T09·T11 |
-| I10 | 가맹점·권한 경계와 공개 api 의존을 지킨다. P5는 P3/P6 내부 데이터·Case 상태를 직접 변경하지 않는다 | T12 |
+| M01 | 최초 저장·평가 실패 | FDS 전에 PENDING 커밋. ERROR·타임아웃을 자동 승인/거절로 바꾸지 않음 |
+| M02 | ALLOW/REVIEW/DENY·승인 거절 | ALLOW 승인 후 매입 요청, REVIEW 승인 후 HELD, DENY는 승인 없이 DENIED, 승인 업무 거절은 DECLINED |
+| M03 | 직원 ACCEPT/REJECT | 재승인 없이 CAPTURE/VOID 선택. 같은 요청 재전송과 반대 조치를 구분 |
+| M04 | P6 정상 저장·완료 수신 | 매입 COMPLETED·정산 SCHEDULED·발행 기록 동시 커밋 후 P5 CAPTURED. 승인/요청만으로 CAPTURED 금지 |
+| M05 | P6 저장 실패 | 매입·정산·완료 발행 기록 함께 롤백. 완료 통지 없음. 합의된 실패 기록·재시도 확인 |
+| M06 | 저장 성공 후 완료 통지 유실·중복 | 기존 결과 재전달, 매입·정산 각 1건 유지, 기존 captureId·capturedAt 유지 |
+| M07 | P5 상태 반영 또는 P3 통지 기록 실패 | P5 소비 트랜잭션 원자성. 재처리 후 상태와 후속 통지가 모두 반영됨 |
+| M08 | 직원 ACCEPT 완료 통지 | P3가 원 판정·인계를 대조해 ACCEPTED와 합의된 ID·시각 저장. ALLOW에는 P3 인계 생성 없음 |
+| M09 | 완료 지연·실패·P3 통지 유실 | 성공 확인 전 인계 미완료·Case 미종료. 합의된 REQUESTED/FAILED 기준과 재전달·재시도 검증 |
+| M10 | 잘못된 ID·상태·동시 CAPTURE/VOID | 없는 결제·모순 매입·VOIDED를 무조건 CAPTURED로 변경하지 않음. 이중 성공 차단 |
+| M11 | VOID 및 혼합 판정 | 실제 성공 전 VOIDED 금지. VOID 접수 증거·시점 합의 후 모든 판정·인계 완료 시에만 Case CLOSED |
+| M12 | CakeShop·권한·모듈 경계 | 실제 결과 통지, 유실·중복·역순 복구, 가맹점 격리, 공개 api 의존 준수 |
 
-## 최소 테스트 시나리오
+단위 테스트는 분기 판단을, MariaDB 테스트는 새 트랜잭션 재조회로 커밋·롤백·유니크·동시성을, 실제 연동 테스트는 P3/P6/CakeShop의 수신·상태 반영을 확인한다. 대역 테스트를 실제 연동으로 기록하지 않는다.
+DB/발행 기록/전달 실패를 구분해 주입한다. 이벤트 재발행 설정과 운영 재시도 경로를 구현·확인해야 한다. 기본 오류 이력·멱등 요구는 유지하며, 미합의 보조 테이블이나 시도별 UNKNOWN 프로토콜을 검사 전제로 삼지 않는다.
 
-U는 통제된 입력의 P5 단위 검증, D는 실제 MariaDB의 P5 영속 검증, X는 실제 참여 모듈/외부 연계 검증이다.
-U의 성공은 D/X의 원자성·전달 보장을 증명하지 못한다. 모의 카드사는 정상적인 MVP 실행 대상이지만 P2/P3/P6 대역을 실제 연동으로 기록하지 않는다.
+## 통합 시연 계획
 
-| ID·수준 | 입력·상황 | 예상 결과·관찰할 증거 | 선행 계약 |
-| --- | --- | --- | --- |
-| T01 · U/D/X | ALLOW·모의 승인 성공 | 최초 PENDING 커밋, 승인 참조 기록, CAPTURE 요청. 승인·P6 접수만으로 CAPTURED 아님. P6 실제 성공 후 CAPTURED와 CakeShop 결과 | C1·C2·C4~C7 |
-| T02 · U/D/X | DENY, ERROR, FDS 타임아웃 각각 | DENY만 DENIED. 나머지는 승인 없음·PENDING 및 오류/복구 추적. P2의 확인된 평가 기록 유지 | C1·C2·C6 |
-| T03 · U/D/X | REVIEW·승인 성공 1건 | HELD·승인 참조 및 커밋 후 통지, Case 1건 연결. 직원 판정 전 CAPTURE 없음 | C1~C3·C5·C6 |
-| T04 · U/D/X | ALLOW/REVIEW·모의 승인 업무 거절 | DECLINED, CAPTURE·HELD 이벤트 없음, Case 미생성. FDS 평가 이력 유지 | C1·C2·C6 |
-| T05 · U/D/X | HELD 결제 ACCEPT, P6 수신 지연·재기동 | 재승인 없음. P5 접수만으로 P3 최종 ACCEPTED 아님. P6 작업 커밋·작업 ID 확인 후에만 접수 완료 통지. 실제 매입 성공은 별도 확인 | C3~C6 |
-| T06 · U/D/X | HELD 결제 REJECT, VOID 실행 지연 | P5 VOID 요청 커밋 후 동기 응답/결과 이벤트로 접수 확인. VOID 실행 전에도 P3는 인계 완료 가능. 실제 성공 전 VOIDED 아님 | C3·C5·C6 |
-| T07 · D/X | 영속 접수 후 CAPTURE/VOID 실행 실패·재시도 | 작업·오류가 남고 성공 상태를 미리 기록하지 않음. Case CLOSED·직원 판정은 보존. 복구 성공 후에만 최종 상태·통지 반영 | C4~C7 |
-| T08 · U/D/X | 최초 결제·판정 조치·P6 확인·실행 결과 각각 동일/충돌 요청, 커밋 후 응답 유실 | 동일 요청은 기존 식별자·결과 재생, 다른 본문/반대 조치는 계약상 충돌. 실제 승인·작업·실행 효과 1회. 재기동 후에도 확인 가능 | C1~C6 |
-| T09 · D/X | 상태/접수 저장 도중 실패, 커밋 후 HELD·CAPTURE·접수 결과 통지 유실·중복 | 롤백 데이터가 발행되지 않음. 커밋된 데이터는 재전달/조회·대조로 복구. 고아 HELD 방치·중복 Case 연결 없음 | C3~C6 |
-| T10 · D/X | ACCEPT/CAPTURE와 VOID 동시 요청, 실행 결과가 접수 확인보다 먼저 도착 | 승인별 조치 경합 통제, 이중 금융 성공 없음. 요청·작업 ID 검증과 순서 역전 복구, 기존 최종 상태 보존 | C3·C4·C6 |
-| T11 · D/X | 금융 성공 후 CakeShop 통지 실패·중복·역순 도착 | 금융 성공 기록 유지. 같은 결과 재통지/조회로 복구하고 주문을 과거 상태로 되돌리지 않음 | C7 |
-| T12 · U/구조/X | 다른 가맹점 결제 조회·금액/주체 변조, AI 조회, 모듈 경계 검사 | 무권한 조회·변경 거부. 신뢰된 금액 사용. 조사 모듈이 Case 권한을 검증하고 P5는 자기 범위를 검증. 타 모듈 내부 접근·변경 없음 | C1·C3·C7 |
-| T13 · D | 최초 payment/request 저장 중 실패, 키/작업/판정/이력 제약 경합 | 최초 2행+생성 이력은 함께 커밋/롤백. 같은 키의 같은 본문은 원 payment 재생. 다른 가맹점은 독립 키, 같은 가맹점의 다른 본문은 충돌. 같은 AUTH/조치의 중복 행 없음 | C1·C3·C6 |
-| T14 · U/D/X | 복구 가능한 접수 거절 뒤 동일 키 재접수, P3 통지·P6 접수 확인의 중복/역순 | 원 P5 작업 ID 유지, 접수 버전 증가. 오래된 REJECTED가 최신 ACCEPTED를 덮어쓰지 않음. 같은 소스 버전의 다른 작업 ID/본문은 충돌·대조 | C3~C6 |
-| T15 · D/X | 실행 중 프로세스 종료, UNKNOWN 결과, 늦은 이전 시도 성공, 모의 성공 반영 중 DB 실패 | 실행 불명에서는 자동 재실행 금지·대조. 모순 성공은 무시하지 않고 추가 실행 중지. 실패·확인 이력 보존. 내부 모의 AUTH/VOID의 업무 효과·작업 성공·공개 결과는 같은 커밋 | C4·C6 |
+1. REVIEW·승인 성공 결제 B/C의 HELD와 P3 Case 연결을 확인한다.
+2. P3/P4 조사 후 B ACCEPT·C REJECT를 판정·인계 REQUESTED와 함께 저장한다.
+3. B의 P6 매입·정산 동시 저장과 완료 전달, P5 CAPTURED, P3 ACCEPTED 순서를 확인한다.
+4. C의 VOID 처리와 접수 확인은 별도 합의한 계약으로 검증한다. 모든 판정·인계 완료 후 Case CLOSED를 확인한다.
+5. B 저장 실패·통지 지연을 주입하면 인계가 미완료로 남아 Case가 조기 종료되지 않는지 확인한다. 실패 분류·재시도 후 복구는 C3~C6 합의에 따른다.
 
-점수 경계 테스트는 C2 합의 후 P2/P5 계약 검증으로 추가한다. 50/80을 확정값으로 고정하지 않는다.
-EXPIRED 자동 전이·만료 스케줄러·카드 한도·토큰 재발급은 현재 완료 조건에 넣지 않는다. 해당 범위를 추가하면 별도 정책·데이터·검증이 필요하다.
-
-## 통합 시연 D1 — 혼합 판정
-
-기획 §2.14·DB 가이드 §4를 따른다. 금액과 시간은 가상 시연값이다.
-
-1. 같은 가맹점·고객의 B(300,000), C(500,000)를 차례로 접수한다. 각각 PENDING → REVIEW·승인 성공 → HELD를 확인한다.
-2. 최초 Case 생성 후 30분 미만·직원 판정 전에 C를 병합한다. P3/P4의 증거 버전·보고서 v1 보존·v2 생성을 확인한다.
-3. 직원이 최신 보고서를 보고 B ACCEPT, C REJECT를 확정한다. P3 판정·인계 REQUESTED 커밋 이후 P5 호출을 확인한다.
-4. B는 P6 CAPTURE 작업 ID, C는 P5 VOID 작업 ID로 최종 영속 접수를 확인한다. 모든 인계 ACCEPTED 후 Case CLOSED가 된다.
-5. B CAPTURED·C VOIDED 및 CakeShop 반영을 확인한다. P6 1차는 이벤트 수신 후 즉시 매입하므로, Case 종료 뒤 매입 실행을 필수 순서로 요구하지 않는다.
-6. 접수·실행 분리와 장애 복구 검증은 C4·C5 확정 후 지연·실패를 주입해 수행한다. 금융 처리가 CLOSED 전후에 끝나도 종료 조건은 영속 접수 확인이며, 이후 실행 실패만으로 Case를 재개하지 않는다.
-
-Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후인 추가 REVIEW 결제는 새 Case로 간다.
-병합·AI·판정·Case 종료 자체는 P3/P4 검증이며, P5 단독 완료로 표시하지 않는다.
-
-## 저장·DTO 초안의 검토 기준
-
-- 현재 `payments` 8개 컬럼·BIGINT PK와 미합의 보조 저장 3개를 구분한다. `auth_expires_at`·`rule_set_version`은 현재 SQL에 없으며 담당 ERD 합의 없이 추가하지 않는다.
-- 필수/NULL 조건: 직원 조치 decisionId, 최종 접수 targetOperationId·acceptedAt, 실행 성공 resultRef, 실패 errorCode를 검증한다.
-- DTO의 paymentId·merchantId·operationId·승인 참조·금액 불일치는 부작용 없이 거절하고 기존 정본을 유지한다.
-- 접수 receiptVersion/sourceVersion과 실행 attemptNo를 구분한다. 타임스탬프만으로 덮어쓰기 순서를 정하지 않는다.
-- P3/P6의 키·버전·조회·재전달 계약과 P5 저장안은 합의 전 제안으로 남긴다. 예시 타입·제약을 확정 DDL로 간주하지 않는다.
-- P5/P6의 이벤트 타입은 `settlement.api`에 두고, P6가 P5에 동기 접수 확인·실행 허가·결과 ACK를 요청하는 이전 초안을 사용하지 않는다.
-- P6의 즉시 매입·PROCESSING 선행 커밋 없음 조건에서 영속 접수 근거와 실행 실패 기록·접수 결과 발행이 성립하는지 C4에서 확인한다.
+Case 병합·AI·판정 자체는 P3/P4 책임이다. 실제 점수 생성은 P2 계약에 따르며 가상 금액만으로 REVIEW 발생을 보장하지 않는다. 기존 정본의 실행 전 Case 종료 시연과 달라지는 CAPTURE 순서는 담당 합의가 필요하다.
 
 ## 완료 증거
 
-- 단위 테스트는 분기·호출 여부, DB 테스트는 실제 저장·재기동·유니크·커밋/롤백, 연동 테스트는 실제 수신 모듈의 접수·실행을 관찰한다.
-- DB 검증은 커밋/롤백 이후 새 트랜잭션에서 수행한다. 동시 테스트는 별도 연결과 실행 순서 제어를 사용한다.
-- 실패 주입은 DB flush/commit, 이벤트 저장·전달, 접수 응답·결과 통지 유실, 실행 결과 불명까지 구분한다.
-- 변경 영역 테스트와 `cd backend && ./gradlew check`를 실행한다. DB·재기동·연동 검사는 별도 명령이 필요하면 함께 기록한다.
-- 실행 커밋·미커밋 변경·환경·명령·실제 결과·증거 위치·대역 범위·미검증 항목을 남긴다. 과거 커밋 결과를 현재 검증으로 쓰지 않는다.
+- 구현 PR은 실행 커밋·명령·환경·실제 결과·대역 사용·미검증을 남긴다.
+- 코드 변경 시 해당 검사와 `cd backend && ./gradlew check`, DB 변경 시 `mariaDbTest`를 실행한다.
+- 문서 작업 #104는 상대 링크·공백을 검사한다. 코드·DB·업무 연동 테스트 결과로 해석하지 않는다.
 
-아래 기록은 W1 도입 당시 작업본의 결과다. 이후 #56에서 추가된 업무 테이블 SQL과 현재 모듈 의존 방향 검사를 대신하지 않는다.
-업무 DB 저장·모듈 연동·실제 금융 처리는 별도 검증이 필요하다.
+## #104 문서 축소 검사 기록
+
+2026-10-23, `feature/104-payment-mvp-docs`, 기준 `ae28a7c` 위 문서 작업본에서 수행했다.
+
+- `python3 .github/scripts/check_md_links.py` → Markdown 상대 링크 이상 없음.
+- `git diff --check` → 공백 오류 없음.
+- Python으로 Git 기준본과 대조: 아래 과거 실행 기록과 설계의 P2 계약 절이 그대로 보존됐음을 확인했다. 코드·migration·채택된 ADR-0012 변경 없음도 확인했다.
+- 미검증: Backend·MariaDB·Frontend·AI 테스트, Mermaid/GitHub 렌더링, 실제 P3/P6/CakeShop 연동. 문서만 변경하여 업무 검사를 재실행하지 않았다.
+- P3·P6 계약 합의와 Notion 동기화는 완료하지 않았다. #100의 구현·테스트는 별도 브랜치에 남겨 두었다.
+
+최신 dev `d9e4251` 병합 후 ADR 목록 충돌을 해결하고 이 제안 번호를 0016으로 옮겼다. P3의 현재 목 접수·시각 처리와 제안의 차이를 코드로 대조했다. 같은 문서 검사 명령을 다시 실행하며, dev에서 들어온 P2/P3 코드의 업무 테스트는 이 문서 PR에서 재실행하지 않는다.
 
 ## 문서 자체 검사 기록
 
@@ -153,3 +123,49 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - 승인 성공/불명·종료 결제의 재처리 차단, 잘못된 상태/승인 조합·누락 입력 거절 검증.
 - 반환된 NOTIFY_HELD·REQUEST_CAPTURE·REQUEST_VOID·RECORD_FDS_ERROR 등은 판단 결과이며 실제 호출·이벤트·기록을 실행하지 않았다.
 - DB 선저장·트랜잭션·원장·요청 키 멱등성·직원 권한·실제 FDS/Case/P6/CakeShop 연동은 미검증. W1 통과를 T01~T15 전체 통과로 해석하지 않는다.
+
+## #100 최초 저장·평가 흐름 통합 실행 기록
+
+2026-10-23, `feature/100-payment-evaluation-flow`, 기준 커밋 `a74c83b` + 3~6번 단계 미커밋 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 검사 159건, MariaDB 검사 30건 통과. 실패·오류·건너뜀 모두 0.
+- [PaymentEvaluationFlowPersistenceTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationFlowPersistenceTests.java) 3건은 실제 P2 Bean·MariaDB를 사용한다. ALLOW, 동일 고객 세 번째 고액 결제의 REVIEW, 호출자 롤백 후 결제와 평가의 별도 커밋 보존을 확인했다.
+- 저장된 결제와 평가의 paymentId·customerRef·요청 시각을 DB에서 비교하고, P2 HIGH_AMOUNT 근거의 금액이 결제 저장 금액과 일치함을 확인했다. 결제마다 평가 한 건, 새 결제들의 요청 UUID가 서로 다름을 확인했다.
+- [PaymentEvaluationFlowFailureTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationFlowFailureTests.java) 3건은 실제 P5·MariaDB에 `FdsEvaluator` 대역을 주입한다. 평가 시작 시 호출자 트랜잭션이 중단되어 있고 별도 트랜잭션에서 최초 결제를 조회할 수 있음을 확인했다. 호출 예외·호출자 롤백 후 PENDING 보존과 평가 단일 호출을 확인했다.
+- 대역 DENY·ERROR 응답에서는 반환 판단만 달라지고 DB 결제는 승인 참조 없는 PENDING으로 유지된다. 이는 실제 P2의 DENY·ERROR 생성·저장 검증이 아니다. 현재 실제 P2 규칙의 최대 점수는 60점, DENY 기준은 80점이다.
+- 미검증·후속: 실제 승인·상태 변경·오류 이력·이벤트, HTTP·CakeShop, 중복 접수·재시작 후 복구. 동일 요청 UUID에 다른 입력을 넣는 경우의 검증은 #95에서 합의한 P2 후속 과제다. 스키마·P2 공개 계약 변경은 없다.
+
+### #100 문서 정리 후 최종 점검
+
+2026-10-23, `4bf6c04` + 문서 수정 작업본에서 `cd backend && ./gradlew spotlessApply check mariaDbTest`를 실행해 BUILD SUCCESSFUL을 확인했다. 모든 태스크는 UP-TO-DATE로 기존 결과를 재사용했다. 새 테스트 실행으로 기록하지 않는다. 현재 backend 코드·테스트는 `4bf6c04`와 동일하며, 남아 있는 XML 결과는 일반 검사 159건·MariaDB 30건, 실패·오류·건너뜀 0이다.
+
+README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 현재 구현·검증 범위로 갱신했다. `python3 .github/scripts/check_md_links.py`와 `git diff --check`도 통과했다. 위 미검증·후속 범위와 P2 후속 합의는 유지한다.
+
+
+## #118 승인 연결·트랜잭션 검증 (6번 단계)
+
+2026-10-23, `feature/118-payment-authorization`, 기준 커밋 `4a41a3f` + 2~6번 단계 미커밋 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 검사 234건 중 233건 통과·1건 건너뜀, MariaDB 검사 68건 통과. 실패·오류 0. 건너뛴 기존 LocalSettlementDemoTests는 개발 DB용 수동 실행 환경 변수가 필요한 테스트다.
+- [PaymentAuthorizationPersistenceTests](../../backend/src/test/java/com/donworry/payment/service/PaymentAuthorizationPersistenceTests.java) 신규 9건 통과. Spring 프록시·실제 MariaDB·P2 평가를 사용하고 승인기는 테스트 대역으로 제어한다. 정상 성공 대역은 MockPaymentAuthorizer에 위임한다.
+- 실제 P2 ALLOW·REVIEW에 따른 PENDING/HELD 및 승인 참조 커밋, 호출자 트랜잭션 롤백 이후 승인 결과와 평가 기록 보존을 확인했다.
+- DENY·ERROR는 평가 문맥 대역으로 상태 반영과 승인기 미호출을 확인했다. 실제 P2에서 해당 판정을 생성·저장한 검증은 아니다.
+- 업무 거절 커밋과 중복 처리 차단, 모의 기술 실패 뒤 PENDING·평가 보존 및 동일 문맥의 명시적 재처리를 확인했다.
+- REVIEW 성공의 HELD·승인 참조를 flush하여 SQL 반영을 확인한 후 beforeCommit 예외를 주입했다. 호출자에게 성공을 반환하지 않고 두 값이 모두 최초 PENDING·null로 롤백되며 P2 평가는 남는 것을 확인했다. 실제 DB 장애·커밋 응답 유실을 재현한 검사는 아니다.
+- 두 스레드에서 동일 결제를 처리했다. latch로 첫 승인을 멈춘 동안 두 번째 요청이 완료되지 않음을 확인하고, 첫 커밋 뒤 두 번째 충돌·승인 호출 1회, 첫 롤백 뒤 두 번째 성공·총 호출 2회를 확인했다.
+- 기존 평가 전용 흐름 테스트도 유지·통과했다. 모듈 경계·계층·포맷 검사 포함.
+- 미검증·후속: 외부 카드사, 실제 DB 연결 장애·응답 유실, 프로세스 재시작 복구, 주문 단위 중복 접수, P3/P6 이벤트·HTTP·CakeShop. 거절 코드·오류 이력의 영속 저장은 구현하지 않았다. 스키마·다른 담당 공개 계약 변경은 없다.
+
+
+## #122 5번 단계: 실패·재전달·동시 수신 검증
+
+2026-10-23, `feature/122-payment-capture-events`, `c680eb9` + 2~5번 단계 미커밋 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 255건 중 254건 통과·기존 LocalSettlementDemoTests 1건 건너뜀, MariaDB 79건 통과. 실패·오류 0. 문서 링크 검사와 git diff --check도 통과했다.
+- PaymentCaptureRecoveryTests 신규 3건은 실제 P5·P6·P2·MariaDB·Modulith를 사용하고 실패 지점과 잠금 대기를 spy로 통제한다. 이번 단계에서 운영 코드는 변경하지 않았다.
+- P5 완료 트랜잭션에서 CAPTURED를 flush한 뒤 커밋 직전 예외를 주입했다. P5는 승인 참조가 있는 PENDING으로 롤백되고 P6 매입·정산 각 1건 및 원래 완료 발행 기록은 보존됐다. 실패한 완료 발행 기록 ID를 IncompleteEventPublications 공개 API로 선택해 재전달하고 같은 기록의 완료 및 CAPTURED를 확인했다. 새 완료 이벤트 발행이나 DB 기록 직접 수정으로 대체하지 않았다.
+- P6 정산 저장 실패 시 매입·정산·완료 발행 기록은 남지 않고 P5 승인과 미완료 요청 기록은 유지됐다. 원래 요청 기록을 재전달하여 재승인·재평가 없이 매입·정산·CAPTURED까지 이어짐을 확인했다.
+- 완료 실패로 PENDING을 유지한 실제 매입에 대해 동일 값의 독립 완료 이벤트 두 건을 서로 다른 트랜잭션에서 발행했다. 첫 리스너가 행 잠금을 잡은 상태에서 둘째 리스너의 잠금 시도와 대기를 latch로 확인했다. PENDING을 관찰한 처리는 1회이며 두 새 발행 기록은 모두 완료됐고, 원래 실패 기록도 재전달 후 정상 완료됐다. 상태·승인 참조 보존과 매입·정산 각 1건을 확인했다.
+- 실행 관찰: 완료 리스너는 Test worker가 아닌 task-* 스레드에서 실행됐다. 설치된 Modulith 2.1.1 EventPublicationAutoConfiguration의 AsyncEnablingConfiguration(@EnableAsync)도 소스로 확인했다. 서비스 반환만으로 후속 완료를 판단하지 않고 발행 기록과 DB 상태를 기다린다.
+- 테스트 작성 중 프록시를 통한 대역 설정, 동기 실행 가정, 같은 이벤트 객체의 동시 재발행을 수정했다. Modulith의 진행 중 발행 추적은 객체 identity를 사용하므로 독립 전달 테스트는 값이 같은 별도 객체를 사용한다. 마지막 전체 검사 결과는 위 집계다.
+- 미검증·후속: 실제 DB 네트워크 장애·프로세스 중단·응답 유실, 자동 재시도 스케줄러·운영 복구 API, 같은 paymentId의 상이한 captureId 진위 대조, 직원 ACCEPT·P3 통지·VOID·외부 카드사·HTTP·CakeShop. 테스트의 실패 주입과 명시적 재전달 통과를 운영 자동 복구 구현으로 표현하지 않는다.
