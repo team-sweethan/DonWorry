@@ -3,8 +3,10 @@ package com.donworry.payment.service;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
+import com.donworry.settlement.api.CaptureRequested;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentAuthorizationService {
     private final PaymentRepository paymentRepository;
     private final PaymentAuthorizer authorizer;
+    private final ApplicationEventPublisher events;
 
     // 별도 Bean 프록시를 통해 호출한다. 잠금은 상태·참조의 커밋/롤백까지 유지된다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -54,7 +57,16 @@ public class PaymentAuthorizationService {
         } else if (decision.state().status() == PaymentStatus.DENIED) {
             payment.deny();
         }
-        // 관리 Entity의 변경 감지로 저장한다. 반환은 프록시 커밋이 끝난 뒤 호출자에게 전달된다.
+        // 승인 저장과 요청 발행 기록이 함께 커밋되도록 업무 트랜잭션 안에서 발행한다.
+        if (decision.nextStep() == PaymentRules.NextStep.REQUEST_CAPTURE) {
+            events.publishEvent(CaptureRequested.builder()
+                    .paymentId(payment.getPaymentId())
+                    .merchantId(payment.getMerchantId())
+                    .orderId(payment.getOrderRef())
+                    .amount(payment.getAmount())
+                    .build());
+        }
+        // 승인 단계 스냅샷이다. 완료 이벤트가 반영된 최신 결제 상태를 뜻하지 않는다.
         return PaymentAuthorizationResult.builder()
                 .paymentId(payment.getPaymentId())
                 .evaluationResult(context.evaluationResult())

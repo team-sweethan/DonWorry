@@ -29,6 +29,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
 class CaptureConcurrencyTests {
+    // P6 단독 테스트의 가상 paymentId를 유지하고 P5 소비자는 별도 통합 테스트에서 검증한다.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.donworry.payment.service.PaymentCaptureService paymentCaptureService;
+
     @Autowired
     CaptureService service;
 

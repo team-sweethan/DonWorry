@@ -32,6 +32,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
 class PaymentAuthorizationPersistenceTests {
+    // 승인 트랜잭션 자체를 검증한다. 실제 매입·완료 연결은 별도 통합 테스트가 담당한다.
+    @MockitoBean
+    com.donworry.settlement.service.CaptureService captureService;
+
     @Autowired
     PaymentEvaluationFlowService flow;
 

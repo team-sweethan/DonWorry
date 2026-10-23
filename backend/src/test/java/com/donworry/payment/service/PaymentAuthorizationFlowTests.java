@@ -10,6 +10,7 @@ import com.donworry.fds.api.FdsResult;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
+import com.donworry.settlement.api.CaptureRequested;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class PaymentAuthorizationFlowTests {
@@ -24,8 +26,11 @@ class PaymentAuthorizationFlowTests {
     private final FdsEvaluator evaluator = mock(FdsEvaluator.class);
     private final PaymentRepository repository = mock(PaymentRepository.class);
     private final PaymentAuthorizer authorizer = mock(PaymentAuthorizer.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final PaymentEvaluationFlowService service = new PaymentEvaluationFlowService(
-            creation, new PaymentEvaluationService(evaluator), new PaymentAuthorizationService(repository, authorizer));
+            creation,
+            new PaymentEvaluationService(evaluator),
+            new PaymentAuthorizationService(repository, authorizer, events));
     private final PaymentEvaluationFlowInput input =
             new PaymentEvaluationFlowInput(1L, "input-customer", "order", 1000L);
     private final Payment payment =
@@ -95,6 +100,12 @@ class PaymentAuthorizationFlowTests {
             assertThat(result.authorizationRef()).isNull();
         }
         order.verifyNoMoreInteractions();
+        if (verdict == FdsResult.ALLOW) {
+            verify(events).publishEvent(new CaptureRequested(101L, 1L, "order", 2000L));
+            verifyNoMoreInteractions(events);
+        } else {
+            verifyNoInteractions(events);
+        }
     }
 
     // 평가 예외·빈 응답·요청 ID 불일치는 잠금 조회와 승인 단계에 진입하지 않는다.
@@ -116,7 +127,7 @@ class PaymentAuthorizationFlowTests {
         assertThatThrownBy(() -> service.createAndAuthorize(input)).isInstanceOf(IllegalStateException.class);
         verify(evaluator).evaluate(any());
         verifyNoMoreInteractions(evaluator);
-        verifyNoInteractions(repository, authorizer);
+        verifyNoInteractions(repository, authorizer, events);
     }
 
     // 업무 거절은 DECLINED로 반환하지만 모의 기술 실패는 원래 예외를 전달한다.
@@ -146,13 +157,13 @@ class PaymentAuthorizationFlowTests {
         var failure = new IllegalStateException("save failed");
         when(creation.createPendingSnapshot(any(), any(), any(), any())).thenThrow(failure);
         assertThatThrownBy(() -> service.createAndAuthorize(input)).isSameAs(failure);
-        verifyNoInteractions(evaluator, repository, authorizer);
+        verifyNoInteractions(evaluator, repository, authorizer, events);
     }
 
     // 입력 누락은 저장 전에 거절한다.
     @Test
     void createAndAuthorize_whenInputNull_rejectsBeforeSaving() {
         assertThatThrownBy(() -> service.createAndAuthorize(null)).isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(creation, evaluator, repository, authorizer);
+        verifyNoInteractions(creation, evaluator, repository, authorizer, events);
     }
 }

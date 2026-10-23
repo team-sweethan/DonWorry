@@ -1,6 +1,6 @@
 # P5 1차 시연 설계
 
-**#104의 시연 범위 제안과 #100·#118 구현을 구분한다. P6 이벤트는 ADR-0016·0017이 채택됐고, P3 통지·인계 매핑은 합의 전이다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
+**#104의 시연 범위 제안과 #100·#118·#122 구현을 구분한다. P6 이벤트는 ADR-0016·0017이 채택됐고, P3 통지·인계 매핑은 합의 전이다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
 현재 테이블·컬럼·타입은 migration SQL, 모듈 의존 방향과 이벤트 타입 위치는 ADR-0012를 따른다.
 새 보조 저장·DTO 필드명·URL·HTTP 코드·복구 세부는 합의 전 제안이다.
 
@@ -89,7 +89,7 @@ ACCEPT 접수 이후에도 실제 매입 성공 전까지 HELD를 유지하는 �
 
 ## 3. 모듈 간 계약
 
-P2와 P6 이벤트는 현재 코드 계약이다. P3·CakeShop 및 P5의 이벤트 연결·복구는 후속 합의·구현 대상이다. ID는 Long, 시각은 Instant(UTC), 금액은 Long(원 단위)을 기준으로 한다.
+P2와 P6 이벤트는 현재 코드 계약이다. P5의 ALLOW 자동 매입 연결과 명시적 미완료 기록 재전달은 #122에서 구현·검증했다. P3·CakeShop 및 운영 자동 복구는 후속 합의·구현 대상이다. ID는 Long, 시각은 Instant(UTC), 금액은 Long(원 단위)을 기준으로 한다.
 
 ### 3.1. P2 평가 — fds/api 소유
 
@@ -171,7 +171,7 @@ record PaymentEvaluationFlowResult(
 
 P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 정상 반환한다. 호출 예외·null 응답·요청 UUID 불일치는 기존 평가 서비스의 예외를 전달하며, 자동 재시도하지 않는다. 평가 실패에도 최초 PENDING은 남는다. 예외 발생 시 결제 ID를 호출자에게 반환하는 복구 계약은 이번 범위에 없으므로, 이 메서드를 그대로 외부 재시도 API로 노출하지 않는다.
 
-`createAndEvaluate()`는 DENY의 DENIED 판단을 반환하지만 DB 결제 상태를 변경하지 않는다. 승인 실행·오류 이력 저장·이벤트 발행도 후속 작업이다. 동일 입력으로 다시 호출하면 별도 결제가 생성되며, 주문 중복 방지·UUID 영속 보존·재시작 후 복구는 후속 계약으로 남긴다. #95에서 합의한 P2의 동일 요청 UUID 입력 충돌 검증도 P2 후속 과제로 유지한다.
+`createAndEvaluate()`는 DENY의 DENIED 판단을 반환하지만 DB 결제 상태를 변경하지 않는다. 이 평가 전용 메서드는 승인 실행·오류 이력 저장·이벤트 발행을 수행하지 않는다. 동일 입력으로 다시 호출하면 별도 결제가 생성되며, 주문 중복 방지·UUID 영속 보존·재시작 후 복구는 후속 계약으로 남긴다. #95에서 합의한 P2의 동일 요청 UUID 입력 충돌 검증도 P2 후속 과제로 유지한다.
 
 기존 최초 저장·평가 호출·분기 판단 서비스를 연결하는 내부 설계이며, DB 스키마·저장 방식·모듈 의존 방향·P2 공개 계약은 변경하지 않는다.
 
@@ -181,7 +181,7 @@ P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 �
 
 `createAndAuthorize(input)`는 기존 생성·평가 helper의 문맥을 별도 `PaymentAuthorizationService`에 넘긴다. 행 잠금과 REQUIRES_NEW 아래 승인 전 PENDING을 확인하고 DENY→DENIED, 업무 거절→DECLINED, ALLOW 성공→승인 참조가 있는 PENDING, REVIEW 성공→HELD를 저장한다. ERROR는 승인 없이 PENDING을 유지한다.
 
-기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. REQUEST_CAPTURE·NOTIFY_HELD는 반환 판단이며 이벤트를 발행하지 않는다.
+기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. #118에서는 REQUEST_CAPTURE·NOTIFY_HELD가 반환 판단에만 사용됐다. #122에서는 REQUEST_CAPTURE에 따라 같은 승인 트랜잭션 안에서 CaptureRequested를 발행한다. NOTIFY_HELD 통지는 후속이다. 반환값은 승인 단계 스냅샷이며 비동기 완료 반영 후의 최신 상태가 아니다.
 
 [모의 승인 계약](mock-authorization.md), [트랜잭션 설계](authorization-flow.md), [실행 검증](verification.md)에 세부와 한계를 기록한다. 기존 createAndEvaluate의 평가 전용 계약은 유지한다.
 
@@ -204,9 +204,9 @@ VOID의 접수 증거·식별자·통지 시점은 별도 미결이다. CAPTURE 
 
 의존 방향 `payment → settlement`와 타입 위치는 ADR-0012를 유지한다. P6는 P5를 호출·import하지 않는다.
 
-ADR-0016의 `CaptureRequested(paymentId, merchantId, orderId, amount)`가 구현되어 있다. P5의 orderRef를 orderId에 넣어 업무 트랜잭션 안에서 발행해야 한다. 수수료 계산은 P6가 담당한다. 요청 발행과 완료 수신은 #118 범위 밖이다.
+ADR-0016의 `CaptureRequested(paymentId, merchantId, orderId, amount)`가 구현되어 있다. #122에서 P5의 orderRef를 orderId에 넣어 ALLOW 승인 트랜잭션 안에서 발행한다. 수수료 계산은 P6가 담당한다.
 
-완료 이벤트는 ADR-0017에 채택됐으며 settlement.api에 다음 3개 필드로 구현됐다. P5 수신은 후속 작업이다.
+완료 이벤트는 ADR-0017에 채택됐으며 settlement.api에 다음 3개 필드로 구현됐다. #122의 P5 @ApplicationModuleListener가 수신하고, 행 잠금·입력·승인 참조·상태 검증 후 CAPTURED를 반영한다. 이미 CAPTURED인 정상 재전달은 상태를 유지한다. captureId·capturedAt을 payments에 저장하거나 서로 다른 captureId의 진위를 대조하지는 않는다. 자세한 범위는 [매입 이벤트 연결](capture-events.md)을 따른다.
 
 ```java
 record CaptureCompleted(Long paymentId, Long captureId, Instant capturedAt) {}
@@ -244,7 +244,7 @@ CakeShop에는 실제 P5 결제 상태를 제공하며 HELD·PENDING이나 Case 
 | P5 | 적법한 매입 요청과 결과를 대조해 payments CAPTURED 및 필요한 후속 통지 발행 기록을 같은 트랜잭션으로 저장 | 커밋 후 직원 ACCEPT 건은 P3 인계 완료, CakeShop에는 실제 결제 결과 |
 | P3 | 판정·인계 대조 후 ACCEPTED 및 합의된 대상 ID·시각 저장 | 모든 판정·인계 완료 조건을 만족할 때만 Case CLOSED |
 
-P3·P5·P6 전체를 한 트랜잭션으로 묶지 않는다. 발행 기록은 업무 저장과 함께 남기고 소비자는 커밋 후 처리한다. 현재 Event Publication Registry 기반은 있지만 업무 이벤트·리스너·재발행은 이 기준 커밋에 구현되지 않아 전달 보장은 미검증이다.
+P3·P5·P6 전체를 한 트랜잭션으로 묶지 않는다. 발행 기록은 업무 저장과 함께 남기고 소비자는 커밋 후 처리한다. #122에서 ALLOW 자동 매입의 업무 이벤트·리스너와 실패 기록의 명시적 재전달을 검증했다. 위 표의 P3·CakeShop 후속 통지 및 운영 자동 재발행은 구현하지 않았다.
 
 이 안에서는 CAPTURE 완료가 확인되기 전에는 그 인계를 ACCEPTED로 만들 수 없다. **기존 정본의 실행 성공 전 Case 종료 가능 정책을 CAPTURE 경로에서 축소**하므로 P3·P6와 [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) 합의가 필요하다. 채택 전에는 기존 정책을 대체하지 않는다.
 
