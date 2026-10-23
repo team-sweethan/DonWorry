@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 · 시도 횟수 저장 · 사실 필드 채우기 반영 (#112)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -16,7 +16,7 @@
 
 설계 3.9⑤는 `ai_reports`를 8개 컬럼(`report_id` · `case_id` · `report_version` · `evidence_version` · `status` · `report_body` · `created_at` · `completed_at`)으로 확정했다. 작업 ID · 시도 횟수 · 실패 사유 컬럼은 없고, "시도 횟수 저장 방식은 P4 내부 설계에서 결정"으로 남겼다. 공통 페이지 §5.3(P3 ↔ P4) · §5.4(AI Tool)는 개발 전 결정 항목이 비어 있다.
 
-이 ADR은 (1) FastAPI ↔ Spring 호출의 위치 · 인증, (2) 8개 컬럼 안에서 상태 · 재시도 · 실패를 다루는 방법을 정한다. §5.3 · §5.4는 합의 전이라 미정으로 남긴다.
+이 ADR은 (1) FastAPI ↔ Spring 호출의 위치 · 인증, (2) 8개 컬럼에 `attempt_count` 하나를 더해 상태 · 재시도 · 실패를 다루는 방법을 정한다 (시도 횟수 저장 방식은 설계 3.7이 P4에 맡겼다). §5.3 · §5.4는 합의 전이라 미정으로 남긴다.
 
 ## 결정 1 — 호출 구조
 
@@ -49,7 +49,7 @@ sequenceDiagram
 | --- | --- |
 | Tool API 위치 | `investigation/report/controller`. Case 권한 검증을 한 곳에서 하고, 아래 모듈 api만 호출하므로 순환이 없다 |
 | 경로 | Spring `/internal/ai/**` — 화면용 `/api/**`와 분리. FastAPI `POST /investigations` · `GET /investigations/{reportId}` |
-| 작업 ID | `report_id`. 별도 job ID 컬럼을 만들지 않는다 (3.9⑤ 8개 컬럼 유지) |
+| 작업 ID | `report_id`. 별도 job ID 컬럼을 만들지 않는다 |
 | 인증 | 서비스 간 키(헤더). 직원 로그인과 별개. 키는 환경 변수, 저장소에 올리지 않는다 |
 | 권한 | Tool은 GET만. 결제 · 판정 · Case 상태를 바꾸는 Tool은 만들지 않는다 |
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
@@ -68,14 +68,14 @@ sequenceDiagram
 
 입력에 `caseId`가 있다고 다른 모듈 데이터를 마음대로 읽는 것은 아니다. 각 Tool 구현이 Case 소속 결제 · 가맹점 범위를 검증하고, 소유 모듈의 공개 api로 필요한 정보만 모은다 (설계 3.6 주의).
 
-## 결정 2 — `ai_reports` 8개 컬럼으로 상태 · 재시도 · 실패 다루기
+## 결정 2 — `ai_reports`(8개 컬럼 + `attempt_count`)로 상태 · 재시도 · 실패 다루기
 
 | 상태 | 언제 | 채우는 컬럼 |
 | --- | --- | --- |
 | `PENDING` | P4가 조사 요청을 받아 행 생성 | `report_version` = 해당 Case 최대값 + 1, `evidence_version` = 요청 시점 Case 증거 버전, `created_at` |
 | `RUNNING` | FastAPI가 `202`로 접수. **`PENDING`일 때만** 바꾼다 | — |
 | `SUCCEEDED` | 결과 콜백이 구조 검증 통과. **`PENDING` · `RUNNING`일 때만** 바꾼다 | `report_body`(보고서 JSON), `completed_at` |
-| `FAILED` | 총 3회 시도 모두 실패 | `report_body`에 `error` 객체(실패 코드 · 사유 · 시도 횟수 · 마지막 시도 시각), `completed_at` = 실패 확정 시각 |
+| `FAILED` | 총 3회 시도 모두 실패 | `report_body`에 `error` 객체(실패 코드 · 사유 · 마지막 시도 시각), `completed_at` = 실패 확정 시각 |
 
 - **상태 변경은 모두 조건부 UPDATE로 한다.** `WHERE report_id = ? AND status IN (…)`처럼 바꿔도 되는 이전 상태를 조건에 넣고, 변경 건수가 0이면 "이미 처리됨"으로 본다. 끝난 상태(`SUCCEEDED` · `FAILED`)는 어떤 경로로도 덮어쓰지 않는다
   - 예) 202 응답 직후 FastAPI가 바로 끝나 성공 콜백이 먼저 `SUCCEEDED`를 저장하면, 뒤이은 `RUNNING` UPDATE는 조건(`status = 'PENDING'`)이 맞지 않아 0건 변경으로 끝난다. 그래서 콜백은 `PENDING`에서도 받는다
@@ -86,12 +86,12 @@ sequenceDiagram
   - 이전 시도를 취소하지 않는다. FastAPI가 버려질 작업을 끝까지 돌릴 수 있지만 결과는 반영되지 않는다 (MVP에서 감수)
 - **재시도는 같은 행에서 한다.** 같은 증거를 다시 분석하는 것이므로 `report_version`을 올리지 않는다. `UNIQUE(case_id, report_version)`과 충돌하지 않는다
 - **한 번의 시도 실패**로 세는 것: FastAPI가 202를 주지 않음(연결 실패 · 5xx · 타임아웃), FastAPI가 실패 결과를 보냄, 결과가 시간 안에 오지 않고 조회로도 완료가 아님, 결과가 구조 검증에 실패함
-- **시도 횟수는 실행 중에는 Spring 프로세스 안에서 센다.** 최종 실패 때만 `report_body.error.attempts`에 남긴다. 컬럼을 늘리지 않기 위한 선택이며, 아래 "한계"를 받아들인다
+- **시도 횟수는 `attempt_count` 컬럼에 저장한다.** 시도를 시작할 때(FastAPI 호출 전) 1 올리고, 3이면 더 시도하지 않는다. 서버가 재시작돼도 이어서 세므로 총 시도는 3회를 넘지 않는다 (화면 "총 3회 시도" 문구와 일치)
 - **실패 사유 위치:** 기획 2.5의 "실패 사유 기록"은 `report_body.error`로 충족한다 (별도 컬럼 없음)
-- **`error`는 화면에 보내지 않는다.** 실패 이유는 개발자 조사용이다. 조회 응답은 `FAILED`면 `reportBody: null`로 보내고, 화면은 고정 문구("총 3회 시도")를 보여준다
+- **`error`는 화면에 보내지 않는다.** 실패 이유는 개발자 조사용이다. `FAILED`면 P3에 넘기는 `ReportSnapshot.reportBody`를 null로 두고, 화면은 고정 문구("총 3회 시도")를 보여준다
 - **AI 실패는 자동 판정으로 이어지지 않는다.** `FAILED`를 P3에 알리고, 직원이 직접 조사해 `report_id = NULL`로 판정한다 (설계 3.7)
 
-**한계:** 실행 중 서버가 재시작되면 메모리의 시도 횟수 · 현재 시도 토큰이 사라진다. 늦은 콜백 구분은 새 토큰으로 유지되지만, 시도 횟수는 다시 센다. 재시작 시 오래된 `PENDING` · `RUNNING` 행은 조회로 상태를 확인하고, 확인되지 않으면 처음부터 다시 3회를 시도한다. 횟수를 엄밀히 지켜야 한다고 팀이 정하면 `attempt_count` 컬럼 추가를 설계 3.9에 먼저 제안한다.
+**한계:** 실행 중 서버가 재시작되면 메모리의 현재 시도 토큰만 사라진다. 진행 중이던 시도는 이미 1회로 셌으므로, 재시작 시 오래된 `PENDING` · `RUNNING` 행은 조회로 상태를 확인하고 완료가 확인되지 않으면 실패로 보고 남은 횟수만 시도한다. 재시작 전 시도의 늦은 콜백은 토큰이 없어 무시된다.
 
 ## 결정 3 — 같은 Case의 중복 실행 방지와 버전
 
@@ -106,11 +106,11 @@ sequenceDiagram
 - 늦게 도착한 결과는 자기 행에만 쓴다. 다른 버전 행을 덮어쓰지 않는다. 끝난 행에 오는 결과는 무시한다(멱등, 결정 2 조건부 UPDATE)
 - "최신 보고서" = Case 최대 `report_version`이면서 `evidence_version`이 현재 Case 증거 버전과 같은 `SUCCEEDED` 행
 
-## 결정 4 — 화면 계약 (보고서 응답 · ID · 권고 값)
+## 결정 4 — 화면 계약 (보고서 형식 · ID · 권고 값 · 사실 필드)
 
-보안 직원 화면(`ReportCard`)이 먼저 만들어졌으므로 응답 형식은 화면 타입 `frontend/src/types/case.ts`(`AiReport` · `ReportBody`)를 따른다. **화면 타입과 이 절은 같이 바뀐다. 한쪽만 고치지 않는다.**
+보안 직원 화면(`ReportCard`)이 먼저 만들어졌으므로 보고서 형식은 화면 타입 `frontend/src/types/case.ts`(`AiReport` · `ReportBody`)를 따른다. **화면 타입과 이 절은 같이 바뀐다. 한쪽만 고치지 않는다.**
 
-- **ID:** DB는 `BIGINT`를 유지하고, P4 응답 JSON에서만 문자열로 보낸다 (`5` → `"5"`). 접두어(`CASE-` 등)는 붙이지 않는다. 요청으로 받은 ID는 문자열 → 숫자로 바꾼다. migration · P3 · 화면은 바꾸지 않는다
+- **ID:** P4는 P3의 `ReportGateway`(`ReportSnapshot`)로 숫자(`Long`) ID를 넘긴다. 화면은 P3 `CaseDetailResponse`로 보고서를 받으므로, 화면 응답에서 ID를 숫자로 보낼지 문자열로 보낼지는 P3 응답과 화면이 함께 정한다 (이 ADR 범위 밖)
 - **`report_body` 구조:** 기획 2.7 순서와 같다
 
 | 키 | 화면 섹션 |
@@ -125,12 +125,21 @@ sequenceDiagram
 | `evidence` | 8. 증거 추적 (Tool · 출처 · 증거 ID · 조회 시각 · 데이터 버전) |
 
 - **권고 값:** `ACCEPT_REVIEW` / `REJECT_REVIEW` / `NEEDS_CHECK`. 참고용이며 최종 판정은 직원이 한다
-- **보고서 속 결제 ID:** Tool로 받은 실제 ID만 쓴다. 저장 전에 Case 소속인지 검증하고, 아니면 구조 검증 실패(시도 실패 1회)로 처리한다
-- **실패 정보:** 결정 2대로 `error`는 응답에서 뺀다
+- **사실 필드는 Spring이 정본 데이터로 채운다.** AI는 해석만 쓴다. AI 결과에 사실 필드가 들어 있어도 쓰지 않고 정본 값으로 덮어쓴다
+
+| 누가 채우나 | 필드 |
+| --- | --- |
+| Spring (정본 데이터) | `overview` 전체, `paymentAnalyses[]`의 `paymentId` · `amount` · `requestedAt` · `riskScore` · `ruleHits`, `timeline`, `evidence` |
+| AI (해석) | `summary`, `paymentAnalyses[]`의 `riskEvidence` · `normalEvidence` · `unknowns` · `recommendation`, `overallAnalysis`, `additionalChecks`, `recommendation` |
+
+- **결제별 분석 대상:** AI가 Case에 속하지 않은 결제에 대한 분석을 보내면 구조 검증 실패(시도 실패 1회)로 처리한다
+- **실패 정보:** 결정 2대로 `error`는 P3에 넘기지 않는다
 
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)
 
 정본 §5.3의 개발 전 결정 항목(조사 요청 방식 · 입력, 완료 · 실패 통지, 병합 중 중복 요청 · 구버전 처리, 판정 시 버전 검증 · 수동 판정 전달)은 **P3 담당과 합의 전이라 이 ADR에서 정하지 않는다.** 정해지면 이 절을 갱신한다.
+
+P3가 요청 · 조회 경계 `investigation/service/ReportGateway`(`request` · `findByCase`)를 만들었다 (#103). P4는 이를 구현해 `MockReportGateway`를 교체한다. 완료 · 실패 통지와 판정 시 버전 검증은 여전히 미정이다.
 
 이 ADR이 전제하는 것은 정본에 이미 있는 내용뿐이다.
 
@@ -179,7 +188,13 @@ investigation/report/
 | FastAPI가 DB를 직접 읽음 | 설계 3.6이 금지한다 |
 | 동기 HTTP 한 번으로 보고서를 받음 | 생성 시간이 길어 타임아웃 위험이 있다. 설계 3.7이 비동기 접수(202)를 정했다 |
 | 결과 조회(polling)만 사용 | 완료가 늦게 반영되고 Spring에 주기 작업이 필요하다. 콜백 유실 복구용으로만 쓴다 |
-| 별도 job ID · `attempt_count` · `error_message` 컬럼 추가 | 설계 3.9⑤가 8개 컬럼으로 확정했다. `report_id`와 `report_body.error`로 충분하다. 재시작 때 횟수 보존이 필요해지면 그때 3.9 변경을 제안한다 |
+| 별도 job ID · `error_message` 컬럼 추가 | 설계 3.9⑤의 8개 컬럼을 늘린다. `report_id`와 `report_body.error`로 충분하다 |
+| 시도 횟수를 메모리에서만 세기 (이전 결정) | 재시작하면 총 시도가 3회를 넘을 수 있고 화면 "총 3회 시도" 문구와 어긋난다 (#115 리뷰). 저장 방식은 설계 3.7이 P4에 맡겼으므로 `attempt_count` 하나만 더한다 |
+| P4 DTO · OpenAPI를 보고서 형식의 기준으로 삼기 | 화면이 먼저 만들어졌고 이미 기획 2.7을 반영했다. 두 곳에서 정의하면 어긋난다 |
+| 실패 정보를 화면에 보내거나 실패 응답을 따로 두기 | 직원 판정에 필요 없고 내부 오류가 드러난다. 고정 문구로 충분하다 (`attempt_count`로 횟수가 정확함) |
+| 이 ADR에서 화면 ID 타입을 숫자나 문자열로 정하기 | 화면은 P3 응답으로 보고서를 받는다. P3 · 화면 공통 문제라 P4 ADR에서 정하지 않는다 |
+| AI가 사실 필드까지 쓰고 Spring이 대조하기 | 비교 코드가 많고, 불일치가 생기면 재시도만 늘어난다. 정본에서 채우면 틀릴 여지가 없다 |
+| 결제 ID만 검증하기 | 금액 · 점수 등 잘못 쓴 사실을 막지 못한다 (#115 리뷰) |
 | `RUNNING`을 FastAPI 호출 전에 저장 | 콜백과의 순서 경합은 막지만, 호출이 실패해도 "진행 중"이 먼저 기록된다. `RUNNING` = "FastAPI가 접수함"이라는 뜻을 유지하고, 경합은 조건부 UPDATE로 막는다 |
 | 시도 번호(1 · 2 · 3)로 콜백 구분 | 서버 재시작 후 번호가 다시 1부터 시작해 재시작 전 콜백과 겹친다. UUID 토큰은 겹치지 않고 컬럼도 필요 없다 |
 | 이전 시도 취소 API(`DELETE /investigations/…`) | 현재 토큰만 받는 규칙으로 늦은 콜백이 이미 무시된다. 계약을 하나 더 늘릴 이유가 MVP에서는 작다 |
@@ -190,15 +205,16 @@ investigation/report/
 ## 영향
 
 - API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
-- DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
+- DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼에 `attempt_count INT NOT NULL DEFAULT 0`을 더한다 (새 migration, 재시도 구현 때. Notion ERD 3.9⑤ 갱신). `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `identity/security/SecurityConfig`에서 `/internal/ai/**`를 서비스 키 인증으로 분리해야 한다 — P1과 협의
-- P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
+- P3: P4가 `ReportGateway`를 구현해 `MockReportGateway`를 교체. 완료 통지 · 판정 검증 방식 합의 필요 (미정)
+- P3 · 화면: P3 응답 ID는 `Long`, 화면 타입은 `string`이라 표현을 맞추는 협의 필요
 - P5: Tool 3종(`get_case_payments` 결제 정보 · `get_payment_history` · `get_payment_authentication`)용 조회 api
 - P1: `get_security_events`용 조회 api
 - CakeShop: `get_order_context` 제공 범위 (§5.7)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
-- 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리
-- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지
+- 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 형식은 결정 4이며 `frontend/src/types/case.ts`와 함께 관리
+- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, P3에 넘기는 보고서에 `error`가 없는지, Case 밖 결제 분석이 거부되는지, AI가 보낸 사실 필드가 정본 값으로 덮이는지, 재시작 후에도 총 시도가 3회를 넘지 않는지
 - 문서: README Architecture · AGENTS.md §6
 
 ## 검증
