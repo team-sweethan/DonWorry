@@ -20,6 +20,8 @@ export type CaseHistoryEventType =
   | 'HANDOFF_REQUESTED'
   | 'HANDOFF_ACCEPTED'
   | 'HANDOFF_FAILED'
+  /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
+  | 'CASE_STATUS_CHANGED'
   | 'CASE_CLOSED'
 
 // ── 엔터티 (설계 3.9) ──

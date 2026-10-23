@@ -1,19 +1,25 @@
 import type {
   ActionHandoff,
+  AiReport,
   CaseDetail,
   CaseHistory,
+  CasePayment,
   CaseSummary,
+  PaymentDecision,
+  ReportBody,
+  SecurityCase,
   SubmitDecisionsRequest,
 } from '../types/case'
-import { isMergeOpen, latestReport } from '../utils/caseRules'
-import { buildReportBody, caseStore, MOCK_STAFF_ID, reviewPayment } from './mock/caseMock'
+import { getMe } from './auth'
+import { api, ApiError } from './client'
 
 /**
- * P3 Case 조회·판정 API. 백엔드 계약 전이라 목업 저장소를 읽고 쓴다.
- * 연동 시 각 함수 본문만 `api()`(client.ts) 호출로 바꾸고 화면은 그대로 둔다.
+ * P3 Case 조회·판정 API (`/api/security-cases`, #98).
+ * 백엔드 ID는 숫자이고 화면 타입은 문자열이다. 변환은 이 파일 안에서만 해서 화면은 그대로 둔다.
+ * 결제 금액·FDS 점수·AI 보고서는 백엔드가 아직 목 데이터로 채운다 (Notion "목업 데이터 · 연동 현황" P3 표).
  */
 
-/** 판정 저장 시 화면이 본 증거 버전과 현재 버전이 다를 때 (설계 3.5). */
+/** 판정 저장 시 화면이 본 증거 버전·보고서가 현재와 다를 때 (설계 3.5). */
 export class CaseVersionConflictError extends Error {
   constructor() {
     super('Case 증거 버전이 바뀌었습니다.')
@@ -21,194 +27,185 @@ export class CaseVersionConflictError extends Error {
   }
 }
 
-const REPORT_MOCK_DURATION_MS = 15_000
-const HANDOFF_MOCK_DURATION_MS = 2_000
+// 백엔드 응답 모양 — ID만 숫자이고 나머지는 화면 타입과 같다
+type Id = number
+type ServerSecurityCase = Omit<SecurityCase, 'caseId' | 'merchantId'> & {
+  caseId: Id
+  merchantId: Id
+}
+type ServerSummary = Omit<CaseSummary, 'caseId' | 'merchantId'> & { caseId: Id; merchantId: Id }
+type ServerPayment = Omit<CasePayment, 'casePaymentId' | 'paymentId'> & {
+  casePaymentId: Id
+  paymentId: Id
+}
+type ServerReport = Omit<AiReport, 'reportId' | 'caseId' | 'reportBody'> & {
+  reportId: Id
+  caseId: Id
+  reportBody: ReportBody | null
+}
+type ServerDecision = Omit<
+  PaymentDecision,
+  'decisionId' | 'casePaymentId' | 'staffId' | 'reportId'
+> & {
+  decisionId: Id
+  casePaymentId: Id
+  staffId: Id
+  reportId: Id | null
+}
+type ServerHandoff = Omit<ActionHandoff, 'handoffId' | 'decisionId' | 'targetOperationId'> & {
+  handoffId: Id
+  decisionId: Id
+  targetOperationId: Id | null
+}
+type ServerHistory = Omit<CaseHistory, 'historyId' | 'caseId' | 'actorId' | 'eventData'> & {
+  historyId: Id
+  caseId: Id
+  actorId: Id | null
+  eventData: Record<string, string | number> | null
+}
+type ServerDetail = {
+  securityCase: ServerSecurityCase
+  payments: ServerPayment[]
+  reports: ServerReport[]
+  decisions: ServerDecision[]
+  handoffs: ServerHandoff[]
+  history: ServerHistory[]
+}
+type DemoHeldPayment = { paymentId: Id; caseId: Id }
 
-const wait = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms))
-const clone = <T>(value: T): T => structuredClone(value)
+const str = (id: Id) => String(id)
+const strOrNull = (id: Id | null) => (id === null ? null : String(id))
 
-export async function getCases(merchantId: string): Promise<CaseSummary[]> {
-  await wait()
-  return caseStore
-    .filter((d) => d.securityCase.merchantId === merchantId)
-    .map((d) => {
-      settle(d)
-      const latest = latestReport(d.reports)
-      return clone({
-        ...d.securityCase,
-        paymentCount: d.payments.length,
-        totalAmount: d.payments.reduce((sum, p) => sum + p.amount, 0),
-        maxRiskScore: d.payments.reduce<number | null>(
-          (max, p) => (p.riskScore === null ? max : Math.max(max ?? 0, p.riskScore)),
-          null,
-        ),
-        latestReportStatus: latest?.status ?? null,
-        decidedCount: d.decisions.length,
-      })
-    })
+/**
+ * 보안 직원은 가맹점 소속 없이 모든 가맹점 Case를 본다 (platform_users.merchant_id = NULL).
+ * 화면의 시연 가맹점 선택은 백엔드 merchantId와 다른 값이라 거르지 않는다. 인가는 백엔드 몫이다.
+ */
+export async function getCases(_merchant: string): Promise<CaseSummary[]> {
+  const cases = await api<ServerSummary[]>('/security-cases', { cache: 'no-store' })
+  return cases.map((c) => ({ ...c, caseId: str(c.caseId), merchantId: str(c.merchantId) }))
 }
 
-/** 다른 가맹점의 Case는 없는 것으로 응답한다 (가맹점 범위 검증은 백엔드 몫). */
-export async function getCase(caseId: string, merchantId: string): Promise<CaseDetail | null> {
-  await wait()
-  const detail = find(caseId)
-  if (!detail || detail.securityCase.merchantId !== merchantId) return null
-  settle(detail)
-  return clone(detail)
+export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {
+  try {
+    return toDetail(await fetchDetail(caseId))
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+    throw error
+  }
 }
 
 export async function submitDecisions(caseId: string, request: SubmitDecisionsRequest) {
-  await wait(400)
-  const detail = find(caseId)
-  if (!detail) throw new Error(`Case ${caseId} 없음`)
-  if (detail.securityCase.evidenceVersion !== request.evidenceVersion) {
-    throw new CaseVersionConflictError()
-  }
-  // 요청 전체를 먼저 검증하고, 통과했을 때만 한꺼번에 반영한다 (한 트랜잭션, 설계 3.8).
-  const seen = new Set<string>()
-  const targets = request.decisions.map((input) => {
-    const target = detail.payments.find((p) => p.casePaymentId === input.casePaymentId)
-    if (!target) throw new Error(`결제 ${input.casePaymentId}는 이 Case 소속이 아닙니다.`)
-    if (
-      seen.has(input.casePaymentId) ||
-      detail.decisions.some((d) => d.casePaymentId === input.casePaymentId)
-    ) {
-      throw new Error(`${target.paymentId}는 이미 판정되었습니다.`)
+  // 판정 직원은 세션 사용자다. 백엔드가 세션에서 읽기 전까지 요청에 담는다 (#98)
+  const me = await getMe()
+  try {
+    await api<ServerDetail>(`/security-cases/${caseId}/decisions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        staffId: me.userId,
+        evidenceVersion: request.evidenceVersion,
+        reportId: request.reportId === null ? null : Number(request.reportId),
+        decisions: request.decisions.map((d) => ({
+          casePaymentId: Number(d.casePaymentId),
+          decision: d.decision,
+          reason: d.reason,
+        })),
+      }),
+    })
+  } catch (error) {
+    // INV_003 증거 버전 변경, INV_004 최신 보고서 아님 — 둘 다 다시 확인 후 판정해야 한다
+    if (error instanceof ApiError && (error.code === 'INV_003' || error.code === 'INV_004')) {
+      throw new CaseVersionConflictError()
     }
-    seen.add(input.casePaymentId)
-    return { input, target }
-  })
-  const now = new Date().toISOString()
-  for (const { input, target } of targets) {
-    const decisionId = `DEC-${input.casePaymentId}`
-    const actionType: ActionHandoff['actionType'] = input.decision === 'ACCEPT' ? 'CAPTURE' : 'VOID'
-    detail.decisions.push({
-      decisionId,
-      casePaymentId: input.casePaymentId,
-      staffId: MOCK_STAFF_ID,
-      reportId: request.reportId,
-      decision: input.decision,
-      reason: input.reason,
-      decidedAt: now,
-    })
-    // 판정과 인계 요청(REQUESTED)은 같은 트랜잭션으로 저장된다 (설계 3.8).
-    detail.handoffs.push({
-      handoffId: `HO-${input.casePaymentId}`,
-      decisionId,
-      actionType,
-      status: 'REQUESTED',
-      targetOperationId: null,
-      requestedAt: now,
-      acceptedAt: null,
-      lastErrorCode: null,
-    })
-    addHistory(detail, 'DECISION_CONFIRMED', 'STAFF', {
-      paymentId: target.paymentId,
-      decision: input.decision,
-    })
-    addHistory(detail, 'HANDOFF_REQUESTED', 'SYSTEM', { paymentId: target.paymentId, actionType })
+    throw error
   }
-  updateStatus(detail)
+}
+
+/** 시연 전용: P5 HELD 이벤트 대신 50~79점 HELD 결제를 만든다. 실제 연동 후 지운다. */
+export async function demoCreateHeldPayment(): Promise<string> {
+  const held = await postDemoHeld({
+    // 시연 가맹점 DEMOSHOP(#101 시드)이 첫 가맹점이라는 가정. Case의 merchantId는 논리 참조라 FK 오류는 없다
+    merchantId: 1,
+    customerRef: `demo-customer-${Date.now()}`,
+    amount: 300_000,
+    riskScore: 65,
+    ruleHits: ['NEW_CARD', 'HIGH_AMOUNT'],
+  })
+  return str(held.caseId)
 }
 
 /**
  * 시연 전용: 열람 중 같은 고객의 보류 결제(고액 + 10분 내 반복 = 60점)가 병합되는 상황을 만든다.
- * 실제 API에는 없다. 병합 조건이 안 맞아 거부되면 false.
+ * 병합 기한이 지났거나 판정이 시작돼 새 Case가 생기면 false.
  */
 export async function demoMergePayment(caseId: string): Promise<boolean> {
-  await wait()
-  const detail = find(caseId)
-  // 병합 조건(기획 2.4): 최초 생성 후 30분 미만, 직원 판정 전
-  if (!detail || !isMergeOpen(detail.securityCase.createdAt, detail.decisions.length)) return false
-  const seq = detail.payments.length + 1
-  const now = new Date().toISOString()
-  const paymentId = `PAY-${caseId.slice(5)}-${seq}`
-  detail.payments.push(
-    reviewPayment(`CP-${caseId.slice(5)}-${seq}`, paymentId, 540_000, now, [
-      'HIGH_AMOUNT',
-      'RAPID_REPEAT',
-    ]),
-  )
-  detail.securityCase.evidenceVersion += 1
-  addHistory(detail, 'PAYMENT_LINKED', 'SYSTEM', { paymentId })
-  const reportVersion = (latestReport(detail.reports)?.reportVersion ?? 0) + 1
-  detail.reports.push({
-    reportId: `RPT-${caseId.slice(5)}-v${reportVersion}`,
-    caseId,
-    reportVersion,
-    evidenceVersion: detail.securityCase.evidenceVersion,
-    status: 'RUNNING',
-    reportBody: null,
-    createdAt: now,
-    completedAt: null,
+  const { securityCase } = await fetchDetail(caseId)
+  const held = await postDemoHeld({
+    merchantId: securityCase.merchantId,
+    customerRef: securityCase.customerRef,
+    amount: 540_000,
+    riskScore: 60,
+    ruleHits: ['HIGH_AMOUNT', 'RAPID_REPEAT'],
   })
-  updateStatus(detail)
-  return true
+  return str(held.caseId) === caseId
 }
 
-function find(caseId: string) {
-  return caseStore.find((d) => d.securityCase.caseId === caseId)
+function fetchDetail(caseId: string) {
+  return api<ServerDetail>(`/security-cases/${caseId}`, { cache: 'no-store' })
 }
 
-/** 목업의 비동기 진행: 일정 시간이 지나면 AI 보고서 완료, 인계 접수 완료로 바꾼다. */
-function settle(detail: CaseDetail) {
-  const now = Date.now()
-  for (const r of detail.reports) {
-    if (r.status === 'RUNNING' && now - Date.parse(r.createdAt) > REPORT_MOCK_DURATION_MS) {
-      r.status = 'SUCCEEDED'
-      r.completedAt = new Date().toISOString()
-      r.reportBody = buildReportBody(detail, r, r.completedAt)
-    }
-  }
-  for (const h of detail.handoffs) {
-    if (h.status === 'REQUESTED' && now - Date.parse(h.requestedAt) > HANDOFF_MOCK_DURATION_MS) {
-      h.status = 'ACCEPTED'
-      h.acceptedAt = new Date().toISOString()
-      h.targetOperationId = `${h.actionType === 'CAPTURE' ? 'CAP' : 'VOID'}-${h.handoffId.slice(3)}`
-      const paymentId = paymentIdOf(detail, h.decisionId)
-      addHistory(detail, 'HANDOFF_ACCEPTED', 'SYSTEM', { paymentId, actionType: h.actionType })
-    }
-  }
-  updateStatus(detail)
-}
-
-/** 설계 3.3 Case 상태 전이. 모든 결제 판정 + 모든 인계 ACCEPTED일 때만 CLOSED. */
-function updateStatus(detail: CaseDetail) {
-  const c = detail.securityCase
-  if (c.status === 'CLOSED') return
-  const allDecided = detail.payments.every((p) =>
-    detail.decisions.some((d) => d.casePaymentId === p.casePaymentId),
-  )
-  const latest = latestReport(detail.reports)
-  if (detail.handoffs.some((h) => h.status === 'FAILED')) c.status = 'ACTION_FAILED'
-  else if (allDecided && detail.handoffs.every((h) => h.status === 'ACCEPTED')) {
-    c.status = 'CLOSED'
-    c.closedAt = new Date().toISOString()
-    addHistory(detail, 'CASE_CLOSED', 'SYSTEM')
-  } else if (allDecided) c.status = 'ACTION_PENDING'
-  else if (latest && (latest.status === 'PENDING' || latest.status === 'RUNNING'))
-    c.status = 'INVESTIGATING'
-  else c.status = 'DECISION_PENDING'
-}
-
-function paymentIdOf(detail: CaseDetail, decisionId: string) {
-  const d = detail.decisions.find((x) => x.decisionId === decisionId)
-  return detail.payments.find((p) => p.casePaymentId === d?.casePaymentId)?.paymentId ?? ''
-}
-
-function addHistory(
-  detail: CaseDetail,
-  eventType: CaseHistory['eventType'],
-  actorType: CaseHistory['actorType'],
-  eventData: Record<string, string> = {},
-) {
-  detail.history.push({
-    historyId: `H-${detail.securityCase.caseId.slice(5)}-${detail.history.length + 1}`,
-    caseId: detail.securityCase.caseId,
-    eventType,
-    actorType,
-    actorId: actorType === 'STAFF' ? MOCK_STAFF_ID : null,
-    eventData,
-    createdAt: new Date().toISOString(),
+function postDemoHeld(body: {
+  merchantId: Id
+  customerRef: string
+  amount: number
+  riskScore: number
+  ruleHits: string[]
+}) {
+  return api<DemoHeldPayment>('/demo/held-payments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
+}
+
+function toDetail(detail: ServerDetail): CaseDetail {
+  return {
+    securityCase: {
+      ...detail.securityCase,
+      caseId: str(detail.securityCase.caseId),
+      merchantId: str(detail.securityCase.merchantId),
+    },
+    payments: detail.payments.map((p) => ({
+      ...p,
+      casePaymentId: str(p.casePaymentId),
+      paymentId: str(p.paymentId),
+    })),
+    reports: detail.reports.map((r) => ({
+      ...r,
+      reportId: str(r.reportId),
+      caseId: str(r.caseId),
+    })),
+    decisions: detail.decisions.map((d) => ({
+      ...d,
+      decisionId: str(d.decisionId),
+      casePaymentId: str(d.casePaymentId),
+      staffId: str(d.staffId),
+      reportId: strOrNull(d.reportId),
+    })),
+    handoffs: detail.handoffs.map((h) => ({
+      ...h,
+      handoffId: str(h.handoffId),
+      decisionId: str(h.decisionId),
+      targetOperationId: strOrNull(h.targetOperationId),
+    })),
+    history: detail.history.map((h) => ({
+      ...h,
+      historyId: str(h.historyId),
+      caseId: str(h.caseId),
+      actorId: strOrNull(h.actorId),
+      eventData: Object.fromEntries(
+        Object.entries(h.eventData ?? {}).map(([key, value]) => [key, String(value)]),
+      ),
+    })),
+  }
 }

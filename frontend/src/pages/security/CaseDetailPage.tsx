@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
+import { App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
@@ -8,6 +8,7 @@ import {
   getCase,
   submitDecisions,
 } from '../../api/cases'
+import { ApiError } from '../../api/client'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -29,6 +30,8 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   const { merchant } = useDemo()
   const { toast } = useFeedback()
+  // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
+  const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
   // 늦게 도착한 이전 범위의 응답은 버린다.
@@ -36,13 +39,19 @@ export function CaseDetailPage() {
   const [loaded, setLoaded] = useState<{ scope: string; detail: CaseDetail | null } | null>(null)
   useEffect(() => {
     let alive = true
-    getCase(id, merchant).then((result) => {
-      if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
-    })
+    getCase(id, merchant)
+      .then((result) => {
+        if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
+      })
+      .catch(() => {
+        if (!alive) return
+        message.error('Case를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
+        setLoaded({ scope: `${merchant}/${id}`, detail: null })
+      })
     return () => {
       alive = false
     }
-  }, [id, merchant, refreshKey])
+  }, [id, merchant, refreshKey, message])
   const detail = loaded?.scope === scope ? loaded.detail : undefined
   const load = useCallback(() => setRefreshKey((k) => k + 1), [])
 
@@ -74,7 +83,9 @@ export function CaseDetailPage() {
       toast.error(
         error instanceof CaseVersionConflictError
           ? '검토 중 Case에 결제가 추가되었습니다. 변경 내용을 다시 확인한 뒤 판정하세요.'
-          : '판정을 저장하지 못했습니다. 잠시 후 다시 시도하세요.',
+          : error instanceof ApiError && error.detail
+            ? error.detail
+            : '판정을 저장하지 못했습니다. 잠시 후 다시 시도하세요.',
       )
       load()
       return false

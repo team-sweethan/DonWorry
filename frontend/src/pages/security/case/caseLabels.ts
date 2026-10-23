@@ -76,6 +76,7 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_REQUESTED: '금융 조치 인계 요청',
   HANDOFF_ACCEPTED: '담당 모듈 접수 확인',
   HANDOFF_FAILED: '금융 조치 인계 실패',
+  CASE_STATUS_CHANGED: 'Case 상태 변경',
   CASE_CLOSED: 'Case 종료',
 }
 
