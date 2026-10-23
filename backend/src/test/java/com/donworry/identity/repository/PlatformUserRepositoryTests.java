@@ -24,6 +24,9 @@ class PlatformUserRepositoryTests {
     PlatformUserRepository repository;
 
     @Autowired
+    UserPermissionRepository permissionRepository;
+
+    @Autowired
     JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -62,18 +65,14 @@ class PlatformUserRepositoryTests {
         assertThat(boss.getRole()).isEqualTo(UserRole.OPERATOR);
         assertThat(boss.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(boss.getMerchantId()).isEqualTo(demoShopId);
-        assertThat(jdbcTemplate.queryForList(
-                        "SELECT permission_code FROM user_permissions WHERE user_id = ?",
-                        String.class,
-                        boss.getUserId()))
-                .containsExactlyInAnyOrder("FDS_VIEW", "FINANCE_VIEW");
+        assertThat(permissionRepository.findPermissionCodesByUserId(boss.getUserId()))
+                .containsExactly("FDS_VIEW", "FINANCE_VIEW");
 
         assertThat(staff.getRole()).isEqualTo(UserRole.SECURITY_STAFF);
         assertThat(staff.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(staff.getMerchantId()).isNull();
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT COUNT(*) FROM user_permissions WHERE user_id = ?", Long.class, staff.getUserId()))
-                .isZero();
+        assertThat(permissionRepository.findPermissionCodesByUserId(staff.getUserId()))
+                .isEmpty();
     }
 
     // 없는 로그인 ID는 빈 결과로 반환한다

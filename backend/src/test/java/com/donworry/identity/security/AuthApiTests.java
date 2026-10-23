@@ -12,8 +12,10 @@ import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.entity.UserStatus;
 import com.donworry.identity.repository.PlatformUserRepository;
+import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.service.AuthService;
 import java.io.*;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +57,9 @@ class AuthApiTests {
 
     @MockitoBean
     PlatformUserRepository repository;
+
+    @MockitoBean
+    UserPermissionRepository permissionRepository;
 
     private PlatformUser user;
 
@@ -98,6 +103,31 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"))
                 .andExpect(content().json(result.getResponse().getContentAsString()));
         verify(repository, times(1)).findByLoginId("admin");
+    }
+
+    // OPERATOR는 소속 가맹점과 user_permissions에 저장된 권한을 받는다
+    @Test
+    void login_whenOperator_returnsStoredPermissions() throws Exception {
+        var operator = mock(PlatformUser.class);
+        given(operator.getUserId()).willReturn(2L);
+        given(operator.getMerchantId()).willReturn(10L);
+        given(operator.getLoginId()).willReturn("boss");
+        given(operator.getDisplayName()).willReturn("사장님");
+        given(operator.getRole()).willReturn(UserRole.OPERATOR);
+        given(operator.getStatus()).willReturn(UserStatus.ACTIVE);
+        given(operator.getPasswordHash()).willReturn(encoder.encode("test-password"));
+        given(repository.findByLoginId("boss")).willReturn(Optional.of(operator));
+        given(permissionRepository.findPermissionCodesByUserId(2L)).willReturn(List.of("FDS_VIEW", "FINANCE_VIEW"));
+
+        var session = (MockHttpSession)
+                login("boss", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("OPERATOR"))
+                .andExpect(jsonPath("$.merchantId").value(10))
+                .andExpect(jsonPath("$.tenantScope").isEmpty())
+                .andExpect(jsonPath("$.permissions[0]").value("FDS_VIEW"))
+                .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"));
     }
 
     // 기존 세션은 인증 성공 후 ID가 변경된다

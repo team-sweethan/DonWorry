@@ -1,17 +1,19 @@
-# Identity — ADMIN 로그인 MVP
+# Identity — 로그인 MVP
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
 ## 구현
 
-- POST /api/auth/login: 아이디를 trim · 소문자로 정규화하고 BCrypt로 인증한다. 성공하면 관리자 정보와 조회 권한을 반환한다.
+- POST /api/auth/login: 아이디를 trim · 소문자로 정규화하고 BCrypt로 인증한다. 성공하면 사용자 정보와 조회 권한을 반환한다.
 - GET /api/auth/me: 세션 사용자 정보로 응답하며 DB를 다시 조회하지 않는다.
 - POST /api/auth/logout: Security 로그아웃 필터에서 세션과 인증 정보를 제거하고 204를 반환한다. 비로그인 · 반복 요청도 204다. GET은 로그아웃하지 않는다.
 - 없는 아이디 · 틀린 비밀번호 · DISABLED 계정은 같은 401 AUTH_004 ProblemDetail로 응답한다. 입력 누락 · 공백 · 아이디 100자 초과(DB login_id 컬럼 길이) · 잘못된 JSON은 400("아이디와 비밀번호를 확인해 주세요.")이다. 400이면 DB를 조회하지 않는다.
 - 계정 조회 중 DB 오류 등 인증 처리 자체가 실패하면 500 AUTH_005 ProblemDetail로 응답하고 error 로그를 남긴다. 처리하지 않으면 Security 필터가 401 AUTH_001(로그인 필요)로 바꿔 장애가 드러나지 않는다.
 - 첫 로그인은 세션을 만들고, 기존 세션이 있으면 ID를 바꾼 뒤 인증을 명시적으로 저장한다.
 - 세션에는 Entity · 비밀번호 · 비밀번호 해시를 보관하지 않는다. 별도의 Serializable 사용자 객체만 저장한다. 이 객체의 role은 UserRole enum이고, 응답 JSON의 role은 문자열("ADMIN")로 내보낸다.
-- ADMIN 권한은 role로 계산한다. user_permissions는 조회하지 않는다. ADMIN이고 merchantId가 null이면 tenantScope=ALL, ADMIN 권한은 FDS_VIEW · FINANCE_VIEW다.
+- ADMIN 권한은 role로 계산한다. ADMIN이고 merchantId가 null이면 tenantScope=ALL, ADMIN 권한은 FDS_VIEW · FINANCE_VIEW다.
+- ADMIN 외 역할은 로그인할 때 user_permissions를 읽어 세션 사용자 객체에 담고 permissions로 반환한다. 권한을 바꾸면 다시 로그인해야 반영된다. 권한 필드가 없는 이전 세션은 권한 없음으로 본다.
+- 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다.
 - DB · 프론트 · 다른 모듈 계약 변경은 없다. /me 외 접근 허용과 CSRF 비활성화는 ADR-0014대로 유지한다.
 
 ## 검증
@@ -28,6 +30,6 @@
 
 - 시드 ADMIN 계정으로 서버 기동 후 curl 로그인 → me → logout → me(401) 순서는 담당자가 직접 실행해 통과를 확인했다 (실행 기록은 저장소에 없음).
 - AUTH_005 코드 값과 문구는 이번에 새로 정했다. AUTH_003은 비어 있지만 예약 여부를 확인하지 못했다.
-- ADMIN 외 역할의 tenantScope는 #76에서 미정이다. 현재 구현은 null, permissions는 빈 목록이며 역할 확장 전 응답 계약 확정이 필요하다. 관리자 가맹점 정보가 비정상적으로 존재하는 경우에도 ALL을 반환하지 않는다.
+- ADMIN 외 역할의 tenantScope는 #76에서 미정이다. 현재 구현은 null이며 응답 계약 확정이 필요하다. 관리자 가맹점 정보가 비정상적으로 존재하는 경우에도 ALL을 반환하지 않는다.
 - 로그인 후 계정이 DISABLED로 바뀌어도 기존 세션에는 즉시 반영되지 않는다. #76 리뷰에서 유지로 결정했다. /me 외 API가 열려 있어 /me만 막는 효과가 없으므로 #68 5단계 서버 API 차단 때 다시 본다.
 - 로그인 실패 문구는 “아이디 또는 비밀번호가 올바르지 않습니다.”로 #76 리뷰에서 확정했다. 계정 존재 여부를 드러내지 않도록 모든 실패에 같은 문구를 쓴다.
