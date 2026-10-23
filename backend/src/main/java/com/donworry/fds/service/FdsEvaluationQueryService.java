@@ -66,8 +66,8 @@ public class FdsEvaluationQueryService {
                     predicate,
                     criteriaBuilder.or(
                             customerRef,
-                            criteriaBuilder.equal(root.get("evaluationId"), number),
-                            criteriaBuilder.equal(root.get("paymentId"), number)));
+                            criteriaBuilder.like(root.get("evaluationId").as(String.class), "%" + number + "%"),
+                            criteriaBuilder.like(root.get("paymentId").as(String.class), "%" + number + "%")));
         };
     }
 

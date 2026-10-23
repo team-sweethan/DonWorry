@@ -41,6 +41,13 @@ export function AlertListPage() {
   const [mockCreating, setMockCreating] = useState(false)
   const requestSequence = useRef(0)
   const conditions = useRef({ filter: 'NEEDS_ATTENTION' as Filter, query: '' })
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelScheduledSearch = () => {
+    if (searchTimer.current === null) return
+    clearTimeout(searchTimer.current)
+    searchTimer.current = null
+  }
 
   const load = (page = 0, nextFilter = filter, nextQuery = query) => {
     const sequence = ++requestSequence.current
@@ -86,6 +93,7 @@ export function AlertListPage() {
   }
 
   const selectFilter = (nextFilter: Filter) => {
+    cancelScheduledSearch()
     setFilter(nextFilter)
     conditions.current = { filter: nextFilter, query }
     load(0, nextFilter, query)
@@ -94,6 +102,7 @@ export function AlertListPage() {
   useEffect(() => {
     load(0, 'NEEDS_ATTENTION')
     return () => {
+      cancelScheduledSearch()
       requestSequence.current += 1
     }
   }, [])
@@ -221,7 +230,12 @@ export function AlertListPage() {
                 const nextQuery = event.target.value
                 setQuery(nextQuery)
                 conditions.current = { filter, query: nextQuery }
-                load(0, filter, nextQuery)
+                cancelScheduledSearch()
+                searchTimer.current = setTimeout(() => {
+                  searchTimer.current = null
+                  const current = conditions.current
+                  load(0, current.filter, current.query)
+                }, 300)
               }}
               allowClear
               className="dw-alert-search"

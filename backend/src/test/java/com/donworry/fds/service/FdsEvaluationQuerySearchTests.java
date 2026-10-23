@@ -49,18 +49,15 @@ class FdsEvaluationQuerySearchTests {
         assertThat(result.totalElements()).isEqualTo(1);
     }
 
-    // 결제 ID로 검색하면 해당 결제의 평가만 반환한다.
+    // 결제 ID 일부로 검색하면 해당 숫자를 포함하는 모든 평가를 반환한다.
     @Test
     void list_searchPaymentId_returnsMatchingEvaluation() {
         save(2001L, "customer-a", FdsResult.REVIEW, 60, 1);
         save(2002L, "customer-b", FdsResult.DENY, 80, 2);
 
-        var result = queryService.list(null, false, "2002", 0, 10);
+        var result = queryService.list(null, false, "200", 0, 10);
 
-        assertThat(result.content()).singleElement().satisfies(summary -> {
-            assertThat(summary.paymentId()).isEqualTo(2002L);
-            assertThat(summary.result()).isEqualTo(FdsResult.DENY);
-        });
+        assertThat(result.content()).extracting(summary -> summary.paymentId()).containsExactly(2002L, 2001L);
     }
 
     // 검색어와 판정 필터를 함께 적용한 결과도 서버에서 페이지로 나눈다.
