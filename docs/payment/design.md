@@ -196,6 +196,7 @@ Registry의 이력/보존과 업무 이력의 보존은 별개다. 성공 업무
 
 기존 초안의 merchantId·orderRef·RiskSignals는 현재 P2 요청 DTO에 없다. 추가가 필요하면 P2와 계약을 먼저 합의한다.
 P5 내부 입력은 `payment.service.PaymentEvaluationInput`으로 준비하며 요청 ID와 결제 요청 시각을 전달받아 보존한다. 고정된 모의 값은 테스트 코드에만 둔다.
+`PaymentEvaluationService`는 이 입력을 공개 요청 DTO로 변환해 `FdsEvaluator.evaluate()`를 한 번 호출하고 응답을 그대로 반환한다. 현재 P2 구현 Bean이 없어 생성자 주입을 받는 일반 클래스로 작성했으며, Spring Bean 등록과 실제 결제 흐름 연결은 P2 구현 준비 후 수행한다. 테스트 대역은 테스트 코드에만 둔다. 이 서비스는 결제 저장·승인·상태 분기를 수행하지 않는다.
 요청 형식 오류는 IllegalArgumentException으로 거절한다. 기록 가능한 평가 실패는 ERROR 응답, 응답을 만들 수 없는 호출 실패는 예외로 전달한다. 자동 재시도는 이번 호출 구현에 포함하지 않는다.
 
 동일 evaluationRequestId의 기술 재전송과 명시적 재평가를 구분한다. 응답의 요청·결제 연관성을 확인한 뒤 저장한다.
