@@ -53,7 +53,7 @@
 
 코드·SQL 기준은 `ae28a7c`다. P5 최초 저장·P2 평가 호출·응답 분기 판단은 있으나 최초 저장과 평가 연결은 별도 #100 작업이다. 이 기준의 P6는 패키지 골격이며 담당자가 전달한 매입·정산 동시 저장 구현은 별도 브랜치의 미검증 내용이다.
 
-[Issue #104](https://github.com/team-sweethan/DonWorry/issues/104)에서 [ADR-0016](decisions/0016-payment-mvp-capture-completion.md)를 제안한다. 별도 접수 이벤트 없이 P6 완료 통지(paymentId·captureId·capturedAt)를 P5 CAPTURED 및 직원 ACCEPT 건의 P3 인계 완료 근거로 쓰는 안이다. 보조 저장·추가 작업 ID·시도별 UNKNOWN 프로토콜은 후속 검토로 분리한다.
+[Issue #104](https://github.com/team-sweethan/DonWorry/issues/104)에서 [ADR-0018](decisions/0018-payment-mvp-capture-completion.md)를 제안한다. 별도 접수 이벤트 없이 P6 완료 통지(paymentId·captureId·capturedAt)를 P5 CAPTURED 및 직원 ACCEPT 건의 P3 인계 완료 근거로 쓰는 안이다. 보조 저장·추가 작업 ID·시도별 UNKNOWN 프로토콜은 후속 검토로 분리한다.
 
 3절의 기존 접수 정책과 달라지는 **제안**이며 아직 합의·구현된 대체 계약은 아니다. P3의 ID·시각 매핑, 완료 전 Case 종료 불가, 실패 시 인계·재시도 정책을 P3·P6와 확인해야 한다. Notion 원문과 채택된 ADR-0012는 변경하지 않았다. 최종 계약 채택 후 Notion 동기화는 별도 추적해야 한다.
 

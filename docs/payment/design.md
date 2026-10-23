@@ -193,7 +193,7 @@ CakeShop에는 실제 P5 결제 상태를 제공하며 HELD·PENDING이나 Case 
 
 P3·P5·P6 전체를 한 트랜잭션으로 묶지 않는다. 발행 기록은 업무 저장과 함께 남기고 소비자는 커밋 후 처리한다. 현재 Event Publication Registry 기반은 있지만 업무 이벤트·리스너·재발행은 이 기준 커밋에 구현되지 않아 전달 보장은 미검증이다.
 
-이 안에서는 CAPTURE 완료가 확인되기 전에는 그 인계를 ACCEPTED로 만들 수 없다. **기존 정본의 실행 성공 전 Case 종료 가능 정책을 CAPTURE 경로에서 축소**하므로 P3·P6와 [ADR-0016](../decisions/0016-payment-mvp-capture-completion.md) 합의가 필요하다. 채택 전에는 기존 정책을 대체하지 않는다.
+이 안에서는 CAPTURE 완료가 확인되기 전에는 그 인계를 ACCEPTED로 만들 수 없다. **기존 정본의 실행 성공 전 Case 종료 가능 정책을 CAPTURE 경로에서 축소**하므로 P3·P6와 [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) 합의가 필요하다. 채택 전에는 기존 정책을 대체하지 않는다.
 
 ## 5. 실패·중복·경합
 
