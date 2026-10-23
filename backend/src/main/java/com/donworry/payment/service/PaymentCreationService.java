@@ -17,7 +17,18 @@ public class PaymentCreationService {
     // 후속 평가·승인 흐름이 롤백돼도 최초 접수 기록은 남긴다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long createPending(Long merchantId, String customerRef, String orderRef, Long amount) {
+        return savePending(merchantId, customerRef, orderRef, amount).getPaymentId();
+    }
+
+    // Spring Bean 호출이 반환되면 커밋된 결제의 값으로 후속 평가를 구성한다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public PaymentCreationSnapshot createPendingSnapshot(
+            Long merchantId, String customerRef, String orderRef, Long amount) {
+        return PaymentCreationSnapshot.from(savePending(merchantId, customerRef, orderRef, amount));
+    }
+
+    private Payment savePending(Long merchantId, String customerRef, String orderRef, Long amount) {
         Payment payment = Payment.pending(merchantId, customerRef, orderRef, amount, Instant.now());
-        return paymentRepository.save(payment).getPaymentId();
+        return paymentRepository.save(payment);
     }
 }

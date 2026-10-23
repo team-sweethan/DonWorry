@@ -153,3 +153,14 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - 승인 성공/불명·종료 결제의 재처리 차단, 잘못된 상태/승인 조합·누락 입력 거절 검증.
 - 반환된 NOTIFY_HELD·REQUEST_CAPTURE·REQUEST_VOID·RECORD_FDS_ERROR 등은 판단 결과이며 실제 호출·이벤트·기록을 실행하지 않았다.
 - DB 선저장·트랜잭션·원장·요청 키 멱등성·직원 권한·실제 FDS/Case/P6/CakeShop 연동은 미검증. W1 통과를 T01~T15 전체 통과로 해석하지 않는다.
+
+## #100 최초 저장·평가 흐름 통합 실행 기록
+
+2026-10-23, `feature/100-payment-evaluation-flow`, 기준 커밋 `a74c83b` + 3~6번 단계 미커밋 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 검사 159건, MariaDB 검사 30건 통과. 실패·오류·건너뜀 모두 0.
+- [PaymentEvaluationFlowPersistenceTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationFlowPersistenceTests.java) 3건은 실제 P2 Bean·MariaDB를 사용한다. ALLOW, 동일 고객 세 번째 고액 결제의 REVIEW, 호출자 롤백 후 결제와 평가의 별도 커밋 보존을 확인했다.
+- 저장된 결제와 평가의 paymentId·customerRef·요청 시각을 DB에서 비교하고, P2 HIGH_AMOUNT 근거의 금액이 결제 저장 금액과 일치함을 확인했다. 결제마다 평가 한 건, 새 결제들의 요청 UUID가 서로 다름을 확인했다.
+- [PaymentEvaluationFlowFailureTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationFlowFailureTests.java) 3건은 실제 P5·MariaDB에 `FdsEvaluator` 대역을 주입한다. 평가 시작 시 호출자 트랜잭션이 중단되어 있고 별도 트랜잭션에서 최초 결제를 조회할 수 있음을 확인했다. 호출 예외·호출자 롤백 후 PENDING 보존과 평가 단일 호출을 확인했다.
+- 대역 DENY·ERROR 응답에서는 반환 판단만 달라지고 DB 결제는 승인 참조 없는 PENDING으로 유지된다. 이는 실제 P2의 DENY·ERROR 생성·저장 검증이 아니다. 현재 실제 P2 규칙의 최대 점수는 60점, DENY 기준은 80점이다.
+- 미검증·후속: 실제 승인·상태 변경·오류 이력·이벤트, HTTP·CakeShop, 중복 접수·재시작 후 복구. 동일 요청 UUID에 다른 입력을 넣는 경우의 검증은 #95에서 합의한 P2 후속 과제다. 스키마·P2 공개 계약 변경은 없다.

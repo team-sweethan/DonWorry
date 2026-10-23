@@ -77,6 +77,45 @@ class PaymentCreationServiceTests {
         });
     }
 
+    // 반환한 평가 재료와 상태가 커밋 후 재조회한 결제의 값과 모두 일치한다
+    @Test
+    void createPendingSnapshot_withValidInput_returnsCommittedValues() {
+        var snapshot =
+                paymentCreationService.createPendingSnapshot(999L, "customer-snapshot", "order-snapshot", 150_000L);
+
+        assertThat(snapshot.paymentId()).isPositive();
+        assertThat(snapshot.customerRef()).isEqualTo("customer-snapshot");
+        assertThat(snapshot.amount()).isEqualTo(150_000L);
+        assertThat(snapshot.status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(snapshot.authorizationRef()).isNull();
+        assertThat(snapshot.createdAt()).isNotNull();
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+        transactions.executeWithoutResult(status -> {
+            Payment payment = paymentRepository.findById(snapshot.paymentId()).orElseThrow();
+            assertThat(PaymentCreationSnapshot.from(payment)).isEqualTo(snapshot);
+            assertThat(payment.getMerchantId()).isEqualTo(999L);
+            assertThat(payment.getOrderRef()).isEqualTo("order-snapshot");
+        });
+    }
+
+    // 호출자가 롤백해도 반환한 스냅샷과 같은 최초 결제 기록이 남는다
+    @Test
+    void createPendingSnapshot_whenCallerRollsBack_preservesInitialPayment() {
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+        var snapshot = transactions.execute(status -> {
+            var created = paymentCreationService.createPendingSnapshot(
+                    999L, "customer-snapshot-rollback", "order-snapshot-rollback", 150_000L);
+            status.setRollbackOnly();
+            return created;
+        });
+
+        assertThat(snapshot).isNotNull();
+        transactions.executeWithoutResult(status -> {
+            Payment payment = paymentRepository.findById(snapshot.paymentId()).orElseThrow();
+            assertThat(PaymentCreationSnapshot.from(payment)).isEqualTo(snapshot);
+        });
+    }
+
     // 필수값이 없는 호출은 실패하고 결제 행을 생성하지 않는다
     @Test
     void createPending_withMissingRequiredValue_doesNotPersistPayment() {
