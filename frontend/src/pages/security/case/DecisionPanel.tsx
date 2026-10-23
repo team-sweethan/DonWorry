@@ -111,7 +111,7 @@ export function DecisionPanel({
             <div key={p.casePaymentId} style={rowBox}>
               <Space size={8} wrap style={{ marginBottom: 8 }}>
                 <strong>{p.paymentId}</strong>
-                <span>{won(p.amount)}</span>
+                <span>{p.amount === null ? '-' : won(p.amount)}</span>
                 <span style={{ color: '#64748b' }}>FDS {p.riskScore ?? '-'}점</span>
               </Space>
               {decided ? (

@@ -36,7 +36,11 @@ export function CaseDetailPage() {
   // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
   // 늦게 도착한 이전 범위의 응답은 버린다.
   const scope = `${merchant}/${id}`
-  const [loaded, setLoaded] = useState<{ scope: string; detail: CaseDetail | null } | null>(null)
+  // detail: null은 404(Case 없음), 'error'는 네트워크·5xx 등 일시 장애 — 404 화면으로 단정하지 않는다
+  const [loaded, setLoaded] = useState<{
+    scope: string
+    detail: CaseDetail | null | 'error'
+  } | null>(null)
   useEffect(() => {
     let alive = true
     getCase(id, merchant)
@@ -46,13 +50,14 @@ export function CaseDetailPage() {
       .catch(() => {
         if (!alive) return
         message.error('Case를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setLoaded({ scope: `${merchant}/${id}`, detail: null })
+        setLoaded({ scope: `${merchant}/${id}`, detail: 'error' })
       })
     return () => {
       alive = false
     }
   }, [id, merchant, refreshKey, message])
-  const detail = loaded?.scope === scope ? loaded.detail : undefined
+  const result = loaded?.scope === scope ? loaded.detail : undefined
+  const detail = result === 'error' ? null : result
   const load = useCallback(() => setRefreshKey((k) => k + 1), [])
 
   const waiting =
@@ -65,8 +70,19 @@ export function CaseDetailPage() {
     return () => clearTimeout(timer)
   }, [waiting, detail, load])
 
-  if (detail === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
-  if (detail === null) return <ScreenResult kind="404" />
+  if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
+  if (result === 'error')
+    return (
+      <ScreenResult
+        kind="500"
+        action={
+          <Button type="primary" onClick={load}>
+            다시 시도
+          </Button>
+        }
+      />
+    )
+  if (detail === null || detail === undefined) return <ScreenResult kind="404" />
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
   const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
@@ -93,11 +109,16 @@ export function CaseDetailPage() {
   }
 
   const handleDemoMerge = async () => {
-    // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
-    if (await demoMergePayment(securityCase.caseId)) {
-      toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
-    } else {
-      toast.error('병합 기한(30분)이 지났거나 판정이 시작되어 병합되지 않았습니다.')
+    try {
+      // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
+      if (await demoMergePayment(securityCase.caseId)) {
+        toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
+      } else {
+        toast.error('병합 기한(30분)이 지났거나 판정이 시작되어 병합되지 않았습니다.')
+        load()
+      }
+    } catch {
+      toast.error('시연 결제를 병합하지 못했습니다. 잠시 후 다시 시도하세요.')
       load()
     }
   }
@@ -163,13 +184,22 @@ export function CaseDetailPage() {
             dataSource={payments}
             columns={[
               { title: '결제 ID', dataIndex: 'paymentId', render: (v) => <strong>{v}</strong> },
-              { title: '금액', dataIndex: 'amount', align: 'right', render: won },
-              { title: '결제 시각', dataIndex: 'requestedAt', render: dateTime },
+              {
+                title: '금액',
+                dataIndex: 'amount',
+                align: 'right',
+                render: (v: CasePayment['amount']) => (v === null ? '-' : won(v)),
+              },
+              {
+                title: '결제 시각',
+                dataIndex: 'requestedAt',
+                render: (v: CasePayment['requestedAt']) => (v === null ? '-' : dateTime(v)),
+              },
               {
                 title: '결제 상태 (P5)',
                 dataIndex: 'paymentStatus',
                 render: (v: CasePayment['paymentStatus']) => (
-                  <CodeTag value={paymentStatusLabel[v]} />
+                  <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
                 ),
               },
               {
@@ -181,7 +211,9 @@ export function CaseDetailPage() {
               {
                 title: 'FDS 판정',
                 dataIndex: 'fdsResult',
-                render: (v: CasePayment['fdsResult']) => <CodeTag value={fdsResultLabel[v]} />,
+                render: (v: CasePayment['fdsResult']) => (
+                  <CodeTag value={v ? fdsResultLabel[v] : undefined} />
+                ),
               },
               {
                 title: '적중 규칙',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import { demoCreateHeldPayment, getCases } from '../../api/cases'
@@ -34,22 +34,29 @@ export function CaseListPage() {
   const [status, setStatus] = useState<StatusFilter>('OPEN_ONLY')
   const [refreshKey, setRefreshKey] = useState(0)
   // 어떤 요청(가맹점·새로고침)에 대한 응답인지 함께 저장해 늦게 온 응답이 덮어쓰지 않게 한다.
+  // failed: 조회 실패. 빈 목록과 구분해 "처리할 Case 없음"으로 오인하지 않게 하고, 직전 목록은 유지한다.
   const [result, setResult] = useState<{
     merchant: string
     refreshKey: number
     cases: CaseSummary[]
+    failed: boolean
   } | null>(null)
 
   useEffect(() => {
     let alive = true
     getCases(merchant)
       .then((cases) => {
-        if (alive) setResult({ merchant, refreshKey, cases })
+        if (alive) setResult({ merchant, refreshKey, cases, failed: false })
       })
       .catch(() => {
         if (!alive) return
         message.error('Case 목록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setResult({ merchant, refreshKey, cases: [] })
+        setResult((prev) => ({
+          merchant,
+          refreshKey,
+          cases: prev?.merchant === merchant ? prev.cases : [],
+          failed: true,
+        }))
       })
     return () => {
       alive = false
@@ -183,6 +190,19 @@ export function CaseListPage() {
           </>
         }
       />
+      {result?.merchant === merchant && result.failed && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Case 목록을 불러오지 못했습니다. 아래 건수와 목록은 실제와 다를 수 있습니다."
+          action={
+            <Button size="small" onClick={() => setRefreshKey((k) => k + 1)}>
+              다시 시도
+            </Button>
+          }
+        />
+      )}
       <div className="dw-stat-grid">
         <StatCard title="열린 Case" value={open.length} foot="종료 전 Case" />
         <StatCard

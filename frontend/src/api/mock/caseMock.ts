@@ -59,7 +59,7 @@ export function buildReportBody(
       merchantId: securityCase.merchantId,
       customerRef: securityCase.customerRef,
       paymentCount: payments.length,
-      totalAmount: payments.reduce((sum, p) => sum + p.amount, 0),
+      totalAmount: payments.reduce((sum, p) => sum + (p.amount ?? 0), 0),
       caseCreatedAt: securityCase.createdAt,
       investigatedAt,
       reportVersion: report.reportVersion,
@@ -70,8 +70,8 @@ export function buildReportBody(
     ],
     paymentAnalyses: payments.map((p) => ({
       paymentId: p.paymentId,
-      amount: p.amount,
-      requestedAt: p.requestedAt,
+      amount: p.amount ?? 0,
+      requestedAt: p.requestedAt ?? p.linkedAt,
       riskScore: p.riskScore,
       ruleHits: p.ruleHits,
       riskEvidence: p.ruleHits.map((rule) => `${rule} 규칙 적중`),
@@ -80,7 +80,7 @@ export function buildReportBody(
       recommendation: 'NEEDS_CHECK',
     })),
     timeline: payments.map((p) => ({
-      at: p.requestedAt,
+      at: p.requestedAt ?? p.linkedAt,
       event: `${p.paymentId} 결제 요청 · FDS REVIEW (${p.riskScore}점)`,
     })),
     overallAnalysis: ['결제 간 공통 기기·계정 관계는 확인되지 않았습니다.'],

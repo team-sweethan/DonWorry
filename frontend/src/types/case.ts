@@ -36,16 +36,19 @@ export type SecurityCase = {
   closedAt: string | null
 }
 
-/** case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가. */
+/**
+ * case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가.
+ * P5·P2에서 조회하지 못하면 백엔드가 null로 보낸다 (추정값을 채우지 않는다). 화면은 '-'로 표시한다.
+ */
 export type CasePayment = {
   casePaymentId: string
   paymentId: string
   linkedAt: string
-  amount: number
-  paymentStatus: PaymentStatus
-  requestedAt: string
+  amount: number | null
+  paymentStatus: PaymentStatus | null
+  requestedAt: string | null
   riskScore: number | null
-  fdsResult: FdsResult
+  fdsResult: FdsResult | null
   ruleHits: string[]
 }
 

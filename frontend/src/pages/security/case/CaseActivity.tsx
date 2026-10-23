@@ -68,7 +68,11 @@ export function HandoffCard({
             title: '실제 결제 상태 (P5)',
             key: 'paymentStatus',
             render: (_, r) =>
-              r.payment ? <CodeTag value={paymentStatusLabel[r.payment.paymentStatus]} /> : '-',
+              r.payment?.paymentStatus ? (
+                <CodeTag value={paymentStatusLabel[r.payment.paymentStatus]} />
+              ) : (
+                '-'
+              ),
           },
         ]}
       />
