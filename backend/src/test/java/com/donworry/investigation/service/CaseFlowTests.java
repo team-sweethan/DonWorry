@@ -148,7 +148,10 @@ class CaseFlowTests {
         mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1))
-                .andExpect(jsonPath("$.reports[0].evidenceVersion").value(1));
+                .andExpect(jsonPath("$.reports[0].evidenceVersion").value(1))
+                // 연결 결제 정보를 찾지 못하면 성공 보고서를 만들지 않고 FAILED로 남긴다 (수동 판정 경로)
+                .andExpect(jsonPath("$.reports[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.reports[0].reportBody").isEmpty());
         mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1));
@@ -383,7 +386,7 @@ class CaseFlowTests {
                         .value(72));
     }
 
-    // 결제 정보를 조회하지 못한 결제가 있으면 합계는 0이 아니라 null이다 (서버 재시작으로 목업이 비었을 때)
+    // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다 (서버 재시작으로 목업이 비었을 때)
     @Test
     void list_missingPaymentInfo_returnsNullTotalAmount() {
         Long caseId = caseIntakeService.receive(
@@ -395,6 +398,7 @@ class CaseFlowTests {
                 .satisfies(summary -> {
                     assertThat(summary.paymentCount()).isEqualTo(1);
                     assertThat(summary.totalAmount()).isNull();
+                    assertThat(summary.maxRiskScore()).isNull();
                 });
     }
 

@@ -47,11 +47,13 @@ public class MockReportGateway implements ReportGateway {
             }
             int reportVersion = caseReports.size() + 1;
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            List<PaymentInfo> payments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                    .map(CasePayment::getPaymentId)
-                    .map(paymentInfoReader::find)
-                    .flatMap(Optional::stream)
-                    .toList();
+            List<Optional<PaymentInfo>> found =
+                    casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
+                            .map(CasePayment::getPaymentId)
+                            .map(paymentInfoReader::find)
+                            .toList();
+            List<PaymentInfo> payments =
+                    found.stream().flatMap(Optional::stream).toList();
             // 결제 연결과 버전 증가는 한 트랜잭션으로 커밋되므로, 결제를 읽은 뒤 버전이 요청과 같으면 둘이 같은 시점이다
             // 그사이 병합돼 버전이 앞섰으면 낡은 요청이다 — 건너뛰고 새 버전 요청이 보고서를 만든다
             boolean stale = securityCase.get().getEvidenceVersion() != evidenceVersion
@@ -61,6 +63,13 @@ public class MockReportGateway implements ReportGateway {
                                     .orElse(-1)
                             != evidenceVersion;
             if (stale) {
+                return;
+            }
+            // 연결된 결제 중 하나라도 조회하지 못하면(예: 서버 재시작으로 목 결제 정보가 비었을 때) 성공 보고서를 만들지 않는다
+            // 증거가 빠진 보고서를 판정 근거로 쓰지 않도록 최종 실패(FAILED)로 남긴다 — 직원은 수동 판정 경로로 간다 (fds 정본 02 §2.5)
+            if (payments.size() != found.size()) {
+                caseReports.add(new ReportSnapshot(
+                        reportIds.incrementAndGet(), caseId, reportVersion, evidenceVersion, "FAILED", null, now, now));
                 return;
             }
             caseReports.add(new ReportSnapshot(

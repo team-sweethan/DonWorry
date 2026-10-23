@@ -10,6 +10,7 @@ import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.repository.ActionHandoffRepository;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
+import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -49,16 +50,17 @@ class HandoffReceiptTests {
     @Autowired
     JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    MockPaymentInfoStore mockPaymentInfoStore;
+
     Long caseId;
     UUID idempotencyKey;
 
     @BeforeEach
     void decideOnePayment() {
         given(financialActionGateway.request(any())).willReturn(Receipt.unknown());
-        caseId = caseIntakeService.receive(new HeldPayment(
-                System.nanoTime(), 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
+        caseId = receiveHeld();
         CaseDetailResponse detail = caseQueryService.detail(caseId);
-        // 목 결제 저장소를 거치지 않았으므로 보고서 경계는 목 그대로 쓰되 최신 보고서 ID만 가져온다
         caseDecisionService.decide(
                 caseId,
                 new DecisionSubmitRequest(
@@ -91,8 +93,7 @@ class HandoffReceiptTests {
     @Test
     void gatewayThrows_keepsRequestedAndLeavesPublicationIncomplete() {
         given(financialActionGateway.request(any())).willThrow(new IllegalStateException("timeout"));
-        Long otherCaseId = caseIntakeService.receive(new HeldPayment(
-                System.nanoTime(), 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
+        Long otherCaseId = receiveHeld();
         CaseDetailResponse before = caseQueryService.detail(otherCaseId);
 
         caseDecisionService.decide(
@@ -109,6 +110,15 @@ class HandoffReceiptTests {
         assertThat(after.handoffs().getFirst().status()).isEqualTo("REQUESTED");
         assertThat(incompletePublications(after.handoffs().getFirst().handoffId()))
                 .isEqualTo(1);
+    }
+
+    // 결제 정보가 있어야 목 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
+    private Long receiveHeld() {
+        Long paymentId = mockPaymentInfoStore
+                .registerHeld(100_000L, 65, List.of("NEW_CARD"), Instant.now())
+                .paymentId();
+        return caseIntakeService.receive(
+                new HeldPayment(paymentId, 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
     }
 
     private Integer incompletePublications(Long handoffId) {

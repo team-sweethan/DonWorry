@@ -19,7 +19,6 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -90,12 +89,7 @@ public class CaseQueryService {
                 securityCase.getClosedAt(),
                 payments.size(),
                 totalAmount(payments),
-                payments.stream()
-                        .flatMap(Optional::stream)
-                        .map(PaymentInfo::riskScore)
-                        .filter(Objects::nonNull)
-                        .max(Integer::compare)
-                        .orElse(null),
+                maxRiskScore(payments),
                 reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null),
                 (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId));
     }
@@ -111,6 +105,19 @@ public class CaseQueryService {
             total += amount;
         }
         return total;
+    }
+
+    // 점수를 모르는 결제가 있으면 최고 점수도 모른다 (null). 남은 결제만으로 낮게 보이게 하지 않는다
+    private static Integer maxRiskScore(List<Optional<PaymentInfo>> payments) {
+        Integer max = null;
+        for (Optional<PaymentInfo> payment : payments) {
+            Integer riskScore = payment.map(PaymentInfo::riskScore).orElse(null);
+            if (riskScore == null) {
+                return null;
+            }
+            max = max == null ? riskScore : Math.max(max, riskScore);
+        }
+        return max;
     }
 
     private CasePaymentResponse payment(CasePayment casePayment) {
