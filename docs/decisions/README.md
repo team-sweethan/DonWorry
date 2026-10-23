@@ -37,7 +37,9 @@
 | [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 채택 |
 | [0015](0015-fds-evaluation-list-query-contract.md) | FDS 평가 목록 조회의 서버 페이지네이션과 검색 계약 | 제안 — 팀 합의 필요 |
-| [0016](0016-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
+| [0016](0016-capture-request-event-contract.md) | 1차 MVP 매입 요청 이벤트 계약 | 채택 — P6 요청 계약 |
+| [0017](0017-capture-completed-event-contract.md) | 1차 MVP 매입 완료 이벤트 계약 | 채택 — P5 수신 구현 별도 |
+| [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
 
 ## 현재 적용 상태와 기록의 구분
 
