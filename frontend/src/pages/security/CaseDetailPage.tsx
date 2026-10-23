@@ -6,6 +6,7 @@ import {
   CaseVersionConflictError,
   demoMergePayment,
   getCase,
+  requestReport,
   submitDecisions,
 } from '../../api/cases'
 import { ApiError } from '../../api/client'
@@ -111,17 +112,40 @@ export function CaseDetailPage() {
   const handleDemoMerge = async () => {
     try {
       // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
-      if (await demoMergePayment(securityCase.caseId)) {
+      const result = await demoMergePayment(securityCase.caseId)
+      if (result.merged) {
         toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
       } else {
-        toast.error('병합 기한(30분)이 지났거나 판정이 시작되어 병합되지 않았습니다.')
-        load()
+        // 병합되지 않은 결제는 새 Case가 된다. 숨기지 않고 새 Case로 안내한다
+        toast.info(
+          `병합 기한(30분)이 지났거나 판정이 시작되어 새 Case ${result.caseId}가 생성되었습니다.`,
+        )
+        navigate(`/security/cases/${result.caseId}`)
       }
     } catch {
       toast.error('시연 결제를 병합하지 못했습니다. 잠시 후 다시 시도하세요.')
       load()
     }
   }
+
+  const handleRequestReport = async () => {
+    try {
+      await requestReport(securityCase.caseId)
+      toast.info('AI 보고서를 다시 요청했습니다.')
+    } catch {
+      toast.error('AI 보고서를 요청하지 못했습니다. 잠시 후 다시 시도하세요.')
+    }
+    load()
+  }
+  // 현재 증거 버전 보고서가 없고 생성 중인 것도 없을 때만 다시 요청할 수 있다
+  // (목 보고서가 서버 재시작으로 비었거나 커밋 뒤 보고서 요청이 실패한 경우)
+  const latest = latestReport(reports)
+  const reportMissing =
+    securityCase.status !== 'CLOSED' &&
+    (!latest ||
+      (latest.evidenceVersion < securityCase.evidenceVersion &&
+        latest.status !== 'PENDING' &&
+        latest.status !== 'RUNNING'))
 
   return (
     <>
@@ -131,6 +155,7 @@ export function CaseDetailPage() {
         actions={
           <Space>
             <span className="dw-demo-label">DEMO DATA</span>
+            {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
             {mergeRemaining !== null && <Button onClick={handleDemoMerge}>시연: 결제 병합</Button>}
             <Button icon={<ReloadOutlined />} onClick={load}>
               새로고침

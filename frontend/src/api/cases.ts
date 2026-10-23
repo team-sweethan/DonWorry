@@ -134,11 +134,18 @@ export async function demoCreateHeldPayment(): Promise<string> {
   return str(held.caseId)
 }
 
+/** 현재 증거 버전의 AI 보고서가 없을 때 다시 요청한다. 이미 있으면 백엔드가 새로 만들지 않는다. */
+export async function requestReport(caseId: string): Promise<CaseDetail> {
+  return toDetail(await api<ServerDetail>(`/security-cases/${caseId}/reports`, { method: 'POST' }))
+}
+
 /**
  * 시연 전용: 열람 중 같은 고객의 보류 결제(고액 + 10분 내 반복 = 60점)가 병합되는 상황을 만든다.
- * 병합 기한이 지났거나 판정이 시작돼 새 Case가 생기면 false.
+ * 병합 기한이 지났거나 판정이 시작되면 백엔드는 그 결제로 새 Case를 만든다 — merged: false와 새 caseId를 돌려준다.
  */
-export async function demoMergePayment(caseId: string): Promise<boolean> {
+export async function demoMergePayment(
+  caseId: string,
+): Promise<{ merged: boolean; caseId: string }> {
   const { securityCase } = await fetchDetail(caseId)
   const held = await postDemoHeld({
     merchantId: securityCase.merchantId,
@@ -147,7 +154,7 @@ export async function demoMergePayment(caseId: string): Promise<boolean> {
     riskScore: 60,
     ruleHits: ['HIGH_AMOUNT', 'RAPID_REPEAT'],
   })
-  return str(held.caseId) === caseId
+  return { merged: str(held.caseId) === caseId, caseId: str(held.caseId) }
 }
 
 function fetchDetail(caseId: string) {
