@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @Tag("mariadb")
@@ -34,6 +35,9 @@ class CaptureConcurrencyTests {
     @Autowired
     EntityManager entityManager;
 
+    @Autowired
+    JdbcTemplate jdbc;
+
     @MockitoSpyBean
     CaptureRepository captures;
 
@@ -43,8 +47,11 @@ class CaptureConcurrencyTests {
     @AfterEach
     void cleanUp() {
         reset(captures, settlements);
-        settlements.deleteAll();
-        captures.deleteAll();
+        // 다른 테스트가 같은 컨테이너에 저장한 기록은 지우지 않는다.
+        for (long paymentId : new long[] {90001L, 90002L}) {
+            settlements.findByPaymentId(paymentId).ifPresent(settlements::delete);
+            captures.findByPaymentId(paymentId).ifPresent(captures::delete);
+        }
     }
 
     // 같은 결제를 동시에 처음 처리해도 두 요청 모두 같은 매입을 반환한다
@@ -73,8 +80,10 @@ class CaptureConcurrencyTests {
             Capture firstResult = first.get(20, TimeUnit.SECONDS);
             Capture secondResult = second.get(20, TimeUnit.SECONDS);
             assertThat(firstResult.getCaptureId()).isEqualTo(secondResult.getCaptureId());
-            assertThat(captures.count()).isEqualTo(1);
-            assertThat(settlements.count()).isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM captures WHERE payment_id = ?", Long.class, 90001L))
+                    .isEqualTo(1);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM settlements WHERE payment_id = ?", Long.class, 90001L))
+                    .isEqualTo(1);
             assertThat(settlements.findByPaymentId(90001L).orElseThrow().getSettlementAmount())
                     .isEqualTo(9701L);
         }

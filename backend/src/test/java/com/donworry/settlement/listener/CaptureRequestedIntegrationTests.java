@@ -64,7 +64,7 @@ class CaptureRequestedIntegrationTests {
             assertThat(capture.getStatus()).isEqualTo(CaptureStatus.COMPLETED);
             assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
             assertThat(settlement.getSettlementAmount()).isEqualTo(9701L);
-            var completed = completions.received.stream()
+            var completed = completions.received().stream()
                     .filter(result -> result.paymentId().equals(event.paymentId()))
                     .toList();
             assertThat(completed).hasSize(1);
@@ -120,10 +120,15 @@ class CaptureRequestedIntegrationTests {
 
     static class CompletionProbe {
         private final JdbcTemplate jdbc;
-        final CopyOnWriteArrayList<CaptureCompleted> received = new CopyOnWriteArrayList<>();
+        private final CopyOnWriteArrayList<CaptureCompleted> received = new CopyOnWriteArrayList<>();
 
         CompletionProbe(JdbcTemplate jdbc) {
             this.jdbc = jdbc;
+        }
+
+        // Spring 프록시의 필드를 직접 읽지 않고 실제 수신 객체의 기록을 조회한다.
+        public java.util.List<CaptureCompleted> received() {
+            return java.util.List.copyOf(received);
         }
 
         // P5 대신 커밋된 매입과 정산을 조회해 완료 이벤트의 수신 시점을 확인한다
