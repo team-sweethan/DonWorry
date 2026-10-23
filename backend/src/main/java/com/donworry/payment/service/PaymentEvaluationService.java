@@ -5,8 +5,9 @@ import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsEvaluator;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
-// 실제 결제 흐름을 연결할 때 Spring Bean으로 등록한다.
+@Service
 @RequiredArgsConstructor
 public class PaymentEvaluationService {
 
