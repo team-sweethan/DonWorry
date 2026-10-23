@@ -8,7 +8,7 @@ import org.springframework.security.core.userdetails.User;
 public class PlatformUserDetails extends User {
     private final SessionUser sessionUser;
 
-    public PlatformUserDetails(PlatformUser user, List<String> permissions) {
+    public PlatformUserDetails(PlatformUser user) {
         super(
                 user.getLoginId(),
                 user.getPasswordHash(),
@@ -23,8 +23,8 @@ public class PlatformUserDetails extends User {
                 .displayName(user.getDisplayName())
                 .role(user.getRole())
                 .merchantId(user.getMerchantId())
-                // 세션에 직렬화되므로 변경 불가 · 직렬화 가능한 목록으로 복사한다
-                .permissions(List.copyOf(permissions))
+                // 권한은 비밀번호 검증 뒤 AuthService가 채운다
+                .permissions(List.of())
                 .build();
     }
 

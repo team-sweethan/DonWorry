@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Alert, Button, Form, Input } from 'antd'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { roles, type Role } from '../../config/navigation'
+import type { Role } from '../../config/navigation'
 import { useDemo } from '../../demo/DemoContext'
 
 type LoginValues = { username: string; password: string }
@@ -11,13 +11,16 @@ const demoAccounts: Record<Role, LoginValues> = {
   owner: { username: 'owner', password: 'demo1234' },
 }
 
+// 보안 직원 · 사장님 화면은 서버 세션으로 옮겨졌다. 시연 로그인은 개발 화면 확인용으로만 남긴다.
+const demoLanding = '/dev/components'
+
 export function DemoLoginPage() {
-  const { loggedIn, role, login } = useDemo()
+  const { loggedIn, login } = useDemo()
   const navigate = useNavigate()
   const [form] = Form.useForm<LoginValues>()
   const [error, setError] = useState(false)
 
-  if (loggedIn) return <Navigate to={roles[role].landing} replace />
+  if (loggedIn) return <Navigate to={demoLanding} replace />
 
   const submit = (values: LoginValues) => {
     // 공개된 시연 계정만 확인한다. 실제 인증 API 연결 시 교체한다.
@@ -32,7 +35,7 @@ export function DemoLoginPage() {
     }
     form.resetFields()
     login(selected)
-    navigate(roles[selected].landing, { replace: true })
+    navigate(demoLanding, { replace: true })
   }
 
   const fillAccount = (selected: Role) => {

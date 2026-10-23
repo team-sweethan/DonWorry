@@ -33,7 +33,7 @@ npm run dev
 | `/login`                                   | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                           |
 | `/`                                        | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                             |
 | `/admin/fds`, `/admin/finance`             | ADMIN 전용 메뉴·헤더와 담당자 구현 영역 (`EmptyPage`)                                |
-| `/demo/login`                              | 로컬 시연 로그인. `/dev/components`용으로만 남아 있음                                |
+| `/demo/login`                              | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                 |
 | `/security/cases`, `/security/cases/:id`   | Case 목록·상세 목업. `src/api/cases.ts`의 메모리 저장소로 조회·판정·인계 진행을 시연 |
 | `/security/alerts`, `/security/alerts/:id` | 경보 목록·상세 목업. `src/demo/alertMockData.ts` 사용                                |
 | `/security/transactions`                   | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                             |

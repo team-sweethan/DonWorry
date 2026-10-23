@@ -130,6 +130,14 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"));
     }
 
+    // 비밀번호가 틀리면 권한을 조회하지 않아 있는 아이디와 없는 아이디의 처리 차이를 만들지 않는다
+    @Test
+    void login_whenPasswordWrong_doesNotReadPermissions() throws Exception {
+        assertThat(login("admin", "wrong-password", null).getResponse().getStatus())
+                .isEqualTo(401);
+        verify(permissionRepository, never()).findPermissionCodesByUserId(any());
+    }
+
     // 기존 세션은 인증 성공 후 ID가 변경된다
     @Test
     void login_whenSessionExists_changesSessionId() throws Exception {
