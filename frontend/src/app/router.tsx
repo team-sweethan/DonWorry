@@ -1,10 +1,9 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
-import type { Role } from '../config/navigation'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { useDemo } from '../demo/DemoContext'
 import { AdminLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
-import { AdminSession, LoginRoute } from '../auth/AuthRoutes'
+import { LoginRoute, ServerSession } from '../auth/AuthRoutes'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
@@ -17,51 +16,51 @@ function DemoSession() {
   return loggedIn ? <AdminLayout /> : <Navigate to="/demo/login" replace />
 }
 
-function RoleRoute({ allowed }: { allowed: Role }) {
-  const { role } = useDemo()
-  return role === allowed ? <Outlet /> : <ScreenResult kind="403" />
-}
-
-// ADMIN은 서버 세션으로, 기존 목업은 DemoSession으로 진입한다. 서버 인가는 #68 5단계다.
+// ADMIN · 보안 직원 · 사장님은 서버 세션으로, 컴포넌트 목록 같은 개발 화면은 DemoSession으로 진입한다.
+// 서버 인가는 #68 5단계다.
 export const router = createBrowserRouter([
-  { path: '/', element: <Navigate to="/admin" replace /> },
+  // 로그인 화면이 로그인된 사용자를 역할별 첫 화면으로 보낸다.
+  { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginRoute /> },
-  // 가드보다 먼저 이동해 /me 확인을 한 번만 한다.
+  // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/fds" replace /> },
+  { path: '/security', element: <Navigate to="/security/cases" replace /> },
   {
-    path: '/admin',
-    element: <AdminSession />,
+    element: <ServerSession />,
     children: [
-      { path: 'fds', element: <EmptyPage title="FDS" /> },
-      { path: 'finance', element: <EmptyPage title="자금관리" /> },
-      { path: '*', element: <ScreenResult kind="404" homePath="/admin" /> },
+      {
+        path: '/admin',
+        children: [
+          { path: 'fds', element: <EmptyPage title="FDS" /> },
+          { path: 'finance', element: <EmptyPage title="자금관리" /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/admin" /> },
+        ],
+      },
+      {
+        path: '/security',
+        children: [
+          { path: 'cases', element: <CaseListPage /> },
+          { path: 'cases/:id', element: <CaseDetailPage /> },
+          { path: 'alerts', element: <AlertListPage /> },
+          { path: 'alerts/:id', element: <AlertDetailPage /> },
+          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
+        ],
+      },
+      {
+        path: '/owner',
+        children: [
+          { path: 'actions', element: <EmptyPage title="조치 결과" /> },
+          { path: 'settlements', element: <EmptyPage title="정산 현황" /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
+        ],
+      },
     ],
   },
   { path: '/demo/login', element: <DemoLoginPage /> },
   {
     element: <DemoSession />,
     children: [
-      {
-        path: '/security',
-        element: <RoleRoute allowed="security" />,
-        children: [
-          { index: true, element: <Navigate to="cases" replace /> },
-          { path: 'cases', element: <CaseListPage /> },
-          { path: 'cases/:id', element: <CaseDetailPage /> },
-          { path: 'alerts', element: <AlertListPage /> },
-          { path: 'alerts/:id', element: <AlertDetailPage /> },
-          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
-        ],
-      },
-      {
-        path: '/owner',
-        element: <RoleRoute allowed="owner" />,
-        children: [
-          { index: true, element: <Navigate to="actions" replace /> },
-          { path: 'actions', element: <EmptyPage title="조치 결과" /> },
-          { path: 'settlements', element: <EmptyPage title="정산 현황" /> },
-        ],
-      },
       { path: '/dev/components', element: <ComponentShowcasePage /> },
       { path: '*', element: <ScreenResult kind="404" /> },
     ],

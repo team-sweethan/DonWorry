@@ -24,6 +24,9 @@ class PlatformUserRepositoryTests {
     PlatformUserRepository repository;
 
     @Autowired
+    UserPermissionRepository permissionRepository;
+
+    @Autowired
     JdbcTemplate jdbcTemplate;
 
     @Autowired
@@ -34,7 +37,7 @@ class PlatformUserRepositoryTests {
     void findByLoginId_whenAdminSeeded_returnsActiveAdmin() {
         PlatformUser user = repository.findByLoginId("admin").orElseThrow();
 
-        assertThat(repository.count()).isOne();
+        assertThat(countByRole("ADMIN")).isOne();
         assertThat(user.getUserId()).isPositive();
         assertThat(user.getLoginId()).isEqualTo("admin");
         assertThat(user.getDisplayName()).isEqualTo("demo_shop");
@@ -51,6 +54,27 @@ class PlatformUserRepositoryTests {
         assertThat(permissionCount).isZero();
     }
 
+    // 시연용 사장님은 DEMOSHOP 소속에 FDS·자금 권한을 갖고, 보안 직원은 소속·추가 권한이 없다
+    @Test
+    void findByLoginId_whenDemoUsersSeeded_returnsOperatorAndStaff() {
+        PlatformUser boss = repository.findByLoginId("boss").orElseThrow();
+        PlatformUser staff = repository.findByLoginId("staff_test").orElseThrow();
+
+        Long demoShopId = jdbcTemplate.queryForObject(
+                "SELECT merchant_id FROM merchants WHERE merchant_code = 'DEMOSHOP'", Long.class);
+        assertThat(boss.getRole()).isEqualTo(UserRole.OPERATOR);
+        assertThat(boss.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(boss.getMerchantId()).isEqualTo(demoShopId);
+        assertThat(permissionRepository.findPermissionCodesByUserId(boss.getUserId()))
+                .containsExactly("FDS_VIEW", "FINANCE_VIEW");
+
+        assertThat(staff.getRole()).isEqualTo(UserRole.SECURITY_STAFF);
+        assertThat(staff.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(staff.getMerchantId()).isNull();
+        assertThat(permissionRepository.findPermissionCodesByUserId(staff.getUserId()))
+                .isEmpty();
+    }
+
     // 없는 로그인 ID는 빈 결과로 반환한다
     @Test
     void findByLoginId_whenUserMissing_returnsEmpty() {
@@ -65,9 +89,13 @@ class PlatformUserRepositoryTests {
         assertThat(flyway.migrate().migrationsExecuted).isZero();
 
         PlatformUser after = repository.findByLoginId("admin").orElseThrow();
-        assertThat(repository.count()).isOne();
+        assertThat(countByRole("ADMIN")).isOne();
         assertThat(after.getUserId()).isEqualTo(before.getUserId());
         assertThat(after.getPasswordHash()).isEqualTo(before.getPasswordHash());
         assertThat(after.getCreatedAt()).isEqualTo(before.getCreatedAt());
+    }
+
+    private Long countByRole(String role) {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM platform_users WHERE role = ?", Long.class, role);
     }
 }

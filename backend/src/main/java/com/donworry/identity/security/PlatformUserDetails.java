@@ -23,6 +23,8 @@ public class PlatformUserDetails extends User {
                 .displayName(user.getDisplayName())
                 .role(user.getRole())
                 .merchantId(user.getMerchantId())
+                // 권한은 비밀번호 검증 뒤 AuthService가 채운다
+                .permissions(List.of())
                 .build();
     }
 

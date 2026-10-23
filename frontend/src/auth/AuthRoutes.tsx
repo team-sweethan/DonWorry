@@ -3,13 +3,17 @@ import { Alert, Button, Result, Spin } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
-import { adminNavigation } from '../config/navigation'
+import { canOpenPath, sessionNavigation } from '../config/navigation'
+import type { AuthUser } from '../types/auth'
 import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
+
+// 볼 수 있는 메뉴가 없는 계정은 /login으로 보내고, 그곳에서 403과 로그아웃을 보여 준다.
+const homeOf = (user: AuthUser) => sessionNavigation(user).landing ?? '/login'
 
 function useSessionCheck() {
   const auth = useAuth()
@@ -76,7 +80,12 @@ export function LoginRoute() {
   }, [store])
   if (checkedKey !== key) return <CheckingSession />
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
-  if (status === 'authenticated' && user) return <Navigate to="/admin" replace />
+  if (status === 'authenticated' && user) {
+    if (sessionNavigation(user).landing === null) {
+      return <ScreenResult kind="403" action={<LogoutButton />} />
+    }
+    return <Navigate to={homeOf(user)} replace />
+  }
   return (
     <>
       {/* 로그인 화면에는 보호할 본문이 없으므로 확인 실패에도 로그인은 시도할 수 있게 둔다. */}
@@ -99,50 +108,61 @@ export function LoginRoute() {
       <LoginPage
         onSubmit={async ({ loginId, password }) => {
           await store.login(loginId, password)
-          navigate('/admin', { replace: true })
+          const loggedIn = store.getSnapshot().user
+          navigate(loggedIn ? homeOf(loggedIn) : '/login', { replace: true })
         }}
       />
     </>
   )
 }
 
-export function AdminSession() {
+/** 서버 세션으로 ADMIN · 보안 직원 · 사장님 화면을 지킨다. 서버 API 인가는 #68 5단계다. */
+export function ServerSession() {
   const { store, user, status, checkedKey, error, expired, key } = useSessionCheck()
+  const { pathname } = useLocation()
   const checked = checkedKey === key
   if (expired) return <Navigate to="/login" replace />
   if (checked && status === 'anonymous') return <Navigate to="/login" replace />
   const retry = () => {
     void store.check(key)
   }
-  // 확인 중 · 오류에는 본문만 가린다. 확인된 ADMIN이면 메뉴 · 헤더는 유지한다.
+  // 확인 중 · 오류에는 본문만 가린다. 확인된 사용자면 메뉴 · 헤더는 유지한다.
   const body = !checked ? (
     <CheckingSession />
   ) : error === 'unavailable' ? (
     <SessionError retry={retry} />
   ) : error === 'forbidden' ? (
-    <ScreenResult kind="403" homePath="/admin" />
+    <ScreenResult kind="403" homePath={user ? homeOf(user) : '/login'} />
   ) : undefined
   if (status !== 'authenticated' || !user) return body ?? <Navigate to="/login" replace />
+  const navigation = sessionNavigation(user)
   // 홈으로 가도 같은 403이므로 로그아웃만 제공한다.
-  if (user.role !== 'ADMIN') return body ?? <ScreenResult kind="403" action={<LogoutButton />} />
+  if (navigation.landing === null) {
+    return body ?? <ScreenResult kind="403" action={<LogoutButton />} />
+  }
+  if (pathname === navigation.base) return <Navigate to={navigation.landing} replace />
+  // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
+  const forbidden = !canOpenPath(user, pathname) ? (
+    <ScreenResult kind="403" homePath={navigation.landing} />
+  ) : undefined
   return (
     <ManagementLayout
-      groups={adminNavigation.groups}
+      groups={navigation.groups}
       header={
         <header className="dw-header">
-          <NavLink to={adminNavigation.landing} className="dw-brand" aria-label="돈워리 홈">
+          <NavLink to={navigation.landing} className="dw-brand" aria-label="돈워리 홈">
             돈워리
           </NavLink>
           <div className="dw-header-center" />
           <div className="dw-header-tools">
             <span className="dw-user-name">{user.displayName}</span>
-            <span className="dw-role-pill">{adminNavigation.label}</span>
+            <span className="dw-role-pill">{navigation.label}</span>
             <LogoutButton />
           </div>
         </header>
       }
     >
-      {body}
+      {body ?? forbidden}
     </ManagementLayout>
   )
 }
