@@ -130,6 +130,17 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - 기존 스키마를 사용하며 migration·다른 모듈 계약은 변경하지 않았다. 생성 시각은 서비스에서 정하고, 외부 입력으로 ID·상태·승인 참조를 받지 않는다.
 - 가맹점 존재·권한·신뢰할 금액 검증, 요청 멱등성, HTTP·CakeShop·P2 호출·승인·이벤트는 미구현·미검증이다. 이 단계는 내부 최초 저장 기반만 검증하며 W2 전체 완료가 아니다.
 
+## #94 평가 결과 분기 실행 기록
+
+2026-10-23, `feature/94-fds-result-handling`, 기준 커밋 `49a6967` + 이후 `b13c6e2`로 커밋한 코드·테스트 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check` → BUILD SUCCESSFUL. 전체 122건 통과, 실패·오류·건너뜀 0.
+- [PaymentEvaluationDecisionTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationDecisionTests.java) 16건: 결과 4종, 부적합 상태 8종, 입력 누락·null 응답·요청 ID 불일치·호출 예외를 검증했다.
+- P2 테스트 대역으로 요청 전달과 응답·판단 보존, 호출 전 상태 차단, 예외 전달·자동 재시도 없음을 확인했다.
+- ALLOW·REVIEW는 승인 전 PENDING과 승인 요청 판단, DENY는 DENIED, ERROR는 오류 기록 필요 판단을 반환한다. REVIEW만으로 HELD가 되지 않는다.
+- 실제 P2·DB 통합, Spring Bean 연결, 판단 결과의 DB 반영, 오류 기록·승인·이벤트 실행은 미검증이다. `mariaDbTest`는 재실행하지 않았다. 이번 변경은 DB 스키마·저장 로직을 바꾸지 않는다.
+- State에는 결제 ID가 없으므로, State와 평가 입력이 같은 결제라는 보장은 후속 결제 흐름에서 같은 저장 데이터로 구성해 확보해야 한다.
+
 ## W1 실행 기록
 
 2026-10-21, `feature/p5-state-rules`, 기준 커밋 `b3e5799` + W1 미커밋 작업본에서 실행했다.
