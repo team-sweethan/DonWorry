@@ -213,6 +213,11 @@ export function AlertDetailPage() {
                   dataIndex: 'result',
                   render: (value: FdsResult) => <ResultTag result={value} />,
                 },
+                {
+                  title: '오류 코드',
+                  dataIndex: 'errorCode',
+                  render: (value: string | null) => (value ? <code>{value}</code> : '—'),
+                },
               ]}
               dataSource={detail.history}
             />

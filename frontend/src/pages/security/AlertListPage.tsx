@@ -1,7 +1,7 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Input, Space, Spin, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   createMockFdsEvaluations,
@@ -39,8 +39,10 @@ export function AlertListPage() {
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [mockCreating, setMockCreating] = useState(false)
+  const requestSequence = useRef(0)
 
-  const load = (page = 0, nextFilter = filter) => {
+  const load = (page = 0, nextFilter = filter, nextQuery = query) => {
+    const sequence = ++requestSequence.current
     setLoading(true)
     setError(null)
     getFdsEvaluations({
@@ -49,16 +51,22 @@ export function AlertListPage() {
           ? nextFilter
           : undefined,
       attentionOnly: nextFilter === 'NEEDS_ATTENTION',
+      search: nextQuery,
       page,
       size: 10,
     })
       .then((response) => {
+        if (sequence !== requestSequence.current) return
         setEvaluations(response.content)
         setEvaluationPage(response)
         setCurrentPage(response.page + 1)
       })
-      .catch(() => setError('경보 목록을 불러오지 못했습니다.'))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (sequence === requestSequence.current) setError('경보 목록을 불러오지 못했습니다.')
+      })
+      .finally(() => {
+        if (sequence === requestSequence.current) setLoading(false)
+      })
   }
 
   const createMock = () => {
@@ -77,29 +85,17 @@ export function AlertListPage() {
 
   useEffect(() => {
     load(0, 'NEEDS_ATTENTION')
+    return () => {
+      requestSequence.current += 1
+    }
   }, [])
 
-  const count = (result?: FdsResult) =>
-    result ? (evaluationPage?.resultCounts[result] ?? 0) : (evaluationPage?.totalElements ?? 0)
-  const rows = useMemo(
-    () =>
-      evaluations
-        .filter((item) =>
-          filter === 'NEEDS_ATTENTION'
-            ? item.result !== 'ALLOW'
-            : filter === 'ALL' || item.result === filter,
-        )
-        .filter((item) => {
-          const q = query.trim().toLowerCase()
-          return (
-            !q ||
-            [String(item.evaluationId), String(item.paymentId), item.customerRef].some((value) =>
-              value.toLowerCase().includes(q),
-            )
-          )
-        }),
-    [evaluations, filter, query],
+  const count = (result: FdsResult) => evaluationPage?.resultCounts[result] ?? 0
+  const totalCount = Object.values(evaluationPage?.resultCounts ?? {}).reduce(
+    (total, resultCount) => total + resultCount,
+    0,
   )
+  const attentionCount = totalCount - count('ALLOW')
   const columns: ColumnsType<FdsEvaluationSummary> = [
     { title: '평가 시각', dataIndex: 'evaluatedAt', width: 190, render: formatDate },
     {
@@ -192,7 +188,7 @@ export function AlertListPage() {
         >
           <div className="dw-stat-label">전체 평가</div>
           <div className="dw-stat-value">
-            {count()}
+            {totalCount}
             <small>건</small>
           </div>
           <div className="dw-stat-foot">ALLOW 포함</div>
@@ -214,8 +210,9 @@ export function AlertListPage() {
               prefix={<SearchOutlined />}
               value={query}
               onChange={(event) => {
-                setQuery(event.target.value)
-                setCurrentPage(1)
+                const nextQuery = event.target.value
+                setQuery(nextQuery)
+                load(0, filter, nextQuery)
               }}
               allowClear
               className="dw-alert-search"
@@ -232,9 +229,9 @@ export function AlertListPage() {
           {filterOptions.map((option) => {
             const optionCount =
               option.value === 'NEEDS_ATTENTION'
-                ? (evaluationPage?.totalElements ?? 0)
+                ? attentionCount
                 : option.value === 'ALL'
-                  ? count()
+                  ? totalCount
                   : count(option.value)
             return (
               <button
@@ -258,7 +255,7 @@ export function AlertListPage() {
           <Table
             rowKey="evaluationId"
             columns={columns}
-            dataSource={rows}
+            dataSource={evaluations}
             size="middle"
             scroll={{ x: 1000 }}
             onRow={(record) => ({

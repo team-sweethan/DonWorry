@@ -19,6 +19,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class FdsEvaluationQueryServiceTests {
@@ -31,14 +33,15 @@ class FdsEvaluationQueryServiceTests {
     void list_resultFilter_returnsMatchingEvaluationPage() {
         var review = evaluation(101L, FdsResult.REVIEW);
         var queryService = new FdsEvaluationQueryService(evaluationRepository);
-        given(evaluationRepository.findByResultOrderByEvaluatedAtDesc(
-                        org.mockito.ArgumentMatchers.eq(FdsResult.REVIEW), org.mockito.ArgumentMatchers.any()))
+        given(evaluationRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<FdsEvaluation>>any(),
+                        org.mockito.ArgumentMatchers.any(Pageable.class)))
                 .willReturn(new PageImpl<>(java.util.List.of(review), PageRequest.of(0, 10), 1));
         given(evaluationRepository.countByResult(org.mockito.ArgumentMatchers.any()))
                 .willReturn(0L);
         given(evaluationRepository.countByResult(FdsResult.REVIEW)).willReturn(1L);
 
-        var result = queryService.list(FdsResult.REVIEW, false, 0, 10);
+        var result = queryService.list(FdsResult.REVIEW, false, null, 0, 10);
 
         assertThat(result.content()).singleElement().satisfies(summary -> {
             assertThat(summary.paymentId()).isEqualTo(101L);

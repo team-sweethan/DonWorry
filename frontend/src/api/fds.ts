@@ -49,17 +49,20 @@ type FdsEvaluationResponse = {
 export function getFdsEvaluations({
   result,
   attentionOnly = false,
+  search,
   page = 0,
   size = 10,
 }: {
   result?: FdsResult
   attentionOnly?: boolean
+  search?: string
   page?: number
   size?: number
 } = {}) {
   const query = new URLSearchParams({ page: String(page), size: String(size) })
   if (result) query.set('result', result)
   if (attentionOnly) query.set('attentionOnly', 'true')
+  if (search?.trim()) query.set('search', search.trim())
   return api<FdsEvaluationPage>(`/fds/evaluations?${query}`)
 }
 
