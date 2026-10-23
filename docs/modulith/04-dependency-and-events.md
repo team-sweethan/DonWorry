@@ -93,6 +93,8 @@ void on(CaptureRequested event) { ... }                // 자기 모듈 클래�
 | 매입 접수 결과 (예: `CaptureIntakeAccepted` · `CaptureIntakeRejected`) | settlement → payment | `settlement.api` |
 | 매입 실행 결과 (예: `CaptureCompleted` · `CaptureFailed`) | settlement → payment | `settlement.api` |
 
+위 표는 ADR-0012의 기존 접수·실행 분리안입니다. #104의 [완료 통지 기반 접수 확인 제안](../decisions/0015-payment-mvp-capture-completion.md)은 P3·P6 합의 전이며 의존 방향·타입 위치는 유지합니다.
+
 이름 · 필드는 아직 합의 중입니다 ([ADR-0012 합의가 필요한 것](../decisions/0012-payment-settlement-dependency.md#합의가-필요한-것)).
 
 ### 받는 쪽이 꼭 할 일 — 멱등
@@ -100,8 +102,8 @@ void on(CaptureRequested event) { ... }                // 자기 모듈 클래�
 이벤트는 재발행될 수 있어서 **같은 이벤트가 두 번 올 수 있습니다.** 받는 쪽은 이미 처리한 이벤트인지 확인하고 한 번만 반영합니다.
 
 ```text
-CaptureRequested(p5OperationId=OP-1) 도착 → captures에 저장
-CaptureRequested(p5OperationId=OP-1) 또 도착 → 이미 있음 → 저장하지 않고 넘어감
+CaptureRequested(paymentId=101) 도착 → captures에 저장
+CaptureRequested(paymentId=101) 또 도착 → 이미 있음 → 저장하지 않고 넘어감
 ```
 
 ## 4. 리스너 — `@ApplicationModuleListener`
