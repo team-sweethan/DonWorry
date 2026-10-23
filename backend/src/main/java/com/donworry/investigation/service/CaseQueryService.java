@@ -38,11 +38,14 @@ public class CaseQueryService {
     private final PaymentInfoReader paymentInfoReader;
     private final ReportGateway reportGateway;
 
+    // 보안 직원(merchant_id 없음)은 모든 가맹점 Case를 본다. 화면에서 가맹점을 고르면 그 가맹점만 거른다
+    // 이건 표시 필터일 뿐 인가가 아니다 — 역할 · 가맹점 권한 검사는 identity 공개 계약이 생긴 뒤 붙인다
     @Transactional(readOnly = true)
-    public List<CaseSummaryResponse> list() {
-        return securityCaseRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(this::summary)
-                .toList();
+    public List<CaseSummaryResponse> list(Long merchantId) {
+        List<SecurityCase> cases = merchantId == null
+                ? securityCaseRepository.findAllByOrderByCreatedAtDesc()
+                : securityCaseRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId);
+        return cases.stream().map(this::summary).toList();
     }
 
     @Transactional(readOnly = true)

@@ -52,6 +52,17 @@ public class MockReportGateway implements ReportGateway {
                     .map(paymentInfoReader::find)
                     .flatMap(Optional::stream)
                     .toList();
+            // 결제 연결과 버전 증가는 한 트랜잭션으로 커밋되므로, 결제를 읽은 뒤 버전이 요청과 같으면 둘이 같은 시점이다
+            // 그사이 병합돼 버전이 앞섰으면 낡은 요청이다 — 건너뛰고 새 버전 요청이 보고서를 만든다
+            boolean stale = securityCase.get().getEvidenceVersion() != evidenceVersion
+                    || securityCaseRepository
+                                    .findById(caseId)
+                                    .map(SecurityCase::getEvidenceVersion)
+                                    .orElse(-1)
+                            != evidenceVersion;
+            if (stale) {
+                return;
+            }
             caseReports.add(new ReportSnapshot(
                     reportIds.incrementAndGet(),
                     caseId,

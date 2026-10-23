@@ -15,7 +15,8 @@ public record DecisionSubmitRequest(
         @NotNull Integer evidenceVersion,
         // AI 보고서 최종 실패 후 수동 판정이면 null
         Long reportId,
-        @NotEmpty List<@Valid Item> decisions) {
+        // [null] 같은 빈 항목도 400으로 막는다 — @Valid는 null 요소를 건너뛴다
+        @NotEmpty List<@NotNull @Valid Item> decisions) {
 
     public record Item(
             @NotNull Long casePaymentId,

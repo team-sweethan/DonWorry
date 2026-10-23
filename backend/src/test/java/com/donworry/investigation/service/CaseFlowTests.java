@@ -9,12 +9,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DemoHeldPaymentResponse;
+import com.donworry.investigation.entity.CasePayment;
+import com.donworry.investigation.entity.CaseType;
+import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.CasePaymentRepository;
+import com.donworry.investigation.repository.SecurityCaseRepository;
+import com.donworry.investigation.service.mock.MockReportGateway;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +60,104 @@ class CaseFlowTests {
 
     @Autowired
     CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
+
+    @Autowired
+    MockReportGateway mockReportGateway;
+
+    // 같은 결제가 동시에 처음 두 번 와도 둘 다 같은 Case를 돌려받고 연결은 한 번만 된다
+    @Test
+    void receive_samePaymentConcurrently_bothSucceedWithOneLink() throws Exception {
+        HeldPayment heldPayment =
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now());
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Callable<Long> receive = () -> {
+                start.await();
+                return caseIntakeService.receive(heldPayment);
+            };
+            Future<Long> first = executor.submit(receive);
+            Future<Long> second = executor.submit(receive);
+            start.countDown();
+
+            Long firstCaseId = first.get(30, TimeUnit.SECONDS);
+            assertThat(second.get(30, TimeUnit.SECONDS)).isEqualTo(firstCaseId);
+            assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(firstCaseId))
+                    .hasSize(1);
+        }
+    }
+
+    // 같은 고객의 서로 다른 결제가 동시에 처음 와도 Case는 하나로 모인다 (fds 정본 03 §3.4 생성 경쟁)
+    @Test
+    void receive_differentPaymentsSameCustomerConcurrently_shareOneCase() throws Exception {
+        String customer = customer();
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Callable<Long> first = () -> {
+                start.await();
+                return caseIntakeService.receive(
+                        new HeldPayment(System.nanoTime(), 1L, customer, 100_000L, "AUTH", null, Instant.now()));
+            };
+            Callable<Long> second = () -> {
+                start.await();
+                return caseIntakeService.receive(
+                        new HeldPayment(System.nanoTime() + 1, 1L, customer, 200_000L, "AUTH", null, Instant.now()));
+            };
+            Future<Long> firstCase = executor.submit(first);
+            Future<Long> secondCase = executor.submit(second);
+            start.countDown();
+
+            Long caseId = firstCase.get(30, TimeUnit.SECONDS);
+            assertThat(secondCase.get(30, TimeUnit.SECONDS)).isEqualTo(caseId);
+            assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId))
+                    .hasSize(2);
+        }
+    }
+
+    // 보고서 요청이 늦게 도착해 Case 증거 버전이 이미 앞섰으면 낡은 버전 보고서를 만들지 않는다
+    @Test
+    void mockReport_staleRequest_isSkipped() {
+        SecurityCase securityCase =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        securityCase.increaseEvidenceVersion();
+        securityCaseRepository.save(securityCase);
+
+        mockReportGateway.request(securityCase.getId(), 1);
+        assertThat(mockReportGateway.findByCase(securityCase.getId())).isEmpty();
+
+        mockReportGateway.request(securityCase.getId(), 2);
+        assertThat(mockReportGateway.findByCase(securityCase.getId()))
+                .singleElement()
+                .extracting(ReportGateway.ReportSnapshot::evidenceVersion)
+                .isEqualTo(2);
+    }
+
+    // 판정 항목에 null이 있으면 500이 아니라 400으로 거부한다
+    @Test
+    void decide_withNullItem_returnsBadRequest() throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        List<Map<String, Object>> items = new ArrayList<>();
+        items.add(null);
+
+        mvc.perform(decide(held.caseId(), 1, 1L, items)).andExpect(status().isBadRequest());
+    }
+
+    // 가맹점을 고르면 그 가맹점 Case만 목록에 나온다
+    @Test
+    void list_withMerchantId_returnsOnlyThatMerchant() throws Exception {
+        long merchantId = 1_000_000L + System.nanoTime() % 1_000_000L;
+        DemoHeldPaymentResponse mine = createHeld(merchantId, customer(), 300_000L, 65);
+        createHeld(customer(), 300_000L, 65);
+
+        mvc.perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].caseId").value(mine.caseId()));
+    }
 
     // HELD 결제 1건이면 Case가 생기고 보고서 v1이 나와 판정 대기가 된다
     @Test
@@ -256,11 +366,16 @@ class CaseFlowTests {
     }
 
     private DemoHeldPaymentResponse createHeld(String customerRef, long amount, int riskScore) throws Exception {
+        return createHeld(1L, customerRef, amount, riskScore);
+    }
+
+    private DemoHeldPaymentResponse createHeld(long merchantId, String customerRef, long amount, int riskScore)
+            throws Exception {
         String body = mvc.perform(post("/api/demo/held-payments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of(
                                 "merchantId",
-                                1,
+                                merchantId,
                                 "customerRef",
                                 customerRef,
                                 "amount",

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 // P5 접수 결과가 늦게 · 여러 번 · 실패로 오는 경우를 확인한다 — 금융 조치 경계는 응답을 모르는(UNKNOWN) 것으로 바꿔 둔다
@@ -44,6 +45,9 @@ class HandoffReceiptTests {
 
     @Autowired
     ActionHandoffRepository actionHandoffRepository;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
 
     Long caseId;
     UUID idempotencyKey;
@@ -79,6 +83,41 @@ class HandoffReceiptTests {
                 .extracting(CaseDetailResponse.HandoffResponse::status)
                 .isEqualTo("REQUESTED");
         assertThat(detail.securityCase().status()).isEqualTo("ACTION_PENDING");
+        assertThat(incompletePublications(detail.handoffs().getFirst().handoffId()))
+                .isEqualTo(1);
+    }
+
+    // 금융 조치 호출이 예외로 끝나도 판정은 저장되고, 인계는 REQUESTED · 발행 기록은 미완료로 남아 다시 보낼 수 있다
+    @Test
+    void gatewayThrows_keepsRequestedAndLeavesPublicationIncomplete() {
+        given(financialActionGateway.request(any())).willThrow(new IllegalStateException("timeout"));
+        Long otherCaseId = caseIntakeService.receive(new HeldPayment(
+                System.nanoTime(), 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
+        CaseDetailResponse before = caseQueryService.detail(otherCaseId);
+
+        caseDecisionService.decide(
+                otherCaseId,
+                new DecisionSubmitRequest(
+                        7L,
+                        1,
+                        before.reports().getLast().reportId(),
+                        List.of(new DecisionSubmitRequest.Item(
+                                before.payments().getFirst().casePaymentId(), Decision.REJECT, "사유"))));
+
+        CaseDetailResponse after = caseQueryService.detail(otherCaseId);
+        assertThat(after.decisions()).hasSize(1);
+        assertThat(after.handoffs().getFirst().status()).isEqualTo("REQUESTED");
+        assertThat(incompletePublications(after.handoffs().getFirst().handoffId()))
+                .isEqualTo(1);
+    }
+
+    private Integer incompletePublications(Long handoffId) {
+        return jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM EVENT_PUBLICATION
+                WHERE COMPLETION_DATE IS NULL
+                  AND EVENT_TYPE LIKE '%HandoffRequested'
+                  AND SERIALIZED_EVENT LIKE ?
+                """, Integer.class, "%\"handoffId\":" + handoffId + "}%");
     }
 
     // 같은 접수 결과가 두 번 와도 이력은 한 번만 남고 Case는 종료된다
