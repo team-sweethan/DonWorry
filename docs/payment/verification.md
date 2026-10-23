@@ -164,3 +164,9 @@ Case 최초 생성 후 정확히 30분 이상이거나 직원 판정 확정 후�
 - [PaymentEvaluationFlowFailureTests](../../backend/src/test/java/com/donworry/payment/service/PaymentEvaluationFlowFailureTests.java) 3건은 실제 P5·MariaDB에 `FdsEvaluator` 대역을 주입한다. 평가 시작 시 호출자 트랜잭션이 중단되어 있고 별도 트랜잭션에서 최초 결제를 조회할 수 있음을 확인했다. 호출 예외·호출자 롤백 후 PENDING 보존과 평가 단일 호출을 확인했다.
 - 대역 DENY·ERROR 응답에서는 반환 판단만 달라지고 DB 결제는 승인 참조 없는 PENDING으로 유지된다. 이는 실제 P2의 DENY·ERROR 생성·저장 검증이 아니다. 현재 실제 P2 규칙의 최대 점수는 60점, DENY 기준은 80점이다.
 - 미검증·후속: 실제 승인·상태 변경·오류 이력·이벤트, HTTP·CakeShop, 중복 접수·재시작 후 복구. 동일 요청 UUID에 다른 입력을 넣는 경우의 검증은 #95에서 합의한 P2 후속 과제다. 스키마·P2 공개 계약 변경은 없다.
+
+### #100 문서 정리 후 최종 점검
+
+2026-10-23, `4bf6c04` + 문서 수정 작업본에서 `cd backend && ./gradlew spotlessApply check mariaDbTest`를 실행해 BUILD SUCCESSFUL을 확인했다. 모든 태스크는 UP-TO-DATE로 기존 결과를 재사용했다. 새 테스트 실행으로 기록하지 않는다. 현재 backend 코드·테스트는 `4bf6c04`와 동일하며, 남아 있는 XML 결과는 일반 검사 159건·MariaDB 30건, 실패·오류·건너뜀 0이다.
+
+README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 현재 구현·검증 범위로 갱신했다. `python3 .github/scripts/check_md_links.py`와 `git diff --check`도 통과했다. 위 미검증·후속 범위와 P2 후속 합의는 유지한다.

@@ -196,7 +196,7 @@ Registry의 이력/보존과 업무 이력의 보존은 별개다. 성공 업무
 
 기존 초안의 merchantId·orderRef·RiskSignals는 현재 P2 요청 DTO에 없다. 추가가 필요하면 P2와 계약을 먼저 합의한다.
 P5 내부 입력은 `payment.service.PaymentEvaluationInput`으로 준비하며 요청 ID와 결제 요청 시각을 전달받아 보존한다. 고정된 모의 값은 테스트 코드에만 둔다.
-`PaymentEvaluationService`는 이 입력을 공개 요청 DTO로 변환해 `FdsEvaluator.evaluate()`를 한 번 호출하고 응답을 그대로 반환한다. P5 호출 서비스는 #100에서 Spring Bean으로 등록했으며, P2의 #87 평가 구현 Bean을 공개 인터페이스로 주입받는다. 최초 저장과의 연결 구현은 아래 #100 절을 참고한다. 테스트 대역은 테스트 코드에만 둔다. 현재 호출 메서드는 결제 저장·승인·상태 분기를 수행하지 않는다.
+`PaymentEvaluationService`는 이 입력을 공개 요청 DTO로 변환해 `FdsEvaluator.evaluate()`를 한 번 호출하고 응답을 그대로 반환한다. P5 호출 서비스는 #100에서 Spring Bean으로 등록했으며, P2의 #87 평가 구현 Bean을 공개 인터페이스로 주입받는다. 최초 저장과의 연결 구현은 아래 #100 절을 참고한다. 테스트 대역은 테스트 코드에만 둔다. `evaluate(input)` 자체는 결제 저장·승인·상태 분기를 수행하지 않으며, 분기 판단은 아래 `evaluateAndDecide()`에서 처리한다.
 요청 형식 오류는 IllegalArgumentException으로 거절한다. 기록 가능한 평가 실패는 ERROR 응답, 응답을 만들 수 없는 호출 실패는 예외로 전달한다. 자동 재시도는 이번 호출 구현에 포함하지 않는다.
 
 동일 evaluationRequestId의 기술 재전송과 명시적 재평가를 구분한다. 응답의 요청·결제 연관성을 확인한 뒤 저장한다.
@@ -224,11 +224,11 @@ record PaymentEvaluationResult(
 4. 응답의 FdsResult를 switch로 P5 FdsVerdict에 명시적으로 매핑한다. 점수로 판정을 다시 계산하지 않는다.
 5. `PaymentRules.afterFds(state, verdict)`를 호출하고 원 응답과 Decision을 함께 반환한다.
 
-ALLOW·REVIEW는 PENDING 유지·REQUEST_AUTHORIZATION, DENY는 DENIED·NONE, ERROR는 PENDING 유지·RECORD_FDS_ERROR다. 오류 기록·승인 요청은 필요한 다음 단계의 판단이며 실제 저장·실행은 하지 않는다. 현재 State에는 paymentId가 없으므로 State와 입력이 같은 결제라는 보장은 후속 결제 흐름에서 같은 저장 데이터로 구성해 확보해야 한다.
+ALLOW·REVIEW는 PENDING 유지·REQUEST_AUTHORIZATION, DENY는 DENIED·NONE, ERROR는 PENDING 유지·RECORD_FDS_ERROR다. 오류 기록·승인 요청은 필요한 다음 단계의 판단이며 실제 저장·실행은 하지 않는다. State에는 paymentId가 없으므로 #100 연결 서비스는 같은 저장 스냅샷에서 State와 평가 입력을 구성한다.
 
 #### #100 최초 저장·평가 흐름 연결 설계와 구현
 
-2번 단계에서 `a74c83b`의 저장·평가 코드와 기존 MariaDB 테스트를 읽어 확인했다. 아래 계약은 3번 단계에서 설계했고, 4·5번 단계에서 저장 반환값과 연결 서비스를 구현했다. 실제 P2·MariaDB 연결 검증은 6번 단계에서 수행한다.
+`4bf6c04`에 최초 저장 반환값·연결 서비스·테스트가 구현되어 있다. 실제 P2·MariaDB 연결 검증과 대역 기반 실패 검증의 실행 근거는 [검증 기록](verification.md)에 구분한다.
 
 연결 서비스와 입출력 record는 `payment.service`에 둔다. 외부 HTTP 또는 다른 모듈에 공개하는 계약이 아니며, 기존 `payment → fds.api` 의존을 사용한다.
 
@@ -261,7 +261,7 @@ record PaymentEvaluationFlowResult(
 3. 같은 결제 데이터로 승인 전 PENDING 상태를 확인하고 `PaymentEvaluationInput`을 구성한다. 연결 서비스가 새 평가 요청 UUID를 한 번 생성한다.
 4. Spring Bean으로 등록한 `PaymentEvaluationService.evaluateAndDecide()`를 한 번 호출하고, 결제 ID와 결과를 반환한다. P2 호출은 기존 `FdsEvaluator` 공개 인터페이스를 통한다.
 
-연결 흐름 전체를 쓰기 트랜잭션으로 감싸지 않는다. `PaymentEvaluationFlowService.createAndEvaluate()`는 `NOT_SUPPORTED`로 호출자 트랜잭션을 일시 중단한다. 최초 저장은 `REQUIRES_NEW`, P2 평가는 자체 트랜잭션에서 처리하도록 구성했다. Spring 프록시를 통한 트랜잭션 동작 검증은 6번 단계에서 수행한다. 기존 P2는 기본 전파의 `@Transactional`을 사용하므로 연결 서비스에 어노테이션을 생략하는 것만으로는 호출자의 트랜잭션을 차단할 수 없다.
+연결 흐름 전체를 쓰기 트랜잭션으로 감싸지 않는다. `PaymentEvaluationFlowService.createAndEvaluate()`는 `NOT_SUPPORTED`로 호출자 트랜잭션을 일시 중단한다. 최초 저장은 `REQUIRES_NEW`, P2 평가는 자체 트랜잭션에서 처리하도록 구성했다. 통합 테스트에서 평가 직전 최초 저장의 커밋과 호출자 트랜잭션 중단, 호출자 롤백 후 결제·실제 P2 평가 보존을 확인했다. 기존 P2는 기본 전파의 `@Transactional`을 사용하므로 연결 서비스에 어노테이션을 생략하는 것만으로는 호출자의 트랜잭션을 차단할 수 없다.
 
 P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 정상 반환한다. 호출 예외·null 응답·요청 UUID 불일치는 기존 평가 서비스의 예외를 전달하며, 자동 재시도하지 않는다. 평가 실패에도 최초 PENDING은 남는다. 예외 발생 시 결제 ID를 호출자에게 반환하는 복구 계약은 이번 범위에 없으므로, 이 메서드를 그대로 외부 재시도 API로 노출하지 않는다.
 
