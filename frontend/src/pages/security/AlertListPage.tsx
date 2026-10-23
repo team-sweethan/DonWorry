@@ -1,53 +1,75 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Button, Card, Input, Segmented, Space, Table } from 'antd'
+import { Alert, Button, Card, Input, Space, Spin, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { type MouseEvent, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  createMockFdsEvaluations,
+  getFdsEvaluations,
+  type FdsEvaluationSummary,
+  type FdsResult,
+} from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
-import { fdsAlerts, type FdsAlert, type FdsResult } from '../../demo/alertMockData'
-import { useDemo } from '../../demo/DemoContext'
-import { won } from '../../utils/format'
-import { PaymentStatusTag, ResultTag } from './alert/AlertTags'
+import { ResultTag } from './alert/AlertTags'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
 
-function StatCard({
-  title,
-  count,
-  description,
-  tone,
-  onClick,
-}: {
-  title: string
-  count: number
-  description: string
-  tone?: 'review' | 'deny' | 'error'
-  onClick: () => void
-}) {
-  return (
-    <button type="button" className="dw-panel dw-stat-card dw-stat-card-button" onClick={onClick}>
-      <div className="dw-stat-label">{title}</div>
-      <div className={`dw-stat-value ${tone ? `dw-alert-stat-value--${tone}` : ''}`}>
-        {count}
-        <span className="dw-alert-stat-value-unit">건</span>
-      </div>
-      <div className="dw-stat-foot">{description}</div>
-    </button>
+const filterOptions: Array<{ value: Filter; label: string }> = [
+  { value: 'NEEDS_ATTENTION', label: '확인 필요' },
+  { value: 'REVIEW', label: 'REVIEW' },
+  { value: 'DENY', label: 'DENY' },
+  { value: 'ERROR', label: 'ERROR' },
+  { value: 'ALL', label: '전체 (ALLOW 포함)' },
+]
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium' }).format(
+    new Date(value),
   )
 }
 
 export function AlertListPage() {
-  const { merchant } = useDemo()
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
   const [query, setQuery] = useState('')
+  const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const alerts = useMemo(() => fdsAlerts.filter((item) => item.merchant === merchant), [merchant])
+  const [mockCreating, setMockCreating] = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    setError(null)
+    getFdsEvaluations()
+      .then(setEvaluations)
+      .catch(() => setError('경보 목록을 불러오지 못했습니다.'))
+      .finally(() => setLoading(false))
+  }
+
+  const createMock = () => {
+    setMockCreating(true)
+    setError(null)
+    createMockFdsEvaluations()
+      .then(load)
+      .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
+      .finally(() => setMockCreating(false))
+  }
+
+  const selectFilter = (nextFilter: Filter) => {
+    setFilter(nextFilter)
+    setCurrentPage(1)
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
   const count = (result?: FdsResult) =>
-    result ? alerts.filter((item) => item.result === result).length : alerts.length
+    result ? evaluations.filter((item) => item.result === result).length : evaluations.length
   const rows = useMemo(
     () =>
-      alerts
+      evaluations
         .filter((item) =>
           filter === 'NEEDS_ATTENTION'
             ? item.result !== 'ALLOW'
@@ -57,20 +79,20 @@ export function AlertListPage() {
           const q = query.trim().toLowerCase()
           return (
             !q ||
-            [item.paymentId, item.orderId, item.customer].some((value) =>
+            [String(item.evaluationId), String(item.paymentId), item.customerRef].some((value) =>
               value.toLowerCase().includes(q),
             )
           )
         }),
-    [alerts, filter, query],
+    [evaluations, filter, query],
   )
-  const columns: ColumnsType<FdsAlert> = [
-    { title: '평가 시각', dataIndex: 'evaluatedAt', width: 162 },
+  const columns: ColumnsType<FdsEvaluationSummary> = [
+    { title: '평가 시각', dataIndex: 'evaluatedAt', width: 190, render: formatDate },
     {
-      title: '결제 ID',
-      dataIndex: 'paymentId',
-      width: 166,
-      render: (value: string) => (
+      title: '평가 ID',
+      dataIndex: 'evaluationId',
+      width: 120,
+      render: (value: number) => (
         <Button
           type="link"
           className="dw-alert-payment-link"
@@ -83,87 +105,98 @@ export function AlertListPage() {
         </Button>
       ),
     },
-    { title: '주문번호', dataIndex: 'orderId', width: 160 },
-    { title: '고객', dataIndex: 'customer', width: 115 },
-    { title: '금액', dataIndex: 'amount', align: 'right', width: 120, render: won },
+    { title: '결제 ID', dataIndex: 'paymentId', width: 130 },
+    { title: '고객 식별자', dataIndex: 'customerRef', width: 180 },
     {
       title: '위험 점수',
-      dataIndex: 'score',
+      dataIndex: 'riskScore',
       align: 'right',
-      width: 104,
+      width: 110,
       render: (value: number | null) => <strong>{value ?? '—'}</strong>,
     },
     {
       title: '판정',
       dataIndex: 'result',
-      width: 100,
+      width: 110,
       render: (value: FdsResult) => <ResultTag result={value} />,
     },
     {
       title: '오류 코드',
       dataIndex: 'errorCode',
-      width: 130,
-      render: (value?: string) => (value ? <code>{value}</code> : '—'),
+      width: 160,
+      render: (value: string | null) => (value ? <code>{value}</code> : '—'),
     },
-    {
-      title: '결제 상태',
-      dataIndex: 'paymentStatus',
-      width: 150,
-      render: (value: FdsAlert['paymentStatus']) => <PaymentStatusTag status={value} />,
-    },
-    { title: 'Case', dataIndex: 'caseId', width: 130, render: (value?: string) => value ?? '—' },
   ]
-  const selectFilter = (nextFilter: Filter) => {
-    setFilter(nextFilter)
-    setCurrentPage(1)
-  }
 
   return (
-    <>
+    <div className="dw-alert-list-page">
       <PageHeader
         title="경보"
-        description="FDS가 결제마다 평가한 위험 점수와 판정입니다. 기본으로 REVIEW · DENY · ERROR만 표시합니다."
-        actions={<span className="dw-demo-label">LOCAL DEMO</span>}
+        description="FDS가 결제마다 평가한 위험 점수와 판정입니다. 기본으로 REVIEW · DENY · ERROR만 보여 줍니다."
       />
-      <div className="dw-stat-grid">
-        <StatCard
-          title="REVIEW · 추가 조사"
-          count={count('REVIEW')}
-          tone="review"
-          description="시연용 기준상 추가 확인 대상"
+      <div className="dw-stat-grid" aria-label="경보 판정 요약">
+        <button
+          type="button"
+          className="dw-panel dw-stat-card dw-stat-card-button"
           onClick={() => selectFilter('REVIEW')}
-        />
-        <StatCard
-          title="DENY · 결제 차단"
-          count={count('DENY')}
-          tone="deny"
-          description="시연용 차단 판정"
+        >
+          <div className="dw-stat-label">REVIEW · 추가 조사</div>
+          <div className="dw-stat-value dw-alert-stat-value--review">
+            {count('REVIEW')}
+            <small>건</small>
+          </div>
+          <div className="dw-stat-foot">50~79점 · 승인 성공 시 HELD → 사건</div>
+        </button>
+        <button
+          type="button"
+          className="dw-panel dw-stat-card dw-stat-card-button"
           onClick={() => selectFilter('DENY')}
-        />
-        <StatCard
-          title="ERROR · 평가 실패"
-          count={count('ERROR')}
-          tone="error"
-          description="위험 판정이 아님 · 자동 ALLOW 금지"
+        >
+          <div className="dw-stat-label">DENY · 결제 차단</div>
+          <div className="dw-stat-value dw-alert-stat-value--deny">
+            {count('DENY')}
+            <small>건</small>
+          </div>
+          <div className="dw-stat-foot">80점 이상 · 카드 승인 요청 안 함</div>
+        </button>
+        <button
+          type="button"
+          className="dw-panel dw-stat-card dw-stat-card-button"
           onClick={() => selectFilter('ERROR')}
-        />
-        <StatCard
-          title="전체 평가"
-          count={count()}
-          description="ALLOW 포함"
+        >
+          <div className="dw-stat-label">ERROR · 평가 실패</div>
+          <div className="dw-stat-value dw-alert-stat-value--error">
+            {count('ERROR')}
+            <small>건</small>
+          </div>
+          <div className="dw-stat-foot">위험 판정 아님 · 자동 ALLOW 하지 않음</div>
+        </button>
+        <button
+          type="button"
+          className="dw-panel dw-stat-card dw-stat-card-button"
           onClick={() => selectFilter('ALL')}
-        />
+        >
+          <div className="dw-stat-label">전체 평가</div>
+          <div className="dw-stat-value">
+            {count()}
+            <small>건</small>
+          </div>
+          <div className="dw-stat-foot">ALLOW 포함</div>
+        </button>
       </div>
       <Card className="dw-table-card dw-alert-card">
         <div className="dw-table-toolbar">
           <div>
             <h3>평가 결과</h3>
-            <p>행 또는 결제 ID를 누르면 평가 근거를 확인합니다.</p>
+            <p>
+              행을 누르면 평가 근거를 봅니다. 같은 결제에 평가가 여러 건이면 ERROR를 뺀 최신 평가가
+              유효 판정입니다.
+            </p>
           </div>
           <Space>
             <Input
               aria-label="경보 검색"
-              placeholder="결제 ID, 주문번호, 고객"
+              placeholder="평가 ID, 결제 ID, 고객 식별자"
               prefix={<SearchOutlined />}
               value={query}
               onChange={(event) => {
@@ -173,56 +206,66 @@ export function AlertListPage() {
               allowClear
               className="dw-alert-search"
             />
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                setQuery('')
-                selectFilter('NEEDS_ATTENTION')
-              }}
-            >
-              초기화
+            <Button icon={<ReloadOutlined />} onClick={load}>
+              새로고침
+            </Button>
+            <Button onClick={createMock} loading={mockCreating}>
+              Mock 평가 생성
             </Button>
           </Space>
         </div>
         <div className="dw-alert-tabs">
-          <Segmented
-            value={filter}
-            onChange={(value) => selectFilter(value as Filter)}
-            options={[
-              {
-                value: 'NEEDS_ATTENTION',
-                label: `확인 필요 ${alerts.filter((item) => item.result !== 'ALLOW').length}`,
-              },
-              { value: 'REVIEW', label: `REVIEW ${count('REVIEW')}` },
-              { value: 'DENY', label: `DENY ${count('DENY')}` },
-              { value: 'ERROR', label: `ERROR ${count('ERROR')}` },
-              { value: 'ALL', label: `전체 ${count()}` },
-            ]}
-          />
-        </div>
-        <Table
-          rowKey="evaluationId"
-          columns={columns}
-          dataSource={rows}
-          size="middle"
-          scroll={{ x: 1300 }}
-          onRow={(record) => ({
-            onClick: () => navigate(`/security/alerts/${record.paymentId}`),
-            style: { cursor: 'pointer' },
+          {filterOptions.map((option) => {
+            const optionCount =
+              option.value === 'NEEDS_ATTENTION'
+                ? evaluations.filter((item) => item.result !== 'ALLOW').length
+                : option.value === 'ALL'
+                  ? count()
+                  : count(option.value)
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`dw-alert-tab ${filter === option.value ? 'dw-alert-tab--active' : ''}`}
+                onClick={() => selectFilter(option.value)}
+              >
+                {option.label}
+                <span>{optionCount}</span>
+              </button>
+            )
           })}
-          pagination={{
-            current: currentPage,
-            pageSize: 20,
-            showSizeChanger: false,
-            showTotal: (total) => `총 ${total}건`,
-            onChange: (page) => setCurrentPage(page),
-          }}
-        />
+        </div>
+        {error && <Alert type="error" showIcon message={error} className="dw-alert-load-error" />}
+        {loading ? (
+          <div className="dw-alert-loading">
+            <Spin />
+          </div>
+        ) : (
+          <Table
+            rowKey="evaluationId"
+            columns={columns}
+            dataSource={rows}
+            size="middle"
+            scroll={{ x: 1000 }}
+            onRow={(record) => ({
+              onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: currentPage,
+              pageSize: 20,
+              showSizeChanger: false,
+              showTotal: (total) => `총 ${total}건`,
+              onChange: (page) => setCurrentPage(page),
+            }}
+            locale={{ emptyText: '표시할 경보가 없습니다.' }}
+          />
+        )}
       </Card>
       <div className="dw-api-note">
-        점수와 규칙은 화면 검증용 임시 데이터입니다. 실제 FDS 기준·상태값·API 계약은 P2 정본 확정 후
-        연결해야 합니다.
+        점수 기준: 0~49점 ALLOW · 50~79점 REVIEW · 80점 이상 DENY. 1차 MVP 규칙: 고액 결제(15만 원
+        이상 +35) · 단시간 반복 결제(동일 구매자 10분 내 3회 이상 +25).
       </div>
-    </>
+    </div>
   )
 }

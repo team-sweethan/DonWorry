@@ -2,9 +2,87 @@
   border-color: #e2e8f0;
 }
 
+/* donworry-prototype_2.html의 경보 목록 서체·간격을 화면에 명시적으로 고정한다. */
+.dw-alert-list-page .dw-page-title {
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -0.7px;
+}
+
+.dw-alert-list-page .dw-page-description {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dw-alert-list-page .dw-stat-card {
+  padding: 20px 22px;
+}
+
+.dw-alert-list-page .dw-stat-label {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.dw-alert-list-page .dw-stat-value {
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+.dw-alert-list-page .dw-stat-value small {
+  margin-left: 3px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dw-alert-list-page .dw-stat-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.dw-alert-list-page .dw-table-toolbar {
+  padding: 20px 22px 14px;
+}
+
+.dw-alert-list-page .dw-table-toolbar p {
+  color: #64748b;
+}
+
 .dw-alert-tabs {
-  padding: 0 24px 16px;
+  display: flex;
+  gap: 28px;
+  padding: 0 22px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.dw-alert-tab {
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 12px 0;
+  background: none;
+  color: #475569;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.dw-alert-tab:hover {
+  color: #2563eb;
+}
+
+.dw-alert-tab--active {
+  border-color: #2563eb;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.dw-alert-tab > span {
+  margin-left: 6px;
+  color: #64748b;
+  font-size: 12px;
 }
 
 .dw-alert-payment-link {
@@ -153,6 +231,34 @@
   color: #64748b;
   font-size: 12px;
   font-weight: 400;
+}
+
+.dw-alert-flow-item--received::before,
+.dw-alert-flow-item--received:not(:last-child)::after {
+  border-color: #94a3b8;
+  background: #94a3b8;
+}
+
+.dw-alert-flow-item--evaluated::before {
+  border-color: #d97706;
+  background: #fef3c7;
+}
+
+.dw-alert-flow-item--returned::before {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.dw-alert-source-label {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 4px;
+  padding: 0 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dw-alert-detail .ant-descriptions-item-label {

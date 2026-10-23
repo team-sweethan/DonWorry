@@ -43,3 +43,8 @@ server:
       cookie:
         http-only: true
         same-site: lax
+
+fds:
+  mock:
+    # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.
+    seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
