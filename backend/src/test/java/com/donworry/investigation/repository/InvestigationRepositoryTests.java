@@ -16,8 +16,11 @@ import com.donworry.investigation.entity.PaymentDecision;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.service.InvestigationRules;
 import jakarta.persistence.EntityManager;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -169,6 +172,26 @@ class InvestigationRepositoryTests {
                 .get()
                 .extracting(ActionHandoff::getId)
                 .isEqualTo(handoff.getId());
+        assertThat(securityCaseRepository.findByIdForUpdate(securityCase.getId()))
+                .get()
+                .extracting(SecurityCase::getId)
+                .isEqualTo(securityCase.getId());
+    }
+
+    // 조사 기록 저장소는 물리 삭제 메서드를 노출하지 않는다 (AGENTS.md 4절)
+    @Test
+    void repositories_doNotExposeDelete() {
+        var repositories = List.of(
+                SecurityCaseRepository.class,
+                CasePaymentRepository.class,
+                PaymentDecisionRepository.class,
+                ActionHandoffRepository.class,
+                CaseHistoryRepository.class);
+
+        assertThat(repositories)
+                .flatExtracting(type -> Arrays.asList(type.getMethods()))
+                .extracting(Method::getName)
+                .noneMatch(name -> name.startsWith("delete"));
     }
 
     private SecurityCase saveCase(Long merchantId, String customerRef, Instant createdAt) {

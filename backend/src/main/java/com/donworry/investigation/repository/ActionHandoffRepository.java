@@ -7,12 +7,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-public interface ActionHandoffRepository extends JpaRepository<ActionHandoff, Long> {
+// 조사 기록의 물리 삭제를 노출하지 않고 필요한 저장·조회만 제공한다
+public interface ActionHandoffRepository extends Repository<ActionHandoff, Long> {
+
+    ActionHandoff save(ActionHandoff handoff);
+
+    Optional<ActionHandoff> findById(Long handoffId);
 
     List<ActionHandoff> findByDecisionCasePaymentSecurityCaseId(Long caseId);
 

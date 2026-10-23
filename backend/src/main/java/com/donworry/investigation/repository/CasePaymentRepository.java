@@ -3,9 +3,14 @@ package com.donworry.investigation.repository;
 import com.donworry.investigation.entity.CasePayment;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.Repository;
 
-public interface CasePaymentRepository extends JpaRepository<CasePayment, Long> {
+// 조사 기록의 물리 삭제를 노출하지 않고 필요한 저장·조회만 제공한다
+public interface CasePaymentRepository extends Repository<CasePayment, Long> {
+
+    CasePayment save(CasePayment casePayment);
+
+    Optional<CasePayment> findById(Long casePaymentId);
 
     List<CasePayment> findBySecurityCaseIdOrderByLinkedAtAsc(Long caseId);
 
