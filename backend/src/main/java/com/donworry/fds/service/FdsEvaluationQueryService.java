@@ -2,11 +2,14 @@ package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsEvaluationDetail;
 import com.donworry.fds.api.FdsEvaluationDetail.FdsRuleHitDetail;
+import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsEvaluationSummary;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
-import java.util.List;
+import java.util.EnumMap;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,11 +23,24 @@ public class FdsEvaluationQueryService {
         this.evaluationRepository = evaluationRepository;
     }
 
-    public List<FdsEvaluationSummary> list(FdsResult result) {
-        return evaluationRepository.findAllByOrderByEvaluatedAtDesc().stream()
-                .filter(evaluation -> result == null || evaluation.getResult() == result)
-                .map(this::summary)
-                .toList();
+    public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, int page, int size) {
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "evaluatedAt"));
+        var evaluations = attentionOnly
+                ? evaluationRepository.findByResultNotOrderByEvaluatedAtDesc(FdsResult.ALLOW, pageable)
+                : result == null
+                        ? evaluationRepository.findAllByOrderByEvaluatedAtDesc(pageable)
+                        : evaluationRepository.findByResultOrderByEvaluatedAtDesc(result, pageable);
+        var resultCounts = new EnumMap<FdsResult, Long>(FdsResult.class);
+        for (var candidate : FdsResult.values()) {
+            resultCounts.put(candidate, evaluationRepository.countByResult(candidate));
+        }
+        return new FdsEvaluationPage(
+                evaluations.map(this::summary).toList(),
+                evaluations.getNumber(),
+                evaluations.getSize(),
+                evaluations.getTotalElements(),
+                evaluations.getTotalPages(),
+                resultCounts);
     }
 
     public FdsEvaluationDetail detail(Long evaluationId) {

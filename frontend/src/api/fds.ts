@@ -28,6 +28,15 @@ export type FdsEvaluationDetail = {
   history: FdsEvaluationSummary[]
 }
 
+export type FdsEvaluationPage = {
+  content: FdsEvaluationSummary[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  resultCounts: Record<FdsResult, number>
+}
+
 type FdsEvaluationResponse = {
   evaluationRequestId: string
   evaluationId: number
@@ -37,9 +46,21 @@ type FdsEvaluationResponse = {
   errorCode: string | null
 }
 
-export function getFdsEvaluations(result?: FdsResult) {
-  const query = result ? `?result=${result}` : ''
-  return api<FdsEvaluationSummary[]>(`/fds/evaluations${query}`)
+export function getFdsEvaluations({
+  result,
+  attentionOnly = false,
+  page = 0,
+  size = 10,
+}: {
+  result?: FdsResult
+  attentionOnly?: boolean
+  page?: number
+  size?: number
+} = {}) {
+  const query = new URLSearchParams({ page: String(page), size: String(size) })
+  if (result) query.set('result', result)
+  if (attentionOnly) query.set('attentionOnly', 'true')
+  return api<FdsEvaluationPage>(`/fds/evaluations?${query}`)
 }
 
 export function getFdsEvaluation(evaluationId: string) {

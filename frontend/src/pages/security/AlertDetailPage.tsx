@@ -3,6 +3,7 @@ import { Alert, Button, Card, Descriptions, Spin, Table, Tag, Typography } from 
 import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { ApiError } from '../../api/client'
 import { getFdsEvaluation, type FdsEvaluationDetail, type FdsResult } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -60,16 +61,25 @@ export function AlertDetailPage() {
 
   useEffect(() => {
     if (!id) return
+    let active = true
     setLoading(true)
     setNotFound(false)
     setError(null)
     getFdsEvaluation(id)
-      .then(setDetail)
-      .catch((requestError: Error) => {
-        if (requestError.message.startsWith('404')) setNotFound(true)
+      .then((response) => {
+        if (active) setDetail(response)
+      })
+      .catch((requestError: unknown) => {
+        if (!active) return
+        if (requestError instanceof ApiError && requestError.status === 404) setNotFound(true)
         else setError('경보 상세를 불러오지 못했습니다.')
       })
-      .finally(() => setLoading(false))
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
   }, [id])
 
   if (loading) {

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   createMockFdsEvaluations,
   getFdsEvaluations,
+  type FdsEvaluationPage,
   type FdsEvaluationSummary,
   type FdsResult,
 } from '../../api/fds'
@@ -33,16 +34,29 @@ export function AlertListPage() {
   const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
   const [query, setQuery] = useState('')
   const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
+  const [evaluationPage, setEvaluationPage] = useState<FdsEvaluationPage | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [mockCreating, setMockCreating] = useState(false)
 
-  const load = () => {
+  const load = (page = 0, nextFilter = filter) => {
     setLoading(true)
     setError(null)
-    getFdsEvaluations()
-      .then(setEvaluations)
+    getFdsEvaluations({
+      result:
+        nextFilter === 'REVIEW' || nextFilter === 'DENY' || nextFilter === 'ERROR'
+          ? nextFilter
+          : undefined,
+      attentionOnly: nextFilter === 'NEEDS_ATTENTION',
+      page,
+      size: 10,
+    })
+      .then((response) => {
+        setEvaluations(response.content)
+        setEvaluationPage(response)
+        setCurrentPage(response.page + 1)
+      })
       .catch(() => setError('경보 목록을 불러오지 못했습니다.'))
       .finally(() => setLoading(false))
   }
@@ -51,22 +65,22 @@ export function AlertListPage() {
     setMockCreating(true)
     setError(null)
     createMockFdsEvaluations()
-      .then(load)
+      .then(() => load(0, filter))
       .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
       .finally(() => setMockCreating(false))
   }
 
   const selectFilter = (nextFilter: Filter) => {
     setFilter(nextFilter)
-    setCurrentPage(1)
+    load(0, nextFilter)
   }
 
   useEffect(() => {
-    load()
+    load(0, 'NEEDS_ATTENTION')
   }, [])
 
   const count = (result?: FdsResult) =>
-    result ? evaluations.filter((item) => item.result === result).length : evaluations.length
+    result ? (evaluationPage?.resultCounts[result] ?? 0) : (evaluationPage?.totalElements ?? 0)
   const rows = useMemo(
     () =>
       evaluations
@@ -206,7 +220,7 @@ export function AlertListPage() {
               allowClear
               className="dw-alert-search"
             />
-            <Button icon={<ReloadOutlined />} onClick={load}>
+            <Button icon={<ReloadOutlined />} onClick={() => load(currentPage - 1, filter)}>
               새로고침
             </Button>
             <Button onClick={createMock} loading={mockCreating}>
@@ -218,7 +232,7 @@ export function AlertListPage() {
           {filterOptions.map((option) => {
             const optionCount =
               option.value === 'NEEDS_ATTENTION'
-                ? evaluations.filter((item) => item.result !== 'ALLOW').length
+                ? (evaluationPage?.totalElements ?? 0)
                 : option.value === 'ALL'
                   ? count()
                   : count(option.value)
@@ -253,10 +267,12 @@ export function AlertListPage() {
             })}
             pagination={{
               current: currentPage,
-              pageSize: 20,
+              pageSize: 10,
               showSizeChanger: false,
-              showTotal: (total) => `총 ${total}건`,
-              onChange: (page) => setCurrentPage(page),
+              showLessItems: false,
+              showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
+              total: evaluationPage?.totalElements ?? 0,
+              onChange: (page) => load(page - 1, filter),
             }}
             locale={{ emptyText: '표시할 경보가 없습니다.' }}
           />

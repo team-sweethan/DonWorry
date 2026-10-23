@@ -34,8 +34,8 @@ class FdsMockEvaluationServiceTests {
     @Captor
     private ArgumentCaptor<FdsEvaluationRequest> requestCaptor;
 
-    @Test
     // 버튼 요청은 공개 평가 계약으로 하드코딩된 Mock 요청 세 건을 보낸다.
+    @Test
     void createMockEvaluations_sendsThreeMockP5Requests() {
         when(evaluator.evaluate(any())).thenAnswer(invocation -> {
             var request = invocation.getArgument(0, FdsEvaluationRequest.class);
@@ -56,8 +56,8 @@ class FdsMockEvaluationServiceTests {
                 .isBeforeOrEqualTo(Instant.now());
     }
 
-    @Test
     // 기존 개발용 Mock 행만 비어 있던 룰 스냅샷을 채운다.
+    @Test
     void createMockEvaluations_whenExistingMockHasNoSnapshots_backfillsOnlyThatMock() {
         var requestId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");

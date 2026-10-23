@@ -1,11 +1,10 @@
 package com.donworry.fds.controller;
 
 import com.donworry.fds.api.FdsEvaluationDetail;
-import com.donworry.fds.api.FdsEvaluationSummary;
+import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.service.FdsEvaluationNotFoundException;
 import com.donworry.fds.service.FdsEvaluationQueryService;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,8 +25,12 @@ public class FdsEvaluationController {
     }
 
     @GetMapping
-    public List<FdsEvaluationSummary> list(@RequestParam(required = false) FdsResult result) {
-        return queryService.list(result);
+    public FdsEvaluationPage list(
+            @RequestParam(required = false) FdsResult result,
+            @RequestParam(defaultValue = "false") boolean attentionOnly,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return queryService.list(result, attentionOnly, page, Math.min(Math.max(size, 1), 100));
     }
 
     @GetMapping("/{evaluationId}")
