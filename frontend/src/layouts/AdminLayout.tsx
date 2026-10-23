@@ -1,7 +1,7 @@
 import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
 import { Button, Select, Tooltip } from 'antd'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
 import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
@@ -76,6 +76,7 @@ function Header() {
 
 function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean }) {
   const location = useLocation()
+
   return (
     <aside className="dw-sidebar" aria-label="주 메뉴">
       <nav>

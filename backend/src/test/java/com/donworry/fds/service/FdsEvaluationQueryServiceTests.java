@@ -17,6 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class FdsEvaluationQueryServiceTests {
@@ -24,23 +28,31 @@ class FdsEvaluationQueryServiceTests {
     @Mock
     private FdsEvaluationRepository evaluationRepository;
 
-    @Test
     // 판정을 지정하면 해당 평가 이력만 반환한다.
-    void list_resultFilter_returnsMatchingEvaluations() {
+    @Test
+    void list_resultFilter_returnsMatchingEvaluationPage() {
         var review = evaluation(101L, FdsResult.REVIEW);
-        var allow = evaluation(102L, FdsResult.ALLOW);
         var queryService = new FdsEvaluationQueryService(evaluationRepository);
-        given(evaluationRepository.findAllByOrderByEvaluatedAtDesc()).willReturn(List.of(review, allow));
+        given(evaluationRepository.findAll(
+                        org.mockito.ArgumentMatchers.<Specification<FdsEvaluation>>any(),
+                        org.mockito.ArgumentMatchers.any(Pageable.class)))
+                .willReturn(new PageImpl<>(java.util.List.of(review), PageRequest.of(0, 10), 1));
+        given(evaluationRepository.countByResult(org.mockito.ArgumentMatchers.any()))
+                .willReturn(0L);
+        given(evaluationRepository.countByResult(FdsResult.REVIEW)).willReturn(1L);
 
-        var result = queryService.list(FdsResult.REVIEW);
+        var result = queryService.list(FdsResult.REVIEW, false, null, 0, 10);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().paymentId()).isEqualTo(101L);
-        assertThat(result.getFirst().result()).isEqualTo(FdsResult.REVIEW);
+        assertThat(result.content()).singleElement().satisfies(summary -> {
+            assertThat(summary.paymentId()).isEqualTo(101L);
+            assertThat(summary.result()).isEqualTo(FdsResult.REVIEW);
+        });
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.resultCounts()).containsEntry(FdsResult.REVIEW, 1L);
     }
 
-    @Test
     // 상세 조회는 룰 근거와 동일 결제 이력을 함께 반환한다.
+    @Test
     void detail_existingEvaluation_returnsRuleHitsAndHistory() {
         var evaluation = evaluation(101L, FdsResult.REVIEW);
         evaluation.addRuleHit(
@@ -68,8 +80,8 @@ class FdsEvaluationQueryServiceTests {
         assertThat(result.history()).hasSize(1);
     }
 
-    @Test
     // 없는 평가 ID는 조회 실패 예외를 반환한다.
+    @Test
     void detail_missingEvaluation_throwsNotFoundException() {
         var queryService = new FdsEvaluationQueryService(evaluationRepository);
         given(evaluationRepository.findById(999L)).willReturn(Optional.empty());

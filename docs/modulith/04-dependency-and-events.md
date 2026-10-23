@@ -93,7 +93,7 @@ void on(CaptureRequested event) { ... }                // 자기 모듈 클래�
 | 매입 접수 결과 (예: `CaptureIntakeAccepted` · `CaptureIntakeRejected`) | settlement → payment | `settlement.api` |
 | 매입 실행 결과 (예: `CaptureCompleted` · `CaptureFailed`) | settlement → payment | `settlement.api` |
 
-위 표는 ADR-0012의 기존 접수·실행 분리안입니다. #104의 [완료 통지 기반 접수 확인 제안](../decisions/0015-payment-mvp-capture-completion.md)은 P3·P6 합의 전이며 의존 방향·타입 위치는 유지합니다.
+위 표는 ADR-0012의 기존 접수·실행 분리안입니다. #104의 [완료 통지 기반 접수 확인 제안](../decisions/0016-payment-mvp-capture-completion.md)은 P3·P6 합의 전이며 의존 방향·타입 위치는 유지합니다.
 
 이름 · 필드는 아직 합의 중입니다 ([ADR-0012 합의가 필요한 것](../decisions/0012-payment-settlement-dependency.md#합의가-필요한-것)).
 

@@ -1,5 +1,6 @@
 package com.donworry.fds.repository;
 
+import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -7,9 +8,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 
-public interface FdsEvaluationRepository extends JpaRepository<FdsEvaluation, Long> {
+public interface FdsEvaluationRepository
+        extends JpaRepository<FdsEvaluation, Long>, JpaSpecificationExecutor<FdsEvaluation> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<FdsEvaluation> findByCustomerRefAndPaymentRequestedAtBetween(
@@ -17,7 +20,7 @@ public interface FdsEvaluationRepository extends JpaRepository<FdsEvaluation, Lo
 
     Optional<FdsEvaluation> findByEvaluationRequestId(UUID evaluationRequestId);
 
-    List<FdsEvaluation> findAllByOrderByEvaluatedAtDesc();
+    long countByResult(FdsResult result);
 
     List<FdsEvaluation> findByPaymentIdOrderByEvaluatedAtDesc(Long paymentId);
 }

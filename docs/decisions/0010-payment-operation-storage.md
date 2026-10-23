@@ -5,7 +5,7 @@
 - **관련:** [P5 설계 §2](../payment/design.md), Notion FDS 설계 §3.9·P5 담당 ERD, [ADR-0012](0012-payment-settlement-dependency.md), 문서 최신화 #62 (저장안 채택·구현 Issue와 구분)
 - **영향 받는 담당:** P5 시은, P2 정후, P3 수민, P6 민정, P1·CakeShop·DB 담당
 
-2026-10-23: 이 안을 1차 P6 연동의 필수 전제로 요구하지 않는다. 최소 완료 계약은 [ADR-0015](0015-payment-mvp-capture-completion.md), 이전 확장 항목은 [후속 검토](../payment/future-design.md)에 구분한다. 아래는 원래 저장 제안의 이유와 대안이며 채택된 설계가 아니다.
+2026-10-23: 이 안을 1차 P6 연동의 필수 전제로 요구하지 않는다. 최소 완료 계약은 [ADR-0016](0016-payment-mvp-capture-completion.md), 이전 확장 항목은 [후속 검토](../payment/future-design.md)에 구분한다. 아래는 원래 저장 제안의 이유와 대안이며 채택된 설계가 아니다.
 
 ## 배경
 

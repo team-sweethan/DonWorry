@@ -50,4 +50,7 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
             @Param("createdAfter") Instant createdAfter);
 
     List<SecurityCase> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
+
+    // 보안 직원 Case 목록 — 최근 생성 순
+    List<SecurityCase> findAllByOrderByCreatedAtDesc();
 }
