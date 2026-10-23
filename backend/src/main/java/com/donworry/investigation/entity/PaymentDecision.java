@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -66,7 +67,7 @@ public class PaymentDecision {
         this.decision = Objects.requireNonNull(decision, "decision");
         this.reason = Objects.requireNonNull(reason, "reason");
         this.evidenceVersion = evidenceVersion;
-        this.decidedAt = Objects.requireNonNull(decidedAt, "decidedAt");
+        this.decidedAt = Objects.requireNonNull(decidedAt, "decidedAt").truncatedTo(ChronoUnit.MICROS);
     }
 
     // 증거 버전 일치 여부는 저장 전에 Service가 확인한다 (fds 정본 03 §3.5)

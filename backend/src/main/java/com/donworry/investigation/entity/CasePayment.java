@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -41,7 +42,7 @@ public class CasePayment {
     private CasePayment(SecurityCase securityCase, Long paymentId, Instant linkedAt) {
         this.securityCase = Objects.requireNonNull(securityCase, "securityCase");
         this.paymentId = Objects.requireNonNull(paymentId, "paymentId");
-        this.linkedAt = Objects.requireNonNull(linkedAt, "linkedAt");
+        this.linkedAt = Objects.requireNonNull(linkedAt, "linkedAt").truncatedTo(ChronoUnit.MICROS);
     }
 
     public static CasePayment link(SecurityCase securityCase, Long paymentId, Instant now) {

@@ -95,6 +95,52 @@ class InvestigationEntityTests {
         assertThatIllegalStateException().isThrownBy(() -> handoff.retry(NOW.plusSeconds(10)));
     }
 
+    // 같은 접수 결과가 다시 오면 예외 없이 그대로 둔다 (이벤트 재전달 멱등)
+    @Test
+    void actionHandoff_acceptSameOperationTwice_isNoOp() {
+        ActionHandoff handoff = handoffFor(Decision.ACCEPT);
+        handoff.accept(10L, NOW.plusSeconds(5));
+
+        handoff.accept(10L, NOW.plusSeconds(30));
+
+        assertThat(handoff.getStatus()).isEqualTo(HandoffStatus.ACCEPTED);
+        assertThat(handoff.getAcceptedAt()).isEqualTo(NOW.plusSeconds(5));
+    }
+
+    // 이미 접수된 인계에 다른 작업 ID가 오면 충돌로 거부한다
+    @Test
+    void actionHandoff_acceptDifferentOperation_throwsException() {
+        ActionHandoff handoff = handoffFor(Decision.ACCEPT);
+        handoff.accept(10L, NOW.plusSeconds(5));
+
+        assertThatIllegalStateException().isThrownBy(() -> handoff.accept(11L, NOW.plusSeconds(30)));
+        assertThat(handoff.getTargetOperationId()).isEqualTo(10L);
+    }
+
+    // 저장되는 시각은 DATETIME(6)에 맞춰 마이크로초로 잘린다
+    @Test
+    void entities_truncateInstantsToMicros() {
+        Instant withNanos = NOW.plusNanos(123_456_789);
+        Instant micros = NOW.plusNanos(123_456_000);
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, withNanos);
+        CasePayment casePayment = CasePayment.link(securityCase, 100L, withNanos);
+        PaymentDecision decision = PaymentDecision.confirm(casePayment, 3L, 7L, Decision.ACCEPT, "사유", 1, withNanos);
+        ActionHandoff handoff = ActionHandoff.request(decision, withNanos);
+        handoff.accept(10L, withNanos);
+        securityCase.close(withNanos);
+
+        assertThat(securityCase.getCreatedAt()).isEqualTo(micros);
+        assertThat(securityCase.getClosedAt()).isEqualTo(micros);
+        assertThat(casePayment.getLinkedAt()).isEqualTo(micros);
+        assertThat(decision.getDecidedAt()).isEqualTo(micros);
+        assertThat(handoff.getRequestedAt()).isEqualTo(micros);
+        assertThat(handoff.getLastAttemptedAt()).isEqualTo(micros);
+        assertThat(handoff.getAcceptedAt()).isEqualTo(micros);
+        assertThat(CaseHistory.bySystem(securityCase, CaseHistoryEventType.CASE_CREATED, null, withNanos)
+                        .getCreatedAt())
+                .isEqualTo(micros);
+    }
+
     // AI 보고서 없이 저장한 판정은 수동 판정이다
     @Test
     void paymentDecision_withoutReport_isManual() {

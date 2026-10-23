@@ -140,6 +140,37 @@ class InvestigationRepositoryTests {
         assertThat(retryTargets).extracting(ActionHandoff::getId).containsExactly(stale.getId());
     }
 
+    // 나노초가 있는 시각으로 만들어도 저장 전 값과 다시 읽은 값이 같다
+    @Test
+    void securityCase_createdWithNanos_keepsSameCreatedAtAfterReload() {
+        Instant withNanos = Instant.parse("2026-10-22T05:00:00.123456789Z");
+        SecurityCase saved = saveCase(1L, "customer-1", withNanos);
+        entityManager.flush();
+        entityManager.clear();
+
+        SecurityCase reloaded = securityCaseRepository.findById(saved.getId()).orElseThrow();
+
+        assertThat(reloaded.getCreatedAt()).isEqualTo(saved.getCreatedAt());
+    }
+
+    // 잠금 조회도 같은 인계 행을 돌려준다 (SELECT ... FOR UPDATE가 MariaDB에서 실행된다)
+    @Test
+    void handoffLockQueries_returnSameRow() {
+        SecurityCase securityCase = saveCase(1L, "customer-1", NOW);
+        ActionHandoff handoff = saveHandoff(securityCase, 5001L, NOW);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(actionHandoffRepository.findByIdForUpdate(handoff.getId()))
+                .get()
+                .extracting(ActionHandoff::getId)
+                .isEqualTo(handoff.getId());
+        assertThat(actionHandoffRepository.findByIdempotencyKey(handoff.getIdempotencyKey()))
+                .get()
+                .extracting(ActionHandoff::getId)
+                .isEqualTo(handoff.getId());
+    }
+
     private SecurityCase saveCase(Long merchantId, String customerRef, Instant createdAt) {
         return securityCaseRepository.save(
                 SecurityCase.open(merchantId, customerRef, CaseType.PAYMENT_FRAUD, createdAt));

@@ -2,6 +2,7 @@ package com.donworry.investigation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.HandoffStatus;
@@ -16,6 +17,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 class InvestigationRulesTests {
 
     static final Instant CREATED_AT = Instant.parse("2026-10-22T05:00:00Z");
+
+    // 병합 가능 상태 집합은 밖에서 바꿀 수 없다
+    @Test
+    void mergeableStatuses_isUnmodifiable() {
+        assertThatThrownBy(() -> InvestigationRules.MERGEABLE_STATUSES.add(CaseStatus.CLOSED))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
 
     // 판정 전 Case는 생성 후 30분 미만까지 결제를 더 받는다
     @Test

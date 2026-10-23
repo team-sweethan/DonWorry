@@ -4,7 +4,6 @@ import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.HandoffStatus;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -16,8 +15,9 @@ public final class InvestigationRules {
     public static final Duration MERGE_WINDOW = Duration.ofMinutes(30);
 
     // 판정 전 단계만 결제를 더 받는다. 판정이 하나라도 있으면 대상 목록이 고정된다 (fds 정본 03 §3.5)
+    // 밖에서 바꾸면 모든 병합 판단이 달라지므로 변경 불가 집합으로 둔다
     public static final Set<CaseStatus> MERGEABLE_STATUSES =
-            EnumSet.of(CaseStatus.OPEN, CaseStatus.INVESTIGATING, CaseStatus.DECISION_PENDING);
+            Set.of(CaseStatus.OPEN, CaseStatus.INVESTIGATING, CaseStatus.DECISION_PENDING);
 
     private InvestigationRules() {}
 

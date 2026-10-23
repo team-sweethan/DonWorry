@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -50,7 +51,8 @@ public class SecurityCase {
         this.merchantId = Objects.requireNonNull(merchantId, "merchantId");
         this.customerRef = Objects.requireNonNull(customerRef, "customerRef");
         this.caseType = Objects.requireNonNull(caseType, "caseType");
-        this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
+        // DATETIME(6)에 저장되는 값과 같게 마이크로초로 맞춘다 — 병합 기한 판단이 저장 전후로 달라지지 않게
+        this.createdAt = Objects.requireNonNull(createdAt, "createdAt").truncatedTo(ChronoUnit.MICROS);
         this.status = CaseStatus.OPEN;
         this.evidenceVersion = 1;
     }
@@ -65,6 +67,7 @@ public class SecurityCase {
     }
 
     // 최초 결제는 생성 때의 버전 1에 포함되므로, 이후 병합되는 결제에만 호출한다
+    // 동시 병합에서 증가가 덮어써지지 않도록 쓰기 잠금으로 읽은 Case에만 호출한다 (SecurityCaseRepository.findMergeCandidates)
     public void increaseEvidenceVersion() {
         requireNotClosed();
         this.evidenceVersion++;
@@ -83,7 +86,7 @@ public class SecurityCase {
     public void close(Instant now) {
         requireNotClosed();
         this.status = CaseStatus.CLOSED;
-        this.closedAt = Objects.requireNonNull(now, "now");
+        this.closedAt = Objects.requireNonNull(now, "now").truncatedTo(ChronoUnit.MICROS);
     }
 
     public boolean isClosed() {

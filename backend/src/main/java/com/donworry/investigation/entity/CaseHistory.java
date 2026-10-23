@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.Objects;
 import lombok.AccessLevel;
@@ -67,7 +68,7 @@ public class CaseHistory {
         this.actorType = Objects.requireNonNull(actorType, "actorType");
         this.actorId = actorId;
         this.eventData = eventData == null ? null : Map.copyOf(eventData);
-        this.createdAt = Objects.requireNonNull(createdAt, "createdAt");
+        this.createdAt = Objects.requireNonNull(createdAt, "createdAt").truncatedTo(ChronoUnit.MICROS);
     }
 
     public static CaseHistory bySystem(
