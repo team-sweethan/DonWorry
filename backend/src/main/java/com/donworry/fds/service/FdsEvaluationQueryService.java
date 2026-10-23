@@ -33,13 +33,14 @@ public class FdsEvaluationQueryService {
         for (var candidate : FdsResult.values()) {
             resultCounts.put(candidate, evaluationRepository.countByResult(candidate));
         }
-        return new FdsEvaluationPage(
-                evaluations.map(this::summary).toList(),
-                evaluations.getNumber(),
-                evaluations.getSize(),
-                evaluations.getTotalElements(),
-                evaluations.getTotalPages(),
-                resultCounts);
+        return FdsEvaluationPage.builder()
+                .content(evaluations.map(this::summary).toList())
+                .page(evaluations.getNumber())
+                .size(evaluations.getSize())
+                .totalElements(evaluations.getTotalElements())
+                .totalPages(evaluations.getTotalPages())
+                .resultCounts(resultCounts)
+                .build();
     }
 
     private Specification<FdsEvaluation> filters(FdsResult result, boolean attentionOnly, String search) {

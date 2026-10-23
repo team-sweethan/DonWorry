@@ -40,11 +40,15 @@ export function AlertListPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [mockCreating, setMockCreating] = useState(false)
   const requestSequence = useRef(0)
+  const conditions = useRef({ filter: 'NEEDS_ATTENTION' as Filter, query: '' })
 
   const load = (page = 0, nextFilter = filter, nextQuery = query) => {
     const sequence = ++requestSequence.current
     setLoading(true)
     setError(null)
+    setEvaluations([])
+    setEvaluationPage(null)
+    setCurrentPage(page + 1)
     getFdsEvaluations({
       result:
         nextFilter === 'REVIEW' || nextFilter === 'DENY' || nextFilter === 'ERROR'
@@ -73,14 +77,18 @@ export function AlertListPage() {
     setMockCreating(true)
     setError(null)
     createMockFdsEvaluations()
-      .then(() => load(0, filter))
+      .then(() => {
+        const current = conditions.current
+        load(0, current.filter, current.query)
+      })
       .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
       .finally(() => setMockCreating(false))
   }
 
   const selectFilter = (nextFilter: Filter) => {
     setFilter(nextFilter)
-    load(0, nextFilter)
+    conditions.current = { filter: nextFilter, query }
+    load(0, nextFilter, query)
   }
 
   useEffect(() => {
@@ -212,6 +220,7 @@ export function AlertListPage() {
               onChange={(event) => {
                 const nextQuery = event.target.value
                 setQuery(nextQuery)
+                conditions.current = { filter, query: nextQuery }
                 load(0, filter, nextQuery)
               }}
               allowClear

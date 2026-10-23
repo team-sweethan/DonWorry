@@ -2,7 +2,9 @@ package com.donworry.fds.api;
 
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 
+@Builder
 public record FdsEvaluationPage(
         List<FdsEvaluationSummary> content,
         int page,
