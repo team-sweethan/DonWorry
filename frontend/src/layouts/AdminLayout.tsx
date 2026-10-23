@@ -1,8 +1,7 @@
 import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
 import { Button, Select, Tooltip } from 'antd'
-import { useEffect, useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { getFdsEvaluations } from '../api/fds'
 import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
 import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
@@ -76,28 +75,7 @@ function Header() {
 }
 
 function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean }) {
-  const { role } = useDemo()
   const location = useLocation()
-  const [reviewCount, setReviewCount] = useState(0)
-
-  useEffect(() => {
-    if (role !== 'security') return
-
-    let active = true
-    getFdsEvaluations()
-      .then((evaluations) => {
-        if (active) {
-          setReviewCount(evaluations.filter((evaluation) => evaluation.result === 'REVIEW').length)
-        }
-      })
-      .catch(() => {
-        if (active) setReviewCount(0)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [role])
 
   return (
     <aside className="dw-sidebar" aria-label="주 메뉴">
@@ -113,12 +91,7 @@ function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean 
                   `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
                 }
               >
-                <span>{item.label}</span>
-                {item.path === '/security/alerts' && reviewCount > 0 && (
-                  <span className="dw-nav-count" aria-label={`추가 조사 ${reviewCount}건`}>
-                    {reviewCount}
-                  </span>
-                )}
+                {item.label}
               </NavLink>
             ))}
           </div>

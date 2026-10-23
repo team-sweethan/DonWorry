@@ -187,21 +187,6 @@ textarea {
   background: #2563eb;
   font-weight: 650;
 }
-.dw-nav-count {
-  display: inline-flex;
-  min-width: 20px;
-  height: 18px;
-  margin-left: auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  padding: 0 6px;
-  background: #f59e0b;
-  color: #172554;
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1;
-}
 .dw-sidebar-bottom {
   margin-top: auto;
   padding-top: 16px;
@@ -274,9 +259,7 @@ textarea {
   margin-bottom: 20px;
 }
 .dw-alert-tabs {
-  display: flex;
-  gap: 28px;
-  padding: 0 22px;
+  padding: 0 24px 16px;
   border-bottom: 1px solid #f0f0f0;
 }
 .dw-score-row {
