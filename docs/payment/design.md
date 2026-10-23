@@ -1,6 +1,6 @@
 # P5 1차 시연 설계
 
-**#104의 1차 축소 제안이며 P3·P6 합의 전이다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
+**#104의 시연 범위 제안과 #100·#118 구현을 구분한다. P6 이벤트는 ADR-0016·0017이 채택됐고, P3 통지·인계 매핑은 합의 전이다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
 현재 테이블·컬럼·타입은 migration SQL, 모듈 의존 방향과 이벤트 타입 위치는 ADR-0012를 따른다.
 새 보조 저장·DTO 필드명·URL·HTTP 코드·복구 세부는 합의 전 제안이다.
 
@@ -89,7 +89,7 @@ ACCEPT 접수 이후에도 실제 매입 성공 전까지 HELD를 유지하는 �
 
 ## 3. 모듈 간 계약
 
-P2는 현재 코드 계약이다. P3·P6·CakeShop의 아래 계약은 구현 전 제안이며, 이벤트 메타데이터와 구체 DTO는 담당 합의 후 확정한다. ID는 Long, 시각은 Instant(UTC), 금액은 Long(원 단위)을 기준으로 한다.
+P2와 P6 이벤트는 현재 코드 계약이다. P3·CakeShop 및 P5의 이벤트 연결·복구는 후속 합의·구현 대상이다. ID는 Long, 시각은 Instant(UTC), 금액은 Long(원 단위)을 기준으로 한다.
 
 ### 3.1. P2 평가 — fds/api 소유
 
@@ -171,11 +171,19 @@ record PaymentEvaluationFlowResult(
 
 P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 정상 반환한다. 호출 예외·null 응답·요청 UUID 불일치는 기존 평가 서비스의 예외를 전달하며, 자동 재시도하지 않는다. 평가 실패에도 최초 PENDING은 남는다. 예외 발생 시 결제 ID를 호출자에게 반환하는 복구 계약은 이번 범위에 없으므로, 이 메서드를 그대로 외부 재시도 API로 노출하지 않는다.
 
-DENY는 DENIED 판단을 반환하지만 이번 작업에서는 DB 결제 상태를 변경하지 않는다. 승인 실행·오류 이력 저장·이벤트 발행도 후속 작업이다. 동일 입력으로 다시 호출하면 별도 결제가 생성되며, 주문 중복 방지·UUID 영속 보존·재시작 후 복구는 후속 계약으로 남긴다. #95에서 합의한 P2의 동일 요청 UUID 입력 충돌 검증도 P2 후속 과제로 유지한다.
+`createAndEvaluate()`는 DENY의 DENIED 판단을 반환하지만 DB 결제 상태를 변경하지 않는다. 승인 실행·오류 이력 저장·이벤트 발행도 후속 작업이다. 동일 입력으로 다시 호출하면 별도 결제가 생성되며, 주문 중복 방지·UUID 영속 보존·재시작 후 복구는 후속 계약으로 남긴다. #95에서 합의한 P2의 동일 요청 UUID 입력 충돌 검증도 P2 후속 과제로 유지한다.
 
 기존 최초 저장·평가 호출·분기 판단 서비스를 연결하는 내부 설계이며, DB 스키마·저장 방식·모듈 의존 방향·P2 공개 계약은 변경하지 않는다.
 
 4번 단계에서는 커밋 후 별도 조회 대신 저장 서비스의 반환값을 보강했다. `PaymentCreationService.createPendingSnapshot()`은 `REQUIRES_NEW`로 저장한 Entity에서 `PaymentCreationSnapshot`을 만들며, Spring Bean 호출이 반환될 때 커밋이 완료된다. 스냅샷은 paymentId·customerRef·amount·createdAt·status·authorizationRef를 담는다. 생성 시각은 Entity의 마이크로초 정밀도 값을 그대로 사용한다. 기존 ID 반환 `createPending()`은 유지하고 두 메서드는 내부 저장 함수를 공유한다. 추가 조회 없이 같은 저장 객체의 값을 전달할 수 있으며, DB 재조회 값과의 일치 및 호출자 롤백 후 보존을 MariaDB 테스트로 검사한다. 5번 단계에서 연결 서비스와 입력·반환 record, 입력 검증 및 대역 기반 흐름 테스트를 추가했다. 저장된 상태가 PENDING이고 승인 참조가 없는지 확인한 후 같은 스냅샷으로 상태와 평가 입력을 구성한다.
+
+#### #118 모의 승인·상태 저장 연결
+
+`createAndAuthorize(input)`는 기존 생성·평가 helper의 문맥을 별도 `PaymentAuthorizationService`에 넘긴다. 행 잠금과 REQUIRES_NEW 아래 승인 전 PENDING을 확인하고 DENY→DENIED, 업무 거절→DECLINED, ALLOW 성공→승인 참조가 있는 PENDING, REVIEW 성공→HELD를 저장한다. ERROR는 승인 없이 PENDING을 유지한다.
+
+기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. REQUEST_CAPTURE·NOTIFY_HELD는 반환 판단이며 이벤트를 발행하지 않는다.
+
+[모의 승인 계약](mock-authorization.md), [트랜잭션 설계](authorization-flow.md), [실행 검증](verification.md)에 세부와 한계를 기록한다. 기존 createAndEvaluate의 평가 전용 계약은 유지한다.
 
 ### 3.2. P3 HELD·직원 조치 — payment/api 소유
 
@@ -196,9 +204,9 @@ VOID의 접수 증거·식별자·통지 시점은 별도 미결이다. CAPTURE 
 
 의존 방향 `payment → settlement`와 타입 위치는 ADR-0012를 유지한다. P6는 P5를 호출·import하지 않는다.
 
-요청은 P6가 매입·정산을 저장하는 데 필요한 결제 ID·가맹점·주문 참조·금액과 수수료 계산 재료를 담아야 한다. `orderRef`와 `captures.order_id` 매핑, 수수료 제공 경로·단위·반올림은 C4에서 정한다. 완료 통지 필드를 줄이는 것이 요청을 paymentId 하나로 줄인다는 뜻은 아니다.
+ADR-0016의 `CaptureRequested(paymentId, merchantId, orderId, amount)`가 구현되어 있다. P5의 orderRef를 orderId에 넣어 업무 트랜잭션 안에서 발행해야 한다. 수수료 계산은 P6가 담당한다. 요청 발행과 완료 수신은 #118 범위 밖이다.
 
-완료 이벤트의 업무 필드는 다음 3개를 제안한다. 구현된 DTO가 아니다.
+완료 이벤트는 ADR-0017에 채택됐으며 settlement.api에 다음 3개 필드로 구현됐다. P5 수신은 후속 작업이다.
 
 ```java
 record CaptureCompleted(Long paymentId, Long captureId, Instant capturedAt) {}

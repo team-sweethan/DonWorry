@@ -140,3 +140,18 @@ Case 병합·AI·판정 자체는 P3/P4 책임이다. 실제 점수 생성은 P2
 2026-10-23, `4bf6c04` + 문서 수정 작업본에서 `cd backend && ./gradlew spotlessApply check mariaDbTest`를 실행해 BUILD SUCCESSFUL을 확인했다. 모든 태스크는 UP-TO-DATE로 기존 결과를 재사용했다. 새 테스트 실행으로 기록하지 않는다. 현재 backend 코드·테스트는 `4bf6c04`와 동일하며, 남아 있는 XML 결과는 일반 검사 159건·MariaDB 30건, 실패·오류·건너뜀 0이다.
 
 README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 현재 구현·검증 범위로 갱신했다. `python3 .github/scripts/check_md_links.py`와 `git diff --check`도 통과했다. 위 미검증·후속 범위와 P2 후속 합의는 유지한다.
+
+
+## #118 승인 연결·트랜잭션 검증 (6번 단계)
+
+2026-10-23, `feature/118-payment-authorization`, 기준 커밋 `4a41a3f` + 2~6번 단계 미커밋 작업본에서 실행했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 검사 234건 중 233건 통과·1건 건너뜀, MariaDB 검사 68건 통과. 실패·오류 0. 건너뛴 기존 LocalSettlementDemoTests는 개발 DB용 수동 실행 환경 변수가 필요한 테스트다.
+- [PaymentAuthorizationPersistenceTests](../../backend/src/test/java/com/donworry/payment/service/PaymentAuthorizationPersistenceTests.java) 신규 9건 통과. Spring 프록시·실제 MariaDB·P2 평가를 사용하고 승인기는 테스트 대역으로 제어한다. 정상 성공 대역은 MockPaymentAuthorizer에 위임한다.
+- 실제 P2 ALLOW·REVIEW에 따른 PENDING/HELD 및 승인 참조 커밋, 호출자 트랜잭션 롤백 이후 승인 결과와 평가 기록 보존을 확인했다.
+- DENY·ERROR는 평가 문맥 대역으로 상태 반영과 승인기 미호출을 확인했다. 실제 P2에서 해당 판정을 생성·저장한 검증은 아니다.
+- 업무 거절 커밋과 중복 처리 차단, 모의 기술 실패 뒤 PENDING·평가 보존 및 동일 문맥의 명시적 재처리를 확인했다.
+- REVIEW 성공의 HELD·승인 참조를 flush하여 SQL 반영을 확인한 후 beforeCommit 예외를 주입했다. 호출자에게 성공을 반환하지 않고 두 값이 모두 최초 PENDING·null로 롤백되며 P2 평가는 남는 것을 확인했다. 실제 DB 장애·커밋 응답 유실을 재현한 검사는 아니다.
+- 두 스레드에서 동일 결제를 처리했다. latch로 첫 승인을 멈춘 동안 두 번째 요청이 완료되지 않음을 확인하고, 첫 커밋 뒤 두 번째 충돌·승인 호출 1회, 첫 롤백 뒤 두 번째 성공·총 호출 2회를 확인했다.
+- 기존 평가 전용 흐름 테스트도 유지·통과했다. 모듈 경계·계층·포맷 검사 포함.
+- 미검증·후속: 외부 카드사, 실제 DB 연결 장애·응답 유실, 프로세스 재시작 복구, 주문 단위 중복 접수, P3/P6 이벤트·HTTP·CakeShop. 거절 코드·오류 이력의 영속 저장은 구현하지 않았다. 스키마·다른 담당 공개 계약 변경은 없다.

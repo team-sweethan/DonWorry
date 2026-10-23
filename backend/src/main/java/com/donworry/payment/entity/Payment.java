@@ -71,6 +71,31 @@ public class Payment {
         this.status = PaymentStatus.PENDING;
     }
 
+    public void requireUnapprovedPending() {
+        if (status != PaymentStatus.PENDING || authorizationRef != null) {
+            throw new IllegalStateException("승인 결과가 없는 PENDING 결제에만 적용할 수 있습니다");
+        }
+    }
+
+    public void deny() {
+        requireUnapprovedPending();
+        status = PaymentStatus.DENIED;
+    }
+
+    public void recordAuthorizationSuccess(String reference, boolean hold) {
+        requireUnapprovedPending();
+        if (reference == null || reference.isBlank()) {
+            throw new IllegalArgumentException("authorizationRef must not be blank");
+        }
+        authorizationRef = requireReference(reference, "authorizationRef");
+        status = hold ? PaymentStatus.HELD : PaymentStatus.PENDING;
+    }
+
+    public void declineAuthorization() {
+        requireUnapprovedPending();
+        status = PaymentStatus.DECLINED;
+    }
+
     private static String requireReference(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.codePointCount(0, value.length()) > 100) {

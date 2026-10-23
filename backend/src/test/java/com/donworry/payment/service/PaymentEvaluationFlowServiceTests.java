@@ -18,8 +18,9 @@ import org.mockito.ArgumentCaptor;
 class PaymentEvaluationFlowServiceTests {
     private final PaymentCreationService creation = mock(PaymentCreationService.class);
     private final FdsEvaluator evaluator = mock(FdsEvaluator.class);
+    private final PaymentAuthorizationService authorization = mock(PaymentAuthorizationService.class);
     private final PaymentEvaluationFlowService service =
-            new PaymentEvaluationFlowService(creation, new PaymentEvaluationService(evaluator));
+            new PaymentEvaluationFlowService(creation, new PaymentEvaluationService(evaluator), authorization);
 
     private PaymentEvaluationFlowInput input() {
         return new PaymentEvaluationFlowInput(999L, "input-customer", "order-1", 10_000L);
@@ -60,6 +61,7 @@ class PaymentEvaluationFlowServiceTests {
         var captor = ArgumentCaptor.forClass(FdsEvaluationRequest.class);
         order.verify(evaluator).evaluate(captor.capture());
         verifyNoMoreInteractions(creation, evaluator);
+        verifyNoInteractions(authorization);
         var request = captor.getValue();
         assertThat(request.evaluationRequestId()).isNotNull();
         assertThat(request.paymentId()).isEqualTo(saved.paymentId());

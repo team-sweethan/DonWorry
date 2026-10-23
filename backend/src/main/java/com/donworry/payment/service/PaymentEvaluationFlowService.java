@@ -13,10 +13,22 @@ public class PaymentEvaluationFlowService {
 
     private final PaymentCreationService creationService;
     private final PaymentEvaluationService evaluationService;
+    private final PaymentAuthorizationService authorizationService;
 
     // 호출자 트랜잭션을 중단해 최초 저장과 P2 평가가 각각 커밋되도록 한다.
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PaymentEvaluationFlowResult createAndEvaluate(PaymentEvaluationFlowInput input) {
+        var context = createEvaluationContext(input);
+        return new PaymentEvaluationFlowResult(context.payment().paymentId(), context.evaluationResult());
+    }
+
+    // 최초 저장·평가 뒤 별도 Bean에서 승인 결과를 커밋한다. 재호출하면 새 결제가 생성된다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PaymentAuthorizationResult createAndAuthorize(PaymentEvaluationFlowInput input) {
+        return authorizationService.authorize(createEvaluationContext(input));
+    }
+
+    private PaymentAuthorizationContext createEvaluationContext(PaymentEvaluationFlowInput input) {
         if (input == null) {
             throw new IllegalArgumentException("input must not be null");
         }
@@ -34,6 +46,6 @@ public class PaymentEvaluationFlowService {
                 .paymentRequestedAt(payment.createdAt())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
-        return new PaymentEvaluationFlowResult(payment.paymentId(), result);
+        return new PaymentAuthorizationContext(payment, evaluationInput.evaluationRequestId(), result);
     }
 }
