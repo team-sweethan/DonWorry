@@ -13,7 +13,8 @@ public record CaseSummaryResponse(
         Instant createdAt,
         Instant closedAt,
         int paymentCount,
-        long totalAmount,
+        // 결제 정보를 하나라도 조회하지 못하면 null — 일부만 더한 값을 합계로 내보내지 않는다
+        Long totalAmount,
         Integer maxRiskScore,
         String latestReportStatus,
         int decidedCount) {}

@@ -89,12 +89,7 @@ public class CaseQueryService {
                 securityCase.getCreatedAt(),
                 securityCase.getClosedAt(),
                 payments.size(),
-                payments.stream()
-                        .flatMap(Optional::stream)
-                        .map(PaymentInfo::amount)
-                        .filter(Objects::nonNull)
-                        .mapToLong(Long::longValue)
-                        .sum(),
+                totalAmount(payments),
                 payments.stream()
                         .flatMap(Optional::stream)
                         .map(PaymentInfo::riskScore)
@@ -103,6 +98,19 @@ public class CaseQueryService {
                         .orElse(null),
                 reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null),
                 (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId));
+    }
+
+    // 금액을 모르는 결제가 있으면 합계도 모른다 (null). 빠진 금액을 0으로 치지 않는다
+    private static Long totalAmount(List<Optional<PaymentInfo>> payments) {
+        long total = 0;
+        for (Optional<PaymentInfo> payment : payments) {
+            Long amount = payment.map(PaymentInfo::amount).orElse(null);
+            if (amount == null) {
+                return null;
+            }
+            total += amount;
+        }
+        return total;
     }
 
     private CasePaymentResponse payment(CasePayment casePayment) {

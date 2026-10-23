@@ -365,6 +365,21 @@ class CaseFlowTests {
                         .value(72));
     }
 
+    // 결제 정보를 조회하지 못한 결제가 있으면 합계는 0이 아니라 null이다 (서버 재시작으로 목업이 비었을 때)
+    @Test
+    void list_missingPaymentInfo_returnsNullTotalAmount() {
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(caseId))
+                .singleElement()
+                .satisfies(summary -> {
+                    assertThat(summary.paymentCount()).isEqualTo(1);
+                    assertThat(summary.totalAmount()).isNull();
+                });
+    }
+
     private DemoHeldPaymentResponse createHeld(String customerRef, long amount, int riskScore) throws Exception {
         return createHeld(1L, customerRef, amount, riskScore);
     }

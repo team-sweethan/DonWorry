@@ -130,7 +130,7 @@ export function CaseListPage() {
       dataIndex: 'totalAmount',
       align: 'right',
       width: 120,
-      render: won,
+      render: (v: CaseSummary['totalAmount']) => (v === null ? '-' : won(v)),
     },
     {
       title: '생성 시각',

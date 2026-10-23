@@ -137,7 +137,8 @@ export type AiReport = {
 // ── 화면 조회·요청 모델 ──
 export type CaseSummary = SecurityCase & {
   paymentCount: number
-  totalAmount: number
+  /** 결제 정보를 하나라도 조회하지 못하면 null (일부 합계를 내보내지 않는다). */
+  totalAmount: number | null
   maxRiskScore: number | null
   latestReportStatus: ReportStatus | null
   decidedCount: number
