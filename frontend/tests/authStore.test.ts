@@ -177,7 +177,7 @@ test('login_whenOldMeFailsLate_preservesNewSession', async () => {
 
 // 403은 세션 만료와 구분하고 다른 역할도 원래 역할로 보관한다.
 test('check_whenForbidden_preservesAuthentication', async () => {
-  const operator: AuthUser = { ...user, role: 'OPERATOR', tenantScope: null, permissions: [] }
+  const operator: AuthUser = { ...user, role: 'OPERATOR', tenantScope: 'MERCHANT', permissions: [] }
   const store = setup({
     login: async () => operator,
     getMe: async () => {

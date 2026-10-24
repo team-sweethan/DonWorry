@@ -4,6 +4,6 @@ export type AuthUser = {
   displayName: string
   role: 'ADMIN' | 'OPERATOR' | 'SECURITY_STAFF'
   merchantId: number | null
-  tenantScope: 'ALL' | null
+  tenantScope: 'ALL' | 'MERCHANT'
   permissions: string[]
 }

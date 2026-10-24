@@ -14,6 +14,7 @@ import com.donworry.identity.entity.UserStatus;
 import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.service.AuthService;
+import com.donworry.identity.service.CurrentStaffService;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -125,9 +127,34 @@ class AuthApiTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("OPERATOR"))
                 .andExpect(jsonPath("$.merchantId").value(10))
-                .andExpect(jsonPath("$.tenantScope").isEmpty())
+                .andExpect(jsonPath("$.tenantScope").value("MERCHANT"))
                 .andExpect(jsonPath("$.permissions[0]").value("FDS_VIEW"))
                 .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"));
+    }
+
+    // 보안 직원은 전체 가맹점 범위를 받지만 기능 권한이 자동 추가되지는 않는다
+    @Test
+    void login_whenSecurityStaff_returnsAllScopeWithoutExtraPermissions() throws Exception {
+        given(user.getRole()).willReturn(UserRole.SECURITY_STAFF);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var session = (MockHttpSession) result.getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantScope").value("ALL"))
+                .andExpect(jsonPath("$.permissions").isEmpty())
+                .andExpect(content().json(result.getResponse().getContentAsString()));
+        var context = (SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+        try {
+            SecurityContextHolder.setContext(context);
+            var summary = new CurrentStaffService().findCurrent().orElseThrow();
+            assertThat(summary.userId()).isEqualTo(1L);
+            assertThat(summary.role()).isEqualTo("SECURITY_STAFF");
+            assertThat(summary.permissions()).isEmpty();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     // 비밀번호가 틀리면 권한을 조회하지 않아 있는 아이디와 없는 아이디의 처리 차이를 만들지 않는다
