@@ -21,6 +21,10 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class PlatformUser {
 
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")

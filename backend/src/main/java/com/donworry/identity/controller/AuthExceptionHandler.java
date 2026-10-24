@@ -1,18 +1,32 @@
 package com.donworry.identity.controller;
 
 import com.donworry.identity.security.AuthErrorCode;
+import com.donworry.identity.security.PasswordChangeException;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.transaction.TransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackages = "com.donworry.identity.controller")
 public class AuthExceptionHandler {
+    @ExceptionHandler(PasswordChangeException.class)
+    public ProblemDetail passwordChangeFailed(PasswordChangeException exception) {
+        return problem(exception.getErrorCode());
+    }
+
+    @ExceptionHandler({DataAccessException.class, TransactionException.class})
+    public ProblemDetail persistenceUnavailable() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    }
+
     @ExceptionHandler({BadCredentialsException.class, DisabledException.class})
     public ProblemDetail authenticationFailed() {
         return problem(AuthErrorCode.INVALID_CREDENTIALS);
@@ -25,9 +39,13 @@ public class AuthExceptionHandler {
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
-    public ProblemDetail invalidInput() {
+    public ProblemDetail invalidInput(HttpServletRequest request) {
         // 검증 예외의 rejectedValue에는 비밀번호가 포함될 수 있어 응답에 넣지 않는다.
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "아이디와 비밀번호를 확인해 주세요.");
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                request.getRequestURI().equals("/api/auth/password")
+                        ? "현재 비밀번호와 새 비밀번호를 확인해 주세요."
+                        : "아이디와 비밀번호를 확인해 주세요.");
     }
 
     private ProblemDetail problem(AuthErrorCode code) {

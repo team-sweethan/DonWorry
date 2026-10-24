@@ -25,3 +25,10 @@ export async function login(loginId: string, password: string): Promise<AuthUser
 
 export const getMe = () => api<AuthUser>('/auth/me', { cache: 'no-store' })
 export const logout = () => api<void>('/auth/logout', { method: 'POST' })
+
+export const changePassword = (currentPassword: string, newPassword: string) =>
+  api<void>('/auth/password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })

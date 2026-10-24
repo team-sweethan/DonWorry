@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Result, Spin } from 'antd'
+import { Alert, Button, Result, Space, Spin } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
@@ -71,6 +71,15 @@ export function LogoutButton() {
   )
 }
 
+function AccountActions() {
+  return (
+    <Space>
+      <NavLink to="/account/password">비밀번호 변경</NavLink>
+      <LogoutButton />
+    </Space>
+  )
+}
+
 export function LoginRoute() {
   const { store, status, user, checkedKey, error, expired, key } = useSessionCheck()
   const [showExpired] = useState(expired)
@@ -82,7 +91,7 @@ export function LoginRoute() {
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
   if (status === 'authenticated' && user) {
     if (sessionNavigation(user).landing === null) {
-      return <ScreenResult kind="403" action={<LogoutButton />} />
+      return <ScreenResult kind="403" action={<AccountActions />} />
     }
     return <Navigate to={homeOf(user)} replace />
   }
@@ -136,27 +145,29 @@ export function ServerSession() {
   ) : undefined
   if (status !== 'authenticated' || !user) return body ?? <Navigate to="/login" replace />
   const navigation = sessionNavigation(user)
-  // 홈으로 가도 같은 403이므로 로그아웃만 제공한다.
-  if (navigation.landing === null) {
-    return body ?? <ScreenResult kind="403" action={<LogoutButton />} />
+  // 업무 권한과 무관하게 본인 계정 설정은 사용할 수 있다.
+  if (navigation.landing === null && pathname !== '/account/password') {
+    return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
-  if (pathname === navigation.base) return <Navigate to={navigation.landing} replace />
+  const home = navigation.landing ?? '/account/password'
+  if (pathname === navigation.base) return <Navigate to={home} replace />
   // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
   const forbidden = !canOpenPath(user, pathname) ? (
-    <ScreenResult kind="403" homePath={navigation.landing} />
+    <ScreenResult kind="403" homePath={home} />
   ) : undefined
   return (
     <ManagementLayout
       groups={navigation.groups}
       header={
         <header className="dw-header">
-          <NavLink to={navigation.landing} className="dw-brand" aria-label="돈워리 홈">
+          <NavLink to={home} className="dw-brand" aria-label="돈워리 홈">
             돈워리
           </NavLink>
           <div className="dw-header-center" />
           <div className="dw-header-tools">
             <span className="dw-user-name">{user.displayName}</span>
             <span className="dw-role-pill">{navigation.label}</span>
+            <NavLink to="/account/password">비밀번호 변경</NavLink>
             <LogoutButton />
           </div>
         </header>

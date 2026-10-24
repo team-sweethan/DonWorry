@@ -13,8 +13,10 @@ import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.entity.UserStatus;
 import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
+import com.donworry.identity.service.AccountLockService;
 import com.donworry.identity.service.AuthService;
 import com.donworry.identity.service.CurrentStaffService;
+import com.donworry.identity.service.PasswordChangeService;
 import com.donworry.identity.service.UserSessionService;
 import java.io.*;
 import java.util.List;
@@ -48,10 +50,14 @@ import tools.jackson.databind.json.JsonMapper;
     SecurityProblemResponseWriter.class,
     PlatformUserDetailsService.class,
     AuthService.class,
+    AccountLockService.class,
     UserSessionService.class,
     AuthExceptionHandler.class
 })
 class AuthApiTests {
+    @MockitoBean
+    PasswordChangeService passwordChangeService;
+
     @Autowired
     MockMvc mvc;
 
@@ -109,6 +115,8 @@ class AuthApiTests {
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         var session = (MockHttpSession) result.getRequest().getSession(false);
         assertThat(session).isNotNull();
+        verify(repository, times(2)).findByLoginId("admin");
+        clearInvocations(repository);
         mvc.perform(get("/api/auth/me").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(1))
@@ -120,7 +128,7 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.permissions[0]").value("FDS_VIEW"))
                 .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"))
                 .andExpect(content().json(result.getResponse().getContentAsString()));
-        verify(repository, times(1)).findByLoginId("admin");
+        verifyNoInteractions(repository);
     }
 
     // OPERATOR는 소속 가맹점과 user_permissions에 저장된 권한을 받는다
@@ -196,7 +204,8 @@ class AuthApiTests {
     void login_whenLoginIdNeedsNormalization_succeeds() throws Exception {
         assertThat(login("  ADMIN  ", "test-password", null).getResponse().getStatus())
                 .isEqualTo(200);
-        verify(repository).findByLoginId("admin");
+        // 잠금 키 조회 뒤 잠금 안에서 인증용 계정을 새로 읽는다.
+        verify(repository, times(2)).findByLoginId("admin");
     }
 
     // 없는 아이디와 비밀번호 오류 및 비활성 계정은 같은 오류를 반환한다

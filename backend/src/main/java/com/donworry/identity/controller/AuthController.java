@@ -1,9 +1,11 @@
 package com.donworry.identity.controller;
 
+import com.donworry.identity.dto.ChangePasswordRequest;
 import com.donworry.identity.dto.LoginRequest;
 import com.donworry.identity.dto.MeResponse;
 import com.donworry.identity.security.SessionUser;
 import com.donworry.identity.service.AuthService;
+import com.donworry.identity.service.PasswordChangeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -22,6 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final PasswordChangeService passwordChangeService;
+
+    @PostMapping("/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(
+            @AuthenticationPrincipal SessionUser user,
+            @Valid @RequestBody ChangePasswordRequest input,
+            HttpServletRequest request) {
+        passwordChangeService.change(user, input, request);
+    }
 
     @PostMapping("/login")
     public MeResponse login(

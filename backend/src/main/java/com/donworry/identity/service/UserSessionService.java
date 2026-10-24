@@ -1,5 +1,7 @@
 package com.donworry.identity.service;
 
+import com.donworry.identity.security.AuthErrorCode;
+import com.donworry.identity.security.PasswordChangeException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,12 @@ public class UserSessionService {
 
     public synchronized void expireAll(Long userId) {
         expireSessions(userId, null);
+    }
+
+    public synchronized void requireActive(Long userId, String sessionId) {
+        var session = sessionRegistry.getSessionInformation(sessionId);
+        if (session == null || session.isExpired() || !userId.equals(session.getPrincipal()))
+            throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
     }
 
     public synchronized void expireAllExcept(Long userId, String retainedSessionId) {

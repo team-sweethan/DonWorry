@@ -41,7 +41,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const code = 'code' in fields && typeof fields.code === 'string' ? fields.code : undefined
     const detail =
       'detail' in fields && typeof fields.detail === 'string' ? fields.detail : undefined
-    if (res.status === 401 && !path.startsWith('/auth/') && generation === sessionGeneration) {
+    if (
+      res.status === 401 &&
+      (!path.startsWith('/auth/') || path === '/auth/password') &&
+      generation === sessionGeneration
+    ) {
       unauthorizedListeners.forEach((listener) => listener())
     }
     throw new ApiError(res.status, code, detail)

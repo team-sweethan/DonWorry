@@ -2,6 +2,7 @@ package com.donworry.identity.service;
 
 import com.donworry.identity.dto.LoginRequest;
 import com.donworry.identity.dto.MeResponse;
+import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.security.PlatformUserDetails;
 import com.donworry.identity.security.SessionUser;
@@ -25,9 +26,27 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserSessionService userSessionService;
     private final UserPermissionRepository permissionRepository;
+    private final AccountLockService accountLockService;
+    private final PlatformUserRepository userRepository;
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
         String loginId = input.loginId().trim().toLowerCase(Locale.ROOT);
+        String accountLoginId;
+        try {
+            // DB collation이 같은 계정으로 보는 악센트 등의 별칭도 반드시 같은 잠금을 사용한다.
+            accountLoginId = userRepository
+                    .findByLoginId(loginId)
+                    .map(user -> user.getLoginId())
+                    .orElse(loginId);
+        } catch (RuntimeException exception) {
+            log.error("로그인 계정 조회 오류");
+            throw new InternalAuthenticationServiceException("로그인 계정을 조회하지 못했습니다.", exception);
+        }
+        return accountLockService.withAccount(accountLoginId, () -> loginLocked(input, loginId, request, response));
+    }
+
+    private MeResponse loginLocked(
+            LoginRequest input, String loginId, HttpServletRequest request, HttpServletResponse response) {
         // 제어 문자 · Unicode 줄 구분자 · 방향 제어 문자로 로그에 가짜 줄을 넣거나 내용을 뒤집지 못하게 한다.
         String logLoginId = loginId.replaceAll("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]", "_");
         try {

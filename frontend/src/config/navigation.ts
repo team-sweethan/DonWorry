@@ -69,6 +69,7 @@ export function sessionNavigation(user: AuthUser) {
 
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */
 export function canOpenPath(user: AuthUser, pathname: string) {
+  if (pathname === '/account/password') return true
   const { base, groups } = sessionNavigation(user)
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups
