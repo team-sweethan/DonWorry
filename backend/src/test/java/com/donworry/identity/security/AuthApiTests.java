@@ -30,6 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.context.SecurityContext;
@@ -236,6 +237,19 @@ class AuthApiTests {
         var body = mapper.readTree(result.getResponse().getContentAsString());
         assertThat(body.path("code").asString()).isEqualTo("AUTH_005");
         assertThat(result.getResponse().getContentAsString()).doesNotContain("db down", "Exception");
+    }
+
+    // 비밀번호 검증 뒤 권한 조회 DB 오류도 공통 AUTH_007이 아닌 로그인 AUTH_005다
+    @Test
+    void login_whenPermissionLookupFails_returnsAuthenticationUnavailable() throws Exception {
+        given(permissionRepository.findPermissionCodesByUserId(any()))
+                .willThrow(new DataAccessResourceFailureException("db down"));
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        var body = mapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.path("code").asString()).isEqualTo("AUTH_005");
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("db down", "Exception");
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
     }
 
     // 필수 입력이 누락되거나 공백이면 인증을 시도하지 않는다

@@ -3,7 +3,7 @@ import { Alert, Button, Result, Space, Spin } from 'antd'
 import { LogoutOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
-import { canOpenPath, sessionNavigation } from '../config/navigation'
+import { canOpenPath, isAccountPasswordPath, sessionNavigation } from '../config/navigation'
 import type { AuthUser } from '../types/auth'
 import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
@@ -146,7 +146,7 @@ export function ServerSession() {
   if (status !== 'authenticated' || !user) return body ?? <Navigate to="/login" replace />
   const navigation = sessionNavigation(user)
   // 업무 권한과 무관하게 본인 계정 설정은 사용할 수 있다.
-  if (navigation.landing === null && pathname !== '/account/password') {
+  if (navigation.landing === null && !isAccountPasswordPath(pathname)) {
     return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
   const home = navigation.landing ?? '/account/password'

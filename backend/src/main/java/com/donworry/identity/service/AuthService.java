@@ -39,7 +39,7 @@ public class AuthService {
                     .map(user -> user.getLoginId())
                     .orElse(loginId);
         } catch (RuntimeException exception) {
-            log.error("로그인 계정 조회 오류");
+            log.error("로그인 계정 조회 오류", exception);
             throw new InternalAuthenticationServiceException("로그인 계정을 조회하지 못했습니다.", exception);
         }
         return accountLockService.withAccount(accountLoginId, () -> loginLocked(input, loginId, request, response));
@@ -56,9 +56,14 @@ public class AuthService {
             // 권한은 비밀번호 검증 뒤에 읽는다. 검증 전에 읽으면 있는 아이디만 DB를 한 번 더 조회해
             // 응답 시간으로 계정 존재 여부가 드러난다.
             // 세션에 직렬화되므로 변경 불가 · 직렬화 가능한 목록으로 복사한다.
-            var user = authenticated.toBuilder()
-                    .permissions(List.copyOf(permissionRepository.findPermissionCodesByUserId(authenticated.userId())))
-                    .build();
+            List<String> permissions;
+            try {
+                permissions = List.copyOf(permissionRepository.findPermissionCodesByUserId(authenticated.userId()));
+            } catch (RuntimeException exception) {
+                // 공통 DB 오류(AUTH_007)가 아니라 로그인 처리 실패(AUTH_005)로 응답한다.
+                throw new InternalAuthenticationServiceException("로그인 권한을 조회하지 못했습니다.", exception);
+            }
+            var user = authenticated.toBuilder().permissions(permissions).build();
             // 인증에 쓰인 UserDetails와 비밀번호 해시는 세션에 보관하지 않는다.
             var authentication = UsernamePasswordAuthenticationToken.authenticated(user, null, result.getAuthorities());
             userSessionService.establishAuthentication(authentication, request, response);

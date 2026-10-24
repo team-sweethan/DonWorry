@@ -67,9 +67,14 @@ export function sessionNavigation(user: AuthUser) {
   return { label: menu.label, base: menu.base, groups, landing }
 }
 
+/** 라우터처럼 끝 슬래시는 같은 경로로 보되 하위 경로는 계정 화면으로 보지 않는다. */
+export function isAccountPasswordPath(pathname: string) {
+  return pathname.replace(/\/+$/, '') === '/account/password'
+}
+
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */
 export function canOpenPath(user: AuthUser, pathname: string) {
-  if (pathname === '/account/password') return true
+  if (isAccountPasswordPath(pathname)) return true
   const { base, groups } = sessionNavigation(user)
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups

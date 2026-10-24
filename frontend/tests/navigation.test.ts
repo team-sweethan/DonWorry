@@ -50,6 +50,7 @@ test('다른 역할 화면과 권한 없는 메뉴는 열 수 없다', () => {
 test('비밀번호 변경은 업무 권한이 없는 사장님을 포함해 세 역할 모두 접근한다', () => {
   for (const user of [admin, staff, owner([]), owner(['FDS_VIEW'])]) {
     assert.equal(canOpenPath(user, '/account/password'), true)
+    assert.equal(canOpenPath(user, '/account/password/'), true)
     assert.equal(canOpenPath(user, '/account/password/unknown'), false)
   }
 })
