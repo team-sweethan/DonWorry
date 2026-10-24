@@ -10,6 +10,7 @@ import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
+import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -28,6 +29,7 @@ export const router = createBrowserRouter([
   {
     element: <ServerSession />,
     children: [
+      { path: '/account/password', element: <ChangePasswordPage /> },
       {
         path: '/admin',
         children: [

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test, afterEach } from 'node:test'
 import { api, ApiError, advanceApiSession, subscribeUnauthorized } from '../src/api/client.ts'
-import { login, logout, InvalidCredentialsError } from '../src/api/auth.ts'
+import { login, logout, changePassword, InvalidCredentialsError } from '../src/api/auth.ts'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -94,6 +94,67 @@ test('api_whenSessionChanges_ignoresLateUnauthorized', async () => {
     const pending = api('/cases')
     advanceApiSession()
     resolve(new Response(null, { status: 401 }))
+    await assert.rejects(pending)
+    assert.equal(calls, 0)
+  } finally {
+    unsubscribe()
+  }
+})
+
+// 비밀번호 변경은 원문을 유지하고 현재 계정의 비밀번호 두 개만 전송한다.
+test('changePassword_whenSubmitted_preservesPasswordsAndHandlesNoContent', async () => {
+  globalThis.fetch = async (input, init) => {
+    assert.equal(input, '/api/auth/password')
+    assert.equal(init?.method, 'POST')
+    assert.equal(init?.credentials, 'include')
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      currentPassword: ' 1234 ',
+      newPassword: ' Abc123가! ',
+    })
+    return new Response(null, { status: 204 })
+  }
+  assert.equal(await changePassword(' 1234 ', ' Abc123가! '), undefined)
+})
+
+// 현재 비밀번호 오류는 세션을 유지하고 변경 API의 401만 만료로 전파한다.
+test('changePassword_whenRejected_distinguishesBadPasswordFromExpiredSession', async () => {
+  let calls = 0
+  const unsubscribe = subscribeUnauthorized(() => {
+    calls++
+  })
+  try {
+    for (const code of ['AUTH_003', 'AUTH_006']) {
+      globalThis.fetch = async () => Response.json({ code }, { status: 400 })
+      await assert.rejects(
+        changePassword('wrong', 'Abcd1234'),
+        (error: unknown) =>
+          error instanceof ApiError && error.status === 400 && error.code === code,
+      )
+    }
+    assert.equal(calls, 0)
+    globalThis.fetch = async () => Response.json({ code: 'AUTH_001' }, { status: 401 })
+    await assert.rejects(changePassword('1234', 'Abcd1234'))
+    assert.equal(calls, 1)
+  } finally {
+    unsubscribe()
+  }
+})
+
+// 이전 로그인에서 시작한 변경 요청의 401은 새 로그인을 만료시키지 않는다.
+test('changePassword_whenSessionChanges_ignoresLateUnauthorized', async () => {
+  let resolve!: (response: Response) => void
+  let calls = 0
+  const unsubscribe = subscribeUnauthorized(() => {
+    calls++
+  })
+  try {
+    globalThis.fetch = () =>
+      new Promise<Response>((yes) => {
+        resolve = yes
+      })
+    const pending = changePassword('1234', 'Abcd1234')
+    advanceApiSession()
+    resolve(Response.json({ code: 'AUTH_001' }, { status: 401 }))
     await assert.rejects(pending)
     assert.equal(calls, 0)
   } finally {
