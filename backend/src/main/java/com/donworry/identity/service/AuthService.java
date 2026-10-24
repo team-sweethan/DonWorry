@@ -16,9 +16,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,8 +23,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class AuthService {
     private final AuthenticationManager authenticationManager;
-    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
-    private final SecurityContextRepository securityContextRepository;
+    private final UserSessionService userSessionService;
     private final UserPermissionRepository permissionRepository;
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
@@ -46,11 +42,7 @@ public class AuthService {
                     .build();
             // 인증에 쓰인 UserDetails와 비밀번호 해시는 세션에 보관하지 않는다.
             var authentication = UsernamePasswordAuthenticationToken.authenticated(user, null, result.getAuthorities());
-            sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
-            var context = SecurityContextHolder.createEmptyContext();
-            context.setAuthentication(authentication);
-            SecurityContextHolder.setContext(context);
-            securityContextRepository.saveContext(context, request, response);
+            userSessionService.establishAuthentication(authentication, request, response);
             log.info("로그인 성공 loginId={}", logLoginId);
             return MeResponse.from(user);
         } catch (BadCredentialsException | DisabledException exception) {
@@ -64,5 +56,9 @@ public class AuthService {
 
     public MeResponse me(SessionUser user) {
         return MeResponse.from(user);
+    }
+
+    public void logoutAll(SessionUser user, HttpServletRequest request, HttpServletResponse response) {
+        userSessionService.logoutAll(user.userId(), request, response);
     }
 }

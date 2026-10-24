@@ -7,6 +7,8 @@
 - POST /api/auth/login: 아이디를 trim · 소문자로 정규화하고 BCrypt로 인증한다. 성공하면 사용자 정보와 조회 권한을 반환한다.
 - GET /api/auth/me: 세션 사용자 정보로 응답하며 DB를 다시 조회하지 않는다.
 - POST /api/auth/logout: Security 로그아웃 필터에서 세션과 인증 정보를 제거하고 204를 반환한다. 비로그인 · 반복 요청도 204다. GET은 로그아웃하지 않는다.
+- POST /api/auth/logout-all: 로그인한 본인의 전체 세션을 만료시키고 현재 세션·인증·쿠키를 정리해 204를 반환한다. 비로그인은 401 AUTH_001이다. 사용자 ID는 인증 정보에서 읽는다.
+- 계정당 유효 로그인은 1개다. 새 로그인은 이전 세션을 만료시키며, 이전 세션의 다음 요청은 401 AUTH_001이다. 등록·조회 기준은 권한·이름과 무관한 userId다. 세션은 서버 메모리에 유지한다.
 - 없는 아이디 · 틀린 비밀번호 · DISABLED 계정은 같은 401 AUTH_004 ProblemDetail로 응답한다. 입력 누락 · 공백 · 아이디 100자 초과(DB login_id 컬럼 길이) · 잘못된 JSON은 400("아이디와 비밀번호를 확인해 주세요.")이다. 400이면 DB를 조회하지 않는다.
 - 계정 조회 중 DB 오류 등 인증 처리 자체가 실패하면 500 AUTH_005 ProblemDetail로 응답하고 error 로그를 남긴다. 처리하지 않으면 Security 필터가 401 AUTH_001(로그인 필요)로 바꿔 장애가 드러나지 않는다.
 - 첫 로그인은 세션을 만들고, 기존 세션이 있으면 ID를 바꾼 뒤 인증을 명시적으로 저장한다.
@@ -14,7 +16,7 @@
 - ADMIN 권한은 role로 계산한다. tenantScope는 OPERATOR=MERCHANT, SECURITY_STAFF·ADMIN=ALL이며 기능 권한과 별개다. ADMIN 권한은 FDS_VIEW · FINANCE_VIEW다.
 - ADMIN 외 역할은 비밀번호 검증이 성공한 뒤 user_permissions를 읽어 세션 사용자 객체에 담고 permissions로 반환한다. 검증 전에 읽으면 있는 아이디만 DB를 한 번 더 조회해 응답 시간으로 계정 존재 여부가 드러난다. 권한을 바꾸면 다시 로그인해야 반영된다. 권한 필드가 없는 이전 세션은 권한 없음으로 본다.
 - 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다.
-- #124에서 공개 Java 조회 계약과 프론트 tenantScope 타입을 추가했다. DB 스키마 변경은 없다. /me 외 접근 허용과 CSRF 비활성화는 ADR-0014대로 유지한다.
+- #124에서 공개 Java 조회 계약과 프론트 tenantScope 타입을 추가했다. DB 스키마 변경은 없다. #125에서 /me와 /logout-all만 인증을 요구하며 다른 경로의 접근 허용과 CSRF 비활성화는 유지한다.
 
 ## 검증
 
@@ -31,7 +33,7 @@
 - 시드 ADMIN 계정으로 서버 기동 후 curl 로그인 → me → logout → me(401) 순서는 담당자가 직접 실행해 통과를 확인했다 (실행 기록은 저장소에 없음).
 - AUTH_003은 #68 결정 20에 따라 다음 새 에러 코드에 사용한다. 이번 조회 계약은 새 HTTP 에러 코드를 추가하지 않는다.
 - #68·#124에서 tenantScope를 역할 기준으로 확정했다. OPERATOR의 merchantId가 null이어도 MERCHANT이며 전체 조회로 승격하지 않는다. DB 제약은 후속 계정 관리, 실제 데이터 필터는 각 담당과 합의 후 구현한다.
-- 로그인 후 계정이 DISABLED로 바뀌어도 기존 세션에는 즉시 반영되지 않는다. #76 리뷰에서 유지로 결정했다. /me 외 API가 열려 있어 /me만 막는 효과가 없으므로 #68 5단계 서버 API 차단 때 다시 본다.
+- 로그인 후 계정이 DISABLED로 바뀌어도 기존 세션에는 즉시 반영되지 않는다. #125에서 세션 종료 서비스를 제공하며, 계정 정지·권한 변경·비밀번호 초기화 연결은 최신 #68·#129 범위를 따른다. 전체 업무 API의 역할·가맹점별 차단은 #68 5단계다.
 - 로그인 실패 문구는 “아이디 또는 비밀번호가 올바르지 않습니다.”로 #76 리뷰에서 확정했다. 계정 존재 여부를 드러내지 않도록 모든 실패에 같은 문구를 쓴다.
 
 ## #124 공개 조회 계약
@@ -63,3 +65,27 @@
 - `cd backend && ./gradlew spotlessApply check mariaDbTest`: 통과. 일반 테스트 266개 중 성공 265개·기존 건너뜀 1개, MariaDB 테스트 83개 성공. 실패·오류 0개.
 - `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과, 테스트 21개 성공. 기존 lint 경고 4개·번들 크기 경고는 유지된다.
 - ADR-0019가 dev에서 먼저 사용되어 이번 ADR은 ADR-0020으로 변경했다.
+
+## #125 단일 세션과 전체 로그아웃
+
+상세 계약·버린 대안: [ADR-0021](../decisions/0021-single-session-and-logout-all.md).
+
+- 로그인은 AuthService → `UserSessionService.establishAuthentication`에서 동시 로그인 검사(최대 1개, 새 로그인 우선) → 세션 ID 변경 → 세션 등록 순서로 처리한다. 세션 목록은 `UserIdSessionRegistry`가 userId로 묶는다.
+- 끊긴 세션 쿠키의 첫 요청은 경로와 무관하게(로그인 포함) 401 AUTH_001이고, 그다음 요청부터 다시 로그인할 수 있다. 일반 로그아웃은 204를 유지한다.
+- 재사용 서비스: `expireAll(userId)`, `expireAllExcept(userId, retainedSessionId)`. #128·#129·#130에서 연결한다.
+- 화면에는 모든 기기 로그아웃 버튼을 두지 않는다. 단일 세션이라 일반 로그아웃과 결과가 같다. API는 유지한다.
+
+### #125 검증
+
+2026-10-24, `feature/125-single-session-logout`의 기준 커밋 `af2f2d5` 위 #125 미커밋 작업 트리에서 실행했다. 기준 커밋 단독의 결과가 아니다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest`: 통과. 일반 테스트 283개 중 성공 282개·건너뜀 1개(기존 `LocalSettlementDemoTests`), MariaDB 테스트 85개 성공. 실패·오류 0개.
+- 커밋 직전 동일 코드로 `cd backend && ./gradlew check mariaDbTest --rerun-tasks`를 실행해 캐시 없이 재검증했다. 일반 테스트 282개 성공·기존 1개 건너뜀, MariaDB 85개 성공. 이후 변경은 검증 기록뿐이다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 프론트 변경은 없다. 테스트 21개 성공, lint 기존 경고와 번들 크기 경고는 남아 있다.
+- `git diff --check`: 통과.
+
+- 로컬 서버(`bootRun`, 로컬 MariaDB 3307)에 시드 계정 boss로 쿠키 저장소 두 개를 써서 curl로 확인했다: B 로그인 후 A의 /me·공개 API 401 AUTH_001, B 유지, 끊긴 A의 첫 로그인 401 후 재시도 200, 끊긴 A의 일반 logout 204(B 유지), logout-all 204 후 /me 401, 비로그인 logout-all 401, GET logout-all 405(세션 유지). 실행 기록은 저장소에 없다.
+
+- 사용자가 브라우저에서 두 번째 로그인 후 이전 세션 만료 안내, 새 세션 유지, 전체·일반 로그아웃을 직접 확인하고 대화에서 “체크 완료”를 보고했다. 당시에는 전체 로그아웃 버튼이 있었으며, 최종 범위에서는 사용자 결정으로 버튼을 제외했다. 버튼 제거 후 프론트는 기준 커밋과 동일하다.
+
+미검증: 버튼 제거 후 브라우저 수동 재확인, 실제 30분 타임아웃 대기(세션 파괴 이벤트 처리는 단위 테스트로 검증), #128·#129·#130의 DB 변경 연결, 다중 서버 환경(범위 밖).
