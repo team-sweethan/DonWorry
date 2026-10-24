@@ -9,7 +9,7 @@ const base: AuthUser = {
   displayName: '테스트',
   role: 'ADMIN',
   merchantId: null,
-  tenantScope: null,
+  tenantScope: 'ALL',
   permissions: [],
 }
 const admin: AuthUser = { ...base, role: 'ADMIN', tenantScope: 'ALL' }
@@ -18,6 +18,7 @@ const owner = (permissions: string[]): AuthUser => ({
   ...base,
   role: 'OPERATOR',
   merchantId: 10,
+  tenantScope: 'MERCHANT',
   permissions,
 })
 
