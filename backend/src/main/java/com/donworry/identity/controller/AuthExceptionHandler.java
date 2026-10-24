@@ -3,6 +3,7 @@ package com.donworry.identity.controller;
 import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.PasswordChangeException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Slf4j
 @RestControllerAdvice(basePackages = "com.donworry.identity.controller")
 public class AuthExceptionHandler {
     @ExceptionHandler(PasswordChangeException.class)
@@ -23,8 +25,9 @@ public class AuthExceptionHandler {
     }
 
     @ExceptionHandler({DataAccessException.class, TransactionException.class})
-    public ProblemDetail persistenceUnavailable() {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    public ProblemDetail persistenceUnavailable(RuntimeException exception) {
+        log.error("identity 요청 DB 처리 오류", exception);
+        return problem(AuthErrorCode.PROCESSING_UNAVAILABLE);
     }
 
     @ExceptionHandler({BadCredentialsException.class, DisabledException.class})

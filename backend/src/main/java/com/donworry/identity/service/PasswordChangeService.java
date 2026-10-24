@@ -8,6 +8,7 @@ import com.donworry.identity.security.PasswordChangeException;
 import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -16,6 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PasswordChangeService {
     private final PlatformUserRepository repository;
     private final PasswordEncoder encoder;
@@ -39,12 +41,20 @@ public class PasswordChangeService {
                         .orElseThrow(() -> new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED));
                 if (user.getStatus() != UserStatus.ACTIVE)
                     throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
-                if (!encoder.matches(input.currentPassword(), user.getPasswordHash()))
+                if (!encoder.matches(input.currentPassword(), user.getPasswordHash())) {
+                    log.info("비밀번호 변경 실패 userId={} code={}", current.userId(), "AUTH_003");
                     throw new PasswordChangeException(AuthErrorCode.CURRENT_PASSWORD_MISMATCH);
-                policy.validate(user.getLoginId(), input.newPassword());
+                }
+                try {
+                    policy.validate(user.getLoginId(), input.newPassword());
+                } catch (PasswordChangeException exception) {
+                    log.info("비밀번호 변경 실패 userId={} code={}", current.userId(), "AUTH_006");
+                    throw exception;
+                }
                 user.changePasswordHash(encoder.encode(input.newPassword()));
             });
             sessions.expireAllExcept(current.userId(), sessionId);
+            log.info("비밀번호 변경 성공 userId={}", current.userId());
             return null;
         });
     }

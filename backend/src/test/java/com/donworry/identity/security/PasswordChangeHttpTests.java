@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -171,6 +172,21 @@ class PasswordChangeHttpTests {
         assertThat(send(current, "GET", "me", null).statusCode()).isEqualTo(200);
         assertThat(hash()).isEqualTo(before);
         assertProblem(change(client(), "1234", newPassword), 401, "AUTH_001");
+    }
+
+    // 변경 중 DB 오류는 원인을 숨긴 500 AUTH_007이고 해시와 세션을 유지한다
+    @Test
+    void change_whenDatabaseFails_returnsProcessingUnavailableAndPreservesPassword() throws Exception {
+        var current = client();
+        assertThat(login(current, "1234").statusCode()).isEqualTo(200);
+        String before = hash();
+        doThrow(new DataAccessResourceFailureException("db down")).when(policy).validate(any(), any());
+        var response = change(current, "1234", newPassword);
+        assertProblem(response, 500, "AUTH_007");
+        assertThat(response.body()).doesNotContain("db down");
+        assertThat(hash()).isEqualTo(before);
+        assertThat(send(current, "GET", "me", null).statusCode()).isEqualTo(200);
+        verify(sessions, never()).expireAllExcept(any(), any());
     }
 
     // 변경 트랜잭션 중 시작된 옛 비밀번호 로그인은 커밋을 기다린 뒤 거절된다
