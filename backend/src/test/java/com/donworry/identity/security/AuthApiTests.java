@@ -15,6 +15,7 @@ import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.service.AuthService;
 import com.donworry.identity.service.CurrentStaffService;
+import com.donworry.identity.service.UserSessionService;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -30,6 +32,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -45,6 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
     SecurityProblemResponseWriter.class,
     PlatformUserDetailsService.class,
     AuthService.class,
+    UserSessionService.class,
     AuthExceptionHandler.class
 })
 class AuthApiTests {
@@ -63,10 +67,22 @@ class AuthApiTests {
     @MockitoBean
     UserPermissionRepository permissionRepository;
 
+    @Autowired
+    SessionRegistry sessionRegistry;
+
+    @Autowired
+    UserSessionService userSessionService;
+
     private PlatformUser user;
 
     @BeforeEach
     void setUp() {
+        // MockHttpSession은 서블릿 컨테이너의 종료 이벤트를 발행하지 않으므로 테스트 사이에 정리한다.
+        for (var principal : sessionRegistry.getAllPrincipals()) {
+            for (var session : sessionRegistry.getAllSessions(principal, true)) {
+                sessionRegistry.removeSessionInformation(session.getSessionId());
+            }
+        }
         user = mock(PlatformUser.class);
         given(user.getUserId()).willReturn(1L);
         given(user.getMerchantId()).willReturn(null);
@@ -311,5 +327,131 @@ class AuthApiTests {
             assertThat(restored.getAuthentication().getPrincipal())
                     .isEqualTo(context.getAuthentication().getPrincipal());
         }
+    }
+
+    // 다른 기기의 새 로그인은 기존 세션을 401로 종료하고 새 세션을 유지한다
+    @Test
+    void login_whenAnotherDeviceAuthenticates_expiresFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var second = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        assertThat(first.isInvalid()).isTrue();
+        mvc.perform(get("/api/auth/me").session(second)).andExpect(status().isOk());
+    }
+
+    // 표시 이름과 권한이 달라져도 userId가 같으면 이전 로그인은 종료된다
+    @Test
+    void login_whenUserDetailsChange_stillExpiresFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        given(user.getDisplayName()).willReturn("변경된 이름");
+        given(permissionRepository.findPermissionCodesByUserId(1L)).willReturn(List.of("FDS_VIEW"));
+        var second = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(first)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").session(second))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("변경된 이름"));
+        assertThat(sessionRegistry.getAllSessions(1L, false)).hasSize(1);
+    }
+
+    // 인증 실패는 이미 로그인한 세션을 끊지 않는다
+    @Test
+    void login_whenAnotherDeviceUsesWrongPassword_preservesFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        assertThat(login("admin", "wrong-password", null).getResponse().getStatus())
+                .isEqualTo(401);
+        mvc.perform(get("/api/auth/me").session(first)).andExpect(status().isOk());
+    }
+
+    // 전체 로그아웃은 현재 세션과 이전 세션 모두 종료하고 쿠키를 지운다
+    @ParameterizedTest
+    @EnumSource(UserRole.class)
+    void logoutAll_whenAuthenticated_invalidatesCurrentAndPreviousSessions(UserRole role) throws Exception {
+        given(user.getRole()).willReturn(role);
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var current = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(post("/api/auth/logout-all").session(current).content("{\"userId\":999}"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""))
+                .andExpect(cookie().maxAge("JSESSIONID", 0));
+        assertThat(current.isInvalid()).isTrue();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+        mvc.perform(get("/api/auth/me").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout-all")).andExpect(status().isUnauthorized());
+    }
+
+    // 비로그인 전체 로그아웃은 새 세션을 만들지 않고 401을 반환한다
+    @Test
+    void logoutAll_whenAnonymous_returnsUnauthorizedWithoutSession() throws Exception {
+        var result = mvc.perform(post("/api/auth/logout-all"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"))
+                .andReturn();
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // 이전 세션은 공개된 업무 경로를 호출해도 만료 응답을 먼저 받는다
+    @Test
+    void api_whenSessionExpired_returnsUnauthorizedBeforePublicEndpoint() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        login("admin", "test-password", null);
+        mvc.perform(get("/api/security-test-missing").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+    }
+
+    // GET 요청으로 전체 로그아웃을 실행할 수 없다
+    @Test
+    void logoutAll_whenGet_preservesSession() throws Exception {
+        var current = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/logout-all").session(current)).andExpect(status().isMethodNotAllowed());
+        mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isOk());
+    }
+
+    // 동시에 로그인해도 검사와 등록 사이에 서로 끼어들어 두 세션이 살아남지 않는다
+    @Test
+    void login_whenConcurrent_keepsOnlyOneActiveSession() throws Exception {
+        var sessions = new java.util.ArrayList<MockHttpSession>();
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var attempts = new java.util.ArrayList<java.util.concurrent.Future<MvcResult>>();
+            for (int i = 0; i < 4; i++) {
+                attempts.add(executor.submit(() -> {
+                    start.await();
+                    return login("admin", "test-password", null);
+                }));
+            }
+            start.countDown();
+            for (var attempt : attempts) {
+                var result = attempt.get(15, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(result.getResponse().getStatus()).isEqualTo(200);
+                sessions.add((MockHttpSession) result.getRequest().getSession(false));
+            }
+        }
+        assertThat(sessionRegistry.getAllSessions(1L, false)).hasSize(1);
+        int active = 0;
+        for (var session : sessions) {
+            int status = mvc.perform(get("/api/auth/me").session(session))
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+            assertThat(status).isIn(200, 401);
+            if (status == 200) active++;
+        }
+        assertThat(active).isEqualTo(1);
     }
 }

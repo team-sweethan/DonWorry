@@ -42,6 +42,7 @@
 | [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
 | [0019](0019-security-case-http-contract.md) | P3 Case 조회 · 판정 HTTP 계약 | 제안 — 팀 합의 필요 |
 | [0020](0020-identity-public-read-contracts.md) | Identity 공개 조회 계약과 가맹점 범위 | 제안 — #124 구현 반영, PR 리뷰 대상 |
+| [0021](0021-single-session-and-logout-all.md) | 계정당 단일 세션과 모든 기기 로그아웃 | 제안 — #125 구현 반영, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 
