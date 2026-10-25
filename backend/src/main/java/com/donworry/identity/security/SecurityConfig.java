@@ -1,12 +1,14 @@
 package com.donworry.identity.security;
 
 import com.donworry.identity.entity.UserRole;
+import java.time.Clock;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -55,10 +57,18 @@ public class SecurityConfig {
     }
 
     @Bean
+    Clock loginAttemptClock() {
+        return Clock.systemUTC();
+    }
+
+    @Bean
     AuthenticationManager authenticationManager(
             UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
         var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
+        // 정지·잠금 여부로 BCrypt를 건너뛰지 않되 기존 계정 상태 검사는 모두 유지한다.
+        provider.setPreAuthenticationChecks(user -> {});
+        provider.setPostAuthenticationChecks(new AccountStatusUserDetailsChecker());
         return new ProviderManager(provider);
     }
 

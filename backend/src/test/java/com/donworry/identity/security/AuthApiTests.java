@@ -39,6 +39,7 @@ import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import tools.jackson.databind.json.JsonMapper;
@@ -58,12 +59,15 @@ import tools.jackson.databind.json.JsonMapper;
 })
 class AuthApiTests {
     @MockitoBean
+    com.donworry.identity.service.LoginAttemptService loginAttempts;
+
+    @MockitoBean
     PasswordChangeService passwordChangeService;
 
     @Autowired
     MockMvc mvc;
 
-    @Autowired
+    @MockitoSpyBean
     PasswordEncoder encoder;
 
     @Autowired
@@ -101,7 +105,7 @@ class AuthApiTests {
         given(user.getDisplayName()).willReturn("관리자");
         given(user.getRole()).willReturn(UserRole.ADMIN);
         given(user.getStatus()).willReturn(UserStatus.ACTIVE);
-        given(user.getPasswordHash()).willReturn(encoder.encode("test-password"));
+        doReturn(encoder.encode("test-password")).when(user).getPasswordHash();
         given(repository.findByLoginId("admin")).willReturn(Optional.of(user));
     }
 
@@ -146,7 +150,7 @@ class AuthApiTests {
         given(operator.getDisplayName()).willReturn("사장님");
         given(operator.getRole()).willReturn(UserRole.OPERATOR);
         given(operator.getStatus()).willReturn(UserStatus.ACTIVE);
-        given(operator.getPasswordHash()).willReturn(encoder.encode("test-password"));
+        doReturn(encoder.encode("test-password")).when(operator).getPasswordHash();
         given(repository.findByLoginId("boss")).willReturn(Optional.of(operator));
         var merchant = mock(com.donworry.identity.entity.Merchant.class);
         given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.ACTIVE);
@@ -231,6 +235,71 @@ class AuthApiTests {
         assertThat(body.path("code").asString()).isEqualTo("AUTH_004");
         assertThat(body.path("detail").asString()).isEqualTo("아이디 또는 비밀번호가 올바르지 않습니다.");
         assertThat(result.getResponse().getContentAsString()).doesNotContain("test-password", "Exception");
+    }
+
+    // 잠긴 계정도 실제 BCrypt 비교를 마친 뒤 같은 인증 실패를 반환한다
+    @Test
+    void login_whenLocked_comparesPasswordWithoutReadingPermissionsOrCreatingSession() throws Exception {
+        var until = java.time.LocalDateTime.parse("2026-10-25T03:15:00");
+        given(user.getLoginLockedUntil()).willReturn(until);
+        given(loginAttempts.isLocked(until)).willReturn(true);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo("AUTH_004");
+        verify(encoder).matches("test-password", user.getPasswordHash());
+        verifyNoInteractions(permissionRepository);
+        verify(loginAttempts, never()).clearFailures(any());
+        verify(loginAttempts, never()).recordFailure(anyString());
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // 정지된 계정도 BCrypt를 수행해 잠긴 계정과 같은 오류를 반환한다
+    @Test
+    void login_whenDisabled_stillComparesPassword() throws Exception {
+        given(user.getStatus()).willReturn(UserStatus.DISABLED);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        verify(encoder).matches("test-password", user.getPasswordHash());
+        verifyNoInteractions(loginAttempts, permissionRepository);
+    }
+
+    // 비밀번호 오류만 실패 저장으로 연결하며 401 전에 저장 호출을 마친다
+    @Test
+    void login_whenPasswordWrong_recordsFailureBeforeReturningUnauthorized() throws Exception {
+        assertThat(login("  ADMIN  ", "wrong", null).getResponse().getStatus()).isEqualTo(401);
+        verify(loginAttempts).recordFailure("admin");
+        verify(loginAttempts, never()).clearFailures(any());
+    }
+
+    // 실패 증가와 성공 초기화의 DB 장애는 새 세션 없이 AUTH_005로 응답한다
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void login_whenAttemptPersistenceFails_returnsAuthenticationUnavailable(boolean wrongPassword) throws Exception {
+        var cause = new org.springframework.security.authentication.InternalAuthenticationServiceException("db down");
+        if (wrongPassword) doThrow(cause).when(loginAttempts).recordFailure(anyString());
+        else doThrow(cause).when(loginAttempts).clearFailures(any());
+        var result = login("admin", wrongPassword ? "wrong" : "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo("AUTH_005");
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+    }
+
+    // 첫 조회 뒤 생성된 계정의 DB 별칭은 실제 계정 잠금을 얻는 다음 요청부터 로그인한다
+    @Test
+    void login_whenAliasAccountAppearsAfterInitialLookup_doesNotResetFailuresWithoutActualAccountLock()
+            throws Exception {
+        given(repository.findByLoginId("ádmin")).willReturn(Optional.empty(), Optional.of(user));
+        var result = login("ádmin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(result.getRequest().getSession(false)).isNull();
+        verifyNoInteractions(loginAttempts, permissionRepository);
     }
 
     // 계정 조회 중 서버 오류는 로그인 필요 401이 아니라 500 AUTH_005로 응답한다

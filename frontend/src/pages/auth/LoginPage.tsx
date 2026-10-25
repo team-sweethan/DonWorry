@@ -77,7 +77,11 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
         </section>
         <section className="dw-login-box" aria-labelledby="login-title">
           <h2 id="login-title">로그인</h2>
-          <p className="dw-login-description">계정으로 로그인하고 업무를 시작하세요.</p>
+          <p className="dw-login-description">
+            계정으로 로그인하고 업무를 시작하세요.
+            <br />
+            비밀번호를 5번 연속 틀리면 15분 동안 로그인할 수 없습니다.
+          </p>
           <Form<LoginValues>
             layout="vertical"
             onFinish={submit}

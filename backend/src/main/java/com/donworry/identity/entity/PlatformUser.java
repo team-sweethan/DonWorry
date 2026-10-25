@@ -62,6 +62,13 @@ public class PlatformUser {
     @Column(name = "password_change_required", nullable = false)
     private boolean passwordChangeRequired;
 
+    @Column(name = "login_failure_count", nullable = false)
+    private int loginFailureCount;
+
+    @Column(name = "login_locked_until")
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
+    private LocalDateTime loginLockedUntil;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
