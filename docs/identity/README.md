@@ -4,7 +4,7 @@
 
 ## #129 관리자 계정·권한 관리
 
-계약과 대안은 [ADR-0023](../decisions/0023-admin-account-management.md), [상세 설계](129-admin-account-design.md)를 따른다.
+계약과 대안은 [ADR-0024](../decisions/0024-admin-account-management.md), [상세 설계](129-admin-account-design.md)를 따른다.
 
 - `/admin/users` 목록·검색·역할/상태 필터·페이지 나누기, `/admin/users/new` 생성, `/admin/users/:id` 권한·정지/복구·비밀번호 초기화를 제공한다.
 - `GET /api/admin/users?page=0&size=20&keyword=&role=&status=`: items·page·size·totalElements. role/status는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
