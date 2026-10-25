@@ -107,6 +107,28 @@ public class Payment {
         status = PaymentStatus.CAPTURED;
     }
 
+    // 호출 서비스가 저장된 직원 CAPTURE 조치를 대조한 경우에만 사용한다.
+    public void completeHeldCapture() {
+        if (status != PaymentStatus.HELD
+                || authorizationRef == null
+                || authorizationRef.isBlank()
+                || authorizationRef.codePointCount(0, authorizationRef.length()) > 100) {
+            throw new IllegalStateException("승인된 HELD 결제에만 직원 매입 완료를 적용할 수 있습니다");
+        }
+        status = PaymentStatus.CAPTURED;
+    }
+
+    // 모의 취소 성공 확인 뒤에만 호출한다. 원래 승인 참조는 금융 기록으로 보존한다.
+    public void completeVoid() {
+        if (status != PaymentStatus.HELD
+                || authorizationRef == null
+                || authorizationRef.isBlank()
+                || authorizationRef.codePointCount(0, authorizationRef.length()) > 100) {
+            throw new IllegalStateException("승인된 HELD 결제에만 승인 취소 완료를 적용할 수 있습니다");
+        }
+        status = PaymentStatus.VOIDED;
+    }
+
     private static String requireReference(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.codePointCount(0, value.length()) > 100) {

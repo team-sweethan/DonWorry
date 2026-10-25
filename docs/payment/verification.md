@@ -233,3 +233,54 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 최종 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 336건 중 335건 통과·기존 수동 LocalSettlementDemoTests 1건 건너뜀, MariaDB 118건 통과. 실패·오류 0. 기존 결제·모듈 경계·계층 검사 포함.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
 - 미검증: P3 목업 교체·권한 검증·화면·보고서 실제 연결, 실제 DB 네트워크 장애. DB 오류 전파는 단위 대역 검증이다. 장기 트랜잭션의 반복 조회가 항상 외부 최신 커밋을 보장하지 않는다는 계약을 유지한다.
+
+
+## #141 4번 단계 — 직원 조치 저장 기반
+
+2026-10-25, `19e70b2` + 4번 단계 미커밋 작업본에서 실행했다. 사용자 승인에 따라 저장소 상세 ERD·ADR을 기준으로 구현했으며 Notion 동기화는 후속이다.
+
+- `cd backend && ./gradlew newMigration -Pdesc=create_payment_actions_table` 성공. V20261025_160810 생성 후 SQL 작성.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m31s). 일반 342건 중 341건 성공·기존 수동 시연 1건 제외, MariaDB 125건 성공. 실패·오류 0.
+- 신규 PaymentActionTests 6건: 종료 상태 불변·CAPTURE 중복/충돌·요청 내용 일치·공개 계약 검증.
+- 신규 PaymentActionAdmissionMariaDbTests 7건: 트랜잭션 필수, 별도 트랜잭션 재조회·결과 복원, 키/판정/결제 충돌, 롤백, CAPTURE/VOID 동시 요청 직렬화, UNIQUE/FK/CHECK, UTC 마이크로초 저장. 새 migration 전체 적용과 JPA validate 포함.
+- 문서 상대 링크 및 diff 검사를 통과했다.
+- 미구현·미검증: 공개 실행 Bean, 서로 다른 결제의 UNIQUE 경쟁 후 업무 응답 복구, 직원 CAPTURE 발행·완료 전이·모의 VOID 실행·P3 결과 발행/재전달은 5·6·7번 단계에서 연결·검증한다. 현재 내부 admission은 반드시 호출자 트랜잭션에 참여하며 저장만으로 외부 API를 성공 응답하지 않는다.
+- P3 운영 Gateway·리스너·권한 연결은 별도 담당 범위다. VOID actionId와 구체 DTO의 P3 추가 확인, Notion 동기화는 아직 확인하지 않았다.
+
+
+## #141 5번 단계 — 직원 ACCEPT 매입 연결
+
+2026-10-25, `68290cd` + 5번 단계 미커밋 작업본 기준. 코드·테스트 최종 수정 후 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m22s). 일반 342건 중 341건 성공·기존 수동 시연 1건 제외, MariaDB 133건 성공. 실패·오류 0. 이후에는 문서 실행 기록만 추가했다.
+
+- 신규 PaymentActionCaptureMariaDbTests 8건: 실제 P6 매입·정산과 P5 CAPTURED·조치 완료·테스트 수신자 결과, 원 요청 필드·금액/주문 매핑, 완료 후 결과 재조회, 중복 완료 및 다른 captureId 거절.
+- 요청 커밋 실패 시 조치·CaptureRequested 기록 동시 롤백, 완료 커밋 실패 시 HELD/PENDING 유지·P3 결과 기록 롤백 후 원 CaptureCompleted 재전달 복구를 검증했다.
+- 결과 수신 실패·원 결과 재전달, 같은 요청의 동시 실행, 호출자 롤백과 P5 커밋 분리, 다른 결제의 동일 키/동일 판정 UNIQUE 경쟁 후 실패 트랜잭션 밖에서 업무 충돌 판정을 검증했다.
+- 기존 ALLOW 자동 매입·P6 중복 처리 검사를 포함한 전체 검사 통과. VOID 미연결 요청은 저장·발행 없이 기술 예외를 전달함을 확인했다.
+- 첫 실행의 신규 테스트 3건 실패는 Spring Data 인터페이스 spy에서 callRealMethod를 호출한 테스트 구성 오류였다. 실패 주입을 서비스 spy로 옮기고 경쟁 제어는 실제 조회와 INSERT를 유지하도록 수정했다. 첫/두 번째 실행의 기존 P6 테스트 시간 초과는 테스트 로그의 MariaDB `Too many connections`로 원인을 확인했다. 새 테스트 전용 컨텍스트에 AFTER_CLASS 정리를 추가해 연결 풀을 반환했으며, 기존 테스트의 제한 시간·단언·운영 DB 설정은 바꾸지 않았다. 최종 전체 재실행은 모두 통과했다.
+- 문서 링크 검사와 git diff --check 통과.
+- 미구현·미검증: VOID 실행·VOIDED 전이(6번 단계), P3 실제 Gateway·결과 수신·권한·Case 종료 및 응답/이벤트 순서 역전 처리, 운영 자동 재시도, Notion 동기화. P3 결과는 테스트 전용 리스너로만 전달 검증했다. 해당 운영 구독자가 없으면 P3용 발행 기록이 자동 보존된다고 보장하지 않는다.
+
+
+## #141 6번 단계 — 직원 REJECT 모의 승인 취소 연결
+
+2026-10-25, ACCEPT 연결 커밋 `72994e5` + 6번 단계 미커밋 작업본 기준. `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m40s). 일반 351건 중 350건 성공·기존 수동 시연 1건 제외, MariaDB 142건 성공. 실패·오류 0. 검사 후에는 문서 실행 기록만 추가했다.
+
+- PaymentVoidTests 9건: HELD 취소 전이·원래 승인/금액 보존·다른 상태 거절·손상된 승인 참조 거절·모의 취소 입력.
+- PaymentActionVoidMariaDbTests 9건: 실제 공개 요청으로 VOID 성공·actionId 결과와 저장값 조회, 동일 요청 재실행 방지, 명시적 업무 거절 후 HELD/FAILED 보존, null/기술 예외 롤백·동일 키 재시도, 커밋 실패의 결제/조치/이벤트 동시 롤백, 결과 재전달 시 취소 재실행 없음.
+- 취소 실행 중 같은 요청과 반대 CAPTURE 요청이 결제 잠금 뒤에 대기하며 하나만 실행됨을 검증했다. VOID 완료 뒤 CaptureCompleted가 도착해도 VOIDED를 덮어쓰지 않는다.
+- 기존 5번 테스트의 임시 VOID 미지원 검사는 CAPTURE 선행 후 VOID 충돌 거절 검사로 교체했다. 실제 P6를 통한 ACCEPT 및 기존 ALLOW 매입 회귀 검사는 그대로 통과했다.
+- P3 역할은 테스트 수신자로 검증했다. VOID 성공 시 targetOperationId=actionId, 확정 거절 시 targetOperationId=null·errorCode=VOID_DECLINED를 확인했다. 실제 P3 Gateway·결과 리스너·권한·Case 종료·응답/이벤트 순서 역전 처리는 별도 구현·미검증이다.
+- 문서 링크 및 git diff --check 통과. 운영 자동 재시도·실제 카드사 취소·Notion 동기화는 수행하지 않았다. VOID actionId/구체 DTO의 추가 P3 확인은 아직 확인되지 않았다.
+
+
+## #141 7번 단계 — 완료 기준 대조와 복구 검증 보강
+
+2026-10-25, REJECT 구현 커밋 `8a93b88` + 7번 단계 테스트 작업본 기준. `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m21s). 일반 351건 중 350건 성공·기존 수동 시연 1건 제외, MariaDB 145건 성공. 실패·오류 0. 검사 뒤 문서 실행 기록만 추가했다.
+
+- PaymentActionCaptureMariaDbTests에 3건 추가(총 11건): 승인 참조가 없는 HELD에 CAPTURE/VOID 요청 시 PAYMENT_NOT_AUTHORIZED 반환·조치/이벤트 미생성, P6 정산 저장 실패 후 원 CaptureRequested 재전달 복구.
+- P6 실패 시 매입·정산·완료 이벤트는 롤백되고 P5 HELD/PENDING은 유지된다. 동일 요청 재호출은 PENDING이며 요청 이벤트를 추가하지 않는다. 저장 장애 대역을 해제하고 원 발행 기록을 재전달하면 매입·정산이 각각 한 건 생성되고 최종 ACCEPTED를 저장값에서 반환한다.
+- P6 저장 장애는 기존 복구 테스트와 같은 Repository spy로 주입했다. 운영 P5 코드의 P6 내부 의존은 추가하지 않았다. 이 검사는 실제 DB 연결 단절 실험이 아니다.
+- [구현 문서](141-payment-actions.md)의 7번 단계 표에 완료 기준과 검사 근거를 연결했다. 기존 ALLOW·VOID·모듈 경계·DB 제약 검사도 통과했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` 통과.
+- 미검증: 실제 P3 Gateway·결과 수신·권한·Case 종료·응답/이벤트 역순 반영, 완료와 재요청 순서를 강제한 경합, JVM 재기동 및 운영 자동 재시도. DB 복원은 별도 트랜잭션 재조회와 명시적 이벤트 재전달 범위로 확인했다.
+- 다른 담당 확인: VOID actionId/구체 DTO의 P3 추가 확인과 Notion 동기화는 후속으로 남아 있다.

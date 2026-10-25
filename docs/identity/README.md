@@ -4,7 +4,7 @@
 
 ## #130 관리자 가맹점 관리
 
-상세 HTTP·입력·동시성 계약은 [#130 설계](130-admin-merchant-design.md), 대안·영향은 [ADR-0027](../decisions/0027-admin-merchant-management.md)을 따른다.
+상세 HTTP·입력·동시성 계약은 [#130 설계](130-admin-merchant-design.md), 대안·영향은 [ADR-0028](../decisions/0028-admin-merchant-management.md)을 따른다.
 
 - ADMIN 전용 목록·상세·생성·상태 변경을 `/api/admin/merchants`에 제공한다. 검색은 코드·이름, 상태 필터·서버 페이지네이션을 사용하며 기존 `/options`는 ACTIVE 가맹점 선택용으로 유지한다.
 - 코드는 대문자·숫자 3~40자로 생성 후 변경할 수 없다. 이름은 100자 이내다. 비율은 BigDecimal로 0 이상 1 미만·소수 6자리까지 받는다. 화면은 % 단위·기본값 1%이며 반올림 없이 `0.010000`으로 변환한다.
@@ -34,7 +34,7 @@
 - 화면 생성 폼·목록·상세에 수수료율이 아직 정산에 반영되지 않음(현재 1% 고정)을 표시했다.
 - 상세 화면의 상태 변경 오류를 확인 모달 안에만 표시하고, 모달을 닫으면 지운다 (페이지 상단 중복 표시 제거).
 - `MerchantRepository`를 `Repository` + `JpaSpecificationExecutor`로 되돌리고 필요한 메서드만 선언해 `deleteById` 등 삭제 메서드를 노출하지 않는다. `JpaSpecificationExecutor.delete(Specification)`은 남는다.
-- ADR-0027·설계 문서에 로그인 중 BCrypt 동안 가맹점 잠금을 유지해 생기는 같은 가맹점(및 같은 잠금 칸) 로그인 직렬화 한계와 받아들인 이유를 적었다.
+- ADR-0028·설계 문서에 로그인 중 BCrypt 동안 가맹점 잠금을 유지해 생기는 같은 가맹점(및 같은 잠금 칸) 로그인 직렬화 한계와 받아들인 이유를 적었다.
 - `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 347개 중 346개 성공·기존 1개 건너뜀, MariaDB 126개 성공.
 - `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 57개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
