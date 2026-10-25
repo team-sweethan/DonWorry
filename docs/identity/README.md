@@ -8,8 +8,8 @@
 
 - `security.csrf.enabled=false`가 기본값이다. 환경변수는 `DONWORRY_CSRF_ENABLED`다. false에서도 토큰 발급·전송·로그인/로그아웃 정리는 동작하며 토큰 없는 기존 변경 요청도 CSRF로 막지 않는다. 실제 활성화는 다른 담당에게 공지한 뒤 #68 5단계에서 한다.
 - `GET /api/auth/csrf` → 204, `Cache-Control: no-store`. 로그인 전·비밀번호 강제 변경 중에도 호출할 수 있고, 토큰이 없으면 `XSRF-TOKEN` 쿠키를 발급한다. 로그인 세션을 새로 만들지 않는다. 쿠키는 JavaScript 읽기 가능·Path=/·SameSite=Lax이며, Secure는 요청 HTTPS 여부를 따른다. 인증용 JSESSIONID는 기존 HttpOnly 정책을 유지한다.
-- 프론트 공통 `src/api/client.ts`가 POST·PUT·PATCH·DELETE 등 변경 요청에 `X-XSRF-TOKEN`을 붙인다. GET·HEAD·OPTIONS·TRACE는 토큰이 필요 없다. 토큰이 없으면 `/csrf`를 먼저 부르고 동시 발급은 공유한다. 쿠키를 메모리·localStorage에 복사해 보관하지 않는다.
-- 검사가 켜졌을 때 누락·불일치는 403 `CSRF_001` ProblemDetail이다. 이 응답에만 토큰 재확인 후 한 번 재시도하며, AUTH_002·AUTH_008·네트워크·5xx와 Stream 본문은 자동 재시도하지 않는다. 세션이 바뀌거나 요청이 취소되면 대기하던 변경을 보내지 않는다.
+- 프론트 공통 `src/api/client.ts`가 POST·PUT·PATCH·DELETE 등 변경 요청에 `X-XSRF-TOKEN`을 붙인다. GET·HEAD·OPTIONS·TRACE는 토큰이 필요 없다. 토큰이 없으면 `/csrf`를 먼저 부르고 동시 발급은 공유한다. 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 서버 설정에 맡긴다. 쿠키를 메모리·localStorage에 복사해 보관하지 않는다.
+- 검사가 켜졌을 때 누락·불일치는 403 `CSRF_001` ProblemDetail이다. 이 응답에만 거절된 쿠키를 지우고 새 토큰을 받아 한 번 재시도하며, AUTH_002·AUTH_008·네트워크·5xx와 Stream 본문은 자동 재시도하지 않는다. 세션이 바뀌거나 요청이 취소되면 대기하던 변경을 보내지 않는다.
 - 수동 로그인 합성 전략에 `CsrfAuthenticationStrategy`를 추가했다. 일반·전체 로그아웃도 쿠키를 폐기하며 다음 안전한 요청 또는 다음 변경 전 `/csrf`에서 새 토큰을 받는다. #125 단일 세션 정책과 #128 본인 비밀번호 변경의 현재 세션 유지는 그대로다.
 - `/internal/**`만 검사 예외를 준비했다. CakeShop 웹훅의 정확한 경로와 서버 간 인증은 #68 5단계에서 합의한다. DB·다른 모듈의 공개 Java 계약 변경은 없다. 운영 HTTPS·프록시 쿠키 확인은 #131 후속이다.
 - 쿠키 저장 방식이므로 새 쿠키에 예전 헤더를 보내는 경우를 거부한다. 예전 쿠키·헤더 쌍 자체의 영구 폐기를 보장하는 세션 저장 토큰 방식은 아니다.
@@ -21,7 +21,7 @@
 - `cd backend && ./gradlew spotlessApply check mariaDbTest`: 통과. 일반 323개 중 성공 322개·기존 건너뜀 1개(`LocalSettlementDemoTests`), MariaDB 114개 성공, 실패·오류 0개. ModularityTests·ArchitectureTests·Flyway 전체 적용·JPA validate 포함.
 - 검사를 켠 실제 Security 필터로 토큰 누락·헤더 누락·불일치 403 CSRF_001, 정상 토큰, 내부 경로 예외, 로그인 전 무세션 발급, 수동 로그인 후 새 쿠키+옛 헤더 거부, 일반·전체 로그아웃의 토큰 폐기를 확인했다. 기본 설정의 기존 인증·관리자·업무 회귀 검사도 통과했다.
 - Testcontainers MariaDB와 실제 HTTP 쿠키 저장소로 익명 발급 → 로그인 → 토큰 폐기·재발급 → 옛 헤더 거부·로그인 유지 → 일반/전체 로그아웃 → 익명 새 토큰·me 401을 확인했다. 기존 로컬 DB나 운영 DB는 변경하지 않았다.
-- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 테스트 45개 성공. CSRF 헤더·발급 공유·한 번 재시도·오류 구분·세션 세대·취소·실패 복구·로그인/로그아웃 후 재발급·Stream 재전송 금지·발급 중 401의 만료 전파를 검사했다. 기존 lint 경고 4개·번들 크기 경고는 유지된다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 테스트 46개 성공. CSRF 헤더·발급 공유·쿠키 삭제 후 새 토큰으로 한 번 재시도·쿠키를 읽지 못할 때 헤더 없이 전송·오류 구분·세션 세대·취소·실패 복구·로그인/로그아웃 후 재발급·Stream 재전송 금지·발급 중 401의 만료 전파를 검사했다. 기존 lint 경고 4개·번들 크기 경고는 유지된다.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 
 미검증: 실제 브라우저에서 프론트·백엔드 통합 동작, HTTPS·프록시 환경 쿠키, 실제 30분 만료 대기, Notion 정책 동기화. 공용 환경 CSRF 활성화·CakeShop 웹훅 예외 경로·서버 간 인증은 #68 5단계 후속이며 이번 작업에서 활성화하지 않았다. 원격 CI 결과는 PR에서 별도로 확인한다.

@@ -5,6 +5,10 @@ import { api, ApiError, advanceApiSession, subscribeUnauthorized } from '../src/
 const originalFetch = globalThis.fetch
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 let cookies = { cookie: '' }
+// 서버의 /auth/csrf처럼 쿠키가 남아 있으면 유지하고 없을 때만 새 토큰을 발급한다.
+function issueIfMissing(value: string) {
+  if (!/XSRF-TOKEN=[^;]/.test(cookies.cookie)) cookies.cookie = `XSRF-TOKEN=${value}`
+}
 beforeEach(() => {
   advanceApiSession()
   cookies = { cookie: '' }
@@ -58,15 +62,15 @@ test('api_whenTokenMissing_sharesBootstrapAndPreservesRequest', async () => {
   assert.deepEqual(paths, ['/api/auth/csrf', '/api/one', '/api/two'])
 })
 
-// CSRF 전용 403만 새 쿠키로 한 번 재전송하고 두 번째 거절은 그대로 반환한다.
-test('api_whenCsrfRejected_retriesExactlyOnceWithRefreshedToken', async () => {
+// CSRF 전용 403만 거절된 쿠키를 지우고 새로 받아 한 번 재전송하며 두 번째 거절은 그대로 반환한다.
+test('api_whenCsrfRejected_clearsCookieAndRetriesOnceWithNewToken', async () => {
   cookies.cookie = 'XSRF-TOKEN=old'
   let writes = 0
   let refreshes = 0
   globalThis.fetch = async (input, init) => {
     if (input === '/api/auth/csrf') {
       refreshes++
-      cookies.cookie = 'XSRF-TOKEN=new'
+      issueIfMissing('new')
       return new Response(null, { status: 204 })
     }
     writes++
@@ -103,23 +107,34 @@ test('api_whenNotCsrfRejection_doesNotRetry', async () => {
   assert.equal(calls, 1)
 })
 
-// 토큰 발급 실패나 쿠키 누락이면 업무 요청을 보내지 않고 다음 시도에서 다시 발급받는다.
+// 토큰 발급이 실패하면 업무 요청을 보내지 않고 다음 시도에서 다시 발급받는다.
 test('api_whenBootstrapFails_doesNotSendWriteAndCanRecover', async () => {
-  for (const status of [503, 204]) {
-    let calls = 0
-    globalThis.fetch = async (input) => {
-      calls++
-      assert.equal(input, '/api/auth/csrf')
-      return new Response(null, { status })
-    }
-    await assert.rejects(api('/write', { method: 'POST' }))
-    assert.equal(calls, 1)
-  }
+  let calls = 0
   globalThis.fetch = async (input) => {
-    if (input === '/api/auth/csrf') cookies.cookie = 'XSRF-TOKEN=recovered'
+    calls++
+    assert.equal(input, '/api/auth/csrf')
+    return new Response(null, { status: 503 })
+  }
+  await assert.rejects(api('/write', { method: 'POST' }))
+  assert.equal(calls, 1)
+  globalThis.fetch = async (input) => {
+    if (input === '/api/auth/csrf') issueIfMissing('recovered')
     return new Response(null, { status: 204 })
   }
   await api('/write', { method: 'POST' })
+})
+
+// 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 검사 여부를 서버에 맡긴다 (검사 끔 기본값 유지).
+test('api_whenCookieUnreadable_sendsWithoutHeader', async () => {
+  const paths: string[] = []
+  globalThis.fetch = async (input, init) => {
+    paths.push(String(input))
+    if (input !== '/api/auth/csrf')
+      assert.equal(new Headers(init?.headers).get('X-XSRF-TOKEN'), null)
+    return new Response(null, { status: 204 })
+  }
+  await api('/write', { method: 'POST' })
+  assert.deepEqual(paths, ['/api/auth/csrf', '/api/write'])
 })
 
 // 발급 대기 중 로그인 상태가 바뀌거나 요청이 취소되면 이전 변경을 보내지 않는다.
@@ -173,7 +188,7 @@ test('api_whenCsrfRefreshSucceeds_returnsRetriedResponse', async () => {
   let calls = 0
   globalThis.fetch = async (input) => {
     if (input === '/api/auth/csrf') {
-      cookies.cookie = 'XSRF-TOKEN=new'
+      issueIfMissing('new')
       return new Response(null, { status: 204 })
     }
     calls++

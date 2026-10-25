@@ -31,6 +31,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void csrf(CsrfToken token, HttpServletResponse response) {
         response.setHeader("Cache-Control", "no-store");
+        // 지연 생성된 토큰을 읽어야 저장소가 XSRF-TOKEN 쿠키를 응답에 쓴다.
         token.getToken();
     }
 

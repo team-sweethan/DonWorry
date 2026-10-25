@@ -1,3 +1,11 @@
+import {
+  CSRF_HEADER,
+  clearCsrfToken,
+  isCsrfRejection,
+  isUnsafeMethod,
+  readCsrfToken,
+} from './csrf.ts'
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string | undefined
@@ -30,13 +38,6 @@ export function advanceApiSession() {
   pendingCsrf = null
 }
 
-function readCsrfToken(): string | undefined {
-  const cookie = document.cookie.split(';').find((value) => value.trim().startsWith('XSRF-TOKEN='))
-  return cookie
-    ? decodeURIComponent(cookie.trim().slice('XSRF-TOKEN='.length)) || undefined
-    : undefined
-}
-
 function loadCsrfToken(): Promise<void> {
   if (pendingCsrf) return pendingCsrf
   const pending = api<void>('/auth/csrf', { cache: 'no-store' }).finally(() => {
@@ -65,9 +66,7 @@ export function subscribeUnauthorized(listener: () => void) {
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const generation = sessionGeneration
-  const changesState = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(
-    (init?.method ?? 'GET').toUpperCase(),
-  )
+  const changesState = isUnsafeMethod(init?.method)
   const requireSameSession = () => {
     init?.signal?.throwIfAborted()
     if (generation !== sessionGeneration)
@@ -86,9 +85,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const headers = new Headers(init?.headers)
     if (changesState) {
       requireSameSession()
+      // 쿠키를 읽지 못하면 헤더 없이 보내고 검사 여부는 서버 설정에 맡긴다.
       const token = readCsrfToken()
-      if (!token) throw new Error('요청 보안 토큰을 받지 못했습니다. 다시 시도해 주세요.')
-      headers.set('X-XSRF-TOKEN', token)
+      if (token) headers.set(CSRF_HEADER, token)
     }
     return fetch(`/api${path}`, { ...init, headers, credentials: 'include' })
   }
@@ -97,26 +96,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     await prepareCsrf()
   }
   let res = await send()
-  // 필터가 업무 처리 전에 거절한 CSRF 오류만 재전송한다. 네트워크·일반 403은 반복하지 않는다.
-  if (changesState && res.status === 403) {
-    let problem: unknown
-    try {
-      problem = await res.clone().json()
-    } catch {
-      // 비 JSON 403은 기존 오류 처리로 넘긴다.
-    }
-    if (
-      typeof problem === 'object' &&
-      problem !== null &&
-      'code' in problem &&
-      problem.code === 'CSRF_001'
-    ) {
-      requireSameSession()
-      // Stream 본문은 소비된 뒤 재사용할 수 없으므로 자동 재전송하지 않는다.
-      if (!(init?.body instanceof ReadableStream)) {
-        await prepareCsrf()
-        res = await send()
-      }
+  // CSRF 거절만 새 토큰으로 한 번 재전송한다. 네트워크·일반 403은 반복하지 않는다.
+  if (changesState && (await isCsrfRejection(res))) {
+    requireSameSession()
+    // Stream 본문은 소비된 뒤 재사용할 수 없으므로 자동 재전송하지 않는다.
+    if (!(init?.body instanceof ReadableStream)) {
+      clearCsrfToken()
+      await prepareCsrf()
+      res = await send()
     }
   }
   if (!res.ok) {
