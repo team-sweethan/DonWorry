@@ -118,7 +118,14 @@ class PasswordChangeHttpTests {
     @ParameterizedTest
     @EnumSource(UserRole.class)
     void change_whenAuthenticated_updatesDatabaseAndPreservesCurrentSession(UserRole role) throws Exception {
-        jdbc.update("UPDATE platform_users SET role = ? WHERE user_id = ?", role.name(), userId);
+        jdbc.update(
+                "UPDATE platform_users SET role = ?, merchant_id = ? WHERE user_id = ?",
+                role.name(),
+                role == UserRole.OPERATOR
+                        ? jdbc.queryForObject(
+                                "SELECT merchant_id FROM merchants WHERE merchant_code = 'DEMOSHOP'", Long.class)
+                        : null,
+                userId);
         var current = client();
         assertThat(login(current, "1234").statusCode()).isEqualTo(200);
         String id = registry.getAllSessions(userId, false).getFirst().getSessionId();

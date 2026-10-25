@@ -38,6 +38,7 @@ export const adminNavigation = {
       items: [
         { label: 'FDS', path: '/admin/fds' },
         { label: '자금관리', path: '/admin/finance' },
+        { label: '계정 관리', path: '/admin/users' },
       ],
     },
   ] satisfies NavGroup[],
@@ -54,6 +55,14 @@ const sessionMenus: Record<SessionRole, { label: string; base: string; groups: N
 /** 서버 로그인 사용자의 메뉴 · 첫 화면. 권한이 필요한 메뉴는 permissions에 있을 때만 보인다. */
 export function sessionNavigation(user: AuthUser) {
   const menu = sessionMenus[user.role]
+  if (user.passwordChangeRequired) {
+    return {
+      label: menu.label,
+      base: menu.base,
+      groups: [] as NavGroup[],
+      landing: '/account/password',
+    }
+  }
   const groups = menu.groups
     .map((group) => ({
       ...group,
@@ -75,6 +84,7 @@ export function isAccountPasswordPath(pathname: string) {
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */
 export function canOpenPath(user: AuthUser, pathname: string) {
   if (isAccountPasswordPath(pathname)) return true
+  if (user.passwordChangeRequired) return false
   const { base, groups } = sessionNavigation(user)
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups

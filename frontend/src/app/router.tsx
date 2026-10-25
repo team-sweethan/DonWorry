@@ -11,6 +11,11 @@ import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
+import {
+  AdminUsersPage,
+  AdminCreateUserPage,
+  AdminUserDetailPage,
+} from '../pages/admin/AdminUsersPage'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -35,6 +40,9 @@ export const router = createBrowserRouter([
         children: [
           { path: 'fds', element: <EmptyPage title="FDS" /> },
           { path: 'finance', element: <EmptyPage title="자금관리" /> },
+          { path: 'users', element: <AdminUsersPage /> },
+          { path: 'users/new', element: <AdminCreateUserPage /> },
+          { path: 'users/:id', element: <AdminUserDetailPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/admin" /> },
         ],
       },

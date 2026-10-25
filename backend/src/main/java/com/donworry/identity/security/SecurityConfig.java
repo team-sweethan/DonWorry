@@ -1,5 +1,6 @@
 package com.donworry.identity.security;
 
+import com.donworry.identity.entity.UserRole;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -8,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,6 +18,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.logout.CompositeLogoutHandler;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
@@ -93,11 +96,18 @@ public class SecurityConfig {
             throws Exception {
         // 전체 API 차단과 CSRF 활성화는 EPIC #68 5단계에서 함께 적용한다.
         http.csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(
-                        auth -> auth.requestMatchers("/api/auth/me", "/api/auth/logout-all", "/api/auth/password")
-                                .authenticated()
-                                .anyRequest()
-                                .permitAll())
+                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/admin", "/api/admin/**")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.ADMIN);
+                        })
+                        .requestMatchers("/api/auth/me", "/api/auth/logout-all", "/api/auth/password")
+                        .authenticated()
+                        .anyRequest()
+                        .permitAll())
+                .addFilterBefore(new ForcedPasswordChangeFilter(responseWriter), AuthorizationFilter.class)
                 .securityContext(context -> context.securityContextRepository(securityContextRepository)
                         .requireExplicitSave(true))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)

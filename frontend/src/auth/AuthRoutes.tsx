@@ -144,6 +144,9 @@ export function ServerSession() {
     <ScreenResult kind="403" homePath={user ? homeOf(user) : '/login'} />
   ) : undefined
   if (status !== 'authenticated' || !user) return body ?? <Navigate to="/login" replace />
+  if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
+    return <Navigate to="/account/password" replace />
+  }
   const navigation = sessionNavigation(user)
   // 업무 권한과 무관하게 본인 계정 설정은 사용할 수 있다.
   if (navigation.landing === null && !isAccountPasswordPath(pathname)) {

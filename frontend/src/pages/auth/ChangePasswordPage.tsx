@@ -3,10 +3,15 @@ import { Alert, Button, Card, Form, Input } from 'antd'
 import { changePassword } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { PageHeader } from '../../components/common/PageHeader'
+import { useAuth } from '../../auth/useAuth'
+import { useNavigate } from 'react-router-dom'
+import { sessionNavigation } from '../../config/navigation'
 
 type PasswordValues = { currentPassword: string; newPassword: string; confirmation: string }
 
 export function ChangePasswordPage() {
+  const { store, user } = useAuth()
+  const navigate = useNavigate()
   const [form] = Form.useForm<PasswordValues>()
   const pending = useRef(false)
   const [submitting, setSubmitting] = useState(false)
@@ -20,6 +25,21 @@ export function ChangePasswordPage() {
     try {
       await changePassword(values.currentPassword, values.newPassword)
       form.resetFields()
+      const wasRequired = user?.passwordChangeRequired
+      let updated
+      try {
+        updated = await store.refresh()
+      } catch {
+        setFeedback({
+          success: false,
+          message: '비밀번호는 변경되었습니다. 로그인 정보를 갱신하려면 화면을 새로고침해 주세요.',
+        })
+        return
+      }
+      if (!updated) return
+      if (wasRequired && !updated.passwordChangeRequired) {
+        navigate(sessionNavigation(updated).landing ?? '/login', { replace: true })
+      }
       setFeedback({ success: true, message: '비밀번호가 변경되었습니다.' })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) return
@@ -40,6 +60,14 @@ export function ChangePasswordPage() {
     <>
       <PageHeader title="비밀번호 변경" description="새 비밀번호로 계정을 안전하게 관리하세요." />
       <Card style={{ maxWidth: 560 }}>
+        {user?.passwordChangeRequired && (
+          <Alert
+            type="warning"
+            showIcon
+            message="임시 비밀번호를 새 비밀번호로 변경해야 서비스를 사용할 수 있습니다."
+            style={{ marginBottom: 16 }}
+          />
+        )}
         <p>
           8~64자로 영문과 숫자를 모두 포함하고, 아이디와 다르게 입력해 주세요. 한글·특수문자를
           사용할 수 있으며 UTF-8 기준 72바이트까지 가능합니다.

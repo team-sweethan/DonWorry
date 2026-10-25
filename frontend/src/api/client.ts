@@ -14,6 +14,14 @@ export class ApiError extends Error {
 
 let sessionGeneration = 0
 const unauthorizedListeners = new Set<() => void>()
+const passwordChangeListeners = new Set<() => void>()
+
+export function subscribePasswordChangeRequired(listener: () => void) {
+  passwordChangeListeners.add(listener)
+  return () => {
+    passwordChangeListeners.delete(listener)
+  }
+}
 
 // 이전 로그인에서 보낸 요청의 401은 새 로그인에 영향을 주지 않는다.
 export function advanceApiSession() {
@@ -41,6 +49,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const code = 'code' in fields && typeof fields.code === 'string' ? fields.code : undefined
     const detail =
       'detail' in fields && typeof fields.detail === 'string' ? fields.detail : undefined
+    if (res.status === 403 && code === 'AUTH_008' && generation === sessionGeneration) {
+      passwordChangeListeners.forEach((listener) => listener())
+    }
     if (
       res.status === 401 &&
       (!path.startsWith('/auth/') || path === '/auth/password') &&
