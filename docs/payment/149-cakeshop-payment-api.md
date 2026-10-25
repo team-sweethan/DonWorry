@@ -1,6 +1,6 @@
 # #149 CakeShop 결제 요청·조회 설계
 
-- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수·평가/승인 재개·가맹점별 조회 서비스 구현, HTTP·담당 인증 연결은 후속.**
+- 상태: **사용자 저장 구조 방향 승인. 저장 기반·결제 처리·조회·기본 비활성 HTTP 구현. 실제 P1 인증·운영 활성화는 후속.**
 - 기준: `dev 84698bb`, 2026-10-25. migration 전체를 버전 순으로 읽고 P5 생성·승인·완료·조회와 P2 평가 재호출 코드를 대조했다.
 - [Issue #149](https://github.com/team-sweethan/DonWorry/issues/149), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md), [ERD 제안](../erd/README.md#149-p5-cakeshop-결제-저장-제안).
 - 2026-10-25 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 이를 저장 구조 승인으로 기록하며 실제 DB 적용·타 담당 회신·Notion 반영 완료와 구분한다. 상세 제약과 연동 세부는 아래 설계 기준으로 검토한다.
@@ -231,3 +231,18 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 - 추가 테이블·컬럼 없음. P1 코드·인증 정책도 변경하지 않는다. 다음 연결에 필요한 사항은 API Key 검증 공개 인터페이스, 키 헤더/오류, 정지 가맹점 조회 허용 정책, HTTP 권한·CSRF 범위다.
 
 검증 기준: `af4d39f` 위 조회 서비스 미커밋 작업 트리, 2026-10-25. `./gradlew spotlessApply check mariaDbTest` 통과(일반 385개 통과·기존 비활성 1개 제외, MariaDB 212개 통과). 신규 단위 1개·MariaDB 6개로 입력/페이지 검증, 타 가맹점·없는 결제, 읽기 후 DB 값 불변, 상태 커밋 반영, 과거 NULL, 최신/이력 페이지·새 시도 삽입 후 커서·빈 시도 주문을 확인했다. 문서 상대 링크·diff 검사 통과. HTTP·P1 API Key 인증·실제 CakeShop 호출은 미구현/미검증이며 P1 공개 경계 확인 후 연결한다.
+
+
+### 후속 단계 — 인증 연결 전 HTTP 구현
+
+사용자 승인으로 HTTP 코드와 테스트 대역 검증을 먼저 구현한다. P1 공개 인증 계약·운영 키 구현은 완료로 표시하지 않는다.
+
+- `payment.http.enabled` 기본값은 false(설정 생략)이며 Controller를 등록하지 않는다. true로 바꿔도 `PaymentMerchantIdentity` 어댑터가 없으면 POST/GET 모두 503 PAYMENT_AUTH_NOT_READY다. 이 인터페이스는 P5 내부 연결 지점이며 P1의 CurrentMerchant를 임의로 정의한 것이 아니다. 운영 구현과 고정 가맹점 fallback은 없다.
+- 테스트 소스의 어댑터만 X-Test-Identity를 읽는다. 운영 코드에는 테스트 헤더를 신뢰하는 코드가 없다. 실제 P1 연결 시 서버 간 인증 결과만 읽는 어댑터를 작성하고 직원 세션으로 대체하지 않아야 한다.
+- POST `/api/payments`, GET `/api/payments/{paymentId}`, GET `/api/payment-orders`를 연결한다. Controller의 모델 초기화에서 본문/인자 바인딩 전에 가맹점을 확인한다. 인증 없는 요청은 401, 미등록 가맹점도 401, 정지 가맹점 POST는 403이다. 유효 인증의 정지 가맹점 GET 허용은 현재 제안 기준이며 P1 확인 후 운영 반영한다.
+- 본문 필드는 orderRef/customerRef/amount/orderCreatedAt이다. 키는 Idempotency-Key의 정규 UUID 형식이다. 고객 번호는 양수 Long 십진 문자열로 제한하며 내부에서는 merchantId:customerRef로 변환한다. 금액은 양수, 시각은 미래가 아닌 마이크로초 정밀도다. 가맹점 ID를 요청 body/query에서 받아 인증을 대신하지 않는다.
+- POST는 현재 결과가 PENDING/HELD면 202, 그 외면 200이다. Location은 결제 단건 경로다. GET은 200, 타 가맹점·없는 결제는 동일 404다. 응답과 처리기 오류에 Cache-Control: no-store를 지정한다.
+- 오류는 이 Controller에만 적용되는 ProblemDetail+code다. 입력 400 INVALID_REQUEST, 충돌 409(접수 내부 코드와 동일), DB 장애 503 PAYMENT_PROCESSING_UNAVAILABLE, 예상 밖 실패 500 PAYMENT_INTERNAL_ERROR다. 내부 예외·평가 사유·키 원문을 노출하지 않는다. 공통 BusinessException이나 전역 보안 처리기를 만들지 않는다.
+- identity/SecurityConfig·직원 세션·CSRF 정책은 변경하지 않는다. 실제 운영 활성화 전에 P1 필터의 적용 경로·키 정책·CSRF 범위 및 고객 참조/정지 조회 정책을 확인하고 통합 테스트해야 한다. HTTP 대역 테스트는 실제 API Key 인증 검증이 아니다.
+
+검증 기준: `c7c5268` 위 HTTP 미커밋 작업 트리, 2026-10-25. 최종 `./gradlew spotlessApply check mariaDbTest` 통과(일반 387개 통과·기존 비활성 1개 제외, MariaDB 219개 통과). 신규 일반 2개로 기본 Controller 비등록·인증 어댑터 부재 차단을 확인했다. 신규 HTTP/MariaDB 7개로 인증 선행·반복 키·내용 충돌·가맹점 분리/조회 파라미터 위조·정지 POST/GET·입력/페이지 오류·200/202·민감 필드 제외·안전한 500/503 응답을 검증했다. 인증과 P2는 테스트 대역, P5 접수/재개/조회와 DB는 실제 구현이다. 전체 검사에는 기존 실제 P2/P6 통합 테스트도 포함한다. 문서 링크·diff 검사 통과. 실제 P1 인증/키 발급·폐기·직원 세션과의 보안 필터 조합·HTTPS·CSRF 활성화·CakeShop E2E는 미검증이며 운영 활성화 전 선행 조건이다.

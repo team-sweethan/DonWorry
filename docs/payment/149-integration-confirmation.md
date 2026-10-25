@@ -121,3 +121,29 @@ Java·SQL·API Key 변경·담당자 메시지 발송은 수행하지 않았다.
 로컬 기준 84698bb의 identity.api에는 CurrentStaff·StaffSummary·TenantReader·TenantSummary가 있다. identity 소스에서 API Key / X-API-Key / CurrentMerchant / MerchantIdentity 구현은 확인되지 않았다. 따라서 위 예시 CurrentMerchant를 사용 가능한 실제 API로 표시하지 않는다. 원격 미병합 작업의 존재 여부는 이번 확인 범위 밖이다.
 
 문서 링크·diff 검사를 실행해 통과했다. Java·SQL 수정과 backend 테스트는 수행하지 않았다.
+
+## 7. HTTP 연결 직전 확인 (2026-10-25)
+
+- 조회 구현까지 커밋: `c7c5268`. P5 접수·평가/승인 재개·가맹점별 조회는 구현·검증했고 HTTP 컨트롤러는 아직 없다.
+- `git fetch origin dev` 후 원격 dev는 `84698bb`다. `git ls-tree`로 identity/api를 확인했으며 CurrentStaff·StaffSummary·TenantReader·TenantSummary만 있다. 원격 dev의 Java 코드에서 CurrentMerchant·MerchantIdentity·X-API-Key·ApiKey 검색 결과는 없었다.
+- GitHub [#68](https://github.com/team-sweethan/DonWorry/issues/68)의 서버 간 인증은 미완료다. [#149](https://github.com/team-sweethan/DonWorry/issues/149)에는 추가 댓글이 없었다. 조회한 공개 이슈·PR에서 연결 가능한 API Key 구현을 확인하지 못했다. 미게시 로컬 작업까지 없다고 단정하지 않는다.
+- P1 세션용 CurrentStaff를 CakeShop 서버 인증으로 대체하지 않는다. 가맹점 ID를 body/header에서 직접 받아 신뢰하거나 고정 가맹점 fallback을 만들지 않는다. P1 identity·SecurityConfig도 이번 범위에서 수정하지 않는다.
+
+### P1에게 전달할 짧은 문안 (미발송)
+
+주환님, P5 결제 접수·평가/승인·결과 조회 구현까지 끝났고 이제 HTTP를 연결하려고 합니다.
+
+최신 dev에는 가맹점 API Key 인증이 아직 없어서 아래 세 가지만 연결 부탁드립니다.
+
+1. CakeShop이 `X-API-Key`로 호출하면 P1에서 키를 검증하고, P5가 **인증된 가맹점 번호**를 읽을 수 있는 공개 인터페이스를 제공해주세요. 예전에 제안한 CurrentMerchant는 예시라 실제 이름·반환 형식을 알려주시면 맞추겠습니다.
+2. 적용할 주소는 `POST /api/payments`, `GET /api/payments/{paymentId}`, `GET /api/payment-orders`입니다. 키가 없거나 잘못됐거나 폐기됐으면 모두 차단하고, 직원 로그인 세션으로 대신 통과하지 않게 연결해주세요. 기존 직원 API의 보안·CSRF 설정은 유지하고 이 서버 간 경로에 필요한 처리를 구분해주세요.
+3. 정지 가맹점은 POST 금지, 아직 유효한 키로 자기 결제 GET은 허용하는 안으로 진행 가능한지 확인해주세요. 다른 정책이면 알려주세요.
+
+이미 구현 중이면 **이슈/PR 또는 브랜치와 공개 인터페이스 이름**만 알려주셔도 됩니다. P5에서는 그 경계를 연결한 뒤 인증 실패·다른 가맹점 접근·정지 상태를 포함해 HTTP 테스트하겠습니다.
+
+이번 단계는 원격 코드·이슈 확인과 전달안 정리다. 담당자에게 메시지를 보내지 않았다. Java/SQL 변경은 없어서 backend 검사를 다시 실행하지 않았으며, 이전 `c7c5268` 구현 작업 트리의 일반 385개·MariaDB 212개 통과 기록을 유지한다. 실제 HTTP·API Key·CakeShop 통합은 미검증이다.
+
+
+## 8. 인증 대기 중 구현 범위 변경 (사용자 승인)
+
+사용자가 HTTP 구현·테스트를 먼저 진행하고 실제 인증 전 운영 비활성을 유지하도록 승인했다. POST/GET Controller와 P5 내부 PaymentMerchantIdentity 연결 지점을 구현하며, 테스트 소스에만 인증 대역을 둔다. 운영 기본값은 Controller 미등록, 명시적으로 활성화해도 실제 어댑터 없이는 503 차단이다. 위 7절의 “HTTP 컨트롤러는 아직 없다”는 당시 확인 기록이며 현재 구현 범위는 #149 상세 설계의 후속 기록을 따른다. P1 API Key 공개 계약/운영 구현 완료나 담당자 발송으로 표시하지 않는다.
