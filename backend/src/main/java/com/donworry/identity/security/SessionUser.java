@@ -7,5 +7,11 @@ import lombok.Builder;
 
 @Builder(toBuilder = true)
 public record SessionUser(
-        Long userId, String loginId, String displayName, UserRole role, Long merchantId, List<String> permissions)
+        Long userId,
+        String loginId,
+        String displayName,
+        UserRole role,
+        Long merchantId,
+        List<String> permissions,
+        boolean passwordChangeRequired)
         implements Serializable {}

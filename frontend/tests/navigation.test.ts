@@ -5,6 +5,7 @@ import type { AuthUser } from '../src/types/auth.ts'
 
 const base: AuthUser = {
   userId: 1,
+  passwordChangeRequired: false,
   loginId: 'user',
   displayName: '테스트',
   role: 'ADMIN',
@@ -53,4 +54,26 @@ test('비밀번호 변경은 업무 권한이 없는 사장님을 포함해 세 
     assert.equal(canOpenPath(user, '/account/password/'), true)
     assert.equal(canOpenPath(user, '/account/password/unknown'), false)
   }
+})
+
+test('임시 비밀번호 계정은 권한과 무관하게 변경 화면만 연다', () => {
+  for (const user of [admin, staff, owner([]), owner(['FDS_VIEW', 'FINANCE_VIEW'])]) {
+    const forced = { ...user, passwordChangeRequired: true }
+    assert.equal(sessionNavigation(forced).landing, '/account/password')
+    assert.deepEqual(sessionNavigation(forced).groups, [])
+    assert.equal(canOpenPath(forced, '/account/password/'), true)
+    for (const path of ['/admin/users', '/owner/actions', '/security/cases']) {
+      assert.equal(canOpenPath(forced, path), false)
+    }
+  }
+})
+
+test('관리자 계정 관리 메뉴와 하위 경로를 제공한다', () => {
+  assert.ok(
+    sessionNavigation(admin)
+      .groups.flatMap((group) => group.items)
+      .some((item) => item.path === '/admin/users'),
+  )
+  assert.equal(canOpenPath(admin, '/admin/users/new'), true)
+  assert.equal(canOpenPath(staff, '/admin/users/1'), false)
 })

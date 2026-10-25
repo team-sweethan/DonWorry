@@ -1,5 +1,6 @@
 package com.donworry.identity.controller;
 
+import com.donworry.identity.security.AccountManagementException;
 import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.PasswordChangeException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,6 +20,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice(basePackages = "com.donworry.identity.controller")
 public class AuthExceptionHandler {
+    @ExceptionHandler(AccountManagementException.class)
+    public ProblemDetail accountManagementFailed(AccountManagementException exception) {
+        return problem(exception.getErrorCode());
+    }
+
     @ExceptionHandler(PasswordChangeException.class)
     public ProblemDetail passwordChangeFailed(PasswordChangeException exception) {
         return problem(exception.getErrorCode());
@@ -43,6 +49,7 @@ public class AuthExceptionHandler {
 
     @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
     public ProblemDetail invalidInput(HttpServletRequest request) {
+        if (request.getRequestURI().startsWith("/api/admin/")) return problem(AuthErrorCode.ADMIN_INVALID_INPUT);
         // 검증 예외의 rejectedValue에는 비밀번호가 포함될 수 있어 응답에 넣지 않는다.
         return ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,

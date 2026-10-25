@@ -13,7 +13,8 @@ public record MeResponse(
         String role,
         Long merchantId,
         String tenantScope,
-        List<String> permissions) {
+        List<String> permissions,
+        boolean passwordChangeRequired) {
     public static MeResponse from(SessionUser user) {
         var summary = SessionUserMapper.toSummary(user);
         return MeResponse.builder()
@@ -24,6 +25,7 @@ public record MeResponse(
                 .merchantId(user.merchantId())
                 .tenantScope(SessionUserMapper.tenantScope(user))
                 .permissions(summary.permissions())
+                .passwordChangeRequired(user.passwordChangeRequired())
                 .build();
     }
 }

@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -23,7 +24,43 @@ public class PlatformUser {
 
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+        this.passwordChangeRequired = false;
     }
+
+    public void resetPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.passwordChangeRequired = true;
+    }
+
+    public void changeStatus(UserStatus status) {
+        this.status = status;
+    }
+
+    public static PlatformUser create(
+            String loginId, String displayName, UserRole role, Long merchantId, String passwordHash) {
+        return PlatformUser.builder()
+                .loginId(loginId)
+                .displayName(displayName)
+                .role(role)
+                .merchantId(merchantId)
+                .passwordHash(passwordHash)
+                .build();
+    }
+
+    @Builder(access = AccessLevel.PRIVATE)
+    private PlatformUser(String loginId, String displayName, UserRole role, Long merchantId, String passwordHash) {
+        this.loginId = loginId;
+        this.displayName = displayName;
+        this.role = role;
+        this.merchantId = merchantId;
+        this.passwordHash = passwordHash;
+        this.status = UserStatus.ACTIVE;
+        this.passwordChangeRequired = true;
+        this.createdAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
+    }
+
+    @Column(name = "password_change_required", nullable = false)
+    private boolean passwordChangeRequired;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

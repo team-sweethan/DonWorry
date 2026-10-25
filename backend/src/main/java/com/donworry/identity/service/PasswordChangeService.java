@@ -7,6 +7,7 @@ import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.PasswordChangeException;
 import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,7 +27,11 @@ public class PasswordChangeService {
     private final UserSessionService sessions;
     private final PlatformTransactionManager transactionManager;
 
-    public void change(SessionUser current, ChangePasswordRequest input, HttpServletRequest request) {
+    public void change(
+            SessionUser current,
+            ChangePasswordRequest input,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         accountLockService.withAccount(current.loginId(), () -> {
             var session = request.getSession(false);
             if (session == null) throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
@@ -54,6 +59,7 @@ public class PasswordChangeService {
                 user.changePasswordHash(encoder.encode(input.newPassword()));
             });
             sessions.expireAllExcept(current.userId(), sessionId);
+            if (current.passwordChangeRequired()) sessions.clearPasswordChangeRequired(current, request, response);
             log.info("비밀번호 변경 성공 userId={}", current.userId());
             return null;
         });

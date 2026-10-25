@@ -6,6 +6,7 @@ import type { AuthUser } from '../src/types/auth.ts'
 
 const user: AuthUser = {
   userId: 1,
+  passwordChangeRequired: false,
   loginId: 'admin',
   displayName: '관리자 테스트',
   role: 'ADMIN',
@@ -31,6 +32,48 @@ function setup(overrides: Partial<Parameters<typeof createAuthStore>[0]> = {}) {
     ...overrides,
   })
 }
+
+test('강제 변경 알림 뒤 me 갱신으로 해제 상태를 반영한다', async () => {
+  const store = setup()
+  await store.login('admin', 'secret')
+  store.requirePasswordChange()
+  assert.equal(store.getSnapshot().user?.passwordChangeRequired, true)
+  await store.check('password-page')
+  store.requirePasswordChange()
+  await store.refresh()
+  assert.equal(store.getSnapshot().user?.passwordChangeRequired, false)
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(store.getSnapshot().checkedKey, 'password-page')
+})
+
+test('변경 후 정보 갱신 중 폼 경로를 유지하고 이전 me 응답은 무시한다', async () => {
+  const old = deferred<AuthUser>()
+  let calls = 0
+  const store = setup({ getMe: () => (++calls === 2 ? old.promise : Promise.resolve(user)) })
+  await store.login('admin', 'secret')
+  await store.check('password-page')
+  const checking = store.check('other-page')
+  await store.refresh()
+  old.resolve({ ...user, passwordChangeRequired: true })
+  await checking
+  assert.equal(store.getSnapshot().user?.passwordChangeRequired, false)
+  assert.equal(store.getSnapshot().checkedKey, 'other-page')
+})
+
+test('변경 후 정보 갱신 실패는 인증을 보존하고 401만 만료 처리한다', async () => {
+  let failure = 500
+  const store = setup({
+    getMe: async () => {
+      throw new ApiError(failure)
+    },
+  })
+  await store.login('admin', 'secret')
+  await assert.rejects(store.refresh())
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  failure = 401
+  assert.equal(await store.refresh(), null)
+  assert.equal(store.getSnapshot().status, 'anonymous')
+})
 
 // 최초 비로그인 확인은 만료 안내 없이 로그인 화면으로 넘긴다.
 test('check_whenInitiallyUnauthorized_becomesAnonymousWithoutExpiry', async () => {

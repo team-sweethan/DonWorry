@@ -48,7 +48,11 @@ class PasswordChangeServiceTests {
     // 기존 규칙의 현재 비밀번호도 확인하고 커밋 후 현재 외 세션을 종료한다
     @Test
     void change_whenValid_expiresOtherSessionsOnlyAfterCommit() {
-        service.change(current, new ChangePasswordRequest("1234", "newPass123"), request);
+        service.change(
+                current,
+                new ChangePasswordRequest("1234", "newPass123"),
+                request,
+                new org.springframework.mock.web.MockHttpServletResponse());
         var order = inOrder(entity, transactions, sessions);
         order.verify(sessions).requireActive(1L, request.getSession().getId());
         order.verify(entity).changePasswordHash("new-hash");
@@ -65,7 +69,11 @@ class PasswordChangeServiceTests {
         doThrow(new TransactionSystemException("commit failed"))
                 .when(transactions)
                 .commit(transaction);
-        assertThatThrownBy(() -> service.change(current, new ChangePasswordRequest("1234", "newPass123"), request))
+        assertThatThrownBy(() -> service.change(
+                        current,
+                        new ChangePasswordRequest("1234", "newPass123"),
+                        request,
+                        new org.springframework.mock.web.MockHttpServletResponse()))
                 .isInstanceOf(TransactionSystemException.class);
         verify(sessions, never()).expireAllExcept(any(), any());
     }
@@ -73,7 +81,11 @@ class PasswordChangeServiceTests {
     // 현재 비밀번호 오류는 롤백하고 해시와 세션을 바꾸지 않는다
     @Test
     void change_whenCurrentPasswordWrong_rollsBackWithoutChanges() {
-        assertThatThrownBy(() -> service.change(current, new ChangePasswordRequest("wrong", "newPass123"), request))
+        assertThatThrownBy(() -> service.change(
+                        current,
+                        new ChangePasswordRequest("wrong", "newPass123"),
+                        request,
+                        new org.springframework.mock.web.MockHttpServletResponse()))
                 .isInstanceOfSatisfying(
                         PasswordChangeException.class,
                         error -> assertThat(error.getErrorCode()).isEqualTo(AuthErrorCode.CURRENT_PASSWORD_MISMATCH));
@@ -88,7 +100,11 @@ class PasswordChangeServiceTests {
         doThrow(new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED))
                 .when(sessions)
                 .requireActive(any(), any());
-        assertThatThrownBy(() -> service.change(current, new ChangePasswordRequest("1234", "newPass123"), request))
+        assertThatThrownBy(() -> service.change(
+                        current,
+                        new ChangePasswordRequest("1234", "newPass123"),
+                        request,
+                        new org.springframework.mock.web.MockHttpServletResponse()))
                 .isInstanceOf(PasswordChangeException.class);
         verifyNoInteractions(transactions, repository);
     }

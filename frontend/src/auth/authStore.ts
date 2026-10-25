@@ -86,6 +86,28 @@ export function createAuthStore(api: AuthApi = authApi) {
       }
     },
     expire,
+    requirePasswordChange: () => {
+      if (state.user) update({ user: { ...state.user, passwordChangeRequired: true } })
+    },
+    refresh: async (): Promise<AuthUser | null> => {
+      if (!state.user || pendingLogout) return null
+      // 변경 전 me의 늦은 응답을 버리되 현재 폼은 마운트된 채 유지한다.
+      invalidate()
+      const currentGeneration = generation
+      try {
+        const user = await api.getMe()
+        if (currentGeneration !== generation) return null
+        update({ user, status: 'authenticated', checkedKey: lastCheckKey, error: null })
+        return user
+      } catch (error) {
+        if (currentGeneration !== generation) return null
+        if (error instanceof ApiError && error.status === 401) {
+          expire()
+          return null
+        }
+        throw error
+      }
+    },
     consumeExpired: () => update({ expired: false }),
     check,
     login: async (loginId: string, password: string) => {

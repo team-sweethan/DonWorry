@@ -16,6 +16,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserPermission {
 
+    public static UserPermission grant(Long userId, String permissionCode) {
+        var permission = new UserPermission();
+        permission.userId = userId;
+        permission.permissionCode = permissionCode;
+        return permission;
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "permission_id")

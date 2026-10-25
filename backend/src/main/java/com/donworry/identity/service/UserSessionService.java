@@ -2,9 +2,11 @@ package com.donworry.identity.service;
 
 import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.PasswordChangeException;
+import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.session.SessionRegistry;
@@ -40,6 +42,21 @@ public class UserSessionService {
         var session = sessionRegistry.getSessionInformation(sessionId);
         if (session == null || session.isExpired() || !userId.equals(session.getPrincipal()))
             throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+    }
+
+    public synchronized void clearPasswordChangeRequired(
+            SessionUser user, HttpServletRequest request, HttpServletResponse response) {
+        var session = request.getSession(false);
+        if (session == null) throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+        requireActive(user.userId(), session.getId());
+        var current = SecurityContextHolder.getContext().getAuthentication();
+        var updated = user.toBuilder().passwordChangeRequired(false).build();
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(updated, null, current.getAuthorities()));
+        SecurityContextHolder.setContext(context);
+        // 쿠키와 세션 ID를 바꾸지 않고 현재 세션의 인증만 명시적으로 저장한다.
+        securityContextRepository.saveContext(context, request, response);
     }
 
     public synchronized void expireAllExcept(Long userId, String retainedSessionId) {

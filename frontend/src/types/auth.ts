@@ -6,4 +6,5 @@ export type AuthUser = {
   merchantId: number | null
   tenantScope: 'ALL' | 'MERCHANT'
   permissions: string[]
+  passwordChangeRequired: boolean
 }

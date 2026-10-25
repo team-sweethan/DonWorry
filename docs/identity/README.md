@@ -2,6 +2,38 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #129 관리자 계정·권한 관리
+
+계약과 대안은 [ADR-0023](../decisions/0023-admin-account-management.md), [상세 설계](129-admin-account-design.md)를 따른다.
+
+- `/admin/users` 목록·검색·역할/상태 필터·페이지 나누기, `/admin/users/new` 생성, `/admin/users/:id` 권한·정지/복구·비밀번호 초기화를 제공한다.
+- `GET /api/admin/users?page=0&size=20&keyword=&role=&status=`: items·page·size·totalElements. role/status는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
+- `POST /api/admin/users`: loginId·displayName·role·merchantId. 아이디 `[a-z0-9_]{3,30}`, 이름 1~100자, 역할은 OPERATOR·SECURITY_STAFF만 허용한다. OPERATOR는 ACTIVE 가맹점이 필수이고 다른 역할은 merchantId를 받지 않는다. 생성 시 기능 권한은 비어 있다. 응답은 201 `{user, temporaryPassword}`다.
+- `PUT /api/admin/users/{id}/permissions`: `{permissions:[...]}` 최종 집합. OPERATOR만 FDS_VIEW·FINANCE_VIEW를 설정한다. ADMIN의 조회 권한은 기존 역할 계산이다.
+- `PUT /api/admin/users/{id}/status`: `{status:"ACTIVE"|"DISABLED"}`. 자기 정지는 거절한다. 역할·소속 변경과 계정 삭제 API는 없다.
+- `POST /api/admin/users/{id}/password-reset`: `{user, temporaryPassword}`를 반환하고 다음 로그인에서 변경을 요구한다. 자기 초기화도 가능하며 성공 응답 후 다음 요청부터 현재 세션이 만료된다.
+- `GET /api/admin/merchants/options?keyword=`: ACTIVE 가맹점의 ID·이름을 최대 50개 반환한다. 이름으로 검색하며 생성·정지는 #130이다.
+- 관리자 API는 ADMIN만 허용한다. 비로그인 401 AUTH_001, 비관리자 403 AUTH_002. 입력 오류 400 ADMIN_001, 없는 계정 404 ADMIN_002, 중복 아이디 409 ADMIN_003, 자기 정지 400 ADMIN_004, ACTIVE 가맹점 누락 400 ADMIN_005, 비사장님 권한 변경 400 ADMIN_006이다. DB 장애는 500 AUTH_007이다.
+- 임시 비밀번호는 SecureRandom·기존 PasswordPolicy로 만들고 BCrypt만 DB에 저장한다. 원문은 생성·초기화 응답에 한 번만 포함하고 응답은 no-store다. 화면은 메모리 모달에만 표시하고 닫으면 제거한다. 응답을 잃으면 다시 초기화하며 자동 재시도·재조회는 없다.
+- `platform_users.password_change_required`와 역할/가맹점 CHECK, INSERT 전용 `admin_change_histories`를 새 migration 세 개로 추가했다. 기존 시드는 false를 유지한다. 이력은 수행자·대상·유형·안전한 변경 전후 값·UTC 시각만 저장하고 비밀번호·해시는 제외한다. 이력 실패 시 계정 변경도 롤백한다.
+- 변경은 수행자·대상 실제 loginId의 고정 분할 잠금을 인덱스 순서로 획득한다. 수행자 세션·DB 상태 재확인 → REQUIRES_NEW 커밋 → 대상 expireAll 뒤 잠금을 해제한다. 같은 상태·권한 집합은 이력·세션 종료를 반복하지 않는다. 가맹점 정지와의 경쟁 조건은 #130 후속이다.
+- `/login`·`/me`에 passwordChangeRequired를 추가했다. true면 업무 메뉴를 숨기고 변경 화면으로 이동한다. 인증 경로를 제외한 해당 세션의 `/api/**`는 403 AUTH_008이며, 클라이언트는 오래된 로그인에서 온 알림을 무시한다. 본인 변경 성공 시 DB·현재 세션 플래그를 해제하고 me를 갱신한다. 현재 세션 ID는 유지한다.
+- 강제 변경 중에도 #128의 동일 비밀번호 재사용 허용 정책을 유지한다. 전체 역할·가맹점별 서버 인가·CSRF는 #68 5단계다. 익명 업무 API 허용이 남아 있으므로 #129만으로 전체 API 접근 통제가 완료된 것으로 보지 않는다.
+- Notion 선행 반영은 이번 작업에 한해 사용자 승인으로 저장소 ERD·ADR 기록으로 대체했다. Notion 최신 ERD 확인·동기화는 미수행이다.
+
+### #129 검증
+
+2026-10-25, `feature/129-admin-account-management`, 기준 `dev c19f94f` 위 최종 #129 작업 트리에서 실행했다. 기준 커밋 단독의 결과가 아니다. 아래 최종 검사 이후 변경은 검증 기록뿐이다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest`: 통과. 일반 307개 중 성공 306개·기존 건너뜀 1개(`LocalSettlementDemoTests`), MariaDB 109개 성공. 실패·오류 0개. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 실제 MariaDB·HTTP 쿠키로 관리자 영역 401·403, 생성·중복·입력·ACTIVE 가맹점, 자기 정지 금지, 권한 회수·상태 복구·임시 비밀번호 일회 응답, 강제 변경 전후 현재 세션·me, 자기 초기화 응답과 세션 종료를 검사했다.
+- 이력 INSERT 실패 시 생성·상태·비밀번호·권한 변경 롤백과 기존 세션 보존, DB CHECK의 역할/가맹점·이력 대상 NULL 조합을 검사했다. 단위 테스트는 실제 커밋 이후 종료, 커밋 실패 시 종료 없음, 수행자 세션 재확인, 같은 값 재요청을 검사했다.
+- latch로 로그인→관리자 변경과 관리자 변경→로그인의 두 순서를 정지·권한·초기화 각각 검사했다. DB 악센트 별칭의 로그인도 동일 잠금에서 새 상태를 사용한다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 테스트 34개 성공. 신규 테스트는 관리자 요청 계약·검색 인코딩·자동 재시도 없음, 강제 변경 경로와 오래된 알림 무시, me 갱신 중 폼 경로 유지와 실패·401을 검사한다. 기존 lint 경고 4개와 번들 크기 경고는 남아 있다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+미검증: 브라우저에서 목록·생성·상세·임시 비밀번호 모달·강제 변경 완료·자기 초기화 흐름의 수동 확인(Chrome 접근이 허용되지 않음), Notion 최신 ERD·동기화, 실제 운영 데이터의 CHECK 사전 점검, 실제 30분 만료 대기. 기존 로컬 DB나 운영 DB에 migration을 적용하지 않고 Testcontainers MariaDB에서 검증했다. 다중 서버, #130 가맹점 정지와의 동시성, #68 5단계 전체 인가·CSRF는 후속 범위다.
+
 ## 구현
 
 - POST /api/auth/login: 아이디를 trim · 소문자로 정규화하고 BCrypt로 인증한다. 성공하면 사용자 정보와 조회 권한을 반환한다.
@@ -17,6 +49,7 @@
 - ADMIN 외 역할은 비밀번호 검증이 성공한 뒤 user_permissions를 읽어 세션 사용자 객체에 담고 permissions로 반환한다. 검증 전에 읽으면 있는 아이디만 DB를 한 번 더 조회해 응답 시간으로 계정 존재 여부가 드러난다. 권한을 바꾸면 다시 로그인해야 반영된다. 권한 필드가 없는 이전 세션은 권한 없음으로 본다.
 - 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다.
 - #124에서 공개 Java 조회 계약과 프론트 tenantScope 타입을 추가했다. DB 스키마 변경은 없다. #128까지 /me·/logout-all·/password가 인증을 요구하며 다른 경로의 접근 허용과 CSRF 비활성화는 유지한다.
+- #129는 `/api/admin/**`를 ADMIN으로 제한하고 `/login`·`/me`에 `passwordChangeRequired`를 추가한다. 강제 변경 계정의 인증 경로 외 `/api/**`는 403 AUTH_008이다. 그 외 익명 업무 API·서버 간 경로와 CSRF 정책은 기존 #68 5단계 범위를 유지한다.
 
 ## 검증
 

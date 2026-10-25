@@ -31,8 +31,9 @@ public class AuthController {
     public void changePassword(
             @AuthenticationPrincipal SessionUser user,
             @Valid @RequestBody ChangePasswordRequest input,
-            HttpServletRequest request) {
-        passwordChangeService.change(user, input, request);
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        passwordChangeService.change(user, input, request, response);
     }
 
     @PostMapping("/login")
