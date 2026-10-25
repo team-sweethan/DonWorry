@@ -24,7 +24,7 @@
 
 ## 현재 구현
 
-- #136의 [HELD 이벤트 계약](../decisions/0023-payment-held-event-contract.md)은 P3와 필드·필수 조건·시각 기준을 합의했다. 3번 단계에서 `payment.api.PaymentHeld` 타입을 추가했고 4번 단계에서 NOTIFY_HELD 분기의 발행을 연결했다. P3 운영 수신은 아직 미구현이며 커밋·롤백·재전달 통합 검증은 5번 단계다.
+- #136의 [HELD 이벤트 계약](../decisions/0023-payment-held-event-contract.md)은 P3와 필드·필수 조건·시각 기준을 합의했다. 3번 단계에서 `payment.api.PaymentHeld` 타입을 추가했고 4번 단계에서 NOTIFY_HELD 분기의 발행을 연결했다. 5번 단계에서 실제 MariaDB·Modulith와 테스트 수신자로 커밋·롤백·재전달·동시 승인 통합 검증을 통과했다. P3 운영 수신·Case 연결은 아직 미구현·미검증이다.
 
 - 결제 순수 규칙, `payments` Entity·Repository·최초 PENDING 저장 서비스가 있다.
 - #91/#92의 P2 평가 호출과 #94/#95의 응답 검증·분기 판단이 반영됐다. `createAndEvaluate()`는 평가 전용이며 `createAndAuthorize()`는 모의 승인과 결제 상태·승인 참조 저장까지 수행한다.
