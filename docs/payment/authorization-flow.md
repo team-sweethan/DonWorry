@@ -2,6 +2,9 @@
 
 2026-10-23 · 기준 `4a41a3f` · 3번 단계 설계 및 4·5번 단계 구현. Entity 전이·모의 승인·잠금 조회·승인 처리 서비스를 구현했다. createAndAuthorize로 최초 저장·평가·승인을 연결했다. 6번 단계에서 MariaDB 커밋·롤백·동시성 통합 테스트 9건이 통과했다. 실행 기준과 한계는 [검증 기록](verification.md)에 남긴다. DB 스키마는 변경하지 않았다.
 #122에서 추가할 매입 요청·완료 연결은 [이벤트 설계](capture-events.md)를 따른다. 아래 발행하지 않는다는 설명은 #118 구현 범위의 기록이다.
+
+#136의 4번 단계에서 NOTIFY_HELD 분기에 [PaymentHeld 계약](../decisions/0023-payment-held-event-contract.md)을 연결했다. HELD·승인 참조 저장과 같은 트랜잭션에서 저장 결제 값·REVIEW 평가 ID·전환 시각을 발행한다. NOTIFY_HELD 반환을 받은 호출자가 다시 발행하지 않는다. P3 리스너 등록·실제 전달은 별도 검증 대상이다.
+
 승인기 입력·출력과 부작용 제한은 [모의 승인 계약](mock-authorization.md)을 따른다.
 
 ## 서비스 경계와 평가 연결

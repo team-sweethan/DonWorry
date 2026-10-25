@@ -1,9 +1,11 @@
 package com.donworry.payment.service;
 
+import com.donworry.payment.api.PaymentHeld;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
 import com.donworry.settlement.api.CaptureRequested;
+import java.time.Instant;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -57,13 +59,23 @@ public class PaymentAuthorizationService {
         } else if (decision.state().status() == PaymentStatus.DENIED) {
             payment.deny();
         }
-        // 승인 저장과 요청 발행 기록이 함께 커밋되도록 업무 트랜잭션 안에서 발행한다.
+        // 승인 저장과 등록된 수신자의 발행 기록이 함께 커밋되도록 업무 트랜잭션 안에서 발행한다.
         if (decision.nextStep() == PaymentRules.NextStep.REQUEST_CAPTURE) {
             events.publishEvent(CaptureRequested.builder()
                     .paymentId(payment.getPaymentId())
                     .merchantId(payment.getMerchantId())
                     .orderId(payment.getOrderRef())
                     .amount(payment.getAmount())
+                    .build());
+        } else if (decision.nextStep() == PaymentRules.NextStep.NOTIFY_HELD) {
+            events.publishEvent(PaymentHeld.builder()
+                    .paymentId(payment.getPaymentId())
+                    .merchantId(payment.getMerchantId())
+                    .customerRef(payment.getCustomerRef())
+                    .amount(payment.getAmount())
+                    .authorizationRef(payment.getAuthorizationRef())
+                    .evaluationId(context.evaluationResult().evaluation().evaluationId())
+                    .heldAt(Instant.now())
                     .build());
         }
         // 승인 단계 스냅샷이다. 완료 이벤트가 반영된 최신 결제 상태를 뜻하지 않는다.

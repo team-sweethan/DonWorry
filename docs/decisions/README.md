@@ -44,6 +44,7 @@
 | [0020](0020-identity-public-read-contracts.md) | Identity 공개 조회 계약과 가맹점 범위 | 제안 — #124 구현 반영, PR 리뷰 대상 |
 | [0021](0021-single-session-and-logout-all.md) | 계정당 단일 세션과 모든 기기 로그아웃 | 제안 — #125 구현 반영, PR 리뷰 대상 |
 | [0022](0022-self-service-password-change.md) | 본인 비밀번호 변경과 로그인 직렬화 | 제안 — #128 구현 반영, PR 리뷰 대상 |
+| [0023](0023-payment-held-event-contract.md) | P5 HELD 이벤트 계약 | 채택 — P3 필드·필수 조건·시각 기준 확인 |
 | [0024](0024-admin-account-management.md) | 관리자 계정 관리와 강제 비밀번호 변경 | 제안 — #129 사용자 구현 승인, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
