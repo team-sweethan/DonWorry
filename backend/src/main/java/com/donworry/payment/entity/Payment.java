@@ -49,6 +49,12 @@ public class Payment {
     @Column(name = "created_at", nullable = false, columnDefinition = "DATETIME(6)")
     private Instant createdAt;
 
+    @Column(columnDefinition = "DATETIME(6)")
+    private Instant statusChangedAt;
+
+    @Column(length = 100)
+    private String declineCode;
+
     public static Payment pending(
             Long merchantId, String customerRef, String orderRef, Long amount, Instant createdAt) {
         return Payment.builder()
@@ -69,6 +75,7 @@ public class Payment {
         // DATETIME(6) 왕복 시 생성 직후 값과 재조회 값의 정밀도를 맞춘다.
         this.createdAt = Objects.requireNonNull(createdAt, "createdAt").truncatedTo(ChronoUnit.MICROS);
         this.status = PaymentStatus.PENDING;
+        this.statusChangedAt = this.createdAt;
     }
 
     public void requireUnapprovedPending() {
@@ -79,7 +86,8 @@ public class Payment {
 
     public void deny() {
         requireUnapprovedPending();
-        status = PaymentStatus.DENIED;
+        transitionTo(PaymentStatus.DENIED);
+        declineCode = "FDS_REJECTED";
     }
 
     public void recordAuthorizationSuccess(String reference, boolean hold) {
@@ -88,12 +96,13 @@ public class Payment {
             throw new IllegalArgumentException("authorizationRef must not be blank");
         }
         authorizationRef = requireReference(reference, "authorizationRef");
-        status = hold ? PaymentStatus.HELD : PaymentStatus.PENDING;
+        transitionTo(hold ? PaymentStatus.HELD : PaymentStatus.PENDING);
     }
 
     public void declineAuthorization() {
         requireUnapprovedPending();
-        status = PaymentStatus.DECLINED;
+        transitionTo(PaymentStatus.DECLINED);
+        declineCode = "AUTHORIZATION_DECLINED";
     }
 
     public void completeCapture() {
@@ -104,7 +113,7 @@ public class Payment {
             throw new IllegalStateException("승인된 PENDING 또는 CAPTURED 결제에만 매입 완료를 적용할 수 있습니다");
         }
         // 완료 표시가 유실되어 재전달돼도 기존 승인 참조와 상태를 보존한다.
-        status = PaymentStatus.CAPTURED;
+        transitionTo(PaymentStatus.CAPTURED);
     }
 
     // 호출 서비스가 저장된 직원 CAPTURE 조치를 대조한 경우에만 사용한다.
@@ -115,7 +124,7 @@ public class Payment {
                 || authorizationRef.codePointCount(0, authorizationRef.length()) > 100) {
             throw new IllegalStateException("승인된 HELD 결제에만 직원 매입 완료를 적용할 수 있습니다");
         }
-        status = PaymentStatus.CAPTURED;
+        transitionTo(PaymentStatus.CAPTURED);
     }
 
     // 모의 취소 성공 확인 뒤에만 호출한다. 원래 승인 참조는 금융 기록으로 보존한다.
@@ -126,7 +135,15 @@ public class Payment {
                 || authorizationRef.codePointCount(0, authorizationRef.length()) > 100) {
             throw new IllegalStateException("승인된 HELD 결제에만 승인 취소 완료를 적용할 수 있습니다");
         }
-        status = PaymentStatus.VOIDED;
+        transitionTo(PaymentStatus.VOIDED);
+    }
+
+    // 같은 상태의 재수신에서는 원래 전이 시각을 보존한다.
+    private void transitionTo(PaymentStatus next) {
+        if (status == next) return;
+        status = next;
+        statusChangedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        declineCode = null;
     }
 
     private static String requireReference(String value, String name) {
