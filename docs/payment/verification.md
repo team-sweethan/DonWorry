@@ -195,3 +195,41 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 최종 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 311건 중 310건 통과·기존 수동 LocalSettlementDemoTests 1건 건너뜀, MariaDB 98건 통과. 실패·오류 0. 모듈 경계·계층·기존 ALLOW 매입 검사 포함.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
 - 미검증·후속: P3 운영 리스너·실제 Case 생성/병합/중복 연결, 실제 DB 장애·프로세스 재시작·응답 유실, 운영 자동 재시도. 실패 수신자의 업무 DB 변경 롤백은 테스트하지 않았다. 운영 리스너 등록 전의 발행은 P3 전달 기록 보장이 없으며, 테스트 전용 수신자의 검증을 운영 P3 연동 완료로 표현하지 않는다.
+
+
+## #139 3번 단계: 결제 조회 계약·공개 타입
+
+2026-10-25, `feature/139-payment-read-api`, `4c62977` + 3번 단계 작업본 기준이다.
+
+- ADR-0026에 단건 입력·4개 출력·없는 결제·입력 오류·DB 오류·P3 권한 책임·조회 트랜잭션 한계를 기록했다. 사용자 확정안과 P3 전달 사실을 기록하되 P3의 별도 승인 회신을 추정하지 않았다.
+- payment.api.PaymentReader 및 PaymentSummary를 추가했다. Entity·내부 enum을 노출하지 않는다. 실제 조회 서비스와 동작 검증은 아직 구현하지 않았다.
+- `cd backend && ./gradlew spotlessApply check` → BUILD SUCCESSFUL. 컴파일·포맷·모듈 경계·계층 및 기존 일반 검사 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증: MariaDB 검사는 실행하지 않았다. 입력 검증·조회 결과·DB 오류 전파·세션 없는 실제 조회·P3 연동은 후속 단계다. 타입 정의의 검사 통과를 조회 기능 완료로 표현하지 않는다.
+
+
+## #139 4번 단계: 읽기 전용 조회 구현
+
+2026-10-25, `feature/139-payment-read-api`, `4c62977` + 3·4번 단계 작업본 기준이다.
+
+- PaymentReaderService가 PaymentReader를 구현한다. 기본 REQUIRED의 읽기 전용 트랜잭션으로 기존 findById를 호출하고 4개 저장 필드를 반환한다. 세션 조회·상태 변경·쓰기 잠금·이벤트 발행은 추가하지 않았다.
+- PaymentReaderServiceTests 13건 통과: 상태 7종의 저장값 매핑·상태/참조 보존, null·0·음수 입력 거절, 없는 결제 empty, DB 오류 원본 전파를 검사했다. Repository 대역 기반 단위 검사이며 실제 DB 증거와 구분한다.
+- `cd backend && ./gradlew spotlessApply check` → BUILD SUCCESSFUL. 기존 일반 검사와 모듈 경계·계층 검사 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증: 이번 단계에서 MariaDB 검사는 실행하지 않았다. 실제 Spring 프록시의 읽기 전용 트랜잭션, DB 왕복 시각 정밀도, 상태 변경 커밋 후 조회, 세션 없는 실제 호출은 5번 단계에서 검증한다. P3 목업 교체·접근 제어·화면·보고서 연동은 P3 후속 작업이다.
+
+
+## #139 5번 단계: 결제 조회 MariaDB 통합 검증
+
+2026-10-25, `feature/139-payment-read-api`, `4c62977` + 3~5번 단계 작업본 기준이다.
+
+- [PaymentReaderMariaDbTests](../../backend/src/test/java/com/donworry/payment/service/PaymentReaderMariaDbTests.java) 4건 통과. 실제 Spring Bean을 PaymentReader 인터페이스로 주입받아 MariaDB에 저장된 결제를 조회했다.
+- SecurityContext를 비운 상태에서 호출했다. Repository spy로 트랜잭션 활성·readOnly를 관찰하는 테스트는 실제 EntityManager 조회에 위임했고, 나머지 조회는 실제 Repository를 사용했다. 호출 전후 트랜잭션 종료와 DB 전체 행 불변을 확인했다.
+- 나노초 입력이 기존 Entity 규칙대로 마이크로초로 저장되고, API의 UTC Instant와 DB DATETIME(6) 원본이 일치함을 확인했다.
+- 승인 참조 저장 후 조회가 최초 시각·금액을 유지하고, CAPTURED 커밋 후 새 트랜잭션 조회에는 변경 상태가 반영됨을 확인했다. 이전 반환 DTO는 PENDING 스냅샷으로 유지된다.
+- 호출자 트랜잭션에서 HELD를 flush한 뒤 조회하면 해당 변경이 보이며, 호출자 롤백 뒤 새 조회는 PENDING·null 승인 참조를 읽는다. 조회가 호출자의 변경을 별도 커밋하지 않음을 확인했다.
+- 실제 Spring 프록시에서도 null·0·음수는 입력 오류, 없는 양수 ID는 empty로 구분했다.
+- 첫 실행에서 테스트의 JDBC Timestamp 변환에 로컬 시간대가 적용돼 DB 원본 비교 1건이 실패했다. DATETIME 원본을 DATE_FORMAT으로 확인하도록 수정했다. API UTC 반환 검증은 유지했으며 운영 코드는 수정하지 않았다.
+- 최종 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 336건 중 335건 통과·기존 수동 LocalSettlementDemoTests 1건 건너뜀, MariaDB 118건 통과. 실패·오류 0. 기존 결제·모듈 경계·계층 검사 포함.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증: P3 목업 교체·권한 검증·화면·보고서 실제 연결, 실제 DB 네트워크 장애. DB 오류 전파는 단위 대역 검증이다. 장기 트랜잭션의 반복 조회가 항상 외부 최신 커밋을 보장하지 않는다는 계약을 유지한다.
