@@ -41,6 +41,15 @@
 
 미검증: 바뀐 안내 문구·모달 오류 표시의 실제 브라우저 확인. 위 브라우저 미검증 항목은 그대로 남아 있다.
 
+#### #130 재리뷰 반영 (2026-10-25, `00a002e` 위 작업 트리)
+
+- `MerchantRepository` 주석을 실제 범위로 고쳤다 (ID 기반 삭제만 비노출, `delete(Specification)`은 남음).
+- 화면의 "정산 미반영, 현재 1% 고정" 안내를 상수 하나로 모으고 `SettlementFeeCalculator` 고정값과 P6 연동 시 제거할 것을 주석으로 남겼다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과, 57개 성공. 기존 lint 경고 4개 유지.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과 (주석만 바뀌어 컴파일 결과가 같아 테스트 작업은 up-to-date 처리, 결과는 일반 347개 중 346개 성공·1개 건너뜀, MariaDB 126개 성공).
+
+미검증: 실제 브라우저 확인.
+
 ## #126 CSRF 준비 (서버 검사 기본값 끔)
 
 상세 계약·대안은 [ADR-0025](../decisions/0025-csrf-preparation.md)를 따른다.

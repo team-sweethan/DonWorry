@@ -9,7 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.repository.Repository;
 
-// 결제·정산 기록이 가맹점 ID를 가리키므로 삭제 메서드를 열지 않는다. 필요한 메서드만 선언한다.
+// 결제·정산 기록이 가맹점 ID를 가리키므로 ID 기반 삭제 메서드를 열지 않고 필요한 메서드만 선언한다.
+// JpaSpecificationExecutor.delete(Specification)은 남으므로 가맹점 삭제 코드를 만들지 않는다.
 public interface MerchantRepository extends Repository<Merchant, Long>, JpaSpecificationExecutor<Merchant> {
     Optional<Merchant> findById(Long merchantId);
 

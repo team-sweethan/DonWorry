@@ -27,6 +27,8 @@ import {
 import type { AdminMerchant, MerchantPage, MerchantStatus } from '../../api/adminMerchants'
 
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
+// 정산은 아직 settlement의 SettlementFeeCalculator 고정값(0.01)을 쓴다. P6 정산 연동 시 이 안내를 지운다.
+const settlementFeeNotice = '정산 미반영, 현재 1% 고정'
 const errorMessage = (error: unknown) =>
   error instanceof ApiError
     ? (error.detail ?? '요청을 처리하지 못했습니다. 다시 시도해 주세요.')
@@ -212,7 +214,7 @@ export function AdminCreateMerchantPage() {
           <Form.Item
             name="feePercent"
             label="수수료율"
-            extra="0% 이상 100% 미만, 소수 4자리까지. 기본값 1%입니다. 아직 정산에는 반영되지 않습니다(현재 정산은 1% 고정)."
+            extra={`0% 이상 100% 미만, 소수 4자리까지. 기본값 1%입니다. (${settlementFeeNotice})`}
             rules={[
               {
                 validator: (_, value: unknown) =>
@@ -319,7 +321,7 @@ export function AdminMerchantDetailPage() {
               {
                 key: 'fee',
                 label: '수수료율',
-                children: `${feeRatePercent(merchant.pgFeeRate)} (정산 미반영, 현재 1% 고정)`,
+                children: `${feeRatePercent(merchant.pgFeeRate)} (${settlementFeeNotice})`,
               },
               {
                 key: 'created',
