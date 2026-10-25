@@ -1,6 +1,6 @@
 # #149 CakeShop 결제 요청·조회 설계
 
-- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수·평가/승인 재개 구현, HTTP·담당 인증 연결은 후속.**
+- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수·평가/승인 재개·가맹점별 조회 서비스 구현, HTTP·담당 인증 연결은 후속.**
 - 기준: `dev 84698bb`, 2026-10-25. migration 전체를 버전 순으로 읽고 P5 생성·승인·완료·조회와 P2 평가 재호출 코드를 대조했다.
 - [Issue #149](https://github.com/team-sweethan/DonWorry/issues/149), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md), [ERD 제안](../erd/README.md#149-p5-cakeshop-결제-저장-제안).
 - 2026-10-25 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 이를 저장 구조 승인으로 기록하며 실제 DB 적용·타 담당 회신·Notion 반영 완료와 구분한다. 상세 제약과 연동 세부는 아래 설계 기준으로 검토한다.
@@ -219,3 +219,15 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 실제 P2 동시 평가 테스트에서 `fds_evaluations` 잠금 조회의 SnapshotIsolationException을 재현했다. P2 코드는 수정하지 않고 P5의 호출 경계에서 해당 스냅샷 경합·비관적 잠금 경합만 같은 저장 입력으로 최대 2회 재시도한다(최대 3회 호출). 오류 응답 ERROR·일반 DB 오류·기타 호출 실패는 자동 재시도하지 않는다. 한도 초과 시 접수를 보존하고 오류를 전달하므로 이후 같은 키 요청으로 복구할 수 있다. 이는 새 UUID 재평가나 운영 자동 재시도 스케줄러가 아니다.
 
 검증 기준: `5186f99` 위 이번 미커밋 작업 트리, 2026-10-25. 최종 `./gradlew spotlessApply check mariaDbTest` 통과. 일반 384개 통과·기존 비활성 1개 제외, MariaDB 206개 통과. 신규 단위 3개·MariaDB 12개로 P2 실패 후 동일 입력 재호출, 평가 저장 전/후 중단 복원, 승인 커밋 실패·재개, 네 평가 분기·카드 거절·동시 승인 1회·UUID 불일치·제한 재시도를 확인했다. 실제 P2/P6로 평가 1건·매입 1건과 응답 유실 후 복원을 검증했고, DENY/ERROR/카드 거절/커밋 실패는 대역으로 검증했다. 첫 실행에서 발견한 대역 재설정 오류와 실제 P2 경합을 보완한 후 재실행한 결과다. HTTP·P1 인증·실제 CakeShop 연결·운영 자동 복구는 미검증이다. 문서 상대 링크와 diff 검사 통과.
+
+
+### 후속 단계 — 가맹점별 결제 결과 조회
+
+- `MerchantPaymentQueryService.findPayment(merchantId, paymentId)`는 두 ID를 함께 조건으로 조회한다. 타 가맹점 건과 없는 건 모두 Optional.empty다. 기존 내부 PaymentReader 4필드는 변경하지 않는다.
+- 반환 DTO는 paymentId·orderRef·attemptNo·paymentStatus·requestedAt·statusChangedAt·amount·declineCode 8필드다. 고객 참조·승인 참조·평가·내부 처리 단계는 반환하지 않는다. 기존 미이관 결제의 attemptNo와 과거 변경 시각은 null을 보존한다.
+- `findOrder(merchantId, orderRef, size, beforeAttemptNo)`는 등록된 시도만 조회한다. 최신 시도와 순번 내림차순 이력, 다음 커서를 반환한다. 기본 20·최대 100, 커서는 양수·미만 조건이다. 추가 한 건을 읽어 다음 페이지 유무를 판단하며 빈 이력 페이지라도 최신 시도는 반환한다. 주문이 없거나 시도가 없으면 Optional.empty다.
+- 조회는 REQUIRES_NEW·readOnly·REPEATABLE_READ로 실행해 한 응답의 최신 시도와 이력을 같은 DB 스냅샷에서 읽는다. 다음 페이지 사이 새 시도가 생성되면 최신값은 달라질 수 있으나 커서는 이전 순번 아래를 계속 조회한다. 반환 목록은 불변이다.
+- GET 처리를 위한 읽기 서비스일 뿐 HTTP 엔드포인트는 아직 추가하지 않았다. 기준 코드의 P1 공개 API에는 CurrentStaff·TenantReader만 있고 가맹점 API Key 인증 경계는 없다. 향후 HTTP에서 인증 결과의 merchantId를 전달해야 하며 외부 요청 body/query의 merchantId를 그대로 신뢰하면 안 된다.
+- 추가 테이블·컬럼 없음. P1 코드·인증 정책도 변경하지 않는다. 다음 연결에 필요한 사항은 API Key 검증 공개 인터페이스, 키 헤더/오류, 정지 가맹점 조회 허용 정책, HTTP 권한·CSRF 범위다.
+
+검증 기준: `af4d39f` 위 조회 서비스 미커밋 작업 트리, 2026-10-25. `./gradlew spotlessApply check mariaDbTest` 통과(일반 385개 통과·기존 비활성 1개 제외, MariaDB 212개 통과). 신규 단위 1개·MariaDB 6개로 입력/페이지 검증, 타 가맹점·없는 결제, 읽기 후 DB 값 불변, 상태 커밋 반영, 과거 NULL, 최신/이력 페이지·새 시도 삽입 후 커서·빈 시도 주문을 확인했다. 문서 상대 링크·diff 검사 통과. HTTP·P1 API Key 인증·실제 CakeShop 호출은 미구현/미검증이며 P1 공개 경계 확인 후 연결한다.

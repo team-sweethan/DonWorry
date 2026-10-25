@@ -20,6 +20,8 @@ public interface PaymentRepository extends Repository<Payment, Long> {
 
     Optional<Payment> findById(Long paymentId);
 
+    Optional<Payment> findByPaymentIdAndMerchantId(Long paymentId, Long merchantId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.paymentId = :paymentId")
     Optional<Payment> findByIdForUpdate(@Param("paymentId") Long paymentId);
