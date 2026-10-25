@@ -2,11 +2,16 @@ package com.donworry.identity.security;
 
 import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserStatus;
+import java.time.LocalDateTime;
 import java.util.List;
+import lombok.Getter;
 import org.springframework.security.core.userdetails.User;
 
 public class PlatformUserDetails extends User {
     private final SessionUser sessionUser;
+
+    @Getter
+    private final LocalDateTime loginLockedUntil;
 
     public PlatformUserDetails(PlatformUser user) {
         super(
@@ -17,6 +22,7 @@ public class PlatformUserDetails extends User {
                 true,
                 true,
                 List.of());
+        loginLockedUntil = user.getLoginLockedUntil();
         sessionUser = SessionUser.builder()
                 .userId(user.getUserId())
                 .loginId(user.getLoginId())

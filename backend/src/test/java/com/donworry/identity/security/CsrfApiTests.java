@@ -48,6 +48,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 })
 class CsrfApiTests {
     @MockitoBean
+    com.donworry.identity.service.LoginAttemptService loginAttempts;
+
+    @MockitoBean
     com.donworry.identity.repository.MerchantRepository merchants;
 
     @Autowired

@@ -2,6 +2,33 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #127 로그인 시도 제한
+
+상세 정책·저장 순서는 [#127 설계](127-login-attempt-design.md), 대안·영향은 [ADR-0029](../decisions/0029-login-attempt-lock.md)를 따른다.
+
+- 같은 계정에서 비밀번호를 5번 연속 틀리면 다섯 번째 실패 시점부터 15분 동안 새 로그인을 막는다. `platform_users.login_failure_count`·`login_locked_until`에 저장하므로 서버 재시작으로 초기화되지 않는다.
+- 잠금 중에도 BCrypt 비교를 수행하며 정답도 401 AUTH_004·기존 실패 문구로 거절한다. 재시도로 횟수·종료 시각을 바꾸지 않는다. 잠금 여부·남은 횟수·종료 시각은 응답·세션에 넣지 않는다.
+- UTC 종료 시각과 같거나 늦으면 다시 시도할 수 있다. 만료 후 첫 오답은 1회부터 시작하고, 로그인 성공 시 0·NULL로 초기화한다. 별도 예약 작업은 없다.
+- 실패 증가와 다섯 번째의 종료 시각은 조건부 UPDATE 한 번이다. 실패 저장은 REQUIRES_NEW 커밋을 마친 뒤 401을 반환하며, 성공 초기화도 세션 등록 전에 커밋한다. 조회·저장·커밋 장애는 로그인 500 AUTH_005로 구분한다.
+- 기존 가맹점 → 실제 DB loginId 계정 잠금 → 짧은 세션 처리 순서를 유지한다. 단일 서버 전제이며 DB collation 별칭도 같은 계정을 사용한다.
+- 계정 DISABLED·가맹점 INACTIVE와 별도로 관리한다. 만료가 정지를 해제하지 않으며 본인 비밀번호 변경·관리자 초기화·재활성화도 잠금을 풀지 않는다. 계정 정지 자체·입력 400·DB 장애는 비밀번호 오류로 세지 않는다. 실제 오답은 ACTIVE 계정에 대해서만 센다.
+- 실패·잠금은 기존 세션을 종료하지 않는다. 새 로그인 성공의 기존 단일 세션·CSRF 전략과 프론트 공통 오류 처리는 그대로다. 로그인 화면에 공통 정책 안내를 표시한다.
+- P1 테이블에 새 migration 하나만 추가한다. 사용자가 이번 작업은 저장소 ERD·ADR 기준으로 구현하고 Notion은 나중에 반영하도록 승인했다. Notion 최신 내용 확인·동기화는 미수행이다. 다른 담당 테이블·공개 Java 계약·모듈 의존은 변경하지 않는다.
+
+### #127 검증·미검증
+
+2026-10-25, `feature/127-login-attempt-limit`, 기준 dev `0e326b7` 위 최종 구현·테스트 작업 트리에서 실행했다. 기준 dev 단독 결과가 아니다. 아래 최종 검사 뒤 구현·테스트 코드는 변경하지 않고 문서의 실행 기록만 보완했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 373개 중 372개 성공·기존 1개 건너뜀(`LocalSettlementDemoTests`), MariaDB 171개 성공. 실패·오류 0개. 전체 Flyway 적용·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 새 MariaDB·실제 HTTP 테스트 18개로 세 역할의 4회 실패 후 성공 초기화, 5회 잠금과 정답 거절, 잠금 중 횟수·종료 시각 유지, UTC 마이크로초 저장·만료 1마이크로초 전/정확한 만료·만료 후 새 실패 묶음을 확인했다.
+- DB UPDATE 동시 증가·HTTP 동시 실패, 성공↔다섯 번째 실패의 두 순서, 외부 트랜잭션 롤백과 독립 실패 저장, 저장 장애 AUTH_005, 없는 계정/정지/잠금의 동일 응답, 악센트 별칭·다른 계정 분리, 기존 세션 보존·비밀번호 변경·관리자 초기화/정지 후 재활성화의 잠금 유지를 확인했다.
+- 단위·MockMvc에서 BCrypt 수행, 실패 시 권한 조회/세션 생성 없음, 실패 저장·성공 초기화·커밋 오류, 최초 조회 뒤 생성된 DB 별칭 계정의 실제 계정 잠금 우회 차단을 검사했다. 기존 계정/가맹점 정지·비밀번호 변경·CSRF 회귀 검사도 전체 실행에 포함했다.
+- 첫 전체 실행에서는 정산의 `CaptureConcurrencyTests` 한 건이 공유 컨테이너 `Too many connections`와 함께 시간 초과됐다. 새 테스트의 전용 Clock·Spy 컨텍스트를 클래스 종료 시 닫도록 정리한 뒤, 같은 전체 명령을 다시 실행해 171개 모두 통과했다. 정산 구현·기존 테스트는 수정하지 않았다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 57개 성공. 기존 lint 경고 4개·번들 크기 경고는 유지된다. 화면은 기존 설명 영역에 공통 안내를 추가했으며 실제 화면 검증과 이 자동 검사 결과를 구분한다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. migration은 새 파일 한 개만 추가했으며 기존 SQL은 변경하지 않았다. 기존 로컬 DB나 운영 DB에 적용하지 않고 Testcontainers MariaDB에서 검증했다.
+
+미검증: Notion 동기화, 로그인 화면 안내의 실제 브라우저 확인. Google Chrome 사용은 자동 승인 검토에서 거부됐다(`Computer Use was not approved to use Google Chrome`). 실제 15분 대기 대신 주입한 UTC 시각으로 경계를 검사한다. 다중 서버·IP 제한·CAPTCHA·관리자 잠금 해제는 범위 밖이다.
+
 ## #130 관리자 가맹점 관리
 
 상세 HTTP·입력·동시성 계약은 [#130 설계](130-admin-merchant-design.md), 대안·영향은 [ADR-0028](../decisions/0028-admin-merchant-management.md)을 따른다.
