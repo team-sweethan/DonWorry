@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 public enum AuthErrorCode {
     AUTHENTICATION_REQUIRED("AUTH_001", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     ACCESS_DENIED("AUTH_002", "권한이 없습니다.", HttpStatus.FORBIDDEN),
+    CSRF_INVALID("CSRF_001", "요청 보안 토큰이 없거나 유효하지 않습니다. 다시 시도해 주세요.", HttpStatus.FORBIDDEN),
     CURRENT_PASSWORD_MISMATCH("AUTH_003", "현재 비밀번호가 올바르지 않습니다.", HttpStatus.BAD_REQUEST),
     INVALID_NEW_PASSWORD(
             "AUTH_006", "새 비밀번호는 8~64자, UTF-8 72바이트 이하로 영문과 숫자를 포함하고 아이디와 달라야 합니다.", HttpStatus.BAD_REQUEST),

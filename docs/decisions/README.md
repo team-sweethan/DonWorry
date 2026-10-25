@@ -46,6 +46,7 @@
 | [0022](0022-self-service-password-change.md) | 본인 비밀번호 변경과 로그인 직렬화 | 제안 — #128 구현 반영, PR 리뷰 대상 |
 | [0023](0023-payment-held-event-contract.md) | P5 HELD 이벤트 계약 | 채택 — P3 필드·필수 조건·시각 기준 확인 |
 | [0024](0024-admin-account-management.md) | 관리자 계정 관리와 강제 비밀번호 변경 | 제안 — #129 사용자 구현 승인, PR 리뷰 대상 |
+| [0025](0025-csrf-preparation.md) | CSRF 토큰 교환 준비와 검사 설정 분리 | 제안 — #126 사용자 구현 승인, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict'
-import { test, afterEach } from 'node:test'
+import { test, beforeEach, afterEach } from 'node:test'
 import { api, ApiError, advanceApiSession, subscribeUnauthorized } from '../src/api/client.ts'
 import { login, logout, changePassword, InvalidCredentialsError } from '../src/api/auth.ts'
+
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { cookie: 'XSRF-TOKEN=test-token' },
+  })
+})
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = originalFetch
+  if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
 })
 
 // 204와 빈 성공 응답은 JSON 파싱 없이 처리하며 쿠키를 전송한다.
