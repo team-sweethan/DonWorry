@@ -338,7 +338,12 @@ export function AdminCreateUserPage() {
                 name="merchantId"
                 label="소속 가맹점"
                 preserve={false}
-                extra="사용 중인 가맹점만 선택할 수 있습니다. 이름으로 검색하세요."
+                extra={
+                  <span>
+                    사용 중인 가맹점만 선택할 수 있습니다. 이름으로 검색하세요.{' '}
+                    <Link to="/admin/merchants/new">가맹점 만들기</Link>
+                  </span>
+                }
                 rules={[{ required: true, message: '가맹점을 선택해 주세요.' }]}
               >
                 <Select

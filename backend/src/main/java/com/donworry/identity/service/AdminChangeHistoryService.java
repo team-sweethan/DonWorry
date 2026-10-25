@@ -23,4 +23,14 @@ public class AdminChangeHistoryService {
                 before == null ? null : mapper.writeValueAsString(before),
                 mapper.writeValueAsString(after)));
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordMerchant(Long actorId, Long targetId, String type, Object before, Object after) {
+        repository.save(AdminChangeHistory.forMerchant(
+                actorId,
+                targetId,
+                type,
+                before == null ? null : mapper.writeValueAsString(before),
+                mapper.writeValueAsString(after)));
+    }
 }

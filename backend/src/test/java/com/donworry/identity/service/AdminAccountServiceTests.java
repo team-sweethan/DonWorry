@@ -35,6 +35,7 @@ class AdminAccountServiceTests {
             mock(MerchantRepository.class),
             histories,
             new AccountLockService(),
+            new MerchantLockService(),
             sessions,
             mock(PasswordEncoder.class),
             mock(TemporaryPasswordService.class),

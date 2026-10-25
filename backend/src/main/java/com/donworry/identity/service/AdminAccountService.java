@@ -30,6 +30,7 @@ public class AdminAccountService {
     private final MerchantRepository merchants;
     private final AdminChangeHistoryService histories;
     private final AccountLockService locks;
+    private final MerchantLockService merchantLocks;
     private final UserSessionService sessions;
     private final PasswordEncoder encoder;
     private final TemporaryPasswordService temporaryPasswords;
@@ -78,43 +79,45 @@ public class AdminAccountService {
     }
 
     public TemporaryPasswordResponse create(SessionUser actor, CreateUserRequest input, HttpServletRequest request) {
-        return locks.withAccounts(actor.loginId(), input.loginId(), () -> {
-            requireSession(actor, request);
-            try {
-                return transaction(() -> {
-                    requireAdmin(actor);
-                    if (!input.loginId().matches("[a-z0-9_]{3,30}")
-                            || input.displayName().isBlank()
-                            || input.displayName().length() > 100) invalid();
-                    UserRole role = role(input.role());
-                    if (role == UserRole.ADMIN) invalid();
-                    if (users.findByLoginId(input.loginId()).isPresent())
-                        throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
-                    if (role == UserRole.OPERATOR) {
-                        if (input.merchantId() == null
-                                || merchants
-                                        .findById(input.merchantId())
-                                        .filter(m -> m.getStatus() == MerchantStatus.ACTIVE)
-                                        .isEmpty())
-                            throw new AccountManagementException(AuthErrorCode.ADMIN_MERCHANT_REQUIRED);
-                    } else if (input.merchantId() != null) invalid();
-                    String password = temporaryPasswords.generate(input.loginId());
-                    var user = users.saveAndFlush(PlatformUser.create(
-                            input.loginId(),
-                            input.displayName().trim(),
-                            role,
-                            input.merchantId(),
-                            encoder.encode(password)));
-                    record(actor, user, "USER_CREATED", null, snapshot(user));
-                    return new TemporaryPasswordResponse(response(user), password);
-                });
-            } catch (DataIntegrityViolationException exception) {
-                String cause = exception.getMostSpecificCause().getMessage();
-                if (cause != null && cause.contains("uk_platform_users_login_id"))
-                    throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
-                throw exception;
-            }
-        });
+        return merchantLocks.withMerchant(
+                input.merchantId(),
+                () -> locks.withAccounts(actor.loginId(), input.loginId(), () -> {
+                    requireSession(actor, request);
+                    try {
+                        return transaction(() -> {
+                            requireAdmin(actor);
+                            if (!input.loginId().matches("[a-z0-9_]{3,30}")
+                                    || input.displayName().isBlank()
+                                    || input.displayName().length() > 100) invalid();
+                            UserRole role = role(input.role());
+                            if (role == UserRole.ADMIN) invalid();
+                            if (users.findByLoginId(input.loginId()).isPresent())
+                                throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
+                            if (role == UserRole.OPERATOR) {
+                                if (input.merchantId() == null
+                                        || merchants
+                                                .findById(input.merchantId())
+                                                .filter(m -> m.getStatus() == MerchantStatus.ACTIVE)
+                                                .isEmpty())
+                                    throw new AccountManagementException(AuthErrorCode.ADMIN_MERCHANT_REQUIRED);
+                            } else if (input.merchantId() != null) invalid();
+                            String password = temporaryPasswords.generate(input.loginId());
+                            var user = users.saveAndFlush(PlatformUser.create(
+                                    input.loginId(),
+                                    input.displayName().trim(),
+                                    role,
+                                    input.merchantId(),
+                                    encoder.encode(password)));
+                            record(actor, user, "USER_CREATED", null, snapshot(user));
+                            return new TemporaryPasswordResponse(response(user), password);
+                        });
+                    } catch (DataIntegrityViolationException exception) {
+                        String cause = exception.getMostSpecificCause().getMessage();
+                        if (cause != null && cause.contains("uk_platform_users_login_id"))
+                            throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
+                        throw exception;
+                    }
+                }));
     }
 
     public void setPermissions(SessionUser actor, Long id, SetPermissionsRequest input, HttpServletRequest request) {

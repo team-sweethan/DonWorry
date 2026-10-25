@@ -54,6 +54,8 @@ public class AuthExceptionHandler {
         MethodArgumentTypeMismatchException.class
     })
     public ProblemDetail invalidInput(HttpServletRequest request) {
+        if (request.getRequestURI().startsWith("/api/admin/merchants"))
+            return problem(AuthErrorCode.ADMIN_MERCHANT_INVALID_INPUT);
         if (request.getRequestURI().startsWith("/api/admin/")) return problem(AuthErrorCode.ADMIN_INVALID_INPUT);
         // 검증 예외의 rejectedValue에는 비밀번호가 포함될 수 있어 응답에 넣지 않는다.
         return ProblemDetail.forStatusAndDetail(

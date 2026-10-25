@@ -77,3 +77,17 @@ test('관리자 계정 관리 메뉴와 하위 경로를 제공한다', () => {
   assert.equal(canOpenPath(admin, '/admin/users/new'), true)
   assert.equal(canOpenPath(staff, '/admin/users/1'), false)
 })
+
+test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공한다', () => {
+  assert.ok(
+    sessionNavigation(admin)
+      .groups.flatMap((group) => group.items)
+      .some((item) => item.path === '/admin/merchants'),
+  )
+  for (const path of ['/admin/merchants', '/admin/merchants/new', '/admin/merchants/1']) {
+    assert.equal(canOpenPath(admin, path), true)
+    assert.equal(canOpenPath(staff, path), false)
+    assert.equal(canOpenPath(owner(['FDS_VIEW', 'FINANCE_VIEW']), path), false)
+    assert.equal(canOpenPath({ ...admin, passwordChangeRequired: true }, path), false)
+  }
+})

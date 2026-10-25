@@ -39,6 +39,7 @@ export const adminNavigation = {
         { label: 'FDS', path: '/admin/fds' },
         { label: '자금관리', path: '/admin/finance' },
         { label: '계정 관리', path: '/admin/users' },
+        { label: '가맹점 관리', path: '/admin/merchants' },
       ],
     },
   ] satisfies NavGroup[],
