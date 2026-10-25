@@ -1,6 +1,6 @@
 # #141 직원 금융 조치 저장·처리 설계
 
-- 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 실행·결과 발행 연결은 후속이다.
+- 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 CAPTURE 실행·완료·결과 발행을 연결했다. VOID 실행은 후속이다.
 - 사용자 승인: P5 소유 `payment_actions` 하나 추가, 완료 기반 P3 통지, VOID 식별자로 actionId 사용 방향.
 - P3 공유 완료: 요청 4필드, 완료 시점, 정상 대기 구분, 결과 처리 기본 기준. 별도 P3 회신은 확인하지 않았다.
 - 사용자 추가 승인(2026-10-25): 아래 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영한다. VOID actionId 및 구체 DTO의 P3 추가 확인은 아직 확인하지 않았다.
@@ -16,7 +16,7 @@ P5는 직원 조치 요청과 처리 결과만 저장한다. 기존 최초 결�
 
 ## 2. 공개 계약 초안
 
-다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. PaymentActionRequester의 실행 구현 Bean은 5·6번 단계에서 연결한다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
+다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. 5번 단계에서 PaymentActionRequester 구현 Bean을 등록했다. CAPTURE를 지원하며 VOID는 6번 단계 전까지 저장 없이 UnsupportedOperationException을 전달한다. 이를 영구 거절로 변환하지 않는다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
 
 | 타입 (`payment.api`) | 계약 |
 | --- | --- |
@@ -121,6 +121,17 @@ P3 운영 리스너는 payment.api.PaymentActionResult를 커밋 후 수신해�
 
 - 새 migration·PaymentAction Entity·Repository·공개 요청/응답/결과 타입을 추가했다. Entity는 종료 상태 변경 차단과 CAPTURE 동일 결과 재반영 방지를 제공한다.
 - PaymentActionAdmissionService는 MANDATORY 트랜잭션에서 결제를 잠그고 요청을 검증·저장한다. 신규 여부와 기존 결과를 내부 실행 서비스에 반환한다. 단독으로 금융 실행을 시작하거나 커밋하지 않는다.
-- 실제 공개 PaymentActionRequester Bean은 아직 없다. 요청 저장만으로 PENDING을 반환하고 이벤트가 없는 상태를 외부에 노출하지 않는다. 후속 단계에서 REQUIRES_NEW 실행 트랜잭션·UNIQUE 경쟁 실패 뒤 새 트랜잭션 재조회·P6 발행 또는 VOID 실행을 연결한다.
+- 4번 단계 당시에는 공개 실행 Bean이 없었다. 5번 단계의 CAPTURE 연결은 아래 기록을 따른다. VOID 연결은 아직 후속이다.
 - 이번 DB 테스트의 PENDING 행과 직접 설정한 CAPTURED는 저장 계층의 검증 fixture다. 직원 매입·취소가 실제 연결됐다는 증거가 아니다.
 - 검사 실행 결과는 [검증 기록](verification.md)을 본다. P3 운영 연동·Notion 동기화는 미검증/후속이다.
+
+
+### 5번 단계 구현 범위
+
+- PaymentActionService가 공개 PaymentActionRequester를 구현한다. NOT_SUPPORTED 조정 서비스 → REQUIRES_NEW PaymentActionTransactionService → MANDATORY admission 순서로 호출한다. 요청 저장과 CaptureRequested 발행은 같은 트랜잭션이다.
+- 같은 요청은 진행 중이면 PENDING, 완료됐으면 저장된 ACCEPTED를 반환한다. 기존 요청 재호출로 매입을 다시 발행하지 않는다.
+- 다른 결제의 키/판정 UNIQUE 경합은 지정한 MariaDB 1062 제약만 구분하고, 실패한 트랜잭션이 끝난 뒤 PaymentActionConflictService의 새 읽기 트랜잭션에서 결과를 대조한다. 다른 DB 오류는 전파한다.
+- PaymentCaptureService가 직원 CAPTURE 조치의 존재·상태·완료 ID·시각을 대조한다. 유효한 HELD 요청만 CAPTURED로 바꾸고 조치 SUCCEEDED·P3 결과 이벤트를 함께 저장한다. 기존 ALLOW는 조치 없이 기존 처리를 유지하고 P3 결과를 발행하지 않는다.
+- 새 completeHeldCapture 전이는 승인된 HELD만 허용하며, 기존 completeCapture는 HELD를 계속 거절한다. 완료 중복은 상태·승인 참조와 동일 ID·시각을 검증한 뒤 추가 결과 발행 없이 끝난다.
+- VOID 실행·VOIDED 전이는 아직 없다. 공개 요청으로 VOID를 보내면 저장 전에 기술 예외가 발생하며 성공/영구 실패로 기록하지 않는다. P3 실제 연동 전에 6번 단계를 완료해야 한다.
+- 실제 P6 매입·정산을 거쳐 테스트 수신자에 P3 결과를 전달하는 검증을 추가했다. 실제 P3 Gateway·Case 종료 연결 검증과 구분한다. 결과는 [검증 기록](verification.md)을 본다.

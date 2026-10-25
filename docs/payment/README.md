@@ -24,7 +24,7 @@
 
 ## 현재 구현
 
-- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 저장 기반을 구현한 단계다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 공개 실행 Bean·매입/취소 연결·결과 발행은 아직 없다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약 확인과 Notion 동기화는 후속이다.
+- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 저장 기반을 구현한 단계다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 5번 단계에서 공개 실행 Bean·직원 CAPTURE 요청/완료·P3 결과 발행을 연결했다. VOID 실행과 P3 운영 수신은 후속이다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약 확인과 Notion 동기화는 후속이다.
 
 - #139의 [결제 단건 조회 계약](../decisions/0026-payment-read-api.md)에 따라 `payment.api.PaymentReader`와 `PaymentSummary`를 정의했다. 4번 단계에서 읽기 전용 `PaymentReaderService`를 연결했다. 입력 검증·저장값 매핑·없는 결제·DB 오류 전파를 단위 검증했고, 5번 단계에서 실제 DB·읽기 전용 트랜잭션·세션 없는 호출·상태 커밋 후 조회를 검증했다. P3 목업 교체·권한 검증·화면 연결은 후속이다.
 
@@ -34,7 +34,7 @@
 - #91/#92의 P2 평가 호출과 #94/#95의 응답 검증·분기 판단이 반영됐다. `createAndEvaluate()`는 평가 전용이며 `createAndAuthorize()`는 모의 승인과 결제 상태·승인 참조 저장까지 수행한다.
 - `PaymentCreationService.createPending()`은 `REQUIRES_NEW`로 최초 저장을 별도 커밋하고 ID를 반환한다. 인증·가맹점 존재·주문 금액 신뢰·주문 중복 방지를 제공하는 외부 API는 아니다.
 - #100에서 최초 저장과 평가를 연결했고, #118에서 별도 승인 트랜잭션과 같은 결제의 반복·동시 승인 차단을 추가했다. 주문 단위 중복 접수는 후속 범위다.
-- P6 #111에는 매입·정산 동시 저장과 CaptureRequested 수신·CaptureCompleted 발행이 구현되어 있다. #122에서 P5의 ALLOW 요청 발행·완료 수신·CAPTURED 반영을 연결했다. REVIEW는 HELD를 유지하며 직원 ACCEPT 매입·P3 통지는 후속이다.
+- P6 #111에는 매입·정산 동시 저장과 CaptureRequested 수신·CaptureCompleted 발행이 구현되어 있다. #122에서 P5의 ALLOW 요청 발행·완료 수신·CAPTURED 반영을 연결했다. REVIEW는 HELD를 유지하며, #141의 5번 단계에서 직원 ACCEPT 매입·P3 결과 발행을 연결했다. P3 운영 수신·인계/Case 반영은 별도 후속이다.
 
 과거 테스트 결과는 [검증 기록](verification.md)에 실행 기준과 함께 보존한다. 현재 브랜치에서 재실행한 결과로 해석하지 않는다.
 
@@ -62,7 +62,7 @@ P5는 최초 결제 저장 → FDS 평가 → 모의 승인 → 보류 또는 �
 | W1 내부 규칙 | 구현된 판단 규칙과 실제 저장·호출을 구분. 과거 실행 기록 보존 |
 | W2 저장·평가·모의 승인 | #118에서 상태·참조 저장 및 동일 결제 동시 승인 차단 검증. 주문 중복 방지·재시작 복구는 후속 |
 | W3 HELD·읽기 | 커밋 후 통지, 중복 Case 방지, 가맹점 범위 조회 |
-| W4 조치·P6 인계 | ALLOW 자동 매입은 #122에서 연결·검증. 직원 조치·P3 인계는 C3~C6 합의 후 연결 |
+| W4 조치·P6 인계 | ALLOW 자동 매입은 #122에서 연결·검증. 직원 CAPTURE는 #141 5번 단계에서 연결. VOID·P3 운영 인계는 후속 |
 | W5 실제 결과·복구 | CAPTURED 중복·경합·명시적 재전달은 #122에서 검증. VOIDED·운영 자동 복구는 후속 |
 | W6 CakeShop·시연 | 외부 통지 실패 복구와 전체 흐름 검증 |
 

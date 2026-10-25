@@ -32,7 +32,7 @@ public class PaymentActionAdmissionService {
                     command.decisionId(),
                     PaymentActionType.valueOf(command.actionType()),
                     command.idempotencyKey())) return rejected("IDEMPOTENCY_KEY_CONFLICT");
-            return new PaymentActionAdmission(action, receipt(action), false);
+            return new PaymentActionAdmission(action, PaymentActionMapping.receipt(action), false);
         }
         if (payment.isEmpty()) return rejected("PAYMENT_NOT_FOUND");
         if (actions.findByPaymentId(command.paymentId()).isPresent()) return rejected("PAYMENT_ACTION_CONFLICT");
@@ -51,17 +51,5 @@ public class PaymentActionAdmissionService {
 
     private PaymentActionAdmission rejected(String code) {
         return new PaymentActionAdmission(null, PaymentActionReceipt.rejected(code), false);
-    }
-
-    private PaymentActionReceipt receipt(PaymentAction action) {
-        return switch (action.getStatus()) {
-            case PENDING -> PaymentActionReceipt.pending();
-            case FAILED -> PaymentActionReceipt.rejected(action.getErrorCode());
-            case SUCCEEDED ->
-                PaymentActionReceipt.accepted(
-                        action.getActionType() == PaymentActionType.CAPTURE
-                                ? action.getCaptureId()
-                                : action.getActionId());
-        };
     }
 }

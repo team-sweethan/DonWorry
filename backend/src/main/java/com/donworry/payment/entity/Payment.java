@@ -107,6 +107,17 @@ public class Payment {
         status = PaymentStatus.CAPTURED;
     }
 
+    // 호출 서비스가 저장된 직원 CAPTURE 조치를 대조한 경우에만 사용한다.
+    public void completeHeldCapture() {
+        if (status != PaymentStatus.HELD
+                || authorizationRef == null
+                || authorizationRef.isBlank()
+                || authorizationRef.codePointCount(0, authorizationRef.length()) > 100) {
+            throw new IllegalStateException("승인된 HELD 결제에만 직원 매입 완료를 적용할 수 있습니다");
+        }
+        status = PaymentStatus.CAPTURED;
+    }
+
     private static String requireReference(String value, String name) {
         Objects.requireNonNull(value, name);
         if (value.codePointCount(0, value.length()) > 100) {
