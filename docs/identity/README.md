@@ -2,6 +2,53 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #131 운영 설정(부분 구현)
+
+사용자 결정으로 이번에는 운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키만 구현한다. **시연 계정(`boss`·`staff_test`) 정지는 후속이며 #131 전체 완료가 아니다.** 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
+
+### 로컬 개발
+
+기존 `./gradlew bootRun`은 그대로다. `application-local.yml`도 지금처럼 자동으로 읽으며 운영 비밀번호는 필요 없다. `prod`를 로컬에서 활성화하지 않고, 로컬·운영 DB를 분리한다. 같은 DB에서 운영 초기화를 실행하면 관리자 비밀번호 변경은 영속적이며 로컬 프로필로 바꿔도 복구되지 않는다.
+
+### 운영 실행
+
+배포 시스템에서 아래 환경변수를 주입한다. 비밀값은 명령줄·저장소·로그에 적지 않는다.
+
+| 변수 | 내용 |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `prod` (`local`과 혼용 금지) |
+| `DONWORRY_DB_HOST` | 운영 DB 호스트, 필수 |
+| `DONWORRY_DB_PORT` | 운영 DB 포트, 기본 3306 |
+| `DONWORRY_DB_NAME` | 운영 DB 이름, 필수 |
+| `DONWORRY_DB_USER` | 운영 DB 사용자, 필수 |
+| `DONWORRY_DB_PASSWORD` | 운영 DB 비밀번호, 필수 |
+| `DONWORRY_ADMIN_PASSWORD` | 관리자 비밀번호, 필수. 기존 PasswordPolicy 적용 |
+
+- 운영에서는 개인 설정 파일을 자동 import하지 않는다. DB 변수·관리자 비밀번호 누락, `prod,local` 혼용, `server.servlet.session.cookie.secure=false`이면 기동 실패한다.
+- Flyway/JPA 뒤, 웹 서버 시작 전에 활성 ADMIN `admin`의 비밀번호를 BCrypt로 적용한다. 없거나 정지/다른 역할이면 기동 실패한다. 관리자 생성·재활성화는 하지 않는다.
+- 매 재시작마다 환경값을 기준으로 맞춘다. 화면에서 바꾼 값을 유지하려면 환경변수도 함께 변경한다. 같은 비밀번호·강제 변경 false이면 저장·이력을 반복하지 않는다.
+- 실제 변경과 `PRODUCTION_PASSWORD_APPLIED` 이력은 같은 트랜잭션이다. 실패하면 롤백·기동 실패한다. 이력 출처는 `PRODUCTION_STARTUP`이며 원문·해시는 저장하지 않는다.
+- 시연 계정·다른 계정·권한·가맹점·로그인 실패 횟수/잠금은 유지한다. 시연 계정 로그인도 계속 가능하다. 관리자 15분 잠금 역시 재시작으로 풀지 않는다.
+- 세션 쿠키는 Secure=true·HttpOnly·SameSite=Lax다. XSRF-TOKEN은 JavaScript 읽기 가능을 유지하고 Secure는 요청 HTTPS 여부를 따른다. CSRF 검사 기본값은 계속 false다.
+
+### 배포 시 남은 확인
+
+- HTTPS 프록시 전달·신뢰 범위·프론트/API 동일 출처를 확정하고 실제 JSESSIONID/XSRF-TOKEN 속성·로그인/로그아웃·두 탭 흐름을 확인한다. 프록시 헤더를 무조건 신뢰하는 설정은 추가하지 않았다.
+- 시연 계정 제한·전체 업무 인가/가맹점 필터·CSRF 활성화는 후속이다. 이 부분 구현만으로 실제 운영 공개 준비가 끝난 것은 아니다.
+- 단일 서버·메모리 세션 전제다. 다른 실행 인스턴스의 세션 종료·다중 서버/롤링 배포는 범위 밖이다.
+
+### #131 검증·미검증
+
+2026-10-25, `feature/131-production-security`, 기준 `dev 84698bb` 위 최종 구현·테스트 작업 트리에서 실행했다. 기준 dev 단독 결과가 아니다. 아래 전체 검사 이후에는 문서의 검증 기록만 추가했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 390개 중 389개 성공·기존 1개 건너뜀(`LocalSettlementDemoTests`), MariaDB 175개 성공. 실패·오류 0개. Flyway 전체·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 새 DB 없는 17개 실행으로 개인 설정 자동 읽기 유지·운영 제외, 프로필 혼용·DB/관리자 비밀번호 누락·Secure 해제 기동 실패, 초기화 실패 전파, 정책 오류의 입력값 비노출·관리자 역할/정지 확인·동일 비밀번호/강제 변경 플래그 처리를 검사했다.
+- 새 MariaDB 테스트 3개는 별도 컨테이너에서 실제 앱을 여러 번 기동해 웹 서버 시작 이벤트 전에 비밀번호 커밋·HTTP 인증·JSESSIONID Secure/HttpOnly/SameSite·시연 계정 로그인/ACTIVE 보존·같은 값 재시작의 해시/이력 유지·이력 INSERT 실패 롤백·잠금 보존·실패 시 웹 서버 미시작을 확인했다. 잘못된 비밀번호 값이 기동 로그에 없는 것도 검사했다.
+- 첫 선택 실행의 테스트 코드에서 웹 서버 컨텍스트 타입 컴파일 오류와 포트 기본값 우선순위에 따른 기존 서버 포트 충돌이 있었다. 테스트 헬퍼와 격리 설정 우선순위를 고친 뒤 선택 검사와 위 전체 검사가 통과했다. 기존 실행 서버나 로컬 DB를 종료·변경하지 않았다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 기존 migration은 변경하지 않았다. 실제 로컬·운영 DB 대신 Testcontainers DB에서만 계정 변경을 검사했다.
+
+미검증: 실제 HTTPS/프록시·배포 비밀값 주입·브라우저의 쿠키/두 탭 흐름, 실제 30분 대기, Notion 동기화. 프론트·AI 서버는 변경하지 않아 해당 검사를 실행하지 않았다. 원격 CI·리뷰·dev 병합은 PR에서 별도 추적한다. 시연 계정 정지는 사용자 결정으로 후속이다.
+
 ## #127 로그인 시도 제한
 
 상세 정책·저장 순서는 [#127 설계](127-login-attempt-design.md), 대안·영향은 [ADR-0029](../decisions/0029-login-attempt-lock.md)를 따른다.

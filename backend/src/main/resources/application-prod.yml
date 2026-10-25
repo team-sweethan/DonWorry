@@ -1,0 +1,13 @@
+spring:
+  main:
+    lazy-initialization: false
+  datasource:
+    url: jdbc:mariadb://${DONWORRY_DB_HOST}:${DONWORRY_DB_PORT:3306}/${DONWORRY_DB_NAME}
+    username: ${DONWORRY_DB_USER}
+    password: ${DONWORRY_DB_PASSWORD}
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true

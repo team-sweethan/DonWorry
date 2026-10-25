@@ -172,6 +172,8 @@ cd backend
 
 `Started DonWorryApplication`이 보이면 `http://localhost:8081`에서 실행 중입니다.
 
+운영 `prod` 실행은 [P1 운영 설정](docs/identity/README.md#131-운영-설정부분-구현)을 따릅니다. 일반 로컬 실행은 지금처럼 개인 설정을 읽으며 운영 관리자 비밀번호가 필요하지 않습니다. 로컬·운영 DB는 분리합니다.
+
 ### 5. frontend 실행
 
 ```bash
