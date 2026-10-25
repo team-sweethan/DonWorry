@@ -362,14 +362,17 @@ class PaymentActionCaptureMariaDbTests {
         }
     }
 
-    // 아직 연결하지 않은 VOID를 성공 또는 영구 실패로 저장하지 않는다.
+    // CAPTURE가 먼저 선택된 결제는 다른 키의 VOID도 실행하지 않는다.
     @Test
-    void request_whenVoidNotConnected_doesNotPersist() {
+    void request_whenCaptureAlreadyChosen_rejectsVoid() {
         var c = command();
-        assertThatThrownBy(() -> requester.request(
-                        new PaymentActionCommand(c.paymentId(), c.decisionId(), "VOID", c.idempotencyKey())))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThat(count("payment_actions", c.paymentId())).isZero();
-        assertThat(eventCount(CaptureRequested.class, c.paymentId())).isZero();
+        requester.request(c);
+        completed(c.paymentId());
+        var result =
+                requester.request(new PaymentActionCommand(c.paymentId(), c.decisionId(), "VOID", UUID.randomUUID()));
+        assertThat(result).isEqualTo(PaymentActionReceipt.rejected("PAYMENT_ACTION_CONFLICT"));
+        assertThat(count("payment_actions", c.paymentId())).isEqualTo(1);
+        assertThat(eventCount(CaptureRequested.class, c.paymentId())).isEqualTo(1);
+        assertThat(eventCount(PaymentActionResult.class, c.paymentId())).isEqualTo(1);
     }
 }

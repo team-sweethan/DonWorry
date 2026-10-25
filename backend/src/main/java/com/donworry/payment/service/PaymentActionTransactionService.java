@@ -4,6 +4,7 @@ import com.donworry.payment.api.PaymentActionCommand;
 import com.donworry.payment.api.PaymentActionReceipt;
 import com.donworry.payment.repository.PaymentRepository;
 import com.donworry.settlement.api.CaptureRequested;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -16,22 +17,37 @@ public class PaymentActionTransactionService {
     private final PaymentActionAdmissionService admission;
     private final PaymentRepository payments;
     private final ApplicationEventPublisher events;
+    private final PaymentVoider voider;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public PaymentActionReceipt request(PaymentActionCommand command) {
         if (command == null) throw new IllegalArgumentException("command is required");
-        // VOID 실행은 다음 단계다. 접수 성공/영구 거절로 오인하지 않도록 저장 전에 예외로 남긴다.
-        if (!"CAPTURE".equals(command.actionType())) throw new UnsupportedOperationException("VOID 실행은 아직 연결하지 않았습니다");
         var admitted = admission.admit(command);
         if (admitted.created()) {
             // admission이 획득한 결제 잠금은 이 트랜잭션의 커밋까지 유지된다.
             var payment = payments.findById(command.paymentId()).orElseThrow();
-            events.publishEvent(CaptureRequested.builder()
-                    .paymentId(payment.getPaymentId())
-                    .merchantId(payment.getMerchantId())
-                    .orderId(payment.getOrderRef())
-                    .amount(payment.getAmount())
-                    .build());
+            if ("CAPTURE".equals(command.actionType())) {
+                events.publishEvent(CaptureRequested.builder()
+                        .paymentId(payment.getPaymentId())
+                        .merchantId(payment.getMerchantId())
+                        .orderId(payment.getOrderRef())
+                        .amount(payment.getAmount())
+                        .build());
+            } else {
+                var result = voider.voidAuthorization(
+                        new AuthorizationVoidCommand(payment.getPaymentId(), payment.getAuthorizationRef()));
+                if (result == null) throw new IllegalStateException("모의 취소 응답이 없습니다");
+                var action = admitted.action();
+                var now = Instant.now();
+                if (result == AuthorizationVoidResult.SUCCEEDED) {
+                    payment.completeVoid();
+                    action.completeVoid(now);
+                } else {
+                    action.fail("VOID_DECLINED", now);
+                }
+                events.publishEvent(PaymentActionMapping.result(action));
+                return PaymentActionMapping.receipt(action);
+            }
         }
         return admitted.receipt();
     }

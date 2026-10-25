@@ -1,6 +1,6 @@
 # #141 직원 금융 조치 저장·처리 설계
 
-- 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 CAPTURE 실행·완료·결과 발행을 연결했다. VOID 실행은 후속이다.
+- 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 CAPTURE 실행·완료·결과 발행을 연결했다. 6번 단계에서 VOID 모의 실행·결과 발행도 연결했다.
 - 사용자 승인: P5 소유 `payment_actions` 하나 추가, 완료 기반 P3 통지, VOID 식별자로 actionId 사용 방향.
 - P3 공유 완료: 요청 4필드, 완료 시점, 정상 대기 구분, 결과 처리 기본 기준. 별도 P3 회신은 확인하지 않았다.
 - 사용자 추가 승인(2026-10-25): 아래 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영한다. VOID actionId 및 구체 DTO의 P3 추가 확인은 아직 확인하지 않았다.
@@ -16,7 +16,7 @@ P5는 직원 조치 요청과 처리 결과만 저장한다. 기존 최초 결�
 
 ## 2. 공개 계약 초안
 
-다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. 5번 단계에서 PaymentActionRequester 구현 Bean을 등록했다. CAPTURE를 지원하며 VOID는 6번 단계 전까지 저장 없이 UnsupportedOperationException을 전달한다. 이를 영구 거절로 변환하지 않는다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
+다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. 5번 단계에서 PaymentActionRequester 구현 Bean을 등록했다. 6번 단계에서 VOID도 연결했다. CAPTURE는 PENDING, VOID는 같은 트랜잭션의 모의 실행 결과를 반환한다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
 
 | 타입 (`payment.api`) | 계약 |
 | --- | --- |
@@ -133,5 +133,16 @@ P3 운영 리스너는 payment.api.PaymentActionResult를 커밋 후 수신해�
 - 다른 결제의 키/판정 UNIQUE 경합은 지정한 MariaDB 1062 제약만 구분하고, 실패한 트랜잭션이 끝난 뒤 PaymentActionConflictService의 새 읽기 트랜잭션에서 결과를 대조한다. 다른 DB 오류는 전파한다.
 - PaymentCaptureService가 직원 CAPTURE 조치의 존재·상태·완료 ID·시각을 대조한다. 유효한 HELD 요청만 CAPTURED로 바꾸고 조치 SUCCEEDED·P3 결과 이벤트를 함께 저장한다. 기존 ALLOW는 조치 없이 기존 처리를 유지하고 P3 결과를 발행하지 않는다.
 - 새 completeHeldCapture 전이는 승인된 HELD만 허용하며, 기존 completeCapture는 HELD를 계속 거절한다. 완료 중복은 상태·승인 참조와 동일 ID·시각을 검증한 뒤 추가 결과 발행 없이 끝난다.
-- VOID 실행·VOIDED 전이는 아직 없다. 공개 요청으로 VOID를 보내면 저장 전에 기술 예외가 발생하며 성공/영구 실패로 기록하지 않는다. P3 실제 연동 전에 6번 단계를 완료해야 한다.
+- 5번 단계 당시에는 VOID 실행을 저장 전 기술 예외로 차단했다. 현재 6번 단계 연결은 아래 기록을 따른다.
 - 실제 P6 매입·정산을 거쳐 테스트 수신자에 P3 결과를 전달하는 검증을 추가했다. 실제 P3 Gateway·Case 종료 연결 검증과 구분한다. 결과는 [검증 기록](verification.md)을 본다.
+
+
+### 6번 단계 구현 범위
+
+- PaymentVoider·AuthorizationVoidCommand·AuthorizationVoidResult와 기본 MockPaymentVoider를 추가했다. 명령은 저장 결제 ID와 승인 참조만 받고 기본 모의 취소기는 유효 입력에 SUCCEEDED를 반환한다. 외부 호출·별도 저장·결과 ID 생성은 없다.
+- PaymentActionTransactionService는 신규 VOID 조치 저장 뒤 모의 취소를 같은 REQUIRES_NEW 트랜잭션에서 호출한다. 성공한 경우에만 Payment.completeVoid()로 HELD → VOIDED, 조치 SUCCEEDED·완료 시각 저장 및 PaymentActionResult 발행을 수행한다. targetOperationId는 해당 조치의 actionId다.
+- 명시적인 DECLINED는 결제 HELD 유지·조치 FAILED/VOID_DECLINED·결과 발행으로 처리한다. 동일 요청은 저장된 실패 결과를 반환하며 다시 실행하지 않는다. null 응답·기술 예외·커밋 실패는 신규 조치와 결제 변경·결과 발행을 모두 롤백한다. 같은 키로 다시 요청할 수 있다.
+- 같은 요청의 재실행은 admission에서 기존 결과를 반환한다. 다른 키·반대 조치는 조치 행과 결제 잠금으로 차단한다. VOID 선택 뒤 들어온 CaptureCompleted는 기존 완료 서비스가 거절한다.
+- 승인 참조·금액은 VOIDED에서도 그대로 보존한다. PENDING·CAPTURED 등 HELD 이외의 결제에 승인 취소 완료를 적용하지 않는다.
+- 이 트랜잭션 모델은 외부 부작용이 없는 모의 취소에 한정한다. 실제 카드사 취소로 교체하면서 단순히 이 트랜잭션에 HTTP 호출을 넣어서는 안 된다. 외부 실행·조회·복구 계약은 별도 설계한다.
+- 테스트 수신자는 VOID 성공·거절 결과가 결제/조치 커밋 뒤 전달되는지 검증한다. P3 운영 수신·Case 반영과 Notion 동기화는 여전히 후속이다. 실행 결과는 [검증 기록](verification.md)을 본다.

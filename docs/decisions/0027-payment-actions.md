@@ -50,4 +50,4 @@ ADR-0018의 CAPTURE 완료 기반 인계 제안을 구체화하되 acceptedAt=ca
 
 ## 검증
 
-현재 코드·SQL과 P3 목업 및 인계 처리 흐름을 대조한 설계다. 4번 단계에서 migration·Entity·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 직원 CAPTURE 요청·완료·결과 발행을 연결했다. VOID와 P3 운영 연동은 후속이다. 검사 결과와 미검증 범위는 [검증 기록](../payment/verification.md)에 구분한다.
+현재 코드·SQL과 P3 목업 및 인계 처리 흐름을 대조한 설계다. 4번 단계에서 migration·Entity·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 직원 CAPTURE 요청·완료·결과 발행을 연결했다. 6번 단계에서 모의 VOID·VOIDED·결과 발행도 연결했다. P3 운영 연동·Notion 동기화는 후속이다. 검사 결과와 미검증 범위는 [검증 기록](../payment/verification.md)에 구분한다.

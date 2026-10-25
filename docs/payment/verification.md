@@ -259,3 +259,15 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 첫 실행의 신규 테스트 3건 실패는 Spring Data 인터페이스 spy에서 callRealMethod를 호출한 테스트 구성 오류였다. 실패 주입을 서비스 spy로 옮기고 경쟁 제어는 실제 조회와 INSERT를 유지하도록 수정했다. 첫/두 번째 실행의 기존 P6 테스트 시간 초과는 테스트 로그의 MariaDB `Too many connections`로 원인을 확인했다. 새 테스트 전용 컨텍스트에 AFTER_CLASS 정리를 추가해 연결 풀을 반환했으며, 기존 테스트의 제한 시간·단언·운영 DB 설정은 바꾸지 않았다. 최종 전체 재실행은 모두 통과했다.
 - 문서 링크 검사와 git diff --check 통과.
 - 미구현·미검증: VOID 실행·VOIDED 전이(6번 단계), P3 실제 Gateway·결과 수신·권한·Case 종료 및 응답/이벤트 순서 역전 처리, 운영 자동 재시도, Notion 동기화. P3 결과는 테스트 전용 리스너로만 전달 검증했다. 해당 운영 구독자가 없으면 P3용 발행 기록이 자동 보존된다고 보장하지 않는다.
+
+
+## #141 6번 단계 — 직원 REJECT 모의 승인 취소 연결
+
+2026-10-25, ACCEPT 연결 커밋 `72994e5` + 6번 단계 미커밋 작업본 기준. `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m40s). 일반 351건 중 350건 성공·기존 수동 시연 1건 제외, MariaDB 142건 성공. 실패·오류 0. 검사 후에는 문서 실행 기록만 추가했다.
+
+- PaymentVoidTests 9건: HELD 취소 전이·원래 승인/금액 보존·다른 상태 거절·손상된 승인 참조 거절·모의 취소 입력.
+- PaymentActionVoidMariaDbTests 9건: 실제 공개 요청으로 VOID 성공·actionId 결과와 저장값 조회, 동일 요청 재실행 방지, 명시적 업무 거절 후 HELD/FAILED 보존, null/기술 예외 롤백·동일 키 재시도, 커밋 실패의 결제/조치/이벤트 동시 롤백, 결과 재전달 시 취소 재실행 없음.
+- 취소 실행 중 같은 요청과 반대 CAPTURE 요청이 결제 잠금 뒤에 대기하며 하나만 실행됨을 검증했다. VOID 완료 뒤 CaptureCompleted가 도착해도 VOIDED를 덮어쓰지 않는다.
+- 기존 5번 테스트의 임시 VOID 미지원 검사는 CAPTURE 선행 후 VOID 충돌 거절 검사로 교체했다. 실제 P6를 통한 ACCEPT 및 기존 ALLOW 매입 회귀 검사는 그대로 통과했다.
+- P3 역할은 테스트 수신자로 검증했다. VOID 성공 시 targetOperationId=actionId, 확정 거절 시 targetOperationId=null·errorCode=VOID_DECLINED를 확인했다. 실제 P3 Gateway·결과 리스너·권한·Case 종료·응답/이벤트 순서 역전 처리는 별도 구현·미검증이다.
+- 문서 링크 및 git diff --check 통과. 운영 자동 재시도·실제 카드사 취소·Notion 동기화는 수행하지 않았다. VOID actionId/구체 DTO의 추가 P3 확인은 아직 확인되지 않았다.
