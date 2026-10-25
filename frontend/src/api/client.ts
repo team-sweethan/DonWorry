@@ -22,6 +22,8 @@ export class ApiError extends Error {
 
 let sessionGeneration = 0
 let pendingCsrf: Promise<void> | null = null
+// 발급을 받아도 쿠키를 읽을 수 없는 환경이면 같은 로그인 동안 선행 발급을 반복하지 않는다.
+let csrfUnreadable = false
 const unauthorizedListeners = new Set<() => void>()
 const passwordChangeListeners = new Set<() => void>()
 
@@ -36,13 +38,18 @@ export function subscribePasswordChangeRequired(listener: () => void) {
 export function advanceApiSession() {
   sessionGeneration += 1
   pendingCsrf = null
+  csrfUnreadable = false
 }
 
 function loadCsrfToken(): Promise<void> {
   if (pendingCsrf) return pendingCsrf
-  const pending = api<void>('/auth/csrf', { cache: 'no-store' }).finally(() => {
-    if (pendingCsrf === pending) pendingCsrf = null
-  })
+  const pending = api<void>('/auth/csrf', { cache: 'no-store' })
+    .then(() => {
+      if (pendingCsrf === pending && !readCsrfToken()) csrfUnreadable = true
+    })
+    .finally(() => {
+      if (pendingCsrf === pending) pendingCsrf = null
+    })
   pendingCsrf = pending
   return pending
 }
@@ -91,7 +98,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     }
     return fetch(`/api${path}`, { ...init, headers, credentials: 'include' })
   }
-  if (changesState && !readCsrfToken()) {
+  if (changesState && !csrfUnreadable && !readCsrfToken()) {
     requireSameSession()
     await prepareCsrf()
   }

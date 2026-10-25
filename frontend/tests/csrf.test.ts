@@ -70,6 +70,8 @@ test('api_whenCsrfRejected_clearsCookieAndRetriesOnceWithNewToken', async () => 
   globalThis.fetch = async (input, init) => {
     if (input === '/api/auth/csrf') {
       refreshes++
+      // 실제 브라우저는 서버 쿠키와 Path가 같아야 지우므로 삭제 속성을 확인한다.
+      assert.match(cookies.cookie, /^XSRF-TOKEN=; Max-Age=0; Path=\/$/)
       issueIfMissing('new')
       return new Response(null, { status: 204 })
     }
@@ -124,8 +126,9 @@ test('api_whenBootstrapFails_doesNotSendWriteAndCanRecover', async () => {
   await api('/write', { method: 'POST' })
 })
 
-// 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 검사 여부를 서버에 맡긴다 (검사 끔 기본값 유지).
-test('api_whenCookieUnreadable_sendsWithoutHeader', async () => {
+// 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 검사 여부를 서버에 맡기고 (검사 끔 기본값 유지),
+// 같은 로그인 동안은 선행 발급을 반복하지 않는다.
+test('api_whenCookieUnreadable_sendsWithoutHeaderAndSkipsRepeatedBootstrap', async () => {
   const paths: string[] = []
   globalThis.fetch = async (input, init) => {
     paths.push(String(input))
@@ -134,7 +137,11 @@ test('api_whenCookieUnreadable_sendsWithoutHeader', async () => {
     return new Response(null, { status: 204 })
   }
   await api('/write', { method: 'POST' })
-  assert.deepEqual(paths, ['/api/auth/csrf', '/api/write'])
+  await api('/write', { method: 'POST' })
+  assert.deepEqual(paths, ['/api/auth/csrf', '/api/write', '/api/write'])
+  advanceApiSession()
+  await api('/write', { method: 'POST' })
+  assert.deepEqual(paths.slice(3), ['/api/auth/csrf', '/api/write'])
 })
 
 // 발급 대기 중 로그인 상태가 바뀌거나 요청이 취소되면 이전 변경을 보내지 않는다.
