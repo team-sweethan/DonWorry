@@ -5,6 +5,7 @@ import {
   isUnsafeMethod,
   readCsrfToken,
 } from './csrf.ts'
+import { publishSessionVersion, readSessionVersion } from './sessionVersion.ts'
 
 export class ApiError extends Error {
   readonly status: number
@@ -37,6 +38,7 @@ export function subscribePasswordChangeRequired(listener: () => void) {
 // 이전 로그인에서 보낸 요청의 401은 새 로그인에 영향을 주지 않는다.
 export function advanceApiSession() {
   sessionGeneration += 1
+  publishSessionVersion()
   pendingCsrf = null
   csrfUnreadable = false
 }
@@ -54,8 +56,13 @@ function loadCsrfToken(): Promise<void> {
   return pending
 }
 
-function notifyError(path: string, generation: number, error: ApiError) {
-  if (generation !== sessionGeneration) return
+function notifyError(
+  path: string,
+  generation: number,
+  version: string | undefined,
+  error: ApiError,
+) {
+  if (generation !== sessionGeneration || version !== readSessionVersion()) return
   if (error.status === 403 && error.code === 'AUTH_008') {
     passwordChangeListeners.forEach((listener) => listener())
   }
@@ -73,10 +80,11 @@ export function subscribeUnauthorized(listener: () => void) {
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const generation = sessionGeneration
+  const version = readSessionVersion()
   const changesState = isUnsafeMethod(init?.method)
   const requireSameSession = () => {
     init?.signal?.throwIfAborted()
-    if (generation !== sessionGeneration)
+    if (generation !== sessionGeneration || version !== readSessionVersion())
       throw new DOMException('로그인 상태가 변경되었습니다.', 'AbortError')
   }
   const prepareCsrf = async () => {
@@ -84,7 +92,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       await loadCsrfToken()
     } catch (error) {
       // 선행 토큰 요청에서 세션 만료가 확인돼도 원래 업무 요청의 만료 정책을 따른다.
-      if (error instanceof ApiError) notifyError(path, generation, error)
+      if (error instanceof ApiError) notifyError(path, generation, version, error)
       throw error
     }
   }
@@ -107,7 +115,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (changesState && (await isCsrfRejection(res))) {
     requireSameSession()
     // Stream 본문은 소비된 뒤 재사용할 수 없으므로 자동 재전송하지 않는다.
-    if (!(init?.body instanceof ReadableStream)) {
+    if (version !== undefined && !(init?.body instanceof ReadableStream)) {
       clearCsrfToken()
       await prepareCsrf()
       res = await send()
@@ -125,7 +133,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const detail =
       'detail' in fields && typeof fields.detail === 'string' ? fields.detail : undefined
     const error = new ApiError(res.status, code, detail)
-    notifyError(path, generation, error)
+    notifyError(path, generation, version, error)
     throw error
   }
   if (res.status === 204 || res.status === 205) return undefined as T

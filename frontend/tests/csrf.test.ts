@@ -4,18 +4,34 @@ import { api, ApiError, advanceApiSession, subscribeUnauthorized } from '../src/
 
 const originalFetch = globalThis.fetch
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
 let cookies = { cookie: '' }
 // 서버의 /auth/csrf처럼 쿠키가 남아 있으면 유지하고 없을 때만 새 토큰을 발급한다.
 function issueIfMissing(value: string) {
   if (!/XSRF-TOKEN=[^;]/.test(cookies.cookie)) cookies.cookie = `XSRF-TOKEN=${value}`
 }
 beforeEach(() => {
+  const values = new Map<string, string>()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => values.get(key) ?? null,
+      removeItem: (key: string) => {
+        values.delete(key)
+      },
+      setItem: (key: string, value: string) => {
+        values.set(key, value)
+      },
+    },
+  })
   advanceApiSession()
   cookies = { cookie: '' }
   Object.defineProperty(globalThis, 'document', { configurable: true, value: cookies })
 })
 afterEach(() => {
   globalThis.fetch = originalFetch
+  if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage)
+  else Reflect.deleteProperty(globalThis, 'localStorage')
   if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
   else Reflect.deleteProperty(globalThis, 'document')
 })

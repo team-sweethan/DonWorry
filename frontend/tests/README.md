@@ -4,6 +4,7 @@
 
 - `authStore.test.ts`: HTTP 경계(`login` · `getMe` · `logout`)만 대체하고 실제 상태 관리 코드를 실행한다
 - `client.test.ts`: `fetch` 응답만 대체한다
+- `crossTabSession.test.ts`: 독립 API 모듈 두 개의 탭별 메모리와 공유 저장소·쿠키를 연결해 다른 탭의 인증 변경 중 요청 취소를 검사한다. 실제 브라우저 통합 검증과 구분한다
 
 ## 작성 시 주의
 
