@@ -129,7 +129,7 @@ export function AdminMerchantsPage() {
             },
             { title: '가맹점 이름', dataIndex: 'displayName' },
             { title: '상태', dataIndex: 'status', render: statusTag },
-            { title: '수수료율', dataIndex: 'pgFeeRate', render: feeRatePercent },
+            { title: '수수료율(정산 미반영)', dataIndex: 'pgFeeRate', render: feeRatePercent },
           ]}
         />
       </Card>
@@ -212,7 +212,7 @@ export function AdminCreateMerchantPage() {
           <Form.Item
             name="feePercent"
             label="수수료율"
-            extra="0% 이상 100% 미만, 소수 4자리까지. 기본값 1%입니다."
+            extra="0% 이상 100% 미만, 소수 4자리까지. 기본값 1%입니다. 아직 정산에는 반영되지 않습니다(현재 정산은 1% 고정)."
             rules={[
               {
                 validator: (_, value: unknown) =>
@@ -298,11 +298,12 @@ export function AdminMerchantDetailPage() {
           </Space>
         }
       />
-      {(error || current?.error || invalidId) && (
+      {/* 상태 변경 오류는 확인 모달 안에서만 보여준다. */}
+      {(current?.error || invalidId) && (
         <Alert
           type="error"
           showIcon
-          message={error ?? current?.error ?? '올바른 가맹점 주소가 아닙니다.'}
+          message={current?.error ?? '올바른 가맹점 주소가 아닙니다.'}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -315,7 +316,11 @@ export function AdminMerchantDetailPage() {
               { key: 'code', label: '가맹점 코드', children: merchant.merchantCode },
               { key: 'name', label: '가맹점 이름', children: merchant.displayName },
               { key: 'status', label: '상태', children: statusTag(merchant.status) },
-              { key: 'fee', label: '수수료율', children: feeRatePercent(merchant.pgFeeRate) },
+              {
+                key: 'fee',
+                label: '수수료율',
+                children: `${feeRatePercent(merchant.pgFeeRate)} (정산 미반영, 현재 1% 고정)`,
+              },
               {
                 key: 'created',
                 label: '등록 시각 (UTC)',
@@ -355,7 +360,9 @@ export function AdminMerchantDetailPage() {
         closable={!busy}
         maskClosable={!busy}
         onCancel={() => {
-          if (!pending.current) setConfirming(false)
+          if (pending.current) return
+          setConfirming(false)
+          setError(null)
         }}
         onOk={changeStatus}
       >

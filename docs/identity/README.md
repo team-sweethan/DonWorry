@@ -29,6 +29,18 @@
 
 미검증: 실제 브라우저의 목록·검색·필터·생성 폼·상세·확인 모달·재활성화·계정 생성 연결, HTTPS·프록시·실제 30분 만료 대기, Notion 동기화, 다중 서버(범위 밖). Google Chrome을 통한 수동 확인은 자동 승인 검토에서 거부됐다(`Computer Use was not approved to use Google Chrome`). 로컬 backend bootRun과 Vite 기동은 확인했으나 실제 브라우저 조작·시드 계정 변경은 수행하지 않았다.
 
+#### #130 리뷰 반영 (2026-10-25, `f764cc9` 위 작업 트리)
+
+- 화면 생성 폼·목록·상세에 수수료율이 아직 정산에 반영되지 않음(현재 1% 고정)을 표시했다.
+- 상세 화면의 상태 변경 오류를 확인 모달 안에만 표시하고, 모달을 닫으면 지운다 (페이지 상단 중복 표시 제거).
+- `MerchantRepository`를 `Repository` + `JpaSpecificationExecutor`로 되돌리고 필요한 메서드만 선언해 `deleteById` 등 삭제 메서드를 노출하지 않는다. `JpaSpecificationExecutor.delete(Specification)`은 남는다.
+- ADR-0027·설계 문서에 로그인 중 BCrypt 동안 가맹점 잠금을 유지해 생기는 같은 가맹점(및 같은 잠금 칸) 로그인 직렬화 한계와 받아들인 이유를 적었다.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 347개 중 346개 성공·기존 1개 건너뜀, MariaDB 126개 성공.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 57개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+미검증: 바뀐 안내 문구·모달 오류 표시의 실제 브라우저 확인. 위 브라우저 미검증 항목은 그대로 남아 있다.
+
 ## #126 CSRF 준비 (서버 검사 기본값 끔)
 
 상세 계약·대안은 [ADR-0025](../decisions/0025-csrf-preparation.md)를 따른다.
