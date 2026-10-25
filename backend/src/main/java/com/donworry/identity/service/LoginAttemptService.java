@@ -5,7 +5,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -13,11 +13,20 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-@RequiredArgsConstructor
 public class LoginAttemptService {
     private final PlatformUserRepository repository;
     private final PlatformTransactionManager transactionManager;
     private final Clock loginAttemptClock;
+
+    // 다른 모듈이 Clock 빈을 추가해도 잠금 판정은 항상 이 시계를 쓴다.
+    public LoginAttemptService(
+            PlatformUserRepository repository,
+            PlatformTransactionManager transactionManager,
+            @Qualifier("loginAttemptClock") Clock loginAttemptClock) {
+        this.repository = repository;
+        this.transactionManager = transactionManager;
+        this.loginAttemptClock = loginAttemptClock;
+    }
 
     public boolean isLocked(LocalDateTime lockedUntil) {
         return lockedUntil != null && now().isBefore(lockedUntil);

@@ -33,7 +33,11 @@ public interface PlatformUserRepository
             @Param("now") LocalDateTime now,
             @Param("lockedUntil") LocalDateTime lockedUntil);
 
+    // 실패 기록이 없는 계정은 갱신하지 않아 성공 로그인마다 쓰기가 생기지 않게 한다.
     @Modifying
-    @Query("UPDATE PlatformUser u SET u.loginFailureCount = 0, u.loginLockedUntil = NULL WHERE u.userId = :userId")
+    @Query("""
+            UPDATE PlatformUser u SET u.loginFailureCount = 0, u.loginLockedUntil = NULL
+            WHERE u.userId = :userId AND (u.loginFailureCount <> 0 OR u.loginLockedUntil IS NOT NULL)
+            """)
     int clearLoginFailures(@Param("userId") Long userId);
 }

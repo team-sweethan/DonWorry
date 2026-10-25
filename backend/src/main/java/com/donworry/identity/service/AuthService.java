@@ -73,7 +73,8 @@ public class AuthService {
                 result = authenticationManager.authenticate(
                         UsernamePasswordAuthenticationToken.unauthenticated(loginId, input.password()));
             } catch (BadCredentialsException exception) {
-                loginAttempts.recordFailure(loginId);
+                // 잠금과 같은 실제 계정 아이디로 센다.
+                loginAttempts.recordFailure(lockedAccountLoginId);
                 throw exception;
             }
             var details = (PlatformUserDetails) result.getPrincipal();

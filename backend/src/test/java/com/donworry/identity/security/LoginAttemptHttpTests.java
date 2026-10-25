@@ -367,6 +367,19 @@ class LoginAttemptHttpTests {
         assertThat(failures()).isEqualTo(1);
     }
 
+    // 실패 기록이 없는 계정은 성공 초기화 UPDATE가 행을 바꾸지 않고, 기록이 있으면 0·NULL로 되돌린다
+    @Test
+    void clearLoginFailures_whenNoFailureRecorded_updatesNoRow() {
+        var transaction = new TransactionTemplate(transactions);
+        assertThat(transaction.<Integer>execute(status -> repository.clearLoginFailures(userId)))
+                .isZero();
+        attempts.recordFailure(loginId);
+        assertThat(transaction.<Integer>execute(status -> repository.clearLoginFailures(userId)))
+                .isEqualTo(1);
+        assertThat(failures()).isZero();
+        assertThat(lockedUntil()).isNull();
+    }
+
     // 증가·초기화 UPDATE 오류는 AUTH_005이며 기존 횟수와 인증되지 않은 상태를 유지한다
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
