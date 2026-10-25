@@ -243,18 +243,25 @@ export function AdminCreateUserPage() {
   const navigate = useNavigate()
   useEffect(() => {
     let alive = true
-    getMerchantOptions(keyword)
-      .then((data) => {
-        if (alive) {
-          setOptions(data)
-          setMerchantError(null)
-        }
-      })
-      .catch((error) => {
-        if (alive) setMerchantError(errorMessage(error))
-      })
+    // 입력이 멈춘 뒤에만 조회해 글자마다 요청하지 않는다.
+    const timer = setTimeout(
+      () => {
+        getMerchantOptions(keyword)
+          .then((data) => {
+            if (alive) {
+              setOptions(data)
+              setMerchantError(null)
+            }
+          })
+          .catch((error) => {
+            if (alive) setMerchantError(errorMessage(error))
+          })
+      },
+      keyword ? 300 : 0,
+    )
     return () => {
       alive = false
+      clearTimeout(timer)
     }
   }, [keyword])
   const submit = async (values: CreateUser) => {

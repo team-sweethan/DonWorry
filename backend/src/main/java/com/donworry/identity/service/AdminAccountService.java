@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
@@ -57,8 +58,7 @@ public class AdminAccountService {
         };
         var result = users.findAll(
                 filter, PageRequest.of(page, size, Sort.by("userId").descending()));
-        return new AdminUserPageResponse(
-                result.getContent().stream().map(this::response).toList(), page, size, result.getTotalElements());
+        return new AdminUserPageResponse(responses(result.getContent()), page, size, result.getTotalElements());
     }
 
     @Transactional(readOnly = true)
@@ -211,12 +211,38 @@ public class AdminAccountService {
     }
 
     private AdminUserResponse response(PlatformUser user) {
-        String merchantName = user.getMerchantId() == null
-                ? null
-                : merchants
-                        .findById(user.getMerchantId())
-                        .map(Merchant::getDisplayName)
-                        .orElse(null);
+        return responses(List.of(user)).getFirst();
+    }
+
+    // 목록의 가맹점 이름과 권한은 계정마다 따로 조회하지 않고 한 번씩 모아 읽는다.
+    private List<AdminUserResponse> responses(List<PlatformUser> page) {
+        if (page.isEmpty()) return List.of();
+        var merchantIds = page.stream()
+                .map(PlatformUser::getMerchantId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> merchantNames = new HashMap<>();
+        if (!merchantIds.isEmpty())
+            merchants
+                    .findByMerchantIdIn(merchantIds)
+                    .forEach(m -> merchantNames.put(m.getMerchantId(), m.getDisplayName()));
+        Map<Long, List<String>> codes = new HashMap<>();
+        permissions
+                .findByUserIdInOrderByPermissionCode(
+                        page.stream().map(PlatformUser::getUserId).toList())
+                .forEach(p -> codes.computeIfAbsent(p.getUserId(), key -> new ArrayList<>())
+                        .add(p.getPermissionCode()));
+        return page.stream()
+                .map(user -> response(
+                        user,
+                        merchantNames.get(user.getMerchantId()),
+                        user.getRole() == UserRole.ADMIN
+                                ? SessionUserMapper.ADMIN_PERMISSIONS
+                                : List.copyOf(codes.getOrDefault(user.getUserId(), List.of()))))
+                .toList();
+    }
+
+    private AdminUserResponse response(PlatformUser user, String merchantName, List<String> codes) {
         return AdminUserResponse.builder()
                 .userId(user.getUserId())
                 .loginId(user.getLoginId())
@@ -225,10 +251,7 @@ public class AdminAccountService {
                 .status(user.getStatus().name())
                 .merchantId(user.getMerchantId())
                 .merchantName(merchantName)
-                .permissions(
-                        user.getRole() == UserRole.ADMIN
-                                ? List.of("FDS_VIEW", "FINANCE_VIEW")
-                                : List.copyOf(permissions.findPermissionCodesByUserId(user.getUserId())))
+                .permissions(codes)
                 .passwordChangeRequired(user.isPasswordChangeRequired())
                 .createdAt(user.getCreatedAt())
                 .build();

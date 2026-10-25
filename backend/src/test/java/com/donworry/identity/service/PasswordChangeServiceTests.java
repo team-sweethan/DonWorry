@@ -94,6 +94,37 @@ class PasswordChangeServiceTests {
         verify(sessions, never()).expireAllExcept(any(), any());
     }
 
+    // 강제 변경 중에는 임시 비밀번호를 새 비밀번호로 다시 쓸 수 없다
+    @Test
+    void change_whenForcedAndSameAsTemporary_rejectsWithoutChanges() {
+        when(entity.isPasswordChangeRequired()).thenReturn(true);
+        when(encoder.matches("tempPass123", "old-hash")).thenReturn(true);
+        assertThatThrownBy(() -> service.change(
+                        current,
+                        new ChangePasswordRequest("tempPass123", "tempPass123"),
+                        request,
+                        new org.springframework.mock.web.MockHttpServletResponse()))
+                .isInstanceOfSatisfying(
+                        PasswordChangeException.class,
+                        error -> assertThat(error.getErrorCode()).isEqualTo(AuthErrorCode.TEMPORARY_PASSWORD_REUSED));
+        verify(transactions).rollback(transaction);
+        verify(entity, never()).changePasswordHash(any());
+        verify(sessions, never()).expireAllExcept(any(), any());
+    }
+
+    // 강제 변경이 아니면 #128 정책대로 같은 비밀번호도 허용한다
+    @Test
+    void change_whenNotForcedAndSamePassword_allowsChange() {
+        when(encoder.matches("newPass123", "old-hash")).thenReturn(true);
+        when(encoder.matches("1234", "old-hash")).thenReturn(true);
+        service.change(
+                current,
+                new ChangePasswordRequest("1234", "newPass123"),
+                request,
+                new org.springframework.mock.web.MockHttpServletResponse());
+        verify(entity).changePasswordHash("new-hash");
+    }
+
     // 잠금 대기 중 만료된 세션은 DB 변경 전에 거절한다
     @Test
     void change_whenSessionExpired_doesNotStartTransaction() {

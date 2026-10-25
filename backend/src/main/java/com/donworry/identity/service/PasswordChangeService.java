@@ -56,6 +56,11 @@ public class PasswordChangeService {
                     log.info("비밀번호 변경 실패 userId={} code={}", current.userId(), "AUTH_006");
                     throw exception;
                 }
+                // 관리자가 아는 임시 비밀번호를 그대로 쓰면 강제 변경의 의미가 없다.
+                if (user.isPasswordChangeRequired() && encoder.matches(input.newPassword(), user.getPasswordHash())) {
+                    log.info("비밀번호 변경 실패 userId={} code={}", current.userId(), "AUTH_009");
+                    throw new PasswordChangeException(AuthErrorCode.TEMPORARY_PASSWORD_REUSED);
+                }
                 user.changePasswordHash(encoder.encode(input.newPassword()));
             });
             sessions.expireAllExcept(current.userId(), sessionId);

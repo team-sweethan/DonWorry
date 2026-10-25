@@ -185,6 +185,8 @@ class AdminAccountHttpTests {
         assertThat(mapper.readTree(list.body()).path("items").size()).isOne();
         problem(send(admin, "GET", "/api/admin/users?size=101", null), 400, "ADMIN_001");
         problem(send(admin, "GET", "/api/admin/users?role=UNKNOWN", null), 400, "ADMIN_001");
+        problem(send(admin, "GET", "/api/admin/users?page=abc", null), 400, "ADMIN_001");
+        problem(send(admin, "GET", "/api/admin/users/abc", null), 400, "ADMIN_001");
         problem(send(admin, "GET", "/api/admin/users/99999999", null), 404, "ADMIN_002");
         for (String role : List.of("ADMIN", "UNKNOWN"))
             problem(
@@ -265,6 +267,15 @@ class AdminAccountHttpTests {
                 .isTrue();
         String sessionId = registry.getAllSessions(id, false).getFirst().getSessionId();
         problem(send(caller, "GET", "/api/fds/evaluations", null), 403, "AUTH_008");
+        String temporary = created.path("temporaryPassword").asString();
+        problem(
+                send(
+                        caller,
+                        "POST",
+                        "/api/auth/password",
+                        Map.of("currentPassword", temporary, "newPassword", temporary)),
+                400,
+                "AUTH_009");
         var changed = send(
                 caller,
                 "POST",
@@ -313,6 +324,14 @@ class AdminAccountHttpTests {
                 .isEqualTo(204);
         assertThat(jdbc.queryForList("SELECT permission_code FROM user_permissions WHERE user_id=?", String.class, id))
                 .containsExactly("FINANCE_VIEW");
+        // 목록은 가맹점 이름·권한을 모아 읽어도 계정별로 정확히 붙인다
+        var row = mapper.readTree(send(admin, "GET", "/api/admin/users?keyword=" + prefix + "_mutate", null)
+                        .body())
+                .path("items")
+                .get(0);
+        assertThat(row.path("permissions").get(0).asString()).isEqualTo("FINANCE_VIEW");
+        assertThat(row.path("permissions").size()).isEqualTo(1);
+        assertThat(row.path("merchantName").isNull()).isFalse();
         caller = client();
         assertThat(login(caller, prefix + "_mutate", password).statusCode()).isEqualTo(200);
         assertThat(send(admin, "PUT", base + "/status", Map.of("status", "DISABLED"))
