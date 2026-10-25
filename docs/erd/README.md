@@ -166,3 +166,66 @@ erDiagram
 - 상태별 운영 목록·자동 복구 스케줄러는 범위 밖이므로 추가 조회 인덱스는 우선 만들지 않는다. 결제·키·판정 조회는 UNIQUE 인덱스를 쓴다.
 
 현재 SQL의 payments·action_handoffs·captures는 변경하지 않는 안이다. P3 결과의 targetOperationId는 actionType=CAPTURE일 때 capture_id, VOID일 때 action_id로 해석한다. VOID 식별자 추가 공유·확인은 남아 있다.
+
+### #149 P5 CakeShop 결제 저장 제안
+
+**저장 구조 방향 사용자 승인·저장 기반 구현.** 기준 dev 84698bb, 2026-10-25. 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 작업 브랜치에 migration·Entity·Repository를 추가했다. 운영 DB 적용·Notion 동기화·HTTP 연동은 미수행이다. [처리 설계](../payment/149-cakeshop-payment-api.md), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md)을 함께 확인한다.
+
+추가 migration: `V20261025_210954` (결제 메타데이터·주문 조회 인덱스), `V20261025_210955` (주문), `V20261025_210956` (시도). 같은 PR에 포함하며 기존 migration은 변경하지 않는다. 아래 입력 일치·동시 요청 제어 중 Entity/DB 제약 외 서비스 정책은 후속 구현이다.
+
+모두 P5 소유로 제안한다. 새 결제 시도마다 기존 payments 한 행을 만들고 P2/P3/P6는 그 paymentId를 계속 사용한다. PK는 BIGINT AUTO_INCREMENT, 시각은 UTC DATETIME(6), 금액 BIGINT, 상태 VARCHAR다. 참조되는 행은 물리 삭제하지 않는다.
+
+#### payment_orders — 주문 단위 접수·직렬화 기준
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| payment_order_id | BIGINT AUTO_INCREMENT PK | P5 내부 주문 접수 ID |
+| merchant_id | BIGINT NOT NULL | 인증된 P1 가맹점 논리 참조 |
+| order_ref | VARCHAR(100) NOT NULL | CakeShop 주문번호, 대소문자 구분 collation 제안 |
+| customer_ref | VARCHAR(100) NOT NULL | 합의 후 사용할 내부 고객 참조 |
+| amount | BIGINT NOT NULL | 주문의 확정 결제 금액, 양수 |
+| order_created_at | DATETIME(6) NOT NULL | CakeShop 최초 주문 생성 시각 |
+| payment_deadline_at | DATETIME(6) NOT NULL | 최초 주문 생성 +10분, 새 시도 접수 제한 |
+| last_attempt_no | BIGINT NOT NULL DEFAULT 0 | 마지막으로 발급한 시도 순번 |
+| created_at | DATETIME(6) NOT NULL | P5 주문 접수 기준행 생성 시각 |
+
+UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_order_id, merchant_id). CHECK: merchant_id/amount >0, last_attempt_no >=0, payment_deadline_at > order_created_at. 정확한 +10분과 주문 불변 입력은 서비스에서 검사한다. 다른 담당 merchants로 FK를 걸지 않는다. PK 행 잠금으로 같은 주문의 요청들을 직렬화한다. 최신 결제 포인터/상태를 복제하지 않고 요청행의 최대 attempt_no로 찾는다.
+
+#### payment_requests — 결제 시도별 식별·재개 정보
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| request_id | BIGINT AUTO_INCREMENT PK | 요청 기록 ID |
+| payment_order_id | BIGINT NOT NULL | P5 payment_orders 참조 |
+| merchant_id | BIGINT NOT NULL | 가맹점별 키 UNIQUE를 위한 값, 주문과 일치 |
+| payment_id | BIGINT NOT NULL | P5 payments FK, 시도당 하나 |
+| attempt_no | BIGINT NOT NULL | 주문별 1부터 증가하는 순번 |
+| idempotency_key | UUID NOT NULL | CakeShop이 시도별로 보존하는 키 |
+| evaluation_request_id | UUID NOT NULL | P5가 최초 생성·고정하는 P2 요청 키 |
+| processing_stage | VARCHAR(30) NOT NULL | RECEIVED / EVALUATED / AUTHORIZED / NEEDS_REVIEW |
+| evaluation_id | BIGINT NULL | P2 응답 논리 참조, FK 없음 |
+| evaluation_result | VARCHAR(20) NULL | P2 응답 ALLOW/REVIEW/DENY/ERROR |
+| evaluation_risk_score | INT NULL | P2 응답 점수, ERROR이면 NULL |
+| evaluation_error_code | VARCHAR(100) NULL | P2 ERROR 코드, 외부 거절 코드와 별개 |
+| evaluated_at | DATETIME(6) NULL | P2 응답 시각 |
+| created_at | DATETIME(6) NOT NULL | 시도 저장 시각, payments.created_at과 동일 |
+
+- UNIQUE(merchant_id, idempotency_key), UNIQUE(payment_order_id, attempt_no), UNIQUE(payment_id), UNIQUE(evaluation_request_id).
+- 복합 FK(payment_order_id, merchant_id) → payment_orders(payment_order_id, merchant_id); FK(payment_id) → payments(payment_id). 같은 P5 소유, 삭제 연쇄 없음.
+- CHECK: attempt_no >0, processing_stage 허용값. RECEIVED는 평가 필드 전부 NULL. EVALUATED/AUTHORIZED는 양수 evaluation_id·evaluated_at·ALLOW/REVIEW/DENY·0 이상 점수 필수, 오류 NULL. NEEDS_REVIEW는 양수 evaluation_id·evaluated_at·ERROR·비어 있지 않은 오류 필수, 점수 NULL.
+- AUTHORIZED는 초기 승인 판단이 끝났다는 내부 단계다. 결제 최종 성공이 아니며 DENIED/DECLINED도 포함한다. 실제 상태는 payments에서 읽는다.
+- payment와 주문의 가맹점·주문번호·금액·고객 일치는 같은 트랜잭션의 저장 서비스와 테스트로 보장한다. 행 CHECK로 타 테이블 일치까지 보장한다고 주장하지 않는다.
+- 요청 재전송 내용은 주문 불변 필드와 키로 대조한다. 요청 raw JSON·API Key·카드 정보는 저장하지 않는다. 평가 응답 사본은 재개에 필요한 최소 6필드이며 룰·보고서 사본은 두지 않는다.
+
+#### payments 추가 제안
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| status_changed_at | DATETIME(6) NULL | 현재 상태로 전이한 P5 시각. 과거 행은 알 수 없으면 NULL |
+| decline_code | VARCHAR(100) NULL | 외부용 최종 DENIED/DECLINED 사유 |
+
+신규 결제는 생성 시 status_changed_at=created_at. 기존 상태 메서드와 ALLOW/직원 CAPTURE·VOID 완료까지 모두 반영한다. 동일 상태 재전달은 기존 시각 보존. decline_code는 FDS_REJECTED/AUTHORIZATION_DECLINED 제안이며 그 외 상태 NULL. 기존 행은 사유를 추정 백필하지 않으므로 거절 상태에서도 NULL 허용한다. 해당 상태/코드 조합 CHECK를 추가하는 안이다.
+
+기존 조회·거절·완료 API의 원래 시각을 대체하지 않는다. 주문·키 신규 구조는 과거 데이터 자동 편입 없이 도입하고 동일 가맹점/주문번호 과거 결제가 있으면 새 HTTP 접수를 막는다. 기존 조회를 위한 payments(merchant_id, order_ref) 비고유 인덱스도 제안한다. 기존 orders 중복 데이터를 삭제하거나 UNIQUE로 강제하지 않는다.
+
+현재 SQL은 변경하지 않았다. 물리 스키마 적용 전 타입·collation·제약·순번 상한·기존 데이터 호환 및 후속 migration 배포 순서를 구현 단계에서 검증한다.
