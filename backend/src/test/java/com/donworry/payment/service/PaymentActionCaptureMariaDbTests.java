@@ -10,6 +10,7 @@ import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentAction;
 import com.donworry.payment.repository.*;
 import com.donworry.settlement.api.*;
+import com.donworry.settlement.repository.SettlementRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Duration;
 import java.time.Instant;
@@ -59,6 +60,10 @@ class PaymentActionCaptureMariaDbTests {
 
     @Autowired
     ResultReceiver receiver;
+
+    // P6 저장 장애만 주입하는 통합 테스트 대역이며 운영 코드의 모듈 의존은 추가하지 않는다.
+    @MockitoSpyBean
+    SettlementRepository settlements;
 
     @MockitoSpyBean
     PaymentActionRepository actions;
@@ -155,6 +160,55 @@ class PaymentActionCaptureMariaDbTests {
 
     private void resubmit(UUID id) {
         publications.resubmitIncompletePublications(p -> p.getIdentifier().equals(id));
+    }
+
+    // 손상된 HELD 데이터도 공개 요청 경계에서 거절하며 금융 작업을 시작하지 않는다.
+    @ParameterizedTest
+    @ValueSource(strings = {"CAPTURE", "VOID"})
+    void request_whenAuthorizationMissing_rejectsWithoutPersistingAction(String type) {
+        var c = command();
+        jdbc.update("UPDATE payments SET authorization_ref=NULL WHERE payment_id=?", c.paymentId());
+        var request = new PaymentActionCommand(c.paymentId(), c.decisionId(), type, c.idempotencyKey());
+        assertThat(requester.request(request)).isEqualTo(PaymentActionReceipt.rejected("PAYMENT_NOT_AUTHORIZED"));
+        assertThat(count("payment_actions", c.paymentId())).isZero();
+        assertThat(eventCount(CaptureRequested.class, c.paymentId())).isZero();
+        assertThat(eventCount(PaymentActionResult.class, c.paymentId())).isZero();
+        assertThat(payments.findById(c.paymentId()).orElseThrow().getStatus().name())
+                .isEqualTo("HELD");
+    }
+
+    // P6 저장 실패는 업무 거절로 바꾸지 않고 원 요청 이벤트를 재전달해 복구한다.
+    @Test
+    void request_whenSettlementSaveFails_recoversWithoutNewCaptureRequest() {
+        var c = command();
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("injected settlement failure"))
+                .when(settlements)
+                .save(any());
+        assertThat(requester.request(c)).isEqualTo(PaymentActionReceipt.pending());
+        await().atMost(Duration.ofSeconds(15))
+                .untilAsserted(() -> assertThat(publicationStatus(publication(CaptureRequested.class, c.paymentId())))
+                        .isEqualTo("FAILED"));
+        UUID original = publication(CaptureRequested.class, c.paymentId());
+        assertThat(count("captures", c.paymentId())).isZero();
+        assertThat(count("settlements", c.paymentId())).isZero();
+        assertThat(eventCount(CaptureCompleted.class, c.paymentId())).isZero();
+        assertThat(eventCount(PaymentActionResult.class, c.paymentId())).isZero();
+        assertThat(payments.findById(c.paymentId()).orElseThrow().getStatus().name())
+                .isEqualTo("HELD");
+        assertThat(actions.findByPaymentId(c.paymentId())
+                        .orElseThrow()
+                        .getStatus()
+                        .name())
+                .isEqualTo("PENDING");
+        assertThat(requester.request(c)).isEqualTo(PaymentActionReceipt.pending());
+        assertThat(eventCount(CaptureRequested.class, c.paymentId())).isEqualTo(1);
+        reset(settlements);
+        resubmit(original);
+        completed(c.paymentId());
+        assertThat(publication(CaptureRequested.class, c.paymentId())).isEqualTo(original);
+        assertThat(count("captures", c.paymentId())).isEqualTo(1);
+        assertThat(count("settlements", c.paymentId())).isEqualTo(1);
+        assertThat(requester.request(c).status()).isEqualTo("ACCEPTED");
     }
 
     // 실제 P6가 저장한 매입·정산 결과로 직원 결제를 완료하고 원래 판정 정보를 전달한다.

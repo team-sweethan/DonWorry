@@ -271,3 +271,16 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 기존 5번 테스트의 임시 VOID 미지원 검사는 CAPTURE 선행 후 VOID 충돌 거절 검사로 교체했다. 실제 P6를 통한 ACCEPT 및 기존 ALLOW 매입 회귀 검사는 그대로 통과했다.
 - P3 역할은 테스트 수신자로 검증했다. VOID 성공 시 targetOperationId=actionId, 확정 거절 시 targetOperationId=null·errorCode=VOID_DECLINED를 확인했다. 실제 P3 Gateway·결과 리스너·권한·Case 종료·응답/이벤트 순서 역전 처리는 별도 구현·미검증이다.
 - 문서 링크 및 git diff --check 통과. 운영 자동 재시도·실제 카드사 취소·Notion 동기화는 수행하지 않았다. VOID actionId/구체 DTO의 추가 P3 확인은 아직 확인되지 않았다.
+
+
+## #141 7번 단계 — 완료 기준 대조와 복구 검증 보강
+
+2026-10-25, REJECT 구현 커밋 `8a93b88` + 7번 단계 테스트 작업본 기준. `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m21s). 일반 351건 중 350건 성공·기존 수동 시연 1건 제외, MariaDB 145건 성공. 실패·오류 0. 검사 뒤 문서 실행 기록만 추가했다.
+
+- PaymentActionCaptureMariaDbTests에 3건 추가(총 11건): 승인 참조가 없는 HELD에 CAPTURE/VOID 요청 시 PAYMENT_NOT_AUTHORIZED 반환·조치/이벤트 미생성, P6 정산 저장 실패 후 원 CaptureRequested 재전달 복구.
+- P6 실패 시 매입·정산·완료 이벤트는 롤백되고 P5 HELD/PENDING은 유지된다. 동일 요청 재호출은 PENDING이며 요청 이벤트를 추가하지 않는다. 저장 장애 대역을 해제하고 원 발행 기록을 재전달하면 매입·정산이 각각 한 건 생성되고 최종 ACCEPTED를 저장값에서 반환한다.
+- P6 저장 장애는 기존 복구 테스트와 같은 Repository spy로 주입했다. 운영 P5 코드의 P6 내부 의존은 추가하지 않았다. 이 검사는 실제 DB 연결 단절 실험이 아니다.
+- [구현 문서](141-payment-actions.md)의 7번 단계 표에 완료 기준과 검사 근거를 연결했다. 기존 ALLOW·VOID·모듈 경계·DB 제약 검사도 통과했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` 통과.
+- 미검증: 실제 P3 Gateway·결과 수신·권한·Case 종료·응답/이벤트 역순 반영, 완료와 재요청 순서를 강제한 경합, JVM 재기동 및 운영 자동 재시도. DB 복원은 별도 트랜잭션 재조회와 명시적 이벤트 재전달 범위로 확인했다.
+- 다른 담당 확인: VOID actionId/구체 DTO의 P3 추가 확인과 Notion 동기화는 후속으로 남아 있다.

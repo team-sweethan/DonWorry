@@ -146,3 +146,23 @@ P3 운영 리스너는 payment.api.PaymentActionResult를 커밋 후 수신해�
 - 승인 참조·금액은 VOIDED에서도 그대로 보존한다. PENDING·CAPTURED 등 HELD 이외의 결제에 승인 취소 완료를 적용하지 않는다.
 - 이 트랜잭션 모델은 외부 부작용이 없는 모의 취소에 한정한다. 실제 카드사 취소로 교체하면서 단순히 이 트랜잭션에 HTTP 호출을 넣어서는 안 된다. 외부 실행·조회·복구 계약은 별도 설계한다.
 - 테스트 수신자는 VOID 성공·거절 결과가 결제/조치 커밋 뒤 전달되는지 검증한다. P3 운영 수신·Case 반영과 Notion 동기화는 여전히 후속이다. 실행 결과는 [검증 기록](verification.md)을 본다.
+
+
+### 7번 단계 검증 범위
+
+| 완료 기준 | 검증 근거 |
+| --- | --- |
+| 필수 입력·종료 상태 불변 | PaymentActionTests, PaymentVoidTests |
+| 저장 제약·UTC 정밀도·없는 결제·상태 거절 | PaymentActionAdmissionMariaDbTests |
+| 승인 정보 없는 HELD의 CAPTURE/VOID 거절 | PaymentActionCaptureMariaDbTests.request_whenAuthorizationMissing_rejectsWithoutPersistingAction |
+| 실제 직원 매입·정산·CAPTURED와 저장 결과 재조회 | PaymentActionCaptureMariaDbTests.request_whenCapture_completesAndReplaysStoredResult |
+| P6 실패 뒤 HELD/PENDING 유지·기존 요청 재전달 | PaymentActionCaptureMariaDbTests.request_whenSettlementSaveFails_recoversWithoutNewCaptureRequest |
+| 동일·반대 요청 경합, 다른 결제의 키/판정 UNIQUE 경쟁 | Admission·Capture·Void MariaDB 테스트의 concurrent/race 사례 |
+| 모의 취소 성공·확정 거절·기술 실패 구분 | PaymentActionVoidMariaDbTests |
+| 요청·완료·취소 커밋 실패 시 원자적 롤백 | Capture·Void MariaDB 테스트의 commitFails 사례 |
+| 결과 수신 실패 뒤 동일 이벤트 재전달·실행 중복 방지 | Capture·Void MariaDB 테스트의 receiverFails 사례 |
+| 기존 ALLOW 회귀·모듈 경계 | 전체 check·mariaDbTest |
+
+DB 기반 복원은 새 트랜잭션에서 같은 요청을 재호출해 저장된 결과를 반환하는 범위다. JVM 종료·재기동 실험이나 운영 자동 재시도 검증으로 표현하지 않는다. 완료 처리와 재요청을 특정 순서로 강제한 경합, P3 응답/이벤트 역순 반영은 별도 미검증이다. P3 실제 Gateway·권한·인계/Case 종료는 이 테스트 수신자로 검증되지 않는다.
+
+실행 결과와 기준 커밋은 [검증 기록](verification.md)에 기록한다.

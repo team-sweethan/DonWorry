@@ -42,11 +42,11 @@ ADR-0018의 CAPTURE 완료 기반 인계 제안을 구체화하되 acceptedAt=ca
 
 ## 영향
 
-- API: PaymentActionRequester·Command·Receipt·Result 추가 설계. P3 Gateway 매핑·PENDING 처리·최종 결과 멱등 수신은 P3 담당 후속 구현이다.
-- DB: P5 payment_actions 신규 제안, payments 컬럼은 유지. payments 물리 FK, P3 decision/P6 capture는 논리 참조. 사용자가 승인한 저장소 상세 ERD 기준으로 migration을 생성한다. Notion 동기화는 후속이다.
+- API: PaymentActionRequester·Command·Receipt·Result 구현. P3 Gateway 매핑·PENDING 처리·최종 결과 멱등 수신은 P3 담당 후속 구현이다.
+- DB: P5 payment_actions 신규 migration 구현, payments 컬럼은 유지. payments 물리 FK, P3 decision/P6 capture는 논리 참조. 사용자가 승인한 저장소 상세 ERD 기준으로 migration을 생성했다. Notion 동기화는 후속이다.
 - 화면: P3 Case가 실제 완료까지 열려 있게 된다. 화면 수정은 이번 P5 범위 밖이다.
 - 테스트: 트랜잭션 원자성·동시 충돌·중복·재전달·영속 결과 복구·기존 ALLOW 회귀가 필요하다.
-- 문서: P5 설계·README, ERD에 저장 기반 구현과 실행 연결 미구현을 구분한다. Notion 동기화는 후속이다.
+- 문서: P5 설계·README, ERD에 P5 실행·결과 발행 구현과 P3 운영 연결 미구현을 구분한다. Notion 동기화는 후속이다.
 
 ## 검증
 
