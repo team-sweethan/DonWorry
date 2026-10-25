@@ -24,7 +24,7 @@
 
 ## 현재 구현
 
-- #149는 [CakeShop 요청·조회 설계](149-cakeshop-payment-api.md)와 [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md)을 작성한 단계다. 5번 단계에서 신규 저장 구조(migration·Entity·Repository)와 상태 변경 메타데이터를 구현했다. 후속 단계에서 접수 서비스의 동일 키 재사용·주문 잠금·거절 후 재결제·기존 주문 차단을 구현했다. 평가/승인 재개·HTTP·인증 연결은 아직 미구현이다. 기존 내부 결제 처리·조회 구현과 구분한다.
+- #149는 [CakeShop 요청·조회 설계](149-cakeshop-payment-api.md)와 [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md)을 작성한 단계다. 5번 단계에서 신규 저장 구조(migration·Entity·Repository)와 상태 변경 메타데이터를 구현했다. 후속 단계에서 접수 서비스의 동일 키 재사용·주문 잠금·거절 후 재결제·기존 주문 차단을 구현했다. 이어서 고정 평가 UUID로 P2 호출·결과 복원과 모의 승인/단계/이벤트의 원자 저장을 연결했다. HTTP·인증 연결은 아직 미구현이다. 기존 내부 결제 처리·조회 구현과 구분한다.
 
 - #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 직원 CAPTURE·VOID 실행과 결과 저장·발행을 구현했다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 5번 단계에서 공개 실행 Bean·직원 CAPTURE 요청/완료·P3 결과 발행을 연결했다. 6번 단계에서 REJECT 모의 승인 취소·VOIDED·결과 발행도 연결했다. 7번 단계에서 요청 거절·P6 실패 복구를 보강하고 전체 검사를 통과했다. P3 운영 수신은 후속이다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약 확인과 Notion 동기화는 후속이다.
 

@@ -1,6 +1,6 @@
 # #149 CakeShop 결제 요청·조회 설계
 
-- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수 서비스 구현, 평가/승인 재개·HTTP·담당 인증 연결은 후속.**
+- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수·평가/승인 재개 구현, HTTP·담당 인증 연결은 후속.**
 - 기준: `dev 84698bb`, 2026-10-25. migration 전체를 버전 순으로 읽고 P5 생성·승인·완료·조회와 P2 평가 재호출 코드를 대조했다.
 - [Issue #149](https://github.com/team-sweethan/DonWorry/issues/149), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md), [ERD 제안](../erd/README.md#149-p5-cakeshop-결제-저장-제안).
 - 2026-10-25 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 이를 저장 구조 승인으로 기록하며 실제 DB 적용·타 담당 회신·Notion 반영 완료와 구분한다. 상세 제약과 연동 세부는 아래 설계 기준으로 검토한다.
@@ -204,3 +204,18 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 - **후속 구현:** 저장된 평가 UUID로 P2 호출·결과 저장·승인 원자 처리/재개, HTTP 요청·조회·인증 연결. 새 테이블이나 컬럼을 더 추가하지 않는다.
 
 검증 기준: `bba245f` 위 접수 서비스 미커밋 작업 트리, 2026-10-25. 최종 `./gradlew spotlessApply check mariaDbTest` 통과. 일반 테스트 381개 통과·기존 비활성 1개 제외, MariaDB 194개 통과. 신규 접수 단위 4개·MariaDB 17개에서 동일 키/다른 내용·최초 주문 경합·거절 후 재결제 경합·교차 주문 키 경합 롤백·가맹점 격리·기한·과거 키 복원·미이관 주문 차단·독립 커밋을 확인했다. 문서 링크와 diff 검사도 통과했다. HTTP·인증·P2/승인 재개·실제 CakeShop 연동은 미구현/미검증이다.
+
+
+### 후속 단계 — 저장 평가와 모의 승인 재개
+
+- `PaymentRequestFlowService.submit`는 같은 명령의 접수 결과를 얻은 뒤 저장한 paymentId·evaluationRequestId·고객·금액·결제 생성 시각으로 P2를 호출한다. P5 저장 트랜잭션을 종료한 후 호출하며, 응답의 요청 UUID도 대조한다.
+- RECEIVED이면 P2 호출 결과를 별도 트랜잭션에 저장한다. P2 호출 실패·응답 유실이면 접수를 유지하고 같은 키 재시도에서 같은 UUID·입력을 사용한다. P2 커밋 후 P5 저장 전에 중단된 경우에도 기존 P2 결과를 복원한다.
+- EVALUATED이면 저장한 평가 결과로만 승인한다. 기존 `PaymentAuthorizationService`의 승인 규칙·이벤트 발행 로직을 재사용하되 새 MANDATORY 경계로 호출해 결제 상태·승인 참조·등록된 수신자의 이벤트 발행 기록·AUTHORIZED 단계를 함께 커밋한다. 기존 내부 흐름의 REQUIRES_NEW 계약은 유지한다.
+- AUTHORIZED는 재승인·재발행하지 않는다. ERROR는 NEEDS_REVIEW로 보존하고 자동 재평가·승인하지 않는다. DENY·모의 승인 거절도 초기 판단 완료인 AUTHORIZED로 기록하며 실제 상태는 각각 DENIED·DECLINED다.
+- 저장/승인 순서는 payments 잠금 → payment_requests 잠금이다. 동시 응답이 이미 저장한 결과와 같으면 그대로 유지하고, 다르면 덮어쓰지 않고 충돌한다. 늦은 호출도 승인 직전 단계를 다시 확인한다.
+- 반환값은 접수 식별자이며 최신 결제 상태 응답이 아니다. 상태 조회·HTTP·인증 연결은 다음 단계다. GET은 이 처리 서비스를 호출하면 안 된다.
+- 실제 카드사 호출은 없으며 롤백 후 모의 승인을 다시 실행할 수 있다. 운영 자동 재개 스케줄러·ERROR 종료 정책·장기 보류 만료는 추가하지 않는다.
+
+실제 P2 동시 평가 테스트에서 `fds_evaluations` 잠금 조회의 SnapshotIsolationException을 재현했다. P2 코드는 수정하지 않고 P5의 호출 경계에서 해당 스냅샷 경합·비관적 잠금 경합만 같은 저장 입력으로 최대 2회 재시도한다(최대 3회 호출). 오류 응답 ERROR·일반 DB 오류·기타 호출 실패는 자동 재시도하지 않는다. 한도 초과 시 접수를 보존하고 오류를 전달하므로 이후 같은 키 요청으로 복구할 수 있다. 이는 새 UUID 재평가나 운영 자동 재시도 스케줄러가 아니다.
+
+검증 기준: `5186f99` 위 이번 미커밋 작업 트리, 2026-10-25. 최종 `./gradlew spotlessApply check mariaDbTest` 통과. 일반 384개 통과·기존 비활성 1개 제외, MariaDB 206개 통과. 신규 단위 3개·MariaDB 12개로 P2 실패 후 동일 입력 재호출, 평가 저장 전/후 중단 복원, 승인 커밋 실패·재개, 네 평가 분기·카드 거절·동시 승인 1회·UUID 불일치·제한 재시도를 확인했다. 실제 P2/P6로 평가 1건·매입 1건과 응답 유실 후 복원을 검증했고, DENY/ERROR/카드 거절/커밋 실패는 대역으로 검증했다. 첫 실행에서 발견한 대역 재설정 오류와 실제 P2 경합을 보완한 후 재실행한 결과다. HTTP·P1 인증·실제 CakeShop 연결·운영 자동 복구는 미검증이다. 문서 상대 링크와 diff 검사 통과.
