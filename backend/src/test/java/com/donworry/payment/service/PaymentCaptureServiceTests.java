@@ -20,7 +20,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class PaymentCaptureServiceTests {
     private final PaymentRepository payments = mock(PaymentRepository.class);
-    private final PaymentCaptureService service = new PaymentCaptureService(payments);
+    private final PaymentCaptureService service = new PaymentCaptureService(
+            payments,
+            mock(com.donworry.payment.repository.PaymentActionRepository.class),
+            mock(org.springframework.context.ApplicationEventPublisher.class));
     private final CaptureCompleted event = new CaptureCompleted(10L, 20L, Instant.now());
     private final Payment payment = Payment.pending(1L, "customer", "order", 1000L, Instant.now());
 
