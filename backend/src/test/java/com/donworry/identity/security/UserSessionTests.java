@@ -2,6 +2,8 @@ package com.donworry.identity.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
 
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.service.UserSessionService;
@@ -131,5 +133,29 @@ class UserSessionTests {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         assertThat(response.getCookie("JSESSIONID").getMaxAge()).isZero();
         assertThat(registry.getAllSessions(1L, false)).isEmpty();
+    }
+
+    // 인증 저장 도중 실패하면 새 세션·registry·컨텍스트를 정리하고 이미 만료한 이전 세션은 복구하지 않는다
+    @Test
+    void establishAuthentication_whenContextSaveFails_cleansPartialAuthentication() {
+        var request = new MockHttpServletRequest();
+        var response = new MockHttpServletResponse();
+        var authentication = UsernamePasswordAuthenticationToken.authenticated(user(1L, List.of()), null, List.of());
+        service.establishAuthentication(authentication, request, response);
+        var first = (MockHttpSession) request.getSession(false);
+        var broken = spy(contextRepository);
+        doThrow(new IllegalStateException("session write failure")).when(broken).saveContext(any(), any(), any());
+        var failing = new UserSessionService(
+                registry,
+                config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository()),
+                broken,
+                config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository()));
+        var fresh = new MockHttpServletRequest();
+        assertThatThrownBy(() -> failing.establishAuthentication(authentication, fresh, response))
+                .isInstanceOf(org.springframework.security.authentication.InternalAuthenticationServiceException.class);
+        assertThat(fresh.getSession(false)).isNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(registry.getAllSessions(1L, false)).isEmpty();
+        assertThat(registry.getSessionInformation(first.getId()).isExpired()).isTrue();
     }
 }

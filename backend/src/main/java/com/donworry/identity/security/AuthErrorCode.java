@@ -18,6 +18,7 @@ public enum AuthErrorCode {
     PROCESSING_UNAVAILABLE("AUTH_007", "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.INTERNAL_SERVER_ERROR),
     PASSWORD_CHANGE_REQUIRED("AUTH_008", "비밀번호를 먼저 변경해 주세요.", HttpStatus.FORBIDDEN),
     TEMPORARY_PASSWORD_REUSED("AUTH_009", "임시 비밀번호와 다른 새 비밀번호를 입력해 주세요.", HttpStatus.BAD_REQUEST),
+    INVALID_HISTORY_INPUT("AUTH_010", "로그인 이력 조회 조건을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     ADMIN_INVALID_INPUT("ADMIN_001", "계정 관리 입력값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     ADMIN_USER_NOT_FOUND("ADMIN_002", "계정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
     ADMIN_LOGIN_ID_CONFLICT("ADMIN_003", "이미 사용 중인 아이디입니다.", HttpStatus.CONFLICT),

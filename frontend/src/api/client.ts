@@ -66,7 +66,12 @@ function notifyError(
   if (error.status === 403 && error.code === 'AUTH_008') {
     passwordChangeListeners.forEach((listener) => listener())
   }
-  if (error.status === 401 && (!path.startsWith('/auth/') || path === '/auth/password')) {
+  if (
+    error.status === 401 &&
+    (!path.startsWith('/auth/') ||
+      path === '/auth/password' ||
+      path.startsWith('/auth/login-histories'))
+  ) {
     unauthorizedListeners.forEach((listener) => listener())
   }
 }

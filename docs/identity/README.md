@@ -2,6 +2,48 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #147 로그인 이력
+
+상세 계약은 [#147 설계](147-login-history-design.md), 대안·영향은
+[ADR-0031](../decisions/0031-login-history.md), 스키마는 [ERD](../erd/README.md)의 #147 계약을 따른다.
+사용자가 이번 작업은 저장소 ERD·ADR부터 반영해 구현하고 Notion은 후속 반영하도록 승인했다.
+
+- 로그인 성공·인증 거절·일반/전체 로그아웃을 P1 `login_histories`에 저장한다. 없는 계정은 user_id=NULL이며 입력 아이디는 보관·재연결하지 않는다.
+- 성공은 세션 수립 후 기록한다. INSERT·커밋 오류는 독립 트랜잭션에서 격리하고 기존 인증·401·로그아웃 결과를 유지한다. 기존 잠금 횟수 저장·성공 초기화의 AUTH_005 정책은 유지한다.
+- 일반/전체 로그아웃은 로그인별 비인증 UUID와 DB UNIQUE로 중복을 막는다. DB는 세션 모니터 밖에서 접근한다. 원본 세션 ID·비밀번호·쿠키·토큰을 저장하지 않는다.
+- 세션 수립 자체의 실패는 새 인증·registry·부분 세션을 정리하며 성공으로 기록하지 않는다. 앞서 만료한 이전 세션은 복구하지 않는다.
+- 본인 이력·최근 성공은 `/api/auth/login-histories`, `/api/auth/login-histories/latest-success`, ADMIN 계정별 조회는 `/api/admin/users/{userId}/login-histories`다. 페이지 크기 1~100, 기본 20이며 시각·PK 역순으로 정렬한다. 최근 성공 응답은 `{latestSuccess: 항목 또는 null}`이다.
+- 조회·최근 성공은 정확히 90일 지난 행과 미래 행을 제외한다. 기동 후/매시간 1,000건씩 최대 10배치 독립 삭제하며 오류 후 다음 실행에 재시도한다. native 삭제 기준은 UTC DATETIME(6)으로 명시 변환한다.
+- 공통 헤더·내 이력 화면·ADMIN 계정 상세 탭을 연결했다. 시각은 Asia/Seoul, 기기는 브라우저·OS 수준이다. 업무 조회 권한 없는 사장님도 본인 경로를 사용하며 강제 비밀번호 변경 중에는 차단한다.
+- 기존 API·이벤트·모듈 의존·다른 담당 테이블은 변경하지 않는다. #146 운영 설정에는 직접 의존하지 않으며 해당 PR 병합 후 통합 검증은 후속이다.
+
+### IP 배포 설정
+
+기본 `DONWORRY_LOGIN_HISTORY_IP_MODE=DIRECT`는 원 접속 IP만 사용하고 전달 헤더는 무시한다.
+프록시 배포는 `PROXY`와 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`(쉼표 구분 숫자 IP)를 설정한다.
+신뢰 프록시가 외부 입력을 제거하고 `X-DonWorry-Client-IP`를 유효한 단일 사용자 IP로 덮어써야 한다.
+신뢰하지 않는 peer·없는/잘못된/다중 헤더는 확인 불가로 남기며 프록시 IP로 대체하지 않는다.
+원 peer를 보존하도록 `server.forward-headers-strategy=NONE`을 사용해야 한다.
+FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 거절한다.
+실제 운영 프록시 주소·전달·우회 접속 차단은 배포 구성이 정해진 뒤 확인한다.
+
+### #147 검증·미검증
+
+2026-10-25, `feature/147-login-history`, 기준 `dev 84698bb` 위 #147 최종 구현·테스트 작업 트리에서 실행했다.
+기준 dev 단독 결과가 아니며 #146 변경은 포함하지 않는다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 378개 중 377개 성공·기존 1개 건너뜀(LocalSettlementDemoTests), MariaDB 194개 성공. 실패·오류 0. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 신규 일반 테스트 5개: 직접·신뢰/비신뢰 프록시·위조/오류/다중 IP 헤더·설정 혼용 거절·User-Agent 제한, 부분 세션 정리.
+- 신규 MariaDB HTTP 테스트 22개: 성공·오답·없는 계정·계정/가맹점 정지·잠금·입력 400, 외부 롤백과 독립 커밋, 성공/실패/두 로그아웃의 INSERT·커밋 오류와 로그, 세션 저장 실패·이전 세션 만료, 일반/전체 동시 로그아웃 중복 방지, 본인/ADMIN 인가·세 역할/무권한 계정·강제 변경·계정 분리·NULL 계정 비연결, 동률 페이지·90일 마이크로초 경계·삭제 실패 후 재실행·1,000건 초과 배치·최근 성공 없음.
+- 초기 검사에서 새 Clock 빈과 Modulith 자동 설정의 충돌, native LocalDateTime 삭제 바인딩의 JVM 시간대 재적용을 발견했다. 기존 UTC Clock 공유·명시적 UTC DATETIME 변환으로 수정하고 경계 검사를 통과했다.
+- 새 FK 때문에 기존 관리자 HTTP 테스트의 계정 정리 순서가 실패했다. 각 테스트 소유 로그인 이력을 먼저 지우도록 fixture를 보완한 뒤 위 전체 검사를 통과했다. 기존 기능 검증 조건은 유지했다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고는 유지된다. 신규 공통 경로·API/401·강제 변경·한국 시간·기기 표시·기록 없음/오류 구별 검사를 포함한다.
+- Chrome과 별도 MariaDB/백엔드/Vite 서버에서 로그인·마지막 로그인·헤더 링크·내 이력·ADMIN 상세 탭·20건/나머지 페이지 이동·확인 불가 IP/기기·로딩을 확인했다. 임시 DB의 기록을 91일 전으로 바꿔 헤더·목록의 “최근 90일 내 로그인 기록 없음”도 확인했다. 일시적인 로컬 프록시 503 주입으로 헤더/목록 오류를 확인하고 각각 다시 시도로 복구했다. 기존 로컬 DB·서버는 변경하지 않았다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 모든 기존 migration은 보존하고 `newMigration`으로 새 파일 하나만 추가했다.
+- 검증 이후 구현·테스트 코드는 변경하지 않고 문서 실행 기록만 보완한다.
+
+미검증: 실제 운영 프록시·HTTPS·신뢰 주소/헤더 주입·직접 접근 차단, 실제 90일/매시간 대기(주입 시각과 직접 작업 실행으로 검증), #146 병합 후 통합 검증, 다중 서버(범위 밖), Notion 최신 내용 확인·동기화. AI 서버는 변경하지 않아 해당 검사를 실행하지 않았다.
+
 ## #127 로그인 시도 제한
 
 상세 정책·저장 순서는 [#127 설계](127-login-attempt-design.md), 대안·영향은 [ADR-0029](../decisions/0029-login-attempt-lock.md)를 따른다.

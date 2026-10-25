@@ -45,6 +45,10 @@ server:
         same-site: lax
 
 security:
+  login-history:
+    # PROXY는 관리 프록시가 X-DonWorry-Client-IP를 덮어쓰는 배포에서만 설정한다.
+    ip-mode: ${DONWORRY_LOGIN_HISTORY_IP_MODE:DIRECT}
+    trusted-proxies: ${DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES:}
   csrf:
     # 실제 활성화는 #68 5단계에서 다른 담당에게 공지한 뒤 진행한다.
     enabled: ${DONWORRY_CSRF_ENABLED:false}
