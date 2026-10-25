@@ -44,6 +44,20 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 
 미검증: 실제 운영 프록시·HTTPS·신뢰 주소/헤더 주입·직접 접근 차단, 실제 90일/매시간 대기(주입 시각과 직접 작업 실행으로 검증), #146 병합 후 통합 검증, 다중 서버(범위 밖), Notion 최신 내용 확인·동기화. AI 서버는 변경하지 않아 해당 검사를 실행하지 않았다.
 
+### #147 헤더·이력 레이아웃 후속
+
+2026-10-25, `fdea469` 위 후속 작업 트리에서 헤더·이력 표만 정리했다.
+변경 파일은 `AuthRoutes.tsx`, `LoginHistoryPage.tsx`, `global.css`와 관련 문서다.
+마지막 로그인은 회색 보조 정보로 표시하고 이름·역할을 계정 메뉴로 묶었다.
+비밀번호 변경·내 로그인 이력은 클릭으로 여는 메뉴로 이동하고 로그아웃은 별도 버튼으로 유지했다.
+강제 비밀번호 변경 중에는 이력 메뉴를 제공하지 않는다.
+표의 안내를 짧게 나누고 시각·활동·IP 열 너비와 여백을 정리했다.
+
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
+- 문서 상대 링크·diff 공백 검사를 실행했다.
+- 미검증: 이번 레이아웃의 실제 화면·드롭다운 클릭/키보드 확인. Google Chrome 제어가 자동 승인 검토에서 거절됐다(`Computer Use was not approved to use Google Chrome`). 앞 절의 브라우저 기록은 이 후속 변경 전 결과다.
+- 백엔드·DB·API·다른 담당 계약은 변경하지 않아 해당 검사를 다시 실행하지 않았다. 원격 CI는 사용자 확인을 기다리며 추적하지 않는다.
+
 ## #127 로그인 시도 제한
 
 상세 정책·저장 순서는 [#127 설계](127-login-attempt-design.md), 대안·영향은 [ADR-0029](../decisions/0029-login-attempt-lock.md)를 따른다.

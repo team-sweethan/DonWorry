@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Result, Space, Spin } from 'antd'
-import { LogoutOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
+import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import {
@@ -84,6 +84,34 @@ function AccountActions() {
       <NavLink to="/account/login-history">내 로그인 이력</NavLink>
       <LogoutButton />
     </Space>
+  )
+}
+
+function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string }) {
+  const items = [
+    { key: 'password', label: <NavLink to="/account/password">비밀번호 변경</NavLink> },
+    ...(!user.passwordChangeRequired
+      ? [{ key: 'history', label: <NavLink to="/account/login-history">내 로그인 이력</NavLink> }]
+      : []),
+  ]
+  return (
+    <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight" autoFocus>
+      <Button
+        type="text"
+        className="dw-account-menu"
+        aria-label={`${user.displayName} 계정 메뉴`}
+        aria-haspopup="menu"
+      >
+        <span className="dw-account-avatar" aria-hidden="true">
+          <UserOutlined />
+        </span>
+        <span className="dw-user-name" title={user.displayName}>
+          {user.displayName}
+        </span>
+        <span className="dw-role-pill">{roleLabel}</span>
+        <DownOutlined className="dw-account-chevron" />
+      </Button>
+    </Dropdown>
   )
 }
 
@@ -176,12 +204,7 @@ export function ServerSession() {
           <div className="dw-header-center" />
           <div className="dw-header-tools">
             {!user.passwordChangeRequired && <LatestLogin key={user.userId} />}
-            <span className="dw-user-name">{user.displayName}</span>
-            <span className="dw-role-pill">{navigation.label}</span>
-            <NavLink to="/account/password">비밀번호 변경</NavLink>
-            {!user.passwordChangeRequired && (
-              <NavLink to="/account/login-history">내 로그인 이력</NavLink>
-            )}
+            <AccountMenu user={user} roleLabel={navigation.label} />
             <LogoutButton />
           </div>
         </header>

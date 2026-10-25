@@ -40,10 +40,10 @@ export function LoginHistoryTable({ userId }: { userId?: number }) {
   const current = result?.key === key ? result : null
   return (
     <>
-      <p>
-        최근 90일의 로그인 시도와 로그아웃을 한국 시간으로 표시합니다. 기기는 브라우저·OS 기준이며
-        정확한 기기 식별은 아닙니다.
-      </p>
+      <div className="dw-login-history-intro">
+        <span>최근 90일의 접속 기록</span>
+        <span>한국 시간 기준 · 기기는 브라우저/OS로 표시합니다.</span>
+      </div>
       {current?.error ? (
         <Alert
           type="error"
@@ -53,6 +53,7 @@ export function LoginHistoryTable({ userId }: { userId?: number }) {
         />
       ) : (
         <Table<LoginHistory>
+          className="dw-login-history-table"
           rowKey="historyId"
           loading={!current}
           dataSource={current?.data?.items ?? []}
@@ -68,11 +69,13 @@ export function LoginHistoryTable({ userId }: { userId?: number }) {
           columns={[
             {
               title: '시각 (한국)',
+              width: 220,
               dataIndex: 'occurredAt',
               render: (value: string) => loginTime(value),
             },
             {
               title: '활동',
+              width: 180,
               dataIndex: 'eventType',
               render: (_: string, row) => (
                 <Tag color={row.eventType === 'LOGIN_FAILURE' ? 'orange' : undefined}>
@@ -88,8 +91,11 @@ export function LoginHistoryTable({ userId }: { userId?: number }) {
             },
             {
               title: 'IP',
+              width: 260,
               dataIndex: 'clientIp',
-              render: (value: string | null) => value ?? '확인 불가',
+              render: (value: string | null) => (
+                <span className="dw-login-history-ip">{value ?? '확인 불가'}</span>
+              ),
             },
             {
               title: '기기',
