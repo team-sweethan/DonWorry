@@ -44,6 +44,11 @@ server:
         http-only: true
         same-site: lax
 
+security:
+  csrf:
+    # 실제 활성화는 #68 5단계에서 다른 담당에게 공지한 뒤 진행한다.
+    enabled: ${DONWORRY_CSRF_ENABLED:false}
+
 fds:
   mock:
     # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.

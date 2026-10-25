@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,6 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final PasswordChangeService passwordChangeService;
+
+    @GetMapping("/csrf")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void csrf(CsrfToken token, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        // 지연 생성된 토큰을 읽어야 저장소가 XSRF-TOKEN 쿠키를 응답에 쓴다.
+        token.getToken();
+    }
 
     @PostMapping("/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)

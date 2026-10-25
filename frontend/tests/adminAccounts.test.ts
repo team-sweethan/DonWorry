@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { test, afterEach } from 'node:test'
+import { test, beforeEach, afterEach } from 'node:test'
 import {
   createUser,
   getUsers,
@@ -10,9 +10,19 @@ import {
 } from '../src/api/adminAccounts.ts'
 import { advanceApiSession, api, subscribePasswordChangeRequired } from '../src/api/client.ts'
 
+const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { cookie: 'XSRF-TOKEN=test-token' },
+  })
+})
+
 const originalFetch = globalThis.fetch
 afterEach(() => {
   globalThis.fetch = originalFetch
+  if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
+  else Reflect.deleteProperty(globalThis, 'document')
 })
 
 test('계정 검색값을 인코딩하고 쿠키와 no-store를 전달한다', async () => {

@@ -2,6 +2,7 @@ package com.donworry.identity.security;
 
 import com.donworry.identity.entity.UserRole;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,10 @@ import org.springframework.security.web.authentication.session.RegisterSessionAu
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
+import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.csrf.CsrfLogoutHandler;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 
@@ -68,21 +73,35 @@ public class SecurityConfig {
     }
 
     @Bean
-    SessionAuthenticationStrategy sessionAuthenticationStrategy(SessionRegistry sessionRegistry) {
+    CookieCsrfTokenRepository csrfTokenRepository() {
+        var repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookiePath("/");
+        repository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+        return repository;
+    }
+
+    @Bean
+    SessionAuthenticationStrategy sessionAuthenticationStrategy(
+            SessionRegistry sessionRegistry, CookieCsrfTokenRepository csrfTokenRepository) {
         var concurrent = new ConcurrentSessionControlAuthenticationStrategy(sessionRegistry);
         concurrent.setMaximumSessions(1);
         concurrent.setExceptionIfMaximumExceeded(false);
         return new CompositeSessionAuthenticationStrategy(List.of(
                 concurrent,
                 new ChangeSessionIdAuthenticationStrategy(),
-                new RegisterSessionAuthenticationStrategy(sessionRegistry)));
+                new RegisterSessionAuthenticationStrategy(sessionRegistry),
+                new CsrfAuthenticationStrategy(csrfTokenRepository)));
     }
 
     @Bean
-    LogoutHandler sessionLogoutHandler(SecurityContextRepository securityContextRepository) {
+    LogoutHandler sessionLogoutHandler(
+            SecurityContextRepository securityContextRepository, CookieCsrfTokenRepository csrfTokenRepository) {
         var contextLogout = new SecurityContextLogoutHandler();
         contextLogout.setSecurityContextRepository(securityContextRepository);
-        return new CompositeLogoutHandler(contextLogout, new CookieClearingLogoutHandler(SESSION_COOKIE));
+        return new CompositeLogoutHandler(
+                new CsrfLogoutHandler(csrfTokenRepository),
+                contextLogout,
+                new CookieClearingLogoutHandler(SESSION_COOKIE));
     }
 
     @Bean
@@ -92,10 +111,17 @@ public class SecurityConfig {
             SessionRegistry sessionRegistry,
             SecurityProblemResponseWriter responseWriter,
             JsonAuthenticationEntryPoint authenticationEntryPoint,
-            JsonAccessDeniedHandler accessDeniedHandler)
+            JsonAccessDeniedHandler accessDeniedHandler,
+            CookieCsrfTokenRepository csrfTokenRepository,
+            @Value("${security.csrf.enabled:false}") boolean csrfEnabled)
             throws Exception {
         // 전체 API 차단과 CSRF 활성화는 EPIC #68 5단계에서 함께 적용한다.
-        http.csrf(AbstractHttpConfigurer::disable)
+        http.csrf(csrf -> csrf.spa()
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .requireCsrfProtectionMatcher(
+                                request -> csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request))
+                        // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
+                        .ignoringRequestMatchers("/internal/**"))
                 .authorizeHttpRequests(auth -> auth.requestMatchers("/api/admin", "/api/admin/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();
