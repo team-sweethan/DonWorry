@@ -48,7 +48,11 @@
 - `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과, 57개 성공. 기존 lint 경고 4개 유지.
 - `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과 (주석만 바뀌어 컴파일 결과가 같아 테스트 작업은 up-to-date 처리, 결과는 일반 347개 중 346개 성공·1개 건너뜀, MariaDB 126개 성공).
 
-미검증: 실제 브라우저 확인.
+미검증: 없음(이번 변경 범위). 위 #130 기록의 HTTPS·프록시·30분 만료 대기·Notion 동기화는 그대로 미검증이다.
+
+#### #130 브라우저 E2E
+
+실제 브라우저 E2E는 2026-10-25 담당자(P1 주환)가 직접 확인했다(사용자 보고, 기준 head `abc10b0`): 목록·검색·필터·생성 폼·상세·확인 모달·정지/재활성화·계정 생성의 가맹점 선택 연결, 리뷰 반영 안내 문구·모달 오류 표시. 위 #130 기록들의 실제 브라우저 미검증 항목은 이 확인으로 해소한다.
 
 ## #126 CSRF 준비 (서버 검사 기본값 끔)
 
