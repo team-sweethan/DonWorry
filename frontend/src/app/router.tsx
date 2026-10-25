@@ -17,6 +17,12 @@ import {
   AdminUserDetailPage,
 } from '../pages/admin/AdminUsersPage'
 
+import {
+  AdminMerchantsPage,
+  AdminCreateMerchantPage,
+  AdminMerchantDetailPage,
+} from '../pages/admin/AdminMerchantsPage'
+
 function DemoSession() {
   const { loggedIn } = useDemo()
   return loggedIn ? <AdminLayout /> : <Navigate to="/demo/login" replace />
@@ -40,6 +46,9 @@ export const router = createBrowserRouter([
         children: [
           { path: 'fds', element: <EmptyPage title="FDS" /> },
           { path: 'finance', element: <EmptyPage title="자금관리" /> },
+          { path: 'merchants', element: <AdminMerchantsPage /> },
+          { path: 'merchants/new', element: <AdminCreateMerchantPage /> },
+          { path: 'merchants/:id', element: <AdminMerchantDetailPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'users/new', element: <AdminCreateUserPage /> },
           { path: 'users/:id', element: <AdminUserDetailPage /> },

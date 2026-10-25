@@ -56,11 +56,28 @@ public class AdminChangeHistory {
                 .build();
     }
 
+    public static AdminChangeHistory forMerchant(
+            Long actorId, Long targetId, String type, String before, String after) {
+        return AdminChangeHistory.builder()
+                .actorUserId(actorId)
+                .targetMerchantId(targetId)
+                .changeType(type)
+                .beforeData(before)
+                .afterData(after)
+                .build();
+    }
+
     @Builder(access = AccessLevel.PRIVATE)
     private AdminChangeHistory(
-            Long actorUserId, Long targetUserId, String changeType, String beforeData, String afterData) {
+            Long actorUserId,
+            Long targetUserId,
+            Long targetMerchantId,
+            String changeType,
+            String beforeData,
+            String afterData) {
         this.actorUserId = actorUserId;
         this.targetUserId = targetUserId;
+        this.targetMerchantId = targetMerchantId;
         this.changeType = changeType;
         this.beforeData = beforeData;
         this.afterData = afterData;

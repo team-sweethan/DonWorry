@@ -42,10 +42,14 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
     PlatformUserDetailsService.class,
     AuthService.class,
     AccountLockService.class,
+    com.donworry.identity.service.MerchantLockService.class,
     UserSessionService.class,
     AuthExceptionHandler.class
 })
 class CsrfApiTests {
+    @MockitoBean
+    com.donworry.identity.repository.MerchantRepository merchants;
+
     @Autowired
     MockMvc mvc;
 

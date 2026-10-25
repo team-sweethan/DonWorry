@@ -2,6 +2,33 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #130 관리자 가맹점 관리
+
+상세 HTTP·입력·동시성 계약은 [#130 설계](130-admin-merchant-design.md), 대안·영향은 [ADR-0027](../decisions/0027-admin-merchant-management.md)을 따른다.
+
+- ADMIN 전용 목록·상세·생성·상태 변경을 `/api/admin/merchants`에 제공한다. 검색은 코드·이름, 상태 필터·서버 페이지네이션을 사용하며 기존 `/options`는 ACTIVE 가맹점 선택용으로 유지한다.
+- 코드는 대문자·숫자 3~40자로 생성 후 변경할 수 없다. 이름은 100자 이내다. 비율은 BigDecimal로 0 이상 1 미만·소수 6자리까지 받는다. 화면은 % 단위·기본값 1%이며 반올림 없이 `0.010000`으로 변환한다.
+- 입력 400 ADMIN_007, 없는 가맹점 404 ADMIN_008, 코드 중복 409 ADMIN_009. DB 유일 제약도 중복을 막으며 다른 DB 오류는 AUTH_007로 유지한다.
+- 사장님 로그인은 가맹점 ACTIVE를 확인한다. 정지·누락·연결 없는 가맹점은 DISABLED와 동일한 401 AUTH_004다. 가맹점 조회 DB 오류는 로그인 장애 AUTH_005로 구분한다.
+- 가맹점 잠금 → 실제 loginId 계정 잠금 → 세션 모니터 순서를 사용한다. 로그인은 상태 확인·세션 등록까지, 정지는 실제 커밋·소속 사장님 세션 종료까지 보호한다. #129 사장님 계정 생성도 가맹점 잠금을 공유한다.
+- 상태 변경·가맹점 대상 이력 INSERT는 같은 트랜잭션이다. 커밋 성공 후 사용자별 expireAll을 호출하며, 실패 시 변경을 롤백하고 세션을 보존한다. 같은 상태 재요청은 이력·세션 종료를 반복하지 않는다.
+- 가맹점 정지는 계정 status·권한을 바꾸지 않는다. 재활성화 후 ACTIVE 계정만 새 로그인 가능하며 별도 DISABLED 계정·만료된 옛 세션은 복구하지 않는다.
+- `/admin/merchants` 목록·`/new` 생성·`/:id` 상세/정지/재활성화와 계정 생성의 가맹점 만들기 링크를 제공한다. 정지 확인에서 소속 사장님의 세션 종료를 안내한다.
+- 기존 DB 스키마·migration·TenantReader/TenantSummary·모듈 의존·정산 계산은 변경하지 않는다. P6 수수료율 공유는 예정이며 현재 정산 0.01·시드 0.020000 차이는 후속이다. CSRF 서버 기본값 false·전체 업무 인가의 #68 5단계 범위를 유지한다.
+
+### #130 검증·미검증
+
+2026-10-25, `feature/130-admin-merchant-management`, 기준 dev `078a5c8` 위 최종 #130 작업 트리에서 실행했다. 기준 dev 단독 결과가 아니다. 아래 검사 후 변경은 검증 기록뿐이다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 347개 중 346개 성공·기존 1개 건너뜀(`LocalSettlementDemoTests`), MariaDB 126개 성공. 실패·오류 0개. Flyway 전체·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 실제 MariaDB·HTTP 쿠키로 모든 관리자 경로의 익명 401·타 역할 403·강제 변경 차단, 생성/상세/검색/필터/경계·비율 정밀도·코드 중복, 여러 사장님 세션 종료·타 가맹점 보호·계정 status 보존·재활성화·옛 세션 거절, TenantReader ACTIVE/INACTIVE를 검사했다.
+- 이력 INSERT 실패 시 생성·정지 롤백과 기존 세션 보존을 확인했다. 단위 테스트로 실제 커밋 이후 종료·커밋 실패 시 종료 없음·수행자 세션/DB 상태 재확인·같은 상태 재요청·DB 유일 제약 오류만 409로 변환하는 것을 검사했다.
+- latch로 로그인→정지·정지→로그인(악센트 로그인 별칭 포함), 계정 생성→정지·정지→계정 생성을 실제 HTTP로 검사했다. 두 관리자의 동시 코드 중복 생성은 한 건 저장·한 건 409·이력 한 건을 확인했다. 최초 조회 후 생성된 계정의 잠금 우회 차단과 가맹점 조회 장애 AUTH_005는 MockMvc로 검사했다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 57개 성공. % 변환 경계·검색 인코딩·요청/CSRF 헤더·네트워크 재전송 없음·401 만료·관리자 메뉴와 경로 제한 포함. 기존 lint 경고 4개와 번들 크기 경고는 남아 있다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 원격 CI는 PR에서 별도 확인한다.
+
+미검증: 실제 브라우저의 목록·검색·필터·생성 폼·상세·확인 모달·재활성화·계정 생성 연결, HTTPS·프록시·실제 30분 만료 대기, Notion 동기화, 다중 서버(범위 밖). Google Chrome을 통한 수동 확인은 자동 승인 검토에서 거부됐다(`Computer Use was not approved to use Google Chrome`). 로컬 backend bootRun과 Vite 기동은 확인했으나 실제 브라우저 조작·시드 계정 변경은 수행하지 않았다.
+
 ## #126 CSRF 준비 (서버 검사 기본값 끔)
 
 상세 계약·대안은 [ADR-0025](../decisions/0025-csrf-preparation.md)를 따른다.

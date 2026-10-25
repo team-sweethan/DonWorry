@@ -52,6 +52,7 @@ import tools.jackson.databind.json.JsonMapper;
     PlatformUserDetailsService.class,
     AuthService.class,
     AccountLockService.class,
+    com.donworry.identity.service.MerchantLockService.class,
     UserSessionService.class,
     AuthExceptionHandler.class
 })
@@ -73,6 +74,9 @@ class AuthApiTests {
 
     @MockitoBean
     UserPermissionRepository permissionRepository;
+
+    @MockitoBean
+    com.donworry.identity.repository.MerchantRepository merchants;
 
     @Autowired
     SessionRegistry sessionRegistry;
@@ -144,6 +148,9 @@ class AuthApiTests {
         given(operator.getStatus()).willReturn(UserStatus.ACTIVE);
         given(operator.getPasswordHash()).willReturn(encoder.encode("test-password"));
         given(repository.findByLoginId("boss")).willReturn(Optional.of(operator));
+        var merchant = mock(com.donworry.identity.entity.Merchant.class);
+        given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.ACTIVE);
+        given(merchants.findById(10L)).willReturn(Optional.of(merchant));
         given(permissionRepository.findPermissionCodesByUserId(2L)).willReturn(List.of("FDS_VIEW", "FINANCE_VIEW"));
 
         var session = (MockHttpSession)
@@ -398,6 +405,12 @@ class AuthApiTests {
     @EnumSource(UserRole.class)
     void logoutAll_whenAuthenticated_invalidatesCurrentAndPreviousSessions(UserRole role) throws Exception {
         given(user.getRole()).willReturn(role);
+        if (role == UserRole.OPERATOR) {
+            given(user.getMerchantId()).willReturn(10L);
+            var merchant = mock(com.donworry.identity.entity.Merchant.class);
+            given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.ACTIVE);
+            given(merchants.findById(10L)).willReturn(Optional.of(merchant));
+        }
         var first = (MockHttpSession)
                 login("admin", "test-password", null).getRequest().getSession(false);
         var current = (MockHttpSession)
@@ -476,5 +489,29 @@ class AuthApiTests {
             if (status == 200) active++;
         }
         assertThat(active).isEqualTo(1);
+    }
+    // 정지·누락·연결 없는 가맹점과 최초 조회 뒤 생성된 계정도 로그인 세션을 만들지 않는다
+    @ParameterizedTest
+    @ValueSource(strings = {"INACTIVE", "MISSING", "NULL", "CREATED_LATER", "DB_FAILURE"})
+    void login_whenMerchantUnavailable_rejectsWithoutSession(String condition) throws Exception {
+        given(user.getRole()).willReturn(UserRole.OPERATOR);
+        given(user.getMerchantId()).willReturn(condition.equals("NULL") ? null : 10L);
+        var merchant = mock(com.donworry.identity.entity.Merchant.class);
+        given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.INACTIVE);
+        given(merchants.findById(10L))
+                .willReturn(condition.equals("MISSING") ? Optional.empty() : Optional.of(merchant));
+        if (condition.equals("CREATED_LATER"))
+            given(repository.findByLoginId("admin")).willReturn(Optional.empty(), Optional.of(user));
+        if (condition.equals("DB_FAILURE"))
+            given(merchants.findById(10L)).willThrow(new DataAccessResourceFailureException("merchant db down"));
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(condition.equals("DB_FAILURE") ? 500 : 401);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo(condition.equals("DB_FAILURE") ? "AUTH_005" : "AUTH_004");
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+        verifyNoInteractions(permissionRepository);
     }
 }
