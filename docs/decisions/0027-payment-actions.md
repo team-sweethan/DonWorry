@@ -1,6 +1,6 @@
 # 0027. P5 직원 금융 조치 단일 저장과 완료 기반 인계
 
-- **상태:** 제안 — #141 사용자 방향 승인·기본 계약 P3 전달, 상세 ERD·추가 계약 확인 및 PR 리뷰 대상
+- **상태:** 제안 — #141 사용자 방향 승인·기본 계약 P3 전달, 저장소 상세 ERD 기준 구현 승인, 추가 P3 계약 확인 및 PR 리뷰 대상
 - **날짜:** 2026-10-25
 - **관련:** Issue #141, [ADR-0010](0010-payment-operation-storage.md), [ADR-0012](0012-payment-settlement-dependency.md), [ADR-0018](0018-payment-mvp-capture-completion.md)
 - **영향 받는 담당:** P5 시은 · P3 수민. P6 공개 이벤트 변경 없음
@@ -9,7 +9,7 @@
 
 `078a5c8`의 P5 payments는 결제 상태·승인 참조만 저장한다. P3는 판정·인계·멱등 키를 저장하지만 실제 금융 요청은 목업이다. 직원 ACCEPT를 비동기 매입으로 연결하려면 완료를 원래 판정에 연결하고, 대기 중 반대 조치 및 재시작 후 중복 실행을 막을 P5 저장 근거가 필요하다.
 
-사용자는 요청 4필드·완료 기반 인계·정상 대기 구분을 확정해 P3에 전달했다고 알렸다. 이어 P5 소유 테이블 하나와 VOID 식별자로 P5 actionId를 쓰는 방향을 승인했다. 상세 컬럼의 Notion ERD 반영과 VOID 추가 계약의 P3 확인은 아직 확인하지 않았다.
+사용자는 요청 4필드·완료 기반 인계·정상 대기 구분을 확정해 P3에 전달했다고 알렸다. 이어 P5 소유 테이블 하나와 VOID 식별자로 P5 actionId를 쓰는 방향을 승인했다. 이후 사용자는 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영하도록 승인했다. VOID 추가 계약의 P3 확인은 아직 확인하지 않았다.
 
 ## 결정
 
@@ -43,11 +43,11 @@ ADR-0018의 CAPTURE 완료 기반 인계 제안을 구체화하되 acceptedAt=ca
 ## 영향
 
 - API: PaymentActionRequester·Command·Receipt·Result 추가 설계. P3 Gateway 매핑·PENDING 처리·최종 결과 멱등 수신은 P3 담당 후속 구현이다.
-- DB: P5 payment_actions 신규 제안, payments 컬럼은 유지. payments 물리 FK, P3 decision/P6 capture는 논리 참조. 상세 담당 ERD 확인 전 migration을 만들지 않는다.
+- DB: P5 payment_actions 신규 제안, payments 컬럼은 유지. payments 물리 FK, P3 decision/P6 capture는 논리 참조. 사용자가 승인한 저장소 상세 ERD 기준으로 migration을 생성한다. Notion 동기화는 후속이다.
 - 화면: P3 Case가 실제 완료까지 열려 있게 된다. 화면 수정은 이번 P5 범위 밖이다.
 - 테스트: 트랜잭션 원자성·동시 충돌·중복·재전달·영속 결과 복구·기존 ALLOW 회귀가 필요하다.
-- 문서: P5 설계·README, ERD에 미구현 초안임을 구분해 연결한다. Notion 반영은 확인되지 않았다.
+- 문서: P5 설계·README, ERD에 저장 기반 구현과 실행 연결 미구현을 구분한다. Notion 동기화는 후속이다.
 
 ## 검증
 
-현재 코드·SQL과 P3 목업 및 인계 처리 흐름을 대조한 설계다. migration·Java 구현·동작 검증은 수행하지 않았다. 문서 검사는 작업 보고에 기록하고 이후 구현 단계에서 실제 실행 결과를 추가한다.
+현재 코드·SQL과 P3 목업 및 인계 처리 흐름을 대조한 설계다. 4번 단계에서 migration·Entity·공개 계약·내부 요청 저장을 구현했다. 실제 금융 실행·결과 발행은 후속이다. 검사 결과와 미검증 범위는 [검증 기록](../payment/verification.md)에 구분한다.

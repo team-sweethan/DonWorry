@@ -233,3 +233,16 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 최종 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 336건 중 335건 통과·기존 수동 LocalSettlementDemoTests 1건 건너뜀, MariaDB 118건 통과. 실패·오류 0. 기존 결제·모듈 경계·계층 검사 포함.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
 - 미검증: P3 목업 교체·권한 검증·화면·보고서 실제 연결, 실제 DB 네트워크 장애. DB 오류 전파는 단위 대역 검증이다. 장기 트랜잭션의 반복 조회가 항상 외부 최신 커밋을 보장하지 않는다는 계약을 유지한다.
+
+
+## #141 4번 단계 — 직원 조치 저장 기반
+
+2026-10-25, `19e70b2` + 4번 단계 미커밋 작업본에서 실행했다. 사용자 승인에 따라 저장소 상세 ERD·ADR을 기준으로 구현했으며 Notion 동기화는 후속이다.
+
+- `cd backend && ./gradlew newMigration -Pdesc=create_payment_actions_table` 성공. V20261025_160810 생성 후 SQL 작성.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL (1m31s). 일반 342건 중 341건 성공·기존 수동 시연 1건 제외, MariaDB 125건 성공. 실패·오류 0.
+- 신규 PaymentActionTests 6건: 종료 상태 불변·CAPTURE 중복/충돌·요청 내용 일치·공개 계약 검증.
+- 신규 PaymentActionAdmissionMariaDbTests 7건: 트랜잭션 필수, 별도 트랜잭션 재조회·결과 복원, 키/판정/결제 충돌, 롤백, CAPTURE/VOID 동시 요청 직렬화, UNIQUE/FK/CHECK, UTC 마이크로초 저장. 새 migration 전체 적용과 JPA validate 포함.
+- 문서 상대 링크 및 diff 검사를 통과했다.
+- 미구현·미검증: 공개 실행 Bean, 서로 다른 결제의 UNIQUE 경쟁 후 업무 응답 복구, 직원 CAPTURE 발행·완료 전이·모의 VOID 실행·P3 결과 발행/재전달은 5·6·7번 단계에서 연결·검증한다. 현재 내부 admission은 반드시 호출자 트랜잭션에 참여하며 저장만으로 외부 API를 성공 응답하지 않는다.
+- P3 운영 Gateway·리스너·권한 연결은 별도 담당 범위다. VOID actionId와 구체 DTO의 P3 추가 확인, Notion 동기화는 아직 확인하지 않았다.

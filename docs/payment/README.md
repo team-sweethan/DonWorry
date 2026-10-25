@@ -24,7 +24,7 @@
 
 ## 현재 구현
 
-- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)을 작성한 단계다. `payment_actions` 상세 ERD·공개 계약·동시성·복구는 검토안이며 migration·Java 구현은 아직 없다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약과 Notion 상세 ERD 반영은 확인이 남아 있다.
+- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 저장 기반을 구현한 단계다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 공개 실행 Bean·매입/취소 연결·결과 발행은 아직 없다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약 확인과 Notion 동기화는 후속이다.
 
 - #139의 [결제 단건 조회 계약](../decisions/0026-payment-read-api.md)에 따라 `payment.api.PaymentReader`와 `PaymentSummary`를 정의했다. 4번 단계에서 읽기 전용 `PaymentReaderService`를 연결했다. 입력 검증·저장값 매핑·없는 결제·DB 오류 전파를 단위 검증했고, 5번 단계에서 실제 DB·읽기 전용 트랜잭션·세션 없는 호출·상태 커밋 후 조회를 검증했다. P3 목업 교체·권한 검증·화면 연결은 후속이다.
 

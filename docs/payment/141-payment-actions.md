@@ -1,9 +1,9 @@
 # #141 직원 금융 조치 저장·처리 설계
 
-- 기준: `dev 078a5c8`, 2026-10-25. **설계 초안이며 migration·Java 구현·동작 검증은 아직 없다.**
+- 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 실행·결과 발행 연결은 후속이다.
 - 사용자 승인: P5 소유 `payment_actions` 하나 추가, 완료 기반 P3 통지, VOID 식별자로 actionId 사용 방향.
 - P3 공유 완료: 요청 4필드, 완료 시점, 정상 대기 구분, 결과 처리 기본 기준. 별도 P3 회신은 확인하지 않았다.
-- 추가 확인: VOID actionId 전달, 아래 구체 DTO·오류·재시도 계약. Notion P5 담당 ERD의 상세 컬럼 합의·반영은 확인하지 않았다. 이 문서 작성만으로 해당 절차를 생략하지 않는다.
+- 사용자 추가 승인(2026-10-25): 아래 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영한다. VOID actionId 및 구체 DTO의 P3 추가 확인은 아직 확인하지 않았다.
 - 결정 이유: [ADR-0027](../decisions/0027-payment-actions.md). 저장 초안: [ERD](../erd/README.md#141-p5-직원-조치-저장-설계-초안).
 
 ## 1. 범위와 책임
@@ -16,7 +16,7 @@ P5는 직원 조치 요청과 처리 결과만 저장한다. 기존 최초 결�
 
 ## 2. 공개 계약 초안
 
-다음 이름은 이번 설계에서 제안한 이름이며 아직 Java 파일이 없다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
+다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. PaymentActionRequester의 실행 구현 Bean은 5·6번 단계에서 연결한다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
 
 | 타입 (`payment.api`) | 계약 |
 | --- | --- |
@@ -117,4 +117,10 @@ P3 운영 리스너는 payment.api.PaymentActionResult를 커밋 후 수신해�
 5. Modulith: 커밋 후 전달, 미완료 요청·완료·결과 재전달, 중복 결과 및 기존 ALLOW 회귀. P3 운영 연결과 테스트 수신자 검증을 구분한다.
 6. spotlessApply check mariaDbTest, 문서 링크·diff 검사 후 실행 커밋·미검증을 PR에 기록한다.
 
-이 문서 작성 시점에는 위 검사를 실행하지 않았다. 새 스키마·계약은 미구현이며 실제 P3 연동도 미검증이다.
+### 4번 단계 구현 범위
+
+- 새 migration·PaymentAction Entity·Repository·공개 요청/응답/결과 타입을 추가했다. Entity는 종료 상태 변경 차단과 CAPTURE 동일 결과 재반영 방지를 제공한다.
+- PaymentActionAdmissionService는 MANDATORY 트랜잭션에서 결제를 잠그고 요청을 검증·저장한다. 신규 여부와 기존 결과를 내부 실행 서비스에 반환한다. 단독으로 금융 실행을 시작하거나 커밋하지 않는다.
+- 실제 공개 PaymentActionRequester Bean은 아직 없다. 요청 저장만으로 PENDING을 반환하고 이벤트가 없는 상태를 외부에 노출하지 않는다. 후속 단계에서 REQUIRES_NEW 실행 트랜잭션·UNIQUE 경쟁 실패 뒤 새 트랜잭션 재조회·P6 발행 또는 VOID 실행을 연결한다.
+- 이번 DB 테스트의 PENDING 행과 직접 설정한 CAPTURED는 저장 계층의 검증 fixture다. 직원 매입·취소가 실제 연결됐다는 증거가 아니다.
+- 검사 실행 결과는 [검증 기록](verification.md)을 본다. P3 운영 연동·Notion 동기화는 미검증/후속이다.
