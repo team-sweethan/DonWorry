@@ -24,6 +24,8 @@
 
 ## 현재 구현
 
+- #139의 [결제 단건 조회 계약](../decisions/0026-payment-read-api.md)에 따라 `payment.api.PaymentReader`와 `PaymentSummary`를 정의했다. 4번 단계에서 읽기 전용 `PaymentReaderService`를 연결했다. 입력 검증·저장값 매핑·없는 결제·DB 오류 전파를 단위 검증했고, 5번 단계에서 실제 DB·읽기 전용 트랜잭션·세션 없는 호출·상태 커밋 후 조회를 검증했다. P3 목업 교체·권한 검증·화면 연결은 후속이다.
+
 - #136의 [HELD 이벤트 계약](../decisions/0023-payment-held-event-contract.md)은 P3와 필드·필수 조건·시각 기준을 합의했다. 3번 단계에서 `payment.api.PaymentHeld` 타입을 추가했고 4번 단계에서 NOTIFY_HELD 분기의 발행을 연결했다. 5번 단계에서 실제 MariaDB·Modulith와 테스트 수신자로 커밋·롤백·재전달·동시 승인 통합 검증을 통과했다. P3 운영 수신·Case 연결은 아직 미구현·미검증이다.
 
 - 결제 순수 규칙, `payments` Entity·Repository·최초 PENDING 저장 서비스가 있다.
