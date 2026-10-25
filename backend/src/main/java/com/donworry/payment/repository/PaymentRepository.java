@@ -13,6 +13,11 @@ public interface PaymentRepository extends Repository<Payment, Long> {
 
     Payment save(Payment payment);
 
+    @Query("select count(p) from Payment p where p.merchantId = :merchantId and p.orderRef = :orderRef "
+            + "and not exists (select r.requestId from PaymentRequest r where r.paymentId = p.paymentId)")
+    long countUntrackedByMerchantIdAndOrderRef(
+            @Param("merchantId") Long merchantId, @Param("orderRef") String orderRef);
+
     Optional<Payment> findById(Long paymentId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

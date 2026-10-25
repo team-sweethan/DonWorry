@@ -1,6 +1,6 @@
 # #149 CakeShop 결제 요청·조회 설계
 
-- 상태: **사용자 저장 구조 방향 승인. 저장 기반 구현, 접수/재개 서비스·HTTP·담당 인증 연결은 후속.**
+- 상태: **사용자 저장 구조 방향 승인. 저장 기반·접수 서비스 구현, 평가/승인 재개·HTTP·담당 인증 연결은 후속.**
 - 기준: `dev 84698bb`, 2026-10-25. migration 전체를 버전 순으로 읽고 P5 생성·승인·완료·조회와 P2 평가 재호출 코드를 대조했다.
 - [Issue #149](https://github.com/team-sweethan/DonWorry/issues/149), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md), [ERD 제안](../erd/README.md#149-p5-cakeshop-결제-저장-제안).
 - 2026-10-25 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 이를 저장 구조 승인으로 기록하며 실제 DB 적용·타 담당 회신·Notion 반영 완료와 구분한다. 상세 제약과 연동 세부는 아래 설계 기준으로 검토한다.
@@ -127,7 +127,7 @@ PENDING은 최초 평가 중·오류로 멈춤·매입 대기를 함께 포함�
 
 ### 주문 접수
 
-주문행 확보 → 주문 FOR UPDATE → 결제 → 요청 순으로 잠근다. 최초 주문행 INSERT 경합은 UNIQUE로 막고, 실패 트랜잭션이 끝난 뒤 새 트랜잭션에서 재조회한다. 주문행만 따로 생성돼 남아도 결제 접수를 뜻하지 않으며 시도 없는 행은 조회 시 미접수로 처리한다.
+주문행 확보 → 주문 FOR UPDATE → 결제 → 요청 순으로 잠근다. 최초 주문행 INSERT 경합은 UNIQUE로 막고, 실패 트랜잭션이 끝난 뒤 새 트랜잭션에서 재조회한다. 이번 구현은 주문 신규 생성도 같은 접수 트랜잭션에 포함하므로 접수 실패 시 주문도 롤백한다.
 
 새 payments·payment_requests·주문 attempt 순번 갱신은 한 트랜잭션이다. 기존 createPendingSnapshot의 별도 커밋을 그대로 호출하면 키 없이 결제만 남을 수 있으므로 HTTP 접수에서는 같은 트랜잭션 저장을 새로 구성한다. 기존 내부 생성 진입점은 유지한다.
 
@@ -187,7 +187,20 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 - 가맹점별 주문/키, 주문별 시도 순번, 결제별 요청, 평가 UUID의 UNIQUE와 P5 소유 FK·단계별 CHECK를 추가했다.
 - Entity에서 불변 주문 입력 대조·최초 주문 기준 10분 접수 기한, 평가 스냅샷 보존·동일 결과 재반영·충돌 거절을 제공한다. ERROR는 NEEDS_REVIEW로 보존한다.
 - 신규 결제는 생성 시각을 상태 시각으로 사용한다. 실제 상태 전이만 시각을 변경하며 CAPTURED 중복 반영이나 승인 후 PENDING 유지에서는 바꾸지 않는다. 거절 사유는 FDS_REJECTED / AUTHORIZATION_DECLINED다.
-- **아직 미구현:** 실제 요청 접수 서비스의 잠금·키 재사용·거절 후 재결제 정책·기존 주문 차단, P2 호출/승인 복원 연결, HTTP·인증·페이지 조회. DB UNIQUE가 HTTP 멱등 처리까지 완성했다는 뜻은 아니다.
+- **5번 단계 당시 미구현:** 실제 요청 접수 서비스의 잠금·키 재사용·거절 후 재결제 정책·기존 주문 차단(아래 후속 단계에서 구현), P2 호출/승인 복원 연결, HTTP·인증·페이지 조회. DB UNIQUE가 HTTP 멱등 처리까지 완성했다는 뜻은 아니다.
 - **계약 확인:** API Key 공개 경계·고객 참조·장기 보류 기준은 기존 확인 문서에 따라 후속 확인한다. 이번 변경은 다른 담당 코드나 테이블을 수정하지 않는다.
 
 검증 기준: `84698bb` 위 이번 미커밋 작업 트리, 2026-10-25. `./gradlew spotlessApply check mariaDbTest` 통과(전체 Flyway 적용·JPA validate 포함). 신규 단위 테스트 5개와 MariaDB 테스트 5개에서 기한 경계·상태 시각·거절 사유·평가 스냅샷 복원/충돌·ERROR 보존·키 충돌 롤백·가맹점 격리·DB 제약·과거 NULL 호환을 검증했다. HTTP·동시 접수/재결제 서비스·P1 인증 연동·운영 DB 적용은 미검증이다. 기존 명시적 비활성 LocalSettlementDemoTests 1건은 실행 제외다.
+
+
+### 후속 단계 — 결제 요청 접수 서비스
+
+- `PaymentRequestAdmissionService.admit`는 P5 내부 서비스다. 인증된 가맹점 ID와 내부 고객 참조를 받는 경계이며 HTTP를 공개하거나 API Key를 검증하지 않는다.
+- 동일 가맹점·키는 입력을 대조하고 기존 paymentId·attemptNo·evaluationRequestId를 반환한다. 현재 상태·기한과 관계없이 원래 시도를 가리키며 새로운 평가나 승인을 실행하지 않는다.
+- 주문을 처음 읽을 때부터 `FOR UPDATE`로 잠근다. 별도 일반 조회 뒤 잠그면 JPA 영속성 컨텍스트의 오래된 순번을 재사용할 수 있으므로 그렇게 하지 않는다. 접수 트랜잭션은 `REQUIRES_NEW / READ_COMMITTED`이며 잠금 대기 후 키와 최신 시도를 다시 읽는다.
+- 최신 결제의 상태를 결제 행 잠금 아래 확인한다. DENIED/DECLINED 후 최초 주문 기준 10분 기한 내에서만 새 키를 받는다. 기존 내부 생성 경로의 미이관 결제가 있는 주문은 차단한다. 기존 내부 생성 서비스는 이 주문 잠금을 사용하지 않으므로 같은 주문을 양쪽 생성 경로에 동시에 투입하는 것은 지원하지 않는다.
+- 새 주문(필요 시)·결제·요청·순번을 한 트랜잭션에 저장한다. 주문/키 UNIQUE 경합은 실패 트랜잭션 밖에서 최대 2회 재조회하며 그 외 무결성 오류는 전파한다. 호출자의 트랜잭션 롤백과 별도로 접수가 커밋되는 경계다.
+- 내부 충돌 코드는 IDEMPOTENCY_KEY_CONFLICT / ORDER_CONTENT_CONFLICT / ORDER_PAYMENT_EXISTS / ORDER_DEADLINE_PASSED / LEGACY_ORDER_EXISTS다. 위 HTTP 오류 표는 제안이며 HTTP 단계에서 매핑한다.
+- **후속 구현:** 저장된 평가 UUID로 P2 호출·결과 저장·승인 원자 처리/재개, HTTP 요청·조회·인증 연결. 새 테이블이나 컬럼을 더 추가하지 않는다.
+
+검증 기준: `bba245f` 위 접수 서비스 미커밋 작업 트리, 2026-10-25. 최종 `./gradlew spotlessApply check mariaDbTest` 통과. 일반 테스트 381개 통과·기존 비활성 1개 제외, MariaDB 194개 통과. 신규 접수 단위 4개·MariaDB 17개에서 동일 키/다른 내용·최초 주문 경합·거절 후 재결제 경합·교차 주문 키 경합 롤백·가맹점 격리·기한·과거 키 복원·미이관 주문 차단·독립 커밋을 확인했다. 문서 링크와 diff 검사도 통과했다. HTTP·인증·P2/승인 재개·실제 CakeShop 연동은 미구현/미검증이다.

@@ -16,6 +16,11 @@ public interface PaymentOrderRepository extends Repository<PaymentOrder, Long> {
     Optional<PaymentOrder> findByMerchantIdAndOrderRef(Long merchantId, String orderRef);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select o from PaymentOrder o where o.merchantId = :merchantId and o.orderRef = :orderRef")
+    Optional<PaymentOrder> findByMerchantIdAndOrderRefForUpdate(
+            @Param("merchantId") Long merchantId, @Param("orderRef") String orderRef);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from PaymentOrder o where o.paymentOrderId = :id")
     Optional<PaymentOrder> findByIdForUpdate(@Param("id") Long id);
 }
