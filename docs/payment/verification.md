@@ -169,3 +169,29 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 실행 관찰: 완료 리스너는 Test worker가 아닌 task-* 스레드에서 실행됐다. 설치된 Modulith 2.1.1 EventPublicationAutoConfiguration의 AsyncEnablingConfiguration(@EnableAsync)도 소스로 확인했다. 서비스 반환만으로 후속 완료를 판단하지 않고 발행 기록과 DB 상태를 기다린다.
 - 테스트 작성 중 프록시를 통한 대역 설정, 동기 실행 가정, 같은 이벤트 객체의 동시 재발행을 수정했다. Modulith의 진행 중 발행 추적은 객체 identity를 사용하므로 독립 전달 테스트는 값이 같은 별도 객체를 사용한다. 마지막 전체 검사 결과는 위 집계다.
 - 미검증·후속: 실제 DB 네트워크 장애·프로세스 중단·응답 유실, 자동 재시도 스케줄러·운영 복구 API, 같은 paymentId의 상이한 captureId 진위 대조, 직원 ACCEPT·P3 통지·VOID·외부 카드사·HTTP·CakeShop. 테스트의 실패 주입과 명시적 재전달 통과를 운영 자동 복구 구현으로 표현하지 않는다.
+
+
+## #136 4번 단계: HELD 발행 연결
+
+2026-10-25, `feature/136-payment-held-event`, `c19f94f` + 3·4번 단계 작업본 기준이다.
+
+- PaymentAuthorizationService의 NOTIFY_HELD 분기에서 저장 결제 필드·성공 승인 참조·해당 REVIEW 평가 ID와 HELD 전환 시각으로 PaymentHeld를 발행한다. 기존 REQUIRES_NEW 트랜잭션과 행 잠금·반복 승인 차단을 유지했다.
+- 단위·흐름 테스트에서 저장값 매핑(외부 입력과 다른 고객·금액 포함), 전환 시각 범위, 반복 승인 후 추가 발행 없음, 다른 분기·승인 실패의 미발행 및 발행 예외 전파를 확인했다. 기존 ALLOW CaptureRequested 검사도 유지했다.
+- `cd backend && ./gradlew spotlessApply check` → BUILD SUCCESSFUL. 모듈 경계·계층·기존 일반 검사 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증: 이번 단계에서 MariaDB 검사를 실행하지 않았다. 실제 HELD 저장과 발행 기록의 동시 커밋·롤백, 커밋 후 전달·재전달·동시 승인 검증은 5번 단계다. 단위 테스트의 예외 전파를 DB 롤백 검증으로 표현하지 않는다. P3 운영 리스너·Case 연결은 별도 담당 작업이며 현재 운영 수신자가 없는 상태에서 전달 기록 보장을 주장하지 않는다.
+
+
+## #136 5번 단계: HELD 전달·롤백·재전달 통합 검증
+
+2026-10-25, `feature/136-payment-held-event`, `d90d584` + 5번 단계 작업본 기준이다. 운영 코드는 변경하지 않았다.
+
+- [PaymentHeldPersistenceTests](../../backend/src/test/java/com/donworry/payment/service/PaymentHeldPersistenceTests.java) 신규 4건은 실제 P2·P5·MariaDB·Modulith와 테스트 전용 @ApplicationModuleListener를 사용한다. P3 Case 처리 구현을 대체하거나 검증하는 테스트가 아니다. 승인 성공은 제어 가능한 대역에서 기존 MockPaymentAuthorizer에 위임한다.
+- 실제 P2의 REVIEW 평가 문맥을 만든 뒤 승인·HELD 전환을 수행했다. 커밋 직전 flush 후 HELD·승인 참조·수신자 발행 기록 1건과 수신 미실행을 확인했다. 정상 커밋 후 별도 스레드·트랜잭션의 수신자가 커밋된 HELD·참조를 읽고 7개 필드가 원본과 일치함을 확인했다.
+- 커밋 직전 예외 주입 시 HELD·참조·발행 기록은 함께 롤백되고 최초 PENDING·기커밋 P2 평가는 보존됐다. 발행 기록 없음과 수신 미실행을 확인했다. 실제 DB 네트워크 장애를 재현한 검사는 아니다.
+- 수신 실패 시 발행 기록의 FAILED·미완료 상태와 P5 HELD·승인 참조 보존을 확인했다. IncompleteEventPublications 공개 API로 원래 발행 기록 ID만 재전달한 뒤 같은 기록의 완료를 확인했다. 역직렬화된 새 객체의 모든 값(heldAt 포함)이 원래 이벤트와 같고 재승인·재평가·새 발행 기록 생성이 없음을 확인했다.
+- 같은 결제의 반복 승인 차단과 동시 승인 두 건을 검증했다. latch로 첫 승인 트랜잭션을 유지하는 동안 두 번째 호출이 대기함을 확인하고, 첫 커밋 후 두 번째 충돌과 승인 1회·발행 기록 1건·수신 1회를 확인했다.
+- 첫 실행에서 테스트 관찰용 필드를 Spring 프록시에서 직접 읽어 실패했다. 실제 수신 대상의 관찰 필드를 읽도록 수정했으며, 실제 이벤트 호출의 프록시·트랜잭션·비동기 처리는 유지했다.
+- 최종 `cd backend && ./gradlew spotlessApply check mariaDbTest` → BUILD SUCCESSFUL. 일반 311건 중 310건 통과·기존 수동 LocalSettlementDemoTests 1건 건너뜀, MariaDB 98건 통과. 실패·오류 0. 모듈 경계·계층·기존 ALLOW 매입 검사 포함.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증·후속: P3 운영 리스너·실제 Case 생성/병합/중복 연결, 실제 DB 장애·프로세스 재시작·응답 유실, 운영 자동 재시도. 실패 수신자의 업무 DB 변경 롤백은 테스트하지 않았다. 운영 리스너 등록 전의 발행은 P3 전달 기록 보장이 없으며, 테스트 전용 수신자의 검증을 운영 P3 연동 완료로 표현하지 않는다.
