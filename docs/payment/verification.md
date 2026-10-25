@@ -169,3 +169,14 @@ README의 연결 미구현 설명과 설계의 통합 검증 예정 설명을 �
 - 실행 관찰: 완료 리스너는 Test worker가 아닌 task-* 스레드에서 실행됐다. 설치된 Modulith 2.1.1 EventPublicationAutoConfiguration의 AsyncEnablingConfiguration(@EnableAsync)도 소스로 확인했다. 서비스 반환만으로 후속 완료를 판단하지 않고 발행 기록과 DB 상태를 기다린다.
 - 테스트 작성 중 프록시를 통한 대역 설정, 동기 실행 가정, 같은 이벤트 객체의 동시 재발행을 수정했다. Modulith의 진행 중 발행 추적은 객체 identity를 사용하므로 독립 전달 테스트는 값이 같은 별도 객체를 사용한다. 마지막 전체 검사 결과는 위 집계다.
 - 미검증·후속: 실제 DB 네트워크 장애·프로세스 중단·응답 유실, 자동 재시도 스케줄러·운영 복구 API, 같은 paymentId의 상이한 captureId 진위 대조, 직원 ACCEPT·P3 통지·VOID·외부 카드사·HTTP·CakeShop. 테스트의 실패 주입과 명시적 재전달 통과를 운영 자동 복구 구현으로 표현하지 않는다.
+
+
+## #136 4번 단계: HELD 발행 연결
+
+2026-10-25, `feature/136-payment-held-event`, `c19f94f` + 3·4번 단계 작업본 기준이다.
+
+- PaymentAuthorizationService의 NOTIFY_HELD 분기에서 저장 결제 필드·성공 승인 참조·해당 REVIEW 평가 ID와 HELD 전환 시각으로 PaymentHeld를 발행한다. 기존 REQUIRES_NEW 트랜잭션과 행 잠금·반복 승인 차단을 유지했다.
+- 단위·흐름 테스트에서 저장값 매핑(외부 입력과 다른 고객·금액 포함), 전환 시각 범위, 반복 승인 후 추가 발행 없음, 다른 분기·승인 실패의 미발행 및 발행 예외 전파를 확인했다. 기존 ALLOW CaptureRequested 검사도 유지했다.
+- `cd backend && ./gradlew spotlessApply check` → BUILD SUCCESSFUL. 모듈 경계·계층·기존 일반 검사 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` → 통과.
+- 미검증: 이번 단계에서 MariaDB 검사를 실행하지 않았다. 실제 HELD 저장과 발행 기록의 동시 커밋·롤백, 커밋 후 전달·재전달·동시 승인 검증은 5번 단계다. 단위 테스트의 예외 전파를 DB 롤백 검증으로 표현하지 않는다. P3 운영 리스너·Case 연결은 별도 담당 작업이며 현재 운영 수신자가 없는 상태에서 전달 기록 보장을 주장하지 않는다.

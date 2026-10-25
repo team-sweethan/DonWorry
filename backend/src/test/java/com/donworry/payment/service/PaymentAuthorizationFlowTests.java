@@ -7,6 +7,7 @@ import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsEvaluator;
 import com.donworry.fds.api.FdsResult;
+import com.donworry.payment.api.PaymentHeld;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
@@ -103,6 +104,19 @@ class PaymentAuthorizationFlowTests {
         if (verdict == FdsResult.ALLOW) {
             verify(events).publishEvent(new CaptureRequested(101L, 1L, "order", 2000L));
             verifyNoMoreInteractions(events);
+        } else if (verdict == FdsResult.REVIEW) {
+            var held = ArgumentCaptor.forClass(PaymentHeld.class);
+            verify(events).publishEvent(held.capture());
+            assertThat(held.getValue())
+                    .isEqualTo(new PaymentHeld(
+                            101L,
+                            1L,
+                            "stored-customer",
+                            2000L,
+                            "MOCK-AUTH-101",
+                            201L,
+                            held.getValue().heldAt()));
+            verifyNoMoreInteractions(events);
         } else {
             verifyNoInteractions(events);
         }
@@ -149,6 +163,7 @@ class PaymentAuthorizationFlowTests {
         }
         verify(authorizer).authorize(new AuthorizationCommand(101L, 2000L));
         verifyNoMoreInteractions(authorizer);
+        verifyNoInteractions(events);
     }
 
     // 최초 저장 실패는 후속 평가와 승인을 시작하지 않는다.

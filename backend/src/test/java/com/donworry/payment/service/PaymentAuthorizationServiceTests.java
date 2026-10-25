@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
+import com.donworry.payment.api.PaymentHeld;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRepository;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -55,7 +57,9 @@ class PaymentAuthorizationServiceTests {
         var command = new AuthorizationCommand(10L, 1000L);
         when(authorizer.authorize(command))
                 .thenReturn(new AuthorizationResult(AuthorizationResult.Type.SUCCEEDED, "auth-10", null));
+        var before = Instant.now();
         var result = service.authorize(context);
+        var after = Instant.now();
         assertThat(payment.getStatus())
                 .isEqualTo(verdict == FdsResult.ALLOW ? PaymentStatus.PENDING : PaymentStatus.HELD);
         assertThat(payment.getAuthorizationRef()).isEqualTo("auth-10");
@@ -75,7 +79,19 @@ class PaymentAuthorizationServiceTests {
             verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
             verifyNoMoreInteractions(events);
         } else {
-            verifyNoInteractions(events);
+            var held = ArgumentCaptor.forClass(PaymentHeld.class);
+            verify(events).publishEvent(held.capture());
+            assertThat(held.getValue())
+                    .isEqualTo(new PaymentHeld(
+                            10L,
+                            1L,
+                            "customer",
+                            1000L,
+                            "auth-10",
+                            20L,
+                            held.getValue().heldAt()));
+            assertThat(held.getValue().heldAt()).isBetween(before, after);
+            verifyNoMoreInteractions(events);
         }
     }
 
@@ -166,15 +182,22 @@ class PaymentAuthorizationServiceTests {
     }
 
     // 발행 오류는 성공으로 숨기거나 재시도하지 않고 트랜잭션 경계로 전달한다.
-    @Test
-    void authorize_whenPublicationFails_propagatesWithoutRetry() {
-        var context = context(FdsResult.ALLOW);
+    @ParameterizedTest
+    @EnumSource(
+            value = FdsResult.class,
+            names = {"ALLOW", "REVIEW"})
+    void authorize_whenPublicationFails_propagatesWithoutRetry(FdsResult verdict) {
+        var context = context(verdict);
         when(authorizer.authorize(any()))
                 .thenReturn(new AuthorizationResult(AuthorizationResult.Type.SUCCEEDED, "auth-10", null));
         var failure = new IllegalStateException("publication unavailable");
-        doThrow(failure).when(events).publishEvent(any(CaptureRequested.class));
+        doThrow(failure).when(events).publishEvent(any(Object.class));
         assertThatThrownBy(() -> service.authorize(context)).isSameAs(failure);
-        verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
+        if (verdict == FdsResult.ALLOW) {
+            verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
+        } else {
+            verify(events).publishEvent(any(PaymentHeld.class));
+        }
         verifyNoMoreInteractions(events);
     }
 

@@ -181,7 +181,7 @@ P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 �
 
 `createAndAuthorize(input)`는 기존 생성·평가 helper의 문맥을 별도 `PaymentAuthorizationService`에 넘긴다. 행 잠금과 REQUIRES_NEW 아래 승인 전 PENDING을 확인하고 DENY→DENIED, 업무 거절→DECLINED, ALLOW 성공→승인 참조가 있는 PENDING, REVIEW 성공→HELD를 저장한다. ERROR는 승인 없이 PENDING을 유지한다.
 
-기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. #118에서는 REQUEST_CAPTURE·NOTIFY_HELD가 반환 판단에만 사용됐다. #122에서는 REQUEST_CAPTURE에 따라 같은 승인 트랜잭션 안에서 CaptureRequested를 발행한다. NOTIFY_HELD 통지는 후속이다. 반환값은 승인 단계 스냅샷이며 비동기 완료 반영 후의 최신 상태가 아니다.
+기본 모의 승인기는 모든 유효 입력에 성공하며 외부 금융 부작용이 없다. 기술 실패는 롤백·예외 전달로 처리하며 기존 순수 규칙의 UNKNOWN 분기로 변환하지 않는다. 처리된 결제는 재승인 대신 충돌 예외로 거절한다. #118에서는 REQUEST_CAPTURE·NOTIFY_HELD가 반환 판단에만 사용됐다. #122에서는 REQUEST_CAPTURE에 따라 같은 승인 트랜잭션 안에서 CaptureRequested를 발행한다. #136의 4번 단계에서는 NOTIFY_HELD에 따라 같은 트랜잭션에서 PaymentHeld를 발행한다. P3 수신 연결과 전달 통합 검증은 후속이다. 반환값은 승인 단계 스냅샷이며 비동기 완료 반영 후의 최신 상태가 아니다.
 
 [모의 승인 계약](mock-authorization.md), [트랜잭션 설계](authorization-flow.md), [실행 검증](verification.md)에 세부와 한계를 기록한다. 기존 createAndEvaluate의 평가 전용 계약은 유지한다.
 
