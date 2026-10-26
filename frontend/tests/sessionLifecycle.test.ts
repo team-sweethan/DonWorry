@@ -349,3 +349,99 @@ test('api_whenRequestTimesOut_abortsTransportAndRechecksExpiry', async () => {
   assert.equal(store.getSnapshot().expired, true)
   assert.equal(sessionActivity.hasPendingRequests(), false)
 })
+
+// 별도 탭의 활성 추적이 있지만 새 탭은 아직 최초 me 확인 전인 상황을 만든다.
+async function checkingNewTab() {
+  const activityA = createSessionActivity()
+  const a = createAuthStore(
+    { login: async () => user, getMe: async () => user, logout: async () => {} },
+    activityA,
+  )
+  await a.login('test', 'test')
+  const b = createAuthStore()
+  cleanups.push(
+    subscribeUnauthorized(b.expire),
+    sessionActivity.subscribe(b.handleActivityChange),
+    sessionActivity.subscribeSettled(b.expireIfInactive),
+  )
+  const response = deferred<Response>()
+  let calls = 0
+  handler = () => {
+    calls++
+    return calls === 1 ? response.promise : Promise.resolve(Response.json(user))
+  }
+  now += SESSION_TIMEOUT_MS - 1
+  assert.equal(sessionActivity.getSnapshot(), null)
+  const checking = b.check('initial')
+  return { a, b, activityA, response, checking, calls: () => calls }
+}
+
+// 새 탭의 최초 me도 다른 탭의 만료 판정에서 보호하며 성공 전 활동 시각은 갱신하지 않는다.
+test('check_whenNewTabInitialMeCrossesDeadline_protectsSharedSession', async () => {
+  const { a, b, activityA, response, checking, calls } = await checkingNewTab()
+  const initial = activityA.getSnapshot()!
+  assert.equal(b.getSnapshot().status, 'loading')
+  now += 2
+  a.expireIfInactive()
+  assert.equal(a.getSnapshot().expired, false)
+  assert.equal(activityA.getSnapshot()?.at, initial.at)
+  response.resolve(Response.json(user))
+  await checking
+  assert.equal(calls(), 1)
+  assert.equal(b.getSnapshot().status, 'authenticated')
+  assert.equal(sessionActivity.getSnapshot()?.id, initial.id)
+  activityA.sync()
+  assert.equal(activityA.getSnapshot()?.id, initial.id)
+  assert.equal(activityA.getSnapshot()?.at, now)
+})
+
+// 최초 확인 중 기존 탭이 종료하면 중단된 me를 재시도하여 종료 표식을 되살리지 않는다.
+for (const reason of ['expired', 'logout'] as const) {
+  test(`check_whenInitialMeInterruptedBy${reason}_doesNotRetryEndedSession`, async () => {
+    const { a, b, activityA, response, checking, calls } = await checkingNewTab()
+    const id = activityA.getSnapshot()!.id
+    if (reason === 'logout') await a.logout()
+    else a.expire()
+    response.resolve(Response.json(user))
+    await checking
+    assert.equal(calls(), 1)
+    assert.equal(b.getSnapshot().status, 'anonymous')
+    assert.equal(b.getSnapshot().reauthenticationRequired, true)
+    assert.equal(b.getSnapshot().loggedOut, reason === 'logout')
+    const shared = JSON.parse(values.get('donworry.auth.activity')!)
+    assert.equal(shared.id, id)
+    assert.equal(shared.ended, true)
+    assert.equal(shared.reason, reason)
+  })
+}
+
+// 버전 변경 통지보다 먼저 종료 표식만 보이는 경우에도 최초 성공으로 추적을 되살리지 않는다.
+test('check_whenEndMarkerPrecedesInitialSuccess_preservesEndedSession', async () => {
+  const { b, activityA, response, checking, calls } = await checkingNewTab()
+  const id = activityA.getSnapshot()!.id
+  activityA.stop()
+  response.resolve(Response.json(user))
+  await checking
+  assert.equal(calls(), 1)
+  assert.equal(b.getSnapshot().status, 'anonymous')
+  assert.equal(b.getSnapshot().reauthenticationRequired, true)
+  const shared = JSON.parse(values.get('donworry.auth.activity')!)
+  assert.equal(shared.id, id)
+  assert.equal(shared.ended, true)
+})
+
+// 중단 원인이 실제 새 로그인이라면 종료된 추적과 구별해 새 세션의 확인은 허용한다.
+test('check_whenActualNewLoginInterruptsInitialMe_retriesLiveSession', async () => {
+  const { a, b, activityA, response, checking, calls } = await checkingNewTab()
+  const previousId = activityA.getSnapshot()!.id
+  await a.login('test', 'test')
+  const newId = activityA.getSnapshot()!.id
+  assert.notEqual(newId, previousId)
+  response.resolve(Response.json({ ...user, displayName: '이전 응답' }))
+  await checking
+  assert.equal(calls(), 2)
+  assert.equal(b.getSnapshot().status, 'authenticated')
+  assert.equal(b.getSnapshot().user?.displayName, user.displayName)
+  assert.equal(sessionActivity.getSnapshot()?.id, newId)
+  assert.equal(JSON.parse(values.get('donworry.auth.activity')!).ended, false)
+})

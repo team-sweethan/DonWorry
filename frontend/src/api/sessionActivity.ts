@@ -147,7 +147,19 @@ export function createSessionActivity(
         settledListeners.delete(listener)
       }
     },
-    beginRequest() {
+    beginRequest(joinShared = false) {
+      // 최초 /me는 인증 성공 전에도 기존 추적의 요청만 보호한다. 시각·ID는 갱신하지 않는다.
+      if (!current && joinShared) {
+        const shared = read()
+        if (
+          shared &&
+          !shared.ended &&
+          (sessionTime(shared.at, now()).remaining > 0 || pendingFor(shared.id))
+        ) {
+          lastEnd = null
+          update(shared)
+        }
+      }
       if (!current) return () => {}
       const key = `${SESSION_REQUEST_PREFIX}${newId()}.${++sequence}`
       const request = { id: current.id, until: now() + SESSION_REQUEST_GRACE_MS }
@@ -175,11 +187,14 @@ export function createSessionActivity(
     },
     start(newSession = false) {
       const shared = read()
+      // 종료 표식은 명시적 로그인만 교체한다. 확인 직전의 종료와도 경합할 수 있다.
+      if (!newSession && (shared?.ended || (!shared && lastEnd !== null))) return false
       // 최초 /me 성공은 같은 브라우저의 추적에 참여하고, 로그인 성공은 새 추적을 시작한다.
       const id = !newSession && shared && !shared.ended ? shared.id : newId()
       if (newSession || current?.id !== id) for (const key of pending.keys()) removeRequest(key)
       lastEnd = null
       update({ id, at: now(), ended: false }, true)
+      return true
     },
     touch(id: string | undefined) {
       if (!id || current?.id !== id) return

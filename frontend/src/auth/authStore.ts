@@ -101,6 +101,28 @@ export function createAuthStore(
     if (latest && sessionTime(latest.at, now()).remaining === 0) expire()
   }
 
+  function requireLoginForEndedCheck(key: string | null) {
+    const reason = activity.endReason()
+    if (!reason || activity.liveId()) return false
+    if (reason === 'logout') clearLoggedOut()
+    else {
+      const previousUserId = state.user?.userId ?? state.expiredUserId
+      invalidate()
+      update({
+        user: null,
+        status: 'anonymous',
+        error: null,
+        expired: true,
+        expiredUserId: previousUserId,
+        reauthenticationRequired: true,
+        loggedOut: false,
+      })
+    }
+    activity.stop(reason)
+    update({ checkedKey: key })
+    return true
+  }
+
   function check(key: string, requireLogin = false): Promise<void> {
     lastCheckKey = key
     if (pendingLogout)
@@ -125,7 +147,7 @@ export function createAuthStore(
     }
     if (pendingCheck?.key === key) return pendingCheck.promise
     const currentGeneration = generation
-    const finish = activity.beginRequest()
+    const finish = activity.beginRequest(true)
     const request = { key, promise: Promise.resolve() }
     pendingCheck = request
     update({ error: null, checkedKey: null })
@@ -138,10 +160,15 @@ export function createAuthStore(
           // 다른 탭의 인증 변경으로 중단된 확인은 바뀐 상태로 한 번 다시 묻는다.
           const aborted = error instanceof DOMException && error.name === 'AbortError'
           if (!aborted || currentGeneration !== generation || pendingCheck !== request) throw error
+          if (requireLoginForEndedCheck(key)) return
           user = await api.getMe()
         }
         if (currentGeneration !== generation || pendingCheck !== request) return
-        activity.start()
+        if (requireLoginForEndedCheck(key)) return
+        if (!activity.start()) {
+          requireLoginForEndedCheck(key)
+          return
+        }
         update({
           user,
           status: 'authenticated',
@@ -207,6 +234,7 @@ export function createAuthStore(
         try {
           const user = await api.getMe()
           if (currentGeneration !== generation) return null
+          if (requireLoginForEndedCheck(lastCheckKey)) return null
           activity.touch(activity.getSnapshot()?.id)
           if (currentGeneration !== generation) return null
           update({ user })
@@ -248,7 +276,11 @@ export function createAuthStore(
       try {
         const user = await api.getMe()
         if (currentGeneration !== generation) return null
-        activity.start()
+        if (requireLoginForEndedCheck(lastCheckKey)) return null
+        if (!activity.start()) {
+          requireLoginForEndedCheck(lastCheckKey)
+          return null
+        }
         update({ user, status: 'authenticated', checkedKey: lastCheckKey, error: null })
         return user
       } catch (error) {

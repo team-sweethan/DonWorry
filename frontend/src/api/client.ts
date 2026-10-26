@@ -85,7 +85,7 @@ export function subscribeUnauthorized(listener: () => void) {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const finish = sessionActivity.beginRequest()
+  const finish = sessionActivity.beginRequest(path === '/auth/me')
   const timeout = AbortSignal.timeout(SESSION_REQUEST_GRACE_MS)
   const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
   try {

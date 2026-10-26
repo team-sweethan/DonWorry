@@ -143,10 +143,12 @@ test('activity_whenStorageMalformedOrInactive_doesNotAdoptInvalidActivity', () =
   assert.equal(a.getSnapshot(), null)
   for (const value of ['{', 'null', '{}', '{"id":"future","at":999999,"ended":false}']) {
     values.set(SESSION_ACTIVITY_KEY, value)
-    a.start()
-    assert.notEqual(a.getSnapshot()?.id, 'future')
-    assert.equal(a.getSnapshot()?.at, 1000)
-    a.stop()
+    // 각 손상 값은 종료 이력이 없는 새 탭에서 검사한다.
+    const fresh = tab()
+    fresh.start()
+    assert.notEqual(fresh.getSnapshot()?.id, 'future')
+    assert.equal(fresh.getSnapshot()?.at, 1000)
+    fresh.stop()
   }
 })
 
@@ -157,4 +159,55 @@ test('activity_whenLegacyEndedMarker_treatsItAsExpiry', () => {
   const activity = tab()
   assert.equal(activity.endReason(), 'expired')
   assert.equal(activity.liveId(), null)
+})
+
+// 최초 확인의 명시적 참여만 허용하고 인증 성공 전에는 시각·공유 표식을 바꾸지 않는다.
+test('activity_whenInitialMeJoinsSharedTracking_preservesTimestampAndId', () => {
+  const { tab, values, advance } = setup()
+  const a = tab(),
+    b = tab()
+  a.start(true)
+  const shared = values.get(SESSION_ACTIVITY_KEY)
+  advance(100)
+  b.beginRequest()()
+  assert.equal(b.getSnapshot(), null)
+  const finish = b.beginRequest(true)
+  assert.equal(b.getSnapshot()?.id, a.getSnapshot()?.id)
+  assert.equal(b.getSnapshot()?.at, a.getSnapshot()?.at)
+  assert.equal(values.get(SESSION_ACTIVITY_KEY), shared)
+  assert.equal(b.hasPendingRequests(), true)
+  finish()
+  assert.equal(b.hasPendingRequests(), false)
+})
+
+// 종료된 추적은 최초 요청의 참여로 재생성하지 않고 실제 새 로그인만 참여시킨다.
+test('activity_whenEndedTrackingExists_rejectsInitialRequestJoin', () => {
+  for (const reason of ['expired', 'logout'] as const) {
+    const { tab, values } = setup()
+    const a = tab(),
+      b = tab()
+    a.start(true)
+    a.stop(reason)
+    const shared = values.get(SESSION_ACTIVITY_KEY)
+    b.beginRequest(true)()
+    assert.equal(b.getSnapshot(), null)
+    assert.equal(values.get(SESSION_ACTIVITY_KEY), shared)
+    assert.equal(b.start(), false)
+    assert.equal(values.get(SESSION_ACTIVITY_KEY), shared)
+    a.start(true)
+    const finish = b.beginRequest(true)
+    assert.equal(b.getSnapshot()?.id, a.getSnapshot()?.id)
+    finish()
+  }
+  const local = createSessionActivity(
+    () => 1000,
+    () => {
+      throw new Error('blocked')
+    },
+    () => 'local',
+  )
+  local.start(true)
+  local.stop()
+  assert.equal(local.start(), false)
+  assert.equal(local.start(true), true)
 })
