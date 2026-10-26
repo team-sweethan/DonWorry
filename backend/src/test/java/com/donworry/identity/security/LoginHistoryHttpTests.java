@@ -318,8 +318,12 @@ class LoginHistoryHttpTests {
                 }));
             }
             gate.countDown();
-            for (var task : requests)
-                assertThat(task.get(15, TimeUnit.SECONDS).statusCode()).isIn(204, 401);
+            for (var task : requests) {
+                var response = task.get(15, TimeUnit.SECONDS);
+                assertThat(response.statusCode())
+                        .as(response.uri().getPath() + " " + response.body())
+                        .isIn(204, 401);
+            }
         }
         assertThat(count("LOGOUT")).isEqualTo(1);
         assertThat(send(browser, "POST", "/api/auth/logout", null).statusCode()).isEqualTo(204);
