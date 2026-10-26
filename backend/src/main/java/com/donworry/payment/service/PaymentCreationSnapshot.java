@@ -8,6 +8,7 @@ import lombok.Builder;
 @Builder
 public record PaymentCreationSnapshot(
         Long paymentId,
+        Long merchantId,
         String customerRef,
         Long amount,
         Instant createdAt,
@@ -17,6 +18,7 @@ public record PaymentCreationSnapshot(
     static PaymentCreationSnapshot from(Payment payment) {
         return PaymentCreationSnapshot.builder()
                 .paymentId(payment.getPaymentId())
+                .merchantId(payment.getMerchantId())
                 .customerRef(payment.getCustomerRef())
                 .amount(payment.getAmount())
                 .createdAt(payment.getCreatedAt())

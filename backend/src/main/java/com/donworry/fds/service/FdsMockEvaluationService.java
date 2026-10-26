@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FdsMockEvaluationService {
 
     private static final String MOCK_CUSTOMER_REF = "hong-gildong";
+    private static final long MOCK_MERCHANT_ID = 1L;
     private static final long HIGH_AMOUNT_THRESHOLD = 150_000L;
     private static final int HIGH_AMOUNT_SCORE = 35;
     private static final int REPEAT_COUNT_THRESHOLD = 3;
@@ -110,7 +111,7 @@ public class FdsMockEvaluationService {
 
     private FdsEvaluationRequest request(String requestId, Long paymentId, long amount, Instant paymentRequestedAt) {
         return new FdsEvaluationRequest(
-                UUID.fromString(requestId), paymentId, MOCK_CUSTOMER_REF, amount, paymentRequestedAt);
+                UUID.fromString(requestId), paymentId, MOCK_MERCHANT_ID, MOCK_CUSTOMER_REF, amount, paymentRequestedAt);
     }
 
     private record MockRequest(

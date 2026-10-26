@@ -24,6 +24,7 @@ public class PaymentRequestProcessingService {
         return Optional.of(new PaymentEvaluationInput(
                 request.getEvaluationRequestId(),
                 paymentId,
+                payment.getMerchantId(),
                 payment.getCustomerRef(),
                 payment.getAmount(),
                 payment.getCreatedAt()));

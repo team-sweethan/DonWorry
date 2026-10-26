@@ -85,7 +85,7 @@ class FdsEvaluationQuerySearchTests {
 
     private void save(Long paymentId, String customerRef, FdsResult result, int riskScore, long secondOffset) {
         var requestedAt = Instant.parse("2026-10-23T00:00:00Z").plusSeconds(secondOffset);
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, customerRef, 150_000L, requestedAt);
+        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, customerRef, 150_000L, requestedAt);
         evaluationRepository.save(FdsEvaluation.completed(request, result, riskScore, requestedAt.plusSeconds(1)));
     }
 }

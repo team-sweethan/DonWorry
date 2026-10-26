@@ -14,8 +14,9 @@ class FdsEvaluationContractTests {
     void request_whenRequiredFieldsPresent_createsRequest() {
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), 101L, "hong-gildong", 150_000L, requestedAt);
+        var request = new FdsEvaluationRequest(UUID.randomUUID(), 101L, 1L, "hong-gildong", 150_000L, requestedAt);
 
+        assertThat(request.merchantId()).isEqualTo(1L);
         assertThat(request.customerRef()).isEqualTo("hong-gildong");
         assertThat(request.paymentRequestedAt()).isEqualTo(requestedAt);
     }
@@ -26,11 +27,13 @@ class FdsEvaluationContractTests {
         var requestId = UUID.randomUUID();
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        assertThatThrownBy(() -> new FdsEvaluationRequest(null, 101L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> new FdsEvaluationRequest(null, 101L, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, null, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, null, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, "hong-gildong", 150_000L, null))
+        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, null, "hong-gildong", 150_000L, requestedAt))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, 1L, "hong-gildong", 150_000L, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

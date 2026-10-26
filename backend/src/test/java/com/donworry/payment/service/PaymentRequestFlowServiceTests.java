@@ -19,7 +19,7 @@ class PaymentRequestFlowServiceTests {
     private final PaymentRequestCommand command =
             new PaymentRequestCommand(1L, "order", "customer", 100L, Instant.now(), UUID.randomUUID());
     private final PaymentEvaluationInput input =
-            new PaymentEvaluationInput(UUID.randomUUID(), 1L, "customer", 100L, Instant.now());
+            new PaymentEvaluationInput(UUID.randomUUID(), 1L, 1L, "customer", 100L, Instant.now());
 
     private void setup() {
         when(admission.admit(command))

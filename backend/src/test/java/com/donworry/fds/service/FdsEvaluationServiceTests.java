@@ -51,8 +51,8 @@ class FdsEvaluationServiceTests {
     void evaluate_highAmountAndThirdPaymentWithinWindow_returnsReview() {
         var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
         when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
-        when(evaluationRepository.findByCustomerRefAndPaymentRequestedAtBetween(
-                        eq("hong-gildong"), eq(requestedAt.minusSeconds(10 * 60)), eq(requestedAt)))
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        eq(1L), eq("hong-gildong"), eq(requestedAt.minusSeconds(10 * 60)), eq(requestedAt)))
                 .thenReturn(List.of(
                         priorEvaluation(1L, requestedAt.minusSeconds(5 * 60)),
                         priorEvaluation(2L, requestedAt.minusSeconds(2 * 60))));
@@ -69,6 +69,7 @@ class FdsEvaluationServiceTests {
         assertThat(result.evaluationId()).isEqualTo(1L);
         verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
         assertThat(evaluationCaptor.getValue().getCustomerRef()).isEqualTo("hong-gildong");
+        assertThat(evaluationCaptor.getValue().getMerchantId()).isEqualTo(1L);
         assertThat(evaluationCaptor.getValue().getPaymentRequestedAt()).isEqualTo(requestedAt);
         assertThat(evaluationCaptor.getValue().getRequestedAmount()).isEqualTo(150_000L);
         assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(2);
@@ -119,6 +120,8 @@ class FdsEvaluationServiceTests {
 
         assertThat(stored.hasSameRequestSnapshot(request(requestId, 1L, "hong-gildong", 150_000L, requestedAt)))
                 .isTrue();
+        assertThat(stored.hasSameRequestSnapshot(request(requestId, 2L, 1L, "hong-gildong", 150_000L, requestedAt)))
+                .isFalse();
         assertThat(stored.hasSameRequestSnapshot(request(requestId, 2L, "hong-gildong", 150_000L, requestedAt)))
                 .isFalse();
         assertThat(stored.hasSameRequestSnapshot(request(requestId, 1L, "other-customer", 150_000L, requestedAt)))
@@ -137,7 +140,8 @@ class FdsEvaluationServiceTests {
         var request = request(3L, 150_000L, requestedAt);
         when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
                 .thenReturn(Optional.empty());
-        when(evaluationRepository.findByCustomerRefAndPaymentRequestedAtBetween(any(), any(), any()))
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
                 .thenReturn(List.of(
                         priorEvaluation(1L, requestedAt.minusSeconds(5 * 60)),
                         priorEvaluation(3L, requestedAt.minusSeconds(2 * 60)),
@@ -198,6 +202,11 @@ class FdsEvaluationServiceTests {
 
     private FdsEvaluationRequest request(
             UUID requestId, Long paymentId, String customerRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(requestId, paymentId, customerRef, amount, requestedAt);
+        return request(requestId, paymentId, 1L, customerRef, amount, requestedAt);
+    }
+
+    private FdsEvaluationRequest request(
+            UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
+        return new FdsEvaluationRequest(requestId, paymentId, merchantId, customerRef, amount, requestedAt);
     }
 }
