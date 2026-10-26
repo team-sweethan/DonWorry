@@ -2,7 +2,7 @@ import { SessionExpiryModal } from './SessionExpiryModal'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
-import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import {
   canOpenPath,
@@ -254,7 +254,8 @@ export function ServerSession() {
       }
     >
       <SessionExpiryModal />
-      {body ?? forbidden}
+      {/* 모달을 children으로 넘기면 레이아웃의 Outlet 대체가 막히므로 정상 화면은 여기서 직접 그린다 */}
+      {body ?? forbidden ?? <Outlet />}
     </ManagementLayout>
   )
 }
