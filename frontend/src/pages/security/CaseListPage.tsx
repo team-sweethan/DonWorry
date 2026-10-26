@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -99,7 +99,11 @@ export function CaseListPage() {
         <Button
           type="link"
           style={{ padding: 0, fontWeight: 700 }}
-          onClick={() => navigate(`/security/cases/${id}`)}
+          // 행 클릭과 겹쳐 두 번 이동하지 않게 막는다. 버튼은 키보드로 여는 경로로 남긴다.
+          onClick={(event: MouseEvent<HTMLElement>) => {
+            event.stopPropagation()
+            navigate(`/security/cases/${id}`)
+          }}
         >
           {id}
         </Button>
@@ -256,6 +260,10 @@ export function CaseListPage() {
           loading={loading}
           size="middle"
           scroll={{ x: 1060 }}
+          onRow={(record) => ({
+            onClick: () => navigate(`/security/cases/${record.caseId}`),
+            style: { cursor: 'pointer' },
+          })}
           locale={{
             emptyText: (
               <Typography.Text type="secondary" style={{ display: 'block', padding: 36 }}>
