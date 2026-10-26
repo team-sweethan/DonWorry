@@ -39,7 +39,7 @@
 | [0015](0015-fds-evaluation-list-query-contract.md) | FDS 평가 목록 조회의 서버 페이지네이션과 검색 계약 | 제안 — 팀 합의 필요 |
 | [0016](0016-capture-request-event-contract.md) | 1차 MVP 매입 요청 이벤트 계약 | 채택 — P6 요청 계약 |
 | [0017](0017-capture-completed-event-contract.md) | 1차 MVP 매입 완료 이벤트 계약 | 채택 — P5 수신 구현 별도 |
-| [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 제안 — P3·P6 합의 대기 |
+| [0018](0018-payment-mvp-capture-completion.md) | 1차 CAPTURE 완료 통지로 영속 접수 확인 | 대체됨 (→ 0027) |
 | [0019](0019-security-case-http-contract.md) | P3 Case 조회 · 판정 HTTP 계약 | 제안 — 팀 합의 필요 |
 | [0020](0020-identity-public-read-contracts.md) | Identity 공개 조회 계약과 가맹점 범위 | 제안 — #124 구현 반영, PR 리뷰 대상 |
 | [0021](0021-single-session-and-logout-all.md) | 계정당 단일 세션과 모든 기기 로그아웃 | 제안 — #125 구현 반영, PR 리뷰 대상 |
@@ -48,7 +48,7 @@
 | [0024](0024-admin-account-management.md) | 관리자 계정 관리와 강제 비밀번호 변경 | 제안 — #129 사용자 구현 승인, PR 리뷰 대상 |
 | [0025](0025-csrf-preparation.md) | CSRF 토큰 교환 준비와 검사 설정 분리 | 제안 — #126 사용자 구현 승인, PR 리뷰 대상 |
 | [0026](0026-payment-read-api.md) | P5 결제 정보 단건 공개 조회 계약 | 제안 — #139 사용자 확정안·구현 승인, PR 리뷰 대상 |
-| [0027](0027-payment-actions.md) | P5 직원 금융 조치 단일 저장과 완료 기반 인계 | 제안 — #141 저장소 ERD 기준 구현 승인, 추가 P3 계약 확인 필요 |
+| [0027](0027-payment-actions.md) | P5 직원 금융 조치 단일 저장과 완료 기반 인계 | 제안 — #158 P3 계약 확인 반영, CAPTURE 확정 실패는 P5·P6 후속 협의 |
 | [0028](0028-admin-merchant-management.md) | 관리자 가맹점 관리와 정지·로그인 순서 보장 | 제안 — #130 사용자 구현 승인, PR 리뷰 대상 |
 | [0029](0029-login-attempt-lock.md) | 로그인 연속 실패의 고정 시간 잠금 | 제안 — #127 사용자 구현 승인, PR 리뷰 대상 |
 | [0030](0030-cakeshop-payment-attempts.md) | CakeShop 주문별 결제 시도와 HTTP 조회 | 제안 — #149 저장 구조 방향 사용자 승인, 상세 설계·인증 연결 확인 중 |

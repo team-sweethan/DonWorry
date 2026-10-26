@@ -2,8 +2,8 @@
 
 - 기준: `dev 078a5c8`, 2026-10-25. 설계 기준 커밋. 4번 단계에서 migration·공개 계약·내부 요청 저장을 구현했다. 5번 단계에서 CAPTURE 실행·완료·결과 발행을 연결했다. 6번 단계에서 VOID 모의 실행·결과 발행도 연결했다.
 - 사용자 승인: P5 소유 `payment_actions` 하나 추가, 완료 기반 P3 통지, VOID 식별자로 actionId 사용 방향.
-- P3 공유 완료: 요청 4필드, 완료 시점, 정상 대기 구분, 결과 처리 기본 기준. 별도 P3 회신은 확인하지 않았다.
-- 사용자 추가 승인(2026-10-25): 아래 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영한다. VOID actionId 및 구체 DTO의 P3 추가 확인은 아직 확인하지 않았다.
+- P3 확인 근거: [#158](https://github.com/team-sweethan/DonWorry/issues/158)에서 완료 기반 인계, CAPTURE=captureId·VOID=actionId, acceptedAt·completedAt 구분에 동의했다. 정상 대기·확정 거절·멱등 수신과 배포 순서도 이 회신을 따른다. P3 구현·검증 완료와 구분한다.
+- 사용자 추가 승인(2026-10-25): 아래 상세 스키마를 저장소 ERD·ADR 기준으로 구현하고 Notion은 후속 반영한다. 2026-10-26에는 CAPTURE 확정 실패 처리를 P5·P6 후속 협의 대상으로 남기기로 결정했다. 도입 시점은 미정이다.
 - 결정 이유: [ADR-0027](../decisions/0027-payment-actions.md). 저장 초안: [ERD](../erd/README.md#141-p5-직원-조치-저장-설계-초안).
 
 ## 1. 범위와 책임
@@ -14,7 +14,7 @@ P5는 직원 조치 요청과 처리 결과만 저장한다. 기존 최초 결�
 
 `investigation → payment.api → settlement.api` 의존을 유지한다. P3 Gateway 교체·운영 결과 리스너·Case 종료 로직 변경은 P3 담당이며 이번 P5 구현에 포함하지 않는다. P6 이벤트 4필드 요청·3필드 완료 계약은 그대로 쓴다.
 
-## 2. 공개 계약 초안
+## 2. 공개 계약
 
 다음 공개 타입은 4번 단계에서 Java 파일로 정의했다. 5번 단계에서 PaymentActionRequester 구현 Bean을 등록했다. 6번 단계에서 VOID도 연결했다. CAPTURE는 PENDING, VOID는 같은 트랜잭션의 모의 실행 결과를 반환한다. 공개 record에는 내부 Entity·enum을 노출하지 않고, 4필드 이상 record에는 `@Builder`를 적용한다.
 
@@ -35,21 +35,23 @@ P5는 직원 조치 요청과 처리 결과만 저장한다. 기존 최초 결�
 
 P5는 UNKNOWN 응답을 생성하지 않는다. 응답을 받지 못한 경우 P3가 기존 UNKNOWN/예외 처리로 같은 키를 재전달한다. 정상 PENDING은 요청 전달 성공이므로 예외를 던지지 않고 P3 인계 REQUESTED를 유지한다. 이후 완료 통지를 기다린다. 최초 응답은 반환 직후 이미 바뀌었을 수도 있는 처리 스냅샷이다.
 
-결과 이벤트 status는 ACCEPTED 또는 REJECTED만 허용한다. PENDING 이벤트는 없다. 이벤트의 completedAt은 P5가 보존한 결과 시각(UTC 마이크로초)이며 P3 acceptedAt을 덮어쓰는 값이 아니다. P3는 기존처럼 자기 결과 반영 시각으로 acceptedAt을 저장한다. CAPTURE의 completedAt은 P6 capturedAt, VOID 성공·업무 실패는 P5 처리 시각이다.
+결과 이벤트 status는 ACCEPTED 또는 REJECTED만 허용한다. PENDING 이벤트는 없다. 이벤트의 completedAt은 P5가 보존한 결과 시각(UTC 마이크로초)이며 P3 acceptedAt을 덮어쓰는 값이 아니다. P3는 자기 결과 반영 시각으로 acceptedAt을 저장하고 completedAt은 case_histories.event_data에 함께 남기는 계약이다 (#158). CAPTURE의 completedAt은 P6 capturedAt, VOID 성공·업무 실패는 P5 처리 시각이다. P3 저장 연결은 별도 구현·검증 대상이다.
 
 P3는 idempotencyKey로 인계를 찾고 paymentId·decisionId·actionType을 함께 대조한다. 성공 결과가 먼저 도착하고 늦게 PENDING 응답이 와도 ACCEPTED를 REQUESTED로 되돌리지 않는다. 동일 성공 결과는 한 번만 반영하고 다른 targetOperationId의 성공 통지는 충돌로 취급한다. 실패 또는 성공 결과의 반대 순서 처리도 P3가 완료 상태를 임의로 덮어쓰지 않도록 검증해야 한다.
 
-### 업무 오류 코드 초안
+### 현재 구현의 업무 거절 코드
 
-| 코드 | 조건 |
-| --- | --- |
-| PAYMENT_NOT_FOUND | 요청한 결제가 없음 |
-| PAYMENT_NOT_HELD | 신규 직원 조치인데 HELD가 아님 |
-| PAYMENT_NOT_AUTHORIZED | HELD지만 유효한 승인 참조가 없음 |
-| IDEMPOTENCY_KEY_CONFLICT | 같은 키에 다른 paymentId·decisionId·actionType |
-| PAYMENT_ACTION_CONFLICT | 같은 결제에 다른 키·판정·조치가 이미 저장됨 |
-| DECISION_ACTION_CONFLICT | 같은 decisionId가 다른 결제/요청에 사용됨 |
-| VOID_DECLINED | 모의 취소기가 명시적으로 업무 거절을 반환 |
+| 코드 | 조건 | 저장·전달 |
+| --- | --- | --- |
+| PAYMENT_NOT_FOUND | 요청한 결제가 없음 | REJECTED 응답만 반환 |
+| PAYMENT_NOT_HELD | 신규 직원 조치인데 HELD가 아님 | REJECTED 응답만 반환 |
+| PAYMENT_NOT_AUTHORIZED | HELD지만 유효한 승인 참조가 없음 | REJECTED 응답만 반환 |
+| IDEMPOTENCY_KEY_CONFLICT | 같은 키에 다른 paymentId·decisionId·actionType | REJECTED 응답만 반환 |
+| PAYMENT_ACTION_CONFLICT | 같은 결제에 다른 키·판정·조치가 이미 저장됨 | REJECTED 응답만 반환 |
+| DECISION_ACTION_CONFLICT | 같은 decisionId가 다른 결제/요청에 사용됨 | REJECTED 응답만 반환 |
+| VOID_DECLINED | 모의 취소기가 명시적으로 업무 거절을 반환 | 조치 FAILED·완료 시각 저장, REJECTED 응답과 PaymentActionResult 발행 |
+
+앞의 6개 코드는 CAPTURE·VOID 모두 요청 접수 단계에서 반환할 수 있다. 접수된 CAPTURE가 실행 중 확정 실패했다는 뜻은 아니다. 현재 접수된 조치의 REJECTED 결과 이벤트를 만드는 코드는 VOID_DECLINED뿐이다. 기본 MockPaymentVoider는 유효 입력에 항상 성공하며 거절 경로는 테스트 대역으로 다룬다. 형식 오류는 IllegalArgumentException, DB·잠금 등 기술 실패는 예외로 전달하므로 위 errorCode 목록과 구분한다.
 
 형식 오류·신규 요청 검증 거절은 조치 행이나 결과 이벤트를 만들지 않는다. 따라서 거절된 모든 잘못된 요청의 영구 응답 캐시를 보장하지 않는다. 멱등 보장 대상은 접수되어 저장된 조치다. 키 충돌 거절은 기존 정상 조치의 실패로 저장하거나 실패 이벤트로 발행하지 않는다.
 
@@ -68,7 +70,14 @@ P3는 idempotencyKey로 인계를 찾고 paymentId·decisionId·actionType을 �
 
 PENDING → SUCCEEDED 또는 FAILED만 허용한다. 종료 상태는 재요청으로 초기화하지 않는다. 확정 실패의 동일 요청은 기존 거절을 반환한다. 실패한 판정을 새 키/반대 조치로 바꾸는 기능은 제공하지 않는다. 일시 장애는 FAILED로 저장하지 않는다.
 
-P6에는 현재 CaptureFailed 계약이 없다. P6 처리 예외만으로 CAPTURE FAILED를 만들지 않고, PENDING과 미완료 이벤트를 보존한다. 운영자가 확정 실패로 전환하는 API나 자동 재시도 스케줄러는 이번 범위가 아니다.
+P6에는 현재 CaptureFailed 계약이 없다. P6 처리 예외만으로 CAPTURE FAILED를 만들지 않고, PENDING과 미완료 이벤트를 보존한다. 운영자가 확정 실패로 전환하는 API나 자동 재시도 스케줄러는 이번 범위가 아니다. CAPTURE 확정 실패 기준·전달 계약·복구 방식과 도입 시점은 P5·P6 후속 협의 대상으로 남긴다 (#158, 2026-10-26 사용자 결정). 2차 구현이 확정된 것은 아니다.
+
+### P3의 장기 대기·거절 처리 방침 (#158)
+
+- 정상 PENDING이면 인계는 REQUESTED, Case는 ACTION_PENDING으로 두고 결과 이벤트를 기다린다. 대기 자체로 예외나 자동 재요청을 만들지 않는다.
+- CAPTURE가 계속 PENDING이면 24시간 SLA 경고와 "금융 처리 대기 중" 표시만 제공한다. 직원의 "인계 상태 다시 확인"은 같은 멱등키로 저장 결과를 조회한다.
+- VOID 확정 거절이면 인계 FAILED·Case ACTION_FAILED로 두고 실패 코드를 표시한다. 같은 요청에 같은 결과를 반환하므로 자동 재시도하지 않는다. 판정 정정은 후속 확장이다.
+- 타임아웃만으로 FAILED·CLOSED로 바꾸지 않는다. 위 항목은 P3가 공유한 계약이며 P5 문서 반영이 P3 화면·처리 구현 완료를 뜻하지 않는다.
 
 ## 4. 요청 트랜잭션과 경합
 
@@ -103,14 +112,14 @@ P3 운영 리스너는 payment.api.PaymentActionResult를 커밋 후 수신해�
 - P6 실패: 요청의 미완료 EVENT_PUBLICATION을 명시적으로 재전달한다. 정상 PENDING을 반환하는 공개 API를 재호출하는 것만으로 P6 재발행을 대신하지 않는다.
 - P5 완료 반영 실패: P6 완료 이벤트의 미완료 기록을 재전달한다.
 - P3 결과 수신 실패: P5 결과 이벤트의 미완료 기록을 재전달한다. P5 조치 결과는 유지한다.
-- P3 구독자 설치 전 발생한 결과는 자동 소급 전달되지 않는다. 저장 결과를 동일 요청으로 재조회해 동기 결과를 반영하는 복구 경로와 배포 순서를 P3와 확인한다.
+- P3 구독자 설치 전 발생한 결과는 자동 소급 전달되지 않는다. #158에 따라 P3 운영 리스너(PaymentHeld·PaymentActionResult)를 먼저 연결하고 실제 발행 흐름을 활성화한다. 설치 전 결과는 동일 요청으로 저장 결과를 재조회해 동기 결과를 반영한다. 이 재조회가 P6 요청 재전달을 대신하지 않는다.
 - 완료 이벤트가 응답보다 먼저 올 수 있다. P3는 종료 상태를 역행시키지 않으며, 응답과 이벤트가 모두 최종 결과여도 한 번만 반영한다.
 
 프로세스 메모리 캐시·EVENT_PUBLICATION payload를 업무 조회 정본으로 사용하지 않는다. 재시작 후 DB의 같은 조치 행에서 결과를 재구성한다. 운영 자동 재시도·관리 UI는 별도다.
 
 ## 7. 구현 순서와 검증 계획
 
-1. 상세 ERD 반영·합의 및 추가 P3 계약 확인 → newMigration 생성 → Entity·Repository·공개 DTO/API.
+1. 상세 ERD 반영·합의 → newMigration 생성 → Entity·Repository·공개 DTO/API. 추가 P3 계약 확인은 #158의 회신으로 갈음하며, CAPTURE 확정 실패는 후속 협의다.
 2. 요청 중복·반대 조치 제어 → ACCEPT 요청·완료 연결 → 모의 취소·VOID 완료 연결.
 3. 단위 검사: 필수값·필드 매핑·오류·상태 전이·이벤트 조건.
 4. MariaDB: UNIQUE·CHECK·FK·UTC 정밀도, 동일 요청·키/판정 충돌·CAPTURE/VOID 경합, 완료와 재요청 경합, DB 재조회로 복구, 요청·완료 롤백.
