@@ -1,7 +1,7 @@
 package com.donworry.investigation.entity;
 
 // 금융 조치 인계 상태 (fds 정본 03 §3.3 ⑦)
-// ACCEPTED는 실행 성공이 아니라 담당 모듈이 요청을 영속 접수했다는 뜻이다
+// 완료 기반 (ADR-0027) — ACCEPTED는 실제 매입 · 취소 완료, FAILED는 확정 거절, REQUESTED는 처리 대기 중이다
 public enum HandoffStatus {
     REQUESTED,
     ACCEPTED,

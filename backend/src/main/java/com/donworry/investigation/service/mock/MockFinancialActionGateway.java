@@ -6,24 +6,26 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-// 목업 — P5 금융 조치 접수를 흉내 내 바로 ACCEPTED를 돌려준다 (Notion "목업 데이터 · 연동 현황" P3 표)
-// 실제로는 ACCEPT(CAPTURE)는 P6 영속 접수가 P5를 거쳐 이벤트로 오고, REJECT(VOID)는 P5 동기 응답으로 온다
-// P5 공개 API가 생기면 이 클래스를 지운다
+// 목업 — 시연 결제(DemoHeldPaymentService)는 P5 payments에 없어서 실제 P5로 보내면 PAYMENT_NOT_FOUND가 된다
+// 시연 화면에서만 investigation.mock.payment-action-enabled=true로 켜서 바로 완료(ACCEPTED)를 돌려준다
+// 시연 API와 함께 지운다 (#163, Notion "목업 데이터 · 연동 현황" P3 표)
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "investigation.mock", name = "payment-action-enabled", havingValue = "true")
 public class MockFinancialActionGateway implements FinancialActionGateway {
 
     private final AtomicLong operationIds = new AtomicLong();
     private final Map<UUID, Receipt> receipts = new ConcurrentHashMap<>();
 
-    // 같은 멱등키로 다시 오면 처음 접수 결과를 그대로 돌려준다
+    // 같은 멱등키로 다시 오면 처음 결과를 그대로 돌려준다. 결과 이벤트가 없으므로 응답으로 바로 반영된다
     @Override
     public Receipt request(Command command) {
         return receipts.computeIfAbsent(command.idempotencyKey(), key -> {
             log.info(
-                    "목업 금융 조치 접수 paymentId={} decisionId={} actionType={}",
+                    "목업 금융 조치 완료 paymentId={} decisionId={} actionType={}",
                     command.paymentId(),
                     command.decisionId(),
                     command.actionType());

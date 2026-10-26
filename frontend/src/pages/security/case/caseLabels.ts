@@ -18,8 +18,8 @@ export const caseStatusLabel: Record<CaseStatus, Label> = {
   OPEN: { label: '생성됨', color: 'blue' },
   INVESTIGATING: { label: '조사 중', color: 'processing' },
   DECISION_PENDING: { label: '판정 대기', color: 'gold' },
-  ACTION_PENDING: { label: '인계 대기', color: 'geekblue' },
-  ACTION_FAILED: { label: '인계 실패', color: 'red' },
+  ACTION_PENDING: { label: '금융 처리 대기', color: 'geekblue' },
+  ACTION_FAILED: { label: '금융 조치 실패', color: 'red' },
   CLOSED: { label: '종료', color: 'default' },
 }
 
@@ -52,10 +52,22 @@ export const decisionLabel: Record<Decision, Label> = {
   REJECT: { label: 'REJECT · 매입 거부', color: 'red' },
 }
 
+/** 완료 기반 (ADR-0027) — ACCEPTED는 실제 매입·취소 완료, FAILED는 확정 거절이다. */
 export const handoffStatusLabel: Record<HandoffStatus, Label> = {
-  REQUESTED: { label: '접수 확인 중', color: 'processing' },
-  ACCEPTED: { label: '접수 완료', color: 'green' },
-  FAILED: { label: '인계 실패', color: 'red' },
+  REQUESTED: { label: '금융 처리 대기 중', color: 'processing' },
+  ACCEPTED: { label: '처리 완료', color: 'green' },
+  FAILED: { label: '처리 실패', color: 'red' },
+}
+
+/** P5 거절 코드 → 직원이 읽는 문구 (#169). 목록에 없는 코드는 코드 그대로 보여준다. */
+export const handoffErrorLabel: Record<string, string> = {
+  PAYMENT_NOT_FOUND: 'P5에 결제가 없습니다.',
+  PAYMENT_NOT_HELD: '결제가 이미 보류 상태가 아닙니다.',
+  PAYMENT_NOT_AUTHORIZED: '승인 정보가 없는 결제입니다.',
+  IDEMPOTENCY_KEY_CONFLICT: '같은 요청 키로 다른 조치가 접수되어 있습니다. P3에 확인을 요청하세요.',
+  PAYMENT_ACTION_CONFLICT: '이 결제에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
+  DECISION_ACTION_CONFLICT: '이 판정에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
+  VOID_DECLINED: '승인 취소가 거절되었습니다. P5에 확인을 요청하세요.',
 }
 
 export const actionTypeLabel: Record<ActionType, string> = {
@@ -74,8 +86,9 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   PAYMENT_LINKED: '결제 연결',
   DECISION_CONFIRMED: '직원 판정 확정',
   HANDOFF_REQUESTED: '금융 조치 인계 요청',
-  HANDOFF_ACCEPTED: '담당 모듈 접수 확인',
-  HANDOFF_FAILED: '금융 조치 인계 실패',
+  HANDOFF_ACCEPTED: '금융 조치 완료',
+  HANDOFF_FAILED: '금융 조치 실패',
+  HANDOFF_RECHECKED: '인계 상태 다시 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   CASE_CLOSED: 'Case 종료',
 }

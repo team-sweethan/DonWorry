@@ -20,6 +20,8 @@ export type CaseHistoryEventType =
   | 'HANDOFF_REQUESTED'
   | 'HANDOFF_ACCEPTED'
   | 'HANDOFF_FAILED'
+  /** 직원의 "인계 상태 다시 확인". eventData에 handoffId · result (#161) */
+  | 'HANDOFF_RECHECKED'
   /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
   | 'CASE_STATUS_CHANGED'
   | 'CASE_CLOSED'

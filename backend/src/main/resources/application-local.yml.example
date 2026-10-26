@@ -5,3 +5,8 @@ spring:
     url: jdbc:mariadb://localhost:3306/donworry
     username: donworry
     password: 내비밀번호
+
+# 시연 버튼(시연 HELD 결제)으로 판정까지 보여줄 때만 켠다 — 실제 P5 대신 목이 금융 조치를 바로 완료한다 (#161)
+# investigation:
+#   mock:
+#     payment-action-enabled: true

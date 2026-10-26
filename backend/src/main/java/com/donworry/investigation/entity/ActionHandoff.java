@@ -45,7 +45,7 @@ public class ActionHandoff {
     // 재시도해도 같은 값을 보내 담당 모듈이 중복 접수하지 않게 한다
     private UUID idempotencyKey;
 
-    // 접수한 모듈의 작업 ID — 접수 확인 전에는 null
+    // P5가 돌려준 완료 작업 ID(CAPTURE는 매입 ID, VOID는 조치 ID) — 완료 전에는 null
     private Long targetOperationId;
 
     private Instant requestedAt;
@@ -71,7 +71,7 @@ public class ActionHandoff {
         return ActionHandoff.builder().decision(decision).requestedAt(now).build();
     }
 
-    // 담당 모듈의 영속 접수가 확인됐을 때만 호출한다. 이벤트 발행 사실만으로는 부르지 않는다
+    // P5가 실제 완료를 알려줬을 때만 호출한다 (ADR-0027). 요청 접수 · 대기 응답만으로는 부르지 않는다
     // 같은 접수 결과가 다시 오면 이미 반영된 것으로 보고 넘긴다. 다른 작업 ID로 오면 충돌이다
     public void accept(Long targetOperationId, Instant now) {
         Objects.requireNonNull(targetOperationId, "targetOperationId");

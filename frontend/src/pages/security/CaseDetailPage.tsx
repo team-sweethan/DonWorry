@@ -6,6 +6,7 @@ import {
   CaseVersionConflictError,
   demoMergePayment,
   getCase,
+  recheckHandoff,
   requestReport,
   submitDecisions,
 } from '../../api/cases'
@@ -23,7 +24,7 @@ import { CodeTag } from './case/CodeTag'
 import { DecisionPanel } from './case/DecisionPanel'
 import { ReportCard } from './case/ReportCard'
 
-/** 보고서 생성 중·인계 접수 확인 중이면 이 간격으로 다시 조회한다. */
+/** 보고서 생성 중·금융 처리 대기 중이면 이 간격으로 다시 조회한다. */
 const POLL_MS = 3_000
 
 export function CaseDetailPage() {
@@ -34,6 +35,7 @@ export function CaseDetailPage() {
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
+  const [recheckingId, setRecheckingId] = useState<string | null>(null)
   // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
   // 늦게 도착한 이전 범위의 응답은 버린다.
   const scope = `${merchant}/${id}`
@@ -93,7 +95,7 @@ export function CaseDetailPage() {
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
     try {
       await submitDecisions(securityCase.caseId, request)
-      toast.success('판정을 확정했습니다. 금융 조치 인계 접수를 확인하고 있습니다.')
+      toast.success('판정을 확정했습니다. 실제 매입·취소 결과를 기다리고 있습니다.')
       load()
       return true
     } catch (error) {
@@ -126,6 +128,28 @@ export function CaseDetailPage() {
       toast.error('시연 결제를 병합하지 못했습니다. 잠시 후 다시 시도하세요.')
       load()
     }
+  }
+
+  const handleRecheck = async (handoffId: string) => {
+    setRecheckingId(handoffId)
+    try {
+      const after = await recheckHandoff(securityCase.caseId, handoffId)
+      const handoff = after.handoffs.find((h) => h.handoffId === handoffId)
+      if (handoff?.status === 'REQUESTED') {
+        toast.info('아직 금융 처리 중입니다. P5 확인이 필요하면 결제·조치 정보를 전달하세요.')
+      } else {
+        toast.success('금융 처리 결과를 반영했습니다.')
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError && error.detail
+          ? error.detail
+          : '인계 상태를 확인하지 못했습니다. 잠시 후 다시 시도하세요.',
+      )
+    } finally {
+      setRecheckingId(null)
+    }
+    load()
   }
 
   const handleRequestReport = async () => {
@@ -266,7 +290,13 @@ export function CaseDetailPage() {
         </div>
 
         <div className="dw-section-grid">
-          <HandoffCard payments={payments} decisions={decisions} handoffs={handoffs} />
+          <HandoffCard
+            payments={payments}
+            decisions={decisions}
+            handoffs={handoffs}
+            recheckingId={recheckingId}
+            onRecheck={handleRecheck}
+          />
           <HistoryCard history={history} />
         </div>
       </div>
