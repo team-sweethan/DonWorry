@@ -5,6 +5,7 @@
 - `authStore.test.ts`: HTTP 경계(`login` · `getMe` · `logout`)만 대체하고 실제 상태 관리 코드를 실행한다
 - `client.test.ts`: `fetch` 응답만 대체한다
 - `crossTabSession.test.ts`: 독립 API 모듈 두 개의 탭별 메모리와 공유 저장소·쿠키를 연결해 다른 탭의 인증 변경 중 요청 취소를 검사한다. 실제 브라우저 통합 검증과 구분한다
+- `loginRedirect.test.ts`: 실제 목적지 결정 함수에 잘못된 Router state·외부/우회 경로·역할·권한·이전 계정·강제 비밀번호 변경 조건을 입력해 복귀와 대체 경로를 검사한다. React 라우팅과 실제 브라우저 세션 검증은 별도로 수행한다
 
 ## 작성 시 주의
 

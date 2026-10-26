@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -15,6 +15,7 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { LatestLogin } from './LatestLogin'
+import { loginDestination, type LoginRedirectState } from './loginRedirect'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -118,6 +119,7 @@ function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string })
 export function LoginRoute() {
   const { store, status, user, checkedKey, error, expired, key } = useSessionCheck()
   const [showExpired] = useState(expired)
+  const { state } = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
     store.consumeExpired()
@@ -125,10 +127,11 @@ export function LoginRoute() {
   if (checkedKey !== key) return <CheckingSession />
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
   if (status === 'authenticated' && user) {
-    if (sessionNavigation(user).landing === null) {
+    const destination = loginDestination(user, state)
+    if (destination === null) {
       return <ScreenResult kind="403" action={<AccountActions />} />
     }
-    return <Navigate to={homeOf(user)} replace />
+    return <Navigate to={destination} replace />
   }
   return (
     <>
@@ -153,7 +156,10 @@ export function LoginRoute() {
         onSubmit={async ({ loginId, password }) => {
           await store.login(loginId, password)
           const loggedIn = store.getSnapshot().user
-          navigate(loggedIn ? homeOf(loggedIn) : '/login', { replace: true })
+          // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
+          navigate(loggedIn ? (loginDestination(loggedIn, state) ?? '/login') : '/login', {
+            replace: true,
+          })
         }}
       />
     </>
@@ -162,11 +168,17 @@ export function LoginRoute() {
 
 /** 서버 세션으로 ADMIN · 보안 직원 · 사장님 화면을 지킨다. 서버 API 인가는 #68 5단계다. */
 export function ServerSession() {
-  const { store, user, status, checkedKey, error, expired, key } = useSessionCheck()
-  const { pathname } = useLocation()
+  const { store, user, status, checkedKey, error, expired, expiredUserId, key } = useSessionCheck()
+  const { pathname, search } = useLocation()
   const checked = checkedKey === key
-  if (expired) return <Navigate to="/login" replace />
-  if (checked && status === 'anonymous') return <Navigate to="/login" replace />
+  // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
+  const loginState = useMemo<LoginRedirectState>(
+    () => ({ returnTo: pathname + search, previousUserId: expiredUserId }),
+    [pathname, search, expiredUserId],
+  )
+  const login = <Navigate to="/login" state={loginState} replace />
+  if (expired) return login
+  if (checked && status === 'anonymous') return login
   const retry = () => {
     void store.check(key)
   }
@@ -178,7 +190,7 @@ export function ServerSession() {
   ) : error === 'forbidden' ? (
     <ScreenResult kind="403" homePath={user ? homeOf(user) : '/login'} />
   ) : undefined
-  if (status !== 'authenticated' || !user) return body ?? <Navigate to="/login" replace />
+  if (status !== 'authenticated' || !user) return body ?? login
   if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
     return <Navigate to="/account/password" replace />
   }

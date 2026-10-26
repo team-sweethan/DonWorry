@@ -86,6 +86,7 @@ test('check_whenInitiallyUnauthorized_becomesAnonymousWithoutExpiry', async () =
   assert.equal(store.getSnapshot().status, 'anonymous')
   assert.equal(store.getSnapshot().expired, false)
   assert.equal(store.getSnapshot().checkedKey, 'initial')
+  assert.equal(store.getSnapshot().expiredUserId, null)
 })
 
 // 로그인 후 확인한 401은 사용자 정보를 지우고 안내를 한 번만 만든다.
@@ -99,8 +100,43 @@ test('check_whenSessionExpires_clearsUserAndSignalsOnce', async () => {
   await store.check('next')
   assert.equal(store.getSnapshot().user, null)
   assert.equal(store.getSnapshot().expired, true)
+  assert.equal(store.getSnapshot().expiredUserId, user.userId)
   store.consumeExpired()
   store.expire()
+  assert.equal(store.getSnapshot().expired, false)
+  await store.check('login')
+  assert.equal(store.getSnapshot().expiredUserId, user.userId)
+})
+
+// 업무 API에서 만료돼도 계정 비교용 ID는 남고 재로그인 후 제거한다.
+test('expire_whenBusinessApiUnauthorized_retainsAccountUntilLogin', async () => {
+  let failLogin = false
+  const store = setup({
+    login: async () => {
+      if (failLogin) throw unauthorized()
+      return user
+    },
+  })
+  await store.login('admin', 'secret')
+  store.expire()
+  assert.equal(store.getSnapshot().user, null)
+  assert.equal(store.getSnapshot().expiredUserId, user.userId)
+  store.consumeExpired()
+  failLogin = true
+  await assert.rejects(store.login('admin', 'wrong'))
+  assert.equal(store.getSnapshot().expiredUserId, user.userId)
+  failLogin = false
+  await store.login('admin', 'secret')
+  assert.equal(store.getSnapshot().expiredUserId, null)
+})
+
+// 명시적 로그아웃은 성공한 뒤 만료 전 계정 정보도 제거한다.
+test('logout_whenExpired_clearsPreviousAccount', async () => {
+  const store = setup()
+  await store.login('admin', 'secret')
+  store.expire()
+  await store.logout()
+  assert.equal(store.getSnapshot().expiredUserId, null)
   assert.equal(store.getSnapshot().expired, false)
 })
 
