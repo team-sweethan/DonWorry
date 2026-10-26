@@ -2,6 +2,7 @@ import { canOpenPath, sessionNavigation } from '../config/navigation.ts'
 import type { AuthUser } from '../types/auth.ts'
 
 export type LoginRedirectState = {
+  requireLogin?: boolean
   returnTo: string
   previousUserId: number | null
 }
@@ -33,4 +34,13 @@ export function loginDestination(user: AuthUser, state: unknown): string | null 
     if (state.previousUserId !== user.userId) return fallback
   }
   return canOpenPath(user, pathname) ? target : fallback
+}
+
+export function requiresLogin(state: unknown): boolean {
+  return (
+    typeof state === 'object' &&
+    state !== null &&
+    'requireLogin' in state &&
+    state.requireLogin === true
+  )
 }

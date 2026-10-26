@@ -15,16 +15,24 @@ afterEach(() => {
 
 test('본인·ADMIN 이력은 지정한 경로와 페이지를 조회하고 세션·no-store·취소를 전달한다', async () => {
   const paths: string[] = []
+  const signals: AbortSignal[] = []
   const controller = new AbortController()
   globalThis.fetch = async (input, init) => {
     paths.push(String(input))
     assert.equal(init?.cache, 'no-store')
     assert.equal(init?.credentials, 'include')
-    assert.equal(init?.signal, controller.signal)
+    assert.ok(init?.signal)
+    signals.push(init.signal)
+    assert.equal(init.signal.aborted, false)
     return Response.json({ items: [], page: 2, size: 20, totalElements: 0, totalPages: 0 })
   }
   assert.deepEqual((await getLoginHistories(2, undefined, controller.signal)).items, [])
   await getLoginHistories(1, 7, controller.signal)
+  controller.abort()
+  for (const signal of signals) {
+    assert.equal(signal.aborted, true)
+    assert.equal(signal.reason, controller.signal.reason)
+  }
   assert.deepEqual(paths, [
     '/api/auth/login-histories?page=2&size=20',
     '/api/admin/users/7/login-histories?page=1&size=20',

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ApiError } from '../src/api/client.ts'
+import { createSessionActivity, SESSION_TIMEOUT_MS } from '../src/api/sessionActivity.ts'
 import { createAuthStore } from '../src/auth/authStore.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
@@ -25,12 +26,15 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function setup(overrides: Partial<Parameters<typeof createAuthStore>[0]> = {}) {
-  return createAuthStore({
-    login: async () => user,
-    getMe: async () => user,
-    logout: async () => {},
-    ...overrides,
-  })
+  return createAuthStore(
+    {
+      login: async () => user,
+      getMe: async () => user,
+      logout: async () => {},
+      ...overrides,
+    },
+    createSessionActivity(),
+  )
 }
 
 test('강제 변경 알림 뒤 me 갱신으로 해제 상태를 반영한다', async () => {
@@ -306,4 +310,412 @@ test('logout_whenFailsAfterRouteCheckStarted_rechecksRoute', async () => {
   assert.equal(meCalls, 2)
   assert.equal(store.getSnapshot().checkedKey, 'finance')
   assert.equal(store.getSnapshot().user, user)
+})
+
+// 타이머 만료 후 경로 확인과 안내 소비가 자동 재로그인을 일으키지 않는다.
+test('check_whenExpired_requiresExplicitLoginEvenAfterNoticeConsumed', async () => {
+  let calls = 0
+  const store = setup({
+    getMe: async () => {
+      calls++
+      return user
+    },
+  })
+  await store.login('admin', 'secret')
+  store.expire()
+  store.consumeExpired()
+  await store.check('login')
+  await store.check('protected')
+  assert.equal(calls, 0)
+  assert.equal(store.getSnapshot().reauthenticationRequired, true)
+  assert.equal(store.getSnapshot().status, 'anonymous')
+  await store.login('admin', 'secret')
+  await store.check('restored')
+  assert.equal(calls, 1)
+  assert.equal(store.getSnapshot().reauthenticationRequired, false)
+})
+
+// 만료 복귀 state가 있는 로그인 화면을 새로고침해도 /me를 호출하지 않는다.
+test('check_whenReauthenticationStateRestored_skipsMeUntilLogin', async () => {
+  let calls = 0
+  const store = setup({
+    getMe: async () => {
+      calls++
+      return user
+    },
+  })
+  await store.check('login', true)
+  assert.equal(calls, 0)
+  assert.equal(store.getSnapshot().checkedKey, 'login')
+  assert.equal(store.getSnapshot().status, 'anonymous')
+  await store.login('admin', 'secret')
+  await store.check('login', true)
+  assert.equal(calls, 1)
+})
+
+// 연장 중 폼을 유지하며 중복 클릭은 같은 요청을 공유한다.
+test('renew_whenClickedTwice_sharesRequestAndPreservesCheckedRoute', async () => {
+  const pending = deferred<AuthUser>()
+  let calls = 0
+  const store = setup({ getMe: () => (++calls === 1 ? Promise.resolve(user) : pending.promise) })
+  await store.login('admin', 'secret')
+  await store.check('editing')
+  const first = store.renew()
+  assert.equal(first, store.renew())
+  assert.equal(store.getSnapshot().checkedKey, 'editing')
+  pending.resolve(user)
+  assert.equal(await first, user)
+  assert.equal(calls, 2)
+  assert.equal(store.getSnapshot().checkedKey, 'editing')
+})
+
+// 연장 장애는 재시도할 수 있고 401만 인증을 만료시킨다.
+test('renew_whenUnavailableThenUnauthorized_preservesAuthThenExpires', async () => {
+  let status = 500
+  const store = setup({
+    getMe: async () => {
+      throw new ApiError(status)
+    },
+  })
+  await store.login('admin', 'secret')
+  await assert.rejects(store.renew())
+  assert.equal(store.getSnapshot().user, user)
+  status = 401
+  assert.equal(await store.renew(), null)
+  assert.equal(store.getSnapshot().expired, true)
+  assert.equal(store.getSnapshot().expiredUserId, user.userId)
+})
+
+// 연장 요청이 늦게 도착해도 만료·재로그인한 계정을 복원하지 않는다.
+test('renew_whenOldResponseArrivesAfterNewLogin_ignoresResponse', async () => {
+  const pending = deferred<AuthUser>()
+  const store = setup({ getMe: () => pending.promise })
+  await store.login('admin', 'secret')
+  const renewing = store.renew()
+  store.expire()
+  await store.login('admin', 'secret')
+  pending.resolve({ ...user, displayName: '이전 응답' })
+  assert.equal(await renewing, null)
+  assert.equal(store.getSnapshot().user?.displayName, user.displayName)
+})
+
+// 이전 연장이 끝나지 않아도 새 로그인은 새 연장을 시작할 수 있다.
+test('renew_whenNewLoginStartsBeforeOldRequestFinishes_doesNotReuseOldRequest', async () => {
+  const old = deferred<AuthUser>()
+  const current = deferred<AuthUser>()
+  let calls = 0
+  const store = setup({ getMe: () => (++calls === 1 ? old.promise : current.promise) })
+  await store.login('admin', 'secret')
+  const first = store.renew()
+  store.expire()
+  await store.login('admin', 'secret')
+  const second = store.renew()
+  assert.notEqual(first, second)
+  old.resolve(user)
+  assert.equal(await first, null)
+  assert.equal(store.renew(), second)
+  current.resolve(user)
+  assert.equal(await second, user)
+  assert.equal(calls, 2)
+})
+
+// 같은 브라우저의 두 탭이 같은 저장소를 공유한다.
+function sharedTabs() {
+  const values = new Map<string, string>()
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value)
+    },
+  }
+  let id = 0
+  return () =>
+    createSessionActivity(
+      () => 1000,
+      () => storage,
+      () => String(++id),
+    )
+}
+
+// 만료 뒤 다른 탭이 다시 로그인하면 남은 탭은 재로그인 없이 그 세션에 합류한다.
+test('check_whenAnotherTabLogsInAfterExpiry_joinsWithoutEvictingIt', async () => {
+  const tab = sharedTabs()
+  const activityA = tab(),
+    activityB = tab()
+  let meCalls = 0
+  const api = {
+    login: async () => user,
+    getMe: async () => {
+      meCalls++
+      return user
+    },
+    logout: async () => {},
+  }
+  const a = createAuthStore(api, activityA)
+  const b = createAuthStore(api, activityB)
+  await b.login('admin', 'secret')
+  b.expire()
+  await b.check('login', true)
+  assert.equal(meCalls, 0)
+  await a.login('admin', 'secret')
+  b.recheck()
+  await b.check('login', true)
+  assert.equal(meCalls, 1)
+  assert.equal(b.getSnapshot().status, 'authenticated')
+  assert.equal(b.getSnapshot().reauthenticationRequired, false)
+  assert.equal(activityB.getSnapshot()?.id, activityA.getSnapshot()?.id)
+  activityA.sync()
+  assert.notEqual(activityA.getSnapshot(), null)
+  assert.equal(a.getSnapshot().status, 'authenticated')
+})
+
+// 다른 탭의 인증 변경으로 중단된 me 확인은 한 번 다시 묻고 오류로 표시하지 않는다.
+test('check_whenAbortedBySessionChange_retriesOnceBeforeUnavailable', async () => {
+  const aborted = () => new DOMException('로그인 상태가 변경되었습니다.', 'AbortError')
+  let failures = 1
+  const store = setup({
+    getMe: async () => {
+      if (failures-- > 0) throw aborted()
+      return user
+    },
+  })
+  await store.check('route')
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(store.getSnapshot().error, null)
+  failures = 2
+  await store.check('next')
+  assert.equal(store.getSnapshot().error, 'unavailable')
+})
+
+// 만료 직전에 시작한 연장은 기존 시한 뒤 응답해도 로그인 상태를 유지한다.
+test('renew_whenSuccessArrivesAfterOldDeadline_defersTimerExpiry', async () => {
+  let now = 1000
+  const activity = createSessionActivity(
+    () => now,
+    () => {
+      throw new Error('blocked')
+    },
+    () => 'test',
+  )
+  const pending = deferred<AuthUser>()
+  const store = createAuthStore(
+    { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+    activity,
+    () => now,
+  )
+  await store.login('admin', 'secret')
+  now += SESSION_TIMEOUT_MS - 1
+  const renewing = store.renew()
+  now += 2
+  store.expireIfInactive()
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(store.getSnapshot().expired, false)
+  pending.resolve(user)
+  assert.equal(await renewing, user)
+  assert.equal(activity.getSnapshot()?.at, now)
+  store.expireIfInactive()
+  assert.equal(store.getSnapshot().status, 'authenticated')
+})
+
+// 연장이 실패하면 요청 종료 직후 현재 시각으로 다시 검사해 초과한 인증을 만료시킨다.
+test('renew_whenFailureArrivesAfterOldDeadline_expiresWithoutAnotherTick', async () => {
+  for (const error of [new ApiError(500), new TypeError('offline')]) {
+    let now = 1000
+    const activity = createSessionActivity(
+      () => now,
+      () => {
+        throw new Error('blocked')
+      },
+      () => 'test',
+    )
+    const pending = deferred<AuthUser>()
+    const store = createAuthStore(
+      { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+      activity,
+      () => now,
+    )
+    await store.login('admin', 'secret')
+    now += SESSION_TIMEOUT_MS - 1
+    const renewing = store.renew()
+    now += 2
+    store.expireIfInactive()
+    pending.reject(error)
+    await assert.rejects(renewing, error)
+    assert.equal(store.getSnapshot().status, 'anonymous')
+    assert.equal(store.getSnapshot().expired, true)
+  }
+})
+
+// 이전 me가 끝나지 않아도 다른 탭 로그인 감지 시 새 요청으로 로그인 화면의 로딩을 끝낸다.
+test('recheck_whenInitialMePending_startsFreshCheckAndIgnoresOldResult', async () => {
+  for (const outcome of ['success', 'unauthorized', 'aborted']) {
+    const tab = sharedTabs()
+    const activity = tab(),
+      other = tab()
+    const old = deferred<AuthUser>()
+    let calls = 0
+    const store = createAuthStore(
+      {
+        login: async () => user,
+        getMe: () => (++calls === 1 ? old.promise : Promise.resolve(user)),
+        logout: async () => {},
+      },
+      activity,
+    )
+    const original = store.check('login')
+    other.start(true)
+    store.recheck()
+    assert.equal(calls, 2)
+    await store.check('login')
+    assert.equal(store.getSnapshot().status, 'authenticated')
+    assert.equal(store.getSnapshot().checkedKey, 'login')
+    if (outcome === 'success') old.resolve({ ...user, displayName: '이전 응답' })
+    else
+      old.reject(
+        outcome === 'unauthorized' ? unauthorized() : new DOMException('old', 'AbortError'),
+      )
+    await original
+    assert.equal(calls, 2)
+    assert.equal(store.getSnapshot().user?.displayName, user.displayName)
+    assert.equal(store.getSnapshot().expired, false)
+  }
+})
+
+// 연장 중이어도 서버의 401은 남은 시간과 무관하게 즉시 만료로 처리한다.
+test('renew_whenUnauthorizedBeforeDeadline_expiresImmediately', async () => {
+  let now = 1000
+  const activity = createSessionActivity(
+    () => now,
+    () => {
+      throw new Error('blocked')
+    },
+    () => 'test',
+  )
+  const pending = deferred<AuthUser>()
+  const store = createAuthStore(
+    { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+    activity,
+    () => now,
+  )
+  await store.login('admin', 'secret')
+  now += SESSION_TIMEOUT_MS - 1000
+  const renewing = store.renew()
+  store.expireIfInactive()
+  pending.reject(unauthorized())
+  assert.equal(await renewing, null)
+  assert.equal(store.getSnapshot().expired, true)
+  assert.equal(activity.getSnapshot(), null)
+})
+
+// 연장 실패 전 다른 탭이 활동했으면 기존 시한이 지나도 갱신된 공유 시각을 따른다.
+test('renew_whenAnotherTabWorksBeforeFailure_preservesSharedSession', async () => {
+  let now = 1000
+  const values = new Map<string, string>()
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value)
+    },
+  }
+  const activity = createSessionActivity(
+    () => now,
+    () => storage,
+    () => 'shared',
+  )
+  const other = createSessionActivity(
+    () => now,
+    () => storage,
+    () => 'other',
+  )
+  const pending = deferred<AuthUser>()
+  const store = createAuthStore(
+    { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+    activity,
+    () => now,
+  )
+  await store.login('admin', 'secret')
+  other.start()
+  now += SESSION_TIMEOUT_MS - 1
+  const renewing = store.renew()
+  other.touch(other.getSnapshot()?.id)
+  now += 2
+  store.expireIfInactive()
+  pending.reject(new ApiError(500))
+  await assert.rejects(renewing)
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(activity.getSnapshot()?.at, other.getSnapshot()?.at)
+})
+
+// 일반 경로 확인도 기존 만료 시각 뒤 성공하면 로그인 상태를 유지한다.
+test('check_whenResponseCrossesDeadline_preservesAuthenticatedSession', async () => {
+  let now = 1000
+  const activity = createSessionActivity(
+    () => now,
+    () => {
+      throw new Error('blocked')
+    },
+    () => 'test',
+  )
+  const pending = deferred<AuthUser>()
+  const store = createAuthStore(
+    { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+    activity,
+    () => now,
+  )
+  await store.login('admin', 'secret')
+  now += SESSION_TIMEOUT_MS - 1
+  const checking = store.check('next')
+  now += 2
+  store.expireIfInactive()
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  pending.resolve(user)
+  await checking
+  assert.equal(store.getSnapshot().checkedKey, 'next')
+  assert.equal(store.getSnapshot().expired, false)
+})
+
+// 종료한 추적을 새 탭의 최초 me 성공으로 되살리지 않고 명시적 로그인만 허용한다.
+test('check_whenNewTabOpensAfterExpiry_requiresLoginWithoutMe', async () => {
+  const tab = sharedTabs()
+  const a = createAuthStore(
+    { login: async () => user, getMe: async () => user, logout: async () => {} },
+    tab(),
+  )
+  await a.login('admin', 'secret')
+  a.expire()
+  let calls = 0
+  const b = createAuthStore(
+    {
+      login: async () => user,
+      getMe: async () => {
+        calls++
+        return user
+      },
+      logout: async () => {},
+    },
+    tab(),
+  )
+  await b.check('initial')
+  assert.equal(calls, 0)
+  assert.equal(b.getSnapshot().status, 'anonymous')
+  assert.equal(b.getSnapshot().reauthenticationRequired, true)
+})
+
+// 다른 탭의 명시적 로그아웃은 만료 안내와 이전 계정 복귀 정보를 남기지 않는다.
+test('logout_whenOtherTabReceivesEnd_clearsExpiryAndPreviousAccount', async () => {
+  const tab = sharedTabs()
+  const activityA = tab(),
+    activityB = tab()
+  const api = { login: async () => user, getMe: async () => user, logout: async () => {} }
+  const a = createAuthStore(api, activityA),
+    b = createAuthStore(api, activityB)
+  await a.login('admin', 'secret')
+  await b.check('protected')
+  const off = activityB.subscribe(b.handleActivityChange)
+  await a.logout()
+  activityB.sync()
+  off()
+  assert.equal(b.getSnapshot().status, 'anonymous')
+  assert.equal(b.getSnapshot().expired, false)
+  assert.equal(b.getSnapshot().expiredUserId, null)
 })

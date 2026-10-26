@@ -1,3 +1,4 @@
+import { SessionExpiryModal } from './SessionExpiryModal'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
@@ -15,7 +16,7 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { LatestLogin } from './LatestLogin'
-import { loginDestination, type LoginRedirectState } from './loginRedirect'
+import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -25,10 +26,13 @@ const homeOf = (user: AuthUser) => sessionNavigation(user).landing ?? '/login'
 function useSessionCheck() {
   const auth = useAuth()
   const location = useLocation()
+  const requireLogin = location.pathname === '/login' && requiresLogin(location.state)
+  const reauthenticationRequired = auth.reauthenticationRequired
+  const loggedOut = auth.loggedOut
   const key = location.key + location.pathname + location.search
   useEffect(() => {
-    void auth.store.check(key)
-  }, [auth.store, key])
+    void auth.store.check(key, requireLogin)
+  }, [auth.store, key, requireLogin, reauthenticationRequired, loggedOut])
   return { ...auth, key }
 }
 
@@ -80,11 +84,14 @@ export function LogoutButton() {
 
 function AccountActions() {
   return (
-    <Space>
-      <NavLink to="/account/password">비밀번호 변경</NavLink>
-      <NavLink to="/account/login-history">내 로그인 이력</NavLink>
-      <LogoutButton />
-    </Space>
+    <>
+      <SessionExpiryModal />
+      <Space>
+        <NavLink to="/account/password">비밀번호 변경</NavLink>
+        <NavLink to="/account/login-history">내 로그인 이력</NavLink>
+        <LogoutButton />
+      </Space>
+    </>
   )
 }
 
@@ -117,13 +124,16 @@ function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string })
 }
 
 export function LoginRoute() {
-  const { store, status, user, checkedKey, error, expired, key } = useSessionCheck()
-  const [showExpired] = useState(expired)
+  const { store, status, user, checkedKey, error, expired, loggedOut, key } = useSessionCheck()
   const { state } = useLocation()
+  const [showExpired] = useState(expired || requiresLogin(state))
   const navigate = useNavigate()
   useEffect(() => {
     store.consumeExpired()
   }, [store])
+  useEffect(() => {
+    if (loggedOut && state !== null) navigate('/login', { replace: true, state: null })
+  }, [loggedOut, state, navigate])
   if (checkedKey !== key) return <CheckingSession />
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
   if (status === 'authenticated' && user) {
@@ -144,7 +154,7 @@ export function LoginRoute() {
           message="로그인 상태를 확인할 수 없습니다. 로그인을 다시 시도해 주세요."
         />
       )}
-      {showExpired && (
+      {!loggedOut && (showExpired || expired) && (
         <Alert
           role="status"
           type="warning"
@@ -157,9 +167,14 @@ export function LoginRoute() {
           await store.login(loginId, password)
           const loggedIn = store.getSnapshot().user
           // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
-          navigate(loggedIn ? (loginDestination(loggedIn, state) ?? '/login') : '/login', {
-            replace: true,
-          })
+          navigate(
+            loggedIn
+              ? (loginDestination(loggedIn, loggedOut ? null : state) ?? '/login')
+              : '/login',
+            {
+              replace: true,
+            },
+          )
         }}
       />
     </>
@@ -168,15 +183,31 @@ export function LoginRoute() {
 
 /** 서버 세션으로 ADMIN · 보안 직원 · 사장님 화면을 지킨다. 서버 API 인가는 #68 5단계다. */
 export function ServerSession() {
-  const { store, user, status, checkedKey, error, expired, expiredUserId, key } = useSessionCheck()
+  const {
+    store,
+    user,
+    status,
+    checkedKey,
+    error,
+    expired,
+    expiredUserId,
+    reauthenticationRequired,
+    loggedOut,
+    key,
+  } = useSessionCheck()
   const { pathname, search } = useLocation()
   const checked = checkedKey === key
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
-    () => ({ returnTo: pathname + search, previousUserId: expiredUserId }),
-    [pathname, search, expiredUserId],
+    () => ({
+      returnTo: pathname + search,
+      previousUserId: expiredUserId,
+      requireLogin: reauthenticationRequired,
+    }),
+    [pathname, search, expiredUserId, reauthenticationRequired],
   )
-  const login = <Navigate to="/login" state={loginState} replace />
+  const login = <Navigate to="/login" state={loggedOut ? null : loginState} replace />
+  if (loggedOut) return login
   if (expired) return login
   if (checked && status === 'anonymous') return login
   const retry = () => {
@@ -222,6 +253,7 @@ export function ServerSession() {
         </header>
       }
     >
+      <SessionExpiryModal />
       {body ?? forbidden}
     </ManagementLayout>
   )
