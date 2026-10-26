@@ -18,12 +18,18 @@
 | [#122 매입 이벤트 연결](capture-events.md) | 발행·수신 조건과 트랜잭션 설계. 요청 발행·완료 수신 구현. 단계별 검증과 후속 범위 기록 |
 | [검증](verification.md) | 1차 검증 계획과 과거 실행 기록 |
 | [후속 검토](future-design.md) | 보조 저장·시도별 결과 관리 등 1차 필수에서 분리한 초안 |
+| [#152 장기 보류 정책](152-long-held-payment-policy.md) | 제안 — 원인별 확인·종료·예약·경합·활성화 조건. 기간과 담당 합의 미정 |
+| [#152 돈워리 내부 대응](152-internal-response.md) | P5가 결정할 항목과 P3·P6 합의 항목, 원인별 대응·해소 확인 기준. 결정 후보·합의 전 |
+| [#152 담당자 확인 질문](152-policy-confirmation.md) | 미발송 문안·회신 기록. P1/CakeShop·P3·P5·P6 및 P2 추가 확인 |
+| [ADR-0035](../decisions/0035-long-held-payment-policy.md) | 제안 — 확인 기한과 실제 금융 종료 분리. 대안·영향 기록 |
 | [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |
 | [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) | ADR-0027로 대체된 이전 CAPTURE 제안의 이유·대안·영향 |
 
 업무의 근거는 Notion FDS 정본과 P6 담당 ERD다. 실제 컬럼은 migration SQL, 의존 방향은 채택된 [ADR-0012](../decisions/0012-payment-settlement-dependency.md)를 따른다. 출처와 차이는 [문서 대조 현황](../README.md)에 기록한다.
 
 ## 현재 구현
+
+**2026-10-26 P3 진행 보충:** 최신 GitHub `dev 2ba8a4f`에는 #170의 PaymentHeld 수신·Case 연결이 병합됐다. 아래 이전 단계 기록의 HELD 수신 미구현 표시는 당시 기준이다. 직원 금융 Gateway·PaymentActionResult 수신·인계 재확인은 P3 #161의 후속이다. [#152 내부 대응 기준](152-internal-response.md)에서 운영 분담 제안과 미확정 사항을 구분한다.
 
 - #149는 [CakeShop 요청·조회 설계](149-cakeshop-payment-api.md)와 [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md)을 작성한 단계다. 5번 단계에서 신규 저장 구조(migration·Entity·Repository)와 상태 변경 메타데이터를 구현했다. 후속 단계에서 접수 서비스의 동일 키 재사용·주문 잠금·거절 후 재결제·기존 주문 차단을 구현했다. 이어서 고정 평가 UUID로 P2 호출·결과 복원과 모의 승인/단계/이벤트의 원자 저장을 연결했다. 가맹점별 단건·주문별 시도 목록 조회도 추가했다. 사용자 승인으로 기본 비활성 HTTP와 인증 대역 테스트를 추가했다. 실제 P1 인증 연결·운영 활성화는 미완료다. 기존 내부 결제 처리·조회 구현과 구분한다.
 
