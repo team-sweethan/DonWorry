@@ -21,12 +21,14 @@ public class PaymentRequestProcessingService {
         var request = requests.findByPaymentId(paymentId).orElseThrow();
         if (request.getProcessingStage() != PaymentProcessingStage.RECEIVED) return Optional.empty();
         var payment = payments.findById(paymentId).orElseThrow();
-        return Optional.of(new PaymentEvaluationInput(
-                request.getEvaluationRequestId(),
-                paymentId,
-                payment.getCustomerRef(),
-                payment.getAmount(),
-                payment.getCreatedAt()));
+        return Optional.of(PaymentEvaluationInput.builder()
+                .evaluationRequestId(request.getEvaluationRequestId())
+                .paymentId(paymentId)
+                .merchantId(payment.getMerchantId())
+                .customerRef(payment.getCustomerRef())
+                .amount(payment.getAmount())
+                .paymentRequestedAt(payment.getCreatedAt())
+                .build());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

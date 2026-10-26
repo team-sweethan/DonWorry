@@ -29,6 +29,7 @@ class PaymentEvaluationFlowServiceTests {
     private PaymentCreationSnapshot snapshot() {
         return PaymentCreationSnapshot.builder()
                 .paymentId(101L)
+                .merchantId(42L)
                 .customerRef("stored-customer")
                 .amount(150_000L)
                 .createdAt(PaymentEvaluationFixtures.REQUESTED_AT)
@@ -65,6 +66,7 @@ class PaymentEvaluationFlowServiceTests {
         var request = captor.getValue();
         assertThat(request.evaluationRequestId()).isNotNull();
         assertThat(request.paymentId()).isEqualTo(saved.paymentId());
+        assertThat(request.merchantId()).isEqualTo(saved.merchantId());
         assertThat(request.customerRef()).isEqualTo(saved.customerRef());
         assertThat(request.amount()).isEqualTo(saved.amount());
         assertThat(request.paymentRequestedAt()).isEqualTo(saved.createdAt());

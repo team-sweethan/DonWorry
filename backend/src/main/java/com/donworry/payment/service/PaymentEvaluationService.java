@@ -41,6 +41,7 @@ public class PaymentEvaluationService {
         var request = FdsEvaluationRequest.builder()
                 .evaluationRequestId(input.evaluationRequestId())
                 .paymentId(input.paymentId())
+                .merchantId(input.merchantId())
                 .customerRef(input.customerRef())
                 .amount(input.amount())
                 .paymentRequestedAt(input.paymentRequestedAt())

@@ -41,6 +41,7 @@ public class PaymentEvaluationFlowService {
         var evaluationInput = PaymentEvaluationInput.builder()
                 .evaluationRequestId(UUID.randomUUID())
                 .paymentId(payment.paymentId())
+                .merchantId(payment.merchantId())
                 .customerRef(payment.customerRef())
                 .amount(payment.amount())
                 .paymentRequestedAt(payment.createdAt())

@@ -14,6 +14,7 @@ final class PaymentEvaluationFixtures {
         return PaymentEvaluationInput.builder()
                 .evaluationRequestId(REQUEST_ID)
                 .paymentId(101L)
+                .merchantId(42L)
                 .customerRef("customer-001")
                 .amount(150_000L)
                 .paymentRequestedAt(REQUESTED_AT);
