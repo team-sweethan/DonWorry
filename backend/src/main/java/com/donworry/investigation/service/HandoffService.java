@@ -76,7 +76,17 @@ public class HandoffService {
             throw mismatch("인계와 결과의 결제 · 판정 · 조치 유형이 다릅니다", result);
         }
         // 실제 완료 시각은 이력에만 남긴다. acceptedAt은 P3 반영 시각이다
-        apply(handoff, receipt, Map.of("completedAt", completedAt.toString()), Instant.now());
+        Instant now = Instant.now();
+        HandoffStatus before = handoff.getStatus();
+        apply(handoff, receipt, Map.of("completedAt", completedAt.toString()), now);
+        // 다시 확인이 이벤트보다 먼저 같은 결과를 반영했으면 그 이력에는 completedAt이 없다 — 한 번만 보완한다
+        if (before != HandoffStatus.REQUESTED && !hasCompletedAt(handoff)) {
+            caseHistoryRepository.save(CaseHistory.bySystem(
+                    lockedCase(handoff),
+                    CaseHistoryEventType.HANDOFF_COMPLETION_RECORDED,
+                    Map.of("handoffId", handoff.getId(), "completedAt", completedAt.toString()),
+                    now));
+        }
     }
 
     // 직원의 다시 확인 결과를 반영한다. 계속 처리 중이면 확인 시각만 남긴다
@@ -125,6 +135,16 @@ public class HandoffService {
         if (!securityCase.isClosed()) {
             caseStatusService.refresh(securityCase, now);
         }
+    }
+
+    // 이 인계의 이력 중 실제 완료 시각을 남긴 것이 있는지 — Case 이력은 몇 건뿐이라 불러와서 거른다
+    private boolean hasCompletedAt(ActionHandoff handoff) {
+        String handoffId = String.valueOf(handoff.getId());
+        return caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseIdOf(handoff)).stream()
+                .map(CaseHistory::getEventData)
+                .filter(Objects::nonNull)
+                .anyMatch(data ->
+                        handoffId.equals(String.valueOf(data.get("handoffId"))) && data.containsKey("completedAt"));
     }
 
     // 쓰기 잠금 — 결과 이벤트와 다시 확인이 같은 행을 동시에 바꾸지 않게 한다

@@ -10,6 +10,8 @@ public enum CaseHistoryEventType {
     HANDOFF_FAILED,
     // 직원이 "인계 상태 다시 확인"을 눌렀다 — event_data에 handoffId · 그때 받은 result를 남긴다
     HANDOFF_RECHECKED,
+    // 다시 확인으로 먼저 반영된 인계에 늦게 온 결과 이벤트의 실제 완료 시각 — event_data에 handoffId · completedAt
+    HANDOFF_COMPLETION_RECORDED,
     // CASE_CREATED · CASE_CLOSED 외의 상태 전이 — event_data에 from · to를 남긴다
     CASE_STATUS_CHANGED,
     CASE_CLOSED

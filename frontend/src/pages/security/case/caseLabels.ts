@@ -89,6 +89,7 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_ACCEPTED: '금융 조치 완료',
   HANDOFF_FAILED: '금융 조치 실패',
   HANDOFF_RECHECKED: '인계 상태 다시 확인',
+  HANDOFF_COMPLETION_RECORDED: '실제 완료 시각 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   CASE_CLOSED: 'Case 종료',
 }

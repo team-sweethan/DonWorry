@@ -146,7 +146,8 @@ class HandoffReceiptTests {
         assertThat(detail.securityCase().status()).isEqualTo("CLOSED");
         assertThat(detail.history())
                 .extracting(HistoryResponse::eventType)
-                .containsOnlyOnce("HANDOFF_ACCEPTED", "CASE_CLOSED");
+                .containsOnlyOnce("HANDOFF_ACCEPTED", "CASE_CLOSED")
+                .doesNotContain("HANDOFF_COMPLETION_RECORDED");
     }
 
     // 완료된 인계에 다른 작업 ID · 거절 결과가 오면 반영하지 않고 처음 결과를 지킨다
@@ -229,6 +230,47 @@ class HandoffReceiptTests {
         assertThat(detail.handoffs().getFirst().status()).isEqualTo("ACCEPTED");
         assertThat(detail.securityCase().status()).isEqualTo("CLOSED");
         assertThat(historyOf(detail, "HANDOFF_ACCEPTED").eventData()).containsEntry("source", "RECHECK");
+    }
+
+    // 다시 확인으로 먼저 완료된 인계에 결과 이벤트가 늦게 오면, 빠진 실제 완료 시각을 한 번만 보완한다
+    @Test
+    void lateResultEventAfterRecheck_recordsCompletedAtOnce() {
+        given(financialActionGateway.request(any()))
+                .willReturn(Receipt.accepted(77L).withResultEvent());
+        handoffRecheckService.recheck(caseId, handoffId);
+        Instant completedAt = Instant.parse("2026-10-26T07:00:00Z");
+
+        handoffService.applyResult(capture, Receipt.accepted(77L), completedAt);
+        handoffService.applyResult(capture, Receipt.accepted(77L), completedAt);
+
+        CaseDetailResponse detail = caseQueryService.detail(caseId);
+        assertThat(detail.history())
+                .extracting(HistoryResponse::eventType)
+                .containsOnlyOnce("HANDOFF_ACCEPTED", "HANDOFF_COMPLETION_RECORDED");
+        assertThat(historyOf(detail, "HANDOFF_COMPLETION_RECORDED").eventData())
+                .containsEntry("completedAt", completedAt.toString());
+    }
+
+    // VOID 거절도 다시 확인이 먼저 반영했으면, 늦게 온 거절 이벤트의 실제 완료 시각만 보완한다
+    @Test
+    void lateVoidDeclinedEventAfterRecheck_recordsCompletedAtAndKeepsFailed() {
+        Long voidCaseId = decidedCase(Decision.REJECT);
+        Long voidHandoffId =
+                caseQueryService.detail(voidCaseId).handoffs().getFirst().handoffId();
+        given(financialActionGateway.request(any()))
+                .willReturn(Receipt.rejected("VOID_DECLINED").withResultEvent());
+        handoffRecheckService.recheck(voidCaseId, voidHandoffId);
+
+        handoffService.applyResult(
+                commandOf(voidCaseId, ActionType.VOID, keyOf(voidCaseId)),
+                Receipt.rejected("VOID_DECLINED"),
+                Instant.now());
+
+        CaseDetailResponse detail = caseQueryService.detail(voidCaseId);
+        assertThat(detail.securityCase().status()).isEqualTo("ACTION_FAILED");
+        assertThat(detail.history())
+                .extracting(HistoryResponse::eventType)
+                .containsOnlyOnce("HANDOFF_FAILED", "HANDOFF_COMPLETION_RECORDED");
     }
 
     // 다른 Case의 인계 ID로는 다시 확인할 수 없다

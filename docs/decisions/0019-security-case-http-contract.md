@@ -37,6 +37,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
   - 그 밖의 완료 결과(매입 완료 · 취소 완료 · `VOID_DECLINED`)는 결과 이벤트로만 반영한다. 응답에는 `completedAt`이 없어서, 응답을 먼저 반영하면 실제 완료 시각이 이력에 남지 않는다.
   - 결과 이벤트는 멱등키로 인계를 찾고 `paymentId` · `decisionId` · `actionType`을 대조한다. 다르거나, 완료된 인계에 다른 `targetOperationId` · 거절이 오면 반영하지 않고 예외로 끝내 `EVENT_PUBLICATION`에 미완료로 남긴다(P5와 대조할 기록). 같은 결과가 다시 오면 무시한다.
   - `acceptedAt`은 P3 반영 시각이다. P5 `completedAt`은 `case_histories.event_data`에 남긴다.
+  - 다시 확인이 이벤트보다 먼저 같은 결과를 반영하면 그 이력에는 `completedAt`이 없다. 뒤에 온 결과 이벤트는 상태를 바꾸지 않고, 이 인계 이력에 `completedAt`이 아직 없을 때만 `HANDOFF_COMPLETION_RECORDED`(handoffId · completedAt)를 한 번 남긴다(PR #194 리뷰).
 - 다시 확인: `REQUESTED` 인계만 대상이다. 보안 직원만 부를 수 있고(판정과 같은 확인), 같은 멱등키로 P5에 저장된 결과를 받아 반영한다. P6 매입을 다시 실행하지 않고 새 키도 만들지 않는다. 계속 `PENDING`이면 상태는 그대로 두고 `last_attempted_at`과 `HANDOFF_RECHECKED` 이력(확인한 직원 · 결과)만 남긴다. 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다(#158).
 - 시연 결제는 P5 `payments`에 없다. 시연 화면에서만 `investigation.mock.payment-action-enabled=true`로 목 금융 조치(바로 완료)를 켠다. 기본값은 실제 P5다.
 - 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` 400, `INV_009` 403, `INV_010` 401, `INV_013` 503. 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
@@ -59,7 +60,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 ## 영향
 
 - API: 이 문서의 표. 소비자는 이 저장소 frontend뿐이다. `totalAmount`는 #103의 `long`에서 nullable로 바뀌었다(병합 전 #113에서 변경, 다른 소비자 없음).
-- DB: 없음. 목업 데이터는 메모리이고 `ai_reports`(P4 소유)는 쓰지 않는다. 이력 종류 `HANDOFF_RECHECKED`는 `event_type` VARCHAR 값만 추가한다.
+- DB: 없음. 목업 데이터는 메모리이고 `ai_reports`(P4 소유)는 쓰지 않는다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
 - 화면: `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
 - 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 설정의 목 금융 조치), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결).
 - 문서: P4 보고서 계약이 정해지면 보고서 재요청과 FAILED 의미를 그 계약에 맞춰 이 ADR을 개정한다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
