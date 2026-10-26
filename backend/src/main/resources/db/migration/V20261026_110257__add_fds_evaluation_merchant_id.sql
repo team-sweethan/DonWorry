@@ -10,9 +10,11 @@
 ALTER TABLE fds_evaluations
     ADD COLUMN merchant_id BIGINT NULL AFTER payment_id;
 
-UPDATE fds_evaluations evaluation
-JOIN payments payment ON payment.payment_id = evaluation.payment_id
-SET evaluation.merchant_id = payment.merchant_id;
+-- 기존 평가 이력은 이 개발 단계에서 가맹점 1로 귀속한다.
+-- P5 payments 테이블을 직접 조회하지 않고 FDS 소유 이력만 전환한다.
+UPDATE fds_evaluations
+SET merchant_id = 1
+WHERE merchant_id IS NULL;
 
 ALTER TABLE fds_evaluations
     MODIFY COLUMN merchant_id BIGINT NOT NULL,
