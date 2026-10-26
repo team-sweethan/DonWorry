@@ -15,6 +15,7 @@ import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicat
 import { ResultTag } from './alert/AlertTags'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
+type ListConditions = { filter: Filter; query: string; page: number }
 
 const filterOptions: Array<{ value: Filter; label: string }> = [
   { value: 'NEEDS_ATTENTION', label: '확인 필요' },
@@ -52,7 +53,9 @@ export function AlertListPage() {
   const [mockCreating, setMockCreating] = useState(false)
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
-  const conditions = useRef({ filter: 'NEEDS_ATTENTION' as Filter, query: '' })
+  const summaryRefreshPending = useRef(true)
+  const conditions = useRef<ListConditions>({ filter: 'NEEDS_ATTENTION', query: '', page: 0 })
+  const successfulConditions = useRef<ListConditions | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialListLoading = listLoading && evaluationPage === null
   const showInitialListSkeleton = useMinimumLoadingIndicator(initialListLoading)
@@ -66,7 +69,8 @@ export function AlertListPage() {
   const load = useCallback(
     (page: number, nextFilter: Filter, nextQuery: string, refreshSummary = false) => {
       const sequence = ++requestSequence.current
-      const shouldRefreshSummary = refreshSummary || resultCountsRef.current === null
+      if (refreshSummary || resultCountsRef.current === null) summaryRefreshPending.current = true
+      const shouldRefreshSummary = summaryRefreshPending.current
       setListLoading(true)
       setSummaryLoading(shouldRefreshSummary)
       setError(null)
@@ -86,18 +90,31 @@ export function AlertListPage() {
           setEvaluations(response.content)
           setEvaluationPage(response)
           setCurrentPage(response.page + 1)
+          successfulConditions.current = {
+            filter: nextFilter,
+            query: nextQuery,
+            page: response.page,
+          }
           if (shouldRefreshSummary) {
             resultCountsRef.current = response.resultCounts
             setResultCounts(response.resultCounts)
+            summaryRefreshPending.current = false
           }
         })
         .catch(() => {
-          if (sequence === requestSequence.current) setError('경보 목록을 불러오지 못했습니다.')
+          if (sequence !== requestSequence.current) return
+          setError('경보 목록을 불러오지 못했습니다.')
+          const previous = successfulConditions.current
+          if (previous === null) return
+          conditions.current = previous
+          setFilter(previous.filter)
+          setQuery(previous.query)
+          setCurrentPage(previous.page + 1)
         })
         .finally(() => {
           if (sequence === requestSequence.current) {
             setListLoading(false)
-            if (shouldRefreshSummary) setSummaryLoading(false)
+            setSummaryLoading(false)
           }
         })
     },
@@ -119,7 +136,7 @@ export function AlertListPage() {
   const selectFilter = (nextFilter: Filter) => {
     cancelScheduledSearch()
     setFilter(nextFilter)
-    conditions.current = { filter: nextFilter, query }
+    conditions.current = { filter: nextFilter, query, page: 0 }
     load(0, nextFilter, query)
   }
 
@@ -254,7 +271,7 @@ export function AlertListPage() {
               onChange={(event) => {
                 const nextQuery = event.target.value
                 setQuery(nextQuery)
-                conditions.current = { filter, query: nextQuery }
+                conditions.current = { filter, query: nextQuery, page: 0 }
                 cancelScheduledSearch()
                 searchTimer.current = setTimeout(() => {
                   searchTimer.current = null
@@ -322,7 +339,10 @@ export function AlertListPage() {
               showLessItems: false,
               showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
               total: evaluationPage?.totalElements ?? 0,
-              onChange: (page) => load(page - 1, filter, query),
+              onChange: (page) => {
+                conditions.current = { filter, query, page: page - 1 }
+                load(page - 1, filter, query)
+              },
             }}
             locale={{ emptyText: '표시할 경보가 없습니다.' }}
           />
