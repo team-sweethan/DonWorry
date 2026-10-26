@@ -2,7 +2,6 @@ package com.donworry.identity.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.entity.UserStatus;
@@ -12,13 +11,30 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
+import org.testcontainers.mariadb.MariaDBContainer;
 
 @Tag("mariadb")
 @SpringBootTest
-@Import(MariaDbTestContainerConfig.class)
+@Import(PlatformUserRepositoryTests.SeedDatabase.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PlatformUserRepositoryTests {
+
+    // 빈 DB 시드는 다른 HTTP 검사가 만든 계정 수와 실행 순서에 영향을 받지 않아야 한다.
+    @TestConfiguration(proxyBeanMethods = false)
+    static class SeedDatabase {
+        @Bean
+        @ServiceConnection
+        MariaDBContainer seedDatabase() {
+            return new MariaDBContainer("mariadb:11.8")
+                    .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci");
+        }
+    }
 
     @Autowired
     PlatformUserRepository repository;
