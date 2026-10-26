@@ -15,7 +15,9 @@ public enum InvestigationErrorCode {
     MANUAL_DECISION_NOT_ALLOWED("INV_005", "AI 보고서가 최종 실패한 경우에만 보고서 없이 판정할 수 있습니다.", HttpStatus.BAD_REQUEST),
     PAYMENT_NOT_IN_CASE("INV_006", "이 Case에 속한 결제가 아닙니다.", HttpStatus.BAD_REQUEST),
     PAYMENT_ALREADY_DECIDED("INV_007", "이미 판정한 결제입니다.", HttpStatus.CONFLICT),
-    DUPLICATE_PAYMENT_IN_REQUEST("INV_008", "같은 결제를 한 요청에서 두 번 판정할 수 없습니다.", HttpStatus.BAD_REQUEST);
+    DUPLICATE_PAYMENT_IN_REQUEST("INV_008", "같은 결제를 한 요청에서 두 번 판정할 수 없습니다.", HttpStatus.BAD_REQUEST),
+    SECURITY_STAFF_ONLY("INV_009", "보안 직원만 판정할 수 있습니다.", HttpStatus.FORBIDDEN),
+    LOGIN_REQUIRED("INV_010", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED);
 
     private final String code;
     private final String message;

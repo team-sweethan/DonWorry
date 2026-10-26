@@ -10,7 +10,6 @@ import {
   submitDecisions,
 } from '../../api/cases'
 import { ApiError } from '../../api/client'
-import { useAuth } from '../../auth/useAuth'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -31,7 +30,6 @@ export function CaseDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const { merchant } = useDemo()
-  const { user } = useAuth()
   const { toast } = useFeedback()
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
   const { message } = App.useApp()
@@ -93,13 +91,8 @@ export function CaseDetailPage() {
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
-    // 화면은 로그인 가드 안에 있지만, 세션이 만료돼 사용자가 비면 판정을 보내지 않는다
-    if (!user) {
-      toast.error('로그인 정보를 확인할 수 없습니다. 다시 로그인한 뒤 판정하세요.')
-      return false
-    }
     try {
-      await submitDecisions(securityCase.caseId, user.userId, request)
+      await submitDecisions(securityCase.caseId, request)
       toast.success('판정을 확정했습니다. 금융 조치 인계 접수를 확인하고 있습니다.')
       load()
       return true

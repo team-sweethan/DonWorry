@@ -94,20 +94,15 @@ export async function getCase(caseId: string, _merchant: string): Promise<CaseDe
 }
 
 /**
- * 판정 직원은 세션 사용자다. 백엔드가 세션에서 읽기 전까지 요청에 담는다 (#98).
- * staffId는 AuthProvider가 확인한 사용자를 쓴다 — 여기서 /auth/me를 다시 부르면 그 401이 세션 만료 처리로 전달되지 않는다.
+ * 판정 직원은 보내지 않는다 — 백엔드가 로그인 세션 사용자로 정한다 (#160).
+ * 세션이 없으면 401(INV_010), 보안 직원이 아니면 403(INV_009)이 온다. 401은 client가 세션 만료로 처리한다.
  */
-export async function submitDecisions(
-  caseId: string,
-  staffId: number,
-  request: SubmitDecisionsRequest,
-) {
+export async function submitDecisions(caseId: string, request: SubmitDecisionsRequest) {
   try {
     await api<ServerDetail>(`/security-cases/${caseId}/decisions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        staffId,
         evidenceVersion: request.evidenceVersion,
         reportId: request.reportId === null ? null : Number(request.reportId),
         decisions: request.decisions.map((d) => ({
