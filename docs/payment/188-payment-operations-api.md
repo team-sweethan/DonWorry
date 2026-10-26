@@ -1,7 +1,7 @@
 # #188 미처리 결제 조회 HTTP 계약
 
 - 상태: 3단계 HTTP·DTO·조회·분류 및 역할 검사 구현. 현재 feature 브랜치 작업 트리 기준이며 배포·병합 전이다. 검사 결과는 아래 §8에 기록한다.
-- 기준: `0afaf11`, 2026-10-26. 관련 [Issue #188](https://github.com/team-sweethan/DonWorry/issues/188), [담당자 확인을 마친 조회 설계](152-payment-operations-design.md), [ADR-0035](../decisions/0035-long-held-payment-policy.md).
+- 최초 설계 기준: `0afaf11`, 2026-10-26. 최신 통합 검사 기준은 §9를 따른다. 관련 [Issue #188](https://github.com/team-sweethan/DonWorry/issues/188), [담당자 확인을 마친 조회 설계](152-payment-operations-design.md), [ADR-0035](../decisions/0035-long-held-payment-policy.md).
 - 이번 문서의 세부 경로·필드 이름은 P5 구현 선택이다. 기존 담당자 확인을 이 세부 계약에 대한 추가 회신으로 표시하지 않는다.
 
 ## 1. 경로와 공개 조건
@@ -143,12 +143,21 @@ DTO는 payment.dto, Controller는 payment.controller, 읽기 트랜잭션·관�
 
 ## 8. 구현과 검사 기록
 
-- 작업 브랜치: `feature/188-payment-operations-query`, 기준 커밋 `0afaf11` 위의 미커밋 작업 트리. 새 실행 코드의 병합·배포를 의미하지 않는다.
+- 초기 검사: `0afaf11` 위의 작업 트리. 이후 커밋과 최신 dev 반영 결과는 §9에 별도로 기록한다. 새 실행 코드의 병합·배포를 의미하지 않는다.
 - 구현 파일: payment.controller의 PaymentOperationsController/ExceptionHandler, payment.dto의 조회 계약, payment.service의 PaymentOperationsQueryService, payment.repository의 조회·분류 CASE, identity.security.SecurityConfig의 GET/HEAD 역할 검사.
 - 저장 구조·기존 PaymentReader·CakeShop 인증은 변경하지 않았다. P3/P6 내부 데이터와 이벤트 저장소를 조회하는 운영 코드는 없다.
 - 새 기능 테스트는 입력·시각 단위 18건, 실제 세션·HTTP·MariaDB 25건이다. 권한, 분류 20개 조합, 필터·페이지·완료 상세, 누락값·원문 제외·DB 장애·업무 데이터/이벤트 불변을 확인한다.
 - 전체 검사 중 테스트 연결 풀 누적에 의한 P6 동시성 검사 시간 초과를 발견해 이 클래스의 컨텍스트를 종료하도록 보완했다. 공유 DB에 남은 임시 관리자 계정이 시드 검사에 영향을 주는 문제도 테스트별 계정·세션·가맹점 정리로 수정했다. 업무 코드나 기존 검사의 검증 조건은 약화하지 않았다.
-- 최종 실행: `cd backend && ./gradlew spotlessApply check mariaDbTest` — spotless·check 통과. 기본 테스트 438건 중 437건 통과, 기존 로컬 시연용 LocalSettlementDemoTests 1건 건너뜀. MariaDB 277건 중 276건 통과·1건 실패. 새 조회 기능 43건(단위 18·실제 HTTP 25)은 모두 통과했다.
+- 초기 구현 검사: `cd backend && ./gradlew spotlessApply check mariaDbTest` — spotless·check 통과. 기본 테스트 438건 중 437건 통과, 기존 로컬 시연용 LocalSettlementDemoTests 1건 건너뜀. MariaDB 277건 중 276건 통과·1건 실패. 새 조회 기능 43건(단위 18·실제 HTTP 25)은 모두 통과했다.
 - 남은 실패: `LoginHistoryHttpTests.logout_whenConcurrentAcrossRoutes_recordsAtMostOnce`, 동시 로그아웃의 예상 204/401 대신 500. 로그에서 AuthService.logoutAll의 SessionUser=null 참조를 확인했다. 수정 전 `0afaf11`을 /tmp에 별도 추출한 뒤 `./gradlew mariaDbTest --tests '*LoginHistoryHttpTests.logout_whenConcurrentAcrossRoutes_recordsAtMostOnce'`로 동일 실패를 재현했다. dev나 P1 로그아웃 구현은 수정하지 않았다. 전체 MariaDB 통과·#188 전체 완료로 표시하지 않는다.
 - 문서: `python3 .github/scripts/check_md_links.py`, `git diff --check`, 신규 파일 공백 검사 통과. 프론트 검사는 변경이 없어 실행하지 않았다.
 - 미검증/범위 외: 프론트 화면, 운영 데이터의 대량 조회 성능, 배포 환경 접속, P2 재평가·P3 반영·P6 조회·운영 이벤트 복구. 시간 수치·운영 담당 합의는 기존 후속으로 남긴다.
+
+## 9. PR 준비 단계의 최신 dev 통합 검사
+
+- 최신 dev `595a44a`(#194 P3 인계·#197 P6 공개 조회)를 반영한 구현 커밋: `256808b1ab526b5031d20e49ff3f0edc9334b0ea`. 이후 변경은 이 검사 기록 문서뿐이다.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest`: spotless·check 통과(447건 중 446건 통과·기존 시연 테스트 1건 건너뜀), MariaDB 296건 중 293건 통과·3건 실패. 새 기능 43건은 모두 통과했다.
+- 이번 실패: PlatformUserRepositoryTests의 관리자 시드 개수 검사 2건(기대 1·실제 23), CaptureReaderMariaDbTests의 완료 시각 검사 1건(기대 01:02:03.123456Z·실제 10:02:03.123456Z, 날짜 2026-10-26).
+- 비교 검사: 변경 없는 dev `595a44a`를 임시 디렉터리에 추출해 `./gradlew mariaDbTest` 실행. 271건 중 270건 통과·1건 실패로, P6 완료 시각 불일치가 동일하게 재현됐다. 관리자 시드 개수 검사 2건은 이 비교 실행에서 통과했으므로 기존 문제라고 단정하지 않으며, 작업 브랜치 전체 검사에서의 실패 원인은 미확인이다.
+- §8의 동시 로그아웃 검사는 이번 실행에서는 통과했다. 기존 커밋에서 재현했던 경합 문제를 수정한 것은 아니다.
+- 전체 검사 통과 전 초안 PR로 제공하며 #188을 자동 종료하지 않는다. P1 시드·동시 로그아웃, P6 시각 검증 확인과 전체 재검증이 남는다.
