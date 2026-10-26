@@ -365,6 +365,38 @@ class CaseFlowTests {
         assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
     }
 
+    // Case 목록 · 상세 · 보고서 재요청도 로그인하지 않았으면 401이다 — 실제 결제 · FDS 근거를 내보내기 때문이다
+    @Test
+    void readApis_withoutLogin_returnUnauthorized() throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+
+        mvc.perform(get("/api/security-cases"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
+        mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
+        mvc.perform(post("/api/security-cases/{caseId}/reports", held.caseId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
+    }
+
+    // 보안 직원이 아닌 역할(사장님 · 관리자)은 Case 목록 · 상세를 볼 수 없다 (403)
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATOR", "ADMIN"})
+    void readApis_byNonSecurityStaff_returnForbidden(String role) throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        loginAs(99L, role);
+
+        mvc.perform(get("/api/security-cases"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+        mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+    }
+
     // 일부만 판정하면 판정 대기로 남고, 같은 결제를 다시 판정하면 거부한다
     @Test
     void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
