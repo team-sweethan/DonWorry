@@ -103,6 +103,14 @@ export function AlertListPage() {
         })
         .catch(() => {
           if (sequence !== requestSequence.current) return
+          const current = conditions.current
+          if (
+            current.filter !== nextFilter ||
+            current.query !== nextQuery ||
+            current.page !== page
+          ) {
+            return
+          }
           setError('경보 목록을 불러오지 못했습니다.')
           const previous = successfulConditions.current
           if (previous === null) return
