@@ -1,8 +1,9 @@
-import { Card, Table, Timeline, Typography } from 'antd'
+import { Button, Card, Table, Timeline, Typography } from 'antd'
 import type { ActionHandoff, CaseHistory, CasePayment, PaymentDecision } from '../../../types/case'
 import {
   actionTypeLabel,
   dateTime,
+  handoffErrorLabel,
   handoffStatusLabel,
   historyEventLabel,
   paymentStatusLabel,
@@ -10,17 +11,21 @@ import {
 import { CodeTag } from './CodeTag'
 
 /**
- * 결제별 금융 조치 인계 (설계 3.8). ACCEPTED는 담당 모듈의 영속 접수이며 실제 매입·취소 성공이 아니다.
- * 실제 결과는 P5 결제 상태로 따로 보여준다.
+ * 결제별 금융 조치 인계 (설계 3.8, ADR-0027 완료 기반). ACCEPTED는 실제 매입·취소 완료다.
+ * 대기 중이면 "다시 확인"으로 P5에 저장된 결과를 받아온다 — 매입을 다시 실행하지 않는다 (#161).
  */
 export function HandoffCard({
   payments,
   decisions,
   handoffs,
+  recheckingId,
+  onRecheck,
 }: {
   payments: CasePayment[]
   decisions: PaymentDecision[]
   handoffs: ActionHandoff[]
+  recheckingId: string | null
+  onRecheck: (handoffId: string) => void
 }) {
   const rows = handoffs.map((h) => {
     const decision = decisions.find((d) => d.decisionId === h.decisionId)
@@ -53,14 +58,25 @@ export function HandoffCard({
                 <CodeTag value={handoffStatusLabel[v]} />
                 {r.lastErrorCode && (
                   <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>
-                    {r.lastErrorCode}
+                    {handoffErrorLabel[r.lastErrorCode] ?? r.lastErrorCode}
                   </div>
+                )}
+                {v === 'REQUESTED' && (
+                  <Button
+                    size="small"
+                    style={{ marginTop: 4 }}
+                    loading={recheckingId === r.handoffId}
+                    disabled={recheckingId !== null && recheckingId !== r.handoffId}
+                    onClick={() => onRecheck(r.handoffId)}
+                  >
+                    다시 확인
+                  </Button>
                 )}
               </>
             ),
           },
           {
-            title: '접수 작업 ID',
+            title: '완료 작업 ID',
             dataIndex: 'targetOperationId',
             render: (v: string | null) => v ?? '-',
           },
@@ -77,8 +93,9 @@ export function HandoffCard({
         ]}
       />
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '12px 0 0' }}>
-        모든 결제의 인계가 접수 완료되면 Case가 종료됩니다. Case 종료는 실제 매입·취소 완료를 뜻하지
-        않으며, 실행 결과는 P5·P6가 결제 상태로 반영합니다.
+        모든 결제의 실제 매입·취소가 끝나면 Case가 종료됩니다. 시간이 지났다고 실패나 종료로 바꾸지
+        않습니다. &quot;다시 확인&quot;은 P5에 저장된 결과를 받아올 뿐 매입을 다시 실행하지
+        않습니다.
       </Typography.Paragraph>
     </Card>
   )
@@ -104,10 +121,7 @@ export function HistoryCard({ history }: { history: CaseHistory[] }) {
             <div style={{ fontSize: 13 }}>
               <strong>{historyEventLabel[h.eventType]}</strong>
               {Object.keys(h.eventData).length > 0 && (
-                <span style={{ color: '#475569' }}>
-                  {' '}
-                  · {Object.values(h.eventData).join(' · ')}
-                </span>
+                <span style={{ color: '#475569' }}> · {eventDataText(h.eventData)}</span>
               )}
               <div style={{ fontSize: 12, color: '#94a3b8' }}>
                 {dateTime(h.createdAt)} · {h.actorType === 'STAFF' ? h.actorId : '시스템'}
@@ -118,4 +132,11 @@ export function HistoryCard({ history }: { history: CaseHistory[] }) {
       />
     </Card>
   )
+}
+
+/** completedAt은 P5가 알려준 실제 완료 시각이다 — P3 반영 시각(이력 시각)과 구분해 보여준다. */
+function eventDataText(eventData: Record<string, string>) {
+  return Object.entries(eventData)
+    .map(([key, value]) => (key === 'completedAt' ? `실제 완료 ${dateTime(value)}` : value))
+    .join(' · ')
 }

@@ -6,6 +6,7 @@ import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.service.CaseDecisionService;
 import com.donworry.investigation.service.CaseQueryService;
 import com.donworry.investigation.service.CaseReportService;
+import com.donworry.investigation.service.HandoffRecheckService;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class SecurityCaseController {
     private final CaseQueryService caseQueryService;
     private final CaseDecisionService caseDecisionService;
     private final CaseReportService caseReportService;
+    private final HandoffRecheckService handoffRecheckService;
 
     @GetMapping
     public List<CaseSummaryResponse> list(@RequestParam(required = false) Long merchantId) {
@@ -40,6 +42,13 @@ public class SecurityCaseController {
     @PostMapping("/{caseId}/decisions")
     public CaseDetailResponse decide(@PathVariable Long caseId, @Valid @RequestBody DecisionSubmitRequest request) {
         caseDecisionService.decide(caseId, request);
+        return caseQueryService.detail(caseId);
+    }
+
+    // 금융 처리 대기 중인 인계를 같은 멱등키로 다시 확인하고, 반영된 상세를 돌려준다 (P6 매입 재실행 아님)
+    @PostMapping("/{caseId}/handoffs/{handoffId}/recheck")
+    public CaseDetailResponse recheckHandoff(@PathVariable Long caseId, @PathVariable Long handoffId) {
+        handoffRecheckService.recheck(caseId, handoffId);
         return caseQueryService.detail(caseId);
     }
 

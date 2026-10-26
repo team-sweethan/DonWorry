@@ -41,15 +41,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
-// HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 목 인계 접수 → Case CLOSED 를 HTTP로 확인한다
+// 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 목 금융 조치 완료 → Case CLOSED 를 HTTP로 확인한다
+// 시연 결제는 P5 payments에 없으므로 시연 설정처럼 목 금융 조치를 켠다. 실제 P5 연결은 PaymentActionFlowTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
+// 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest
+@SpringBootTest(properties = "investigation.mock.payment-action-enabled=true")
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class CaseFlowTests {
@@ -255,7 +259,7 @@ class CaseFlowTests {
                 .hasSize(1);
     }
 
-    // 모든 결제를 판정하면 인계가 접수되고 Case가 종료된다 (ACCEPT · REJECT 혼합)
+    // 모든 결제를 판정하면 금융 조치가 완료되고 Case가 종료된다 (ACCEPT · REJECT 혼합)
     @Test
     void decideAllPayments_handoffsAccepted_closesCase() throws Exception {
         String customer = customer();
@@ -302,6 +306,26 @@ class CaseFlowTests {
         assertThat(caseQueryService.detail(held.caseId()).decisions())
                 .extracting(CaseDetailResponse.DecisionResponse::staffId)
                 .containsExactly(42L);
+    }
+
+    // 이미 완료된 인계는 다시 확인할 수 없다(409), 로그인하지 않았으면 401이다
+    @Test
+    void recheckHandoff_completedOrWithoutLogin_isRefused() throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isOk());
+        Long handoffId =
+                caseQueryService.detail(held.caseId()).handoffs().getFirst().handoffId();
+
+        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_012"));
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
     }
 
     // 로그인하지 않았으면 401이고 판정은 저장되지 않는다

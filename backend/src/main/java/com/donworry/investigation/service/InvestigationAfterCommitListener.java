@@ -27,8 +27,9 @@ class InvestigationAfterCommitListener {
     }
 
     // P5 호출은 P3 트랜잭션 밖에서 한다 — P5 접수와 P3 반영의 트랜잭션을 섞지 않는다
-    // 접수 여부를 모르면(예외 · UNKNOWN) 인계는 REQUESTED로 두고 예외를 다시 던진다
+    // 응답이 없으면(예외) 인계는 REQUESTED로 두고 예외를 다시 던진다
     // 리스너가 실패해야 EVENT_PUBLICATION이 미완료로 남아 같은 멱등키로 다시 보낼 수 있다 (fds 정본 03 §3.8)
+    // PENDING은 정상 대기다. 결과 이벤트로도 오는 결과는 completedAt을 남기려고 이벤트로만 반영한다 (ADR-0027)
     @TransactionalEventListener
     void on(HandoffRequested event) {
         handoffService.commandFor(event.handoffId()).ifPresent(command -> {
@@ -39,10 +40,10 @@ class InvestigationAfterCommitListener {
                 log.warn("금융 조치 요청 응답 없음 handoffId={}", event.handoffId());
                 throw e;
             }
-            handoffService.applyReceipt(command.idempotencyKey(), receipt);
-            if (receipt.status() == Receipt.Status.UNKNOWN) {
-                throw new IllegalStateException("금융 조치 접수 여부 미확인 handoffId=" + event.handoffId());
+            if (receipt.resultEventFollows()) {
+                return;
             }
+            handoffService.applyReceipt(command.idempotencyKey(), receipt);
         });
     }
 }

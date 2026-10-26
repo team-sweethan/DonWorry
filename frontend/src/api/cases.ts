@@ -121,6 +121,18 @@ export async function submitDecisions(caseId: string, request: SubmitDecisionsRe
   }
 }
 
+/**
+ * 금융 처리 대기 중인 인계를 같은 요청 키로 다시 확인한다 (#161). P5에 저장된 결과를 받아올 뿐 매입을 다시 하지 않는다.
+ * 대기 중이 아니면 409(INV_012), P5가 응답하지 않으면 503(INV_013)이 온다.
+ */
+export async function recheckHandoff(caseId: string, handoffId: string): Promise<CaseDetail> {
+  return toDetail(
+    await api<ServerDetail>(`/security-cases/${caseId}/handoffs/${handoffId}/recheck`, {
+      method: 'POST',
+    }),
+  )
+}
+
 /** 시연 전용: P5 HELD 이벤트 대신 50~79점 HELD 결제를 만든다. 실제 연동 후 지운다. */
 export async function demoCreateHeldPayment(): Promise<string> {
   const held = await postDemoHeld({
