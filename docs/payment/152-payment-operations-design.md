@@ -134,7 +134,7 @@ P3의 기존 화면 경고는 Case 생성 후 24시간 기준이다. HELD 시각
 | P6 공개 조회 | P6 [#189](https://github.com/team-sweethan/DonWorry/issues/189) | 인터페이스·DTO 구체화 후 공개 호출 검증 |
 | P3 완료 시각 | P3 기존 [#161](https://github.com/team-sweethan/DonWorry/issues/161) | 성공 선반영 뒤 지연 이벤트 보완·중복/충돌 검증 |
 | 평가 결과 복원·재평가 | P2·P5 [#190](https://github.com/team-sweethan/DonWorry/issues/190) | 별도 설계. #176 계약 변화 반영, 조회 개발을 막지 않음 |
-| 운영자 이벤트 복구 | 담당 미정 [#191](https://github.com/team-sweethan/DonWorry/issues/191) | 후속 설계 백로그. 조회 제공과 별개로 복구 수단 미제공 제한 유지 |
+| 운영자 이벤트 복구 | 설계 정리 P5, 실제 개발·실행 담당 미정 [#191](https://github.com/team-sweethan/DonWorry/issues/191) | 후속 설계 백로그. 조회 제공과 별개로 복구 수단 미제공 제한 유지 |
 
 1. P5 단건·목록의 정확한 HTTP 경로·페이지 규격·필터 검증을 정하고 P1과 SecurityConfig 규칙을 함께 연결한다.
 2. P5 소유 데이터 조회·분류·누락 표현을 구현한다. 상태·평가·조치·이벤트를 변경하지 않는지 검사한다.
