@@ -9,6 +9,7 @@ export type AuthState = {
   checkedKey: string | null
   error: 'unavailable' | 'forbidden' | null
   expired: boolean
+  expiredUserId: number | null
   loggingOut: boolean
 }
 
@@ -19,6 +20,7 @@ export function createAuthStore(api: AuthApi = authApi) {
     checkedKey: null,
     error: null,
     expired: false,
+    expiredUserId: null,
     loggingOut: false,
   }
   let generation = 0
@@ -38,7 +40,14 @@ export function createAuthStore(api: AuthApi = authApi) {
   const expire = () => {
     if (!state.user) return
     invalidate()
-    update({ user: null, status: 'anonymous', checkedKey: null, error: null, expired: true })
+    update({
+      expiredUserId: state.user.userId,
+      user: null,
+      status: 'anonymous',
+      checkedKey: null,
+      error: null,
+      expired: true,
+    })
   }
 
   function check(key: string): Promise<void> {
@@ -63,7 +72,14 @@ export function createAuthStore(api: AuthApi = authApi) {
         if (error instanceof ApiError && error.status === 401) {
           const expired = state.user !== null
           invalidate()
-          update({ user: null, status: 'anonymous', checkedKey: key, error: null, expired })
+          update({
+            expiredUserId: state.user?.userId ?? state.expiredUserId,
+            user: null,
+            status: 'anonymous',
+            checkedKey: key,
+            error: null,
+            expired,
+          })
         } else {
           update({
             checkedKey: key,
@@ -117,7 +133,14 @@ export function createAuthStore(api: AuthApi = authApi) {
       const user = await api.login(loginId, password)
       if (currentGeneration !== generation) return
       advanceApiSession()
-      update({ user, status: 'authenticated', checkedKey: null, error: null, expired: false })
+      update({
+        user,
+        status: 'authenticated',
+        checkedKey: null,
+        error: null,
+        expired: false,
+        expiredUserId: null,
+      })
     },
     logout: (): Promise<void> => {
       if (pendingLogout) return pendingLogout
@@ -129,7 +152,14 @@ export function createAuthStore(api: AuthApi = authApi) {
           await api.logout()
           if (currentGeneration !== generation) return
           invalidate()
-          update({ user: null, status: 'anonymous', checkedKey: null, error: null, expired: false })
+          update({
+            user: null,
+            status: 'anonymous',
+            checkedKey: null,
+            error: null,
+            expired: false,
+            expiredUserId: null,
+          })
         } catch (error) {
           // 시작할 때 버린 경로 확인을 다시 해 로딩에 갇히지 않게 한다.
           pendingLogout = null
