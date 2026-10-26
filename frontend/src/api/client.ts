@@ -1,3 +1,4 @@
+import { sessionActivity } from './sessionActivity.ts'
 import {
   CSRF_HEADER,
   clearCsrfToken,
@@ -84,6 +85,7 @@ export function subscribeUnauthorized(listener: () => void) {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const activityId = sessionActivity.getSnapshot()?.id
   const generation = sessionGeneration
   const version = readSessionVersion()
   const changesState = isUnsafeMethod(init?.method)
@@ -126,6 +128,20 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       res = await send()
     }
   }
+  const recordActivity = () => {
+    if (
+      generation !== sessionGeneration ||
+      version !== readSessionVersion() ||
+      init?.signal?.aborted
+    )
+      return
+    if (path === '/auth/login' || path === '/auth/logout' || path === '/auth/logout-all') return
+    // /me 실패를 연장 성공으로 처리하지 않는다. 일반 HTTP 오류는 API 활동에 포함한다.
+    if (res.status === 401 || (path === '/auth/me' && !res.ok)) return
+    sessionActivity.touch(activityId)
+  }
+  if (path === '/auth/me') requireSameSession()
+  if (path !== '/auth/me') recordActivity()
   if (!res.ok) {
     let problem: unknown
     try {
@@ -141,7 +157,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     notifyError(path, generation, version, error)
     throw error
   }
-  if (res.status === 204 || res.status === 205) return undefined as T
+  if (res.status === 204 || res.status === 205) {
+    if (path === '/auth/me') recordActivity()
+    return undefined as T
+  }
   const text = await res.text()
-  return text ? (JSON.parse(text) as T) : (undefined as T)
+  const result = text ? (JSON.parse(text) as T) : (undefined as T)
+  if (path === '/auth/me') {
+    requireSameSession()
+    recordActivity()
+  }
+  return result
 }

@@ -2,6 +2,12 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #166 세션 만료 예고
+
+활동 추적·공통 예고 모달·여러 탭 동기화·만료 후 재로그인은
+[#166 설계](166-session-expiry-design.md)를 따른다.
+백엔드 세션 정책·API·DB 변경은 없으며 검증 결과와 미검증은 PR에 기록한다.
+
 ## #147 로그인 이력
 
 상세 계약은 [#147 설계](147-login-history-design.md), 대안·영향은

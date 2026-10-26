@@ -1,3 +1,4 @@
+import { sessionActivity } from '../api/sessionActivity.ts'
 import * as authApi from '../api/auth.ts'
 import { advanceApiSession, ApiError } from '../api/client.ts'
 import type { AuthUser } from '../types/auth.ts'
@@ -8,6 +9,7 @@ export type AuthState = {
   status: 'loading' | 'authenticated' | 'anonymous'
   checkedKey: string | null
   error: 'unavailable' | 'forbidden' | null
+  reauthenticationRequired: boolean
   expired: boolean
   expiredUserId: number | null
   loggingOut: boolean
@@ -19,12 +21,14 @@ export function createAuthStore(api: AuthApi = authApi) {
     status: 'loading',
     checkedKey: null,
     error: null,
+    reauthenticationRequired: false,
     expired: false,
     expiredUserId: null,
     loggingOut: false,
   }
   let generation = 0
   let pendingCheck: { key: string; promise: Promise<void> } | null = null
+  let pendingRenew: { promise: Promise<AuthUser | null> } | null = null
   let pendingLogout: Promise<void> | null = null
   let lastCheckKey: string | null = null
   const listeners = new Set<() => void>()
@@ -35,6 +39,7 @@ export function createAuthStore(api: AuthApi = authApi) {
   const invalidate = () => {
     generation += 1
     pendingCheck = null
+    pendingRenew = null
     advanceApiSession()
   }
   const expire = () => {
@@ -47,16 +52,22 @@ export function createAuthStore(api: AuthApi = authApi) {
       checkedKey: null,
       error: null,
       expired: true,
+      reauthenticationRequired: true,
     })
+    sessionActivity.stop()
   }
 
-  function check(key: string): Promise<void> {
+  function check(key: string, requireLogin = false): Promise<void> {
     lastCheckKey = key
     if (pendingLogout)
       return pendingLogout.then(
-        () => check(key),
-        () => check(key),
+        () => check(key, requireLogin),
+        () => check(key, requireLogin),
       )
+    if (!state.user && (state.reauthenticationRequired || requireLogin)) {
+      update({ status: 'anonymous', checkedKey: key, reauthenticationRequired: true })
+      return Promise.resolve()
+    }
     if (pendingCheck?.key === key) return pendingCheck.promise
     const currentGeneration = generation
     const request = { key, promise: Promise.resolve() }
@@ -66,6 +77,7 @@ export function createAuthStore(api: AuthApi = authApi) {
       try {
         const user = await api.getMe()
         if (currentGeneration !== generation || pendingCheck !== request) return
+        sessionActivity.start()
         update({ user, status: 'authenticated', checkedKey: key, error: null })
       } catch (error) {
         if (currentGeneration !== generation || pendingCheck !== request) return
@@ -79,7 +91,9 @@ export function createAuthStore(api: AuthApi = authApi) {
             checkedKey: key,
             error: null,
             expired,
+            reauthenticationRequired: expired || state.reauthenticationRequired,
           })
+          sessionActivity.stop()
         } else {
           update({
             checkedKey: key,
@@ -102,6 +116,33 @@ export function createAuthStore(api: AuthApi = authApi) {
       }
     },
     expire,
+    renew: (): Promise<AuthUser | null> => {
+      if (pendingRenew) return pendingRenew.promise
+      if (!state.user || pendingLogout) return Promise.resolve(null)
+      const currentGeneration = generation
+      const request = { promise: Promise.resolve<AuthUser | null>(null) }
+      pendingRenew = request
+      request.promise = (async () => {
+        try {
+          const user = await api.getMe()
+          if (currentGeneration !== generation) return null
+          sessionActivity.touch(sessionActivity.getSnapshot()?.id)
+          if (currentGeneration !== generation) return null
+          update({ user })
+          return user
+        } catch (error) {
+          if (currentGeneration !== generation) return null
+          if (error instanceof ApiError && error.status === 401) {
+            expire()
+            return null
+          }
+          throw error
+        } finally {
+          if (pendingRenew === request) pendingRenew = null
+        }
+      })()
+      return request.promise
+    },
     requirePasswordChange: () => {
       if (state.user) update({ user: { ...state.user, passwordChangeRequired: true } })
     },
@@ -113,6 +154,7 @@ export function createAuthStore(api: AuthApi = authApi) {
       try {
         const user = await api.getMe()
         if (currentGeneration !== generation) return null
+        sessionActivity.start()
         update({ user, status: 'authenticated', checkedKey: lastCheckKey, error: null })
         return user
       } catch (error) {
@@ -133,11 +175,13 @@ export function createAuthStore(api: AuthApi = authApi) {
       const user = await api.login(loginId, password)
       if (currentGeneration !== generation) return
       advanceApiSession()
+      sessionActivity.start(true)
       update({
         user,
         status: 'authenticated',
         checkedKey: null,
         error: null,
+        reauthenticationRequired: false,
         expired: false,
         expiredUserId: null,
       })
@@ -157,9 +201,11 @@ export function createAuthStore(api: AuthApi = authApi) {
             status: 'anonymous',
             checkedKey: null,
             error: null,
+            reauthenticationRequired: false,
             expired: false,
             expiredUserId: null,
           })
+          sessionActivity.stop()
         } catch (error) {
           // 시작할 때 버린 경로 확인을 다시 해 로딩에 갇히지 않게 한다.
           pendingLogout = null

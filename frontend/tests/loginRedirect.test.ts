@@ -123,3 +123,23 @@ test('loginDestination_whenPathUnsafe_usesLanding', () => {
     '/owner/settlements',
   )
 })
+
+// 재로그인 표식은 명시적 boolean만 받고 복귀 경로 검증은 그대로 적용한다.
+test('requiresLogin_whenStateMalformed_acceptsOnlyExplicitFlag', async () => {
+  const { requiresLogin } = await import('../src/auth/loginRedirect.ts')
+  for (const value of [
+    null,
+    undefined,
+    {},
+    'true',
+    { requireLogin: 'true' },
+    { requireLogin: false },
+  ]) {
+    assert.equal(requiresLogin(value), false)
+  }
+  assert.equal(requiresLogin({ requireLogin: true }), true)
+  assert.equal(
+    loginDestination(staff, { requireLogin: true, returnTo: '//evil.example' }),
+    '/security/transactions',
+  )
+})
