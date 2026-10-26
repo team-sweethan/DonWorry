@@ -1,0 +1,18 @@
+spring:
+  main:
+    lazy-initialization: false
+  datasource:
+    url: jdbc:mariadb://${DONWORRY_DB_HOST}:${DONWORRY_DB_PORT:3306}/${DONWORRY_DB_NAME}
+    username: ${DONWORRY_DB_USER}
+    password: ${DONWORRY_DB_PASSWORD}
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+
+fds:
+  mock:
+    # 인증 없이 Mock 평가를 기록하는 개발용 API다. 운영에서는 끈다 (시작 검사도 거절).
+    seed-enabled: false

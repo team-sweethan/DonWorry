@@ -2,6 +2,58 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #131 운영 설정(부분 구현)
+
+사용자 결정으로 이번에는 운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키만 구현한다. **시연 계정(`boss`·`staff_test`) 정지는 후속이며 #131 전체 완료가 아니다.** 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
+
+### 로컬 개발
+
+기존 `./gradlew bootRun`은 그대로다. `application-local.yml`도 지금처럼 자동으로 읽으며 운영 비밀번호는 필요 없다. `prod`를 로컬에서 활성화하지 않고, 로컬·운영 DB를 분리한다. 같은 DB에서 운영 초기화를 실행하면 관리자 비밀번호 변경은 영속적이며 로컬 프로필로 바꿔도 복구되지 않는다.
+
+### 운영 실행
+
+배포 시스템에서 아래 환경변수를 주입한다. 비밀값은 명령줄·저장소·로그에 적지 않는다.
+
+| 변수 | 내용 |
+| --- | --- |
+| `SPRING_PROFILES_ACTIVE` | `prod` (`local`과 혼용 금지) |
+| `DONWORRY_DB_HOST` | 운영 DB 호스트, 필수 |
+| `DONWORRY_DB_PORT` | 운영 DB 포트, 기본 3306 |
+| `DONWORRY_DB_NAME` | 운영 DB 이름, 필수 |
+| `DONWORRY_DB_USER` | 운영 DB 사용자, 필수 |
+| `DONWORRY_DB_PASSWORD` | 운영 DB 비밀번호, 필수 |
+| `DONWORRY_ADMIN_PASSWORD` | 관리자 비밀번호, 필수. 기존 PasswordPolicy 적용 |
+
+DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL` 등 표준 이름만 넣으면 접속 정보가 있어도 기동 실패한다. 이전 배포의 `SPRING_DATASOURCE_*`가 남아 최종 접속 정보가 `DONWORRY_DB_*`와 다르면 역시 기동 실패한다(배포 담당 공지 대상).
+
+- 개인 `application-local.yml`은 `bootJar`·`jar` 결과물에서 제외한다. 개인 PC에서 빌드해도 배포 jar에 개인 DB 비밀번호가 들어가지 않는다. `bootRun`은 jar를 쓰지 않아 기존처럼 읽는다.
+- 운영에서는 개인 설정 파일을 자동 import하지 않는다. DB 변수·관리자 비밀번호 누락, `prod,local` 혼용, 세션 쿠키 Secure·HttpOnly 해제나 SameSite를 Lax 외 값으로 바꾸면, FDS 개발용 Mock 평가 API(`fds.mock.seed-enabled`)를 켜면 기동 실패한다. 운영 기본값에서 Mock API는 꺼져 있다.
+- Flyway/JPA 뒤, 웹 서버 시작 전에 활성 ADMIN `admin`의 비밀번호를 BCrypt로 적용한다. 없거나 정지/다른 역할이면 기동 실패한다. 관리자 생성·재활성화는 하지 않는다.
+- 매 재시작마다 환경값을 기준으로 맞춘다. 화면에서 바꾼 값을 유지하려면 환경변수도 함께 변경한다. 같은 비밀번호·강제 변경 false이면 저장·이력을 반복하지 않는다.
+- 실제 변경과 `PRODUCTION_PASSWORD_APPLIED` 이력은 같은 트랜잭션이다. 실패하면 롤백·기동 실패한다. 이력 출처는 `PRODUCTION_STARTUP`이며 원문·해시는 저장하지 않는다.
+- 시연 계정·다른 계정·권한·가맹점·로그인 실패 횟수/잠금은 유지한다. 시연 계정 로그인도 계속 가능하다. 관리자 15분 잠금 역시 재시작으로 풀지 않는다.
+- 세션 쿠키는 Secure=true·HttpOnly·SameSite=Lax다. XSRF-TOKEN은 JavaScript 읽기 가능을 유지하고, 운영에서는 요청 HTTPS 여부와 무관하게 Secure로 고정한다(프록시 전달 정보를 믿지 않음). CSRF 검사 기본값은 계속 false다.
+
+### 배포 시 남은 확인
+
+- XSRF-TOKEN Secure는 운영 설정만으로 보장한다(평문 HTTP 요청에서도 Secure를 MariaDB 테스트로 확인). 프록시에서 HTTPS를 종료해도 `forward-headers-strategy` 설정이 필요 없다. 실제 HTTPS 배포에서의 쿠키 확인만 남는다.
+- HTTPS 프록시 전달·신뢰 범위·프론트/API 동일 출처를 확정하고 실제 JSESSIONID/XSRF-TOKEN 속성·로그인/로그아웃·두 탭 흐름을 확인한다. 프록시 헤더를 무조건 신뢰하는 설정은 추가하지 않았다.
+- 시연 계정 제한·전체 업무 인가/가맹점 필터·CSRF 활성화는 후속이다. 이 부분 구현만으로 실제 운영 공개 준비가 끝난 것은 아니다.
+- 단일 서버·메모리 세션 전제다. 다른 실행 인스턴스의 세션 종료·다중 서버/롤링 배포는 범위 밖이다.
+
+### #131 검증·미검증
+
+2026-10-26 재검증: `dev af79eb8`(#155) 위에서 ADR 번호 변경·jar의 개인 설정 제외·Codex 리뷰 3건(데이터소스 우회·쿠키 약화·FDS Mock)·운영 XSRF-TOKEN Secure 고정 반영까지 마친 작업 트리에서 실행했다. 기준 dev 단독 결과가 아니다. 이후에는 이 검증 기록만 고쳤다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 411개 중 410개 성공·기존 1개 건너뜀(`LocalSettlementDemoTests`), MariaDB 222개 성공. 실패·오류 0개. Flyway 전체·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 새 DB 없는 20개 실행으로 개인 설정 자동 읽기 유지·운영 제외, 프로필 혼용·DB/관리자 비밀번호 누락·쿠키 Secure/HttpOnly/SameSite 약화·`SPRING_DATASOURCE_*` 우회(값 비노출)·FDS Mock 활성화 기동 실패, 초기화 실패 전파, 정책 오류의 입력값 비노출·관리자 역할/정지 확인·동일 비밀번호/강제 변경 플래그 처리를 검사했다.
+- 새 MariaDB 테스트 3개는 별도 컨테이너에서 실제 앱을 여러 번 기동해 웹 서버 시작 이벤트 전에 비밀번호 커밋·HTTP 인증·JSESSIONID Secure/HttpOnly/SameSite·시연 계정 로그인/ACTIVE 보존·운영 기본값에서 FDS Mock API 미등록·평문 HTTP 요청에서도 XSRF-TOKEN Secure·같은 값 재시작의 해시/이력 유지·이력 INSERT 실패 롤백·잠금 보존·실패 시 웹 서버 미시작을 확인했다. 잘못된 비밀번호 값이 기동 로그에 없는 것도 검사했다.
+- 첫 선택 실행의 테스트 코드에서 웹 서버 컨텍스트 타입 컴파일 오류와 포트 기본값 우선순위에 따른 기존 서버 포트 충돌이 있었다. 테스트 헬퍼와 격리 설정 우선순위를 고친 뒤 선택 검사와 위 전체 검사가 통과했다. 기존 실행 서버나 로컬 DB를 종료·변경하지 않았다.
+- 임시 `application-local.yml`을 두고 `./gradlew bootJar jar`를 실행해 두 jar 모두 해당 파일이 없고 `application.yml`은 들어 있음을 확인한 뒤 임시 파일을 지웠다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 기존 migration은 변경하지 않았다. 실제 로컬·운영 DB 대신 Testcontainers DB에서만 계정 변경을 검사했다.
+
+미검증: 실제 HTTPS/프록시·배포 비밀값 주입·브라우저의 쿠키/두 탭 흐름, 실제 30분 대기, Notion 동기화. 프론트·AI 서버는 변경하지 않아 해당 검사를 실행하지 않았다. 원격 CI·리뷰·dev 병합은 PR에서 별도 추적한다. 시연 계정 정지는 사용자 결정으로 후속이다.
+
 ## #127 로그인 시도 제한
 
 상세 정책·저장 순서는 [#127 설계](127-login-attempt-design.md), 대안·영향은 [ADR-0029](../decisions/0029-login-attempt-lock.md)를 따른다.
@@ -86,7 +138,7 @@
 상세 계약·대안은 [ADR-0025](../decisions/0025-csrf-preparation.md)를 따른다.
 
 - `security.csrf.enabled=false`가 기본값이다. 환경변수는 `DONWORRY_CSRF_ENABLED`다. false에서도 토큰 발급·전송·로그인/로그아웃 정리는 동작하며 토큰 없는 기존 변경 요청도 CSRF로 막지 않는다. 실제 활성화는 다른 담당에게 공지한 뒤 #68 5단계에서 한다.
-- `GET /api/auth/csrf` → 204, `Cache-Control: no-store`. 로그인 전·비밀번호 강제 변경 중에도 호출할 수 있고, 토큰이 없으면 `XSRF-TOKEN` 쿠키를 발급한다. 로그인 세션을 새로 만들지 않는다. 쿠키는 JavaScript 읽기 가능·Path=/·SameSite=Lax이며, Secure는 요청 HTTPS 여부를 따른다. 인증용 JSESSIONID는 기존 HttpOnly 정책을 유지한다.
+- `GET /api/auth/csrf` → 204, `Cache-Control: no-store`. 로그인 전·비밀번호 강제 변경 중에도 호출할 수 있고, 토큰이 없으면 `XSRF-TOKEN` 쿠키를 발급한다. 로그인 세션을 새로 만들지 않는다. 쿠키는 JavaScript 읽기 가능·Path=/·SameSite=Lax이며, Secure는 요청 HTTPS 여부를 따른다(운영 `prod`는 항상 Secure, #131). 인증용 JSESSIONID는 기존 HttpOnly 정책을 유지한다.
 - 프론트 공통 `src/api/client.ts`가 POST·PUT·PATCH·DELETE 등 변경 요청에 `X-XSRF-TOKEN`을 붙인다. GET·HEAD·OPTIONS·TRACE는 토큰이 필요 없다. 토큰이 없으면 `/csrf`를 먼저 부르고 동시 발급은 공유한다. 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 서버 설정에 맡기고, 같은 로그인 동안은 선행 발급을 반복하지 않는다. 쿠키를 메모리·localStorage에 복사해 보관하지 않는다.
 - 검사가 켜졌을 때 누락·불일치는 403 `CSRF_001` ProblemDetail이다. 이 응답에만 거절된 쿠키를 지우고 새 토큰을 받아 한 번 재시도하며, AUTH_002·AUTH_008·네트워크·5xx와 Stream 본문은 자동 재시도하지 않는다. 세션이 바뀌거나 요청이 취소되면 대기하던 변경을 보내지 않는다. 다른 탭의 인증 변경도 `localStorage`의 임의 변경 표식으로 비교하며 사용자 정보·세션 ID·토큰을 저장하지 않는다. 공유 저장소를 읽거나 쓸 수 없으면 CSRF 자동 재전송을 생략한다.
 - 수동 로그인 합성 전략에 `CsrfAuthenticationStrategy`를 추가했다. 일반·전체 로그아웃도 쿠키를 폐기하며 다음 안전한 요청 또는 다음 변경 전 `/csrf`에서 새 토큰을 받는다. #125 단일 세션 정책과 #128 본인 비밀번호 변경의 현재 세션 유지는 그대로다.
