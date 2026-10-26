@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -35,15 +36,18 @@ public class AuthService {
     private final MerchantRepository merchants;
     private final MerchantLockService merchantLocks;
     private final LoginAttemptService loginAttempts;
+    private final LoginHistoryService loginHistories;
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
         String loginId = input.loginId().trim().toLowerCase(Locale.ROOT);
         String accountLoginId;
         Long merchantId;
+        Long accountUserId;
         try {
             // DB collation이 같은 계정으로 보는 악센트 등의 별칭도 반드시 같은 잠금을 사용한다.
             var account = userRepository.findByLoginId(loginId);
             accountLoginId = account.map(user -> user.getLoginId()).orElse(loginId);
+            accountUserId = account.map(user -> user.getUserId()).orElse(null);
             merchantId = account.filter(user -> user.getRole() == UserRole.OPERATOR)
                     .map(user -> user.getMerchantId())
                     .orElse(null);
@@ -55,13 +59,15 @@ public class AuthService {
                 merchantId,
                 () -> accountLockService.withAccount(
                         accountLoginId,
-                        () -> loginLocked(input, loginId, accountLoginId, merchantId, request, response)));
+                        () -> loginLocked(
+                                input, loginId, accountLoginId, accountUserId, merchantId, request, response)));
     }
 
     private MeResponse loginLocked(
             LoginRequest input,
             String loginId,
             String lockedAccountLoginId,
+            Long accountUserId,
             Long lockedMerchantId,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -108,14 +114,19 @@ public class AuthService {
                 // 공통 DB 오류(AUTH_007)가 아니라 로그인 처리 실패(AUTH_005)로 응답한다.
                 throw new InternalAuthenticationServiceException("로그인 권한을 조회하지 못했습니다.", exception);
             }
-            var user = authenticated.toBuilder().permissions(permissions).build();
+            var user = authenticated.toBuilder()
+                    .permissions(permissions)
+                    .loginReference(UUID.randomUUID())
+                    .build();
             loginAttempts.clearFailures(user.userId());
             // 인증에 쓰인 UserDetails와 비밀번호 해시는 세션에 보관하지 않는다.
             var authentication = UsernamePasswordAuthenticationToken.authenticated(user, null, result.getAuthorities());
             userSessionService.establishAuthentication(authentication, request, response);
+            loginHistories.success(user, request);
             log.info("로그인 성공 loginId={}", logLoginId);
             return MeResponse.from(user);
         } catch (BadCredentialsException | DisabledException exception) {
+            loginHistories.failure(accountUserId, request);
             log.info("로그인 실패 loginId={}", logLoginId);
             throw exception;
         } catch (InternalAuthenticationServiceException exception) {
@@ -130,5 +141,6 @@ public class AuthService {
 
     public void logoutAll(SessionUser user, HttpServletRequest request, HttpServletResponse response) {
         userSessionService.logoutAll(user.userId(), request, response);
+        loginHistories.logout(user, true, request);
     }
 }

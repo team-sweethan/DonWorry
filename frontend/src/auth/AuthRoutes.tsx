@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Result, Space, Spin } from 'antd'
-import { LogoutOutlined } from '@ant-design/icons'
+import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
+import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
-import { canOpenPath, isAccountPasswordPath, sessionNavigation } from '../config/navigation'
+import {
+  canOpenPath,
+  isAccountPath,
+  isAccountPasswordPath,
+  sessionNavigation,
+} from '../config/navigation'
 import type { AuthUser } from '../types/auth'
 import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { LatestLogin } from './LatestLogin'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -75,8 +81,37 @@ function AccountActions() {
   return (
     <Space>
       <NavLink to="/account/password">비밀번호 변경</NavLink>
+      <NavLink to="/account/login-history">내 로그인 이력</NavLink>
       <LogoutButton />
     </Space>
+  )
+}
+
+function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string }) {
+  const items = [
+    { key: 'password', label: <NavLink to="/account/password">비밀번호 변경</NavLink> },
+    ...(!user.passwordChangeRequired
+      ? [{ key: 'history', label: <NavLink to="/account/login-history">내 로그인 이력</NavLink> }]
+      : []),
+  ]
+  return (
+    <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight" autoFocus>
+      <Button
+        type="text"
+        className="dw-account-menu"
+        aria-label={`${user.displayName} 계정 메뉴`}
+        aria-haspopup="menu"
+      >
+        <span className="dw-account-avatar" aria-hidden="true">
+          <UserOutlined />
+        </span>
+        <span className="dw-user-name" title={user.displayName}>
+          {user.displayName}
+        </span>
+        <span className="dw-role-pill">{roleLabel}</span>
+        <DownOutlined className="dw-account-chevron" />
+      </Button>
+    </Dropdown>
   )
 }
 
@@ -149,7 +184,7 @@ export function ServerSession() {
   }
   const navigation = sessionNavigation(user)
   // 업무 권한과 무관하게 본인 계정 설정은 사용할 수 있다.
-  if (navigation.landing === null && !isAccountPasswordPath(pathname)) {
+  if (navigation.landing === null && !isAccountPath(pathname)) {
     return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
   const home = navigation.landing ?? '/account/password'
@@ -168,9 +203,8 @@ export function ServerSession() {
           </NavLink>
           <div className="dw-header-center" />
           <div className="dw-header-tools">
-            <span className="dw-user-name">{user.displayName}</span>
-            <span className="dw-role-pill">{navigation.label}</span>
-            <NavLink to="/account/password">비밀번호 변경</NavLink>
+            {!user.passwordChangeRequired && <LatestLogin key={user.userId} />}
+            <AccountMenu user={user} roleLabel={navigation.label} />
             <LogoutButton />
           </div>
         </header>

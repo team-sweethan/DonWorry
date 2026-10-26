@@ -1,6 +1,7 @@
 package com.donworry.identity.security;
 
 import com.donworry.identity.entity.UserRole;
+import com.donworry.identity.service.LoginHistoryService;
 import java.time.Clock;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,7 +25,6 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.logout.CompositeLogoutHandler;
 import org.springframework.security.web.authentication.logout.CookieClearingLogoutHandler;
-import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
@@ -56,8 +56,9 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // 로그인 잠금·로그인 이력이 같은 UTC 기준 시각을 쓴다. 테스트는 이 이름으로 바꿔 끼운다.
     @Bean
-    Clock loginAttemptClock() {
+    Clock identityClock() {
         return Clock.systemUTC();
     }
 
@@ -129,6 +130,7 @@ public class SecurityConfig {
             JsonAuthenticationEntryPoint authenticationEntryPoint,
             JsonAccessDeniedHandler accessDeniedHandler,
             CookieCsrfTokenRepository csrfTokenRepository,
+            LoginHistoryService loginHistories,
             @Value("${security.csrf.enabled:false}") boolean csrfEnabled)
             throws Exception {
         // 전체 API 차단과 CSRF 활성화는 EPIC #68 5단계에서 함께 적용한다.
@@ -145,7 +147,12 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && user.role() == UserRole.ADMIN);
                         })
-                        .requestMatchers("/api/auth/me", "/api/auth/logout-all", "/api/auth/password")
+                        .requestMatchers(
+                                "/api/auth/me",
+                                "/api/auth/logout-all",
+                                "/api/auth/password",
+                                "/api/auth/login-histories",
+                                "/api/auth/login-histories/**")
                         .authenticated()
                         .anyRequest()
                         .permitAll())
@@ -170,7 +177,13 @@ public class SecurityConfig {
                         .invalidateHttpSession(true)
                         .clearAuthentication(true)
                         .deleteCookies(SESSION_COOKIE)
-                        .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)));
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            if (authentication != null
+                                    && authentication.isAuthenticated()
+                                    && authentication.getPrincipal() instanceof SessionUser user)
+                                loginHistories.logout(user, false, request);
+                            response.setStatus(HttpStatus.NO_CONTENT.value());
+                        }));
         return http.build();
     }
 }

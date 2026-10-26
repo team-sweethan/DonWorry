@@ -11,6 +11,7 @@ import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
+import { LoginHistoryScreen } from '../pages/auth/LoginHistoryPage'
 import {
   AdminUsersPage,
   AdminCreateUserPage,
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
     element: <ServerSession />,
     children: [
       { path: '/account/password', element: <ChangePasswordPage /> },
+      { path: '/account/login-history', element: <LoginHistoryScreen /> },
       {
         path: '/admin',
         children: [

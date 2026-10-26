@@ -2,6 +2,75 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #147 로그인 이력
+
+상세 계약은 [#147 설계](147-login-history-design.md), 대안·영향은
+[ADR-0033](../decisions/0033-login-history.md), 스키마는 [ERD](../erd/README.md)의 #147 계약을 따른다.
+사용자가 이번 작업은 저장소 ERD·ADR부터 반영해 구현하고 Notion은 후속 반영하도록 승인했다.
+
+- 로그인 성공·인증 거절·일반/전체 로그아웃을 P1 `login_histories`에 저장한다. 없는 계정은 user_id=NULL이며 입력 아이디는 보관·재연결하지 않는다.
+- 성공은 세션 수립 후 기록한다. INSERT·커밋 오류는 독립 트랜잭션에서 격리하고 기존 인증·401·로그아웃 결과를 유지한다. 기존 잠금 횟수 저장·성공 초기화의 AUTH_005 정책은 유지한다.
+- 일반/전체 로그아웃은 로그인별 비인증 UUID와 DB UNIQUE로 중복을 막는다. DB는 세션 모니터 밖에서 접근한다. 원본 세션 ID·비밀번호·쿠키·토큰을 저장하지 않는다.
+- 세션 수립 자체의 실패는 새 인증·registry·부분 세션을 정리하며 성공으로 기록하지 않는다. 앞서 만료한 이전 세션은 복구하지 않는다.
+- 본인 이력·최근 성공은 `/api/auth/login-histories`, `/api/auth/login-histories/latest-success`, ADMIN 계정별 조회는 `/api/admin/users/{userId}/login-histories`다. 페이지 크기 1~100, 기본 20이며 시각·PK 역순으로 정렬한다. 최근 성공 응답은 `{latestSuccess: 항목 또는 null}`이다.
+- 조회·최근 성공은 정확히 90일 지난 행과 미래 행을 제외한다. 기동 후/매시간 1,000건씩 독립 삭제를 만료 행이 남지 않을 때까지(한 실행 최대 5분) 반복하며 오류 후 다음 실행에 재시도한다. native 삭제 기준은 UTC DATETIME(6)으로 명시 변환한다.
+- 공통 헤더·내 이력 화면·ADMIN 계정 상세 탭을 연결했다. 시각은 Asia/Seoul, 기기는 브라우저·OS 수준이다. 업무 조회 권한 없는 사장님도 본인 경로를 사용하며 강제 비밀번호 변경 중에는 차단한다.
+- 기존 API·이벤트·모듈 의존·다른 담당 테이블은 변경하지 않는다. #146 운영 설정에는 직접 의존하지 않으며, #146 병합 후 통합 검증 결과는 아래 "#146 병합 후 통합 검증"에 적는다.
+
+### IP 배포 설정
+
+기본 `DONWORRY_LOGIN_HISTORY_IP_MODE=DIRECT`는 원 접속 IP만 사용하고 전달 헤더는 무시한다.
+프록시 배포는 `PROXY`와 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`(쉼표 구분 숫자 IP)를 설정한다.
+신뢰 프록시가 외부 입력을 제거하고 `X-DonWorry-Client-IP`를 유효한 단일 사용자 IP로 덮어써야 한다.
+신뢰하지 않는 peer·없는/잘못된/다중 헤더는 확인 불가로 남기며 프록시 IP로 대체하지 않는다.
+원 peer를 보존하도록 `application.yml`에 `server.forward-headers-strategy: none`을 명시했다 (비워 두면 클라우드 환경 감지로 NATIVE가 켜질 수 있다).
+이 설정은 앱 전체에 적용되어 TLS 종료 프록시 뒤에서는 `request.isSecure()`가 false다. 운영 쿠키는 ADR-0032가 Secure로 고정하므로 충돌하지 않는다.
+FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 거절한다.
+실제 운영 프록시 주소·전달·우회 접속 차단은 배포 구성이 정해진 뒤 확인한다.
+
+### #147 검증·미검증
+
+2026-10-25, `feature/147-login-history`, 기준 `dev 84698bb` 위 #147 최종 구현·테스트 작업 트리에서 실행했다.
+기준 dev 단독 결과가 아니며 #146 변경은 포함하지 않는다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 378개 중 377개 성공·기존 1개 건너뜀(LocalSettlementDemoTests), MariaDB 194개 성공. 실패·오류 0. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 신규 일반 테스트 5개: 직접·신뢰/비신뢰 프록시·위조/오류/다중 IP 헤더·설정 혼용 거절·User-Agent 제한, 부분 세션 정리.
+- 신규 MariaDB HTTP 테스트 22개: 성공·오답·없는 계정·계정/가맹점 정지·잠금·입력 400, 외부 롤백과 독립 커밋, 성공/실패/두 로그아웃의 INSERT·커밋 오류와 로그, 세션 저장 실패·이전 세션 만료, 일반/전체 동시 로그아웃 중복 방지, 본인/ADMIN 인가·세 역할/무권한 계정·강제 변경·계정 분리·NULL 계정 비연결, 동률 페이지·90일 마이크로초 경계·삭제 실패 후 재실행·1,000건 초과 배치·최근 성공 없음.
+- 초기 검사에서 새 Clock 빈과 Modulith 자동 설정의 충돌, native LocalDateTime 삭제 바인딩의 JVM 시간대 재적용을 발견했다. 기존 UTC Clock 공유·명시적 UTC DATETIME 변환으로 수정하고 경계 검사를 통과했다.
+- 새 FK 때문에 기존 관리자 HTTP 테스트의 계정 정리 순서가 실패했다. 각 테스트 소유 로그인 이력을 먼저 지우도록 fixture를 보완한 뒤 위 전체 검사를 통과했다. 기존 기능 검증 조건은 유지했다.
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고는 유지된다. 신규 공통 경로·API/401·강제 변경·한국 시간·기기 표시·기록 없음/오류 구별 검사를 포함한다.
+- Chrome과 별도 MariaDB/백엔드/Vite 서버에서 로그인·마지막 로그인·헤더 링크·내 이력·ADMIN 상세 탭·20건/나머지 페이지 이동·확인 불가 IP/기기·로딩을 확인했다. 임시 DB의 기록을 91일 전으로 바꿔 헤더·목록의 “최근 90일 내 로그인 기록 없음”도 확인했다. 일시적인 로컬 프록시 503 주입으로 헤더/목록 오류를 확인하고 각각 다시 시도로 복구했다. 기존 로컬 DB·서버는 변경하지 않았다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 모든 기존 migration은 보존하고 `newMigration`으로 새 파일 하나만 추가했다.
+- 검증 이후 구현·테스트 코드는 변경하지 않고 문서 실행 기록만 보완한다.
+
+미검증: 실제 운영 프록시·HTTPS·신뢰 주소/헤더 주입·직접 접근 차단, 실제 90일/매시간 대기(주입 시각과 직접 작업 실행으로 검증), #146 병합 후 통합 검증, 다중 서버(범위 밖), Notion 최신 내용 확인·동기화. AI 서버는 변경하지 않아 해당 검사를 실행하지 않았다.
+
+### #147 헤더·이력 레이아웃 후속
+
+2026-10-25, `fdea469` 위 후속 작업 트리에서 헤더·이력 표만 정리했다.
+변경 파일은 `AuthRoutes.tsx`, `LoginHistoryPage.tsx`, `global.css`와 관련 문서다.
+마지막 로그인은 회색 보조 정보로 표시하고 이름·역할을 계정 메뉴로 묶었다.
+비밀번호 변경·내 로그인 이력은 클릭으로 여는 메뉴로 이동하고 로그아웃은 별도 버튼으로 유지했다.
+강제 비밀번호 변경 중에는 이력 메뉴를 제공하지 않는다.
+표의 안내를 짧게 나누고 시각·활동·IP 열 너비와 여백을 정리했다.
+
+- `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
+- 문서 상대 링크·diff 공백 검사를 실행했다.
+- 미검증: 이번 레이아웃의 실제 화면·드롭다운 클릭/키보드 확인. Google Chrome 제어가 자동 승인 검토에서 거절됐다(`Computer Use was not approved to use Google Chrome`). 앞 절의 브라우저 기록은 이 후속 변경 전 결과다.
+- 백엔드·DB·API·다른 담당 계약은 변경하지 않아 해당 검사를 다시 실행하지 않았다. 원격 CI는 사용자 확인을 기다리며 추적하지 않는다.
+
+### #146 병합 후 통합 검증
+
+2026-10-26, `154c484`에 `dev ecfd302`(#146)를 병합한 작업 트리에서 실행했다.
+
+- 병합 충돌: `docs/decisions/README.md`(0032·0033 목록), 이 README(#147·#131 절) — 둘 다 남겼다.
+- 충돌 표시 없이 컴파일이 깨진 곳: #146이 `SecurityConfig.csrfTokenRepository()`를 `csrfTokenRepository(boolean)`으로 바꿔 #147의 `UserSessionTests` 신규 테스트 2곳을 `csrfTokenRepository(false)`로 맞췄다.
+- ADR 번호가 0031 → 0033으로 바뀌어 아직 `dev`에 없는 `V20261025_201559__create_login_histories.sql`의 주석을 ADR-0033으로 고쳤다. 이 브랜치로 이미 로컬 DB에 적용했다면 `Migration checksum mismatch`가 나므로 [Flyway 문제 해결 A3](../flyway/06-troubleshooting.md#a3-적용된-migration-파일이-바뀜)대로 로컬 DB를 초기화한다.
+- 운영 프로필(`application-prod.yml`)은 forward-headers를 설정하지 않아 `none` 명시와 충돌하지 않는다.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 416개 중 415개 성공·기존 1개 건너뜀, MariaDB 244개 성공(#146 운영 프로필·Secure 쿠키 테스트 포함). 실패·오류 0.
+- `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공.
+- 미검증: 실제 운영 프록시·HTTPS 배포, 계정 드롭다운의 실제 브라우저 확인.
+
 ## #131 운영 설정(부분 구현)
 
 사용자 결정으로 이번에는 운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키만 구현한다. **시연 계정(`boss`·`staff_test`) 정지는 후속이며 #131 전체 완료가 아니다.** 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
@@ -313,3 +382,18 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - `git diff --check`: 통과.
 
 미검증: 관리자·무권한 사장님의 브라우저 수동 확인, 브라우저에서 변경 성공 후 폼 초기화·세션 만료 이동·중복 제출 동작(HTTP·상태 전이 자동 테스트와 구분), 실제 30분 대기, 다중 서버(범위 밖). 전체 업무 인가·CSRF 활성화와 #129·#130 연결, Notion 정책 동기화는 이번 범위에서 수행하지 않았다.
+
+### #148 리뷰 반영
+
+2026-10-26, `d4d8b71` 위 리뷰 반영 작업 트리에서 실행했다.
+
+- `server.forward-headers-strategy: none`을 `application.yml`에 명시해 클라우드 환경 자동 감지로 NATIVE가 켜져 IP 확인을 지나치는 경우를 막았다.
+- 90일 삭제의 "최대 10배치" 상한을 실행 시간 5분 상한으로 바꿨다. 없는 아이디 실패가 하루 24만 건을 넘어도 테이블이 계속 커지지 않는다. 기존 배치 초과 테스트를 10,003건으로 늘려 확인했다.
+- `@EnableScheduling`을 identity 모듈에서 루트 `SchedulingConfiguration`으로 옮기고 `donworry.scheduling.enabled`로 끌 수 있게 했다. 테스트는 `build.gradle`에서 끈다.
+- 공유 Clock 빈 이름을 `loginAttemptClock` → `identityClock`으로 바꿨다 (#127 잠금 코드·테스트 포함).
+- 헤더의 마지막 로그인은 화면 이동마다 다시 조회하지 않고 로그인 사용자별 한 번(다시 시도 시 재조회)만 조회한다.
+- ADR-0033(구 0031) 영향에 forward-headers 제약과 #146 HTTPS 쿠키의 관계를 적었다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 378개 중 377개 성공·기존 1개 건너뜀, MariaDB 194개 성공. 실패·오류 0.
+- `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
+- 미검증: 계정 드롭다운 메뉴(`d4d8b71`)와 이번 헤더 조회 변경의 실제 브라우저 클릭·키보드 확인, 5분 실행 상한 도달 경로(실제 시간 대기 없이 코드 검토만), 실제 운영 프록시·HTTPS.

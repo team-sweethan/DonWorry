@@ -68,6 +68,18 @@ test('임시 비밀번호 계정은 권한과 무관하게 변경 화면만 연�
   }
 })
 
+test('본인 로그인 이력은 모든 역할과 업무 권한 없는 계정이 열 수 있다', () => {
+  for (const user of [admin, staff, owner([]), owner(['FDS_VIEW'])]) {
+    assert.equal(canOpenPath(user, '/account/login-history'), true)
+    assert.equal(canOpenPath(user, '/account/login-history/'), true)
+    assert.equal(canOpenPath(user, '/account/login-history/unknown'), false)
+    assert.equal(
+      canOpenPath({ ...user, passwordChangeRequired: true }, '/account/login-history'),
+      false,
+    )
+  }
+})
+
 test('관리자 계정 관리 메뉴와 하위 경로를 제공한다', () => {
   assert.ok(
     sessionNavigation(admin)

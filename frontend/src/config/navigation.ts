@@ -82,10 +82,17 @@ export function isAccountPasswordPath(pathname: string) {
   return pathname.replace(/\/+$/, '') === '/account/password'
 }
 
+/** 업무 메뉴 권한 없이 사용할 수 있는 본인 계정 경로. 강제 변경 검사는 별도로 유지한다. */
+export function isAccountPath(pathname: string) {
+  const path = pathname.replace(/\/+$/, '')
+  return path === '/account/password' || path === '/account/login-history'
+}
+
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */
 export function canOpenPath(user: AuthUser, pathname: string) {
   if (isAccountPasswordPath(pathname)) return true
   if (user.passwordChangeRequired) return false
+  if (isAccountPath(pathname)) return true
   const { base, groups } = sessionNavigation(user)
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups

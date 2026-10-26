@@ -64,7 +64,11 @@ dependencies {
 
 // 한글 주석·SQL이 Windows 기본 인코딩(MS949)으로 깨지지 않게 한다
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
-tasks.withType(Test).configureEach { defaultCharacterEncoding = 'UTF-8' }
+tasks.withType(Test).configureEach {
+    defaultCharacterEncoding = 'UTF-8'
+    // 예약 작업이 테스트 데이터와 동시에 돌지 않게 한다. 테스트는 작업을 직접 호출한다
+    systemProperty 'donworry.scheduling.enabled', 'false'
+}
 
 // 개인 PC 설정(DB 비밀번호 등)이 배포 jar에 들어가지 않게 한다. bootRun은 jar를 쓰지 않아 영향 없음
 tasks.withType(Jar).configureEach { exclude '**/application-local.yml' }

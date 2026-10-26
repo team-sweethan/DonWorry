@@ -6,6 +6,7 @@ import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,11 +28,26 @@ public class UserSessionService {
     // 단일 서버의 짧은 메모리 작업만 직렬화한다. 비밀번호 검증과 DB 조회는 호출 전에 끝낸다.
     public synchronized void establishAuthentication(
             Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
-        sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
-        var context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-        securityContextRepository.saveContext(context, request, response);
+        try {
+            sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+            var context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            securityContextRepository.saveContext(context, request, response);
+        } catch (RuntimeException exception) {
+            // 세션 전략이 이미 이전 인증을 만료했을 수 있다. 새 인증만 정리하며 이전 인증은 복구하지 않는다.
+            SecurityContextHolder.clearContext();
+            try {
+                var session = request.getSession(false);
+                if (session != null) {
+                    sessionRegistry.removeSessionInformation(session.getId());
+                    sessionLogoutHandler.logout(request, response, authentication);
+                }
+            } catch (RuntimeException cleanup) {
+                exception.addSuppressed(cleanup);
+            }
+            throw new InternalAuthenticationServiceException("세션 인증을 수립하지 못했습니다.", exception);
+        }
     }
 
     public synchronized void expireAll(Long userId) {

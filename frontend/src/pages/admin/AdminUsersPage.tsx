@@ -12,6 +12,7 @@ import {
   Space,
   Spin,
   Table,
+  Tabs,
   Tag,
   Typography,
 } from 'antd'
@@ -35,6 +36,7 @@ import type {
 import { ApiError } from '../../api/client'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
+import { LoginHistoryTable } from '../auth/LoginHistoryPage'
 
 const roleLabels = { ADMIN: '관리자', OPERATOR: '사장님', SECURITY_STAFF: '보안 직원' }
 const permissionOptions = [
@@ -447,82 +449,106 @@ export function AdminUserDetailPage() {
       ) : !user ? (
         <Spin />
       ) : (
-        <Space direction="vertical" size={20} style={{ width: '100%' }}>
-          {feedback && <Alert type="error" showIcon message={feedback} />}
-          <Card title={user.displayName}>
-            <Descriptions
-              column={{ xs: 1, sm: 2 }}
-              items={[
-                { key: 'login', label: '아이디', children: user.loginId },
-                { key: 'role', label: '역할', children: roleLabels[user.role] },
-                { key: 'merchant', label: '소속 가맹점', children: user.merchantName ?? '—' },
-                {
-                  key: 'status',
-                  label: '상태',
-                  children: user.status === 'ACTIVE' ? '사용 중' : '정지',
-                },
-                {
-                  key: 'password',
-                  label: '비밀번호',
-                  children: user.passwordChangeRequired ? '변경 필요' : '설정됨',
-                },
-                {
-                  key: 'created',
-                  label: '생성 시각',
-                  children: new Date(`${user.createdAt}Z`).toLocaleString('ko-KR'),
-                },
-              ]}
-            />
-          </Card>
-          <Card title="조회 권한">
-            {user.role === 'OPERATOR' ? (
-              <Space direction="vertical">
-                <Checkbox.Group
-                  options={permissionOptions}
-                  value={selected}
-                  onChange={(values) => setSelected(values.map(String))}
-                  disabled={busy}
-                />
-                <Typography.Text type="secondary">
-                  변경하면 해당 사용자가 로그아웃됩니다.
-                </Typography.Text>
-                <Button type="primary" loading={busy} onClick={() => void perform('permissions')}>
-                  권한 저장
-                </Button>
-              </Space>
-            ) : (
-              <Typography.Text>
-                {user.role === 'ADMIN'
-                  ? '관리자의 조회 권한은 역할에 따라 자동 부여됩니다.'
-                  : '보안 직원은 역할에 따라 업무 화면을 사용합니다.'}
-              </Typography.Text>
-            )}
-          </Card>
-          <Card title="계정 사용 및 비밀번호">
-            <p>
-              정지·복구 또는 비밀번호 초기화 시 해당 사용자의 기존 로그인이 종료됩니다. 계정은
-              삭제하지 않습니다.
-            </p>
-            <Space wrap>
-              <Button
-                danger={user.status === 'ACTIVE'}
-                disabled={busy || (actor?.userId === userId && user.status === 'ACTIVE')}
-                onClick={() => setConfirmation('status')}
-              >
-                {user.status === 'ACTIVE' ? '계정 정지' : '정지 해제'}
-              </Button>
-              <Button disabled={busy} onClick={() => setConfirmation('reset')}>
-                비밀번호 초기화
-              </Button>
-            </Space>
-            {actor?.userId === userId && (
-              <p>
-                자기 자신은 정지할 수 없습니다. 본인 비밀번호를 초기화하면 임시 비밀번호를 확인한 뒤
-                다시 로그인해야 합니다.
-              </p>
-            )}
-          </Card>
-        </Space>
+        <Tabs
+          destroyOnHidden
+          items={[
+            {
+              key: 'account',
+              label: '계정 정보',
+              children: (
+                <Space direction="vertical" size={20} style={{ width: '100%' }}>
+                  {feedback && <Alert type="error" showIcon message={feedback} />}
+                  <Card title={user.displayName}>
+                    <Descriptions
+                      column={{ xs: 1, sm: 2 }}
+                      items={[
+                        { key: 'login', label: '아이디', children: user.loginId },
+                        { key: 'role', label: '역할', children: roleLabels[user.role] },
+                        {
+                          key: 'merchant',
+                          label: '소속 가맹점',
+                          children: user.merchantName ?? '—',
+                        },
+                        {
+                          key: 'status',
+                          label: '상태',
+                          children: user.status === 'ACTIVE' ? '사용 중' : '정지',
+                        },
+                        {
+                          key: 'password',
+                          label: '비밀번호',
+                          children: user.passwordChangeRequired ? '변경 필요' : '설정됨',
+                        },
+                        {
+                          key: 'created',
+                          label: '생성 시각',
+                          children: new Date(`${user.createdAt}Z`).toLocaleString('ko-KR'),
+                        },
+                      ]}
+                    />
+                  </Card>
+                  <Card title="조회 권한">
+                    {user.role === 'OPERATOR' ? (
+                      <Space direction="vertical">
+                        <Checkbox.Group
+                          options={permissionOptions}
+                          value={selected}
+                          onChange={(values) => setSelected(values.map(String))}
+                          disabled={busy}
+                        />
+                        <Typography.Text type="secondary">
+                          변경하면 해당 사용자가 로그아웃됩니다.
+                        </Typography.Text>
+                        <Button
+                          type="primary"
+                          loading={busy}
+                          onClick={() => void perform('permissions')}
+                        >
+                          권한 저장
+                        </Button>
+                      </Space>
+                    ) : (
+                      <Typography.Text>
+                        {user.role === 'ADMIN'
+                          ? '관리자의 조회 권한은 역할에 따라 자동 부여됩니다.'
+                          : '보안 직원은 역할에 따라 업무 화면을 사용합니다.'}
+                      </Typography.Text>
+                    )}
+                  </Card>
+                  <Card title="계정 사용 및 비밀번호">
+                    <p>
+                      정지·복구 또는 비밀번호 초기화 시 해당 사용자의 기존 로그인이 종료됩니다.
+                      계정은 삭제하지 않습니다.
+                    </p>
+                    <Space wrap>
+                      <Button
+                        danger={user.status === 'ACTIVE'}
+                        disabled={busy || (actor?.userId === userId && user.status === 'ACTIVE')}
+                        onClick={() => setConfirmation('status')}
+                      >
+                        {user.status === 'ACTIVE' ? '계정 정지' : '정지 해제'}
+                      </Button>
+                      <Button disabled={busy} onClick={() => setConfirmation('reset')}>
+                        비밀번호 초기화
+                      </Button>
+                    </Space>
+                    {actor?.userId === userId && (
+                      <p>
+                        자기 자신은 정지할 수 없습니다. 본인 비밀번호를 초기화하면 임시 비밀번호를
+                        확인한 뒤 다시 로그인해야 합니다.
+                      </p>
+                    )}
+                  </Card>
+                </Space>
+              ),
+            },
+            {
+              key: 'login-history',
+              label: '로그인 이력',
+              children: <LoginHistoryTable key={userId} userId={userId} />,
+            },
+          ]}
+        />
       )}
       <Modal
         open={confirmation !== null}

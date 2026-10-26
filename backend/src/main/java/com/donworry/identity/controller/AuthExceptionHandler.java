@@ -54,6 +54,7 @@ public class AuthExceptionHandler {
         MethodArgumentTypeMismatchException.class
     })
     public ProblemDetail invalidInput(HttpServletRequest request) {
+        if (request.getRequestURI().contains("/login-histories")) return problem(AuthErrorCode.INVALID_HISTORY_INPUT);
         if (request.getRequestURI().startsWith("/api/admin/merchants"))
             return problem(AuthErrorCode.ADMIN_MERCHANT_INVALID_INPUT);
         if (request.getRequestURI().startsWith("/api/admin/")) return problem(AuthErrorCode.ADMIN_INVALID_INPUT);

@@ -3,6 +3,7 @@ package com.donworry.identity.security;
 import com.donworry.identity.entity.UserRole;
 import java.io.Serializable;
 import java.util.List;
+import java.util.UUID;
 import lombok.Builder;
 
 @Builder(toBuilder = true)
@@ -13,5 +14,6 @@ public record SessionUser(
         UserRole role,
         Long merchantId,
         List<String> permissions,
-        boolean passwordChangeRequired)
+        boolean passwordChangeRequired,
+        UUID loginReference)
         implements Serializable {}

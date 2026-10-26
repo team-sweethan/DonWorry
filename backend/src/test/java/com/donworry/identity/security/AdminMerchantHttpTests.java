@@ -70,6 +70,7 @@ class AdminMerchantHttpTests {
         var ids =
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
+            jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM admin_change_histories WHERE actor_user_id=? OR target_user_id=?", id, id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
             sessions.expireAll(id);

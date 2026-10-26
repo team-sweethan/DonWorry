@@ -16,16 +16,16 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class LoginAttemptService {
     private final PlatformUserRepository repository;
     private final PlatformTransactionManager transactionManager;
-    private final Clock loginAttemptClock;
+    private final Clock identityClock;
 
     // 다른 모듈이 Clock 빈을 추가해도 잠금 판정은 항상 이 시계를 쓴다.
     public LoginAttemptService(
             PlatformUserRepository repository,
             PlatformTransactionManager transactionManager,
-            @Qualifier("loginAttemptClock") Clock loginAttemptClock) {
+            @Qualifier("identityClock") Clock identityClock) {
         this.repository = repository;
         this.transactionManager = transactionManager;
-        this.loginAttemptClock = loginAttemptClock;
+        this.identityClock = identityClock;
     }
 
     public boolean isLocked(LocalDateTime lockedUntil) {
@@ -42,8 +42,7 @@ public class LoginAttemptService {
     }
 
     private LocalDateTime now() {
-        return LocalDateTime.ofInstant(loginAttemptClock.instant(), ZoneOffset.UTC)
-                .truncatedTo(ChronoUnit.MICROS);
+        return LocalDateTime.ofInstant(identityClock.instant(), ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
     }
 
     private void commit(Runnable update) {

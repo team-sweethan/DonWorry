@@ -70,7 +70,7 @@ class LoginAttemptHttpTests {
     @MockitoSpyBean
     PlatformUserRepository repository;
 
-    @MockitoBean(name = "loginAttemptClock")
+    @MockitoBean(name = "identityClock")
     Clock clock;
 
     private final Instant start = Instant.parse("2026-10-25T03:00:00.123456Z");

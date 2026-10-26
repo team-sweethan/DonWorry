@@ -38,6 +38,8 @@ import tools.jackson.databind.json.JsonMapper;
     SecurityProblemResponseWriter.class
 })
 class SecurityConfigTests {
+    @MockitoBean
+    com.donworry.identity.service.LoginHistoryService loginHistories;
 
     @MockitoBean
     UserDetailsService userDetailsService;

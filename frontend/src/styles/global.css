@@ -140,6 +140,66 @@ textarea {
 .dw-header .ant-btn {
   box-shadow: none;
 }
+.dw-last-login {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dw-header .dw-account-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+.dw-account-menu .dw-user-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dw-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+}
+.dw-account-chevron {
+  color: #64748b;
+  font-size: 10px;
+}
+.dw-login-history-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-bottom: 20px;
+}
+.dw-login-history-intro > :first-child {
+  color: #334155;
+  font-weight: 600;
+}
+.dw-login-history-intro > :last-child {
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-login-history-table .ant-table-cell {
+  vertical-align: middle;
+}
+.dw-login-history-ip {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
 .dw-sidebar {
   position: sticky;
   top: var(--dw-header-height);
