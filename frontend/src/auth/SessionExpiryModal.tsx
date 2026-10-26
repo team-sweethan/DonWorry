@@ -13,11 +13,8 @@ export function SessionExpiryModal() {
   const navigate = useNavigate()
   useEffect(() => {
     const tick = () => {
-      sessionActivity.sync()
-      const latest = sessionActivity.getSnapshot()
-      const time = Date.now()
-      setNow(time)
-      if (latest && sessionTime(latest.at, time).remaining === 0) store.expire()
+      store.expireIfInactive()
+      setNow(Date.now())
     }
     tick()
     const timer = window.setInterval(tick, 1000)
@@ -32,7 +29,7 @@ export function SessionExpiryModal() {
   const { remaining, warning } = sessionTime(activity?.at ?? now, now)
   return (
     <Modal
-      open={!!activity && warning}
+      open={!!activity && (warning || (renewing && remaining === 0))}
       title="로그인 유지 시간이 곧 만료됩니다"
       closable={false}
       maskClosable={false}

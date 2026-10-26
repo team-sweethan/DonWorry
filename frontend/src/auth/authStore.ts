@@ -1,4 +1,4 @@
-import { sessionActivity } from '../api/sessionActivity.ts'
+import { sessionActivity, sessionTime } from '../api/sessionActivity.ts'
 import * as authApi from '../api/auth.ts'
 import { advanceApiSession, ApiError } from '../api/client.ts'
 import type { AuthUser } from '../types/auth.ts'
@@ -15,7 +15,11 @@ export type AuthState = {
   loggingOut: boolean
 }
 
-export function createAuthStore(api: AuthApi = authApi, activity = sessionActivity) {
+export function createAuthStore(
+  api: AuthApi = authApi,
+  activity = sessionActivity,
+  now: () => number = Date.now,
+) {
   let state: AuthState = {
     user: null,
     status: 'loading',
@@ -55,6 +59,13 @@ export function createAuthStore(api: AuthApi = authApi, activity = sessionActivi
       reauthenticationRequired: true,
     })
     activity.stop()
+  }
+
+  function expireIfInactive() {
+    activity.sync()
+    const latest = activity.getSnapshot()
+    // 연장 응답을 기다리는 동안 기존 시한만으로 성공 응답을 무효화하지 않는다.
+    if (!pendingRenew && latest && sessionTime(latest.at, now()).remaining === 0) expire()
   }
 
   function check(key: string, requireLogin = false): Promise<void> {
@@ -131,6 +142,7 @@ export function createAuthStore(api: AuthApi = authApi, activity = sessionActivi
       }
     },
     expire,
+    expireIfInactive,
     renew: (): Promise<AuthUser | null> => {
       if (pendingRenew) return pendingRenew.promise
       if (!state.user || pendingLogout) return Promise.resolve(null)
@@ -153,14 +165,21 @@ export function createAuthStore(api: AuthApi = authApi, activity = sessionActivi
           }
           throw error
         } finally {
-          if (pendingRenew === request) pendingRenew = null
+          if (pendingRenew === request) {
+            pendingRenew = null
+            expireIfInactive()
+          }
         }
       })()
       return request.promise
     },
     // 로그인 화면의 탭이 다른 탭의 새 로그인을 반영한다.
     recheck: () => {
-      if (!state.user && lastCheckKey && !pendingLogout) void check(lastCheckKey)
+      if (!state.user && lastCheckKey && !pendingLogout) {
+        // 새 로그인 확인은 이전 요청을 기다리지 않는다. 요청 식별자로 늦은 결과를 버린다.
+        pendingCheck = null
+        return check(lastCheckKey)
+      }
     },
     requirePasswordChange: () => {
       if (state.user) update({ user: { ...state.user, passwordChangeRequired: true } })
