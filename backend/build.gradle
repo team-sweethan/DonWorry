@@ -66,6 +66,9 @@ dependencies {
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.withType(Test).configureEach { defaultCharacterEncoding = 'UTF-8' }
 
+// 개인 PC 설정(DB 비밀번호 등)이 배포 jar에 들어가지 않게 한다. bootRun은 jar를 쓰지 않아 영향 없음
+tasks.withType(Jar).configureEach { exclude '**/application-local.yml' }
+
 // check는 DB 없이 돈다. Docker가 필요한 테스트는 mariaDbTest로 분리
 tasks.named('test') {
     useJUnitPlatform { excludeTags 'mariadb' }
