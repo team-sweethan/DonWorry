@@ -6,7 +6,12 @@ import lombok.Builder;
 
 @Builder
 public record FdsEvaluationRequest(
-        UUID evaluationRequestId, Long paymentId, String customerRef, long amount, Instant paymentRequestedAt) {
+        UUID evaluationRequestId,
+        Long paymentId,
+        Long merchantId,
+        String customerRef,
+        long amount,
+        Instant paymentRequestedAt) {
 
     public FdsEvaluationRequest {
         if (evaluationRequestId == null) {
@@ -17,6 +22,9 @@ public record FdsEvaluationRequest(
         }
         if (paymentId <= 0) {
             throw new IllegalArgumentException("paymentId must be positive");
+        }
+        if (merchantId == null || merchantId <= 0) {
+            throw new IllegalArgumentException("merchantId must be positive");
         }
         if (customerRef == null || customerRef.isBlank()) {
             throw new IllegalArgumentException("customerRef must not be blank");

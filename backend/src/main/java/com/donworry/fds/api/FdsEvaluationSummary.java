@@ -6,6 +6,7 @@ import java.time.Instant;
 public record FdsEvaluationSummary(
         Long evaluationId,
         Long paymentId,
+        Long merchantId,
         String customerRef,
         Integer riskScore,
         FdsResult result,

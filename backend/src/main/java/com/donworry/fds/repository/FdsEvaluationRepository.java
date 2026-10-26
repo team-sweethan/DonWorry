@@ -17,8 +17,8 @@ public interface FdsEvaluationRepository
         extends JpaRepository<FdsEvaluation, Long>, JpaSpecificationExecutor<FdsEvaluation> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    List<FdsEvaluation> findByCustomerRefAndPaymentRequestedAtBetween(
-            String customerRef, Instant windowStart, Instant windowEnd);
+    List<FdsEvaluation> findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+            Long merchantId, String customerRef, Instant windowStart, Instant windowEnd);
 
     Optional<FdsEvaluation> findByEvaluationRequestId(UUID evaluationRequestId);
 

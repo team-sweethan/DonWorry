@@ -54,6 +54,6 @@ class FdsEvaluationPersistenceTests {
     }
 
     private FdsEvaluationRequest request(Long paymentId, String orderRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", amount, requestedAt);
+        return new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", amount, requestedAt);
     }
 }

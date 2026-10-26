@@ -49,6 +49,7 @@ class FdsMockEvaluationServiceTests {
         verify(evaluator, org.mockito.Mockito.times(3)).evaluate(requestCaptor.capture());
         var requests = requestCaptor.getAllValues();
         assertThat(responses).hasSize(3);
+        assertThat(requests).extracting(FdsEvaluationRequest::merchantId).containsOnly(1L);
         assertThat(requests).extracting(FdsEvaluationRequest::customerRef).containsOnly("hong-gildong");
         assertThat(requests.get(2).amount()).isEqualTo(150_000L);
         assertThat(requests.get(2).paymentRequestedAt())
@@ -62,7 +63,7 @@ class FdsMockEvaluationServiceTests {
         var requestId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
         var evaluation = FdsEvaluation.completed(
-                new FdsEvaluationRequest(requestId, 900_003L, "hong-gildong", 150_000L, requestedAt),
+                new FdsEvaluationRequest(requestId, 900_003L, 1L, "hong-gildong", 150_000L, requestedAt),
                 FdsResult.REVIEW,
                 60,
                 requestedAt.plusSeconds(1));

@@ -60,6 +60,20 @@ class FdsEvaluationQuerySearchTests {
         assertThat(result.content()).extracting(summary -> summary.paymentId()).containsExactly(2002L, 2001L);
     }
 
+    // 가맹점 ID 일부로도 평가를 찾을 수 있다.
+    @Test
+    void list_searchMerchantId_returnsMatchingEvaluation() {
+        save(2101L, 7001L, "customer-a", FdsResult.REVIEW, 60, 1);
+        save(2102L, 8001L, "customer-b", FdsResult.DENY, 80, 2);
+
+        var result = queryService.list(null, false, "700", 0, 10);
+
+        assertThat(result.content()).singleElement().satisfies(summary -> {
+            assertThat(summary.paymentId()).isEqualTo(2101L);
+            assertThat(summary.merchantId()).isEqualTo(7001L);
+        });
+    }
+
     // 검색어와 판정 필터를 함께 적용한 결과도 서버에서 페이지로 나눈다.
     @Test
     void list_searchWithResultFilter_returnsFilteredPage() {
@@ -84,8 +98,14 @@ class FdsEvaluationQuerySearchTests {
     }
 
     private void save(Long paymentId, String customerRef, FdsResult result, int riskScore, long secondOffset) {
+        save(paymentId, 1L, customerRef, result, riskScore, secondOffset);
+    }
+
+    private void save(
+            Long paymentId, Long merchantId, String customerRef, FdsResult result, int riskScore, long secondOffset) {
         var requestedAt = Instant.parse("2026-10-23T00:00:00Z").plusSeconds(secondOffset);
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, customerRef, 150_000L, requestedAt);
+        var request =
+                new FdsEvaluationRequest(UUID.randomUUID(), paymentId, merchantId, customerRef, 150_000L, requestedAt);
         evaluationRepository.save(FdsEvaluation.completed(request, result, riskScore, requestedAt.plusSeconds(1)));
     }
 }

@@ -92,7 +92,7 @@ class FdsEvidenceQueryServiceTests {
     }
 
     private FdsEvaluation evaluation(Long paymentId, FdsResult result, Instant evaluatedAt) {
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", 150_000L, evaluatedAt);
+        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", 150_000L, evaluatedAt);
         return FdsEvaluation.completed(request, result, result == FdsResult.ERROR ? 0 : 60, evaluatedAt);
     }
 }

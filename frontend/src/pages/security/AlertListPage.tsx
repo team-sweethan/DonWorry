@@ -183,6 +183,7 @@ export function AlertListPage() {
       ),
     },
     { title: '결제 ID', dataIndex: 'paymentId', width: 130 },
+    { title: '가맹점 ID', dataIndex: 'merchantId', width: 120 },
     { title: '고객 식별자', dataIndex: 'customerRef', width: 180 },
     {
       title: '위험 점수',
@@ -273,7 +274,7 @@ export function AlertListPage() {
           <Space>
             <Input
               aria-label="경보 검색"
-              placeholder="평가 ID, 결제 ID, 고객 식별자"
+              placeholder="평가 ID, 결제 ID, 가맹점 ID, 고객 식별자"
               prefix={<SearchOutlined />}
               value={query}
               onChange={(event) => {
@@ -335,7 +336,7 @@ export function AlertListPage() {
             dataSource={evaluations}
             loading={listLoading}
             size="middle"
-            scroll={{ x: 1000 }}
+            scroll={{ x: 1120 }}
             onRow={(record) => ({
               onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
               style: { cursor: 'pointer' },

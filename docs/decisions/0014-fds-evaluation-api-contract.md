@@ -16,8 +16,10 @@ P5는 결제 처리 중 P2의 위험 평가 결과를 즉시 받아야 한다. `
 P2는 `fds.api`에 `FdsEvaluator`, `FdsEvaluationRequest`, `FdsEvaluationResponse`, `FdsResult`를
 공개한다. P5는 `FdsEvaluator.evaluate(request)`를 동기로 호출한다.
 
-- 요청 필수값은 `evaluationRequestId(UUID)`, `paymentId(Long)`, `customerRef(String)`,
-  `amount(long)`, `paymentRequestedAt(Instant)`이다.
+- 요청 필수값은 `evaluationRequestId(UUID)`, `paymentId(Long)`, `merchantId(Long)`,
+  `customerRef(String)`, `amount(long)`, `paymentRequestedAt(Instant)`이다.
+- `merchantId`는 반복 결제 룰을 가맹점 경계 안에서 계산하기 위한 요청 스냅샷이다. P5가
+  저장된 결제의 값을 전달하며, P2는 payment 모듈 저장소를 조회하지 않는다.
 - `paymentRequestedAt`은 반복 결제 룰의 시간 구간 기준이고, P2의 평가 완료 시각과 구분한다.
 - 응답은 `evaluationRequestId(UUID)`, `evaluationId(Long)`, `result(FdsResult)`,
   `riskScore(Integer)`, `evaluatedAt(Instant)`, `errorCode(String)`를 반환한다.
@@ -36,15 +38,18 @@ P2는 `fds.api`에 `FdsEvaluator`, `FdsEvaluationRequest`, `FdsEvaluationRespons
 | `paymentId`만 요청 식별자로 사용 | 한 결제의 재평가 이력과 통신 재시도를 구분할 수 없다. |
 | `evaluatedAt`을 10분 룰 기준으로 사용 | 큐 대기·재시도 시간에 따라 같은 결제 묶음의 결과가 달라진다. |
 | `ruleHits`를 P5 동기 응답에 포함 | P5의 결제 분기에 필요하지 않은 근거까지 공개 계약에 고정한다. |
+| P2가 `payments`를 조회해 가맹점을 결정 | FDS가 P5 내부 저장소에 직접 의존해 모듈 경계를 넘는다. |
 
 ## 영향
 
 - API: P5는 `fds.api`만 import해 요청을 만들고 결과별 결제 상태 처리를 구현할 수 있다.
-- DB: `fds_evaluations`에 `evaluation_request_id(UUID)`, `customer_ref(VARCHAR(100))`,
-  `payment_requested_at(DATETIME(6))`을 추가한다. `evaluation_request_id`는 유니크로 보장하고,
-  반복 결제 조회는 `(customer_ref, payment_requested_at)` 인덱스를 사용한다. Notion P2 담당 ERD의
-  필드 반영은 PR 병합 전 확인한다.
-- 화면: 없음. 룰 근거는 P2 경보 상세 조회 계약에서 제공한다.
+- DB: `fds_evaluations`에 `evaluation_request_id(UUID)`, `merchant_id(BIGINT)`,
+  `customer_ref(VARCHAR(100))`, `payment_requested_at(DATETIME(6))`을 저장한다.
+  `evaluation_request_id`는 유니크로 보장하고, 반복 결제 조회는
+  `(merchant_id, customer_ref, payment_requested_at)` 인덱스를 사용한다. `merchant_id` 추가 전의
+  기존 FDS 평가는 가맹점 1로 백필한다. P5 `payments`를 JOIN하지 않으며, 이 과거 이력 귀속은
+  새 NOT NULL 컬럼 전환을 위한 호환 처리다. Notion P2 담당 ERD의 필드 반영은 PR 병합 전 확인한다.
+- 화면: P2 경보 목록·상세 조회에 가맹점 ID를 함께 제공한다. 룰 근거는 P2 경보 상세 조회 계약에서 제공한다.
 - 테스트: DTO 필수값과 `ERROR`/정상 응답 불변식을 단위 테스트로 확인한다.
 - 문서: P5 C2의 세부 계약 후보가 생긴다. 팀 합의 뒤 이 ADR 상태를 채택으로 변경한다.
 

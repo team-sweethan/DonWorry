@@ -40,8 +40,8 @@ class FdsEvaluationTransactionService {
         var highAmountMatched = request.amount() >= HIGH_AMOUNT_THRESHOLD;
         var windowStart = request.paymentRequestedAt().minus(REPEAT_WINDOW);
         var priorPaymentIds = evaluationRepository
-                .findByCustomerRefAndPaymentRequestedAtBetween(
-                        request.customerRef(), windowStart, request.paymentRequestedAt())
+                .findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        request.merchantId(), request.customerRef(), windowStart, request.paymentRequestedAt())
                 .stream()
                 .map(FdsEvaluation::getPaymentId)
                 .collect(java.util.stream.Collectors.toSet());
