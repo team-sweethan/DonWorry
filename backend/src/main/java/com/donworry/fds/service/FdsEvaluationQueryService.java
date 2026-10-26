@@ -67,7 +67,8 @@ public class FdsEvaluationQueryService {
                     criteriaBuilder.or(
                             customerRef,
                             criteriaBuilder.like(root.get("evaluationId").as(String.class), "%" + number + "%"),
-                            criteriaBuilder.like(root.get("paymentId").as(String.class), "%" + number + "%")));
+                            criteriaBuilder.like(root.get("paymentId").as(String.class), "%" + number + "%"),
+                            criteriaBuilder.like(root.get("merchantId").as(String.class), "%" + number + "%")));
         };
     }
 
@@ -105,6 +106,7 @@ public class FdsEvaluationQueryService {
         return new FdsEvaluationSummary(
                 evaluation.getEvaluationId(),
                 evaluation.getPaymentId(),
+                evaluation.getMerchantId(),
                 evaluation.getCustomerRef(),
                 evaluation.getRiskScore(),
                 evaluation.getResult(),

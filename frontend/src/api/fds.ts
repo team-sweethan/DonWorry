@@ -6,6 +6,7 @@ export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
 export type FdsEvaluationSummary = {
   evaluationId: number
   paymentId: number
+  merchantId: number
   customerRef: string
   riskScore: number | null
   result: FdsResult
