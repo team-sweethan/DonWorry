@@ -1,6 +1,6 @@
 # P5 Payment — 1차 MVP 문서
 
-최초 작성: 2026-10-21 · 최신화: 2026-10-25 · 구현 현황: #100·#118·#122·#136·#139·#141 · 문서 범위 정리: #104 · 담당: P5 시은.
+최초 작성: 2026-10-21 · 최신화: 2026-10-26 · 구현 현황: #100·#118·#122·#136·#139·#141 · 문서 범위 정리: #104·#158 · 담당: P5 시은.
 
 #100에서 최초 PENDING 저장·커밋 → 저장 데이터 기반 P2 평가 → 결제 분기 판단을 내부 서비스로 연결했다. 실제 P2·MariaDB로 ALLOW·REVIEW와 트랜잭션 분리를 검증했고, DENY·ERROR·호출 실패는 P2 대역으로 검증했다. #118의 4·5번 단계에서 승인 처리 서비스·모의 승인기·Entity 전이와 별도 createAndAuthorize 진입점을 연결했다. 기존 createAndEvaluate는 평가 전용으로 유지한다. 6번 단계에서 MariaDB 커밋·롤백·동시성 통합 검증을 수행했다. #122에서 ALLOW 승인 성공 후 매입 요청 발행 → P6 매입·정산 저장 → 완료 수신 후 CAPTURED 반영을 연결하고, 롤백·중복·동시 수신·미완료 기록 재전달을 검증했다. HTTP API는 후속 범위다.
 
@@ -18,7 +18,8 @@
 | [#122 매입 이벤트 연결](capture-events.md) | 발행·수신 조건과 트랜잭션 설계. 요청 발행·완료 수신 구현. 단계별 검증과 후속 범위 기록 |
 | [검증](verification.md) | 1차 검증 계획과 과거 실행 기록 |
 | [후속 검토](future-design.md) | 보조 저장·시도별 결과 관리 등 1차 필수에서 분리한 초안 |
-| [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) | 완료 통지로 접수도 확인하는 제안의 이유·대안·영향 |
+| [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |
+| [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) | ADR-0027로 대체된 이전 CAPTURE 제안의 이유·대안·영향 |
 
 업무의 근거는 Notion FDS 정본과 P6 담당 ERD다. 실제 컬럼은 migration SQL, 의존 방향은 채택된 [ADR-0012](../decisions/0012-payment-settlement-dependency.md)를 따른다. 출처와 차이는 [문서 대조 현황](../README.md)에 기록한다.
 
@@ -26,7 +27,7 @@
 
 - #149는 [CakeShop 요청·조회 설계](149-cakeshop-payment-api.md)와 [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md)을 작성한 단계다. 5번 단계에서 신규 저장 구조(migration·Entity·Repository)와 상태 변경 메타데이터를 구현했다. 후속 단계에서 접수 서비스의 동일 키 재사용·주문 잠금·거절 후 재결제·기존 주문 차단을 구현했다. 이어서 고정 평가 UUID로 P2 호출·결과 복원과 모의 승인/단계/이벤트의 원자 저장을 연결했다. 가맹점별 단건·주문별 시도 목록 조회도 추가했다. 사용자 승인으로 기본 비활성 HTTP와 인증 대역 테스트를 추가했다. 실제 P1 인증 연결·운영 활성화는 미완료다. 기존 내부 결제 처리·조회 구현과 구분한다.
 
-- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 직원 CAPTURE·VOID 실행과 결과 저장·발행을 구현했다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 5번 단계에서 공개 실행 Bean·직원 CAPTURE 요청/완료·P3 결과 발행을 연결했다. 6번 단계에서 REJECT 모의 승인 취소·VOIDED·결과 발행도 연결했다. 7번 단계에서 요청 거절·P6 실패 복구를 보강하고 전체 검사를 통과했다. P3 운영 수신은 후속이다. 기본 계약은 사용자 확정·P3 전달 완료이고, VOID 식별자 추가 계약 확인과 Notion 동기화는 후속이다.
+- #141은 [직원 금융 조치 저장·처리 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)에 따라 직원 CAPTURE·VOID 실행과 결과 저장·발행을 구현했다. 사용자의 저장소 ERD 기준 구현 승인 후 4번 단계에서 `payment_actions` migration·Entity·공개 계약·내부 요청 저장을 추가했다. 5번 단계에서 공개 실행 Bean·직원 CAPTURE 요청/완료·P3 결과 발행을 연결했다. 6번 단계에서 REJECT 모의 승인 취소·VOIDED·결과 발행도 연결했다. 7번 단계에서 요청 거절·P6 실패 복구를 보강하고 전체 검사를 통과했다. #158에서 P3가 완료 기반 인계·VOID actionId·시각 기준에 동의했다. P3 운영 수신과 Notion 동기화는 후속이며, CAPTURE 확정 실패는 P5·P6 후속 협의로 남긴다. 도입 시점은 미정이다.
 
 - #139의 [결제 단건 조회 계약](../decisions/0026-payment-read-api.md)에 따라 `payment.api.PaymentReader`와 `PaymentSummary`를 정의했다. 4번 단계에서 읽기 전용 `PaymentReaderService`를 연결했다. 입력 검증·저장값 매핑·없는 결제·DB 오류 전파를 단위 검증했고, 5번 단계에서 실제 DB·읽기 전용 트랜잭션·세션 없는 호출·상태 커밋 후 조회를 검증했다. P3 목업 교체·권한 검증·화면 연결은 후속이다.
 
@@ -74,10 +75,10 @@ P5는 최초 결제 저장 → FDS 평가 → 모의 승인 → 보류 또는 �
 | --- | --- |
 | C1 | P1·CakeShop: 인증, 가맹점·금액 검증, 주문 중복 접수 기준과 외부 표현 |
 | C2 | P2: 현재 공개 DTO 유지. ERROR·타임아웃 복구, 동일 UUID 재전송과 재평가 구분 |
-| C3 | P3: #141 완료 기반 결과 계약으로 Gateway·리스너 연결. CAPTURE targetOperationId=captureId, VOID=actionId이며 acceptedAt은 P3 반영 시각. VOID 식별자·구체 DTO 추가 확인은 후속 |
+| C3 | P3: #158에서 완료 기반 인계·CAPTURE targetOperationId=captureId·VOID=actionId 확인. acceptedAt은 P3 반영 시각, completedAt은 이력에 보존. Gateway·리스너·Case 연결 구현·검증은 별도 |
 | C4 | P6: ADR-0016·0017의 요청·완료 타입을 #122에서 P5에 연결. 수수료 계산은 P6 소유. 미완료 기록 재전달 검증과 별개로 운영 복구 정책·P3 매핑은 후속 확인 |
 | C5 | 공통 이벤트 담당: 발행 기록·커밋 후 전달·재발행·이벤트 식별·소비자 멱등성·유실 복구 |
-| C6 | P5는 #141 payment_actions 한 테이블로 요청·결과와 반대 조치 차단을 구현. P3는 정상 대기 시 REQUESTED 유지·확정 거절 시 FAILED 반영, 같은 키 재시도와 완료 상태 보존을 연결해야 함. 운영 복구 정책은 후속 |
+| C6 | P5는 #141 payment_actions 한 테이블로 요청·결과와 반대 조치 차단을 구현. P3는 #158의 정상 대기 REQUESTED·확정 거절 FAILED·같은 키 재확인·완료 상태 보존 방침을 연결. CAPTURE 확정 실패 계약·운영 복구 정책은 P5·P6 후속 협의, 도입 시점 미정 |
 | C7 | CakeShop·P1: 조회·통지 스키마와 인증, 중복·역순·실패 통지 복구 |
 
-#141은 CAPTURE·VOID 모두 실제 성공 확인 뒤 인계 ACCEPTED를 반영하는 기준이다. 사용자가 기본 기준을 확정해 P3에 전달했으며, P3 운영 수신·Case 종료는 별도 구현·검증 대상이다. 상세 계약·추가 확인 사항은 [ADR-0027](../decisions/0027-payment-actions.md)을 따른다.
+#141은 CAPTURE·VOID 모두 실제 성공 확인 뒤 인계 ACCEPTED를 반영하는 기준이다. #158에서 P3 확인을 받았으며, P3 운영 수신·Case 종료는 별도 구현·검증 대상이다. 상세 계약·후속 협의 사항은 [ADR-0027](../decisions/0027-payment-actions.md)을 따른다. Notion 차이는 P3가 notion-sync Issue로 관리한다.

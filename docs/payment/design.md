@@ -1,8 +1,8 @@
 # P5 1차 시연 설계
 
-> 2026-10-25 #141: 직원 조치 저장·완료 통지의 구체 설계는 [직원 조치 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)을 따른다. 아래 기존 C3~C6 미결 설명과 구분하며 아직 미구현이다. 사용자 확정·P3 전달 기준은 완료 후 인계 확인, P3 acceptedAt은 결과 반영 시각이다. VOID 식별자와 상세 ERD의 추가 확인은 남아 있다.
+> 2026-10-26 #158: 직원 조치 저장·완료 통지의 현재 계약은 [직원 조치 설계](141-payment-actions.md)와 [ADR-0027](../decisions/0027-payment-actions.md)을 따른다. P5 실행·결과 발행은 #141에서 구현됐고 P3는 #158에서 완료 기반 인계·CAPTURE=captureId·VOID=actionId에 동의했다. acceptedAt은 P3 결과 반영 시각, completedAt은 별도 이력으로 남기는 계약이다. 아래 과거 기준의 C3~C6 미결 설명과 구분한다. CAPTURE 확정 실패는 P5·P6 후속 협의이며 도입 시점은 미정이다. P3 운영 연결·Notion 동기화는 별도다.
 
-**#104의 시연 범위 제안과 #100·#118·#122 구현을 구분한다. P6 이벤트는 ADR-0016·0017이 채택됐고, P3 통지·인계 매핑은 합의 전이다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
+**#104의 시연 범위 제안과 #100·#118·#122·#141 구현을 구분한다. P6 이벤트는 ADR-0016·0017이 채택됐고, P3 완료 기반 인계·식별자·시각 기준은 #158에서 확인했다.** 기준·범위·미결 C번호는 [README](README.md)를 따른다. 이 문서의 계약은 필요한 정보와 책임을 정의한다.
 현재 테이블·컬럼·타입은 migration SQL, 모듈 의존 방향과 이벤트 타입 위치는 ADR-0012를 따른다.
 새 보조 저장·DTO 필드명·URL·HTTP 코드·복구 세부는 합의 전 제안이다.
 
@@ -192,15 +192,15 @@ P2가 ERROR 응답을 반환하면 해당 응답과 RECORD_FDS_ERROR 판단을 �
 HELD 통지는 REVIEW와 승인 성공이 저장된 뒤 전달한다. 직원 ACCEPT는 재승인 없이 매입 요청, REJECT는 승인 취소 요청이다.
 P3는 판정과 `action_handoffs(REQUESTED)`를 저장·커밋한 뒤 P5 공개 API를 호출한다. 요청에는 결제·판정·조치·멱등 키의 연결이 필요하며 가맹점·권한 검증은 생략하지 않는다.
 
-CAPTURE 완료 기반 인계 확인을 채택하면 P5가 P6 완료 결과를 반영한 뒤 직원 ACCEPT 건만 P3에 인계 완료를 통지한다. ALLOW 자동 매입에는 Case·직원 판정이 없으므로 P3 인계를 만들지 않는다.
+#141에서 P5는 P6 완료 결과를 반영한 뒤 직원 ACCEPT 건의 결과를 발행하도록 구현했다. #158에서 P3는 CAPTURE·VOID 모두 실제 완료 후 인계를 확인하는 기준에 동의했다. ALLOW 자동 매입에는 Case·직원 판정이 없으므로 P3 인계를 만들지 않는다.
 P3는 결제와 판정·인계를 대조한 뒤 `action_handoffs.status = ACCEPTED`로 저장한다. 모든 소속 결제의 판정·인계가 끝난 경우에만 Case를 CLOSED로 변경한다.
 
-매핑 제안은 `target_operation_id = captureId`, `accepted_at = capturedAt`이다. 후자는 완료 기록 시각을 접수 확인 근거로 쓰는 것이며 DB의 정확한 커밋 시각이나 P3 수신 시각은 아니다.
-P5→P3 이벤트의 판정/인계 식별 방식·필드·키는 C3·C6에서 확정한다. P5가 P3 저장소를 직접 조회하거나 paymentId만으로 직원 조치 여부를 추정하지 않는다.
+현재 계약은 CAPTURE의 `targetOperationId = captureId`, VOID의 `targetOperationId = actionId`이며 actionType과 함께 해석한다. acceptedAt은 P3 결과 반영 시각으로 두고 completedAt은 case_histories.event_data에 함께 남긴다. ADR-0018의 acceptedAt=capturedAt 제안은 사용하지 않는다.
+P5→P3 PaymentActionResult에는 paymentId·decisionId·actionType·idempotencyKey와 최종 결과를 담는다. P3는 멱등키로 인계를 찾고 나머지 식별자를 대조한다. P5가 P3 저장소를 직접 조회하거나 paymentId만으로 직원 조치 여부를 추정하지 않는다.
 
-최신 dev `d9e4251`의 P3 `FinancialActionGateway.Receipt`는 status·targetOperationId·errorCode를 받고, `HandoffService.applyReceipt()`는 멱등 키로 인계를 찾아 현재 시각을 accepted_at에 사용한다. MockFinancialActionGateway는 즉시 ACCEPTED를 반환한다. 따라서 capturedAt 매핑은 현재 구현 사실이 아니라 P3 입력·시각 처리 변경이 필요한 제안이다. P3의 Receipt.UNKNOWN은 접수 여부 미확인이고, 여기서 제외하는 P6 외부 실행 UNKNOWN과 다르다.
+과거 기준 `d9e4251`의 P3 `FinancialActionGateway.Receipt`는 status·targetOperationId·errorCode를 받고, `HandoffService.applyReceipt()`는 멱등 키로 인계를 찾아 현재 시각을 accepted_at에 사용했다. MockFinancialActionGateway는 즉시 ACCEPTED를 반환했다. 이 과거 구현 기록을 #158 계약에 따른 P3 Gateway·결과 리스너 연결 완료의 근거로 사용하지 않는다. P3의 Receipt.UNKNOWN은 접수 여부 미확인이고, 여기서 제외하는 P6 외부 실행 UNKNOWN과 다르다.
 
-VOID의 접수 증거·식별자·통지 시점은 별도 미결이다. CAPTURE 축소를 근거로 VOID를 이미 구현했거나 완료 후 통지로 합의했다고 간주하지 않는다. 실제 승인 취소 성공 전 VOIDED는 금지한다.
+VOID는 #141에서 모의 취소 성공 후 VOIDED·조치 SUCCEEDED·결과 발행을 함께 저장하도록 구현했다. #158에서 P3가 actionId와 완료 후 인계 확인에 동의했다. 실제 카드사 취소 연동은 후속 설계이며 모의 실행과 구분한다. 실제 승인 취소 성공 전 VOIDED는 금지한다.
 
 ### 3.3. P6 요청·완료 결과 — settlement/api 소유
 
@@ -208,7 +208,7 @@ VOID의 접수 증거·식별자·통지 시점은 별도 미결이다. CAPTURE 
 
 ADR-0016의 `CaptureRequested(paymentId, merchantId, orderId, amount)`가 구현되어 있다. #122에서 P5의 orderRef를 orderId에 넣어 ALLOW 승인 트랜잭션 안에서 발행한다. 수수료 계산은 P6가 담당한다.
 
-완료 이벤트는 ADR-0017에 채택됐으며 settlement.api에 다음 3개 필드로 구현됐다. #122의 P5 @ApplicationModuleListener가 수신하고, 행 잠금·입력·승인 참조·상태 검증 후 CAPTURED를 반영한다. 이미 CAPTURED인 정상 재전달은 상태를 유지한다. captureId·capturedAt을 payments에 저장하거나 서로 다른 captureId의 진위를 대조하지는 않는다. 자세한 범위는 [매입 이벤트 연결](capture-events.md)을 따른다.
+완료 이벤트는 ADR-0017에 채택됐으며 settlement.api에 다음 3개 필드로 구현됐다. #122의 P5 @ApplicationModuleListener가 수신하고, 행 잠금·입력·승인 참조·상태 검증 후 CAPTURED를 반영한다. 이미 CAPTURED인 정상 재전달은 상태를 유지한다. 직원 조치가 없는 ALLOW 경로는 captureId·capturedAt을 payments에 저장하거나 서로 다른 captureId를 대조하지 않는다. #141의 직원 CAPTURE는 payment_actions에 captureId·completedAt을 저장하고 완료 재수신 시 기존 값과 대조한다. 자세한 범위는 [매입 이벤트 연결](capture-events.md)과 [직원 조치 설계](141-payment-actions.md)를 따른다.
 
 ```java
 record CaptureCompleted(Long paymentId, Long captureId, Instant capturedAt) {}
@@ -217,7 +217,7 @@ record CaptureCompleted(Long paymentId, Long captureId, Instant capturedAt) {}
 | 필드 | 목적 |
 | --- | --- |
 | paymentId | P5 대상 결제 조회·CAPTURED 반영 |
-| captureId | 기존 P6 매입 PK로 결과 추적. P3 인계 대상 ID로 사용 제안 |
+| captureId | 기존 P6 매입 PK로 결과 추적. #158에서 P3 인계 대상 ID로 확인 |
 | capturedAt | 기존 매입 완료 기록 시각. 재전달 시 원래 값 유지 |
 
 성공 전용 이벤트이므로 `executionStatus = SUCCEEDED`를 별도로 넣지 않는다. `eventId` 등 전달·추적 메타데이터는 C5의 공통 방식으로 정하며, 위 3개 업무 필드가 전달 보장 전체를 뜻하지 않는다.
@@ -246,13 +246,13 @@ CakeShop에는 실제 P5 결제 상태를 제공하며 HELD·PENDING이나 Case 
 | P5 | 적법한 매입 요청과 결과를 대조해 payments CAPTURED 및 필요한 후속 통지 발행 기록을 같은 트랜잭션으로 저장 | 커밋 후 직원 ACCEPT 건은 P3 인계 완료, CakeShop에는 실제 결제 결과 |
 | P3 | 판정·인계 대조 후 ACCEPTED 및 합의된 대상 ID·시각 저장 | 모든 판정·인계 완료 조건을 만족할 때만 Case CLOSED |
 
-P3·P5·P6 전체를 한 트랜잭션으로 묶지 않는다. 발행 기록은 업무 저장과 함께 남기고 소비자는 커밋 후 처리한다. #122에서 ALLOW 자동 매입의 업무 이벤트·리스너와 실패 기록의 명시적 재전달을 검증했다. 위 표의 P3·CakeShop 후속 통지 및 운영 자동 재발행은 구현하지 않았다.
+P3·P5·P6 전체를 한 트랜잭션으로 묶지 않는다. 발행 기록은 업무 저장과 함께 남기고 소비자는 커밋 후 처리한다. #122에서 ALLOW 자동 매입의 업무 이벤트·리스너와 실패 기록의 명시적 재전달을 검증했다. #141에서 P5의 직원 조치 결과 발행을 구현했으며, P3 운영 수신·Case 반영과 CakeShop 후속 통지·운영 자동 재발행은 별도 후속 범위다. 과거 검사 결과는 [검증 기록](verification.md)을 따른다.
 
-이 안에서는 CAPTURE 완료가 확인되기 전에는 그 인계를 ACCEPTED로 만들 수 없다. **기존 정본의 실행 성공 전 Case 종료 가능 정책을 CAPTURE 경로에서 축소**하므로 P3·P6와 [ADR-0018](../decisions/0018-payment-mvp-capture-completion.md) 합의가 필요하다. 채택 전에는 기존 정책을 대체하지 않는다.
+CAPTURE 완료 확인 전에는 인계를 ACCEPTED로 만들지 않는 기준에 P3가 #158에서 동의했다. **기존 정본의 실행 성공 전 Case 종료 가능 정책과의 차이**는 P3가 notion-sync Issue로 관리한다. 현재 계약은 ADR-0018을 대체한 [ADR-0027](../decisions/0027-payment-actions.md)을 따르며 P3 구현·검증 및 팀 채택 상태와 구분한다.
 
 ## 5. 실패·중복·경합
 
-- P6 업무 저장 실패: 매입·정산·완료 발행 기록을 함께 롤백하고 성공을 통지하지 않는다. P3 인계는 성공 확인 전 REQUESTED 유지가 제안이다. 영구 거절/인계 FAILED 기준, 실패 기록 위치와 재시도 주체·한도는 C3·C4·C6에서 정한다. 전체 롤백만으로 `captures.FAILED`가 저장됐다고 볼 수 없다.
+- P6 업무 저장 실패: 매입·정산·완료 발행 기록을 함께 롤백하고 성공을 통지하지 않는다. P5 직원 조치는 PENDING이며 P3는 #158에 따라 인계 REQUESTED·Case ACTION_PENDING을 유지하고 SLA 경고·표시만 제공하는 방침이다. CAPTURE 확정 실패 기준·전달 계약·복구 방식과 도입 시점은 P5·P6 후속 협의다. 전체 롤백만으로 `captures.FAILED`가 저장됐다고 볼 수 없다.
 - P6 저장 성공 후 통지 실패: 매입을 새로 만들지 않고 커밋된 완료 통지를 재전달한다. 응답 유실을 매입 실패로 바꾸지 않는다.
 - 중복 요청: `captures.payment_id` UNIQUE와 기존 본문 대조를 사용해 같은 결제의 매입·정산을 중복 생성하지 않는다. 유니크 제약만으로 재전달·경합 처리가 완성되지는 않는다.
 - P5/P3 소비 실패: 각 소비 트랜잭션을 롤백하고 기존 이벤트를 재처리한다. CAPTURED 반영과 P3 통지 발행 기록이 원자적이어야 P5 반영 후 P3 통지 누락을 복구할 수 있다.
