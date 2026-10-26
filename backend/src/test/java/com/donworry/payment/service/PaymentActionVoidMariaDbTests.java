@@ -37,6 +37,9 @@ import org.springframework.transaction.support.*;
 @SpringBootTest
 @Import({MariaDbTestContainerConfig.class, PaymentActionVoidMariaDbTests.ReceiverConfig.class})
 class PaymentActionVoidMariaDbTests {
+    private static final String TEST_RECEIVER_LISTENER_ID =
+            ResultReceiver.class.getName() + ".on(" + PaymentActionResult.class.getName() + ")";
+
     @Autowired
     PaymentActionRequester requester;
 
@@ -121,20 +124,23 @@ class PaymentActionVoidMariaDbTests {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE payment_id=?", Long.class, id);
     }
 
+    // 결과 이벤트는 P3 수신 기록을 제외하고 테스트 수신자에 대한 발행만 확인한다.
     private long eventCount(Class<?> type, long id) {
         return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?",
-                Long.class,
-                type.getName(),
-                id);
+                """
+                SELECT COUNT(*) FROM EVENT_PUBLICATION
+                WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?
+                  AND (EVENT_TYPE<>? OR LISTENER_ID=?)
+                """, Long.class, type.getName(), id, PaymentActionResult.class.getName(), TEST_RECEIVER_LISTENER_ID);
     }
 
     private UUID publication(long id) {
         return UUID.fromString(jdbc.queryForObject(
-                "SELECT ID FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?",
-                String.class,
-                PaymentActionResult.class.getName(),
-                id));
+                """
+                SELECT ID FROM EVENT_PUBLICATION
+                WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?
+                  AND LISTENER_ID=?
+                """, String.class, PaymentActionResult.class.getName(), id, TEST_RECEIVER_LISTENER_ID));
     }
 
     private void delivered(long id, int attempts) {
