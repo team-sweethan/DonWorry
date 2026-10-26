@@ -7,6 +7,7 @@ import { ApiError } from '../../api/client'
 import { getFdsEvaluation, type FdsEvaluationDetail, type FdsResult } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
+import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { ResultTag } from './alert/AlertTags'
 
 function formatDate(value: string) {
@@ -58,36 +59,35 @@ export function AlertDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const initialDetailLoading = loading && detail === null
+  const showInitialDetailLoading = useMinimumLoadingIndicator(initialDetailLoading)
 
   useEffect(() => {
     if (!id) return
     let active = true
-    setLoading(true)
-    setNotFound(false)
-    setError(null)
-    getFdsEvaluation(id)
-      .then((response) => {
+    const loadDetail = async () => {
+      setLoading(true)
+      setNotFound(false)
+      setError(null)
+      try {
+        const response = await getFdsEvaluation(id)
         if (active) setDetail(response)
-      })
-      .catch((requestError: unknown) => {
+      } catch (requestError) {
         if (!active) return
         if (requestError instanceof ApiError && requestError.status === 404) setNotFound(true)
         else setError('경보 상세를 불러오지 못했습니다.')
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false)
-      })
+      }
+    }
+    void loadDetail()
     return () => {
       active = false
     }
   }, [id])
 
-  if (loading) {
-    return (
-      <div className="dw-alert-loading">
-        <Spin />
-      </div>
-    )
+  if (initialDetailLoading || showInitialDetailLoading) {
+    return <div className="dw-alert-detail-loading">{showInitialDetailLoading && <Spin />}</div>
   }
   if (notFound) return <ScreenResult kind="404" />
   if (!detail || error)

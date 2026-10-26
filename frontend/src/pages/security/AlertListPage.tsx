@@ -1,7 +1,7 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Input, Space, Spin, Table } from 'antd'
+import { Alert, Button, Card, Input, Skeleton, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { type MouseEvent, useEffect, useRef, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   createMockFdsEvaluations,
@@ -11,6 +11,7 @@ import {
   type FdsResult,
 } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
+import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { ResultTag } from './alert/AlertTags'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
@@ -29,19 +30,32 @@ function formatDate(value: string) {
   )
 }
 
+function AlertListSkeleton() {
+  return (
+    <div aria-label="경보 목록을 불러오는 중" className="dw-alert-list-skeleton">
+      <Skeleton active paragraph={{ rows: 5 }} title={{ width: '30%' }} />
+    </div>
+  )
+}
+
 export function AlertListPage() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
   const [query, setQuery] = useState('')
   const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
   const [evaluationPage, setEvaluationPage] = useState<FdsEvaluationPage | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [resultCounts, setResultCounts] = useState<FdsEvaluationPage['resultCounts'] | null>(null)
+  const [listLoading, setListLoading] = useState(true)
+  const [summaryLoading, setSummaryLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [mockCreating, setMockCreating] = useState(false)
   const requestSequence = useRef(0)
+  const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
   const conditions = useRef({ filter: 'NEEDS_ATTENTION' as Filter, query: '' })
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const initialListLoading = listLoading && evaluationPage === null
+  const showInitialListSkeleton = useMinimumLoadingIndicator(initialListLoading)
 
   const cancelScheduledSearch = () => {
     if (searchTimer.current === null) return
@@ -49,36 +63,46 @@ export function AlertListPage() {
     searchTimer.current = null
   }
 
-  const load = (page = 0, nextFilter = filter, nextQuery = query) => {
-    const sequence = ++requestSequence.current
-    setLoading(true)
-    setError(null)
-    setEvaluations([])
-    setEvaluationPage(null)
-    setCurrentPage(page + 1)
-    getFdsEvaluations({
-      result:
-        nextFilter === 'REVIEW' || nextFilter === 'DENY' || nextFilter === 'ERROR'
-          ? nextFilter
-          : undefined,
-      attentionOnly: nextFilter === 'NEEDS_ATTENTION',
-      search: nextQuery,
-      page,
-      size: 10,
-    })
-      .then((response) => {
-        if (sequence !== requestSequence.current) return
-        setEvaluations(response.content)
-        setEvaluationPage(response)
-        setCurrentPage(response.page + 1)
+  const load = useCallback(
+    (page: number, nextFilter: Filter, nextQuery: string, refreshSummary = false) => {
+      const sequence = ++requestSequence.current
+      const shouldRefreshSummary = refreshSummary || resultCountsRef.current === null
+      setListLoading(true)
+      setSummaryLoading(shouldRefreshSummary)
+      setError(null)
+      setCurrentPage(page + 1)
+      getFdsEvaluations({
+        result:
+          nextFilter === 'REVIEW' || nextFilter === 'DENY' || nextFilter === 'ERROR'
+            ? nextFilter
+            : undefined,
+        attentionOnly: nextFilter === 'NEEDS_ATTENTION',
+        search: nextQuery,
+        page,
+        size: 10,
       })
-      .catch(() => {
-        if (sequence === requestSequence.current) setError('경보 목록을 불러오지 못했습니다.')
-      })
-      .finally(() => {
-        if (sequence === requestSequence.current) setLoading(false)
-      })
-  }
+        .then((response) => {
+          if (sequence !== requestSequence.current) return
+          setEvaluations(response.content)
+          setEvaluationPage(response)
+          setCurrentPage(response.page + 1)
+          if (shouldRefreshSummary) {
+            resultCountsRef.current = response.resultCounts
+            setResultCounts(response.resultCounts)
+          }
+        })
+        .catch(() => {
+          if (sequence === requestSequence.current) setError('경보 목록을 불러오지 못했습니다.')
+        })
+        .finally(() => {
+          if (sequence === requestSequence.current) {
+            setListLoading(false)
+            if (shouldRefreshSummary) setSummaryLoading(false)
+          }
+        })
+    },
+    [],
+  )
 
   const createMock = () => {
     setMockCreating(true)
@@ -86,7 +110,7 @@ export function AlertListPage() {
     createMockFdsEvaluations()
       .then(() => {
         const current = conditions.current
-        load(0, current.filter, current.query)
+        load(0, current.filter, current.query, true)
       })
       .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
       .finally(() => setMockCreating(false))
@@ -100,15 +124,16 @@ export function AlertListPage() {
   }
 
   useEffect(() => {
-    load(0, 'NEEDS_ATTENTION')
+    const initialLoad = window.setTimeout(() => load(0, 'NEEDS_ATTENTION', '', true), 0)
     return () => {
+      window.clearTimeout(initialLoad)
       cancelScheduledSearch()
       requestSequence.current += 1
     }
-  }, [])
+  }, [load])
 
-  const count = (result: FdsResult) => evaluationPage?.resultCounts[result] ?? 0
-  const totalCount = Object.values(evaluationPage?.resultCounts ?? {}).reduce(
+  const count = (result: FdsResult) => resultCounts?.[result] ?? 0
+  const totalCount = Object.values(resultCounts ?? {}).reduce(
     (total, resultCount) => total + resultCount,
     0,
   )
@@ -161,7 +186,7 @@ export function AlertListPage() {
         title="경보"
         description="FDS가 결제마다 평가한 위험 점수와 판정입니다. 기본으로 REVIEW · DENY · ERROR만 보여 줍니다."
       />
-      <div className="dw-stat-grid" aria-label="경보 판정 요약">
+      <div className="dw-stat-grid" aria-busy={summaryLoading} aria-label="경보 판정 요약">
         <button
           type="button"
           className="dw-panel dw-stat-card dw-stat-card-button"
@@ -240,7 +265,11 @@ export function AlertListPage() {
               allowClear
               className="dw-alert-search"
             />
-            <Button icon={<ReloadOutlined />} onClick={() => load(currentPage - 1, filter)}>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={summaryLoading && evaluationPage !== null}
+              onClick={() => load(currentPage - 1, filter, query, true)}
+            >
               새로고침
             </Button>
             <Button onClick={createMock} loading={mockCreating}>
@@ -270,15 +299,16 @@ export function AlertListPage() {
           })}
         </div>
         {error && <Alert type="error" showIcon message={error} className="dw-alert-load-error" />}
-        {loading ? (
-          <div className="dw-alert-loading">
-            <Spin />
+        {evaluationPage === null || showInitialListSkeleton ? (
+          <div className="dw-alert-list-loading">
+            {showInitialListSkeleton && <AlertListSkeleton />}
           </div>
         ) : (
           <Table
             rowKey="evaluationId"
             columns={columns}
             dataSource={evaluations}
+            loading={listLoading}
             size="middle"
             scroll={{ x: 1000 }}
             onRow={(record) => ({
@@ -292,7 +322,7 @@ export function AlertListPage() {
               showLessItems: false,
               showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
               total: evaluationPage?.totalElements ?? 0,
-              onChange: (page) => load(page - 1, filter),
+              onChange: (page) => load(page - 1, filter, query),
             }}
             locale={{ emptyText: '표시할 경보가 없습니다.' }}
           />
