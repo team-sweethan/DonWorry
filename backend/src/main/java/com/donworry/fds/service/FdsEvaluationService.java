@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsEvaluationRequestConflictException;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsEvaluator;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -27,7 +28,7 @@ public class FdsEvaluationService implements FdsEvaluator {
         } catch (DataIntegrityViolationException exception) {
             return evaluationRepository
                     .findByEvaluationRequestId(request.evaluationRequestId())
-                    .map(this::responseOf)
+                    .map(evaluation -> responseOf(requireSameRequest(evaluation, request)))
                     .orElseThrow(() -> exception);
         }
     }
@@ -40,5 +41,12 @@ public class FdsEvaluationService implements FdsEvaluator {
                 evaluation.getRiskScore(),
                 evaluation.getEvaluatedAt(),
                 evaluation.getErrorCode());
+    }
+
+    private FdsEvaluation requireSameRequest(FdsEvaluation evaluation, FdsEvaluationRequest request) {
+        if (!evaluation.hasSameRequestSnapshot(request)) {
+            throw new FdsEvaluationRequestConflictException();
+        }
+        return evaluation;
     }
 }

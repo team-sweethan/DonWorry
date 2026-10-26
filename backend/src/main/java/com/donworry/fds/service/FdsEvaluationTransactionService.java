@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsEvaluationRequestConflictException;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.api.FdsRuleHitOutcome;
@@ -33,7 +34,7 @@ class FdsEvaluationTransactionService {
     public FdsEvaluationResponse evaluate(FdsEvaluationRequest request) {
         var existing = evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId());
         if (existing.isPresent()) {
-            return responseOf(existing.get());
+            return responseOf(requireSameRequest(existing.get(), request));
         }
 
         var highAmountMatched = request.amount() >= HIGH_AMOUNT_THRESHOLD;
@@ -81,6 +82,13 @@ class FdsEvaluationTransactionService {
                 evaluation.getRiskScore(),
                 evaluation.getEvaluatedAt(),
                 evaluation.getErrorCode());
+    }
+
+    private FdsEvaluation requireSameRequest(FdsEvaluation evaluation, FdsEvaluationRequest request) {
+        if (!evaluation.hasSameRequestSnapshot(request)) {
+            throw new FdsEvaluationRequestConflictException();
+        }
+        return evaluation;
     }
 
     private int score(boolean highAmountMatched, boolean repeatedPaymentMatched) {

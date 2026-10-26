@@ -1,12 +1,14 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsEvaluationRequestConflictException;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
@@ -68,6 +70,7 @@ class FdsEvaluationServiceTests {
         verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
         assertThat(evaluationCaptor.getValue().getCustomerRef()).isEqualTo("hong-gildong");
         assertThat(evaluationCaptor.getValue().getPaymentRequestedAt()).isEqualTo(requestedAt);
+        assertThat(evaluationCaptor.getValue().getRequestedAmount()).isEqualTo(150_000L);
         assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(2);
         assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getObservedValue())
                 .isEqualTo("{\"amount\":150000}");
@@ -91,6 +94,40 @@ class FdsEvaluationServiceTests {
         assertThat(result.evaluationId()).isEqualTo(1L);
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
         verify(evaluationRepository).findByEvaluationRequestId(request.evaluationRequestId());
+    }
+
+    // 같은 요청 ID가 다른 결제 입력에 재사용되면 기존 평가를 반환하지 않는다.
+    @Test
+    void evaluate_existingRequestIdWithDifferentInput_throwsRequestConflict() {
+        var requestId = UUID.randomUUID();
+        var original = request(requestId, 1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var stored = FdsEvaluation.completed(original, FdsResult.REVIEW, 60, Instant.parse("2026-10-22T01:00:01Z"));
+        when(evaluationRepository.findByEvaluationRequestId(requestId)).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> transactionEvaluator.evaluate(
+                        request(requestId, 2L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"))))
+                .isInstanceOf(FdsEvaluationRequestConflictException.class);
+    }
+
+    @Test
+    // 재시도는 결제·고객·금액·요청 시각이 모두 원래 요청과 같아야 한다.
+    void evaluation_sameRequestSnapshot_requiresAllRequestFieldsToMatch() {
+        var requestId = UUID.randomUUID();
+        var requestedAt = Instant.parse("2026-10-22T01:00:00.123456789Z");
+        var original = request(requestId, 1L, "hong-gildong", 150_000L, requestedAt);
+        var stored = FdsEvaluation.completed(original, FdsResult.REVIEW, 60, Instant.parse("2026-10-22T01:00:01Z"));
+
+        assertThat(stored.hasSameRequestSnapshot(request(requestId, 1L, "hong-gildong", 150_000L, requestedAt)))
+                .isTrue();
+        assertThat(stored.hasSameRequestSnapshot(request(requestId, 2L, "hong-gildong", 150_000L, requestedAt)))
+                .isFalse();
+        assertThat(stored.hasSameRequestSnapshot(request(requestId, 1L, "other-customer", 150_000L, requestedAt)))
+                .isFalse();
+        assertThat(stored.hasSameRequestSnapshot(request(requestId, 1L, "hong-gildong", 150_001L, requestedAt)))
+                .isFalse();
+        assertThat(stored.hasSameRequestSnapshot(
+                        request(requestId, 1L, "hong-gildong", 150_000L, requestedAt.plusSeconds(1))))
+                .isFalse();
     }
 
     @Test
@@ -133,11 +170,34 @@ class FdsEvaluationServiceTests {
         assertThat(result.evaluationId()).isEqualTo(1L);
     }
 
+    // 동시 저장 충돌 후에도 다른 요청 스냅샷이면 P5에 충돌 예외를 전달한다.
+    @Test
+    void evaluate_concurrentConflictWithDifferentInput_throwsRequestConflict() {
+        var requestId = UUID.randomUUID();
+        var request = request(requestId, 2L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var original = request(requestId, 1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var stored = FdsEvaluation.completed(original, FdsResult.REVIEW, 60, Instant.parse("2026-10-22T01:00:01Z"));
+        when(transactionService.evaluate(request))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate request"));
+        when(evaluationRepository.findByEvaluationRequestId(requestId)).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> evaluator.evaluate(request)).isInstanceOf(FdsEvaluationRequestConflictException.class);
+    }
+
     private FdsEvaluation priorEvaluation(Long paymentId, Instant requestedAt) {
         return FdsEvaluation.completed(request(paymentId, 50_000L, requestedAt), FdsResult.ALLOW, 0, requestedAt);
     }
 
     private FdsEvaluationRequest request(Long paymentId, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", amount, requestedAt);
+        return request(UUID.randomUUID(), paymentId, amount, requestedAt);
+    }
+
+    private FdsEvaluationRequest request(UUID requestId, Long paymentId, long amount, Instant requestedAt) {
+        return request(requestId, paymentId, "hong-gildong", amount, requestedAt);
+    }
+
+    private FdsEvaluationRequest request(
+            UUID requestId, Long paymentId, String customerRef, long amount, Instant requestedAt) {
+        return new FdsEvaluationRequest(requestId, paymentId, customerRef, amount, requestedAt);
     }
 }
