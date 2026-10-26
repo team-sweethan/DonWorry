@@ -23,6 +23,16 @@ public class PaymentAuthorizationService {
     // 별도 Bean 프록시를 통해 호출한다. 잠금은 상태·참조의 커밋/롤백까지 유지된다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     PaymentAuthorizationResult authorize(PaymentAuthorizationContext context) {
+        return apply(context);
+    }
+
+    // 새 요청 처리에서는 결제 상태·이벤트·요청 단계를 호출자 트랜잭션에서 함께 커밋한다.
+    @Transactional(propagation = Propagation.MANDATORY)
+    PaymentAuthorizationResult authorizeInTransaction(PaymentAuthorizationContext context) {
+        return apply(context);
+    }
+
+    private PaymentAuthorizationResult apply(PaymentAuthorizationContext context) {
         Objects.requireNonNull(context, "context");
         var payment = paymentRepository
                 .findByIdForUpdate(context.payment().paymentId())
