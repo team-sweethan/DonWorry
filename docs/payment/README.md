@@ -19,7 +19,7 @@
 | [검증](verification.md) | 1차 검증 계획과 과거 실행 기록 |
 | [후속 검토](future-design.md) | 보조 저장·시도별 결과 관리 등 1차 필수에서 분리한 초안 |
 | [#152 장기 보류 정책](152-long-held-payment-policy.md) | 제안 — 원인별 확인·종료·예약·경합·활성화 조건. 기간과 담당 합의 미정 |
-| [#152 돈워리 내부 대응](152-internal-response.md) | P5가 결정할 항목과 P3·P6 합의 항목, 원인별 대응·해소 확인 기준. 결정 후보·합의 전 |
+| [#152 돈워리 내부 대응](152-internal-response.md) | P5 D1~D6 시간·담당 외 방향 사용자 확정. 원인별 대응·해소 기준. 시간·운영 담당 미정, P3·P6 합의·구현 전 |
 | [#152 담당자 확인 질문](152-policy-confirmation.md) | 미발송 문안·회신 기록. P1/CakeShop·P3·P5·P6 및 P2 추가 확인 |
 | [ADR-0035](../decisions/0035-long-held-payment-policy.md) | 제안 — 확인 기한과 실제 금융 종료 분리. 대안·영향 기록 |
 | [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |
