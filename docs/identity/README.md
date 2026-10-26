@@ -13,7 +13,7 @@
 - 일반/전체 로그아웃은 로그인별 비인증 UUID와 DB UNIQUE로 중복을 막는다. DB는 세션 모니터 밖에서 접근한다. 원본 세션 ID·비밀번호·쿠키·토큰을 저장하지 않는다.
 - 세션 수립 자체의 실패는 새 인증·registry·부분 세션을 정리하며 성공으로 기록하지 않는다. 앞서 만료한 이전 세션은 복구하지 않는다.
 - 본인 이력·최근 성공은 `/api/auth/login-histories`, `/api/auth/login-histories/latest-success`, ADMIN 계정별 조회는 `/api/admin/users/{userId}/login-histories`다. 페이지 크기 1~100, 기본 20이며 시각·PK 역순으로 정렬한다. 최근 성공 응답은 `{latestSuccess: 항목 또는 null}`이다.
-- 조회·최근 성공은 정확히 90일 지난 행과 미래 행을 제외한다. 기동 후/매시간 1,000건씩 최대 10배치 독립 삭제하며 오류 후 다음 실행에 재시도한다. native 삭제 기준은 UTC DATETIME(6)으로 명시 변환한다.
+- 조회·최근 성공은 정확히 90일 지난 행과 미래 행을 제외한다. 기동 후/매시간 1,000건씩 독립 삭제를 만료 행이 남지 않을 때까지(한 실행 최대 5분) 반복하며 오류 후 다음 실행에 재시도한다. native 삭제 기준은 UTC DATETIME(6)으로 명시 변환한다.
 - 공통 헤더·내 이력 화면·ADMIN 계정 상세 탭을 연결했다. 시각은 Asia/Seoul, 기기는 브라우저·OS 수준이다. 업무 조회 권한 없는 사장님도 본인 경로를 사용하며 강제 비밀번호 변경 중에는 차단한다.
 - 기존 API·이벤트·모듈 의존·다른 담당 테이블은 변경하지 않는다. #146 운영 설정에는 직접 의존하지 않으며 해당 PR 병합 후 통합 검증은 후속이다.
 
@@ -23,7 +23,8 @@
 프록시 배포는 `PROXY`와 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`(쉼표 구분 숫자 IP)를 설정한다.
 신뢰 프록시가 외부 입력을 제거하고 `X-DonWorry-Client-IP`를 유효한 단일 사용자 IP로 덮어써야 한다.
 신뢰하지 않는 peer·없는/잘못된/다중 헤더는 확인 불가로 남기며 프록시 IP로 대체하지 않는다.
-원 peer를 보존하도록 `server.forward-headers-strategy=NONE`을 사용해야 한다.
+원 peer를 보존하도록 `application.yml`에 `server.forward-headers-strategy: none`을 명시했다 (비워 두면 클라우드 환경 감지로 NATIVE가 켜질 수 있다).
+이 설정은 앱 전체에 적용되므로 TLS 종료 프록시 뒤 HTTPS 판정(#146 쿠키)과 함께 배포 시 결정한다.
 FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 거절한다.
 실제 운영 프록시 주소·전달·우회 접속 차단은 배포 구성이 정해진 뒤 확인한다.
 
@@ -317,3 +318,18 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 - `git diff --check`: 통과.
 
 미검증: 관리자·무권한 사장님의 브라우저 수동 확인, 브라우저에서 변경 성공 후 폼 초기화·세션 만료 이동·중복 제출 동작(HTTP·상태 전이 자동 테스트와 구분), 실제 30분 대기, 다중 서버(범위 밖). 전체 업무 인가·CSRF 활성화와 #129·#130 연결, Notion 정책 동기화는 이번 범위에서 수행하지 않았다.
+
+### #148 리뷰 반영
+
+2026-10-26, `d4d8b71` 위 리뷰 반영 작업 트리에서 실행했다.
+
+- `server.forward-headers-strategy: none`을 `application.yml`에 명시해 클라우드 환경 자동 감지로 NATIVE가 켜져 IP 확인을 지나치는 경우를 막았다.
+- 90일 삭제의 "최대 10배치" 상한을 실행 시간 5분 상한으로 바꿨다. 없는 아이디 실패가 하루 24만 건을 넘어도 테이블이 계속 커지지 않는다. 기존 배치 초과 테스트를 10,003건으로 늘려 확인했다.
+- `@EnableScheduling`을 identity 모듈에서 루트 `SchedulingConfiguration`으로 옮기고 `donworry.scheduling.enabled`로 끌 수 있게 했다. 테스트는 `build.gradle`에서 끈다.
+- 공유 Clock 빈 이름을 `loginAttemptClock` → `identityClock`으로 바꿨다 (#127 잠금 코드·테스트 포함).
+- 헤더의 마지막 로그인은 화면 이동마다 다시 조회하지 않고 로그인 사용자별 한 번(다시 시도 시 재조회)만 조회한다.
+- ADR-0031 영향에 forward-headers 제약과 #146 HTTPS 쿠키의 관계를 적었다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 378개 중 377개 성공·기존 1개 건너뜀, MariaDB 194개 성공. 실패·오류 0.
+- `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.
+- 미검증: 계정 드롭다운 메뉴(`d4d8b71`)와 이번 헤더 조회 변경의 실제 브라우저 클릭·키보드 확인, 5분 실행 상한 도달 경로(실제 시간 대기 없이 코드 검토만), 실제 운영 프록시·HTTPS.

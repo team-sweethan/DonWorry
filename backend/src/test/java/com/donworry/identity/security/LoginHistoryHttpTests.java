@@ -71,7 +71,7 @@ class LoginHistoryHttpTests {
     @MockitoSpyBean(name = "securityContextRepository")
     org.springframework.security.web.context.SecurityContextRepository contexts;
 
-    @MockitoBean(name = "loginAttemptClock")
+    @MockitoBean(name = "identityClock")
     Clock clock;
 
     private final Instant start = Instant.parse("2026-10-25T03:00:00.123456Z");
@@ -474,7 +474,8 @@ class LoginHistoryHttpTests {
         assertThat(count("LOGIN_FAILURE")).isZero();
     }
 
-    // 만료한 성공·실패·로그아웃과 NULL 계정 기록은 배치를 넘어도 모두 삭제하며 최근 성공을 보존하지 않는다
+    // 만료한 성공·실패·로그아웃과 NULL 계정 기록은 예전 10배치 상한(10,000건)을 넘어도 한 번에 모두 삭제하며
+    // 최근 성공을 보존하지 않는다
     @Test
     void retention_whenOverBatchSize_deletesEveryExpiredKindAndClearsLatest() {
         var expired = LocalDateTime.ofInstant(start.minus(Duration.ofDays(90)), ZoneOffset.UTC);
@@ -483,7 +484,7 @@ class LoginHistoryHttpTests {
                 new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
                     @Override
                     public int getBatchSize() {
-                        return 1003;
+                        return 10_003;
                     }
 
                     @Override

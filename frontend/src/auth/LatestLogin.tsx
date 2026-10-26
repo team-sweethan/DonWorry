@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Button } from 'antd'
-import { useLocation } from 'react-router-dom'
 import { getLatestLogin } from '../api/loginHistories'
 import type { LoginHistory } from '../api/loginHistories'
 import { emptyLoginMessage, loginTime } from '../utils/loginHistory'
 
 export function LatestLogin() {
-  const location = useLocation()
   const [revision, setRevision] = useState(0)
-  const key = `${location.key}:${revision}`
+  // 단일 세션 정책상 로그인 중에는 값이 바뀌지 않는다. 화면 이동마다 다시 조회하지 않는다.
+  const key = String(revision)
   const [result, setResult] = useState<{
     key: string
     value?: LoginHistory | null

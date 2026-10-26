@@ -23,9 +23,7 @@ public class LoginHistoryQueryService {
     private final Clock clock;
 
     public LoginHistoryQueryService(
-            LoginHistoryRepository histories,
-            PlatformUserRepository users,
-            @Qualifier("loginAttemptClock") Clock clock) {
+            LoginHistoryRepository histories, PlatformUserRepository users, @Qualifier("identityClock") Clock clock) {
         this.histories = histories;
         this.users = users;
         this.clock = clock;

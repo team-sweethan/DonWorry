@@ -56,8 +56,9 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    // 로그인 잠금·로그인 이력이 같은 UTC 기준 시각을 쓴다. 테스트는 이 이름으로 바꿔 끼운다.
     @Bean
-    Clock loginAttemptClock() {
+    Clock identityClock() {
         return Clock.systemUTC();
     }
 

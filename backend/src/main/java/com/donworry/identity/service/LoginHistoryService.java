@@ -29,7 +29,7 @@ public class LoginHistoryService {
             LoginHistoryRepository histories,
             LoginHistoryRequestMetadata metadata,
             PlatformTransactionManager transactions,
-            @Qualifier("loginAttemptClock") Clock clock) {
+            @Qualifier("identityClock") Clock clock) {
         this.histories = histories;
         this.metadata = metadata;
         this.transactions = transactions;
