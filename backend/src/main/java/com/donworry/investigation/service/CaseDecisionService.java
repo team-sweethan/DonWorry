@@ -39,10 +39,13 @@ public class CaseDecisionService {
     private final CaseStatusService caseStatusService;
     private final ReportGateway reportGateway;
     private final ApplicationEventPublisher events;
+    private final SecurityStaffGuard securityStaffGuard;
 
     // P5 호출은 커밋 뒤 HandoffRequested 리스너가 한다 — 판정 저장이 롤백되면 인계 요청도 나가지 않는다
     @Transactional
     public void decide(Long caseId, DecisionSubmitRequest request) {
+        // 판정자는 요청 값이 아니라 로그인 세션으로 정한다 — 다른 사람 ID로 판정을 남기지 못하게 한다
+        Long staffId = securityStaffGuard.requireSecurityStaffId();
         // 병합과 같은 Case 행 잠금 — 판정 중에 결제가 끼어들어 증거 버전이 바뀌지 않게 한다
         SecurityCase securityCase = securityCaseRepository
                 .findByIdForUpdate(caseId)
@@ -76,7 +79,7 @@ public class CaseDecisionService {
             }
             PaymentDecision decision = paymentDecisionRepository.save(PaymentDecision.confirm(
                     casePayment,
-                    request.staffId(),
+                    staffId,
                     request.reportId(),
                     item.decision(),
                     item.reason(),
@@ -86,7 +89,7 @@ public class CaseDecisionService {
             caseHistoryRepository.save(CaseHistory.byStaff(
                     securityCase,
                     CaseHistoryEventType.DECISION_CONFIRMED,
-                    request.staffId(),
+                    staffId,
                     Map.of(
                             "decisionId", decision.getId(),
                             "casePaymentId", casePayment.getId(),
@@ -95,7 +98,7 @@ public class CaseDecisionService {
             caseHistoryRepository.save(CaseHistory.byStaff(
                     securityCase,
                     CaseHistoryEventType.HANDOFF_REQUESTED,
-                    request.staffId(),
+                    staffId,
                     Map.of(
                             "handoffId", handoff.getId(),
                             "decisionId", decision.getId(),

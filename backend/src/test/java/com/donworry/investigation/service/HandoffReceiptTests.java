@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.identity.api.CurrentStaff;
+import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.Decision;
@@ -13,6 +15,7 @@ import com.donworry.investigation.service.FinancialActionGateway.Receipt;
 import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -31,6 +34,10 @@ class HandoffReceiptTests {
 
     @MockitoBean
     FinancialActionGateway financialActionGateway;
+
+    // 판정은 로그인한 보안 직원만 할 수 있다 — 이 테스트는 인계 결과만 보므로 보안 직원으로 고정한다
+    @MockitoBean
+    CurrentStaff currentStaff;
 
     @Autowired
     CaseIntakeService caseIntakeService;
@@ -58,13 +65,15 @@ class HandoffReceiptTests {
 
     @BeforeEach
     void decideOnePayment() {
+        given(currentStaff.findCurrent())
+                .willReturn(Optional.of(
+                        StaffSummary.builder().userId(7L).role("SECURITY_STAFF").build()));
         given(financialActionGateway.request(any())).willReturn(Receipt.unknown());
         caseId = receiveHeld();
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         caseDecisionService.decide(
                 caseId,
                 new DecisionSubmitRequest(
-                        7L,
                         1,
                         detail.reports().getLast().reportId(),
                         List.of(new DecisionSubmitRequest.Item(
@@ -99,7 +108,6 @@ class HandoffReceiptTests {
         caseDecisionService.decide(
                 otherCaseId,
                 new DecisionSubmitRequest(
-                        7L,
                         1,
                         before.reports().getLast().reportId(),
                         List.of(new DecisionSubmitRequest.Item(

@@ -1,12 +1,15 @@
 package com.donworry.investigation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.identity.api.CurrentStaff;
+import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DemoHeldPaymentResponse;
 import com.donworry.investigation.entity.CasePayment;
@@ -20,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -27,13 +31,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
@@ -66,6 +74,17 @@ class CaseFlowTests {
 
     @Autowired
     MockReportGateway mockReportGateway;
+
+    // 로그인 세션은 P1 공개 계약으로만 본다 — 기본은 보안 직원 7번, 권한 테스트에서만 바꾼다
+    @MockitoBean
+    CurrentStaff currentStaff;
+
+    static final Long STAFF_ID = 7L;
+
+    @BeforeEach
+    void loginAsSecurityStaff() {
+        loginAs(STAFF_ID, "SECURITY_STAFF");
+    }
 
     // 같은 결제가 동시에 처음 두 번 와도 둘 다 같은 Case를 돌려받고 연결은 한 번만 된다
     @Test
@@ -269,6 +288,53 @@ class CaseFlowTests {
                 .contains("DECISION_CONFIRMED", "HANDOFF_REQUESTED", "HANDOFF_ACCEPTED", "CASE_CLOSED");
     }
 
+    // 판정 직원은 요청 본문이 아니라 로그인 세션 사용자로 저장된다 — 본문의 staffId는 무시한다
+    @Test
+    void decide_savesSessionStaffAndIgnoresBodyStaffId() throws Exception {
+        loginAs(42L, "SECURITY_STAFF");
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+
+        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isOk());
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions())
+                .extracting(CaseDetailResponse.DecisionResponse::staffId)
+                .containsExactly(42L);
+    }
+
+    // 로그인하지 않았으면 401이고 판정은 저장되지 않는다
+    @Test
+    void decide_withoutLogin_returnsUnauthorized() throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+
+        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
+    }
+
+    // 보안 직원이 아닌 역할(사장님 · 관리자)은 403이고 판정은 저장되지 않는다
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATOR", "ADMIN"})
+    void decide_byNonSecurityStaff_returnsForbidden(String role) throws Exception {
+        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        loginAs(99L, role);
+
+        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
+    }
+
     // 일부만 판정하면 판정 대기로 남고, 같은 결제를 다시 판정하면 거부한다
     @Test
     void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
@@ -428,6 +494,7 @@ class CaseFlowTests {
 
     private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {
         Map<String, Object> body = new HashMap<>();
+        // 예전 화면이 보내던 값 — 서버는 무시하고 로그인 세션 사용자로 저장해야 한다
         body.put("staffId", 7);
         body.put("evidenceVersion", evidenceVersion);
         body.put("reportId", reportId);
@@ -435,6 +502,12 @@ class CaseFlowTests {
         return post("/api/security-cases/{caseId}/decisions", caseId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(body));
+    }
+
+    private void loginAs(Long userId, String role) {
+        given(currentStaff.findCurrent())
+                .willReturn(Optional.of(
+                        StaffSummary.builder().userId(userId).role(role).build()));
     }
 
     private static Map<String, Object> item(Long casePaymentId, String decision) {
