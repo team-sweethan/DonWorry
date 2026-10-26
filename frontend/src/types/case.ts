@@ -41,6 +41,16 @@ export type SecurityCase = {
 }
 
 /**
+ * P2 MATCH 적중 룰. name은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값 (#163).
+ * 시연 결제의 이름·점수는 시연용 값이다.
+ */
+export type RuleHit = {
+  code: string
+  name: string
+  appliedScore: number | null
+}
+
+/**
  * case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가.
  * P5·P2에서 조회하지 못하면 백엔드가 null로 보낸다 (추정값을 채우지 않는다). 화면은 '-'로 표시한다.
  */
@@ -53,7 +63,7 @@ export type CasePayment = {
   requestedAt: string | null
   riskScore: number | null
   fdsResult: FdsResult | null
-  ruleHits: string[]
+  ruleHits: RuleHit[]
 }
 
 export type PaymentDecision = {

@@ -265,7 +265,12 @@ export function CaseDetailPage() {
               {
                 title: '적중 규칙',
                 dataIndex: 'ruleHits',
-                render: (rules: string[]) => rules.map((r) => <Tag key={r}>{r}</Tag>),
+                render: (rules: CasePayment['ruleHits']) =>
+                  rules.map((r) => (
+                    <Tag key={r.code} title={r.code}>
+                      {r.appliedScore === null ? r.name : `${r.name} +${r.appliedScore}`}
+                    </Tag>
+                  )),
               },
             ]}
           />

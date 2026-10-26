@@ -35,7 +35,11 @@ export function reviewPayment(
     requestedAt,
     riskScore: rules.reduce((sum, rule) => sum + FDS_RULES[rule].score, 0),
     fdsResult: 'REVIEW',
-    ruleHits: rules.map((rule) => FDS_RULES[rule].label),
+    ruleHits: rules.map((rule) => ({
+      code: rule,
+      name: FDS_RULES[rule].label,
+      appliedScore: FDS_RULES[rule].score,
+    })),
   }
 }
 
@@ -73,8 +77,8 @@ export function buildReportBody(
       amount: p.amount ?? 0,
       requestedAt: p.requestedAt ?? p.linkedAt,
       riskScore: p.riskScore,
-      ruleHits: p.ruleHits,
-      riskEvidence: p.ruleHits.map((rule) => `${rule} 규칙 적중`),
+      ruleHits: p.ruleHits.map((rule) => rule.name),
+      riskEvidence: p.ruleHits.map((rule) => `${rule.name} 규칙 적중`),
       normalEvidence: ['기존 배송지와 일치'],
       unknowns: ['고객 본인의 결제 의사'],
       recommendation: 'NEEDS_CHECK',

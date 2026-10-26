@@ -6,6 +6,7 @@ import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import com.donworry.investigation.service.ReportGateway;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -47,13 +48,14 @@ public class MockReportGateway implements ReportGateway {
             }
             int reportVersion = caseReports.size() + 1;
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            List<Optional<PaymentInfo>> found =
-                    casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                            .map(CasePayment::getPaymentId)
-                            .map(paymentInfoReader::find)
-                            .toList();
-            List<PaymentInfo> payments =
-                    found.stream().flatMap(Optional::stream).toList();
+            List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
+                    .map(CasePayment::getPaymentId)
+                    .toList();
+            Map<Long, PaymentInfo> found = paymentInfoReader.findAll(paymentIds);
+            List<PaymentInfo> payments = paymentIds.stream()
+                    .map(found::get)
+                    .filter(MockReportGateway::hasEvidence)
+                    .toList();
             // 결제 연결과 버전 증가는 한 트랜잭션으로 커밋되므로, 결제를 읽은 뒤 버전이 요청과 같으면 둘이 같은 시점이다
             // 그사이 병합돼 버전이 앞섰으면 낡은 요청이다 — 건너뛰고 새 버전 요청이 보고서를 만든다
             boolean stale = securityCase.get().getEvidenceVersion() != evidenceVersion
@@ -65,9 +67,10 @@ public class MockReportGateway implements ReportGateway {
             if (stale) {
                 return;
             }
-            // 연결된 결제 중 하나라도 조회하지 못하면(예: 서버 재시작으로 목 결제 정보가 비었을 때) 성공 보고서를 만들지 않는다
+            // 연결된 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면(예: 서버 재시작으로 목 결제 정보가 비었을 때,
+            // P2 평가가 없거나 ERROR일 때) 성공 보고서를 만들지 않는다
             // 증거가 빠진 보고서를 판정 근거로 쓰지 않도록 최종 실패(FAILED)로 남긴다 — 직원은 수동 판정 경로로 간다 (fds 정본 02 §2.5)
-            if (payments.size() != found.size()) {
+            if (payments.size() != paymentIds.size()) {
                 caseReports.add(new ReportSnapshot(
                         reportIds.incrementAndGet(), caseId, reportVersion, evidenceVersion, "FAILED", null, now, now));
                 return;
@@ -82,6 +85,13 @@ public class MockReportGateway implements ReportGateway {
                     now,
                     now));
         }
+    }
+
+    private static boolean hasEvidence(PaymentInfo payment) {
+        return payment != null
+                && payment.amount() != null
+                && payment.requestedAt() != null
+                && payment.riskScore() != null;
     }
 
     @Override
@@ -105,10 +115,11 @@ public class MockReportGateway implements ReportGateway {
                     "amount", payment.amount(),
                     "requestedAt", payment.requestedAt().toString(),
                     "riskScore", payment.riskScore(),
-                    "ruleHits", payment.ruleHits(),
+                    // 보고서 본문 모양은 P4 계약(ADR-0009) 영역이라 코드 문자열 목록을 그대로 둔다
+                    "ruleHits", payment.ruleHits().stream().map(RuleHit::code).toList(),
                     "riskEvidence",
                             payment.ruleHits().stream()
-                                    .map(rule -> rule + " 규칙 적중")
+                                    .map(rule -> rule.name() + " 규칙 적중")
                                     .toList(),
                     "normalEvidence", List.of("기존 배송지와 일치"),
                     "unknowns", List.of("고객 본인의 결제 의사"),
@@ -117,7 +128,7 @@ public class MockReportGateway implements ReportGateway {
                     "at",
                     payment.requestedAt().toString(),
                     "event",
-                    payment.paymentId() + " 결제 요청 · FDS REVIEW (" + payment.riskScore() + "점)"));
+                    payment.paymentId() + " 결제 요청 · FDS " + payment.fdsResult() + " (" + payment.riskScore() + "점)"));
         }
         return Map.of(
                 "overview",
