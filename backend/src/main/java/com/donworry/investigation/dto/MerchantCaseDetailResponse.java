@@ -2,9 +2,11 @@ package com.donworry.investigation.dto;
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 // 고객사 "보안 조치 결과" 상세 (fds 정본 02 §2.12 ②)
 // 적중 규칙 · 증거 추적 · 판정 사유 · 판정 직원 · FDS 점수 · 내부 ID · 인계 실패 코드는 보내지 않는다
+@Builder
 public record MerchantCaseDetailResponse(
         Long caseId,
         String displayStatus,
@@ -19,6 +21,7 @@ public record MerchantCaseDetailResponse(
     // 직원 판정(decision)과 실제 금융 처리 결과(paymentStatus, P5 정본)를 따로 보낸다
     // decision은 ACCEPT(정상 처리 결정) · REJECT(취소 결정) · null(미판정)
     // 결제 정보를 조회하지 못하면 amount · requestedAt · paymentStatus가 null이다
+    @Builder
     public record PaymentResult(
             Long paymentId,
             Long amount,

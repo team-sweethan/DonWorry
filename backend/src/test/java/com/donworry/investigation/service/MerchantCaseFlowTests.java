@@ -11,6 +11,7 @@ import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DemoHeldPaymentResponse;
+import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 // 고객사 "보안 조치 결과" API — 가맹점 범위 · 접근 권한 · 내보내지 않는 항목을 HTTP로 확인한다 (#205)
@@ -58,6 +60,12 @@ class MerchantCaseFlowTests {
 
     @Autowired
     CaseQueryService caseQueryService;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
+
+    @Autowired
+    TransactionTemplate transactionTemplate;
 
     @MockitoBean
     CurrentStaff currentStaff;
@@ -155,6 +163,21 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.payments[0].decision").value("ACCEPT"))
                 .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].amount").doesNotExist());
+    }
+
+    // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약 · AI 결론을 내보내지 않는다 (PR #207 리뷰)
+    @Test
+    void detail_evidenceChangedBeforeNewReport_hidesOldSummary() throws Exception {
+        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 300_000L, 65);
+        // 새 보고서 요청 없이 증거 버전만 올려 "병합 직후 · 재조사 결과 전"을 만든다
+        transactionTemplate.executeWithoutResult(status ->
+                securityCaseRepository.findById(held.caseId()).orElseThrow().increaseEvidenceVersion());
+
+        loginAsOwner(merchantId);
+        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").doesNotExist())
+                .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist());
     }
 
     // 다른 가맹점 Case는 없는 Case와 같은 404다

@@ -41,7 +41,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
   - 가맹점은 요청 값이 아니라 세션 `merchantId`로만 정한다. 다른 가맹점 Case 상세는 없는 Case와 같은 `INV_001` 404다. P5 `PaymentReader`는 범위를 검사하지 않으므로 가맹점을 확인한 Case의 결제 ID로만 조회한다(ADR-0026).
   - 표시 상태 `displayStatus`: `OPEN` · `INVESTIGATING` · `DECISION_PENDING` → `INVESTIGATING`(조사 중), `ACTION_PENDING` · `ACTION_FAILED` → `PROCESSING`(판정 완료 · 처리 진행 중), `CLOSED` → `CLOSED`(조사 종료).
   - 목록 지표는 조사 중 Case 수와 가맹점의 ACCEPT · REJECT 판정 건수다. FDS 차단(DENY) 건수는 Case가 없는 P2 평가라 넣지 않는다.
-  - 상세는 최신 보고서가 `SUCCEEDED`일 때만 `summary`(핵심 요약)와 결제별 `aiRecommendation`을 보낸다. 재조사 중이면 이전 버전 요약을 내보내지 않는다. 보고서 없이 판정한 결제가 있으면 `directInvestigation: true`("보안 담당자 직접 조사").
+  - 상세는 최신 보고서가 현재 Case 증거 버전을 조사해 `SUCCEEDED`일 때만 `summary`(핵심 요약)와 결제별 `aiRecommendation`을 보낸다. 병합 뒤 새 보고서가 아직 없거나 실패했으면 이전 버전 요약을 내보내지 않는다(PR #207 리뷰). 보고서 없이 판정한 결제가 있으면 `directInvestigation: true`("보안 담당자 직접 조사").
   - 결제별로 직원 판정(`decision`)과 P5 결제 상태(`paymentStatus`)를 따로 보낸다.
   - 보내지 않는 것: 적중 규칙 · 증거 추적 · 판정 사유(정본 §2.12), 판정 직원 · 내부 ID · 인계 실패 코드 · FDS 점수 · 고객 참조(최소 공개).
 - 인계 상태는 완료 기반이다(ADR-0027). `REQUESTED`는 금융 처리 대기 중, `ACCEPTED`는 실제 매입 · 취소 완료, `FAILED`는 확정 거절이다. 모든 인계가 `ACCEPTED`가 되어야 Case가 `CLOSED`가 된다.

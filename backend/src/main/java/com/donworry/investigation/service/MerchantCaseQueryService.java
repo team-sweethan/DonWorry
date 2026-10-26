@@ -42,14 +42,15 @@ public class MerchantCaseQueryService {
     @Transactional(readOnly = true)
     public MerchantCaseListResponse list(Long merchantId) {
         List<CaseRow> rows = securityCaseRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId).stream()
-                .map(securityCase -> new CaseRow(
-                        securityCase.getId(),
-                        displayStatus(securityCase.getStatus()),
-                        securityCase.getCreatedAt(),
-                        securityCase.getClosedAt(),
-                        casePaymentRepository
+                .map(securityCase -> CaseRow.builder()
+                        .caseId(securityCase.getId())
+                        .displayStatus(displayStatus(securityCase.getStatus()))
+                        .createdAt(securityCase.getCreatedAt())
+                        .closedAt(securityCase.getClosedAt())
+                        .paymentCount(casePaymentRepository
                                 .findBySecurityCaseIdOrderByLinkedAtAsc(securityCase.getId())
-                                .size()))
+                                .size())
+                        .build())
                 .toList();
         int investigating = (int) rows.stream()
                 .filter(row -> INVESTIGATING.equals(row.displayStatus()))
@@ -78,35 +79,42 @@ public class MerchantCaseQueryService {
                 paymentDecisionRepository.findByCasePaymentSecurityCaseId(caseId).stream()
                         .collect(Collectors.toMap(
                                 decision -> decision.getCasePayment().getId(), Function.identity()));
-        // 최신 보고서가 성공했을 때만 요약 · 결제별 결론을 보여 준다. 재조사 중이면 이전 버전 요약을 내보내지 않는다
+        // 최신 보고서가 현재 증거 버전을 조사해 성공했을 때만 요약 · 결제별 결론을 보여 준다
+        // 병합 뒤 새 보고서가 아직 없거나 실패했으면 이전 버전 요약을 내보내지 않는다 (CaseStatusService.reportProgress와 같은 기준)
         Map<String, Object> reportBody = reportGateway
                 .latest(caseId)
+                .filter(report -> report.evidenceVersion() == securityCase.getEvidenceVersion())
                 .filter(ReportSnapshot::isSucceeded)
                 .map(ReportSnapshot::reportBody)
                 .orElse(null);
         Map<String, String> recommendations = recommendations(reportBody);
-        return new MerchantCaseDetailResponse(
-                securityCase.getId(),
-                displayStatus(securityCase.getStatus()),
-                securityCase.getCreatedAt(),
-                securityCase.getClosedAt(),
-                summary(reportBody),
-                decisions.values().stream().anyMatch(decision -> decision.getReportId() == null),
-                casePayments.stream()
+        return MerchantCaseDetailResponse.builder()
+                .caseId(securityCase.getId())
+                .displayStatus(displayStatus(securityCase.getStatus()))
+                .createdAt(securityCase.getCreatedAt())
+                .closedAt(securityCase.getClosedAt())
+                .summary(summary(reportBody))
+                .directInvestigation(decisions.values().stream().anyMatch(decision -> decision.getReportId() == null))
+                .payments(casePayments.stream()
                         .map(casePayment -> {
                             Optional<PaymentInfo> info = Optional.ofNullable(infos.get(casePayment.getPaymentId()));
                             Optional<PaymentDecision> decision =
                                     Optional.ofNullable(decisions.get(casePayment.getId()));
-                            return new PaymentResult(
-                                    casePayment.getPaymentId(),
-                                    info.map(PaymentInfo::amount).orElse(null),
-                                    info.map(PaymentInfo::requestedAt).orElse(null),
-                                    info.map(PaymentInfo::paymentStatus).orElse(null),
-                                    decision.map(found -> found.getDecision().name())
-                                            .orElse(null),
-                                    recommendations.get(String.valueOf(casePayment.getPaymentId())));
+                            return PaymentResult.builder()
+                                    .paymentId(casePayment.getPaymentId())
+                                    .amount(info.map(PaymentInfo::amount).orElse(null))
+                                    .requestedAt(
+                                            info.map(PaymentInfo::requestedAt).orElse(null))
+                                    .paymentStatus(
+                                            info.map(PaymentInfo::paymentStatus).orElse(null))
+                                    .decision(decision.map(
+                                                    found -> found.getDecision().name())
+                                            .orElse(null))
+                                    .aiRecommendation(recommendations.get(String.valueOf(casePayment.getPaymentId())))
+                                    .build();
                         })
-                        .toList());
+                        .toList())
+                .build();
     }
 
     // 고객사 화면의 3단계 표시 (fds 정본 02 §2.12 ②) — 확정 거절(ACTION_FAILED)도 "처리 진행 중"으로 묶는다
