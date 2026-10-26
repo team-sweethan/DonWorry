@@ -140,7 +140,22 @@ public class SecurityConfig {
                                 request -> csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request))
                         // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
                         .ignoringRequestMatchers("/internal/**"))
-                .authorizeHttpRequests(auth -> auth.requestMatchers("/api/admin", "/api/admin/**")
+                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-operations"),
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-operations/{paymentId}"),
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.HEAD, "/api/payment-operations"),
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.HEAD, "/api/payment-operations/{paymentId}"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
+                        .requestMatchers("/api/admin", "/api/admin/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
