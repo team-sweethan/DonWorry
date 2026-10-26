@@ -57,7 +57,6 @@ class ProductionSecurityMariaDbTests {
         properties.put("DONWORRY_ADMIN_PASSWORD", password);
         properties.put("server.port", 0);
         properties.put("spring.main.banner-mode", "off");
-        properties.put("fds.mock.seed-enabled", false);
         properties.put("logging.level.root", "ERROR");
         application.setDefaultProperties(properties);
         // application.yml의 기본 포트나 개발자 환경변수가 격리된 검사 설정을 덮지 못하게 한다.
@@ -75,15 +74,19 @@ class ProductionSecurityMariaDbTests {
         return jdbc.queryForObject("SELECT password_hash FROM platform_users WHERE login_id='admin'", String.class);
     }
 
-    private HttpResponse<String> login(ConfigurableApplicationContext context, String loginId, String password)
+    private HttpResponse<String> post(ConfigurableApplicationContext context, String path, String body)
             throws Exception {
         int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
-        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"loginId\":\"" + loginId + "\",\"password\":\"" + password + "\"}"))
+                .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> login(ConfigurableApplicationContext context, String loginId, String password)
+            throws Exception {
+        return post(context, "/api/auth/login", "{\"loginId\":\"" + loginId + "\",\"password\":\"" + password + "\"}");
     }
 
     // DB 커밋 후에만 웹 서버 시작 이벤트가 발생하고 HTTP 인증·Secure 쿠키를 확인한다
@@ -111,6 +114,12 @@ class ProductionSecurityMariaDbTests {
                             .startsWith("JSESSIONID=")
                             .contains("Secure", "HttpOnly", "SameSite=Lax"));
             assertThat(login(context, "admin", "1234").statusCode()).isEqualTo(401);
+            // 운영 기본값으로 인증 없는 개발용 Mock 평가 API가 등록되지 않는다.
+            // 같은 경로의 다른 GET 조회가 있으면 405, 없으면 404다
+            assertThat(post(context, "/api/fds/evaluations/mock", "").statusCode())
+                    .isIn(404, 405);
+            assertThat(jdbc(context).queryForObject("SELECT COUNT(*) FROM fds_evaluations", Integer.class))
+                    .isZero();
             for (String demo : new String[] {"boss", "staff_test"}) {
                 assertThat(login(context, demo, "1234").statusCode()).isEqualTo(200);
                 assertThat(jdbc.queryForObject(

@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -69,6 +70,7 @@ class ProductionProfileTests {
             assertThat(environment.getProperty("spring.datasource.url"))
                     .isEqualTo("jdbc:mariadb://production-db:3306/production");
             assertThat(environment.getProperty("security.csrf.enabled")).isEqualTo("false");
+            assertThat(environment.getProperty("fds.mock.seed-enabled")).isEqualTo("false");
             verify(service).applyPassword("Production123!");
         });
     }
@@ -112,6 +114,50 @@ class ProductionProfileTests {
                     assertThat(context).hasFailed();
                     verifyNoInteractions(service);
                 });
+    }
+
+    // SPRING_DATASOURCE_* 등이 남아 다른 DB를 가리키면 값을 출력하지 않고 기동 실패한다
+    @Test
+    void configuration_whenDatasourceOverridden_failsBeforeChangingPassword() {
+        for (String override : new String[] {
+            "spring.datasource.url=jdbc:mariadb://legacy-db:3306/legacy",
+            "spring.datasource.username=legacy-user",
+            "spring.datasource.password=legacy-password"
+        }) {
+            production().withPropertyValues(override).run(context -> {
+                assertThat(context).hasFailed();
+                assertThat(context.getStartupFailure())
+                        .hasMessageContaining("DONWORRY_DB_*")
+                        .message()
+                        .doesNotContain("legacy", "test-db-password");
+                verifyNoInteractions(service);
+            });
+        }
+    }
+
+    // 외부 설정으로 HttpOnly·SameSite를 약하게 바꾸면 기동하지 않는다
+    @Test
+    void configuration_whenCookieWeakened_failsBeforeChangingPassword() {
+        var overrides = Map.of(
+                "server.servlet.session.cookie.http-only=false", "HttpOnly",
+                "server.servlet.session.cookie.same-site=none", "SameSite");
+        overrides.forEach((override, message) -> production()
+                .withPropertyValues(override)
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure()).hasMessageContaining(message);
+                    verifyNoInteractions(service);
+                }));
+    }
+
+    // 인증 없는 개발용 Mock 평가 API를 운영에서 다시 켜면 기동하지 않는다
+    @Test
+    void configuration_whenFdsMockEnabled_failsBeforeChangingPassword() {
+        production().withPropertyValues("fds.mock.seed-enabled=true").run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure()).hasMessageContaining("fds.mock.seed-enabled");
+            verifyNoInteractions(service);
+        });
     }
 
     // 비밀번호 적용 실패는 삼키지 않고 기동 실패로 전파한다
