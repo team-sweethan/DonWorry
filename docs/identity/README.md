@@ -5,7 +5,7 @@
 ## #147 로그인 이력
 
 상세 계약은 [#147 설계](147-login-history-design.md), 대안·영향은
-[ADR-0031](../decisions/0031-login-history.md), 스키마는 [ERD](../erd/README.md)의 #147 계약을 따른다.
+[ADR-0033](../decisions/0033-login-history.md), 스키마는 [ERD](../erd/README.md)의 #147 계약을 따른다.
 사용자가 이번 작업은 저장소 ERD·ADR부터 반영해 구현하고 Notion은 후속 반영하도록 승인했다.
 
 - 로그인 성공·인증 거절·일반/전체 로그아웃을 P1 `login_histories`에 저장한다. 없는 계정은 user_id=NULL이며 입력 아이디는 보관·재연결하지 않는다.
@@ -328,7 +328,7 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 - `@EnableScheduling`을 identity 모듈에서 루트 `SchedulingConfiguration`으로 옮기고 `donworry.scheduling.enabled`로 끌 수 있게 했다. 테스트는 `build.gradle`에서 끈다.
 - 공유 Clock 빈 이름을 `loginAttemptClock` → `identityClock`으로 바꿨다 (#127 잠금 코드·테스트 포함).
 - 헤더의 마지막 로그인은 화면 이동마다 다시 조회하지 않고 로그인 사용자별 한 번(다시 시도 시 재조회)만 조회한다.
-- ADR-0031 영향에 forward-headers 제약과 #146 HTTPS 쿠키의 관계를 적었다.
+- ADR-0033(구 0031) 영향에 forward-headers 제약과 #146 HTTPS 쿠키의 관계를 적었다.
 
 - `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 378개 중 377개 성공·기존 1개 건너뜀, MariaDB 194개 성공. 실패·오류 0.
 - `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공. 기존 lint 경고 4개·번들 크기 경고 유지.

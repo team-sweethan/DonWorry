@@ -2,7 +2,7 @@
 
 - 상태: 사용자 승인으로 구현 반영. 저장소 ERD·ADR 우선 반영, Notion 후속 동기화. 팀 리뷰 대상.
 - 기준: `origin/dev 84698bb`, 작업 브랜치 `feature/147-login-history`.
-- 관련: [Issue #147](https://github.com/team-sweethan/DonWorry/issues/147), [ADR-0031](../decisions/0031-login-history.md).
+- 관련: [Issue #147](https://github.com/team-sweethan/DonWorry/issues/147), [ADR-0033](../decisions/0033-login-history.md).
 - #146의 운영 초기화 코드는 포함하지 않는다. 병합 후 통합 검증한다.
 
 ## 1. 확정 정책과 구현 범위

@@ -14,6 +14,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,6 +46,9 @@ public class FdsEvaluation {
     @Column(name = "payment_requested_at", nullable = false)
     private Instant paymentRequestedAt;
 
+    @Column(name = "requested_amount", nullable = false)
+    private Long requestedAmount;
+
     @Column(name = "risk_score")
     private Integer riskScore;
 
@@ -67,6 +71,7 @@ public class FdsEvaluation {
             Long paymentId,
             String customerRef,
             Instant paymentRequestedAt,
+            Long requestedAmount,
             Integer riskScore,
             FdsResult result,
             Instant evaluatedAt,
@@ -75,6 +80,7 @@ public class FdsEvaluation {
         this.paymentId = paymentId;
         this.customerRef = customerRef;
         this.paymentRequestedAt = paymentRequestedAt;
+        this.requestedAmount = requestedAmount;
         this.riskScore = riskScore;
         this.result = result;
         this.evaluatedAt = evaluatedAt;
@@ -87,11 +93,19 @@ public class FdsEvaluation {
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
                 .customerRef(request.customerRef())
-                .paymentRequestedAt(request.paymentRequestedAt())
+                .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
+                .requestedAmount(request.amount())
                 .riskScore(riskScore)
                 .result(result)
                 .evaluatedAt(evaluatedAt)
                 .build();
+    }
+
+    public boolean hasSameRequestSnapshot(FdsEvaluationRequest request) {
+        return paymentId.equals(request.paymentId())
+                && customerRef.equals(request.customerRef())
+                && requestedAmount == request.amount()
+                && paymentRequestedAt.equals(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS));
     }
 
     public void addRuleHit(String ruleCode, FdsRuleHitOutcome outcome, int appliedScore, String ruleNameSnapshot) {

@@ -37,7 +37,7 @@ spring:
 
 server:
   port: ${DONWORRY_PORT:8081}       # CakeShop 8080과 겹치지 않게
-  # 로그인 이력 IP는 원 접속 주소만 쓴다 (ADR-0031). 값을 비워 두면 클라우드 환경 감지로
+  # 로그인 이력 IP는 원 접속 주소만 쓴다 (ADR-0033). 값을 비워 두면 클라우드 환경 감지로
   # NATIVE가 켜질 수 있어 명시한다. 프록시 사용자 IP는 security.login-history.ip-mode=PROXY로 받는다.
   forward-headers-strategy: none
   servlet:
