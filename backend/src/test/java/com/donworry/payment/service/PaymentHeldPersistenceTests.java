@@ -36,6 +36,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @SpringBootTest
 @Import({MariaDbTestContainerConfig.class, PaymentHeldPersistenceTests.ReceiverConfig.class})
 class PaymentHeldPersistenceTests {
+    private static final String TEST_RECEIVER_LISTENER_ID =
+            TestReceiver.class.getName() + ".on(" + PaymentHeld.class.getName() + ")";
+
     @Autowired
     PaymentEvaluationFlowService flow;
 
@@ -121,17 +124,21 @@ class PaymentHeldPersistenceTests {
     }
 
     private long publicationCount(long id) {
+        // 다른 수신자가 추가되어도 이 테스트 수신자의 발행 기록만 검증한다.
         return jdbc.queryForObject("""
                 SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE = ?
                 AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId') = ?
-                """, Long.class, PaymentHeld.class.getName(), id);
+                AND LISTENER_ID = ?
+                """, Long.class, PaymentHeld.class.getName(), id, TEST_RECEIVER_LISTENER_ID);
     }
 
     private UUID publicationId(long id) {
-        return UUID.fromString(jdbc.queryForObject("""
+        return UUID.fromString(
+                jdbc.queryForObject("""
                 SELECT ID FROM EVENT_PUBLICATION WHERE EVENT_TYPE = ?
                 AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId') = ?
-                """, String.class, PaymentHeld.class.getName(), id));
+                AND LISTENER_ID = ?
+                """, String.class, PaymentHeld.class.getName(), id, TEST_RECEIVER_LISTENER_ID));
     }
 
     private String state(long id) {
