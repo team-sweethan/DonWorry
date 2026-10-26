@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -171,10 +171,11 @@ export function ServerSession() {
   const { store, user, status, checkedKey, error, expired, expiredUserId, key } = useSessionCheck()
   const { pathname, search } = useLocation()
   const checked = checkedKey === key
-  const loginState: LoginRedirectState = {
-    returnTo: pathname + search,
-    previousUserId: expiredUserId,
-  }
+  // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
+  const loginState = useMemo<LoginRedirectState>(
+    () => ({ returnTo: pathname + search, previousUserId: expiredUserId }),
+    [pathname, search, expiredUserId],
+  )
   const login = <Navigate to="/login" state={loginState} replace />
   if (expired) return login
   if (checked && status === 'anonymous') return login

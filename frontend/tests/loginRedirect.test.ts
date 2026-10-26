@@ -77,7 +77,7 @@ test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
   assert.equal(loginDestination(noPermissions, null), null)
 })
 
-// 잘못된 Router state와 사용자 ID는 예외 없이 버린다.
+// 잘못된 Router state와 현재 계정 ID와 일치하지 않는 이전 사용자 ID는 예외 없이 버린다.
 test('loginDestination_whenStateMalformed_usesLanding', () => {
   for (const state of [null, undefined, '', 1, [], {}, { returnTo: 3 }, { returnTo: null }]) {
     assert.equal(loginDestination(staff, state), '/security/transactions')
