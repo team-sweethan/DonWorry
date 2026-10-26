@@ -20,7 +20,8 @@ public enum InvestigationErrorCode {
     LOGIN_REQUIRED("INV_010", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     HANDOFF_NOT_FOUND("INV_011", "이 Case의 금융 조치 인계가 아닙니다.", HttpStatus.NOT_FOUND),
     HANDOFF_NOT_PENDING("INV_012", "금융 처리 대기 중인 인계만 다시 확인할 수 있습니다.", HttpStatus.CONFLICT),
-    PAYMENT_ACTION_UNAVAILABLE("INV_013", "금융 처리 결과를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.SERVICE_UNAVAILABLE);
+    PAYMENT_ACTION_UNAVAILABLE("INV_013", "금융 처리 결과를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.SERVICE_UNAVAILABLE),
+    MERCHANT_VIEWER_ONLY("INV_014", "조치 결과를 조회할 권한이 없습니다.", HttpStatus.FORBIDDEN);
 
     private final String code;
     private final String message;

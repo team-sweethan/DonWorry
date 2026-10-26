@@ -1,8 +1,8 @@
 # 0019. P3 Case 조회 · 판정 HTTP 계약
 
 - **상태:** 제안
-- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회)
-- **관련:** Issue #98 · #107 · #160 · #161 · #163, ADR-0020, ADR-0026, ADR-0027, ADR-0034, PR #103 · #113, ADR-0009, Notion FDS 정본 02 §2.5 · 03 §3.5, Notion "목업 데이터 · 연동 현황"
+- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회 · #205 개정: 고객사 보안 조치 결과 조회)
+- **관련:** Issue #98 · #107 · #160 · #161 · #163 · #205, ADR-0020, ADR-0026, ADR-0027, ADR-0034, PR #103 · #113, ADR-0009, Notion FDS 정본 02 §2.5 · 03 §3.5, Notion "목업 데이터 · 연동 현황"
 - **영향 받는 담당:** P3 수민 (소유), P1 주환 (frontend · identity), P2 정후 (평가 근거), P4 현규 (보고서), P5 시은 (결제 정보 · 금융 조치 결과)
 
 ## 배경
@@ -23,6 +23,8 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 | `POST /api/security-cases/{caseId}/decisions` | 결제별 ACCEPT · REJECT 판정, 반영된 상세 반환 |
 | `POST /api/security-cases/{caseId}/reports` | 현재 증거 버전 보고서가 없을 때만 다시 요청, 반영된 상세 반환 |
 | `POST /api/security-cases/{caseId}/handoffs/{handoffId}/recheck` | 금융 처리 대기 중인 인계를 같은 멱등키로 다시 확인, 반영된 상세 반환 (#161) |
+| `GET /api/merchant/security-cases` | 고객사 "보안 조치 결과" 목록 — 로그인한 사장님 가맹점의 Case와 요약 지표 (#205) |
+| `GET /api/merchant/security-cases/{caseId}` | 고객사 "보안 조치 결과" 상세 — 핵심 요약 · 결제별 판정 · AI 결론 · 결제 상태 (#205) |
 | `POST /api/demo/held-payments` | 시연 전용 50~79점 HELD 결제 (P5 결제 입력이 켜지면 #163에서 삭제) |
 
 - 결제 · FDS 출처(#163): `amount` · `paymentStatus` · `requestedAt`은 P5 `PaymentReader`, `riskScore` · `fdsResult` · `ruleHits`는 P2 `FdsEvidenceReader`(결제의 최신 유효 평가)에서 온다. Case 하나의 결제를 한 번에 조회한다(P2는 결제 ID 목록으로 한 번).
@@ -34,7 +36,14 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 - 목 보고서: 연결 결제 정보를 하나라도 찾지 못하거나 금액 · 요청 시각 · 점수 중 하나라도 비면 `SUCCEEDED`가 아니라 `FAILED`(본문 `null`)로 남긴다. 직원은 정본 02 §2.5의 수동 판정(`reportId: null`)으로 간다.
 - 판정 직원은 요청 본문으로 받지 않는다. 서버가 `CurrentStaff`로 로그인 사용자를 확인해 `staff_id`로 저장한다. 본문에 `staffId`가 있어도 무시한다(#160).
 - 판정은 `SECURITY_STAFF`만 할 수 있다(정본 02 §2.8 · §2.12). 로그인하지 않았으면 `INV_010` 401, 다른 역할(OPERATOR · ADMIN)이면 `INV_009` 403이다. ADMIN 허용이 필요해지면 허용 역할 조건만 바꾼다.
-- Case 목록 · 상세 · 보고서 재요청도 `SECURITY_STAFF`만 쓴다(#163, PR #198 리뷰). 실제 P5 결제 · P2 평가 근거를 내보내므로 HTTP 조회 경계(컨트롤러)에서 같은 401 · 403으로 막는다. 보안 직원은 모든 가맹점 Case를 보므로 가맹점 범위는 검사하지 않고, `merchantId`는 표시 필터다. 사장님 화면의 가맹점 범위 조회는 그 화면을 만들 때 정한다(P1 EPIC #68). 시연 API는 실제 데이터를 내보내지 않아 그대로 두고 #163 2단계에서 지운다.
+- Case 목록 · 상세 · 보고서 재요청도 `SECURITY_STAFF`만 쓴다(#163, PR #198 리뷰). 실제 P5 결제 · P2 평가 근거를 내보내므로 HTTP 조회 경계(컨트롤러)에서 같은 401 · 403으로 막는다. 보안 직원은 모든 가맹점 Case를 보므로 가맹점 범위는 검사하지 않고, `merchantId`는 표시 필터다. 사장님 화면은 아래 고객사 조회 API를 따로 쓴다(#205). 시연 API는 실제 데이터를 내보내지 않아 그대로 두고 #163 2단계에서 지운다.
+- 고객사 조회(#205, 정본 02 §2.12 ②): 사장님(`OPERATOR`) 중 `FDS_VIEW` 권한과 `merchantId`가 있는 계정만 쓴다. 비로그인은 `INV_010` 401, 그 밖(보안 직원 · ADMIN · 권한 없음 · `merchantId` 없는 사장님)은 `INV_014` 403이다. `merchantId` 없는 사장님은 전체로 넓히지 않고 거부한다(ADR-0020).
+  - 가맹점은 요청 값이 아니라 세션 `merchantId`로만 정한다. 다른 가맹점 Case 상세는 없는 Case와 같은 `INV_001` 404다. P5 `PaymentReader`는 범위를 검사하지 않으므로 가맹점을 확인한 Case의 결제 ID로만 조회한다(ADR-0026).
+  - 표시 상태 `displayStatus`: `OPEN` · `INVESTIGATING` · `DECISION_PENDING` → `INVESTIGATING`(조사 중), `ACTION_PENDING` · `ACTION_FAILED` → `PROCESSING`(판정 완료 · 처리 진행 중), `CLOSED` → `CLOSED`(조사 종료).
+  - 목록 지표는 조사 중 Case 수와 가맹점의 ACCEPT · REJECT 판정 건수다. FDS 차단(DENY) 건수는 Case가 없는 P2 평가라 넣지 않는다.
+  - 상세는 최신 보고서가 `SUCCEEDED`일 때만 `summary`(핵심 요약)와 결제별 `aiRecommendation`을 보낸다. 재조사 중이면 이전 버전 요약을 내보내지 않는다. 보고서 없이 판정한 결제가 있으면 `directInvestigation: true`("보안 담당자 직접 조사").
+  - 결제별로 직원 판정(`decision`)과 P5 결제 상태(`paymentStatus`)를 따로 보낸다.
+  - 보내지 않는 것: 적중 규칙 · 증거 추적 · 판정 사유(정본 §2.12), 판정 직원 · 내부 ID · 인계 실패 코드 · FDS 점수 · 고객 참조(최소 공개).
 - 인계 상태는 완료 기반이다(ADR-0027). `REQUESTED`는 금융 처리 대기 중, `ACCEPTED`는 실제 매입 · 취소 완료, `FAILED`는 확정 거절이다. 모든 인계가 `ACCEPTED`가 되어야 Case가 `CLOSED`가 된다.
   - P5 응답 `PENDING`은 정상 대기다. 인계 `REQUESTED` · Case `ACTION_PENDING`을 두고 예외 · 자동 재요청을 하지 않는다.
   - 접수 단계 거절 6개(`PAYMENT_NOT_FOUND` · `PAYMENT_NOT_HELD` · `PAYMENT_NOT_AUTHORIZED` · `IDEMPOTENCY_KEY_CONFLICT` · `PAYMENT_ACTION_CONFLICT` · `DECISION_ACTION_CONFLICT`)는 응답으로만 오므로 응답에서 반영한다. 충돌 3개는 P3 버그 신호라 오류 로그를 남긴다.
@@ -44,7 +53,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
   - 다시 확인이 이벤트보다 먼저 같은 결과를 반영하면 그 이력에는 `completedAt`이 없다. 뒤에 온 결과 이벤트는 상태를 바꾸지 않고, 이 인계 이력에 `completedAt`이 아직 없을 때만 `HANDOFF_COMPLETION_RECORDED`(handoffId · completedAt)를 한 번 남긴다(PR #194 리뷰).
 - 다시 확인: `REQUESTED` 인계만 대상이다. 보안 직원만 부를 수 있고(판정과 같은 확인), 같은 멱등키로 P5에 저장된 결과를 받아 반영한다. P6 매입을 다시 실행하지 않고 새 키도 만들지 않는다. 계속 `PENDING`이면 상태는 그대로 두고 `last_attempted_at`과 `HANDOFF_RECHECKED` 이력(확인한 직원 · 결과)만 남긴다. 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다(#158).
 - 시연 결제는 P5 `payments`에 없다. 목 저장소(`MockPaymentInfoStore`)에 등록된 결제 ID만 목 조회 · 목 금융 조치(바로 완료)로 보내고, 그 밖의 결제는 실제 P5 · P2로 보낸다(#163). 설정값이 없어서 실제 결제가 목으로 "완료"될 수 없다. #161의 `investigation.mock.payment-action-enabled` 속성은 없앴다. 시연 결제의 룰 이름 · 점수는 시연용 값이다.
-- 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` 400, `INV_009` 403, `INV_010` 401, `INV_013` 503. 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
+- 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` 400, `INV_009` · `INV_014` 403, `INV_010` 401, `INV_013` 503. 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
 
 ## 고려한 대안
 
@@ -63,14 +72,17 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 | (#163) 조회 오류도 `null`로 내보내기 | 장애가 "값 모름"으로 보여 직원이 빈 근거로 판정할 수 있다 |
 | (#163) Case 조회 권한 검사를 P1 전체 접근 제어(#68)까지 미루기 | 목업 값일 때는 미검증으로 두었지만, 실제 금융 데이터를 내보내기 시작하면 비로그인 사용자도 볼 수 있게 된다 |
 | (#163) `ruleHits`를 코드 문자열로 유지 | 지금 고칠 곳은 적지만, 경보 화면(이름 · 점수)과 맞추려면 응답 · 화면을 한 번 더 바꿔야 한다 |
+| (#205) 보안 직원 목록 API에 `merchantId`를 세션 값으로 넣어 재사용 | 응답에 적중 규칙 · 점수 · 판정 사유 · 이력이 들어 있어 사장님에게 내보내면 안 되는 값을 매번 빼야 한다. 빠뜨리면 그대로 노출된다 |
+| (#205) 다른 가맹점 Case에 403 | Case ID를 바꿔 넣어 다른 가맹점 Case가 있는지 알 수 있다. 없는 Case와 같은 404로 답한다 |
+| (#205) ADMIN도 고객사 조회 허용 | 관리자는 관리자 화면을 쓰고 `merchantId`가 없다. 필요해지면 허용 조건만 바꾼다 |
 | (#160) ADMIN도 판정 허용 | 정본의 판정 주체는 보안 직원이고 화면에도 ADMIN 진입 메뉴가 없다. 열어 두었다가 나중에 막으면 그 사이 판정을 다시 검토해야 하므로, 막아 두고 필요할 때 연다 |
 
 ## 영향
 
 - API: 이 문서의 표. 소비자는 이 저장소 frontend뿐이다. `totalAmount`는 #103의 `long`에서 nullable로 바뀌었다(병합 전 #113에서 변경, 다른 소비자 없음).
 - DB: 없음. 목업 데이터는 메모리이고 `ai_reports`(P4 소유)는 쓰지 않는다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
-- 화면: `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
-- 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가).
+- 화면: 고객사 `/owner/actions` 목록 · 상세가 `src/api/merchantCases.ts`로 고객사 조회 API를 쓴다(#205). `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
+- 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가), `MerchantCaseFlowTests`(고객사 조회 가맹점 범위 · 권한 · 제외 항목 · 직접 조사 표시).
 - 문서: P4 보고서 계약이 정해지면 보고서 재요청과 FAILED 의미를 그 계약에 맞춰 이 ADR을 개정한다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
 
 ## 검증
