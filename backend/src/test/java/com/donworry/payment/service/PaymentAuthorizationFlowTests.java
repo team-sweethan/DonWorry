@@ -72,6 +72,7 @@ class PaymentAuthorizationFlowTests {
         order.verify(evaluator).evaluate(request.capture());
         order.verify(repository).findByIdForUpdate(101L);
         assertThat(request.getValue().paymentId()).isEqualTo(101L);
+        assertThat(request.getValue().merchantId()).isEqualTo(payment.getMerchantId());
         assertThat(request.getValue().customerRef()).isEqualTo("stored-customer");
         assertThat(request.getValue().amount()).isEqualTo(2000L);
         assertThat(request.getValue().paymentRequestedAt()).isEqualTo(payment.getCreatedAt());

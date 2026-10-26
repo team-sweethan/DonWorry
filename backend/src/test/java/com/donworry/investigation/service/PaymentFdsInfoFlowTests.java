@@ -56,6 +56,7 @@ class PaymentFdsInfoFlowTests {
         fdsEvaluator.evaluate(FdsEvaluationRequest.builder()
                 .evaluationRequestId(UUID.randomUUID())
                 .paymentId(paymentId)
+                .merchantId(1L)
                 .customerRef(customerRef)
                 .amount(150_000L)
                 .paymentRequestedAt(Instant.now())

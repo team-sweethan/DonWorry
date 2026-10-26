@@ -154,6 +154,9 @@ class PaymentRequestFlowMariaDbTests {
         verify(evaluator, times(2)).evaluate(inputs.capture());
         assertThat(inputs.getAllValues().get(0)).isEqualTo(inputs.getAllValues().get(1));
         assertThat(inputs.getValue().evaluationRequestId()).isEqualTo(saved.getEvaluationRequestId());
+        assertThat(inputs.getValue().merchantId())
+                .isEqualTo(payments.findById(saved.getPaymentId()).orElseThrow().getMerchantId())
+                .isEqualTo(c.merchantId());
     }
 
     // 평가 저장 이후 중단되면 P2를 다시 부르지 않고 저장 결과로 승인한다.

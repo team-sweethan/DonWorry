@@ -61,6 +61,8 @@ class PaymentRequestRealFlowMariaDbTests {
                 .isEqualTo(PaymentProcessingStage.AUTHORIZED);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fds_evaluations WHERE payment_id=?", Long.class, id))
                 .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT merchant_id FROM fds_evaluations WHERE payment_id=?", Long.class, id))
+                .isEqualTo(payments.findById(id).orElseThrow().getMerchantId());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM captures WHERE payment_id=?", Long.class, id))
                 .isEqualTo(1);
     }

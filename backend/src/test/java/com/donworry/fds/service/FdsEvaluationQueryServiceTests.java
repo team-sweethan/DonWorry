@@ -91,7 +91,7 @@ class FdsEvaluationQueryServiceTests {
 
     private FdsEvaluation evaluation(Long paymentId, FdsResult result) {
         var requestedAt = Instant.now();
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, "hong-gildong", 150_000L, requestedAt);
+        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", 150_000L, requestedAt);
         return FdsEvaluation.completed(
                 request, result, result == FdsResult.REVIEW ? 60 : 0, requestedAt.plusSeconds(1));
     }

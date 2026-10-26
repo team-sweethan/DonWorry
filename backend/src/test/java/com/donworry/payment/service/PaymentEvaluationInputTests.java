@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class PaymentEvaluationInputTests {
@@ -18,6 +19,7 @@ class PaymentEvaluationInputTests {
         assertThat(input.evaluationRequestId()).isEqualTo(PaymentEvaluationFixtures.REQUEST_ID);
         assertThat(input.paymentRequestedAt()).isEqualTo(PaymentEvaluationFixtures.REQUESTED_AT);
         assertThat(input.paymentId()).isEqualTo(101L);
+        assertThat(input.merchantId()).isEqualTo(42L);
         assertThat(input.customerRef()).isEqualTo("customer-001");
         assertThat(input.amount()).isEqualTo(150_000L);
     }
@@ -36,6 +38,18 @@ class PaymentEvaluationInputTests {
                         .paymentRequestedAt(null)
                         .build())
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 가맹점이 없는 평가나 유효하지 않은 가맹점 ID는 호출 전에 거절한다.
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(longs = {0L, -1L})
+    void input_whenMerchantIdInvalid_throwsIllegalArgumentException(Long merchantId) {
+        assertThatThrownBy(() -> PaymentEvaluationFixtures.validInput()
+                        .merchantId(merchantId)
+                        .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("merchantId must be positive");
     }
 
     // 비어 있거나 공백뿐인 고객 참조는 평가 입력으로 허용하지 않는다.

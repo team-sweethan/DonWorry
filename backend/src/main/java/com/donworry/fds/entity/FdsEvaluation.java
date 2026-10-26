@@ -40,6 +40,9 @@ public class FdsEvaluation {
     @Column(name = "payment_id", nullable = false)
     private Long paymentId;
 
+    @Column(name = "merchant_id", nullable = false)
+    private Long merchantId;
+
     @Column(name = "customer_ref", nullable = false, length = 100)
     private String customerRef;
 
@@ -69,6 +72,7 @@ public class FdsEvaluation {
     private FdsEvaluation(
             UUID evaluationRequestId,
             Long paymentId,
+            Long merchantId,
             String customerRef,
             Instant paymentRequestedAt,
             Long requestedAmount,
@@ -78,6 +82,7 @@ public class FdsEvaluation {
             String errorCode) {
         this.evaluationRequestId = evaluationRequestId;
         this.paymentId = paymentId;
+        this.merchantId = merchantId;
         this.customerRef = customerRef;
         this.paymentRequestedAt = paymentRequestedAt;
         this.requestedAmount = requestedAmount;
@@ -92,6 +97,7 @@ public class FdsEvaluation {
         return FdsEvaluation.builder()
                 .evaluationRequestId(request.evaluationRequestId())
                 .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
                 .customerRef(request.customerRef())
                 .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
                 .requestedAmount(request.amount())
@@ -103,6 +109,7 @@ public class FdsEvaluation {
 
     public boolean hasSameRequestSnapshot(FdsEvaluationRequest request) {
         return paymentId.equals(request.paymentId())
+                && merchantId.equals(request.merchantId())
                 && customerRef.equals(request.customerRef())
                 && requestedAmount == request.amount()
                 && paymentRequestedAt.equals(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS));

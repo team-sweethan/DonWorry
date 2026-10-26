@@ -46,6 +46,7 @@ class PaymentEvaluationServiceTests {
         var request = captor.getValue();
         assertThat(request.evaluationRequestId()).isEqualTo(input.evaluationRequestId());
         assertThat(request.paymentId()).isEqualTo(input.paymentId());
+        assertThat(request.merchantId()).isEqualTo(input.merchantId());
         assertThat(request.customerRef()).isEqualTo(input.customerRef());
         assertThat(request.amount()).isEqualTo(input.amount());
         assertThat(request.paymentRequestedAt()).isEqualTo(input.paymentRequestedAt());

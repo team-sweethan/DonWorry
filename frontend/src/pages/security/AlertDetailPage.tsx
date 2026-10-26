@@ -103,7 +103,7 @@ export function AlertDetailPage() {
     <>
       <PageHeader
         title="경보 상세"
-        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 고객 ${evaluation.customerRef}`}
+        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${evaluation.merchantId} · 고객 ${evaluation.customerRef}`}
         actions={
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/alerts')}>
             목록으로
@@ -253,6 +253,7 @@ export function AlertDetailPage() {
           >
             <Descriptions column={1} colon={false}>
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
+              <Descriptions.Item label="가맹점 ID">{evaluation.merchantId}</Descriptions.Item>
               <Descriptions.Item label="고객 식별자">{evaluation.customerRef}</Descriptions.Item>
               <Descriptions.Item label="결제 요청 시각">
                 {formatDate(evaluation.paymentRequestedAt)}
