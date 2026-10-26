@@ -1,6 +1,7 @@
 package com.donworry.identity.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -90,6 +91,9 @@ class AuthApiTests {
 
     @Autowired
     UserSessionService userSessionService;
+
+    @Autowired
+    AuthService authService;
 
     private PlatformUser user;
 
@@ -508,6 +512,20 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.code").value("AUTH_001"))
                 .andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // 인가 통과 뒤 동시 로그아웃이 인증을 비워도 전체 로그아웃은 500이 아니라 401(AUTH_001)로 끝난다
+    @Test
+    void logoutAll_whenAuthenticationClearedConcurrently_rejectsAsUnauthenticated() {
+        assertThatThrownBy(() -> authService.logoutAll(
+                        null,
+                        new org.springframework.mock.web.MockHttpServletRequest(),
+                        new org.springframework.mock.web.MockHttpServletResponse()))
+                .isInstanceOfSatisfying(
+                        AccountManagementException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.AUTHENTICATION_REQUIRED));
+        verifyNoInteractions(loginHistories);
     }
 
     // 이전 세션은 공개된 업무 경로를 호출해도 만료 응답을 먼저 받는다

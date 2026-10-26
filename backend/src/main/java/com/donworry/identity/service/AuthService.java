@@ -7,6 +7,8 @@ import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.repository.MerchantRepository;
 import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
+import com.donworry.identity.security.AccountManagementException;
+import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.PlatformUserDetails;
 import com.donworry.identity.security.SessionUser;
 import jakarta.servlet.http.HttpServletRequest;
@@ -140,6 +142,8 @@ public class AuthService {
     }
 
     public void logoutAll(SessionUser user, HttpServletRequest request, HttpServletResponse response) {
+        // 인가 필터를 지난 뒤 같은 세션의 다른 로그아웃이 공유 SecurityContext의 인증을 비울 수 있다.
+        if (user == null) throw new AccountManagementException(AuthErrorCode.AUTHENTICATION_REQUIRED);
         userSessionService.logoutAll(user.userId(), request, response);
         loginHistories.logout(user, true, request);
     }
