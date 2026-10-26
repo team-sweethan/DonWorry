@@ -52,7 +52,10 @@ public record CaseDetailResponse(
             Instant requestedAt,
             Integer riskScore,
             String fdsResult,
-            List<String> ruleHits) {}
+            List<RuleHitResponse> ruleHits) {}
+
+    // P2 MATCH 적중 룰 — 경보 상세 화면과 같은 정보(코드 · 평가 당시 이름 · 더한 점수). 시연 결제의 이름 · 점수는 시연용 값이다
+    public record RuleHitResponse(String code, String name, Integer appliedScore) {}
 
     public record AiReportResponse(
             Long reportId,

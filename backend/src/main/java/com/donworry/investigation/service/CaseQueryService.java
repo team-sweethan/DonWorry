@@ -6,6 +6,7 @@ import com.donworry.investigation.dto.CaseDetailResponse.CasePaymentResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.DecisionResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HandoffResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
+import com.donworry.investigation.dto.CaseDetailResponse.RuleHitResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.entity.CasePayment;
@@ -19,6 +20,7 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -52,10 +54,12 @@ public class CaseQueryService {
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
+        List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
+        Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         return new CaseDetailResponse(
                 SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
-                casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                        .map(this::payment)
+                casePayments.stream()
+                        .map(casePayment -> payment(casePayment, infos.get(casePayment.getPaymentId())))
                         .toList(),
                 reportGateway.findByCase(caseId).stream()
                         .sorted(Comparator.comparingInt(ReportSnapshot::reportVersion))
@@ -74,10 +78,11 @@ public class CaseQueryService {
 
     private CaseSummaryResponse summary(SecurityCase securityCase) {
         Long caseId = securityCase.getId();
-        List<Optional<PaymentInfo>> payments =
-                casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                        .map(casePayment -> paymentInfoReader.find(casePayment.getPaymentId()))
-                        .toList();
+        List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
+        Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
+        List<Optional<PaymentInfo>> payments = casePayments.stream()
+                .map(casePayment -> Optional.ofNullable(infos.get(casePayment.getPaymentId())))
+                .toList();
         return new CaseSummaryResponse(
                 caseId,
                 securityCase.getMerchantId(),
@@ -120,8 +125,14 @@ public class CaseQueryService {
         return max;
     }
 
-    private CasePaymentResponse payment(CasePayment casePayment) {
-        Optional<PaymentInfo> info = paymentInfoReader.find(casePayment.getPaymentId());
+    // Case 하나의 결제를 한 번에 조회한다 — P2 평가 근거는 결제 ID 목록으로 한 번에 읽는다
+    private Map<Long, PaymentInfo> paymentInfos(List<CasePayment> casePayments) {
+        return paymentInfoReader.findAll(
+                casePayments.stream().map(CasePayment::getPaymentId).toList());
+    }
+
+    private static CasePaymentResponse payment(CasePayment casePayment, PaymentInfo found) {
+        Optional<PaymentInfo> info = Optional.ofNullable(found);
         return new CasePaymentResponse(
                 casePayment.getId(),
                 casePayment.getPaymentId(),
@@ -131,7 +142,9 @@ public class CaseQueryService {
                 info.map(PaymentInfo::requestedAt).orElse(null),
                 info.map(PaymentInfo::riskScore).orElse(null),
                 info.map(PaymentInfo::fdsResult).orElse(null),
-                info.map(PaymentInfo::ruleHits).orElse(List.of()));
+                info.map(PaymentInfo::ruleHits).orElse(List.of()).stream()
+                        .map(rule -> new RuleHitResponse(rule.code(), rule.name(), rule.appliedScore()))
+                        .toList());
     }
 
     private static AiReportResponse report(ReportSnapshot report) {

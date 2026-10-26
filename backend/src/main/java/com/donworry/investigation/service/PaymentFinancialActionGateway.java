@@ -1,23 +1,19 @@
 package com.donworry.investigation.service;
 
+import com.donworry.investigation.service.mock.MockFinancialActionGateway;
+import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import com.donworry.payment.api.PaymentActionCommand;
 import com.donworry.payment.api.PaymentActionReceipt;
 import com.donworry.payment.api.PaymentActionRequester;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 // P5 공개 계약으로 금융 조치를 요청한다 (ADR-0027, #158 · #169)
-// 시연 결제용 목(investigation.mock.payment-action-enabled=true)을 켜면 이 구현 대신 목이 뜬다
+// 시연 결제(P5 payments에 없음)만 목으로 보낸다 — 설정 없이 결제 ID로 나눠, 실제 결제가 목으로 "완료"될 수 없게 한다 (#163)
 @Slf4j
 @Component
-@ConditionalOnProperty(
-        prefix = "investigation.mock",
-        name = "payment-action-enabled",
-        havingValue = "false",
-        matchIfMissing = true)
 @RequiredArgsConstructor
 class PaymentFinancialActionGateway implements FinancialActionGateway {
 
@@ -35,9 +31,14 @@ class PaymentFinancialActionGateway implements FinancialActionGateway {
             Set.of("IDEMPOTENCY_KEY_CONFLICT", "PAYMENT_ACTION_CONFLICT", "DECISION_ACTION_CONFLICT");
 
     private final PaymentActionRequester paymentActionRequester;
+    private final MockPaymentInfoStore mockPaymentInfoStore;
+    private final MockFinancialActionGateway mockFinancialActionGateway;
 
     @Override
     public Receipt request(Command command) {
+        if (mockPaymentInfoStore.contains(command.paymentId())) {
+            return mockFinancialActionGateway.request(command);
+        }
         PaymentActionReceipt response = paymentActionRequester.request(new PaymentActionCommand(
                 command.paymentId(), command.decisionId(), command.actionType().name(), command.idempotencyKey()));
         Receipt receipt = Receipt.of(response.status(), response.targetOperationId(), response.errorCode());

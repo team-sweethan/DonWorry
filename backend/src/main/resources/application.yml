@@ -57,12 +57,6 @@ security:
     # 실제 활성화는 #68 5단계에서 다른 담당에게 공지한 뒤 진행한다.
     enabled: ${DONWORRY_CSRF_ENABLED:false}
 
-investigation:
-  mock:
-    # 시연 결제(/api/demo/held-payments)는 P5 payments에 없어 실제 P5로 보내면 PAYMENT_NOT_FOUND가 된다.
-    # 시연 화면에서만 true로 켜면 금융 조치를 목이 바로 완료한다. 시연 API와 함께 지운다 (#163).
-    payment-action-enabled: ${INVESTIGATION_MOCK_PAYMENT_ACTION_ENABLED:false}
-
 fds:
   mock:
     # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.

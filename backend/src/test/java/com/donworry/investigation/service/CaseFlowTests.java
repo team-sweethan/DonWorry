@@ -48,12 +48,13 @@ import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
 // 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 목 금융 조치 완료 → Case CLOSED 를 HTTP로 확인한다
-// 시연 결제는 P5 payments에 없으므로 시연 설정처럼 목 금융 조치를 켠다. 실제 P5 연결은 PaymentActionFlowTests가 본다
+// 시연 결제는 P5 payments에 없으므로 결제 ID로 나뉘어 목 조회 · 목 금융 조치로 간다. 실제 P5 · P2 연결은 PaymentActionFlowTests ·
+// PaymentFdsInfoReaderTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest(properties = "investigation.mock.payment-action-enabled=true")
+@SpringBootTest
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class CaseFlowTests {
@@ -216,6 +217,11 @@ class CaseFlowTests {
             assertThat(payment.paymentId()).isEqualTo(held.paymentId());
             assertThat(payment.riskScore()).isEqualTo(65);
             assertThat(payment.paymentStatus()).isEqualTo("HELD");
+            // 시연 룰 코드는 목 저장소가 시연용 이름 · 점수로 채운다
+            assertThat(payment.ruleHits())
+                    .containsExactly(
+                            new CaseDetailResponse.RuleHitResponse("NEW_CARD", "첫 사용 카드", 30),
+                            new CaseDetailResponse.RuleHitResponse("HIGH_AMOUNT", "고액 (50만 원 이상)", 35));
         });
         assertThat(detail.reports()).singleElement().satisfies(report -> {
             assertThat(report.status()).isEqualTo("SUCCEEDED");
