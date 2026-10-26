@@ -10,6 +10,8 @@ import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
+import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
+import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
 import { LoginHistoryScreen } from '../pages/auth/LoginHistoryPage'
 import {
@@ -71,7 +73,8 @@ export const router = createBrowserRouter([
       {
         path: '/owner',
         children: [
-          { path: 'actions', element: <EmptyPage title="조치 결과" /> },
+          { path: 'actions', element: <MerchantCaseListPage /> },
+          { path: 'actions/:id', element: <MerchantCaseDetailPage /> },
           { path: 'settlements', element: <EmptyPage title="정산 현황" /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],

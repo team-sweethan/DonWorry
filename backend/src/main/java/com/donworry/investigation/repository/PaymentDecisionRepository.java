@@ -1,5 +1,6 @@
 package com.donworry.investigation.repository;
 
+import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.entity.PaymentDecision;
 import java.util.List;
 import java.util.Optional;
@@ -15,4 +16,7 @@ public interface PaymentDecisionRepository extends Repository<PaymentDecision, L
     List<PaymentDecision> findByCasePaymentSecurityCaseId(Long caseId);
 
     long countByCasePaymentSecurityCaseId(Long caseId);
+
+    // 고객사 조치 결과 요약 지표 — 가맹점의 ACCEPT · REJECT 판정 건수
+    long countByCasePaymentSecurityCaseMerchantIdAndDecision(Long merchantId, Decision decision);
 }
