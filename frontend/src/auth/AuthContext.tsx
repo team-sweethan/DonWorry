@@ -13,8 +13,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!sessionActivity.getSnapshot()) store.expire()
     })
     const sync = () => sessionActivity.sync()
+    let seen = sessionActivity.liveId()
     const onStorage = (event: StorageEvent) => {
-      if (event.key === SESSION_ACTIVITY_KEY || event.key === null) sync()
+      if (event.key !== SESSION_ACTIVITY_KEY && event.key !== null) return
+      const anonymous = !store.getSnapshot().user
+      sync()
+      const live = sessionActivity.liveId()
+      // 다른 탭이 새로 로그인하면 로그인 화면의 탭도 같은 세션으로 확인한다.
+      if (anonymous && live && live !== seen) store.recheck()
+      seen = live
     }
     window.addEventListener('storage', onStorage)
     window.addEventListener('focus', sync)

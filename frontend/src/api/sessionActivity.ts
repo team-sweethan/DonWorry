@@ -86,6 +86,13 @@ export function createSessionActivity(
       sync()
       if (current?.id === id) update({ ...current, at: Math.max(current.at, now()) }, true)
     },
+    // 다른 탭이 로그인해 진행 중인 추적 표식. 만료 후 재로그인 요구를 풀지 판단한다.
+    liveId() {
+      const shared = read()
+      return shared && !shared.ended && sessionTime(shared.at, now()).remaining > 0
+        ? shared.id
+        : null
+    },
     stop() {
       const previous = current
       const shared = read()

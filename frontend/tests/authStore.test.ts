@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { ApiError } from '../src/api/client.ts'
+import { createSessionActivity } from '../src/api/sessionActivity.ts'
 import { createAuthStore } from '../src/auth/authStore.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
@@ -413,4 +414,72 @@ test('renew_whenNewLoginStartsBeforeOldRequestFinishes_doesNotReuseOldRequest', 
   current.resolve(user)
   assert.equal(await second, user)
   assert.equal(calls, 2)
+})
+
+// 같은 브라우저의 두 탭이 같은 저장소를 공유한다.
+function sharedTabs() {
+  const values = new Map<string, string>()
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value)
+    },
+  }
+  let id = 0
+  return () =>
+    createSessionActivity(
+      () => 1000,
+      () => storage,
+      () => String(++id),
+    )
+}
+
+// 만료 뒤 다른 탭이 다시 로그인하면 남은 탭은 재로그인 없이 그 세션에 합류한다.
+test('check_whenAnotherTabLogsInAfterExpiry_joinsWithoutEvictingIt', async () => {
+  const tab = sharedTabs()
+  const activityA = tab(),
+    activityB = tab()
+  let meCalls = 0
+  const api = {
+    login: async () => user,
+    getMe: async () => {
+      meCalls++
+      return user
+    },
+    logout: async () => {},
+  }
+  const a = createAuthStore(api, activityA)
+  const b = createAuthStore(api, activityB)
+  await b.login('admin', 'secret')
+  b.expire()
+  await b.check('login', true)
+  assert.equal(meCalls, 0)
+  await a.login('admin', 'secret')
+  b.recheck()
+  await b.check('login', true)
+  assert.equal(meCalls, 1)
+  assert.equal(b.getSnapshot().status, 'authenticated')
+  assert.equal(b.getSnapshot().reauthenticationRequired, false)
+  assert.equal(activityB.getSnapshot()?.id, activityA.getSnapshot()?.id)
+  activityA.sync()
+  assert.notEqual(activityA.getSnapshot(), null)
+  assert.equal(a.getSnapshot().status, 'authenticated')
+})
+
+// 다른 탭의 인증 변경으로 중단된 me 확인은 한 번 다시 묻고 오류로 표시하지 않는다.
+test('check_whenAbortedBySessionChange_retriesOnceBeforeUnavailable', async () => {
+  const aborted = () => new DOMException('로그인 상태가 변경되었습니다.', 'AbortError')
+  let failures = 1
+  const store = setup({
+    getMe: async () => {
+      if (failures-- > 0) throw aborted()
+      return user
+    },
+  })
+  await store.check('route')
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  assert.equal(store.getSnapshot().error, null)
+  failures = 2
+  await store.check('next')
+  assert.equal(store.getSnapshot().error, 'unavailable')
 })

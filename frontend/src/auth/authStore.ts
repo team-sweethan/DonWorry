@@ -15,7 +15,7 @@ export type AuthState = {
   loggingOut: boolean
 }
 
-export function createAuthStore(api: AuthApi = authApi) {
+export function createAuthStore(api: AuthApi = authApi, activity = sessionActivity) {
   let state: AuthState = {
     user: null,
     status: 'loading',
@@ -54,7 +54,7 @@ export function createAuthStore(api: AuthApi = authApi) {
       expired: true,
       reauthenticationRequired: true,
     })
-    sessionActivity.stop()
+    activity.stop()
   }
 
   function check(key: string, requireLogin = false): Promise<void> {
@@ -64,7 +64,8 @@ export function createAuthStore(api: AuthApi = authApi) {
         () => check(key, requireLogin),
         () => check(key, requireLogin),
       )
-    if (!state.user && (state.reauthenticationRequired || requireLogin)) {
+    // 다른 탭이 새로 로그인한 경우에만 만료 후에도 같은 브라우저의 세션을 확인한다.
+    if (!state.user && (state.reauthenticationRequired || requireLogin) && !activity.liveId()) {
       update({ status: 'anonymous', checkedKey: key, reauthenticationRequired: true })
       return Promise.resolve()
     }
@@ -75,10 +76,24 @@ export function createAuthStore(api: AuthApi = authApi) {
     update({ error: null, checkedKey: null })
     request.promise = (async () => {
       try {
-        const user = await api.getMe()
+        let user: AuthUser
+        try {
+          user = await api.getMe()
+        } catch (error) {
+          // 다른 탭의 인증 변경으로 중단된 확인은 바뀐 상태로 한 번 다시 묻는다.
+          const aborted = error instanceof DOMException && error.name === 'AbortError'
+          if (!aborted || currentGeneration !== generation || pendingCheck !== request) throw error
+          user = await api.getMe()
+        }
         if (currentGeneration !== generation || pendingCheck !== request) return
-        sessionActivity.start()
-        update({ user, status: 'authenticated', checkedKey: key, error: null })
+        activity.start()
+        update({
+          user,
+          status: 'authenticated',
+          checkedKey: key,
+          error: null,
+          reauthenticationRequired: false,
+        })
       } catch (error) {
         if (currentGeneration !== generation || pendingCheck !== request) return
         if (error instanceof ApiError && error.status === 401) {
@@ -93,7 +108,7 @@ export function createAuthStore(api: AuthApi = authApi) {
             expired,
             reauthenticationRequired: expired || state.reauthenticationRequired,
           })
-          sessionActivity.stop()
+          activity.stop()
         } else {
           update({
             checkedKey: key,
@@ -126,7 +141,7 @@ export function createAuthStore(api: AuthApi = authApi) {
         try {
           const user = await api.getMe()
           if (currentGeneration !== generation) return null
-          sessionActivity.touch(sessionActivity.getSnapshot()?.id)
+          activity.touch(activity.getSnapshot()?.id)
           if (currentGeneration !== generation) return null
           update({ user })
           return user
@@ -143,6 +158,10 @@ export function createAuthStore(api: AuthApi = authApi) {
       })()
       return request.promise
     },
+    // 로그인 화면의 탭이 다른 탭의 새 로그인을 반영한다.
+    recheck: () => {
+      if (!state.user && lastCheckKey && !pendingLogout) void check(lastCheckKey)
+    },
     requirePasswordChange: () => {
       if (state.user) update({ user: { ...state.user, passwordChangeRequired: true } })
     },
@@ -154,7 +173,7 @@ export function createAuthStore(api: AuthApi = authApi) {
       try {
         const user = await api.getMe()
         if (currentGeneration !== generation) return null
-        sessionActivity.start()
+        activity.start()
         update({ user, status: 'authenticated', checkedKey: lastCheckKey, error: null })
         return user
       } catch (error) {
@@ -175,7 +194,7 @@ export function createAuthStore(api: AuthApi = authApi) {
       const user = await api.login(loginId, password)
       if (currentGeneration !== generation) return
       advanceApiSession()
-      sessionActivity.start(true)
+      activity.start(true)
       update({
         user,
         status: 'authenticated',
@@ -205,7 +224,7 @@ export function createAuthStore(api: AuthApi = authApi) {
             expired: false,
             expiredUserId: null,
           })
-          sessionActivity.stop()
+          activity.stop()
         } catch (error) {
           // 시작할 때 버린 경로 확인을 다시 해 로딩에 갇히지 않게 한다.
           pendingLogout = null
