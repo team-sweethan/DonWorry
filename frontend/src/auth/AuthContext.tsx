@@ -9,10 +9,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => subscribeUnauthorized(store.expire), [store])
   useEffect(() => subscribePasswordChangeRequired(store.requirePasswordChange), [store])
   useEffect(() => {
-    const unsubscribe = sessionActivity.subscribe(() => {
-      if (!sessionActivity.getSnapshot()) store.expire()
-    })
-    const sync = () => sessionActivity.sync()
+    const unsubscribe = sessionActivity.subscribe(store.handleActivityChange)
+    const unsubscribeSettled = sessionActivity.subscribeSettled(store.expireIfInactive)
+    const sync = () => {
+      sessionActivity.sync()
+      store.handleActivityChange()
+    }
     let seen = sessionActivity.liveId()
     const onStorage = (event: StorageEvent) => {
       if (event.key !== SESSION_ACTIVITY_KEY && event.key !== null) return
@@ -28,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', sync)
     return () => {
       unsubscribe()
+      unsubscribeSettled()
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('focus', sync)
       document.removeEventListener('visibilitychange', sync)

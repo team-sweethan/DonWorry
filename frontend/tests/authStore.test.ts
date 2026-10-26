@@ -26,12 +26,15 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function setup(overrides: Partial<Parameters<typeof createAuthStore>[0]> = {}) {
-  return createAuthStore({
-    login: async () => user,
-    getMe: async () => user,
-    logout: async () => {},
-    ...overrides,
-  })
+  return createAuthStore(
+    {
+      login: async () => user,
+      getMe: async () => user,
+      logout: async () => {},
+      ...overrides,
+    },
+    createSessionActivity(),
+  )
 }
 
 test('강제 변경 알림 뒤 me 갱신으로 해제 상태를 반영한다', async () => {
@@ -641,4 +644,78 @@ test('renew_whenAnotherTabWorksBeforeFailure_preservesSharedSession', async () =
   await assert.rejects(renewing)
   assert.equal(store.getSnapshot().status, 'authenticated')
   assert.equal(activity.getSnapshot()?.at, other.getSnapshot()?.at)
+})
+
+// 일반 경로 확인도 기존 만료 시각 뒤 성공하면 로그인 상태를 유지한다.
+test('check_whenResponseCrossesDeadline_preservesAuthenticatedSession', async () => {
+  let now = 1000
+  const activity = createSessionActivity(
+    () => now,
+    () => {
+      throw new Error('blocked')
+    },
+    () => 'test',
+  )
+  const pending = deferred<AuthUser>()
+  const store = createAuthStore(
+    { login: async () => user, getMe: () => pending.promise, logout: async () => {} },
+    activity,
+    () => now,
+  )
+  await store.login('admin', 'secret')
+  now += SESSION_TIMEOUT_MS - 1
+  const checking = store.check('next')
+  now += 2
+  store.expireIfInactive()
+  assert.equal(store.getSnapshot().status, 'authenticated')
+  pending.resolve(user)
+  await checking
+  assert.equal(store.getSnapshot().checkedKey, 'next')
+  assert.equal(store.getSnapshot().expired, false)
+})
+
+// 종료한 추적을 새 탭의 최초 me 성공으로 되살리지 않고 명시적 로그인만 허용한다.
+test('check_whenNewTabOpensAfterExpiry_requiresLoginWithoutMe', async () => {
+  const tab = sharedTabs()
+  const a = createAuthStore(
+    { login: async () => user, getMe: async () => user, logout: async () => {} },
+    tab(),
+  )
+  await a.login('admin', 'secret')
+  a.expire()
+  let calls = 0
+  const b = createAuthStore(
+    {
+      login: async () => user,
+      getMe: async () => {
+        calls++
+        return user
+      },
+      logout: async () => {},
+    },
+    tab(),
+  )
+  await b.check('initial')
+  assert.equal(calls, 0)
+  assert.equal(b.getSnapshot().status, 'anonymous')
+  assert.equal(b.getSnapshot().reauthenticationRequired, true)
+})
+
+// 다른 탭의 명시적 로그아웃은 만료 안내와 이전 계정 복귀 정보를 남기지 않는다.
+test('logout_whenOtherTabReceivesEnd_clearsExpiryAndPreviousAccount', async () => {
+  const tab = sharedTabs()
+  const activityA = tab(),
+    activityB = tab()
+  const api = { login: async () => user, getMe: async () => user, logout: async () => {} }
+  const a = createAuthStore(api, activityA),
+    b = createAuthStore(api, activityB)
+  await a.login('admin', 'secret')
+  await b.check('protected')
+  const off = activityB.subscribe(b.handleActivityChange)
+  await a.logout()
+  activityB.sync()
+  off()
+  assert.equal(b.getSnapshot().status, 'anonymous')
+  assert.equal(b.getSnapshot().expired, false)
+  assert.equal(b.getSnapshot().expiredUserId, null)
 })

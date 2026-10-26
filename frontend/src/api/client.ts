@@ -1,4 +1,4 @@
-import { sessionActivity } from './sessionActivity.ts'
+import { sessionActivity, SESSION_REQUEST_GRACE_MS } from './sessionActivity.ts'
 import {
   CSRF_HEADER,
   clearCsrfToken,
@@ -85,6 +85,17 @@ export function subscribeUnauthorized(listener: () => void) {
 }
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const finish = sessionActivity.beginRequest()
+  const timeout = AbortSignal.timeout(SESSION_REQUEST_GRACE_MS)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+  try {
+    return await request<T>(path, { ...init, signal })
+  } finally {
+    finish()
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const activityId = sessionActivity.getSnapshot()?.id
   const generation = sessionGeneration
   const version = readSessionVersion()

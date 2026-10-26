@@ -29,7 +29,10 @@ export function SessionExpiryModal() {
   const { remaining, warning } = sessionTime(activity?.at ?? now, now)
   return (
     <Modal
-      open={!!activity && (warning || (renewing && remaining === 0))}
+      open={
+        !!activity &&
+        (warning || ((renewing || sessionActivity.hasPendingRequests()) && remaining === 0))
+      }
       title="로그인 유지 시간이 곧 만료됩니다"
       closable={false}
       maskClosable={false}

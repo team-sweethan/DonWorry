@@ -149,3 +149,12 @@ test('activity_whenStorageMalformedOrInactive_doesNotAdoptInvalidActivity', () =
     a.stop()
   }
 })
+
+// 이전 형식의 종료 표식도 만료로 읽어 자동 복원을 허용하지 않는다.
+test('activity_whenLegacyEndedMarker_treatsItAsExpiry', () => {
+  const { tab, values } = setup()
+  values.set(SESSION_ACTIVITY_KEY, JSON.stringify({ id: 'legacy', at: 1000, ended: true }))
+  const activity = tab()
+  assert.equal(activity.endReason(), 'expired')
+  assert.equal(activity.liveId(), null)
+})
