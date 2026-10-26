@@ -55,6 +55,7 @@
 | [0031](0031-fds-evaluation-request-id-conflict.md) | FDS 평가 요청 ID 재사용 충돌 처리 | 제안 — 팀 합의 필요 |
 | [0032](0032-production-admin-startup.md) | 운영 설정 분리와 관리자 비밀번호 기동 적용 | 제안 — #131 부분 구현, 시연 계정 정지는 후속 |
 | [0033](0033-login-history.md) | 로그인 이력의 독립 저장과 90일 조회 | 제안 — #147 사용자 승인·구현 반영, 팀 리뷰 대상 |
+| [0034](0034-fds-evidence-read-contract.md) | P3 Case 화면용 FDS 평가 근거 공개 조회 계약 | 제안 — #162 구현·P3 연동 대기 |
 
 ## 현재 적용 상태와 기록의 구분
 
