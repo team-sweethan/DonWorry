@@ -3,6 +3,7 @@
 - 상태: **사용자 저장 구조 방향 승인. 저장 기반·결제 처리·조회·기본 비활성 HTTP 구현. 실제 P1 인증·운영 활성화는 후속.**
 - 기준: `dev 84698bb`, 2026-10-25. migration 전체를 버전 순으로 읽고 P5 생성·승인·완료·조회와 P2 평가 재호출 코드를 대조했다.
 - [Issue #149](https://github.com/team-sweethan/DonWorry/issues/149), [ADR-0030](../decisions/0030-cakeshop-payment-attempts.md), [ERD 제안](../erd/README.md#149-p5-cakeshop-결제-저장-제안).
+- 장기 보류·종료·예약 해제는 [#152 정책 초안](152-long-held-payment-policy.md)과 [ADR-0035](../decisions/0035-long-held-payment-policy.md)에서 제안 상태로 협의한다. [담당자 확인 질문](152-policy-confirmation.md)은 미발송이며, 이 초안이 #149 실제 인증·요청·조회 검증을 대체하지 않는다.
 - 2026-10-25 사용자는 payment_orders·payment_requests 신규와 payments.status_changed_at·decline_code 추가 방향에 동의했다. 이를 저장 구조 승인으로 기록하며 실제 DB 적용·타 담당 회신·Notion 반영 완료와 구분한다. 상세 제약과 연동 세부는 아래 설계 기준으로 검토한다.
 
 ## 1. 쉬운 설명과 범위
