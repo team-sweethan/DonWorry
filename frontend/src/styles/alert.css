@@ -2,6 +2,18 @@
   border-color: #e2e8f0;
 }
 
+/* 목록 첫 조회는 표 구조를 먼저 보여 주고, 상세는 본문 중앙에 표시한다. */
+.dw-alert-list-loading,
+.dw-alert-detail-loading {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+}
+
+.dw-alert-list-skeleton {
+  width: min(760px, calc(100% - 44px));
+}
+
 /* donworry-prototype_2.html의 경보 목록 서체·간격을 화면에 명시적으로 고정한다. */
 .dw-alert-list-page .dw-page-title {
   font-size: 24px;
