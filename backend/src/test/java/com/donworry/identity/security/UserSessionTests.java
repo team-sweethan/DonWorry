@@ -23,9 +23,9 @@ class UserSessionTests {
     private final SecurityConfig config = new SecurityConfig();
     private final UserSessionService service = new UserSessionService(
             registry,
-            config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository()),
+            config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository(false)),
             contextRepository,
-            config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository()));
+            config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository(false)));
 
     @AfterEach
     void clearContext() {

@@ -83,10 +83,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    CookieCsrfTokenRepository csrfTokenRepository() {
+    CookieCsrfTokenRepository csrfTokenRepository(
+            @Value("${server.servlet.session.cookie.secure:false}") boolean secureCookie) {
         var repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         repository.setCookiePath("/");
-        repository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+        // 운영(세션 쿠키 Secure)에서는 프록시 전달 정보를 믿지 않고도 Secure를 고정한다 (ADR-0032).
+        // 그 외에는 요청의 HTTPS 여부를 따른다 (ADR-0025).
+        repository.setCookieCustomizer(cookie -> {
+            cookie.sameSite("Lax");
+            if (secureCookie) cookie.secure(true);
+        });
         return repository;
     }
 

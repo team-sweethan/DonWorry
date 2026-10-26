@@ -84,6 +84,14 @@ class ProductionSecurityMariaDbTests {
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
+    private HttpResponse<String> get(ConfigurableApplicationContext context, String path) throws Exception {
+        int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
     private HttpResponse<String> login(ConfigurableApplicationContext context, String loginId, String password)
             throws Exception {
         return post(context, "/api/auth/login", "{\"loginId\":\"" + loginId + "\",\"password\":\"" + password + "\"}");
@@ -114,6 +122,12 @@ class ProductionSecurityMariaDbTests {
                             .startsWith("JSESSIONID=")
                             .contains("Secure", "HttpOnly", "SameSite=Lax"));
             assertThat(login(context, "admin", "1234").statusCode()).isEqualTo(401);
+            // 프록시 전달 정보 없이 평문 HTTP로 요청해도 운영 XSRF-TOKEN은 Secure로 고정된다
+            assertThat(get(context, "/api/auth/csrf").headers().allValues("set-cookie"))
+                    .anySatisfy(cookie -> assertThat(cookie)
+                            .startsWith("XSRF-TOKEN=")
+                            .contains("Secure", "SameSite=Lax")
+                            .doesNotContain("HttpOnly"));
             // 운영 기본값으로 인증 없는 개발용 Mock 평가 API가 등록되지 않는다.
             // 같은 경로의 다른 GET 조회가 있으면 405, 없으면 404다
             assertThat(post(context, "/api/fds/evaluations/mock", "").statusCode())
