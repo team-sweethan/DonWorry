@@ -29,7 +29,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(MariaDbTestContainerConfig.class)
 class PaymentHeldListenerTests {
 
-    static final Duration WAIT = Duration.ofSeconds(5);
+    // 리스너는 별도 스레드에서 돈다. 전체 mariaDbTest 중에는 처리가 늦어져 5초로는 간헐 실패했다(#178)
+    // 조건이 맞으면 바로 끝나므로 상한만 넉넉히 둔다
+    static final Duration WAIT = Duration.ofSeconds(30);
 
     @Autowired
     ApplicationEventPublisher events;
