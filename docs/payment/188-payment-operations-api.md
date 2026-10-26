@@ -161,3 +161,12 @@ DTO는 payment.dto, Controller는 payment.controller, 읽기 트랜잭션·관�
 - 비교 검사: 변경 없는 dev `595a44a`를 임시 디렉터리에 추출해 `./gradlew mariaDbTest` 실행. 271건 중 270건 통과·1건 실패로, P6 완료 시각 불일치가 동일하게 재현됐다. 관리자 시드 개수 검사 2건은 이 비교 실행에서 통과했으므로 기존 문제라고 단정하지 않으며, 작업 브랜치 전체 검사에서의 실패 원인은 미확인이다.
 - §8의 동시 로그아웃 검사는 이번 실행에서는 통과했다. 기존 커밋에서 재현했던 경합 문제를 수정한 것은 아니다.
 - 전체 검사 통과 전 초안 PR로 제공하며 #188을 자동 종료하지 않는다. P1 시드·동시 로그아웃, P6 시각 검증 확인과 전체 재검증이 남는다.
+
+## 10. 통합 검사 실패 원인 수정
+
+- 검사 대상: `2ea1002` (이후 검사 기록 문서만 변경). `./gradlew spotlessApply check mariaDbTest` 통과: 기본 447건 중 446건 통과·기존 시연용 1건 건너뜀, MariaDB 296건 모두 통과.
+- 관리자 시드 2건: 이전 실행에서 LoginHistoryHttpTests 22건이 먼저 실행되고 임시 ADMIN 계정이 공용 DB에 남았다. 빈 DB의 관리자 1개를 검증하는 PlatformUserRepositoryTests를 전용 MariaDB 컨테이너로 분리했다. 관리자 개수·시드 내용·Flyway 재실행 검증은 그대로 유지했다.
+- P6 완료 시각 1건: JdbcTemplate에 전달한 Timestamp가 JVM 기본 시간대(Asia/Seoul)로 DATETIME에 저장돼 9시간 차이가 났다. 테스트 데이터 저장과 직접 DB 검증을 명시적인 UTC LocalDateTime 변환으로 변경했다. 완료 시각·마이크로초 정밀도·데이터와 이벤트 불변 검증은 유지했다.
+- 두 수정은 테스트 코드에만 적용했다. P1 계정 정책, P6 매입 구현, 공개 계약, 스키마는 변경하지 않았다.
+- 과거 동시 로그아웃 경합 실패는 이번 전체 검사에서도 통과했으나, 이 변경이 해당 경합을 수정한 것은 아니다. 배포 환경·대량 데이터 성능은 계속 미검증이다.
+- 시간대 비교: 전체 검사는 Asia/Seoul에서 통과했고, 임시 Gradle init script로 테스트 JVM의 `user.timezone=UTC`를 지정한 `mariaDbTest --tests '*CaptureReaderMariaDbTests'`도 6건 모두 통과했다. 시간대 설정은 저장소 공통 설정에 추가하지 않았다.
