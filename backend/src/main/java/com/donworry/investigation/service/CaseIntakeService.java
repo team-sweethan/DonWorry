@@ -10,7 +10,7 @@ import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 // HELD 결제를 받아 Case를 만들거나 30분 안의 Case에 병합한다 (fds 정본 03 §3.4)
-// P5 HELD 이벤트 리스너 · 데모 API가 이 메서드를 부른다
+// P5 HELD 이벤트 리스너(PaymentHeldListener) · 시연 API가 이 메서드를 부른다
 @Slf4j
 @Service
 @RequiredArgsConstructor
