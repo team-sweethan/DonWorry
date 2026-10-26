@@ -3,7 +3,7 @@
 - 상태: 사용자 승인으로 구현 반영. 저장소 ERD·ADR 우선 반영, Notion 후속 동기화. 팀 리뷰 대상.
 - 기준: `origin/dev 84698bb`, 작업 브랜치 `feature/147-login-history`.
 - 관련: [Issue #147](https://github.com/team-sweethan/DonWorry/issues/147), [ADR-0033](../decisions/0033-login-history.md).
-- #146의 운영 초기화 코드는 포함하지 않는다. 병합 후 통합 검증한다.
+- #146의 운영 초기화 코드는 포함하지 않는다. #146이 `dev`에 병합된 뒤 이 브랜치에 합쳐 통합 검증했다.
 
 ## 1. 확정 정책과 구현 범위
 
@@ -98,7 +98,8 @@ PROXY는 실제 peer IP가 설정된 신뢰 프록시 목록과 일치할 때만
 IP는 숫자 주소만 허용하고 DNS 조회를 하지 않는다. 애플리케이션 앞에서 주소를 임의 변환하는
 `server.forward-headers-strategy`가 NONE이 아니거나 Tomcat remote-ip-header가 설정된 조합은 기동을 거절한다.
 값을 비워 두면 Spring Boot가 클라우드 환경(Kubernetes 등)을 감지해 NATIVE를 켜고 이 검사를 지나칠 수 있으므로 `application.yml`에 `none`을 명시한다.
-이 제약은 앱 전체에 적용된다. TLS를 앞단 프록시에서 끊는 배포에서는 `request.isSecure()`가 false가 되어 #146의 HTTPS 의존 쿠키 동작에 영향을 줄 수 있으므로 배포 구조를 정할 때 함께 결정한다.
+이 제약은 앱 전체에 적용되어 TLS를 앞단 프록시에서 끊는 배포에서는 `request.isSecure()`가 false가 된다.
+운영 쿠키는 [ADR-0032](../decisions/0032-production-admin-startup.md)가 세션·XSRF-TOKEN 모두 Secure로 고정하므로 이 제약과 충돌하지 않는다.
 배포 담당이 proxy 종류·주소·헤더 덮어쓰기·직접 접근 차단을 확정하기 전에는 운영 IP 신뢰 설정을 추정하지 않는다.
 개발 기본 DIRECT와 별개로 실제 프록시 배포 검증은 미검증으로 남긴다.
 

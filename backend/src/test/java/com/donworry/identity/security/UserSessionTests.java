@@ -25,9 +25,9 @@ class UserSessionTests {
     private final SecurityConfig config = new SecurityConfig();
     private final UserSessionService service = new UserSessionService(
             registry,
-            config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository()),
+            config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository(false)),
             contextRepository,
-            config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository()));
+            config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository(false)));
 
     @AfterEach
     void clearContext() {
@@ -147,9 +147,9 @@ class UserSessionTests {
         doThrow(new IllegalStateException("session write failure")).when(broken).saveContext(any(), any(), any());
         var failing = new UserSessionService(
                 registry,
-                config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository()),
+                config.sessionAuthenticationStrategy(registry, config.csrfTokenRepository(false)),
                 broken,
-                config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository()));
+                config.sessionLogoutHandler(contextRepository, config.csrfTokenRepository(false)));
         var fresh = new MockHttpServletRequest();
         assertThatThrownBy(() -> failing.establishAuthentication(authentication, fresh, response))
                 .isInstanceOf(org.springframework.security.authentication.InternalAuthenticationServiceException.class);

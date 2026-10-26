@@ -2,10 +2,6 @@ spring:
   application:
     name: donworry
 
-  # 개인 PC 설정 파일이 있으면 자동으로 덮어쓴다 (없어도 됨)
-  config:
-    import: optional:classpath:application-local.yml
-
   datasource:
     url: jdbc:mariadb://${DONWORRY_DB_HOST:localhost}:${DONWORRY_DB_PORT:3307}/${DONWORRY_DB_NAME:donworry}
     username: ${DONWORRY_DB_USER:donworry}
@@ -65,3 +61,11 @@ fds:
   mock:
     # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.
     seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!prod"
+    # 운영에서는 개인 PC의 DB·쿠키 설정을 가져오지 않는다.
+    import: optional:classpath:application-local.yml

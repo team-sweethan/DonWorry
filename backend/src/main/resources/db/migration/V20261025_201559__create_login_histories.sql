@@ -6,7 +6,7 @@
 -- * 다른 담당 테이블로 물리 FK를 걸지 않는다 (AGENTS.md 4절)
 -- * 한 migration은 하나의 배포 가능한 스키마 전환만 담는다
 
--- P1 #147: 사용자 승인으로 저장소 ERD·ADR-0031 우선 반영, Notion 후속.
+-- P1 #147: 사용자 승인으로 저장소 ERD·ADR-0033 우선 반영, Notion 후속.
 CREATE TABLE login_histories
 (
     history_id BIGINT NOT NULL AUTO_INCREMENT,

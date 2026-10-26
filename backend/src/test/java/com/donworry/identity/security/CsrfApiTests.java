@@ -104,6 +104,8 @@ class CsrfApiTests {
         assertThat(cookie.isHttpOnly()).isFalse();
         assertThat(cookie.getPath()).isEqualTo("/");
         assertThat(cookie.getAttribute("SameSite")).isEqualTo("Lax");
+        // 로컬(세션 쿠키 Secure 아님)에서는 기존처럼 요청 HTTPS 여부를 따른다
+        assertThat(cookie.getSecure()).isFalse();
         return cookie;
     }
 

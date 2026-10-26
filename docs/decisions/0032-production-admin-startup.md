@@ -1,0 +1,56 @@
+# 0032. 운영 설정 분리와 관리자 비밀번호 기동 적용
+
+- **상태:** 제안 — #131 사용자 구현 승인, 시연 계정 정지는 후속
+- **날짜:** 2026-10-25
+- **관련:** Issue #131, #68, [ADR-0014](0014-session-authentication.md), [ADR-0025](0025-csrf-preparation.md)
+- **영향 받는 담당:** P1, 배포 담당
+
+## 배경
+
+현재 개인 `application-local.yml`을 모든 실행에서 읽는다. #131은 운영 관리자 비밀번호와 HTTPS 쿠키 설정을 요구한다. 사용자는 이번 구현에서 시연 계정 정지를 제외하고 후속으로 남기도록 결정했다. 따라서 이 변경은 #131 전체 또는 운영 공개 준비 완료를 뜻하지 않는다.
+
+## 결정
+
+- `prod` 프로필에서만 운영 관리자 초기화를 실행한다. 일반 `bootRun`과 명시적인 `local` 프로필은 기존 개인 설정을 읽는다. 기본 설정의 로컬 import를 `!prod` 문서로 옮긴다.
+- 개인 `application-local.yml`은 Gradle `Jar` 계열 작업(`bootJar`·`jar`)에서 제외해 배포 결과물에 개인 비밀값이 실리지 않게 한다.
+- 운영에서는 개인 설정을 자동 import하지 않는다. `prod,local` 혼용·운영 DB 환경변수 누락·관리자 비밀번호 누락·세션 Secure/HttpOnly/SameSite=Lax 약화·`fds.mock.seed-enabled=true`를 BeanFactoryPostProcessor에서 거절한다. 잘못된 설정으로 데이터소스와 Flyway가 시작되는 것을 막는다.
+- 운영 DB의 HOST·NAME·USER·PASSWORD는 명시적으로 제공한다. PORT 기본값은 3306이다. 검사는 `DONWORRY_DB_*` 이름을 직접 확인하므로 `SPRING_DATASOURCE_*` 표준 이름만으로는 기동하지 않는다. 최종 `spring.datasource.url`·`username`·`password`가 `DONWORRY_DB_*`로 만든 값과 다르면(예: 이전 배포의 `SPRING_DATASOURCE_*`가 남아 우선 적용) 다른 DB에 Flyway·비밀번호 변경이 실행되지 않도록 기동 실패한다. 오류 메시지에 값은 넣지 않는다. 설정은 Spring Environment로 읽어 테스트 설정과 배포 비밀값 주입을 지원한다. 운영에서는 환경변수로 공급하고 명령줄·저장소에 비밀값을 쓰지 않는다.
+- `DONWORRY_ADMIN_PASSWORD`는 기존 PasswordPolicy로 검증한다. 잘못된 값은 원문·해시를 담지 않는 기동 오류로 처리한다. 비밀번호는 trim·정규화하지 않는다.
+- `SmartInitializingSingleton`이 Flyway/JPA 초기화 뒤, 웹 서버 lifecycle 시작 전에 별도 Service의 트랜잭션 메서드를 호출한다. 서비스가 정상 반환하기 전에 실제 커밋이 완료되어야 한다. `@DependsOnDatabaseInitialization`으로 초기화 의존을 명시하고 초기화 Bean은 lazy 생성을 막는다.
+- 시드 `admin`이 ACTIVE ADMIN인지 확인한다. 없거나 역할·상태가 다르면 임의 생성·재활성화하지 않고 기동 실패한다.
+- 환경 비밀번호를 BCrypt로 적용하고 강제 변경 플래그를 해제한다. 이미 같은 비밀번호·플래그 false이면 UPDATE·이력을 생략한다. 동일 비밀번호·플래그 true이면 기존 해시를 유지하고 플래그 해제 이력만 기록한다.
+- 비밀번호 변경과 기존 `admin_change_histories` INSERT는 같은 트랜잭션이다. HTTP 수행자가 없는 작업이므로 actor/target은 대상 관리자 ID, 유형은 `PRODUCTION_PASSWORD_APPLIED`, after_data 출처는 `PRODUCTION_STARTUP`으로 명확히 구분한다. 비밀번호·해시를 이력에 넣지 않는다. 저장·커밋 실패는 기동 실패로 전파한다.
+- 계정 상태·권한·가맹점·실패 횟수·로그인 잠금은 바꾸지 않는다. 잠금 중에는 올바른 운영 비밀번호도 기존 #127 정책대로 거절된다. `boss`·`staff_test`는 조회·정지하지 않는다.
+- FDS 개발용 Mock 평가 API(`POST /api/fds/evaluations/mock`)는 인증 없이 운영 DB에 평가를 기록하므로 `application-prod.yml`에서 끄고, 외부 설정으로 다시 켜면 기동 실패한다. P2 소유 기능이지만 컨트롤러 주석의 "개발 환경에서만 켜는" 의도대로 운영 설정만 바꾼다.
+- 운영 세션 쿠키는 Secure=true, 기존 HttpOnly·SameSite=Lax를 유지하고 외부 설정으로 약화하면 기동 실패한다. XSRF-TOKEN은 세션 쿠키가 Secure인 환경(운영)에서 요청의 HTTPS 여부와 무관하게 Secure로 고정한다. 그 외(로컬)는 ADR-0025대로 요청의 HTTPS 여부를 따른다. 배포 프록시를 모르므로 Forwarded 헤더 신뢰 범위를 임의 설정하지 않는다. 그래서 TLS를 프록시에서 종료해도 두 쿠키 모두 Secure가 붙고, 접속 IP를 위해 Forwarded 헤더를 믿지 않는 #147(ADR-0033)과도 충돌하지 않는다. HTTPS 프록시 전달·동일 출처 배포·실제 쿠키는 배포 시 검증한다.
+- CSRF 검사 기본값 false, 전체 업무 인가·서버 간 인증 후속은 유지한다.
+
+## 운영상 의미와 한계
+
+- 매번 시작할 때 환경 비밀번호로 맞춘다. 화면에서 비밀번호를 변경해도 환경값을 갱신하지 않으면 재시작 시 환경값으로 돌아간다. 영구 변경은 배포 비밀값도 함께 갱신한다.
+- 데이터 변경은 영속적이다. 로컬·운영 DB를 분리해야 하며 같은 DB를 사용하면 로컬도 변경된 비밀번호를 사용한다. 프로필만 바꾼다고 DB 변경이 복구되지 않는다.
+- 기존 서버 메모리 세션·단일 서버 전제다. 시작 전에만 호출하므로 HTTP 수행자·실행 중 세션 종료·로그인 잠금을 요구하는 관리자 API를 억지로 재사용하지 않는다. 실행 중인 다른 인스턴스의 세션 무효화·롤링 배포는 지원 범위 밖이다.
+- 시연 계정은 여전히 로그인할 수 있다. 실제 운영 공개 전에 시연 계정 제한, #68 전체 서버 인가·CSRF 활성화, #131 HTTPS 검증을 마쳐야 한다.
+
+## 버린 대안
+
+| 대안 | 버린 이유 |
+| --- | --- |
+| 기존 시드 migration 수정·삭제 | 이미 병합된 SQL의 체크섬·기존 DB 상태를 깨뜨린다. |
+| 새 migration에 운영 비밀번호 저장 | 환경별 비밀값을 저장소에 남기고 회전하기 어렵다. |
+| 처음 한 번만 관리자 비밀번호 적용 | 매 시작 환경값을 반영한다는 #131 요구와 다르고 적용 여부 저장도 추가로 필요하다. |
+| 일반 ApplicationRunner에서만 변경 | readiness와 별도로 웹 서버 포트가 먼저 시작될 수 있다. singleton 초기화 단계에서 커밋하고 실제 기동 순서를 검사한다. |
+| 관리자 HTTP 초기화 API 재사용 | 임시 비밀번호·강제 변경·수행자 세션을 전제로 하므로 운영 시작 계약과 다르다. PasswordPolicy·Encoder·이력 서비스만 재사용한다. |
+| 시연 계정까지 함께 정지 | 사용자가 후속으로 미루도록 명시했다. |
+| 개인 설정 파일을 jar에 그대로 포함 | `prod`에서는 읽지 않아도 배포 결과물에 개인 DB 비밀번호가 실릴 수 있다. |
+| `DONWORRY_DB_*` 존재만 확인 | `SPRING_DATASOURCE_*`가 남으면 검사는 통과하고 실제로는 다른 DB에 연결된다. |
+| XSRF-TOKEN Secure를 위해 Forwarded 헤더 신뢰(`forward-headers-strategy`) | 신뢰 프록시 범위가 정해지지 않았고, #147은 접속 IP 보존을 위해 이를 막는다. 운영은 HTTPS만 쓰므로 Secure 고정으로 잃는 것이 없다. |
+| 전체 Forwarded 헤더 신뢰 | 프록시·네트워크 경계가 정해지지 않아 클라이언트 헤더를 그대로 신뢰할 수 있다. |
+
+## 영향과 검증
+
+- API·프론트·공개 Java 계약·이벤트·모듈 의존·DB 스키마·migration 변경 없음.
+- 기동 시 기존 P1 관리자 행과 변경 이력만 변경한다. 채택된 ADR-0014 본문은 보존하고 운영 후속의 구체적 정책을 이 ADR로 보완한다.
+- DB 없는 테스트: 로컬 import 유지·운영 import 제외·설정 누락/혼용/쿠키 약화/데이터소스 우회/FDS Mock 활성화·초기화 실패 전파, 비밀번호 정책·활성 관리자 검사·중복 생략.
+- 별도 Testcontainers MariaDB: 실제 Flyway/JPA·웹 서버 기동 전 커밋·HTTP 로그인/Secure 쿠키·시연 계정 보존·재시작·이력 실패 롤백·로그인 잠금 보존.
+- 실제 HTTPS·프록시·브라우저·배포 비밀값 주입은 배포 환경에서 확인한다. 실행 결과는 Issue/PR과 identity README에 별도 기록한다.

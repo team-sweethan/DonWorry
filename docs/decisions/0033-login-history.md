@@ -44,7 +44,7 @@
 - 테스트: HTTP·DB 저장 장애·동시성·90일 경계·삭제 재실행 및 기존 인증 회귀.
 - 문서: 합의 후 저장소 ERD·identity README·ADR 목록 갱신. 사용자 승인으로 저장소 문서 우선 반영, Notion은 후속 동기화.
 - 설정: 원 접속 주소 보존을 위해 `server.forward-headers-strategy: none`을 명시하고 FRAMEWORK/NATIVE를 거절한다. 앱 전체 제약이므로 TLS 종료 프록시 뒤에서는 `request.isSecure()`가 false가 된다.
-- #146: 직접 구현 의존 없음. 다만 위 설정 제약이 #146의 HTTPS 의존 쿠키(XSRF-TOKEN Secure 판정)에 닿으므로 배포 구조를 정할 때 함께 결정한다. dev 병합 후 운영 프로필과 통합 검증 필요.
+- #146: 직접 구현 의존 없음. 위 설정 제약과 HTTPS 쿠키의 관계는 [ADR-0032](0032-production-admin-startup.md)가 운영 XSRF-TOKEN을 요청의 HTTPS 여부와 무관하게 Secure로 고정해 해결했다. #146 병합 후 `dev`와 합쳐 전체 검사를 통과했다.
 
 ## 검증
 
