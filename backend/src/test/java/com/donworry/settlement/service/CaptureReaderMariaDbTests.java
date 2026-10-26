@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.settlement.api.CaptureReader;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,7 @@ class CaptureReaderMariaDbTests {
         jdbc.update("DELETE FROM captures WHERE payment_id = ?", PAYMENT_ID);
     }
 
+    // DATETIME은 시간대가 없으므로 JVM 기본 시간대를 거치지 않고 UTC 값을 넣는다.
     private long seed(String status, boolean settlement) {
         jdbc.update(
                 """
@@ -56,17 +58,22 @@ class CaptureReaderMariaDbTests {
                 """,
                 PAYMENT_ID,
                 status,
-                status.equals("COMPLETED") ? Timestamp.from(AT) : null,
-                Timestamp.from(AT),
-                Timestamp.from(AT));
+                status.equals("COMPLETED") ? LocalDateTime.ofInstant(AT, ZoneOffset.UTC) : null,
+                LocalDateTime.ofInstant(AT, ZoneOffset.UTC),
+                LocalDateTime.ofInstant(AT, ZoneOffset.UTC));
         long id = jdbc.queryForObject("SELECT capture_id FROM captures WHERE payment_id = ?", Long.class, PAYMENT_ID);
         if (settlement) {
-            jdbc.update("""
+            jdbc.update(
+                    """
                     INSERT INTO settlements
                     (capture_id, payment_id, merchant_id, gross_amount, card_fee_rate, pg_fee_rate,
                      card_fee_amount, pg_fee_amount, settlement_amount, status, created_at, updated_at)
                     VALUES (?, ?, 1, 10001, 0.02, 0.01, 200, 100, 9701, 'SCHEDULED', ?, ?)
-                    """, id, PAYMENT_ID, Timestamp.from(AT), Timestamp.from(AT));
+                    """,
+                    id,
+                    PAYMENT_ID,
+                    LocalDateTime.ofInstant(AT, ZoneOffset.UTC),
+                    LocalDateTime.ofInstant(AT, ZoneOffset.UTC));
         }
         return id;
     }
@@ -85,8 +92,8 @@ class CaptureReaderMariaDbTests {
         assertThat(result.settlementExists()).isTrue();
         assertThat(result.settlementStatus()).isEqualTo("SCHEDULED");
         assertThat(jdbc.queryForObject(
-                                "SELECT updated_at FROM captures WHERE payment_id = ?", Timestamp.class, PAYMENT_ID)
-                        .toInstant())
+                                "SELECT updated_at FROM captures WHERE payment_id = ?", LocalDateTime.class, PAYMENT_ID)
+                        .toInstant(ZoneOffset.UTC))
                 .isEqualTo(AT);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM settlements WHERE payment_id = ?", Long.class, PAYMENT_ID))
                 .isEqualTo(1);

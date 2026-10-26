@@ -1,0 +1,13 @@
+package com.donworry.payment.dto;
+
+public enum PaymentOperationCategory {
+    EVALUATION_PENDING,
+    EVALUATION_ERROR,
+    AUTO_CAPTURE_PENDING,
+    DECISION_PENDING,
+    STAFF_CAPTURE_PENDING,
+    VOID_FAILED,
+    FINANCIAL_COMPLETED,
+    PAYMENT_TERMINATED,
+    UNKNOWN
+}
