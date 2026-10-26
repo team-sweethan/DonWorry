@@ -30,12 +30,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
 
 // 실제 P5 PaymentActionRequester · P6 매입까지 이어서 판정 → 금융 조치 완료 → 인계 ACCEPTED → Case 종료를 확인한다 (#161)
 // P5 공개 결제 입력이 꺼져 있어(#151) HELD 결제는 P5 테스트와 같은 방법으로 P5 저장소에 직접 만든다 — 테스트 준비에만 쓴다
 // 커밋 뒤 비동기 리스너(P6 매입 · P5 결과 · P3 반영)가 돌아야 하므로 롤백 테스트가 아니다
+// 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
 @SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
@@ -65,11 +68,17 @@ class PaymentActionFlowTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    // 판정 ID 시작값 — P5 테스트는 같은 DB에 decisionId = paymentId인 임의 조치를 남긴다
+    // P3 판정 ID가 그 값과 겹치면 P5가 DECISION_ACTION_CONFLICT로 거절하므로, 이 테스트의 판정은 겹치지 않는 범위에서 만든다
+    static final long DECISION_ID_FLOOR = 8_000_000_000L;
+
     @BeforeEach
     void loginAsSecurityStaff() {
         given(currentStaff.findCurrent())
                 .willReturn(Optional.of(
                         StaffSummary.builder().userId(7L).role("SECURITY_STAFF").build()));
+        // 현재 최댓값보다 작으면 MariaDB가 무시하므로 여러 번 실행해도 된다
+        jdbc.execute("ALTER TABLE payment_decisions AUTO_INCREMENT = " + DECISION_ID_FLOOR);
     }
 
     // ACCEPT 판정이면 P5가 처리 중으로 답하고, P6 매입이 끝난 뒤 결과 이벤트로 인계 완료 · Case 종료가 된다

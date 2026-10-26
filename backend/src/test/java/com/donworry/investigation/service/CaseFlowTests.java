@@ -41,6 +41,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
@@ -49,6 +50,8 @@ import tools.jackson.databind.json.JsonMapper;
 // 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 목 금융 조치 완료 → Case CLOSED 를 HTTP로 확인한다
 // 시연 결제는 P5 payments에 없으므로 시연 설정처럼 목 금융 조치를 켠다. 실제 P5 연결은 PaymentActionFlowTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
+// 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
 @SpringBootTest(properties = "investigation.mock.payment-action-enabled=true")
 @AutoConfigureMockMvc
