@@ -19,6 +19,8 @@ P5가 FDS 평가를 동기 호출한 뒤 P2 내부 시스템 오류의 `ERROR`�
 - 분석 저장 후 P2는 `fds.api.FdsEvaluationFailureAnalyzed` 이벤트를 발행한다. 이벤트 타입은 P5가 import 가능한 `fds.api`에 둔다.
 - P2가 실제 `ERROR` 평가와 일시 오류 복구 근거를 확인해 `REEVALUATION_AVAILABLE`를 발행한 경우에만, P5는 `FdsReevaluationRequester.reevaluate(FdsReevaluationRequest)`를 호출할 수 있다.
 - 재탐지 요청은 원본 UUID와 새 UUID, `retryId`를 함께 전달한다. P2는 새 평가를 `fds_evaluations`에 저장하고 원본 UUID·재탐지 키를 연결한다.
+- P2는 오류 보고의 평가 ID·원본 UUID 계보를 저장된 평가와 대조한다. 재탐지는 원본 ERROR 평가 행을 잠가 같은 원본 평가의 동시 요청을 직렬화하고, 이미 사용된 새 평가 UUID는 거절한다.
+- 같은 `retryId` 재전송은 원본 UUID·새 UUID뿐 아니라 평가 입력 스냅샷도 같을 때만 기존 결과를 반환한다.
 - P2는 P5 결제 상태를 변경하지 않으며, 분석 이벤트도 재탐지를 강제하지 않는다.
 
 ## 실패 유형과 분석 결과

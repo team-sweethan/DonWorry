@@ -23,7 +23,7 @@ public class FdsReevaluationService implements FdsReevaluationRequester {
         if (retried.isPresent()) return responseOf(retried.get(), request);
 
         var original = evaluations
-                .findByEvaluationRequestId(request.originalEvaluationRequestId())
+                .findByEvaluationRequestIdForUpdate(request.originalEvaluationRequestId())
                 .orElseThrow(() -> new IllegalArgumentException("원본 ERROR 평가가 없습니다"));
         if (original.getResult() != FdsResult.ERROR) {
             throw new IllegalStateException("ERROR 평가만 재탐지할 수 있습니다");
@@ -35,6 +35,11 @@ public class FdsReevaluationService implements FdsReevaluationRequester {
                 request.originalEvaluationRequestId(), FdsFailureDisposition.REEVALUATION_AVAILABLE)) {
             throw new IllegalStateException("재탐지 가능 분석 결과가 없습니다");
         }
+        if (evaluations
+                .findByEvaluationRequestId(request.newEvaluationRequestId())
+                .isPresent()) {
+            throw new IllegalArgumentException("새 평가 UUID가 이미 사용되었습니다");
+        }
 
         var response = evaluator.evaluate(request.evaluationRequest());
         var evaluation = evaluations.findById(response.evaluationId()).orElseThrow();
@@ -44,7 +49,8 @@ public class FdsReevaluationService implements FdsReevaluationRequester {
 
     private FdsEvaluationResponse responseOf(FdsEvaluation evaluation, FdsReevaluationRequest request) {
         if (!evaluation.getEvaluationRequestId().equals(request.newEvaluationRequestId())
-                || !request.originalEvaluationRequestId().equals(evaluation.getOriginalEvaluationRequestId())) {
+                || !request.originalEvaluationRequestId().equals(evaluation.getOriginalEvaluationRequestId())
+                || !evaluation.hasSameRequestSnapshot(request.evaluationRequest())) {
             throw new IllegalArgumentException("retryId가 다른 재탐지 요청에 사용되었습니다");
         }
         return new FdsEvaluationResponse(

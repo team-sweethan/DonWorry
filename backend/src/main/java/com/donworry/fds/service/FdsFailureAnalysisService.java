@@ -24,11 +24,11 @@ public class FdsFailureAnalysisService implements FdsFailureReporter {
     public void report(FdsEvaluationFailureReport report) {
         if (analyses.findByFailureReportId(report.failureReportId()).isPresent()) return;
 
-        var outcome = analyze(
-                report,
-                evaluations
-                        .findByEvaluationRequestId(report.evaluationRequestId())
-                        .orElse(null));
+        var evaluation = evaluations
+                .findByEvaluationRequestId(report.evaluationRequestId())
+                .orElse(null);
+        validateReportLineage(report, evaluation);
+        var outcome = analyze(report, evaluation);
         var analysis = analyses.save(
                 FdsFailureAnalysis.analyzed(report, outcome.disposition(), outcome.reasonCode(), Instant.now()));
         events.publishEvent(new FdsEvaluationFailureAnalyzed(
@@ -62,6 +62,17 @@ public class FdsFailureAnalysisService implements FdsFailureReporter {
             return new AnalysisOutcome(FdsFailureDisposition.REEVALUATION_AVAILABLE, "TRANSIENT_ERROR_RECOVERED");
         }
         return new AnalysisOutcome(FdsFailureDisposition.MANUAL_REVIEW_REQUIRED, "ERROR_REQUIRES_MANUAL_REVIEW");
+    }
+
+    private void validateReportLineage(FdsEvaluationFailureReport report, FdsEvaluation evaluation) {
+        if (evaluation == null) return;
+        if (!evaluation.getEvaluationId().equals(report.evaluationId())) {
+            throw new IllegalArgumentException("평가 ID가 평가 요청 UUID와 일치하지 않습니다");
+        }
+        if (report.originalEvaluationRequestId().equals(report.evaluationRequestId())) return;
+        if (!report.originalEvaluationRequestId().equals(evaluation.getOriginalEvaluationRequestId())) {
+            throw new IllegalArgumentException("원본 평가 UUID가 실제 재탐지 계보와 일치하지 않습니다");
+        }
     }
 
     private record AnalysisOutcome(FdsFailureDisposition disposition, String reasonCode) {}

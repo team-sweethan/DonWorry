@@ -38,8 +38,10 @@ class FdsReevaluationServiceTests {
                 request.evaluationRequest(), FdsResult.ALLOW, 0, Instant.parse("2026-10-27T01:00:02Z"));
         org.springframework.test.util.ReflectionTestUtils.setField(reevaluated, "evaluationId", 101L);
         when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.empty());
-        when(evaluations.findByEvaluationRequestId(request.originalEvaluationRequestId()))
+        when(evaluations.findByEvaluationRequestIdForUpdate(request.originalEvaluationRequestId()))
                 .thenReturn(Optional.of(original));
+        when(evaluations.findByEvaluationRequestId(request.newEvaluationRequestId()))
+                .thenReturn(Optional.empty());
         when(analyses.existsByOriginalEvaluationRequestIdAndDisposition(
                         request.originalEvaluationRequestId(), FdsFailureDisposition.REEVALUATION_AVAILABLE))
                 .thenReturn(true);
@@ -67,7 +69,7 @@ class FdsReevaluationServiceTests {
         var original =
                 FdsEvaluation.failed(originalRequest(request), "FDS_RULE_ERROR", Instant.parse("2026-10-27T01:00:01Z"));
         when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.empty());
-        when(evaluations.findByEvaluationRequestId(request.originalEvaluationRequestId()))
+        when(evaluations.findByEvaluationRequestIdForUpdate(request.originalEvaluationRequestId()))
                 .thenReturn(Optional.of(original));
         when(analyses.existsByOriginalEvaluationRequestIdAndDisposition(any(), any()))
                 .thenReturn(false);
@@ -75,6 +77,49 @@ class FdsReevaluationServiceTests {
         assertThatThrownBy(() -> new FdsReevaluationService(evaluations, analyses, evaluator).reevaluate(request))
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(evaluator);
+    }
+
+    @Test
+    // 이미 사용된 새 평가 UUID는 과거 평가를 재탐지 결과로 재사용하지 않는다.
+    void reevaluate_whenNewEvaluationRequestIdAlreadyExists_throwsException() {
+        var request = request();
+        var original = FdsEvaluation.failed(
+                originalRequest(request), "TRANSIENT_MODEL_UNAVAILABLE", Instant.parse("2026-10-27T01:00:01Z"));
+        when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.empty());
+        when(evaluations.findByEvaluationRequestIdForUpdate(request.originalEvaluationRequestId()))
+                .thenReturn(Optional.of(original));
+        when(analyses.existsByOriginalEvaluationRequestIdAndDisposition(
+                        request.originalEvaluationRequestId(), FdsFailureDisposition.REEVALUATION_AVAILABLE))
+                .thenReturn(true);
+        when(evaluations.findByEvaluationRequestId(request.newEvaluationRequestId()))
+                .thenReturn(Optional.of(mock(FdsEvaluation.class)));
+
+        assertThatThrownBy(() -> new FdsReevaluationService(evaluations, analyses, evaluator).reevaluate(request))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(evaluator);
+    }
+
+    @Test
+    // 같은 retryId의 재전송도 원래 재탐지 입력과 다르면 기존 결과를 반환하지 않는다.
+    void reevaluate_whenRetriedRequestInputDiffers_throwsException() {
+        var request = request();
+        var existing = FdsEvaluation.completed(
+                request.evaluationRequest(), FdsResult.ALLOW, 0, Instant.parse("2026-10-27T01:00:01Z"));
+        existing.recordReevaluation(request.originalEvaluationRequestId(), request.retryId());
+        var changedRequest = new FdsReevaluationRequest(
+                request.originalEvaluationRequestId(),
+                request.newEvaluationRequestId(),
+                request.paymentId() + 1,
+                request.merchantId(),
+                request.customerRef(),
+                request.amount(),
+                request.paymentRequestedAt(),
+                request.retryId());
+        when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(
+                        () -> new FdsReevaluationService(evaluations, analyses, evaluator).reevaluate(changedRequest))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private FdsReevaluationRequest request() {

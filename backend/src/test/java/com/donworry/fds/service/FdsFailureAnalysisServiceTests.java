@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -90,12 +91,51 @@ class FdsFailureAnalysisServiceTests {
         verifyNoInteractions(events);
     }
 
+    @Test
+    // 오류 보고의 원본 UUID는 현재 평가의 실제 재탐지 계보와 같아야 한다.
+    void report_whenOriginalEvaluationRequestIdDoesNotMatchLineage_throwsException() {
+        var report = report();
+        var evaluation = FdsEvaluation.failed(
+                request(report), "TRANSIENT_MODEL_UNAVAILABLE", Instant.parse("2026-10-27T01:00:01Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 99L);
+        when(analyses.findByFailureReportId(report.failureReportId())).thenReturn(Optional.empty());
+        when(evaluations.findByEvaluationRequestId(report.evaluationRequestId()))
+                .thenReturn(Optional.of(evaluation));
+        var invalidReport = new FdsEvaluationFailureReport(
+                report.failureReportId(),
+                UUID.randomUUID(),
+                report.evaluationRequestId(),
+                report.evaluationId(),
+                report.paymentId(),
+                report.merchantId(),
+                report.customerRef(),
+                report.amount(),
+                report.paymentRequestedAt(),
+                report.evaluationResult(),
+                report.errorCode(),
+                report.sanitizedErrorMessage(),
+                report.requestedAt(),
+                report.respondedAt(),
+                report.paymentStatus(),
+                report.processingStage(),
+                report.requestId(),
+                report.idempotencyKey(),
+                report.orderRef(),
+                report.correlationId(),
+                report.evaluationAttemptNo());
+
+        assertThatThrownBy(() -> new FdsFailureAnalysisService(analyses, evaluations, events).report(invalidReport))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(events);
+    }
+
     private FdsEvaluationFailureReport report() {
         var now = Instant.parse("2026-10-27T01:00:00Z");
+        var evaluationRequestId = UUID.randomUUID();
         return new FdsEvaluationFailureReport(
                 UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
+                evaluationRequestId,
+                evaluationRequestId,
                 99L,
                 10L,
                 1L,
