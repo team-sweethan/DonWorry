@@ -144,6 +144,17 @@ PR 리뷰를 반영한 커밋 `510eae8`에서 정지 가맹점 POST의 403 거�
 신규 테스트 `inactive_whenPostRejected_consumesNonceBeforeReactivation`이 수정 전 코드에서 실패하는지는 실행해 확인하지 않았다.
 `510eae8`의 원격 CI(backend·docs 포함)는 통과했다. 이후 변경은 이 문서의 실행 기록뿐이다.
 
+### #241 픽업 PUT 공통 인증 검증
+
+2026-10-27, 기준 dev `ae93f90` 위 구현 커밋 `2b599cd`와 같은 코드에서 확인했다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 510개 중 509개 성공·기존 1개 건너뜀, MariaDB 328개 성공, 실패·오류 0. 최종 명령의 일반 test는 동일 소스의 직전 성공 결과를 UP-TO-DATE로 재사용했고 MariaDB는 새로 실행했다. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 신규 픽업 보안 테스트 11개는 구현 전에 실패하고 구현 후 통과했다. 두 PUT의 정지 가맹점 허용·본문 보존·세션 비저장·직원 세션 분리, 미지원 메서드 405·Allow: PUT, 주문번호·경로·메서드·본문 변조, 만료·nonce 재사용·새 서명 재시도·nonce 장애 503을 확인했다. 기존 인접 경로의 CSRF 보호도 확인했다.
+- Python 예시를 오프라인 실행해 두 요청과 고정 서명을 생성했고 Java 서명 테스트 2개와 일치했다. 처음 이를 MockMvc 요청에 그대로 넣었을 때 테스트 환경이 Content-Type에 charset을 추가해 401이 됐다. 고정 벡터 비교는 서명 단위 테스트에서 수행하고, HTTP 검사는 실제 전송 헤더에 맞춰 서명하도록 구분했다.
+- MariaDB 실제 HTTP 4개는 키 조회만 대역이고 HMAC 필터·DB 가맹점 조회·독립 nonce 커밋을 거친다. P5 비활성·CSRF 활성·P6 Controller 부재 상태에서 서명 누락 401, 정지 가맹점의 올바른 PUT은 nonce 소비 후 404, 동일 서명 재사용 401, 새 nonce는 다시 인증·기록, 미지원 메서드 405·Allow: PUT, 실제 nonce INSERT 장애 503을 확인했다.
+- 문서 상대 링크·diff 공백 검사 통과. 검증 이후 변경은 실행 기록과 관련 문서 안내 보완뿐이다.
+- 미검증: 실제 P6 Controller·어댑터·주문/매입 소유권 대조·픽업 저장·동일/상충 업무 재전송 통합, CakeShop 발신 코드·실제 키/가맹점 등록·배포 도메인·HTTPS/프록시·Notion 동기화. 프론트·AI 코드는 변경하지 않아 해당 검사를 실행하지 않았고 팀 메시지는 발송하지 않았다. #241은 실제 통합 검증 전까지 전체 완료로 처리하지 않는다.
+
 ## 7. #241 CakeShop 픽업 PUT 서명 예시
 
 P6가 전달한 두 경로와 본문 필드를 사용한다. 아래는 CakeShop 서버에서 적용할 Python 표준 라이브러리 예시이며 CakeShop 저장소 구현 자체는 아니다.
