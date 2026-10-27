@@ -1,6 +1,8 @@
 package com.donworry.investigation.report.repository;
 
 import com.donworry.investigation.report.entity.AiReport;
+import com.donworry.investigation.report.entity.ReportStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +20,9 @@ public interface AiReportRepository extends Repository<AiReport, Long> {
     Optional<AiReport> findById(Long reportId);
 
     List<AiReport> findByCaseIdOrderByReportVersionAsc(Long caseId);
+
+    // 서버 재시작으로 끝나지 못한 보고서 찾기용 (AiReportRecovery)
+    List<AiReport> findByStatusIn(Collection<ReportStatus> statuses);
 
     // 요청한 증거 버전 이상을 이미 분석한 보고서가 있으면 새로 만들지 않는다 (ADR-0009 결정 3)
     boolean existsByCaseIdAndEvidenceVersionGreaterThanEqual(Long caseId, int evidenceVersion);

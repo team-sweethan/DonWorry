@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.CasePayment;
+import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.entity.AiReport;
@@ -58,6 +59,9 @@ class AiReportServiceTests {
 
     @Autowired
     CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    AiReportRecovery aiReportRecovery;
 
     @MockitoBean
     PaymentInfoReader paymentInfoReader;
@@ -188,6 +192,27 @@ class AiReportServiceTests {
         assertThat(report.fail(Map.of("code", "EVIDENCE_MISSING"), now)).isTrue();
         assertThat(report.succeed(Map.of("summary", List.of()), now)).isFalse();
         assertThat(report.getStatus()).isEqualTo(ReportStatus.FAILED);
+    }
+
+    // 생성 도중 서버가 멈춰 PENDING만 남아도, 다시 켜질 때 같은 보고서 버전에서 끝까지 만들고 Case를 판정 대기로 바꾼다
+    // 새 행은 만들지 않고, 그 뒤 같은 버전 요청도 새 보고서를 만들지 않는다
+    @Test
+    void recovery_leftoverPending_completesSameReportAndRefreshesCase() {
+        SecurityCase securityCase = caseWithPayment();
+        givenEvidenceFor(securityCase);
+        AiReport leftover = aiReportRepository.save(AiReport.pending(securityCase.getId(), 1, 1, Instant.now()));
+
+        aiReportRecovery.resumeUnfinished();
+        aiReportService.request(securityCase.getId(), 1);
+
+        assertThat(reportsOf(securityCase)).singleElement().satisfies(report -> {
+            assertThat(report.getId()).isEqualTo(leftover.getId());
+            assertThat(report.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        });
+        assertThat(securityCaseRepository.findById(securityCase.getId()))
+                .get()
+                .extracting(SecurityCase::getStatus)
+                .isEqualTo(CaseStatus.DECISION_PENDING);
     }
 
     private SecurityCase caseWithPayment() {

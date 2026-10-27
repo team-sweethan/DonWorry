@@ -6,6 +6,7 @@ import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.service.ReportGateway;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,6 +42,23 @@ public class AiReportService implements ReportGateway {
         return aiReportRepository.findByCaseIdOrderByReportVersionAsc(caseId).stream()
                 .map(AiReportService::snapshot)
                 .toList();
+    }
+
+    // 서버 재시작으로 PENDING · RUNNING에 멈춘 보고서를 같은 버전에서 처음부터 다시 만든다 (ADR-0009 한계)
+    // P4-2에서는 RUNNING(FastAPI 접수됨)이면 다시 만들기 전에 FastAPI 결과부터 조회한다
+    // 재개한 보고서의 Case ID를 돌려준다 — 호출자가 Case 상태를 다시 계산한다
+    List<Long> resumeUnfinished() {
+        List<Long> resumedCaseIds = new ArrayList<>();
+        for (AiReport report : aiReportRepository.findByStatusIn(List.of(ReportStatus.PENDING, ReportStatus.RUNNING))) {
+            log.info("미완료 보고서 재개 reportId={} caseId={}", report.getId(), report.getCaseId());
+            try {
+                run(report);
+                resumedCaseIds.add(report.getCaseId());
+            } catch (RuntimeException e) {
+                log.warn("미완료 보고서 재개 실패 reportId={}", report.getId(), e);
+            }
+        }
+        return resumedCaseIds;
     }
 
     // 동시 요청이 같은 report_version을 잡으면 늦은 쪽은 UNIQUE 위반 — 다시 읽어 합류하거나 다음 번호로 만든다 (ADR-0009 결정 3)
