@@ -31,6 +31,9 @@ public class Merchant {
     @Column(name = "status", nullable = false, length = 20)
     private MerchantStatus status;
 
+    @Column(name = "secret_reference", length = 200)
+    private String secretReference;
+
     @Column(name = "pg_fee_rate", nullable = false, precision = 9, scale = 6)
     private BigDecimal pgFeeRate;
 

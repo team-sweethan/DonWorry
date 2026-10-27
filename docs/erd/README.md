@@ -51,6 +51,7 @@
 | `identity` | P1 주환 | `merchants`, `platform_users`, `user_permissions` | [20261022_145055](../../backend/src/main/resources/db/migration/V20261022_145055__create_merchants_table.sql) · [20261022_145057](../../backend/src/main/resources/db/migration/V20261022_145057__create_platform_users_table.sql) · [20261022_145059](../../backend/src/main/resources/db/migration/V20261022_145059__create_user_permissions_table.sql) |
 | `identity` (#129) | P1 주환 | `platform_users` 강제 변경·역할 CHECK, `admin_change_histories` | [강제 변경](../../backend/src/main/resources/db/migration/V20261025_121650__add_password_change_required.sql) · [역할 CHECK](../../backend/src/main/resources/db/migration/V20261025_121656__add_user_role_merchant_check.sql) · [관리 이력](../../backend/src/main/resources/db/migration/V20261025_121657__create_admin_change_histories.sql) |
 | `identity` (#127) | P1 주환 | `platform_users` 연속 로그인 실패 횟수·잠금 종료 시각 | [로그인 잠금](../../backend/src/main/resources/db/migration/V20261025_165712__add_login_attempt_lock.sql) |
+| `identity` (#219) | P1 주환 | `merchant_request_nonces` | [HMAC nonce](../../backend/src/main/resources/db/migration/V20261027_144924__create_merchant_request_nonces.sql) |
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
@@ -66,6 +67,7 @@
 
 ```mermaid
 erDiagram
+    merchants ||--o{ merchant_request_nonces : "merchant_id"
     merchants |o--o{ platform_users : "merchant_id"
     platform_users ||--o{ user_permissions : "user_id"
     platform_users |o--o{ login_histories : "user_id"
@@ -243,3 +245,20 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 기존 조회·거절·완료 API의 원래 시각을 대체하지 않는다. 주문·키 신규 구조는 과거 데이터 자동 편입 없이 도입하고 동일 가맹점/주문번호 과거 결제가 있으면 새 HTTP 접수를 막는다. 기존 조회를 위한 payments(merchant_id, order_ref) 비고유 인덱스도 제안한다. 기존 orders 중복 데이터를 삭제하거나 UNIQUE로 강제하지 않는다.
 
 현재 SQL은 변경하지 않았다. 물리 스키마 적용 전 타입·collation·제약·순번 상한·기존 데이터 호환 및 후속 migration 배포 순서를 구현 단계에서 검증한다.
+
+### #219 P1 HMAC nonce 계약 (2026-10-27)
+
+사용자는 P6를 제외한 HMAC 구현과 아래 신규 P1 테이블을 승인했다. 저장소 ERD·ADR에 먼저 반영하고 Notion은 후속 반영한다.
+
+| 컬럼 | 타입·조건 | 의미 |
+| --- | --- | --- |
+| request_nonce_id | BIGINT AUTO_INCREMENT PK | 내부 기록 ID |
+| merchant_id | BIGINT NOT NULL FK merchants | 인증한 P1 가맹점 |
+| nonce | UUID NOT NULL | HTTP 전송별 UUID v4 |
+| expires_at | DATETIME(6) NOT NULL | 서명 시각+301초, UTC |
+
+`UNIQUE(merchant_id, nonce)`로 동시 재전송을 한 번만 소비한다. `INDEX(expires_at, request_nonce_id)`로 만료 행만 배치 삭제한다.
+가맹점 FK는 같은 P1 소유이고 삭제 연쇄는 없다. 원문 키·서명·요청 본문을 저장하지 않는다.
+서명 확인 후 업무 실행 전에 독립 커밋하므로 업무 롤백·서버 재시작으로 nonce가 복구되지 않는다. 만료 행은 금융·조사 이력이 아닌 단기 보안 기록으로 물리 삭제한다.
+기존 `merchants.secret_reference`는 Entity 매핑만 추가한다. 기존 migration·다른 담당 테이블은 변경하지 않는다.
+세부 계약과 검증은 [#219 설계](../identity/219-merchant-hmac.md)와 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.

@@ -6,42 +6,29 @@ import static org.mockito.Mockito.*;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.fds.api.*;
 import com.donworry.identity.api.*;
-import com.donworry.payment.service.PaymentMerchantIdentity;
+import com.donworry.identity.dto.MerchantSignedRequest;
+import com.donworry.identity.service.MerchantHmacSigner;
+import com.donworry.identity.service.MerchantSecretService;
 import java.net.*;
 import java.net.http.*;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.web.context.request.*;
 import tools.jackson.databind.json.JsonMapper;
 
 @Tag("mariadb")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "payment.http.enabled=true")
-@Import({MariaDbTestContainerConfig.class, PaymentHttpMariaDbTests.FakeIdentity.class})
+@Import(MariaDbTestContainerConfig.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PaymentHttpMariaDbTests {
-    @TestConfiguration(proxyBeanMethods = false)
-    static class FakeIdentity {
-        @Bean
-        PaymentMerchantIdentity fakeMerchant() {
-            return () -> {
-                var request = ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest();
-                return switch (Objects.toString(request.getHeader("X-Test-Identity"), "")) {
-                    case "merchant-a" -> Optional.of(997L);
-                    case "merchant-b" -> Optional.of(998L);
-                    default -> Optional.empty();
-                };
-            };
-        }
-    }
-
     @LocalServerPort
     int port;
 
@@ -49,7 +36,12 @@ class PaymentHttpMariaDbTests {
     JsonMapper mapper;
 
     @MockitoBean
-    TenantReader tenants;
+    MerchantSecretService secrets;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    private final byte[] signingKey = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8);
 
     @MockitoBean
     FdsEvaluator evaluator;
@@ -58,9 +50,22 @@ class PaymentHttpMariaDbTests {
 
     @BeforeEach
     void setup() {
-        when(tenants.findById(anyLong()))
-                .thenAnswer(i -> Optional.of(new TenantSummary(i.getArgument(0), "test", "ACTIVE")));
+        for (long id : new long[] {997, 998}) {
+            jdbc.update(
+                    "INSERT INTO merchants (merchant_id, merchant_code, display_name, status, pg_fee_rate, secret_reference, created_at) "
+                            + "VALUES (?, ?, 'HMAC test', 'ACTIVE', 0.01, 'DONWORRY_MERCHANT_HMAC_TEST', UTC_TIMESTAMP(6)) "
+                            + "ON DUPLICATE KEY UPDATE status='ACTIVE'",
+                    id,
+                    "HMAC" + id);
+        }
+        when(secrets.resolve(anyString())).thenReturn(signingKey);
         verdict(FdsResult.REVIEW);
+    }
+
+    @AfterEach
+    void cleanUpMerchants() {
+        jdbc.update("DELETE FROM merchant_request_nonces WHERE merchant_id IN (997,998)");
+        jdbc.update("DELETE FROM merchants WHERE merchant_code IN ('HMAC997','HMAC998')");
     }
 
     private void verdict(FdsResult result) {
@@ -85,25 +90,76 @@ class PaymentHttpMariaDbTests {
 
     private HttpResponse<String> call(String method, String path, String identity, String key, String body)
             throws Exception {
+        return client.send(signedRequest(method, path, identity, key, body), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpRequest signedRequest(String method, String path, String identity, String key, String body) {
         var b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json");
-        if (identity != null) b.header("X-Test-Identity", identity);
+        if (identity != null) {
+            String merchantCode = identity.equals("merchant-a") ? "HMAC997" : "HMAC998";
+            String timestamp = Long.toString(Instant.now().getEpochSecond());
+            String nonce = UUID.randomUUID().toString();
+            var input = new MerchantSignedRequest(
+                    merchantCode,
+                    timestamp,
+                    nonce,
+                    "",
+                    method,
+                    path,
+                    "application/json",
+                    key == null ? "" : key,
+                    body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8));
+            b.header("X-Merchant-Code", merchantCode)
+                    .header("X-Timestamp", timestamp)
+                    .header("X-Nonce", nonce)
+                    .header("X-Signature", HexFormat.of().formatHex(MerchantHmacSigner.sign(signingKey, input)));
+        }
         if (key != null) b.header("Idempotency-Key", key);
-        return client.send(
-                b.method(
-                                method,
-                                body == null
-                                        ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(body))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+        return b.method(
+                        method,
+                        body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body))
+                .build();
     }
     // 인증 없는 요청은 잘못된 본문보다 먼저 거절하고 업무 처리를 실행하지 않는다.
     @Test
     void post_withoutIdentity_rejectsBeforeBody() throws Exception {
         var r = call("POST", "/api/payments", null, null, "{");
         assertThat(r.statusCode()).isEqualTo(401);
-        assertThat(r.body()).contains("PAYMENT_AUTH_REQUIRED");
+        assertThat(r.body()).contains("MERCHANT_AUTH_001");
+        verifyNoInteractions(evaluator);
+    }
+
+    // 같은 HTTP 서명은 거절하되 새 nonce와 같은 결제 키로 재시도하면 기존 결과를 돌려준다
+    @Test
+    void post_whenSignatureReplayed_rejectsButAllowsResignedRetry() throws Exception {
+        String key = UUID.randomUUID().toString();
+        String body = body(UUID.randomUUID().toString(), 1000);
+        var request = signedRequest("POST", "/api/payments", "merchant-a", key, body);
+        var first = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(first.statusCode()).isEqualTo(202);
+        var duplicate = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(duplicate.statusCode()).isEqualTo(401);
+        assertThat(duplicate.body()).contains("MERCHANT_AUTH_001");
+        var retry = call("POST", "/api/payments", "merchant-a", key, body);
+        assertThat(retry.statusCode()).isEqualTo(202);
+        assertThat(mapper.readTree(retry.body()).path("paymentId").asLong())
+                .isEqualTo(mapper.readTree(first.body()).path("paymentId").asLong());
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM merchant_request_nonces WHERE merchant_id=997", Integer.class))
+                .isEqualTo(2);
+        verify(evaluator).evaluate(any());
+    }
+
+    // 서명 확인 후 업무 입력이 거절돼도 소비한 nonce를 되살리지 않는다
+    @Test
+    void post_whenBodyRejected_preservesConsumedNonce() throws Exception {
+        var request = signedRequest(
+                "POST", "/api/payments", "merchant-a", UUID.randomUUID().toString(), "{");
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(400);
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode())
+                .isEqualTo(401);
         verifyNoInteractions(evaluator);
     }
     // 같은 키 재전송·다른 내용 충돌과 가맹점 범위 조회를 실제 HTTP로 확인한다.
@@ -142,9 +198,7 @@ class PaymentHttpMariaDbTests {
         String key = UUID.randomUUID().toString(), body = body(UUID.randomUUID().toString(), 1000);
         var first = call("POST", "/api/payments", "merchant-a", key, body);
         long id = mapper.readTree(first.body()).path("paymentId").asLong();
-        doReturn(Optional.of(new TenantSummary(997L, "test", "INACTIVE")))
-                .when(tenants)
-                .findById(997L);
+        jdbc.update("UPDATE merchants SET status='INACTIVE' WHERE merchant_id=997");
         assertThat(call("POST", "/api/payments", "merchant-a", key, body).statusCode())
                 .isEqualTo(403);
         assertThat(call("GET", "/api/payments/" + id, "merchant-a", null, null).statusCode())
