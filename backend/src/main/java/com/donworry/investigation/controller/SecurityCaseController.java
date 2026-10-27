@@ -1,5 +1,6 @@
 package com.donworry.investigation.controller;
 
+import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
@@ -37,6 +38,13 @@ public class SecurityCaseController {
     public List<CaseSummaryResponse> list(@RequestParam(required = false) Long merchantId) {
         securityStaffGuard.requireSecurityStaffId();
         return caseQueryService.list(merchantId);
+    }
+
+    // 사이드바 배지용 상태별 건수. 사용자 동작(메뉴 이동 · 탭 복귀 · 판정) 때만 부른다 — 타이머로 부르면 세션 무활동 만료가 오지 않는다
+    @GetMapping("/counts")
+    public CaseCountsResponse counts() {
+        securityStaffGuard.requireSecurityStaffId();
+        return caseQueryService.counts();
     }
 
     @GetMapping("/{caseId}")

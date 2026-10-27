@@ -15,6 +15,7 @@ import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { useDemo } from '../../demo/DemoContext'
+import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
 import { decisionMode, latestReport, mergeRemainingMin, slaState } from '../../utils/caseRules'
 import { won } from '../../utils/format'
@@ -95,6 +96,7 @@ export function CaseDetailPage() {
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
     try {
       await submitDecisions(securityCase.caseId, request)
+      refreshCaseBadge()
       toast.success('판정을 확정했습니다. 실제 매입·취소 결과를 기다리고 있습니다.')
       load()
       return true
@@ -134,6 +136,7 @@ export function CaseDetailPage() {
     setRecheckingId(handoffId)
     try {
       const after = await recheckHandoff(securityCase.caseId, handoffId)
+      refreshCaseBadge()
       const handoff = after.handoffs.find((h) => h.handoffId === handoffId)
       if (handoff?.status === 'REQUESTED') {
         toast.info('아직 금융 처리 중입니다. P5 확인이 필요하면 결제·조치 정보를 전달하세요.')
