@@ -14,6 +14,8 @@ import org.springframework.data.repository.Repository;
 public interface MerchantRepository extends Repository<Merchant, Long>, JpaSpecificationExecutor<Merchant> {
     Optional<Merchant> findById(Long merchantId);
 
+    Optional<Merchant> findByMerchantCode(String merchantCode);
+
     Merchant saveAndFlush(Merchant merchant);
 
     boolean existsByMerchantCode(String merchantCode);
