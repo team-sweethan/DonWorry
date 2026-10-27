@@ -60,7 +60,7 @@
 | [0036](0036-fds-failure-analysis-and-reevaluation.md) | P2 FDS 오류 분석·재탐지 계약 | 제안 — P2 구현, P5 연동 대기 |
 | [0037](0037-merchant-hmac-authentication.md) | CakeShop 요청 HMAC 인증과 가맹점 신원 | 제안 — #219·#241 사용자 구현 승인, P6 업무 연결 후속·PR 리뷰 대상 |
 | [0038](0038-settlement-identity-dependency.md) | Settlement → Identity 의존 허용 (ADR-0012 보류 항목 확정) | 채택 — #240·#241 선행, P1 결정 (P6 별도 리뷰 없음) |
-| [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 제안 — #240 사용자 구현 승인, P6 실제 통합 후속 |
+| [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 채택 — P1 결정 (P6 확인 전), P6 실제 통합 후속 |
 
 ## 현재 적용 상태와 기록의 구분
 
