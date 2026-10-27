@@ -82,7 +82,7 @@ print(response.status, response.read().decode())
 
 프론트 로컬 서버에서 `cakeshop_owner` / `1234`로 로그인한다. `/api/auth/me`의 `OPERATOR`, 실제 CakeShop `merchantId`, 두 권한을 확인한 뒤 메뉴의 **정산 현황**(`/owner/settlements`)에 진입한다.
 현재 dev의 이 경로는 빈 화면(`EmptyPage`)이다. 화면 진입이 P6 업무 API·정산 데이터·타 가맹점 격리 검증을 의미하지 않는다.
-세션 공통 인가는 검수 중인 PR #249(#240), P6 실제 업무 연결은 후속이다. #246 브랜치에는 #249를 복사하거나 먼저 병합하지 않는다.
+`/api/v1/settlements` 세션 공통 인가는 [#240 연결 계약](240-owner-finance-session.md)을 따른다. `cakeshop_owner`는 그 조건(`OPERATOR`·`FINANCE_VIEW`·`merchantId`)을 갖춘 시드 계정이며, P6 실제 업무 연결은 후속이다.
 
 ## 검증 기록
 

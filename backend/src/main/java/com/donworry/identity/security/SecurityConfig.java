@@ -155,6 +155,18 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
+                        .requestMatchers("/api/v1/settlements", "/api/v1/settlements/**")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            // FINANCE_VIEW는 사장님의 읽기·쓰기 공통 권한이다 (#240).
+                            // ADMIN도 조회 권한 목록을 받으므로 역할을 별도로 제한한다.
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.OPERATOR
+                                    && user.merchantId() != null
+                                    && user.permissions() != null
+                                    && user.permissions().contains("FINANCE_VIEW"));
+                        })
                         .requestMatchers("/api/admin", "/api/admin/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();

@@ -6,7 +6,14 @@
 
 [등록·키 생성·전달·실제 서명 확인 절차](246-cakeshop-provisioning.md)를 따른다.
 새 가맹점 `CAKESHOP`과 `cakeshop_owner`를 Flyway 시드로 등록한다. 키 원문은 환경마다 별도로 생성한다.
-정산 세션 인가는 #240·PR #249, CakeShop 발신 연결은 #242, 시연 적용은 #175에서 확인한다.
+정산 세션 인가는 [#240 연결 계약](240-owner-finance-session.md), CakeShop 발신 연결은 #242, 시연 적용은 #175에서 확인한다.
+
+## #240 사장님 정산·자금관리 세션 인가
+
+정책·대안은 [ADR-0039](../decisions/0039-owner-finance-session-authorization.md), P6 공개 API 사용법·오류·책임 경계는 [연결 계약](240-owner-finance-session.md)을 따른다.
+`/api/v1/settlements`와 하위 경로는 OPERATOR·FINANCE_VIEW·merchantId 조건을 모두 요구한다. 읽기·쓰기 조건은 같고 ADMIN·SECURITY_STAFF는 제외한다.
+P1 공통 인가는 사용자 승인으로 먼저 구현하며, P6 정책 확인·실제 업무 어댑터 연결과 가맹점 격리 검증은 후속이다. P1 테스트 수신부의 검증을 실제 업무 통합 완료로 표현하지 않는다.
+DB·공개 Java API·모듈 의존·프론트 변경과 전체 CSRF 활성화는 없다.
 
 ## #219 CakeShop HMAC 인증
 
