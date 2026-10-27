@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.entity.UserStatus;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Tag;
@@ -16,6 +17,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.mariadb.MariaDBContainer;
 
@@ -89,6 +91,34 @@ class PlatformUserRepositoryTests {
         assertThat(staff.getMerchantId()).isNull();
         assertThat(permissionRepository.findPermissionCodesByUserId(staff.getUserId()))
                 .isEmpty();
+    }
+
+    // CakeShop 시드는 별도 가맹점·키 참조·사장님 권한을 갖고 재적용으로 중복되지 않는다
+    @Test
+    void migrations_whenCakeShopSeeded_preserveMerchantAndOwner() {
+        PlatformUser owner = repository.findByLoginId("cakeshop_owner").orElseThrow();
+        var merchant = jdbcTemplate.queryForMap("SELECT * FROM merchants WHERE merchant_code='CAKESHOP'");
+        assertThat(merchant.get("display_name")).isEqualTo("CakeShop");
+        assertThat(merchant.get("status")).isEqualTo("ACTIVE");
+        assertThat((BigDecimal) merchant.get("pg_fee_rate")).isEqualByComparingTo("0.020000");
+        assertThat(merchant.get("secret_reference")).isEqualTo("DONWORRY_MERCHANT_HMAC_CAKESHOP");
+        assertThat(merchant.get("webhook_url")).isNull();
+        assertThat(owner.getMerchantId()).isEqualTo(merchant.get("merchant_id"));
+        assertThat(owner.getMerchantId())
+                .isNotEqualTo(repository.findByLoginId("boss").orElseThrow().getMerchantId());
+        assertThat(owner.getRole()).isEqualTo(UserRole.OPERATOR);
+        assertThat(owner.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(owner.getDisplayName()).isEqualTo("CakeShop 사장님");
+        assertThat(new BCryptPasswordEncoder().matches("1234", owner.getPasswordHash()))
+                .isTrue();
+        assertThat(permissionRepository.findPermissionCodesByUserId(owner.getUserId()))
+                .containsExactlyInAnyOrder("FDS_VIEW", "FINANCE_VIEW");
+        assertThat(flyway.migrate().migrationsExecuted).isZero();
+        assertThat(repository.findByLoginId("cakeshop_owner").orElseThrow().getUserId())
+                .isEqualTo(owner.getUserId());
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM merchants WHERE merchant_code='CAKESHOP'", Long.class))
+                .isOne();
     }
 
     // 없는 로그인 ID는 빈 결과로 반환한다

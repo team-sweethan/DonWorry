@@ -2,6 +2,12 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #246 CakeShop 등록·키 준비
+
+[등록·키 생성·전달·실제 서명 확인 절차](246-cakeshop-provisioning.md)를 따른다.
+새 가맹점 `CAKESHOP`과 `cakeshop_owner`를 Flyway 시드로 등록한다. 키 원문은 환경마다 별도로 생성한다.
+정산 세션 인가는 #240·PR #249, CakeShop 발신 연결은 #242, 시연 적용은 #175에서 확인한다.
+
 ## #219 CakeShop HMAC 인증
 
 [HMAC 계약](219-merchant-hmac.md)과 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.
