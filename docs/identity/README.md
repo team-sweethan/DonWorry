@@ -5,7 +5,8 @@
 ## #219 CakeShop HMAC 인증
 
 [HMAC 계약](219-merchant-hmac.md)과 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.
-P1 공통 인증·P5 경로와 DB nonce 저장을 구현했고 P6 연결은 후속이다.
+P1 공통 인증·P5 경로와 DB nonce 저장을 구현했고 #241에서 P6 픽업 두 PUT의 HMAC 체인을 확장했다.
+P6 Controller·어댑터 연결(#227), 주문 소유권 통합 검증과 CakeShop 실제 호출은 후속이다.
 사용자 승인으로 저장소 ERD·ADR부터 반영했으며 Notion 동기화는 후속이다.
 기존 직원 세션과 전체 업무 CSRF 정책, P5 HTTP 기본 비활성은 유지한다.
 

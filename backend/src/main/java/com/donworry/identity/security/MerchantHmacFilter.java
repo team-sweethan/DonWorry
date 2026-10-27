@@ -7,7 +7,9 @@ import jakarta.servlet.http.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -18,19 +20,25 @@ final class MerchantHmacFilter extends OncePerRequestFilter {
     static final int MAX_BODY_BYTES = 65_536;
     private final MerchantHmacService service;
     private final SecurityProblemResponseWriter writer;
-    private final RequestMatcher allowed;
+    private final Map<RequestMatcher, HttpMethod> routes;
 
-    MerchantHmacFilter(MerchantHmacService service, SecurityProblemResponseWriter writer, RequestMatcher allowed) {
+    MerchantHmacFilter(
+            MerchantHmacService service, SecurityProblemResponseWriter writer, Map<RequestMatcher, HttpMethod> routes) {
         this.service = service;
         this.writer = writer;
-        this.allowed = allowed;
+        this.routes = Map.copyOf(routes);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (!allowed.matches(request)) {
-            response.setHeader("Allow", request.getServletPath().equals("/api/payments") ? "POST" : "GET");
+        HttpMethod method = routes.entrySet().stream()
+                .filter(route -> route.getKey().matches(request))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElseThrow();
+        if (!method.matches(request.getMethod())) {
+            response.setHeader("Allow", method.name());
             writer.write(response, AuthErrorCode.MERCHANT_METHOD_NOT_ALLOWED);
             return;
         }

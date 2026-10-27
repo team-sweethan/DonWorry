@@ -8,7 +8,7 @@
 
 사용자는 서버 간 인증을 HMAC으로 확정하고 P1 공통 인증·P5 경로 적용을 승인했다.
 아래 X-API-Key 문안은 당시 제안 기록이다. 최신 헤더·서명·재시도 규칙은
-[#219 계약](../identity/219-merchant-hmac.md)을 따른다. P6 연결은 후속이고 실제 CakeShop 키 배포·HTTPS 통합과 팀 전달은 아직 하지 않았다.
+[#219 계약](../identity/219-merchant-hmac.md)을 따른다. #241에서 P6 픽업 PUT의 공통 인증 경로를 확장했다. P6 업무 연결·실제 CakeShop 키 배포·HTTPS 통합과 팀 전달은 후속이다.
 
 ## 1. P1·CakeShop 전달용
 
