@@ -61,14 +61,15 @@ Notion 워크스페이스는 한 사람이 소유하고 다른 팀원은 게스�
 ## 5. 로컬에서 확인
 
 ```bash
-# ADR 파싱 결과만 출력 (네트워크 · 토큰 불필요)
+# 전체 대조(push)를 흉내 내기 — Issue · PR 목록을 GitHub에서 읽고 ADR을 파싱한다 (네트워크 필요)
 GITHUB_EVENT_NAME=push python .github/scripts/notion_sync.py --dry-run
 
-# 웹훅 payload 하나를 흉내 내기 — 최근 변경 조회에 GitHub 토큰이 필요하다 (없으면 그 건만 처리)
+# 웹훅 payload 하나를 흉내 내기 — 그 건 + 최근 60분 안에 바뀐 Issue · PR
 GITHUB_EVENT_NAME=pull_request_target GITHUB_EVENT_PATH=pr.json GITHUB_TOKEN=$(gh auth token) python .github/scripts/notion_sync.py --dry-run
 ```
 
-`NOTION_TOKEN`을 넣고 `--dry-run`을 쓰면 Notion을 읽기만 하고 쓰기 요청은 로그로만 남깁니다.
+`GITHUB_TOKEN`은 없어도 됩니다(공개 저장소라 토큰 없이 조회되지만 시간당 60회 제한). 토큰이 틀리면 최근 변경 조회가 실패해 이벤트로 온 그 건만 처리합니다.
+`NOTION_TOKEN` 없이 `--dry-run`을 쓰면 Notion을 읽지 않아 모든 행이 "생성"으로 나옵니다. `NOTION_TOKEN`을 넣고 `--dry-run`을 쓰면 Notion을 읽기만 하고 쓰기 요청은 로그로만 남깁니다.
 
 ## 6. 문제 해결
 
