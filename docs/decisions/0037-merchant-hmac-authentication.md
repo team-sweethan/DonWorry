@@ -1,9 +1,9 @@
 # 0037. CakeShop 요청의 HMAC 인증과 가맹점 신원
 
-- **상태:** 제안 — #219 사용자 구현 승인, P6 연결 제외. nonce DB 스키마 사용자 승인, 구현·PR 리뷰 대상
+- **상태:** 제안 — #219·#241 사용자 구현 승인. nonce DB 스키마 사용자 승인, 구현·PR 리뷰 대상. P6 업무 연결은 #227 후속
 - **날짜:** 2026-10-27
 - **관련:** #219, #149, #68, [ADR-0012](0012-payment-settlement-dependency.md), [ADR-0014](0014-session-authentication.md), [ADR-0025](0025-csrf-preparation.md), [ADR-0030](0030-cakeshop-payment-attempts.md)
-- **영향 받는 담당:** P1 identity·CakeShop, P5. P6는 후속 공개 경계 소비자이며 이번 변경 대상이 아니다.
+- **영향 받는 담당:** P1 identity·CakeShop, P5, P6(#241 공통 인증 경로 확장). 원래 #219 범위에서 제외했던 P6 확장은 아래 후속 절을 따른다.
 
 ## 배경
 
@@ -45,3 +45,28 @@ P5의 결제 HTTP는 구현됐지만 인증 연결 전 기본 비활성이고, �
 - 테스트: 서명·재전송·직원 인증 분리·CSRF·P5 실제 HTTP 회귀, MariaDB 영속 기록·동시성·롤백·만료 삭제 검사.
 - 문서: 기존 P5 API Key 문서는 당시 제안으로 보존하고 최신 HMAC 계약으로 연결한다. 팀 메시지는 발송하지 않는다.
 - 실행 기록·미검증: #219 계약 문서에 기록한다. 이 ADR의 작성은 구현·검증 완료를 뜻하지 않는다.
+
+## #241 후속: P6 픽업 PUT 공통 인증 연결 (2026-10-27)
+
+원래 #219의 P6 제외 범위를 #241 사용자 구현 승인과 P6가 전달한 확정 계약에 따라 확장한다.
+P6 업무 구현·검증 완료를 의미하지 않는다. 모듈 의존은 이미 채택된 [ADR-0038](0038-settlement-identity-dependency.md)을 따른다.
+
+- P6 확정 경로 `PUT /api/v1/order-fulfillments/{orderId}/schedule` · `PUT /api/v1/order-fulfillments/{orderId}/completion`만 HMAC 허용·CSRF 예외로 추가한다.
+- 두 경로는 모든 메서드에서 전용 체인이 선택한다. 미지원 메서드는 405·`Allow: PUT`이며 직원 세션 체인으로 넘어가지 않는다. Controller 부재·기능 비활성에도 체인은 유지한다.
+- INACTIVE 가맹점의 위 PUT은 허용한다. P6 제안과 P1 결정이 일치하며, 기존 주문의 픽업 통지가 누락돼 정산 일정이 멈추는 것을 방지한다. P5 POST 차단·GET 허용은 유지한다.
+- P6는 `CurrentMerchant.findCurrent()`의 ID만 사용하고 본문 merchantId·직원 세션으로 대체하지 않는다. P6 어댑터·Controller·주문/매입 ID 대조·선도착 저장은 #226·#227에서 구현한다.
+- 같은 서명 재사용은 401, 새 서명으로 같은 본문을 보내는 경우는 P6 업무 멱등 검사의 대상이다. 키 등록은 #246, CakeShop 발신 코드·실제 호출 검증은 별도 연동 작업이다.
+
+### 버린 대안과 영향
+
+| 대안 | 버린 이유 |
+| --- | --- |
+| 정지 가맹점의 픽업 PUT도 차단 | 신규 결제를 제한하려다 기존 주문의 후속 정산 통지까지 멈추게 한다 |
+| order-fulfillments 전체 하위 경로를 CSRF 예외로 지정 | 아직 합의하지 않은 API까지 예외가 확대된다 |
+| P6 기능 활성화 때만 HMAC 체인 등록 | 비활성·Controller 부재 시 직원 체인으로 빠질 수 있다 |
+| 요청 merchantId 또는 직원 세션으로 대체 | 서버 간 신원과 사용자 신원이 섞이고 요청 값으로 타 가맹점에 접근할 수 있다 |
+
+- API: 두 PUT에 기존 HMAC wire format 적용. 각 경로의 지원 메서드를 `Allow` 헤더와 함께 정의한다. P6 업무 JSON·응답 정책은 #227 소유다.
+- DB·화면·공개 Java 계약·의존 목록: 변경 없음.
+- 테스트: 두 PUT 서명·변조·만료·직원 세션 분리·정지 허용·미지원 메서드·CSRF 범위, 실제 HTTP/DB nonce 소비·장애 차단·Controller 부재, 기존 P5 회귀를 검사한다.
+- 검증 기록·미검증은 [HMAC 계약](../identity/219-merchant-hmac.md)에 적는다. 테스트용 Controller·키 대역과 실제 P6/CakeShop 통합은 구분한다.

@@ -47,7 +47,7 @@ public class MerchantHmacService {
         if (!nonces.consume(
                 merchant.getMerchantId(), UUID.fromString(input.nonce()), Instant.ofEpochSecond(timestamp + 301)))
             reject();
-        // 비활성 가맹점도 유효한 서명으로 자기 결제 결과를 조회할 수 있다.
+        // 비활성 가맹점도 기존 결제 조회·픽업 PUT은 허용한다. 주문 소유권은 업무 모듈이 검사한다.
         if ("POST".equals(input.method()) && merchant.getStatus() != MerchantStatus.ACTIVE)
             throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_INACTIVE);
         return new MerchantIdentity(merchant.getMerchantId());
