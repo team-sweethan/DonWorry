@@ -43,6 +43,12 @@ TOOL_SPECS: list[dict[str, Any]] = [
 
 ALLOWED_TOOL_NAMES = frozenset(spec["function"]["name"] for spec in TOOL_SPECS)
 
+# 도구별로 받는 인자 이름 — 이 밖의 인자는 버린다
+TOOL_ARGS: dict[str, frozenset[str]] = {
+    spec["function"]["name"]: frozenset(spec["function"]["parameters"]["properties"])
+    for spec in TOOL_SPECS
+}
+
 
 # Agent가 실제로 부른 도구 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
 @dataclass(frozen=True)

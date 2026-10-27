@@ -6,10 +6,10 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts
-from app.agent.assemble import analyzable, assemble_report, facts_json
+from app.agent.assemble import analyzable, assemble_report, fact_numbers, facts_json
 from app.agent.llm import LlmClient
 from app.agent.narrative import Narrative, narrative_schema, validate_narrative
-from app.agent.tools import ALLOWED_TOOL_NAMES, TOOL_SPECS, ToolBox, ToolRecord
+from app.agent.tools import ALLOWED_TOOL_NAMES, TOOL_ARGS, TOOL_SPECS, ToolBox, ToolRecord
 from app.config import Settings
 from app.schemas.case_context import CaseContext
 from app.schemas.report import ReportBody
@@ -96,9 +96,11 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                 content = f"허용되지 않은 도구다: {name}"
             else:
                 used += 1
+                # 도구 설명에 없는 인자(예: Qwen이 지어낸 case_id)는 쓰지도 기록하지도 않는다
+                args = {k: v for k, v in (call.get("args") or {}).items() if k in TOOL_ARGS[name]}
                 try:
-                    result = _execute(toolbox, name, call.get("args") or {})
-                    records.append(ToolRecord(name, dict(call.get("args") or {}), result))
+                    result = _execute(toolbox, name, args)
+                    records.append(ToolRecord(name, args, result))
                     content = result.model_dump_json()
                 except Exception as e:  # 도구 실패는 Qwen에게 알려 다시 고르게 한다
                     content = f"도구 실행 실패: {e}"
@@ -163,7 +165,8 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             ),
         ]
         raw = llm.write_json(messages, narrative_schema(payment_ids))
-        narrative, errors = validate_narrative(raw, payment_ids)
+        allowed = fact_numbers(case_payments, _fds_by_payment(records))
+        narrative, errors = validate_narrative(raw, payment_ids, allowed)
         if narrative is not None:
             return {"narrative": narrative, "write_messages": messages, "next": "assemble"}
         if state["repairs"] < settings.agent_max_repairs:

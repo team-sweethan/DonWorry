@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -79,13 +80,71 @@ def narrative_schema(payment_ids: list[str]) -> dict[str, Any]:
     }
 
 
-# 형식 검사 — 통과하면 Narrative, 아니면 Qwen에게 돌려줄 오류 문장 목록
-def validate_narrative(raw: str, payment_ids: list[str]) -> tuple[Narrative | None, list[str]]:
+# 문장에 나오면 안 되는 코드값 — 밑줄이 든 영문 코드(REJECT_REVIEW · HIGH_AMOUNT 등)와 상태 코드
+# \b는 한글도 글자로 봐서 "REJECT_REVIEW를"을 놓친다 — 영문 · 숫자 · 밑줄 기준으로만 경계를 본다
+_CODE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:[A-Z]+(?:_[A-Z]+)+"
+    r"|HELD|REVIEW|DENY|DENIED|ALLOW|CAPTURED|VOIDED|PENDING|DECLINED|EXPIRED)(?![A-Za-z0-9_])"
+)
+
+# 확률처럼 단정하는 표현 — FDS 점수는 확률이 아니고 판정은 직원이 한다 (fds 정본 기획 2.6)
+_ASSERTIVE = re.compile(
+    r"확률|%|가능성이\s*(?:매우\s*)?(?:높|크)|사기(?:로|임이|가)\s*(?:판단|확실|분명|확정|추정)"
+)
+
+# 숫자와 단위 — "65만 원"은 650000으로 읽는다
+_NUMBER = re.compile(r"(\d[\d,]*)(\s*만)?")
+
+# 수량 · 횟수처럼 근거에 없어도 되는 작은 수
+_SMALL_NUMBERS = frozenset(range(11))
+
+
+def _sentences(narrative: Narrative) -> list[str]:
+    texts = [
+        *narrative.summary,
+        *narrative.overallAnalysis,
+        *narrative.additionalChecks,
+        narrative.recommendationSummary,
+        *narrative.limitations,
+    ]
+    for payment in narrative.payments.values():
+        texts += [*payment.riskEvidence, *payment.normalEvidence, *payment.unknowns]
+    return texts
+
+
+def _numbers(text: str) -> set[int]:
+    found: set[int] = set()
+    for digits, man in _NUMBER.findall(text):
+        value = int(digits.replace(",", "")) if digits.replace(",", "") else 0
+        found.add(value * 10000 if man else value)
+    return found
+
+
+# 내용 검사 — 근거에 없는 숫자, 코드값, 확률 단정 표현을 찾는다
+def content_errors(narrative: Narrative, allowed_numbers: set[int]) -> list[str]:
+    errors: list[str] = []
+    for text in _sentences(narrative):
+        unknown = sorted(_numbers(text) - allowed_numbers - _SMALL_NUMBERS)
+        if unknown:
+            errors.append(f'근거에 없는 숫자 {unknown}: "{text}"')
+        if code := _CODE.search(text):
+            errors.append(f'코드값 "{code.group()}"을 한국어로 풀어 써라: "{text}"')
+        if phrase := _ASSERTIVE.search(text):
+            errors.append(f'확률 · 단정 표현 "{phrase.group()}"을 쓰지 마라: "{text}"')
+    return errors
+
+
+# 형식 · 내용 검사 — 통과하면 Narrative, 아니면 Qwen에게 돌려줄 오류 문장 목록
+def validate_narrative(
+    raw: str, payment_ids: list[str], allowed_numbers: set[int] | None = None
+) -> tuple[Narrative | None, list[str]]:
     try:
         narrative = Narrative.model_validate_json(raw)
     except ValidationError as e:
         return None, [f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
     errors: list[str] = []
+    if allowed_numbers is not None:
+        errors += content_errors(narrative, allowed_numbers)
     if not narrative.summary:
         errors.append("summary가 비어 있다")
     if not narrative.recommendationSummary.strip():
