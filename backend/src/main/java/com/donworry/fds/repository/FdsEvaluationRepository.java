@@ -22,6 +22,8 @@ public interface FdsEvaluationRepository
 
     Optional<FdsEvaluation> findByEvaluationRequestId(UUID evaluationRequestId);
 
+    Optional<FdsEvaluation> findByReevaluationRetryId(UUID reevaluationRetryId);
+
     long countByResult(FdsResult result);
 
     List<FdsEvaluation> findByPaymentIdOrderByEvaluatedAtDesc(Long paymentId);

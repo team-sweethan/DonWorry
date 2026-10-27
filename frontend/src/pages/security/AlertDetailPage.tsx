@@ -220,6 +220,10 @@ export function AlertDetailPage() {
                 },
               ]}
               dataSource={detail.history}
+              onRow={(record) => ({
+                onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
+                style: { cursor: 'pointer' },
+              })}
             />
           </Card>
         </div>

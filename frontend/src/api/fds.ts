@@ -74,3 +74,11 @@ export function getFdsEvaluation(evaluationId: string) {
 export function createMockFdsEvaluations() {
   return api<FdsEvaluationResponse[]>('/fds/evaluations/mock', { method: 'POST' })
 }
+
+export function createMockFdsErrorEvaluation() {
+  return api<FdsEvaluationResponse>('/fds/evaluations/mock/error', { method: 'POST' })
+}
+
+export function reevaluateMockFdsError() {
+  return api<FdsEvaluationResponse>('/fds/evaluations/mock/error/reevaluate', { method: 'POST' })
+}
