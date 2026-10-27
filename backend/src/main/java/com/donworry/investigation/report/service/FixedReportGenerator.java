@@ -1,4 +1,4 @@
-package com.donworry.investigation.service.mock;
+package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
@@ -7,84 +7,44 @@ import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
-import com.donworry.investigation.service.ReportGateway;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
-// 목업 — P4 보고서 생성을 흉내 내 요청 즉시 SUCCEEDED 보고서를 메모리에 쌓는다 (Notion "목업 데이터 · 연동 현황" P3 표)
-// report_body 키는 화면 ReportBody(fds 정본 02 §2.7)를 따른다. P4와 확정 전이다
-// ai_reports는 P4 소유라 쓰지 않는다. P4 보고서 서비스가 생기면 이 클래스를 지운다
+// 임시 — FastAPI 연결(P4-2) 전까지 Case 결제 근거로 고정 문장 보고서를 만든다. 이전 MockReportGateway 본문을 그대로 옮겼다
+// report_body 키는 화면 ReportBody(frontend/src/types/case.ts · ADR-0009 결정 4)를 따른다
 @Component
 @RequiredArgsConstructor
-public class MockReportGateway implements ReportGateway {
+class FixedReportGenerator {
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
     private final PaymentInfoReader paymentInfoReader;
 
-    private final AtomicLong reportIds = new AtomicLong();
-    private final Map<Long, List<ReportSnapshot>> reports = new ConcurrentHashMap<>();
-
-    // 같은 증거 버전을 이미 조사했으면 새 버전을 만들지 않는다 — 요청이 두 번 와도 보고서는 하나
-    @Override
-    public void request(Long caseId, int evidenceVersion) {
-        List<ReportSnapshot> caseReports = reports.computeIfAbsent(caseId, id -> new CopyOnWriteArrayList<>());
-        synchronized (caseReports) {
-            if (caseReports.stream().anyMatch(report -> report.evidenceVersion() >= evidenceVersion)) {
-                return;
-            }
-            Optional<SecurityCase> securityCase = securityCaseRepository.findById(caseId);
-            if (securityCase.isEmpty()) {
-                return;
-            }
-            int reportVersion = caseReports.size() + 1;
-            Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
-                    .map(CasePayment::getPaymentId)
-                    .toList();
-            Map<Long, PaymentInfo> found = paymentInfoReader.findAll(paymentIds);
-            List<PaymentInfo> payments = paymentIds.stream()
-                    .map(found::get)
-                    .filter(MockReportGateway::hasEvidence)
-                    .toList();
-            // 결제 연결과 버전 증가는 한 트랜잭션으로 커밋되므로, 결제를 읽은 뒤 버전이 요청과 같으면 둘이 같은 시점이다
-            // 그사이 병합돼 버전이 앞섰으면 낡은 요청이다 — 건너뛰고 새 버전 요청이 보고서를 만든다
-            boolean stale = securityCase.get().getEvidenceVersion() != evidenceVersion
-                    || securityCaseRepository
-                                    .findById(caseId)
-                                    .map(SecurityCase::getEvidenceVersion)
-                                    .orElse(-1)
-                            != evidenceVersion;
-            if (stale) {
-                return;
-            }
-            // 연결된 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면(예: 서버 재시작으로 목 결제 정보가 비었을 때,
-            // P2 평가가 없거나 ERROR일 때) 성공 보고서를 만들지 않는다
-            // 증거가 빠진 보고서를 판정 근거로 쓰지 않도록 최종 실패(FAILED)로 남긴다 — 직원은 수동 판정 경로로 간다 (fds 정본 02 §2.5)
-            if (payments.size() != paymentIds.size()) {
-                caseReports.add(new ReportSnapshot(
-                        reportIds.incrementAndGet(), caseId, reportVersion, evidenceVersion, "FAILED", null, now, now));
-                return;
-            }
-            caseReports.add(new ReportSnapshot(
-                    reportIds.incrementAndGet(),
-                    caseId,
-                    reportVersion,
-                    evidenceVersion,
-                    "SUCCEEDED",
-                    body(securityCase.get(), payments, reportVersion, evidenceVersion, now),
-                    now,
-                    now));
+    // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
+    // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
+    // 커밋 뒤 리스너에서 불리므로 끝난 트랜잭션에 합류하지 않게 새 읽기 트랜잭션을 연다
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public Optional<Map<String, Object>> generate(Long caseId, int reportVersion, int evidenceVersion, Instant now) {
+        SecurityCase securityCase = securityCaseRepository.findById(caseId).orElseThrow();
+        List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
+                .map(CasePayment::getPaymentId)
+                .toList();
+        Map<Long, PaymentInfo> found = paymentInfoReader.findAll(paymentIds);
+        List<PaymentInfo> payments = paymentIds.stream()
+                .map(found::get)
+                .filter(FixedReportGenerator::hasEvidence)
+                .toList();
+        if (payments.size() != paymentIds.size()) {
+            return Optional.empty();
         }
+        return Optional.of(body(securityCase, payments, reportVersion, evidenceVersion, now));
     }
 
     private static boolean hasEvidence(PaymentInfo payment) {
@@ -92,11 +52,6 @@ public class MockReportGateway implements ReportGateway {
                 && payment.amount() != null
                 && payment.requestedAt() != null
                 && payment.riskScore() != null;
-    }
-
-    @Override
-    public List<ReportSnapshot> findByCase(Long caseId) {
-        return List.copyOf(reports.getOrDefault(caseId, List.of()));
     }
 
     private static Map<String, Object> body(
@@ -115,7 +70,6 @@ public class MockReportGateway implements ReportGateway {
                     "amount", payment.amount(),
                     "requestedAt", payment.requestedAt().toString(),
                     "riskScore", payment.riskScore(),
-                    // 보고서 본문 모양은 P4 계약(ADR-0009) 영역이라 코드 문자열 목록을 그대로 둔다
                     "ruleHits", payment.ruleHits().stream().map(RuleHit::code).toList(),
                     "riskEvidence",
                             payment.ruleHits().stream()
@@ -158,7 +112,7 @@ public class MockReportGateway implements ReportGateway {
                         "summary",
                         "추가 확인 후 결제별로 판정할 것을 권고합니다.",
                         "limitations",
-                        List.of("목업 보고서입니다. FDS 점수는 부정거래 확률이 아닙니다.")),
+                        List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다.")),
                 "evidence",
                 List.of(
                         evidence(
