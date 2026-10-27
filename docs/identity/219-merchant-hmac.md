@@ -114,4 +114,11 @@ P5 업무 입력·충돌·다른 가맹점 조회·처리 장애 오류는 기�
 - 미검증·후속: CakeShop 실제 서명 코드·환경변수 키 배포·운영 HTTPS/프록시·부하·실제 프로세스 재시작(저장소 객체 재생성으로 구분해 검사)·P6 연결·Notion 동기화·팀 메시지 발송. 프론트/AI 코드는 변경하지 않아 해당 검사를 실행하지 않았다.
 - 기존 #203 브랜치는 보존했다. 셸 Git fetch의 DNS 오류로 GitHub 연결 도구에서 받은 원격 Git 객체를 SHA 일치 확인 후 로컬에 반영했다.
 
-최신 dev #221 통합 후 결과는 아래에 추가한다.
+### 최신 dev 통합 후 최종 검증
+
+최신 dev `d5a74d4`(#221)를 통합한 커밋 `8b184fc`에서 `./gradlew spotlessApply check mariaDbTest --console=plain`을 다시 실행해 통과했다.
+일반 496개 중 495개 성공·기존 1개 건너뜀, MariaDB 323개 성공. 실패·오류 0.
+ADR 목록 충돌은 P2 ADR-0036과 HMAC ADR-0037을 모두 보존해 해결했고 ERD는 자동 병합됐다.
+신규 P2 migration까지 포함해 전체 Flyway·JPA validate·모듈 경계 검사를 통과했다.
+검증 이후 변경은 이 문서의 실행 기록뿐이다. [PR #225](https://github.com/team-sweethan/DonWorry/pull/225)는 dev 대상으로 생성했다.
+원격 CI 결과는 PR에서 별도 확인하며 위 수치는 로컬 실행 결과다.
