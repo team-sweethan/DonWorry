@@ -9,9 +9,11 @@ import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseSummary } from '../../types/case'
 import { slaState } from '../../utils/caseRules'
 import { won } from '../../utils/format'
+import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
 import { homeCounts, priorityCases, type PriorityReason } from '../../utils/securityHome'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
+import { StatButton } from './case/StatButton'
 
 /** 먼저 볼 이유 — 표의 첫 열. OTHER는 진행 중이라 따로 표시하지 않는다. */
 const reasonLabel: Record<PriorityReason, { label: string; color: string } | null> = {
@@ -67,13 +69,14 @@ export function SecurityHomePage() {
   const rows = useMemo(() => priorityCases(cases), [cases])
   const failed = result?.merchant === merchant && result.failed
 
-  const openList = (status?: CaseStatus) =>
-    navigate(status ? `/security/cases?status=${status}` : '/security/cases')
+  // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243)
+  const openList = (query: Partial<CaseListQuery> = {}) =>
+    navigate(`/security/cases${caseListSearch(query)}`)
   // 한 건이면 그 Case로 바로 간다
-  const openFirst = (match: (c: CaseSummary) => boolean, status?: CaseStatus) => {
+  const openFirst = (match: (c: CaseSummary) => boolean, query: Partial<CaseListQuery>) => {
     const hits = cases.filter((c) => c.status !== 'CLOSED' && match(c))
     if (hits.length === 1) navigate(`/security/cases/${hits[0].caseId}`)
-    else openList(status)
+    else openList(query)
   }
 
   const columns: ColumnsType<Row> = [
@@ -170,7 +173,9 @@ export function SecurityHomePage() {
               action={
                 <Button
                   size="small"
-                  onClick={() => openFirst((c) => c.status === 'ACTION_FAILED', 'ACTION_FAILED')}
+                  onClick={() =>
+                    openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' })
+                  }
                 >
                   확인
                 </Button>
@@ -185,7 +190,9 @@ export function SecurityHomePage() {
               action={
                 <Button
                   size="small"
-                  onClick={() => openFirst((c) => c.latestReportStatus === 'FAILED')}
+                  onClick={() =>
+                    openFirst((c) => c.latestReportStatus === 'FAILED', { report: 'failed' })
+                  }
                 >
                   확인
                 </Button>
@@ -205,41 +212,41 @@ export function SecurityHomePage() {
           value={counts.decisionPending}
           foot="직원 판정 필요"
           color="#B45309"
-          onClick={() => openList('DECISION_PENDING')}
+          onClick={() => openList({ status: 'DECISION_PENDING' })}
         />
         <StatButton
           title="AI 조사 중"
           value={counts.aiRunning}
           foot="보고서 생성 대기 · 생성 중"
-          onClick={() => openList()}
+          onClick={() => openList({ report: 'running' })}
         />
         <StatButton
           title="AI 보고서 실패"
           value={counts.aiFailed}
           foot="수동 조사 · 판정 필요"
           color="#B91C1C"
-          onClick={() => openFirst((c) => c.latestReportStatus === 'FAILED')}
+          onClick={() => openFirst((c) => c.latestReportStatus === 'FAILED', { report: 'failed' })}
         />
         <StatButton
           title="금융 처리 대기"
           value={counts.actionPending}
           foot="매입 · 승인 취소 완료 대기 중"
           color="#1D4ED8"
-          onClick={() => openList('ACTION_PENDING')}
+          onClick={() => openList({ status: 'ACTION_PENDING' })}
         />
         <StatButton
           title="금융 조치 실패"
           value={counts.actionFailed}
           foot="실패 사유 확인 필요"
           color="#B91C1C"
-          onClick={() => openList('ACTION_FAILED')}
+          onClick={() => openList({ status: 'ACTION_FAILED' })}
         />
         <StatButton
           title="24시간 초과"
           value={counts.slaExceeded}
           foot="권장 처리 시간(SLA) 경과"
           color="#C2410C"
-          onClick={() => openList()}
+          onClick={() => openList({ slaExceeded: true })}
         />
       </div>
       <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
@@ -280,30 +287,5 @@ export function SecurityHomePage() {
         />
       </Card>
     </>
-  )
-}
-
-function StatButton({
-  title,
-  value,
-  foot,
-  color = '#0F172A',
-  onClick,
-}: {
-  title: string
-  value: number
-  foot: string
-  color?: string
-  onClick: () => void
-}) {
-  return (
-    <button type="button" className="dw-panel dw-stat-card dw-stat-card-button" onClick={onClick}>
-      <div className="dw-stat-label">{title}</div>
-      <div className="dw-stat-value" style={{ color }}>
-        {value}
-        <span style={{ fontSize: 13, fontWeight: 500, marginLeft: 3 }}>건</span>
-      </div>
-      <div className="dw-stat-foot">{foot}</div>
-    </button>
   )
 }
