@@ -143,7 +143,8 @@ def assemble_report(
             )
         )
         fds_text = (
-            f"FDS {evidence.fdsResult} ({evidence.riskScore}점)"
+            f"FDS {FDS_RESULT_KO.get(evidence.fdsResult or '', '판정 미확인')}"
+            f" ({evidence.riskScore}점)"
             if evidence and evidence.riskScore is not None
             else "FDS 평가 미확인"
         )

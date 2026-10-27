@@ -2,6 +2,9 @@ import json
 
 from app.agent.assemble import ALWAYS_LIMITATIONS, ALWAYS_UNKNOWN, facts_json
 from app.agent.graph import run_investigation
+from app.agent.llm import MockLlmClient
+from app.agent.narrative import validate_narrative
+from app.agent.prompts import WRITE_EXAMPLE
 from app.config import Settings
 from tests.fakes import ScriptedLlm, call, context, narrative, toolbox
 
@@ -113,3 +116,26 @@ def test_invented_tool_args_are_dropped() -> None:
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
     assert outcome.records[0].args == {}
+
+
+# 프롬프트 예시 문장도 내용 검사를 통과해야 한다 — 예시가 규칙을 어기면 Qwen이 따라 한다
+def test_prompt_example_passes_content_checks() -> None:
+    example = dict(WRITE_EXAMPLE)
+    example["payments"] = {"9201": WRITE_EXAMPLE["payments"]["<결제 ID>"]}
+
+    narrative_obj, errors = validate_narrative(
+        json.dumps(example, ensure_ascii=False), ["9201"], set()
+    )
+
+    assert errors == []
+    assert narrative_obj is not None
+
+
+# 타임라인은 코드가 만드는 칸이라 코드값 대신 한국어로 쓴다
+def test_timeline_uses_korean_fds_result() -> None:
+    outcome = run_investigation(
+        context("103", 1), MockLlmClient(), toolbox("sample_single.json"), SETTINGS
+    )
+
+    assert outcome.status == "SUCCEEDED"
+    assert [t.event for t in outcome.report.timeline] == ["9201 결제 요청 · FDS 검토 (55점)"]

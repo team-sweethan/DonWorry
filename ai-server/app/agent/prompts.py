@@ -46,28 +46,31 @@ recommendationSummary는 결제별 권고와 같은 내용을 한국어 한두 �
 """
 
 # 7B 모델은 규칙 나열보다 예시를 더 잘 따른다 — 숫자 · 코드값 없이 쓴 문장 예시
+# 실제 사건과 겹치지 않는 가상 사건(카드사 거절 뒤 재시도 1건)으로 둔다 — 베껴 쓰면 바로 드러나게
 WRITE_EXAMPLE = {
-    "summary": ["같은 고객이 짧은 간격으로 두 번 결제했고, 두 결제 모두 처음 쓰는 카드였습니다."],
+    "summary": ["카드사가 거절한 직후 같은 고객이 다시 결제를 시도했습니다."],
     "payments": {
         "<결제 ID>": {
-            "riskEvidence": ["처음 쓰는 카드로 결제했습니다.", "금액이 고액 기준을 넘었습니다."],
+            "riskEvidence": ["카드사 거절 뒤 짧은 시간 안에 다시 결제했습니다."],
             "normalEvidence": [],
-            "unknowns": ["카드를 새로 발급받았는지 여부"],
+            "unknowns": ["거절 사유가 한도 초과인지 분실 · 도난 카드인지 여부"],
             "recommendation": "NEEDS_CHECK",
         }
     },
     "overallAnalysis": [
-        "두 결제 모두 처음 쓰는 카드라는 공통점이 있어 같은 카드 소지자인지 확인이 필요합니다."
+        "거절 후 재시도는 한도를 모른 정상 고객에게도 나타나므로 거절 사유를 확인해야 합니다."
     ],
-    "additionalChecks": ["고객에게 본인 결제 여부 확인"],
+    "additionalChecks": ["카드사 거절 사유 확인"],
     "recommendationSummary": (
-        "규칙 적중 외 근거가 없어 두 결제 모두 추가 확인 후 판정할 것을 권고합니다."
+        "거절 후 재시도 외에 다른 근거가 없어 추가 확인 후 판정할 것을 권고합니다."
     ),
-    "limitations": ["고객의 과거 결제 패턴은 확인하지 못했습니다."],
+    "limitations": ["카드사 거절 사유는 확인하지 못했습니다."],
 }
 
-WRITE_SYSTEM += "\n출력 예시 (<결제 ID> 자리는 실제 근거의 결제 ID를 쓴다)\n" + json.dumps(
-    WRITE_EXAMPLE, ensure_ascii=False, indent=1
+WRITE_SYSTEM += (
+    "\n출력 예시 — 형식만 참고한다. 아래는 다른 가상 사건이므로 문장을 베끼지 말고,"
+    " 이번 [조사 근거]에 맞는 내용으로 새로 쓴다. (<결제 ID> 자리는 실제 결제 ID)\n"
+    + json.dumps(WRITE_EXAMPLE, ensure_ascii=False, indent=1)
 )
 
 WRITE_FACTS = "[조사 근거]\n{facts}"
