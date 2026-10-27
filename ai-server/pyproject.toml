@@ -7,12 +7,15 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic-settings>=2.6",
+    "httpx>=0.28",
+    "langgraph>=1.2",
+    "langchain-core>=1.7",
+    "langchain-ollama>=1.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=8.3",
-    "httpx>=0.28",
     "ruff>=0.8",
 ]
 

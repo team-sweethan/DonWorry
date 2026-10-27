@@ -1,0 +1,40 @@
+{
+  "casePayments": {
+    "caseId": "101",
+    "evidenceVersion": 2,
+    "source": "P3·P5",
+    "retrievedAt": "2026-10-27T12:10:00Z",
+    "payments": [
+      {"paymentId": "9001", "amount": 650000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T12:00:00Z"},
+      {"paymentId": "9002", "amount": 120000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T12:07:00Z"}
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "101",
+    "evidenceVersion": 2,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T12:10:01Z",
+    "payments": [
+      {
+        "paymentId": "9001",
+        "riskScore": 65,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "HIGH_AMOUNT", "name": "고액 결제", "appliedScore": 35},
+          {"code": "NEW_CARD", "name": "처음 쓰는 카드", "appliedScore": 30}
+        ]
+      },
+      {
+        "paymentId": "9002",
+        "riskScore": 55,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "RAPID_REPEAT_PAYMENT", "name": "단시간 반복 결제", "appliedScore": 25},
+          {"code": "NEW_CARD", "name": "처음 쓰는 카드", "appliedScore": 30}
+        ]
+      }
+    ],
+    "missingPaymentIds": []
+  }
+}
