@@ -17,6 +17,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.json.JsonMapper;
@@ -25,6 +26,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("mariadb")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "security.csrf.enabled=false")
 @Import({MariaDbTestContainerConfig.class, OwnerFinanceHttpMariaDbTests.ProbeController.class})
+// 테스트 전용 컨텍스트의 연결 풀을 반납해 뒤의 동시성 검사가 DB 연결 한도를 넘지 않게 한다.
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OwnerFinanceHttpMariaDbTests {
     private static final String PROBE = "/api/v1/settlements/auth-probe";
 
