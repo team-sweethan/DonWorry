@@ -72,4 +72,31 @@ public class AiReport {
                 .createdAt(now)
                 .build();
     }
+
+    // SUCCEEDED · FAILED는 끝난 상태 — 어떤 경로로도 다시 바꾸지 않는다 (ADR-0009 결정 2)
+    public boolean isFinished() {
+        return status == ReportStatus.SUCCEEDED || status == ReportStatus.FAILED;
+    }
+
+    // 보고서 본문을 저장하고 끝낸다. 이미 끝났으면 바꾸지 않고 false
+    public boolean succeed(Map<String, Object> body, Instant now) {
+        if (isFinished()) {
+            return false;
+        }
+        this.reportBody = Objects.requireNonNull(body, "body");
+        this.status = ReportStatus.SUCCEEDED;
+        this.completedAt = now.truncatedTo(ChronoUnit.MICROS);
+        return true;
+    }
+
+    // 실패 정보는 report_body.error에 남긴다 — 화면 응답에는 보내지 않는다 (ADR-0009 결정 2)
+    public boolean fail(Map<String, Object> error, Instant now) {
+        if (isFinished()) {
+            return false;
+        }
+        this.reportBody = Map.of("error", Objects.requireNonNull(error, "error"));
+        this.status = ReportStatus.FAILED;
+        this.completedAt = now.truncatedTo(ChronoUnit.MICROS);
+        return true;
+    }
 }

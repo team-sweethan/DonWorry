@@ -17,7 +17,6 @@ import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
-import com.donworry.investigation.service.mock.MockReportGateway;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,7 +46,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
-// 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
+// 시연 HELD 결제 → Case 생성 · 병합 → 보고서(P4 고정 결과) → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
 // 시연 결제는 P5 payments에 없으므로 결제 ID로 나뉘어 목 조회 · 목 금융 조치로 간다. 실제 P5 · P2 연결은 PaymentActionFlowTests ·
 // PaymentFdsInfoReaderTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
@@ -78,7 +77,7 @@ class CaseFlowTests {
     SecurityCaseRepository securityCaseRepository;
 
     @Autowired
-    MockReportGateway mockReportGateway;
+    ReportGateway reportGateway;
 
     // 로그인 세션은 P1 공개 계약으로만 본다 — 기본은 보안 직원 7번, 권한 테스트에서만 바꾼다
     @MockitoBean
@@ -142,7 +141,7 @@ class CaseFlowTests {
 
     // 보고서 요청이 늦게 도착해 Case 증거 버전이 이미 앞섰으면 낡은 버전 보고서를 만들지 않는다
     @Test
-    void mockReport_staleRequest_isSkipped() {
+    void report_staleRequest_isSkipped() {
         SecurityCase securityCase =
                 securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
@@ -150,24 +149,24 @@ class CaseFlowTests {
         securityCase.increaseEvidenceVersion();
         securityCaseRepository.save(securityCase);
 
-        mockReportGateway.request(securityCase.getId(), 1);
-        assertThat(mockReportGateway.findByCase(securityCase.getId())).isEmpty();
+        reportGateway.request(securityCase.getId(), 1);
+        assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
-        mockReportGateway.request(securityCase.getId(), 2);
-        assertThat(mockReportGateway.findByCase(securityCase.getId()))
+        reportGateway.request(securityCase.getId(), 2);
+        assertThat(reportGateway.findByCase(securityCase.getId()))
                 .singleElement()
                 .extracting(ReportGateway.ReportSnapshot::evidenceVersion)
                 .isEqualTo(2);
     }
 
-    // 현재 증거 버전 보고서가 없으면(예: 목 보고서가 재시작으로 비었을 때) 다시 요청해 판정을 이어 갈 수 있다
+    // 현재 증거 버전 보고서가 없으면(예: 커밋 뒤 보고서 요청이 실패했을 때) 다시 요청해 판정을 이어 갈 수 있다
     // 이미 있으면 두 번 요청해도 보고서는 하나다
     @Test
     void requestReport_missingReport_createsCurrentVersionOnce() throws Exception {
         SecurityCase securityCase =
                 securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
-        assertThat(mockReportGateway.findByCase(securityCase.getId())).isEmpty();
+        assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
         mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
                 .andExpect(status().isOk())
