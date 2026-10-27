@@ -40,8 +40,8 @@ void modules_respectBoundariesAndAllowedDependencies() {
 // fds/package-info.java
 @ApplicationModule(displayName = "Fds", allowedDependencies = {"identity :: api"})
 
-// settlement/package-info.java  — identity가 필요해지면 ADR 개정 후 "identity :: api" 추가 (ADR-0012 보류 항목)
-@ApplicationModule(displayName = "Settlement", allowedDependencies = {})
+// settlement/package-info.java  — ADR-0038에서 "identity :: api" 추가 (ADR-0012 보류 항목 확정)
+@ApplicationModule(displayName = "Settlement", allowedDependencies = {"identity :: api"})
 
 // payment/package-info.java
 @ApplicationModule(displayName = "Payment",

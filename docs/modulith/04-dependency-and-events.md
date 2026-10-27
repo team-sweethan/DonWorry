@@ -18,19 +18,19 @@ flowchart TB
 
     fds --> identity
     payment --> fds
+    settlement --> identity
     payment --> identity
     payment --> settlement
     investigation --> payment
     investigation --> fds
     investigation --> identity
-    settlement -. "보류" .-> identity
 ```
 
 | 모듈 | import해도 되는 모듈 |
 | --- | --- |
 | `identity` | 없음 |
 | `fds` | identity |
-| `settlement` | 없음 (identity는 보류 — 가맹점 정보가 필요해지면 추가) |
+| `settlement` | identity ([ADR-0038](../decisions/0038-settlement-identity-dependency.md) — 인증된 가맹점 확인) |
 | `payment` | fds, identity, settlement |
 | `investigation` | payment, fds, identity |
 
