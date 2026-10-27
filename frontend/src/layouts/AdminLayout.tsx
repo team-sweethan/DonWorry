@@ -2,7 +2,7 @@ import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@an
 import { Button, Select, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { navByRole, roles, type Role, type NavGroup } from '../config/navigation'
+import { navByRole, roles, type Role, type NavBadge, type NavGroup } from '../config/navigation'
 import { useDemo } from '../demo/DemoContext'
 import { useFeedback } from '../components/common/Feedback'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
@@ -74,7 +74,17 @@ function Header() {
   )
 }
 
-function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean }) {
+type NavBadges = Partial<Record<NavBadge, number | null>>
+
+function Sidebar({
+  groups,
+  badges = {},
+  demo = false,
+}: {
+  groups: NavGroup[]
+  badges?: NavBadges
+  demo?: boolean
+}) {
   const location = useLocation()
 
   return (
@@ -83,17 +93,26 @@ function Sidebar({ groups, demo = false }: { groups: NavGroup[]; demo?: boolean 
         {groups.map((group) => (
           <div className="dw-nav-group" key={group.title}>
             <div className="dw-nav-heading">{group.title}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {group.items.map((item) => {
+              // 0건 · 아직 모름(null)이면 숨긴다
+              const count = item.badge ? badges[item.badge] : null
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
+                  }
+                >
+                  {item.label}
+                  {count ? (
+                    <span className="dw-nav-badge" aria-label={`처리 필요 ${count}건`}>
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  ) : null}
+                </NavLink>
+              )
+            })}
           </div>
         ))}
       </nav>
@@ -131,11 +150,13 @@ export function AdminLayout() {
 export function ManagementLayout({
   header,
   groups,
+  badges,
   demo = false,
   children,
 }: {
   header: ReactNode
   groups: NavGroup[]
+  badges?: NavBadges
   demo?: boolean
   children?: ReactNode
 }) {
@@ -143,7 +164,7 @@ export function ManagementLayout({
   return (
     <div className="admin-viewport">
       {header}
-      <Sidebar groups={groups} demo={demo} />
+      <Sidebar groups={groups} badges={badges} demo={demo} />
       <main className="dw-main" id="main">
         <div className="dw-container">
           {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}

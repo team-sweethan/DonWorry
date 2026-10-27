@@ -53,4 +53,12 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
 
     // 보안 직원 Case 목록 — 최근 생성 순
     List<SecurityCase> findAllByOrderByCreatedAtDesc();
+
+    // 사이드바 배지용 상태별 건수 — 결제 · 보고서를 읽지 않고 security_cases만 센다 (#224)
+    @Query("""
+            SELECT new com.donworry.investigation.repository.CaseStatusCount(c.status, COUNT(c))
+            FROM SecurityCase c
+            GROUP BY c.status
+            """)
+    List<CaseStatusCount> countByStatus();
 }

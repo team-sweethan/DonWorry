@@ -386,13 +386,16 @@ class CaseFlowTests {
         assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
     }
 
-    // Case 목록 · 상세 · 보고서 재요청도 로그인하지 않았으면 401이다 — 실제 결제 · FDS 근거를 내보내기 때문이다
+    // Case 목록 · 건수 · 상세 · 보고서 재요청도 로그인하지 않았으면 401이다 — 실제 결제 · FDS 근거를 내보내기 때문이다
     @Test
     void readApis_withoutLogin_returnUnauthorized() throws Exception {
         DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
         mvc.perform(get("/api/security-cases"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
+        mvc.perform(get("/api/security-cases/counts"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
@@ -403,7 +406,7 @@ class CaseFlowTests {
                 .andExpect(jsonPath("$.code").value("INV_010"));
     }
 
-    // 보안 직원이 아닌 역할(사장님 · 관리자)은 Case 목록 · 상세를 볼 수 없다 (403)
+    // 보안 직원이 아닌 역할(사장님 · 관리자)은 Case 목록 · 건수 · 상세를 볼 수 없다 (403)
     @ParameterizedTest
     @ValueSource(strings = {"OPERATOR", "ADMIN"})
     void readApis_byNonSecurityStaff_returnForbidden(String role) throws Exception {
@@ -411,6 +414,9 @@ class CaseFlowTests {
         loginAs(99L, role);
 
         mvc.perform(get("/api/security-cases"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+        mvc.perform(get("/api/security-cases/counts"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INV_009"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
@@ -517,6 +523,22 @@ class CaseFlowTests {
         mvc.perform(get("/api/security-cases/{caseId}", Long.MAX_VALUE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INV_001"));
+    }
+
+    // 상태별 건수 — 모든 상태가 키로 오고, 새 Case가 판정 대기 건수에 바로 더해진다 (#224)
+    // 다른 테스트와 DB를 같이 쓰므로 절대값이 아니라 전후 차이로 본다
+    @Test
+    void counts_includesEveryStatusAndNewDecisionPendingCase() throws Exception {
+        Map<String, Long> before = caseQueryService.counts().statusCounts();
+        createHeld(customer(), 300_000L, 65);
+
+        assertThat(before)
+                .containsOnlyKeys(
+                        "OPEN", "INVESTIGATING", "DECISION_PENDING", "ACTION_PENDING", "ACTION_FAILED", "CLOSED");
+        mvc.perform(get("/api/security-cases/counts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
+                .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
     }
 
     // 목록에 방금 만든 Case가 결제 수 · 금액 · 최고 점수와 함께 나온다

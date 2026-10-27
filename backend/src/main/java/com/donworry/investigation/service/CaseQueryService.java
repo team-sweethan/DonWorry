@@ -1,5 +1,6 @@
 package com.donworry.investigation.service;
 
+import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.AiReportResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.CasePaymentResponse;
@@ -10,15 +11,18 @@ import com.donworry.investigation.dto.CaseDetailResponse.RuleHitResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.entity.CasePayment;
+import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.ActionHandoffRepository;
 import com.donworry.investigation.repository.CaseHistoryRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
+import com.donworry.investigation.repository.CaseStatusCount;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +51,20 @@ public class CaseQueryService {
                 ? securityCaseRepository.findAllByOrderByCreatedAtDesc()
                 : securityCaseRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId);
         return cases.stream().map(this::summary).toList();
+    }
+
+    // 사이드바 배지용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
+    // 화면이 키 유무를 따지지 않게 없는 상태도 0으로 채운다
+    @Transactional(readOnly = true)
+    public CaseCountsResponse counts() {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (CaseStatus status : CaseStatus.values()) {
+            counts.put(status.name(), 0L);
+        }
+        for (CaseStatusCount row : securityCaseRepository.countByStatus()) {
+            counts.put(row.status().name(), row.count());
+        }
+        return new CaseCountsResponse(counts);
     }
 
     @Transactional(readOnly = true)
