@@ -88,7 +88,7 @@ void on(CaptureRequested event) { ... }                // 자기 모듈 클래�
 | 이벤트 | 보내는 쪽 → 받는 쪽 | 클래스 위치 |
 | --- | --- | --- |
 | `PaymentHeld` (HELD 발생) | payment → investigation | `payment.api` |
-| `HandoffResult` (금융 조치 인계 결과) | payment → investigation | `payment.api` |
+| `PaymentActionResult` (금융 조치 완료 결과, [ADR-0027](../decisions/0027-payment-actions.md)) | payment → investigation | `payment.api` |
 | `CaptureRequested` (매입 요청) | payment → settlement | `settlement.api` |
 | 매입 접수 결과 (예: `CaptureIntakeAccepted` · `CaptureIntakeRejected`) | settlement → payment | `settlement.api` |
 | 매입 실행 결과 (예: `CaptureCompleted` · `CaptureFailed`) | settlement → payment | `settlement.api` |
