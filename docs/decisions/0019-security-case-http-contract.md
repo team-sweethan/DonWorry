@@ -1,7 +1,7 @@
 # 0019. P3 Case 조회 · 판정 HTTP 계약
 
 - **상태:** 제안
-- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회 · #205 개정: 고객사 보안 조치 결과 조회)
+- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회 · #205 개정: 고객사 보안 조치 결과 조회 · #212 개정: 시연 결제 금융 조치를 처리 대기 → 다시 확인 완료로)
 - **관련:** Issue #98 · #107 · #160 · #161 · #163 · #205, ADR-0020, ADR-0026, ADR-0027, ADR-0034, PR #103 · #113, ADR-0009, Notion FDS 정본 02 §2.5 · 03 §3.5, Notion "목업 데이터 · 연동 현황"
 - **영향 받는 담당:** P3 수민 (소유), P1 주환 (frontend · identity), P2 정후 (평가 근거), P4 현규 (보고서), P5 시은 (결제 정보 · 금융 조치 결과)
 
@@ -52,7 +52,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
   - `acceptedAt`은 P3 반영 시각이다. P5 `completedAt`은 `case_histories.event_data`에 남긴다.
   - 다시 확인이 이벤트보다 먼저 같은 결과를 반영하면 그 이력에는 `completedAt`이 없다. 뒤에 온 결과 이벤트는 상태를 바꾸지 않고, 이 인계 이력에 `completedAt`이 아직 없을 때만 `HANDOFF_COMPLETION_RECORDED`(handoffId · completedAt)를 한 번 남긴다(PR #194 리뷰).
 - 다시 확인: `REQUESTED` 인계만 대상이다. 보안 직원만 부를 수 있고(판정과 같은 확인), 같은 멱등키로 P5에 저장된 결과를 받아 반영한다. P6 매입을 다시 실행하지 않고 새 키도 만들지 않는다. 계속 `PENDING`이면 상태는 그대로 두고 `last_attempted_at`과 `HANDOFF_RECHECKED` 이력(확인한 직원 · 결과)만 남긴다. 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다(#158).
-- 시연 결제는 P5 `payments`에 없다. 목 저장소(`MockPaymentInfoStore`)에 등록된 결제 ID만 목 조회 · 목 금융 조치(바로 완료)로 보내고, 그 밖의 결제는 실제 P5 · P2로 보낸다(#163). 설정값이 없어서 실제 결제가 목으로 "완료"될 수 없다. #161의 `investigation.mock.payment-action-enabled` 속성은 없앴다. 시연 결제의 룰 이름 · 점수는 시연용 값이다.
+- 시연 결제는 P5 `payments`에 없다. 목 저장소(`MockPaymentInfoStore`)에 등록된 결제 ID만 목 조회 · 목 금융 조치로 보내고, 그 밖의 결제는 실제 P5 · P2로 보낸다(#163). 목 금융 조치는 실제 P5와 같은 순서로 보인다(#212): 판정 직후 첫 요청은 `PENDING`(인계 `REQUESTED` · Case `ACTION_PENDING`), 직원의 "인계 상태 다시 확인"(같은 멱등키 재요청)에서 완료되고 목 결제 상태를 CAPTURE → `CAPTURED`, VOID → `VOIDED`로 바꾼다. 시간이 지났다고 스스로 완료하지 않는다. 설정값이 없어서 실제 결제가 목으로 "완료"될 수 없다. #161의 `investigation.mock.payment-action-enabled` 속성은 없앴다. 시연 결제의 룰 이름 · 점수는 시연용 값이다.
 - 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` 400, `INV_009` · `INV_014` 403, `INV_010` 401, `INV_013` 503. 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
 
 ## 고려한 대안
@@ -68,6 +68,8 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 | (#161) 응답과 결과 이벤트 중 먼저 온 쪽으로 반영 | 화면은 바로 바뀌지만, VOID는 거의 항상 응답이 먼저라 실제 완료 시각(`completedAt`)이 이력에 남지 않는다 |
 | (#161) 오래 대기한 인계를 자동 `FAILED`로 바꾸거나 자동 재요청 | 늦게 매입이 끝나면 P3 기록과 실제 결제가 어긋난다. P3에는 P5 · P6 작업을 멈출 권한이 없다(정본 §2.9, #158) |
 | (#161) 목 금융 조치를 바로 지우기 | 시연 결제가 모두 `PAYMENT_NOT_FOUND`로 실패한다. P5 결제 입력이 켜질 때까지 남긴다 |
+| (#212) 시연 결제 금융 조치를 계속 바로 완료 | 결제 상태가 `HELD`인 채로 Case가 `CLOSED`가 되어 "실제 매입 · 취소 완료 뒤 종료"와 반대로 보이고, "금융 처리 대기 중" · 다시 확인 장면을 시연할 수 없다 |
+| (#212) 판정 뒤 몇 초 지나면 목업이 스스로 완료 | 정본 02 §2.9 "시간만으로 상태를 바꾸지 않음"과 어긋나고, 백그라운드 타이머 때문에 테스트가 시간에 의존한다 |
 | (#163) 시연 모드 속성 하나로 목 조회 · 목 금융 조치를 함께 켜고 끄기 | 운영에서 켜 두면 실제 결제를 판정해도 목이 "완료"를 돌려줘 매입 없이 Case가 종료된다. 결제 ID로 나누면 켤 스위치가 없다 |
 | (#163) 조회 오류도 `null`로 내보내기 | 장애가 "값 모름"으로 보여 직원이 빈 근거로 판정할 수 있다 |
 | (#163) Case 조회 권한 검사를 P1 전체 접근 제어(#68)까지 미루기 | 목업 값일 때는 미검증으로 두었지만, 실제 금융 데이터를 내보내기 시작하면 비로그인 사용자도 볼 수 있게 된다 |
@@ -82,7 +84,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 - API: 이 문서의 표. 소비자는 이 저장소 frontend뿐이다. `totalAmount`는 #103의 `long`에서 nullable로 바뀌었다(병합 전 #113에서 변경, 다른 소비자 없음).
 - DB: 없음. 목업 데이터는 메모리이고 `ai_reports`(P4 소유)는 쓰지 않는다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
 - 화면: 고객사 `/owner/actions` 목록 · 상세가 `src/api/merchantCases.ts`로 고객사 조회 API를 쓴다(#205). `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
-- 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가), `MerchantCaseFlowTests`(고객사 조회 가맹점 범위 · 권한 · 제외 항목 · 직접 조사 표시).
+- 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치 처리 대기 → 다시 확인 → 종료), `MockFinancialActionGatewayTests`(처리 중 · 완료 · 결제 상태 · 멱등), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가), `MerchantCaseFlowTests`(고객사 조회 가맹점 범위 · 권한 · 제외 항목 · 직접 조사 표시).
 - 문서: P4 보고서 계약이 정해지면 보고서 재요청과 FAILED 의미를 그 계약에 맞춰 이 ADR을 개정한다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
 
 ## 검증

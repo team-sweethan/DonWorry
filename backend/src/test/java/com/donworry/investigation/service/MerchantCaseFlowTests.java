@@ -84,6 +84,7 @@ class MerchantCaseFlowTests {
         DemoHeldPaymentResponse decided = createHeld(merchantId, customer, 300_000L, 65);
         createHeld(merchantId, customer, 500_000L, 72);
         decideAll(decided.caseId(), "ACCEPT", "REJECT");
+        recheckAll(decided.caseId());
         DemoHeldPaymentResponse waiting = createHeld(merchantId, customer(), 100_000L, 60);
         DemoHeldPaymentResponse others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
 
@@ -131,13 +132,23 @@ class MerchantCaseFlowTests {
 
         decideAll(held.caseId(), "REJECT");
 
+        // 판정 직후 — 금융 처리 대기 중이라 결제는 아직 보류 상태다 (화면은 "판정 반영 처리 중")
+        loginAsOwner(merchantId);
+        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayStatus").value("PROCESSING"))
+                .andExpect(jsonPath("$.payments[0].decision").value("REJECT"))
+                .andExpect(jsonPath("$.payments[0].paymentStatus").value("HELD"));
+
+        // 실제 취소가 확인되면 Case가 종료되고 결제 상태도 VOIDED다 (#212)
+        recheckAll(held.caseId());
         loginAsOwner(merchantId);
         mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayStatus").value("CLOSED"))
                 .andExpect(jsonPath("$.closedAt").isNotEmpty())
                 .andExpect(jsonPath("$.payments[0].decision").value("REJECT"))
-                .andExpect(jsonPath("$.payments[0].paymentStatus").value("HELD"))
+                .andExpect(jsonPath("$.payments[0].paymentStatus").value("VOIDED"))
                 .andExpect(jsonPath("$.payments[0].reason").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].staffId").doesNotExist())
                 .andExpect(jsonPath("$.decisions").doesNotExist())
@@ -253,6 +264,16 @@ class MerchantCaseFlowTests {
                             reportId,
                             detail.payments().get(i).casePaymentId(),
                             decisions[i]))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    // 금융 처리 대기 중인 인계를 보안 직원으로 모두 다시 확인한다 — 시연 결제는 다시 확인에서 완료된다 (#212)
+    private void recheckAll(Long caseId) throws Exception {
+        loginAs(7L, "SECURITY_STAFF", null, List.of());
+        for (CaseDetailResponse.HandoffResponse handoff :
+                caseQueryService.detail(caseId).handoffs()) {
+            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId()))
                     .andExpect(status().isOk());
         }
     }

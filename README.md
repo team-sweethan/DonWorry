@@ -239,7 +239,7 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 설치를 마쳤다면 다음 흐름으로 지금 있는 화면을 확인할 수 있습니다. 업무 기능이 구현되면 이 절을 보강합니다.
 
 1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 로그인과 Case·조치 결과 화면은 백엔드(8081)와 DB가 필요합니다([프론트 README](frontend/README.md#실행)).
-2. [프론트 README](frontend/README.md)의 보안 직원 시연 계정으로 로그인합니다. **Case 목록**에서 "시연: HELD 결제 발생"으로 Case를 만들고 병합 → 판정 → 금융 조치 인계 → Case 종료까지 확인합니다. **경보 목록 → 경보 상세** 목업과 역할별 메뉴도 확인합니다.
+2. [프론트 README](frontend/README.md)의 보안 직원 시연 계정으로 로그인합니다. **Case 목록**에서 "시연: HELD 결제 발생"으로 Case를 만들고 병합 → 판정 → "금융 처리 대기 중" → "인계 상태 다시 확인" → Case 종료까지 확인합니다. **경보 목록 → 경보 상세** 목업과 역할별 메뉴도 확인합니다.
 3. 사장님 시연 계정으로 로그인해 **조치 결과**에서 내 가맹점 Case의 직원 판정과 실제 결제 상태를 확인합니다.
 4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
 5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).

@@ -38,6 +38,20 @@ public class MockPaymentInfoStore {
         return info;
     }
 
+    // 목 금융 조치가 완료되면 P5처럼 결제 상태를 바꾼다 — CAPTURED(매입 완료) · VOIDED(승인 취소) (#212)
+    public void markCompleted(Long paymentId, String paymentStatus) {
+        payments.computeIfPresent(
+                paymentId,
+                (id, info) -> new PaymentInfo(
+                        info.paymentId(),
+                        info.amount(),
+                        paymentStatus,
+                        info.requestedAt(),
+                        info.riskScore(),
+                        info.fdsResult(),
+                        info.ruleHits()));
+    }
+
     public Optional<PaymentInfo> find(Long paymentId) {
         return Optional.ofNullable(payments.get(paymentId));
     }
