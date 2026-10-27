@@ -47,7 +47,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
-// 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 목 금융 조치 완료 → Case CLOSED 를 HTTP로 확인한다
+// 시연 HELD 결제 → Case 생성 · 병합 → 목 보고서 → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
 // 시연 결제는 P5 payments에 없으므로 결제 ID로 나뉘어 목 조회 · 목 금융 조치로 간다. 실제 P5 · P2 연결은 PaymentActionFlowTests ·
 // PaymentFdsInfoReaderTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
@@ -265,9 +265,10 @@ class CaseFlowTests {
                 .hasSize(1);
     }
 
-    // 모든 결제를 판정하면 금융 조치가 완료되고 Case가 종료된다 (ACCEPT · REJECT 혼합)
+    // 모든 결제를 판정하면 먼저 금융 처리 대기가 되고, 다시 확인으로 실제 완료가 확인되면 Case가 종료된다 (#212)
+    // 시연 결제도 실제 P5와 같은 순서 — 판정 직후 PENDING, 완료되면 결제 상태가 CAPTURED · VOIDED로 바뀐다
     @Test
-    void decideAllPayments_handoffsAccepted_closesCase() throws Exception {
+    void decideAllPayments_pendingThenRecheck_closesCaseWithCompletedPayments() throws Exception {
         String customer = customer();
         DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
@@ -282,10 +283,24 @@ class CaseFlowTests {
                                 item(payments.get(0).casePaymentId(), "ACCEPT"),
                                 item(payments.get(1).casePaymentId(), "REJECT"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.securityCase.status").value("CLOSED"))
+                .andExpect(jsonPath("$.securityCase.status").value("ACTION_PENDING"))
                 .andExpect(jsonPath("$.decisions.length()").value(2));
 
+        CaseDetailResponse waiting = caseQueryService.detail(first.caseId());
+        assertThat(waiting.handoffs())
+                .extracting(CaseDetailResponse.HandoffResponse::status)
+                .containsExactly("REQUESTED", "REQUESTED");
+        assertThat(waiting.payments())
+                .extracting(CaseDetailResponse.CasePaymentResponse::paymentStatus)
+                .containsExactly("HELD", "HELD");
+
+        recheckAll(first.caseId());
+
         CaseDetailResponse closed = caseQueryService.detail(first.caseId());
+        assertThat(closed.securityCase().status()).isEqualTo("CLOSED");
+        assertThat(closed.payments())
+                .extracting(CaseDetailResponse.CasePaymentResponse::paymentStatus)
+                .containsExactly("CAPTURED", "VOIDED");
         assertThat(closed.handoffs())
                 .extracting(CaseDetailResponse.HandoffResponse::status)
                 .containsExactly("ACCEPTED", "ACCEPTED");
@@ -295,7 +310,12 @@ class CaseFlowTests {
         assertThat(closed.securityCase().closedAt()).isNotNull();
         assertThat(closed.history())
                 .extracting(CaseDetailResponse.HistoryResponse::eventType)
-                .contains("DECISION_CONFIRMED", "HANDOFF_REQUESTED", "HANDOFF_ACCEPTED", "CASE_CLOSED");
+                .contains(
+                        "DECISION_CONFIRMED",
+                        "HANDOFF_REQUESTED",
+                        "HANDOFF_RECHECKED",
+                        "HANDOFF_ACCEPTED",
+                        "CASE_CLOSED");
     }
 
     // 판정 직원은 요청 본문이 아니라 로그인 세션 사용자로 저장된다 — 본문의 staffId는 무시한다
@@ -324,6 +344,7 @@ class CaseFlowTests {
                 .andExpect(status().isOk());
         Long handoffId =
                 caseQueryService.detail(held.caseId()).handoffs().getFirst().handoffId();
+        recheckAll(held.caseId());
 
         mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId))
                 .andExpect(status().isConflict())
@@ -472,7 +493,8 @@ class CaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
-                .andExpect(jsonPath("$.securityCase.status").value("CLOSED"));
+                .andExpect(jsonPath("$.securityCase.status").value("ACTION_PENDING"));
+        recheckAll(held.caseId());
 
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isConflict())
@@ -552,6 +574,15 @@ class CaseFlowTests {
                 .getResponse()
                 .getContentAsString();
         return mapper.readValue(body, DemoHeldPaymentResponse.class);
+    }
+
+    // 금융 처리 대기 중인 인계를 모두 다시 확인한다 — 시연 결제는 다시 확인에서 완료된다 (#212)
+    private void recheckAll(Long caseId) throws Exception {
+        for (CaseDetailResponse.HandoffResponse handoff :
+                caseQueryService.detail(caseId).handoffs()) {
+            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId()))
+                    .andExpect(status().isOk());
+        }
     }
 
     private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {

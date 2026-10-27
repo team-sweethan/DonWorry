@@ -105,7 +105,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 | --- | --- | --- |
 | `MockReportGateway` | 요청 즉시 `SUCCEEDED` 보고서를 메모리에 만든다. 결제 정보가 비면 `FAILED` | P4가 `ReportGateway`를 구현할 때 (ADR-0009, PR #120). 그때 완료 이벤트 리스너를 붙인다 |
 | `MockPaymentInfoStore` | 시연 결제의 금액 · 점수 · 룰을 메모리에 둔다 | P5 결제 입구(#151)가 켜진 뒤 #163 2단계 |
-| `MockFinancialActionGateway` | 시연 결제의 금융 조치를 바로 완료로 돌려준다 | 같음 (#163 2단계) |
+| `MockFinancialActionGateway` | 시연 결제의 금융 조치. 첫 요청은 처리 중(`PENDING`), "인계 상태 다시 확인"에서 완료되고 결제 상태를 `CAPTURED` · `VOIDED`로 바꾼다 (#212) | 같음 (#163 2단계) |
 | `DemoHeldPaymentController` · `DemoHeldPaymentService` | 시연 HELD 결제 API | 같음 (#163 2단계) |
 
 - 시연 결제와 실제 결제는 결제 ID로 나뉜다. 목 저장소에 등록된 ID만 목업으로 가고, 나머지는 실제 P5 · P2로 간다. 켜고 끄는 설정값은 없다.
