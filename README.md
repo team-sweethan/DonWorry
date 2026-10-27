@@ -32,7 +32,7 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
 
 - **결제(PG) · P5** — CakeShop 결제 세션, FDS 평가 요청, 모의 카드사 승인, REVIEW 승인 건의 매입 보류(HELD), 승인 취소(VOID), 결제 상태 관리(DENIED · DECLINED · HELD · CAPTURED · VOIDED · EXPIRED), CakeShop 결과 통지
 - **FDS 위험평가 · P2** — 규칙 기반 점수로 ALLOW / REVIEW / DENY 판정(50점 미만 · 50~80 · 80 초과, MVP 임시 기준). 평가 실패는 ERROR이며 자동 ALLOW하지 않음. 결제별 평가 이력은 `fds_evaluations`, 룰별 실행 결과·점수·근거는 `fds_rule_hits`에 저장하는 스키마가 있음. 평가·저장 로직은 미구현이며 `rule_set_version` 컬럼은 없음
-- **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계가 모두 확인되면 Case 종료
+- **Case 조사 · 직원 판정 · P3** — HELD 결제 1건부터 Case 생성. 같은 가맹점·고객이면 최초 생성 후 30분 미만, 판정 전까지 병합. 보안 직원이 결제별 ACCEPT(매입 허용) / REJECT(승인 취소) 판정. 금융 조치 인계는 실제 매입·취소 완료를 확인한 뒤 Case 종료(완료 기반), 대기 중인 인계는 "인계 상태 다시 확인". 사장님은 자기 가맹점의 보안 조치 결과(직원 판정·실제 결제 상태)를 조회
 - **AI 조사 보고서 · P4** — Case 단위 보고서, 결제가 병합되면 새 버전으로 재조사(이전 버전 보존). 읽기 전용 Tool로 증거 조회, 증거 출처는 보고서 JSON 안에 기록. 총 3회 실패하면 직원이 직접 조사해 판정(`report_id` 없이 사유에 근거 기록). AI는 결제를 바꾸지 않음
 - **매입 · 정산 · P6** — CAPTURE 요청 이벤트 수신 후 즉시 매입, 수수료·정산 예정금 계산 및 `SCHEDULED` 저장. 별도 일일 매입 배치는 두지 않음. 픽업·정산 완료·취소 연동은 2차 범위이며, 영속 접수 결과와 실행 결과의 세부 계약은 확인 필요
 - **조사 기한** — Case 최초 생성 후 24시간을 내부 목표로 경고(권장값, 확정 아님). 기한 초과만으로 자동 판정하지 않음
@@ -185,8 +185,8 @@ npm run dev
 `http://localhost:5173`에서 열립니다. `/api`로 시작하는 요청은 백엔드(8081)로 전달됩니다.
 
 프론트는 로컬 시연 로그인과 공통 헤더·사이드바를 제공합니다.
-보안 직원의 **Case 목록·상세와 경보 목록·상세**는 목업 데이터로 동작합니다.
-거래 내역·사장님 조치 결과·정산 현황은 `EmptyPage`의 **담당자 구현 영역**입니다.
+보안 직원의 **경보 목록·상세**는 목업 데이터로 동작합니다. **Case 목록·상세**와 사장님 **조치 결과**는 백엔드 API에 연결되어 있습니다(시연 결제와 AI 보고서만 백엔드 목업, [P3 문서](docs/investigation/README.md#7-목업-범위와-지울-조건)).
+거래 내역·정산 현황은 `EmptyPage`의 **담당자 구현 영역**입니다.
 실제 인증·업무 API는 연동 전입니다.
 시연 계정·실행 방법은 [프론트 README](frontend/README.md),
 담당 페이지 연결 방법은 [공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)를 참고합니다.
@@ -238,9 +238,9 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 
 설치를 마쳤다면 다음 흐름으로 지금 있는 화면을 확인할 수 있습니다. 업무 기능이 구현되면 이 절을 보강합니다.
 
-1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 백엔드 없이도 화면을 볼 수 있습니다.
-2. 보안 직원 `security` / `demo1234`로 로그인해 **Case 목록 → Case 상세**, **경보 목록 → 경보 상세** 목업과 역할별 메뉴를 확인합니다.
-3. 사장님 `owner` / `demo1234`로 로그인해 사장님 메뉴를 확인합니다.
+1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 로그인과 Case·조치 결과 화면은 백엔드(8081)와 DB가 필요합니다([프론트 README](frontend/README.md#실행)).
+2. [프론트 README](frontend/README.md)의 보안 직원 시연 계정으로 로그인합니다. **Case 목록**에서 "시연: HELD 결제 발생"으로 Case를 만들고 병합 → 판정 → 금융 조치 인계 → Case 종료까지 확인합니다. **경보 목록 → 경보 상세** 목업과 역할별 메뉴도 확인합니다.
+3. 사장님 시연 계정으로 로그인해 **조치 결과**에서 내 가맹점 Case의 직원 판정과 실제 결제 상태를 확인합니다.
 4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
 5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
 
@@ -361,6 +361,7 @@ flowchart TB
 - ⚙️ **[CI 문서](docs/ci/README.md)**: 개념, 언제 무엇이 도나, 워크플로별 검사, 문제 해결
 - 🗂️ **[ERD](docs/erd/README.md)**: 1차 MVP 테이블 14개의 소유·관계(ERD 그림)·공통 타입 규칙, 모듈 간 참조 규칙
 - 💳 **[P5 결제 설계](docs/payment/README.md)**: P5 결제 1차 시연 문서
+- 🔎 **[P3 Case 조사 문서](docs/investigation/README.md)**: Case 상태 전이 우선순위 · 병합 규칙 · 판정과 인계 · API · 목업 범위
 - 🖥️ **[프론트 README](frontend/README.md)** · **[공통 레이아웃 적용 가이드](frontend/공통레이아웃_적용가이드.md)**: 시연 계정, 담당 페이지 연결 방법
 - 📝 **[문서 정본과 대조 현황](docs/README.md)**: Notion FDS 정본·담당 ERD·P6 상세 설계 링크, 현재 구현과 출처 간 차이·담당 확인 사항
 - 🗄️ **Notion 팀페이지 / ERD** (P1~P6 담당별 페이지): 테이블·컬럼 합의 정본
@@ -373,12 +374,13 @@ flowchart TB
 - 업무 테이블 14개와 `EVENT_PUBLICATION`의 Flyway migration, 개발용 DB(Docker Compose)
 - 서비스 CI 3개와 문서 CI 1개, PR · 이슈 템플릿, 작업 규칙
 - P5 `PaymentStatus`·`PaymentRules`와 순수 규칙 단위 테스트
-- frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·Case/경보 목업·담당자 구현 영역·공통 UI 가이드
+- P3 Case 접수(`PaymentHeld` 수신)·병합·결제별 판정·P5 금융 조치 인계(완료 기반)·Case 종료, 보안 직원·사장님 Case 화면과 API ([P3 문서](docs/investigation/README.md))
+- frontend 로컬 시연 로그인·공통 레이아웃·역할별 메뉴·경보 목업·담당자 구현 영역·공통 UI 가이드
 - ai-server `/health`
 
 **아직 없는 것**
 
 - 업무 Entity·Repository — 테이블 14개는 Flyway로 만들어져 있고(#56), Java Entity는 각 담당이 기능 개발 때 추가
 - 실제 서버 인증·로그인 — 지금은 모든 요청 허용 (`identity/security/SecurityConfig`), 프론트 로그인은 로컬 시연용
-- 실제 업무 API·이벤트 연동, 서버 데이터에 연결된 업무 화면, AI 보고서 생성
+- 실제 업무 API·이벤트 연동, 서버 데이터에 연결된 업무 화면 (P3 Case는 연결됨 — 위 "있는 것"), AI 보고서 생성
 - 시연용 시드 데이터(가맹점·직원·사장님 계정)

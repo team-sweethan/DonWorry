@@ -1,7 +1,7 @@
 # DonWorry 프론트엔드
 
 React·TypeScript·Vite·Ant Design 기반 백오피스 화면입니다.
-서버 세션 기반 로그인과 역할별(ADMIN·보안 직원·사장님) 메뉴를 제공합니다. Case·경보 화면은 목업 데이터이며 업무 API는 연결 전입니다.
+서버 세션 기반 로그인과 역할별(ADMIN·보안 직원·사장님) 메뉴를 제공합니다. Case 화면과 사장님 조치 결과는 백엔드 업무 API에 연결되어 있고, 경보 화면은 목업 데이터입니다.
 
 ## 실행
 
@@ -28,19 +28,20 @@ npm run dev
 
 현재 라우터에 연결된 화면은 다음과 같습니다.
 
-| 경로                                       | 현재 상태                                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `/login`                                   | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                           |
-| `/`                                        | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                             |
-| `/admin/fds`, `/admin/finance`             | ADMIN 전용 메뉴·헤더와 담당자 구현 영역 (`EmptyPage`)                                |
-| `/demo/login`                              | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                  |
-| `/security/cases`, `/security/cases/:id`   | Case 목록·상세 목업. `src/api/cases.ts`의 메모리 저장소로 조회·판정·인계 진행을 시연 |
-| `/security/alerts`, `/security/alerts/:id` | 경보 목록·상세 목업. `src/demo/alertMockData.ts` 사용                                |
-| `/security/transactions`                   | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                             |
-| `/owner/actions`, `/owner/settlements`     | 조치 결과(`FDS_VIEW`)·정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)       |
-| `/dev/components`                          | 공통 UI 예시                                                                         |
+| 경로                                       | 현재 상태                                                                                                           |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `/login`                                   | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                                                          |
+| `/`                                        | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                            |
+| `/admin/fds`, `/admin/finance`             | ADMIN 전용 메뉴·헤더와 담당자 구현 영역 (`EmptyPage`)                                                               |
+| `/demo/login`                              | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                                 |
+| `/security/cases`, `/security/cases/:id`   | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제·AI 보고서만 백엔드 목업 |
+| `/security/alerts`, `/security/alerts/:id` | 경보 목록·상세 목업. `src/demo/alertMockData.ts` 사용                                                               |
+| `/security/transactions`                   | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                            |
+| `/owner/actions`, `/owner/actions/:id`     | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)                |
+| `/owner/settlements`                       | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                            |
+| `/dev/components`                          | 공통 UI 예시                                                                                                        |
 
-목업의 판정·보고서·인계 상태 변경은 서버 저장이나 실제 금융 실행을 의미하지 않습니다.
+Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 실제 요청됩니다. "시연: HELD 결제 발생"으로 만든 시연 결제만 백엔드 목업으로 바로 완료됩니다.
 
 [공통 레이아웃 적용 가이드](공통레이아웃_적용가이드.md)에서 담당 페이지 연결 방법과 수정 위치를 확인합니다.
 공통 UI 예시는 사이드바의 **UI 컴포넌트 보기**에서 확인할 수 있습니다.
@@ -64,4 +65,4 @@ npm run test
 
 `/admin/*`·`/security/*`·`/owner/*`는 `auth/AuthRoutes.tsx`의 `ServerSession`이 지킵니다. 역할별 메뉴와 첫 화면은 `config/navigation.ts`의 `sessionNavigation`이 정합니다. 다른 역할 화면이나 권한이 없는 사장님 메뉴는 403과 "내 홈으로"를 보여주고, 볼 수 있는 메뉴가 없는 계정은 403과 로그아웃만 보여줍니다. 권한은 로그인할 때 세션에 담으므로 권한을 바꾸면 다시 로그인해야 반영됩니다.
 
-Case·경보 목업은 여전히 `DemoContext`의 가맹점(기본 CakeShop)으로 데이터를 거릅니다. 가맹점 선택은 시연 헤더에만 있어 서버 로그인 화면에서는 바꿀 수 없습니다.
+경보 목업은 여전히 `DemoContext`의 가맹점(기본 CakeShop)으로 데이터를 거릅니다. Case 화면은 이 값을 쓰지 않고 서버 응답을 그대로 보여줍니다(보안 직원은 모든 가맹점, 사장님은 자기 가맹점). 가맹점 선택은 시연 헤더에만 있어 서버 로그인 화면에서는 바꿀 수 없습니다.
