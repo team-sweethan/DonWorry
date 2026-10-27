@@ -15,11 +15,11 @@ npm run dev
 터미널에 표시된 주소로 접속합니다. 기본 주소는 `http://localhost:5173`입니다.
 `/login`에서 Flyway 시드 계정으로 로그인합니다. ADMIN 시드 비밀번호는 저장소에 없으므로 담당자가 공유한 값을 사용합니다.
 
-| 역할                     | 아이디       | 비밀번호 | 첫 화면                  |
-| ------------------------ | ------------ | -------- | ------------------------ |
-| 보안 직원                | `staff_test` | `1234`   | `/security/transactions` |
-| 사장님 (DEMOSHOP 가맹점) | `boss`       | `1234`   | `/owner/actions`         |
-| 관리자                   | `admin`      | 담당자   | `/admin/fds`             |
+| 역할                     | 아이디       | 비밀번호 | 첫 화면          |
+| ------------------------ | ------------ | -------- | ---------------- |
+| 보안 직원                | `staff_test` | `1234`   | `/security/home` |
+| 사장님 (DEMOSHOP 가맹점) | `boss`       | `1234`   | `/owner/actions` |
+| 관리자                   | `admin`      | 담당자   | `/admin/fds`     |
 
 보안 직원·사장님은 공개된 시연 계정입니다.
 관리 화면은 최소 1280px 기준이며, 작은 창에서는 가로 스크롤을 사용합니다.
@@ -34,6 +34,7 @@ npm run dev
 | `/`                                        | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                            |
 | `/admin/fds`, `/admin/finance`             | ADMIN 전용 메뉴·헤더와 담당자 구현 영역 (`EmptyPage`)                                                               |
 | `/demo/login`                              | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                                 |
+| `/security/home`                           | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                              |
 | `/security/cases`, `/security/cases/:id`   | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제·AI 보고서만 백엔드 목업 |
 | `/security/alerts`, `/security/alerts/:id` | 경보 목록·상세 목업. `src/demo/alertMockData.ts` 사용                                                               |
 | `/security/transactions`                   | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                            |

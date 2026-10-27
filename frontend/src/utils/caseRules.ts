@@ -1,4 +1,4 @@
-import type { AiReport, CaseStatus } from '../types/case'
+import type { AiReport, CaseStatus } from '../types/case.ts'
 
 /** 화면 표시용 업무 규칙. 최종 판단은 백엔드가 하며 여기 값은 안내용이다. */
 
