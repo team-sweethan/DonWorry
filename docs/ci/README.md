@@ -21,6 +21,7 @@
 | [04-frontend.md](04-frontend.md) | frontend 검사 — `npm ci`, oxlint, Prettier, 타입 검사 + 빌드 |
 | [05-ai-server-and-docs.md](05-ai-server-and-docs.md) | ai-server 검사(uv·ruff·pytest)와 문서 링크 검사 |
 | [06-troubleshooting.md](06-troubleshooting.md) | 문제 해결 — 증상별 원인과 해결 단계 |
+| [07-notion-sync.md](07-notion-sync.md) | Notion 자동 동기화 — 무엇을 쓰고 안 쓰는지, 처음 설정, 문제 해결 |
 
 ## 관련 파일
 

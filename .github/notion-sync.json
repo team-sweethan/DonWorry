@@ -1,0 +1,16 @@
+{
+  "repository": "team-sweethan/DonWorry",
+  "branch": "dev",
+  "status_page_id": "406ee45ba5e1816480b4df646aa7a186",
+  "work_database_id": "a5ac5483893d45e4ad787ec96f426ab8",
+  "adr_database_id": "3d3dd3bdd884496cb57f3b09f449517a",
+  "owners": {
+    "P1 주환": ["juhwanz"],
+    "P2 정후": ["hoo0070"],
+    "P3 수민": ["ssume98"],
+    "P4 현규": ["HyunGyu-Cho"],
+    "P5 시은": ["hxtchhxkxr"],
+    "P6 민정": ["minjung0413"]
+  },
+  "canonical_pages": []
+}
