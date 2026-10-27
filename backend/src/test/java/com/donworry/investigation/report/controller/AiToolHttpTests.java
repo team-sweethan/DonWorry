@@ -35,9 +35,10 @@ import org.springframework.test.web.servlet.MockMvc;
 // AI 서버가 부르는 읽기 Tool 2종을 HTTP로 확인한다 (ADR-0009 결정 1)
 // 결제 · FDS 값(P5 · P2)은 목으로 바꿔 Tool 응답 모양과 Case 범위 검증만 본다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
+// Tool API는 기본으로 꺼져 있어 이 테스트에서만 켠다 (기본 비활성은 AiToolControllerConditionTests)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest
+@SpringBootTest(properties = "ai.tools.enabled=true")
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class AiToolHttpTests {

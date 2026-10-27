@@ -163,6 +163,7 @@ sequenceDiagram
 - 값을 못 찾은 결제는 추측하지 않고 `null`로 두고 `missingPaymentIds`에 넣는다 (`get_case_payments`는 금액, `get_fds_evidence`는 점수 기준). 응답은 성공(200)이다 — 보고서에 "미확인"으로 적을지는 AI 쪽에서 정한다
 - 거부: 없는 Case `404 INV_001`, Case 소속이 아닌 결제 `400 INV_006`, `caseId` 누락 · 형식 오류 `400`
 - 증거 버전과 결제 목록은 같은 읽기 트랜잭션에서 읽어 같은 시점 값이다
+- 로그인 없이 결제 · FDS 근거를 내주므로 서비스 키 인증(#253) 전까지 기본 비활성이다 — `ai.tools.enabled=true`일 때만 경로가 생긴다 (ADR-0037 "인증 연결 전 기본 비활성"과 같은 방식)
 
 보고서 JSON(`report_body`) 구조는 결정 4를 따른다 (기획 2.7 순서와 같다).
 
