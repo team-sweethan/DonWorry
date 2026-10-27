@@ -8,6 +8,7 @@
 | `frontend.yml` | `frontend` | `npm ci` → oxlint → Prettier `--check` → `tsc` + 빌드 | [04](../../docs/ci/04-frontend.md) |
 | `ai-server.yml` | `ai-server` | `uv sync --locked` → ruff → pytest | [05](../../docs/ci/05-ai-server-and-docs.md) |
 | `docs.yml` | `docs` (필수 아님) | Markdown 상대 링크 검사 | [05](../../docs/ci/05-ai-server-and-docs.md) |
+| `notion-sync.yml` | `notion-sync` (필수 아님) | Issue · PR · ADR을 Notion 자동 페이지에 기록 (검사 아님) | [07](../../docs/ci/07-notion-sync.md) |
 
 워크플로를 고칠 때 주의할 점
 
