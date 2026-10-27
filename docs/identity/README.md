@@ -2,6 +2,13 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #240 사장님 정산·자금관리 세션 인가
+
+정책·대안은 [ADR-0039](../decisions/0039-owner-finance-session-authorization.md), P6 공개 API 사용법·오류·책임 경계는 [연결 계약](240-owner-finance-session.md)을 따른다.
+`/api/v1/settlements`와 하위 경로는 OPERATOR·FINANCE_VIEW·merchantId 조건을 모두 요구한다. 읽기·쓰기 조건은 같고 ADMIN·SECURITY_STAFF는 제외한다.
+P1 공통 인가는 사용자 승인으로 먼저 구현하며, P6 정책 확인·실제 업무 어댑터 연결과 가맹점 격리 검증은 후속이다. P1 테스트 수신부의 검증을 실제 업무 통합 완료로 표현하지 않는다.
+DB·공개 Java API·모듈 의존·프론트 변경과 전체 CSRF 활성화는 없다.
+
 ## #219 CakeShop HMAC 인증
 
 [HMAC 계약](219-merchant-hmac.md)과 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.
