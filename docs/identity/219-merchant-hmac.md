@@ -124,3 +124,10 @@ ADR 목록 충돌은 P2 ADR-0036과 HMAC ADR-0037을 모두 보존해 해결했�
 신규 P2 migration까지 포함해 전체 Flyway·JPA validate·모듈 경계 검사를 통과했다.
 검증 이후 변경은 이 문서의 실행 기록뿐이다. [PR #225](https://github.com/team-sweethan/DonWorry/pull/225)는 dev 대상으로 생성했다.
 원격 CI 결과는 PR에서 별도 확인하며 위 수치는 로컬 실행 결과다.
+
+### 리뷰 반영 후 검증
+
+PR 리뷰를 반영한 커밋 `510eae8`에서 정지 가맹점 POST의 403 거절보다 nonce 소비를 먼저 하도록 순서를 바꿨다. 정지 중 거절한 서명은 재활성화 뒤 재전송해도 401이다.
+같은 코드에서 `./gradlew spotlessApply check mariaDbTest --console=plain`을 실행해 통과했다. 일반 497개 중 496개 성공·기존 1개 건너뜀, MariaDB 323개 성공. 실패·오류 0.
+신규 테스트 `inactive_whenPostRejected_consumesNonceBeforeReactivation`이 수정 전 코드에서 실패하는지는 실행해 확인하지 않았다.
+`510eae8`의 원격 CI(backend·docs 포함)는 통과했다. 이후 변경은 이 문서의 실행 기록뿐이다.
