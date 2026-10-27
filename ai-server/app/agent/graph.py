@@ -144,10 +144,25 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             records.append(ToolRecord("get_fds_evidence", {"payment_ids": unseen}, filled, True))
         return _ready_to_write(records)
 
+    # 결제 정보 · FDS 점수가 하나라도 비면 성공 보고서를 만들지 않는다
+    # 일부만 합친 총액 등 틀린 사실이 확정값처럼 보이기 때문
+    # 기존 고정 보고서(#250)와 같은 계약이다. 직원은 수동 판정으로 간다 (fds 정본 02 §2.5)
     def _ready_to_write(records: list[ToolRecord]) -> AgentState:
         case_payments = _latest_case_payments(records)
         if case_payments is None or not case_payments.payments:
             failure = {"code": "NO_PAYMENTS", "reason": "조사할 결제가 없다"}
+            return {"records": records, "failure": failure, "next": "end"}
+        fds = _fds_by_payment(records)
+        incomplete = [
+            p.paymentId
+            for p in case_payments.payments
+            if not analyzable(p)
+            or fds.get(p.paymentId) is None
+            or fds[p.paymentId].riskScore is None
+        ]
+        if incomplete:
+            reason = f"결제 정보 또는 FDS 점수를 확인하지 못한 결제: {incomplete}"
+            failure = {"code": "EVIDENCE_MISSING", "reason": reason}
             return {"records": records, "failure": failure, "next": "end"}
         return {"records": records, "next": "write"}
 

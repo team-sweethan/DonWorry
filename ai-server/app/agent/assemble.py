@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime
 
 from app.agent.narrative import Narrative
 from app.agent.tools import ToolRecord
@@ -153,7 +154,8 @@ def assemble_report(
                 at=payment.requestedAt, event=f"{payment.paymentId} 결제 요청 · {fds_text}"
             )
         )
-    timeline.sort(key=lambda item: item.at)
+    # 글자 순서로 정렬하면 "12:00:00.100Z"가 "12:00:00Z"보다 앞에 온다 — 실제 시각으로 비교한다
+    timeline.sort(key=lambda item: datetime.fromisoformat(item.at))
     return ReportBody(
         overview=Overview(
             caseId=context.case_id,

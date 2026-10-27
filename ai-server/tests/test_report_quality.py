@@ -5,7 +5,9 @@ from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.narrative import validate_narrative
 from app.agent.prompts import WRITE_EXAMPLE
+from app.agent.tools import StaticToolBox
 from app.config import Settings
+from app.schemas.tools import CasePayment, CasePaymentsTool, FdsEvidenceTool, FdsPayment
 from tests.fakes import ScriptedLlm, call, context, narrative, toolbox
 
 # Qwen 실제 실행에서 나온 실수를 코드가 막는지 본다
@@ -139,3 +141,64 @@ def test_timeline_uses_korean_fds_result() -> None:
 
     assert outcome.status == "SUCCEEDED"
     assert [t.event for t in outcome.report.timeline] == ["9201 결제 요청 · FDS 검토 (55점)"]
+
+
+# 작은 숫자 예외는 수량 · 시간 단위 앞에서만 — "5점"처럼 근거에 없는 점수는 걸린다
+def test_small_score_not_in_facts_is_repaired() -> None:
+    wrong = json.loads(narrative(PAYMENTS))
+    wrong["payments"]["9001"]["riskEvidence"] = ["FDS 점수는 5점입니다."]
+
+    llm, outcome = _run(json.dumps(wrong, ensure_ascii=False), narrative(PAYMENTS))
+
+    assert llm.write_calls == 2
+    assert outcome.status == "SUCCEEDED"
+
+
+def test_small_counts_are_allowed() -> None:
+    ok = narrative(PAYMENTS, overallAnalysis=["10분 안에 3회 결제 시도가 있었고 결제는 2건입니다."])
+
+    llm, _ = _run(ok)
+
+    assert llm.write_calls == 1
+
+
+# 같은 초 안의 결제도 실제 시각 순서로 보인다 (카드 테스팅처럼 결제가 몰릴 때)
+def test_timeline_sorted_by_real_time() -> None:
+    payments = CasePaymentsTool(
+        caseId="104",
+        evidenceVersion=1,
+        source="P3·P5",
+        retrievedAt="2026-10-27T12:00:05Z",
+        payments=[
+            CasePayment(
+                paymentId="9302",
+                amount=1000,
+                paymentStatus="HELD",
+                requestedAt="2026-10-27T12:00:00.100Z",
+            ),
+            CasePayment(
+                paymentId="9301",
+                amount=1000,
+                paymentStatus="HELD",
+                requestedAt="2026-10-27T12:00:00Z",
+            ),
+        ],
+        missingPaymentIds=[],
+    )
+    fds = FdsEvidenceTool(
+        caseId="104",
+        evidenceVersion=1,
+        source="P2",
+        retrievedAt="2026-10-27T12:00:05Z",
+        payments=[
+            FdsPayment(paymentId=p, riskScore=55, fdsResult="REVIEW", ruleHits=[])
+            for p in ("9301", "9302")
+        ],
+        missingPaymentIds=[],
+    )
+
+    outcome = run_investigation(
+        context("104", 1), MockLlmClient(), StaticToolBox(payments, fds), SETTINGS
+    )
+
+    assert [t.event.split()[0] for t in outcome.report.timeline] == ["9301", "9302"]

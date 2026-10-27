@@ -92,11 +92,12 @@ _ASSERTIVE = re.compile(
     r"확률|%|가능성이\s*(?:매우\s*)?(?:높|크)|사기(?:로|임이|가)\s*(?:판단|확실|분명|확정|추정)"
 )
 
-# 숫자와 단위 — "65만 원"은 650000으로 읽는다
-_NUMBER = re.compile(r"(\d[\d,]*)(\s*만)?")
+# 숫자와 뒤 단위 — "65만 원"은 650000으로 읽는다
+_NUMBER = re.compile(r"(\d[\d,]*)(\s*만)?\s*(건|회|번|개|명|분|시간|일|차)?")
 
-# 수량 · 횟수처럼 근거에 없어도 되는 작은 수
-_SMALL_NUMBERS = frozenset(range(11))
+# 수량 · 시간 단위 앞의 작은 수는 근거에 없어도 된다 ("2건", "3회")
+# 점수 · 금액("5점")은 예외가 아니다
+_SMALL_COUNT = 10
 
 
 def _sentences(narrative: Narrative) -> list[str]:
@@ -112,11 +113,15 @@ def _sentences(narrative: Narrative) -> list[str]:
     return texts
 
 
+# 근거와 맞춰 볼 숫자 — 수량 · 시간 단위가 붙은 작은 수는 뺀다
 def _numbers(text: str) -> set[int]:
     found: set[int] = set()
-    for digits, man in _NUMBER.findall(text):
-        value = int(digits.replace(",", "")) if digits.replace(",", "") else 0
-        found.add(value * 10000 if man else value)
+    for digits, man, count_unit in _NUMBER.findall(text):
+        plain = digits.replace(",", "")
+        value = int(plain) * (10000 if man else 1) if plain else 0
+        if count_unit and value <= _SMALL_COUNT:
+            continue
+        found.add(value)
     return found
 
 
@@ -124,7 +129,7 @@ def _numbers(text: str) -> set[int]:
 def content_errors(narrative: Narrative, allowed_numbers: set[int]) -> list[str]:
     errors: list[str] = []
     for text in _sentences(narrative):
-        unknown = sorted(_numbers(text) - allowed_numbers - _SMALL_NUMBERS)
+        unknown = sorted(_numbers(text) - allowed_numbers)
         if unknown:
             errors.append(f'근거에 없는 숫자 {unknown}: "{text}"')
         if code := _CODE.search(text):

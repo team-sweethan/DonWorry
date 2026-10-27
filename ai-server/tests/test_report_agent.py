@@ -170,18 +170,17 @@ def test_narrative_keeps_failing_ends_failed() -> None:
 
 
 # 못 찾은 값은 추측하지 않고 미확인으로 남긴다
-def test_missing_info_is_marked_unknown() -> None:
+# 결제 정보 · FDS 점수를 하나라도 못 찾으면 성공 보고서를 만들지 않는다
+# 일부만 합친 총액을 확정값처럼 내보내지 않게 — 기존 고정 보고서(#250)와 같은 계약
+def test_missing_evidence_ends_failed() -> None:
     outcome = run_investigation(
         context("102", 1), MockLlmClient(), toolbox("sample_missing.json"), SETTINGS
     )
 
-    assert outcome.status == "SUCCEEDED"
-    report = outcome.report
-    assert report.overview.paymentCount == 2
-    assert [p.paymentId for p in report.paymentAnalyses] == ["9101"]
-    assert report.paymentAnalyses[0].riskScore is None
-    assert "FDS 평가 결과 미확인" in report.paymentAnalyses[0].unknowns
-    assert any("9102" in item for item in report.recommendation.limitations)
+    assert outcome.status == "FAILED"
+    assert outcome.report is None
+    assert outcome.error["code"] == "EVIDENCE_MISSING"
+    assert "9101" in outcome.error["reason"] and "9102" in outcome.error["reason"]
 
 
 # 조사 중 Case 증거 버전이 바뀌었으면 낡은 근거로 성공 보고서를 만들지 않는다
