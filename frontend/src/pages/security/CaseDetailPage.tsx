@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
@@ -18,15 +18,13 @@ import { useDemo } from '../../demo/DemoContext'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
 import { decisionMode, latestReport, mergeRemainingMin, slaState } from '../../utils/caseRules'
+import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { caseStatusLabel, dateTime, fdsResultLabel, paymentStatusLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
 import { DecisionPanel } from './case/DecisionPanel'
 import { ReportCard } from './case/ReportCard'
-
-/** 보고서 생성 중·금융 처리 대기 중이면 이 간격으로 다시 조회한다. */
-const POLL_MS = 3_000
 
 export function CaseDetailPage() {
   const { id = '' } = useParams()
@@ -62,17 +60,40 @@ export function CaseDetailPage() {
   }, [id, merchant, refreshKey, message])
   const result = loaded?.scope === scope ? loaded.detail : undefined
   const detail = result === 'error' ? null : result
-  const load = useCallback(() => setRefreshKey((k) => k + 1), [])
+  // 자동 조회 제한 시간의 시작점. null이면 다음 자동 조회부터 다시 센다 (#238)
+  const [poll, setPoll] = useState<{ scope: string; from: number; stopped: boolean } | null>(null)
+  // 사용자 동작으로 다시 조회할 때는 자동 조회 제한 시간도 처음부터 다시 센다
+  const load = useCallback(() => {
+    setPoll(null)
+    setRefreshKey((k) => k + 1)
+  }, [])
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
+  useEffect(() => {
+    const onVisibility = () => {
+      const now = document.visibilityState === 'visible'
+      setVisible(now)
+      // 탭으로 돌아오면 자리를 비운 사이 바뀐 상태를 한 번 반영한다
+      if (now) load()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [load])
 
   const waiting =
     !!detail &&
     (detail.reports.some((r) => r.status === 'PENDING' || r.status === 'RUNNING') ||
       detail.handoffs.some((h) => h.status === 'REQUESTED'))
+  const current = poll?.scope === scope ? poll : null
+  const pollStopped = current?.stopped === true
   useEffect(() => {
-    if (!waiting) return
-    const timer = setTimeout(load, POLL_MS)
+    if (!waiting || !visible || pollStopped) return
+    const timer = setTimeout(() => {
+      const step = pollStep(current?.from ?? null, Date.now())
+      setPoll({ scope, from: step.from, stopped: !step.poll })
+      if (step.poll) setRefreshKey((k) => k + 1)
+    }, POLL_MS)
     return () => clearTimeout(timer)
-  }, [waiting, detail, load])
+  }, [waiting, visible, pollStopped, current?.from, scope, detail])
 
   if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
   if (result === 'error')
@@ -191,6 +212,19 @@ export function CaseDetailPage() {
           </Space>
         }
       />
+      {waiting && pollStopped && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`자동 갱신을 멈췄습니다 (${POLL_LIMIT_MS / 60_000}분 경과). 최신 상태는 새로고침 또는 "인계 상태 다시 확인"으로 확인하세요.`}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={load}>
+              새로고침
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <Card style={{ borderColor: '#E2E8F0' }}>
           <Descriptions column={4} colon={false} size="small" labelStyle={{ color: '#64748b' }}>
