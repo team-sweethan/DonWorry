@@ -8,6 +8,7 @@ import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
+import { SecurityHomePage } from '../pages/security/SecurityHomePage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
@@ -39,7 +40,7 @@ export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/fds" replace /> },
-  { path: '/security', element: <Navigate to="/security/transactions" replace /> },
+  { path: '/security', element: <Navigate to="/security/home" replace /> },
   {
     element: <ServerSession />,
     children: [
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       {
         path: '/security',
         children: [
+          { path: 'home', element: <SecurityHomePage /> },
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'alerts', element: <AlertListPage /> },

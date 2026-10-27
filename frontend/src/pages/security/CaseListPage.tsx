@@ -2,7 +2,7 @@ import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { demoCreateHeldPayment, getCases } from '../../api/cases'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -31,7 +31,12 @@ export function CaseListPage() {
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
   const { message } = App.useApp()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<StatusFilter>('OPEN_ONLY')
+  // 홈 카드에서 `?status=`로 들어오면 그 상태로 시작한다. 모르는 값은 기본(열린 Case)
+  const [searchParams] = useSearchParams()
+  const [status, setStatus] = useState<StatusFilter>(() => {
+    const initial = searchParams.get('status')
+    return statusOptions.find((o) => o.value === initial)?.value ?? 'OPEN_ONLY'
+  })
   const [refreshKey, setRefreshKey] = useState(0)
   // 어떤 요청(가맹점·새로고침)에 대한 응답인지 함께 저장해 늦게 온 응답이 덮어쓰지 않게 한다.
   // failed: 조회 실패. 빈 목록과 구분해 "처리할 Case 없음"으로 오인하지 않게 하고, 직전 목록은 유지한다.

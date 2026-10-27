@@ -45,7 +45,7 @@ test('loginDestination_whenPreviousAccountUnknown_checksCurrentPermissions', () 
 test('loginDestination_whenAccountOrRoleChanges_usesLanding', () => {
   assert.equal(
     loginDestination({ ...staff, userId: 2 }, { returnTo: '/security/cases/3', previousUserId: 1 }),
-    '/security/transactions',
+    '/security/home',
   )
   assert.equal(loginDestination(owner, { returnTo: '/security/cases/3' }), '/owner/settlements')
 })
@@ -80,12 +80,12 @@ test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
 // 잘못된 Router state와 현재 계정 ID와 일치하지 않는 이전 사용자 ID는 예외 없이 버린다.
 test('loginDestination_whenStateMalformed_usesLanding', () => {
   for (const state of [null, undefined, '', 1, [], {}, { returnTo: 3 }, { returnTo: null }]) {
-    assert.equal(loginDestination(staff, state), '/security/transactions')
+    assert.equal(loginDestination(staff, state), '/security/home')
   }
   for (const previousUserId of ['1', false, {}, 0, -1, 1.5, NaN, Infinity]) {
     assert.equal(
       loginDestination(staff, { returnTo: '/security/cases/3', previousUserId }),
-      '/security/transactions',
+      '/security/home',
     )
   }
 })
@@ -116,7 +116,7 @@ test('loginDestination_whenPathUnsafe_usesLanding', () => {
     '/demo/login',
     '/api/auth/logout',
   ]) {
-    assert.equal(loginDestination(staff, { returnTo }), '/security/transactions', returnTo)
+    assert.equal(loginDestination(staff, { returnTo }), '/security/home', returnTo)
   }
   assert.equal(
     loginDestination(owner, { returnTo: '/owner/settlements/../actions' }),
@@ -140,6 +140,6 @@ test('requiresLogin_whenStateMalformed_acceptsOnlyExplicitFlag', async () => {
   assert.equal(requiresLogin({ requireLogin: true }), true)
   assert.equal(
     loginDestination(staff, { requireLogin: true, returnTo: '//evil.example' }),
-    '/security/transactions',
+    '/security/home',
   )
 })
