@@ -57,6 +57,7 @@
 | [0033](0033-login-history.md) | 로그인 이력의 독립 저장과 90일 조회 | 제안 — #147 사용자 승인·구현 반영, 팀 리뷰 대상 |
 | [0034](0034-fds-evidence-read-contract.md) | P3 Case 화면용 FDS 평가 근거 공개 조회 계약 | 제안 — #162 구현·P3 연동 대기 |
 | [0035](0035-long-held-payment-policy.md) | 장기 보류 결제의 확인 기한과 금융 종료 분리 | 전체 정책 제안 — 내부 조회 담당 확인 완료, 운영 시간·담당·CakeShop 정책·구현 미완료 |
+| [0036](0036-fds-failure-analysis-and-reevaluation.md) | P2 FDS 오류 분석·재탐지 계약 | 제안 — P2 구현, P5 연동 대기 |
 
 ## 현재 적용 상태와 기록의 구분
 

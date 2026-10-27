@@ -37,6 +37,12 @@ public class FdsEvaluation {
     @Column(name = "evaluation_request_id", nullable = false, unique = true)
     private UUID evaluationRequestId;
 
+    @Column(name = "original_evaluation_request_id")
+    private UUID originalEvaluationRequestId;
+
+    @Column(name = "reevaluation_retry_id", unique = true)
+    private UUID reevaluationRetryId;
+
     @Column(name = "payment_id", nullable = false)
     private Long paymentId;
 
@@ -107,12 +113,39 @@ public class FdsEvaluation {
                 .build();
     }
 
+    public static FdsEvaluation failed(FdsEvaluationRequest request, String errorCode, Instant evaluatedAt) {
+        if (errorCode == null || errorCode.isBlank()) throw new IllegalArgumentException("errorCode must not be blank");
+        return FdsEvaluation.builder()
+                .evaluationRequestId(request.evaluationRequestId())
+                .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
+                .customerRef(request.customerRef())
+                .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
+                .requestedAmount(request.amount())
+                .result(FdsResult.ERROR)
+                .evaluatedAt(evaluatedAt)
+                .errorCode(errorCode)
+                .build();
+    }
+
     public boolean hasSameRequestSnapshot(FdsEvaluationRequest request) {
         return paymentId.equals(request.paymentId())
                 && merchantId.equals(request.merchantId())
                 && customerRef.equals(request.customerRef())
                 && requestedAmount == request.amount()
                 && paymentRequestedAt.equals(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    public void recordReevaluation(UUID originalEvaluationRequestId, UUID retryId) {
+        if (this.originalEvaluationRequestId == null && this.reevaluationRetryId == null) {
+            this.originalEvaluationRequestId = originalEvaluationRequestId;
+            this.reevaluationRetryId = retryId;
+            return;
+        }
+        if (!this.originalEvaluationRequestId.equals(originalEvaluationRequestId)
+                || !this.reevaluationRetryId.equals(retryId)) {
+            throw new IllegalStateException("재탐지 이력은 변경할 수 없습니다");
+        }
     }
 
     public void addRuleHit(String ruleCode, FdsRuleHitOutcome outcome, int appliedScore, String ruleNameSnapshot) {
