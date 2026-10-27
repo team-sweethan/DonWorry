@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-27 개정: 1차 Tool 2종 응답 형식 (#254)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -153,6 +153,16 @@ sequenceDiagram
 - 데이터 누락 · 조회 실패 · 타임아웃 때 Tool이 돌려줄 응답 형식
 - Tool 하나가 실패하면 보고서 생성 실패(재시도 횟수 차감)로 볼지, 미확인 사항으로 적고 계속 쓸지
 - Tool별 타임아웃 · 반환 필드 · 필수/선택 데이터 — 각 제공 담당(P1 · P2 · P5 · CakeShop)과 합의
+
+**1차 Tool 2종 응답 형식 (#254)** — 이미 공개된 조회(`PaymentInfoReader` = P5 + P2)만 쓰므로 P4가 정했다. 나머지 4종은 위 미정 항목을 따른다
+
+- 경로: `GET /internal/ai/tools/get_case_payments?caseId=…`, `GET /internal/ai/tools/get_fds_evidence?caseId=…[&paymentIds=…]`
+- 공통 필드: `caseId` · `evidenceVersion`(조회 시점 Case 증거 버전) · `source`(`P3·P5` / `P2`) · `retrievedAt` · `payments` · `missingPaymentIds`. ID는 문자열 (결정 4)
+- `get_case_payments`의 결제: `paymentId` · `amount` · `paymentStatus` · `requestedAt`
+- `get_fds_evidence`의 결제: `paymentId` · `riskScore` · `fdsResult` · `ruleHits`(`code` · `name` · `appliedScore`). `paymentIds`를 비우면 Case 결제 전체
+- 값을 못 찾은 결제는 추측하지 않고 `null`로 두고 `missingPaymentIds`에 넣는다 (`get_case_payments`는 금액, `get_fds_evidence`는 점수 기준). 응답은 성공(200)이다 — 보고서에 "미확인"으로 적을지는 AI 쪽에서 정한다
+- 거부: 없는 Case `404 INV_001`, Case 소속이 아닌 결제 `400 INV_006`, `caseId` 누락 · 형식 오류 `400`
+- 증거 버전과 결제 목록은 같은 읽기 트랜잭션에서 읽어 같은 시점 값이다
 
 보고서 JSON(`report_body`) 구조는 결정 4를 따른다 (기획 2.7 순서와 같다).
 

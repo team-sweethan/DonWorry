@@ -1,0 +1,20 @@
+package com.donworry.investigation.report.dto;
+
+import java.time.Instant;
+import java.util.List;
+
+// AI Tool get_fds_evidence 응답 — 결제별 P2 FDS 점수 · 판정 · 적중 룰 (ADR-0009 Tool 6종)
+// FDS 평가를 못 찾은 결제는 점수가 null이고 missingPaymentIds에도 들어간다. FDS 점수는 부정거래 확률이 아니다
+public record FdsEvidenceToolResponse(
+        String caseId,
+        int evidenceVersion,
+        String source,
+        Instant retrievedAt,
+        List<Payment> payments,
+        List<String> missingPaymentIds) {
+
+    public record Payment(String paymentId, Integer riskScore, String fdsResult, List<RuleHit> ruleHits) {}
+
+    // 적중 룰 이름은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값
+    public record RuleHit(String code, String name, Integer appliedScore) {}
+}
