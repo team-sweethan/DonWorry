@@ -1,6 +1,6 @@
 # 0038. Settlement → Identity 의존 허용 (ADR-0012 보류 항목 확정)
 
-- **상태:** 제안 — 팀 합의 필요
+- **상태:** 채택 — 2026-10-27 P1 주환 결정 (PR #245, P6 별도 리뷰 없음)
 - **날짜:** 2026-10-27
 - **관련:** Issue #240 · #241, 후속 #227 · #228 · #229, 상위 Issue #68, [ADR-0012](0012-payment-settlement-dependency.md) · [ADR-0020](0020-identity-public-read-contracts.md) · [ADR-0037](0037-merchant-hmac-authentication.md)
 - **영향 받는 담당:** P1 주환 · P6 민정
@@ -22,7 +22,7 @@ P6가 로컬에서 작성한 Controller는 "인증 미연결 시 차단" 상태�
 
 ## 결정
 
-**`settlement`가 `identity :: api`(공개 인터페이스)에 의존하는 것을 허용한다.** 이 ADR과 같은 PR에서 `settlement/package-info.java`를 아래처럼 바꾸고, PR 리뷰 승인(P6 포함)을 팀 합의로 본다.
+**`settlement`가 `identity :: api`(공개 인터페이스)에 의존하는 것을 허용한다.** 이 ADR과 같은 PR(#245)에서 `settlement/package-info.java`를 아래처럼 바꿨다.
 
 ```java
 @org.springframework.modulith.ApplicationModule(
