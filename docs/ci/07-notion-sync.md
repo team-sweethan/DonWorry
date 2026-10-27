@@ -9,7 +9,7 @@ Notion 워크스페이스는 한 사람이 소유하고 다른 팀원은 게스�
 
 | Notion 위치 | 원본 | 언제 | 키 |
 | --- | --- | --- | --- |
-| 작업 현황 (GitHub) DB | Issue · PR | Issue · PR 이벤트 즉시(그 건 + 최근 60분 안에 바뀐 건), 매일 03:00 KST 전체 보정 | GitHub 번호 |
+| 작업 현황 (GitHub) DB | Issue · PR | Issue · PR 이벤트 즉시(그 건 + 최근 60분 안에 바뀐 건), `dev` 설정 · ADR push와 매일 03:00 KST에 전체 대조 | GitHub 번호 |
 | ADR 현황 DB | [`docs/decisions/`](../decisions/README.md)의 `NNNN-*.md` | `dev`에 ADR이 병합될 때, 매일 전체 보정 | 파일 이름 |
 | 상태 페이지 표의 "마지막 동기화" | 실행 시각 · 이벤트 · 커밋 | 매 실행 | — |
 | 정본 페이지 맨 아래 자동 구역 | 관련 ADR · 담당의 최근 병합 PR · 저장소 문서 | `canonical_pages`를 설정했을 때만 | 🤖 callout |
@@ -19,7 +19,7 @@ Notion 워크스페이스는 한 사람이 소유하고 다른 팀원은 게스�
 - 상태: Issue는 Open · Closed, PR은 Draft · In review · Merged · Closed
 - 저장소에서 사라진 ADR 파일의 행은 보관(archive)합니다. Issue · PR 행은 지우지 않습니다
 - 이벤트가 몰리면 GitHub가 대기 중인 실행을 가장 최근 것 하나만 남기고 취소합니다(`concurrency`). 그래서 이벤트 실행마다 최근 60분 안에 바뀐 Issue · PR을 함께 맞춥니다
-- `owners`를 바꿔 `dev`에 병합하면 그 실행에서 모든 행의 담당을 다시 씁니다
+- Issue · PR 행은 쓸 값(제목 · 상태 · 담당 · 라벨 등)이 Notion 행과 다를 때만 씁니다. 그래서 `owners`를 바꿔 `dev`에 병합하면 그 실행에서 담당이 달라진 행이 다시 쓰입니다
 
 ## 2. 하지 않는 것
 

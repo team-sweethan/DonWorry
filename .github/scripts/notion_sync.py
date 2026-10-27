@@ -161,6 +161,8 @@ def plain(prop):
         return prop["url"] or ""
     if kind in ("select", "status"):
         return (prop[kind] or {}).get("name", "")
+    if kind == "multi_select":
+        return sorted(o["name"] for o in prop["multi_select"])
     if kind == "date":
         return (prop["date"] or {}).get("start", "")
     return ""
@@ -178,6 +180,28 @@ def same_minute(a, b):
     pa = dt.datetime.fromisoformat(a.replace("Z", "+00:00"))
     pb = dt.datetime.fromisoformat(b.replace("Z", "+00:00"))
     return pa.replace(second=0, microsecond=0) == pb.replace(second=0, microsecond=0)
+
+
+def row_matches(row, w):
+    """Notion 행이 이번에 쓸 값과 같은지 — 갱신 시각만 보면 같은 분 안의 변경이나 담당 매핑 변경을 놓친다."""
+    props = row["properties"]
+
+    def get(name):
+        return plain(props.get(name))
+
+    return (
+        get("제목") == w["title"]
+        and get("종류") == ("PR" if w["is_pr"] else "Issue")
+        and get("상태") == w["status"]
+        and get("유형") == (w["kind"] or "")
+        and get("담당") == (w["owner"] or "")
+        and get("연결 Issue") == w["linked"]
+        and get("작성자") == w["author"]
+        and get("라벨") == sorted(w["labels"])
+        and get("링크") == w["url"]
+        and get("완료일") == (w["done"] or "")
+        and same_minute(get("GitHub 갱신"), w["updated"])
+    )
 
 
 def owner_of(logins, owners):
@@ -300,8 +324,8 @@ def adr_props(a):
 # ---------------------------------------------------------------- 동기화
 
 
-def sync_work(notion, cfg, items, skip_unchanged, force=()):
-    """force에 든 번호는 skip_unchanged여도 다시 쓴다 (이벤트로 들어온 그 건)."""
+def sync_work(notion, cfg, items, force=()):
+    """값이 Notion 행과 같은 건은 건너뛴다. force에 든 번호는 같아도 다시 쓴다 (이벤트로 들어온 그 건)."""
     db = cfg["work_database_id"]
     owners = cfg.get("owners", {})
     works = list({w["number"]: w for w in (work_item(i, owners) for i in items)}.values())
@@ -324,7 +348,7 @@ def sync_work(notion, cfg, items, skip_unchanged, force=()):
     created = updated = skipped = 0
     for w in works:
         row = index.get(w["number"])
-        if row and skip_unchanged and w["number"] not in force and same_minute(plain(row["properties"].get("GitHub 갱신")), w["updated"]):
+        if row and w["number"] not in force and row_matches(row, w):
             skipped += 1
             continue
         props = work_props(w)
@@ -452,11 +476,6 @@ def sync_zones(notion, cfg, adrs, merged_prs, stamp, repo, branch):
             print(f"정본 자동 구역 추가: {page_cfg.get('name', page_id)}")
 
 
-def config_changed(payload):
-    path = ".github/notion-sync.json"
-    return any(path in (c.get("added") or []) + (c.get("modified") or []) for c in payload.get("commits") or [])
-
-
 # ---------------------------------------------------------------- 진입점
 
 
@@ -477,7 +496,7 @@ def main():
     sha = (os.environ.get("GITHUB_SHA") or "")[:7]
 
     if not token and not args.dry_run:
-        print("::notice::NOTION_TOKEN secret이 없어 Notion 동기화를 건너뜀 (포크 PR이거나 아직 설정 전)")
+        print("::notice::NOTION_TOKEN secret이 없어 Notion 동기화를 건너뜀 (아직 설정 전)")
         return 0
 
     mode = args.mode
@@ -499,14 +518,12 @@ def main():
         except (RuntimeError, urllib.error.URLError) as e:  # 보정 조회가 실패해도 이벤트로 온 그 건은 쓴다
             print(f"::warning::최근 변경 조회 실패 — 이벤트 건만 동기화: {e}")
             recent = []
-        sync_work(notion, cfg, [item] + recent, skip_unchanged=True, force={item["number"]})
+        sync_work(notion, cfg, [item] + recent, force={item["number"]})
     else:
-        # push는 ADR · 정본 구역만. Issue · PR은 각자 이벤트로 들어온다
-        # 단, 담당 매핑(owners)이 바뀐 push는 모든 행의 담당을 다시 써야 하므로 건너뛰지 않고 전부 쓴다
-        owners_changed = event == "push" and config_changed(payload)
-        if event != "push" or owners_changed:
-            items = github_list(f"/repos/{repo}/issues?state=all&per_page=100", gh_token)
-            sync_work(notion, cfg, items, skip_unchanged=not owners_changed)
+        # push(설정 · ADR 변경)에서도 Issue · PR 전체를 대조한다. 값이 다른 행만 쓰므로
+        # owners를 바꾼 push는 담당이 달라진 행만 다시 쓰인다 (Actions push payload에는 변경 파일 목록이 없음)
+        items = github_list(f"/repos/{repo}/issues?state=all&per_page=100", gh_token)
+        sync_work(notion, cfg, items)
         adrs = read_adrs(repo, branch)
         sync_adrs(notion, cfg, adrs)
         if cfg.get("canonical_pages"):
