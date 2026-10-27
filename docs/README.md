@@ -14,6 +14,7 @@
 | 실제 테이블·컬럼·타입·제약 | [migration SQL](../backend/src/main/resources/db/migration/), 소유·관계 요약은 [ERD](erd/README.md) |
 | P6 금융 실행·정산 범위 | [P6 상세 설계](https://www.notion.so/40102d70288a805d8ae8cac21a7f133e)와 담당 ERD. 접수 확인·수수료 세부의 미결 사항은 3절 |
 | 현재 코드와 화면 | 저장소 소스, [프로젝트 README](../README.md#현재-상태), [프론트 README](../frontend/README.md#개발) |
+| P3 Case · 판정 · 인계 구현 요약 | [investigation 문서](investigation/README.md) — 상태 전이 우선순위 · 병합 규칙 · API · 목업 범위 |
 | 1차 CakeShop 연동 | [cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중) |
 | 작업 규칙·자동 검사 | [AGENTS](../AGENTS.md), [규칙 지도](conventions/README.md), [CI](ci/README.md) |
 
