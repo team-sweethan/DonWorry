@@ -134,7 +134,7 @@ class ProductionSecurityMariaDbTests {
                     .isIn(404, 405);
             assertThat(jdbc(context).queryForObject("SELECT COUNT(*) FROM fds_evaluations", Integer.class))
                     .isZero();
-            for (String demo : new String[] {"boss", "staff_test"}) {
+            for (String demo : new String[] {"boss", "staff_test", "cakeshop_owner"}) {
                 assertThat(login(context, demo, "1234").statusCode()).isEqualTo(200);
                 assertThat(jdbc.queryForObject(
                                 "SELECT status FROM platform_users WHERE login_id=?", String.class, demo))

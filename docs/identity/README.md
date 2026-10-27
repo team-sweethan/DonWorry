@@ -2,6 +2,12 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #246 CakeShop 등록·키 준비
+
+[등록·키 생성·전달·실제 서명 확인 절차](246-cakeshop-provisioning.md)를 따른다.
+새 가맹점 `CAKESHOP`과 `cakeshop_owner`를 Flyway 시드로 등록한다. 키 원문은 환경마다 별도로 생성한다.
+정산 세션 인가는 [#240 연결 계약](240-owner-finance-session.md), CakeShop 발신 연결은 #242, 시연 적용은 #175에서 확인한다.
+
 ## #240 사장님 정산·자금관리 세션 인가
 
 정책·대안은 [ADR-0039](../decisions/0039-owner-finance-session-authorization.md), P6 공개 API 사용법·오류·책임 경계는 [연결 계약](240-owner-finance-session.md)을 따른다.

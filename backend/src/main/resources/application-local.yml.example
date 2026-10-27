@@ -1,5 +1,7 @@
 # 내 PC가 기본값(3307 / donworry / donworry)과 다를 때만 채운다
 # 이 파일을 복사해 application-local.yml 로 이름을 바꾼다 (git 제외)
+# CakeShop HMAC 키는 YAML에 넣지 않는다. 실행 프로세스 환경변수
+# DONWORRY_MERCHANT_HMAC_CAKESHOP으로 주입한다 (docs/identity/246-cakeshop-provisioning.md).
 spring:
   datasource:
     url: jdbc:mariadb://localhost:3306/donworry
