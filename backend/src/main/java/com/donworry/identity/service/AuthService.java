@@ -138,6 +138,8 @@ public class AuthService {
     }
 
     public MeResponse me(SessionUser user) {
+        // 인가 통과 후에도 동시 로그아웃이 공유 SecurityContext의 인증을 비울 수 있다.
+        if (user == null) throw new AccountManagementException(AuthErrorCode.AUTHENTICATION_REQUIRED);
         return MeResponse.from(user);
     }
 
