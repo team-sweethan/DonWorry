@@ -42,13 +42,14 @@ public class MerchantHmacService {
         if (!input.merchantCode().equals(merchant.getMerchantCode())) reject();
         byte[] expected = MerchantHmacSigner.sign(secrets.resolve(merchant.getSecretReference()), input);
         if (!MessageDigest.isEqual(expected, HexFormat.of().parseHex(input.signature()))) reject();
-        // 비활성 가맹점도 유효한 서명으로 자기 결제 결과를 조회할 수 있다.
-        if ("POST".equals(input.method()) && merchant.getStatus() != MerchantStatus.ACTIVE)
-            throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_INACTIVE);
         // 미래 시각의 서명도 최초 수신 후 만료까지 재사용되지 않도록 서명 시각을 기준으로 보관한다.
+        // 상태 검사보다 먼저 소비해, 정지 중 거절한 서명이 재활성화 뒤 다시 실행되지 않게 한다.
         if (!nonces.consume(
                 merchant.getMerchantId(), UUID.fromString(input.nonce()), Instant.ofEpochSecond(timestamp + 301)))
             reject();
+        // 비활성 가맹점도 유효한 서명으로 자기 결제 결과를 조회할 수 있다.
+        if ("POST".equals(input.method()) && merchant.getStatus() != MerchantStatus.ACTIVE)
+            throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_INACTIVE);
         return new MerchantIdentity(merchant.getMerchantId());
     }
 

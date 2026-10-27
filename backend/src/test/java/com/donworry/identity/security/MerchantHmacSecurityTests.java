@@ -180,6 +180,22 @@ class MerchantHmacSecurityTests {
         mvc.perform(signed("POST", "/api/payments", "{}", 0).content("wrong")).andExpect(status().isUnauthorized());
     }
 
+    // 정지 중 거절한 서명도 nonce를 소비해 재활성화 뒤 같은 요청으로 결제가 실행되지 않는다
+    @Test
+    void inactive_whenPostRejected_consumesNonceBeforeReactivation() throws Exception {
+        var used = new HashSet<UUID>();
+        when(nonces.consume(anyLong(), any(), any())).thenAnswer(call -> used.add(call.getArgument(1)));
+        when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
+        var request = signed("POST", "/api/payments", "{}", 0);
+        mvc.perform(request)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_003"));
+        when(merchant.getStatus()).thenReturn(MerchantStatus.ACTIVE);
+        mvc.perform(request)
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_001"));
+    }
+
     // 없는 가맹점과 틀린 키는 같은 인증 오류이고 DB 장애는 503으로 구분한다
     @Test
     void authentication_whenMissingOrUnavailable_failsClosed() throws Exception {
