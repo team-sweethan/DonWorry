@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
   demoMergePayment,
@@ -18,6 +18,7 @@ import { useDemo } from '../../demo/DemoContext'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
 import { decisionMode, latestReport, mergeRemainingMin, slaState } from '../../utils/caseRules'
+import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
@@ -29,6 +30,8 @@ import { ReportCard } from './case/ReportCard'
 export function CaseDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  // 목록에서 왔으면 그 조건의 목록으로 돌아간다 (#243)
+  const listPath = caseListReturnPath(useLocation().state)
   const { merchant } = useDemo()
   const { toast } = useFeedback()
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
@@ -206,7 +209,7 @@ export function CaseDetailPage() {
             <Button icon={<ReloadOutlined />} onClick={load}>
               새로고침
             </Button>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/cases')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(listPath)}>
               목록으로
             </Button>
           </Space>
