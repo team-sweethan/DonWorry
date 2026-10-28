@@ -78,6 +78,7 @@ class PaymentAuthorizationServiceTests {
         assertThatThrownBy(() -> service.authorize(context)).isInstanceOf(IllegalStateException.class);
         verify(authorizer).authorize(command);
         verifyNoMoreInteractions(authorizer);
+        verify(authorizationResults).record(20L, FdsAuthorizationResultRecorder.AuthorizationResult.APPROVED);
         if (verdict == FdsResult.ALLOW) {
             verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
             verifyNoMoreInteractions(events);
@@ -114,6 +115,7 @@ class PaymentAuthorizationServiceTests {
         assertThat(result.nextStep()).isEqualTo(PaymentRules.NextStep.NONE);
         assertThatThrownBy(() -> service.authorize(context)).isInstanceOf(IllegalStateException.class);
         verify(authorizer).authorize(any());
+        verify(authorizationResults).record(20L, FdsAuthorizationResultRecorder.AuthorizationResult.DECLINED);
         verifyNoInteractions(events);
     }
 
