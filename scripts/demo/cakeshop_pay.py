@@ -29,7 +29,7 @@ class NoRedirect(HTTPRedirectHandler):
 def load_key() -> bytes:
     raw = os.environ.get("DONWORRY_MERCHANT_HMAC_CAKESHOP", "")
     if not raw:
-        sys.exit("DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수가 없어요. 키를 저장한 뒤 터미널을 새로 열어 주세요 (docs/demo/local-demo.md 3-1).")
+        sys.exit("DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수가 없어요. 키를 저장한 뒤 터미널을 새로 열어 주세요 (docs/demo/local-demo.md 2-1).")
     try:
         key = base64.b64decode(raw, validate=True)
     except ValueError:

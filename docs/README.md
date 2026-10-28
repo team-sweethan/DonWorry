@@ -15,7 +15,7 @@
 | P6 금융 실행·정산 범위 | [P6 상세 설계](https://www.notion.so/40102d70288a805d8ae8cac21a7f133e)와 담당 ERD. 접수 확인·수수료 세부의 미결 사항은 3절 |
 | 현재 코드와 화면 | 저장소 소스, [프로젝트 README](../README.md#구현-상태), [프론트 README](../frontend/README.md#개발) |
 | P3 Case · 판정 · 인계 구현 요약 | [investigation 문서](investigation/README.md) — 상태 전이 우선순위 · 병합 규칙 · API · 목업 범위 |
-| 로컬 시연 (결제 → 매입 완료 · AI 보고서) | [로컬 시연 가이드](demo/local-demo.md) — 시연 방식 4가지 · 처음 한 번 설정 · 확인 SQL · 자주 막히는 곳 |
+| 로컬 시연 (결제 → 매입 완료 · AI 보고서) | [로컬 시연 가이드](demo/local-demo.md) — 목표별 따라 하기(시연 버튼 · 실제 결제 · AI mock · Qwen) · 결과 확인 · 막혔을 때 |
 | 1차 CakeShop 연동 | [cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중) |
 | 작업 규칙·자동 검사 | [AGENTS](../AGENTS.md), [규칙 지도](conventions/README.md), [CI](ci/README.md) |
 
