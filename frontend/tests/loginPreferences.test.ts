@@ -251,3 +251,33 @@ test('loginWithPreferences_whenRestrictedAccountStillAuthenticated_savesId', asy
     assert.equal(storage.getItem(REMEMBERED_LOGIN_ID_KEY), 'owner')
   }
 })
+
+// 인증 상태 반영 중 구독자가 로그아웃하면 반영 직후 무효화된 응답도 저장·이동하지 않는다.
+test('loginWithPreferences_whenListenerLogsOutDuringUpdate_preservesStoredId', async () => {
+  const storage = savedLogin('previous')
+  const store = createAuthStore(
+    {
+      login: async () => user,
+      getMe: async () => user,
+      logout: async () => {},
+    },
+    createSessionActivity(),
+  )
+  let loggingOut = false
+  let logout: Promise<void> | null = null
+  store.subscribe(() => {
+    if (loggingOut || store.getSnapshot().status !== 'authenticated') return
+    loggingOut = true
+    logout = store.logout()
+  })
+  await loginWithPreferences(
+    values,
+    store.login,
+    () => assert.fail('무효화된 로그인은 이동하지 않는다'),
+    () => storage,
+  )
+  assert.notEqual(logout, null)
+  await logout
+  assert.equal(store.getSnapshot().user, null)
+  assert.equal(storage.getItem(REMEMBERED_LOGIN_ID_KEY), 'previous')
+})

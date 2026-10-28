@@ -27,6 +27,7 @@
 비밀번호 입력의 `keydown`·`keyup`에서 `getModifierState('CapsLock')`을 읽고 `blur`에서 숨긴다.
 포커스 재진입 후 첫 키 이벤트에서 현재 상태를 다시 확인한다.
 안내 문구는 `Caps Lock이 켜져 있습니다.`이며 `role="status"`로 제공한다.
+스크린 리더는 미리 있던 상태 영역의 내용 변경만 읽는 경우가 많으므로, 상태 영역은 항상 두고 문구만 바꾼다.
 antd `Form.Item extra`를 사용해 비밀번호의 `aria-describedby`에 안내가 연결되도록 한다.
 antd가 검증 오류의 help ID와 extra ID를 함께 구성하므로 기존 오류 연결을 덮어쓰지 않는다.
 
@@ -41,7 +42,7 @@ antd가 검증 오류의 help ID와 extra ID를 함께 구성하므로 기존 �
 ## 검증
 
 `frontend/tests/loginPreferences.test.ts`에서 복원·저장·삭제·실패 시 유지·저장소 오류·저장 후 이동·제출 값 고정을 검사한다.
-실제 `authStore`와 연결해 로그아웃으로 무시된 응답, 업무 권한 없는 계정과 강제 비밀번호 변경 계정도 검사한다.
+실제 `authStore`와 연결해 로그아웃으로 무시된 응답, 인증 상태 반영 중 구독자의 로그아웃으로 무효화된 응답, 업무 권한 없는 계정과 강제 비밀번호 변경 계정도 검사한다.
 
 실행 명령은 `cd frontend && npm run lint && npm run format:check && npm run test && npm run build`다.
 체크박스·자동 채움·Caps Lock·접근성 연결·실제 이동은 브라우저 확인 대상이며, 결과와 미검증 항목은 PR에 기록한다.

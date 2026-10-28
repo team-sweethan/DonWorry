@@ -118,7 +118,8 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
               label="비밀번호"
               name="password"
               rules={[{ required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' }]}
-              extra={capsLock ? <span role="status">Caps Lock이 켜져 있습니다.</span> : undefined}
+              // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
+              extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
             >
               <Input.Password
                 prefix={<LockOutlined />}
