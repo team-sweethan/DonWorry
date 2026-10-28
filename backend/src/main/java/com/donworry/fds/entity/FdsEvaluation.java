@@ -37,6 +37,12 @@ public class FdsEvaluation {
     @Column(name = "evaluation_request_id", nullable = false, unique = true)
     private UUID evaluationRequestId;
 
+    @Column(name = "original_evaluation_request_id")
+    private UUID originalEvaluationRequestId;
+
+    @Column(name = "reevaluation_retry_id", unique = true)
+    private UUID reevaluationRetryId;
+
     @Column(name = "payment_id", nullable = false)
     private Long paymentId;
 
@@ -45,6 +51,18 @@ public class FdsEvaluation {
 
     @Column(name = "customer_ref", nullable = false, length = 100)
     private String customerRef;
+
+    @Column(name = "device_id", length = 100)
+    private String deviceId;
+
+    @Column(name = "card_token", length = 255)
+    private String cardToken;
+
+    @Column(name = "ip_country_code", length = 2)
+    private String ipCountryCode;
+
+    @Column(name = "authorization_result", length = 20)
+    private String authorizationResult;
 
     @Column(name = "payment_requested_at", nullable = false)
     private Instant paymentRequestedAt;
@@ -74,6 +92,9 @@ public class FdsEvaluation {
             Long paymentId,
             Long merchantId,
             String customerRef,
+            String deviceId,
+            String cardToken,
+            String ipCountryCode,
             Instant paymentRequestedAt,
             Long requestedAmount,
             Integer riskScore,
@@ -84,6 +105,9 @@ public class FdsEvaluation {
         this.paymentId = paymentId;
         this.merchantId = merchantId;
         this.customerRef = customerRef;
+        this.deviceId = deviceId;
+        this.cardToken = cardToken;
+        this.ipCountryCode = ipCountryCode;
         this.paymentRequestedAt = paymentRequestedAt;
         this.requestedAmount = requestedAmount;
         this.riskScore = riskScore;
@@ -99,6 +123,9 @@ public class FdsEvaluation {
                 .paymentId(request.paymentId())
                 .merchantId(request.merchantId())
                 .customerRef(request.customerRef())
+                .deviceId(request.deviceId())
+                .cardToken(request.cardToken())
+                .ipCountryCode(request.ipCountryCode())
                 .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
                 .requestedAmount(request.amount())
                 .riskScore(riskScore)
@@ -107,12 +134,55 @@ public class FdsEvaluation {
                 .build();
     }
 
+    public static FdsEvaluation failed(FdsEvaluationRequest request, String errorCode, Instant evaluatedAt) {
+        if (errorCode == null || errorCode.isBlank()) throw new IllegalArgumentException("errorCode must not be blank");
+        return FdsEvaluation.builder()
+                .evaluationRequestId(request.evaluationRequestId())
+                .paymentId(request.paymentId())
+                .merchantId(request.merchantId())
+                .customerRef(request.customerRef())
+                .deviceId(request.deviceId())
+                .cardToken(request.cardToken())
+                .ipCountryCode(request.ipCountryCode())
+                .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
+                .requestedAmount(request.amount())
+                .result(FdsResult.ERROR)
+                .evaluatedAt(evaluatedAt)
+                .errorCode(errorCode)
+                .build();
+    }
+
     public boolean hasSameRequestSnapshot(FdsEvaluationRequest request) {
         return paymentId.equals(request.paymentId())
                 && merchantId.equals(request.merchantId())
                 && customerRef.equals(request.customerRef())
+                && java.util.Objects.equals(deviceId, request.deviceId())
+                && java.util.Objects.equals(cardToken, request.cardToken())
+                && java.util.Objects.equals(ipCountryCode, request.ipCountryCode())
                 && requestedAmount == request.amount()
                 && paymentRequestedAt.equals(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    public void recordAuthorizationResult(String result) {
+        if (!"APPROVED".equals(result) && !"DECLINED".equals(result)) {
+            throw new IllegalArgumentException("authorization result must be APPROVED or DECLINED");
+        }
+        if (authorizationResult != null && !authorizationResult.equals(result)) {
+            throw new IllegalStateException("승인 결과는 변경할 수 없습니다");
+        }
+        authorizationResult = result;
+    }
+
+    public void recordReevaluation(UUID originalEvaluationRequestId, UUID retryId) {
+        if (this.originalEvaluationRequestId == null && this.reevaluationRetryId == null) {
+            this.originalEvaluationRequestId = originalEvaluationRequestId;
+            this.reevaluationRetryId = retryId;
+            return;
+        }
+        if (!this.originalEvaluationRequestId.equals(originalEvaluationRequestId)
+                || !this.reevaluationRetryId.equals(retryId)) {
+            throw new IllegalStateException("재탐지 이력은 변경할 수 없습니다");
+        }
     }
 
     public void addRuleHit(String ruleCode, FdsRuleHitOutcome outcome, int appliedScore, String ruleNameSnapshot) {

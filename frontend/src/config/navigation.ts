@@ -2,20 +2,26 @@ import type { AuthUser } from '../types/auth.ts'
 
 export type Role = 'security' | 'owner'
 export type Permission = 'FDS_VIEW' | 'FINANCE_VIEW'
-export type NavItem = { label: string; path: string; permission?: Permission }
+/** 메뉴 옆 숫자 배지 이름. 숫자는 레이아웃 바깥(역할별 훅)에서 받아 그리기만 한다. */
+export type NavBadge = 'securityCaseActions'
+export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 export type NavGroup = { title: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string; userName: string; landing: string }> = {
-  security: { label: '보안 직원', userName: '박지원', landing: '/security/transactions' },
+  security: { label: '보안 직원', userName: '박지원', landing: '/security/home' },
   owner: { label: '사장님', userName: '김사장', landing: '/owner/actions' },
 }
 
 /** 메뉴 내용은 노션의 담당자 협의 후 수정할 수 있도록 데이터로 분리. */
 export const navByRole: Record<Role, NavGroup[]> = {
   security: [
+    { title: '개요', items: [{ label: '홈', path: '/security/home' }] },
     { title: '결제', items: [{ label: '거래 내역', path: '/security/transactions' }] },
     { title: '탐지', items: [{ label: '경보', path: '/security/alerts' }] },
-    { title: 'Case', items: [{ label: 'Case 목록', path: '/security/cases' }] },
+    {
+      title: 'Case',
+      items: [{ label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' }],
+    },
   ],
   owner: [
     {

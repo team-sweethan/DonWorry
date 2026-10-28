@@ -1,0 +1,30 @@
+{
+  "casePayments": {
+    "caseId": "103",
+    "evidenceVersion": 1,
+    "source": "P3·P5",
+    "retrievedAt": "2026-10-27T14:05:00Z",
+    "payments": [
+      {"paymentId": "9201", "amount": 48000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T14:00:00Z"}
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "103",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T14:05:01Z",
+    "payments": [
+      {
+        "paymentId": "9201",
+        "riskScore": 55,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "RAPID_REPEAT_PAYMENT", "name": "단시간 반복 결제", "appliedScore": 30},
+          {"code": "NEW_DEVICE", "name": "기존 미사용 단말기", "appliedScore": 25}
+        ]
+      }
+    ],
+    "missingPaymentIds": []
+  }
+}

@@ -1,0 +1,9 @@
+package com.donworry.fds.api;
+
+public enum FdsFailureDisposition {
+    REEVALUATION_AVAILABLE,
+    EXISTING_RESULT_AVAILABLE,
+    PAYMENT_FOLLOW_UP_REQUIRED,
+    MANUAL_REVIEW_REQUIRED,
+    EVALUATION_NOT_FOUND
+}

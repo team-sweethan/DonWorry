@@ -4,6 +4,7 @@ import type {
   CaseDetail,
   CaseHistory,
   CasePayment,
+  CaseStatus,
   CaseSummary,
   PaymentDecision,
   ReportBody,
@@ -82,6 +83,15 @@ const strOrNull = (id: Id | null) => (id === null ? null : String(id))
 export async function getCases(_merchant: string): Promise<CaseSummary[]> {
   const cases = await api<ServerSummary[]>('/security-cases', { cache: 'no-store' })
   return cases.map((c) => ({ ...c, caseId: str(c.caseId), merchantId: str(c.merchantId) }))
+}
+
+/** 사이드바 배지용 상태별 건수 (#224). 목록과 달리 결제 · 보고서를 읽지 않아 가볍다. 모든 상태가 키로 온다. */
+export async function getCaseCounts(): Promise<Record<CaseStatus, number>> {
+  const { statusCounts } = await api<{ statusCounts: Record<CaseStatus, number> }>(
+    '/security-cases/counts',
+    { cache: 'no-store' },
+  )
+  return statusCounts
 }
 
 export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {

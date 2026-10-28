@@ -17,6 +17,7 @@ import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { LatestLogin } from './LatestLogin'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
+import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -197,6 +198,12 @@ export function ServerSession() {
   } = useSessionCheck()
   const { pathname, search } = useLocation()
   const checked = checkedKey === key
+  // 훅은 아래 조기 반환보다 먼저 부른다. 보안 직원으로 확인된 뒤에만 건수를 센다 (#224)
+  const caseActions = useSecurityCaseBadge(
+    status === 'authenticated' && user?.role === 'SECURITY_STAFF' && !user.passwordChangeRequired
+      ? user.userId
+      : null,
+  )
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({
@@ -239,6 +246,7 @@ export function ServerSession() {
   return (
     <ManagementLayout
       groups={navigation.groups}
+      badges={{ securityCaseActions: caseActions }}
       header={
         <header className="dw-header">
           <NavLink to={home} className="dw-brand" aria-label="돈워리 홈">

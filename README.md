@@ -333,14 +333,14 @@ flowchart TB
     investigation --> fds
     investigation --> identity
     payment --> settlement
-    settlement -. "보류" .-> identity
+    settlement --> identity
     investigation -. "HTTP 조사 요청" .-> ai
     ai -. "HTTP Tool API·결과" .-> investigation
 ```
 
-- 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 반대 방향으로 알릴 일은 커밋 후 이벤트로 보냅니다. `보류` 점선은 필요해지면 추가할 의존입니다.
+- 실선은 "호출한다(의존한다)" 방향이며 아래로만 향합니다. 반대 방향으로 알릴 일은 커밋 후 이벤트로 보냅니다.
 - ai-server와의 점선은 HTTP입니다. ai-server는 `investigation/report`의 내부 Tool API만 읽기 전용으로 호출합니다([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)).
-- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 채택했고, 각 모듈의 `allowedDependencies`로 검사합니다 (#60). 이벤트 클래스 위치와 동기 호출·이벤트 선택 기준은 [Modulith 문서 04](docs/modulith/04-dependency-and-events.md), 검사 범위는 [Modulith 문서 05](docs/modulith/05-verification.md)를 봅니다.
+- 이 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 채택했고 `settlement → identity`는 [ADR-0038](docs/decisions/0038-settlement-identity-dependency.md)에서 더했으며, 각 모듈의 `allowedDependencies`로 검사합니다 (#60). 이벤트 클래스 위치와 동기 호출·이벤트 선택 기준은 [Modulith 문서 04](docs/modulith/04-dependency-and-events.md), 검사 범위는 [Modulith 문서 05](docs/modulith/05-verification.md)를 봅니다.
 
 ### 기술 선택 배경
 

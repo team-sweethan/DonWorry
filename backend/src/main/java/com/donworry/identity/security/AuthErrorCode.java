@@ -7,6 +7,12 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum AuthErrorCode {
+    MERCHANT_AUTHENTICATION_REQUIRED("MERCHANT_AUTH_001", "가맹점 인증이 없거나 유효하지 않습니다.", HttpStatus.UNAUTHORIZED),
+    MERCHANT_AUTHENTICATION_UNAVAILABLE(
+            "MERCHANT_AUTH_002", "가맹점 인증을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.", HttpStatus.SERVICE_UNAVAILABLE),
+    MERCHANT_INACTIVE("MERCHANT_AUTH_003", "신규 결제 요청을 할 수 없는 가맹점입니다.", HttpStatus.FORBIDDEN),
+    MERCHANT_METHOD_NOT_ALLOWED("MERCHANT_AUTH_004", "지원하지 않는 요청 메서드입니다.", HttpStatus.METHOD_NOT_ALLOWED),
+    MERCHANT_BODY_TOO_LARGE("MERCHANT_AUTH_005", "요청 본문이 너무 큽니다.", HttpStatus.CONTENT_TOO_LARGE),
     AUTHENTICATION_REQUIRED("AUTH_001", "로그인이 필요합니다.", HttpStatus.UNAUTHORIZED),
     ACCESS_DENIED("AUTH_002", "권한이 없습니다.", HttpStatus.FORBIDDEN),
     CSRF_INVALID("CSRF_001", "요청 보안 토큰이 없거나 유효하지 않습니다. 다시 시도해 주세요.", HttpStatus.FORBIDDEN),

@@ -5,7 +5,9 @@ import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react
 import { useNavigate } from 'react-router-dom'
 import {
   createMockFdsEvaluations,
+  createMockFdsErrorEvaluation,
   getFdsEvaluations,
+  reevaluateMockFdsError,
   type FdsEvaluationPage,
   type FdsEvaluationSummary,
   type FdsResult,
@@ -51,6 +53,8 @@ export function AlertListPage() {
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [mockCreating, setMockCreating] = useState(false)
+  const [mockErrorCreating, setMockErrorCreating] = useState(false)
+  const [mockReevaluating, setMockReevaluating] = useState(false)
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
   const summaryRefreshPending = useRef(true)
@@ -139,6 +143,34 @@ export function AlertListPage() {
       })
       .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
       .finally(() => setMockCreating(false))
+  }
+
+  const createMockError = () => {
+    setMockErrorCreating(true)
+    setError(null)
+    createMockFdsErrorEvaluation()
+      .then(() => {
+        const current = conditions.current
+        load(0, current.filter, current.query, true)
+      })
+      .catch(() => setError('Mock ERROR 평가를 생성하지 못했습니다.'))
+      .finally(() => setMockErrorCreating(false))
+  }
+
+  const reevaluateMockError = () => {
+    setMockReevaluating(true)
+    setError(null)
+    reevaluateMockFdsError()
+      .then(() => {
+        conditions.current = { filter: 'ALL', query: '', page: 0 }
+        setFilter('ALL')
+        setQuery('')
+        load(0, 'ALL', '', true)
+      })
+      .catch(() =>
+        setError('ERROR 평가 재탐지를 실행하지 못했습니다. 먼저 ERROR 케이스를 생성해 주세요.'),
+      )
+      .finally(() => setMockReevaluating(false))
   }
 
   const selectFilter = (nextFilter: Filter) => {
@@ -300,6 +332,12 @@ export function AlertListPage() {
             </Button>
             <Button onClick={createMock} loading={mockCreating}>
               Mock 평가 생성
+            </Button>
+            <Button danger onClick={createMockError} loading={mockErrorCreating}>
+              ERROR 케이스 생성
+            </Button>
+            <Button onClick={reevaluateMockError} loading={mockReevaluating}>
+              재탐지 실행
             </Button>
           </Space>
         </div>
