@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.schemas.report import Overview, PaymentAnalysis, ReportBody
+from app.schemas.report import InvestigationTrace, Overview, PaymentAnalysis, ReportBody, TraceStep
 
 # AI 보고서 형식과 화면 타입(frontend/src/types/case.ts의 ReportBody)이 어긋나지 않는지 본다
 # (ADR-0009 결정 4)
@@ -34,3 +34,8 @@ def test_report_body_matches_frontend_type() -> None:
     assert _keys(_block(body, "overview: {"), 4) == list(Overview.model_fields)
     analyses = _block(body, "paymentAnalyses: Array<{")
     assert _keys(analyses, 4) == list(PaymentAnalysis.model_fields)
+    # 조사 과정 기록(#294)은 따로 선언한 타입이라 이름으로 찾는다
+    assert _keys(_block(source, "export type InvestigationTrace = {"), 2) == list(
+        InvestigationTrace.model_fields
+    )
+    assert _keys(_block(source, "export type TraceStep = {"), 2) == list(TraceStep.model_fields)

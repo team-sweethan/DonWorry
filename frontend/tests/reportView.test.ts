@@ -7,6 +7,7 @@ import {
   reportHeadline,
   ruleEvidenceRows,
   topRiskScore,
+  traceProviderLabel,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -109,4 +110,17 @@ test('hasReadableReport_latestRunningWithOlderSucceeded_returnsTrue', () => {
   assert.equal(hasReadableReport([report(1, 1), running]), true)
   assert.equal(hasReadableReport([report(1, 1), failed]), true)
   assert.equal(hasReadableReport([running]), false)
+})
+
+// 고정 문장 · mock 보고서는 AI 모델 이름이 아니라 무엇으로 만들었는지 한국어로 보여 준다 (#294)
+test('traceProviderLabel_fixedAndMock_returnsKoreanLabels', () => {
+  assert.equal(
+    traceProviderLabel({ provider: 'FIXED', model: 'fixed' }),
+    '고정 문장 (AI 서버 꺼짐)',
+  )
+  assert.equal(
+    traceProviderLabel({ provider: 'MOCK', model: 'mock' }),
+    'mock (Qwen 미사용 · 정해진 순서)',
+  )
+  assert.equal(traceProviderLabel({ provider: 'OLLAMA', model: 'qwen2.5:7b' }), 'qwen2.5:7b')
 })

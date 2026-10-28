@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Empty, Segmented, Space, Spin, Typography } from 'antd'
+import { Alert, App, Button, Card, Empty, Segmented, Space, Spin, Tabs, Typography } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getCase } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -10,6 +10,7 @@ import type { AiReport, CaseDetail } from '../../types/case'
 import { pickReport } from '../../utils/reportView'
 import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
+import { ReportTrace } from './case/ReportTrace'
 
 // AI 보고서 전문 (#292). Case 상세 조회 API를 그대로 쓰고, 판정은 Case 상세에서 한다
 export function CaseReportPage() {
@@ -21,6 +22,8 @@ export function CaseReportPage() {
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
+  // 버전을 바꿔도 보던 탭을 유지해 v1 · v2의 조사 과정을 바로 비교할 수 있게 한다 (#294)
+  const [tab, setTab] = useState<'report' | 'trace'>('report')
   // Case 상세와 같이 조회 범위와 함께 저장해 다른 Case의 늦은 응답을 버린다
   const scope = `${merchant}/${id}`
   const [loaded, setLoaded] = useState<{
@@ -120,10 +123,27 @@ export function CaseReportPage() {
               description={`Case는 증거 v${securityCase.evidenceVersion}입니다. 이 보고서로 최종 판정할 수 없습니다.`}
             />
           )}
-          <ReportState
-            report={picked.report}
-            label={`Case ${securityCase.caseId} · ${securityCase.customerRef} · 보고서 v${picked.report.reportVersion}`}
-          />
+          {picked.report.status === 'SUCCEEDED' && picked.report.reportBody && (
+            <Card style={{ borderColor: '#E2E8F0' }} styles={{ body: { padding: '0 16px' } }}>
+              <Tabs
+                activeKey={tab}
+                onChange={(key) => setTab(key === 'trace' ? 'trace' : 'report')}
+                items={[
+                  { key: 'report', label: '보고서' },
+                  { key: 'trace', label: '조사 과정' },
+                ]}
+                tabBarStyle={{ marginBottom: 0 }}
+              />
+            </Card>
+          )}
+          {tab === 'trace' && picked.report.status === 'SUCCEEDED' && picked.report.reportBody ? (
+            <ReportTrace trace={picked.report.reportBody.investigationTrace} />
+          ) : (
+            <ReportState
+              report={picked.report}
+              label={`Case ${securityCase.caseId} · ${securityCase.customerRef} · 보고서 v${picked.report.reportVersion}`}
+            />
+          )}
         </Space>
       )}
     </>

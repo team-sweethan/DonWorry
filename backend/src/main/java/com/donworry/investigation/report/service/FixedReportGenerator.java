@@ -131,7 +131,40 @@ class FixedReportGenerator {
                                 "get_case_payments", "P3·P5", securityCase.getId(), reportVersion, 1, now, dataVersion),
                         evidence("get_fds_evidence", "P2", securityCase.getId(), reportVersion, 2, now, dataVersion)),
                 "verdict",
-                Map.of("headline", "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.", "overallRecommendation", "NEEDS_CHECK"));
+                Map.of("headline", "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.", "overallRecommendation", "NEEDS_CHECK"),
+                "investigationTrace",
+                fixedTrace(payments.size()));
+    }
+
+    // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다
+    private static Map<String, Object> fixedTrace(int paymentCount) {
+        Map<String, Object> trace = new HashMap<>();
+        trace.put("provider", "FIXED");
+        trace.put("model", "fixed");
+        trace.put("durationMs", null);
+        trace.put(
+                "steps",
+                List.of(
+                        traceStep(
+                                "TOOL",
+                                "결제 · FDS 근거 조회",
+                                "이 사건의 결제 전체",
+                                "결제 " + paymentCount + "건 · FDS 평가 " + paymentCount + "건"),
+                        traceStep("ASSEMBLE", "고정 문장 보고서 조립", null, "AI 서버가 꺼져 정해진 문장으로 조립")));
+        return trace;
+    }
+
+    // 값이 없는 칸(null)이 있어 Map.of 대신 HashMap을 쓴다
+    private static Map<String, Object> traceStep(String kind, String title, String asked, String received) {
+        Map<String, Object> step = new HashMap<>();
+        step.put("kind", kind);
+        step.put("actor", "SYSTEM");
+        step.put("title", title);
+        step.put("durationMs", null);
+        step.put("asked", asked);
+        step.put("received", received);
+        step.put("retryReason", null);
+        return step;
     }
 
     // appliedScore가 없을 수 있어 Map.of 대신 null을 받는 HashMap을 쓴다

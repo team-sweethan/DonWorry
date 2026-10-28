@@ -7,6 +7,7 @@ from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
+    InvestigationTrace,
     Overview,
     PaymentAnalysis,
     Recommendation,
@@ -139,6 +140,7 @@ def assemble_report(
     narrative: Narrative,
     records: list[ToolRecord],
     investigated_at: str,
+    trace: InvestigationTrace,
 ) -> ReportBody:
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
@@ -229,4 +231,5 @@ def assemble_report(
             headline=narrative.headline.strip(),
             overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
         ),
+        investigationTrace=trace,
     )

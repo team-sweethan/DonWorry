@@ -1,4 +1,4 @@
-import type { AiReport, ReportBody } from '../types/case.ts'
+import type { AiReport, InvestigationTrace, ReportBody } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
@@ -67,4 +67,17 @@ export function ruleEvidenceRows(analysis: PaymentAnalysis): RuleEvidenceRow[] {
 // 결제별 "미확인"을 한 목록으로 모은다 (같은 문장은 한 번만)
 export function unknownItems(body: ReportBody): string[] {
   return [...new Set(body.paymentAnalyses.flatMap((p) => p.unknowns))]
+}
+
+// 조사 과정 탭의 "사용 모델" 문구 — 고정 문장 · mock을 AI 모델 이름처럼 보이지 않게 한다 (#294)
+export function traceProviderLabel(trace: Pick<InvestigationTrace, 'provider' | 'model'>): string {
+  if (trace.provider === 'FIXED') return '고정 문장 (AI 서버 꺼짐)'
+  if (trace.provider === 'MOCK') return 'mock (Qwen 미사용 · 정해진 순서)'
+  return trace.model
+}
+
+// 걸린 시간 표시 — 1초 미만은 ms, 그 이상은 소수 첫째 자리 초
+export function durationText(ms: number | null): string {
+  if (ms === null) return '-'
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}초`
 }
