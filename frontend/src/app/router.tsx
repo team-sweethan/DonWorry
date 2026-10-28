@@ -8,6 +8,7 @@ import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
+import { CaseReportPage } from '../pages/security/CaseReportPage'
 import { SecurityHomePage } from '../pages/security/SecurityHomePage'
 import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
           { path: 'home', element: <SecurityHomePage /> },
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
+          { path: 'cases/:id/report', element: <CaseReportPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
