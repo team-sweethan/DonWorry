@@ -67,6 +67,9 @@ class PaymentOperationsHttpMariaDbTests {
     @Autowired
     PaymentActionRepository actions;
 
+    @Autowired
+    PaymentFdsRecoveryRepository recoveries;
+
     @MockitoSpyBean
     PaymentOperationsRepository repository;
 
@@ -77,10 +80,14 @@ class PaymentOperationsHttpMariaDbTests {
     @BeforeEach
     void setup() throws Exception {
         prefix = "q188" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        // 다른 테스트가 논리 참조로만 저장한 가맹점 ID와 자동 증가 ID가 겹치지 않게 한다.
+        merchantId = jdbc.queryForObject(
+                "SELECT GREATEST(COALESCE((SELECT MAX(merchant_id) FROM merchants), 0), COALESCE((SELECT MAX(merchant_id) FROM payments), 0)) + 1",
+                Long.class);
         jdbc.update(
-                "INSERT INTO merchants(merchant_code,display_name,status,pg_fee_rate,created_at) VALUES (?, '조회 테스트', 'INACTIVE', 0.01, UTC_TIMESTAMP(6))",
+                "INSERT INTO merchants(merchant_id,merchant_code,display_name,status,pg_fee_rate,created_at) VALUES (?, ?, '조회 테스트', 'INACTIVE', 0.01, UTC_TIMESTAMP(6))",
+                merchantId,
                 prefix);
-        merchantId = jdbc.queryForObject("SELECT merchant_id FROM merchants WHERE merchant_code=?", Long.class, prefix);
         staff = user("staff", "SECURITY_STAFF", null);
     }
 
@@ -266,6 +273,111 @@ class PaymentOperationsHttpMariaDbTests {
                         "actionIdempotencyKey",
                         "SECRET_CUSTOMER",
                         "SECRET_AUTHORIZATION");
+    }
+
+    // 복구 기록이 없는 기존 ERROR와 요청 없는 결제는 명시적인 null을 반환한다.
+    @Test
+    void recovery_whenAbsent_returnsExplicitNull() throws Exception {
+        for (long id : List.of(requested("ERROR"), payment("PENDING", false))) {
+            var detail = json(PATH + "/" + id);
+            assertThat(detail.has("fdsRecovery")).isTrue();
+            assertThat(detail.path("fdsRecovery").isNull()).isTrue();
+        }
+    }
+
+    // 복구 상태와 새 UUID 일치 여부로 결과·사유를 표현하고 반복 GET은 저장값·이벤트를 바꾸지 않는다.
+    @ParameterizedTest
+    @CsvSource({
+        "WAITING_ANALYSIS,false,ERROR,,",
+        "READY,false,ERROR,,P2_REASON",
+        "REQUESTED,false,ERROR,,P2_REASON",
+        "COMPLETED,true,ALLOW,ALLOW,",
+        "COMPLETED,true,REVIEW,REVIEW,",
+        "COMPLETED,true,DENY,DENY,",
+        "MANUAL_REVIEW,false,ERROR,,P2_REASON",
+        "MANUAL_REVIEW,true,ERROR,ERROR,NEW_ERROR"
+    })
+    void recovery_whenRead_mapsOnlyNewEvaluationAndPreservesData(
+            String status, boolean matches, String result, String expectedResult, String expectedReason)
+            throws Exception {
+        long id = requested("ERROR");
+        long recoveryId = new TransactionTemplate(manager).execute(tx -> {
+            var r = requests.findByPaymentId(id).orElseThrow();
+            var recovery = recoveries.save(PaymentFdsRecovery.waitingAnalysis(
+                    id,
+                    new PaymentEvaluationSnapshot(r.getEvaluationRequestId(), 1L, "ERROR", null, "FDS_ERROR", CREATED),
+                    UUID.randomUUID(),
+                    CREATED,
+                    CREATED));
+            if (!status.equals("WAITING_ANALYSIS")) {
+                recovery.recordAnalysis(
+                        new com.donworry.fds.api.FdsEvaluationFailureAnalyzed(
+                                3000000000000L + id,
+                                recovery.getFailureReportId(),
+                                r.getEvaluationRequestId(),
+                                r.getEvaluationRequestId(),
+                                id,
+                                status.equals("MANUAL_REVIEW") && !matches
+                                        ? com.donworry.fds.api.FdsFailureDisposition.MANUAL_REVIEW_REQUIRED
+                                        : com.donworry.fds.api.FdsFailureDisposition.REEVALUATION_AVAILABLE,
+                                "P2_REASON",
+                                CREATED),
+                        CREATED);
+            }
+            return recovery.getRecoveryId();
+        });
+        // #274 실행 경로는 아직 없으므로 미래 종료 상태만 제약을 지키는 SQL fixture로 구성한다.
+        boolean hasWork = status.equals("REQUESTED") || status.equals("COMPLETED") || matches;
+        if (hasWork) {
+            var newId = UUID.randomUUID();
+            jdbc.update(
+                    "UPDATE payment_fds_recoveries SET status=?,new_evaluation_request_id=?,retry_id=?,requested_by=1,requested_at=original_evaluated_at,completed_at=CASE WHEN ?='REQUESTED' THEN NULL ELSE original_evaluated_at END WHERE payment_id=?",
+                    status,
+                    newId.toString(),
+                    UUID.randomUUID().toString(),
+                    status,
+                    id);
+            if (matches)
+                jdbc.update(
+                        "UPDATE payment_requests SET evaluation_request_id=?,evaluation_result=?,evaluation_error_code=?,evaluation_risk_score=?,processing_stage=? WHERE payment_id=?",
+                        newId.toString(),
+                        result,
+                        result.equals("ERROR") ? "NEW_ERROR" : null,
+                        result.equals("ERROR") ? null : 40,
+                        result.equals("ERROR") ? "NEEDS_REVIEW" : "AUTHORIZED",
+                        id);
+        }
+        var paymentBefore = jdbc.queryForMap("SELECT * FROM payments WHERE payment_id=?", id);
+        var requestBefore = jdbc.queryForMap("SELECT * FROM payment_requests WHERE payment_id=?", id);
+        var recoveryBefore = jdbc.queryForMap("SELECT * FROM payment_fds_recoveries WHERE payment_id=?", id);
+        var eventsBefore = jdbc.queryForList(
+                "SELECT * FROM EVENT_PUBLICATION WHERE JSON_VALUE(serialized_event, '$.paymentId') = ?", id);
+        for (int i = 0; i < 2; i++) {
+            var summary = json(PATH + "/" + id).path("fdsRecovery");
+            assertThat(summary.size()).isEqualTo(7);
+            assertThat(summary.path("paymentId").asLong()).isEqualTo(id);
+            assertThat(summary.path("recoveryId").asLong()).isEqualTo(recoveryId);
+            assertThat(summary.path("status").asString()).isEqualTo(status);
+            assertThat(summary.path("paymentStatus").asString()).isEqualTo("PENDING");
+            assertThat(summary.path("evaluationResult").isNull()).isEqualTo(expectedResult == null);
+            if (expectedResult != null)
+                assertThat(summary.path("evaluationResult").asString()).isEqualTo(expectedResult);
+            assertThat(summary.path("reasonCode").isNull()).isEqualTo(expectedReason == null);
+            if (expectedReason != null)
+                assertThat(summary.path("reasonCode").asString()).isEqualTo(expectedReason);
+            assertThat(summary.path("completedAt").isNull())
+                    .isEqualTo(!status.equals("COMPLETED") && !status.equals("MANUAL_REVIEW"));
+            assertThat(summary.toString()).doesNotContain("retryId", "evaluationRequestId", "customerRef", "FDS_ERROR");
+        }
+        assertThat(jdbc.queryForMap("SELECT * FROM payments WHERE payment_id=?", id))
+                .isEqualTo(paymentBefore);
+        assertThat(jdbc.queryForMap("SELECT * FROM payment_requests WHERE payment_id=?", id))
+                .isEqualTo(requestBefore);
+        assertThat(jdbc.queryForMap("SELECT * FROM payment_fds_recoveries WHERE payment_id=?", id))
+                .isEqualTo(recoveryBefore);
+        assertThat(jdbc.queryForList(
+                        "SELECT * FROM EVENT_PUBLICATION WHERE JSON_VALUE(serialized_event, '$.paymentId') = ?", id))
+                .isEqualTo(eventsBefore);
     }
 
     // 필터는 페이지보다 먼저 적용하고 동률은 ID로 정렬하며 완료 단건은 별도로 조회한다.

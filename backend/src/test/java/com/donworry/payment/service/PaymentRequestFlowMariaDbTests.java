@@ -44,6 +44,12 @@ class PaymentRequestFlowMariaDbTests {
     @Autowired
     PaymentRepository payments;
 
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    PaymentFdsRecoveryRepository recoveries;
+
+    @MockitoBean
+    FdsFailureReporter failureReporter;
+
     @MockitoBean
     FdsEvaluator evaluator;
 
@@ -114,6 +120,8 @@ class PaymentRequestFlowMariaDbTests {
                                 .getStatus())
                         .isEqualTo(expected));
         verify(evaluator).evaluate(any());
+        assertThat(recoveries.findByPaymentId(first.paymentId()).isPresent()).isEqualTo(result == FdsResult.ERROR);
+        verify(failureReporter, times(result == FdsResult.ERROR ? 1 : 0)).report(any());
         verify(authorizer, times(result == FdsResult.ALLOW || result == FdsResult.REVIEW ? 1 : 0))
                 .authorize(any());
     }
@@ -148,6 +156,8 @@ class PaymentRequestFlowMariaDbTests {
         var saved = requests.findByMerchantIdAndIdempotencyKey(c.merchantId(), c.idempotencyKey())
                 .orElseThrow();
         assertThat(saved.getProcessingStage()).isEqualTo(PaymentProcessingStage.RECEIVED);
+        assertThat(recoveries.findByPaymentId(saved.getPaymentId())).isEmpty();
+        verifyNoInteractions(failureReporter);
         var result = flow.submit(c);
         assertThat(result.paymentId()).isEqualTo(saved.getPaymentId());
         var inputs = org.mockito.ArgumentCaptor.forClass(FdsEvaluationRequest.class);
@@ -167,8 +177,11 @@ class PaymentRequestFlowMariaDbTests {
         var admitted = admission.admit(c);
         processing.saveEvaluation(
                 admitted.paymentId(),
-                new FdsEvaluationResponse(
-                        admitted.evaluationRequestId(), 123L, FdsResult.REVIEW, 50, Instant.now(), null));
+                new PaymentObservedEvaluation(
+                        new FdsEvaluationResponse(
+                                admitted.evaluationRequestId(), 123L, FdsResult.REVIEW, 50, Instant.now(), null),
+                        Instant.now(),
+                        Instant.now()));
         var result = flow.submit(c);
         assertThat(stage(result.paymentId())).isEqualTo(PaymentProcessingStage.AUTHORIZED);
         verifyNoInteractions(evaluator);
@@ -246,6 +259,81 @@ class PaymentRequestFlowMariaDbTests {
         var saved = requests.findByMerchantIdAndIdempotencyKey(c.merchantId(), c.idempotencyKey())
                 .orElseThrow();
         assertThat(saved.getProcessingStage()).isEqualTo(PaymentProcessingStage.RECEIVED);
+        verifyNoInteractions(authorizer);
+    }
+    // 보고 시점에는 ERROR와 복구 행이 이미 커밋되어 있고 보고 실패·재요청에도 원본 키를 보존한다.
+    @Test
+    void submit_whenFailureReportThrows_preservesCommittedErrorAndDoesNotReportOnReplay() {
+        evaluation(FdsResult.ERROR);
+        var c = command();
+        doAnswer(invocation -> {
+                    FdsEvaluationFailureReport report = invocation.getArgument(0);
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    var recovery =
+                            recoveries.findByPaymentId(report.paymentId()).orElseThrow();
+                    assertThat(stage(report.paymentId())).isEqualTo(PaymentProcessingStage.NEEDS_REVIEW);
+                    assertThat(report.failureReportId()).isEqualTo(recovery.getFailureReportId());
+                    assertThat(report.originalEvaluationRequestId()).isEqualTo(report.evaluationRequestId());
+                    assertThat(report.evaluationAttemptNo()).isEqualTo(1);
+                    assertThat(report.requestedAt()).isEqualTo(recovery.getEvaluationRequestedAt());
+                    assertThat(report.respondedAt()).isEqualTo(recovery.getEvaluationRespondedAt());
+                    assertThat(report.sanitizedErrorMessage()).isNull();
+                    assertThat(report.deviceId()).isNull();
+                    throw new IllegalStateException("sensitive internal message");
+                })
+                .when(failureReporter)
+                .report(any());
+        var first = flow.submit(c);
+        var saved = recoveries.findByPaymentId(first.paymentId()).orElseThrow();
+        flow.submit(c);
+        var replay = recoveries.findByPaymentId(first.paymentId()).orElseThrow();
+        assertThat(replay.getFailureReportId()).isEqualTo(saved.getFailureReportId());
+        assertThat(replay.getEvaluationRequestedAt()).isEqualTo(saved.getEvaluationRequestedAt());
+        assertThat(replay.getStatus()).isEqualTo(PaymentFdsRecoveryStatus.WAITING_ANALYSIS);
+        verify(failureReporter).report(any());
+        verifyNoInteractions(authorizer);
+    }
+
+    // 복구 행 저장 실패는 ERROR 평가 저장도 롤백하고 보고를 실행하지 않는다.
+    @Test
+    void submit_whenRecoverySaveFails_rollsBackErrorAndSkipsReport() {
+        evaluation(FdsResult.ERROR);
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("storage failure"))
+                .when(recoveries)
+                .save(any(PaymentFdsRecovery.class));
+        var c = command();
+        assertThatThrownBy(() -> flow.submit(c))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        var saved = requests.findByMerchantIdAndIdempotencyKey(c.merchantId(), c.idempotencyKey())
+                .orElseThrow();
+        assertThat(saved.getProcessingStage()).isEqualTo(PaymentProcessingStage.RECEIVED);
+        assertThat(saved.getEvaluationId()).isNull();
+        assertThat(recoveries.findByPaymentId(saved.getPaymentId())).isEmpty();
+        verifyNoInteractions(failureReporter, authorizer);
+    }
+
+    // 동시에 받은 같은 ERROR는 보고 한 건과 최초 관측값 한 쌍만 저장한다.
+    @Test
+    void submit_whenConcurrentError_storesAndReportsOnce() throws Exception {
+        evaluation(FdsResult.ERROR);
+        var barrier = new CyclicBarrier(2);
+        doAnswer(i -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    return response(i.getArgument(0), FdsResult.ERROR);
+                })
+                .when(evaluator)
+                .evaluate(any());
+        var c = command();
+        admission.admit(c);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> flow.submit(c));
+            var b = pool.submit(() -> flow.submit(c));
+            var id = a.get(20, TimeUnit.SECONDS).paymentId();
+            assertThat(b.get(20, TimeUnit.SECONDS).paymentId()).isEqualTo(id);
+            assertThat(recoveries.findByPaymentId(id)).isPresent();
+        }
+        verify(failureReporter).report(any());
         verifyNoInteractions(authorizer);
     }
 }

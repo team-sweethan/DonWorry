@@ -17,6 +17,11 @@ public class PaymentEvaluationService {
     public PaymentEvaluationResult evaluateAndDecide(PaymentRules.State state, PaymentEvaluationInput input) {
         PaymentRules.requireUnapprovedPending(state);
         var evaluation = evaluate(input);
+        return decide(state, input, evaluation);
+    }
+
+    private PaymentEvaluationResult decide(
+            PaymentRules.State state, PaymentEvaluationInput input, FdsEvaluationResponse evaluation) {
         if (evaluation == null) {
             throw new IllegalStateException("FDS 평가 응답이 없습니다");
         }
@@ -33,12 +38,25 @@ public class PaymentEvaluationService {
         return new PaymentEvaluationResult(evaluation, PaymentRules.afterFds(state, verdict));
     }
 
+    public PaymentObservedEvaluation evaluateObserved(PaymentEvaluationInput input) {
+        var request = request(input);
+        var requestedAt = java.time.Instant.now();
+        var response = fdsEvaluator.evaluate(request);
+        var respondedAt = java.time.Instant.now();
+        decide(PaymentRules.State.pending(), input, response);
+        return new PaymentObservedEvaluation(response, requestedAt, respondedAt);
+    }
+
     public FdsEvaluationResponse evaluate(PaymentEvaluationInput input) {
+        return fdsEvaluator.evaluate(request(input));
+    }
+
+    private FdsEvaluationRequest request(PaymentEvaluationInput input) {
         if (input == null) {
             throw new IllegalArgumentException("input must not be null");
         }
 
-        var request = FdsEvaluationRequest.builder()
+        return FdsEvaluationRequest.builder()
                 .evaluationRequestId(input.evaluationRequestId())
                 .paymentId(input.paymentId())
                 .merchantId(input.merchantId())
@@ -46,7 +64,5 @@ public class PaymentEvaluationService {
                 .amount(input.amount())
                 .paymentRequestedAt(input.paymentRequestedAt())
                 .build();
-
-        return fdsEvaluator.evaluate(request);
     }
 }
