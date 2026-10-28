@@ -30,7 +30,7 @@ CREATE TABLE fds_blocklist_entries
 (
     blocklist_entry_id BIGINT       NOT NULL AUTO_INCREMENT,
     identifier_type    VARCHAR(30)  NOT NULL,
-    identifier_value   VARCHAR(255) NOT NULL,
+    identifier_value   VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     reason             VARCHAR(500) NOT NULL,
     active             BOOLEAN      NOT NULL DEFAULT TRUE,
     created_at         DATETIME(6)  NOT NULL,

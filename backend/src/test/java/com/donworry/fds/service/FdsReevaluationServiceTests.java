@@ -114,6 +114,9 @@ class FdsReevaluationServiceTests {
                 request.customerRef(),
                 request.amount(),
                 request.paymentRequestedAt(),
+                request.deviceId(),
+                request.cardToken(),
+                request.ipCountryCode(),
                 request.retryId());
         when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.of(existing));
 
@@ -131,6 +134,9 @@ class FdsReevaluationServiceTests {
                 "customer",
                 1000L,
                 Instant.parse("2026-10-27T01:00:00Z"),
+                "device-1",
+                "token-1",
+                "kr",
                 UUID.randomUUID());
     }
 
@@ -141,6 +147,9 @@ class FdsReevaluationServiceTests {
                 request.merchantId(),
                 request.customerRef(),
                 request.amount(),
-                request.paymentRequestedAt());
+                request.paymentRequestedAt(),
+                request.deviceId(),
+                request.cardToken(),
+                request.ipCountryCode());
     }
 }

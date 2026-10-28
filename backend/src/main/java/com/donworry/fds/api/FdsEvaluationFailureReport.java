@@ -15,6 +15,9 @@ public record FdsEvaluationFailureReport(
         String customerRef,
         long amount,
         Instant paymentRequestedAt,
+        String deviceId,
+        String cardToken,
+        String ipCountryCode,
         FdsResult evaluationResult,
         String errorCode,
         String sanitizedErrorMessage,
@@ -52,6 +55,68 @@ public record FdsEvaluationFailureReport(
         if (sanitizedErrorMessage != null && sanitizedErrorMessage.length() > 500) {
             throw new IllegalArgumentException("sanitizedErrorMessage must be at most 500 characters");
         }
+        var evaluationRequest = new FdsEvaluationRequest(
+                evaluationRequestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                paymentRequestedAt,
+                deviceId,
+                cardToken,
+                ipCountryCode);
+        deviceId = evaluationRequest.deviceId();
+        cardToken = evaluationRequest.cardToken();
+        ipCountryCode = evaluationRequest.ipCountryCode();
+    }
+
+    public FdsEvaluationFailureReport(
+            UUID failureReportId,
+            UUID originalEvaluationRequestId,
+            UUID evaluationRequestId,
+            Long evaluationId,
+            Long paymentId,
+            Long merchantId,
+            String customerRef,
+            long amount,
+            Instant paymentRequestedAt,
+            FdsResult evaluationResult,
+            String errorCode,
+            String sanitizedErrorMessage,
+            Instant requestedAt,
+            Instant respondedAt,
+            String paymentStatus,
+            String processingStage,
+            Long requestId,
+            UUID idempotencyKey,
+            String orderRef,
+            String correlationId,
+            int evaluationAttemptNo) {
+        this(
+                failureReportId,
+                originalEvaluationRequestId,
+                evaluationRequestId,
+                evaluationId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                paymentRequestedAt,
+                null,
+                null,
+                null,
+                evaluationResult,
+                errorCode,
+                sanitizedErrorMessage,
+                requestedAt,
+                respondedAt,
+                paymentStatus,
+                processingStage,
+                requestId,
+                idempotencyKey,
+                orderRef,
+                correlationId,
+                evaluationAttemptNo);
     }
 
     private static void require(Object value, String name) {

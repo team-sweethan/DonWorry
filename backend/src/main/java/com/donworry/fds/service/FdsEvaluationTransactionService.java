@@ -15,6 +15,7 @@ import java.time.temporal.ChronoUnit;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 @Service
 class FdsEvaluationTransactionService {
@@ -30,19 +31,22 @@ class FdsEvaluationTransactionService {
     private final FdsEvaluationRepository evaluationRepository;
     private final FdsHighRiskCountryRepository highRiskCountries;
     private final FdsBlocklistEntryRepository blocklistEntries;
+    private final JsonMapper jsonMapper;
 
     @Autowired
     FdsEvaluationTransactionService(
             FdsEvaluationRepository evaluationRepository,
             FdsHighRiskCountryRepository highRiskCountries,
-            FdsBlocklistEntryRepository blocklistEntries) {
+            FdsBlocklistEntryRepository blocklistEntries,
+            JsonMapper jsonMapper) {
         this.evaluationRepository = evaluationRepository;
         this.highRiskCountries = highRiskCountries;
         this.blocklistEntries = blocklistEntries;
+        this.jsonMapper = jsonMapper;
     }
 
     FdsEvaluationTransactionService(FdsEvaluationRepository evaluationRepository) {
-        this(evaluationRepository, null, null);
+        this(evaluationRepository, null, null, JsonMapper.builder().build());
     }
 
     @Transactional
@@ -79,23 +83,24 @@ class FdsEvaluationTransactionService {
         var highRiskCountry = request.ipCountryCode() != null
                 && highRiskCountries != null
                 && highRiskCountries.existsByCountryCodeAndActiveTrue(request.ipCountryCode());
-        var smallAttempts = history.stream()
-                        .filter(e -> e.getPaymentRequestedAt().isAfter(windowStart))
-                        .filter(e -> e.getRequestedAmount() <= 10_000)
-                        .map(FdsEvaluation::getPaymentId)
-                        .distinct()
-                        .count()
-                + (request.amount() <= 10_000 ? 1 : 0);
+        var windowHistory = history.stream()
+                .filter(e -> isWithinWindow(e.getPaymentRequestedAt(), windowStart, request.paymentRequestedAt()))
+                .toList();
+        var smallPaymentIds = new java.util.HashSet<>(windowHistory.stream()
+                .filter(e -> e.getRequestedAmount() <= 10_000)
+                .map(FdsEvaluation::getPaymentId)
+                .toList());
+        if (request.amount() <= 10_000) {
+            smallPaymentIds.add(request.paymentId());
+        }
+        var smallAttempts = smallPaymentIds.size();
         var distinctCards = java.util.stream.Stream.concat(
-                        history.stream()
-                                .filter(e -> e.getPaymentRequestedAt().isAfter(windowStart))
-                                .map(FdsEvaluation::getCardToken),
+                        windowHistory.stream().map(FdsEvaluation::getCardToken),
                         java.util.stream.Stream.of(request.cardToken()))
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .count();
-        var declined = history.stream()
-                .filter(e -> e.getPaymentRequestedAt().isAfter(windowStart))
+        var declined = windowHistory.stream()
                 .filter(e -> "DECLINED".equals(e.getAuthorizationResult()))
                 .count();
         var cardTesting = request.cardToken() != null && smallAttempts >= 5 && distinctCards >= 3 && declined >= 3;
@@ -223,9 +228,12 @@ class FdsEvaluationTransactionService {
                 null);
     }
 
+    private boolean isWithinWindow(Instant requestedAt, Instant windowStart, Instant windowEnd) {
+        return requestedAt.isAfter(windowStart) && !requestedAt.isAfter(windowEnd);
+    }
+
     private String json(String value) {
-        if (value == null) return "null";
-        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+        return jsonMapper.writeValueAsString(value);
     }
 
     private FdsResult resultFor(int score) {

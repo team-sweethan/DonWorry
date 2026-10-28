@@ -19,16 +19,16 @@ public class FdsMockEvaluationService {
 
     private static final String MOCK_CUSTOMER_REF = "hong-gildong";
     private static final long MOCK_MERCHANT_ID = 1L;
-    private static final long HIGH_AMOUNT_THRESHOLD = 150_000L;
-    private static final int HIGH_AMOUNT_SCORE = 35;
+    private static final long HIGH_AMOUNT_THRESHOLD = 500_000L;
+    private static final int HIGH_AMOUNT_SCORE = 30;
     private static final int REPEAT_COUNT_THRESHOLD = 3;
-    private static final int REPEAT_SCORE = 25;
+    private static final int REPEAT_SCORE = 30;
     private static final Duration REPEAT_WINDOW = Duration.ofMinutes(10);
     private static final Duration MOCK_EVALUATION_INTERVAL = Duration.ofSeconds(1);
     private static final List<MockRequest> MOCK_REQUESTS = List.of(
             new MockRequest("00000000-0000-0000-0000-000000000001", 900_001L, 50_000L, 1, 9),
             new MockRequest("00000000-0000-0000-0000-000000000002", 900_002L, 70_000L, 2, 4),
-            new MockRequest("00000000-0000-0000-0000-000000000003", 900_003L, 150_000L, 3, 0));
+            new MockRequest("00000000-0000-0000-0000-000000000003", 900_003L, 500_000L, 3, 0));
 
     private final FdsEvaluator evaluator;
     private final FdsEvaluationRepository evaluationRepository;
@@ -75,7 +75,7 @@ public class FdsMockEvaluationService {
                         var requestedAt = evaluation.getPaymentRequestedAt();
                         var changed = evaluation.getRuleHits().stream()
                                         .mapToInt(hit -> switch (hit.getRuleCode()) {
-                                            case "HIGH_AMOUNT" ->
+                                            case "R01" ->
                                                 hit.backfillSnapshotsIfMissing(
                                                                 "{\"amountGte\":%d,\"score\":%d}"
                                                                         .formatted(
@@ -86,7 +86,7 @@ public class FdsMockEvaluationService {
                                                                 null)
                                                         ? 1
                                                         : 0;
-                                            case "RAPID_REPEAT_PAYMENT" ->
+                                            case "R04" ->
                                                 hit.backfillSnapshotsIfMissing(
                                                                 "{\"windowMinutes\":%d,\"attemptCountGte\":%d,\"score\":%d}"
                                                                         .formatted(

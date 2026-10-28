@@ -159,6 +159,100 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // R06은 평가 요청 시점 이후의 결제 이력을 카드 테스팅 집계에 포함하지 않는다.
+    void evaluate_cardTestingExcludesFuturePaymentHistory() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        var request = request(10L, "customer", 1_000L, requestedAt, "card-current");
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(1L, "customer"))
+                .thenReturn(List.of(
+                        declinedEvaluation(1L, "customer", "card-a", requestedAt.plusSeconds(60)),
+                        declinedEvaluation(2L, "customer", "card-b", requestedAt.plusSeconds(120)),
+                        declinedEvaluation(3L, "customer", "card-c", requestedAt.plusSeconds(180)),
+                        declinedEvaluation(4L, "customer", "card-c", requestedAt.plusSeconds(240))));
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        transactionEvaluator.evaluate(request);
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var cardTesting = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R06"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(cardTesting.getOutcome().name()).isEqualTo("NO_MATCH");
+        assertThat(cardTesting.getObservedValue())
+                .contains("\"smallAttemptCount\":1", "\"cardCount\":1", "\"declinedCount\":0");
+    }
+
+    @Test
+    // 재평가된 동일 결제는 R06 소액 시도 수에서 한 번만 센다.
+    void evaluate_cardTestingCountsCurrentPaymentOnlyOnce() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        var request = request(1L, "customer", 1_000L, requestedAt, "card-a");
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(1L, "customer"))
+                .thenReturn(List.of(
+                        declinedEvaluation(1L, "customer", "card-a", requestedAt.minusSeconds(60)),
+                        declinedEvaluation(2L, "customer", "card-b", requestedAt.minusSeconds(120)),
+                        declinedEvaluation(3L, "customer", "card-c", requestedAt.minusSeconds(180)),
+                        declinedEvaluation(4L, "customer", "card-c", requestedAt.minusSeconds(240))));
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        transactionEvaluator.evaluate(request);
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var cardTesting = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R06"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(cardTesting.getOutcome().name()).isEqualTo("NO_MATCH");
+        assertThat(cardTesting.getObservedValue()).contains("\"smallAttemptCount\":4");
+    }
+
+    @Test
+    // 제어 문자가 포함된 고객 식별자는 JSON 스냅샷에서도 유효한 문자열로 저장한다.
+    void evaluate_customerRefWithControlCharacters_escapesRuleSnapshotJson() {
+        var request = request(1L, "customer\n\tref", 1_000L, Instant.parse("2026-10-22T01:00:00Z"), null);
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(1L, request.customerRef()))
+                .thenReturn(List.of());
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        transactionEvaluator.evaluate(request);
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var blocklist = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R07"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(blocklist.getObservedValue()).isEqualTo("{\"buyerRef\":\"customer\\n\\tref\"}");
+    }
+
+    @Test
     // 같은 요청 ID의 동시 저장 충돌 뒤에는 이미 저장된 평가를 반환한다.
     void evaluate_whenConcurrentInsertConflicts_returnsStoredEvaluation() {
         var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
@@ -192,6 +286,14 @@ class FdsEvaluationServiceTests {
         return FdsEvaluation.completed(request(paymentId, 50_000L, requestedAt), FdsResult.ALLOW, 0, requestedAt);
     }
 
+    private FdsEvaluation declinedEvaluation(
+            Long paymentId, String customerRef, String cardToken, Instant requestedAt) {
+        var evaluation = FdsEvaluation.completed(
+                request(paymentId, customerRef, 1_000L, requestedAt, cardToken), FdsResult.ALLOW, 0, requestedAt);
+        evaluation.recordAuthorizationResult("DECLINED");
+        return evaluation;
+    }
+
     private FdsEvaluationRequest request(Long paymentId, long amount, Instant requestedAt) {
         return request(UUID.randomUUID(), paymentId, amount, requestedAt);
     }
@@ -208,5 +310,11 @@ class FdsEvaluationServiceTests {
     private FdsEvaluationRequest request(
             UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
         return new FdsEvaluationRequest(requestId, paymentId, merchantId, customerRef, amount, requestedAt);
+    }
+
+    private FdsEvaluationRequest request(
+            Long paymentId, String customerRef, long amount, Instant requestedAt, String cardToken) {
+        return new FdsEvaluationRequest(
+                UUID.randomUUID(), paymentId, 1L, customerRef, amount, requestedAt, null, cardToken, null);
     }
 }
