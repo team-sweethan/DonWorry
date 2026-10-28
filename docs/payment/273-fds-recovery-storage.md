@@ -216,3 +216,17 @@ MANUAL_REVIEW에서 작업 필드가 있으면 재평가 접수 후 종료이므
 - #274 명시적 재평가와 #275 전달 복구 POST(권한·CSRF 포함), 기존 UUID 결과 복원 설계는 후속 범위다.
 - #273 범위에서 새로 필요한 P1·P2 계약 합의는 발견하지 못했다. #274의 별도 수동 종료 사유 영속화와 실행 시 잠금 대기 설정 등 남은 결정은 기존 후속 계약을 따른다.
 - GitHub 체크리스트·종료 상태는 변경하지 않았다. 이 결과는 작업 브랜치의 구현·검증 결과이며 병합·배포 완료를 뜻하지 않는다.
+
+## 12. PR #278 CI 동시 중복 수신 테스트 보완
+
+`4f38b87`의 [backend CI](https://github.com/team-sweethan/DonWorry/actions/runs/40652412268)는 394개 중 `receive_whenConcurrentDuplicates_keepsOneAnalysis` 1개가 실패했다. XML의 실제 실패는 완료 publication 기대값 2건, 실제값 1건이다. 앞선 로컬 전체 통과 기록이 원격 CI 통과를 뜻하지는 않는다.
+
+테스트는 동일 Java 이벤트 객체를 완료 전 두 번 발행했다. 사용 중인 Spring Modulith 2.1.1의 DefaultEventPublicationRegistry는 이벤트 객체 identity와 리스너 ID를 키로 진행 중 publication을 등록한다. 따라서 같은 객체를 중첩 발행하면 두 등록이 같은 키를 공유해 완료 추적이 경합할 수 있다. 로컬 캐시에 있는 해당 버전 소스로 이 동작을 확인했다.
+
+테스트를 동일 내용·다른 객체의 두 이벤트로 변경하고 CyclicBarrier로 두 수신 시작을 동기화했다. 완료 publication 2건, 실패 0건, 동일 analysisId 및 MANUAL_REVIEW 검증은 그대로 유지한다. 업무 코드·DB·P2 계약은 변경하지 않았다. 순차 중복·실패 publication 재전달 테스트도 유지한다.
+
+수정 후 로컬 검증:
+
+- `./gradlew spotlessApply check mariaDbTest --tests '*PaymentFdsAnalysisMariaDbTests'`: 통과(분석 수신 13개).
+- `./gradlew check mariaDbTest`: 전체 394개 통과, 실패·오류·skipped 0(3분 16초). 일반 검사는 총 554개 중 기존 skipped 1개, 실패·오류 0.
+- 문서 링크 검사·`git diff --check`: 통과. 원격 CI 재검증은 수정 커밋 push 후 별도로 확인한다.

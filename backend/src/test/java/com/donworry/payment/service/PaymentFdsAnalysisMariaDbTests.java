@@ -253,8 +253,27 @@ class PaymentFdsAnalysisMariaDbTests {
     void receive_whenConcurrentDuplicates_keepsOneAnalysis() {
         var report = prepare("INTERNAL_TEST");
         var event = event(report, FdsFailureDisposition.MANUAL_REVIEW_REQUIRED);
+        var duplicate = new FdsEvaluationFailureAnalyzed(
+                event.analysisId(),
+                event.failureReportId(),
+                event.originalEvaluationRequestId(),
+                event.evaluationRequestId(),
+                event.paymentId(),
+                event.disposition(),
+                event.reasonCode(),
+                event.analyzedAt());
+        assertThat(duplicate).isEqualTo(event).isNotSameAs(event);
+        // Modulith는 객체 identity로 진행 중 publication을 구분한다. 같은 내용을 별도 전달 객체로 발행한다.
+        // 두 수신이 실제로 겹친 뒤 DB 잠금·멱등 처리를 수행하도록 시작점을 맞춘다.
+        var barrier = new java.util.concurrent.CyclicBarrier(2);
+        doAnswer(invocation -> {
+                    barrier.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                    return invocation.callRealMethod();
+                })
+                .when(analysis)
+                .receive(event);
         publish(event);
-        publish(event);
+        publish(duplicate);
         completed(report, 2);
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             assertThat(recoveries
