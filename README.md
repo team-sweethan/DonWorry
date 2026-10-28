@@ -157,6 +157,7 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 ```
 
 바꿀 값(포트·비밀번호)만 남기고 나머지 줄은 지워도 됩니다.
+결제 API·AI 서버를 켜는 시연용 설정도 이 파일에 둡니다 → [로컬 시연 가이드](docs/demo/local-demo.md#3-3-spring-개인-설정-application-localyml)
 
 ### 4. backend 실행
 
@@ -201,6 +202,7 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 `http://localhost:8000/health`가 `{"status":"ok"}`를 돌려주면 정상입니다.
+Windows에서 "애플리케이션 제어 정책에서 이 파일을 차단했습니다" 오류가 나면 [로컬 시연 가이드 7절](docs/demo/local-demo.md#7-자주-막히는-곳)을 봅니다.
 
 ### 7. 빌드와 테스트
 
@@ -233,6 +235,11 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 - **`Unable to delete directory ...build\test-results`** — OneDrive가 `build/` 폴더를 잠근 경우입니다. `backend/build`를 지우고 다시 실행하고, 반복되면 프로젝트를 OneDrive 밖으로 옮깁니다.
 - **CI에서 `uv.lock` 관련 실패** — 라이브러리를 추가했다면 갱신된 `uv.lock`을 함께 커밋합니다.
 - **첫 backend CI가 오래 걸림** — 검사는 1분 이내이고 나머지는 캐시 업로드 시간입니다. 자세한 내용은 [CI 문제 해결](docs/ci/06-troubleshooting.md#a2-첫-실행이-5분-넘게-걸림).
+
+### 8. 로컬 시연 (결제부터 매입 완료까지)
+
+케이크샵 결제 → FDS 평가 → 보류 → Case · AI 보고서 → 직원 판정 → 매입 · 정산까지 내 PC에서 재현하는 방법은 **[로컬 시연 가이드](docs/demo/local-demo.md)** 를 봅니다.
+시연 버튼만 쓰는 간단한 방식부터 실제 결제 + Qwen 보고서까지 4가지 방식과, 서명 결제를 보내는 [`scripts/demo/cakeshop_pay.py`](scripts/demo/cakeshop_pay.py)를 설명합니다.
 
 ## Quick Start
 
