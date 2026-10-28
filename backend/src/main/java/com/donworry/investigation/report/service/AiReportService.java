@@ -1,5 +1,6 @@
 package com.donworry.investigation.report.service;
 
+import com.donworry.investigation.report.client.AiServerProperties;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
@@ -17,7 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // P3 → P4 보고서 요청 · 조회 경계의 실제 구현 — 보고서를 ai_reports에 버전별로 쌓는다 (ADR-0009)
-// 지금은 FixedReportGenerator가 같은 자리에서 보고서를 만든다. P4-2에서 FastAPI 비동기 호출로 바꾼다
+// ai.server.enabled가 꺼져 있으면(기본) FixedReportGenerator가 같은 자리에서 고정 문장 보고서를 만든다
+// 켜져 있으면 ai-server(Qwen)에 비동기로 맡기고, 결과는 AiReportResultService가 받는다
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,9 @@ public class AiReportService implements ReportGateway {
     private final AiReportRepository aiReportRepository;
     private final AiReportWriter aiReportWriter;
     private final FixedReportGenerator fixedReportGenerator;
+    private final AiServerProperties aiServerProperties;
+    private final AiInvestigationRunner aiInvestigationRunner;
+    private final AiReportResultService aiReportResultService;
 
     // 커밋 뒤에만 부른다 (트랜잭션 밖). 같은 증거 버전 요청이 두 번 와도 보고서는 하나다
     @Override
@@ -44,15 +49,19 @@ public class AiReportService implements ReportGateway {
                 .toList();
     }
 
-    // 서버 재시작으로 PENDING · RUNNING에 멈춘 보고서를 같은 버전에서 처음부터 다시 만든다 (ADR-0009 한계)
-    // P4-2에서는 RUNNING(FastAPI 접수됨)이면 다시 만들기 전에 FastAPI 결과부터 조회한다
+    // 서버 재시작으로 PENDING · RUNNING에 멈춘 보고서를 같은 버전에서 다시 만든다 (ADR-0009 한계)
+    // ai-server를 쓰면 RUNNING(ai-server 접수됨)은 다시 만들기 전에 ai-server 결과부터 조회한다
     // 재개한 보고서의 Case ID를 돌려준다 — 호출자가 Case 상태를 다시 계산한다
     List<Long> resumeUnfinished() {
         List<Long> resumedCaseIds = new ArrayList<>();
         for (AiReport report : aiReportRepository.findByStatusIn(List.of(ReportStatus.PENDING, ReportStatus.RUNNING))) {
             log.info("미완료 보고서 재개 reportId={} caseId={}", report.getId(), report.getCaseId());
             try {
-                run(report);
+                if (aiServerProperties.enabled()) {
+                    aiReportResultService.recover(report);
+                } else {
+                    runFixed(report);
+                }
                 resumedCaseIds.add(report.getCaseId());
             } catch (RuntimeException e) {
                 log.warn("미완료 보고서 재개 실패 reportId={}", report.getId(), e);
@@ -74,9 +83,17 @@ public class AiReportService implements ReportGateway {
         return Optional.empty();
     }
 
-    // 조회 오류는 최대 3회 다시 시도하고, 모두 실패하면 FAILED로 끝낸다
-    // 결제 근거가 빠진 경우는 다시 해도 같으므로 바로 FAILED — 직원은 수동 판정으로 간다 (fds 정본 02 §2.5)
     private void run(AiReport report) {
+        if (aiServerProperties.enabled()) {
+            aiInvestigationRunner.start(report);
+        } else {
+            runFixed(report);
+        }
+    }
+
+    // 고정 문장 보고서 — 조회 오류는 최대 3회 다시 시도하고, 모두 실패하면 FAILED로 끝낸다
+    // 결제 근거가 빠진 경우는 다시 해도 같으므로 바로 FAILED — 직원은 수동 판정으로 간다 (fds 정본 02 §2.5)
+    private void runFixed(AiReport report) {
         String lastError = "UNKNOWN";
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -86,7 +103,8 @@ public class AiReportService implements ReportGateway {
                 if (body.isEmpty()) {
                     aiReportWriter.fail(
                             report.getId(),
-                            error("EVIDENCE_MISSING", "연결 결제의 금액 · 요청 시각 · FDS 점수 중 빠진 값이 있음", attempt, now),
+                            AiReportWriter.error(
+                                    "EVIDENCE_MISSING", "연결 결제의 금액 · 요청 시각 · FDS 점수 중 빠진 값이 있음", attempt, now),
                             now);
                     return;
                 }
@@ -98,16 +116,8 @@ public class AiReportService implements ReportGateway {
             }
         }
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        aiReportWriter.fail(report.getId(), error("GENERATION_ERROR", lastError, MAX_ATTEMPTS, now), now);
-    }
-
-    // 실패 정보는 개발자 조사용 — 화면 응답(ReportSnapshot)에는 싣지 않는다 (ADR-0009 결정 2)
-    private static Map<String, Object> error(String code, String reason, int attempts, Instant lastAttemptAt) {
-        return Map.of(
-                "code", code,
-                "reason", reason,
-                "attempts", attempts,
-                "lastAttemptAt", lastAttemptAt.toString());
+        aiReportWriter.fail(
+                report.getId(), AiReportWriter.error("GENERATION_ERROR", lastError, MAX_ATTEMPTS, now), now);
     }
 
     // 성공한 보고서만 본문을 내보낸다. FAILED의 error · 진행 중 보고서는 본문 null

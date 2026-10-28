@@ -5,6 +5,7 @@ import com.donworry.investigation.report.entity.ReportStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
@@ -30,4 +31,12 @@ public interface AiReportRepository extends Repository<AiReport, Long> {
     // 다음 report_version 계산용 — 해당 Case에 보고서가 없으면 빈 값
     @Query("SELECT MAX(r.reportVersion) FROM AiReport r WHERE r.caseId = :caseId")
     Optional<Integer> findMaxReportVersion(@Param("caseId") Long caseId);
+
+    // 상태가 expected일 때만 바꾼다 — 바뀐 행이 없으면 0 (조건부 UPDATE, ADR-0009 결정 2)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE AiReport r SET r.status = :next WHERE r.id = :reportId AND r.status = :expected")
+    int updateStatusIfCurrent(
+            @Param("reportId") Long reportId,
+            @Param("expected") ReportStatus expected,
+            @Param("next") ReportStatus next);
 }

@@ -62,6 +62,14 @@ fds:
     # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.
     seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
 
+ai:
+  server:
+    # true면 고정 문장 보고서 대신 ai-server(Qwen)에 조사를 맡긴다. 기본은 꺼짐 — ai-server를 켜는 사람만 켠다
+    enabled: ${AI_SERVER_ENABLED:false}
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    # ai-server의 AI_SERVER_INTERNAL_API_KEY와 같은 값. 저장소에 적지 않는다
+    api-key: ${AI_SERVER_API_KEY:}
+
 ---
 spring:
   config:
