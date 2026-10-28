@@ -317,9 +317,8 @@ export function CaseDetailPage() {
         </Card>
 
         <div className="dw-section-grid">
-          {/* 보고서 버전이 늘면 최신 버전을 다시 기본 선택한다. */}
           <ReportCard
-            key={latestReport(reports)?.reportVersion}
+            caseId={securityCase.caseId}
             reports={reports}
             evidenceVersion={securityCase.evidenceVersion}
           />
