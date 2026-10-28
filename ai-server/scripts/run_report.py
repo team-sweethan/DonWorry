@@ -16,7 +16,7 @@ from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
 # Case 하나를 조사해 보고서 JSON을 출력한다 — Spring 접수 · 콜백(#253) 없이 Agent만 확인할 때 쓴다
 # 예) Spring 없이 샘플로
 #     uv run python -m scripts.run_report --sample tests/fixtures/sample_case.json
-# 예) 로컬 Spring으로 (Spring은 AI_TOOLS_ENABLED=true로 켠다)
+# 예) 로컬 Spring으로 (Spring은 AI_SERVER_ENABLED=true, AI_SERVER_API_KEY는 여기 키와 같은 값)
 #     uv run python -m scripts.run_report --case-id 5
 # Qwen 사용: AI_SERVER_LLM_PROVIDER=ollama (기본 mock)
 

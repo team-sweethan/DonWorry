@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
@@ -299,7 +300,7 @@ class AiInvestigationFlowTests {
                 .toList();
     }
 
-    // 서비스 키가 없거나 틀린 콜백은 401로 돌려보내고 보고서는 그대로 RUNNING이다
+    // 서비스 키가 없거나 틀린 콜백은 보안 체인이 401로 돌려보내고 보고서는 그대로 RUNNING이다 (ADR-0041)
     @Test
     void callback_withoutValidKey_isRejected() throws Exception {
         Fixture f = caseWithPayment();
@@ -311,12 +312,14 @@ class AiInvestigationFlowTests {
         mvc.perform(post("/internal/ai/reports/{reportId}/result", reportId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AI_SERVER_AUTH_001"));
         mvc.perform(post("/internal/ai/reports/{reportId}/result", reportId)
                         .header(AiServerClient.API_KEY_HEADER, "wrong-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AI_SERVER_AUTH_001"));
 
         assertThat(reportOf(f).getStatus()).isEqualTo(ReportStatus.RUNNING);
     }

@@ -2,6 +2,12 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #266 AI 서버 내부 API 서비스 키 체인
+
+[ADR-0041](../decisions/0041-ai-server-internal-api-key-authentication.md)을 따른다. P1 동의로 P4가 추가했다.
+`/internal/ai/**`는 전용 체인(`@Order(2)`)이 `X-Internal-Api-Key`를 `ai.server.api-key`와 비교한다. 없거나 틀리거나 설정이 비면 401 `AI_SERVER_AUTH_001`이다.
+세션·CSRF를 쓰지 않고 `ai.server.enabled`와 무관하게 항상 등록한다. 기본 체인의 `/internal/**` 정책, 직원 세션·가맹점 HMAC, DB·모듈 의존은 바꾸지 않는다.
+
 ## #246 CakeShop 등록·키 준비
 
 [등록·키 생성·전달·실제 서명 확인 절차](246-cakeshop-provisioning.md)를 따른다.

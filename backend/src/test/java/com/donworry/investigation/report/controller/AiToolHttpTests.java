@@ -36,11 +36,11 @@ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 // AI 서버가 부르는 읽기 Tool 2종을 HTTP로 확인한다 (ADR-0009 결정 1)
 // 결제 · FDS 값(P5 · P2)은 목으로 바꿔 Tool 응답 모양과 Case 범위 검증만 본다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
-// Tool API는 기본으로 꺼져 있어 이 테스트에서만 켠다 (기본 비활성은 AiToolControllerConditionTests)
-// 요청마다 ai-server와 같은 서비스 키 헤더를 붙인다
+// Tool API는 ai-server를 켰을 때만 생겨 이 테스트에서만 켠다 (기본 비활성은 AiToolControllerConditionTests)
+// 요청마다 ai-server와 같은 서비스 키 헤더를 붙인다. ai-server 호출은 목으로 막아 재시작 복구가 밖으로 나가지 않게 한다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest(properties = {"ai.tools.enabled=true", "ai.server.api-key=" + AiToolHttpTests.API_KEY})
+@SpringBootTest(properties = {"ai.server.enabled=true", "ai.server.api-key=" + AiToolHttpTests.API_KEY})
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class AiToolHttpTests {
@@ -62,6 +62,9 @@ class AiToolHttpTests {
 
     @MockitoBean
     PaymentInfoReader paymentInfoReader;
+
+    @MockitoBean
+    AiServerClient aiServerClient;
 
     // Case에 묶인 결제가 P5 값 그대로 나오고, 증거 추적용 출처 · 버전 · 조회 시각이 붙는다. ID는 문자열이다
     @Test
@@ -173,15 +176,17 @@ class AiToolHttpTests {
         mvc.perform(post(FDS_EVIDENCE).param("caseId", "1")).andExpect(status().isMethodNotAllowed());
     }
 
-    // 서비스 키가 없거나 틀리면 결제 · FDS 근거를 내주지 않는다
+    // 서비스 키가 없거나 틀리면 보안 체인이 먼저 막아 결제 · FDS 근거를 내주지 않는다 (ADR-0041)
     @Test
     void tools_withoutValidKey_returnUnauthorized() throws Exception {
         mvc.perform(MockMvcRequestBuilders.get(CASE_PAYMENTS).param("caseId", "1"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AI_SERVER_AUTH_001"));
         mvc.perform(MockMvcRequestBuilders.get(FDS_EVIDENCE)
                         .param("caseId", "1")
                         .header(AiServerClient.API_KEY_HEADER, "wrong-key"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AI_SERVER_AUTH_001"));
     }
 
     private SecurityCase openCase() {
