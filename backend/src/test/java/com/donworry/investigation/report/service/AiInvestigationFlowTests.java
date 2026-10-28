@@ -351,12 +351,13 @@ class AiInvestigationFlowTests {
                 "overallAnalysis", List.of(),
                 "additionalChecks", List.of(),
                 "recommendation", Map.of("summary", "추가 확인", "limitations", List.of()),
-                "evidence", List.of());
+                "evidence", List.of(),
+                "verdict", Map.of("headline", "본인 확인이 필요합니다.", "overallRecommendation", "NEEDS_CHECK"));
         return new AiInvestigationResult(String.valueOf(reportId), attemptId, "SUCCEEDED", body, null);
     }
 
     private static Map<String, Object> analysis(String paymentId) {
-        return Map.of("paymentId", paymentId, "recommendation", "NEEDS_CHECK");
+        return Map.of("paymentId", paymentId, "recommendation", "NEEDS_CHECK", "ruleHitDetails", List.of());
     }
 
     private static AiInvestigationResult failed(Long reportId, String attemptId, String code) {

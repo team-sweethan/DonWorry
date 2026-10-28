@@ -52,9 +52,11 @@ class MockLlmClient:
             "normalEvidence": ["추가로 확인된 정상 정황은 없습니다."],
             "unknowns": ["고객 본인의 결제 의사"],
             "recommendation": "NEEDS_CHECK",
+            "reason": "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다.",
         }
         return json.dumps(
             {
+                "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
                 "summary": [
                     f"조사 대상 결제 {len(payment_ids)}건의 FDS 근거를 확인했습니다.",
                     "직원은 결제별 위험 근거와 정상 정황을 비교한 뒤 판정해 주세요.",
