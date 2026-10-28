@@ -21,6 +21,8 @@ public interface FdsEvaluationRepository
     List<FdsEvaluation> findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
             Long merchantId, String customerRef, Instant windowStart, Instant windowEnd);
 
+    List<FdsEvaluation> findByMerchantIdAndCustomerRef(Long merchantId, String customerRef);
+
     Optional<FdsEvaluation> findByEvaluationRequestId(UUID evaluationRequestId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

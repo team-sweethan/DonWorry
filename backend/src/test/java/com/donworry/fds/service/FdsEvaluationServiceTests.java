@@ -62,7 +62,7 @@ class FdsEvaluationServiceTests {
             return evaluation;
         });
 
-        var result = transactionEvaluator.evaluate(request(3L, 150_000L, requestedAt));
+        var result = transactionEvaluator.evaluate(request(3L, 500_000L, requestedAt));
 
         assertThat(result.result()).isEqualTo(FdsResult.REVIEW);
         assertThat(result.riskScore()).isEqualTo(60);
@@ -71,12 +71,12 @@ class FdsEvaluationServiceTests {
         assertThat(evaluationCaptor.getValue().getCustomerRef()).isEqualTo("hong-gildong");
         assertThat(evaluationCaptor.getValue().getMerchantId()).isEqualTo(1L);
         assertThat(evaluationCaptor.getValue().getPaymentRequestedAt()).isEqualTo(requestedAt);
-        assertThat(evaluationCaptor.getValue().getRequestedAmount()).isEqualTo(150_000L);
-        assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(2);
+        assertThat(evaluationCaptor.getValue().getRequestedAmount()).isEqualTo(500_000L);
+        assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(7);
         assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getObservedValue())
-                .isEqualTo("{\"amount\":150000}");
+                .isEqualTo("{\"amount\":500000}");
         assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getThresholdSnapshot())
-                .isEqualTo("{\"amountGte\":150000,\"score\":35}");
+                .isEqualTo("{\"amountGte\":500000,\"score\":30}");
         assertThat(evaluationCaptor.getValue().getRuleHits().get(1).getObservedValue())
                 .isEqualTo("{\"attemptCount\":3}");
     }
@@ -154,7 +154,7 @@ class FdsEvaluationServiceTests {
 
         var result = transactionEvaluator.evaluate(request);
 
-        assertThat(result.riskScore()).isEqualTo(35);
+        assertThat(result.riskScore()).isZero();
         assertThat(result.result()).isEqualTo(FdsResult.ALLOW);
     }
 
