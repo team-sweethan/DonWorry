@@ -2,6 +2,10 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #271 로그인 폼 편의 기능
+
+아이디 저장·Caps Lock 안내의 처리 순서와 검증 범위는 [설계](271-login-convenience.md)를 따른다.
+
 ## #246 CakeShop 등록·키 준비
 
 [등록·키 생성·전달·실제 서명 확인 절차](246-cakeshop-provisioning.md)를 따른다.

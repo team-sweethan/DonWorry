@@ -15,6 +15,7 @@ import { ManagementLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { loginWithPreferences } from './loginPreferences'
 import { LatestLogin } from './LatestLogin'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
@@ -164,19 +165,14 @@ export function LoginRoute() {
         />
       )}
       <LoginPage
-        onSubmit={async ({ loginId, password }) => {
-          await store.login(loginId, password)
-          const loggedIn = store.getSnapshot().user
-          // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
-          navigate(
-            loggedIn
-              ? (loginDestination(loggedIn, loggedOut ? null : state) ?? '/login')
-              : '/login',
-            {
+        onSubmit={(values) =>
+          loginWithPreferences(values, store.login, (loggedIn) => {
+            // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
+            navigate(loginDestination(loggedIn, loggedOut ? null : state) ?? '/login', {
               replace: true,
-            },
-          )
-        }}
+            })
+          })
+        }
       />
     </>
   )
