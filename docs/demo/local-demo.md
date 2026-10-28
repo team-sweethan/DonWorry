@@ -50,11 +50,14 @@ $b = New-Object byte[] 32
 저장한 뒤 **터미널 프로그램을 완전히 닫고 다시 연다** (Windows Terminal은 창 전체, IntelliJ · VS Code 터미널은 프로그램 자체). 이미 열린 프로그램에는 새 환경변수가 보이지 않는다.
 새 창에서 `[bool]$env:DONWORRY_MERCHANT_HMAC_CAKESHOP`이 `True`면 된다.
 
-macOS · Linux는 셸 설정 파일(`~/.zshrc` 등)에 넣는다.
+macOS · Linux는 키를 **한 번만** 만들어 그 값을 셸 설정 파일(`~/.zshrc` 등)에 적는다. 아래 명령은 실행하는 순간 키를 한 번 만들고, 만들어진 값 그대로를 파일 끝에 붙인다. **한 번만** 실행한다.
 
 ```bash
-export DONWORRY_MERCHANT_HMAC_CAKESHOP="$(python3 -c 'import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())')"
+echo "export DONWORRY_MERCHANT_HMAC_CAKESHOP=\"$(python3 -c 'import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())')\"" >> ~/.zshrc
 ```
+
+`export ...="$(python3 ...)"`처럼 키를 만드는 명령 자체를 설정 파일에 넣으면 터미널을 열 때마다 새 키가 생긴다. 그러면 Spring 창과 결제 스크립트 창의 키가 달라져 결제가 401로 거절된다.
+실행한 뒤 터미널을 새로 열고 `[ -n "$DONWORRY_MERCHANT_HMAC_CAKESHOP" ] && echo ok`가 `ok`면 된다.
 
 ### 3-2. AI 서버 키 만들기
 
@@ -65,6 +68,8 @@ $b = New-Object byte[] 32
 [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
 -join ($b | ForEach-Object { $_.ToString('x2') })
 ```
+
+macOS · Linux는 `python3 -c 'import secrets; print(secrets.token_hex(32))'`로 만든다.
 
 출력된 64자리 값을 아래 두 파일에 **글자 하나까지 똑같이** 넣는다. 두 파일 모두 Git에 올라가지 않는다. 키를 채팅 · 이슈 · 커밋에 붙이지 않는다.
 
@@ -93,12 +98,14 @@ cd ai-server
 copy .env.example .env       # macOS · Linux: cp .env.example .env
 ```
 
-`.env`에서 두 줄을 채운다.
+`.env`에서 두 줄을 채운다. `AI_SERVER_LLM_PROVIDER`는 어떤 AI가 보고서를 쓸지 정하는 스위치다. **③은 `mock`, ④는 `ollama`** 로 적는다.
 
 ```dotenv
 AI_SERVER_LLM_PROVIDER=mock
 AI_SERVER_INTERNAL_API_KEY=3-2에서 만든 값
 ```
+
+③에서 ④로 넘어갈 때는 이 파일의 첫 줄만 `AI_SERVER_LLM_PROVIDER=ollama`로 고친다 ([4절 창 3](#4-실행-순서)).
 
 ai-server는 **실행한 폴더의** `.env`를 읽는다. 반드시 `ai-server` 폴더에서 실행한다.
 
@@ -130,6 +137,12 @@ uv run uvicorn app.main:app --port 8000
 ```
 
 `Uvicorn running on http://127.0.0.1:8000`이 보이고 `http://localhost:8000/health`가 `{"status":"ok"}`면 된다. Windows에서 "애플리케이션 제어 정책" 오류가 나면 [7절](#7-자주-막히는-곳)을 본다.
+
+④(Qwen)는 창 3을 켜기 전에 아래를 준비한다.
+
+1. Ollama를 실행하고 모델을 받는다 (처음 한 번, 약 4.7GB): `ollama pull qwen2.5:7b`
+2. `ai-server/.env`의 `AI_SERVER_LLM_PROVIDER`를 `ollama`로 바꾼다. ai-server가 이미 켜져 있으면 `Ctrl + C`로 끄고 다시 켠다. `.env`는 켤 때 한 번만 읽는다.
+3. mock 보고서가 이미 있는 Case에는 새 보고서가 생기지 않는다. 창 4에서 **새 결제**를 보낸다.
 
 **창 4: 결제 보내기** (② · ③ · ④, 저장소 맨 위에서)
 
@@ -203,6 +216,7 @@ SELECT listener_id, event_type, publication_date FROM EVENT_PUBLICATION WHERE co
 - 보고서가 고정 문장으로 나옴: `ai.server.enabled`가 꺼져 있다. 켜고 Spring을 다시 켠 뒤 **새 결제**를 보낸다. 이미 보고서가 있는 Case에서는 새 보고서가 생기지 않는다.
 - ai-server 창에 아무 로그가 없음: Spring이 ai-server를 부르지 않았다. 위와 같은 원인이거나 `base-url`(기본 `http://localhost:8000`)이 다르다.
 - 보고서가 "실패": 두 파일의 AI 서버 키가 다르다(ai-server가 Spring에 401로 막힘). ai-server는 키가 비어 있으면 조사 접수 자체를 거절한다.
+- ④인데 보고서 한계 줄에 "mock 조사입니다"가 보임: ai-server가 아직 mock이다. `ai-server/.env`의 `AI_SERVER_LLM_PROVIDER`를 `ollama`로 바꾸고 ai-server를 다시 켠 뒤 새 결제를 보낸다. 창에서 `$env:AI_SERVER_LLM_PROVIDER`를 넣었다면 그 값이 `.env`보다 우선한다.
 - ④에서 5분 넘게 걸려 실패: PC가 느리다. `application-local.yml`의 `ai.server`에 `result-timeout: 10m`을 넣어 기다리는 시간을 늘린다.
 - ④에서 `11434` 연결 오류: Ollama가 꺼져 있다. Ollama를 실행하고 `ollama pull qwen2.5:7b`로 모델을 받는다.
 - Qwen 답에 중국어가 섞임: Qwen 2.5의 버릇이다. ai-server는 한국어 지시와 `temperature=0`으로 줄이지만 검사 장치는 아직 없다. 섞이면 화면을 남겨 P4에 알려 준다.
