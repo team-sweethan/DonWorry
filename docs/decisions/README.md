@@ -62,6 +62,7 @@
 | [0038](0038-settlement-identity-dependency.md) | Settlement → Identity 의존 허용 (ADR-0012 보류 항목 확정) | 채택 — #240·#241 선행, P1 결정 (P6 별도 리뷰 없음) |
 | [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 채택 — P1 결정 (P6 확인 전), P6 실제 통합 후속 |
 | [0040](0040-fds-v02-rule-input-contract.md) | FDS v0.2 룰 입력과 P2 정책 저장소 | 제안 — P2·P5 구현 중 |
+| [0041](0041-ai-server-internal-api-key-authentication.md) | AI 서버 내부 API 서비스 키 인증 | 제안 — #266 P1 동의, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 
