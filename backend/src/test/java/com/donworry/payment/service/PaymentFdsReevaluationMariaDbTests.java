@@ -98,7 +98,8 @@ class PaymentFdsReevaluationMariaDbTests {
     @BeforeEach
     void setup() {
         when(staff.findCurrent())
-                .thenAnswer(i -> Optional.of(new StaffSummary(actor.get(), "SECURITY_STAFF", null, List.of())));
+                .thenAnswer(
+                        i -> Optional.of(new StaffSummary(actor.get(), "보안 직원", "SECURITY_STAFF", null, List.of())));
     }
 
     private long ready() {
@@ -411,7 +412,7 @@ class PaymentFdsReevaluationMariaDbTests {
         long id = ready();
         var work = admission.admit(id);
         assertThatThrownBy(() -> execution.execute(id, UUID.randomUUID())).isInstanceOf(IllegalStateException.class);
-        when(staff.findCurrent()).thenReturn(Optional.of(new StaffSummary(202L, "ADMIN", null, List.of())));
+        when(staff.findCurrent()).thenReturn(Optional.of(new StaffSummary(202L, "관리자", "ADMIN", null, List.of())));
         assertThatThrownBy(() -> execution.execute(id, work.retryId())).isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(requester, authorizer);
         assertThat(recoveries.findByPaymentId(id).orElseThrow().getStatus())

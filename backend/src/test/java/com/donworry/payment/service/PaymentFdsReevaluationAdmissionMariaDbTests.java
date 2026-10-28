@@ -63,7 +63,8 @@ class PaymentFdsReevaluationAdmissionMariaDbTests {
     @BeforeEach
     void setup() {
         when(staff.findCurrent())
-                .thenAnswer(i -> Optional.of(new StaffSummary(actor.get(), "SECURITY_STAFF", null, List.of())));
+                .thenAnswer(
+                        i -> Optional.of(new StaffSummary(actor.get(), "보안 직원", "SECURITY_STAFF", null, List.of())));
     }
 
     private long prepare(boolean analyzed, FdsFailureDisposition disposition) {
@@ -268,7 +269,7 @@ class PaymentFdsReevaluationAdmissionMariaDbTests {
         long id = ready();
         var first = admission.admit(id);
         for (String role : List.of("ADMIN", "OPERATOR")) {
-            when(staff.findCurrent()).thenReturn(Optional.of(new StaffSummary(202L, role, null, List.of())));
+            when(staff.findCurrent()).thenReturn(Optional.of(new StaffSummary(202L, "테스트 사용자", role, null, List.of())));
             assertThatThrownBy(() -> admission.admit(id)).isInstanceOf(AccessDeniedException.class);
             assertThatThrownBy(() -> admission.admit(null)).isInstanceOf(AccessDeniedException.class);
         }
