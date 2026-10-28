@@ -11,7 +11,9 @@ import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationRequestConflictException;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.entity.FdsRulePolicy;
 import com.donworry.fds.repository.FdsEvaluationRepository;
+import com.donworry.fds.repository.FdsRulePolicyRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +25,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class FdsEvaluationServiceTests {
@@ -32,6 +35,12 @@ class FdsEvaluationServiceTests {
 
     @Mock
     private FdsEvaluationTransactionService transactionService;
+
+    @Mock
+    private FdsRulePolicyRepository rulePolicies;
+
+    @Mock
+    private FdsRulePolicy rulePolicy;
 
     @Captor
     private ArgumentCaptor<FdsEvaluation> evaluationCaptor;
@@ -79,6 +88,42 @@ class FdsEvaluationServiceTests {
                 .isEqualTo("{\"amountGte\":500000,\"score\":30}");
         assertThat(evaluationCaptor.getValue().getRuleHits().get(1).getObservedValue())
                 .isEqualTo("{\"attemptCount\":3}");
+    }
+
+    @Test
+    // 꺼진 룰은 입력이 기준을 충족해도 점수와 적중 결과에 반영하지 않는다.
+    void evaluate_whenHighAmountRuleIsInactive_doesNotApplyRule() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var policyEvaluator = new FdsEvaluationTransactionService(
+                evaluationRepository,
+                null,
+                null,
+                rulePolicies,
+                JsonMapper.builder().build());
+        when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(any(), any())).thenReturn(List.of());
+        when(rulePolicies.findByRuleCode("R01")).thenReturn(Optional.of(rulePolicy));
+        when(rulePolicy.isActive()).thenReturn(false);
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = policyEvaluator.evaluate(request(1L, 500_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var highAmount = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R01"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(result.result()).isEqualTo(FdsResult.ALLOW);
+        assertThat(result.riskScore()).isZero();
+        assertThat(highAmount.getOutcome().name()).isEqualTo("NO_MATCH");
+        assertThat(highAmount.getAppliedScore()).isZero();
     }
 
     @Test

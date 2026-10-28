@@ -101,6 +101,9 @@ public class FdsRuleManagementService {
         var policy = policyForUpdate(ruleCode);
         var request = requests.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "요청이 없습니다."));
+        if (request.getStatus() != FdsRuleChangeRequest.Status.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 처리된 요청입니다.");
+        }
         var reviewedAt = Instant.now();
         request.review(
                 approve ? FdsRuleChangeRequest.Status.APPROVED : FdsRuleChangeRequest.Status.REJECTED,

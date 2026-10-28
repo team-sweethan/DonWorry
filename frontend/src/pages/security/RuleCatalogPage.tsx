@@ -78,6 +78,11 @@ function RuleCard({
       setSubmitting(false)
     }
   }
+  const closeDisableModal = () => {
+    if (submitting) return
+    setDisableModalOpen(false)
+    setDisableReason('')
+  }
   const changeActive = async (next: boolean) => {
     setSubmitting(true)
     try {
@@ -175,14 +180,16 @@ function RuleCard({
         cancelText="취소"
         confirmLoading={submitting}
         okButtonProps={{ disabled: !disableReason.trim() }}
-        onCancel={() => {
-          if (!submitting) setDisableModalOpen(false)
-        }}
+        onCancel={closeDisableModal}
         onOk={() => void requestDisable()}
       >
         <Typography.Paragraph type="secondary">
           룰을 끄려면 관리자의 승인이 필요합니다. 요청 사유는 승인자가 확인합니다.
         </Typography.Paragraph>
+        <div className="dw-rule-disable-reason-label">
+          <Typography.Text strong>요청 사유</Typography.Text>
+          <Typography.Text type="secondary">{disableReason.length}/500</Typography.Text>
+        </div>
         <Input.TextArea
           autoFocus
           maxLength={500}

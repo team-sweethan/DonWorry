@@ -4,7 +4,13 @@ import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
-import { getFdsEvaluation, type FdsEvaluationDetail, type FdsResult } from '../../api/fds'
+import {
+  getFdsEvaluation,
+  getFdsRulePolicies,
+  type FdsEvaluationDetail,
+  type FdsResult,
+  type FdsRulePolicy,
+} from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
@@ -75,6 +81,8 @@ export function AlertDetailPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [policies, setPolicies] = useState<FdsRulePolicy[]>([])
+  const [policyError, setPolicyError] = useState(false)
   const initialDetailLoading = loading && detail === null
   const showInitialDetailLoading = useMinimumLoadingIndicator(initialDetailLoading)
 
@@ -85,9 +93,23 @@ export function AlertDetailPage() {
       setLoading(true)
       setNotFound(false)
       setError(null)
+      setPolicyError(false)
+      setPolicies([])
       try {
         const response = await getFdsEvaluation(id)
-        if (active) setDetail(response)
+        if (active) {
+          setDetail(response)
+          void getFdsRulePolicies()
+            .then((next) => {
+              if (active) {
+                setPolicies(next)
+                setPolicyError(false)
+              }
+            })
+            .catch(() => {
+              if (active) setPolicyError(true)
+            })
+        }
       } catch (requestError) {
         if (!active) return
         if (requestError instanceof ApiError && requestError.status === 404) setNotFound(true)
@@ -110,6 +132,7 @@ export function AlertDetailPage() {
     return <Alert type="error" showIcon message={error ?? '경보 상세가 없습니다.'} />
 
   const evaluation = detail.evaluation
+  const policyByRuleCode = new Map(policies.map((policy) => [policy.ruleCode, policy]))
   const score = evaluation.riskScore
   const resultDescription =
     score === null
@@ -170,6 +193,14 @@ export function AlertDetailPage() {
             extra={<Typography.Text type="secondary">평가 당시 저장값</Typography.Text>}
             className="dw-alert-card"
           >
+            {policyError && (
+              <Alert
+                type="warning"
+                showIcon
+                message="현재 룰 정책을 불러오지 못했습니다. 평가 당시 저장값은 정상적으로 표시됩니다."
+                style={{ marginBottom: 12 }}
+              />
+            )}
             <Table
               rowKey="hitId"
               size="small"
@@ -186,6 +217,20 @@ export function AlertDetailPage() {
                   render: (outcome: string) => (
                     <Tag color={outcome === 'MATCH' ? 'gold' : 'default'}>{outcome}</Tag>
                   ),
+                },
+                {
+                  title: '현재 정책',
+                  key: 'currentPolicy',
+                  render: (_, rule) => {
+                    if (policyError) return <Tag color="warning">조회 실패</Tag>
+                    const policy = policyByRuleCode.get(rule.ruleCode)
+                    if (!policy) return <Tag>정책 정보 없음</Tag>
+                    return policy.active ? (
+                      <Tag color="green">현재 켜짐</Tag>
+                    ) : (
+                      <Tag color="default">현재 꺼짐</Tag>
+                    )
+                  },
                 },
                 {
                   title: '점수',
@@ -268,7 +313,6 @@ export function AlertDetailPage() {
           </Card>
           <Card
             title={<span className="dw-section-title">결제 정보</span>}
-            extra={<span className="dw-alert-source-label">P5 전달값</span>}
             className="dw-alert-card"
           >
             <Descriptions column={1} colon={false}>
