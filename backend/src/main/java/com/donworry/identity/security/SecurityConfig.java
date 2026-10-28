@@ -183,6 +183,17 @@ public class SecurityConfig {
                                     && user.permissions() != null
                                     && user.permissions().contains("FINANCE_VIEW"));
                         })
+                        .requestMatchers(
+                                "/api/fds/rule-policies",
+                                "/api/fds/rules/**",
+                                "/api/fds/rule-change-requests",
+                                "/api/fds/rule-change-requests/**")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
                         .requestMatchers("/api/admin", "/api/admin/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();

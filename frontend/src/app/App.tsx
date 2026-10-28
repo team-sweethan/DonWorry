@@ -10,6 +10,7 @@ import { antdTheme } from '../styles/theme'
 import { router } from './router'
 import '../styles/alert.css'
 import '../styles/global.css'
+import '../styles/ruleCatalog.css'
 
 dayjs.locale('ko')
 

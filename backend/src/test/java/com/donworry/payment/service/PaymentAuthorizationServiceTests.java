@@ -3,6 +3,7 @@ package com.donworry.payment.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.donworry.fds.api.FdsAuthorizationResultRecorder;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.payment.api.PaymentHeld;
@@ -25,7 +26,9 @@ class PaymentAuthorizationServiceTests {
     private final PaymentRepository repository = mock(PaymentRepository.class);
     private final PaymentAuthorizer authorizer = mock(PaymentAuthorizer.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    private final PaymentAuthorizationService service = new PaymentAuthorizationService(repository, authorizer, events);
+    private final FdsAuthorizationResultRecorder authorizationResults = mock(FdsAuthorizationResultRecorder.class);
+    private final PaymentAuthorizationService service =
+            new PaymentAuthorizationService(repository, authorizer, events, authorizationResults);
     private final Payment payment =
             Payment.pending(1L, "customer", "order", 1000L, Instant.parse("2026-10-23T00:00:00Z"));
 
@@ -75,6 +78,7 @@ class PaymentAuthorizationServiceTests {
         assertThatThrownBy(() -> service.authorize(context)).isInstanceOf(IllegalStateException.class);
         verify(authorizer).authorize(command);
         verifyNoMoreInteractions(authorizer);
+        verify(authorizationResults).record(20L, FdsAuthorizationResultRecorder.AuthorizationResult.APPROVED);
         if (verdict == FdsResult.ALLOW) {
             verify(events).publishEvent(new CaptureRequested(10L, 1L, "order", 1000L));
             verifyNoMoreInteractions(events);
@@ -111,6 +115,7 @@ class PaymentAuthorizationServiceTests {
         assertThat(result.nextStep()).isEqualTo(PaymentRules.NextStep.NONE);
         assertThatThrownBy(() -> service.authorize(context)).isInstanceOf(IllegalStateException.class);
         verify(authorizer).authorize(any());
+        verify(authorizationResults).record(20L, FdsAuthorizationResultRecorder.AuthorizationResult.DECLINED);
         verifyNoInteractions(events);
     }
 

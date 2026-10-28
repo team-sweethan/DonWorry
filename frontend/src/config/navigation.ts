@@ -3,7 +3,7 @@ import type { AuthUser } from '../types/auth.ts'
 export type Role = 'security' | 'owner'
 export type Permission = 'FDS_VIEW' | 'FINANCE_VIEW'
 /** 메뉴 옆 숫자 배지 이름. 숫자는 레이아웃 바깥(역할별 훅)에서 받아 그리기만 한다. */
-export type NavBadge = 'securityCaseActions'
+export type NavBadge = 'securityCaseActions' | 'ruleChangeRequests'
 export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 export type NavGroup = { title: string; items: NavItem[] }
 
@@ -17,7 +17,13 @@ export const navByRole: Record<Role, NavGroup[]> = {
   security: [
     { title: '개요', items: [{ label: '홈', path: '/security/home' }] },
     { title: '결제', items: [{ label: '거래 내역', path: '/security/transactions' }] },
-    { title: '탐지', items: [{ label: '경보', path: '/security/alerts' }] },
+    {
+      title: '탐지',
+      items: [
+        { label: 'Rule 카탈로그', path: '/security/rules' },
+        { label: '경보', path: '/security/alerts' },
+      ],
+    },
     {
       title: 'Case',
       items: [{ label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' }],
@@ -37,12 +43,22 @@ export const navByRole: Record<Role, NavGroup[]> = {
 
 export const adminNavigation = {
   label: '관리자',
-  landing: '/admin/fds',
+  landing: '/admin/fds/rules',
   groups: [
+    {
+      title: '탐지',
+      items: [
+        { label: 'Rule 카탈로그', path: '/admin/fds/rules' },
+        {
+          label: '룰 변경 요청함',
+          path: '/admin/fds/rule-change-requests',
+          badge: 'ruleChangeRequests',
+        },
+      ],
+    },
     {
       title: '관리',
       items: [
-        { label: 'FDS', path: '/admin/fds' },
         { label: '자금관리', path: '/admin/finance' },
         { label: '계정 관리', path: '/admin/users' },
         { label: '가맹점 관리', path: '/admin/merchants' },

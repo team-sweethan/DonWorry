@@ -57,7 +57,11 @@ class FdsEvaluationPersistenceTests {
             assertThat(evaluation.getPaymentRequestedAt()).isEqualTo(firstRequestedAt.plusSeconds(9 * 60));
             assertThat(evaluation.getRiskScore()).isEqualTo(60);
             assertThat(evaluation.getResult()).isEqualTo(FdsResult.REVIEW);
-            assertThat(evaluation.getRuleHits()).hasSize(7);
+            assertThat(evaluation.getRuleHits()).hasSize(8);
+            assertThat(evaluation.getRuleHits()).anySatisfy(hit -> {
+                assertThat(hit.getRuleCode()).isEqualTo("R08");
+                assertThat(hit.getOutcome().name()).isEqualTo("NO_MATCH");
+            });
         });
     }
 

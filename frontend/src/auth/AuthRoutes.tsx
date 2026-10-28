@@ -19,6 +19,7 @@ import { loginWithPreferences } from './loginPreferences'
 import { LatestLogin } from './LatestLogin'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
+import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -200,6 +201,11 @@ export function ServerSession() {
       ? user.userId
       : null,
   )
+  const ruleChangeRequests = useRuleChangeRequestBadge(
+    status === 'authenticated' && user?.role === 'ADMIN' && !user.passwordChangeRequired
+      ? user.userId
+      : null,
+  )
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({
@@ -242,7 +248,7 @@ export function ServerSession() {
   return (
     <ManagementLayout
       groups={navigation.groups}
-      badges={{ securityCaseActions: caseActions }}
+      badges={{ securityCaseActions: caseActions, ruleChangeRequests }}
       header={
         <header className="dw-header">
           <NavLink to={home} className="dw-brand" aria-label="돈워리 홈">

@@ -48,6 +48,8 @@ function observedValue(ruleCode: string, rawValue: string | null) {
       : '—'
   }
   if (ruleCode === 'R07') return typeof value.buyerRef === 'string' ? value.buyerRef : '—'
+  if (ruleCode === 'R08')
+    return typeof value.declinedCount === 'number' ? `${value.declinedCount}회` : '—'
   return '—'
 }
 
@@ -61,7 +63,8 @@ function threshold(ruleCode: string, rawValue: string | null) {
   if (ruleCode === 'R02' || ruleCode === 'R03') return '이전 정상 승인 이력에 없음'
   if (ruleCode === 'R05') return '고위험 국가 목록 일치'
   if (ruleCode === 'R06') return '10분 내 소액 5회 · 카드 3개 · 거절 3회 이상'
-  if (ruleCode === 'R07') return '활성 공통 차단 목록 일치'
+  if (ruleCode === 'R07') return '활성  일치'
+  if (ruleCode === 'R08') return '10분 내 이전 거절 2회 이상'
   return '—'
 }
 
