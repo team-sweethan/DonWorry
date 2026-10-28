@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class FdsRuleManagementServiceTests {
@@ -53,6 +54,24 @@ class FdsRuleManagementServiceTests {
     }
 
     @Test
+    // 과도하게 긴 요청 사유는 DB에 저장하기 전에 차단한다.
+    void requestDisable_whenReasonExceedsMaximumLength_throwsBadRequest() {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
+        when(policies.findByRuleCodeForUpdate("R03")).thenReturn(Optional.of(policy));
+        when(policy.isActive()).thenReturn(true);
+        when(requests.existsByRuleCodeAndStatus("R03", FdsRuleChangeRequest.Status.PENDING))
+                .thenReturn(false);
+
+        var exception =
+                org.assertj.core.api.Assertions.catchThrowable(() -> service().requestDisable("R03", "가".repeat(501)));
+
+        assertThat(exception).isInstanceOf(ResponseStatusException.class);
+        assertThat(((ResponseStatusException) exception).getStatusCode().value())
+                .isEqualTo(400);
+        verify(requests, never()).save(any());
+    }
+
+    @Test
     // 승인·반려 처리자 이름도 처리 시점 스냅샷으로 남긴다.
     void review_storesReviewerNameSnapshot() {
         var request = FdsRuleChangeRequest.disable("R03", 3L, "보안 직원", "사유", Instant.now());
@@ -67,6 +86,25 @@ class FdsRuleManagementServiceTests {
         assertThat(request.getReviewedByUserId()).isEqualTo(1L);
         assertThat(request.getReviewedByName()).isEqualTo("관리자");
         verify(policy).update(eq(false), eq(1L), any(Instant.class));
+    }
+
+    @Test
+    // 다른 관리자나 직접 변경으로 이미 처리된 요청은 중복 처리하지 않는다.
+    void review_whenRequestAlreadyProcessed_throwsConflict() {
+        var request = FdsRuleChangeRequest.disable("R03", 3L, "보안 직원", "사유", Instant.now());
+        request.review(FdsRuleChangeRequest.Status.APPROVED, 1L, "관리자", Instant.now());
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(1L, "관리자")));
+        when(requests.findRuleCodeById(7L)).thenReturn(Optional.of("R03"));
+        when(policies.findByRuleCodeForUpdate("R03")).thenReturn(Optional.of(policy));
+        when(requests.findByIdForUpdate(7L)).thenReturn(Optional.of(request));
+
+        var exception =
+                org.assertj.core.api.Assertions.catchThrowable(() -> service().review(7L, false));
+
+        assertThat(exception).isInstanceOf(ResponseStatusException.class);
+        assertThat(((ResponseStatusException) exception).getStatusCode().value())
+                .isEqualTo(409);
+        verify(policy, never()).update(anyBoolean(), anyLong(), any(Instant.class));
     }
 
     @Test

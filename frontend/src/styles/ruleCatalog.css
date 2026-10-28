@@ -543,6 +543,13 @@
   font-size: 15px;
 }
 
+.dw-rule-disable-reason-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
 .dw-rule-note {
   margin-top: 16px;
   padding: 11px 14px;

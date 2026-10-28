@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Pagination, Space, Table, Tabs, Tag } from 'antd'
+import { Alert, Button, Card, Descriptions, Modal, Pagination, Space, Table, Tabs, Tag } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleChangeRequests,
@@ -35,6 +35,7 @@ export function RuleChangeRequestsPage() {
   const [result, setResult] = useState<FdsRuleChangeRequestPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<number | null>(null)
+  const [selectedRequest, setSelectedRequest] = useState<FdsRuleChangeRequest | null>(null)
   const requestSequence = useRef(0)
   const reload = () => {
     const sequence = ++requestSequence.current
@@ -107,7 +108,10 @@ export function RuleChangeRequestsPage() {
                       size="small"
                       type="primary"
                       loading={processingId === request.requestId}
-                      onClick={() => void review(request.requestId, true)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void review(request.requestId, true)
+                      }}
                     >
                       승인
                     </Button>
@@ -115,7 +119,10 @@ export function RuleChangeRequestsPage() {
                       size="small"
                       danger
                       loading={processingId === request.requestId}
-                      onClick={() => void review(request.requestId, false)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void review(request.requestId, false)
+                      }}
                     >
                       반려
                     </Button>
@@ -125,6 +132,10 @@ export function RuleChangeRequestsPage() {
                 ),
             },
           ]}
+          onRow={(request) => ({
+            onClick: () => setSelectedRequest(request),
+            style: { cursor: 'pointer' },
+          })}
         />
         <Pagination
           current={page + 1}
@@ -135,6 +146,36 @@ export function RuleChangeRequestsPage() {
           onChange={(next) => setPage(next - 1)}
         />
       </Card>
+      <Modal
+        title="룰 끄기 요청 상세"
+        open={selectedRequest !== null}
+        footer={<Button onClick={() => setSelectedRequest(null)}>닫기</Button>}
+        onCancel={() => setSelectedRequest(null)}
+      >
+        {selectedRequest && (
+          <Descriptions column={1} size="small">
+            <Descriptions.Item label="요청 ID">{selectedRequest.requestId}</Descriptions.Item>
+            <Descriptions.Item label="룰">
+              <Tag>{selectedRequest.ruleCode}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="요청자">{selectedRequest.requestedByName}</Descriptions.Item>
+            <Descriptions.Item label="요청 시각">
+              {formatDate(selectedRequest.requestedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="상태">
+              <StatusTag status={selectedRequest.status} />
+            </Descriptions.Item>
+            <Descriptions.Item label="요청 사유">
+              <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {selectedRequest.reason}
+              </div>
+            </Descriptions.Item>
+            {selectedRequest.reviewedByName && (
+              <Descriptions.Item label="처리자">{selectedRequest.reviewedByName}</Descriptions.Item>
+            )}
+          </Descriptions>
+        )}
+      </Modal>
     </>
   )
 }
