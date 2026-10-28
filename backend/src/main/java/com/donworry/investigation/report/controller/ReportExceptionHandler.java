@@ -27,7 +27,7 @@ public class ReportExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "요청 값을 확인해 주세요.");
     }
 
-    // 서비스 키 거절(401) · 보고서 ID 불일치(400)를 다른 오류와 같은 형식으로 바로 돌려준다
+    // 보고서 ID 불일치(400)를 다른 오류와 같은 형식으로 바로 돌려준다 (서비스 키 401은 보안 체인이 답한다)
     @ExceptionHandler(ResponseStatusException.class)
     public ProblemDetail rejected(ResponseStatusException exception) {
         return ProblemDetail.forStatusAndDetail(exception.getStatusCode(), exception.getReason());
