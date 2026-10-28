@@ -79,6 +79,7 @@ public class AdminAccountService {
     }
 
     public TemporaryPasswordResponse create(SessionUser actor, CreateUserRequest input, HttpServletRequest request) {
+        SessionUser.require(actor);
         return merchantLocks.withMerchant(
                 input.merchantId(),
                 () -> locks.withAccounts(actor.loginId(), input.loginId(), () -> {
@@ -156,6 +157,7 @@ public class AdminAccountService {
     }
 
     public TemporaryPasswordResponse resetPassword(SessionUser actor, Long id, HttpServletRequest request) {
+        SessionUser.require(actor);
         String loginId = find(id).getLoginId();
         return locks.withAccounts(actor.loginId(), loginId, () -> {
             requireSession(actor, request);
@@ -180,6 +182,7 @@ public class AdminAccountService {
 
     private void withTarget(
             SessionUser actor, Long id, HttpServletRequest request, Function<PlatformUser, Boolean> change) {
+        SessionUser.require(actor);
         String loginId = find(id).getLoginId();
         locks.withAccounts(actor.loginId(), loginId, () -> {
             requireSession(actor, request);
