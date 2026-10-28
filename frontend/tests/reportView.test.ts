@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { AiReport, ReportBody } from '../src/types/case.ts'
 import {
+  hasReadableReport,
   pickReport,
   reportHeadline,
   ruleEvidenceRows,
@@ -99,4 +100,13 @@ test('ruleEvidenceRows_withDetails_keepsScoreAndEvidenceId', () => {
     { name: '고액', appliedScore: 35, evidenceId: 'E-2' },
     { name: '반복 결제', appliedScore: null, evidenceId: 'E-2' },
   ])
+})
+
+// 병합 뒤 v2가 생성 중이어도 성공한 v1이 있으면 보고서 전문으로 들어갈 수 있다 (#292 리뷰)
+test('hasReadableReport_latestRunningWithOlderSucceeded_returnsTrue', () => {
+  const running = { ...report(2, 2), status: 'RUNNING' as const, reportBody: null }
+  const failed = { ...report(2, 2), status: 'FAILED' as const, reportBody: null }
+  assert.equal(hasReadableReport([report(1, 1), running]), true)
+  assert.equal(hasReadableReport([report(1, 1), failed]), true)
+  assert.equal(hasReadableReport([running]), false)
 })

@@ -17,6 +17,11 @@ export function topRiskScore(scores: Array<number | null>): number | null {
   return known.length ? Math.max(...known) : null
 }
 
+// 전문 보기 버튼 조건. 최신 보고서가 생성 중 · 실패여도 이전에 성공한 보고서가 있으면 볼 수 있어야 한다
+export function hasReadableReport(reports: AiReport[]): boolean {
+  return reports.some((r) => r.status === 'SUCCEEDED' && r.reportBody !== null)
+}
+
 export type PickedReport = {
   report: AiReport
   isLatest: boolean

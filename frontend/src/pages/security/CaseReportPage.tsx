@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Empty, Segmented, Space, Spin, Typography } from 'antd'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getCase } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -15,6 +15,8 @@ import { ReportFull } from './case/ReportFull'
 export function CaseReportPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
+  // Case 상세에서 받은 목록 복귀 조건을 돌아갈 때 다시 넘긴다 (#243)
+  const listReturn = useLocation().state
   const { merchant } = useDemo()
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
@@ -82,11 +84,14 @@ export function CaseReportPage() {
             <Button icon={<ReloadOutlined />} onClick={reload}>
               새로고침
             </Button>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(casePath)}>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() => navigate(casePath, { state: listReturn })}
+            >
               Case로
             </Button>
             {canDecide && (
-              <Button type="primary" onClick={() => navigate(casePath)}>
+              <Button type="primary" onClick={() => navigate(casePath, { state: listReturn })}>
                 판정하러 가기
               </Button>
             )}

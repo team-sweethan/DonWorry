@@ -1,8 +1,8 @@
 import { Alert, Button, Card, Empty, Space, Spin, Typography } from 'antd'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import type { AiReport } from '../../../types/case'
 import { latestReport } from '../../../utils/caseRules'
-import { reportHeadline, topRiskScore } from '../../../utils/reportView'
+import { hasReadableReport, reportHeadline, topRiskScore } from '../../../utils/reportView'
 import { dateTime, recommendationLabel, reportStatusLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
 import { ScoreGauge } from './ReportFull'
@@ -18,6 +18,8 @@ export function ReportCard({
   evidenceVersion: number
 }) {
   const navigate = useNavigate()
+  // 목록에서 받은 복귀 조건(#243)을 보고서 전문에 넘겨 돌아올 때 그대로 돌려받는다
+  const listReturn = useLocation().state
   const report = latestReport(reports)
   const body = report?.status === 'SUCCEEDED' ? report.reportBody : null
 
@@ -25,11 +27,11 @@ export function ReportCard({
     <Card
       title={<span className="dw-section-title">AI 조사 보고서</span>}
       extra={
-        body && (
+        hasReadableReport(reports) && (
           <Button
             type="primary"
             size="small"
-            onClick={() => navigate(`/security/cases/${caseId}/report`)}
+            onClick={() => navigate(`/security/cases/${caseId}/report`, { state: listReturn })}
           >
             보고서 전문 보기
           </Button>
