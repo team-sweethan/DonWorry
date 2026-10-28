@@ -22,7 +22,9 @@ public class AiServerClient {
     private final RestClient rest;
 
     public AiServerClient(AiServerProperties properties) {
+        // JDK 기본값은 HTTP/2 업그레이드(Upgrade: h2c) 요청 — ai-server(uvicorn)는 이를 400으로 거절해 HTTP/1.1로 고정한다
         HttpClient http = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.connectTimeout())
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
