@@ -22,7 +22,7 @@
 | [#152 돈워리 내부 대응](152-internal-response.md) | D1~D6 운영 원칙·원인별 확인. 내부 조회 담당 확인 완료, 시간·운영 담당 및 구현 미완료 |
 | [#152 조회 설계](152-payment-operations-design.md) | 목록·상세 정보·권한·P2/P3/P6 계약과 #188~#191 후속 범위. 설계 확인 완료·구현 전 |
 | [#188 운영 조회 HTTP 계약](188-payment-operations-api.md) | GET 경로·DTO·필터·페이지·오류 규칙 및 #188 브랜치 구현·검사 기록. 병합·배포 전 |
-| [#190 FDS 복구 저장·API 계약](190-fds-recovery-contract.md) | 단일 복구 테이블·명시적 1회 실행·응답/오류 계약. 설계안 사용자 승인, 코드·DB 미변경·통합 검증 전 |
+| [#190 FDS 복구 저장·API 계약](190-fds-recovery-contract.md) | 단일 복구 테이블·명시적 1회 실행·행 잠금·직원 전달 복구 POST·선택적 CSRF·응답/오류 계약. 사용자 승인, 코드·DB 미변경·통합 검증 전 |
 | [#152 담당별 합의 기록](152-policy-confirmation.md) | P1·P2·P3·P5·P6 회신·사용자 확인 근거와 미정 범위. CakeShop 예약은 별도 |
 | [ADR-0035](../decisions/0035-long-held-payment-policy.md) | 제안 — 확인 기한과 실제 금융 종료 분리. 대안·영향 기록 |
 | [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |
