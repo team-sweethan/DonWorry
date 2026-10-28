@@ -89,6 +89,35 @@ class FdsEvaluationQueryServiceTests {
         assertThatThrownBy(() -> queryService.detail(999L)).isInstanceOf(FdsEvaluationNotFoundException.class);
     }
 
+    // 카탈로그는 구현된 R01~R08과 최근 적중 빈도를 함께 반환한다.
+    @Test
+    void ruleCatalog_returnsImplementedRulesWithRecentFrequency() {
+        var evaluation = evaluation(101L, FdsResult.DENY);
+        evaluation.addRuleHit(
+                "R08",
+                FdsRuleHitOutcome.MATCH,
+                35,
+                "거절 후 재시도",
+                "{\"windowMinutes\":10,\"declinedCountGte\":2,\"score\":35}",
+                "{\"declinedCount\":2}",
+                null,
+                null);
+        given(evaluationRepository.findByEvaluatedAtGreaterThanEqual(org.mockito.ArgumentMatchers.any()))
+                .willReturn(List.of(evaluation));
+        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+
+        var result = queryService.ruleCatalog();
+
+        assertThat(result)
+                .extracting(entry -> entry.ruleCode())
+                .containsExactly("R01", "R02", "R03", "R04", "R05", "R06", "R07", "R08");
+        assertThat(result.getLast()).satisfies(entry -> {
+            assertThat(entry.recentMatchCount()).isEqualTo(1);
+            assertThat(entry.lastMatchedAt()).isEqualTo(evaluation.getEvaluatedAt());
+            assertThat(entry.dailyMatchCounts()).hasSize(7);
+        });
+    }
+
     private FdsEvaluation evaluation(Long paymentId, FdsResult result) {
         var requestedAt = Instant.now();
         var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", 150_000L, requestedAt);

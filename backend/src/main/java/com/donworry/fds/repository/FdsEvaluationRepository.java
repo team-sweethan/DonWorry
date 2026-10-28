@@ -34,6 +34,9 @@ public interface FdsEvaluationRepository
 
     long countByResult(FdsResult result);
 
+    @EntityGraph(attributePaths = "ruleHits")
+    List<FdsEvaluation> findByEvaluatedAtGreaterThanEqual(Instant evaluatedAt);
+
     List<FdsEvaluation> findByPaymentIdOrderByEvaluatedAtDesc(Long paymentId);
 
     @EntityGraph(attributePaths = "ruleHits")

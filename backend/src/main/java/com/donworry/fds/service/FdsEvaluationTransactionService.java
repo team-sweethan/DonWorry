@@ -9,6 +9,7 @@ import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsBlocklistEntryRepository;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.fds.repository.FdsHighRiskCountryRepository;
+import com.donworry.fds.repository.FdsRulePolicyRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -25,12 +26,15 @@ class FdsEvaluationTransactionService {
     private static final Duration REPEAT_WINDOW = Duration.ofMinutes(10);
     private static final int REPEAT_COUNT_THRESHOLD = 3;
     private static final int REPEAT_SCORE = 30;
+    private static final int DECLINED_RETRY_COUNT_THRESHOLD = 2;
+    private static final int DECLINED_RETRY_SCORE = 35;
     private static final int REVIEW_MIN_SCORE = 50;
     private static final int DENY_MIN_SCORE = 80;
 
     private final FdsEvaluationRepository evaluationRepository;
     private final FdsHighRiskCountryRepository highRiskCountries;
     private final FdsBlocklistEntryRepository blocklistEntries;
+    private final FdsRulePolicyRepository rulePolicies;
     private final JsonMapper jsonMapper;
 
     @Autowired
@@ -38,15 +42,17 @@ class FdsEvaluationTransactionService {
             FdsEvaluationRepository evaluationRepository,
             FdsHighRiskCountryRepository highRiskCountries,
             FdsBlocklistEntryRepository blocklistEntries,
+            FdsRulePolicyRepository rulePolicies,
             JsonMapper jsonMapper) {
         this.evaluationRepository = evaluationRepository;
         this.highRiskCountries = highRiskCountries;
         this.blocklistEntries = blocklistEntries;
+        this.rulePolicies = rulePolicies;
         this.jsonMapper = jsonMapper;
     }
 
     FdsEvaluationTransactionService(FdsEvaluationRepository evaluationRepository) {
-        this(evaluationRepository, null, null, JsonMapper.builder().build());
+        this(evaluationRepository, null, null, null, JsonMapper.builder().build());
     }
 
     @Transactional
@@ -56,7 +62,7 @@ class FdsEvaluationTransactionService {
             return responseOf(requireSameRequest(existing.get(), request));
         }
 
-        var highAmountMatched = request.amount() >= HIGH_AMOUNT_THRESHOLD;
+        var highAmountMatched = isRuleActive("R01") && request.amount() >= HIGH_AMOUNT_THRESHOLD;
         var windowStart = request.paymentRequestedAt().minus(REPEAT_WINDOW);
         var priorPaymentIds = evaluationRepository
                 .findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
@@ -66,7 +72,7 @@ class FdsEvaluationTransactionService {
                 .collect(java.util.stream.Collectors.toSet());
         priorPaymentIds.add(request.paymentId());
         var observedAttemptCount = priorPaymentIds.size();
-        var repeatedPaymentMatched = observedAttemptCount >= REPEAT_COUNT_THRESHOLD;
+        var repeatedPaymentMatched = isRuleActive("R04") && observedAttemptCount >= REPEAT_COUNT_THRESHOLD;
         var score = score(highAmountMatched, repeatedPaymentMatched);
         var history = java.util.Optional.ofNullable(evaluationRepository.findByMerchantIdAndCustomerRef(
                         request.merchantId(), request.customerRef()))
@@ -74,13 +80,16 @@ class FdsEvaluationTransactionService {
         var approvedHistory = history.stream()
                 .filter(e -> "APPROVED".equals(e.getAuthorizationResult()))
                 .toList();
-        var newDevice = request.deviceId() != null
+        var newDevice = isRuleActive("R02")
+                && request.deviceId() != null
                 && !approvedHistory.isEmpty()
                 && approvedHistory.stream().noneMatch(e -> request.deviceId().equals(e.getDeviceId()));
-        var newCard = request.cardToken() != null
+        var newCard = isRuleActive("R03")
+                && request.cardToken() != null
                 && !approvedHistory.isEmpty()
                 && approvedHistory.stream().noneMatch(e -> request.cardToken().equals(e.getCardToken()));
-        var highRiskCountry = request.ipCountryCode() != null
+        var highRiskCountry = isRuleActive("R05")
+                && request.ipCountryCode() != null
                 && highRiskCountries != null
                 && highRiskCountries.existsByCountryCodeAndActiveTrue(request.ipCountryCode());
         var windowHistory = history.stream()
@@ -102,15 +111,24 @@ class FdsEvaluationTransactionService {
                 .count();
         var declined = windowHistory.stream()
                 .filter(e -> "DECLINED".equals(e.getAuthorizationResult()))
+                .map(FdsEvaluation::getPaymentId)
+                .distinct()
                 .count();
-        var cardTesting = request.cardToken() != null && smallAttempts >= 5 && distinctCards >= 3 && declined >= 3;
-        var blocked = isBlocked("BUYER_REF", request.customerRef(), request.paymentRequestedAt())
-                || isBlocked("DEVICE_ID", request.deviceId(), request.paymentRequestedAt())
-                || isBlocked("CARD_TOKEN", request.cardToken(), request.paymentRequestedAt());
+        var cardTesting = isRuleActive("R06")
+                && request.cardToken() != null
+                && smallAttempts >= 5
+                && distinctCards >= 3
+                && declined >= 3;
+        var declinedRetry = isRuleActive("R08") && declined >= DECLINED_RETRY_COUNT_THRESHOLD;
+        var blocked = isRuleActive("R07")
+                && (isBlocked("BUYER_REF", request.customerRef(), request.paymentRequestedAt())
+                        || isBlocked("DEVICE_ID", request.deviceId(), request.paymentRequestedAt())
+                        || isBlocked("CARD_TOKEN", request.cardToken(), request.paymentRequestedAt()));
         score += (newDevice ? 25 : 0)
                 + (newCard ? 25 : 0)
                 + (highRiskCountry ? 40 : 0)
                 + (cardTesting ? 45 : 0)
+                + (declinedRetry ? DECLINED_RETRY_SCORE : 0)
                 + (blocked ? 100 : 0);
         score = Math.min(100, score);
         var result = resultFor(score);
@@ -173,11 +191,21 @@ class FdsEvaluationTransactionService {
         addRuleHit(
                 evaluation,
                 "R07",
-                "공통 차단 목록",
+                "차단 목록",
                 blocked,
                 100,
                 "{\"active\":true}",
                 "{\"buyerRef\":" + json(request.customerRef()) + "}");
+        evaluation.addRuleHit(
+                "R08",
+                declinedRetry ? FdsRuleHitOutcome.MATCH : FdsRuleHitOutcome.NO_MATCH,
+                declinedRetry ? DECLINED_RETRY_SCORE : 0,
+                "거절 후 재시도",
+                "{\"windowMinutes\":%d,\"declinedCountGte\":%d,\"score\":%d}"
+                        .formatted(REPEAT_WINDOW.toMinutes(), DECLINED_RETRY_COUNT_THRESHOLD, DECLINED_RETRY_SCORE),
+                "{\"declinedCount\":%d}".formatted(declined),
+                windowStart,
+                request.paymentRequestedAt());
         return responseOf(evaluationRepository.saveAndFlush(evaluation));
     }
 
@@ -207,6 +235,14 @@ class FdsEvaluationTransactionService {
                 && blocklistEntries != null
                 && blocklistEntries.findByIdentifierTypeAndIdentifierValue(type, value).stream()
                         .anyMatch(entry -> entry.isActiveAt(at));
+    }
+
+    private boolean isRuleActive(String ruleCode) {
+        return rulePolicies == null
+                || rulePolicies
+                        .findByRuleCode(ruleCode)
+                        .map(policy -> policy.isActive())
+                        .orElse(true);
     }
 
     private void addRuleHit(

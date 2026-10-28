@@ -3,8 +3,10 @@ package com.donworry.fds.controller;
 import com.donworry.fds.api.FdsEvaluationDetail;
 import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsResult;
+import com.donworry.fds.api.FdsRuleCatalogEntry;
 import com.donworry.fds.service.FdsEvaluationNotFoundException;
 import com.donworry.fds.service.FdsEvaluationQueryService;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -37,6 +39,11 @@ public class FdsEvaluationController {
     @GetMapping("/{evaluationId}")
     public FdsEvaluationDetail detail(@PathVariable Long evaluationId) {
         return queryService.detail(evaluationId);
+    }
+
+    @GetMapping("/rule-catalog")
+    public List<FdsRuleCatalogEntry> ruleCatalog() {
+        return queryService.ruleCatalog();
     }
 
     @ExceptionHandler(FdsEvaluationNotFoundException.class)

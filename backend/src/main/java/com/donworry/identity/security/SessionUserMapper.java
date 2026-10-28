@@ -13,6 +13,7 @@ public final class SessionUserMapper {
     public static StaffSummary toSummary(SessionUser user) {
         return StaffSummary.builder()
                 .userId(user.userId())
+                .displayName(user.displayName())
                 .role(user.role().name())
                 .merchantId(user.merchantId())
                 .permissions(user.role() == UserRole.ADMIN ? ADMIN_PERMISSIONS : user.permissions())

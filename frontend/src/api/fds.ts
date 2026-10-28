@@ -38,6 +38,47 @@ export type FdsEvaluationPage = {
   resultCounts: Record<FdsResult, number>
 }
 
+export type FdsRuleCatalogEntry = {
+  ruleCode: string
+  category: string
+  ruleName: string
+  condition: string
+  resultDescription: string
+  example: string
+  standaloneDescription: string
+  immediateDeny: boolean
+  recentMatchCount: number
+  lastMatchedAt: string | null
+  dailyMatchCounts: number[]
+}
+
+export type FdsRulePolicy = {
+  ruleCode: string
+  active: boolean
+  disableRequestPending: boolean
+}
+
+export type FdsRuleChangeRequest = {
+  requestId: number
+  ruleCode: string
+  requestedByUserId: number
+  requestedByName: string
+  reason: string
+  requestedAt: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  reviewedByUserId: number | null
+  reviewedByName: string | null
+  reviewedAt: string | null
+}
+
+export type FdsRuleChangeRequestPage = {
+  content: FdsRuleChangeRequest[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 type FdsEvaluationResponse = {
   evaluationRequestId: string
   evaluationId: number
@@ -69,6 +110,45 @@ export function getFdsEvaluations({
 
 export function getFdsEvaluation(evaluationId: string) {
   return api<FdsEvaluationDetail>(`/fds/evaluations/${evaluationId}`)
+}
+
+export function getFdsRuleCatalog() {
+  return api<FdsRuleCatalogEntry[]>('/fds/evaluations/rule-catalog')
+}
+
+export function getFdsRulePolicies() {
+  return api<FdsRulePolicy[]>('/fds/rule-policies', { cache: 'no-store' })
+}
+
+export function requestRuleDisable(ruleCode: string, reason: string) {
+  return api<void>(`/fds/rules/${encodeURIComponent(ruleCode)}/disable-requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export function setFdsRuleActive(ruleCode: string, active: boolean) {
+  return api<void>(`/fds/rules/${encodeURIComponent(ruleCode)}/active`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ active }),
+  })
+}
+
+export function getFdsRuleChangeRequests(status: FdsRuleChangeRequest['status'], page: number) {
+  return api<FdsRuleChangeRequestPage>(
+    `/fds/rule-change-requests?${new URLSearchParams({ status, page: String(page), size: '10' })}`,
+    { cache: 'no-store' },
+  )
+}
+
+export function reviewFdsRuleChangeRequest(requestId: number, approve: boolean) {
+  return api<void>(`/fds/rule-change-requests/${requestId}/review`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approve }),
+  })
 }
 
 export function createMockFdsEvaluations() {

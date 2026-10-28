@@ -1,0 +1,576 @@
+.dw-rule-catalog-page .dw-page-header {
+  margin-bottom: 18px;
+}
+
+.dw-rule-tabs {
+  margin-bottom: 16px;
+  border-color: #e2e8f0;
+}
+
+.dw-rule-tabs .ant-card-body {
+  min-height: 46px;
+  padding: 0;
+}
+
+.dw-rule-tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  height: 46px;
+  padding: 0 12px;
+}
+
+.dw-rule-tab-list button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 10px;
+}
+
+.dw-rule-tab-list button.is-active {
+  border-bottom-color: #2563eb;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.dw-rule-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.dw-rule-overview,
+.dw-rule-account-notice,
+.dw-rule-section-header,
+.dw-rule-card {
+  border-color: #e2e8f0;
+}
+
+.dw-rule-overview .ant-card-head,
+.dw-rule-account-notice .ant-card-head,
+.dw-rule-section-header .ant-card-head {
+  min-height: 54px;
+}
+
+.dw-rule-overview .ant-card-head-title,
+.dw-rule-account-notice .ant-card-head-title {
+  font-size: 15.5px;
+  font-weight: 750;
+}
+
+.dw-rule-overview .ant-typography {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.dw-rule-overview {
+  margin-bottom: 16px;
+  border-color: #dbe5f1;
+}
+
+.dw-rule-overview .ant-card-body {
+  padding: 18px 20px;
+}
+
+.dw-rule-overview-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 13px;
+}
+
+.dw-rule-overview-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dw-rule-overview-heading strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.dw-rule-overview-heading .ant-typography,
+.dw-rule-overview-heading > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dw-rule-score-scale {
+  display: flex;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 7px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 26px;
+  text-align: center;
+}
+
+.dw-rule-score-scale span {
+  display: block;
+}
+
+.dw-rule-score-allow {
+  width: 50%;
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.dw-rule-score-review {
+  width: 30%;
+  background: #fde68a;
+  color: #92400e;
+}
+
+.dw-rule-score-deny {
+  width: 20%;
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.dw-rule-examples {
+  color: #334155;
+  font-size: 12.5px;
+  line-height: 1.75;
+}
+
+.dw-rule-examples p {
+  margin: 0;
+}
+
+.dw-rule-overview-examples {
+  display: flex;
+  gap: 4px;
+  color: #475569;
+  font-size: 12px;
+  flex-direction: column;
+}
+
+.dw-rule-overview-examples strong {
+  color: #0f172a;
+}
+
+.dw-rule-account-overview {
+  min-height: 156px;
+  margin-bottom: 16px;
+  border-color: #dbe5f1;
+}
+
+.dw-rule-account-overview .ant-card-body {
+  padding: 18px 20px;
+}
+
+.dw-rule-account-overview .ant-tag {
+  margin: 0;
+  border: 0;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dw-account-rule-placeholders {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dw-account-rule-placeholders > div {
+  display: grid;
+  min-height: 64px;
+  gap: 4px;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 11px 12px;
+}
+
+.dw-account-rule-placeholders strong {
+  color: #334155;
+  font-size: 12px;
+}
+
+.dw-account-rule-placeholders span {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.dw-rule-scope-tag {
+  margin-left: 6px;
+  border: 0;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dw-rule-account-notice .ant-typography {
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.dw-rule-account-detail,
+.dw-rule-note {
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.dw-rule-account-detail {
+  padding: 10px 12px;
+}
+
+.dw-rule-section-header {
+  margin-bottom: 16px;
+}
+
+.dw-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dw-rule-card {
+  min-height: 326px;
+}
+
+.dw-rule-card .ant-card-body {
+  display: flex;
+  height: 100%;
+  min-height: 292px;
+  flex-direction: column;
+  padding: 18px;
+}
+
+.dw-rule-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dw-rule-code,
+.dw-rule-status-active,
+.dw-rule-status-deny {
+  margin: 0;
+  border: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.dw-rule-code {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.dw-rule-group {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+.dw-rule-status-active {
+  display: inline-flex;
+  min-width: 62px;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dw-rule-status-inactive {
+  display: inline-flex;
+  min-width: 62px;
+  min-height: 27px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.dw-rule-card-inactive {
+  border-color: #dbe3ee;
+  background: #f8fafc;
+}
+
+.dw-rule-card-inactive h2,
+.dw-rule-card-inactive .dw-rule-definition dd {
+  color: #64748b;
+}
+
+.dw-rule-card-inactive .dw-rule-definition dt,
+.dw-rule-card-inactive .dw-rule-frequency span,
+.dw-rule-card-inactive .dw-rule-frequency small {
+  color: #94a3b8;
+}
+
+.dw-rule-card-inactive .dw-rule-frequency strong {
+  color: #64748b;
+}
+
+.dw-rule-status-deny {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dw-rule-card h2 {
+  margin: 12px 0;
+  color: #0f172a;
+  font-size: 17px;
+  letter-spacing: -0.3px;
+}
+
+.dw-rule-definition {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dw-rule-definition > div {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.dw-rule-definition dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.dw-rule-definition dd {
+  margin: 0;
+  color: #0f172a;
+}
+
+.dw-rule-definition .dw-rule-muted {
+  color: #64748b;
+}
+
+.dw-rule-frequency {
+  display: grid;
+  grid-template-columns: 1fr 96px;
+  align-items: end;
+  gap: 8px;
+  margin-top: auto;
+  border-top: 1px dashed #dbe4ee;
+  padding-top: 11px;
+}
+
+.dw-rule-frequency > div {
+  display: grid;
+  gap: 1px;
+}
+
+.dw-rule-frequency span,
+.dw-rule-frequency small {
+  color: #64748b;
+  font-size: 10.5px;
+}
+
+.dw-rule-frequency strong {
+  color: #2563eb;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.dw-rule-frequency .dw-rule-request-action {
+  grid-column: 2;
+  justify-self: end;
+  min-width: 88px;
+  min-height: 32px;
+  margin: 0;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dw-rule-frequency .dw-rule-request-action {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.dw-rule-frequency .dw-rule-request-action:disabled {
+  border-color: #dbe3ee;
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.dw-rule-frequency .dw-rule-enable-action {
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: 0 2px 5px rgb(37 99 235 / 20%);
+  color: #fff;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 36px;
+  margin-top: 4px;
+  border-radius: 9px;
+  background: #94a3b8;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / 8%);
+}
+
+.dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked {
+  background: #2563eb;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner {
+  position: relative;
+  padding-inline: 0;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 36px;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner-checked,
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner-unchecked {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  line-height: 36px;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner-checked {
+  opacity: 0;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner-unchecked {
+  opacity: 1;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked .ant-switch-inner-checked {
+  opacity: 1;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked .ant-switch-inner-unchecked {
+  opacity: 0;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-handle {
+  top: 4px;
+  width: 28px;
+  height: 28px;
+}
+
+.dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked .ant-switch-handle {
+  inset-inline-start: calc(100% - 32px);
+}
+
+.dw-rule-frequency .dw-rule-policy-switch .ant-switch-handle::before {
+  border-radius: 7px;
+}
+
+.dw-rule-disable-pending {
+  grid-column: 2;
+  justify-self: end;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px dotted #d97706;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 30px;
+  padding: 0 12px;
+}
+
+.dw-rule-sparkline {
+  align-self: center;
+  width: 96px;
+  height: 32px;
+}
+
+.dw-rule-sparkline-area {
+  fill: #dbeafe;
+}
+
+.dw-rule-sparkline-line {
+  fill: none;
+  stroke: #3b82f6;
+  stroke-width: 2;
+}
+
+.dw-rule-sparkline-dot {
+  fill: #2563eb;
+}
+
+.dw-rule-loading {
+  display: grid;
+  min-height: 240px;
+  place-items: center;
+}
+
+.dw-rule-empty-state {
+  min-height: 220px;
+  border-color: #e2e8f0;
+}
+
+.dw-rule-empty-state .ant-card-body {
+  display: grid;
+  min-height: 220px;
+  place-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dw-rule-empty-state strong {
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.dw-rule-note {
+  margin-top: 16px;
+  padding: 11px 14px;
+}
+
+@media (max-width: 1380px) {
+  .dw-rule-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1000px) {
+  .dw-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dw-rule-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dw-rule-overview-heading,
+  .dw-rule-overview-examples {
+    align-items: start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .dw-account-rule-placeholders {
+    grid-template-columns: 1fr;
+  }
+}

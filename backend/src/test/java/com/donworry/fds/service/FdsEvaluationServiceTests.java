@@ -72,7 +72,7 @@ class FdsEvaluationServiceTests {
         assertThat(evaluationCaptor.getValue().getMerchantId()).isEqualTo(1L);
         assertThat(evaluationCaptor.getValue().getPaymentRequestedAt()).isEqualTo(requestedAt);
         assertThat(evaluationCaptor.getValue().getRequestedAmount()).isEqualTo(500_000L);
-        assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(7);
+        assertThat(evaluationCaptor.getValue().getRuleHits()).hasSize(8);
         assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getObservedValue())
                 .isEqualTo("{\"amount\":500000}");
         assertThat(evaluationCaptor.getValue().getRuleHits().getFirst().getThresholdSnapshot())
@@ -223,6 +223,39 @@ class FdsEvaluationServiceTests {
                 .orElseThrow();
         assertThat(cardTesting.getOutcome().name()).isEqualTo("NO_MATCH");
         assertThat(cardTesting.getObservedValue()).contains("\"smallAttemptCount\":4");
+    }
+
+    // R08은 같은 구매자의 이전 실제 거절 결제 2건이 10분 안에 있으면 적중한다.
+    @Test
+    void evaluate_twoPriorDeclinesWithinWindow_matchesDeclinedRetryRule() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        var request = request(3L, "customer", 50_000L, requestedAt, "card-current");
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(1L, "customer"))
+                .thenReturn(List.of(
+                        declinedEvaluation(1L, "customer", "card-a", requestedAt.minusSeconds(60)),
+                        declinedEvaluation(2L, "customer", "card-b", requestedAt.minusSeconds(120))));
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = transactionEvaluator.evaluate(request);
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var declinedRetry = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R08"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(result.riskScore()).isEqualTo(35);
+        assertThat(declinedRetry.getOutcome().name()).isEqualTo("MATCH");
+        assertThat(declinedRetry.getAppliedScore()).isEqualTo(35);
+        assertThat(declinedRetry.getObservedValue()).isEqualTo("{\"declinedCount\":2}");
     }
 
     @Test
