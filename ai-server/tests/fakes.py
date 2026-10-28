@@ -36,6 +36,7 @@ def call(name: str, **args: Any) -> dict[str, Any]:
 
 def narrative(payment_ids: list[str], **overrides: Any) -> str:
     body = {
+        "headline": "처음 쓰는 카드로 연달아 결제해 본인 확인이 필요합니다.",
         "summary": ["결제 2건 모두 처음 쓰는 카드로 결제됐습니다."],
         "payments": {
             payment_id: {
@@ -43,6 +44,7 @@ def narrative(payment_ids: list[str], **overrides: Any) -> str:
                 "normalEvidence": ["확인된 정상 정황 없음"],
                 "unknowns": ["고객 본인의 결제 의사"],
                 "recommendation": "NEEDS_CHECK",
+                "reason": "규칙 적중 외에 판단할 근거가 없습니다.",
             }
             for payment_id in payment_ids
         },

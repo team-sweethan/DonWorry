@@ -19,8 +19,10 @@ def _block(source: str, start: str) -> str:
     return source[begin : end - 1]
 
 
+# 화면 타입의 선택 항목(`verdict?:`)도 키로 읽는다
+# 예전 형식 보고서 때문에 화면에서만 선택 항목이다
 def _keys(block: str, indent: int) -> list[str]:
-    return re.findall(rf"^ {{{indent}}}(\w+):", block, flags=re.MULTILINE)
+    return re.findall(rf"^ {{{indent}}}(\w+)\??:", block, flags=re.MULTILINE)
 
 
 @pytest.mark.skipif(not CASE_TS.exists(), reason="frontend 소스가 없는 환경")

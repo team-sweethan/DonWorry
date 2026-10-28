@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from app.agent.assemble import ALWAYS_LIMITATIONS, ALWAYS_UNKNOWN, facts_json
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
@@ -202,3 +204,48 @@ def test_timeline_sorted_by_real_time() -> None:
     )
 
     assert [t.event.split()[0] for t in outcome.report.timeline] == ["9301", "9302"]
+
+
+LONG_HEADLINE = (
+    "FDS 규칙 적중 외에는 근거가 없어 AI 권고는 참고만 하고"
+    " 보안 직원이 고객 본인 확인 후 판정해야 합니다."
+)
+
+
+# 한자 · 반복 문장 · 영어 단어 · 긴 결론은 Qwen에게 돌려보내 다시 쓰게 한다
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"summary": ["新規 카드로 결제됐습니다."]},
+        {"overallAnalysis": ["짧은 간격의 반복 결제입니다.", "짧은 간격의 반복 결제입니다"]},
+        {"summary": ["처음 쓰는 card로 결제됐습니다."]},
+        {"headline": LONG_HEADLINE},
+    ],
+    ids=["hanja", "repeat", "english", "long_headline"],
+)
+def test_narrative_with_hanja_repeat_english_or_long_headline_is_repaired(
+    overrides: dict[str, object],
+) -> None:
+    wrong = narrative(PAYMENTS, **overrides)
+
+    llm, outcome = _run(wrong, narrative(PAYMENTS))
+
+    assert llm.write_calls == 2
+    assert outcome.status == "SUCCEEDED"
+
+
+# 화면에서 쓰는 약어(FDS · IP · AI)와 60자 안의 결론, 결제마다 같은 근거 문장은 통과한다
+def test_allowed_abbreviations_and_normal_headline_pass() -> None:
+    ok = narrative(
+        PAYMENTS,
+        headline=(
+            "FDS 규칙 적중 외에는 근거가 없어 AI 권고는 참고만 하고"
+            " 보안 직원이 본인 확인 후 판정해야 합니다."
+        ),
+        summary=["FDS 규칙과 접속 IP를 함께 확인했습니다."],
+    )
+
+    llm, outcome = _run(ok)
+
+    assert llm.write_calls == 1
+    assert outcome.status == "SUCCEEDED"

@@ -101,6 +101,15 @@ export type CaseHistory = {
 // ── AI 보고서 (기획 2.7 표준 구성) — report_body 키 표기는 P4와 확정 전 ──
 export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
 
+// 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 evidence 목록의 같은 ID 줄
+export type ReportRuleHitDetail = {
+  code: string
+  name: string
+  appliedScore: number | null
+  evidenceId: string
+}
+
+// verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
 export type ReportBody = {
   overview: {
     caseId: string
@@ -123,6 +132,8 @@ export type ReportBody = {
     normalEvidence: string[]
     unknowns: string[]
     recommendation: AiRecommendation
+    reason?: string
+    ruleHitDetails?: ReportRuleHitDetail[]
   }>
   timeline: Array<{ at: string; event: string }>
   overallAnalysis: string[]
@@ -135,6 +146,8 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
+  // headline은 AI 결론 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
+  verdict?: { headline: string; overallRecommendation: AiRecommendation }
 }
 
 export type AiReport = {

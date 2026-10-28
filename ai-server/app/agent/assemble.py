@@ -9,11 +9,14 @@ from app.schemas.report import (
     EvidenceItem,
     Overview,
     PaymentAnalysis,
+    Recommendation,
     ReportBody,
     ReportRecommendation,
+    RuleHitDetail,
     TimelineItem,
+    Verdict,
 )
-from app.schemas.tools import CasePayment, CasePaymentsTool, FdsPayment
+from app.schemas.tools import CasePayment, CasePaymentsTool, FdsEvidenceTool, FdsPayment
 
 # 사실 값은 Tool 기록에서만 채운다 — Qwen이 숫자 · ID를 잘못 옮겨 적어도 보고서 사실은 틀리지 않는다
 
@@ -106,6 +109,29 @@ def _drop_nothing_unknown(items: list[str]) -> list[str]:
     return [item for item in items if not _NOTHING_UNKNOWN.search(item)]
 
 
+# 종합 권고 — 하나라도 승인 취소 검토면 승인 취소 검토, 모두 매입 진행 검토면 매입 진행 검토
+def overall_recommendation(recommendations: list[Recommendation]) -> Recommendation:
+    if "REJECT_REVIEW" in recommendations:
+        return "REJECT_REVIEW"
+    if recommendations and all(r == "ACCEPT_REVIEW" for r in recommendations):
+        return "ACCEPT_REVIEW"
+    return "NEEDS_CHECK"
+
+
+def _evidence_id(context: CaseContext, seq: int) -> str:
+    return f"E-{context.case_id}-v{context.report_version}-{seq:02d}"
+
+
+# 결제별로 FDS 근거를 받은 증거 추적 줄 — 같은 결제를 여러 번 봤으면 마지막 조회(보고서에 쓴 값)
+def _fds_evidence_ids(context: CaseContext, records: list[ToolRecord]) -> dict[str, str]:
+    ids: dict[str, str] = {}
+    for seq, record in enumerate(records, start=1):
+        if isinstance(record.result, FdsEvidenceTool):
+            for payment in record.result.payments:
+                ids[payment.paymentId] = _evidence_id(context, seq)
+    return ids
+
+
 def assemble_report(
     context: CaseContext,
     case_payments: CasePaymentsTool,
@@ -118,6 +144,7 @@ def assemble_report(
     timeline: list[TimelineItem] = []
     limitations = _drop_nothing_unknown(list(narrative.limitations))
     checks = list(narrative.additionalChecks)
+    fds_evidence_ids = _fds_evidence_ids(context, records)
     for payment in case_payments.payments:
         if not analyzable(payment):
             limitations.append(
@@ -141,6 +168,18 @@ def assemble_report(
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
                 recommendation=written.recommendation,
+                reason=written.reason,
+                ruleHitDetails=[
+                    RuleHitDetail(
+                        code=rule.code,
+                        name=rule.name,
+                        appliedScore=rule.appliedScore,
+                        evidenceId=fds_evidence_ids[payment.paymentId],
+                    )
+                    for rule in evidence.ruleHits
+                ]
+                if evidence
+                else [],
             )
         )
         fds_text = (
@@ -180,10 +219,14 @@ def assemble_report(
             EvidenceItem(
                 toolName=record.tool_name,
                 source=record.result.source + (" (자동 보충)" if record.filled_by_system else ""),
-                evidenceId=f"E-{context.case_id}-v{context.report_version}-{seq:02d}",
+                evidenceId=_evidence_id(context, seq),
                 retrievedAt=record.result.retrievedAt,
                 dataVersion=f"evidence v{record.result.evidenceVersion}",
             )
             for seq, record in enumerate(records, start=1)
         ],
+        verdict=Verdict(
+            headline=narrative.headline.strip(),
+            overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
+        ),
     )

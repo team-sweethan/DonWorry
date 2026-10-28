@@ -33,7 +33,22 @@
         "고객 본인의 결제 의사",
         "구매자 본인의 결제 의사"
       ],
-      "recommendation": "NEEDS_CHECK"
+      "recommendation": "NEEDS_CHECK",
+      "reason": "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다.",
+      "ruleHitDetails": [
+        {
+          "code": "HIGH_AMOUNT",
+          "name": "고액 결제",
+          "appliedScore": 35,
+          "evidenceId": "E-101-v1-02"
+        },
+        {
+          "code": "NEW_CARD",
+          "name": "처음 쓰는 카드",
+          "appliedScore": 30,
+          "evidenceId": "E-101-v1-02"
+        }
+      ]
     },
     {
       "paymentId": "9002",
@@ -54,7 +69,22 @@
         "고객 본인의 결제 의사",
         "구매자 본인의 결제 의사"
       ],
-      "recommendation": "NEEDS_CHECK"
+      "recommendation": "NEEDS_CHECK",
+      "reason": "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다.",
+      "ruleHitDetails": [
+        {
+          "code": "RAPID_REPEAT_PAYMENT",
+          "name": "단시간 반복 결제",
+          "appliedScore": 25,
+          "evidenceId": "E-101-v1-02"
+        },
+        {
+          "code": "NEW_CARD",
+          "name": "처음 쓰는 카드",
+          "appliedScore": 30,
+          "evidenceId": "E-101-v1-02"
+        }
+      ]
     }
   ],
   "timeline": [
@@ -97,5 +127,9 @@
       "retrievedAt": "2026-10-27T12:10:01Z",
       "dataVersion": "evidence v2"
     }
-  ]
+  ],
+  "verdict": {
+    "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
+    "overallRecommendation": "NEEDS_CHECK"
+  }
 }

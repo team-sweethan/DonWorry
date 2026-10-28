@@ -9,6 +9,7 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,20 +65,31 @@ class FixedReportGenerator {
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
         List<Map<String, Object>> timeline = new ArrayList<>();
+        String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
         for (PaymentInfo payment : payments) {
-            analyses.add(Map.of(
-                    "paymentId", payment.paymentId(),
-                    "amount", payment.amount(),
-                    "requestedAt", payment.requestedAt().toString(),
-                    "riskScore", payment.riskScore(),
-                    "ruleHits", payment.ruleHits().stream().map(RuleHit::code).toList(),
-                    "riskEvidence",
+            // 정상 근거는 비워 둔다 — 고정 보고서는 결제 · FDS 근거 외에 확인한 것이 없다 (#288)
+            analyses.add(Map.ofEntries(
+                    Map.entry("paymentId", payment.paymentId()),
+                    Map.entry("amount", payment.amount()),
+                    Map.entry("requestedAt", payment.requestedAt().toString()),
+                    Map.entry("riskScore", payment.riskScore()),
+                    Map.entry(
+                            "ruleHits",
+                            payment.ruleHits().stream().map(RuleHit::code).toList()),
+                    Map.entry(
+                            "riskEvidence",
                             payment.ruleHits().stream()
                                     .map(rule -> rule.name() + " 규칙 적중")
-                                    .toList(),
-                    "normalEvidence", List.of("기존 배송지와 일치"),
-                    "unknowns", List.of("고객 본인의 결제 의사"),
-                    "recommendation", "NEEDS_CHECK"));
+                                    .toList()),
+                    Map.entry("normalEvidence", List.of()),
+                    Map.entry("unknowns", List.of("고객 본인의 결제 의사")),
+                    Map.entry("recommendation", "NEEDS_CHECK"),
+                    Map.entry("reason", "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다."),
+                    Map.entry(
+                            "ruleHitDetails",
+                            payment.ruleHits().stream()
+                                    .map(rule -> ruleHitDetail(rule, fdsEvidenceId))
+                                    .toList())));
             timeline.add(Map.of(
                     "at",
                     payment.requestedAt().toString(),
@@ -117,7 +129,23 @@ class FixedReportGenerator {
                 List.of(
                         evidence(
                                 "get_case_payments", "P3·P5", securityCase.getId(), reportVersion, 1, now, dataVersion),
-                        evidence("get_fds_evidence", "P2", securityCase.getId(), reportVersion, 2, now, dataVersion)));
+                        evidence("get_fds_evidence", "P2", securityCase.getId(), reportVersion, 2, now, dataVersion)),
+                "verdict",
+                Map.of("headline", "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.", "overallRecommendation", "NEEDS_CHECK"));
+    }
+
+    // appliedScore가 없을 수 있어 Map.of 대신 null을 받는 HashMap을 쓴다
+    private static Map<String, Object> ruleHitDetail(RuleHit rule, String evidenceId) {
+        Map<String, Object> detail = new HashMap<>();
+        detail.put("code", rule.code());
+        detail.put("name", rule.name());
+        detail.put("appliedScore", rule.appliedScore());
+        detail.put("evidenceId", evidenceId);
+        return detail;
+    }
+
+    private static String evidenceId(Long caseId, int reportVersion, int seq) {
+        return "E-" + caseId + "-v" + reportVersion + "-0" + seq;
     }
 
     private static Map<String, Object> evidence(
@@ -125,7 +153,7 @@ class FixedReportGenerator {
         return Map.of(
                 "toolName", toolName,
                 "source", source,
-                "evidenceId", "E-" + caseId + "-v" + reportVersion + "-0" + seq,
+                "evidenceId", evidenceId(caseId, reportVersion, seq),
                 "retrievedAt", now.toString(),
                 "dataVersion", dataVersion);
     }
