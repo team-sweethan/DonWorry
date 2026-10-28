@@ -13,7 +13,7 @@
 | 테이블별 설계 | Notion 담당 ERD: [P1](https://www.notion.so/40102d70288a804cbd4fc895fec73d15) · [P2](https://www.notion.so/40102d70288a80919ec0c80d054770ed) · [P3](https://www.notion.so/40102d70288a80f2980ff3bbf7d968f5) · [P4](https://www.notion.so/40102d70288a8076ae4df729e7fed8b2) · [P5](https://www.notion.so/40102d70288a8068af50e5b30fc3efd2) · [P6](https://www.notion.so/40102d70288a80a7b5acd696c702596e) |
 | 실제 테이블·컬럼·타입·제약 | [migration SQL](../backend/src/main/resources/db/migration/), 소유·관계 요약은 [ERD](erd/README.md) |
 | P6 금융 실행·정산 범위 | [P6 상세 설계](https://www.notion.so/40102d70288a805d8ae8cac21a7f133e)와 담당 ERD. 접수 확인·수수료 세부의 미결 사항은 3절 |
-| 현재 코드와 화면 | 저장소 소스, [프로젝트 README](../README.md#현재-상태), [프론트 README](../frontend/README.md#개발) |
+| 현재 코드와 화면 | 저장소 소스, [프로젝트 README](../README.md#구현-상태), [프론트 README](../frontend/README.md#개발) |
 | P3 Case · 판정 · 인계 구현 요약 | [investigation 문서](investigation/README.md) — 상태 전이 우선순위 · 병합 규칙 · API · 목업 범위 |
 | 로컬 시연 (결제 → 매입 완료 · AI 보고서) | [로컬 시연 가이드](demo/local-demo.md) — 시연 방식 4가지 · 처음 한 번 설정 · 확인 SQL · 자주 막히는 곳 |
 | 1차 CakeShop 연동 | [cakeshop_refactoring](https://github.com/team-sweethan/cakeshop_refactoring) (DonWorry 연동에 맞게 수정 중) |
