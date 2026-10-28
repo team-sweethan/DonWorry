@@ -57,7 +57,7 @@ class FdsRuleManagementServiceTests {
     void review_storesReviewerNameSnapshot() {
         var request = FdsRuleChangeRequest.disable("R03", 3L, "보안 직원", "사유", Instant.now());
         when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(1L, "관리자")));
-        when(requests.findById(7L)).thenReturn(Optional.of(request));
+        when(requests.findRuleCodeById(7L)).thenReturn(Optional.of("R03"));
         when(policies.findByRuleCodeForUpdate("R03")).thenReturn(Optional.of(policy));
         when(requests.findByIdForUpdate(7L)).thenReturn(Optional.of(request));
 
@@ -91,9 +91,6 @@ class FdsRuleManagementServiceTests {
         when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
         when(policies.findByRuleCodeForUpdate("R03")).thenReturn(Optional.of(policy));
         when(policy.isActive()).thenReturn(false);
-        when(requests.findByRuleCodeAndStatus("R03", FdsRuleChangeRequest.Status.PENDING))
-                .thenReturn(java.util.List.of());
-
         service().setActive("R03", true);
 
         verify(policy).update(eq(true), eq(3L), any(Instant.class));
