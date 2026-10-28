@@ -2,6 +2,7 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.entity.AiReport;
+import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
@@ -38,13 +39,39 @@ class AiReportWriter {
                 aiReportRepository.saveAndFlush(AiReport.pending(caseId, nextVersion, evidenceVersion, now)));
     }
 
+    // ai-server가 접수(202)했을 때 PENDING이면 RUNNING으로 — 결과가 먼저 와서 끝났으면 바꾸지 않는다 (ADR-0009 결정 2)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void succeed(Long reportId, Map<String, Object> body, Instant now) {
-        aiReportRepository.findById(reportId).ifPresent(report -> report.succeed(body, now));
+    public void markRunning(Long reportId) {
+        aiReportRepository.updateStatusIfCurrent(reportId, ReportStatus.PENDING, ReportStatus.RUNNING);
+    }
+
+    // 실제로 끝냈으면 true — 이미 끝난 보고서는 바꾸지 않는다
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean succeed(Long reportId, Map<String, Object> body, Instant now) {
+        return aiReportRepository
+                .findById(reportId)
+                .map(report -> report.succeed(body, now))
+                .orElse(false);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void fail(Long reportId, Map<String, Object> error, Instant now) {
-        aiReportRepository.findById(reportId).ifPresent(report -> report.fail(error, now));
+    public boolean fail(Long reportId, Map<String, Object> error, Instant now) {
+        return aiReportRepository
+                .findById(reportId)
+                .map(report -> report.fail(error, now))
+                .orElse(false);
+    }
+
+    // 실패 정보는 개발자 조사용 — 화면 응답(ReportSnapshot)에는 싣지 않는다 (ADR-0009 결정 2)
+    static Map<String, Object> error(String code, String reason, int attempts, Instant lastAttemptAt) {
+        return Map.of(
+                "code",
+                code,
+                "reason",
+                reason == null ? "" : reason,
+                "attempts",
+                attempts,
+                "lastAttemptAt",
+                lastAttemptAt.toString());
     }
 }

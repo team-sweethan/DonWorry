@@ -1,12 +1,14 @@
 import httpx
 
+from app.schemas.investigation import InvestigationResult
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
 
 # 서비스 키 헤더 이름 — Spring 쪽 확인(#253)과 같게 둔다
 API_KEY_HEADER = "X-Internal-Api-Key"
 
 
-# Spring 내부 Tool API 읽기 전용 호출 — 결제 · 판정을 바꾸는 호출은 없다 (AGENTS.md 6절)
+# Spring 내부 API 호출 — Tool 읽기와 조사 결과 전송만 한다
+# 결제 · 판정을 바꾸는 호출은 없다 (AGENTS.md 6절)
 class SpringToolClient:
     def __init__(
         self,
@@ -34,6 +36,15 @@ class SpringToolClient:
         res = self._http.get("/internal/ai/tools/get_fds_evidence", params=params)
         res.raise_for_status()
         return FdsEvidenceTool.model_validate(res.json())
+
+    # 조사가 끝나면 결과를 돌려준다 (ADR-0009 결정 1 결과 수신)
+    # 전송이 실패해도 Spring이 상태 조회로 복구한다
+    def send_result(self, result: InvestigationResult) -> None:
+        res = self._http.post(
+            f"/internal/ai/reports/{result.reportId}/result",
+            json=result.model_dump(mode="json"),
+        )
+        res.raise_for_status()
 
     def close(self) -> None:
         self._http.close()

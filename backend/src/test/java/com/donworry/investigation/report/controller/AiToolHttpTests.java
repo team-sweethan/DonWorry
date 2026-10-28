@@ -2,8 +2,6 @@ package com.donworry.investigation.report.controller;
 
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,6 +9,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.client.AiServerClient;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
@@ -31,18 +30,22 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 // AI 서버가 부르는 읽기 Tool 2종을 HTTP로 확인한다 (ADR-0009 결정 1)
 // 결제 · FDS 값(P5 · P2)은 목으로 바꿔 Tool 응답 모양과 Case 범위 검증만 본다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
 // Tool API는 기본으로 꺼져 있어 이 테스트에서만 켠다 (기본 비활성은 AiToolControllerConditionTests)
+// 요청마다 ai-server와 같은 서비스 키 헤더를 붙인다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest(properties = "ai.tools.enabled=true")
+@SpringBootTest(properties = {"ai.tools.enabled=true", "ai.server.api-key=" + AiToolHttpTests.API_KEY})
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class AiToolHttpTests {
 
+    static final String API_KEY = "test-ai-key";
     static final String CASE_PAYMENTS = "/internal/ai/tools/get_case_payments";
     static final String FDS_EVIDENCE = "/internal/ai/tools/get_fds_evidence";
 
@@ -170,6 +173,17 @@ class AiToolHttpTests {
         mvc.perform(post(FDS_EVIDENCE).param("caseId", "1")).andExpect(status().isMethodNotAllowed());
     }
 
+    // 서비스 키가 없거나 틀리면 결제 · FDS 근거를 내주지 않는다
+    @Test
+    void tools_withoutValidKey_returnUnauthorized() throws Exception {
+        mvc.perform(MockMvcRequestBuilders.get(CASE_PAYMENTS).param("caseId", "1"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(MockMvcRequestBuilders.get(FDS_EVIDENCE)
+                        .param("caseId", "1")
+                        .header(AiServerClient.API_KEY_HEADER, "wrong-key"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private SecurityCase openCase() {
         return securityCaseRepository.save(SecurityCase.open(
                 1L,
@@ -205,5 +219,14 @@ class AiToolHttpTests {
                 riskScore,
                 "REVIEW",
                 List.of(new RuleHit("HIGH_AMOUNT", "고액 결제", 35)));
+    }
+
+    // ai-server처럼 요청마다 서비스 키를 붙인다
+    private static MockHttpServletRequestBuilder get(String url) {
+        return MockMvcRequestBuilders.get(url).header(AiServerClient.API_KEY_HEADER, API_KEY);
+    }
+
+    private static MockHttpServletRequestBuilder post(String url) {
+        return MockMvcRequestBuilders.post(url).header(AiServerClient.API_KEY_HEADER, API_KEY);
     }
 }
