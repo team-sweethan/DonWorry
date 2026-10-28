@@ -270,3 +270,15 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 서명 확인 후 업무 실행 전에 독립 커밋하므로 업무 롤백·서버 재시작으로 nonce가 복구되지 않는다. 만료 행은 금융·조사 이력이 아닌 단기 보안 기록으로 물리 삭제한다.
 기존 `merchants.secret_reference`는 Entity 매핑만 추가한다. 기존 migration·다른 담당 테이블은 변경하지 않는다.
 세부 계약과 검증은 [#219 설계](../identity/219-merchant-hmac.md)와 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.
+
+
+### #190·#273 P5 FDS 복구 저장 기반
+
+#273 구현 준비의 [저장 필드·제약 검토](../payment/273-fds-recovery-storage.md)에 담당 Notion ERD 조회 결과와 상태별 CHECK·키·인덱스 기준을 정리했다. 2026-10-28 최초 조회 시 담당 ERD에는 복구 테이블이 없었으며, 이후 사용자 요청으로 필드·제약과 P2 분석 사유 보존 원칙을 담당 ERD에 반영했다. 문서 반영과 DB 구현은 구분한다.
+
+2026-10-28, `dev ceb4544` 기준으로 사용자가 단일 복구 테이블 설계안을 선택하고 문서화를 요청했다. 상세 필드·상태·제약은 [#190 저장·API 계약](../payment/190-fds-recovery-contract.md)에 기록한다.
+
+- P5 소유 신규 `payment_fds_recoveries` 제안: 결제당 원본 ERROR·오류 보고·P2 분석·직원 재탐지 작업 1행.
+- 기존 `payments`는 결제 정본, `payment_requests`는 현재 적용 평가·처리 단계다. 기존 ERROR는 복구 행에 보존하고 제한된 새 결과 적용 전이를 추가할 계획이다.
+- 같은 P5 payments 참조에만 물리 FK를 사용하고, P2 평가·분석 ID와 P1 직원 ID는 논리 참조한다. 원본/작업 키 불변·물리 삭제 금지·중복 방지는 상세 계약을 따른다.
+- #273 작업 브랜치에 신규 migration·Entity·Repository를 추가했다. 사용자 요청에 따른 Notion 담당 ERD 필드·제약 반영을 마쳤으며 보고·분석 리스너와 상세 GET 응답 확장까지 연결했다. 운영 DB 적용은 후속이다. 이번 사용자 설계 승인을 이미 운영 적용·다른 담당 상세 검토까지 마친 것으로 해석하지 않는다.

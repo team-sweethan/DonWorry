@@ -77,7 +77,7 @@ public class LoginHistoryQueryService {
     }
 
     private void requireUser(SessionUser user) {
-        if (user == null) throw new AccountManagementException(AuthErrorCode.AUTHENTICATION_REQUIRED);
-        if (user.passwordChangeRequired()) throw new AccountManagementException(AuthErrorCode.PASSWORD_CHANGE_REQUIRED);
+        if (SessionUser.require(user).passwordChangeRequired())
+            throw new AccountManagementException(AuthErrorCode.PASSWORD_CHANGE_REQUIRED);
     }
 }

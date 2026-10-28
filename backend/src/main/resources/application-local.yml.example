@@ -7,3 +7,12 @@ spring:
     url: jdbc:mariadb://localhost:3306/donworry
     username: donworry
     password: 내비밀번호
+
+# 로컬 시연용 (docs/demo/local-demo.md 3-3) — 필요할 때 주석을 풀어 쓴다
+# payment:
+#   http:
+#     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)
+# ai:
+#   server:
+#     enabled: true            # 고정 보고서 대신 ai-server에 조사를 맡김 (기본 꺼짐)
+#     api-key: "내AI서버키"       # ai-server/.env의 AI_SERVER_INTERNAL_API_KEY와 같은 값

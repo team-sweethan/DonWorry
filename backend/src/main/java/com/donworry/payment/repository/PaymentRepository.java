@@ -25,4 +25,12 @@ public interface PaymentRepository extends Repository<Payment, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.paymentId = :paymentId")
     Optional<Payment> findByIdForUpdate(@Param("paymentId") Long paymentId);
+
+    // 재평가 접수·실행 전용: 쿼리별 5초 대기, 연결의 세션 설정은 바꾸지 않는다.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(
+            @jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @org.springframework.data.jpa.repository.Query("select r from Payment r where r.paymentId = :paymentId")
+    Optional<Payment> findByIdForReevaluation(
+            @org.springframework.data.repository.query.Param("paymentId") Long paymentId);
 }

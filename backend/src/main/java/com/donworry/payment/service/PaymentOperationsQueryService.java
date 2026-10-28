@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.*;
 @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW, isolation = Isolation.REPEATABLE_READ)
 public class PaymentOperationsQueryService {
     private final PaymentOperationsRepository repository;
+    private final PaymentFdsRecoveryRepository recoveries;
 
     public PaymentOperationsPageResponse findPage(PaymentOperationsQueryRequest query) {
         long total = repository.count(query);
@@ -86,7 +87,11 @@ public class PaymentOperationsQueryService {
                                 a.getRequestedAt(),
                                 a.getCompletedAt(),
                                 a.getCaptureId()),
-                observation(row, Instant.now()));
+                observation(row, Instant.now()),
+                recoveries
+                        .findByPaymentId(paymentId)
+                        .map(recovery -> PaymentFdsRecoveryResponse.from(recovery, p, r))
+                        .orElse(null));
     }
 
     private PaymentOperationSummaryResponse summary(PaymentOperationRow row, Instant observedAt) {
@@ -111,7 +116,7 @@ public class PaymentOperationsQueryService {
         limitations.add("P3 인계·Case 및 P6 매입·정산 상태는 이 조회에서 확인하지 않습니다.");
         if (row.request() == null) limitations.add("P5 요청 행이 없어 평가 요청·결과를 확인할 수 없습니다.");
         else limitations.add("평가 정보는 P5 저장 스냅샷이며 P2의 최신 결과나 진행 여부가 아닙니다.");
-        limitations.add("평가 호출·응답·타임아웃 시각과 재시도 횟수는 수집하지 않습니다.");
+        limitations.add("평가 호출·응답 시각은 신규 ERROR 복구 기록에만 보존하며 이 응답에는 포함하지 않습니다. 타임아웃 시각과 HTTP 재전송 횟수는 수집하지 않습니다.");
         Instant waitingSince = null;
         String basis = "UNKNOWN";
         String reason = switch (category) {

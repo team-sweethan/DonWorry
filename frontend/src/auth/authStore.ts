@@ -297,12 +297,12 @@ export function createAuthStore(
     },
     consumeExpired: () => update({ expired: false }),
     check,
-    login: async (loginId: string, password: string) => {
+    login: async (loginId: string, password: string): Promise<AuthUser | null> => {
       if (pendingLogout) await pendingLogout
       invalidate()
       const currentGeneration = generation
       const user = await api.login(loginId, password)
-      if (currentGeneration !== generation) return
+      if (currentGeneration !== generation) return null
       advanceApiSession()
       activity.start(true)
       update({
@@ -315,6 +315,7 @@ export function createAuthStore(
         expired: false,
         expiredUserId: null,
       })
+      return currentGeneration === generation ? user : null
     },
     logout: (): Promise<void> => {
       if (pendingLogout) return pendingLogout

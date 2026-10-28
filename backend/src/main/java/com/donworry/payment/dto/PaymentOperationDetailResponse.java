@@ -8,4 +8,5 @@ public record PaymentOperationDetailResponse(
         PaymentOperationRequestResponse request,
         PaymentOperationEvaluationResponse evaluation,
         PaymentOperationActionResponse action,
-        PaymentOperationObservationResponse observation) {}
+        PaymentOperationObservationResponse observation,
+        PaymentFdsRecoveryResponse fdsRecovery) {}

@@ -22,6 +22,7 @@
 | [#152 돈워리 내부 대응](152-internal-response.md) | D1~D6 운영 원칙·원인별 확인. 내부 조회 담당 확인 완료, 시간·운영 담당 및 구현 미완료 |
 | [#152 조회 설계](152-payment-operations-design.md) | 목록·상세 정보·권한·P2/P3/P6 계약과 #188~#191 후속 범위. 설계 확인 완료·구현 전 |
 | [#188 운영 조회 HTTP 계약](188-payment-operations-api.md) | GET 경로·DTO·필터·페이지·오류 규칙 및 #188 브랜치 구현·검사 기록. 병합·배포 전 |
+| [#190 FDS 복구 저장·API 계약](190-fds-recovery-contract.md) | 단일 복구 테이블·명시적 1회 실행·행 잠금·직원 전달 복구 POST·선택적 CSRF·응답/오류 계약. 사용자 승인. #273 저장·보고·분석 수신·상세 GET 구현, 재평가·전달 복구 POST는 후속 |
 | [#152 담당별 합의 기록](152-policy-confirmation.md) | P1·P2·P3·P5·P6 회신·사용자 확인 근거와 미정 범위. CakeShop 예약은 별도 |
 | [ADR-0035](../decisions/0035-long-held-payment-policy.md) | 제안 — 확인 기한과 실제 금융 종료 분리. 대안·영향 기록 |
 | [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |
@@ -30,6 +31,10 @@
 업무의 근거는 Notion FDS 정본과 P6 담당 ERD다. 실제 컬럼은 migration SQL, 의존 방향은 채택된 [ADR-0012](../decisions/0012-payment-settlement-dependency.md)를 따른다. 출처와 차이는 [문서 대조 현황](../README.md)에 기록한다.
 
 ## 현재 구현
+
+#274: [명시적 재평가 구현 기록](274-fds-reevaluation.md). 작업 브랜치에 READY 접수·작업 키 저장과 P2 재평가·현재 평가 반영·모의 승인·종료 처리를 연결했다. 재평가 POST·오류 응답·CSRF/권한 연결도 추가했다. 실행 트랜잭션 제한과 실제 잠금·데드락 검증도 추가했다. 상세 검증 결과는 연결 문서를 따른다. 전달 복구 POST는 #275 후속이다.
+
+#273 작업 브랜치 구현: [FDS 복구 저장 필드·제약 검토](273-fds-recovery-storage.md). 사용자 요청에 따라 담당 ERD에 저장 필드·제약과 P2 분석 사유 보존 원칙을 반영했다. 작업 브랜치에 migration·Entity·Repository를 구현했으며 실제 시각 수집·ERROR 저장·커밋 후 보고를 연결했다. 분석 리스너와 운영 상세 fdsRecovery 응답까지 연결했다. 최신 검사 결과는 연결 문서의 최종 점검 기록을 따른다. 운영 DB 적용과 #274·#275 실행 API는 후속이다.
 
 **2026-10-26 P3 진행 보충:** 최신 GitHub `dev 2ba8a4f`에는 #170의 PaymentHeld 수신·Case 연결이 병합됐다. 아래 이전 단계 기록의 HELD 수신 미구현 표시는 당시 기준이다. 직원 금융 Gateway·PaymentActionResult 수신·인계 재확인은 P3 #161의 후속이다. [#152 내부 대응 기준](152-internal-response.md)에서 운영 분담 제안과 미확정 사항을 구분한다.
 

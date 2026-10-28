@@ -28,4 +28,12 @@ public interface PaymentRequestRepository extends Repository<PaymentRequest, Lon
     Optional<PaymentRequest> findByPaymentId(Long paymentId);
 
     Optional<PaymentRequest> findFirstByPaymentOrderIdOrderByAttemptNoDesc(Long paymentOrderId);
+
+    // 재평가 접수·실행 전용: 쿼리별 5초 대기, 연결의 세션 설정은 바꾸지 않는다.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(
+            @jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @org.springframework.data.jpa.repository.Query("select r from PaymentRequest r where r.paymentId = :paymentId")
+    Optional<PaymentRequest> findByPaymentIdForReevaluation(
+            @org.springframework.data.repository.query.Param("paymentId") Long paymentId);
 }

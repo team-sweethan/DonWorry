@@ -1,10 +1,12 @@
 package com.donworry.payment.service;
 
+import com.donworry.fds.api.FdsEvaluationFailureReport;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.payment.entity.*;
 import com.donworry.payment.repository.*;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
@@ -15,6 +17,7 @@ public class PaymentRequestProcessingService {
     private final PaymentRepository payments;
     private final PaymentRequestRepository requests;
     private final PaymentAuthorizationService authorization;
+    private final PaymentFdsRecoveryRepository recoveries;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public Optional<PaymentEvaluationInput> evaluationInput(Long paymentId) {
@@ -32,9 +35,11 @@ public class PaymentRequestProcessingService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void saveEvaluation(Long paymentId, FdsEvaluationResponse response) {
-        payments.findByIdForUpdate(paymentId).orElseThrow();
+    public Optional<FdsEvaluationFailureReport> saveEvaluation(Long paymentId, PaymentObservedEvaluation observed) {
+        var response = observed.evaluation();
+        var payment = payments.findByIdForUpdate(paymentId).orElseThrow();
         var request = requests.findByPaymentIdForUpdate(paymentId).orElseThrow();
+        boolean first = request.getProcessingStage() == PaymentProcessingStage.RECEIVED;
         request.recordEvaluation(new PaymentEvaluationSnapshot(
                 response.evaluationRequestId(),
                 response.evaluationId(),
@@ -42,6 +47,35 @@ public class PaymentRequestProcessingService {
                 response.riskScore(),
                 response.errorCode(),
                 response.evaluatedAt()));
+        if (response.result() != FdsResult.ERROR || !first) return Optional.empty();
+        payment.requireUnapprovedPending();
+        var recovery = recoveries.save(PaymentFdsRecovery.waitingAnalysis(
+                paymentId,
+                request.evaluationSnapshot().orElseThrow(),
+                UUID.randomUUID(),
+                observed.requestedAt(),
+                observed.respondedAt()));
+        return Optional.of(FdsEvaluationFailureReport.builder()
+                .failureReportId(recovery.getFailureReportId())
+                .originalEvaluationRequestId(recovery.getOriginalEvaluationRequestId())
+                .evaluationRequestId(recovery.getOriginalEvaluationRequestId())
+                .evaluationId(recovery.getOriginalEvaluationId())
+                .paymentId(paymentId)
+                .merchantId(payment.getMerchantId())
+                .customerRef(payment.getCustomerRef())
+                .amount(payment.getAmount())
+                .paymentRequestedAt(payment.getCreatedAt())
+                .evaluationResult(FdsResult.ERROR)
+                .errorCode(recovery.getOriginalErrorCode())
+                .requestedAt(recovery.getEvaluationRequestedAt())
+                .respondedAt(recovery.getEvaluationRespondedAt())
+                .paymentStatus(payment.getStatus().name())
+                .processingStage(request.getProcessingStage().name())
+                .requestId(request.getRequestId())
+                .idempotencyKey(request.getIdempotencyKey())
+                .orderRef(payment.getOrderRef())
+                .evaluationAttemptNo(1)
+                .build());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

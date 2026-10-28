@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
-import { Alert, Button, Form, Input } from 'antd'
+import { Alert, Button, Checkbox, Form, Input } from 'antd'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
 import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
+import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
 
-export type LoginValues = { loginId: string; password: string }
+export type { LoginValues } from '../../auth/loginPreferences'
 type LoginPageProps = { onSubmit?: (values: LoginValues) => Promise<void> }
 type Feedback = 'ready' | 'invalid' | 'input' | 'network'
 
@@ -19,6 +20,8 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [initialValues] = useState(readLoginPreferences)
+  const [capsLock, setCapsLock] = useState(false)
 
   const submit = async (values: LoginValues) => {
     if (submittingRef.current) return
@@ -30,7 +33,7 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
     setSubmitting(true)
     setFeedback(null)
     try {
-      await onSubmit({ loginId: values.loginId.trim(), password: values.password })
+      await onSubmit({ ...values, loginId: values.loginId.trim() })
     } catch (error) {
       setFeedback(
         error instanceof InvalidCredentialsError
@@ -83,6 +86,7 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
             비밀번호를 5번 연속 틀리면 15분 동안 로그인할 수 없습니다.
           </p>
           <Form<LoginValues>
+            initialValues={initialValues}
             layout="vertical"
             onFinish={submit}
             onValuesChange={() => setFeedback(null)}
@@ -114,12 +118,20 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
               label="비밀번호"
               name="password"
               rules={[{ required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' }]}
+              // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
+              extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
             >
               <Input.Password
                 prefix={<LockOutlined />}
                 placeholder="비밀번호를 입력하세요"
                 autoComplete="current-password"
+                onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                onBlur={() => setCapsLock(false)}
               />
+            </Form.Item>
+            <Form.Item name="rememberLoginId" valuePropName="checked">
+              <Checkbox>아이디 저장</Checkbox>
             </Form.Item>
             {feedback && (
               <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-login-error">
