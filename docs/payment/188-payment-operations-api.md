@@ -66,7 +66,7 @@
 
 ## 4. 상세 DTO와 기록 부재
 
-`PaymentOperationDetailResponse`는 `payment`, `request`, `evaluation`, `action`, `observation` 다섯 객체를 가진다. 객체 자체는 null로 생략하지 않는다. 없는 영역도 recordStatus를 제공한다.
+`PaymentOperationDetailResponse`는 `payment`, `request`, `evaluation`, `action`, `observation` 다섯 객체와 nullable `fdsRecovery` 요약을 가진다. 기존 다섯 객체는 null로 생략하지 않는다. 없는 영역도 recordStatus를 제공한다.
 
 | 영역 / DTO | 필드 |
 | --- | --- |
@@ -84,6 +84,15 @@
 request가 ABSENT면 해당 데이터 필드는 모두 null이며 evaluation도 ABSENT와 null이다. 평가 결과 미저장 상태에서도 evaluationRequestId는 반환한다. 부분적으로 저장된 평가나 모순은 확보된 값을 보존하고 UNKNOWN 분류와 근거로 표시한다. 저장된 ERROR는 PRESENT다. DB 예외를 위 상태로 변환하지 않는다.
 
 hasAuthorization은 승인 참조 존재 여부만 제공한다. completedAt은 기존 payment_actions의 성공 또는 실패 확정 시각이며 P3 Case 종료 시각이 아니다. 자동 매입은 action이 없어도 정상일 수 있다. PENDING 조치의 completedAt=null은 미완료, VOID의 captureId=null은 대상 외다. 모든 null을 미수집으로 묶지 않는다.
+
+### FDS 복구 요약 (#273)
+
+상세의 `fdsRecovery`는 복구 행이 없으면 명시적인 null이다. 기록이 있으면 `paymentId`, `recoveryId`, `status`, `evaluationResult`, `paymentStatus`, `reasonCode`, `completedAt`을 반환한다. 세부 계약은 [FDS 복구 계약 §5](190-fds-recovery-contract.md#5-http-요청응답)를 따른다.
+
+- `evaluationResult`는 새 평가 UUID와 현재 요청 평가 UUID가 일치할 때만 표시한다. 최초 ERROR나 아직 반영되지 않은 재평가는 null이다.
+- `reasonCode`는 COMPLETED이면 null, 일치하는 재평가 ERROR이면 현재 errorCode, 그 외에는 보존한 P2 분석 사유다. WAITING_ANALYSIS는 null이다. DB 분석 사유를 덮어쓰지 않는다.
+- 실제 결제 상태와 복구 종료 시각을 반환하며 작업 UUID·retryId·고객 원문은 포함하지 않는다.
+- 같은 읽기 전용 REPEATABLE_READ 트랜잭션에서 조회한다. GET은 오류 보고·재평가·상태 변경을 실행하지 않는다. 목록 응답·조회 권한·no-store 정책은 기존 계약을 유지한다.
 
 ## 5. 관측·시간 DTO
 

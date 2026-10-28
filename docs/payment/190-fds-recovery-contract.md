@@ -46,7 +46,7 @@
 | failure_report_id | UUID NOT NULL | 동일 오류 보고 재전송에 유지하는 키 |
 | analysis_id | BIGINT NULL | 수신한 P2 분석 ID, 논리 참조 |
 | disposition | VARCHAR(40) NULL | P2 분석 결과 |
-| reason_code | VARCHAR(100) NULL | 분석·수동검토 사유 코드, 원문 예외 제외 |
+| reason_code | VARCHAR(100) NULL | P2 분석 사유 코드, 수신 후 보존·덮어쓰기 금지 |
 | analyzed_at | DATETIME(6) NULL | P2 분석 완료 시각 |
 | new_evaluation_request_id | UUID NULL | 직원 접수 시 발급, 이후 변경 금지 |
 | retry_id | UUID NULL | 재탐지 작업 키, 이후 변경 금지 |
@@ -154,7 +154,7 @@ COMPLETED는 결제 성공이 아니라 재탐지 후 초기 결제 처리 완�
 }
 ```
 
-새 UUID·retryId·고객 원문·원본 예외는 응답에 넣지 않는다. P2 분석 원문 코드는 disposition과 함께 내부 저장에 보존하고, 재탐지 ERROR 종료 시 reason_code는 새 오류 사유를 나타낸다.
+새 UUID·retryId·고객 원문·원본 예외는 응답에 넣지 않는다. DB reason_code는 disposition과 함께 P2 분석 사유를 보존하며 재탐지 결과로 덮어쓰지 않는다. API reasonCode는 별도 표현이다. 정상 완료이면 null, 재탐지 ERROR이면 현재 평가의 errorCode, 분석상 불가이면 보존한 분석 사유를 반환한다. 별도 수동 종료 사유의 영속 보존 필요 여부는 #274에서 결정한다.
 
 기존 `GET /api/payment-operations/{paymentId}`에 같은 모양의 `fdsRecovery` 요약을 추가한다. 복구 행이 없으면 null이다. GET은 보고·재탐지·상태 변경을 수행하지 않는다. 목록의 기존 분류는 현재 payment_requests 평가와 payments 상태를 사용하며, 원본 ERROR를 현재 결과로 오인하지 않는다.
 
@@ -253,3 +253,7 @@ CSRF 필요 = 정확한 재탐지 POST 경로
 구현 전 남은 작업: 담당 ERD·Notion 반영, 상세 제약/인덱스, 유한 잠금 대기 설정·값 검증, Modulith 리스너/기록 선별·중단 판별과 #191 경계 확인, P1 matcher·필터 구현 검토, 수동검토 절차와 후속 구현 이슈 분리. 잠금·전달 복구 진입점·CSRF 적용 방향은 이번 사용자 승인으로 정리했으며 실제 구현·동작 검증과 구분한다. 응답 유실·기존 UUID 복원 설계는 #190에서 별도로 유지한다.
 
 문서 검사는 `python3 .github/scripts/check_md_links.py`, `git diff --check`로 수행한다. 이후 코드·DB 구현 시 `cd backend && ./gradlew spotlessApply check mariaDbTest`를 실행한다. 이번 문서화에서는 backend·MariaDB·HTTP·보안·통합 테스트를 실행하지 않았으며 기능 구현·검증 완료로 표시하지 않는다.
+
+## #273 저장 상세 반영
+
+2026-10-28 사용자 요청으로 담당 ERD에 저장 필드·제약을 반영하고, reason_code를 P2 분석 사유로 보존하는 방식으로 정리했다. 상세 기준은 [#273 저장 계약](273-fds-recovery-storage.md)을 따른다. 위 구현 전 기록 이후 #273 작업 브랜치에 migration·Entity·Repository, 실제 호출 시각 수집·ERROR 저장·커밋 후 보고, 분석 이벤트 수신 및 상세 GET fdsRecovery 응답을 구현했다. 최신 검증 결과는 연결한 #273 문서의 최종 점검 기록을 따른다. 운영 DB 적용과 #274·#275 실행 API는 후속이며, 위 문서화 당시의 미검증 기록과 구분한다.

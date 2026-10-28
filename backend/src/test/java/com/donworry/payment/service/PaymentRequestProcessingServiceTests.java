@@ -17,7 +17,11 @@ class PaymentRequestProcessingServiceTests {
     void evaluationInput_whenReceived_preservesStoredMerchantOnRetry() {
         var payments = mock(PaymentRepository.class);
         var requests = mock(PaymentRequestRepository.class);
-        var service = new PaymentRequestProcessingService(payments, requests, mock(PaymentAuthorizationService.class));
+        var service = new PaymentRequestProcessingService(
+                payments,
+                requests,
+                mock(PaymentAuthorizationService.class),
+                mock(com.donworry.payment.repository.PaymentFdsRecoveryRepository.class));
         var request = mock(PaymentRequest.class);
         when(request.getProcessingStage()).thenReturn(PaymentProcessingStage.RECEIVED);
         when(request.getEvaluationRequestId()).thenReturn(PaymentEvaluationFixtures.REQUEST_ID);
