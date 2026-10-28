@@ -8,7 +8,7 @@ spring:
     username: donworry
     password: 내비밀번호
 
-# 로컬 시연용 (docs/demo/local-demo.md 3-3) — 필요할 때 주석을 풀어 쓴다
+# 로컬 시연용 (docs/demo/local-demo.md 2 · 3절) — 필요할 때 주석을 풀어 쓴다
 # payment:
 #   http:
 #     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)

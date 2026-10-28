@@ -167,7 +167,7 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 ```
 
 바꿀 값(포트·비밀번호)만 남기고 나머지 줄은 지워도 됩니다.
-결제 API·AI 서버를 켜는 시연용 설정도 이 파일에 둡니다 → [로컬 시연 가이드](docs/demo/local-demo.md#3-3-spring-개인-설정-application-localyml)
+결제 API·AI 서버를 켜는 시연용 설정도 이 파일에 둡니다 → [로컬 시연 가이드 2 · 3절](docs/demo/local-demo.md#2-실제-결제부터-매입까지)
 
 ### 4. backend 실행
 
@@ -209,8 +209,8 @@ uv run uvicorn app.main:app --reload --port 8000
 ```
 
 `http://localhost:8000/health`가 `{"status":"ok"}`를 돌려주면 정상입니다.
-Spring이 ai-server에 조사를 맡기게 하려면 `ai.server.enabled`와 서비스 키를 양쪽에 설정합니다 → [로컬 시연 가이드 3-3 · 3-4](docs/demo/local-demo.md#3-3-spring-개인-설정-application-localyml)
-Windows에서 "애플리케이션 제어 정책에서 이 파일을 차단했습니다" 오류가 나면 [로컬 시연 가이드 7절](docs/demo/local-demo.md#7-자주-막히는-곳)을 봅니다.
+Spring이 ai-server에 조사를 맡기게 하려면 `ai.server.enabled`와 서비스 키를 양쪽에 설정합니다 → [로컬 시연 가이드 3절](docs/demo/local-demo.md#3-ai-보고서-붙이기-mock)
+Windows에서 "애플리케이션 제어 정책에서 이 파일을 차단했습니다" 오류가 나면 [로컬 시연 가이드 7-2](docs/demo/local-demo.md#7-2-windows에서-ai-server-실행이-막힐-때)을 봅니다.
 
 ### 7. 빌드와 테스트
 
