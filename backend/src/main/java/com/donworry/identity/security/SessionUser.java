@@ -16,4 +16,12 @@ public record SessionUser(
         List<String> permissions,
         boolean passwordChangeRequired,
         UUID loginReference)
-        implements Serializable {}
+        implements Serializable {
+
+    // 인가 필터를 지난 뒤 같은 세션의 다른 로그아웃이 공유 SecurityContext의 인증을 비우면
+    // @AuthenticationPrincipal이 null로 해석된다. principal을 쓰는 서비스는 첫 줄에서 이 검사를 거친다.
+    public static SessionUser require(SessionUser user) {
+        if (user == null) throw new AccountManagementException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+        return user;
+    }
+}

@@ -62,6 +62,7 @@ public class AdminMerchantService {
     }
 
     public AdminMerchantResponse create(SessionUser actor, CreateMerchantRequest input, HttpServletRequest request) {
+        SessionUser.require(actor);
         return accountLocks.withAccount(actor.loginId(), () -> {
             requireSession(actor, request);
             try {
@@ -106,6 +107,7 @@ public class AdminMerchantService {
     }
 
     public void setStatus(SessionUser actor, Long id, SetMerchantStatusRequest input, HttpServletRequest request) {
+        SessionUser.require(actor);
         if (id == null || id <= 0) invalid();
         merchantLocks.withMerchant(
                 id,

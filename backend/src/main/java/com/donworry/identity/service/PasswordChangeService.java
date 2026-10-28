@@ -33,7 +33,7 @@ public class PasswordChangeService {
             HttpServletRequest request,
             HttpServletResponse response) {
         // 인가 통과 후 인증이 사라졌다면 계정 잠금이나 DB·세션 처리 전에 거절한다.
-        if (current == null) throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+        SessionUser.require(current);
         accountLockService.withAccount(current.loginId(), () -> {
             var session = request.getSession(false);
             if (session == null) throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
