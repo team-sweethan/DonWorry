@@ -37,12 +37,15 @@ class ReportBodyValidatorTests {
         AiReport report = AiReport.pending(7L, 1, 1, NOW);
         Map<String, Object> noVerdict = new HashMap<>(body());
         noVerdict.remove("verdict");
+        Map<String, Object> nullVerdict = new HashMap<>(body());
+        nullVerdict.put("verdict", null);
         Map<String, Object> unknownRecommendation = new HashMap<>(body());
         unknownRecommendation.put(
                 "verdict", Map.of("headline", "본인 확인이 필요합니다.", "overallRecommendation", "AUTO_ACCEPT"));
 
         assertThat(validator.validate(report, body())).isEmpty();
         assertThat(validator.validate(report, noVerdict)).anyMatch(error -> error.contains("verdict"));
+        assertThat(validator.validate(report, nullVerdict)).anyMatch(error -> error.contains("verdict"));
         assertThat(validator.validate(report, unknownRecommendation)).anyMatch(error -> error.contains("AUTO_ACCEPT"));
     }
 

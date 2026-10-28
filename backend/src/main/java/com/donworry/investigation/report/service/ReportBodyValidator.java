@@ -71,17 +71,18 @@ class ReportBodyValidator {
         } else if (body.containsKey("paymentAnalyses")) {
             errors.add("paymentAnalyses가 목록이 아니다");
         }
-        errors.addAll(verdictErrors(body.get("verdict")));
+        errors.addAll(verdictErrors(body));
         return errors;
     }
 
-    // 결론 카드 값 — 결론 한 줄이 있고 종합 권고가 허용된 값인지 본다 (빠진 경우는 SECTIONS가 알린다)
-    private static List<String> verdictErrors(Object value) {
-        if (value == null) {
+    // 결론 카드 값 — 결론 한 줄이 있고 종합 권고가 허용된 값인지 본다
+    // 키가 빠진 경우는 SECTIONS가 알리고, "verdict": null처럼 값이 비었거나 객체가 아니면 여기서 거부한다
+    private static List<String> verdictErrors(Map<String, Object> body) {
+        if (!body.containsKey("verdict")) {
             return List.of();
         }
-        if (!(value instanceof Map<?, ?> verdict)) {
-            return List.of("verdict가 객체가 아니다");
+        if (!(body.get("verdict") instanceof Map<?, ?> verdict)) {
+            return List.of("verdict가 비었거나 객체가 아니다");
         }
         List<String> errors = new ArrayList<>();
         if (!(verdict.get("headline") instanceof String headline) || headline.isBlank()) {
