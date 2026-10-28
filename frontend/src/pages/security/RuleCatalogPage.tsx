@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Input, Modal, Spin, Switch, Tag, Typography } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleCatalog,
   getFdsRulePolicies,
@@ -61,6 +61,7 @@ function RuleCard({
   const [submitting, setSubmitting] = useState(false)
   const [disableModalOpen, setDisableModalOpen] = useState(false)
   const [disableReason, setDisableReason] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
   const active = policy?.active ?? true
   const pending = policy?.disableRequestPending ?? false
   const requestDisable = async () => {
@@ -69,6 +70,9 @@ function RuleCard({
       await requestRuleDisable(rule.ruleCode, disableReason.trim())
       setDisableModalOpen(false)
       setDisableReason('')
+      onChanged()
+    } catch {
+      setActionError('끄기 요청을 처리하지 못했습니다. 상태를 다시 확인해주세요.')
       onChanged()
     } finally {
       setSubmitting(false)
@@ -80,12 +84,24 @@ function RuleCard({
       await setFdsRuleActive(rule.ruleCode, next)
       onChanged()
       refreshRuleChangeRequestBadge()
+    } catch {
+      setActionError('룰 상태를 변경하지 못했습니다. 상태를 다시 확인해주세요.')
+      onChanged()
     } finally {
       setSubmitting(false)
     }
   }
   return (
     <Card className={`dw-rule-card${active ? '' : ' dw-rule-card-inactive'}`} size="small">
+      {actionError && (
+        <Alert
+          type="error"
+          showIcon
+          message={actionError}
+          closable
+          onClose={() => setActionError(null)}
+        />
+      )}
       <div className="dw-rule-card-top">
         <span>
           <Tag className="dw-rule-code">{rule.ruleCode}</Tag>
@@ -287,6 +303,7 @@ export function RuleCatalogPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('payment')
+  const policyReloadSequence = useRef(0)
   const showLoading = useMinimumLoadingIndicator(loading && rules.length === 0)
   const visibleRules = selectedTab === 'account' ? [] : rules
 
@@ -317,7 +334,12 @@ export function RuleCatalogPage() {
   }, [])
 
   const reloadPolicies = () => {
-    void getFdsRulePolicies().then(setPolicies).finally(refreshRuleChangeRequestBadge)
+    const sequence = ++policyReloadSequence.current
+    void getFdsRulePolicies()
+      .then((next) => {
+        if (sequence === policyReloadSequence.current) setPolicies(next)
+      })
+      .finally(refreshRuleChangeRequestBadge)
   }
   const isAdmin = user?.role === 'ADMIN'
 

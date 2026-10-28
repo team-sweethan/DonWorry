@@ -3,6 +3,7 @@ package com.donworry.payment.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.donworry.fds.api.FdsAuthorizationResultRecorder;
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsEvaluator;
@@ -28,10 +29,11 @@ class PaymentAuthorizationFlowTests {
     private final PaymentRepository repository = mock(PaymentRepository.class);
     private final PaymentAuthorizer authorizer = mock(PaymentAuthorizer.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final FdsAuthorizationResultRecorder authorizationResults = mock(FdsAuthorizationResultRecorder.class);
     private final PaymentEvaluationFlowService service = new PaymentEvaluationFlowService(
             creation,
             new PaymentEvaluationService(evaluator),
-            new PaymentAuthorizationService(repository, authorizer, events));
+            new PaymentAuthorizationService(repository, authorizer, events, authorizationResults));
     private final PaymentEvaluationFlowInput input =
             new PaymentEvaluationFlowInput(1L, "input-customer", "order", 1000L);
     private final Payment payment =

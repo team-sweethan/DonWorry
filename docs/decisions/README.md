@@ -63,6 +63,7 @@
 | [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 채택 — P1 결정 (P6 확인 전), P6 실제 통합 후속 |
 | [0040](0040-fds-v02-rule-input-contract.md) | FDS v0.2 룰 입력과 P2 정책 저장소 | 제안 — P2·P5 구현 중 |
 | [0041](0041-ai-server-internal-api-key-authentication.md) | AI 서버 내부 API 서비스 키 인증 | 제안 — #266 P1 동의, PR 리뷰 대상 |
+| [0042](0042-fds-rule-management.md) | FDS 룰 활성화와 변경 승인 관리 | 제안 — #283 구현 반영, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

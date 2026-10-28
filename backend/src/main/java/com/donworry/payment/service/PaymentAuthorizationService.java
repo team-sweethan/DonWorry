@@ -1,5 +1,6 @@
 package com.donworry.payment.service;
 
+import com.donworry.fds.api.FdsAuthorizationResultRecorder;
 import com.donworry.payment.api.PaymentHeld;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentStatus;
@@ -19,6 +20,7 @@ public class PaymentAuthorizationService {
     private final PaymentRepository paymentRepository;
     private final PaymentAuthorizer authorizer;
     private final ApplicationEventPublisher events;
+    private final FdsAuthorizationResultRecorder authorizationResults;
 
     // 별도 Bean 프록시를 통해 호출한다. 잠금은 상태·참조의 커밋/롤백까지 유지된다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -66,6 +68,11 @@ public class PaymentAuthorizationService {
                 payment.declineAuthorization();
                 declineCode = authorization.declineCode();
             }
+            authorizationResults.record(
+                    context.evaluationResult().evaluation().evaluationId(),
+                    outcome == PaymentRules.AuthorizationOutcome.SUCCEEDED
+                            ? FdsAuthorizationResultRecorder.AuthorizationResult.APPROVED
+                            : FdsAuthorizationResultRecorder.AuthorizationResult.DECLINED);
         } else if (decision.state().status() == PaymentStatus.DENIED) {
             payment.deny();
         }

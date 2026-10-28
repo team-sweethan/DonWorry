@@ -17,6 +17,9 @@ public interface FdsRuleChangeRequestRepository extends JpaRepository<FdsRuleCha
     Optional<FdsRuleChangeRequest> findByRuleCodeAndRequestedByUserIdAndStatus(
             String ruleCode, Long requestedByUserId, FdsRuleChangeRequest.Status status);
 
+    @Query("select request.ruleCode from FdsRuleChangeRequest request where request.ruleChangeRequestId = :requestId")
+    Optional<String> findRuleCodeById(@Param("requestId") Long requestId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from FdsRuleChangeRequest request where request.ruleChangeRequestId = :requestId")
     Optional<FdsRuleChangeRequest> findByIdForUpdate(@Param("requestId") Long requestId);

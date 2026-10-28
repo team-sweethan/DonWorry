@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Pagination, Space, Table, Tabs, Tag } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleChangeRequests,
   reviewFdsRuleChangeRequest,
@@ -35,10 +35,16 @@ export function RuleChangeRequestsPage() {
   const [result, setResult] = useState<FdsRuleChangeRequestPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [processingId, setProcessingId] = useState<number | null>(null)
+  const requestSequence = useRef(0)
   const reload = () => {
+    const sequence = ++requestSequence.current
     getFdsRuleChangeRequests(status, page)
-      .then(setResult)
-      .catch(() => setError('룰 변경 요청을 불러오지 못했습니다.'))
+      .then((next) => {
+        if (sequence === requestSequence.current) setResult(next)
+      })
+      .catch(() => {
+        if (sequence === requestSequence.current) setError('룰 변경 요청을 불러오지 못했습니다.')
+      })
   }
   useEffect(reload, [status, page])
   const review = async (requestId: number, approve: boolean) => {

@@ -53,15 +53,20 @@ public class FdsRuleManagementService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
         }
         var policy = policyForUpdate(ruleCode);
+        if ("SECURITY_STAFF".equals(actor.role()) && policy.isActive()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 켜진 룰입니다.");
+        }
         var changedAt = Instant.now();
         if (policy.isActive() != active) {
             policy.update(active, actor.userId(), changedAt);
         }
-        resolvePendingRequests(
-                ruleCode,
-                active ? FdsRuleChangeRequest.Status.REJECTED : FdsRuleChangeRequest.Status.APPROVED,
-                actor,
-                changedAt);
+        if ("ADMIN".equals(actor.role())) {
+            resolvePendingRequests(
+                    ruleCode,
+                    active ? FdsRuleChangeRequest.Status.REJECTED : FdsRuleChangeRequest.Status.APPROVED,
+                    actor,
+                    changedAt);
+        }
     }
 
     public FdsRuleChangeRequestPage requests(FdsRuleChangeRequestStatus status, int page, int size) {
@@ -91,9 +96,9 @@ public class FdsRuleManagementService {
     @Transactional
     public void review(Long requestId, boolean approve) {
         var actor = requireRole("ADMIN");
-        var requestToReview = requests.findById(requestId)
+        var ruleCode = requests.findRuleCodeById(requestId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "요청이 없습니다."));
-        var policy = policyForUpdate(requestToReview.getRuleCode());
+        var policy = policyForUpdate(ruleCode);
         var request = requests.findByIdForUpdate(requestId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "요청이 없습니다."));
         var reviewedAt = Instant.now();
