@@ -47,10 +47,12 @@ import tools.jackson.databind.json.JsonMapper;
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
-@SpringBootTest(properties = "ai.server.enabled=true")
+@SpringBootTest(properties = {"ai.server.enabled=true", "ai.server.api-key=" + AiInvestigationFlowTests.API_KEY})
 @AutoConfigureMockMvc
 @Import(MariaDbTestContainerConfig.class)
 class AiInvestigationFlowTests {
+
+    static final String API_KEY = "test-ai-key";
 
     @Autowired
     MockMvc mvc;
@@ -75,6 +77,9 @@ class AiInvestigationFlowTests {
 
     @Autowired
     CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    AiAttemptTracker tracker;
 
     @MockitoBean
     AiServerClient aiServerClient;
@@ -294,8 +299,41 @@ class AiInvestigationFlowTests {
                 .toList();
     }
 
+    // 서비스 키가 없거나 틀린 콜백은 401로 돌려보내고 보고서는 그대로 RUNNING이다
+    @Test
+    void callback_withoutValidKey_isRejected() throws Exception {
+        Fixture f = caseWithPayment();
+        aiReportService.request(f.caseId(), 1);
+        Long reportId = reportOf(f).getId();
+        String body = mapper.writeValueAsString(
+                succeeded(reportId, submittedFor(reportId).getFirst().attemptId(), f));
+
+        mvc.perform(post("/internal/ai/reports/{reportId}/result", reportId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/internal/ai/reports/{reportId}/result", reportId)
+                        .header(AiServerClient.API_KEY_HEADER, "wrong-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(reportOf(f).getStatus()).isEqualTo(ReportStatus.RUNNING);
+    }
+
+    // 진행 중인 시도가 없는 보고서 ID로 콜백이 와도 잠금이 남지 않는다 — 반복해 보내도 메모리가 늘지 않게
+    @Test
+    void callback_forUnknownReport_leavesNoLock() throws Exception {
+        long unknownId = Long.MAX_VALUE - 7;
+
+        callback(unknownId, failed(unknownId, "any-attempt", "AGENT_ERROR"));
+
+        assertThat(tracker.holdsLock(unknownId)).isFalse();
+    }
+
     private void callback(Long reportId, AiInvestigationResult result) throws Exception {
         mvc.perform(post("/internal/ai/reports/{reportId}/result", reportId)
+                        .header(AiServerClient.API_KEY_HEADER, API_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(result)))
                 .andExpect(status().isOk());

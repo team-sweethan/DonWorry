@@ -33,6 +33,11 @@ public class AiReportResultService {
     private final AiServerProperties properties;
 
     public void receive(Long reportId, AiInvestigationResult result) {
+        // 진행 중인 시도가 없는 보고서는 잠금을 만들기 전에 무시한다 — 없는 ID로 반복해 보내도 잠금이 쌓이지 않게
+        if (tracker.current(reportId).isEmpty()) {
+            log.info("진행 중인 시도가 없는 결과를 무시 reportId={} attemptId={}", reportId, result.attemptId());
+            return;
+        }
         synchronized (tracker.lockFor(reportId)) {
             boolean current = tracker.current(reportId)
                     .map(attempt -> attempt.attemptId().equals(result.attemptId()))

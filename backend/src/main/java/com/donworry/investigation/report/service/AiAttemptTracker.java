@@ -53,6 +53,11 @@ class AiAttemptTracker {
         locks.remove(reportId);
     }
 
+    // 테스트 확인용 — 이 보고서의 잠금이 남아 있는지
+    boolean holdsLock(Long reportId) {
+        return locks.containsKey(reportId);
+    }
+
     List<Long> overdue(Instant now) {
         return attempts.entrySet().stream()
                 .filter(entry -> entry.getValue().deadline().isBefore(now))

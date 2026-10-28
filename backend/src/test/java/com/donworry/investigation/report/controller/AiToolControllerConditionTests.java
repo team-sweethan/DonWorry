@@ -13,6 +13,7 @@ class AiToolControllerConditionTests {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withBean(AiToolService.class, () -> mock(AiToolService.class))
+            .withBean(AiServerKeyGuard.class, () -> mock(AiServerKeyGuard.class))
             .withUserConfiguration(AiToolController.class);
 
     @Test
