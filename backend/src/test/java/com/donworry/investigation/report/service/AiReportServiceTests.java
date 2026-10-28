@@ -66,7 +66,7 @@ class AiReportServiceTests {
     @MockitoBean
     PaymentInfoReader paymentInfoReader;
 
-    // 근거가 다 있으면 SUCCEEDED 보고서가 DB에 남고, 화면용 조회에도 8개 섹션 본문이 나온다
+    // 근거가 다 있으면 SUCCEEDED 보고서가 DB에 남고, 화면용 조회에도 8개 섹션 + 결론(verdict) 본문이 나온다
     @Test
     void request_withEvidence_savesSucceededReport() {
         SecurityCase securityCase = caseWithPayment();
@@ -92,7 +92,8 @@ class AiReportServiceTests {
                                     "overallAnalysis",
                                     "additionalChecks",
                                     "recommendation",
-                                    "evidence");
+                                    "evidence",
+                                    "verdict");
                 });
     }
 
