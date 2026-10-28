@@ -38,8 +38,10 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfAuthenticationStrategy;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfLogoutHandler;
+import org.springframework.security.web.header.writers.DelegatingRequestMatcherHeaderWriter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 
 @Configuration
 public class SecurityConfig {
@@ -133,14 +135,28 @@ public class SecurityConfig {
             LoginHistoryService loginHistories,
             @Value("${security.csrf.enabled:false}") boolean csrfEnabled)
             throws Exception {
-        // 전체 API 차단과 CSRF 활성화는 EPIC #68 5단계에서 함께 적용한다.
+        var fdsRecoveryPosts = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-reevaluations"),
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
+        // ADR-0036: 두 복구 POST는 전역 CSRF 설정과 관계없이 보호한다.
+        http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                fdsRecoveryPosts, (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         http.csrf(csrf -> csrf.spa()
                         .csrfTokenRepository(csrfTokenRepository)
-                        .requireCsrfProtectionMatcher(
-                                request -> csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request))
+                        .requireCsrfProtectionMatcher(request -> fdsRecoveryPosts.matches(request)
+                                || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
                         .ignoringRequestMatchers("/internal/**"))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                .authorizeHttpRequests(auth -> auth.requestMatchers(fdsRecoveryPosts)
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.SECURITY_STAFF);
+                        })
+                        .requestMatchers(
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.GET, "/api/payment-operations"),
                                 PathPatternRequestMatcher.withDefaults()

@@ -124,6 +124,27 @@ public class PaymentRequest {
                 : PaymentProcessingStage.EVALUATED;
     }
 
+    public void applyReevaluation(PaymentFdsRecovery recovery, PaymentEvaluationSnapshot result) {
+        Objects.requireNonNull(recovery, "recovery");
+        Objects.requireNonNull(result, "result");
+        if (!paymentId.equals(recovery.getPaymentId())
+                || recovery.getStatus() != PaymentFdsRecoveryStatus.REQUESTED
+                || processingStage != PaymentProcessingStage.NEEDS_REVIEW
+                || !recovery.matchesOriginal(evaluationSnapshot().orElse(null))
+                || !result.requestId().equals(recovery.getNewEvaluationRequestId())
+                || result.evaluationId().equals(recovery.getOriginalEvaluationId()))
+            throw new IllegalStateException("저장된 재평가 작업과 현재 평가가 일치하지 않습니다");
+        evaluationRequestId = result.requestId();
+        evaluationId = result.evaluationId();
+        evaluationResult = result.result();
+        evaluationRiskScore = result.riskScore();
+        evaluationErrorCode = result.errorCode();
+        evaluatedAt = result.evaluatedAt();
+        processingStage = "ERROR".equals(result.result())
+                ? PaymentProcessingStage.NEEDS_REVIEW
+                : PaymentProcessingStage.EVALUATED;
+    }
+
     public void completeAuthorization() {
         if (processingStage == PaymentProcessingStage.AUTHORIZED) return;
         if (processingStage != PaymentProcessingStage.EVALUATED) throw new IllegalStateException("승인 가능한 평가가 없습니다");

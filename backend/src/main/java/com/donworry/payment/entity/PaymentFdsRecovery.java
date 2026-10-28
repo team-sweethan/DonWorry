@@ -111,6 +111,49 @@ public class PaymentFdsRecovery {
                 .build();
     }
 
+    public boolean matchesOriginal(PaymentEvaluationSnapshot evaluation) {
+        return evaluation != null
+                && originalEvaluationRequestId.equals(evaluation.requestId())
+                && originalEvaluationId.equals(evaluation.evaluationId())
+                && "ERROR".equals(evaluation.result())
+                && originalErrorCode.equals(evaluation.errorCode())
+                && originalEvaluatedAt.equals(evaluation.evaluatedAt());
+    }
+
+    public void requestReevaluation(UUID newRequestId, UUID workId, Long staffId, Instant time) {
+        if (status != PaymentFdsRecoveryStatus.READY || disposition != FdsFailureDisposition.REEVALUATION_AVAILABLE)
+            throw new IllegalStateException("재평가 접수 가능한 상태가 아닙니다");
+        Objects.requireNonNull(newRequestId, "newRequestId");
+        Objects.requireNonNull(workId, "workId");
+        if (originalEvaluationRequestId.equals(newRequestId)) throw new IllegalArgumentException("새 평가 UUID가 필요합니다");
+        long actor = PaymentStorageValues.positive(staffId);
+        Instant acceptedAt = PaymentStorageValues.micros(time);
+        newEvaluationRequestId = newRequestId;
+        retryId = workId;
+        requestedBy = actor;
+        requestedAt = acceptedAt;
+        status = PaymentFdsRecoveryStatus.REQUESTED;
+    }
+
+    public void finishReevaluation(PaymentRequest request, Instant time) {
+        if (status != PaymentFdsRecoveryStatus.REQUESTED
+                || !paymentId.equals(request.getPaymentId())
+                || !newEvaluationRequestId.equals(request.getEvaluationRequestId()))
+            throw new IllegalStateException("종료할 재평가 작업이 일치하지 않습니다");
+        boolean error = "ERROR".equals(request.getEvaluationResult());
+        if ((error && request.getProcessingStage() != PaymentProcessingStage.NEEDS_REVIEW)
+                || (!error && request.getProcessingStage() != PaymentProcessingStage.AUTHORIZED))
+            throw new IllegalStateException("재평가 결과 처리가 완료되지 않았습니다");
+        completedAt = PaymentStorageValues.micros(time);
+        status = error ? PaymentFdsRecoveryStatus.MANUAL_REVIEW : PaymentFdsRecoveryStatus.COMPLETED;
+    }
+
+    public void stopReevaluation(Instant time) {
+        if (status != PaymentFdsRecoveryStatus.REQUESTED) throw new IllegalStateException("실행 중인 재평가 작업이 아닙니다");
+        completedAt = PaymentStorageValues.micros(time);
+        status = PaymentFdsRecoveryStatus.MANUAL_REVIEW;
+    }
+
     public void recordAnalysis(FdsEvaluationFailureAnalyzed event, Instant receivedAt) {
         Objects.requireNonNull(event, "event");
         if (!failureReportId.equals(event.failureReportId())
