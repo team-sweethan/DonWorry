@@ -114,7 +114,7 @@ class PaymentHeldPersistenceTests {
         String customer = UUID.randomUUID().toString();
         flow.createAndEvaluate(input(customer, 50_000L));
         flow.createAndEvaluate(input(customer, 70_000L));
-        var evaluated = flow.createAndEvaluate(input(customer, 150_000L));
+        var evaluated = flow.createAndEvaluate(input(customer, 500_000L));
         assertThat(evaluated.evaluationResult().evaluation().result()).isEqualTo(FdsResult.REVIEW);
         return new PaymentAuthorizationContext(
                 PaymentCreationSnapshot.from(
@@ -201,7 +201,7 @@ class PaymentHeldPersistenceTests {
                             id,
                             999L,
                             context.payment().customerRef(),
-                            150_000L,
+                            500_000L,
                             result.authorizationRef(),
                             context.evaluationResult().evaluation().evaluationId(),
                             event.heldAt()));
@@ -213,7 +213,7 @@ class PaymentHeldPersistenceTests {
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fds_evaluations WHERE payment_id = ?", Long.class, id))
                 .isEqualTo(1);
-        verify(authorizer).authorize(new AuthorizationCommand(id, 150_000L));
+        verify(authorizer).authorize(new AuthorizationCommand(id, 500_000L));
     }
 
     // 수신 실패는 HELD를 되돌리지 않으며 원래 기록을 역직렬화해 동일 값으로 재전달한다.
@@ -251,7 +251,7 @@ class PaymentHeldPersistenceTests {
                 .isEqualTo(result.authorizationRef());
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM fds_evaluations WHERE payment_id = ?", Long.class, id))
                 .isEqualTo(1);
-        verify(authorizer).authorize(new AuthorizationCommand(id, 150_000L));
+        verify(authorizer).authorize(new AuthorizationCommand(id, 500_000L));
     }
 
     // 승인 경합에서 첫 커밋 후 두 번째 승인을 거절하여 HELD 통지도 한 건만 남긴다.
@@ -284,7 +284,7 @@ class PaymentHeldPersistenceTests {
                     .hasCauseInstanceOf(IllegalStateException.class);
             awaitCompleted(id);
             assertThat(receiverState().attempts.get(id)).hasSize(1);
-            verify(authorizer).authorize(new AuthorizationCommand(id, 150_000L));
+            verify(authorizer).authorize(new AuthorizationCommand(id, 500_000L));
         } finally {
             release.countDown();
             executor.shutdownNow();

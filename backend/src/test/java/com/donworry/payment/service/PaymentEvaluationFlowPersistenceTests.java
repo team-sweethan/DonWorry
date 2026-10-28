@@ -44,9 +44,9 @@ class PaymentEvaluationFlowPersistenceTests {
     // 실제 P2 평가가 저장된 결제의 고객·금액·시각으로 실행되고 평가 한 건만 남는다
     @Test
     void createAndEvaluate_withRealEvaluator_persistsMatchingEvaluation() {
-        var result = service.createAndEvaluate(input(UUID.randomUUID().toString(), 150_000L));
+        var result = service.createAndEvaluate(input(UUID.randomUUID().toString(), 500_000L));
         assertThat(result.evaluationResult().evaluation().result()).isEqualTo(FdsResult.ALLOW);
-        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(35);
+        assertThat(result.evaluationResult().evaluation().riskScore()).isEqualTo(30);
         assertStored(result);
     }
 
@@ -56,7 +56,7 @@ class PaymentEvaluationFlowPersistenceTests {
         String customer = UUID.randomUUID().toString();
         var first = service.createAndEvaluate(input(customer, 50_000L));
         var second = service.createAndEvaluate(input(customer, 70_000L));
-        var third = service.createAndEvaluate(input(customer, 150_000L));
+        var third = service.createAndEvaluate(input(customer, 500_000L));
         assertThat(third.evaluationResult().evaluation().result()).isEqualTo(FdsResult.REVIEW);
         assertThat(third.evaluationResult().evaluation().riskScore()).isEqualTo(60);
         assertThat(java.util.List.of(first, second, third))
@@ -106,7 +106,7 @@ class PaymentEvaluationFlowPersistenceTests {
                 .isEqualTo(1L);
         assertThat(jdbc.queryForObject("""
                 SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(observed_value, '$.amount')) AS SIGNED)
-                FROM fds_rule_hits WHERE evaluation_id = ? AND rule_code = 'HIGH_AMOUNT'
+                FROM fds_rule_hits WHERE evaluation_id = ? AND rule_code = 'R01'
                 """, Long.class, evaluation.evaluationId()))
                 .isEqualTo(payment.getAmount());
     }

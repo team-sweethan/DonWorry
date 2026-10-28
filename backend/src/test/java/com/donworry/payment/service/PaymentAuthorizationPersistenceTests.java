@@ -62,7 +62,7 @@ class PaymentAuthorizationPersistenceTests {
     }
 
     private PaymentEvaluationFlowInput input() {
-        return input(UUID.randomUUID().toString(), 150_000L);
+        return input(UUID.randomUUID().toString(), 500_000L);
     }
 
     private AuthorizationResult success(AuthorizationCommand command) {
@@ -105,7 +105,7 @@ class PaymentAuthorizationPersistenceTests {
             return success(invocation.getArgument(0));
         });
         var result = new TransactionTemplate(transactionManager).execute(status -> {
-            var authorized = flow.createAndAuthorize(input(customer, 150_000L));
+            var authorized = flow.createAndAuthorize(input(customer, 500_000L));
             status.setRollbackOnly();
             return authorized;
         });
@@ -116,7 +116,7 @@ class PaymentAuthorizationPersistenceTests {
                 review ? PaymentStatus.HELD : PaymentStatus.PENDING,
                 "MOCK-AUTH-" + result.paymentId());
         assertEvaluationPreserved(result.paymentId());
-        verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 150_000L));
+        verify(authorizer).authorize(new AuthorizationCommand(result.paymentId(), 500_000L));
     }
 
     // DENY·ERROR 문맥 대역으로 실제 DB 반영을 확인하되 승인기는 호출하지 않는다.
@@ -189,7 +189,7 @@ class PaymentAuthorizationPersistenceTests {
             });
             return success(command);
         });
-        assertThatThrownBy(() -> flow.createAndAuthorize(input(customer, 150_000L)))
+        assertThatThrownBy(() -> flow.createAndAuthorize(input(customer, 500_000L)))
                 .isSameAs(failure);
         assertStored(paymentId.get(), PaymentStatus.PENDING, null);
         assertEvaluationPreserved(paymentId.get());

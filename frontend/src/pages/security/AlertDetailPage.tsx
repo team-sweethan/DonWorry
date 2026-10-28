@@ -35,20 +35,33 @@ function snapshot(value: string | null) {
 function observedValue(ruleCode: string, rawValue: string | null) {
   const value = snapshot(rawValue)
   if (!value) return '—'
-  if (ruleCode === 'HIGH_AMOUNT') return won(value.amount)
-  if (ruleCode === 'RAPID_REPEAT_PAYMENT') {
+  if (ruleCode === 'HIGH_AMOUNT' || ruleCode === 'R01') return won(value.amount)
+  if (ruleCode === 'RAPID_REPEAT_PAYMENT' || ruleCode === 'R04') {
     return typeof value.attemptCount === 'number' ? `${value.attemptCount}회` : '—'
   }
+  if (ruleCode === 'R02') return typeof value.deviceId === 'string' ? value.deviceId : '—'
+  if (ruleCode === 'R03') return typeof value.cardToken === 'string' ? value.cardToken : '—'
+  if (ruleCode === 'R05') return typeof value.ipCountryCode === 'string' ? value.ipCountryCode : '—'
+  if (ruleCode === 'R06') {
+    return typeof value.smallAttemptCount === 'number'
+      ? `소액 ${value.smallAttemptCount}회 · 카드 ${value.cardCount}개 · 거절 ${value.declinedCount}회`
+      : '—'
+  }
+  if (ruleCode === 'R07') return typeof value.buyerRef === 'string' ? value.buyerRef : '—'
   return '—'
 }
 
 function threshold(ruleCode: string, rawValue: string | null) {
   const value = snapshot(rawValue)
   if (!value) return '—'
-  if (ruleCode === 'HIGH_AMOUNT') return `${won(value.amountGte)} 이상`
-  if (ruleCode === 'RAPID_REPEAT_PAYMENT') {
+  if (ruleCode === 'HIGH_AMOUNT' || ruleCode === 'R01') return `${won(value.amountGte)} 이상`
+  if (ruleCode === 'RAPID_REPEAT_PAYMENT' || ruleCode === 'R04') {
     return `${value.windowMinutes}분 내 ${value.attemptCountGte}회 이상`
   }
+  if (ruleCode === 'R02' || ruleCode === 'R03') return '이전 정상 승인 이력에 없음'
+  if (ruleCode === 'R05') return '고위험 국가 목록 일치'
+  if (ruleCode === 'R06') return '10분 내 소액 5회 · 카드 3개 · 거절 3회 이상'
+  if (ruleCode === 'R07') return '활성 공통 차단 목록 일치'
   return '—'
 }
 

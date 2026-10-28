@@ -111,6 +111,9 @@ class FdsFailureAnalysisServiceTests {
                 report.customerRef(),
                 report.amount(),
                 report.paymentRequestedAt(),
+                report.deviceId(),
+                report.cardToken(),
+                report.ipCountryCode(),
                 report.evaluationResult(),
                 report.errorCode(),
                 report.sanitizedErrorMessage(),
@@ -142,6 +145,9 @@ class FdsFailureAnalysisServiceTests {
                 "customer",
                 1000L,
                 now.minusSeconds(10),
+                "device-1",
+                "token-1",
+                "kr",
                 FdsResult.ERROR,
                 "TRANSIENT_MODEL_UNAVAILABLE",
                 "internal model failure",
@@ -163,6 +169,9 @@ class FdsFailureAnalysisServiceTests {
                 report.merchantId(),
                 report.customerRef(),
                 report.amount(),
-                report.paymentRequestedAt());
+                report.paymentRequestedAt(),
+                report.deviceId(),
+                report.cardToken(),
+                report.ipCountryCode());
     }
 }

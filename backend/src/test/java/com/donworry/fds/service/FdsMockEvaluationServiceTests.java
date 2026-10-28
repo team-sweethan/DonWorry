@@ -51,7 +51,7 @@ class FdsMockEvaluationServiceTests {
         assertThat(responses).hasSize(3);
         assertThat(requests).extracting(FdsEvaluationRequest::merchantId).containsOnly(1L);
         assertThat(requests).extracting(FdsEvaluationRequest::customerRef).containsOnly("hong-gildong");
-        assertThat(requests.get(2).amount()).isEqualTo(150_000L);
+        assertThat(requests.get(2).amount()).isEqualTo(500_000L);
         assertThat(requests.get(2).paymentRequestedAt())
                 .isAfter(requests.get(0).paymentRequestedAt())
                 .isBeforeOrEqualTo(Instant.now());
@@ -63,12 +63,12 @@ class FdsMockEvaluationServiceTests {
         var requestId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
         var evaluation = FdsEvaluation.completed(
-                new FdsEvaluationRequest(requestId, 900_003L, 1L, "hong-gildong", 150_000L, requestedAt),
+                new FdsEvaluationRequest(requestId, 900_003L, 1L, "hong-gildong", 500_000L, requestedAt),
                 FdsResult.REVIEW,
                 60,
                 requestedAt.plusSeconds(1));
-        evaluation.addRuleHit("HIGH_AMOUNT", FdsRuleHitOutcome.MATCH, 35, "고액 결제");
-        evaluation.addRuleHit("RAPID_REPEAT_PAYMENT", FdsRuleHitOutcome.MATCH, 25, "단시간 반복 결제");
+        evaluation.addRuleHit("R01", FdsRuleHitOutcome.MATCH, 30, "고액 결제");
+        evaluation.addRuleHit("R04", FdsRuleHitOutcome.MATCH, 30, "단시간 반복 결제");
         when(evaluator.evaluate(any())).thenAnswer(invocation -> {
             var request = invocation.getArgument(0, FdsEvaluationRequest.class);
             return new FdsEvaluationResponse(
@@ -82,7 +82,7 @@ class FdsMockEvaluationServiceTests {
 
         service.createMockEvaluations();
 
-        assertThat(evaluation.getRuleHits().getFirst().getObservedValue()).isEqualTo("{\"amount\":150000}");
+        assertThat(evaluation.getRuleHits().getFirst().getObservedValue()).isEqualTo("{\"amount\":500000}");
         assertThat(evaluation.getRuleHits().get(1).getObservedValue()).isEqualTo("{\"attemptCount\":3}");
         verify(evaluationRepository).save(evaluation);
         verify(evaluator, org.mockito.Mockito.times(3)).evaluate(any());

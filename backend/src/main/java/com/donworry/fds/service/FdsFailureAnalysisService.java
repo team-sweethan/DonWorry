@@ -52,7 +52,10 @@ public class FdsFailureAnalysisService implements FdsFailureReporter {
                 report.merchantId(),
                 report.customerRef(),
                 report.amount(),
-                report.paymentRequestedAt()))) {
+                report.paymentRequestedAt(),
+                report.deviceId(),
+                report.cardToken(),
+                report.ipCountryCode()))) {
             return new AnalysisOutcome(FdsFailureDisposition.PAYMENT_FOLLOW_UP_REQUIRED, "EVALUATION_INPUT_MISMATCH");
         }
         if (evaluation.getResult() != FdsResult.ERROR) {
