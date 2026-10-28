@@ -2,6 +2,10 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #271 로그인 폼 편의 기능
+
+아이디 저장·Caps Lock 안내의 처리 순서와 검증 범위는 [설계](271-login-convenience.md)를 따른다.
+
 ## #266 AI 서버 내부 API 서비스 키 체인
 
 [ADR-0041](../decisions/0041-ai-server-internal-api-key-authentication.md)을 따른다. P1 동의로 P4가 추가했다.
