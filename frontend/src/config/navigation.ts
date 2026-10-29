@@ -25,10 +25,12 @@ export const navByRole: Record<Role, NavGroup[]> = {
         { label: '경보', path: '/security/alerts' },
       ],
     },
+    // 업무 흐름 순서 — 탐지(경보) → 조사(Case · 판정) → 조치(결제별 매입 · 취소) (#314)
     {
-      title: 'Case',
+      title: '조사',
       items: [{ label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' }],
     },
+    { title: '조치', items: [{ label: '조치 내역', path: '/security/actions' }] },
   ],
   owner: [
     {

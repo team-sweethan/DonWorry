@@ -89,3 +89,15 @@ export function caseListReturnPath(state: unknown) {
   if (typeof path !== 'string') return fallback
   return path === fallback || path.startsWith(`${fallback}?`) ? path : fallback
 }
+
+/** 목록 위 탭 (#314) — 처리 중(종료 전, 상태별 조건 포함) / 종료 / 전체 */
+export type CaseListTab = 'ACTIVE' | 'CLOSED' | 'ALL'
+
+export const caseListTab = (status: StatusFilter): CaseListTab =>
+  status === 'CLOSED' ? 'CLOSED' : status === 'ALL' ? 'ALL' : 'ACTIVE'
+
+/** 탭을 누르면 거는 조건. 종료 탭은 진행 중에만 뜻이 있는 조사 기한 조건을 푼다 */
+export function caseListTabPreset(tab: CaseListTab): Partial<CaseListQuery> {
+  if (tab === 'CLOSED') return { status: 'CLOSED', slaExceeded: false }
+  return { status: tab === 'ALL' ? 'ALL' : 'OPEN_ONLY' }
+}
