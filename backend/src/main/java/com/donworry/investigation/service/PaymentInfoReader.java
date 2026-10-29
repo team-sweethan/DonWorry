@@ -34,5 +34,12 @@ public interface PaymentInfoReader {
     }
 
     // P2 MATCH 적중 룰 — 이름은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값
-    record RuleHit(String code, String name, Integer appliedScore) {}
+    // thresholdSnapshot · observedValue는 P2 기준값 · 실제값 JSON 원본 (#326). 식별자가 들 수 있어 화면에 그대로 내보내지 않는다
+    record RuleHit(String code, String name, Integer appliedScore, String thresholdSnapshot, String observedValue) {
+
+        // 기준값 · 실제값이 없는 시연 결제 · 테스트용
+        public RuleHit(String code, String name, Integer appliedScore) {
+            this(code, name, appliedScore, null, null);
+        }
+    }
 }

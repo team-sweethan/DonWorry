@@ -124,6 +124,9 @@ export type ReportRuleHitDetail = {
   name: string
   appliedScore: number | null
   evidenceId: string
+  // 기준 · 실제 문장 (#326) — 코드가 FDS 기준값 · 실제값으로 만든다. 그 전 보고서 · 정리할 수 없는 규칙은 없음
+  criterion?: string | null
+  observed?: string | null
 }
 
 // verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다

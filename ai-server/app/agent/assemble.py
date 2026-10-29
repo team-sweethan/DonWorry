@@ -235,6 +235,8 @@ def assemble_report(
                         name=rule.name,
                         appliedScore=rule.appliedScore,
                         evidenceId=fds_evidence_ids[payment.paymentId],
+                        criterion=rule.criterion,
+                        observed=rule.observed,
                     )
                     for rule in evidence.ruleHits
                 ]

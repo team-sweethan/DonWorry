@@ -16,5 +16,6 @@ public record FdsEvidenceToolResponse(
     public record Payment(String paymentId, Integer riskScore, String fdsResult, List<RuleHit> ruleHits) {}
 
     // 적중 룰 이름은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값
-    public record RuleHit(String code, String name, Integer appliedScore) {}
+    // criterion · observed는 코드가 만든 기준 · 실제 문장 (#326). 숫자를 정리할 수 없는 규칙은 null
+    public record RuleHit(String code, String name, Integer appliedScore, String criterion, String observed) {}
 }

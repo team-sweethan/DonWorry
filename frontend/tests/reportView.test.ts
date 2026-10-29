@@ -99,9 +99,48 @@ test('ruleEvidenceRows_withDetails_keepsScoreAndEvidenceId', () => {
     ],
   })
   assert.deepEqual(rows, [
-    { name: '고액', appliedScore: 35, evidenceId: 'E-2' },
-    { name: '반복 결제', appliedScore: null, evidenceId: 'E-2' },
+    { name: '고액', appliedScore: 35, evidenceId: 'E-2', criterion: null, observed: null },
+    { name: '반복 결제', appliedScore: null, evidenceId: 'E-2', criterion: null, observed: null },
   ])
+})
+
+// 기준 · 실제가 없는 예전 보고서는 그 칸만 비우고 규칙 줄은 그대로 보인다 (#326)
+test('ruleEvidenceRows_oldReportWithoutCriterion_returnsNullCriterion', () => {
+  const base = {
+    paymentId: 'P1',
+    amount: 600_000,
+    requestedAt: '2026-10-29T01:00:00Z',
+    riskScore: 60,
+    ruleHits: ['고액 결제'],
+    riskEvidence: [],
+    normalEvidence: [],
+    unknowns: [],
+    recommendation: 'NEEDS_CHECK' as const,
+  }
+  assert.deepEqual(ruleEvidenceRows(base), [
+    { name: '고액 결제', appliedScore: null, evidenceId: null, criterion: null, observed: null },
+  ])
+  const rows = ruleEvidenceRows({
+    ...base,
+    ruleHitDetails: [
+      { code: 'R01', name: '고액 결제', appliedScore: 30, evidenceId: 'E-2' },
+      {
+        code: 'R04',
+        name: '단시간 반복 결제',
+        appliedScore: 30,
+        evidenceId: 'E-2',
+        criterion: '10분 안 3회 이상',
+        observed: '3회',
+      },
+    ],
+  })
+  assert.deepEqual(
+    rows.map((r) => [r.criterion, r.observed]),
+    [
+      [null, null],
+      ['10분 안 3회 이상', '3회'],
+    ],
+  )
 })
 
 // 병합 뒤 v2가 생성 중이어도 성공한 v1이 있으면 보고서 전문으로 들어갈 수 있다 (#292 리뷰)

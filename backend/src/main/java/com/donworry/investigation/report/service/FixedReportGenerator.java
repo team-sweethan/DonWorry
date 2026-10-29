@@ -3,6 +3,7 @@ package com.donworry.investigation.report.service;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
+import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader;
@@ -269,6 +270,11 @@ class FixedReportGenerator {
         detail.put("name", rule.name());
         detail.put("appliedScore", rule.appliedScore());
         detail.put("evidenceId", evidenceId);
+        // AI 보고서와 같은 기준 · 실제 문장 (#326). 정리할 수 없으면 null
+        Optional<Criterion> criterion =
+                RuleCriterionFormatter.format(rule.code(), rule.thresholdSnapshot(), rule.observedValue());
+        detail.put("criterion", criterion.map(Criterion::criterion).orElse(null));
+        detail.put("observed", criterion.map(Criterion::observed).orElse(null));
         return detail;
     }
 

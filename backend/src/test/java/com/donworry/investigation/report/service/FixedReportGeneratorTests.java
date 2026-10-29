@@ -17,6 +17,7 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,9 +65,12 @@ class FixedReportGeneratorTests {
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         assertThat((List<?>) analysis.get("normalEvidence")).isEmpty();
         assertThat(analysis.get("reason")).isInstanceOf(String.class);
-        assertThat(analysis.get("ruleHitDetails"))
-                .isEqualTo(List.of(Map.<String, Object>of(
-                        "code", "R01", "name", "고액 결제", "appliedScore", 30, "evidenceId", "E-7-v1-02")));
+        // 기준값 · 실제값이 없는 규칙은 criterion · observed가 null — AI 보고서와 같은 모양 (#326)
+        Map<String, Object> expectedRule =
+                new HashMap<>(Map.of("code", "R01", "name", "고액 결제", "appliedScore", 30, "evidenceId", "E-7-v1-02"));
+        expectedRule.put("criterion", null);
+        expectedRule.put("observed", null);
+        assertThat(analysis.get("ruleHitDetails")).isEqualTo(List.of(expectedRule));
         assertThat(new ReportBodyValidator(casePaymentRepository).validate(AiReport.pending(7L, 1, 1, NOW), body))
                 .isEmpty();
     }

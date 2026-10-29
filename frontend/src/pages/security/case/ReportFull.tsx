@@ -128,6 +128,11 @@ function PaymentEvidence({ analysis: p }: { analysis: PaymentAnalysis }) {
               key={`rule-${i}`}
               title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
             >
+              {r.criterion && r.observed && (
+                <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
+                  기준 {r.criterion} · 이번 {r.observed}
+                </span>
+              )}
               FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
             </Item>
           ))}

@@ -5,17 +5,20 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
+import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InvestigationErrorCode;
 import com.donworry.investigation.service.InvestigationException;
 import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
+import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -73,8 +76,7 @@ public class AiToolService {
                                     info.riskScore(),
                                     info.fdsResult(),
                                     info.ruleHits().stream()
-                                            .map(rule -> new FdsEvidenceToolResponse.RuleHit(
-                                                    rule.code(), rule.name(), rule.appliedScore()))
+                                            .map(AiToolService::toolRuleHit)
                                             .toList());
                 })
                 .toList();
@@ -89,6 +91,18 @@ public class AiToolService {
                 scope.retrievedAt(),
                 payments,
                 missing);
+    }
+
+    // 기준값 · 실제값 원본 JSON은 내보내지 않고 정리한 문장만 싣는다 — 식별자가 AI 입력에 들어가지 않게 (#326)
+    private static FdsEvidenceToolResponse.RuleHit toolRuleHit(RuleHit rule) {
+        Optional<Criterion> criterion =
+                RuleCriterionFormatter.format(rule.code(), rule.thresholdSnapshot(), rule.observedValue());
+        return new FdsEvidenceToolResponse.RuleHit(
+                rule.code(),
+                rule.name(),
+                rule.appliedScore(),
+                criterion.map(Criterion::criterion).orElse(null),
+                criterion.map(Criterion::observed).orElse(null));
     }
 
     // 비슷한 과거 사건 (#296) — 고정 보고서와 같은 규칙을 쓰도록 SimilarCaseFinder에 맡긴다 (트랜잭션도 그쪽이 연다)

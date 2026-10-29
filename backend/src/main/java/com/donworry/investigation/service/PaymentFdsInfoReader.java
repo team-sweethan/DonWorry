@@ -68,7 +68,12 @@ class PaymentFdsInfoReader implements PaymentInfoReader {
                 evidence == null
                         ? List.of()
                         : evidence.matchedRules().stream()
-                                .map(rule -> new RuleHit(rule.ruleCode(), rule.ruleName(), rule.appliedScore()))
+                                .map(rule -> new RuleHit(
+                                        rule.ruleCode(),
+                                        rule.ruleName(),
+                                        rule.appliedScore(),
+                                        rule.thresholdSnapshot(),
+                                        rule.observedValue()))
                                 .toList());
     }
 }
