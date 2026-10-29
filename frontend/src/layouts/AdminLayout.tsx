@@ -1,4 +1,5 @@
 import { BellOutlined, DownOutlined, LogoutOutlined, SettingOutlined } from '@ant-design/icons'
+import { BrandMark } from '../components/brand/BrandMark'
 import { Button, Select, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -14,6 +15,7 @@ function Header() {
   return (
     <header className="dw-header">
       <NavLink to={roles[role].landing} className="dw-brand" aria-label="돈워리 홈">
+        <BrandMark size={30} />
         돈워리
       </NavLink>
       <div className="dw-header-center" />

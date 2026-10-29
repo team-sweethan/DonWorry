@@ -3,6 +3,7 @@ import { Alert, Button, Form, Input, Result } from 'antd'
 import { LockOutlined } from '@ant-design/icons'
 import { Link, useLoaderData } from 'react-router-dom'
 import { PublicShell } from './ApplicationPage'
+import { Mascot } from '../../components/brand/BrandMark'
 import { setupInitialPassword } from '../../api/merchantApplications'
 import { ApiError } from '../../api/client'
 import './InitialPasswordPage.css'
@@ -50,10 +51,11 @@ export function InitialPasswordPage() {
     }
   }
   return (
-    <PublicShell>
+    <PublicShell step={4}>
       {done ? (
         <Result
           status="success"
+          icon={<Mascot size={140} className="dw-mascot-float" />}
           title="비밀번호 설정이 완료되었습니다"
           subTitle="승인 안내 메일에 적힌 로그인 아이디와 방금 설정한 비밀번호로 로그인해 주세요."
           extra={

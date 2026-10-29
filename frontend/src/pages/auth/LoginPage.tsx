@@ -1,14 +1,21 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Checkbox, Form, Input } from 'antd'
-import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
-import { ApplicationEntry } from '../public/ApplicationEntry'
 import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
+import './LoginPage.css'
+import { BrandMark, Mascot } from '../../components/brand/BrandMark'
+import { useApplicationConfig } from '../../hooks/useApplicationConfig'
+import { ApplicationEntry } from '../public/ApplicationEntry'
 
 export type { LoginValues } from '../../auth/loginPreferences'
-type LoginPageProps = { onSubmit?: (values: LoginValues) => Promise<void> }
+type LoginPageProps = {
+  onSubmit?: (values: LoginValues) => Promise<void>
+  /** 세션 만료 같은 안내. 카드 안 입력란 위에 보여 준다. */
+  notice?: ReactNode
+}
 type Feedback = 'ready' | 'invalid' | 'input' | 'network'
 
 const feedbackMessages: Record<Feedback, string> = {
@@ -18,12 +25,13 @@ const feedbackMessages: Record<Feedback, string> = {
   network: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
 }
 
-export function LoginPage({ onSubmit }: LoginPageProps) {
+export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [initialValues] = useState(readLoginPreferences)
   const [capsLock, setCapsLock] = useState(false)
+  const apply = useApplicationConfig()
 
   const submit = async (values: LoginValues) => {
     if (submittingRef.current) return
@@ -51,112 +59,99 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
   }
 
   return (
-    <main className="dw-login-shell">
-      <div className="dw-login-layout">
-        <section className="dw-login-intro" aria-labelledby="login-intro-title">
-          <div className="dw-login-brand">
-            <Link className="dw-login-brand-link" to="/" aria-label="돈워리 서비스 소개">
-              돈워리<span>DonWorry</span>
-            </Link>
-          </div>
-          <div className="dw-login-intro-body">
-            <div className="dw-login-symbol">
-              <SafetyCertificateOutlined />
-            </div>
-            <p className="dw-login-eyebrow">안심할 수 있는 거래의 시작</p>
-            <h1 id="login-intro-title">
-              의심 거래는 꼼꼼하게,
-              <br />
-              가맹점 운영은 편안하게.
-            </h1>
-            <p className="dw-login-copy">
-              이상 거래 확인부터 조치 결과까지.
-              <br />
-              돈워리에서 한눈에 확인하세요.
-            </p>
-            <div className="dw-login-features">
-              <span>이상 거래 확인</span>
-              <span>사건 검토 및 조치</span>
-              <span>가맹점 현황 조회</span>
-            </div>
-          </div>
-          <p className="dw-login-intro-footer">거래를 살피고, 안심을 더합니다.</p>
-        </section>
-        <section className="dw-login-box" aria-labelledby="login-title">
-          <h2 id="login-title">로그인</h2>
-          <p className="dw-login-description">
-            계정으로 로그인하고 업무를 시작하세요.
-            <br />
-            비밀번호를 5번 연속 틀리면 15분 동안 로그인할 수 없습니다.
-          </p>
-          <Form<LoginValues>
-            initialValues={initialValues}
-            layout="vertical"
-            onFinish={submit}
-            onValuesChange={() => setFeedback(null)}
-            requiredMark={false}
-            size="large"
-            disabled={submitting}
-          >
-            <Form.Item
-              label="아이디"
-              name="loginId"
-              rules={[
-                { required: true, whitespace: true, message: '아이디를 입력해 주세요.' },
-                {
-                  max: 100,
-                  transform: (value: string) => value?.trim(),
-                  message: '아이디는 100자 이하로 입력해 주세요.',
-                },
-              ]}
+    <div className="dw-signin">
+      <div className="dw-signin-glow" aria-hidden="true" />
+      <header className="dw-signin-top">
+        <Link className="dw-public-brand" to="/" aria-label="돈워리 서비스 소개" viewTransition>
+          <BrandMark className="dw-mark" />
+          돈워리
+        </Link>
+        <Link className="dw-signin-back" to="/" viewTransition>
+          <ArrowLeftOutlined aria-hidden="true" />
+          서비스 소개
+        </Link>
+      </header>
+      <main className="dw-signin-main">
+        <Mascot size={104} className="dw-signin-mascot dw-mascot-float" />
+        <section className="dw-signin-card" aria-labelledby="login-title">
+          <div className="dw-signin-body">
+            <h1 id="login-title">로그인</h1>
+            <p className="dw-signin-description">관리자에게 발급받은 아이디로 로그인해 주세요.</p>
+            {notice && <div className="dw-signin-notice">{notice}</div>}
+            <Form<LoginValues>
+              initialValues={initialValues}
+              layout="vertical"
+              onFinish={submit}
+              onValuesChange={() => setFeedback(null)}
+              requiredMark={false}
+              size="large"
+              disabled={submitting}
             >
-              <Input
-                prefix={<UserOutlined />}
-                placeholder="아이디를 입력하세요"
-                autoComplete="username"
-                autoCapitalize="none"
-                spellCheck={false}
-              />
-            </Form.Item>
-            <Form.Item
-              label="비밀번호"
-              name="password"
-              rules={[{ required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' }]}
-              // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
-              extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
-            >
-              <Input.Password
-                prefix={<LockOutlined />}
-                placeholder="비밀번호를 입력하세요"
-                autoComplete="current-password"
-                onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
-                onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
-                onBlur={() => setCapsLock(false)}
-              />
-            </Form.Item>
-            <Form.Item name="rememberLoginId" valuePropName="checked">
-              <Checkbox>아이디 저장</Checkbox>
-            </Form.Item>
-            {feedback && (
-              <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-login-error">
-                <Alert
-                  type={feedback === 'ready' ? 'info' : 'error'}
-                  showIcon
-                  message={feedbackMessages[feedback]}
+              <Form.Item
+                label="아이디"
+                name="loginId"
+                rules={[
+                  { required: true, whitespace: true, message: '아이디를 입력해 주세요.' },
+                  {
+                    max: 100,
+                    transform: (value: string) => value?.trim(),
+                    message: '아이디는 100자 이하로 입력해 주세요.',
+                  },
+                ]}
+              >
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder="아이디를 입력하세요"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                 />
-              </div>
-            )}
-            <Button type="primary" htmlType="submit" loading={submitting} block>
-              로그인
-            </Button>
-          </Form>
-          <div className="dw-login-public-intro">
-            <span>돈워리가 처음이신가요?</span>
-            <Link to="/">서비스 소개</Link>
-            <ApplicationEntry />
+              </Form.Item>
+              <Form.Item
+                label={
+                  <span className="dw-signin-label">
+                    비밀번호
+                    <small>5번 틀리면 15분 동안 잠겨요</small>
+                  </span>
+                }
+                name="password"
+                rules={[{ required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' }]}
+                // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
+                extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder="비밀번호를 입력하세요"
+                  autoComplete="current-password"
+                  onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                  onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                  onBlur={() => setCapsLock(false)}
+                />
+              </Form.Item>
+              <Form.Item name="rememberLoginId" valuePropName="checked">
+                <Checkbox>아이디 저장</Checkbox>
+              </Form.Item>
+              {feedback && (
+                <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-signin-error">
+                  <Alert
+                    type={feedback === 'ready' ? 'info' : 'error'}
+                    showIcon
+                    message={feedbackMessages[feedback]}
+                  />
+                </div>
+              )}
+              <Button type="primary" htmlType="submit" loading={submitting} block>
+                로그인
+              </Button>
+            </Form>
+          </div>
+          <div className="dw-signin-foot">
+            돈워리가 처음이신가요?
+            <ApplicationEntry config={apply} variant="link" />
           </div>
         </section>
-      </div>
-    </main>
+      </main>
+      <footer className="dw-signin-footer">© 2026 DonWorry</footer>
+    </div>
   )
 }

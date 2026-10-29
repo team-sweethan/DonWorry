@@ -27,7 +27,8 @@ export const tokens = {
     card: 8,
   },
   typography: {
-    family: 'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    family:
+      '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     body: 14,
     pageTitle: 24,
     sectionTitle: 18,
