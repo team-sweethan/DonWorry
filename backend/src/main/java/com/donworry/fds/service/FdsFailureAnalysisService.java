@@ -55,7 +55,10 @@ public class FdsFailureAnalysisService implements FdsFailureReporter {
                 report.paymentRequestedAt(),
                 report.deviceId(),
                 report.cardToken(),
-                report.ipCountryCode()))) {
+                report.cardDisplayLabel(),
+                report.ipCountryCode(),
+                report.ipAddress(),
+                report.buyerEmail()))) {
             return new AnalysisOutcome(FdsFailureDisposition.PAYMENT_FOLLOW_UP_REQUIRED, "EVALUATION_INPUT_MISMATCH");
         }
         if (evaluation.getResult() != FdsResult.ERROR) {

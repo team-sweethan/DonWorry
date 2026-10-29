@@ -17,7 +17,10 @@ public record FdsEvaluationFailureReport(
         Instant paymentRequestedAt,
         String deviceId,
         String cardToken,
+        String cardDisplayLabel,
         String ipCountryCode,
+        String ipAddress,
+        String buyerEmail,
         FdsResult evaluationResult,
         String errorCode,
         String sanitizedErrorMessage,
@@ -64,10 +67,71 @@ public record FdsEvaluationFailureReport(
                 paymentRequestedAt,
                 deviceId,
                 cardToken,
-                ipCountryCode);
+                cardDisplayLabel,
+                ipCountryCode,
+                ipAddress,
+                buyerEmail);
         deviceId = evaluationRequest.deviceId();
         cardToken = evaluationRequest.cardToken();
+        cardDisplayLabel = evaluationRequest.cardDisplayLabel();
         ipCountryCode = evaluationRequest.ipCountryCode();
+        ipAddress = evaluationRequest.ipAddress();
+        buyerEmail = evaluationRequest.buyerEmail();
+    }
+
+    public FdsEvaluationFailureReport(
+            UUID failureReportId,
+            UUID originalEvaluationRequestId,
+            UUID evaluationRequestId,
+            Long evaluationId,
+            Long paymentId,
+            Long merchantId,
+            String customerRef,
+            long amount,
+            Instant paymentRequestedAt,
+            String deviceId,
+            String cardToken,
+            String ipCountryCode,
+            FdsResult evaluationResult,
+            String errorCode,
+            String sanitizedErrorMessage,
+            Instant requestedAt,
+            Instant respondedAt,
+            String paymentStatus,
+            String processingStage,
+            Long requestId,
+            UUID idempotencyKey,
+            String orderRef,
+            String correlationId,
+            int evaluationAttemptNo) {
+        this(
+                failureReportId,
+                originalEvaluationRequestId,
+                evaluationRequestId,
+                evaluationId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                paymentRequestedAt,
+                deviceId,
+                cardToken,
+                null,
+                ipCountryCode,
+                null,
+                null,
+                evaluationResult,
+                errorCode,
+                sanitizedErrorMessage,
+                requestedAt,
+                respondedAt,
+                paymentStatus,
+                processingStage,
+                requestId,
+                idempotencyKey,
+                orderRef,
+                correlationId,
+                evaluationAttemptNo);
     }
 
     public FdsEvaluationFailureReport(
@@ -102,6 +166,9 @@ public record FdsEvaluationFailureReport(
                 customerRef,
                 amount,
                 paymentRequestedAt,
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,

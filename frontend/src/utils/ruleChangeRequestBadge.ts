@@ -22,7 +22,7 @@ export function createRuleChangeRequestBadgeStore(load: () => Promise<number>) {
         const count = await load()
         if (current === sequence) set(count)
       } catch {
-        // 배지는 보조 표시다. 요청함 화면이 실제 오류를 안내한다.
+        // 배지는 보조 표시다. 요청 화면이 실제 오류를 안내한다.
       }
     },
     reset() {

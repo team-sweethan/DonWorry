@@ -63,7 +63,7 @@ export function RuleChangeRequestsPage() {
   return (
     <>
       <PageHeader
-        title="룰 변경 요청함"
+        title="룰 변경 요청"
         description="보안 직원의 룰 끄기 요청을 승인하거나 반려합니다."
       />
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}

@@ -113,7 +113,10 @@ class FdsFailureAnalysisServiceTests {
                 report.paymentRequestedAt(),
                 report.deviceId(),
                 report.cardToken(),
+                report.cardDisplayLabel(),
                 report.ipCountryCode(),
+                report.ipAddress(),
+                report.buyerEmail(),
                 report.evaluationResult(),
                 report.errorCode(),
                 report.sanitizedErrorMessage(),
@@ -147,7 +150,10 @@ class FdsFailureAnalysisServiceTests {
                 now.minusSeconds(10),
                 "device-1",
                 "token-1",
+                "VISA •••• 1234",
                 "kr",
+                "203.0.113.10",
+                "hong@example.test",
                 FdsResult.ERROR,
                 "TRANSIENT_MODEL_UNAVAILABLE",
                 "internal model failure",
@@ -172,6 +178,9 @@ class FdsFailureAnalysisServiceTests {
                 report.paymentRequestedAt(),
                 report.deviceId(),
                 report.cardToken(),
-                report.ipCountryCode());
+                report.cardDisplayLabel(),
+                report.ipCountryCode(),
+                report.ipAddress(),
+                report.buyerEmail());
     }
 }

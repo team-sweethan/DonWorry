@@ -21,6 +21,29 @@ class FdsEvaluationContractTests {
         assertThat(request.paymentRequestedAt()).isEqualTo(requestedAt);
     }
 
+    @Test
+    // P5가 전달한 IP와 이메일은 R07 차단 목록 비교를 위해 평가 스냅샷에 보존한다.
+    void request_whenBlocklistIdentifiersPresent_normalizesEmail() {
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                Instant.parse("2026-10-22T01:00:00Z"),
+                "device-opaque-1",
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "kr",
+                "203.0.113.10",
+                "Hong.Gildong@Example.Test");
+
+        assertThat(request.ipCountryCode()).isEqualTo("KR");
+        assertThat(request.cardDisplayLabel()).isEqualTo("VISA •••• 1234");
+        assertThat(request.ipAddress()).isEqualTo("203.0.113.10");
+        assertThat(request.buyerEmail()).isEqualTo("hong.gildong@example.test");
+    }
+
     // 계약 필수값 누락은 P5가 한 종류의 예외로 처리할 수 있게 IllegalArgumentException으로 통일한다.
     @Test
     void request_whenRequiredValueIsNull_throwsIllegalArgumentException() {

@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsEvaluationDetail;
+import com.donworry.fds.api.FdsEvaluationDetail.FdsBlocklistCandidate;
 import com.donworry.fds.api.FdsEvaluationDetail.FdsRuleHitDetail;
 import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsEvaluationSummary;
@@ -79,7 +80,7 @@ public class FdsEvaluationQueryService {
                     "R07",
                     "차단",
                     "차단 목록",
-                    "활성 차단 식별값(cardToken · deviceId · buyerRef)과 정확히 일치",
+                    "활성 차단 식별값(cardToken · deviceId · IP 주소 · 이메일 · buyerRef)과 정확히 일치",
                     "100점 · 즉시 DENY",
                     "차단된 기기 또는 카드 토큰으로 재시도",
                     "점수 합산 전 즉시 차단",
@@ -174,7 +175,24 @@ public class FdsEvaluationQueryService {
         var history = evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(evaluation.getPaymentId()).stream()
                 .map(this::summary)
                 .toList();
-        return new FdsEvaluationDetail(summary(evaluation), ruleHits, history);
+        var blocklistCandidates = new ArrayList<FdsBlocklistCandidate>();
+        addBlocklistCandidate(
+                blocklistCandidates, "CARD_TOKEN", evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+        addBlocklistCandidate(blocklistCandidates, "DEVICE_ID", evaluation.getDeviceId(), null);
+        addBlocklistCandidate(blocklistCandidates, "IP_ADDRESS", evaluation.getIpAddress(), null);
+        addBlocklistCandidate(blocklistCandidates, "BUYER_EMAIL", evaluation.getBuyerEmail(), null);
+        var cardIdentifier = evaluation.getCardToken() == null
+                ? null
+                : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+        return new FdsEvaluationDetail(
+                summary(evaluation), ruleHits, history, List.copyOf(blocklistCandidates), cardIdentifier);
+    }
+
+    private void addBlocklistCandidate(
+            List<FdsBlocklistCandidate> candidates, String type, String value, String displayLabel) {
+        if (value != null) {
+            candidates.add(new FdsBlocklistCandidate(type, value, displayLabel));
+        }
     }
 
     public List<FdsRuleCatalogEntry> ruleCatalog() {

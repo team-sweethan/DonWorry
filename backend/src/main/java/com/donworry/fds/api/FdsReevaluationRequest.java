@@ -15,7 +15,10 @@ public record FdsReevaluationRequest(
         Instant paymentRequestedAt,
         String deviceId,
         String cardToken,
+        String cardDisplayLabel,
         String ipCountryCode,
+        String ipAddress,
+        String buyerEmail,
         UUID retryId) {
 
     public FdsReevaluationRequest {
@@ -34,10 +37,45 @@ public record FdsReevaluationRequest(
                 paymentRequestedAt,
                 deviceId,
                 cardToken,
-                ipCountryCode);
+                cardDisplayLabel,
+                ipCountryCode,
+                ipAddress,
+                buyerEmail);
         deviceId = evaluationRequest.deviceId();
         cardToken = evaluationRequest.cardToken();
+        cardDisplayLabel = evaluationRequest.cardDisplayLabel();
         ipCountryCode = evaluationRequest.ipCountryCode();
+        ipAddress = evaluationRequest.ipAddress();
+        buyerEmail = evaluationRequest.buyerEmail();
+    }
+
+    public FdsReevaluationRequest(
+            UUID originalEvaluationRequestId,
+            UUID newEvaluationRequestId,
+            Long paymentId,
+            Long merchantId,
+            String customerRef,
+            long amount,
+            Instant paymentRequestedAt,
+            String deviceId,
+            String cardToken,
+            String ipCountryCode,
+            UUID retryId) {
+        this(
+                originalEvaluationRequestId,
+                newEvaluationRequestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                paymentRequestedAt,
+                deviceId,
+                cardToken,
+                null,
+                ipCountryCode,
+                null,
+                null,
+                retryId);
     }
 
     public FdsReevaluationRequest(
@@ -60,6 +98,9 @@ public record FdsReevaluationRequest(
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 retryId);
     }
 
@@ -73,6 +114,9 @@ public record FdsReevaluationRequest(
                 paymentRequestedAt,
                 deviceId,
                 cardToken,
-                ipCountryCode);
+                cardDisplayLabel,
+                ipCountryCode,
+                ipAddress,
+                buyerEmail);
     }
 }
