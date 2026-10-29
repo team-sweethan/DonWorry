@@ -55,27 +55,7 @@ public class PaymentRequestProcessingService {
                 UUID.randomUUID(),
                 observed.requestedAt(),
                 observed.respondedAt()));
-        return Optional.of(FdsEvaluationFailureReport.builder()
-                .failureReportId(recovery.getFailureReportId())
-                .originalEvaluationRequestId(recovery.getOriginalEvaluationRequestId())
-                .evaluationRequestId(recovery.getOriginalEvaluationRequestId())
-                .evaluationId(recovery.getOriginalEvaluationId())
-                .paymentId(paymentId)
-                .merchantId(payment.getMerchantId())
-                .customerRef(payment.getCustomerRef())
-                .amount(payment.getAmount())
-                .paymentRequestedAt(payment.getCreatedAt())
-                .evaluationResult(FdsResult.ERROR)
-                .errorCode(recovery.getOriginalErrorCode())
-                .requestedAt(recovery.getEvaluationRequestedAt())
-                .respondedAt(recovery.getEvaluationRespondedAt())
-                .paymentStatus(payment.getStatus().name())
-                .processingStage(request.getProcessingStage().name())
-                .requestId(request.getRequestId())
-                .idempotencyKey(request.getIdempotencyKey())
-                .orderRef(payment.getOrderRef())
-                .evaluationAttemptNo(1)
-                .build());
+        return Optional.of(PaymentFdsFailureReports.from(payment, request, recovery));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

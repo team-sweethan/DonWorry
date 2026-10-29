@@ -21,14 +21,16 @@ export const navByRole: Record<Role, NavGroup[]> = {
       title: '탐지',
       items: [
         { label: '경보', path: '/security/alerts' },
-        { label: 'Rule 카탈로그', path: '/security/rules' },
+        { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
       ],
     },
+    // 업무 흐름 순서 — 탐지(경보) → 조사(Case · 판정) → 조치(결제별 매입 · 취소) (#314)
     {
-      title: 'Case',
+      title: '조사',
       items: [{ label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' }],
     },
+    { title: '조치', items: [{ label: '조치 내역', path: '/security/actions' }] },
   ],
   owner: [
     {
@@ -48,25 +50,26 @@ export const navByRole: Record<Role, NavGroup[]> = {
 
 export const adminNavigation = {
   label: '관리자',
-  landing: '/admin/fds/rules',
+  landing: '/admin/home',
   groups: [
-    {
-      title: '탐지',
-      items: [
-        { label: 'Rule 카탈로그', path: '/admin/fds/rules' },
-        {
-          label: '룰 변경 요청',
-          path: '/admin/fds/rule-change-requests',
-          badge: 'ruleChangeRequests',
-        },
-      ],
-    },
+    { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
     {
       title: '관리',
       items: [
-        { label: '자금관리', path: '/admin/finance' },
         { label: '계정 관리', path: '/admin/users' },
         { label: '가맹점 관리', path: '/admin/merchants' },
+        { label: '자금관리', path: '/admin/finance' },
+      ],
+    },
+    {
+      title: '탐지',
+      items: [
+        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
+        {
+          label: '룰 끄기 요청',
+          path: '/admin/fds/rule-change-requests',
+          badge: 'ruleChangeRequests',
+        },
       ],
     },
   ] satisfies NavGroup[],

@@ -351,7 +351,7 @@ function Timeline({ items }: { items: ReportBody['timeline'] }) {
           key={i}
           style={{ position: 'relative', fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}
         >
-          <span style={dotStyle} />
+          <span style={{ ...dotStyle, ...timelineDot[t.kind ?? 'OTHER'] }} />
           <span style={{ color: '#64748b', marginRight: 8 }}>{dateTime(t.at)}</span>
           {t.event}
         </li>
@@ -412,5 +412,13 @@ const dotStyle: CSSProperties = {
   height: 10,
   borderRadius: '50%',
   background: '#fff',
-  border: '2px solid #F59E0B',
+  // 색은 timelineDot이 정한다 — border 한 줄 묶음과 섞으면 색 덮어쓰기가 안 될 수 있다
+  borderWidth: 2,
+  borderStyle: 'solid',
+}
+// 사건 경위 점 색 (#310) — 결제(매입 보류) 주황 · 사건 생성 파랑, 종류가 없는 예전 보고서는 회색
+const timelineDot: Record<'PAYMENT' | 'CASE' | 'OTHER', CSSProperties> = {
+  PAYMENT: { borderColor: '#D97706', background: '#FEF3C7' },
+  CASE: { borderColor: '#2563EB', background: '#2563EB' },
+  OTHER: { borderColor: '#94A3B8' },
 }

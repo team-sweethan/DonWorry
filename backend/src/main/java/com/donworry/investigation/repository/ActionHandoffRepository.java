@@ -33,4 +33,14 @@ public interface ActionHandoffRepository extends Repository<ActionHandoff, Long>
 
     // 재시도 대상 — idx_action_handoffs_retry(status, last_attempted_at). 잠그지 않으므로 바꾸기 전 findByIdForUpdate로 다시 읽는다
     List<ActionHandoff> findByStatusAndLastAttemptedAtBefore(HandoffStatus status, Instant before);
+
+    // 조치 내역 (#314) — 인계 · 판정 · 결제 · Case를 한 번에 읽는다. 최근 요청 순
+    @Query("""
+            SELECT new com.donworry.investigation.repository.HandoffListRow(
+                h.id, c.id, p.paymentId, d.decision, h.actionType, h.status, h.lastErrorCode,
+                d.staffId, d.decidedAt, h.requestedAt, h.acceptedAt)
+            FROM ActionHandoff h JOIN h.decision d JOIN d.casePayment p JOIN p.securityCase c
+            ORDER BY h.requestedAt DESC, h.id DESC
+            """)
+    List<HandoffListRow> findListRows();
 }

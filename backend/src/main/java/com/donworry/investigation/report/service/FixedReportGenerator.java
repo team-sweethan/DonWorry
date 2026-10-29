@@ -10,8 +10,10 @@ import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,20 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @RequiredArgsConstructor
 class FixedReportGenerator {
+
+    // AI가 조사하지 않는 고정 보고서라 "AI 조사 시작"은 남기지 않는다 (#310 리뷰)
+    static final String CASE_CREATED_EVENT = "사건 자동 생성";
+    // 화면에 코드값 대신 한국어로 — ai-server assemble.py와 같은 이름
+    private static final Map<String, String> FDS_RESULT_KO =
+            Map.of("ALLOW", "허용", "REVIEW", "검토", "DENY", "차단", "ERROR", "평가 오류");
+    private static final Map<String, String> PAYMENT_STATUS_KO = Map.of(
+            "PENDING", "처리 중",
+            "HELD", "매입 보류",
+            "CAPTURED", "매입 완료",
+            "VOIDED", "승인 취소",
+            "DENIED", "자동 차단",
+            "DECLINED", "카드사 거절",
+            "EXPIRED", "만료");
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
@@ -79,7 +95,6 @@ class FixedReportGenerator {
         long totalAmount = payments.stream().mapToLong(PaymentInfo::amount).sum();
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
-        List<Map<String, Object>> timeline = new ArrayList<>();
         String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
         for (PaymentInfo payment : payments) {
             // 정상 근거는 비워 둔다 — 고정 보고서는 결제 · FDS 근거 외에 확인한 것이 없다 (#288)
@@ -105,11 +120,6 @@ class FixedReportGenerator {
                             payment.ruleHits().stream()
                                     .map(rule -> ruleHitDetail(rule, fdsEvidenceId))
                                     .toList())));
-            timeline.add(Map.of(
-                    "at",
-                    payment.requestedAt().toString(),
-                    "event",
-                    payment.paymentId() + " 결제 요청 · FDS " + payment.fdsResult() + " (" + payment.riskScore() + "점)"));
         }
         Map<String, Object> body = new HashMap<>(Map.ofEntries(
                 Map.entry(
@@ -129,7 +139,7 @@ class FixedReportGenerator {
                                 "조사 대상 결제 " + payments.size() + "건에서 FDS 규칙 적중이 확인되었습니다.",
                                 "직원은 결제별 위험 근거와 정상 정황을 비교한 뒤 판정해 주세요.")),
                 Map.entry("paymentAnalyses", analyses),
-                Map.entry("timeline", timeline),
+                Map.entry("timeline", timeline(securityCase, payments)),
                 Map.entry("overallAnalysis", List.of("결제 간 공통 기기·계정 관계는 확인되지 않았습니다.")),
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
                 Map.entry(
@@ -150,6 +160,31 @@ class FixedReportGenerator {
                 Map.entry("investigationTrace", fixedTrace(payments.size(), similar))));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         return body;
+    }
+
+    // 사건 경위 (#310) — ai-server와 같은 모양. 결제 줄 → 사건 생성 줄을 실제 시각순으로, 같은 시각이면 결제 먼저 (안정 정렬)
+    private static List<Map<String, Object>> timeline(SecurityCase securityCase, List<PaymentInfo> payments) {
+        record Line(Instant at, String event, String kind) {}
+        List<Line> lines = new ArrayList<>();
+        for (PaymentInfo payment : payments) {
+            lines.add(new Line(payment.requestedAt(), paymentEvent(payment), "PAYMENT"));
+        }
+        lines.add(new Line(securityCase.getCreatedAt(), CASE_CREATED_EVENT, "CASE"));
+        lines.sort(Comparator.comparing(Line::at));
+        return lines.stream()
+                .map(line ->
+                        Map.<String, Object>of("at", line.at().toString(), "event", line.event(), "kind", line.kind()))
+                .toList();
+    }
+
+    // "결제 15 · 600,000원 → FDS 검토 60점 → 매입 보류" — 결제 상태가 없거나 모르는 값이면 추측하지 않고 뺀다
+    private static String paymentEvent(PaymentInfo payment) {
+        String fdsResult =
+                payment.fdsResult() == null ? "판정 미확인" : FDS_RESULT_KO.getOrDefault(payment.fdsResult(), "판정 미확인");
+        String event = "결제 " + payment.paymentId() + " · " + String.format(Locale.ROOT, "%,d원", payment.amount())
+                + " → FDS " + fdsResult + " " + payment.riskScore() + "점";
+        String status = payment.paymentStatus() == null ? null : PAYMENT_STATUS_KO.get(payment.paymentStatus());
+        return status == null ? event : event + " → " + status;
     }
 
     // 증거 추적 줄 — 비슷한 사건은 조회에 성공했을 때만, 실제 응답의 출처 · 조회 시각 · 증거 버전으로 남긴다 (#296 리뷰)

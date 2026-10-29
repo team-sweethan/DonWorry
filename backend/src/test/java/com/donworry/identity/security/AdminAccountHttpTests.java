@@ -184,6 +184,16 @@ class AdminAccountHttpTests {
         var list = send(admin, "GET", "/api/admin/users?keyword=" + prefix + "&role=OPERATOR&size=1", null);
         assertThat(mapper.readTree(list.body()).path("totalElements").asLong()).isOne();
         assertThat(mapper.readTree(list.body()).path("items").size()).isOne();
+        // 방금 만든 계정은 임시 비밀번호 상태라 변경 필요 조건에만 걸린다.
+        var pending =
+                send(admin, "GET", "/api/admin/users?keyword=" + prefix + "_owner&passwordChangeRequired=true", null);
+        assertThat(mapper.readTree(pending.body()).path("totalElements").asLong())
+                .isOne();
+        var changed =
+                send(admin, "GET", "/api/admin/users?keyword=" + prefix + "_owner&passwordChangeRequired=false", null);
+        assertThat(mapper.readTree(changed.body()).path("totalElements").asLong())
+                .isZero();
+        problem(send(admin, "GET", "/api/admin/users?passwordChangeRequired=maybe", null), 400, "ADMIN_001");
         problem(send(admin, "GET", "/api/admin/users?size=101", null), 400, "ADMIN_001");
         problem(send(admin, "GET", "/api/admin/users?role=UNKNOWN", null), 400, "ADMIN_001");
         problem(send(admin, "GET", "/api/admin/users?page=abc", null), 400, "ADMIN_001");

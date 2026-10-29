@@ -14,7 +14,9 @@ P5 HELD 결제 ─(PaymentHeld 이벤트)→ Case 생성 · 30분 병합 → P4 
 - P3 책임: Case 생성 · 병합, 증거 버전, 결제별 판정, 금융 조치 인계 요청과 완료 반영, Case 상태 · 이력, 보안 직원 · 고객사 조회 API
 - P3가 하지 않는 것: 결제 상태 변경(P5), 매입 실행(P6), FDS 점수 계산(P2), 보고서 생성(P4), 로그인 · 권한 관리(P1)
 - 소유 테이블: `security_cases` · `case_payments` · `payment_decisions` · `action_handoffs` · `case_histories`. 실제 컬럼은 [migration SQL](../../backend/src/main/resources/db/migration/)과 [ERD](../erd/README.md)를 본다
-- 화면: 보안 직원 `/security/home` (#222) · `/security/cases` · `/security/cases/:id`, 고객사 `/owner/actions` · `/owner/actions/:id`. AI 보고서 상세 `/security/cases/:id/report`는 P4 화면이다
+- 화면: 보안 직원 `/security/home` (#222) · `/security/cases` · `/security/cases/:id` · `/security/actions`(조치 내역, #314), 고객사 `/owner/actions` · `/owner/actions/:id`. AI 보고서 상세 `/security/cases/:id/report`는 P4 화면이다
+  - Case 목록 위 탭: 처리 중 / 종료 / 전체(#314). 종료 탭은 결제 병합 · 조사 기한 대신 종료 시각을 보인다
+  - 조치 내역: 판정한 결제마다 판정 · 조치 · 상태(금융 처리 대기 · 완료 · 실패와 실패 사유)를 모아 본다. 탭 · 페이지는 주소 쿼리에 둔다
   - Case 목록은 조건(상태 · 24시간 초과 · AI 보고서 · 검색어 · 페이지)을 주소 쿼리에 둔다. 상세에 갔다 와도 · 새로고침해도 같은 조건으로 열리고, 홈 · 목록의 건수 카드는 그 조건의 목록으로 간다(#243, `utils/caseListQuery.ts`)
   - 사이드바 "Case 목록"에 처리 필요 건수 배지를 단다. 화면 이동 · 탭 복귀 · 판정 · 다시 확인 뒤에만 다시 세고, 시간 간격으로 조회하지 않는다(무활동 세션 만료를 막지 않게, #224)
 
@@ -93,6 +95,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 | `GET /api/security-cases` | 보안 직원 | Case 목록 |
 | `GET /api/security-cases/counts` | 보안 직원 | 상태별 Case 건수 — 사이드바 처리 필요 배지 (#224) |
 | `GET /api/security-cases/payment-links?paymentIds=` | 보안 직원 | 결제 ID(1~100개) → 연결된 Case. P2 경보 화면에서 Case로 이동 (#309) |
+| `GET /api/security-cases/handoffs` | 보안 직원 | 조치 내역 — 판정한 결제마다 인계 한 줄 (#314) |
 | `GET /api/security-cases/{caseId}` | 보안 직원 | Case 상세 (결제 · 보고서 · 판정 · 인계 · 이력) |
 | `POST /api/security-cases/{caseId}/decisions` | 보안 직원 | 결제별 판정 |
 | `POST /api/security-cases/{caseId}/reports` | 보안 직원 | 현재 버전 보고서가 없을 때 다시 요청 |

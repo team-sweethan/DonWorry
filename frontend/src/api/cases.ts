@@ -6,6 +6,7 @@ import type {
   CasePayment,
   CaseStatus,
   CaseSummary,
+  HandoffListItem,
   PaymentDecision,
   ReportBody,
   SecurityCase,
@@ -106,6 +107,27 @@ export async function getCaseLinksByPayments(paymentIds: string[]): Promise<Case
     paymentId: str(l.paymentId),
     caseId: str(l.caseId),
     caseStatus: l.caseStatus,
+  }))
+}
+
+/** 조치 내역 (#314) — 판정한 결제마다 인계 한 줄, 최근 요청 순. 상태별 탭 · 건수는 화면이 거른다. */
+export async function getHandoffs(): Promise<HandoffListItem[]> {
+  const rows = await api<
+    Array<
+      Omit<HandoffListItem, 'handoffId' | 'caseId' | 'paymentId' | 'staffId'> & {
+        handoffId: Id
+        caseId: Id
+        paymentId: Id
+        staffId: Id | null
+      }
+    >
+  >('/security-cases/handoffs', { cache: 'no-store' })
+  return rows.map((r) => ({
+    ...r,
+    handoffId: str(r.handoffId),
+    caseId: str(r.caseId),
+    paymentId: str(r.paymentId),
+    staffId: strOrNull(r.staffId),
   }))
 }
 

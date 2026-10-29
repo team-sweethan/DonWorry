@@ -151,3 +151,29 @@ P2 공용 Repository의 잠금 정책을 바꾸는 대안은 최초 평가 등 �
 이 제한은 트랜잭션의 DB 작업 예산이다. Java 스레드를 강제로 중단하거나 HTTP 전체 요청을 정확히 15초에 종료하는 보장은 아니다. 접수 C, 커넥션 획득, 네트워크 응답, P3/P6 후속 이벤트 처리는 별도다. 현재 실행 안에 외부 HTTP는 없으며 실제 카드사 호출을 추가하면 별도 시간 제한·결과 불명 계약이 필요하다.
 
 영향 범위: P5 실행 서비스 timeout, MariaDB 잠금·누적 시간 초과·실제 데드락 및 같은 키 재개 테스트. API 상태/code·DB 스키마·화면·P2 공개 계약은 유지한다. 실행 결과는 [#274 구현 기록](../payment/274-fds-reevaluation.md)에 기록한다.
+
+## #275 단일 인스턴스 전달 복구 잠금 — 2026-10-29
+
+사용자가 단일 인스턴스를 전제로 전달 복구 전용 잠금 하나를 적용하는 방식을 승인했다. P5의 singleton `PaymentFdsDeliveryGuard`에서 `ReentrantLock.tryLock()`으로 전달 복구 요청을 하나씩 처리한다. 권한·입력 검사는 진입 전에 수행하고, P5 상태·이벤트 조회부터 재보고·재전달 요청·최종 상태 조회까지 잠금 안에서 수행한다. 잠금 밖에서 읽은 publication을 재사용하지 않는다. 동시 요청과 중첩 호출은 거절하며 정상·예외 종료 모두 finally에서 잠금을 해제한다. HTTP 연결 시 잠금 획득 실패를 503 `FDS_RECOVERY_DELIVERY_UNAVAILABLE`로 매핑한다.
+
+비동기 리스너와 명시적 재평가는 이 잠금을 사용하지 않는다. 재전달 호출 후 리스너 완료까지 기다리며 잠금을 유지하지 않는다. 다음 복구 호출은 상태를 새로 읽고 FAILED만 선택한다. P5 DB 행 잠금은 기존 합의대로 짧은 조회 트랜잭션에서 해제한다.
+
+결제별 잠금 맵·신규 DB 잠금 테이블·Modulith 수정 대신 전용 잠금 하나를 선택한다. 수동 전달 복구의 동시 처리량보다 구현 단순성을 우선하며 서로 다른 결제의 복구 요청도 동시에 처리하지 않는다. P5 리스너 멱등성만 믿는 대안은 중복 실행 자체를 막지 못해 사용하지 않는다.
+
+적용 한계: 앱 인스턴스가 둘 이상이거나 다른 재전달 경로·자동 재전달이 이 잠금을 우회하면 보호되지 않는다. 다중 인스턴스 전환 또는 #191 도입 전에 공통 직렬화/원자적 전환 방식을 다시 정해야 한다. 프로세스 중단 판별과 오래된 PROCESSING의 재전달은 이 결정에 포함하지 않는다.
+
+영향: P5 내부 서비스와 경합 테스트·문서. 공개 API·이벤트·DB 스키마·화면 변경 없음. 이번 단계는 잠금과 실DB 검증까지이며 전달 복구 Controller·보고 조립·최종 상태 반환은 후속이다. [검증 기록](../payment/275-fds-delivery-concurrency.md)을 따른다.
+
+### #275 내부 전달 복구 서비스 연결 — 2026-10-29
+
+`PaymentFdsDeliveryService`가 권한 확인 후 전용 잠금 안에서 원본 조회 → P2 재보고 → publication 선택·재전달 → 현재 요약 반환을 수행한다. 외부 트랜잭션을 중단하고, P5 세 행의 일관된 스냅샷은 별도 짧은 트랜잭션에서 읽어 커밋한다. P2 보고 및 Modulith 호출 중에는 P5 행 잠금을 보유하지 않는다.
+
+최초 보고와 재보고는 동일한 저장값 조립 코드를 사용한다. WAITING_ANALYSIS가 아니면 현재 요약만 반환한다. 원본 ERROR 스냅샷·PENDING·NEEDS_REVIEW가 일치하지 않으면 RECOVERY_DATA_MISSING으로 거절한다. P2 분석 저장소를 직접 조회하는 대안은 모듈 경계를 위반하므로 사용하지 않는다.
+
+수신자 식별·publication 조회를 위해 BOM 2.1.1의 `spring-modulith-events-core`를 운영 의존성으로 명시하고 `EventPublicationRegistry`·`TargetEventPublication`을 사용한다. DB 직접 갱신이나 임의 이벤트 발행 대신 `IncompleteEventPublications`로 기존 publication만 재전달한다. 이벤트 타입·P5 수신자·paymentId·failureReportId·originalEvaluationRequestId·evaluationRequestId가 모두 같고, 미완료 FAILED인 단일 기록만 선택한다. 후보 ID·상태·식별값을 재전달 predicate에서도 검사한다. 후보가 없거나 여러 개면 최종 P5 상태를 다시 확인하고, 여전히 WAITING_ANALYSIS이면 DELIVERY_RECORD_UNAVAILABLE로 거절한다. PUBLISHED/PROCESSING/RESUBMITTED는 건드리지 않는다.
+
+영향: 내부 서비스·공통 보고 조립·라이브러리 의존성과 테스트. DB 스키마·P2 공개 계약·화면 변경은 없다. Controller와 HTTP 오류 매핑은 후속이다. 전체 미완료 publication 조회 비용은 남아 있으므로 대량 적재 시 전용 조회 경계를 검토한다. 단일 인스턴스 및 동일 잠금 전제는 유지한다.
+
+### #275 HTTP 연결 — 2026-10-29
+
+작업 브랜치에 전달 복구 Controller·전용 ProblemDetail 처리기를 연결했다. 기존 SECURITY_STAFF 및 선택적 CSRF matcher를 재사용한다. 현재 요약 200, 입력 400, 결제 없음 404, 원본/전달 기록 부족 409, 전용 잠금·DB·실행기 작업 거절 503, 예상 밖 실패 500으로 구분하며 모두 no-store다. 신규 보안 정책·DB·P2 계약 변경은 없다. 검증 결과와 남은 범위는 [#275 구현 기록](../payment/275-fds-delivery-concurrency.md)을 따른다.

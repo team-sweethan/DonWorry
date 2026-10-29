@@ -142,7 +142,9 @@ def test_timeline_uses_korean_fds_result() -> None:
     )
 
     assert outcome.status == "SUCCEEDED"
-    assert [t.event for t in outcome.report.timeline] == ["9201 결제 요청 · FDS 검토 (55점)"]
+    assert [t.event for t in outcome.report.timeline if t.kind == "PAYMENT"] == [
+        "결제 9201 · 48,000원 → FDS 검토 55점 → 매입 보류"
+    ]
 
 
 # 작은 숫자 예외는 수량 · 시간 단위 앞에서만 — "5점"처럼 근거에 없는 점수는 걸린다
@@ -203,7 +205,8 @@ def test_timeline_sorted_by_real_time() -> None:
         context("104", 1), MockLlmClient(), StaticToolBox(payments, fds), SETTINGS
     )
 
-    assert [t.event.split()[0] for t in outcome.report.timeline] == ["9301", "9302"]
+    paid = [t.event.split()[1] for t in outcome.report.timeline if t.kind == "PAYMENT"]
+    assert paid == ["9301", "9302"]
 
 
 LONG_HEADLINE = (

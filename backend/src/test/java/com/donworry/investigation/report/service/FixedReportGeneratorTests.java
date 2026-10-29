@@ -71,6 +71,38 @@ class FixedReportGeneratorTests {
                 .isEmpty();
     }
 
+    // AI 서버를 끈 시연에서도 경위가 ai-server와 같은 모양 — 결제 · 매입 보류 → 사건 생성, 같은 시각이면 결제 먼저 (#310)
+    // AI가 조사하지 않았으므로 "AI 조사 시작"은 남기지 않는다 (#310 리뷰)
+    @Test
+    void generate_timeline_hasPaymentHoldAndCaseCreated() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 15L, NOW)));
+        when(paymentInfoReader.findAll(List.of(15L)))
+                .thenReturn(Map.of(
+                        15L,
+                        new PaymentInfo(
+                                15L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        assertThat(body.get("timeline"))
+                .isEqualTo(List.of(
+                        Map.of(
+                                "at",
+                                NOW.toString(),
+                                "event",
+                                "결제 15 · 600,000원 → FDS 검토 60점 → 매입 보류",
+                                "kind",
+                                "PAYMENT"),
+                        Map.of("at", NOW.toString(), "event", "사건 자동 생성", "kind", "CASE")));
+        assertThat(body.get("timeline").toString()).doesNotContain("AI 조사");
+    }
+
     // AI 서버를 끈 시연의 보고서는 "고정 문장"으로 표시되고, AI가 한 단계는 하나도 없다 (#294)
     @Test
     void generate_aiDisabled_addsFixedProviderTrace() {

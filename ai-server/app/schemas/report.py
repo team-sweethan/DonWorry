@@ -44,9 +44,11 @@ class PaymentAnalysis(BaseModel):
     ruleHitDetails: list[RuleHitDetail]
 
 
+# 사건 경위 한 줄 — kind는 화면 점 색 구분용 (결제 · 사건 생성)
 class TimelineItem(BaseModel):
     at: str
     event: str
+    kind: Literal["PAYMENT", "CASE"]
 
 
 class ReportRecommendation(BaseModel):

@@ -88,6 +88,23 @@ export type ActionHandoff = {
   lastErrorCode: string | null
 }
 
+/** 조치 내역 한 줄 (#314) — 인계 하나와 그 판정 · 결제 · Case. acceptedAt은 P3가 완료를 반영한 시각이다. */
+export type HandoffListItem = {
+  handoffId: string
+  caseId: string
+  paymentId: string
+  /** 결제 정보를 찾지 못하면 null */
+  amount: number | null
+  decision: Decision
+  actionType: ActionType
+  status: HandoffStatus
+  lastErrorCode: string | null
+  staffId: string | null
+  decidedAt: string
+  requestedAt: string
+  acceptedAt: string | null
+}
+
 export type CaseHistory = {
   historyId: string
   caseId: string
@@ -135,7 +152,8 @@ export type ReportBody = {
     reason?: string
     ruleHitDetails?: ReportRuleHitDetail[]
   }>
-  timeline: Array<{ at: string; event: string }>
+  // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
+  timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
   overallAnalysis: string[]
   additionalChecks: string[]
   recommendation: { summary: string; limitations: string[] }
