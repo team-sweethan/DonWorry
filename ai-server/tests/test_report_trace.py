@@ -100,3 +100,24 @@ def test_trace_model_matches_provider() -> None:
         "MOCK",
         "mock",
     )
+
+
+# Qwen이 인자 형식을 틀려도(목록 대신 숫자) 조사 전체가 실패하지 않는다 (#294 리뷰)
+# 그 조회만 실패로 남고 AI가 다시 고른다
+def test_tool_args_with_wrong_type_are_reported_to_agent() -> None:
+    llm = ScriptedLlm(
+        turns=[
+            [call("get_case_payments")],
+            [call("get_fds_evidence", payment_ids=9001)],
+            [call("get_fds_evidence")],
+            None,
+        ],
+        outputs=[narrative(["9001", "9002"])],
+    )
+
+    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
+
+    assert outcome.status == "SUCCEEDED"
+    tools = [s for s in outcome.report.investigationTrace.steps if s.kind == "TOOL"]
+    assert tools[1].received == "실행 실패 — AI에게 알리고 다시 고르게 함"
+    assert tools[2].received == "FDS 평가 2건 · 적중 규칙 4개"

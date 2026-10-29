@@ -116,8 +116,10 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                 used += 1
                 # 도구 설명에 없는 인자(예: Qwen이 지어낸 case_id)는 쓰지도 기록하지도 않는다
                 args = {k: v for k, v in (call.get("args") or {}).items() if k in TOOL_ARGS[name]}
-                asked = trace.tool_asked(name, args)
+                # 표시용 요약도 try 안에서 만든다 (#294 리뷰)
+                # 인자 형식이 틀려도 기존 도구 실패 복구로 간다
                 try:
+                    asked = trace.tool_asked(name, args)
                     result = _execute(toolbox, name, args)
                     records.append(ToolRecord(name, args, result))
                     content = result.model_dump_json()

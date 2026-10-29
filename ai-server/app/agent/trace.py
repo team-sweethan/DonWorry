@@ -56,6 +56,9 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
     if name == "get_case_payments":
         return "이 사건의 결제 전체"
     payment_ids = args.get("payment_ids") or []
+    # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
+    if not isinstance(payment_ids, list):
+        payment_ids = [payment_ids]
     if payment_ids:
         return f"결제 {' · '.join(str(p) for p in payment_ids)}의 FDS 근거"
     return "이 사건 모든 결제의 FDS 근거"
