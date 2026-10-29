@@ -5,6 +5,7 @@ import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
+import com.donworry.investigation.dto.HandoffListItemResponse;
 import com.donworry.investigation.service.CaseDecisionService;
 import com.donworry.investigation.service.CaseQueryService;
 import com.donworry.investigation.service.CaseReportService;
@@ -53,6 +54,13 @@ public class SecurityCaseController {
     public List<CasePaymentLinkResponse> paymentLinks(@RequestParam(required = false) List<Long> paymentIds) {
         securityStaffGuard.requireSecurityStaffId();
         return caseQueryService.paymentLinks(paymentIds);
+    }
+
+    // 조치 내역 — 인계 단위로 판정 · 조치 · 결과를 모아 본다 (#314)
+    @GetMapping("/handoffs")
+    public List<HandoffListItemResponse> handoffs() {
+        securityStaffGuard.requireSecurityStaffId();
+        return caseQueryService.handoffs();
     }
 
     @GetMapping("/{caseId}")

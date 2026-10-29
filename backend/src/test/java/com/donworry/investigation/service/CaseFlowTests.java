@@ -11,9 +11,11 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
+import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.dto.DemoHeldPaymentResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
+import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -68,6 +70,9 @@ class CaseFlowTests {
 
     @Autowired
     CaseIntakeService caseIntakeService;
+
+    @Autowired
+    CaseDecisionService caseDecisionService;
 
     @Autowired
     CaseQueryService caseQueryService;
@@ -402,6 +407,9 @@ class CaseFlowTests {
         mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
+        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
@@ -424,6 +432,9 @@ class CaseFlowTests {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INV_009"));
         mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+        mvc.perform(get("/api/security-cases/handoffs"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INV_009"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
@@ -584,6 +595,79 @@ class CaseFlowTests {
         mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", tooMany))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INV_015"));
+    }
+
+    // 조치 내역 (#314) — 판정한 결제마다 한 줄. 판정 · 조치 · 금액 · 판정 직원이 오고, 다시 확인으로 완료되면 상태 · 완료 시각이 바뀐다
+    @Test
+    void handoffs_listsEachDecidedPaymentAndFollowsCompletion() throws Exception {
+        loginAs(42L, "SECURITY_STAFF");
+        String customer = customer();
+        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        DemoHeldPaymentResponse second = createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        Map<Long, Long> casePaymentIds = new HashMap<>();
+        detail.payments().forEach(p -> casePaymentIds.put(p.paymentId(), p.casePaymentId()));
+
+        mvc.perform(decide(
+                        first.caseId(),
+                        detail.securityCase().evidenceVersion(),
+                        latestReportId(detail),
+                        List.of(
+                                item(casePaymentIds.get(first.paymentId()), "ACCEPT"),
+                                item(casePaymentIds.get(second.paymentId()), "REJECT"))))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", first.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].decision", first.paymentId())
+                        .value("ACCEPT"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].actionType", first.paymentId())
+                        .value("CAPTURE"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].amount", first.paymentId())
+                        .value(300_000))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].staffId", first.paymentId())
+                        .value(42))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].status", first.paymentId())
+                        .value("REQUESTED"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].actionType", second.paymentId())
+                        .value("VOID"));
+
+        recheckAll(first.caseId());
+
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(h -> h.caseId().equals(first.caseId()))
+                .hasSize(2)
+                .allSatisfy(h -> {
+                    assertThat(h.status()).isEqualTo("ACCEPTED");
+                    assertThat(h.acceptedAt()).isNotNull();
+                });
+    }
+
+    // 결제 정보를 찾지 못한 결제(서버 재시작으로 목업이 비었을 때)의 조치도 빠지지 않고 금액만 null이다 (#314)
+    @Test
+    void handoffs_missingPaymentInfo_keepsRowWithNullAmount() {
+        Long paymentId = System.nanoTime();
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(paymentId, 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseDetailResponse detail = caseQueryService.detail(caseId);
+        caseDecisionService.decide(
+                caseId,
+                new DecisionSubmitRequest(
+                        detail.securityCase().evidenceVersion(),
+                        null,
+                        List.of(new DecisionSubmitRequest.Item(
+                                detail.payments().getFirst().casePaymentId(), Decision.REJECT, "결제 정보 없음"))));
+
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(h -> h.paymentId().equals(paymentId))
+                .singleElement()
+                .satisfies(h -> {
+                    assertThat(h.amount()).isNull();
+                    assertThat(h.status()).isEqualTo("FAILED");
+                    assertThat(h.lastErrorCode()).isEqualTo("PAYMENT_NOT_FOUND");
+                });
     }
 
     // 목록에 방금 만든 Case가 결제 수 · 금액 · 최고 점수와 함께 나온다

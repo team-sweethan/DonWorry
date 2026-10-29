@@ -11,6 +11,7 @@ import com.donworry.investigation.dto.CaseDetailResponse.RuleHitResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
+import com.donworry.investigation.dto.HandoffListItemResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.SecurityCase;
@@ -18,6 +19,7 @@ import com.donworry.investigation.repository.ActionHandoffRepository;
 import com.donworry.investigation.repository.CaseHistoryRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.CaseStatusCount;
+import com.donworry.investigation.repository.HandoffListRow;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
@@ -85,6 +87,34 @@ public class CaseQueryService {
         return casePaymentRepository.findLinksByPaymentIdIn(ids).stream()
                 .map(link -> new CasePaymentLinkResponse(
                         link.paymentId(), link.caseId(), link.caseStatus().name()))
+                .toList();
+    }
+
+    // 조치 내역 (#314) — 판정 뒤 어떤 조치를 했고 어떻게 끝났는지 인계 단위로 모아 본다
+    // 상태별 탭 · 건수는 화면이 거른다(Case 목록과 같은 방식). 인계는 판정한 결제 수만큼이라 전체를 보낸다
+    // 금액은 P5 결제를 한 번에 조회해 붙인다. 못 찾으면 null이고, 조회 오류는 숨기지 않는다 (목록 · 상세와 같은 규칙)
+    @Transactional(readOnly = true)
+    public List<HandoffListItemResponse> handoffs() {
+        List<HandoffListRow> rows = actionHandoffRepository.findListRows();
+        List<Long> paymentIds =
+                rows.stream().map(HandoffListRow::paymentId).distinct().toList();
+        Map<Long, PaymentInfo> infos = paymentIds.isEmpty() ? Map.of() : paymentInfoReader.findAll(paymentIds);
+        return rows.stream()
+                .map(row -> new HandoffListItemResponse(
+                        row.handoffId(),
+                        row.caseId(),
+                        row.paymentId(),
+                        Optional.ofNullable(infos.get(row.paymentId()))
+                                .map(PaymentInfo::amount)
+                                .orElse(null),
+                        row.decision().name(),
+                        row.actionType().name(),
+                        row.status().name(),
+                        row.lastErrorCode(),
+                        row.staffId(),
+                        row.decidedAt(),
+                        row.requestedAt(),
+                        row.acceptedAt()))
                 .toList();
     }
 

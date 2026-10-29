@@ -1,6 +1,6 @@
 import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Input, Select, Space, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Input, Select, Space, Table, Tabs, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { demoCreateHeldPayment, getCases } from '../../api/cases'
@@ -11,10 +11,13 @@ import type { CaseStatus, CaseSummary } from '../../types/case'
 import { mergeRemainingMin } from '../../utils/caseRules'
 import {
   caseListSearch,
+  caseListTab,
+  caseListTabPreset,
   matchesCaseListQuery,
   parseCaseListQuery,
   type CaseListQuery,
   type CaseListReturnState,
+  type CaseListTab,
   type ReportFilter,
   type StatusFilter,
 } from '../../utils/caseListQuery'
@@ -45,6 +48,13 @@ const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
 ]
 
 const PAGE_SIZE = 20
+
+// 목록 위 탭 (#314) — 종료된 Case를 상태 필터 안에 숨기지 않고 바로 본다
+const tabItems: Array<{ key: CaseListTab; label: string }> = [
+  { key: 'ACTIVE', label: '처리 중' },
+  { key: 'CLOSED', label: '종료' },
+  { key: 'ALL', label: '전체' },
+]
 
 export function CaseListPage() {
   const navigate = useNavigate()
@@ -172,7 +182,8 @@ export function CaseListPage() {
       value: open.filter((c) => c.latestReportStatus === 'FAILED').length,
     },
   ]
-  const columns: ColumnsType<CaseSummary> = [
+  const tab = caseListTab(query.status)
+  const allColumns: ColumnsType<CaseSummary> = [
     {
       title: 'Case ID',
       dataIndex: 'caseId',
@@ -226,6 +237,12 @@ export function CaseListPage() {
       render: dateTime,
     },
     {
+      title: '종료 시각',
+      key: 'closedAt',
+      width: 150,
+      render: (_, c) => (c.closedAt ? dateTime(c.closedAt) : '-'),
+    },
+    {
       title: <HelpLabel label="결제 병합" help={mergeHelp} />,
       key: 'merge',
       width: 110,
@@ -252,6 +269,11 @@ export function CaseListPage() {
         s ? <CodeTag value={reportStatusLabel[s]} /> : '-',
     },
   ]
+
+  // 종료 탭은 진행용 열(결제 병합 · 조사 기한)을 빼고 종료 시각을 보인다. 그 밖의 탭은 종료 시각을 뺀다
+  const columns = allColumns.filter((col) =>
+    tab === 'CLOSED' ? col.key !== 'merge' && col.key !== 'sla' : col.key !== 'closedAt',
+  )
 
   return (
     <>
@@ -303,6 +325,12 @@ export function CaseListPage() {
         ))}
       </div>
       <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
+        <Tabs
+          activeKey={tab}
+          onChange={(key) => setQuery(caseListTabPreset(key as CaseListTab))}
+          items={tabItems}
+          style={{ padding: '0 20px' }}
+        />
         <div className="dw-table-toolbar">
           <div>
             <h3>Case 현황</h3>
@@ -355,9 +383,11 @@ export function CaseListPage() {
           locale={{
             emptyText: (
               <Typography.Text type="secondary" style={{ display: 'block', padding: 36 }}>
-                {caseListSearch({ ...query, page: 1 })
-                  ? '조건에 맞는 Case가 없습니다.'
-                  : '열린 Case가 없습니다.'}
+                {tab === 'CLOSED'
+                  ? '종료된 Case가 없습니다.'
+                  : caseListSearch({ ...query, page: 1 })
+                    ? '조건에 맞는 Case가 없습니다.'
+                    : '열린 Case가 없습니다.'}
               </Typography.Text>
             ),
           }}

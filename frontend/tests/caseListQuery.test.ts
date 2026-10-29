@@ -4,6 +4,8 @@ import type { CaseSummary } from '../src/types/case.ts'
 import {
   caseListReturnPath,
   caseListSearch,
+  caseListTab,
+  caseListTabPreset,
   defaultCaseListQuery,
   matchesCaseListQuery,
   parseCaseListQuery,
@@ -94,4 +96,14 @@ test('"목록으로"는 목록 주소만 따르고 나머지는 기본 목록으
   assert.equal(caseListReturnPath({ caseListReturn: '/security/cases/9' }), '/security/cases')
   assert.equal(caseListReturnPath({ caseListReturn: 'https://evil.example' }), '/security/cases')
   assert.equal(caseListReturnPath({ caseListReturn: 3 }), '/security/cases')
+})
+
+test('목록 탭은 상태 조건에서 정해지고, 탭을 누르면 그 탭의 조건이 걸린다 (#314)', () => {
+  assert.equal(caseListTab('OPEN_ONLY'), 'ACTIVE')
+  assert.equal(caseListTab('DECISION_PENDING'), 'ACTIVE')
+  assert.equal(caseListTab('CLOSED'), 'CLOSED')
+  assert.equal(caseListTab('ALL'), 'ALL')
+  assert.deepEqual(caseListTabPreset('ACTIVE'), { status: 'OPEN_ONLY' })
+  assert.deepEqual(caseListTabPreset('CLOSED'), { status: 'CLOSED', slaExceeded: false })
+  assert.deepEqual(caseListTabPreset('ALL'), { status: 'ALL' })
 })

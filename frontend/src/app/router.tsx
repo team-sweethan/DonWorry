@@ -6,6 +6,7 @@ import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
 import { LoginRoute, ServerSession } from '../auth/AuthRoutes'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
+import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
 import { CaseReportPage } from '../pages/security/CaseReportPage'
@@ -98,6 +99,7 @@ export const router = createBrowserRouter([
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'cases/:id/report', element: <CaseReportPage /> },
+          { path: 'actions', element: <ActionHistoryPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
