@@ -31,9 +31,11 @@ public class FdsEvaluationController {
             @RequestParam(required = false) FdsResult result,
             @RequestParam(defaultValue = "false") boolean attentionOnly,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) Long merchantId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return queryService.list(result, attentionOnly, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return queryService.list(
+                result, attentionOnly, search, merchantId, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
     }
 
     @GetMapping("/{evaluationId}")

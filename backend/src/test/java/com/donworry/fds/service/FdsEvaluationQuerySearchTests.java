@@ -60,18 +60,19 @@ class FdsEvaluationQuerySearchTests {
         assertThat(result.content()).extracting(summary -> summary.paymentId()).containsExactly(2002L, 2001L);
     }
 
-    // 가맹점 ID 일부로도 평가를 찾을 수 있다.
+    // 가맹점 선택은 P2가 저장한 merchant_id로만 서버에서 필터링한다.
     @Test
-    void list_searchMerchantId_returnsMatchingEvaluation() {
-        save(2101L, 7001L, "customer-a", FdsResult.REVIEW, 60, 1);
-        save(2102L, 8001L, "customer-b", FdsResult.DENY, 80, 2);
+    void list_merchantFilter_returnsOnlySelectedMerchantEvaluations() {
+        save(2201L, 7001L, "customer-a", FdsResult.REVIEW, 60, 1);
+        save(2202L, 8001L, "customer-b", FdsResult.DENY, 80, 2);
 
-        var result = queryService.list(null, false, "700", 0, 10);
+        var result = queryService.list(null, false, null, 7001L, 0, 10);
 
         assertThat(result.content()).singleElement().satisfies(summary -> {
-            assertThat(summary.paymentId()).isEqualTo(2101L);
+            assertThat(summary.paymentId()).isEqualTo(2201L);
             assertThat(summary.merchantId()).isEqualTo(7001L);
         });
+        assertThat(result.resultCounts()).containsEntry(FdsResult.REVIEW, 1L).containsEntry(FdsResult.DENY, 0L);
     }
 
     // 검색어와 판정 필터를 함께 적용한 결과도 서버에서 페이지로 나눈다.

@@ -192,6 +192,14 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
+                        .requestMatchers(
+                                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.GET, "/api/merchants"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
                         .requestMatchers("/api/v1/settlements", "/api/v1/settlements/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();

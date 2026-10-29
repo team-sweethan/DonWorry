@@ -68,6 +68,7 @@
 | [0043](0043-application-storage.md) | 이용 신청·토큰·개인정보 저장 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
 | [0044](0044-application-smtp.md) | 신청 메일 SMTP와 커밋 후 발송 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
 | [0045](0045-application-public-http.md) | 공개 신청·이메일 확인 HTTP와 CSRF | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
+| [0046](0046-merchant-directory-and-fds-filter.md) | 가맹점 목록 공개 조회와 FDS 경보 가맹점 필터 | 제안 — P1·P2 구현 반영, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

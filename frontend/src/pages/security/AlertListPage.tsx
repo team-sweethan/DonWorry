@@ -1,9 +1,10 @@
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Input, Skeleton, Space, Table } from 'antd'
+import { Alert, Button, Card, Input, Select, Skeleton, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
+import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
 import {
   createMockFdsEvaluations,
   createMockFdsErrorEvaluation,
@@ -18,7 +19,7 @@ import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicat
 import { ResultTag } from './alert/AlertTags'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
-type ListConditions = { filter: Filter; query: string; page: number }
+type ListConditions = { filter: Filter; query: string; merchantId?: number; page: number }
 
 const filterOptions: Array<{ value: Filter; label: string }> = [
   { value: 'NEEDS_ATTENTION', label: '확인 필요' },
@@ -46,6 +47,8 @@ export function AlertListPage() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
   const [query, setQuery] = useState('')
+  const [merchantId, setMerchantId] = useState<number | undefined>()
+  const [merchants, setMerchants] = useState<MerchantDirectoryEntry[]>([])
   const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
   const [evaluationPage, setEvaluationPage] = useState<FdsEvaluationPage | null>(null)
   const [resultCounts, setResultCounts] = useState<FdsEvaluationPage['resultCounts'] | null>(null)
@@ -60,7 +63,12 @@ export function AlertListPage() {
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
   const summaryRefreshPending = useRef(true)
-  const conditions = useRef<ListConditions>({ filter: 'NEEDS_ATTENTION', query: '', page: 0 })
+  const conditions = useRef<ListConditions>({
+    filter: 'NEEDS_ATTENTION',
+    query: '',
+    merchantId: undefined,
+    page: 0,
+  })
   const successfulConditions = useRef<ListConditions | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialListLoading = listLoading && evaluationPage === null
@@ -73,7 +81,13 @@ export function AlertListPage() {
   }
 
   const load = useCallback(
-    (page: number, nextFilter: Filter, nextQuery: string, refreshSummary = false) => {
+    (
+      page: number,
+      nextFilter: Filter,
+      nextQuery: string,
+      nextMerchantId: number | undefined,
+      refreshSummary = false,
+    ) => {
       const sequence = ++requestSequence.current
       if (refreshSummary || resultCountsRef.current === null) summaryRefreshPending.current = true
       const shouldRefreshSummary = summaryRefreshPending.current
@@ -89,6 +103,7 @@ export function AlertListPage() {
             : undefined,
         attentionOnly: nextFilter === 'NEEDS_ATTENTION',
         search: nextQuery,
+        merchantId: nextMerchantId,
         page,
         size: 10,
       })
@@ -100,6 +115,7 @@ export function AlertListPage() {
           successfulConditions.current = {
             filter: nextFilter,
             query: nextQuery,
+            merchantId: nextMerchantId,
             page: response.page,
           }
           if (shouldRefreshSummary) {
@@ -126,6 +142,7 @@ export function AlertListPage() {
           if (
             current.filter !== nextFilter ||
             current.query !== nextQuery ||
+            current.merchantId !== nextMerchantId ||
             current.page !== page
           ) {
             return
@@ -136,6 +153,7 @@ export function AlertListPage() {
           conditions.current = previous
           setFilter(previous.filter)
           setQuery(previous.query)
+          setMerchantId(previous.merchantId)
           setCurrentPage(previous.page + 1)
         })
         .finally(() => {
@@ -154,7 +172,7 @@ export function AlertListPage() {
     createMockFdsEvaluations()
       .then(() => {
         const current = conditions.current
-        load(0, current.filter, current.query, true)
+        load(0, current.filter, current.query, current.merchantId, true)
       })
       .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
       .finally(() => setMockCreating(false))
@@ -166,7 +184,7 @@ export function AlertListPage() {
     createMockFdsErrorEvaluation()
       .then(() => {
         const current = conditions.current
-        load(0, current.filter, current.query, true)
+        load(0, current.filter, current.query, current.merchantId, true)
       })
       .catch(() => setError('Mock ERROR 평가를 생성하지 못했습니다.'))
       .finally(() => setMockErrorCreating(false))
@@ -177,10 +195,10 @@ export function AlertListPage() {
     setError(null)
     reevaluateMockFdsError()
       .then(() => {
-        conditions.current = { filter: 'ALL', query: '', page: 0 }
+        conditions.current = { filter: 'ALL', query: '', merchantId, page: 0 }
         setFilter('ALL')
         setQuery('')
-        load(0, 'ALL', '', true)
+        load(0, 'ALL', '', merchantId, true)
       })
       .catch(() =>
         setError('ERROR 평가 재탐지를 실행하지 못했습니다. 먼저 ERROR 케이스를 생성해 주세요.'),
@@ -191,14 +209,48 @@ export function AlertListPage() {
   const selectFilter = (nextFilter: Filter) => {
     cancelScheduledSearch()
     setFilter(nextFilter)
-    conditions.current = { filter: nextFilter, query, page: 0 }
-    load(0, nextFilter, query)
+    conditions.current = { filter: nextFilter, query, merchantId, page: 0 }
+    load(0, nextFilter, query, merchantId)
+  }
+
+  const selectMerchant = (nextMerchantId: number) => {
+    cancelScheduledSearch()
+    setMerchantId(nextMerchantId)
+    conditions.current = { filter, query, merchantId: nextMerchantId, page: 0 }
+    load(0, filter, query, nextMerchantId, true)
   }
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => load(0, 'NEEDS_ATTENTION', '', true), 0)
+    let cancelled = false
+    void getMerchantDirectory()
+      .then((result) => {
+        if (cancelled) return
+        setMerchants(result)
+        const initialMerchant = result.find((merchant) => merchant.status === 'ACTIVE') ?? result[0]
+        if (!initialMerchant) {
+          setListLoading(false)
+          setSummaryLoading(false)
+          setError('선택할 가맹점이 없습니다.')
+          return
+        }
+        setMerchantId(initialMerchant.merchantId)
+        conditions.current = {
+          filter: 'NEEDS_ATTENTION',
+          query: '',
+          merchantId: initialMerchant.merchantId,
+          page: 0,
+        }
+        load(0, 'NEEDS_ATTENTION', '', initialMerchant.merchantId, true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setListLoading(false)
+          setSummaryLoading(false)
+          setError('가맹점 목록을 불러오지 못했습니다.')
+        }
+      })
     return () => {
-      window.clearTimeout(initialLoad)
+      cancelled = true
       cancelScheduledSearch()
       requestSequence.current += 1
     }
@@ -210,6 +262,9 @@ export function AlertListPage() {
     0,
   )
   const attentionCount = totalCount - count('ALLOW')
+  const merchantNames = new Map(
+    merchants.map((merchant) => [merchant.merchantId, merchant.displayName]),
+  )
   const columns: ColumnsType<FdsEvaluationSummary> = [
     { title: '평가 시각', dataIndex: 'evaluatedAt', width: 190, render: formatDate },
     {
@@ -230,7 +285,12 @@ export function AlertListPage() {
       ),
     },
     { title: '결제 ID', dataIndex: 'paymentId', width: 130 },
-    { title: '가맹점 ID', dataIndex: 'merchantId', width: 120 },
+    {
+      title: '가맹점',
+      dataIndex: 'merchantId',
+      width: 150,
+      render: (value: number) => merchantNames.get(value) ?? `ID ${value}`,
+    },
     { title: '고객 식별자', dataIndex: 'customerRef', width: 180 },
     {
       title: '위험 점수',
@@ -342,27 +402,38 @@ export function AlertListPage() {
           <Space>
             <Input
               aria-label="경보 검색"
-              placeholder="평가 ID, 결제 ID, 가맹점 ID, 고객 식별자"
+              placeholder="평가 ID, 결제 ID, 고객 식별자"
               prefix={<SearchOutlined />}
               value={query}
               onChange={(event) => {
                 const nextQuery = event.target.value
                 setQuery(nextQuery)
-                conditions.current = { filter, query: nextQuery, page: 0 }
+                conditions.current = { filter, query: nextQuery, merchantId, page: 0 }
                 cancelScheduledSearch()
                 searchTimer.current = setTimeout(() => {
                   searchTimer.current = null
                   const current = conditions.current
-                  load(0, current.filter, current.query)
+                  load(0, current.filter, current.query, current.merchantId)
                 }, 300)
               }}
               allowClear
               className="dw-alert-search"
             />
+            <Select
+              aria-label="가맹점 필터"
+              value={merchantId}
+              placeholder="가맹점 선택"
+              style={{ width: 180 }}
+              options={merchants.map((merchant) => ({
+                value: merchant.merchantId,
+                label: `${merchant.displayName} (${merchant.merchantId})${merchant.status === 'INACTIVE' ? ' · 비활성' : ''}`,
+              }))}
+              onChange={(value: number) => selectMerchant(value)}
+            />
             <Button
               icon={<ReloadOutlined />}
               loading={summaryLoading && evaluationPage !== null}
-              onClick={() => load(currentPage - 1, filter, query, true)}
+              onClick={() => load(currentPage - 1, filter, query, merchantId, true)}
             >
               새로고침
             </Button>
@@ -423,8 +494,8 @@ export function AlertListPage() {
               showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
               total: evaluationPage?.totalElements ?? 0,
               onChange: (page) => {
-                conditions.current = { filter, query, page: page - 1 }
-                load(page - 1, filter, query)
+                conditions.current = { filter, query, merchantId, page: page - 1 }
+                load(page - 1, filter, query, merchantId)
               },
             }}
             locale={{ emptyText: '표시할 경보가 없습니다.' }}
