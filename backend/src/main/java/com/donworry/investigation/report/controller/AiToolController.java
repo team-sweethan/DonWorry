@@ -2,6 +2,7 @@ package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.AiToolService;
 import java.util.List;
@@ -38,5 +39,11 @@ public class AiToolController {
     @GetMapping("/find_similar_cases")
     public SimilarCasesToolResponse similarCases(@RequestParam Long caseId) {
         return aiToolService.similarCases(caseId);
+    }
+
+    // 같은 가맹점 · 같은 고객의 최근 30일 결제, 이 사건 결제 제외 · 최대 20건 (#338)
+    @GetMapping("/get_payment_history")
+    public PaymentHistoryToolResponse paymentHistory(@RequestParam Long caseId) {
+        return aiToolService.paymentHistory(caseId);
     }
 }

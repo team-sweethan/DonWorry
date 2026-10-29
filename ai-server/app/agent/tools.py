@@ -2,10 +2,15 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.client.spring import SpringToolClient
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
+from app.schemas.tools import (
+    CasePaymentsTool,
+    FdsEvidenceTool,
+    PaymentHistoryTool,
+    SimilarCasesTool,
+)
 
 # Qwen에게 보여 주는 허용 도구 — 읽기 전용만 둔다
-# (AGENTS.md 6절, ADR-0009 Tool 6종 중 1차 2종 + #296 비슷한 과거 사건)
+# (AGENTS.md 6절, ADR-0009 Tool 6종 중 1차 2종 + #296 비슷한 과거 사건 + #338 고객 최근 결제)
 # caseId는 Qwen이 고르지 않고 코드가 묶는다 — 다른 Case를 조회할 수 없게
 TOOL_SPECS: list[dict[str, Any]] = [
     {
@@ -50,6 +55,17 @@ TOOL_SPECS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_payment_history",
+            "description": (
+                "이 사건 고객의 최근 30일 결제 중 이 사건 밖의 결제와 결제 상태별 건수를 본다. "
+                "평소 결제와 비교하는 참고 근거다."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 ALLOWED_TOOL_NAMES = frozenset(spec["function"]["name"] for spec in TOOL_SPECS)
@@ -66,7 +82,7 @@ TOOL_ARGS: dict[str, frozenset[str]] = {
 class ToolRecord:
     tool_name: str
     args: dict[str, Any]
-    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool
+    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool
     filled_by_system: bool = False
 
 
@@ -77,6 +93,8 @@ class ToolBox(Protocol):
     def get_fds_evidence(self, payment_ids: list[str] | None) -> FdsEvidenceTool: ...
 
     def find_similar_cases(self) -> SimilarCasesTool: ...
+
+    def get_payment_history(self) -> PaymentHistoryTool: ...
 
 
 class SpringToolBox:
@@ -93,15 +111,19 @@ class SpringToolBox:
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._client.find_similar_cases(self._case_id)
 
+    def get_payment_history(self) -> PaymentHistoryTool:
+        return self._client.get_payment_history(self._case_id)
+
 
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
-    # similar를 주지 않으면 비슷한 사건이 없는 응답을 돌려준다
+    # similar · history를 주지 않으면 비슷한 사건 · 이력이 없는 응답을 돌려준다
     def __init__(
         self,
         case_payments: CasePaymentsTool,
         fds_evidence: FdsEvidenceTool,
         similar: SimilarCasesTool | None = None,
+        history: PaymentHistoryTool | None = None,
     ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
@@ -113,9 +135,22 @@ class StaticToolBox:
             cases=[],
             totalMatched=0,
         )
+        self._history = history or PaymentHistoryTool(
+            caseId=case_payments.caseId,
+            evidenceVersion=case_payments.evidenceVersion,
+            source="P5",
+            retrievedAt=case_payments.retrievedAt,
+            lookbackDays=30,
+            payments=[],
+            statusCounts=[],
+            truncated=False,
+        )
 
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._similar
+
+    def get_payment_history(self) -> PaymentHistoryTool:
+        return self._history
 
     def get_case_payments(self) -> CasePaymentsTool:
         return self._case_payments

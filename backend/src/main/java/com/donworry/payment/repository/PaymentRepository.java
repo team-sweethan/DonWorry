@@ -2,7 +2,11 @@ package com.donworry.payment.repository;
 
 import com.donworry.payment.entity.Payment;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
@@ -21,6 +25,17 @@ public interface PaymentRepository extends Repository<Payment, Long> {
     Optional<Payment> findById(Long paymentId);
 
     Optional<Payment> findByPaymentIdAndMerchantId(Long paymentId, Long merchantId);
+
+    // 고객별 최근 결제 (#338) — 뺄 결제를 먼저 빼고 limit을 센다. 같은 시각이면 나중에 저장된 결제가 먼저
+    @Query("select p from Payment p where p.merchantId = :merchantId and p.customerRef = :customerRef "
+            + "and p.createdAt >= :since and p.paymentId not in :excluded "
+            + "order by p.createdAt desc, p.paymentId desc")
+    List<Payment> findRecentByCustomer(
+            @Param("merchantId") Long merchantId,
+            @Param("customerRef") String customerRef,
+            @Param("since") Instant since,
+            @Param("excluded") Collection<Long> excluded,
+            Limit limit);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Payment p where p.paymentId = :paymentId")

@@ -2,6 +2,7 @@
 # 같은 손님이 60만 원을 3번 결제 → 3번째가 FDS 60점 REVIEW로 HELD(보류)되어 Case·보고서가 생긴다
 # 필요: Spring payment.http.enabled=true, Spring과 같은 DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수
 # 실행: 저장소 맨 위에서 py scripts/demo/cakeshop_pay.py (macOS · Linux: python3)
+# 같은 손님으로 다시: py scripts/demo/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
 import base64
 import hashlib
 import hmac
@@ -91,7 +92,8 @@ def pay(key: bytes, customer_ref: str, n: int):
 
 def main() -> int:
     key = load_key()
-    customer_ref = str(random.randint(10**11, 10**12 - 1))
+    # 손님 번호를 주면 그 손님으로 결제한다. 없으면 매번 새 손님
+    customer_ref = sys.argv[1] if len(sys.argv) > 1 else str(random.randint(10**11, 10**12 - 1))
     print(f"손님 번호 {customer_ref} 로 {AMOUNT:,}원 결제를 {COUNT}번 보냅니다\n")
     for n in range(1, COUNT + 1):
         order_ref, status, data = pay(key, customer_ref, n)
@@ -106,6 +108,7 @@ def main() -> int:
         print(f"{n}번째  결제 ID {data.get('paymentId')}  상태 {data.get('paymentStatus')}  주문 {order_ref}{mark}")
         time.sleep(1)
     print("\n이제 http://localhost:5173 에서 staff_test / 1234 로 로그인해 Case 목록을 열어 보세요.")
+    print(f"같은 손님으로 다시 결제하려면: py scripts/demo/cakeshop_pay.py {customer_ref}")
     return 0
 
 

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.when;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
+import com.donworry.investigation.report.dto.PaymentHistoryToolResponse.StatusCount;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse.SharedRule;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse.SimilarCase;
@@ -44,6 +46,9 @@ class FixedReportGeneratorTests {
     @Mock
     SimilarCaseFinder similarCaseFinder;
 
+    @Mock
+    PaymentHistoryFinder paymentHistoryFinder;
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -58,7 +63,11 @@ class FixedReportGeneratorTests {
                         new PaymentInfo(
                                 3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
         FixedReportGenerator generator = new FixedReportGenerator(
-                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -90,7 +99,11 @@ class FixedReportGeneratorTests {
                         new PaymentInfo(
                                 15L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
         FixedReportGenerator generator = new FixedReportGenerator(
-                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -121,7 +134,11 @@ class FixedReportGeneratorTests {
                         new PaymentInfo(
                                 3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
         FixedReportGenerator generator = new FixedReportGenerator(
-                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -180,6 +197,52 @@ class FixedReportGeneratorTests {
         assertThat(evidenceOf(body, "get_fds_evidence")).hasSize(1);
     }
 
+    // AI 서버를 끈 시연에서도 고객 최근 결제 카드가 채워진다 — 값은 PaymentHistoryFinder 결과 그대로 (#338)
+    @Test
+    void generate_aiDisabled_addsPaymentHistory() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(paymentHistoryFinder.find(7L, NOW))
+                .thenReturn(new PaymentHistoryToolResponse(
+                        "7",
+                        1,
+                        "P5",
+                        NOW,
+                        30,
+                        List.of(new PaymentHistoryToolResponse.Payment(
+                                "2", 580_000L, "CAPTURED", NOW.minusSeconds(86_400))),
+                        List.of(new StatusCount("CAPTURED", 1)),
+                        false));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> history = (Map<?, ?>) body.get("paymentHistory");
+        assertThat(history.get("lookbackDays")).isEqualTo(30);
+        assertThat(history.get("truncated")).isEqualTo(false);
+        assertThat(history.get("statusCounts")).isEqualTo(List.of(Map.of("paymentStatus", "CAPTURED", "count", 1)));
+        Map<?, ?> first = (Map<?, ?>) ((List<?>) history.get("payments")).getFirst();
+        assertThat(first.get("paymentId")).isEqualTo("2");
+        assertThat(first.get("amount")).isEqualTo(580_000L);
+        assertThat(first.get("requestedAt")).isEqualTo(NOW.minusSeconds(86_400).toString());
+        assertThat(evidenceOf(body, "get_payment_history")).singleElement().satisfies(e -> {
+            assertThat(e.get("source")).isEqualTo("P5");
+            assertThat(e.get("dataVersion")).isEqualTo("evidence v1");
+        });
+    }
+
+    // 고객 최근 결제는 참고 자료라 조회에 실패해도 보고서는 만들어지고, 값만 비어 있다 (#338)
+    @Test
+    void generate_paymentHistoryLookupFails_stillBuildsReportWithNull() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(paymentHistoryFinder.find(7L, NOW)).thenThrow(new IllegalStateException("P5 조회 실패"));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        assertThat(body).containsKey("paymentHistory");
+        assertThat(body.get("paymentHistory")).isNull();
+        assertThat(body.get("verdict")).isNotNull();
+        assertThat(evidenceOf(body, "get_payment_history")).isEmpty();
+    }
+
     private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
         List<Map<?, ?>> found = new ArrayList<>();
         for (Object item : (List<?>) body.get("evidence")) {
@@ -202,6 +265,10 @@ class FixedReportGeneratorTests {
                         new PaymentInfo(
                                 3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
         return new FixedReportGenerator(
-                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder);
     }
 }

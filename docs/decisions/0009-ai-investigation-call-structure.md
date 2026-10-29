@@ -62,7 +62,7 @@ sequenceDiagram
 | --- | --- | --- | --- |
 | `get_case_payments` | `caseId` | Case 소속 결제 목록 | P3 + P5 |
 | `get_fds_evidence` | `caseId` 또는 허용된 결제 ID | 결제별 FDS 점수 · 적중 규칙 | P2 |
-| `get_payment_history` | `caseId`, `lookbackDays` | 고객 과거 결제 패턴 | P5 |
+| `get_payment_history` (#338) | `caseId` | 같은 고객의 최근 30일 결제(이 사건 제외, 최대 20건)와 상태별 건수 (참고 근거) | P5 (읽기만) |
 | `get_security_events` | `caseId`, 조회 기간 | 로그인 · 기기 · 계정 이벤트 | P1 또는 CakeShop |
 | `get_order_context` | `caseId` | 주문 · 배송 정보 | CakeShop |
 | `get_payment_authentication` | `caseId` 또는 허용된 결제 ID | 카드 인증 · 승인 정보 | P5 |
@@ -76,6 +76,14 @@ sequenceDiagram
 - 결과는 결제별 직원 판정 건수(`acceptCount` · `rejectCount`) 그대로. "사기 확정" 같은 해석은 하지 않는다
 - 필수 근거로 다룬다: AI가 부르지 않으면 "빠진 근거 다시 요청" → 그래도 안 부르면 시스템이 보충 조회한다. 보충 조회까지 실패하면 `similarCases: null`로 두고 보고서는 만든다 (참고 자료라 판정에 필요한 보고서를 막지 않는다)
 - 조회는 별도 읽기 트랜잭션(`REQUIRES_NEW`)에서 한다 — 고정 보고서가 이 조회의 실패를 잡아도 보고서 트랜잭션이 되돌림 전용이 되지 않게
+
+**`get_payment_history` (#338)** — 구현: `PaymentHistoryFinder` + P5 `PaymentReader.findRecentByCustomer`. AI Tool과 AI를 끈 고정 보고서가 같은 규칙을 쓴다
+- "같은 고객": Case의 `merchant_id` + `customer_ref` (`find_similar_cases`와 같은 기준). 다른 가맹점 결제는 읽지 않는다
+- 이 사건에 묶인 결제는 뺀다 — "평소 결제"와 비교하는 것이 목적이라, 사건 결제가 섞이면 사건 자체가 정상 근거처럼 보인다. P5 조회에서 건수를 세기 전에 빼서, 사건 결제가 아무리 많아도 사건 밖 결제를 놓치지 않는다 (#338 리뷰)
+- 기간 · 건수는 코드에 고정: 조회 시각 기준 최근 30일, 최근 순 최대 20건. 기간 안에 더 있으면 `truncated: true`. AI가 기간을 고르지 않는다 (처음 표의 `lookbackDays` 입력은 뺐다 — 아래 고려한 대안)
+- 상태별 건수(`statusCounts`)는 반환한 결제(최대 20건) 안에서 코드가 센다. 응답: `lookbackDays` · `payments[]`(`paymentId` · `amount` · `paymentStatus` · `requestedAt`) · `statusCounts[]`(`paymentStatus` · `count`) · `truncated`
+- 필수 근거 · 실패 처리 · 별도 읽기 트랜잭션은 `find_similar_cases`와 같다 (안 부르면 다시 요청 → 시스템 보충, 실패하면 `paymentHistory: null`로 두고 보고서는 만든다. AI 보고서는 한계 줄에 "고객 최근 결제를 조회하지 못했습니다"를 더한다)
+- AI에게는 건수 · 상태별 건수 · 최근 5건의 금액 · 상태 · 시각만 참고로 보여 준다(결제 ID 없음). 이 숫자들은 판단 문장 숫자 검사(`fact_numbers`)에서 근거에 있는 숫자로 인정한다. "이력이 없다는 것만으로 의심하지 않고, 매입 완료 이력만으로 정상이라고 단정하지 않는다"를 지시한다
 
 입력에 `caseId`가 있다고 다른 모듈 데이터를 마음대로 읽는 것은 아니다. 각 Tool 구현이 Case 소속 결제 · 가맹점 범위를 검증하고, 소유 모듈의 공개 api로 필요한 정보만 모은다 (설계 3.6 주의).
 
@@ -154,6 +162,10 @@ sequenceDiagram
 - **#296에서 더한 키 — 추가만 한다.** `similarCases`: `cases[]`(`caseId` · `similarity` · `sharedRules[]`(`code` · `name`) · `closedAt` · `acceptCount` · `rejectCount`) · `totalMatched`
   - Tool 기록(`find_similar_cases` 응답)에서 코드가 채운다. AI 판단 문장 형식에는 이 칸이 없다. AI에게는 사건 번호 없이 이유 · 결과만 참고로 보여 주고 "지난 결과만으로 권고를 정하지 말 것"을 지시한다
   - 키가 없으면 예전 보고서(화면에서 카드 숨김), `null`이면 조회하지 못함(화면에 안내). Spring 저장 전 검사는 이 키를 요구하지 않는다 (`investigationTrace`와 같은 이유)
+- **#338에서 더한 키 — 추가만 한다.** `paymentHistory`: `lookbackDays` · `payments[]`(`paymentId` · `amount` · `paymentStatus` · `requestedAt`) · `statusCounts[]`(`paymentStatus` · `count`) · `truncated`
+  - Tool 기록(`get_payment_history` 응답)에서 코드가 채운다. AI 판단 문장 형식에는 이 칸이 없다
+  - 키가 없으면 예전 보고서(화면에서 카드 숨김), `null`이면 조회하지 못함(화면에 안내). Spring 저장 전 검사는 이 키를 요구하지 않는다
+  - AI 보고서의 고정 한계 줄에서 "결제 이력"을 뺐다 — 이제 조회한다 (기기 · 로그인 기록 · 주문 정보는 그대로 미확인)
 - **문장 품질 검사 (ai-server, 걸리면 다시 쓰기 · 횟수 넘으면 `NARRATIVE_INVALID`):** 근거에 없는 숫자 · 코드값 · 확률 단정(기존)에 더해 한자 · 일본 문자, 같은 묶음 안 반복 문장, 영어 단어(`FDS` · `IP` · `OTP` · `VPN` · `ID` · `AI` 및 시연 표기 `mock` · `Qwen` 제외), 60자를 넘거나 두 문장인 결론
 - **권고 값:** `ACCEPT_REVIEW` / `REJECT_REVIEW` / `NEEDS_CHECK`. 참고용이며 최종 판정은 직원이 한다
 - **보고서 속 결제 ID:** Tool로 받은 실제 ID만 쓴다. 저장 전에 Case 소속인지 검증하고, 아니면 구조 검증 실패(시도 실패 1회)로 처리한다
@@ -253,21 +265,26 @@ investigation/report/
 | 프롬프트 · Tool 응답 원문을 그대로 저장 (#294) | 보고서가 커지고 결제 값이 본문과 중복 저장된다. 시연 · 확인에는 요약으로 충분하다 |
 | Tool 응답에 P2 기준값 · 실제값 JSON 원본을 그대로 실음 (#326) | 차단 목록(R07) 실제값의 카드 토큰 · IP · 이메일이 AI 입력과 보고서에 남는다. 숫자 키만 골라 문장으로 만든다 |
 | 기준 · 실제 문장을 ai-server나 화면에서 만듦 (#326) | 금액 단위 처리를 Python · TS에 따로 두게 되고, AI 서버를 끈 고정 보고서와 문장이 달라진다. Spring 한 곳에서 만든다 |
+| 결제 이력 기간을 AI가 고름 (`lookbackDays` 입력, #338) | 7B 모델이 매번 다른 기간을 골라 같은 사건의 보고서가 달라지고, 너무 긴 기간은 조회량이 커진다. 30일 · 20건으로 고정한다 |
+| 결제 이력에 이 사건 결제도 포함 (#338) | "평소 결제"와 비교하려는 목적이 흐려지고, 사건 결제가 정상 이력처럼 보인다 |
+| 결제 이력을 FDS 평가 기록(`fds_evaluations`)으로 대신 (#338) | 평가 기록에는 매입 완료 · 승인 취소 같은 결제 상태가 없다. 결제 상태는 P5만 안다 |
+| 상태별 건수를 P5 공개 창구에서 따로 셈 (#338) | P5 공개 메서드가 하나 더 늘고 최근 20건 목록과 기준이 달라진다. 받은 목록 안에서 P4가 센다 |
 | AI 판단 문장에도 기준값 숫자를 허용 (#326) | 7B 모델이 숫자를 틀리게 옮길 위험이 있고 문장 검사(`fact_numbers`)를 넓혀야 한다. 숫자는 코드가 채운 규칙 근거 줄에만 둔다 |
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases`, 구현은 현재 3종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`(`RUNNING`이면 `progress`, #322). 화면용 `GET /api/security-cases/{caseId}/reports/{reportId}/progress` (#322)
+- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases`, 구현은 현재 4종 — `get_payment_history` #338) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`(`RUNNING`이면 `progress`, #322). 화면용 `GET /api/security-cases/{caseId}/reports/{reportId}/progress` (#322)
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `/internal/ai/**`는 identity의 전용 보안 체인이 서비스 키로 확인한다 — #266, P1 동의 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md))
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
 - P5: Tool 3종(`get_case_payments` 결제 정보 · `get_payment_history` · `get_payment_authentication`)용 조회 api
+  - #338: `PaymentReader.findRecentByCustomer(merchantId, customerRef, since, excludePaymentIds, limit)` 읽기 전용 추가 (P5 허락). `payments`에 `(merchant_id, customer_ref, created_at)` 인덱스는 추가하지 않았다 — 필요하면 P5가 정한다
 - P1: `get_security_events`용 조회 api
 - CakeShop: `get_order_context` 제공 범위 (§5.7)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
 - P3: `find_similar_cases`용 읽기 쿼리 추가 — `SecurityCaseRepository`(종료 사건 2종) · `CasePaymentRepository` · `PaymentDecisionRepository`(여러 사건 한 번에) (#296, P4 개선 작업 범위로 P3 허락)
 - 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리. #288의 새 키는 화면에서 선택 항목이며 #292 보고서 전문 페이지에서 표시한다. `investigationTrace`는 #294 "조사 과정" 탭. 생성 중 진행 단계는 #322 `ReportCard`
-- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294), 비슷한 사건이 다른 가맹점의 같은 `customer_ref`를 같은 고객으로 보지 않는지 · 진행 중 사건을 빼는지 · 결과를 결제별로 세는지 · AI가 안 부르면 보충되는지 · 조회 실패에도 보고서가 만들어지는지(#296), 진행 중 상태 조회에 끝난 단계가 실리는지 · 이전 시도의 진행 기록이 버려지는지 · 단계별 실행으로 바꿔도 최종 보고서가 같은지 · Spring이 `progress`를 읽는지 · 진행 조회가 보고서를 바꾸지 않는지 · 다른 Case 보고서는 404인지(#322)
+- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294), 비슷한 사건이 다른 가맹점의 같은 `customer_ref`를 같은 고객으로 보지 않는지 · 진행 중 사건을 빼는지 · 결과를 결제별로 세는지 · AI가 안 부르면 보충되는지 · 조회 실패에도 보고서가 만들어지는지(#296), 고객 최근 결제가 다른 가맹점의 같은 `customer_ref`를 빼는지 · 이 사건 결제를 빼는지 · 상태별 건수 · 30일 · 20건 자르기 · AI가 안 부르면 보충되는지 · 이력 숫자를 쓴 문장이 거부되지 않는지 · 조회 실패에도 보고서가 만들어지는지(#338), 진행 중 상태 조회에 끝난 단계가 실리는지 · 이전 시도의 진행 기록이 버려지는지 · 단계별 실행으로 바꿔도 최종 보고서가 같은지 · Spring이 `progress`를 읽는지 · 진행 조회가 보고서를 바꾸지 않는지 · 다른 Case 보고서는 404인지(#322)
 - 문서: README Architecture · AGENTS.md §6
 
 ## 검증

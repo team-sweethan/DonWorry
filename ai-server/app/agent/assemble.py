@@ -10,6 +10,7 @@ from app.schemas.report import (
     InvestigationTrace,
     Overview,
     PaymentAnalysis,
+    PaymentHistory,
     Recommendation,
     ReportBody,
     ReportRecommendation,
@@ -23,14 +24,14 @@ from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
     FdsPayment,
+    PaymentHistoryTool,
     SimilarCasesTool,
 )
 
 # 사실 값은 Tool 기록에서만 채운다 — Qwen이 숫자 · ID를 잘못 옮겨 적어도 보고서 사실은 틀리지 않는다
 
 ALWAYS_LIMITATIONS = (
-    "결제 이력 · 기기 · 로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다"
-    " (조회 도구 미제공).",
+    "기기 · 로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
     "FDS 점수는 부정거래 확률이 아닙니다.",
     "AI 권고는 참고용이며 최종 판정은 보안 직원이 합니다.",
 )
@@ -61,6 +62,18 @@ def analyzable(payment: CasePayment) -> bool:
 
 SIMILARITY_KO = {"SAME_CUSTOMER": "같은 고객", "SHARED_RULES": "같은 규칙 조합"}
 
+# AI에게 보여 줄 고객 최근 결제 목록 수 — 나머지는 상태별 건수로만 본다
+HISTORY_SHOWN_TO_AI = 5
+HISTORY_UNAVAILABLE = "고객 최근 결제를 조회하지 못했습니다."
+
+
+# 코드가 센 상태별 건수를 한국어 이름으로 — "매입 완료 3건 · 승인 취소 1건"
+def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
+    return {
+        PAYMENT_STATUS_KO.get(c.paymentStatus, c.paymentStatus): c.count
+        for c in history.statusCounts
+    }
+
 
 def similar_outcome(accept: int, reject: int) -> str:
     parts = [f"매입 진행 {accept}건"] if accept else []
@@ -70,10 +83,12 @@ def similar_outcome(accept: int, reject: int) -> str:
 
 # Qwen에게 보여 줄 근거 요약 — 판단 문장을 쓸 결제와 각 결제의 사실 값
 # 비슷한 과거 사건은 이유 · 결과만 보여 준다 (참고 근거, 사건 번호는 문장에 쓰지 않으므로 넣지 않음)
+# 고객 최근 결제는 건수 · 상태별 건수 · 최근 몇 건의 금액 · 상태만 보여 준다 (#338)
 def facts_json(
     case_payments: CasePaymentsTool,
     fds: dict[str, FdsPayment],
     similar: SimilarCasesTool | None = None,
+    history: PaymentHistoryTool | None = None,
 ) -> str:
     payments = []
     for payment in case_payments.payments:
@@ -111,6 +126,24 @@ def facts_json(
             }
             for c in similar.cases
         ]
+    key = "고객 최근 결제(이 사건 밖)"
+    if history is None:
+        facts[key] = "조회하지 못함"
+    else:
+        facts[key] = {
+            "기간(일)": history.lookbackDays,
+            "건수": len(history.payments),
+            "더 있음": history.truncated,
+            "상태별 건수": history_counts(history),
+            "최근 결제": [
+                {
+                    "금액(원)": p.amount,
+                    "결제 상태": PAYMENT_STATUS_KO.get(p.paymentStatus or "", None),
+                    "요청 시각": p.requestedAt,
+                }
+                for p in history.payments[:HISTORY_SHOWN_TO_AI]
+            ],
+        }
     return json.dumps(facts, ensure_ascii=False, indent=2)
 
 
@@ -120,8 +153,16 @@ def fact_numbers(
     case_payments: CasePaymentsTool,
     fds: dict[str, FdsPayment],
     similar: SimilarCasesTool | None = None,
+    history: PaymentHistoryTool | None = None,
 ) -> set[int]:
     numbers = {len(case_payments.payments), sum(p.amount or 0 for p in case_payments.payments)}
+    if history is not None:
+        numbers |= {history.lookbackDays, len(history.payments)}
+        numbers |= {c.count for c in history.statusCounts}
+        for p in history.payments[:HISTORY_SHOWN_TO_AI]:
+            numbers |= {int(d) for d in re.findall(r"\d+", p.requestedAt or "")}
+            if p.amount is not None:
+                numbers |= {p.amount, p.amount // 10000}
     if similar is not None:
         numbers |= {len(similar.cases), similar.totalMatched}
         for c in similar.cases:
@@ -199,10 +240,13 @@ def assemble_report(
     investigated_at: str,
     trace: InvestigationTrace,
     similar: SimilarCasesTool | None = None,
+    history: PaymentHistoryTool | None = None,
 ) -> ReportBody:
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     limitations = _drop_nothing_unknown(list(narrative.limitations))
+    if history is None:
+        limitations.append(HISTORY_UNAVAILABLE)
     checks = list(narrative.additionalChecks)
     fds_evidence_ids = _fds_evidence_ids(context, records)
     for payment in case_payments.payments:
@@ -288,5 +332,10 @@ def assemble_report(
             {"cases": [c.model_dump() for c in similar.cases], "totalMatched": similar.totalMatched}
         )
         if similar is not None
+        else None,
+        paymentHistory=PaymentHistory.model_validate(
+            history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
+        )
+        if history is not None
         else None,
     )

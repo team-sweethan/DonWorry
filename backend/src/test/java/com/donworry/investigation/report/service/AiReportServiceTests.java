@@ -95,7 +95,8 @@ class AiReportServiceTests {
                                     "evidence",
                                     "verdict",
                                     "investigationTrace",
-                                    "similarCases");
+                                    "similarCases",
+                                    "paymentHistory");
                 });
     }
 

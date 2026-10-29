@@ -81,9 +81,12 @@ def test_similar_cases_nudged_then_system_filled() -> None:
     assert outcome.status == "SUCCEEDED"
     nudges = [m for m in llm.choose_messages[-1] if isinstance(m, HumanMessage)]
     assert any("비슷한 과거 사건" in str(m.content) for m in nudges)
-    steps = outcome.report.investigationTrace.steps
-    assert steps[-3].title == "비슷한 과거 사건 조회 (시스템 보충)"
-    assert steps[-3].actor == "SYSTEM"
+    filled = [
+        s
+        for s in outcome.report.investigationTrace.steps
+        if s.title == "비슷한 과거 사건 조회 (시스템 보충)"
+    ]
+    assert [s.actor for s in filled] == ["SYSTEM"]
     assert outcome.report.similarCases.totalMatched == 7
 
 
