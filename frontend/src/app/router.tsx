@@ -29,6 +29,7 @@ import {
   AdminCreateMerchantPage,
   AdminMerchantDetailPage,
 } from '../pages/admin/AdminMerchantsPage'
+import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
 
 function DemoSession() {
   const { loggedIn } = useDemo()
@@ -38,6 +39,31 @@ function DemoSession() {
 // ADMIN · 보안 직원 · 사장님은 서버 세션으로, 컴포넌트 목록 같은 개발 화면은 DemoSession으로 진입한다.
 // 서버 인가는 #68 5단계다.
 export const router = createBrowserRouter([
+  // 실제 로그인·금액 조회 없이 로컬 개발 서버에서만 정산 시연 화면을 확인한다.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/:financePage',
+          element: (
+            <main style={{ padding: 24 }}>
+              <SettlementRoute />
+            </main>
+          ),
+        },
+      ]
+    : []),
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/funds/loans',
+          element: (
+            <main style={{ padding: 24 }}>
+              <LoanProductsRoute />
+            </main>
+          ),
+        },
+      ]
+    : []),
   // 로그인 화면이 로그인된 사용자를 역할별 첫 화면으로 보낸다.
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginRoute /> },
@@ -83,7 +109,11 @@ export const router = createBrowserRouter([
         children: [
           { path: 'actions', element: <MerchantCaseListPage /> },
           { path: 'actions/:id', element: <MerchantCaseDetailPage /> },
-          { path: 'settlements', element: <EmptyPage title="정산 현황" /> },
+          // 정산 상세 API 연동 전에는 HTML 프로토타입의 예시 화면을 제공한다.
+          { path: 'settlements', element: <SettlementRoute /> },
+          { path: 'funds', element: <SettlementRoute /> },
+          { path: 'loans', element: <LoanProductsRoute /> },
+          { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],
       },

@@ -1,0 +1,129 @@
+.loan-products {
+  max-width: 1400px;
+  margin: 12px auto;
+  color: #0f172a;
+}
+.loan-page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+.loan-page-head h1 {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+.loan-page-head p,
+.loan-products p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #475569;
+}
+.loan-products small {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.7;
+}
+.loan-evidence-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 20px;
+  margin: 20px 0;
+}
+.loan-surface {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 20px;
+}
+.loan-surface h2 {
+  font-size: 28px;
+  margin: 8px 0;
+}
+.loan-negative {
+  color: #dc2626;
+}
+.loan-products dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 16px;
+  font-size: 13px;
+}
+.loan-products dt {
+  color: #64748b;
+}
+.loan-products dd {
+  margin: 0;
+  text-align: right;
+}
+.loan-product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.loan-product-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+.loan-product-card h2 {
+  font-size: 17px;
+  line-height: 1.5;
+  margin: 0;
+}
+.loan-product-card p,
+.loan-product-card dl {
+  margin: 0;
+}
+.loan-product-card > .ant-btn {
+  margin-top: auto;
+}
+.loan-featured {
+  border: 2px solid #2563eb;
+  background: #fafdff;
+}
+.loan-bank {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+.loan-coverage {
+  height: 8px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.loan-coverage div {
+  height: 100%;
+  background: #2563eb;
+}
+@media (max-width: 1100px) {
+  .loan-product-grid {
+    grid-template-columns: 1fr;
+  }
+  .loan-evidence-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .loan-page-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .loan-products dl {
+    grid-template-columns: 1fr;
+  }
+  .loan-products dd {
+    text-align: left;
+  }
+}

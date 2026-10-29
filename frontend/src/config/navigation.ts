@@ -36,7 +36,11 @@ export const navByRole: Record<Role, NavGroup[]> = {
     },
     {
       title: '자금',
-      items: [{ label: '정산 현황', path: '/owner/settlements', permission: 'FINANCE_VIEW' }],
+      items: [
+        { label: '정산 내역', path: '/owner/settlements', permission: 'FINANCE_VIEW' },
+        { label: '자금 현황', path: '/owner/funds', permission: 'FINANCE_VIEW' },
+        { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
+      ],
     },
   ],
 }
