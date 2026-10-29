@@ -20,7 +20,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
     {
       title: '탐지',
       items: [
-        { label: 'Rule 카탈로그', path: '/security/rules' },
+        { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
         { label: '경보', path: '/security/alerts' },
       ],
@@ -50,9 +50,9 @@ export const adminNavigation = {
     {
       title: '탐지',
       items: [
-        { label: 'Rule 카탈로그', path: '/admin/fds/rules' },
+        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
         {
-          label: '룰 변경 요청',
+          label: '룰 끄기 요청',
           path: '/admin/fds/rule-change-requests',
           badge: 'ruleChangeRequests',
         },

@@ -11,7 +11,7 @@ import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestB
 
 const tabs: Array<{ key: FdsRuleChangeRequest['status']; label: string }> = [
   { key: 'PENDING', label: '승인 대기' },
-  { key: 'APPROVED', label: '승인' },
+  { key: 'APPROVED', label: '승인 완료' },
   { key: 'REJECTED', label: '반려' },
 ]
 
@@ -24,7 +24,7 @@ function formatDate(value: string | null) {
 }
 
 function StatusTag({ status }: { status: FdsRuleChangeRequest['status'] }) {
-  const labels = { PENDING: '승인 대기', APPROVED: '승인', REJECTED: '반려' } as const
+  const labels = { PENDING: '승인 대기', APPROVED: '승인 완료', REJECTED: '반려' } as const
   const colors = { PENDING: 'gold', APPROVED: 'green', REJECTED: 'red' } as const
   return <Tag color={colors[status]}>{labels[status]}</Tag>
 }
@@ -44,7 +44,7 @@ export function RuleChangeRequestsPage() {
         if (sequence === requestSequence.current) setResult(next)
       })
       .catch(() => {
-        if (sequence === requestSequence.current) setError('룰 변경 요청을 불러오지 못했습니다.')
+        if (sequence === requestSequence.current) setError('룰 끄기 요청을 불러오지 못했습니다.')
       })
   }
   useEffect(reload, [status, page])
@@ -55,7 +55,7 @@ export function RuleChangeRequestsPage() {
       reload()
       refreshRuleChangeRequestBadge()
     } catch {
-      setError('요청을 처리하지 못했습니다.')
+      setError('룰 끄기 요청을 처리하지 못했습니다. 요청 상태를 확인한 뒤 다시 시도해 주세요.')
     } finally {
       setProcessingId(null)
     }
@@ -63,8 +63,8 @@ export function RuleChangeRequestsPage() {
   return (
     <>
       <PageHeader
-        title="룰 변경 요청"
-        description="보안 직원의 룰 끄기 요청을 승인하거나 반려합니다."
+        title="룰 끄기 요청"
+        description="보안 직원의 탐지 룰 끄기 요청을 검토합니다. 승인하면 해당 룰이 중지되어 이상 거래 탐지에 사용되지 않습니다."
       />
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
       <Card>
@@ -84,7 +84,11 @@ export function RuleChangeRequestsPage() {
           dataSource={result?.content ?? []}
           columns={[
             { title: '요청 ID', dataIndex: 'requestId', width: 100 },
-            { title: '룰', dataIndex: 'ruleCode', render: (value: string) => <Tag>{value}</Tag> },
+            {
+              title: '탐지 룰 코드',
+              dataIndex: 'ruleCode',
+              render: (value: string) => <Tag>{value}</Tag>,
+            },
             { title: '요청자', dataIndex: 'requestedByName' },
             { title: '요청 사유', dataIndex: 'reason', ellipsis: true },
             { title: '요청 시각', dataIndex: 'requestedAt', render: formatDate },
@@ -103,7 +107,7 @@ export function RuleChangeRequestsPage() {
               title: '처리',
               render: (_, request: FdsRuleChangeRequest) =>
                 status === 'PENDING' ? (
-                  <Space>
+                  <Space direction="vertical" size={6}>
                     <Button
                       size="small"
                       type="primary"
@@ -113,7 +117,7 @@ export function RuleChangeRequestsPage() {
                         void review(request.requestId, true)
                       }}
                     >
-                      승인
+                      룰 끄기 승인
                     </Button>
                     <Button
                       size="small"
@@ -124,7 +128,7 @@ export function RuleChangeRequestsPage() {
                         void review(request.requestId, false)
                       }}
                     >
-                      반려
+                      요청 반려
                     </Button>
                   </Space>
                 ) : (
@@ -155,7 +159,7 @@ export function RuleChangeRequestsPage() {
         {selectedRequest && (
           <Descriptions column={1} size="small">
             <Descriptions.Item label="요청 ID">{selectedRequest.requestId}</Descriptions.Item>
-            <Descriptions.Item label="룰">
+            <Descriptions.Item label="탐지 룰 코드">
               <Tag>{selectedRequest.ruleCode}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="요청자">{selectedRequest.requestedByName}</Descriptions.Item>

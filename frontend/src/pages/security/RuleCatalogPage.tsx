@@ -214,7 +214,7 @@ function RuleCatalogTabs({
 }) {
   return (
     <Card className="dw-rule-tabs" size="small">
-      <div className="dw-rule-tab-list" role="tablist" aria-label="룰 카탈로그 범위">
+      <div className="dw-rule-tab-list" role="tablist" aria-label="탐지 룰 목록 범위">
         <button
           className={selectedTab === 'payment' ? 'is-active' : undefined}
           role="tab"
@@ -329,7 +329,7 @@ export function RuleCatalogPage() {
           setPolicies(rulePolicies)
         }
       } catch {
-        if (active) setError('룰 카탈로그를 불러오지 못했습니다.')
+        if (active) setError('탐지 룰 목록을 불러오지 못했습니다.')
       } finally {
         if (active) setLoading(false)
       }
@@ -353,7 +353,7 @@ export function RuleCatalogPage() {
   return (
     <div className="dw-rule-catalog-page">
       <PageHeader
-        title="Rule 카탈로그"
+        title="탐지 룰 목록"
         description="돈워리가 어떤 규칙으로 이상 징후를 찾는지 봅니다. 결제 룰은 가맹점 결제를, 계정 룰은 돈워리 계정을 지킵니다."
       />
       {showLoading ? (

@@ -28,21 +28,21 @@ npm run dev
 
 현재 라우터에 연결된 화면은 다음과 같습니다.
 
-| 경로                                                  | 현재 상태                                                                                                 |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `/login`                                              | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                                                |
-| `/`                                                   | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                  |
-| `/admin/home`                                         | 관리자 첫 화면 — 승인 대기 요청 수·최신 5건, 꺼진 Rule 수, 전체 계정·가맹점 수 (#307). 기존 조회 API 사용 |
-| `/admin/fds/rules`, `/admin/fds/rule-change-requests` | Rule 카탈로그·룰 변경 요청 관리                                                                           |
-| `/admin/finance`                                      | 자금관리 담당자 구현 영역 (`EmptyPage`)                                                                   |
-| `/demo/login`                                         | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                       |
-| `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                    |
-| `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업 |
-| `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                     |
-| `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                  |
-| `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)      |
-| `/owner/settlements`                                  | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                  |
-| `/dev/components`                                     | 공통 UI 예시                                                                                              |
+| 경로                                                  | 현재 상태                                                                                                              |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `/login`                                              | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                                                             |
+| `/`                                                   | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                               |
+| `/admin/home`                                         | 관리자 첫 화면 — 룰 끄기 승인 대기 수·최신 5건, 사용 중지된 탐지 룰 수, 전체 계정·가맹점 수 (#307). 기존 조회 API 사용 |
+| `/admin/fds/rules`, `/admin/fds/rule-change-requests` | 탐지 룰 목록·룰 끄기 요청 관리                                                                                         |
+| `/admin/finance`                                      | 자금관리 담당자 구현 영역 (`EmptyPage`)                                                                                |
+| `/demo/login`                                         | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                                    |
+| `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                                 |
+| `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업              |
+| `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                                  |
+| `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                               |
+| `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)                   |
+| `/owner/settlements`                                  | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                               |
+| `/dev/components`                                     | 공통 UI 예시                                                                                                           |
 
 Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 실제 요청됩니다. "시연: HELD 결제 발생"으로 만든 시연 결제는 백엔드 목업이 처리합니다. AI 보고서는 서버가 만듭니다(AI 서버를 끄면 고정 문장 보고서). 판정 직후에는 "금융 처리 대기 중"이고, "인계 상태 다시 확인"을 누르면 완료됩니다.
 
@@ -62,7 +62,7 @@ npm run test
 
 미로그인·만료로 `/login`에 이동하면 Router `location.state`에 원래 경로와 쿼리를 전달합니다 (#165). 로그인 후에는 `auth/loginRedirect.ts`가 내부 경로와 현재 역할·권한을 검사해 복귀 주소를 정합니다. 만료 전 계정을 알면 같은 계정일 때만 복귀하고, 최초 접근·새로고침으로 이전 계정을 모르면 현재 계정의 권한으로 판단합니다. 외부 URL·로그인 화면·해석이 달라질 수 있는 인코딩/상위 경로는 버리고 역할별 첫 화면으로 갑니다. 쿼리는 보존하지만 hash·작성 중 폼 값은 복구하지 않습니다. 의도적 로그아웃에는 복귀 정보를 남기지 않습니다.
 
-관리자는 로그인 시 이전 방문 주소 대신 항상 `/admin/home`에서 시작합니다 (#307). 관리자 홈은 승인 대기 요청과 검토 버튼을 중심에 두고, 탐지 룰·계정·가맹점 현황을 보조 영역에 표시합니다. 좁은 창에서는 운영 현황이 요청 목록 아래로 이동합니다.
+관리자는 로그인 시 이전 방문 주소 대신 항상 `/admin/home`에서 시작합니다 (#307). 관리자 홈은 룰 끄기 승인 대기 건수와 요청 검토 버튼을 중심에 두고, 탐지 룰·계정·가맹점 현황을 보조 영역에 표시합니다. 좁은 창에서는 운영 현황이 요청 목록 아래로 이동합니다.
 
 강제 비밀번호 변경은 관리자 홈 이동과 복귀보다 우선하며 변경 완료 후에는 기존처럼 역할별 첫 화면으로 갑니다. 보안 직원·사장님은 업무 메뉴 권한이 없어도 본인 비밀번호 변경·로그인 이력으로는 복귀할 수 있습니다. 유효한 복귀 주소와 첫 화면이 모두 없으면 기존 403과 계정 메뉴를 보여줍니다. 이 화면 가드는 서버 인가를 대신하지 않습니다.
 

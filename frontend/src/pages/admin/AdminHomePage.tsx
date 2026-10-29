@@ -42,7 +42,7 @@ function Count({
         aria-label="현황 불러오는 중"
       />
     )
-  if (result?.status !== 'fulfilled') return <span className="ah-count-error">확인할 수 없음</span>
+  if (result?.status !== 'fulfilled') return <span className="ah-count-error">불러오기 실패</span>
   return (
     <span className="ah-count">
       {result.value.toLocaleString('ko-KR')}
@@ -53,12 +53,14 @@ function Count({
 
 function ManagementLink({
   title,
+  destination,
   result,
   loading,
   icon,
   to,
 }: {
   title: string
+  destination: string
   result?: PromiseSettledResult<number>
   loading: boolean
   icon: ReactNode
@@ -71,7 +73,7 @@ function ManagementLink({
       </span>
       <span className="ah-management-label">
         {title}
-        <span>전체 {title === '계정 관리' ? '계정' : '가맹점'}</span>
+        <span>{destination}로 이동</span>
       </span>
       <Count result={result} loading={loading} unit="개" />
       <ArrowRightOutlined className="ah-arrow" aria-hidden="true" />
@@ -102,7 +104,7 @@ export function AdminHomePage() {
     <div className="ah-home">
       <PageHeader
         title="관리자 홈"
-        description="승인할 요청을 먼저 살펴보고, 운영 현황을 확인하세요."
+        description="룰 끄기 요청을 검토하고, 탐지 룰·계정·가맹점 현황을 확인하세요."
         actions={
           <Button icon={<ReloadOutlined />} onClick={refresh} loading={loading}>
             새로고침
@@ -113,9 +115,9 @@ export function AdminHomePage() {
         <Alert
           type="error"
           showIcon
-          message="일부 정보를 불러오지 못했습니다."
-          description="확인할 수 없는 항목은 아래에 표시했습니다. 잠시 후 다시 시도해 주세요."
-          action={<Button onClick={refresh}>다시 시도</Button>}
+          message="일부 현황을 불러오지 못했습니다."
+          description="불러오기 실패로 표시된 항목은 조회하지 못했습니다. 다시 불러오기를 눌러 주세요."
+          action={<Button onClick={refresh}>다시 불러오기</Button>}
         />
       )}
       <div className="ah-layout">
@@ -134,8 +136,8 @@ export function AdminHomePage() {
               {pending?.count === 0 ? <CheckOutlined /> : <FileSearchOutlined />}
             </div>
             <div className="ah-summary-copy">
-              <h2 id="ah-approval-title">승인 대기 요청</h2>
-              <Link to={requestPath} title="승인 대기 요청 목록으로 이동">
+              <h2 id="ah-approval-title">룰 끄기 승인 대기</h2>
+              <Link to={requestPath} title="룰 끄기 요청 목록으로 이동">
                 <Count
                   loading={loading}
                   result={
@@ -148,28 +150,28 @@ export function AdminHomePage() {
               </Link>
               <p>
                 {pending?.count === 0
-                  ? '새 요청이 들어오면 이곳에 표시됩니다.'
-                  : '보안 직원이 요청한 탐지 룰 끄기를 검토해 주세요.'}
+                  ? '승인을 기다리는 룰 끄기 요청이 없습니다.'
+                  : '승인하면 해당 룰이 중지되어 이상 거래 탐지에 사용되지 않습니다.'}
               </p>
             </div>
             <Link to={requestPath} className="ah-primary-link">
-              {pending?.count === 0 ? '요청 목록 보기' : '승인 요청 검토'}{' '}
+              {pending?.count === 0 ? '룰 끄기 요청 목록 보기' : '룰 끄기 요청 검토'}{' '}
               <ArrowRightOutlined aria-hidden="true" />
             </Link>
           </div>
           <div className="ah-list-heading">
-            <h3>최근 들어온 요청</h3>
-            <span>최신순 · 최대 5건</span>
+            <h3>최근 룰 끄기 요청</h3>
+            <span>승인 대기 · 최대 5건</span>
           </div>
           {loading ? (
-            <div className="ah-list-state" role="status" aria-label="승인 대기 요청 불러오는 중">
+            <div className="ah-list-state" role="status" aria-label="룰 끄기 요청을 불러오는 중">
               <Skeleton active paragraph={{ rows: 4 }} />
             </div>
           ) : !pending ? (
             <div className="ah-list-state ah-empty" role="status">
               <FileSearchOutlined aria-hidden="true" />
-              <h3>요청 목록을 확인할 수 없습니다</h3>
-              <p>연결 상태를 확인하고 다시 불러와 주세요.</p>
+              <h3>룰 끄기 요청을 불러오지 못했습니다</h3>
+              <p>다시 불러오기를 눌러 요청 목록을 조회해 주세요.</p>
               <Button onClick={refresh} icon={<ReloadOutlined />}>
                 다시 불러오기
               </Button>
@@ -179,10 +181,10 @@ export function AdminHomePage() {
               <span className="ah-empty-check">
                 <CheckOutlined aria-hidden="true" />
               </span>
-              <h3>대기 중인 승인 요청이 없습니다</h3>
-              <p>새 요청이 들어오면 이곳에서 확인할 수 있습니다.</p>
+              <h3>승인을 기다리는 룰 끄기 요청이 없습니다</h3>
+              <p>보안 직원이 룰 끄기를 요청하면 이곳에 표시됩니다.</p>
               <Link to={requestPath}>
-                룰 변경 요청으로 이동 <ArrowRightOutlined aria-hidden="true" />
+                룰 끄기 요청 목록 보기 <ArrowRightOutlined aria-hidden="true" />
               </Link>
             </div>
           ) : (
@@ -199,7 +201,7 @@ export function AdminHomePage() {
                         {request.reason}
                       </p>
                       <div className="ah-request-meta">
-                        <span>{request.requestedByName}</span>
+                        <span>요청자 {request.requestedByName}</span>
                         <span aria-hidden="true">·</span>
                         <time dateTime={request.requestedAt}>
                           {formatDate(request.requestedAt)}
@@ -208,7 +210,7 @@ export function AdminHomePage() {
                       </div>
                     </div>
                     <span className="ah-request-action">
-                      목록으로 <ArrowRightOutlined aria-hidden="true" />
+                      요청 목록 보기 <ArrowRightOutlined aria-hidden="true" />
                     </span>
                   </Link>
                 </li>
@@ -216,9 +218,9 @@ export function AdminHomePage() {
             </ul>
           )}
           <div className="ah-list-footer">
-            <span>승인·반려는 룰 변경 요청 화면에서 처리합니다.</span>
+            <span>룰 끄기 요청 목록에서 승인하거나 반려할 수 있습니다.</span>
             <Link to={requestPath}>
-              전체 요청 보기 <ArrowRightOutlined aria-hidden="true" />
+              룰 끄기 요청 목록 보기 <ArrowRightOutlined aria-hidden="true" />
             </Link>
           </div>
         </section>
@@ -233,16 +235,16 @@ export function AdminHomePage() {
               <PauseCircleOutlined aria-hidden="true" />
             </div>
             <Link to="/admin/fds/rules" className="ah-rule-stat">
-              <span>꺼져 있는 룰</span>
+              <span>사용 중지된 탐지 룰</span>
               <Count result={data?.disabledRules} loading={loading} unit="개" />
             </Link>
             <p>
               {data?.disabledRules.status === 'fulfilled' && data.disabledRules.value === 0
-                ? '모든 탐지 룰이 켜져 있습니다.'
-                : '꺼진 룰은 이상 거래 탐지에 사용되지 않습니다. 필요한 룰이 켜져 있는지 확인하세요.'}
+                ? '모든 탐지 룰이 사용 중입니다.'
+                : '사용 중지된 룰은 이상 거래 탐지에 사용되지 않습니다. 탐지 룰 목록에서 다시 켤 수 있습니다.'}
             </p>
             <Link to="/admin/fds/rules" className="ah-secondary-link">
-              Rule 카탈로그 보기 <ArrowRightOutlined aria-hidden="true" />
+              탐지 룰 목록 보기 <ArrowRightOutlined aria-hidden="true" />
             </Link>
           </section>
           <section
@@ -254,14 +256,16 @@ export function AdminHomePage() {
               <h2 id="ah-management-title">계정 · 가맹점</h2>
             </div>
             <ManagementLink
-              title="계정 관리"
+              title="전체 계정"
+              destination="계정 관리"
               icon={<TeamOutlined />}
               result={data?.users}
               loading={loading}
               to="/admin/users"
             />
             <ManagementLink
-              title="가맹점 관리"
+              title="전체 가맹점"
+              destination="가맹점 관리"
               icon={<ShopOutlined />}
               result={data?.merchants}
               loading={loading}
