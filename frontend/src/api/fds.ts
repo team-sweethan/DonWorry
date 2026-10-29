@@ -27,6 +27,15 @@ export type FdsEvaluationDetail = {
     thresholdSnapshot: string | null
   }>
   history: FdsEvaluationSummary[]
+  blocklistCandidates: Array<{
+    identifierType: FdsBlocklistEntry['identifierType']
+    identifierValue: string
+    displayLabel: string | null
+  }>
+  cardIdentifier: {
+    cardToken: string
+    cardDisplayLabel: string | null
+  } | null
 }
 
 export type FdsEvaluationPage = {
@@ -73,6 +82,25 @@ export type FdsRuleChangeRequest = {
 
 export type FdsRuleChangeRequestPage = {
   content: FdsRuleChangeRequest[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export type FdsBlocklistEntry = {
+  entryId: number
+  identifierType: 'CARD_TOKEN' | 'DEVICE_ID' | 'BUYER_REF' | 'IP_ADDRESS' | 'BUYER_EMAIL'
+  identifierValue: string
+  displayLabel: string | null
+  reason: string
+  active: boolean
+  createdAt: string
+  expiresAt: string | null
+}
+
+export type FdsBlocklistPage = {
+  content: FdsBlocklistEntry[]
   page: number
   size: number
   totalElements: number
@@ -149,6 +177,38 @@ export function reviewFdsRuleChangeRequest(requestId: number, approve: boolean) 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ approve }),
   })
+}
+
+export function getFdsBlocklist(page: number) {
+  return api<FdsBlocklistPage>(
+    `/fds/blocklist?${new URLSearchParams({ page: String(page), size: '10' })}`,
+    { cache: 'no-store' },
+  )
+}
+
+export function addFdsBlocklistEntry(input: {
+  identifierType: FdsBlocklistEntry['identifierType']
+  identifierValue: string
+  displayLabel?: string | null
+  reason: string
+}) {
+  return api<void>('/fds/blocklist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
+export function deactivateFdsBlocklistEntry(entryId: number) {
+  return api<void>(`/fds/blocklist/${entryId}/deactivate`, { method: 'PUT' })
+}
+
+export function getFdsBlocklistStatus(
+  identifierType: FdsBlocklistEntry['identifierType'],
+  identifierValue: string,
+) {
+  const query = new URLSearchParams({ identifierType, identifierValue })
+  return api<{ blocked: boolean }>(`/fds/blocklist/status?${query}`, { cache: 'no-store' })
 }
 
 export function createMockFdsEvaluations() {

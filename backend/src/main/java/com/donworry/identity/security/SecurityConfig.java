@@ -187,7 +187,9 @@ public class SecurityConfig {
                                 "/api/fds/rule-policies",
                                 "/api/fds/rules/**",
                                 "/api/fds/rule-change-requests",
-                                "/api/fds/rule-change-requests/**")
+                                "/api/fds/rule-change-requests/**",
+                                "/api/fds/blocklist",
+                                "/api/fds/blocklist/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

@@ -1,11 +1,26 @@
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Descriptions, Spin, Table, Tag, Typography } from 'antd'
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Descriptions,
+  Form,
+  Input,
+  Modal,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from 'antd'
 import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import {
+  addFdsBlocklistEntry,
   getFdsEvaluation,
+  getFdsBlocklistStatus,
   getFdsRulePolicies,
   type FdsEvaluationDetail,
   type FdsResult,
@@ -53,7 +68,32 @@ function observedValue(ruleCode: string, rawValue: string | null) {
       ? `소액 ${value.smallAttemptCount}회 · 카드 ${value.cardCount}개 · 거절 ${value.declinedCount}회`
       : '—'
   }
-  if (ruleCode === 'R07') return typeof value.buyerRef === 'string' ? value.buyerRef : '—'
+  if (ruleCode === 'R07') {
+    const matchedTypes = Array.isArray(value.matchedIdentifierTypes)
+      ? value.matchedIdentifierTypes.filter((type): type is string => typeof type === 'string')
+      : []
+    const labelByType: Record<string, string> = {
+      BUYER_REF: '구매자',
+      DEVICE_ID: '기기',
+      CARD_TOKEN: '카드',
+      IP_ADDRESS: 'IP',
+      BUYER_EMAIL: '이메일',
+    }
+    const valueByType: Record<string, unknown> = {
+      BUYER_REF: value.buyerRef,
+      DEVICE_ID: value.deviceId,
+      CARD_TOKEN: value.cardDisplayLabel ?? value.cardToken,
+      IP_ADDRESS: value.ipAddress,
+      BUYER_EMAIL: value.buyerEmail,
+    }
+    const descriptions = matchedTypes
+      .map((type) => {
+        const matchedValue = valueByType[type]
+        return `${labelByType[type] ?? type}${typeof matchedValue === 'string' ? ` · ${matchedValue}` : ''}`
+      })
+      .join(' / ')
+    return descriptions || (typeof value.buyerRef === 'string' ? value.buyerRef : '—')
+  }
   if (ruleCode === 'R08')
     return typeof value.declinedCount === 'number' ? `${value.declinedCount}회` : '—'
   return '—'
@@ -83,6 +123,11 @@ export function AlertDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [policies, setPolicies] = useState<FdsRulePolicy[]>([])
   const [policyError, setPolicyError] = useState(false)
+  const [blocklistOpen, setBlocklistOpen] = useState(false)
+  const [blocklistSubmitting, setBlocklistSubmitting] = useState(false)
+  const [blockedCandidates, setBlockedCandidates] = useState<Set<string>>(new Set())
+  const [selectedCandidates, setSelectedCandidates] = useState<string[]>([])
+  const [blocklistForm] = Form.useForm<{ reason: string }>()
   const initialDetailLoading = loading && detail === null
   const showInitialDetailLoading = useMinimumLoadingIndicator(initialDetailLoading)
 
@@ -99,6 +144,25 @@ export function AlertDetailPage() {
         const response = await getFdsEvaluation(id)
         if (active) {
           setDetail(response)
+          void Promise.all(
+            response.blocklistCandidates.map(async (candidate) => ({
+              key: `${candidate.identifierType}:${candidate.identifierValue}`,
+              status: await getFdsBlocklistStatus(
+                candidate.identifierType,
+                candidate.identifierValue,
+              ),
+            })),
+          )
+            .then((statuses) => {
+              if (active) {
+                setBlockedCandidates(
+                  new Set(statuses.filter(({ status }) => status.blocked).map(({ key }) => key)),
+                )
+              }
+            })
+            .catch(() => {
+              if (active) setBlockedCandidates(new Set())
+            })
           void getFdsRulePolicies()
             .then((next) => {
               if (active) {
@@ -138,15 +202,65 @@ export function AlertDetailPage() {
     score === null
       ? `오류 코드 ${evaluation.errorCode ?? '—'}`
       : `${score}점 · ${evaluation.result} 판정`
+  const candidateKey = (candidate: FdsEvaluationDetail['blocklistCandidates'][number]) =>
+    `${candidate.identifierType}:${candidate.identifierValue}`
+  const closeBlocklistModal = () => {
+    if (blocklistSubmitting) return
+    setBlocklistOpen(false)
+    setSelectedCandidates([])
+    blocklistForm.resetFields()
+  }
+  const submitBlocklist = async () => {
+    const { reason } = await blocklistForm.validateFields()
+    const candidates = detail.blocklistCandidates.filter(
+      (candidate) =>
+        selectedCandidates.includes(candidateKey(candidate)) &&
+        !blockedCandidates.has(candidateKey(candidate)),
+    )
+    if (candidates.length === 0) return
+    setBlocklistSubmitting(true)
+    try {
+      await Promise.all(
+        candidates.map((candidate) =>
+          addFdsBlocklistEntry({
+            identifierType: candidate.identifierType,
+            identifierValue: candidate.identifierValue,
+            displayLabel: candidate.displayLabel,
+            reason: reason.trim(),
+          }),
+        ),
+      )
+      setBlockedCandidates(
+        (current) =>
+          new Set([...current, ...candidates.map((candidate) => candidateKey(candidate))]),
+      )
+      setBlocklistOpen(false)
+      setSelectedCandidates([])
+      blocklistForm.resetFields()
+    } catch {
+      setError('차단 목록 등록을 완료하지 못했습니다. 이미 등록된 값인지 확인해주세요.')
+    } finally {
+      setBlocklistSubmitting(false)
+    }
+  }
   return (
     <>
       <PageHeader
         title="경보 상세"
         description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${evaluation.merchantId} · 고객 ${evaluation.customerRef}`}
         actions={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/alerts')}>
-            목록으로
-          </Button>
+          <>
+            <Button
+              danger
+              disabled={detail.blocklistCandidates.length === 0}
+              onClick={() => setBlocklistOpen(true)}
+            >
+              카드 · 기기 · IP · 이메일 차단 목록 등록
+            </Button>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/alerts')}>
+              목록으로
+            </Button>
+          </>
         }
       />
       <div className="dw-section-grid dw-alert-detail">
@@ -319,6 +433,12 @@ export function AlertDetailPage() {
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
               <Descriptions.Item label="가맹점 ID">{evaluation.merchantId}</Descriptions.Item>
               <Descriptions.Item label="고객 식별자">{evaluation.customerRef}</Descriptions.Item>
+              <Descriptions.Item label="마스킹 카드">
+                {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="카드 식별값">
+                {detail.cardIdentifier?.cardToken ?? '—'}
+              </Descriptions.Item>
               <Descriptions.Item label="결제 요청 시각">
                 {formatDate(evaluation.paymentRequestedAt)}
               </Descriptions.Item>
@@ -334,6 +454,60 @@ export function AlertDetailPage() {
           </div>
         </div>
       </div>
+      <Modal
+        title="차단 목록 등록"
+        open={blocklistOpen}
+        okText="선택 항목 등록"
+        cancelText="취소"
+        okButtonProps={{ disabled: selectedCandidates.length === 0 }}
+        confirmLoading={blocklistSubmitting}
+        onCancel={closeBlocklistModal}
+        onOk={() => void submitBlocklist()}
+      >
+        <Typography.Paragraph type="secondary">
+          평가 당시 P5가 전달한 식별값을 선택해 등록합니다. 이미 차단된 값은 다시 등록하지 않습니다.
+        </Typography.Paragraph>
+        <Checkbox.Group
+          value={selectedCandidates}
+          onChange={(values) => setSelectedCandidates(values as string[])}
+          style={{ display: 'grid', gap: 12, marginBottom: 16 }}
+        >
+          {detail.blocklistCandidates.map((candidate) => {
+            const key = candidateKey(candidate)
+            const blocked = blockedCandidates.has(key)
+            return (
+              <Checkbox key={key} value={key} disabled={blocked}>
+                {candidate.identifierType === 'CARD_TOKEN'
+                  ? '카드'
+                  : candidate.identifierType === 'DEVICE_ID'
+                    ? '기기 ID'
+                    : candidate.identifierType === 'IP_ADDRESS'
+                      ? 'IP 주소'
+                      : '이메일'}{' '}
+                · {candidate.displayLabel ?? candidate.identifierValue}{' '}
+                {blocked && <Tag color="red">차단 중</Tag>}
+              </Checkbox>
+            )
+          })}
+        </Checkbox.Group>
+        <Form form={blocklistForm} layout="vertical">
+          <Form.Item
+            label="등록 사유"
+            name="reason"
+            rules={[
+              { required: true, whitespace: true, message: '등록 사유를 입력해주세요.' },
+              { max: 500 },
+            ]}
+          >
+            <Input.TextArea
+              maxLength={500}
+              showCount
+              rows={3}
+              placeholder="예: 사기 거래로 확인되어 재시도를 차단합니다."
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   )
 }

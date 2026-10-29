@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationRequestConflictException;
 import com.donworry.fds.api.FdsResult;
+import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.entity.FdsRulePolicy;
+import com.donworry.fds.repository.FdsBlocklistEntryRepository;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import java.time.Instant;
@@ -40,7 +42,13 @@ class FdsEvaluationServiceTests {
     private FdsRulePolicyRepository rulePolicies;
 
     @Mock
+    private FdsBlocklistEntryRepository blocklistEntries;
+
+    @Mock
     private FdsRulePolicy rulePolicy;
+
+    @Mock
+    private FdsBlocklistEntry blocklistEntry;
 
     @Captor
     private ArgumentCaptor<FdsEvaluation> evaluationCaptor;
@@ -124,6 +132,98 @@ class FdsEvaluationServiceTests {
         assertThat(result.riskScore()).isZero();
         assertThat(highAmount.getOutcome().name()).isEqualTo("NO_MATCH");
         assertThat(highAmount.getAppliedScore()).isZero();
+    }
+
+    @Test
+    // 활성 차단 목록과 일치하면 다른 점수 계산과 무관하게 R07이 즉시 DENY를 반환한다.
+    void evaluate_whenBuyerRefIsOnActiveBlocklist_returnsDeny() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var blocklistEvaluator = new FdsEvaluationTransactionService(
+                evaluationRepository,
+                null,
+                blocklistEntries,
+                null,
+                JsonMapper.builder().build());
+        when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(any(), any())).thenReturn(List.of());
+        when(blocklistEntries.findByIdentifierTypeAndIdentifierValue("BUYER_REF", "hong-gildong"))
+                .thenReturn(List.of(blocklistEntry));
+        when(blocklistEntry.isActiveAt(requestedAt)).thenReturn(true);
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = blocklistEvaluator.evaluate(request(1L, 10_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var blocklist = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R07"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(result.result()).isEqualTo(FdsResult.DENY);
+        assertThat(result.riskScore()).isEqualTo(100);
+        assertThat(blocklist.getOutcome().name()).isEqualTo("MATCH");
+        assertThat(blocklist.getAppliedScore()).isEqualTo(100);
+        assertThat(blocklist.getObservedValue()).contains("\"matchedIdentifierTypes\":[\"BUYER_REF\"]");
+    }
+
+    @Test
+    // 카드와 IP가 함께 차단 목록에 있으면 R07 스냅샷에 두 근거를 모두 남긴다.
+    void evaluate_whenCardAndIpAreOnBlocklist_recordsBothMatchedIdentifierTypes() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var blocklistEvaluator = new FdsEvaluationTransactionService(
+                evaluationRepository,
+                null,
+                blocklistEntries,
+                null,
+                JsonMapper.builder().build());
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                1L,
+                1L,
+                "hong-gildong",
+                10_000L,
+                requestedAt,
+                "device-1",
+                "card-token-4242",
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
+        when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(any(), any())).thenReturn(List.of());
+        when(blocklistEntries.findByIdentifierTypeAndIdentifierValue(
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(List.of());
+        org.mockito.Mockito.doReturn(List.of(blocklistEntry))
+                .when(blocklistEntries)
+                .findByIdentifierTypeAndIdentifierValue("CARD_TOKEN", "card-token-4242");
+        org.mockito.Mockito.doReturn(List.of(blocklistEntry))
+                .when(blocklistEntries)
+                .findByIdentifierTypeAndIdentifierValue("IP_ADDRESS", "203.0.113.10");
+        when(blocklistEntry.isActiveAt(requestedAt)).thenReturn(true);
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        blocklistEvaluator.evaluate(request);
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var blocklist = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R07"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(blocklist.getObservedValue()).contains("\"matchedIdentifierTypes\":[\"CARD_TOKEN\",\"IP_ADDRESS\"]");
     }
 
     @Test
@@ -327,7 +427,7 @@ class FdsEvaluationServiceTests {
                 .filter(hit -> hit.getRuleCode().equals("R07"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(blocklist.getObservedValue()).isEqualTo("{\"buyerRef\":\"customer\\n\\tref\"}");
+        assertThat(blocklist.getObservedValue()).contains("\"buyerRef\":\"customer\\n\\tref\"");
     }
 
     @Test

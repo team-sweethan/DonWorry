@@ -58,8 +58,17 @@ public class FdsEvaluation {
     @Column(name = "card_token", length = 255)
     private String cardToken;
 
+    @Column(name = "card_display_label", length = 50)
+    private String cardDisplayLabel;
+
     @Column(name = "ip_country_code", length = 2)
     private String ipCountryCode;
+
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "buyer_email", length = 254)
+    private String buyerEmail;
 
     @Column(name = "authorization_result", length = 20)
     private String authorizationResult;
@@ -94,7 +103,10 @@ public class FdsEvaluation {
             String customerRef,
             String deviceId,
             String cardToken,
+            String cardDisplayLabel,
             String ipCountryCode,
+            String ipAddress,
+            String buyerEmail,
             Instant paymentRequestedAt,
             Long requestedAmount,
             Integer riskScore,
@@ -107,7 +119,10 @@ public class FdsEvaluation {
         this.customerRef = customerRef;
         this.deviceId = deviceId;
         this.cardToken = cardToken;
+        this.cardDisplayLabel = cardDisplayLabel;
         this.ipCountryCode = ipCountryCode;
+        this.ipAddress = ipAddress;
+        this.buyerEmail = buyerEmail;
         this.paymentRequestedAt = paymentRequestedAt;
         this.requestedAmount = requestedAmount;
         this.riskScore = riskScore;
@@ -125,7 +140,10 @@ public class FdsEvaluation {
                 .customerRef(request.customerRef())
                 .deviceId(request.deviceId())
                 .cardToken(request.cardToken())
+                .cardDisplayLabel(request.cardDisplayLabel())
                 .ipCountryCode(request.ipCountryCode())
+                .ipAddress(request.ipAddress())
+                .buyerEmail(request.buyerEmail())
                 .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
                 .requestedAmount(request.amount())
                 .riskScore(riskScore)
@@ -143,7 +161,10 @@ public class FdsEvaluation {
                 .customerRef(request.customerRef())
                 .deviceId(request.deviceId())
                 .cardToken(request.cardToken())
+                .cardDisplayLabel(request.cardDisplayLabel())
                 .ipCountryCode(request.ipCountryCode())
+                .ipAddress(request.ipAddress())
+                .buyerEmail(request.buyerEmail())
                 .paymentRequestedAt(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS))
                 .requestedAmount(request.amount())
                 .result(FdsResult.ERROR)
@@ -158,7 +179,10 @@ public class FdsEvaluation {
                 && customerRef.equals(request.customerRef())
                 && java.util.Objects.equals(deviceId, request.deviceId())
                 && java.util.Objects.equals(cardToken, request.cardToken())
+                && java.util.Objects.equals(cardDisplayLabel, request.cardDisplayLabel())
                 && java.util.Objects.equals(ipCountryCode, request.ipCountryCode())
+                && java.util.Objects.equals(ipAddress, request.ipAddress())
+                && java.util.Objects.equals(buyerEmail, request.buyerEmail())
                 && requestedAmount == request.amount()
                 && paymentRequestedAt.equals(request.paymentRequestedAt().truncatedTo(ChronoUnit.MICROS));
     }

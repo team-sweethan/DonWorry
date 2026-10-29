@@ -120,10 +120,10 @@ class FdsEvaluationTransactionService {
                 && distinctCards >= 3
                 && declined >= 3;
         var declinedRetry = isRuleActive("R08") && declined >= DECLINED_RETRY_COUNT_THRESHOLD;
-        var blocked = isRuleActive("R07")
-                && (isBlocked("BUYER_REF", request.customerRef(), request.paymentRequestedAt())
-                        || isBlocked("DEVICE_ID", request.deviceId(), request.paymentRequestedAt())
-                        || isBlocked("CARD_TOKEN", request.cardToken(), request.paymentRequestedAt()));
+        var blockedIdentifierTypes = isRuleActive("R07")
+                ? blockedIdentifierTypes(request, request.paymentRequestedAt())
+                : java.util.List.<String>of();
+        var blocked = !blockedIdentifierTypes.isEmpty();
         score += (newDevice ? 25 : 0)
                 + (newCard ? 25 : 0)
                 + (highRiskCountry ? 40 : 0)
@@ -195,7 +195,13 @@ class FdsEvaluationTransactionService {
                 blocked,
                 100,
                 "{\"active\":true}",
-                "{\"buyerRef\":" + json(request.customerRef()) + "}");
+                "{\"buyerRef\":" + json(request.customerRef())
+                        + ",\"deviceId\":" + json(request.deviceId())
+                        + ",\"cardToken\":" + json(request.cardToken())
+                        + ",\"cardDisplayLabel\":" + json(request.cardDisplayLabel())
+                        + ",\"ipAddress\":" + json(request.ipAddress())
+                        + ",\"buyerEmail\":" + json(request.buyerEmail())
+                        + ",\"matchedIdentifierTypes\":" + json(blockedIdentifierTypes) + "}");
         evaluation.addRuleHit(
                 "R08",
                 declinedRetry ? FdsRuleHitOutcome.MATCH : FdsRuleHitOutcome.NO_MATCH,
@@ -237,6 +243,18 @@ class FdsEvaluationTransactionService {
                         .anyMatch(entry -> entry.isActiveAt(at));
     }
 
+    private java.util.List<String> blockedIdentifierTypes(FdsEvaluationRequest request, Instant at) {
+        return java.util.stream.Stream.of(
+                        new BlocklistIdentifier("BUYER_REF", request.customerRef()),
+                        new BlocklistIdentifier("DEVICE_ID", request.deviceId()),
+                        new BlocklistIdentifier("CARD_TOKEN", request.cardToken()),
+                        new BlocklistIdentifier("IP_ADDRESS", request.ipAddress()),
+                        new BlocklistIdentifier("BUYER_EMAIL", request.buyerEmail()))
+                .filter(identifier -> isBlocked(identifier.type(), identifier.value(), at))
+                .map(BlocklistIdentifier::type)
+                .toList();
+    }
+
     private boolean isRuleActive(String ruleCode) {
         return rulePolicies == null
                 || rulePolicies
@@ -268,9 +286,11 @@ class FdsEvaluationTransactionService {
         return requestedAt.isAfter(windowStart) && !requestedAt.isAfter(windowEnd);
     }
 
-    private String json(String value) {
+    private String json(Object value) {
         return jsonMapper.writeValueAsString(value);
     }
+
+    private record BlocklistIdentifier(String type, String value) {}
 
     private FdsResult resultFor(int score) {
         if (score >= DENY_MIN_SCORE) {

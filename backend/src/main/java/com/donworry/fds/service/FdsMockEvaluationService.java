@@ -111,7 +111,18 @@ public class FdsMockEvaluationService {
 
     private FdsEvaluationRequest request(String requestId, Long paymentId, long amount, Instant paymentRequestedAt) {
         return new FdsEvaluationRequest(
-                UUID.fromString(requestId), paymentId, MOCK_MERCHANT_ID, MOCK_CUSTOMER_REF, amount, paymentRequestedAt);
+                UUID.fromString(requestId),
+                paymentId,
+                MOCK_MERCHANT_ID,
+                MOCK_CUSTOMER_REF,
+                amount,
+                paymentRequestedAt,
+                "device-mock-hong-gildong",
+                "card-token-mock-4242",
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 
     private record MockRequest(
