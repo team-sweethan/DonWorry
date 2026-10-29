@@ -41,7 +41,8 @@ class SettlementFlowTests {
         calculator = new SettlementFeeCalculator();
         settlementService = new SettlementService(settlements, calculator);
         events = mock(ApplicationEventPublisher.class);
-        captureService = new CaptureService(new CaptureTransactionService(captures, settlementService, events));
+        captureService = new CaptureService(new CaptureTransactionService(
+                captures, settlementService, events, mock(OrderFulfillmentService.class)));
     }
 
     // 정상 매입은 완료되고 수수료를 차감한 정산 예정금이 생성된다

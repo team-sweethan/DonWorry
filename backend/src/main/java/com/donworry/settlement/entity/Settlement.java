@@ -59,6 +59,24 @@ public class Settlement {
     @Column(name = "status", nullable = false, length = 30)
     private SettlementStatus status;
 
+    @Column(name = "expected_settlement_at")
+    private Instant expectedSettlementAt;
+
+    @Column(name = "scheduled_at")
+    private Instant scheduledAt;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    public void applyPickupSchedule(Instant expectedAt, Instant eligibleAt, Instant now) {
+        if (java.util.Objects.equals(expectedSettlementAt, expectedAt)
+                && java.util.Objects.equals(scheduledAt, eligibleAt)) return;
+        if (status != SettlementStatus.SCHEDULED) throw new IllegalStateException("최종 정산의 일정은 변경할 수 없습니다.");
+        expectedSettlementAt = expectedAt;
+        scheduledAt = eligibleAt;
+        updatedAt = now;
+    }
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

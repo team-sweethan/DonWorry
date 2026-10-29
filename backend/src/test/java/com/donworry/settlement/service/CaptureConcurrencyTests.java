@@ -14,7 +14,6 @@ import jakarta.persistence.EntityManager;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -62,25 +61,15 @@ class CaptureConcurrencyTests {
     @Test
     void processCapture_whenConcurrentDuplicate_returnsSameCapture() throws Exception {
         CyclicBarrier barrier = new CyclicBarrier(2);
-        AtomicInteger lookups = new AtomicInteger();
-        doAnswer(invocation -> {
-                    var existing = entityManager
-                            .createQuery("select c from Capture c where c.paymentId = :paymentId", Capture.class)
-                            .setParameter("paymentId", 90001L)
-                            .getResultList()
-                            .stream()
-                            .findFirst();
-                    if (lookups.incrementAndGet() <= 2) {
-                        barrier.await(10, TimeUnit.SECONDS);
-                    }
-                    return existing;
-                })
-                .when(captures)
-                .findByPaymentId(90001L);
-
         try (var executor = Executors.newFixedThreadPool(2)) {
-            var first = executor.submit(() -> service.processCapture(90001L, 2L, "CONCURRENT-001", 10001L));
-            var second = executor.submit(() -> service.processCapture(90001L, 2L, "CONCURRENT-001", 10001L));
+            var first = executor.submit(() -> {
+                barrier.await(10, TimeUnit.SECONDS);
+                return service.processCapture(90001L, 2L, "CONCURRENT-001", 10001L);
+            });
+            var second = executor.submit(() -> {
+                barrier.await(10, TimeUnit.SECONDS);
+                return service.processCapture(90001L, 2L, "CONCURRENT-001", 10001L);
+            });
             Capture firstResult = first.get(20, TimeUnit.SECONDS);
             Capture secondResult = second.get(20, TimeUnit.SECONDS);
             assertThat(firstResult.getCaptureId()).isEqualTo(secondResult.getCaptureId());
