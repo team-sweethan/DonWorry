@@ -15,6 +15,7 @@ import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
+import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
 import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
@@ -69,7 +70,7 @@ export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
-  { path: '/admin', element: <Navigate to="/admin/fds/rules" replace /> },
+  { path: '/admin', element: <Navigate to="/admin/home" replace /> },
   { path: '/security', element: <Navigate to="/security/home" replace /> },
   {
     element: <ServerSession />,
@@ -79,6 +80,7 @@ export const router = createBrowserRouter([
       {
         path: '/admin',
         children: [
+          { path: 'home', element: <AdminHomePage /> },
           { path: 'fds/rules', element: <RuleCatalogPage /> },
           { path: 'fds/rule-change-requests', element: <RuleChangeRequestsPage /> },
           { path: 'finance', element: <EmptyPage title="자금관리" /> },

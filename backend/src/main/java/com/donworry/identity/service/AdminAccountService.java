@@ -37,7 +37,8 @@ public class AdminAccountService {
     private final PlatformTransactionManager transactionManager;
 
     @Transactional(readOnly = true)
-    public AdminUserPageResponse list(int page, int size, String keyword, String role, String status) {
+    public AdminUserPageResponse list(
+            int page, int size, String keyword, String role, String status, Boolean passwordChangeRequired) {
         if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE || keyword.length() > 100)
             invalid();
         UserRole roleFilter = role == null ? null : role(role);
@@ -52,6 +53,8 @@ public class AdminAccountService {
             var predicates = new ArrayList<jakarta.persistence.criteria.Predicate>();
             if (roleFilter != null) predicates.add(cb.equal(root.get("role"), roleFilter));
             if (statusFilter != null) predicates.add(cb.equal(root.get("status"), statusFilter));
+            if (passwordChangeRequired != null)
+                predicates.add(cb.equal(root.get("passwordChangeRequired"), passwordChangeRequired));
             predicates.add(cb.or(
                     cb.like(cb.lower(root.get("loginId")), pattern, '!'),
                     cb.like(cb.lower(root.get("displayName")), pattern, '!')));

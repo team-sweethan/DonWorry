@@ -1,0 +1,418 @@
+.ah-home {
+  color: #172b4d;
+}
+.ah-home > .ant-alert {
+  margin-bottom: 24px;
+}
+.ah-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 24px;
+  align-items: start;
+}
+.ah-panel {
+  background: #fff;
+  border: 1px solid #e1e7ef;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px #172b4d03;
+  overflow: hidden;
+}
+.ah-home a {
+  text-decoration: none;
+}
+.ah-approval-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 22px 28px;
+  background: #fff;
+  border-bottom: 1px solid #e9edf4;
+}
+.ah-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: #64748b;
+  background: #f1f5fa;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+.ah-summary-copy {
+  flex: 1;
+  min-width: 180px;
+}
+.ah-summary-copy h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+}
+.ah-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: #172b4d;
+  font-size: 34px;
+  font-weight: 750;
+  line-height: 1.25;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.ah-approvals .ah-count {
+  font-size: 24px;
+}
+.ah-count small {
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0;
+}
+.ah-count-error {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #b42318;
+  margin: 8px 0;
+}
+.ah-review-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 17px;
+  border-radius: 8px;
+  border: 1px solid #dce4ef;
+  background: #fff;
+  color: #375780;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 150ms;
+}
+.ah-review-link:hover {
+  background: #f5f8ff;
+  color: #2563eb;
+}
+.ah-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 24px 28px 12px;
+}
+.ah-list-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.ah-list-heading > span {
+  font-size: 11px;
+  color: #64748b;
+}
+.ah-request-list {
+  list-style: none;
+  padding: 0 12px 12px;
+  margin: 0;
+}
+.ah-request-list li + li {
+  border-top: 1px solid #eef1f6;
+}
+.ah-request-link {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin: 4px 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  transition: background 150ms;
+}
+.ah-request-link:hover {
+  background: #f5f8ff;
+}
+.ah-request-content {
+  flex: 1;
+  min-width: 0;
+}
+.ah-rule-code {
+  border: 1px solid #dde6f3;
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: #375780;
+  background: #f5f8fc;
+  font-size: 11px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.ah-request-reason {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0 0 7px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+.ah-request-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.ah-request-action {
+  color: #2563eb;
+  font-size: 13px;
+}
+.ah-list-state {
+  padding: 32px 28px;
+  min-height: 180px;
+}
+.ah-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.ah-empty > .anticon {
+  font-size: 30px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+.ah-empty-check {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #edf8f2;
+  color: #16835d;
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+.ah-empty h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+.ah-side {
+  display: grid;
+  gap: 20px;
+}
+.ah-rule-panel {
+  padding: 24px;
+}
+.ah-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.ah-section-heading h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.ah-section-heading > .anticon {
+  color: #64748b;
+  font-size: 18px;
+}
+.ah-rule-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 28px 0 18px;
+}
+.ah-rule-stat > span:first-child {
+  flex: 1;
+  color: #475569;
+  font-size: 13px;
+}
+.ah-rule-stat:hover .ah-count {
+  color: #2563eb;
+}
+.ah-rule-panel > p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.ah-arrow {
+  color: #64748b;
+  font-size: 13px;
+}
+.ah-management-overview {
+  margin-bottom: 28px;
+}
+.ah-management-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.ah-management-card {
+  position: relative;
+  padding: 28px;
+  background: linear-gradient(115deg, #f5f9ff, #fff 85%);
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.ah-management-card:hover {
+  border-color: #9ab9ec;
+  box-shadow: 0 4px 16px #2563eb0a;
+}
+.ah-management-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.ah-management-heading h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+.ah-management-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #e8f0ff;
+  color: #2563eb;
+  font-size: 23px;
+}
+.ah-management-card:nth-child(2) .ah-management-icon {
+  color: #5d52bd;
+  background: #eeeafd;
+}
+.ah-management-card > p {
+  margin: 18px 0 24px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.ah-management-total {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.ah-management-total > span:first-child {
+  font-size: 12px;
+  color: #64748b;
+}
+.ah-management-total .ah-count {
+  font-size: 38px;
+}
+.ah-management-note {
+  margin: 10px 2px 0;
+  font-size: 11px;
+  color: #64748b;
+}
+@media (max-width: 1350px) {
+  .ah-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 20px;
+  }
+  .ah-approval-summary {
+    padding: 24px;
+    gap: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ah-home a {
+    transition: none;
+  }
+}
+
+/* 홈은 좁은 창에서도 현황이 화면 밖으로 밀리지 않게 재배치한다. */
+.admin-viewport:has(.ah-home) {
+  min-width: 760px;
+}
+@media (max-width: 1100px) {
+  .ah-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ah-management-cards {
+    gap: 20px;
+  }
+  .ah-management-card {
+    padding: 22px;
+  }
+}
+
+/* 승인 대기가 있으면 사이드바 배지와 같은 gold 계열로 눈에 띄게 한다. */
+.ah-approvals.is-pending .ah-approval-summary {
+  background: #fffbeb;
+}
+.ah-approvals.is-pending .ah-feature-icon {
+  color: #b45309;
+  background: #fef3c7;
+}
+.ah-approvals.is-pending .ah-count {
+  color: #b45309;
+}
+.ah-request-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #375780;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+}
+.ah-request-more:hover {
+  background: #f5f8ff;
+  color: #2563eb;
+}
+
+/* 제목 링크가 카드 전체를 덮고, 안쪽 알림 링크만 그 위로 올린다. */
+.ah-management-link {
+  color: inherit;
+}
+.ah-management-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.ah-management-link:focus-visible {
+  outline: none;
+}
+.ah-management-card:has(.ah-management-link:focus-visible) {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.ah-management-alert {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 10px 14px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+}
+.ah-management-alert > span {
+  flex: 1;
+}
+.ah-management-alert:hover {
+  border-color: #f59e0b;
+  color: #78350f;
+}

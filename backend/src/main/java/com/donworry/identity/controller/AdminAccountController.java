@@ -25,8 +25,9 @@ public class AdminAccountController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "") String keyword,
             @RequestParam(required = false) String role,
-            @RequestParam(required = false) String status) {
-        return service.list(page, size, keyword, role, status);
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Boolean passwordChangeRequired) {
+        return service.list(page, size, keyword, role, status, passwordChangeRequired);
     }
 
     @GetMapping("/users/{id}")

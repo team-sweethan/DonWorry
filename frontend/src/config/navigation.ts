@@ -20,7 +20,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
     {
       title: '탐지',
       items: [
-        { label: 'Rule 카탈로그', path: '/security/rules' },
+        { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
         { label: '경보', path: '/security/alerts' },
       ],
@@ -48,25 +48,26 @@ export const navByRole: Record<Role, NavGroup[]> = {
 
 export const adminNavigation = {
   label: '관리자',
-  landing: '/admin/fds/rules',
+  landing: '/admin/home',
   groups: [
-    {
-      title: '탐지',
-      items: [
-        { label: 'Rule 카탈로그', path: '/admin/fds/rules' },
-        {
-          label: '룰 변경 요청',
-          path: '/admin/fds/rule-change-requests',
-          badge: 'ruleChangeRequests',
-        },
-      ],
-    },
+    { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
     {
       title: '관리',
       items: [
-        { label: '자금관리', path: '/admin/finance' },
         { label: '계정 관리', path: '/admin/users' },
         { label: '가맹점 관리', path: '/admin/merchants' },
+        { label: '자금관리', path: '/admin/finance' },
+      ],
+    },
+    {
+      title: '탐지',
+      items: [
+        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
+        {
+          label: '룰 끄기 요청',
+          path: '/admin/fds/rule-change-requests',
+          badge: 'ruleChangeRequests',
+        },
       ],
     },
   ] satisfies NavGroup[],

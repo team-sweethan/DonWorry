@@ -279,7 +279,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 계약과 대안은 [ADR-0024](../decisions/0024-admin-account-management.md), [상세 설계](129-admin-account-design.md)를 따른다.
 
 - `/admin/users` 목록·검색·역할/상태 필터·페이지 나누기, `/admin/users/new` 생성, `/admin/users/:id` 권한·정지/복구·비밀번호 초기화를 제공한다.
-- `GET /api/admin/users?page=0&size=20&keyword=&role=&status=`: items·page·size·totalElements. role/status는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
+- `GET /api/admin/users?page=0&size=20&keyword=&role=&status=&passwordChangeRequired=`: items·page·size·totalElements. role/status/passwordChangeRequired(true·false, 임시 비밀번호 미변경 여부)는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
 - `POST /api/admin/users`: loginId·displayName·role·merchantId. 아이디 `[a-z0-9_]{3,30}`, 이름 1~100자, 역할은 OPERATOR·SECURITY_STAFF만 허용한다. OPERATOR는 ACTIVE 가맹점이 필수이고 다른 역할은 merchantId를 받지 않는다. 생성 시 기능 권한은 비어 있다. 응답은 201 `{user, temporaryPassword}`다.
 - `PUT /api/admin/users/{id}/permissions`: `{permissions:[...]}` 최종 집합. OPERATOR만 FDS_VIEW·FINANCE_VIEW를 설정한다. ADMIN의 조회 권한은 기존 역할 계산이다.
 - `PUT /api/admin/users/{id}/status`: `{status:"ACTIVE"|"DISABLED"}`. 자기 정지는 거절한다. 역할·소속 변경과 계정 삭제 API는 없다.

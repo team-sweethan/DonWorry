@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -16,7 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   createUser,
   getMerchantOptions,
@@ -37,6 +37,11 @@ import { ApiError } from '../../api/client'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
 import { LoginHistoryTable } from '../auth/LoginHistoryPage'
+import {
+  adminUserListParams,
+  parseAdminUserListQuery,
+  type AdminUserListQuery,
+} from '../../utils/adminUserListQuery'
 
 const roleLabels = { ADMIN: '관리자', OPERATOR: '사장님', SECURITY_STAFF: '보안 직원' }
 const permissionOptions = [
@@ -90,33 +95,38 @@ function TemporaryPasswordModal({
 }
 
 export function AdminUsersPage() {
-  const [filter, setFilter] = useState({
-    page: 0,
-    keyword: '',
-    role: undefined as string | undefined,
-    status: undefined as string | undefined,
-    revision: 0,
-  })
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = useMemo(() => parseAdminUserListQuery(searchParams), [searchParams])
+  const [revision, setRevision] = useState(0)
+  const updateFilter = (changes: Partial<AdminUserListQuery>) =>
+    setSearchParams(adminUserListParams({ ...filter, ...changes }))
+  const refresh = () => setRevision((value) => value + 1)
   const [result, setResult] = useState<{
     filter: typeof filter
+    revision: number
     data?: UserPage
     error?: string
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getUsers(filter.page, filter.keyword, filter.role, filter.status)
+    getUsers(
+      filter.page - 1,
+      filter.keyword,
+      filter.role,
+      filter.status,
+      filter.passwordChangeRequired,
+    )
       .then((data) => {
-        if (alive) setResult({ filter, data })
+        if (alive) setResult({ filter, revision, data })
       })
       .catch((error) => {
-        if (alive) setResult({ filter, error: errorMessage(error) })
+        if (alive) setResult({ filter, revision, error: errorMessage(error) })
       })
     return () => {
       alive = false
     }
-  }, [filter])
-  const current = result?.filter === filter ? result : null
+  }, [filter, revision])
+  const current = result?.filter === filter && result.revision === revision ? result : null
   return (
     <>
       <PageHeader
@@ -124,9 +134,7 @@ export function AdminUsersPage() {
         description="계정을 만들고 조회 권한과 사용 상태를 관리합니다."
         actions={
           <Space>
-            <Button onClick={() => setFilter((f) => ({ ...f, revision: f.revision + 1 }))}>
-              새로고침
-            </Button>
+            <Button onClick={refresh}>새로고침</Button>
             <Link to="/admin/users/new">
               <Button type="primary">계정 만들기</Button>
             </Link>
@@ -138,10 +146,10 @@ export function AdminUsersPage() {
           <Input.Search
             aria-label="계정 검색"
             placeholder="아이디 또는 이름"
-            value={search}
+            key={filter.keyword}
+            defaultValue={filter.keyword}
             maxLength={100}
-            onChange={(e) => setSearch(e.target.value)}
-            onSearch={(value) => setFilter((f) => ({ ...f, keyword: value, page: 0 }))}
+            onSearch={(keyword) => updateFilter({ keyword, page: 1 })}
             allowClear
           />
           <Select
@@ -151,7 +159,7 @@ export function AdminUsersPage() {
             style={{ width: 150 }}
             options={roleOptions}
             value={filter.role}
-            onChange={(role) => setFilter((f) => ({ ...f, role, page: 0 }))}
+            onChange={(role) => updateFilter({ role, page: 1 })}
           />
           <Select
             aria-label="상태 필터"
@@ -163,7 +171,16 @@ export function AdminUsersPage() {
               { value: 'ACTIVE', label: '사용 중' },
               { value: 'DISABLED', label: '정지' },
             ]}
-            onChange={(status) => setFilter((f) => ({ ...f, status, page: 0 }))}
+            onChange={(status) => updateFilter({ status, page: 1 })}
+          />
+          <Select
+            aria-label="비밀번호 필터"
+            placeholder="전체 비밀번호"
+            allowClear
+            style={{ width: 170 }}
+            value={filter.passwordChangeRequired}
+            options={[{ value: true, label: '임시 비밀번호 미변경' }]}
+            onChange={(passwordChangeRequired) => updateFilter({ passwordChangeRequired, page: 1 })}
           />
         </Space>
         {current?.error ? (
@@ -171,11 +188,7 @@ export function AdminUsersPage() {
             type="error"
             showIcon
             message={current.error}
-            action={
-              <Button onClick={() => setFilter((f) => ({ ...f, revision: f.revision + 1 }))}>
-                다시 시도
-              </Button>
-            }
+            action={<Button onClick={refresh}>다시 시도</Button>}
           />
         ) : (
           <Table<AdminUser>
@@ -218,12 +231,12 @@ export function AdminUsersPage() {
               },
             ]}
             pagination={{
-              current: filter.page + 1,
+              current: filter.page,
               pageSize: 20,
               total: current?.data?.totalElements ?? 0,
               showSizeChanger: false,
               showTotal: (total) => `총 ${total}명`,
-              onChange: (page) => setFilter((f) => ({ ...f, page: page - 1 })),
+              onChange: (page) => updateFilter({ page }),
             }}
           />
         )}

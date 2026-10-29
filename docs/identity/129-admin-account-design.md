@@ -46,7 +46,7 @@
 
 | 메서드·경로 | 계약 |
 | --- | --- |
-| GET /api/admin/users | page·size·keyword·role·status, 크기 제한과 안정적인 userId 정렬 |
+| GET /api/admin/users | page·size·keyword·role·status·passwordChangeRequired, 크기 제한과 안정적인 userId 정렬 |
 | GET /api/admin/users/{id} | 공개 계정 정보·소속·권한·강제 변경 상태 |
 | POST /api/admin/users | loginId·displayName·role·merchantId, 201 계정 정보와 임시 비밀번호 |
 | PUT /api/admin/users/{id}/permissions | permissions 최종 집합, OPERATOR만 허용 |
