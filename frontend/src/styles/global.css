@@ -1,5 +1,6 @@
 :root {
   font-family:
+    'Pretendard Variable',
     Pretendard,
     -apple-system,
     BlinkMacSystemFont,
@@ -103,8 +104,9 @@ textarea {
   height: 100%;
   display: flex;
   align-items: center;
+  gap: 10px;
   padding-left: 28px;
-  color: var(--dw-primary);
+  color: #13204a;
   font-size: 23px;
   font-weight: 800;
   letter-spacing: -1.2px;
@@ -248,7 +250,8 @@ textarea {
 }
 .dw-nav-link.active {
   color: white;
-  background: #2563eb;
+  background: #24387a;
+  box-shadow: inset 3px 0 0 #e2bc66;
   font-weight: 650;
 }
 .dw-nav-badge {

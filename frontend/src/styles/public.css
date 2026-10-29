@@ -1,0 +1,171 @@
+/* 로그인 전 화면(랜딩 · 로그인)이 함께 쓰는 브랜드 · 버튼 */
+.dw-mark {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.dw-public-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #0b1220;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  text-decoration: none;
+}
+.dw-public-brand:hover {
+  color: #0b1220;
+}
+.dw-public-brand-small {
+  color: #333d4b;
+  font-size: 16px;
+}
+.dw-public-brand-small .dw-mark {
+  width: 24px;
+  height: 24px;
+}
+
+.dw-btn {
+  height: 52px;
+  padding: 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+.dw-btn:focus-visible {
+  outline: 3px solid #e9cd85;
+  outline-offset: 2px;
+}
+.dw-btn:active {
+  transform: translateY(1px);
+}
+.dw-btn .anticon {
+  font-size: 0.85em;
+  transition: transform 0.15s;
+}
+.dw-btn:hover .anticon-arrow-right {
+  transform: translateX(3px);
+}
+/* 공개 화면 브랜드 버튼 — 주 버튼은 샴페인 골드, 헤더 버튼은 네이비 */
+.dw-btn-primary {
+  background: linear-gradient(180deg, #f1d68e, #d4a548);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 6px 16px rgba(180, 132, 44, 0.28);
+  color: #13204a;
+}
+.dw-btn-primary:hover {
+  background: linear-gradient(180deg, #f5df9f, #dcb057);
+  color: #13204a;
+}
+.dw-btn-small {
+  background: #13204a;
+  color: #fff;
+}
+.dw-btn-small:hover {
+  background: #1d3270;
+  color: #fff;
+}
+.dw-btn-small,
+.dw-btn-text {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.dw-btn-text {
+  padding: 0 12px;
+  background: transparent;
+  color: #333d4b;
+}
+.dw-btn-text:hover {
+  background: #f2f4f6;
+  color: #0b1220;
+}
+.dw-btn-tonal {
+  background: #e6eaf4;
+  color: #13204a;
+}
+.dw-btn-tonal:hover {
+  background: #dbe1ef;
+  color: #13204a;
+}
+.dw-btn-inverse {
+  background: linear-gradient(180deg, #f1d68e, #d4a548);
+  color: #13204a;
+}
+.dw-btn-inverse:hover {
+  background: linear-gradient(180deg, #f5df9f, #dcb057);
+  color: #13204a;
+}
+.dw-btn-ghost {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.dw-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* 이용 신청 진입점 — 신청 기능이 꺼져 있거나 확인 중일 때 */
+.dw-apply-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dw-btn.is-disabled {
+  background: #e7e3d8;
+  box-shadow: none;
+  color: #7a7466;
+  cursor: not-allowed;
+}
+.dw-btn-inverse.is-disabled {
+  background: rgba(255, 255, 255, 0.14);
+  color: #c9d3f0;
+}
+.dw-apply-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1d3270;
+  font-weight: 700;
+}
+.dw-apply-link.is-disabled {
+  color: #8b95a1;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+.dw-apply-retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d3270;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 페이지 전환 애니메이션도 움직임 줄이기 설정을 따른다 */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}

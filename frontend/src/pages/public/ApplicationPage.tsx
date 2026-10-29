@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Checkbox, Descriptions, Form, Input, Result, Space } from 'antd'
 import { Link, useLoaderData } from 'react-router-dom'
+import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import {
   submitApplication,
   verifyApplicationEmail,
@@ -13,15 +14,38 @@ import { ApiError } from '../../api/client'
 import { applicationError } from './applicationFeedback'
 import './ApplicationPage.css'
 
-export function PublicShell({ children }: { children: ReactNode }) {
+const journey = ['신청 및 이메일 확인', '관리자 검토', '승인 후 계정 발급', '첫 비밀번호 설정']
+
+/** 신청 · 이메일 확인 · 첫 비밀번호 화면의 공통 틀. step을 주면 4단계 중 지금 위치를 보여 준다. */
+export function PublicShell({ children, step }: { children: ReactNode; step?: 1 | 2 | 3 | 4 }) {
   return (
     <div className="dw-application-shell">
       <header className="dw-application-header">
-        <Link to="/" className="dw-landing-brand">
-          돈워리<span>DonWorry</span>
+        <Link to="/" className="dw-public-brand" aria-label="돈워리 서비스 소개" viewTransition>
+          <BrandMark className="dw-mark" />
+          돈워리
         </Link>
-        <Link to="/login">로그인</Link>
+        <Link className="dw-btn dw-btn-text" to="/login" viewTransition>
+          로그인
+        </Link>
       </header>
+      {step && (
+        <ol className="dw-application-journey" aria-label="이용 시작 절차">
+          {journey.map((title, index) => {
+            const state = index + 1 < step ? 'done' : index + 1 === step ? 'now' : 'next'
+            return (
+              <li
+                key={title}
+                className={`is-${state}`}
+                aria-current={state === 'now' ? 'step' : undefined}
+              >
+                <span aria-hidden="true">{index + 1}</span>
+                {title}
+              </li>
+            )
+          })}
+        </ol>
+      )}
       <main className="dw-application-main">{children}</main>
     </div>
   )
@@ -148,7 +172,8 @@ export function ApplicationPage() {
     }
   }
   return (
-    <PublicShell>
+    <PublicShell step={1}>
+      {receipt && <Mascot size={120} className="dw-application-mascot dw-mascot-float" />}
       <h1 ref={heading} tabIndex={-1}>
         {receipt
           ? '신청이 접수되었습니다'
@@ -402,10 +427,11 @@ export function VerifyEmailPage() {
     }
   }
   return (
-    <PublicShell>
+    <PublicShell step={verified ? 2 : 1}>
       {verified ? (
         <Result
           status="success"
+          icon={<Mascot size={140} className="dw-mascot-float" />}
           title={
             <h1 ref={resultHeading} tabIndex={-1}>
               이메일 확인이 완료되었습니다

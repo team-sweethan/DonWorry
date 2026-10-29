@@ -1,4 +1,5 @@
 import { SessionExpiryModal } from './SessionExpiryModal'
+import { BrandMark } from '../components/brand/BrandMark'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
@@ -164,36 +165,42 @@ export function LoginRoute() {
     }
     return <Navigate to={destination} replace />
   }
+  // 로그인 화면에는 보호할 본문이 없으므로 확인 실패에도 로그인은 시도할 수 있게 둔다.
+  const unavailable = error === 'unavailable'
+  const sessionExpired = !loggedOut && (showExpired || expired)
   return (
-    <>
-      {/* 로그인 화면에는 보호할 본문이 없으므로 확인 실패에도 로그인은 시도할 수 있게 둔다. */}
-      {error === 'unavailable' && (
-        <Alert
-          role="status"
-          type="warning"
-          showIcon
-          message="로그인 상태를 확인할 수 없습니다. 로그인을 다시 시도해 주세요."
-        />
-      )}
-      {!loggedOut && (showExpired || expired) && (
-        <Alert
-          role="status"
-          type="warning"
-          showIcon
-          message="로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
-        />
-      )}
-      <LoginPage
-        onSubmit={(values) =>
-          loginWithPreferences(values, store.login, (loggedIn) => {
-            // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
-            navigate(loginDestination(loggedIn, loggedOut ? null : state) ?? '/login', {
-              replace: true,
-            })
+    <LoginPage
+      notice={
+        (unavailable || sessionExpired) && (
+          <>
+            {unavailable && (
+              <Alert
+                role="status"
+                type="warning"
+                showIcon
+                message="로그인 상태를 확인할 수 없습니다. 로그인을 다시 시도해 주세요."
+              />
+            )}
+            {sessionExpired && (
+              <Alert
+                role="status"
+                type="warning"
+                showIcon
+                message="로그인 세션이 만료되었습니다. 다시 로그인해 주세요."
+              />
+            )}
+          </>
+        )
+      }
+      onSubmit={(values) =>
+        loginWithPreferences(values, store.login, (loggedIn) => {
+          // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
+          navigate(loginDestination(loggedIn, loggedOut ? null : state) ?? '/login', {
+            replace: true,
           })
-        }
-      />
-    </>
+        })
+      }
+    />
   )
 }
 
@@ -271,6 +278,7 @@ export function ServerSession() {
       header={
         <header className="dw-header">
           <NavLink to={home} className="dw-brand" aria-label="돈워리 홈">
+            <BrandMark size={30} />
             돈워리
           </NavLink>
           <div className="dw-header-center" />

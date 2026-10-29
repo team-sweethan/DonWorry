@@ -1,0 +1,46 @@
+/* 동전이 — 눈 깜빡임과 둥실 떠 있는 움직임. 움직임 줄이기 설정이면 멈춘다. */
+@media (prefers-reduced-motion: no-preference) {
+  .dw-blink {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dw-blink 4.2s infinite;
+  }
+  .dw-mascot-float {
+    animation: dw-mascot-float 3.4s ease-in-out infinite;
+  }
+}
+@keyframes dw-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes dw-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dw-sweat {
+    animation: dw-sweat 2.4s ease-in infinite;
+  }
+}
+@keyframes dw-sweat {
+  0%,
+  60% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+}
