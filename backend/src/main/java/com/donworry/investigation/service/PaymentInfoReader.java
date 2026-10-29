@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.Builder;
 
 // 화면 · 보고서에 보여 줄 P5 결제 정보와 P2 FDS 평가 근거 — P3는 금액 · 상태를 저장하지 않고 조회만 한다
 // 구현은 PaymentFdsInfoReader(P5 PaymentReader + P2 FdsEvidenceReader). 시연 결제만 목 저장소에서 읽는다 (#163)
@@ -35,6 +36,7 @@ public interface PaymentInfoReader {
 
     // P2 MATCH 적중 룰 — 이름은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값
     // thresholdSnapshot · observedValue는 P2 기준값 · 실제값 JSON 원본 (#326). 식별자가 들 수 있어 화면에 그대로 내보내지 않는다
+    @Builder
     record RuleHit(String code, String name, Integer appliedScore, String thresholdSnapshot, String observedValue) {
 
         // 기준값 · 실제값이 없는 시연 결제 · 테스트용

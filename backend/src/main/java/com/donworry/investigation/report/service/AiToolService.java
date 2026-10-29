@@ -97,12 +97,13 @@ public class AiToolService {
     private static FdsEvidenceToolResponse.RuleHit toolRuleHit(RuleHit rule) {
         Optional<Criterion> criterion =
                 RuleCriterionFormatter.format(rule.code(), rule.thresholdSnapshot(), rule.observedValue());
-        return new FdsEvidenceToolResponse.RuleHit(
-                rule.code(),
-                rule.name(),
-                rule.appliedScore(),
-                criterion.map(Criterion::criterion).orElse(null),
-                criterion.map(Criterion::observed).orElse(null));
+        return FdsEvidenceToolResponse.RuleHit.builder()
+                .code(rule.code())
+                .name(rule.name())
+                .appliedScore(rule.appliedScore())
+                .criterion(criterion.map(Criterion::criterion).orElse(null))
+                .observed(criterion.map(Criterion::observed).orElse(null))
+                .build();
     }
 
     // 비슷한 과거 사건 (#296) — 고정 보고서와 같은 규칙을 쓰도록 SimilarCaseFinder에 맡긴다 (트랜잭션도 그쪽이 연다)

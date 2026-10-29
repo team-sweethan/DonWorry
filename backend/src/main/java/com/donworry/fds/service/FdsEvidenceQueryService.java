@@ -71,12 +71,13 @@ public class FdsEvidenceQueryService implements FdsEvidenceReader {
     private FdsPaymentEvidence evidenceOf(FdsEvaluation evaluation) {
         var matchedRules = evaluation.getRuleHits().stream()
                 .filter(hit -> hit.getOutcome() == FdsRuleHitOutcome.MATCH)
-                .map(hit -> new MatchedRule(
-                        hit.getRuleCode(),
-                        hit.getRuleNameSnapshot(),
-                        hit.getAppliedScore(),
-                        hit.getThresholdSnapshot(),
-                        hit.getObservedValue()))
+                .map(hit -> MatchedRule.builder()
+                        .ruleCode(hit.getRuleCode())
+                        .ruleName(hit.getRuleNameSnapshot())
+                        .appliedScore(hit.getAppliedScore())
+                        .thresholdSnapshot(hit.getThresholdSnapshot())
+                        .observedValue(hit.getObservedValue())
+                        .build())
                 .toList();
         return new FdsPaymentEvidence(
                 evaluation.getPaymentId(),

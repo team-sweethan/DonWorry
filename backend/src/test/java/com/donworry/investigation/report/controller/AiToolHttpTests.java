@@ -118,8 +118,13 @@ class AiToolHttpTests {
                 Instant.now(),
                 30,
                 "REVIEW",
-                List.of(new RuleHit(
-                        "R01", "고액 결제", 30, "{\"amountGte\":500000,\"score\":30}", "{\"amount\":600000}"))));
+                List.of(RuleHit.builder()
+                        .code("R01")
+                        .name("고액 결제")
+                        .appliedScore(30)
+                        .thresholdSnapshot("{\"amountGte\":500000,\"score\":30}")
+                        .observedValue("{\"amount\":600000}")
+                        .build())));
 
         mvc.perform(get(FDS_EVIDENCE).param("caseId", securityCase.getId().toString()))
                 .andExpect(status().isOk())

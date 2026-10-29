@@ -47,8 +47,15 @@ class PaymentFdsInfoReaderTests {
     void findAll_withPaymentAndEvaluation_mergesBoth() {
         given(paymentReader.findById(1L)).willReturn(Optional.of(payment(1L)));
         given(fdsEvidenceReader.findLatestByPaymentIds(List.of(1L)))
-                .willReturn(List.of(
-                        evidence(1L, FdsResult.REVIEW, 65, new MatchedRule("HIGH_AMOUNT", "고액 결제", 35, null, null))));
+                .willReturn(List.of(evidence(
+                        1L,
+                        FdsResult.REVIEW,
+                        65,
+                        MatchedRule.builder()
+                                .ruleCode("HIGH_AMOUNT")
+                                .ruleName("고액 결제")
+                                .appliedScore(35)
+                                .build())));
 
         assertThat(reader.findAll(List.of(1L)))
                 .containsExactly(Map.entry(
