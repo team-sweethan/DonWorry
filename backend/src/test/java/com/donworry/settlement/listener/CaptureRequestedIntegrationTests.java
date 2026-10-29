@@ -60,7 +60,8 @@ class CaptureRequestedIntegrationTests {
             events.publishEvent(event);
             assertThat(captures.findByPaymentId(event.paymentId())).isEmpty();
         });
-        transaction.executeWithoutResult(status -> events.publishEvent(event));
+        // 재전송은 같은 메모리 객체를 재사용하지 않고 동일 내용의 별도 이벤트로 수신한다.
+        transaction.executeWithoutResult(status -> events.publishEvent(request(event.paymentId())));
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             var capture = captures.findByPaymentId(event.paymentId()).orElseThrow();

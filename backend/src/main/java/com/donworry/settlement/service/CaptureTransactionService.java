@@ -18,6 +18,7 @@ public class CaptureTransactionService {
     private final CaptureRepository captureRepository;
     private final SettlementService settlementService;
     private final ApplicationEventPublisher events;
+    private final OrderFulfillmentService fulfillments;
 
     // 중복 저장이 실패해도 호출자가 롤백된 트랜잭션 밖에서 기존 결과를 조회할 수 있게 한다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -32,9 +33,15 @@ public class CaptureTransactionService {
             throw new IllegalArgumentException("올바르지 않은 매입 요청입니다.");
         }
 
+        fulfillments.lockForCapture(orderId, merchantId);
         Capture existingCapture = captureRepository.findByPaymentId(paymentId).orElse(null);
 
         if (existingCapture != null) {
+            if (!existingCapture.getOrderId().equals(orderId)
+                    || !existingCapture.getMerchantId().equals(merchantId)
+                    || !existingCapture.getCaptureAmount().equals(amount)) {
+                throw new IllegalStateException("기존 매입 요청 내용과 다릅니다.");
+            }
             return existingCapture;
         }
 
@@ -47,7 +54,8 @@ public class CaptureTransactionService {
         Capture savedCapture = captureRepository.save(capture);
 
         // 정산 예정금이 없는 매입 완료 건이 남지 않도록 같은 트랜잭션에서 생성한다.
-        settlementService.createSettlement(savedCapture);
+        var settlement = settlementService.createSettlement(savedCapture);
+        fulfillments.connectCapture(savedCapture, settlement);
 
         // 저장이 롤백될 때 완료 통지도 남지 않도록 같은 트랜잭션에서 발행한다.
         events.publishEvent(CaptureCompleted.builder()
