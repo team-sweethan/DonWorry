@@ -96,3 +96,11 @@
     font-size: 24px;
   }
 }
+
+.dw-application-main .dw-application-account-note {
+  background: #f1f6ff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 13px;
+  margin: 0 0 28px;
+}

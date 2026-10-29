@@ -293,3 +293,9 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 
 P1 담당자가 설계·구현 진행을 승인했다. [상세 컬럼·FK·보관 계약](../identity/315-application-design.md#저장-계약-모두-p1), [ADR-0043](../decisions/0043-application-storage.md)을 따른다. Notion 선행 대조·동기화는 미수행이다.
 `merchant_applications`·`application_tokens`·`application_mail_deliveries`·`application_rate_limits`를 추가하고 `merchants.business_registration_number VARCHAR(10) NULL`을 추가한다. 모두 P1 소유, 다른 담당 FK 없음. 연락처는 신청에만 보관한다. 승인·반려와 첫 설정 토큰 컬럼은 PR 2에 준비하고 실제 동작은 PR 3에서 연결한다. 개인정보 자동 삭제는 PR 4이며 이번 PR에서 완료됐다고 표현하지 않는다.
+
+### #315 PR 3 신청자 로그인 아이디 선택 (2026-10-29)
+
+P1 담당자가 이 PR에서 아이디를 신청자가 선택하도록 변경하는 것을 승인했다. `merchant_applications.requested_login_id VARCHAR(30) COLLATE utf8mb4_bin NULL`을 새 migration으로 추가한다. 신규 신청 API는 필수·영문 소문자/숫자/밑줄 3~30자, trim만 적용한다. 기존 행은 NULL로 보존하고 임의로 채우지 않는다.
+진행 중 신청의 `pending_login_id` SHA-256 생성 컬럼과 UNIQUE로 같은 아이디 예약을 막는다. P1 계정 생성·신청·승인은 같은 아이디 잠금을 공유하며, 수동 계정 생성도 예약을 존중한다. 승인 시 자기 신청의 예약만 사용할 수 있다. 반려/삭제 후 예약을 해제하며 승인 후에는 platform_users의 기존 UNIQUE가 아이디를 보호한다.
+기존 아이디 없는 신청은 임의 발급하지 않고 반려·새 양식 재신청으로 안내한다. 비밀번호는 계속 승인 후 본인이 설정한다. 다른 소유 테이블·공개 Java 계약 변경 없음. 상세는 [PR 3 설계](../identity/315-approval-design.md).

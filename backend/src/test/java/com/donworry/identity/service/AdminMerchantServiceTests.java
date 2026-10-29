@@ -29,7 +29,14 @@ class AdminMerchantServiceTests {
             .build();
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private final AdminMerchantService service = new AdminMerchantService(
-            merchants, users, histories, new MerchantLockService(), new AccountLockService(), sessions, transactions);
+            merchants,
+            new MerchantProvisioningService(merchants, histories),
+            users,
+            histories,
+            new MerchantLockService(),
+            new AccountLockService(),
+            sessions,
+            transactions);
 
     @BeforeEach
     void setUp() {

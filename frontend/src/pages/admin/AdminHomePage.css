@@ -416,3 +416,30 @@
   border-color: #f59e0b;
   color: #78350f;
 }
+
+.ah-application-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  margin-bottom: 24px;
+  background: #f0f5ff;
+  border: 1px solid #dce6f7;
+  border-radius: 14px;
+}
+.ah-application-entry h2 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.ah-application-entry p {
+  margin: 0;
+  color: #5c6f8d;
+  line-height: 1.7;
+}
+@media (max-width: 600px) {
+  .ah-application-entry {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

@@ -9,10 +9,11 @@ import {
   type ApplicationInput,
   type MailStatus,
 } from '../../api/merchantApplications'
+import { ApiError } from '../../api/client'
 import { applicationError } from './applicationFeedback'
 import './ApplicationPage.css'
 
-function PublicShell({ children }: { children: ReactNode }) {
+export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="dw-application-shell">
       <header className="dw-application-header">
@@ -88,7 +89,10 @@ function ConsentNotice() {
       <h2 id="consent-title">개인정보 수집·이용 안내</h2>
       <dl>
         <dt>수집 항목</dt>
-        <dd>가맹점명, 사업자등록번호, 담당자명, 이메일, 연락처, 선택 입력한 문의·요청 사항</dd>
+        <dd>
+          가맹점명, 사업자등록번호, 담당자명, 이메일, 연락처, 로그인 아이디, 선택 입력한 문의·요청
+          사항
+        </dd>
         <dt>이용 목적</dt>
         <dd>이용 신청 확인, 검토 결과 안내, 계정 발급</dd>
         <dt>보관 기간</dt>
@@ -101,7 +105,11 @@ function ConsentNotice() {
 export function ApplicationPage() {
   const [form] = Form.useForm<ApplicationInput>()
   const [review, setReview] = useState<ApplicationInput | null>(null)
-  const [receipt, setReceipt] = useState<{ email: string; mailStatus: MailStatus } | null>(null)
+  const [receipt, setReceipt] = useState<{
+    email: string
+    requestedLoginId: string
+    mailStatus: MailStatus
+  } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const busy = useRef(false)
@@ -114,12 +122,26 @@ export function ApplicationPage() {
     setError(null)
     try {
       const result = await submitApplication(review)
-      setReceipt({ email: normalizeApplication(review).email, mailStatus: result.mailStatus })
+      setReceipt({
+        email: normalizeApplication(review).email,
+        requestedLoginId: normalizeApplication(review).requestedLoginId,
+        mailStatus: result.mailStatus,
+      })
       setReview(null)
       form.resetFields()
       focusHeading()
     } catch (cause) {
       setError(applicationError(cause))
+      if (cause instanceof ApiError && cause.code === 'APPLICATION_018') {
+        setReview(null)
+        form.setFields([
+          {
+            name: 'requestedLoginId',
+            errors: [cause.detail ?? '다른 로그인 아이디를 입력해 주세요.'],
+          },
+        ])
+        requestAnimationFrame(() => form.scrollToField('requestedLoginId', { focus: true }))
+      }
     } finally {
       busy.current = false
       setSubmitting(false)
@@ -149,13 +171,17 @@ export function ApplicationPage() {
                 : '접수는 완료되었지만 메일 발송 결과를 확인하지 못했습니다. 메일함을 확인하고 필요하면 다시 요청해 주세요.'
             }
           />
+          <p>
+            선택한 로그인 아이디는 <strong>{receipt.requestedLoginId}</strong>입니다. 승인 후 이
+            아이디로 계정을 발급하고 비밀번호 설정 방법을 안내합니다.
+          </p>
           <ResendEmail initialEmail={receipt.email} />
         </>
       ) : (
         <>
           <p>
-            가맹점과 담당자 정보를 입력해 주세요. 관리자 승인 후 계정을 발급하며, 결제 연동은 별도로
-            진행합니다.
+            가맹점·담당자 정보와 사용할 로그인 아이디를 입력해 주세요. 관리자 승인 후 계정을
+            발급하며, 결제 연동은 별도로 진행합니다.
           </p>
           <Form<ApplicationInput>
             name="merchant-application"
@@ -238,6 +264,36 @@ export function ApplicationPage() {
               >
                 <Input type="tel" maxLength={25} autoComplete="tel" />
               </Form.Item>
+              <h2>사용할 계정</h2>
+              <Form.Item
+                name="requestedLoginId"
+                label="로그인 아이디"
+                extra="영문 소문자·숫자·밑줄(_) 3~30자. 사용 중이거나 다른 신청에서 선택한 아이디는 사용할 수 없습니다."
+                rules={[
+                  {
+                    required: true,
+                    whitespace: true,
+                    message: '사용할 로그인 아이디를 입력해 주세요.',
+                  },
+                  {
+                    pattern: /^[a-z0-9_]{3,30}$/,
+                    transform: (value: string) => value?.trim(),
+                    message: '영문 소문자·숫자·밑줄로 3~30자를 입력해 주세요.',
+                  },
+                ]}
+              >
+                <Input
+                  maxLength={30}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  placeholder="예: sweet_owner"
+                />
+              </Form.Item>
+              <p className="dw-application-account-note">
+                승인되면 선택한 아이디로 계정을 발급합니다. 비밀번호는 승인 안내 메일의 링크에서
+                직접 설정합니다.
+              </p>
               <Form.Item
                 name="inquiry"
                 label="문의·요청 사항 (선택)"
@@ -277,6 +333,16 @@ export function ApplicationPage() {
                     key: 'business',
                     label: '사업자등록번호',
                     children: review.businessRegistrationNumber,
+                  },
+                  {
+                    key: 'login',
+                    label: '로그인 아이디',
+                    children: normalizeApplication(review).requestedLoginId,
+                  },
+                  {
+                    key: 'password',
+                    label: '비밀번호 설정',
+                    children: '승인 후 메일의 링크에서 직접 설정',
                   },
                   { key: 'contact', label: '담당자명', children: review.contactName },
                   { key: 'email', label: '이메일', children: normalizeApplication(review).email },

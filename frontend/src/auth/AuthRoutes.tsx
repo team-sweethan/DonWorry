@@ -265,6 +265,7 @@ export function ServerSession() {
   ) : undefined
   return (
     <ManagementLayout
+      responsive={pathname === '/admin/applications' || pathname.startsWith('/admin/applications/')}
       groups={navigation.groups}
       badges={{ securityCaseActions: caseActions, ruleChangeRequests }}
       header={

@@ -1,12 +1,13 @@
 import { publicApi } from './client.ts'
 
-export const CONSENT_VERSION = '2026-10-29'
+export const CONSENT_VERSION = '2026-10-29.1'
 export type ApplicationInput = {
   merchantName: string
   businessRegistrationNumber: string
   contactName: string
   email: string
   phone: string
+  requestedLoginId: string
   inquiry?: string
   consent: boolean
 }
@@ -18,6 +19,7 @@ export function normalizeApplication(input: ApplicationInput) {
     contactName: input.contactName.trim(),
     email: input.email.trim().toLowerCase(),
     phone: input.phone.replace(/[- ]/g, ''),
+    requestedLoginId: input.requestedLoginId.trim(),
     inquiry: input.inquiry?.trim() || undefined,
     consent: input.consent,
     consentVersion: CONSENT_VERSION,
@@ -36,6 +38,9 @@ export function submitApplication(input: ApplicationInput) {
 }
 export function verifyApplicationEmail(token: string) {
   return post<{ status: 'REVIEW_PENDING' }>('/email-verifications', { token })
+}
+export function setupInitialPassword(token: string, newPassword: string) {
+  return post<void>('/initial-password-setups', { token, newPassword })
 }
 export function resendApplicationEmail(email: string) {
   return post<void>('/email-verification-resends', { email: email.trim().toLowerCase() })

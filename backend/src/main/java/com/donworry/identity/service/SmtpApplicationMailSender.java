@@ -12,6 +12,40 @@ public class SmtpApplicationMailSender implements ApplicationMailSender {
     private final ApplicationSettings settings;
 
     @Override
+    public void sendApproval(String email, String loginId, String link) {
+        send(
+                email,
+                "[돈워리] 이용 승인 · 첫 비밀번호를 설정해 주세요",
+                "이용 신청이 승인되어 가맹점과 사장님 계정이 발급되었습니다.\n\n로그인 아이디: " + loginId
+                        + "\n\n아래 링크에서 본인이 사용할 비밀번호를 설정한 뒤 로그인해 주세요.\n" + link
+                        + "\n\n링크는 발급 후 72시간 동안 한 번만 사용할 수 있습니다."
+                        + "\n관리자가 비밀번호를 초기화하면 이 링크는 사용할 수 없습니다."
+                        + "\n결제 연동은 별도 진행합니다. 계정 발급만으로 결제 요청을 보낼 수는 없습니다.");
+    }
+
+    @Override
+    public void sendRejection(String email, String reason) {
+        send(
+                email,
+                "[돈워리] 이용 신청 검토 결과를 안내합니다",
+                "이용 신청이 반려되었습니다. 이번 신청으로 계정은 발급되지 않았습니다.\n\n반려 사유\n" + reason + "\n\n사유를 확인한 뒤 이용 신청 화면에서 새로 신청해 주세요.\n"
+                        + settings.applicationLink());
+    }
+
+    private void send(String email, String subject, String body) {
+        try {
+            var helper = new MimeMessageHelper(sender.createMimeMessage(), false, "UTF-8");
+            helper.setFrom(settings.from(), "돈워리");
+            helper.setTo(email);
+            helper.setSubject(subject);
+            helper.setText(body);
+            sender.send(helper.getMimeMessage());
+        } catch (jakarta.mail.MessagingException | java.io.UnsupportedEncodingException e) {
+            throw new org.springframework.mail.MailPreparationException("Application mail preparation failed");
+        }
+    }
+
+    @Override
     public void sendVerification(String email, String link) {
         try {
             var message = sender.createMimeMessage();

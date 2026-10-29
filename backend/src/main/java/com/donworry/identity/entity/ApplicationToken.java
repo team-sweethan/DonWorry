@@ -75,6 +75,17 @@ public class ApplicationToken {
                 .build();
     }
 
+    public static ApplicationToken initialPassword(Long applicationId, Long userId, String hash, LocalDateTime now) {
+        return ApplicationToken.builder()
+                .applicationId(applicationId)
+                .userId(userId)
+                .purpose(ApplicationTokenPurpose.INITIAL_PASSWORD_SETUP)
+                .tokenHash(hash)
+                .createdAt(now)
+                .expiresAt(now.plusHours(72))
+                .build();
+    }
+
     public void revoke(LocalDateTime now) {
         if (usedAt == null && revokedAt == null) revokedAt = now;
     }

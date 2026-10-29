@@ -152,17 +152,19 @@ export function ManagementLayout({
   groups,
   badges,
   demo = false,
+  responsive = false,
   children,
 }: {
   header: ReactNode
   groups: NavGroup[]
   badges?: NavBadges
   demo?: boolean
+  responsive?: boolean
   children?: ReactNode
 }) {
   const location = useLocation()
   return (
-    <div className="admin-viewport">
+    <div className={`admin-viewport${responsive ? ' application-review-viewport' : ''}`}>
       {header}
       <Sidebar groups={groups} badges={badges} demo={demo} />
       <main className="dw-main" id="main">

@@ -69,6 +69,17 @@ public class ApplicationMailDelivery {
                 .build();
     }
 
+    public static ApplicationMailDelivery review(
+            Long applicationId, Long tokenId, ApplicationMailKind kind, LocalDateTime now) {
+        return ApplicationMailDelivery.builder()
+                .applicationId(applicationId)
+                .tokenId(tokenId)
+                .kind(kind)
+                .status(ApplicationMailStatus.PENDING)
+                .startedAt(now)
+                .build();
+    }
+
     public void complete(ApplicationMailStatus status, String failureCode, LocalDateTime now) {
         this.status = status;
         this.failureCode = failureCode;

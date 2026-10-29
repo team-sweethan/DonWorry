@@ -58,6 +58,14 @@ public class ApplicationSettings {
         return baseUrl + "/apply/verify#token=" + token;
     }
 
+    public String initialPasswordLink(String token) {
+        return baseUrl + "/apply/password#token=" + token;
+    }
+
+    public String applicationLink() {
+        return baseUrl + "/apply";
+    }
+
     public String from() {
         return from;
     }
