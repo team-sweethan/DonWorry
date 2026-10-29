@@ -39,6 +39,29 @@ export function validPreviewPeriod(from: string, to: string) {
 }
 export const dateInPeriod = (date: string, from: string, to: string) =>
   validPreviewPeriod(from, to) && date >= from && date <= to
+export function previewExpenseHorizon(state: PreviewState, today: string, ...ends: string[]) {
+  return [
+    dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
+    ...ends,
+    ...state.expenses.map((e) => e.date),
+  ]
+    .filter((date) => validPreviewPeriod(date, date))
+    .sort()
+    .at(-1)!
+}
+export function previewCalendarCursor(
+  from: string,
+  to: string,
+  previousRange: string,
+  selected: Date,
+  month: Date,
+) {
+  if (validPreviewPeriod(from, to) && previousRange !== `${from}/${to}`) {
+    const next = new Date(from + 'T12:00:00')
+    return { selected: next, month: new Date(next.getFullYear(), next.getMonth(), 1) }
+  }
+  return { selected, month }
+}
 export function createPreviewState(today: string): PreviewState {
   return {
     base: today,

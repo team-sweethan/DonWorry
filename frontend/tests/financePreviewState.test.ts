@@ -10,11 +10,80 @@ import {
   setInitialBalance,
   validPreviewPeriod,
   dateInPeriod,
+  previewExpenseHorizon,
+  previewCalendarCursor,
 } from '../src/pages/owner/financePreviewState.ts'
 import type { PreviewState } from '../src/pages/owner/financePreviewState.ts'
 const today = '2026-10-29'
 const initialized = (): PreviewState =>
   setInitialBalance({ ...createPreviewState(today), expenses: [] }, 500000)
+
+test('calendar_whenPeriodChanges_movesMonthAndSelectionTogether', () => {
+  const before = new Date('2026-10-29T12:00:00')
+  const next = previewCalendarCursor(
+    '2026-12-01',
+    '2026-12-31',
+    '2026-10-01/2026-10-31',
+    before,
+    before,
+  )
+  assert.equal(next.selected.getMonth(), 11)
+  assert.equal(next.selected.getDate(), 1)
+  assert.equal(next.month.getMonth(), 11)
+  const browsedMonth = new Date('2027-01-01T12:00:00')
+  assert.equal(
+    previewCalendarCursor(
+      '2026-12-01',
+      '2026-12-31',
+      '2026-12-01/2026-12-31',
+      next.selected,
+      browsedMonth,
+    ).month,
+    browsedMonth,
+  )
+})
+
+test('expenses_whenQueryIsBeyondOneYear_expandsRecurringThroughSelectedEnd', () => {
+  const state: PreviewState = {
+    ...initialized(),
+    recurring: [
+      {
+        recurringExpenseId: 91,
+        title: '임대료',
+        memo: '',
+        amount: 100000,
+        category: 'RENT',
+        frequency: 'MONTHLY',
+        startDate: today,
+        endDate: null,
+        stoppedFrom: null,
+      },
+    ],
+  }
+  const through = previewExpenseHorizon(state, today, '2028-12-31')
+  const rows = expenseRows(state, through).filter((row) => row.date.startsWith('2028-12'))
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].date, '2028-12-29')
+})
+
+test('expenseManagement_whenForecastIsShort_keepsDistantRegisteredExpense', () => {
+  const state: PreviewState = {
+    ...initialized(),
+    expenses: [
+      {
+        id: 99,
+        date: '2029-05-20',
+        title: '시설 교체',
+        amount: 500000,
+        category: 'OTHER',
+        memo: '',
+        paidAt: null,
+      },
+    ],
+  }
+  const rows = expenseRows(state, previewExpenseHorizon(state, today, '2026-11-04'))
+  assert.equal(rows.find((row) => row.expenseId === 99)?.date, '2029-05-20')
+})
 
 test('initialBalance_whenSaved_locksAmountAndKeepsFirstDate', () => {
   const before = createPreviewState(today)

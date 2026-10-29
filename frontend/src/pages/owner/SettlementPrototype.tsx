@@ -1,6 +1,6 @@
 import { previewSettlements, mockOrderItems } from './settlementPreviewData'
 import type { PreviewOrderEntry, OrderProduct } from './settlementPreviewData'
-import { validPreviewPeriod, dateInPeriod } from './financePreviewState'
+import { validPreviewPeriod, dateInPeriod, previewCalendarCursor } from './financePreviewState'
 import { SettlementLineChart } from './FinanceCharts'
 import { settlementDays } from './settlementChart'
 import { useState, useRef, useEffect } from 'react'
@@ -44,23 +44,21 @@ export function SettlementPrototype({
   period,
   monthSummary,
   headerActions,
+  onPeriodChange,
 }: {
   expenses?: CalendarExpense[]
   actualEntries?: Entry[]
   period?: { from: string; to: string }
   monthSummary?: React.ReactNode
   headerActions?: React.ReactNode
+  onPeriodChange?: (period: { from: string; to: string }) => void
 }) {
   const [today] = useState(() => new Date())
   const [entries] = useState(() => previewSettlements(today))
-  const [month, setMonth] = useState(() =>
+  const initialMonth = () =>
     period
       ? new Date(period.from + 'T00:00:00')
-      : new Date(today.getFullYear(), today.getMonth(), 1),
-  )
-  const [selected, setSelected] = useState(() =>
-    period ? new Date(period.from + 'T00:00:00') : today,
-  )
+      : new Date(today.getFullYear(), today.getMonth(), 1)
   const [view, setView] = useState<'cal' | 'list'>('cal')
   const [filter, setFilter] = useState<Status | 'all'>('all')
   const [dateOnly, setDateOnly] = useState(false)
@@ -83,6 +81,54 @@ export function SettlementPrototype({
   )
   const rangeStart = period?.from ?? localRangeStart
   const rangeEnd = period?.to ?? localRangeEnd
+  const [navigation, setNavigation] = useState(() => ({
+    range: `${rangeStart}/${rangeEnd}`,
+    month: initialMonth(),
+    selected:
+      period && !dateInPeriod(dateInput(today), period.from, period.to)
+        ? new Date(period.from + 'T00:00:00')
+        : today,
+  }))
+  const { month, selected } = previewCalendarCursor(
+    rangeStart,
+    rangeEnd,
+    navigation.range,
+    navigation.selected,
+    navigation.month,
+  )
+  const setMonth = (next: Date) => {
+    setNavigation((previous) => ({
+      ...previewCalendarCursor(
+        rangeStart,
+        rangeEnd,
+        previous.range,
+        previous.selected,
+        previous.month,
+      ),
+      range: `${rangeStart}/${rangeEnd}`,
+      month: next,
+    }))
+  }
+  const setSelected = (next: Date) => {
+    setNavigation((previous) => ({
+      ...previewCalendarCursor(
+        rangeStart,
+        rangeEnd,
+        previous.range,
+        previous.selected,
+        previous.month,
+      ),
+      range: `${rangeStart}/${rangeEnd}`,
+      selected: next,
+    }))
+  }
+  const changePeriod = (from: string, to: string) => {
+    setRangeStart(from)
+    setRangeEnd(to)
+    onPeriodChange?.({ from, to })
+    setPage(1)
+    setExpensePage(1)
+  }
   const busyEntries: Entry[] = Array.from({ length: 100 }, (_, i) => ({
     id: `DEMO-${String(i + 1).padStart(4, '0')}`,
     item: '주문번호 기준 정산',
@@ -211,8 +257,7 @@ export function SettlementPrototype({
               value={rangeStart}
               max={rangeEnd}
               onChange={(e) => {
-                setRangeStart(e.target.value)
-                setPage(1)
+                changePeriod(e.target.value, rangeEnd)
               }}
             />
           </label>
@@ -225,16 +270,16 @@ export function SettlementPrototype({
               min={rangeStart}
               max={dayLimit(rangeStart)}
               onChange={(e) => {
-                setRangeEnd(e.target.value)
-                setPage(1)
+                changePeriod(rangeStart, e.target.value)
               }}
             />
           </label>
           <Button
             onClick={() => {
-              setRangeStart(dateInput(new Date(today.getFullYear(), today.getMonth(), 1)))
-              setRangeEnd(dateInput(new Date(today.getFullYear(), today.getMonth() + 1, 0)))
-              setPage(1)
+              changePeriod(
+                dateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+                dateInput(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+              )
             }}
           >
             이번 달
@@ -499,12 +544,12 @@ export function SettlementPrototype({
             <Button onClick={() => setView('cal')}>← 캘린더로 돌아가기</Button>
             <h2>
               {dateOnly
-                ? selected.getMonth() + 1 + '월 ' + selected.getDate() + '일 정산·지출 내역'
+                ? selectedDate.getMonth() + 1 + '월 ' + selectedDate.getDate() + '일 정산·지출 내역'
                 : '전체 정산·지출 내역'}
             </h2>
             <p>
-              {dateOnly ? dateInput(selectedDate) : rangeStart + ' ~ ' + rangeEnd} · 정산금과 예정
-              지출을 나누어 확인하세요.
+              {dateOnly ? dateInput(selectedDate) : rangeStart + ' ~ ' + rangeEnd} · 정산금과 지출을
+              나누어 확인하세요.
             </p>
             <div className="stl-report-summary">
               <div>
@@ -513,7 +558,7 @@ export function SettlementPrototype({
                 <span>{rows.length}건 · 취소 금액 제외</span>
               </div>
               <div>
-                <small>조회된 예정 지출</small>
+                <small>조회된 지출 금액 (예정·완료 포함)</small>
                 <strong className="stl-expense-heading">
                   {won(expenseRows.reduce((n, e) => n + e.amount, 0))}
                 </strong>
@@ -682,9 +727,9 @@ export function SettlementPrototype({
                   <thead>
                     <tr>
                       <th>지출 정보</th>
-                      <th>예정일</th>
+                      <th>반영일 (완료일 / 예정일)</th>
                       <th>구분</th>
-                      <th className="stl-money-cell">예정 금액</th>
+                      <th className="stl-money-cell">지출 금액</th>
                     </tr>
                   </thead>
                   <tbody>

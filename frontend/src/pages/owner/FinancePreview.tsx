@@ -15,6 +15,7 @@ import {
   getPreviewStore,
   normalizeFinancePath,
   setInitialBalance,
+  previewExpenseHorizon,
 } from './financePreviewState'
 import type { ExpenseRow, PreviewExpense } from './financePreviewState'
 import './finance-preview.css'
@@ -41,10 +42,18 @@ export function FinancePreview() {
   const [error, setError] = useState('')
   const [selected, setSelected] = useState(today)
   const [expenseFilter, setExpenseFilter] = useState('all')
+  const [calendarPeriod, setCalendarPeriod] = useState(() => ({
+    from: dayjs(today).startOf('month').format('YYYY-MM-DD'),
+    to: dayjs(today).endOf('month').format('YYYY-MM-DD'),
+  }))
   const result = calculatePreviewCashFlow(state, today, start, end)
+  const managementRows = expenseRows(
+    state,
+    previewExpenseHorizon(state, today, end, calendarPeriod.to),
+  )
   const calendarExpenses = expenseRows(
     state,
-    dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
+    previewExpenseHorizon(state, today, calendarPeriod.to),
   ).map((e) => ({
     id: e.key,
     date: e.date,
@@ -77,12 +86,8 @@ export function FinancePreview() {
     setManageTab(tab)
     setPanel('manage')
   }
-  const rows = result.rows
-    .filter(
-      (e) =>
-        e.date <= end &&
-        (expenseFilter === 'all' || (expenseFilter === 'paid' ? !!e.paidAt : !e.paidAt)),
-    )
+  const rows = managementRows
+    .filter((e) => expenseFilter === 'all' || (expenseFilter === 'paid' ? !!e.paidAt : !e.paidAt))
     .toSorted((a, b) => b.date.localeCompare(a.date))
   const active = result.days.find((d) => d.date === selected) ?? result.days[0]
   const pay = (row: ExpenseRow) =>
@@ -129,7 +134,12 @@ export function FinancePreview() {
         </nav>
       )}
       {!isFunds ? (
-        <SettlementPrototype expenses={calendarExpenses} headerActions={headerActions} />
+        <SettlementPrototype
+          expenses={calendarExpenses}
+          headerActions={headerActions}
+          period={calendarPeriod}
+          onPeriodChange={setCalendarPeriod}
+        />
       ) : (
         <>
           <PageHeader
@@ -349,7 +359,9 @@ export function FinancePreview() {
                 </div>
                 <p>
                   예정 지출은 예측에만 반영합니다. 실제 지급했다면 ‘지출 완료’를 눌러 오늘의 실제
-                  차감을 기록하세요. 완료 기록은 수정·삭제하지 않습니다.
+                  차감을 기록하세요. 완료 기록은 수정·삭제하지 않습니다. 일회성 지출은 예측 조회
+                  기간과 무관하게 모두 표시합니다. 정기 지출 회차는
+                  {previewExpenseHorizon(state, today, end, calendarPeriod.to)}까지 표시합니다.
                 </p>
                 <Select
                   aria-label="지출 상태 필터"
