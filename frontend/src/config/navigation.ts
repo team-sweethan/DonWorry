@@ -20,9 +20,9 @@ export const navByRole: Record<Role, NavGroup[]> = {
     {
       title: '탐지',
       items: [
+        { label: '경보', path: '/security/alerts' },
         { label: 'Rule 카탈로그', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
-        { label: '경보', path: '/security/alerts' },
       ],
     },
     {

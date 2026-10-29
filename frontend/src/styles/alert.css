@@ -274,11 +274,14 @@
 }
 
 .dw-alert-detail .ant-descriptions-item-label {
-  width: 90px;
+  width: 112px;
   color: #64748b;
+  white-space: nowrap;
 }
 
 .dw-alert-detail .ant-descriptions-item-content {
+  min-width: 0;
+  word-break: break-word;
   font-weight: 600;
 }
 

@@ -3,6 +3,7 @@ import { Alert, Button, Card, Input, Skeleton, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getCaseLinksByPayments } from '../../api/cases'
 import {
   createMockFdsEvaluations,
   createMockFdsErrorEvaluation,
@@ -55,6 +56,7 @@ export function AlertListPage() {
   const [mockCreating, setMockCreating] = useState(false)
   const [mockErrorCreating, setMockErrorCreating] = useState(false)
   const [mockReevaluating, setMockReevaluating] = useState(false)
+  const [caseIdsByPaymentId, setCaseIdsByPaymentId] = useState<Map<string, string>>(new Map())
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
   const summaryRefreshPending = useRef(true)
@@ -78,6 +80,7 @@ export function AlertListPage() {
       setListLoading(true)
       setSummaryLoading(shouldRefreshSummary)
       setError(null)
+      setCaseIdsByPaymentId(new Map())
       setCurrentPage(page + 1)
       getFdsEvaluations({
         result:
@@ -104,6 +107,18 @@ export function AlertListPage() {
             setResultCounts(response.resultCounts)
             summaryRefreshPending.current = false
           }
+          const paymentIds = [
+            ...new Set(response.content.map((evaluation) => String(evaluation.paymentId))),
+          ]
+          if (paymentIds.length === 0) return
+          void getCaseLinksByPayments(paymentIds)
+            .then((links) => {
+              if (sequence !== requestSequence.current) return
+              setCaseIdsByPaymentId(new Map(links.map((link) => [link.paymentId, link.caseId])))
+            })
+            .catch(() => {
+              if (sequence === requestSequence.current) setCaseIdsByPaymentId(new Map())
+            })
         })
         .catch(() => {
           if (sequence !== requestSequence.current) return
@@ -235,6 +250,27 @@ export function AlertListPage() {
       dataIndex: 'errorCode',
       width: 160,
       render: (value: string | null) => (value ? <code>{value}</code> : '—'),
+    },
+    {
+      title: '사건',
+      key: 'case',
+      width: 130,
+      render: (_, evaluation) => {
+        const caseId = caseIdsByPaymentId.get(String(evaluation.paymentId))
+        if (!caseId) return '—'
+        return (
+          <Button
+            type="link"
+            className="dw-alert-payment-link"
+            onClick={(event: MouseEvent<HTMLElement>) => {
+              event.stopPropagation()
+              navigate(`/security/cases/${caseId}`)
+            }}
+          >
+            CASE-{caseId}
+          </Button>
+        )
+      },
     },
   ]
 
@@ -374,7 +410,7 @@ export function AlertListPage() {
             dataSource={evaluations}
             loading={listLoading}
             size="middle"
-            scroll={{ x: 1120 }}
+            scroll={{ x: 1250 }}
             onRow={(record) => ({
               onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
               style: { cursor: 'pointer' },
@@ -395,10 +431,6 @@ export function AlertListPage() {
           />
         )}
       </Card>
-      <div className="dw-api-note">
-        점수 기준: 0~49점 ALLOW · 50~79점 REVIEW · 80점 이상 DENY. 1차 MVP 규칙: 고액 결제(15만 원
-        이상 +35) · 단시간 반복 결제(동일 구매자 10분 내 3회 이상 +25).
-      </div>
     </div>
   )
 }
