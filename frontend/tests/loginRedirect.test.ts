@@ -21,10 +21,12 @@ const owner: AuthUser = {
   permissions: ['FINANCE_VIEW'],
 }
 
-test('관리자 첫 로그인은 관리자 홈으로 보내고 유효한 복귀 경로는 유지한다', () => {
+test('관리자는 이전 방문 경로와 관계없이 로그인하면 홈에서 시작한다', () => {
   const admin: AuthUser = { ...staff, role: 'ADMIN' }
   assert.equal(loginDestination(admin, null), '/admin/home')
-  assert.equal(loginDestination(admin, { returnTo: '/admin/fds/rules' }), '/admin/fds/rules')
+  for (const returnTo of ['/admin/fds/rules', '/admin/users/7', '/account/login-history']) {
+    assert.equal(loginDestination(admin, { returnTo }), '/admin/home')
+  }
   assert.equal(
     loginDestination({ ...admin, passwordChangeRequired: true }, null),
     '/account/password',

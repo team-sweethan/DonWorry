@@ -11,6 +11,8 @@ export type LoginRedirectState = {
 export function loginDestination(user: AuthUser, state: unknown): string | null {
   const fallback = sessionNavigation(user).landing
   if (user.passwordChangeRequired) return fallback
+  // 관리자는 로그인할 때마다 승인 대기 현황부터 확인한다.
+  if (user.role === 'ADMIN') return fallback
   if (typeof state !== 'object' || state === null || Array.isArray(state)) return fallback
   if (!('returnTo' in state) || typeof state.returnTo !== 'string') return fallback
   const target = state.returnTo
