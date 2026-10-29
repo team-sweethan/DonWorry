@@ -20,6 +20,8 @@ import { LatestLogin } from './LatestLogin'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
+import { LandingPage } from '../pages/public/LandingPage'
+import { landingEntry } from './landingEntry'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
 
@@ -123,6 +125,22 @@ function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string })
         <DownOutlined className="dw-account-chevron" />
       </Button>
     </Dropdown>
+  )
+}
+
+export function LandingRoute() {
+  const auth = useSessionCheck()
+  const entry = landingEntry(auth, auth.key)
+  if (entry.kind === 'checking') return <CheckingSession />
+  if (entry.kind === 'forbidden') return <ScreenResult kind="403" homePath="/login" />
+  if (entry.kind === 'noPermissions') {
+    return <ScreenResult kind="403" action={<AccountActions />} />
+  }
+  if (entry.kind === 'redirect') return <Navigate to={entry.destination} replace />
+  return (
+    <LandingPage
+      onRetry={entry.kind === 'unavailable' ? () => void auth.store.check(auth.key) : undefined}
+    />
   )
 }
 

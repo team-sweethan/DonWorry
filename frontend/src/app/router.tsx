@@ -3,7 +3,7 @@ import { useDemo } from '../demo/DemoContext'
 import { AdminLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
-import { LoginRoute, ServerSession } from '../auth/AuthRoutes'
+import { LandingRoute, LoginRoute, ServerSession } from '../auth/AuthRoutes'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
@@ -67,8 +67,7 @@ export const router = createBrowserRouter([
         },
       ]
     : []),
-  // 로그인 화면이 로그인된 사용자를 역할별 첫 화면으로 보낸다.
-  { path: '/', element: <Navigate to="/login" replace /> },
+  { path: '/', element: <LandingRoute /> },
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/home" replace /> },
