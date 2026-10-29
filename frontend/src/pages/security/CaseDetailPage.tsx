@@ -22,6 +22,8 @@ import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
+import { CaseBundle } from './case/CaseBundle'
+import { CaseProgress } from './case/CaseProgress'
 import { caseStatusLabel, dateTime, fdsResultLabel, paymentStatusLabel } from './case/caseLabels'
 import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { CodeTag } from './case/CodeTag'
@@ -258,6 +260,18 @@ export function CaseDetailPage() {
           </Descriptions>
         </Card>
 
+        <CaseProgress
+          status={securityCase.status}
+          latestReportStatus={latest?.status ?? null}
+          allDecided={payments.length > 0 && decisions.length >= payments.length}
+        />
+
+        <CaseBundle
+          securityCase={securityCase}
+          payments={payments}
+          mergeRemaining={mergeRemaining}
+        />
+
         <Card
           title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}
           style={{ borderColor: '#E2E8F0' }}
@@ -325,6 +339,7 @@ export function CaseDetailPage() {
             key={securityCase.evidenceVersion}
             payments={payments}
             decisions={decisions}
+            reports={reports}
             mode={mode}
             evidenceVersion={securityCase.evidenceVersion}
             onSubmit={handleSubmit}
