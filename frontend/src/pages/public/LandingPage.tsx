@@ -6,8 +6,9 @@ import {
   SafetyCertificateOutlined,
   SolutionOutlined,
 } from '@ant-design/icons'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import './LandingPage.css'
+import { ApplicationEntry } from './ApplicationEntry'
 
 const features = [
   {
@@ -34,7 +35,6 @@ const steps = ['신청 및 이메일 확인', '관리자 검토', '승인 후 �
 
 export function LandingPage({ onRetry }: { onRetry?: () => void }) {
   const main = useRef<HTMLElement>(null)
-  const navigate = useNavigate()
   return (
     <div className="dw-landing">
       {/* 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 포커스만 옮긴다. */}
@@ -84,20 +84,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
               돈워리에서 확인하세요.
             </p>
             <div className="dw-landing-apply">
-              <Button
-                type="primary"
-                size="large"
-                href="/apply"
-                // 새 탭 열기는 링크대로 두고, 일반 클릭은 페이지를 다시 불러오지 않고 이동한다.
-                onClick={(event) => {
-                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
-                  event.preventDefault()
-                  navigate('/apply')
-                }}
-                aria-describedby="landing-apply-description"
-              >
-                이용 신청
-              </Button>
+              <ApplicationEntry large />
               <p id="landing-apply-description">기존 계정이 있다면 로그인해 주세요.</p>
             </div>
           </div>

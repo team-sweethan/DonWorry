@@ -8,6 +8,25 @@ import org.springframework.web.bind.annotation.*;
 @RestControllerAdvice(assignableTypes = {MerchantApplicationController.class, ApplicationReviewController.class})
 @Order(-1)
 public class ApplicationExceptionHandler {
+    private final java.time.Clock identityClock;
+
+    public ApplicationExceptionHandler(java.time.Clock identityClock) {
+        this.identityClock = identityClock;
+    }
+
+    @ExceptionHandler(ApplicationResendLimitException.class)
+    public org.springframework.http.ResponseEntity<ProblemDetail> resendLimited(
+            ApplicationResendLimitException exception) {
+        var body = problem(exception.getErrorCode());
+        body.setProperty("nextResendAt", exception.getRetryAt());
+        var now = java.time.LocalDateTime.ofInstant(identityClock.instant(), java.time.ZoneOffset.UTC);
+        var delay = java.time.Duration.between(now, exception.getRetryAt());
+        long seconds = Math.max(1, delay.getSeconds() + (delay.getNano() == 0 ? 0 : 1));
+        return org.springframework.http.ResponseEntity.status(429)
+                .header("Retry-After", Long.toString(seconds))
+                .body(body);
+    }
+
     @ExceptionHandler(ApplicationException.class)
     public ProblemDetail applicationFailed(ApplicationException exception) {
         return problem(exception.getErrorCode());

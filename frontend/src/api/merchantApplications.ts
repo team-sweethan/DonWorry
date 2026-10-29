@@ -1,5 +1,12 @@
 import { publicApi } from './client.ts'
 
+export function getApplicationConfig(signal?: AbortSignal) {
+  return publicApi<{ enabled: boolean }>('/merchant-applications/config', {
+    cache: 'no-store',
+    signal,
+  })
+}
+
 export const CONSENT_VERSION = '2026-10-29.1'
 export type ApplicationInput = {
   merchantName: string

@@ -98,7 +98,7 @@ public class ApplicationPersistenceService {
 
     @Transactional
     public void complete(Long id, ApplicationMailStatus status, String failureCode) {
-        deliveries.findById(id).orElseThrow().complete(status, failureCode, now());
+        deliveries.completePending(id, status, failureCode, now());
     }
 
     private void fail(ApplicationErrorCode code) {

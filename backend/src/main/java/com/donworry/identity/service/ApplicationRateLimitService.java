@@ -45,6 +45,47 @@ public class ApplicationRateLimitService {
                 .orElse(true);
     }
 
+    // 관리자는 공개 경로와 이메일 버킷을 공유하되 IP 버킷은 소비하지 않는다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void adminResend(String email) {
+        String hash = ApplicationTokenCodec.hash(email);
+        var times = recent("RESEND_EMAIL", hash, Duration.ofHours(24), identityClock.millis());
+        var retry = adminRetryAt(email, times);
+        if (retry != null) throw new ApplicationResendLimitException(retry);
+        times.add(identityClock.millis());
+        limits.update(
+                "RESEND_EMAIL",
+                hash,
+                times.stream().map(String::valueOf).collect(Collectors.joining(",")),
+                expiry(Duration.ofHours(24)));
+    }
+
+    public LocalDateTime adminRetryAt(String email) {
+        var times = limits.find("RESEND_EMAIL", ApplicationTokenCodec.hash(email))
+                .map(value -> parse(value, Duration.ofHours(24), identityClock.millis()))
+                .orElseGet(ArrayList::new);
+        return adminRetryAt(email, times);
+    }
+
+    private LocalDateTime adminRetryAt(String email, List<Long> times) {
+        long now = identityClock.millis();
+        long retry =
+                times.stream().mapToLong(t -> t + COOLDOWN.toMillis()).max().orElse(0);
+        if (times.size() >= 5)
+            retry = Math.max(
+                    retry,
+                    times.stream().mapToLong(Long::longValue).min().orElseThrow()
+                            + Duration.ofHours(24).toMillis());
+        long initial = limits.find(INITIAL_EMAIL, ApplicationTokenCodec.hash(email))
+                .map(value -> parse(value, COOLDOWN, now).stream()
+                        .mapToLong(t -> t + COOLDOWN.toMillis())
+                        .max()
+                        .orElse(0))
+                .orElse(0L);
+        retry = Math.max(retry, initial);
+        return retry > now ? LocalDateTime.ofInstant(Instant.ofEpochMilli(retry), ZoneOffset.UTC) : null;
+    }
+
     private void consume(String scope, String subject, Duration window, int max, boolean cooldown) {
         long now = identityClock.millis();
         String hash = ApplicationTokenCodec.hash(subject);

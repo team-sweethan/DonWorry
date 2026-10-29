@@ -15,14 +15,37 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class ApplicationReviewController {
     private final ApplicationReviewService service;
+    private final com.donworry.identity.service.ApplicationMailQueryService mailQuery;
+    private final com.donworry.identity.service.ApplicationMailRecoveryService recovery;
+
+    @GetMapping("/{id}/mail-deliveries")
+    public com.donworry.identity.dto.ApplicationMailResponses.MailPage history(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return mailQuery.history(id, page, size);
+    }
+
+    @PostMapping("/{id}/mail-resends")
+    public com.donworry.identity.dto.ApplicationMailResponses.ResendResult resend(
+            @AuthenticationPrincipal SessionUser actor,
+            @PathVariable Long id,
+            @Valid @RequestBody ResendRequest input,
+            HttpServletRequest request) {
+        return recovery.resend(actor, id, input.expectedDeliveryId(), request);
+    }
 
     @GetMapping
     public ApplicationPage list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "") String keyword,
-            @RequestParam(required = false) String status) {
-        return service.list(page, size, keyword, status);
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") String mailAttention) {
+        if (!java.util.Set.of("true", "false").contains(mailAttention))
+            throw new com.donworry.identity.security.ApplicationException(
+                    com.donworry.identity.security.ApplicationErrorCode.INVALID_INPUT);
+        return service.list(page, size, keyword, status, Boolean.parseBoolean(mailAttention));
     }
 
     @GetMapping("/{id}")

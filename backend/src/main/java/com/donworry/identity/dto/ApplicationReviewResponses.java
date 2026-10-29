@@ -16,9 +16,15 @@ public final class ApplicationReviewResponses {
             String contactName,
             String status,
             LocalDateTime createdAt,
-            LocalDateTime emailVerifiedAt) {
+            LocalDateTime emailVerifiedAt,
+            ApplicationMailResponses.MailItem latestMail) {
         public static Summary from(MerchantApplication a) {
+            return from(a, null);
+        }
+
+        public static Summary from(MerchantApplication a, ApplicationMailResponses.MailItem mail) {
             return Summary.builder()
+                    .latestMail(mail)
                     .applicationId(a.getApplicationId())
                     .merchantName(a.getMerchantName())
                     .businessRegistrationNumber(a.getBusinessRegistrationNumber())
@@ -50,7 +56,11 @@ public final class ApplicationReviewResponses {
             Long userId,
             String loginId,
             Boolean passwordChangeRequired,
-            List<AdminMerchantResponse> duplicateMerchants) {}
+            List<AdminMerchantResponse> duplicateMerchants,
+            ApplicationMailResponses.MailItem latestMail,
+            boolean resendAllowed,
+            String resendBlockedReason,
+            LocalDateTime nextResendAt) {}
 
     @Builder
     public record ReviewResult(String status, Long merchantId, Long userId, String mailStatus) {}

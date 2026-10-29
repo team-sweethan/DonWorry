@@ -36,7 +36,7 @@ class ApplicationApprovalHttpTests {
     @Autowired
     MerchantApplicationRepository applications;
 
-    @Autowired
+    @MockitoSpyBean
     ApplicationTokenRepository tokens;
 
     @Autowired
@@ -636,6 +636,462 @@ class ApplicationApprovalHttpTests {
                         .get("requestedLoginId")
                         .isNull())
                 .isTrue();
+    }
+
+    @MockitoSpyBean
+    ApplicationMailDeliveryRepository mailDeliveries;
+
+    @Autowired
+    ApplicationRetentionService retention;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    java.time.Clock identityClock;
+
+    long latestDelivery(Long id) {
+        return jdbc.queryForObject(
+                "SELECT MAX(delivery_id) FROM application_mail_deliveries WHERE application_id=?", Long.class, id);
+    }
+
+    void allowRecovery(Long id) {
+        jdbc.update(
+                "UPDATE application_mail_deliveries SET started_at=UTC_TIMESTAMP(6)-INTERVAL 6 MINUTE WHERE application_id=?",
+                id);
+    }
+
+    HttpResponse<String> resend(Browser browser, Long id, long expected) throws Exception {
+        return browser.send(
+                "POST",
+                BASE + "/" + id + "/mail-resends",
+                json.writeValueAsString(Map.of("expectedDeliveryId", expected)),
+                true);
+    }
+
+    // 재발송은 계정을 추가하지 않고 옛 링크를 폐기하며 같은 요청 반복을 거절한다.
+    @Test
+    void recovery_whenApproved_replacesLinkWithoutProvisioningAgain() throws Exception {
+        Long id = application(true);
+        assertThat(approve(id).statusCode()).isEqualTo(200);
+        String old = raw();
+        long expected = latestDelivery(id);
+        int merchants = count("merchants"),
+                users = count("platform_users"),
+                permissions = count("user_permissions"),
+                histories = count("admin_change_histories");
+        allowRecovery(id);
+        assertThat(resend(admin, id, expected).statusCode()).isEqualTo(200);
+        String replacement = raw();
+        assertThat(replacement).isNotEqualTo(old);
+        assertThat(count("merchants")).isEqualTo(merchants);
+        assertThat(count("platform_users")).isEqualTo(users);
+        assertThat(count("user_permissions")).isEqualTo(permissions);
+        assertThat(count("admin_change_histories")).isEqualTo(histories);
+        assertThat(resend(admin, id, expected).statusCode()).isEqualTo(409);
+        var visitor = new Browser();
+        assertThat(visitor.send("POST", SETUP, setupBody(old, "OwnerNewPass123!"), true)
+                        .body())
+                .contains("APPLICATION_014");
+        assertThat(visitor.send("POST", SETUP, setupBody(replacement, "OwnerNewPass123!"), true)
+                        .statusCode())
+                .isEqualTo(204);
+        allowRecovery(id);
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(409);
+    }
+
+    // 초기화로 폐기된 첫 설정은 강제 변경 플래그가 켜져 있어도 다시 발급하지 않는다.
+    @Test
+    void recovery_whenReset_revokesRecoveryEligibility() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        assertThat(admin.send("POST", "/api/admin/users/" + saved(id).getUserId() + "/password-reset", "{}", true)
+                        .statusCode())
+                .isEqualTo(200);
+        clearInvocations(mail);
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(409);
+        verifyNoInteractions(mail);
+        assertThat(admin.send("GET", BASE + "/" + id, null, false).body()).contains("SETUP_REVOKED");
+    }
+
+    // 서로 다른 관리자의 동시 복구는 한 발송 시도만 추가한다.
+    @Test
+    void recovery_whenConcurrentAcrossAdmins_createsOneAttempt() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        long expected = latestDelivery(id);
+        var other = new Browser();
+        other.login("approval_admin2");
+        var outcomes = concurrent(
+                () -> resend(admin, id, expected).statusCode(),
+                () -> resend(other, id, expected).statusCode());
+        assertThat(outcomes).containsExactlyInAnyOrder(200, 409);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM application_mail_deliveries WHERE application_id=?", Integer.class, id))
+                .isEqualTo(2);
+    }
+
+    // 메일 실패여도 발급과 새 토큰은 유지하며 옛 링크는 되살리지 않는다.
+    @Test
+    void recovery_whenSmtpFails_preservesIssuanceAndNewAttempt() throws Exception {
+        Long id = application(true);
+        approve(id);
+        String old = raw();
+        allowRecovery(id);
+        doThrow(new org.springframework.mail.MailPreparationException("synthetic"))
+                .when(mail)
+                .sendApproval(anyString(), anyString(), anyString());
+        var result = resend(admin, id, latestDelivery(id));
+        assertThat(result.statusCode()).isEqualTo(200);
+        assertThat(result.body()).contains("FAILED");
+        assertThat(saved(id).getUserId()).isNotNull();
+        assertThat(tokens.findByTokenHash(ApplicationTokenCodec.hash(old))
+                        .orElseThrow()
+                        .getRevokedAt())
+                .isNotNull();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM application_tokens WHERE application_id=? AND revoked_at IS NULL",
+                        Integer.class,
+                        id))
+                .isEqualTo(1);
+    }
+
+    // 최신 결과만 메일 필터에 반영하고 오래된 PENDING은 조회에서만 UNKNOWN으로 표시한다.
+    @Test
+    void mailQuery_whenOldPending_filtersWithoutMutatingStoredState() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        jdbc.update(
+                "UPDATE application_mail_deliveries SET status='PENDING',completed_at=NULL WHERE application_id=?", id);
+        var filtered = admin.send("GET", BASE + "?mailAttention=true", null, false);
+        assertThat(filtered.statusCode()).isEqualTo(200);
+        assertThat(filtered.body()).contains("UNKNOWN", "PENDING", "달콤한 가게");
+        assertThat(jdbc.queryForObject(
+                        "SELECT status FROM application_mail_deliveries WHERE delivery_id=?",
+                        String.class,
+                        latestDelivery(id)))
+                .isEqualTo("PENDING");
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(200);
+        assertThat(json.readTree(admin.send("GET", BASE + "?mailAttention=true", null, false)
+                                .body())
+                        .get("totalElements")
+                        .asInt())
+                .isZero();
+        assertThat(json.readTree(admin.send("GET", BASE + "/" + id + "/mail-deliveries?size=1", null, false)
+                                .body())
+                        .get("totalElements")
+                        .asInt())
+                .isEqualTo(2);
+    }
+
+    // 승인 안내 재발송은 1분과 하루 다섯 번 제한 및 대기 시각을 제공한다.
+    @Test
+    void recovery_whenLimited_returnsRetryAfterAndDoesNotAppend() throws Exception {
+        Long id = application(true);
+        approve(id);
+        var immediate = resend(admin, id, latestDelivery(id));
+        assertThat(immediate.statusCode()).isEqualTo(429);
+        assertThat(immediate.headers().firstValue("Retry-After")).isPresent();
+        assertThat(immediate.body()).contains("APPLICATION_021", "nextResendAt");
+        for (int i = 0; i < 5; i++) {
+            allowRecovery(id);
+            assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(200);
+        }
+        allowRecovery(id);
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(429);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM application_mail_deliveries WHERE application_id=?", Integer.class, id))
+                .isEqualTo(6);
+    }
+
+    // 삭제된 발송의 지연 결과와 중복 완료는 행을 만들거나 기존 결과를 덮지 않는다.
+    @Test
+    void completion_whenDeletedOrAlreadyCompleted_isIdempotent() throws Exception {
+        Long id = application(true);
+        approve(id);
+        long delivery = latestDelivery(id);
+        persistence.complete(delivery, ApplicationMailStatus.FAILED, "SMTP_REJECTED");
+        assertThat(mailDeliveries.findById(delivery).orElseThrow().getStatus()).isEqualTo(ApplicationMailStatus.SENT);
+        jdbc.update("DELETE FROM application_mail_deliveries WHERE delivery_id=?", delivery);
+        persistence.complete(delivery, ApplicationMailStatus.SENT, null);
+        assertThat(mailDeliveries.findById(delivery)).isEmpty();
+    }
+
+    // 미확인과 반려 신청만 기한에 맞춰 자식부터 삭제하고 승인·검토 대기를 보존한다.
+    @Test
+    void retention_whenAtBoundary_deletesChildrenAndReleasesReservation() throws Exception {
+        var fixed = Instant.parse("2026-11-30T00:00:00Z");
+        doReturn(fixed).when(identityClock).instant();
+        var now = LocalDateTime.ofInstant(fixed, ZoneOffset.UTC);
+        Long approved = application(true);
+        approve(approved);
+        Long expired = applications
+                .saveAndFlush(MerchantApplication.submit(
+                        "만료",
+                        "9999999999",
+                        "담당자",
+                        "expired@example.com",
+                        "01011112222",
+                        "expiry_owner",
+                        null,
+                        "v1",
+                        now.minusDays(7)))
+                .getApplicationId();
+        var token = tokens.saveAndFlush(ApplicationToken.emailVerification(
+                expired, ApplicationTokenCodec.hash("x".repeat(43)), now.minusDays(7)));
+        mailDeliveries.saveAndFlush(
+                ApplicationMailDelivery.verification(expired, token.getTokenId(), now.minusDays(7)));
+        Long rejected = applications
+                .saveAndFlush(MerchantApplication.submit(
+                        "반려",
+                        "8888888888",
+                        "담당자",
+                        "rejected@example.com",
+                        "01011112222",
+                        "rejected_owner",
+                        null,
+                        "v1",
+                        now.minusDays(60)))
+                .getApplicationId();
+        jdbc.update(
+                "UPDATE merchant_applications SET status='REJECTED',reviewed_at=? WHERE application_id=?",
+                now.minusDays(30),
+                rejected);
+        Long reviewed = applications
+                .saveAndFlush(MerchantApplication.submit(
+                        "검토",
+                        "7777777777",
+                        "담당자",
+                        "review@example.com",
+                        "01011112222",
+                        "review_owner",
+                        null,
+                        "v1",
+                        now.minusDays(60)))
+                .getApplicationId();
+        jdbc.update("UPDATE merchant_applications SET status='REVIEW_PENDING' WHERE application_id=?", reviewed);
+        retention.clean();
+        assertThat(applications.existsById(expired)).isFalse();
+        assertThat(applications.existsById(rejected)).isFalse();
+        assertThat(applications.existsById(approved)).isTrue();
+        assertThat(applications.existsById(reviewed)).isTrue();
+        assertThat(tokens.findById(token.getTokenId())).isEmpty();
+        assertThat(applications.findReservedLoginId("expiry_owner")).isEmpty();
+    }
+
+    // 전역 CSRF가 꺼져 있어도 복구는 보호하고 config는 공개하며 잘못된 페이지를 거절한다.
+    @Test
+    void recoveryHttp_whenUnauthorizedOrInvalid_rejectsBeforeSending() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        String body = "{\"expectedDeliveryId\":" + latestDelivery(id) + "}";
+        assertThat(admin.send("POST", BASE + "/" + id + "/mail-resends", body, false)
+                        .statusCode())
+                .isEqualTo(403);
+        var visitor = new Browser();
+        assertThat(visitor.send("POST", BASE + "/" + id + "/mail-resends", body, true)
+                        .statusCode())
+                .isEqualTo(401);
+        assertThat(admin.send("POST", BASE + "/" + id + "/mail-resends", "{}", true)
+                        .body())
+                .contains("APPLICATION_016");
+        assertThat(admin.send("GET", BASE + "/" + id + "/mail-deliveries?page=2147483647", null, false)
+                        .statusCode())
+                .isEqualTo(400);
+        assertThat(admin.send("GET", BASE + "?mailAttention=wrong", null, false).statusCode())
+                .isEqualTo(400);
+        var config = visitor.send("GET", "/api/merchant-applications/config", null, false);
+        assertThat(config.statusCode()).isEqualTo(200);
+        assertThat(config.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(config.body()).contains("true");
+    }
+
+    // 새 발송 행 저장 실패는 토큰 폐기도 롤백하고 SMTP를 호출하지 않는다.
+    @Test
+    void recovery_whenPreparationFails_rollsBackTokenAndSkipsSmtp() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        String old = raw();
+        int before = count("application_tokens");
+        long expected = latestDelivery(id);
+        clearInvocations(mail);
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("synthetic"))
+                .when(mailDeliveries)
+                .saveAndFlush(any(ApplicationMailDelivery.class));
+        assertThat(resend(admin, id, expected).statusCode()).isEqualTo(503);
+        assertThat(count("application_tokens")).isEqualTo(before);
+        assertThat(tokens.findByTokenHash(ApplicationTokenCodec.hash(old))
+                        .orElseThrow()
+                        .getRevokedAt())
+                .isNull();
+        assertThat(latestDelivery(id)).isEqualTo(expected);
+        verifyNoInteractions(mail);
+    }
+
+    // 삭제 중 자식 정리 실패는 해당 신청을 보존하고 뒤의 정상 신청은 계속 삭제한다.
+    @Test
+    void retention_whenOneDeleteFails_rollsBackAndContinuesBeyondBatch() {
+        var now = LocalDateTime.now(ZoneOffset.UTC);
+        Long failed = null;
+        for (int i = 0; i < 102; i++) {
+            var a = applications.saveAndFlush(MerchantApplication.submit(
+                    "만료",
+                    String.format("6%09d", i),
+                    "담당",
+                    "batch" + i + "@example.com",
+                    "01011112222",
+                    "batch_" + i,
+                    null,
+                    "v1",
+                    now.minusDays(8)));
+            var token = tokens.saveAndFlush(ApplicationToken.emailVerification(
+                    a.getApplicationId(), ApplicationTokenCodec.hash("batch" + i), now.minusDays(8)));
+            mailDeliveries.saveAndFlush(
+                    ApplicationMailDelivery.verification(a.getApplicationId(), token.getTokenId(), now.minusDays(8)));
+            if (i == 0) failed = a.getApplicationId();
+        }
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("synthetic"))
+                .when(tokens)
+                .deleteForApplication(failed);
+        retention.clean();
+        assertThat(applications.findAll())
+                .extracting(MerchantApplication::getApplicationId)
+                .containsExactly(failed);
+        assertThat(count("application_tokens")).isEqualTo(1);
+        assertThat(count("application_mail_deliveries")).isEqualTo(1);
+    }
+
+    // 공개와 관리자 확인 메일은 하나의 이메일 제한을 공유한다.
+    @Test
+    void verificationRecovery_whenPublicAndAdminAlternate_sharesDailyLimit() throws Exception {
+        var start = Instant.parse("2026-11-01T00:00:00Z");
+        doReturn(start).when(identityClock).instant();
+        doReturn(start.toEpochMilli()).when(identityClock).millis();
+        var request = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(request.getRemoteAddr()).thenReturn("192.0.2.200");
+        applicationService.submit(
+                com.donworry.identity.dto.MerchantApplicationRequests.SubmitRequest.builder()
+                        .merchantName("신청")
+                        .businessRegistrationNumber("5555555555")
+                        .contactName("담당")
+                        .email("shared@example.com")
+                        .phone("01011112222")
+                        .requestedLoginId("shared_owner")
+                        .consent(true)
+                        .consentVersion("2026-10-29.1")
+                        .build(),
+                request);
+        Long id = applications.findAll().getFirst().getApplicationId();
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(429);
+        for (int i = 1; i <= 5; i++) {
+            var time = start.plusSeconds(61L * i);
+            doReturn(time).when(identityClock).instant();
+            doReturn(time.toEpochMilli()).when(identityClock).millis();
+            if (i % 2 == 1)
+                assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(200);
+            else
+                applicationService.resend(
+                        new com.donworry.identity.dto.MerchantApplicationRequests.ResendRequest("shared@example.com"),
+                        request);
+        }
+        var time = start.plusSeconds(61 * 6);
+        doReturn(time).when(identityClock).instant();
+        doReturn(time.toEpochMilli()).when(identityClock).millis();
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(429);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM application_mail_deliveries WHERE application_id=?", Integer.class, id))
+                .isEqualTo(6);
+    }
+
+    // 반려 메일 복구는 사유와 검토 시각을 바꾸지 않고 새 시도만 생성한다.
+    @Test
+    void rejectionRecovery_whenAllowed_keepsReviewAndReason() throws Exception {
+        Long id = application(true);
+        assertThat(admin.send("POST", BASE + "/" + id + "/reject", "{\"reason\":\"사업자번호 확인 필요\"}", true)
+                        .statusCode())
+                .isEqualTo(200);
+        var reviewed = saved(id).getReviewedAt();
+        allowRecovery(id);
+        assertThat(resend(admin, id, latestDelivery(id)).statusCode()).isEqualTo(200);
+        assertThat(saved(id).getReviewedAt()).isEqualTo(reviewed);
+        verify(mail, times(2)).sendRejection("approval@example.com", "사업자번호 확인 필요");
+        assertThat(saved(id).getUserId()).isNull();
+    }
+
+    @MockitoSpyBean
+    ApplicationMailQueryService mailQuery;
+
+    // 복구가 계정 잠금을 먼저 얻으면 뒤의 초기화가 새 링크도 함께 폐기한다.
+    @Test
+    void recovery_whenResetWaitsForRecovery_revokesReplacementAfterCommit() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        var resetter = new Browser();
+        resetter.login("approval_admin2");
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var once = new java.util.concurrent.atomic.AtomicBoolean();
+        doAnswer(invocation -> {
+                    if (org.springframework.transaction.support.TransactionSynchronizationManager
+                                    .isActualTransactionActive()
+                            && once.compareAndSet(false, true)) {
+                        entered.countDown();
+                        assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                    }
+                    return invocation.callRealMethod();
+                })
+                .when(mailQuery)
+                .availability(any(MerchantApplication.class), any(LocalDateTime.class), eq(true));
+        long expected = latestDelivery(id);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var recovery = executor.submit(() -> resend(admin, id, expected));
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            var reset = executor.submit(() ->
+                    resetter.send("POST", "/api/admin/users/" + saved(id).getUserId() + "/password-reset", "{}", true));
+            release.countDown();
+            assertThat(recovery.get(20, TimeUnit.SECONDS).statusCode()).isEqualTo(200);
+            assertThat(reset.get(20, TimeUnit.SECONDS).statusCode()).isEqualTo(200);
+        } finally {
+            release.countDown();
+        }
+        assertThat(tokens.findByApplicationIdAndPurpose(id, ApplicationTokenPurpose.INITIAL_PASSWORD_SETUP))
+                .allMatch(t -> t.getRevokedAt() != null);
+    }
+
+    // 초기화가 먼저 진행 중이면 복구는 커밋을 기다린 뒤 새 링크를 발급하지 않는다.
+    @Test
+    void recovery_whenResetOwnsAccountLock_rejectsAfterResetCommit() throws Exception {
+        Long id = application(true);
+        approve(id);
+        allowRecovery(id);
+        var resetter = new Browser();
+        resetter.login("approval_admin2");
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(invocation -> {
+                    entered.countDown();
+                    assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                    return invocation.callRealMethod();
+                })
+                .when(org.springframework.test.util.AopTestUtils.<AdminChangeHistoryService>getUltimateTargetObject(
+                        histories))
+                .recordUser(anyLong(), anyLong(), eq("PASSWORD_RESET"), any(), any());
+        long expected = latestDelivery(id);
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var reset = executor.submit(() ->
+                    resetter.send("POST", "/api/admin/users/" + saved(id).getUserId() + "/password-reset", "{}", true));
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            var recovery = executor.submit(() -> resend(admin, id, expected));
+            release.countDown();
+            assertThat(reset.get(20, TimeUnit.SECONDS).statusCode()).isEqualTo(200);
+            assertThat(recovery.get(20, TimeUnit.SECONDS).statusCode()).isEqualTo(409);
+        } finally {
+            release.countDown();
+        }
+        assertThat(latestDelivery(id)).isEqualTo(expected);
     }
 
     private List<Integer> concurrent(Callable<Integer> one, Callable<Integer> two) throws Exception {

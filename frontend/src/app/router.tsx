@@ -2,6 +2,7 @@ import {
   AdminApplicationsPage,
   AdminApplicationDetailPage,
 } from '../pages/admin/AdminApplicationsPage'
+import { ApplicationGate } from '../pages/public/ApplicationGate'
 import { InitialPasswordPage } from '../pages/public/InitialPasswordPage'
 import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPage'
 import { takeVerificationToken } from '../pages/public/applicationFeedback'
@@ -75,16 +76,31 @@ export const router = createBrowserRouter([
       ]
     : []),
   { path: '/', element: <LandingRoute /> },
-  { path: '/apply', element: <ApplicationPage /> },
+  {
+    path: '/apply',
+    element: (
+      <ApplicationGate>
+        <ApplicationPage />
+      </ApplicationGate>
+    ),
+  },
   {
     path: '/apply/verify',
     loader: () => ({ token: takeVerificationToken(window.location, window.history) }),
-    element: <VerifyEmailPage />,
+    element: (
+      <ApplicationGate>
+        <VerifyEmailPage />
+      </ApplicationGate>
+    ),
   },
   {
     path: '/apply/password',
     loader: () => ({ token: takeVerificationToken(window.location, window.history) }),
-    element: <InitialPasswordPage />,
+    element: (
+      <ApplicationGate>
+        <InitialPasswordPage />
+      </ApplicationGate>
+    ),
   },
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.

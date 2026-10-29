@@ -152,3 +152,24 @@ test('applicationFeedback_whenKnownError_preservesActionableMessage', () => {
   assert.match(applicationError(new ApiError(403, 'CSRF_001')), /보안 확인/)
   assert.match(applicationError(new ApiError(401, 'AUTH_001')), /다시 한 번/)
 })
+
+// 공개 설정 조회는 비활성 값과 no-store를 보존하며 업무 인증 알림을 발생시키지 않는다.
+test('applicationConfig_whenDisabledOrUnauthorized_usesPublicRead', async () => {
+  const { getApplicationConfig } = await import('../src/api/merchantApplications.ts')
+  let notified = 0
+  const off = subscribeUnauthorized(() => notified++)
+  globalThis.fetch = async (path, init) => {
+    assert.equal(String(path), '/api/merchant-applications/config')
+    assert.equal(init?.cache, 'no-store')
+    assert.notEqual(init?.method, 'POST')
+    return Response.json({ enabled: false })
+  }
+  assert.deepEqual(await getApplicationConfig(), { enabled: false })
+  globalThis.fetch = async () => Response.json({ code: 'AUTH_001' }, { status: 401 })
+  try {
+    await assert.rejects(getApplicationConfig())
+    assert.equal(notified, 0)
+  } finally {
+    off()
+  }
+})

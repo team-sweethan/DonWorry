@@ -17,6 +17,8 @@ public final class ApplicationReviewRequests {
 
             @NotNull @Size(max = 2) List<@NotNull @Pattern(regexp = "FDS_VIEW|FINANCE_VIEW") String> permissions) {}
 
+    public record ResendRequest(@NotNull @Positive Long expectedDeliveryId) {}
+
     public record RejectRequest(@NotBlank @Size(max = 1000) String reason) {}
 
     public record SetupRequest(

@@ -16,6 +16,13 @@ public class MerchantApplicationController {
     private final MerchantApplicationService service;
     private final com.donworry.identity.service.InitialPasswordService initialPasswords;
 
+    private final com.donworry.identity.service.ApplicationSettings settings;
+
+    @GetMapping("/config")
+    public Config config() {
+        return new Config(settings.isEnabled());
+    }
+
     @PostMapping("/initial-password-setups")
     public ResponseEntity<Void> setup(
             @Valid @RequestBody com.donworry.identity.dto.ApplicationReviewRequests.SetupRequest input) {

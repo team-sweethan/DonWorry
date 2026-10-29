@@ -31,7 +31,9 @@ public enum ApplicationErrorCode {
     INVALID_SETUP_INPUT("APPLICATION_017", "메일의 비밀번호 설정 링크와 새 비밀번호를 확인해 주세요.", HttpStatus.BAD_REQUEST),
     LOGIN_ID_UNAVAILABLE("APPLICATION_018", "이미 사용 중이거나 다른 신청에서 선택한 로그인 아이디입니다. 다른 아이디를 입력해 주세요.", HttpStatus.CONFLICT),
     LOGIN_ID_REQUIRED(
-            "APPLICATION_019", "이전 양식으로 접수되어 로그인 아이디가 없습니다. 신청자에게 새 양식으로 재신청하도록 안내해 주세요.", HttpStatus.CONFLICT);
+            "APPLICATION_019", "이전 양식으로 접수되어 로그인 아이디가 없습니다. 신청자에게 새 양식으로 재신청하도록 안내해 주세요.", HttpStatus.CONFLICT),
+    RESEND_CONFLICT("APPLICATION_020", "현재 안내 메일을 다시 보낼 수 없습니다. 최신 상태를 확인해 주세요.", HttpStatus.CONFLICT),
+    RESEND_LIMITED("APPLICATION_021", "메일 재발송 제한 시간 이후 다시 요청해 주세요.", HttpStatus.TOO_MANY_REQUESTS);
     private final String code;
     private final String message;
     private final HttpStatus status;
