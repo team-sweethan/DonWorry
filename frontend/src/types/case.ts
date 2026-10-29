@@ -135,7 +135,8 @@ export type ReportBody = {
     reason?: string
     ruleHitDetails?: ReportRuleHitDetail[]
   }>
-  timeline: Array<{ at: string; event: string }>
+  // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
+  timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
   overallAnalysis: string[]
   additionalChecks: string[]
   recommendation: { summary: string; limitations: string[] }

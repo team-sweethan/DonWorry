@@ -56,7 +56,7 @@ export function ReportTrace({ trace }: { trace: InvestigationTrace | undefined }
         }
         extra={
           <span style={{ color: '#94A3B8', fontSize: 12 }}>
-            단계를 누르면 물어본 것과 받은 것이 보입니다
+            화살표가 있는 단계를 누르면 물어본 것과 받은 것이 보입니다
           </span>
         }
       >
@@ -65,9 +65,11 @@ export function ReportTrace({ trace }: { trace: InvestigationTrace | undefined }
           style={{ background: 'transparent' }}
           items={trace.steps.map((s, i) => ({
             key: i,
-            label: <StepLabel step={s} index={i + 1} />,
+            label: <StepLabel step={s} index={i + 1} indent={!hasDetail(s)} />,
             children: <StepDetail step={s} />,
             style: s.actor === 'SYSTEM' ? systemStepStyle : aiStepStyle,
+            // 물어본 것 · 재시도 사유가 없으면 펼쳐도 제목 줄과 같은 말뿐이라 펼치지 않는다 (#310)
+            ...(hasDetail(s) ? {} : { showArrow: false, collapsible: 'icon' as const }),
           }))}
         />
       </Card>
@@ -75,9 +77,18 @@ export function ReportTrace({ trace }: { trace: InvestigationTrace | undefined }
   )
 }
 
-function StepLabel({ step, index }: { step: TraceStep; index: number }) {
+// indent: 화살표가 없는 단계도 번호 줄이 다른 단계와 맞게 화살표 자리만큼 띄운다
+function StepLabel({ step, index, indent }: { step: TraceStep; index: number; indent: boolean }) {
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: 10,
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        paddingLeft: indent ? 24 : 0,
+      }}
+    >
       <span style={{ color: '#94A3B8', width: 20 }}>{index}</span>
       <span>{kindIcon[step.kind]}</span>
       <b style={{ fontSize: 13.5 }}>{step.title}</b>
@@ -90,6 +101,10 @@ function StepLabel({ step, index }: { step: TraceStep; index: number }) {
       </span>
     </div>
   )
+}
+
+function hasDetail(step: TraceStep): boolean {
+  return Boolean(step.asked || step.retryReason)
 }
 
 function StepDetail({ step }: { step: TraceStep }) {
