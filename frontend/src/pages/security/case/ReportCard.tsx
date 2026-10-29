@@ -62,7 +62,8 @@ export function ReportCard({
             <div style={{ padding: '20px 0', textAlign: 'center' }}>
               <Spin />
               <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-                AI가 Case를 조사하고 있습니다. 완료되면 새로고침으로 확인하세요.
+                AI가 Case를 조사하고 있습니다. 완료되면 화면에 자동으로 반영됩니다. 2분이 지나 자동
+                갱신이 멈추면 새로고침하세요.
               </Typography.Paragraph>
             </div>
           )}

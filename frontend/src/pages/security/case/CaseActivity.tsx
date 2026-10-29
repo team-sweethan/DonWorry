@@ -12,7 +12,7 @@ import { CodeTag } from './CodeTag'
 
 /**
  * 결제별 금융 조치 인계 (설계 3.8, ADR-0027 완료 기반). ACCEPTED는 실제 매입·취소 완료다.
- * 대기 중이면 "다시 확인"으로 P5에 저장된 결과를 받아온다 — 매입을 다시 실행하지 않는다 (#161).
+ * 대기 중이면 "인계 상태 다시 확인"으로 P5에 저장된 결과를 받아온다 — 매입을 다시 실행하지 않는다 (#161).
  */
 export function HandoffCard({
   payments,
@@ -69,7 +69,7 @@ export function HandoffCard({
                     disabled={recheckingId !== null && recheckingId !== r.handoffId}
                     onClick={() => onRecheck(r.handoffId)}
                   >
-                    다시 확인
+                    인계 상태 다시 확인
                   </Button>
                 )}
               </>
@@ -94,8 +94,8 @@ export function HandoffCard({
       />
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '12px 0 0' }}>
         모든 결제의 실제 매입·취소가 끝나면 Case가 종료됩니다. 시간이 지났다고 실패나 종료로 바꾸지
-        않습니다. &quot;다시 확인&quot;은 P5에 저장된 결과를 받아올 뿐 매입을 다시 실행하지
-        않습니다.
+        않습니다. &quot;인계 상태 다시 확인&quot;은 P5에 저장된 결과를 받아올 뿐 매입을 다시
+        실행하지 않습니다.
       </Typography.Paragraph>
     </Card>
   )

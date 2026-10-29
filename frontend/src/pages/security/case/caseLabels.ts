@@ -19,7 +19,7 @@ export const caseStatusLabel: Record<CaseStatus, Label> = {
   INVESTIGATING: { label: '조사 중', color: 'processing' },
   DECISION_PENDING: { label: '판정 대기', color: 'gold' },
   ACTION_PENDING: { label: '금융 처리 대기', color: 'geekblue' },
-  ACTION_FAILED: { label: '금융 조치 실패', color: 'red' },
+  ACTION_FAILED: { label: '금융 처리 실패', color: 'red' },
   CLOSED: { label: '종료', color: 'default' },
 }
 
@@ -55,8 +55,8 @@ export const decisionLabel: Record<Decision, Label> = {
 /** 완료 기반 (ADR-0027) — ACCEPTED는 실제 매입·취소 완료, FAILED는 확정 거절이다. */
 export const handoffStatusLabel: Record<HandoffStatus, Label> = {
   REQUESTED: { label: '금융 처리 대기 중', color: 'processing' },
-  ACCEPTED: { label: '처리 완료', color: 'green' },
-  FAILED: { label: '처리 실패', color: 'red' },
+  ACCEPTED: { label: '금융 처리 완료', color: 'green' },
+  FAILED: { label: '금융 처리 실패', color: 'red' },
 }
 
 /** P5 거절 코드 → 직원이 읽는 문구 (#169). 목록에 없는 코드는 코드 그대로 보여준다. */
@@ -86,8 +86,8 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   PAYMENT_LINKED: '결제 연결',
   DECISION_CONFIRMED: '직원 판정 확정',
   HANDOFF_REQUESTED: '금융 조치 인계 요청',
-  HANDOFF_ACCEPTED: '금융 조치 완료',
-  HANDOFF_FAILED: '금융 조치 실패',
+  HANDOFF_ACCEPTED: '금융 처리 완료',
+  HANDOFF_FAILED: '금융 처리 실패',
   HANDOFF_RECHECKED: '인계 상태 다시 확인',
   HANDOFF_COMPLETION_RECORDED: '실제 완료 시각 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',

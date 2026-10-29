@@ -12,7 +12,7 @@ const counts = (over: Partial<CaseCounts> = {}): CaseCounts => ({
   ...over,
 })
 
-test('처리 필요는 판정 대기 + 금융 조치 실패만 센다', () => {
+test('처리 필요는 판정 대기 + 금융 처리 실패만 센다', () => {
   assert.equal(
     needActionCount(
       counts({
