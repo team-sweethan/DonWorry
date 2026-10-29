@@ -44,6 +44,8 @@ dependencies {
     // Modulith — 모듈 경계 + 이벤트 저장(JDBC)
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
+    // #275: publication 수신자 식별·조회 경계 (2.1.1 BOM)
+    implementation 'org.springframework.modulith:spring-modulith-events-core'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'

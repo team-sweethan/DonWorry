@@ -56,6 +56,11 @@ class PaymentRequestFlowMariaDbTests {
     @MockitoBean
     PaymentAuthorizer authorizer;
 
+    // 평가가 대역의 고정 ID이므로 승인 결과도 P2 공개 경계에서 격리한다.
+    // 실제 공유 DB의 같은 ID를 가진 다른 평가를 변경하면 실행 순서에 따라 충돌한다.
+    @MockitoBean
+    FdsAuthorizationResultRecorder authorizationResults;
+
     private PaymentRequestCommand command() {
         return new PaymentRequestCommand(
                 999L,
@@ -141,6 +146,8 @@ class PaymentRequestFlowMariaDbTests {
                 .isEqualTo(PaymentStatus.DECLINED);
         verify(authorizer).authorize(any());
         verify(evaluator).evaluate(any());
+        verify(authorizationResults).record(123L, FdsAuthorizationResultRecorder.AuthorizationResult.DECLINED);
+        verifyNoMoreInteractions(authorizationResults);
     }
 
     // 평가 응답 전에 통신이 실패하면 접수는 유지하고 같은 UUID·입력으로 다시 호출한다.
