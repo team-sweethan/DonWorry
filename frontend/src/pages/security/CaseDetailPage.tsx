@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
   demoMergePayment,
@@ -11,6 +11,7 @@ import {
   submitDecisions,
 } from '../../api/cases'
 import { ApiError } from '../../api/client'
+import { paymentLookupPath } from './paymentLookupState'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
@@ -281,7 +282,20 @@ export function CaseDetailPage() {
             pagination={false}
             dataSource={payments}
             columns={[
-              { title: '결제 ID', dataIndex: 'paymentId', render: (v) => <strong>{v}</strong> },
+              {
+                title: '결제 ID',
+                dataIndex: 'paymentId',
+                render: (id: string) => {
+                  const path = paymentLookupPath(id)
+                  return path ? (
+                    <Link to={path} aria-label={`결제 ${id} 처리 결과 조회`}>
+                      {id}
+                    </Link>
+                  ) : (
+                    <strong>{id}</strong>
+                  )
+                },
+              },
               {
                 title: '금액',
                 dataIndex: 'amount',

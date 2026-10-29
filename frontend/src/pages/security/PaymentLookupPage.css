@@ -1,0 +1,72 @@
+.payment-lookup {
+  display: grid;
+  gap: 20px;
+}
+.payment-lookup .pl-search {
+  display: flex;
+  gap: 10px;
+  max-width: 650px;
+}
+.payment-lookup .pl-search .ant-input {
+  flex: 1;
+  min-width: 0;
+}
+.payment-lookup .pl-note {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 12px 0 0;
+}
+.payment-lookup .pl-results {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.payment-lookup .pl-results:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+.payment-lookup .pl-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.payment-lookup .ant-descriptions {
+  margin-top: 14px;
+}
+.payment-lookup .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+}
+.payment-lookup .pl-amount {
+  font-size: 30px;
+  font-weight: 750;
+  margin: 0 0 18px;
+}
+.payment-lookup .pl-amount small {
+  font-size: 16px;
+  margin-left: 6px;
+}
+.payment-lookup .pl-loading {
+  text-align: center;
+  padding: 48px 16px;
+  color: #64748b;
+}
+.payment-lookup ul {
+  margin: 8px 0;
+  padding-left: 20px;
+  line-height: 1.8;
+}
+@media (max-width: 900px) {
+  .payment-lookup .pl-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .payment-lookup .pl-search {
+    flex-wrap: wrap;
+  }
+  .payment-lookup .pl-search .ant-input {
+    flex-basis: 100%;
+  }
+}

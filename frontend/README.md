@@ -65,7 +65,7 @@ npm run dev
 | `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                                 |
 | `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업              |
 | `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                                  |
-| `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                               |
+| `/security/transactions`                              | 결제 ID 단건 조회 (`PaymentLookupPage`, #348)                                                                          |
 | `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)                   |
 | `/owner/settlements`                                  | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                               |
 | `/dev/components`                                     | 공통 UI 예시                                                                                                           |
@@ -97,3 +97,13 @@ npm run test
 `/admin/*`·`/security/*`·`/owner/*`는 `auth/AuthRoutes.tsx`의 `ServerSession`이 지킵니다. 역할별 메뉴와 첫 화면은 `config/navigation.ts`의 `sessionNavigation`이 정합니다. 다른 역할 화면이나 권한이 없는 사장님 메뉴는 403과 "내 홈으로"를 보여주고, 볼 수 있는 메뉴가 없는 계정은 403과 로그아웃만 보여줍니다. 권한은 로그인할 때 세션에 담으므로 권한을 바꾸면 다시 로그인해야 반영됩니다.
 
 Case 화면은 시연 헤더의 가맹점(`DemoContext`) 값을 쓰지 않고 서버 응답을 그대로 보여줍니다(보안 직원은 모든 가맹점, 사장님은 자기 가맹점). 가맹점 선택은 시연 헤더에만 있어 서버 로그인 화면에서는 바꿀 수 없습니다.
+
+## 결제 단건 조회 (#348)
+
+보안 직원의 `/security/transactions?paymentId=123`에서 기존 `GET /api/payment-operations/{paymentId}`로 완료 결제를 포함한 결제·FDS 평가·직원 금융 조치를 조회한다. 전체 거래 목록 API를 추가하거나 결제 상태를 변경하지 않는다. Case 상세의 결제 ID 링크로도 진입한다.
+
+- URL로 조회 대상을 보존하며 조회 전·입력 오류·로딩·404·세션 만료·권한 거절·연결 실패를 구분한다. 입력이 바뀌면 이전 결과를 숨기고, 이전 요청을 취소하면서 늦은 응답도 폐기한다. 다시 조회는 수동이다.
+- 기존 API의 JSON 숫자 계약을 유지한다. ID는 `1..Number.MAX_SAFE_INTEGER`만 허용하고 선행 0은 정규화한다. 응답의 결제 ID·가맹점 ID·금액도 정밀도를 확인하며 안전하지 않으면 결과를 표시하지 않는다. 더 큰 BIGINT 지원에는 API 문자열 계약의 별도 합의가 필요하다.
+- 기록 없음(`ABSENT`)·결과 미기록(`NOT_RECORDED`)·실패를 구별한다. 자동 매입은 직원 조치 기록 없이 완료될 수 있다. 금융 처리 완료를 Case 종료나 정산 완료로 표시하지 않는다. 시각은 한국 시간으로 표시한다.
+- Case 시연 데이터는 P5에 저장된 결제가 아닐 수 있어 링크 조회가 404일 수 있다. 이를 가짜 성공으로 대체하지 않는다. 실제 저장된 결제 ID로 확인해야 한다.
+- 자동 검사는 `npm run lint`, `npm run format:check`, `npm run build`, `npm test`로 실행한다. API 요청·숫자 정밀도·URL 파싱·늦은 응답·재시도·기록 부재·역할 경계를 회귀 검사한다. 실제 서버 연결·브라우저·키보드·좁은 화면 검증은 별도로 수행한다.

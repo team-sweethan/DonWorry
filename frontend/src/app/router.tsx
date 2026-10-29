@@ -14,6 +14,7 @@ import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
 import { LandingRoute, LoginRoute, ServerSession } from '../auth/AuthRoutes'
 import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
+import { PaymentLookupPage } from '../pages/security/PaymentLookupPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
@@ -144,7 +145,7 @@ export const router = createBrowserRouter([
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'blocklist', element: <BlocklistPage /> },
-          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
+          { path: 'transactions', element: <PaymentLookupPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
         ],
       },
