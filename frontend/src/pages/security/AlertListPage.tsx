@@ -88,6 +88,13 @@ export function AlertListPage() {
       nextMerchantId: number | undefined,
       refreshSummary = false,
     ) => {
+      if (nextMerchantId === undefined) {
+        requestSequence.current += 1
+        setListLoading(false)
+        setSummaryLoading(false)
+        setError('가맹점을 먼저 불러와 선택해 주세요.')
+        return
+      }
       const sequence = ++requestSequence.current
       if (refreshSummary || resultCountsRef.current === null) summaryRefreshPending.current = true
       const shouldRefreshSummary = summaryRefreshPending.current
@@ -166,6 +173,46 @@ export function AlertListPage() {
     [],
   )
 
+  const loadMerchantDirectory = useCallback(
+    (preferredMerchantId?: number) => {
+      const sequence = ++requestSequence.current
+      setListLoading(true)
+      setSummaryLoading(true)
+      setError(null)
+      void getMerchantDirectory()
+        .then((result) => {
+          if (sequence !== requestSequence.current) return
+          setMerchants(result)
+          const selectedMerchant =
+            result.find((merchant) => merchant.merchantId === preferredMerchantId) ??
+            result.find((merchant) => merchant.status === 'ACTIVE') ??
+            result[0]
+          if (!selectedMerchant) {
+            setListLoading(false)
+            setSummaryLoading(false)
+            setError('선택할 가맹점이 없습니다.')
+            return
+          }
+          const current = conditions.current
+          setMerchantId(selectedMerchant.merchantId)
+          conditions.current = {
+            filter: current.filter,
+            query: current.query,
+            merchantId: selectedMerchant.merchantId,
+            page: 0,
+          }
+          load(0, current.filter, current.query, selectedMerchant.merchantId, true)
+        })
+        .catch(() => {
+          if (sequence !== requestSequence.current) return
+          setListLoading(false)
+          setSummaryLoading(false)
+          setError('가맹점 목록을 불러오지 못했습니다.')
+        })
+    },
+    [load],
+  )
+
   const createMock = () => {
     setMockCreating(true)
     setError(null)
@@ -221,40 +268,13 @@ export function AlertListPage() {
   }
 
   useEffect(() => {
-    let cancelled = false
-    void getMerchantDirectory()
-      .then((result) => {
-        if (cancelled) return
-        setMerchants(result)
-        const initialMerchant = result.find((merchant) => merchant.status === 'ACTIVE') ?? result[0]
-        if (!initialMerchant) {
-          setListLoading(false)
-          setSummaryLoading(false)
-          setError('선택할 가맹점이 없습니다.')
-          return
-        }
-        setMerchantId(initialMerchant.merchantId)
-        conditions.current = {
-          filter: 'NEEDS_ATTENTION',
-          query: '',
-          merchantId: initialMerchant.merchantId,
-          page: 0,
-        }
-        load(0, 'NEEDS_ATTENTION', '', initialMerchant.merchantId, true)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setListLoading(false)
-          setSummaryLoading(false)
-          setError('가맹점 목록을 불러오지 못했습니다.')
-        }
-      })
+    const initialLoad = window.setTimeout(() => loadMerchantDirectory(), 0)
     return () => {
-      cancelled = true
+      window.clearTimeout(initialLoad)
       cancelScheduledSearch()
       requestSequence.current += 1
     }
-  }, [load])
+  }, [loadMerchantDirectory])
 
   const count = (result: FdsResult) => resultCounts?.[result] ?? 0
   const totalCount = Object.values(resultCounts ?? {}).reduce(
@@ -433,7 +453,7 @@ export function AlertListPage() {
             <Button
               icon={<ReloadOutlined />}
               loading={summaryLoading && evaluationPage !== null}
-              onClick={() => load(currentPage - 1, filter, query, merchantId, true)}
+              onClick={() => loadMerchantDirectory(merchantId)}
             >
               새로고침
             </Button>
