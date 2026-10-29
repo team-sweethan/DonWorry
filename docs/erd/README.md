@@ -226,6 +226,12 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 | attempt_no | BIGINT NOT NULL | 주문별 1부터 증가하는 순번 |
 | idempotency_key | UUID NOT NULL | CakeShop이 시도별로 보존하는 키 |
 | evaluation_request_id | UUID NOT NULL | P5가 최초 생성·고정하는 P2 요청 키 |
+| device_id | VARCHAR(100) NULL | 가맹점이 보낸 기기 식별자 (#325) |
+| card_token | VARCHAR(255) NULL | 카드 토큰 · 해시, 카드 원문 아님 (#325) |
+| card_display_label | VARCHAR(50) NULL | 마스킹한 카드 표시값 (#325) |
+| ip_country_code | CHAR(2) NULL | 접속 IP 국가 코드, 대문자 (#325) |
+| ip_address | VARCHAR(45) NULL | 접속 IP 주소 (#325) |
+| buyer_email | VARCHAR(254) NULL | 구매자 이메일, 소문자 (#325) |
 | processing_stage | VARCHAR(30) NOT NULL | RECEIVED / EVALUATED / AUTHORIZED / NEEDS_REVIEW |
 | evaluation_id | BIGINT NULL | P2 응답 논리 참조, FK 없음 |
 | evaluation_result | VARCHAR(20) NULL | P2 응답 ALLOW/REVIEW/DENY/ERROR |
@@ -239,7 +245,7 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 - CHECK: attempt_no >0, processing_stage 허용값. RECEIVED는 평가 필드 전부 NULL. EVALUATED/AUTHORIZED는 양수 evaluation_id·evaluated_at·ALLOW/REVIEW/DENY·0 이상 점수 필수, 오류 NULL. NEEDS_REVIEW는 양수 evaluation_id·evaluated_at·ERROR·비어 있지 않은 오류 필수, 점수 NULL.
 - AUTHORIZED는 초기 승인 판단이 끝났다는 내부 단계다. 결제 최종 성공이 아니며 DENIED/DECLINED도 포함한다. 실제 상태는 payments에서 읽는다.
 - payment와 주문의 가맹점·주문번호·금액·고객 일치는 같은 트랜잭션의 저장 서비스와 테스트로 보장한다. 행 CHECK로 타 테이블 일치까지 보장한다고 주장하지 않는다.
-- 요청 재전송 내용은 주문 불변 필드와 키로 대조한다. 요청 raw JSON·API Key·카드 정보는 저장하지 않는다. 평가 응답 사본은 재개에 필요한 최소 6필드이며 룰·보고서 사본은 두지 않는다.
+- 요청 재전송 내용은 주문 불변 필드 · FDS 식별자와 키로 대조한다. 요청 raw JSON·API Key·카드 원문은 저장하지 않는다. FDS 식별자 6개(`V20261029_141011`, #325)는 P2 평가 · 재평가 입력을 다시 만들기 위해 시도 단위로 저장하며 모두 NULL 허용이다. 카드는 토큰과 마스킹 표시값만 저장한다. 평가 응답 사본은 재개에 필요한 최소 6필드이며 룰·보고서 사본은 두지 않는다.
 
 #### payments 추가 제안
 

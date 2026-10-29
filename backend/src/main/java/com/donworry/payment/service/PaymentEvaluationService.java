@@ -56,6 +56,7 @@ public class PaymentEvaluationService {
             throw new IllegalArgumentException("input must not be null");
         }
 
+        var signals = input.riskSignals();
         return FdsEvaluationRequest.builder()
                 .evaluationRequestId(input.evaluationRequestId())
                 .paymentId(input.paymentId())
@@ -63,6 +64,12 @@ public class PaymentEvaluationService {
                 .customerRef(input.customerRef())
                 .amount(input.amount())
                 .paymentRequestedAt(input.paymentRequestedAt())
+                .deviceId(signals.deviceId())
+                .cardToken(signals.cardToken())
+                .cardDisplayLabel(signals.cardDisplayLabel())
+                .ipCountryCode(signals.ipCountryCode())
+                .ipAddress(signals.ipAddress())
+                .buyerEmail(signals.buyerEmail())
                 .build();
     }
 }

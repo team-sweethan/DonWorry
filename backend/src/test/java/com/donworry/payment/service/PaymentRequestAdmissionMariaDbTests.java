@@ -127,6 +127,46 @@ class PaymentRequestAdmissionMariaDbTests {
         assertThat(count(c)).isEqualTo(1);
     }
 
+    // FDS 식별자는 시도에 저장하고, 같은 키의 재전송은 식별자까지 같아야 같은 결제로 본다 (#325).
+    @Test
+    void admit_withRiskSignals_storesThemAndRejectsChangedReplay() {
+        var c = command();
+        var signals = PaymentRiskSignals.builder()
+                .deviceId("device-1")
+                .cardToken("card-token-1")
+                .cardDisplayLabel("신한 **** 1234")
+                .ipCountryCode("kr")
+                .ipAddress("203.0.113.10")
+                .buyerEmail("Buyer@Example.com")
+                .build();
+        var withSignals = new PaymentRequestCommand(
+                c.merchantId(),
+                c.orderRef(),
+                c.customerRef(),
+                c.amount(),
+                c.orderCreatedAt(),
+                c.idempotencyKey(),
+                signals);
+        var first = admission.admit(withSignals);
+        assertThat(requests.findByPaymentId(first.paymentId()).orElseThrow().riskSignals())
+                .isEqualTo(new PaymentRiskSignals(
+                        "device-1", "card-token-1", "신한 **** 1234", "KR", "203.0.113.10", "buyer@example.com"));
+        assertThat(admission.admit(withSignals).paymentId()).isEqualTo(first.paymentId());
+
+        conflict(c, IDEMPOTENCY_KEY_CONFLICT);
+        conflict(
+                new PaymentRequestCommand(
+                        c.merchantId(),
+                        c.orderRef(),
+                        c.customerRef(),
+                        c.amount(),
+                        c.orderCreatedAt(),
+                        c.idempotencyKey(),
+                        signals.toBuilder().cardToken("card-token-2").build()),
+                IDEMPOTENCY_KEY_CONFLICT);
+        assertThat(count(c)).isEqualTo(1);
+    }
+
     // 확정 거절된 시도에 한해서 기한 안에 새 결제를 만들고 오래된 키는 이전 시도를 가리킨다.
     @ParameterizedTest
     @EnumSource(

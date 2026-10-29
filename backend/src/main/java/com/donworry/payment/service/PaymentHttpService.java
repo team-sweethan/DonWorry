@@ -1,6 +1,7 @@
 package com.donworry.payment.service;
 
 import com.donworry.payment.dto.*;
+import com.donworry.payment.entity.PaymentRiskSignals;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +34,14 @@ public class PaymentHttpService {
                     merchantId + ":" + customer,
                     body.amount(),
                     body.orderCreatedAt(),
-                    UUID.fromString(key));
+                    UUID.fromString(key),
+                    new PaymentRiskSignals(
+                            body.deviceId(),
+                            body.cardToken(),
+                            body.cardDisplayLabel(),
+                            body.ipCountryCode(),
+                            body.ipAddress(),
+                            body.buyerEmail()));
         } catch (IllegalArgumentException e) {
             throw invalid();
         }

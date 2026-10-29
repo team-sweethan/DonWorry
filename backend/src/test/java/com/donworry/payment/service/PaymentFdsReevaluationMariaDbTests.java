@@ -103,6 +103,11 @@ class PaymentFdsReevaluationMariaDbTests {
     }
 
     private long ready() {
+        return ready(PaymentRiskSignals.none());
+    }
+
+    // 최초 P2 평가 행에도 P5가 보낸 식별자를 그대로 저장해, 보고 · 재평가 입력이 같은지 P2가 대조할 수 있게 한다.
+    private long ready(PaymentRiskSignals signals) {
         var now = Instant.now();
         var receipt = initialAdmission.admit(new PaymentRequestCommand(
                 9000000000274L,
@@ -110,10 +115,17 @@ class PaymentFdsReevaluationMariaDbTests {
                 UUID.randomUUID().toString(),
                 100L,
                 now,
-                UUID.randomUUID()));
+                UUID.randomUUID(),
+                signals));
         jdbc.update(
-                "INSERT INTO fds_evaluations (evaluation_request_id,payment_id,merchant_id,customer_ref,payment_requested_at,requested_amount,result,evaluated_at,error_code) SELECT ?,payment_id,merchant_id,customer_ref,created_at,amount,'ERROR',UTC_TIMESTAMP(6),'TRANSIENT_TEST' FROM payments WHERE payment_id=?",
+                "INSERT INTO fds_evaluations (evaluation_request_id,payment_id,merchant_id,customer_ref,payment_requested_at,requested_amount,result,evaluated_at,error_code,device_id,card_token,card_display_label,ip_country_code,ip_address,buyer_email) SELECT ?,payment_id,merchant_id,customer_ref,created_at,amount,'ERROR',UTC_TIMESTAMP(6),'TRANSIENT_TEST',?,?,?,?,?,? FROM payments WHERE payment_id=?",
                 receipt.evaluationRequestId().toString(),
+                signals.deviceId(),
+                signals.cardToken(),
+                signals.cardDisplayLabel(),
+                signals.ipCountryCode(),
+                signals.ipAddress(),
+                signals.buyerEmail(),
                 receipt.paymentId());
         long evaluationId = jdbc.queryForObject(
                 "SELECT evaluation_id FROM fds_evaluations WHERE evaluation_request_id=?",
@@ -152,6 +164,28 @@ class PaymentFdsReevaluationMariaDbTests {
                 "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE JSON_VALUE(serialized_event,'$.paymentId')=? AND event_type IN ('com.donworry.payment.api.PaymentHeld','com.donworry.settlement.api.CaptureRequested')",
                 Long.class,
                 id);
+    }
+
+    // 평가 오류 보고와 재평가가 시도에 저장한 FDS 식별자를 그대로 넘긴다 (#325).
+    // 보고 값이 최초 평가와 다르면 P2 분석이 EVALUATION_INPUT_MISMATCH로 끝나 READY가 되지 않는다.
+    @Test
+    void reevaluate_withRiskSignals_reportsAndReevaluatesWithStoredSignals() {
+        var signals = new PaymentRiskSignals(
+                "device-325", "card-token-325", "신한 **** 1234", "KR", "203.0.113.10", "buyer-325@example.com");
+        long id = ready(signals);
+        assertThat(flow.reevaluate(id).status()).isEqualTo("COMPLETED");
+        verify(requester)
+                .reevaluate(argThat(r -> "device-325".equals(r.deviceId())
+                        && "card-token-325".equals(r.cardToken())
+                        && "신한 **** 1234".equals(r.cardDisplayLabel())
+                        && "KR".equals(r.ipCountryCode())
+                        && "203.0.113.10".equals(r.ipAddress())
+                        && "buyer-325@example.com".equals(r.buyerEmail())));
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM fds_evaluations WHERE payment_id=? AND device_id='device-325' AND card_token='card-token-325' AND buyer_email='buyer-325@example.com'",
+                        Long.class,
+                        id))
+                .isEqualTo(2);
     }
 
     // 결과 분기용 평가 대역도 실제 P2 재평가 트랜잭션 안에서 평가 행을 저장한다.

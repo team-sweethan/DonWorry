@@ -37,6 +37,25 @@ public class PaymentRequest {
     @Column(nullable = false)
     private UUID evaluationRequestId;
 
+    // 결제 시도마다 받은 FDS 식별자 (#325). 재평가 · 오류 보고도 이 값을 그대로 쓴다.
+    @Column(length = 100)
+    private String deviceId;
+
+    @Column(length = 255)
+    private String cardToken;
+
+    @Column(length = 50)
+    private String cardDisplayLabel;
+
+    @Column(length = 2)
+    private String ipCountryCode;
+
+    @Column(length = 45)
+    private String ipAddress;
+
+    @Column(length = 254)
+    private String buyerEmail;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private PaymentProcessingStage processingStage;
@@ -65,6 +84,7 @@ public class PaymentRequest {
             Long attemptNo,
             UUID idempotencyKey,
             UUID evaluationRequestId,
+            PaymentRiskSignals riskSignals,
             Instant createdAt) {
         this.paymentOrderId = PaymentStorageValues.positive(paymentOrderId);
         this.merchantId = PaymentStorageValues.positive(merchantId);
@@ -72,12 +92,29 @@ public class PaymentRequest {
         this.attemptNo = PaymentStorageValues.positive(attemptNo);
         this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey");
         this.evaluationRequestId = Objects.requireNonNull(evaluationRequestId, "evaluationRequestId");
+        var signals = PaymentRiskSignals.orNone(riskSignals);
+        this.deviceId = signals.deviceId();
+        this.cardToken = signals.cardToken();
+        this.cardDisplayLabel = signals.cardDisplayLabel();
+        this.ipCountryCode = signals.ipCountryCode();
+        this.ipAddress = signals.ipAddress();
+        this.buyerEmail = signals.buyerEmail();
         this.createdAt = PaymentStorageValues.micros(createdAt);
         this.processingStage = PaymentProcessingStage.RECEIVED;
     }
 
     public static PaymentRequest received(
             PaymentOrder order, Payment payment, long attemptNo, UUID key, UUID evaluationRequestId) {
+        return received(order, payment, attemptNo, key, evaluationRequestId, PaymentRiskSignals.none());
+    }
+
+    public static PaymentRequest received(
+            PaymentOrder order,
+            Payment payment,
+            long attemptNo,
+            UUID key,
+            UUID evaluationRequestId,
+            PaymentRiskSignals riskSignals) {
         Objects.requireNonNull(order, "order");
         Objects.requireNonNull(payment, "payment");
         payment.requireUnapprovedPending();
@@ -92,8 +129,13 @@ public class PaymentRequest {
                 .attemptNo(attemptNo)
                 .idempotencyKey(key)
                 .evaluationRequestId(evaluationRequestId)
+                .riskSignals(riskSignals)
                 .createdAt(payment.getCreatedAt())
                 .build();
+    }
+
+    public PaymentRiskSignals riskSignals() {
+        return new PaymentRiskSignals(deviceId, cardToken, cardDisplayLabel, ipCountryCode, ipAddress, buyerEmail);
     }
 
     public Optional<PaymentEvaluationSnapshot> evaluationSnapshot() {

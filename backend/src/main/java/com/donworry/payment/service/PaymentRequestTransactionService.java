@@ -51,14 +51,16 @@ public class PaymentRequestTransactionService {
         long attempt = order.allocateAttempt(now);
         var payment = payments.save(Payment.pending(
                 command.merchantId(), command.customerRef(), command.orderRef(), command.amount(), now));
-        var request = requests.save(
-                PaymentRequest.received(order, payment, attempt, command.idempotencyKey(), UUID.randomUUID()));
+        var request = requests.save(PaymentRequest.received(
+                order, payment, attempt, command.idempotencyKey(), UUID.randomUUID(), command.riskSignals()));
         return receipt(request, true);
     }
 
     private PaymentRequestAdmission replay(PaymentRequestCommand command, PaymentRequest request) {
         var order = orders.findById(request.getPaymentOrderId()).orElseThrow();
-        if (!matches(order, command)) throw new PaymentRequestConflictException(IDEMPOTENCY_KEY_CONFLICT);
+        // 같은 키의 재전송은 FDS 식별자까지 처음 요청과 같아야 한다. 다르면 다른 결제 시도로 본다.
+        if (!matches(order, command) || !request.riskSignals().equals(command.riskSignals()))
+            throw new PaymentRequestConflictException(IDEMPOTENCY_KEY_CONFLICT);
         return receipt(request, false);
     }
 
