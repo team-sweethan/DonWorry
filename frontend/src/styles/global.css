@@ -30,6 +30,10 @@ body,
   margin: 0;
   min-height: 100%;
 }
+/* 스크롤바가 생기고 사라질 때 본문 폭이 바뀌어 화면이 흔들리지 않게 자리를 비워 둔다 (#312) */
+html {
+  scrollbar-gutter: stable;
+}
 body {
   min-width: 320px;
 }
