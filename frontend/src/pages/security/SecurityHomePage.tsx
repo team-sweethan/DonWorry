@@ -17,7 +17,7 @@ import { StatButton } from './case/StatButton'
 
 /** 먼저 볼 이유 — 표의 첫 열. OTHER는 진행 중이라 따로 표시하지 않는다. */
 const reasonLabel: Record<PriorityReason, { label: string; color: string } | null> = {
-  ACTION_FAILED: { label: '금융 조치 실패', color: 'red' },
+  ACTION_FAILED: { label: '금융 처리 실패', color: 'red' },
   SLA_EXCEEDED: { label: '24시간 초과', color: 'volcano' },
   DECISION_PENDING: { label: '판정 필요', color: 'gold' },
   OTHER: null,
@@ -169,7 +169,7 @@ export function SecurityHomePage() {
             <Alert
               type="error"
               showIcon
-              message={`금융 조치 실패 ${counts.actionFailed}건 — 실패 사유를 확인하세요.`}
+              message={`금융 처리 실패 ${counts.actionFailed}건 — 실패 사유를 확인하세요.`}
               action={
                 <Button
                   size="small"
@@ -235,7 +235,7 @@ export function SecurityHomePage() {
           onClick={() => openList({ status: 'ACTION_PENDING' })}
         />
         <StatButton
-          title="금융 조치 실패"
+          title="금융 처리 실패"
           value={counts.actionFailed}
           foot="실패 사유 확인 필요"
           color="#B91C1C"
@@ -254,7 +254,7 @@ export function SecurityHomePage() {
           <div>
             <h3>지금 처리할 사건</h3>
             <p>
-              금융 조치 실패 → 24시간 초과 → 판정 대기 순, 같은 순위는 오래된 Case부터 6건입니다.
+              금융 처리 실패 → 24시간 초과 → 판정 대기 순, 같은 순위는 오래된 Case부터 6건입니다.
             </p>
           </div>
           <Button type="link" onClick={() => openList()}>

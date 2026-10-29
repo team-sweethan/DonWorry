@@ -157,7 +157,7 @@ export function CaseListPage() {
       value: open.filter((c) => c.status === 'ACTION_PENDING').length,
     },
     {
-      title: '금융 조치 실패',
+      title: '금융 처리 실패',
       foot: '실패 사유 확인 필요',
       color: '#B91C1C',
       preset: { status: 'ACTION_FAILED', slaExceeded: false, report: null },

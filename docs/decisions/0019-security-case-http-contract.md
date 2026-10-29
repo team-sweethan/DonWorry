@@ -85,7 +85,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 
 - API: 이 문서의 표. 소비자는 이 저장소 frontend뿐이다. `totalAmount`는 #103의 `long`에서 nullable로 바뀌었다(병합 전 #113에서 변경, 다른 소비자 없음).
 - DB: 없음. 목 결제 정보는 메모리다. 보고서는 P4가 `ai_reports`(P4 소유)에 저장하고, P3는 `ReportGateway`로만 조회한다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
-- 화면: 고객사 `/owner/actions` 목록 · 상세가 `src/api/merchantCases.ts`로 고객사 조회 API를 쓴다(#205). `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
+- 화면: 고객사 `/owner/actions` 목록 · 상세가 `src/api/merchantCases.ts`로 고객사 조회 API를 쓴다(#205). `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "인계 상태 다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
 - 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치 처리 대기 → 다시 확인 → 종료), `MockFinancialActionGatewayTests`(처리 중 · 완료 · 결제 상태 · 멱등), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가), `MerchantCaseFlowTests`(고객사 조회 가맹점 범위 · 권한 · 제외 항목 · 직접 조사 표시).
 - 문서: 보고서 재요청과 FAILED 의미는 P4 구현(#250 · #253) 뒤에도 위 결정과 같다. 보고서 생성 · 재시도 세부는 ADR-0009를 본다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
 

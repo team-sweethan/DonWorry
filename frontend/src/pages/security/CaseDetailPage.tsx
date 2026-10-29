@@ -163,7 +163,7 @@ export function CaseDetailPage() {
       refreshCaseBadge()
       const handoff = after.handoffs.find((h) => h.handoffId === handoffId)
       if (handoff?.status === 'REQUESTED') {
-        toast.info('아직 금융 처리 중입니다. P5 확인이 필요하면 결제·조치 정보를 전달하세요.')
+        toast.info('아직 금융 처리 대기 중입니다. P5 확인이 필요하면 결제·조치 정보를 전달하세요.')
       } else {
         toast.success('금융 처리 결과를 반영했습니다.')
       }
