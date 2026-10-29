@@ -11,9 +11,10 @@ export type LoginRedirectState = {
 export function loginDestination(user: AuthUser, state: unknown): string | null {
   const fallback = sessionNavigation(user).landing
   if (user.passwordChangeRequired) return fallback
-  // 관리자는 로그인할 때마다 승인 대기 현황부터 확인한다.
-  if (user.role === 'ADMIN') return fallback
   if (typeof state !== 'object' || state === null || Array.isArray(state)) return fallback
+  // 관리자는 관리자 홈에서 시작한다. 세션이 만료돼 같은 계정으로 다시 로그인할 때만 보던 화면으로 돌아간다.
+  if (user.role === 'ADMIN' && !('previousUserId' in state && state.previousUserId != null))
+    return fallback
   if (!('returnTo' in state) || typeof state.returnTo !== 'string') return fallback
   const target = state.returnTo
   const hasControlOrSpace = Array.from(target).some((char) => {

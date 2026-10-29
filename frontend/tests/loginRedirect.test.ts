@@ -33,6 +33,16 @@ test('관리자는 이전 방문 경로와 관계없이 로그인하면 홈에�
   )
 })
 
+test('관리자도 세션 만료 후 같은 계정으로 다시 로그인하면 보던 화면으로 돌아간다', () => {
+  const admin: AuthUser = { ...staff, role: 'ADMIN' }
+  const returnTo = '/admin/fds/rule-change-requests'
+  assert.equal(loginDestination(admin, { returnTo, previousUserId: admin.userId }), returnTo)
+  assert.equal(
+    loginDestination(admin, { returnTo, previousUserId: admin.userId + 1 }),
+    '/admin/home',
+  )
+})
+
 // 같은 계정으로 재로그인하면 상세 경로와 쿼리를 그대로 복원한다.
 test('loginDestination_whenSameAccount_preservesPathAndQuery', () => {
   const returnTo = '/security/cases/3?page=2&keyword=%ED%99%95%EC%9D%B8&next=https://example.com'

@@ -58,6 +58,7 @@ function ManagementCard({
   loading,
   icon,
   to,
+  unit,
 }: {
   title: string
   description: string
@@ -65,6 +66,7 @@ function ManagementCard({
   loading: boolean
   icon: ReactNode
   to: string
+  unit: string
 }) {
   return (
     <Link to={to} className="ah-panel ah-management-card">
@@ -78,7 +80,7 @@ function ManagementCard({
       <p>{description}</p>
       <div className="ah-management-total">
         <span>전체</span>
-        <Count result={result} loading={loading} unit="개" />
+        <Count result={result} loading={loading} unit={unit} />
       </div>
     </Link>
   )
@@ -130,6 +132,7 @@ export function AdminHomePage() {
             result={data?.users}
             loading={loading}
             to="/admin/users"
+            unit="명"
           />
           <ManagementCard
             title="가맹점 관리"
@@ -138,13 +141,14 @@ export function AdminHomePage() {
             result={data?.merchants}
             loading={loading}
             to="/admin/merchants"
+            unit="곳"
           />
         </div>
         <p className="ah-management-note">사용 중지된 계정·가맹점을 포함한 전체 수입니다.</p>
       </section>
       <div className="ah-layout">
         <section
-          className="ah-panel ah-approvals"
+          className={`ah-panel ah-approvals${pending?.count ? ' is-pending' : ''}`}
           aria-labelledby="ah-approval-title"
           aria-busy={loading}
         >
@@ -195,7 +199,10 @@ export function AdminHomePage() {
             <ul className="ah-request-list">
               {pending.recent.map((request) => (
                 <li key={request.requestId}>
-                  <Link to={requestPath} className="ah-request-link">
+                  <Link
+                    to={`${requestPath}?requestId=${request.requestId}`}
+                    className="ah-request-link"
+                  >
                     <span className="ah-rule-code">{request.ruleCode}</span>
                     <div className="ah-request-content">
                       <p className="ah-request-reason" title={request.reason}>
@@ -213,6 +220,14 @@ export function AdminHomePage() {
                   </Link>
                 </li>
               ))}
+              {pending.count > pending.recent.length && (
+                <li>
+                  <Link to={requestPath} className="ah-request-more">
+                    외 {(pending.count - pending.recent.length).toLocaleString('ko-KR')}건 더 보기{' '}
+                    <ArrowRightOutlined aria-hidden="true" />
+                  </Link>
+                </li>
+              )}
             </ul>
           )}
         </section>

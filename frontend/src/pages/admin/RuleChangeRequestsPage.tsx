@@ -1,5 +1,6 @@
 import { Alert, Button, Card, Descriptions, Modal, Pagination, Space, Table, Tabs, Tag } from 'antd'
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   getFdsRuleChangeRequests,
   reviewFdsRuleChangeRequest,
@@ -37,11 +38,22 @@ export function RuleChangeRequestsPage() {
   const [processingId, setProcessingId] = useState<number | null>(null)
   const [selectedRequest, setSelectedRequest] = useState<FdsRuleChangeRequest | null>(null)
   const requestSequence = useRef(0)
+  // 관리자 홈에서 요청을 누르면 ?requestId=로 들어온다. 첫 목록에 있으면 상세를 바로 연다.
+  const [searchParams] = useSearchParams()
+  const linkedRequestId = useRef(Number(searchParams.get('requestId')))
   const reload = () => {
     const sequence = ++requestSequence.current
     getFdsRuleChangeRequests(status, page)
       .then((next) => {
-        if (sequence === requestSequence.current) setResult(next)
+        if (sequence !== requestSequence.current) return
+        setResult(next)
+        if (linkedRequestId.current) {
+          const linked = next.content.find(
+            (request) => request.requestId === linkedRequestId.current,
+          )
+          if (linked) setSelectedRequest(linked)
+          linkedRequestId.current = 0
+        }
       })
       .catch(() => {
         if (sequence === requestSequence.current) setError('룰 끄기 요청을 불러오지 못했습니다.')
