@@ -22,6 +22,8 @@ public interface MerchantRepository extends Repository<Merchant, Long>, JpaSpeci
 
     List<Merchant> findByMerchantIdIn(Collection<Long> merchantIds);
 
+    List<Merchant> findAllByOrderByMerchantIdAsc();
+
     List<Merchant> findByStatusAndDisplayNameContainingIgnoreCaseOrderByMerchantId(
             MerchantStatus status, String keyword, Pageable pageable);
 }

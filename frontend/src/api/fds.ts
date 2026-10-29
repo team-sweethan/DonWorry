@@ -120,12 +120,14 @@ export function getFdsEvaluations({
   result,
   attentionOnly = false,
   search,
+  merchantId,
   page = 0,
   size = 10,
 }: {
   result?: FdsResult
   attentionOnly?: boolean
   search?: string
+  merchantId?: number
   page?: number
   size?: number
 } = {}) {
@@ -133,6 +135,7 @@ export function getFdsEvaluations({
   if (result) query.set('result', result)
   if (attentionOnly) query.set('attentionOnly', 'true')
   if (search?.trim()) query.set('search', search.trim())
+  if (merchantId) query.set('merchantId', String(merchantId))
   return api<FdsEvaluationPage>(`/fds/evaluations?${query}`)
 }
 

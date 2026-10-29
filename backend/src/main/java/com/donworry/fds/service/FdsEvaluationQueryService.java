@@ -102,12 +102,24 @@ public class FdsEvaluationQueryService {
     }
 
     public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, String search, int page, int size) {
+        return list(result, attentionOnly, search, null, page, size);
+    }
+
+    public FdsEvaluationPage list(
+            FdsResult result, boolean attentionOnly, String search, Long merchantId, int page, int size) {
+        if (merchantId != null && merchantId <= 0) {
+            throw new IllegalArgumentException("merchantId must be positive");
+        }
         var pageable =
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("evaluatedAt"), Sort.Order.desc("evaluationId")));
-        var evaluations = evaluationRepository.findAll(filters(result, attentionOnly, search), pageable);
+        var evaluations = evaluationRepository.findAll(filters(result, attentionOnly, search, merchantId), pageable);
         var resultCounts = new EnumMap<FdsResult, Long>(FdsResult.class);
         for (var candidate : FdsResult.values()) {
-            resultCounts.put(candidate, evaluationRepository.countByResult(candidate));
+            resultCounts.put(
+                    candidate,
+                    merchantId == null
+                            ? evaluationRepository.countByResult(candidate)
+                            : evaluationRepository.count(filters(candidate, false, null, merchantId)));
         }
         return FdsEvaluationPage.builder()
                 .content(evaluations.map(this::summary).toList())
@@ -119,9 +131,13 @@ public class FdsEvaluationQueryService {
                 .build();
     }
 
-    private Specification<FdsEvaluation> filters(FdsResult result, boolean attentionOnly, String search) {
+    private Specification<FdsEvaluation> filters(
+            FdsResult result, boolean attentionOnly, String search, Long merchantId) {
         return (root, query, criteriaBuilder) -> {
             var predicate = criteriaBuilder.conjunction();
+            if (merchantId != null) {
+                predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("merchantId"), merchantId));
+            }
             if (attentionOnly) {
                 predicate =
                         criteriaBuilder.and(predicate, criteriaBuilder.notEqual(root.get("result"), FdsResult.ALLOW));
@@ -143,8 +159,7 @@ public class FdsEvaluationQueryService {
                     criteriaBuilder.or(
                             customerRef,
                             criteriaBuilder.like(root.get("evaluationId").as(String.class), "%" + number + "%"),
-                            criteriaBuilder.like(root.get("paymentId").as(String.class), "%" + number + "%"),
-                            criteriaBuilder.like(root.get("merchantId").as(String.class), "%" + number + "%")));
+                            criteriaBuilder.like(root.get("paymentId").as(String.class), "%" + number + "%")));
         };
     }
 
