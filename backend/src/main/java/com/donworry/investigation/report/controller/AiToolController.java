@@ -2,6 +2,7 @@ package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.AiToolService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -31,5 +32,11 @@ public class AiToolController {
     public FdsEvidenceToolResponse fdsEvidence(
             @RequestParam Long caseId, @RequestParam(required = false) List<Long> paymentIds) {
         return aiToolService.fdsEvidence(caseId, paymentIds);
+    }
+
+    // 이 Case와 비슷한 종료 사건 (#296) — 같은 고객 · 같은 규칙 조합, 최대 5건
+    @GetMapping("/find_similar_cases")
+    public SimilarCasesToolResponse similarCases(@RequestParam Long caseId) {
+        return aiToolService.similarCases(caseId);
     }
 }

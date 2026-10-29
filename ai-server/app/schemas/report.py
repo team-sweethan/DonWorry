@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 # AI 보고서 본문 8개 섹션 + 결론(verdict) + 조사 과정(investigationTrace)
+# + 비슷한 과거 사건(similarCases)
 # frontend/src/types/case.ts의 ReportBody와 키 · 타입을 같게 둔다
 # (ADR-0009 결정 4)
 # 한쪽만 고치지 않는다. 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
@@ -88,6 +89,26 @@ class InvestigationTrace(BaseModel):
     steps: list[TraceStep]
 
 
+# 비슷한 과거 사건 (#296) — Tool 기록 값 그대로 코드가 채운다. AI 문장으로 만들지 않는다
+class SimilarSharedRule(BaseModel):
+    code: str
+    name: str
+
+
+class SimilarCaseItem(BaseModel):
+    caseId: str
+    similarity: Literal["SAME_CUSTOMER", "SHARED_RULES"]
+    sharedRules: list[SimilarSharedRule]
+    closedAt: str | None
+    acceptCount: int
+    rejectCount: int
+
+
+class SimilarCases(BaseModel):
+    cases: list[SimilarCaseItem]
+    totalMatched: int
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
@@ -99,3 +120,5 @@ class ReportBody(BaseModel):
     evidence: list[EvidenceItem]
     verdict: Verdict
     investigationTrace: InvestigationTrace
+    # 조회하지 못했으면 None — 화면은 "조회하지 못함"을 보여 준다
+    similarCases: SimilarCases | None

@@ -150,6 +150,24 @@ export type ReportBody = {
   verdict?: { headline: string; overallRecommendation: AiRecommendation }
   // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
   investigationTrace?: InvestigationTrace
+  // 비슷한 과거 사건 (#296) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  similarCases?: SimilarCases | null
+}
+
+// 비슷한 과거 사건 (#296) — 결과는 결제별 직원 판정 건수 그대로 (해석하지 않는다)
+export type SimilarCaseItem = {
+  caseId: string
+  similarity: 'SAME_CUSTOMER' | 'SHARED_RULES'
+  sharedRules: Array<{ code: string; name: string }>
+  closedAt: string | null
+  acceptCount: number
+  rejectCount: number
+}
+
+// cases는 최대 5건, totalMatched는 5건을 넘는 것까지 센 전체 건수
+export type SimilarCases = {
+  cases: SimilarCaseItem[]
+  totalMatched: number
 }
 
 // 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 온다 (#294)

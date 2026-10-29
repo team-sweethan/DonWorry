@@ -10,8 +10,9 @@ import {
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
+import { SimilarCasesCard } from './SimilarCasesCard'
 
-// AI 보고서 전문. 결론 → 결제별 근거 비교 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
+// AI 보고서 전문. 결론 → 결제별 근거 비교 → 비슷한 과거 사건 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
@@ -22,6 +23,7 @@ export function ReportFull({ body, label }: { body: ReportBody; label: string })
       {body.paymentAnalyses.map((p) => (
         <PaymentEvidence key={p.paymentId} analysis={p} />
       ))}
+      {body.similarCases !== undefined && <SimilarCasesCard similar={body.similarCases} />}
       {body.overallAnalysis.length > 0 && (
         <Card title={<CardTitle title="종합 분석" ai />} style={cardStyle}>
           <Bullets items={body.overallAnalysis} />

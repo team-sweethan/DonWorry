@@ -14,10 +14,17 @@ from app.schemas.report import (
     ReportBody,
     ReportRecommendation,
     RuleHitDetail,
+    SimilarCases,
     TimelineItem,
     Verdict,
 )
-from app.schemas.tools import CasePayment, CasePaymentsTool, FdsEvidenceTool, FdsPayment
+from app.schemas.tools import (
+    CasePayment,
+    CasePaymentsTool,
+    FdsEvidenceTool,
+    FdsPayment,
+    SimilarCasesTool,
+)
 
 # 사실 값은 Tool 기록에서만 채운다 — Qwen이 숫자 · ID를 잘못 옮겨 적어도 보고서 사실은 틀리지 않는다
 
@@ -52,8 +59,22 @@ def analyzable(payment: CasePayment) -> bool:
     return payment.amount is not None and payment.requestedAt is not None
 
 
+SIMILARITY_KO = {"SAME_CUSTOMER": "같은 고객", "SHARED_RULES": "같은 규칙 조합"}
+
+
+def similar_outcome(accept: int, reject: int) -> str:
+    parts = [f"매입 진행 {accept}건"] if accept else []
+    parts += [f"승인 취소 {reject}건"] if reject else []
+    return " · ".join(parts) or "판정 없음"
+
+
 # Qwen에게 보여 줄 근거 요약 — 판단 문장을 쓸 결제와 각 결제의 사실 값
-def facts_json(case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]) -> str:
+# 비슷한 과거 사건은 이유 · 결과만 보여 준다 (참고 근거, 사건 번호는 문장에 쓰지 않으므로 넣지 않음)
+def facts_json(
+    case_payments: CasePaymentsTool,
+    fds: dict[str, FdsPayment],
+    similar: SimilarCasesTool | None = None,
+) -> str:
     payments = []
     for payment in case_payments.payments:
         evidence = fds.get(payment.paymentId)
@@ -80,13 +101,31 @@ def facts_json(case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]) -> s
                 ],
             }
         )
-    return json.dumps({"결제": payments}, ensure_ascii=False, indent=2)
+    facts: dict[str, object] = {"결제": payments}
+    if similar is not None:
+        facts["비슷한 과거 사건(참고)"] = [
+            {
+                "비슷한 이유": SIMILARITY_KO[c.similarity],
+                "겹친 규칙": [rule.name for rule in c.sharedRules],
+                "결과": similar_outcome(c.acceptCount, c.rejectCount),
+            }
+            for c in similar.cases
+        ]
+    return json.dumps(facts, ensure_ascii=False, indent=2)
 
 
 # 판단 문장에 나와도 되는 숫자
 # 근거에 있는 금액 · 점수 · 결제 ID · 결제 수 · 시각 · 규칙 이름 속 숫자
-def fact_numbers(case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]) -> set[int]:
+def fact_numbers(
+    case_payments: CasePaymentsTool,
+    fds: dict[str, FdsPayment],
+    similar: SimilarCasesTool | None = None,
+) -> set[int]:
     numbers = {len(case_payments.payments), sum(p.amount or 0 for p in case_payments.payments)}
+    if similar is not None:
+        numbers |= {len(similar.cases), similar.totalMatched}
+        for c in similar.cases:
+            numbers |= {c.acceptCount, c.rejectCount}
     for payment in case_payments.payments:
         numbers |= {int(d) for d in re.findall(r"\d+", payment.paymentId)}
         numbers |= {int(d) for d in re.findall(r"\d+", payment.requestedAt or "")}
@@ -141,6 +180,7 @@ def assemble_report(
     records: list[ToolRecord],
     investigated_at: str,
     trace: InvestigationTrace,
+    similar: SimilarCasesTool | None = None,
 ) -> ReportBody:
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
@@ -232,4 +272,9 @@ def assemble_report(
             overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
         ),
         investigationTrace=trace,
+        similarCases=SimilarCases.model_validate(
+            {"cases": [c.model_dump() for c in similar.cases], "totalMatched": similar.totalMatched}
+        )
+        if similar is not None
+        else None,
     )

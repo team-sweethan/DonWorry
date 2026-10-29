@@ -4,12 +4,16 @@ from typing import Any
 
 from app.config import Settings
 from app.schemas.report import InvestigationTrace, TraceStep
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
+from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
 
 # 조사 과정 기록(investigationTrace, #294) — 화면 "조사 과정" 탭이 그대로 보여 준다
 # 원본 값(금액 · 시각 · 점수)과 프롬프트는 넣지 않고, 코드가 만든 짧은 요약만 남긴다
 
-TOOL_TITLES = {"get_case_payments": "결제 목록 조회", "get_fds_evidence": "FDS 근거 조회"}
+TOOL_TITLES = {
+    "get_case_payments": "결제 목록 조회",
+    "get_fds_evidence": "FDS 근거 조회",
+    "find_similar_cases": "비슷한 과거 사건 조회",
+}
 
 # 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
 _QUOTED_SENTENCE = re.compile(r':\s*".*"\s*$', flags=re.DOTALL)
@@ -55,6 +59,8 @@ def decided(tool_calls: list[dict[str, Any]]) -> str:
 def tool_asked(name: str, args: dict[str, Any]) -> str:
     if name == "get_case_payments":
         return "이 사건의 결제 전체"
+    if name == "find_similar_cases":
+        return "이 사건과 비슷한 종료 사건"
     payment_ids = args.get("payment_ids") or []
     # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
     if not isinstance(payment_ids, list):
@@ -65,7 +71,12 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
 
 
 # 받은 것 요약 — 건수만 쓴다. 금액 · 점수 같은 원본 값은 보고서 본문에 이미 있다
-def tool_received(result: CasePaymentsTool | FdsEvidenceTool) -> str:
+def tool_received(result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool) -> str:
+    if isinstance(result, SimilarCasesTool):
+        same = sum(1 for c in result.cases if c.similarity == "SAME_CUSTOMER")
+        rules = len(result.cases) - same
+        shown = f"같은 고객 {same} · 같은 규칙 {rules}"
+        return f"비슷한 사건 {result.totalMatched}건 (보여 줄 것: {shown})"
     missing = (
         f" · 못 찾은 결제 {len(result.missingPaymentIds)}건" if result.missingPaymentIds else ""
     )

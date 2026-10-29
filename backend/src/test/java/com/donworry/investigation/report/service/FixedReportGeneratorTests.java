@@ -6,6 +6,9 @@ import static org.mockito.Mockito.when;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
+import com.donworry.investigation.report.dto.SimilarCasesToolResponse.SharedRule;
+import com.donworry.investigation.report.dto.SimilarCasesToolResponse.SimilarCase;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -36,6 +39,9 @@ class FixedReportGeneratorTests {
     @Mock
     PaymentInfoReader paymentInfoReader;
 
+    @Mock
+    SimilarCaseFinder similarCaseFinder;
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -49,8 +55,8 @@ class FixedReportGeneratorTests {
                         3L,
                         new PaymentInfo(
                                 3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
-        FixedReportGenerator generator =
-                new FixedReportGenerator(securityCaseRepository, casePaymentRepository, paymentInfoReader);
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -77,8 +83,8 @@ class FixedReportGeneratorTests {
                         3L,
                         new PaymentInfo(
                                 3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
-        FixedReportGenerator generator =
-                new FixedReportGenerator(securityCaseRepository, casePaymentRepository, paymentInfoReader);
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -89,5 +95,57 @@ class FixedReportGeneratorTests {
         assertThat(steps)
                 .allSatisfy(step -> assertThat(((Map<?, ?>) step).get("actor")).isEqualTo("SYSTEM"));
         assertThat(trace.toString()).doesNotContain("600000");
+    }
+
+    // AI 서버를 끈 시연에서도 비슷한 과거 사건 카드가 채워진다 — 값은 SimilarCaseFinder 결과 그대로 (#296)
+    @Test
+    void generate_aiDisabled_addsSimilarCases() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(similarCaseFinder.find(7L))
+                .thenReturn(new SimilarCasesToolResponse(
+                        "7",
+                        1,
+                        "P3·P2",
+                        NOW,
+                        List.of(new SimilarCase(
+                                "3", "SAME_CUSTOMER", List.of(new SharedRule("R01", "고액 결제")), NOW, 1, 1)),
+                        4));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> similar = (Map<?, ?>) body.get("similarCases");
+        assertThat(similar.get("totalMatched")).isEqualTo(4);
+        Map<?, ?> first = (Map<?, ?>) ((List<?>) similar.get("cases")).getFirst();
+        assertThat(first.get("caseId")).isEqualTo("3");
+        assertThat(first.get("acceptCount")).isEqualTo(1);
+        assertThat(first.get("rejectCount")).isEqualTo(1);
+    }
+
+    // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만들어지고, 값만 비어 있다 (#296)
+    @Test
+    void generate_similarCasesLookupFails_stillBuildsReportWithNull() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(similarCaseFinder.find(7L)).thenThrow(new IllegalStateException("P2 조회 실패"));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        assertThat(body).containsKey("similarCases");
+        assertThat(body.get("similarCases")).isNull();
+        assertThat(body.get("verdict")).isNotNull();
+    }
+
+    private FixedReportGenerator generatorForCase7() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
+        return new FixedReportGenerator(
+                securityCaseRepository, casePaymentRepository, paymentInfoReader, similarCaseFinder);
     }
 }

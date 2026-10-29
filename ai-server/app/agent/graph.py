@@ -14,7 +14,7 @@ from app.agent.tools import ALLOWED_TOOL_NAMES, TOOL_ARGS, TOOL_SPECS, ToolBox, 
 from app.config import Settings
 from app.schemas.case_context import CaseContext
 from app.schemas.report import ReportBody, TraceStep
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, FdsPayment
+from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, FdsPayment, SimilarCasesTool
 
 # 조사 Agent — Qwen이 다음에 볼 도구를 고르고, 코드는 허용 · 횟수 · 필수 근거 · 기록을 지킨다
 # 흐름: 고르기 ↔ 실행 → 필수 근거 확인 → 판단 문장 쓰기(형식 검사 · 고쳐 쓰기) → 보고서 조립
@@ -50,6 +50,11 @@ def _now() -> str:
 
 def _latest_case_payments(records: list[ToolRecord]) -> CasePaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, CasePaymentsTool)]
+    return found[-1] if found else None
+
+
+def _latest_similar(records: list[ToolRecord]) -> SimilarCasesTool | None:
+    found = [r.result for r in records if isinstance(r.result, SimilarCasesTool)]
     return found[-1] if found else None
 
 
@@ -143,7 +148,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
     def after_run(state: AgentState) -> str:
         return "check" if state["tool_calls_used"] >= max_calls else "choose"
 
-    # 필수 근거: 결제 목록 + 모든 결제의 FDS 근거
+    # 필수 근거: 결제 목록 + 모든 결제의 FDS 근거 + 비슷한 과거 사건(#296)
     # 빠지면 Qwen에게 알리고, 그래도 안 보면 코드가 보충한다
     def check(state: AgentState) -> AgentState:
         records = list(state["records"])
@@ -156,6 +161,8 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                 p.paymentId for p in case_payments.payments if p.paymentId not in _fds_seen(records)
             ]
             missing += [f"결제 {payment_id}의 FDS 근거(get_fds_evidence)" for payment_id in unseen]
+        if _latest_similar(records) is None:
+            missing.append("비슷한 과거 사건(find_similar_cases)")
         steps = list(state["trace"])
         if not missing:
             return _ready_to_write(records, steps)
@@ -185,6 +192,24 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             filled = toolbox.get_fds_evidence(unseen)
             records.append(ToolRecord("get_fds_evidence", {"payment_ids": unseen}, filled, True))
             steps.append(_system_fill("get_fds_evidence", {"payment_ids": unseen}, filled, started))
+        # 비슷한 사건은 참고 자료라 보충 조회가 실패해도 보고서는 만든다 (카드에는 "조회하지 못함")
+        if _latest_similar(records) is None:
+            started = time.perf_counter()
+            try:
+                similar = toolbox.find_similar_cases()
+                records.append(ToolRecord("find_similar_cases", {}, similar, True))
+                steps.append(_system_fill("find_similar_cases", {}, similar, started))
+            except Exception:
+                steps.append(
+                    trace.step(
+                        "TOOL",
+                        "SYSTEM",
+                        f"{trace.tool_title('find_similar_cases')} (시스템 보충)",
+                        duration_ms=trace.elapsed_ms(started),
+                        asked=trace.tool_asked("find_similar_cases", {}),
+                        received="조회 실패 — 비슷한 사건 없이 진행",
+                    )
+                )
         return _ready_to_write(records, steps)
 
     # 결제 정보 · FDS 점수가 하나라도 비면 성공 보고서를 만들지 않는다
@@ -218,13 +243,15 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             SystemMessage(content=prompts.WRITE_SYSTEM),
             HumanMessage(
                 content=prompts.WRITE_FACTS.format(
-                    facts=facts_json(case_payments, _fds_by_payment(records))
+                    facts=facts_json(
+                        case_payments, _fds_by_payment(records), _latest_similar(records)
+                    )
                 )
             ),
         ]
         started = time.perf_counter()
         raw = llm.write_json(messages, narrative_schema(payment_ids))
-        allowed = fact_numbers(case_payments, _fds_by_payment(records))
+        allowed = fact_numbers(case_payments, _fds_by_payment(records), _latest_similar(records))
         narrative, errors = validate_narrative(raw, payment_ids, allowed)
         attempt = state["repairs"] + 1
 
@@ -281,6 +308,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             records,
             _now(),
             trace.build_trace(settings, list(state["trace"]), 0),
+            _latest_similar(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -318,7 +346,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
 def _system_fill(
     name: str,
     args: dict[str, Any],
-    result: CasePaymentsTool | FdsEvidenceTool,
+    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool,
     started: float,
 ) -> TraceStep:
     return trace.step(
@@ -333,9 +361,11 @@ def _system_fill(
 
 def _execute(
     toolbox: ToolBox, name: str, args: dict[str, Any]
-) -> CasePaymentsTool | FdsEvidenceTool:
+) -> CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool:
     if name == "get_case_payments":
         return toolbox.get_case_payments()
+    if name == "find_similar_cases":
+        return toolbox.find_similar_cases()
     payment_ids = args.get("payment_ids") or None
     return toolbox.get_fds_evidence([str(p) for p in payment_ids] if payment_ids else None)
 

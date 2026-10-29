@@ -24,7 +24,8 @@ def _repaired_run():
     return run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
 
-# 실제로 일어난 순서 · 횟수대로 남는다 (mock: 결제 목록 → FDS 근거 → 조사 완료 → 문장 → 조립)
+# 실제로 일어난 순서 · 횟수대로 남는다
+# (mock: 결제 목록 → FDS 근거 → 비슷한 사건 → 조사 완료 → 문장 → 조립)
 def test_trace_records_steps_in_actual_order() -> None:
     outcome = run_investigation(context(), MockLlmClient(), toolbox("sample_case.json"), SETTINGS)
 
@@ -35,11 +36,17 @@ def test_trace_records_steps_in_actual_order() -> None:
         ("DECIDE", "AI"),
         ("TOOL", "AI"),
         ("DECIDE", "AI"),
+        ("TOOL", "AI"),
+        ("DECIDE", "AI"),
         ("WRITE", "AI"),
         ("ASSEMBLE", "SYSTEM"),
     ]
-    assert [s.title for s in trace.steps if s.kind == "TOOL"] == ["결제 목록 조회", "FDS 근거 조회"]
-    assert trace.steps[4].received == "조사 완료라고 답함"
+    assert [s.title for s in trace.steps if s.kind == "TOOL"] == [
+        "결제 목록 조회",
+        "FDS 근거 조회",
+        "비슷한 과거 사건 조회",
+    ]
+    assert trace.steps[6].received == "조사 완료라고 답함"
     assert all(s.durationMs is not None and s.durationMs >= 0 for s in trace.steps)
     assert trace.durationMs is not None
 
@@ -54,7 +61,10 @@ def test_trace_marks_system_filled_calls_as_system() -> None:
     ai_tools = [s.title for s in steps if s.kind == "TOOL" and s.actor == "AI"]
     system_tools = [s for s in steps if s.kind == "TOOL" and s.actor == "SYSTEM"]
     assert ai_tools == ["결제 목록 조회"]
-    assert [s.title for s in system_tools] == ["FDS 근거 조회 (시스템 보충)"]
+    assert [s.title for s in system_tools] == [
+        "FDS 근거 조회 (시스템 보충)",
+        "비슷한 과거 사건 조회 (시스템 보충)",
+    ]
     assert system_tools[0].asked == "결제 9001 · 9002의 FDS 근거"
     assert [s.actor for s in steps if s.kind == "NUDGE"] == ["SYSTEM", "SYSTEM"]
 
@@ -110,6 +120,7 @@ def test_tool_args_with_wrong_type_are_reported_to_agent() -> None:
             [call("get_case_payments")],
             [call("get_fds_evidence", payment_ids=9001)],
             [call("get_fds_evidence")],
+            [call("find_similar_cases")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],

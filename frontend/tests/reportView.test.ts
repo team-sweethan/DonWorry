@@ -6,6 +6,7 @@ import {
   pickReport,
   reportHeadline,
   ruleEvidenceRows,
+  similarOutcomeTags,
   topRiskScore,
   traceProviderLabel,
 } from '../src/utils/reportView.ts'
@@ -123,4 +124,15 @@ test('traceProviderLabel_fixedAndMock_returnsKoreanLabels', () => {
     'mock (Qwen 미사용 · 정해진 순서)',
   )
   assert.equal(traceProviderLabel({ provider: 'OLLAMA', model: 'qwen2.5:7b' }), 'qwen2.5:7b')
+})
+
+// 결제마다 판정이 다르면 한 태그로 뭉뚱그리지 않고 매입 진행 · 승인 취소를 건수로 따로 보여 준다 (#296)
+test('similarOutcomeTags_mixedDecisions_returnsAcceptAndRejectTags', () => {
+  assert.deepEqual(similarOutcomeTags({ acceptCount: 2, rejectCount: 1 }), [
+    { label: '매입 진행 2건', tone: 'accept' },
+    { label: '승인 취소 1건', tone: 'reject' },
+  ])
+  assert.deepEqual(similarOutcomeTags({ acceptCount: 0, rejectCount: 1 }), [
+    { label: '승인 취소 1건', tone: 'reject' },
+  ])
 })

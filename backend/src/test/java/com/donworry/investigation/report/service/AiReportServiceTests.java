@@ -94,7 +94,8 @@ class AiReportServiceTests {
                                     "recommendation",
                                     "evidence",
                                     "verdict",
-                                    "investigationTrace");
+                                    "investigationTrace",
+                                    "similarCases");
                 });
     }
 
