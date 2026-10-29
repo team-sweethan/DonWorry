@@ -282,7 +282,6 @@ export function CaseListPage() {
         description="HELD 결제로 생성된 조사 Case를 확인하고 판정할 Case를 고릅니다."
         actions={
           <>
-            <span className="dw-demo-label">DEMO DATA</span>
             <Button onClick={handleDemoHeld}>시연: HELD 결제 발생</Button>
             <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((k) => k + 1)}>
               새로고침

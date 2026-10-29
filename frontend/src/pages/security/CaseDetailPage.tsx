@@ -205,7 +205,6 @@ export function CaseDetailPage() {
         description={`${securityCase.caseId} · ${securityCase.merchantId} · ${securityCase.customerRef}`}
         actions={
           <Space>
-            <span className="dw-demo-label">DEMO DATA</span>
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
             {mergeRemaining !== null && <Button onClick={handleDemoMerge}>시연: 결제 병합</Button>}
             <Button icon={<ReloadOutlined />} onClick={load}>
