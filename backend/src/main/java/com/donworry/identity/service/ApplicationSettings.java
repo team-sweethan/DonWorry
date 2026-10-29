@@ -48,6 +48,10 @@ public class ApplicationSettings {
                     "Production application mail requires HTTPS public URL and SMTP credentials");
     }
 
+    public boolean isEnabled() {
+        return enabled;
+    }
+
     public void requireEnabled() {
         if (!enabled)
             throw new com.donworry.identity.security.ApplicationException(

@@ -43,6 +43,8 @@ import type {
 } from '../../api/adminApplications'
 import { percentToFeeRate } from '../../api/adminMerchants'
 import './AdminApplicationsPage.css'
+import { ApplicationMailPanel } from './ApplicationMailPanel'
+import { mailStatusLabels } from '../../api/adminApplications'
 const colors = {
   EMAIL_PENDING: 'default',
   REVIEW_PENDING: 'blue',
@@ -54,7 +56,8 @@ const statusTag = (status: ApplicationStatus) => (
 )
 export function AdminApplicationsPage() {
   const [query, setQuery] = useSearchParams()
-  const statusValue = query.get('status') ?? 'REVIEW_PENDING'
+  const mailAttention = query.get('mailAttention') === 'true'
+  const statusValue = query.get('status') ?? (mailAttention ? 'ALL' : 'REVIEW_PENDING')
   const status = statusValue in applicationLabels ? (statusValue as ApplicationStatus) : undefined
   const pageValue = Number(query.get('page') ?? 0)
   const page =
@@ -66,10 +69,10 @@ export function AdminApplicationsPage() {
     data?: ApplicationPage
     error?: string
   } | null>(null)
-  const key = JSON.stringify([page, keyword, status, revision])
+  const key = JSON.stringify([page, keyword, status, mailAttention, revision])
   useEffect(() => {
     let active = true
-    getApplications(page, keyword, status)
+    getApplications(page, keyword, status, mailAttention)
       .then((data) => {
         if (active) setResult({ key, data })
       })
@@ -80,13 +83,21 @@ export function AdminApplicationsPage() {
     return () => {
       active = false
     }
-  }, [page, keyword, status, revision, key])
+  }, [page, keyword, status, mailAttention, revision, key])
   const current = result?.key === key ? result : null
-  const change = (next: { page?: number; keyword?: string; status?: string }) =>
+  const change = (next: {
+    page?: number
+    keyword?: string
+    status?: string
+    mailAttention?: boolean
+  }) =>
     setQuery({
       page: String(next.page ?? 0),
       keyword: next.keyword ?? keyword,
       status: next.status ?? statusValue,
+      mailAttention: String(
+        next.status === 'REVIEW_PENDING' ? false : (next.mailAttention ?? mailAttention),
+      ),
     })
   return (
     <div className="application-review">
@@ -106,6 +117,17 @@ export function AdminApplicationsPage() {
       </div>
       <Card>
         <div className="ar-filters">
+          <Checkbox
+            checked={mailAttention}
+            onChange={(event) =>
+              change({
+                mailAttention: event.target.checked,
+                status: event.target.checked ? 'ALL' : statusValue,
+              })
+            }
+          >
+            메일 확인 필요
+          </Checkbox>
           <Select
             aria-label="신청 상태"
             value={statusValue}
@@ -171,6 +193,11 @@ export function AdminApplicationsPage() {
               },
               { title: '담당자', dataIndex: 'contactName' },
               { title: '상태', dataIndex: 'status', render: statusTag },
+              {
+                title: '안내 메일',
+                render: (_, row) =>
+                  row.latestMail ? mailStatusLabels[row.latestMail.effectiveStatus] : '—',
+              },
               {
                 title: '접수일 · 한국 시간',
                 dataIndex: 'createdAt',
@@ -363,6 +390,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       : '이번 신청으로 계정은 발급되지 않았습니다. 신청자는 사유를 확인한 뒤 새로 신청할 수 있습니다.'}
               </p>
             </div>
+            <ApplicationMailPanel id={Number(id)} initial={data} />
             <div className="ar-detail-grid">
               <div className="ar-information">
                 <Card title="신청 정보">
@@ -528,7 +556,9 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                           feePercent: '1',
                           permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
                         }}
-                        disabled={sending || needsRefresh}
+                        disabled={
+                          sending || needsRefresh || data.resendBlockedReason === 'FEATURE_DISABLED'
+                        }
                         onFinish={(values) => {
                           const fee = percentToFeeRate(values.feePercent)
                           if (fee)
@@ -618,7 +648,9 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       form={rejectionForm}
                       layout="vertical"
                       requiredMark={false}
-                      disabled={sending || needsRefresh}
+                      disabled={
+                        sending || needsRefresh || data.resendBlockedReason === 'FEATURE_DISABLED'
+                      }
                       onFinish={(values) =>
                         setConfirmation({ kind: 'reject', reason: values.reason.trim() })
                       }

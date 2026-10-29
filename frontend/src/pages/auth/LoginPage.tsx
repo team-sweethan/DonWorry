@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input } from 'antd'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
+import { ApplicationEntry } from '../public/ApplicationEntry'
 import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
@@ -152,7 +153,7 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
           <div className="dw-login-public-intro">
             <span>돈워리가 처음이신가요?</span>
             <Link to="/">서비스 소개</Link>
-            <Link to="/apply">이용 신청</Link>
+            <ApplicationEntry />
           </div>
         </section>
       </div>

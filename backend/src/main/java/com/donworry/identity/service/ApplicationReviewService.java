@@ -40,9 +40,15 @@ public class ApplicationReviewService {
     private final ApplicationSettings settings;
     private final PlatformTransactionManager transactionManager;
     private final Clock identityClock;
+    private final ApplicationMailQueryService mailQuery;
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public ApplicationPage list(int page, int size, String keyword, String status) {
+        return list(page, size, keyword, status, false);
+    }
+
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+    public ApplicationPage list(int page, int size, String keyword, String status, boolean mailAttention) {
         if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE || keyword.length() > 100)
             fail(ApplicationErrorCode.INVALID_INPUT);
         ApplicationStatus state;
@@ -64,14 +70,55 @@ public class ApplicationReviewService {
                     cb.like(root.get("businessRegistrationNumber"), businessPattern, '!'));
             return state == null ? search : cb.and(search, cb.equal(root.get("status"), state));
         };
+        var now = now();
+        if (mailAttention) {
+            Specification<MerchantApplication> attention = (root, query, cb) -> {
+                var sub = query.subquery(Long.class);
+                var d = sub.from(ApplicationMailDelivery.class);
+                var newest = sub.subquery(Long.class);
+                var x = newest.from(ApplicationMailDelivery.class);
+                newest.select(cb.max(x.<Long>get("deliveryId")))
+                        .where(
+                                cb.equal(x.get("applicationId"), root.get("applicationId")),
+                                cb.equal(x.get("kind"), d.get("kind")));
+                var kind = cb.or(
+                        cb.and(
+                                cb.equal(root.get("status"), ApplicationStatus.EMAIL_PENDING),
+                                cb.equal(d.get("kind"), ApplicationMailKind.EMAIL_VERIFICATION)),
+                        cb.and(
+                                cb.equal(root.get("status"), ApplicationStatus.APPROVED),
+                                cb.equal(d.get("kind"), ApplicationMailKind.APPROVAL)),
+                        cb.and(
+                                cb.equal(root.get("status"), ApplicationStatus.REJECTED),
+                                cb.equal(d.get("kind"), ApplicationMailKind.REJECTION)));
+                sub.select(d.get("deliveryId"))
+                        .where(
+                                cb.equal(d.get("applicationId"), root.get("applicationId")),
+                                cb.equal(d.get("deliveryId"), newest),
+                                kind,
+                                cb.or(
+                                        d.get("status").in(ApplicationMailStatus.FAILED, ApplicationMailStatus.UNKNOWN),
+                                        cb.and(
+                                                cb.equal(d.get("status"), ApplicationMailStatus.PENDING),
+                                                cb.lessThanOrEqualTo(d.get("startedAt"), now.minusMinutes(5)))));
+                return cb.exists(sub);
+            };
+            spec = spec.and(attention);
+        }
         var result = applications.findAll(
                 spec,
                 PageRequest.of(page, size, Sort.by("createdAt", "applicationId").descending()));
+        var mail = mailQuery.summaries(result.getContent(), now);
         return new ApplicationPage(
-                result.getContent().stream().map(Summary::from).toList(), page, size, result.getTotalElements());
+                result.getContent().stream()
+                        .map(a -> Summary.from(a, mail.get(a.getApplicationId())))
+                        .toList(),
+                page,
+                size,
+                result.getTotalElements());
     }
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
     public Detail detail(Long id) {
         var a = find(id);
         var u = a.getUserId() == null ? null : users.findById(a.getUserId()).orElse(null);
@@ -80,7 +127,14 @@ public class ApplicationReviewService {
                 : users.findById(a.getReviewerUserId())
                         .map(PlatformUser::getDisplayName)
                         .orElse(null);
+        var snapshotTime = now();
+        var mail = mailQuery.latestItem(a, snapshotTime);
+        var availability = mailQuery.availability(a, snapshotTime);
         return Detail.builder()
+                .latestMail(mail)
+                .resendAllowed(availability.allowed())
+                .resendBlockedReason(availability.blockedReason())
+                .nextResendAt(availability.nextResendAt())
                 .application(Summary.from(a))
                 .email(a.getEmail())
                 .phone(a.getPhone())

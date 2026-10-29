@@ -142,6 +142,8 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
         var applicationPosts = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"),
+                PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/merchant-applications/initial-password-setups"),
                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/merchant-applications"),
                 PathPatternRequestMatcher.withDefaults()

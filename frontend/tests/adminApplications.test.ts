@@ -126,3 +126,48 @@ test('applicationTime_whenUtcWithoutSuffix_matchesExplicitUtc', () => {
   )
   assert.equal(formatApplicationTime(null), '—')
 })
+
+// 복구 요청은 본문에 최신 시도 ID만 보내고 메일 이력을 페이지로 조회한다.
+test('mailRecovery_whenRequested_sendsExpectedIdAndHistoryPage', async () => {
+  const { resendApplicationMail, getApplicationMailHistory } =
+    await import('../src/api/adminApplications.ts')
+  const calls: Array<[string, RequestInit]> = []
+  globalThis.fetch = async (path, init) => {
+    calls.push([String(path), init ?? {}])
+    return Response.json({})
+  }
+  await resendApplicationMail(31, 97)
+  await getApplicationMailHistory(31, 2)
+  await getApplications(0, '', undefined, true)
+  assert.equal(calls[0][0], '/api/admin/merchant-applications/31/mail-resends')
+  assert.deepEqual(JSON.parse(String(calls[0][1].body)), { expectedDeliveryId: 97 })
+  assert.equal(new Headers(calls[0][1].headers).get('X-XSRF-TOKEN'), 'approval-csrf')
+  assert.equal(calls[1][0], '/api/admin/merchant-applications/31/mail-deliveries?page=2&size=20')
+  const filter = new URL(calls[2][0], 'http://localhost')
+  assert.equal(filter.searchParams.get('mailAttention'), 'true')
+  assert.equal(filter.searchParams.has('status'), false)
+  for (const [, init] of calls) assert.equal(init.cache, 'no-store')
+})
+// 충돌·횟수 초과와 네트워크 실패는 복구 POST를 자동 반복하지 않는다.
+test('mailRecovery_whenRejected_doesNotRepeatAndCanRefreshDetail', async () => {
+  const { resendApplicationMail } = await import('../src/api/adminApplications.ts')
+  for (const status of [409, 429, 503]) {
+    const calls: string[] = []
+    globalThis.fetch = async (_path, init) => {
+      calls.push(init?.method ?? 'GET')
+      return init?.method === 'POST'
+        ? Response.json({ code: 'APPLICATION_021' }, { status })
+        : Response.json({ resendAllowed: false })
+    }
+    await assert.rejects(resendApplicationMail(31, 97), ApiError)
+    assert.deepEqual(await getApplication(31), { resendAllowed: false })
+    assert.deepEqual(calls, ['POST', 'GET'])
+  }
+  let count = 0
+  globalThis.fetch = async () => {
+    count++
+    throw new TypeError('offline')
+  }
+  await assert.rejects(resendApplicationMail(31, 97))
+  assert.equal(count, 1)
+})
