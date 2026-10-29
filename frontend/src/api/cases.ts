@@ -9,6 +9,7 @@ import type {
   HandoffListItem,
   PaymentDecision,
   ReportBody,
+  ReportProgress,
   SecurityCase,
   SubmitDecisionsRequest,
 } from '../types/case'
@@ -129,6 +130,15 @@ export async function getHandoffs(): Promise<HandoffListItem[]> {
     paymentId: str(r.paymentId),
     staffId: strOrNull(r.staffId),
   }))
+}
+
+// 생성 중인 AI 보고서의 끝난 단계 (#322, P4) — 사건 상세의 자동 조회에 맞춰 부르고 따로 타이머를 두지 않는다
+export async function getReportProgress(caseId: string, reportId: string): Promise<ReportProgress> {
+  const progress = await api<Omit<ReportProgress, 'reportId'> & { reportId: Id }>(
+    `/security-cases/${caseId}/reports/${reportId}/progress`,
+    { cache: 'no-store' },
+  )
+  return { ...progress, reportId: str(progress.reportId) }
 }
 
 export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {

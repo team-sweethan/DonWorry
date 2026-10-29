@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,11 +18,14 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.client.AiServerClient;
 import com.donworry.investigation.report.dto.AiInvestigationRequest;
 import com.donworry.investigation.report.dto.AiInvestigationResult;
+import com.donworry.investigation.report.dto.AiTraceStep;
+import com.donworry.investigation.report.dto.ReportProgressResponse;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
+import com.donworry.investigation.service.SecurityStaffGuard;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
@@ -82,8 +86,15 @@ class AiInvestigationFlowTests {
     @Autowired
     AiAttemptTracker tracker;
 
+    @Autowired
+    AiReportProgressService progressService;
+
     @MockitoBean
     AiServerClient aiServerClient;
+
+    // 진행 조회 API의 보안 직원 확인은 통과시킨다 — 여기서는 보고서 · Case 확인만 본다
+    @MockitoBean
+    SecurityStaffGuard securityStaffGuard;
 
     // 접수 → RUNNING → 성공 콜백 → SUCCEEDED, Case는 판정 대기로 바뀐다
     @Test
@@ -268,6 +279,52 @@ class AiInvestigationFlowTests {
         assertThat(aiReportRepository.findById(report.getId()).orElseThrow().getStatus())
                 .isEqualTo(ReportStatus.SUCCEEDED);
         assertThat(submittedFor(report.getId())).isEmpty();
+    }
+
+    // 진행 조회는 조회 전용 — ai-server가 끝났다고 답해도 보고서 · Case를 바꾸지 않는다 (#322)
+    @Test
+    void progress_whenAiServerFinished_doesNotChangeReport() {
+        Fixture f = caseWithPayment();
+        aiReportService.request(f.caseId(), 1);
+        Long reportId = reportOf(f).getId();
+        String attemptId = submittedFor(reportId).getFirst().attemptId();
+        CaseStatus before = caseStatus(f);
+        AiTraceStep payments = new AiTraceStep("TOOL", "AI", "결제 목록 조회", 200L, null, "결제 1건", null);
+        given(aiServerClient.status(reportId))
+                .willReturn(Optional.of(new AiInvestigationResult(
+                        String.valueOf(reportId), attemptId, "RUNNING", null, null, List.of(payments))));
+
+        ReportProgressResponse running =
+                progressService.progress(f.caseId(), reportId).orElseThrow();
+
+        assertThat(running.steps()).extracting(AiTraceStep::title).containsExactly("결제 목록 조회");
+
+        given(aiServerClient.status(reportId)).willReturn(Optional.of(succeeded(reportId, attemptId, f)));
+
+        ReportProgressResponse finished =
+                progressService.progress(f.caseId(), reportId).orElseThrow();
+
+        assertThat(finished.status()).isEqualTo("RUNNING");
+        assertThat(finished.steps()).isEmpty();
+        assertThat(reportOf(f).getStatus()).isEqualTo(ReportStatus.RUNNING);
+        assertThat(reportOf(f).getReportBody()).isNull();
+        assertThat(caseStatus(f)).isEqualTo(before);
+    }
+
+    // 보고서 번호만 바꿔 다른 Case의 조사 과정을 볼 수 없다
+    @Test
+    void progress_reportOfOtherCase_returnsNotFound() throws Exception {
+        Fixture mine = caseWithPayment();
+        Fixture other = caseWithPayment();
+        aiReportService.request(other.caseId(), 1);
+        Long otherReportId = reportOf(other).getId();
+
+        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", mine.caseId(), otherReportId))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", other.caseId(), otherReportId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reportId").value(otherReportId))
+                .andExpect(jsonPath("$.status").value("RUNNING"));
     }
 
     record Fixture(Long caseId, String customerRef, Long paymentId) {}
