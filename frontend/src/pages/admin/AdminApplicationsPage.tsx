@@ -35,7 +35,6 @@ import {
   reviewMailMessage,
 } from '../../api/adminApplications'
 import type {
-  ApplicationDetail,
   ApplicationPage,
   ApplicationStatus,
   ApprovalInput,
@@ -44,7 +43,11 @@ import type {
 import { percentToFeeRate } from '../../api/adminMerchants'
 import './AdminApplicationsPage.css'
 import { ApplicationMailPanel } from './ApplicationMailPanel'
-import { applyApplicationDetailSnapshot } from './applicationDetailSnapshot'
+import {
+  applyApplicationDetailSnapshot,
+  requireApplicationDetailRefresh,
+  type ApplicationDetailSnapshot,
+} from './applicationDetailSnapshot'
 import { mailStatusLabels } from '../../api/adminApplications'
 const colors = {
   EMAIL_PENDING: 'default',
@@ -241,11 +244,7 @@ export function AdminApplicationDetailPage() {
 function ApplicationDetail({ id }: { id: string | undefined }) {
   const [query] = useSearchParams()
   const [revision, setRevision] = useState(0)
-  const [result, setResult] = useState<{
-    key: string
-    data?: ApplicationDetail
-    error?: string
-  } | null>(null)
+  const [result, setResult] = useState<ApplicationDetailSnapshot | null>(null)
   const [feedback, setFeedback] = useState<{ warning: boolean; message: string } | null>(null)
   const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null)
   const [confirmation, setConfirmation] = useState<
@@ -255,7 +254,6 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
   >(null)
   const [sending, setSending] = useState(false)
   const pending = useRef(false)
-  const [needsRefresh, setNeedsRefresh] = useState(false)
   const [approvalForm] = Form.useForm<ApprovalFields>()
   const [rejectionForm] = Form.useForm<{ reason: string }>()
   const selectedPermissions = Form.useWatch('permissions', approvalForm) as string[] | undefined
@@ -273,7 +271,6 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
       .then((data) => {
         if (active) {
           setResult({ key, data })
-          setNeedsRefresh(false)
         }
       })
       .catch(() => {
@@ -289,11 +286,14 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
     }
   }, [id, revision, key])
   const current = result?.key === key ? result : null
+  const needsRefresh = current?.needsRefresh === true
   const data = current?.data
   const app = data?.application
   const reload = () => setRevision((v) => v + 1)
   const canReview =
-    app?.status === 'REVIEW_PENDING' && data?.resendBlockedReason !== 'FEATURE_DISABLED'
+    !needsRefresh &&
+    app?.status === 'REVIEW_PENDING' &&
+    data?.resendBlockedReason !== 'FEATURE_DISABLED'
   const perform = async () => {
     if (!confirmation || pending.current || !canReview) return
     pending.current = true
@@ -311,7 +311,8 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
     } catch (error) {
       setFeedback({ warning: true, message: reviewError(error) })
       setConfirmation(null)
-      if (!(error instanceof ApiError) || error.status !== 400) setNeedsRefresh(true)
+      if (!(error instanceof ApiError) || error.status !== 400)
+        setResult((current) => requireApplicationDetailRefresh(current, key))
     } finally {
       pending.current = false
       setSending(false)

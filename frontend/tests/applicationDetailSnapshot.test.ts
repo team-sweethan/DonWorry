@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { applyApplicationDetailSnapshot } from '../src/pages/admin/applicationDetailSnapshot.ts'
+import {
+  applyApplicationDetailSnapshot,
+  requireApplicationDetailRefresh,
+} from '../src/pages/admin/applicationDetailSnapshot.ts'
 import type { ApplicationDetail } from '../src/api/adminApplications.ts'
 
 function detail(status: ApplicationDetail['application']['status'], id = 31): ApplicationDetail {
@@ -68,4 +71,18 @@ test('detailSnapshot_whenResponseIsStale_preservesCurrentRequestAndApplication',
   assert.equal(applyApplicationDetailSnapshot(other, '31:0', detail('APPROVED')), other)
   assert.equal(applyApplicationDetailSnapshot(other, '32:0', detail('APPROVED')), other)
   assert.equal(applyApplicationDetailSnapshot(null, '31:0', detail('APPROVED')), null)
+})
+
+// 결과 불명 후 현재 요청의 상세 조회가 성공하면 검토 잠금도 같은 상태 전이에서 해제한다.
+test('detailSnapshot_whenRefreshSucceeds_clearsReviewBlockOnlyForCurrentRequest', () => {
+  const original = { key: '31:0', data: detail('REVIEW_PENDING') }
+  const blocked = requireApplicationDetailRefresh(original, '31:0')
+  assert.equal(blocked?.needsRefresh, true)
+  const fresh = applyApplicationDetailSnapshot(blocked, '31:0', detail('REVIEW_PENDING'))
+  assert.equal(fresh?.needsRefresh ?? false, false)
+  assert.equal(fresh?.data?.application.status, 'REVIEW_PENDING')
+  const newer = { key: '31:1', data: detail('REVIEW_PENDING'), needsRefresh: true }
+  assert.equal(applyApplicationDetailSnapshot(newer, '31:0', detail('APPROVED')), newer)
+  assert.equal(newer.needsRefresh, true)
+  assert.equal(requireApplicationDetailRefresh(newer, '31:0'), newer)
 })
