@@ -75,8 +75,13 @@ def tool_received(result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool)
     if isinstance(result, SimilarCasesTool):
         same = sum(1 for c in result.cases if c.similarity == "SAME_CUSTOMER")
         rules = len(result.cases) - same
-        shown = f"같은 고객 {same} · 같은 규칙 {rules}"
-        return f"비슷한 사건 {result.totalMatched}건 (보여 줄 것: {shown})"
+        # "7건 중 5건 표시 · 같은 고객 2 · 같은 규칙 3" — 0건인 종류는 뺀다
+        head = f"비슷한 사건 {result.totalMatched}건"
+        if len(result.cases) < result.totalMatched:
+            head += f" 중 {len(result.cases)}건 표시"
+        kinds = [f"같은 고객 {same}"] if same else []
+        kinds += [f"같은 규칙 {rules}"] if rules else []
+        return " · ".join([head, *kinds])
     missing = (
         f" · 못 찾은 결제 {len(result.missingPaymentIds)}건" if result.missingPaymentIds else ""
     )

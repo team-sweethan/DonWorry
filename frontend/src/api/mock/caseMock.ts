@@ -83,10 +83,17 @@ export function buildReportBody(
       unknowns: ['고객 본인의 결제 의사'],
       recommendation: 'NEEDS_CHECK',
     })),
-    timeline: payments.map((p) => ({
-      at: p.requestedAt ?? p.linkedAt,
-      event: `${p.paymentId} 결제 요청 · FDS REVIEW (${p.riskScore}점)`,
-    })),
+    // FixedReportGenerator와 같은 모양 (#310)
+    timeline: [
+      ...payments.map((p) => ({
+        at: p.requestedAt ?? p.linkedAt,
+        event:
+          `결제 ${p.paymentId} · ${(p.amount ?? 0).toLocaleString('ko-KR')}원 → FDS 검토 ${p.riskScore}점` +
+          (p.paymentStatus === 'HELD' ? ' → 매입 보류' : ''),
+        kind: 'PAYMENT' as const,
+      })),
+      { at: securityCase.createdAt, event: '사건 자동 생성 · AI 조사 시작', kind: 'CASE' as const },
+    ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)),
     overallAnalysis: ['결제 간 공통 기기·계정 관계는 확인되지 않았습니다.'],
     additionalChecks: ['고객 본인 확인 필요 여부'],
     recommendation: {

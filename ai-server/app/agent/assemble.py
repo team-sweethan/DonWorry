@@ -158,6 +158,24 @@ def overall_recommendation(recommendations: list[Recommendation]) -> Recommendat
     return "NEEDS_CHECK"
 
 
+CASE_CREATED_EVENT = "사건 자동 생성 · AI 조사 시작"
+
+
+# 사건 경위의 결제 한 줄 — "결제 15 · 600,000원 → FDS 검토 60점 → 매입 보류"
+# 결제 상태를 모르면 추측하지 않고 뺀다
+def payment_timeline_item(payment: CasePayment, evidence: FdsPayment | None) -> TimelineItem:
+    parts = [f"결제 {payment.paymentId} · {payment.amount:,}원"]
+    if evidence and evidence.riskScore is not None:
+        result = FDS_RESULT_KO.get(evidence.fdsResult or "", "판정 미확인")
+        parts.append(f"FDS {result} {evidence.riskScore}점")
+    else:
+        parts.append("FDS 평가 미확인")
+    status = PAYMENT_STATUS_KO.get(payment.paymentStatus or "")
+    if status:
+        parts.append(status)
+    return TimelineItem(at=payment.requestedAt or "", event=" → ".join(parts), kind="PAYMENT")
+
+
 def _evidence_id(context: CaseContext, seq: int) -> str:
     return f"E-{context.case_id}-v{context.report_version}-{seq:02d}"
 
@@ -224,18 +242,10 @@ def assemble_report(
                 else [],
             )
         )
-        fds_text = (
-            f"FDS {FDS_RESULT_KO.get(evidence.fdsResult or '', '판정 미확인')}"
-            f" ({evidence.riskScore}점)"
-            if evidence and evidence.riskScore is not None
-            else "FDS 평가 미확인"
-        )
-        timeline.append(
-            TimelineItem(
-                at=payment.requestedAt, event=f"{payment.paymentId} 결제 요청 · {fds_text}"
-            )
-        )
+        timeline.append(payment_timeline_item(payment, evidence))
+    timeline.append(TimelineItem(at=context.case_created_at, event=CASE_CREATED_EVENT, kind="CASE"))
     # 글자 순서로 정렬하면 "12:00:00.100Z"가 "12:00:00Z"보다 앞에 온다 — 실제 시각으로 비교한다
+    # 같은 시각이면 넣은 순서(결제 → 사건 생성)를 유지한다
     timeline.sort(key=lambda item: datetime.fromisoformat(item.at))
     return ReportBody(
         overview=Overview(
