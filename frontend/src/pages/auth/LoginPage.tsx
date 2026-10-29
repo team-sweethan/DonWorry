@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Alert, Button, Checkbox, Form, Input } from 'antd'
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons'
+import { Link } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
@@ -53,7 +54,9 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
       <div className="dw-login-layout">
         <section className="dw-login-intro" aria-labelledby="login-intro-title">
           <div className="dw-login-brand">
-            돈워리<span>DonWorry</span>
+            <Link className="dw-login-brand-link" to="/" aria-label="돈워리 서비스 소개">
+              돈워리<span>DonWorry</span>
+            </Link>
           </div>
           <div className="dw-login-intro-body">
             <div className="dw-login-symbol">
@@ -146,6 +149,11 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
               로그인
             </Button>
           </Form>
+          <div className="dw-login-public-intro">
+            <span>돈워리가 처음이신가요?</span>
+            <Link to="/">서비스 소개</Link>
+            <p>이용 신청은 준비 중입니다.</p>
+          </div>
         </section>
       </div>
     </main>
