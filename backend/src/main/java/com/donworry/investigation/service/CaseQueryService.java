@@ -9,6 +9,7 @@ import com.donworry.investigation.dto.CaseDetailResponse.HandoffResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.RuleHitResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
+import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
@@ -25,6 +26,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class CaseQueryService {
+
+    // 경보 목록 한 페이지를 한 번에 조회할 수 있는 만큼 (#309)
+    static final int MAX_PAYMENT_LINK_IDS = 100;
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
@@ -65,6 +70,22 @@ public class CaseQueryService {
             counts.put(row.status().name(), row.count());
         }
         return new CaseCountsResponse(counts);
+    }
+
+    // 결제 ID → 연결된 Case (#309) — 경보 화면이 Case로 이동할 때 쓴다. P2는 P3를 부를 수 없어 화면이 이 API를 부른다
+    // 대부분의 경보(ALLOW · 승인 거절 · DENY)는 Case가 없으므로 없는 결제는 오류 없이 빼고 보낸다
+    @Transactional(readOnly = true)
+    public List<CasePaymentLinkResponse> paymentLinks(List<Long> paymentIds) {
+        List<Long> ids = paymentIds == null
+                ? List.of()
+                : paymentIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty() || ids.size() > MAX_PAYMENT_LINK_IDS) {
+            throw new InvestigationException(InvestigationErrorCode.PAYMENT_IDS_OUT_OF_RANGE);
+        }
+        return casePaymentRepository.findLinksByPaymentIdIn(ids).stream()
+                .map(link -> new CasePaymentLinkResponse(
+                        link.paymentId(), link.caseId(), link.caseStatus().name()))
+                .toList();
     }
 
     @Transactional(readOnly = true)

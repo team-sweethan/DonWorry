@@ -30,6 +30,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -397,6 +399,9 @@ class CaseFlowTests {
         mvc.perform(get("/api/security-cases/counts"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
+        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INV_010"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
@@ -416,6 +421,9 @@ class CaseFlowTests {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INV_009"));
         mvc.perform(get("/api/security-cases/counts"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("INV_009"));
+        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("INV_009"));
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
@@ -538,6 +546,44 @@ class CaseFlowTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
                 .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
+    }
+
+    // 결제 ID → 연결된 Case (#309) — 연결된 결제만 결제 ID 순으로 오고, Case가 없는 결제는 빠진다
+    @Test
+    void paymentLinks_returnsOnlyLinkedPayments() throws Exception {
+        String customer = customer();
+        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        DemoHeldPaymentResponse second = createHeld(customer, 200_000L, 60);
+        long unlinked = System.nanoTime();
+
+        mvc.perform(get("/api/security-cases/payment-links")
+                        .param("paymentIds", unlinked + "," + second.paymentId() + "," + first.paymentId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].paymentId").value(Math.min(first.paymentId(), second.paymentId())))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", first.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", second.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseStatus", first.paymentId())
+                        .value("DECISION_PENDING"));
+        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(unlinked)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // 결제 ID가 없거나 100개를 넘으면 400 INV_015 (#309)
+    @Test
+    void paymentLinks_withoutIdsOrTooMany_returnsBadRequest() throws Exception {
+        String tooMany =
+                LongStream.rangeClosed(1, 101).mapToObj(String::valueOf).collect(Collectors.joining(","));
+
+        mvc.perform(get("/api/security-cases/payment-links"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INV_015"));
+        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", tooMany))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INV_015"));
     }
 
     // 목록에 방금 만든 Case가 결제 수 · 금액 · 최고 점수와 함께 나온다

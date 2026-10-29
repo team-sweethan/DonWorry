@@ -2,6 +2,7 @@ package com.donworry.investigation.controller;
 
 import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
+import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.service.CaseDecisionService;
@@ -45,6 +46,13 @@ public class SecurityCaseController {
     public CaseCountsResponse counts() {
         securityStaffGuard.requireSecurityStaffId();
         return caseQueryService.counts();
+    }
+
+    // 결제 ID(여러 개) → 연결된 Case. 경보 화면이 Case로 이동할 때 쓴다 (#309)
+    @GetMapping("/payment-links")
+    public List<CasePaymentLinkResponse> paymentLinks(@RequestParam(required = false) List<Long> paymentIds) {
+        securityStaffGuard.requireSecurityStaffId();
+        return caseQueryService.paymentLinks(paymentIds);
     }
 
     @GetMapping("/{caseId}")
