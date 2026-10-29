@@ -392,16 +392,23 @@
 .dw-rule-frequency .dw-rule-request-action {
   grid-column: 2;
   justify-self: end;
-  min-width: 88px;
-  min-height: 32px;
+  min-width: 96px;
+  min-height: 36px;
   margin: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
 }
 
 .dw-rule-frequency .dw-rule-request-action {
   border-color: #bfdbfe;
+  background: #f8fbff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgb(30 64 175 / 8%);
+}
+
+.dw-rule-frequency .dw-rule-request-action:not(:disabled):hover {
+  border-color: #60a5fa;
   background: #eff6ff;
   color: #1d4ed8;
 }
@@ -415,7 +422,13 @@
 .dw-rule-frequency .dw-rule-enable-action {
   border-color: #2563eb;
   background: #2563eb;
-  box-shadow: 0 2px 5px rgb(37 99 235 / 20%);
+  box-shadow: 0 3px 7px rgb(37 99 235 / 28%);
+  color: #fff;
+}
+
+.dw-rule-frequency .dw-rule-enable-action:not(:disabled):hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
   color: #fff;
 }
 
@@ -495,8 +508,8 @@
   color: #92400e;
   font-size: 12px;
   font-weight: 700;
-  line-height: 30px;
-  padding: 0 12px;
+  line-height: 32px;
+  padding: 0 13px;
 }
 
 .dw-rule-sparkline {

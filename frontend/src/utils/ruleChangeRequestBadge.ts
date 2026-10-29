@@ -1,4 +1,4 @@
-/** 관리자 사이드바의 승인 대기 룰 변경 요청 수다. */
+/** 관리자 사이드바의 승인 대기 룰 끄기 요청 수다. */
 export type RuleChangeRequestBadgeSnapshot = number | null
 
 export function createRuleChangeRequestBadgeStore(load: () => Promise<number>) {

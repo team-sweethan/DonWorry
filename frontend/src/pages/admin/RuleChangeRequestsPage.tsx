@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Descriptions, Modal, Pagination, Space, Table, Tabs, Tag } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   getFdsRuleChangeRequests,
@@ -41,7 +41,7 @@ export function RuleChangeRequestsPage() {
   // 관리자 홈에서 요청을 누르면 ?requestId=로 들어온다. 첫 목록에 있으면 상세를 바로 연다.
   const [searchParams] = useSearchParams()
   const linkedRequestId = useRef(Number(searchParams.get('requestId')))
-  const reload = () => {
+  const reload = useCallback(() => {
     const sequence = ++requestSequence.current
     getFdsRuleChangeRequests(status, page)
       .then((next) => {
@@ -58,8 +58,10 @@ export function RuleChangeRequestsPage() {
       .catch(() => {
         if (sequence === requestSequence.current) setError('룰 끄기 요청을 불러오지 못했습니다.')
       })
-  }
-  useEffect(reload, [status, page])
+  }, [page, status])
+  useEffect(() => {
+    reload()
+  }, [reload])
   const review = async (requestId: number, approve: boolean) => {
     setProcessingId(requestId)
     try {
@@ -84,6 +86,9 @@ export function RuleChangeRequestsPage() {
           activeKey={status}
           onChange={(key) => {
             setError(null)
+            // 이전 탭의 행을 새 탭 결과처럼 잠깐 보여 주지 않는다.
+            requestSequence.current += 1
+            setResult(null)
             setStatus(key as FdsRuleChangeRequest['status'])
             setPage(0)
           }}
@@ -119,7 +124,7 @@ export function RuleChangeRequestsPage() {
               title: '처리',
               render: (_, request: FdsRuleChangeRequest) =>
                 status === 'PENDING' ? (
-                  <Space direction="vertical" size={6}>
+                  <Space size={6} wrap>
                     <Button
                       size="small"
                       type="primary"
@@ -129,7 +134,7 @@ export function RuleChangeRequestsPage() {
                         void review(request.requestId, true)
                       }}
                     >
-                      룰 끄기 승인
+                      승인
                     </Button>
                     <Button
                       size="small"
@@ -140,7 +145,7 @@ export function RuleChangeRequestsPage() {
                         void review(request.requestId, false)
                       }}
                     >
-                      요청 반려
+                      반려
                     </Button>
                   </Space>
                 ) : (
