@@ -44,6 +44,7 @@ import type {
 import { percentToFeeRate } from '../../api/adminMerchants'
 import './AdminApplicationsPage.css'
 import { ApplicationMailPanel } from './ApplicationMailPanel'
+import { applyApplicationDetailSnapshot } from './applicationDetailSnapshot'
 import { mailStatusLabels } from '../../api/adminApplications'
 const colors = {
   EMAIL_PENDING: 'default',
@@ -291,8 +292,10 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
   const data = current?.data
   const app = data?.application
   const reload = () => setRevision((v) => v + 1)
+  const canReview =
+    app?.status === 'REVIEW_PENDING' && data?.resendBlockedReason !== 'FEATURE_DISABLED'
   const perform = async () => {
-    if (!confirmation || pending.current) return
+    if (!confirmation || pending.current || !canReview) return
     pending.current = true
     setSending(true)
     setFeedback(null)
@@ -390,7 +393,13 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       : '이번 신청으로 계정은 발급되지 않았습니다. 신청자는 사유를 확인한 뒤 새로 신청할 수 있습니다.'}
               </p>
             </div>
-            <ApplicationMailPanel id={Number(id)} initial={data} />
+            <ApplicationMailPanel
+              id={Number(id)}
+              detail={data}
+              onDetail={(next) => {
+                setResult((current) => applyApplicationDetailSnapshot(current, key, next))
+              }}
+            />
             <div className="ar-detail-grid">
               <div className="ar-information">
                 <Card title="신청 정보">
@@ -691,7 +700,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
             ? '이 정보로 승인하고 계정을 발급할까요?'
             : '신청을 반려할까요?'
         }
-        open={!!confirmation}
+        open={!!confirmation && canReview}
         onCancel={() => {
           if (!sending) setConfirmation(null)
         }}

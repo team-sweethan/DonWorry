@@ -11,8 +11,15 @@ import {
 } from '../../api/adminApplications'
 import type { ApplicationDetail, MailPage } from '../../api/adminApplications'
 
-export function ApplicationMailPanel({ id, initial }: { id: number; initial: ApplicationDetail }) {
-  const [detail, setDetail] = useState(initial)
+export function ApplicationMailPanel({
+  id,
+  detail,
+  onDetail,
+}: {
+  id: number
+  detail: ApplicationDetail
+  onDetail: (detail: ApplicationDetail) => void
+}) {
   const [page, setPage] = useState(0)
   const [revision, setRevision] = useState(0)
   const [history, setHistory] = useState<{ key: string; data?: MailPage; error?: boolean } | null>(
@@ -48,7 +55,7 @@ export function ApplicationMailPanel({ id, initial }: { id: number; initial: App
     try {
       const next = await getApplication(id)
       if (generation !== refreshGeneration.current) return
-      setDetail(next)
+      onDetail(next)
       setBlocked(false)
     } catch {
       if (generation !== refreshGeneration.current) return
