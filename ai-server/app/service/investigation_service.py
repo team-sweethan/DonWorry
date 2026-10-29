@@ -5,6 +5,7 @@ from concurrent.futures import Executor
 from typing import Protocol
 
 from app.schemas.investigation import InvestigationRequest, InvestigationResult
+from app.schemas.report import TraceStep
 from app.service.report_generator import ReportGenerator
 
 log = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class ResultNotifier(Protocol):
 # - 접수는 바로 끝내고(202) 조사는 뒤에서 돈다
 # - 보고서마다 가장 최근 시도(attemptId)의 상태만 보관한다. 이전 시도의 늦은 결과는 버린다
 # - 결과는 메모리에만 둔다. AI 서버가 재시작되면 Spring이 "결과 없음"으로 보고 다시 시도한다
+# - 진행 중에는 끝난 단계(progress)를 실어 둔다. 이전 시도의 진행 기록도 버린다 (#322)
 class InvestigationService:
     def __init__(
         self,
@@ -52,7 +54,9 @@ class InvestigationService:
 
     def _run(self, request: InvestigationRequest) -> None:
         try:
-            generated = self._generator.generate(request.to_context())
+            generated = self._generator.generate(
+                request.to_context(), lambda steps: self._progress(request, steps)
+            )
             result = InvestigationResult(
                 reportId=request.reportId,
                 attemptId=request.attemptId,
@@ -78,6 +82,18 @@ class InvestigationService:
             self._notifier.send_result(result)
         except Exception:  # 전송 실패 — Spring이 상태 조회(GET)로 결과를 가져간다
             log.warning("결과 전송 실패 reportId=%s", request.reportId, exc_info=True)
+
+    # 현재 시도가 아직 진행 중일 때만 진행 기록을 바꾼다 — 순서는 건드리지 않는다
+    def _progress(self, request: InvestigationRequest, steps: list[TraceStep]) -> None:
+        with self._lock:
+            current = self._results.get(request.reportId)
+            if (
+                current is None
+                or current.attemptId != request.attemptId
+                or current.status != "RUNNING"
+            ):
+                return
+            self._results[request.reportId] = current.model_copy(update={"progress": steps})
 
     # 오래된 끝난 결과부터 비운다 — 진행 중인 조사는 남긴다 (lock 안에서 부른다)
     def _store(self, result: InvestigationResult) -> None:

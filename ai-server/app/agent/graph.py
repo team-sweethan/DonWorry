@@ -1,4 +1,6 @@
+import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
@@ -19,6 +21,11 @@ from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, FdsPayment, Sim
 # 조사 Agent — Qwen이 다음에 볼 도구를 고르고, 코드는 허용 · 횟수 · 필수 근거 · 기록을 지킨다
 # 흐름: 고르기 ↔ 실행 → 필수 근거 확인 → 판단 문장 쓰기(형식 검사 · 고쳐 쓰기) → 보고서 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
+# 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
+
+log = logging.getLogger(__name__)
+
+ProgressListener = Callable[[list[TraceStep]], None]
 
 
 class AgentState(TypedDict, total=False):
@@ -359,6 +366,14 @@ def _system_fill(
     )
 
 
+# 진행 알림이 실패해도 조사는 계속한다 — 표시용일 뿐이다
+def _notify(on_progress: ProgressListener, steps: list[TraceStep]) -> None:
+    try:
+        on_progress(list(steps))
+    except Exception:
+        log.warning("진행 알림 실패", exc_info=True)
+
+
 def _execute(
     toolbox: ToolBox, name: str, args: dict[str, Any]
 ) -> CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool:
@@ -371,7 +386,11 @@ def _execute(
 
 
 def run_investigation(
-    context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings: Settings
+    context: CaseContext,
+    llm: LlmClient,
+    toolbox: ToolBox,
+    settings: Settings,
+    on_progress: ProgressListener | None = None,
 ) -> InvestigationOutcome:
     initial: AgentState = {
         "messages": [
@@ -391,9 +410,17 @@ def run_investigation(
         "started": time.perf_counter(),
     }
     try:
-        final = build_graph(context, llm, toolbox, settings).invoke(
-            initial, {"recursion_limit": 80}
-        )
+        final = initial
+        reported = 0
+        # values 모드는 노드가 끝날 때마다 전체 상태를 준다 — 마지막 값이 invoke 결과와 같다
+        for state in build_graph(context, llm, toolbox, settings).stream(
+            initial, {"recursion_limit": 80}, stream_mode="values"
+        ):
+            final = state
+            steps = state.get("trace", [])
+            if on_progress is not None and len(steps) != reported:
+                reported = len(steps)
+                _notify(on_progress, steps)
     except Exception as e:  # LLM · 도구 서버 장애 — 자동 판정 없이 실패로 끝낸다
         return InvestigationOutcome("FAILED", None, {"code": "AGENT_ERROR", "reason": str(e)})
     records = final.get("records", [])

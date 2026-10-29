@@ -53,6 +53,7 @@ sequenceDiagram
 | 인증 | 서비스 간 키(헤더 `X-Internal-Api-Key`). 직원 로그인과 별개. 키는 환경 변수, 저장소에 올리지 않는다. 확인은 identity의 `/internal/ai/**` 전용 보안 체인 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md)) |
 | 권한 | Tool은 GET만. 결제 · 판정 · Case 상태를 바꾸는 Tool은 만들지 않는다 |
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
+| 진행 기록 (#322) | FastAPI `GET /investigations/{reportId}`는 `RUNNING`일 때 `progress`(지금까지 끝난 단계, `investigationTrace.steps`와 같은 모양)를 싣는다. 끝나면(`SUCCEEDED` · `FAILED`) 비우고 콜백에도 싣지 않는다. 메모리에만 두며, 새 시도가 오면 이전 시도의 늦은 진행 기록은 버린다. **화면 진행 표시에만 쓰고 결과 반영 · 재시도 판단에는 쓰지 않는다** |
 | 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
 
 ### Tool 6종 (Notion 설계 3.6) + 7번째 (#296)
@@ -155,6 +156,14 @@ sequenceDiagram
 - **권고 값:** `ACCEPT_REVIEW` / `REJECT_REVIEW` / `NEEDS_CHECK`. 참고용이며 최종 판정은 직원이 한다
 - **보고서 속 결제 ID:** Tool로 받은 실제 ID만 쓴다. 저장 전에 Case 소속인지 검증하고, 아니면 구조 검증 실패(시도 실패 1회)로 처리한다
 - **실패 정보:** 결정 2대로 `error`는 응답에서 뺀다
+- **진행 조회 (#322) — 생성 중인 보고서의 끝난 단계:** `GET /api/security-cases/{caseId}/reports/{reportId}/progress` → `{ reportId, status, steps[] }`. `steps[]`는 `investigationTrace.steps`와 같은 모양(코드가 만든 요약만, 원본 값 · 프롬프트 없음)
+  - 컨트롤러는 P4 패키지(`investigation/report/controller`)에 둔다. 경로만 P3 Case 아래이고 P3 코드 · `ReportGateway`는 바꾸지 않는다
+  - 보안 직원만 본다(`SecurityStaffGuard`). 다른 Case의 보고서 번호면 404
+  - **조회 전용:** FastAPI가 끝났다고 답해도 보고서 상태를 바꾸지 않는다. 결과 반영은 콜백 · 복구 경로만 한다 (결정 2의 조건부 UPDATE 밖으로 상태가 바뀌지 않게)
+  - Spring이 기억하는 현재 시도(`attemptId`)와 같은 기록만 보여 준다
+  - `steps`가 빈 목록인 경우: 보고서가 `RUNNING`이 아님 · AI 서버를 끔(고정 보고서) · FastAPI 조회 실패나 기록 없음. **오류를 내지 않는다** — 진행 표시 때문에 Case 상세가 깨지지 않게
+  - ID는 문자열(위 ID 규칙)
+  - 화면(`ReportCard`)은 새 타이머 없이 Case 상세의 자동 조회(3초 · 2분 제한, #238)에 맞춰 부른다. 같은 보고서의 조회가 끝나지 않았으면 새로 보내지 않고, 늦게 온 응답도 보고서 번호가 같으면 반영한다
 
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)
 
@@ -233,11 +242,16 @@ investigation/report/
 | 비슷한 사건을 같은 카드 · 기기 · IP로도 찾음 (#296) | P2 공개 창구(`FdsPaymentEvidence`)에 `card_token` · `device_id`가 없고, 결제 데이터에는 IP 주소 없이 국가 코드만 있다. 카드 · 기기는 P2 합의(수치 근거 이슈와 함께) 후 추가한다 |
 | 비슷한 사건의 결과를 사건 하나에 한 값("일부 승인 취소")으로 표시 (#296) | 결제가 2건인지 3건인지 구분되지 않는다. 판정은 원래 결제별로 저장되므로 건수를 그대로 보여 준다 |
 | 비슷한 사건 조회 실패를 보고서 실패로 처리 (#296) | 참고 자료 때문에 판정에 필요한 보고서가 막히면 수동 판정이 늘어난다. 값만 비운다 |
+| 진행 단계를 SSE · 웹소켓으로 밀어 줌 (#322) | 연결 관리 · 재연결이 새로 생기고, 열린 연결이 세션 무활동 만료(ADR-0014)를 막는다. 3초 간격이면 기존 자동 조회로 충분하다 |
+| 진행 단계를 DB에 저장 (#322) | migration이 필요하고, 조사가 끝나면 `investigationTrace`와 중복된다. 생성 중에만 필요한 값이라 FastAPI 메모리로 충분하다 (FastAPI 재시작 시 사라져도 보고서에는 영향 없음) |
+| P3 Case 상세 응답(`ReportGateway`)에 진행 단계를 실음 (#322) | P3 계약이 바뀌고, 상세 조회마다 FastAPI를 부르게 된다. P4 API로 따로 둔다 |
+| 화면이 진행 조회용 타이머를 따로 둠 (#322) | 요청마다 세션이 연장돼 자리를 비워도 무활동 만료가 오지 않는다 (#238과 같은 문제) |
+| 진행 조회 중 끝난 결과를 받으면 바로 반영 (#322) | 화면 조회가 상태를 바꾸면 결과 반영 경로가 둘이 되어 결정 2의 검증 · 멱등 규칙을 우회할 수 있다 |
 | 프롬프트 · Tool 응답 원문을 그대로 저장 (#294) | 보고서가 커지고 결제 값이 본문과 중복 저장된다. 시연 · 확인에는 요약으로 충분하다 |
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases`, 구현은 현재 3종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
+- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases`, 구현은 현재 3종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`(`RUNNING`이면 `progress`, #322). 화면용 `GET /api/security-cases/{caseId}/reports/{reportId}/progress` (#322)
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `/internal/ai/**`는 identity의 전용 보안 체인이 서비스 키로 확인한다 — #266, P1 동의 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md))
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
@@ -246,8 +260,8 @@ investigation/report/
 - CakeShop: `get_order_context` 제공 범위 (§5.7)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
 - P3: `find_similar_cases`용 읽기 쿼리 추가 — `SecurityCaseRepository`(종료 사건 2종) · `CasePaymentRepository` · `PaymentDecisionRepository`(여러 사건 한 번에) (#296, P4 개선 작업 범위로 P3 허락)
-- 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리. #288의 새 키는 화면에서 선택 항목이며 #292 보고서 전문 페이지에서 표시한다. `investigationTrace`는 #294 "조사 과정" 탭
-- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294), 비슷한 사건이 다른 가맹점의 같은 `customer_ref`를 같은 고객으로 보지 않는지 · 진행 중 사건을 빼는지 · 결과를 결제별로 세는지 · AI가 안 부르면 보충되는지 · 조회 실패에도 보고서가 만들어지는지(#296)
+- 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리. #288의 새 키는 화면에서 선택 항목이며 #292 보고서 전문 페이지에서 표시한다. `investigationTrace`는 #294 "조사 과정" 탭. 생성 중 진행 단계는 #322 `ReportCard`
+- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294), 비슷한 사건이 다른 가맹점의 같은 `customer_ref`를 같은 고객으로 보지 않는지 · 진행 중 사건을 빼는지 · 결과를 결제별로 세는지 · AI가 안 부르면 보충되는지 · 조회 실패에도 보고서가 만들어지는지(#296), 진행 중 상태 조회에 끝난 단계가 실리는지 · 이전 시도의 진행 기록이 버려지는지 · 단계별 실행으로 바꿔도 최종 보고서가 같은지 · Spring이 `progress`를 읽는지 · 진행 조회가 보고서를 바꾸지 않는지 · 다른 Case 보고서는 404인지(#322)
 - 문서: README Architecture · AGENTS.md §6
 
 ## 검증

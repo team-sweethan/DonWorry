@@ -132,3 +132,28 @@ def test_tool_args_with_wrong_type_are_reported_to_agent() -> None:
     tools = [s for s in outcome.report.investigationTrace.steps if s.kind == "TOOL"]
     assert tools[1].received == "실행 실패 — AI에게 알리고 다시 고르게 함"
     assert tools[2].received == "FDS 평가 2건 · 적중 규칙 4개"
+
+
+# 단계별 실행(#322)으로 바꿔도 최종 보고서는 같고, 진행 알림은 끝난 단계가 순서대로 늘어난다
+def test_run_investigation_reports_growing_steps_and_same_final_report() -> None:
+    snapshots: list[list[str]] = []
+
+    with_progress = run_investigation(
+        context(),
+        MockLlmClient(),
+        toolbox("sample_case.json"),
+        SETTINGS,
+        lambda steps: snapshots.append([s.title for s in steps]),
+    )
+    without = run_investigation(context(), MockLlmClient(), toolbox("sample_case.json"), SETTINGS)
+
+    final = [s.title for s in with_progress.report.investigationTrace.steps]
+    assert len(snapshots) > 2
+    assert all(len(a) < len(b) for a, b in zip(snapshots, snapshots[1:], strict=False))
+    assert all(snap == final[: len(snap)] for snap in snapshots)
+    assert snapshots[-1] == final
+    # 시각 · 걸린 시간을 뺀 판단 내용은 진행 알림이 있든 없든 같다
+    assert with_progress.status == without.status == "SUCCEEDED"
+    assert with_progress.report.verdict == without.report.verdict
+    assert with_progress.report.paymentAnalyses == without.report.paymentAnalyses
+    assert with_progress.report.summary == without.report.summary

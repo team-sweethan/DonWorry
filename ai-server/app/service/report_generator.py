@@ -3,7 +3,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
-from app.agent.graph import run_investigation
+from app.agent.graph import ProgressListener, run_investigation
 from app.agent.llm import LlmClient, build_llm_client
 from app.agent.tools import SpringToolBox, ToolBox
 from app.client.spring import SpringToolClient
@@ -27,8 +27,11 @@ class ReportResult(BaseModel):
 
 
 # "보고서 만드는 자리" — #253의 접수 · 결과 콜백은 이 인터페이스만 부른다
+# on_progress는 생성 중 끝난 단계를 받는다 (#322) — 없으면 알리지 않는다
 class ReportGenerator(Protocol):
-    def generate(self, context: CaseContext) -> ReportResult: ...
+    def generate(
+        self, context: CaseContext, on_progress: ProgressListener | None = None
+    ) -> ReportResult: ...
 
 
 class AgentReportGenerator:
@@ -39,9 +42,11 @@ class AgentReportGenerator:
         self._toolbox_for = toolbox_for
         self._settings = settings
 
-    def generate(self, context: CaseContext) -> ReportResult:
+    def generate(
+        self, context: CaseContext, on_progress: ProgressListener | None = None
+    ) -> ReportResult:
         toolbox: ToolBox = self._toolbox_for(context.case_id)
-        outcome = run_investigation(context, self._llm, toolbox, self._settings)
+        outcome = run_investigation(context, self._llm, toolbox, self._settings, on_progress)
         return ReportResult(
             status=outcome.status,
             report=outcome.report,
