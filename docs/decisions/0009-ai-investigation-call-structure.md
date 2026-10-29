@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-27 개정: 1차 Tool 2종 응답 형식 (#254) · 2026-10-28 개정: 서비스 키 인증 위치 (#266, ADR-0041) · 2026-10-29 개정: 보고서 결론 · 권고 이유 · 규칙 근거 키와 문장 품질 검사 (#288)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-27 개정: 1차 Tool 2종 응답 형식 (#254) · 2026-10-28 개정: 서비스 키 인증 위치 (#266, ADR-0041) · 2026-10-29 개정: 보고서 결론 · 권고 이유 · 규칙 근거 키와 문장 품질 검사 (#288) · 2026-10-29 개정: 조사 과정 기록 (#294) · 2026-10-29 개정: 7번째 Tool 비슷한 과거 사건 (#296)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -55,7 +55,7 @@ sequenceDiagram
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
 | 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
 
-### Tool 6종 (Notion 설계 3.6)
+### Tool 6종 (Notion 설계 3.6) + 7번째 (#296)
 
 | Tool | 입력 | 하는 일 | 데이터 주인 |
 | --- | --- | --- | --- |
@@ -65,6 +65,16 @@ sequenceDiagram
 | `get_security_events` | `caseId`, 조회 기간 | 로그인 · 기기 · 계정 이벤트 | P1 또는 CakeShop |
 | `get_order_context` | `caseId` | 주문 · 배송 정보 | CakeShop |
 | `get_payment_authentication` | `caseId` 또는 허용된 결제 ID | 카드 인증 · 승인 정보 | P5 |
+| `find_similar_cases` (#296) | `caseId` | 비슷한 종료 사건과 결제별 직원 판정 결과 (참고 근거) | P3 + P2 (읽기만) |
+
+**`find_similar_cases` (#296)** — 구현: `SimilarCaseFinder`. AI Tool과 AI를 끈 고정 보고서가 같은 규칙을 쓴다
+- 후보는 종료(`CLOSED`) 사건만, 지금 사건 제외
+- "같은 고객"(`SAME_CUSTOMER`): 같은 `merchant_id` + `customer_ref` (`customer_ref`는 가맹점마다 따로 매기는 값이라 가맹점도 같아야 한다)
+- "같은 규칙 조합"(`SHARED_RULES`): 최근 종료 100건 중 적중 규칙 코드가 2개 이상 겹치는 사건
+- 같은 고객을 먼저, 그다음 같은 규칙 조합. 각각 최근 종료 순, 최대 5건. 전체 건수는 `totalMatched`
+- 결과는 결제별 직원 판정 건수(`acceptCount` · `rejectCount`) 그대로. "사기 확정" 같은 해석은 하지 않는다
+- 필수 근거로 다룬다: AI가 부르지 않으면 "빠진 근거 다시 요청" → 그래도 안 부르면 시스템이 보충 조회한다. 보충 조회까지 실패하면 `similarCases: null`로 두고 보고서는 만든다 (참고 자료라 판정에 필요한 보고서를 막지 않는다)
+- 조회는 별도 읽기 트랜잭션(`REQUIRES_NEW`)에서 한다 — 고정 보고서가 이 조회의 실패를 잡아도 보고서 트랜잭션이 되돌림 전용이 되지 않게
 
 입력에 `caseId`가 있다고 다른 모듈 데이터를 마음대로 읽는 것은 아니다. 각 Tool 구현이 Case 소속 결제 · 가맹점 범위를 검증하고, 소유 모듈의 공개 api로 필요한 정보만 모은다 (설계 3.6 주의).
 
@@ -125,6 +135,7 @@ sequenceDiagram
 | `evidence` | 상세 정보 펼치기 — 증거 추적 표 (증거 ID · Tool · 출처 · 조회 시각 · 데이터 버전) |
 | `verdict` | 결론 카드 — `headline`(AI 결론 한 줄) · `overallRecommendation`(종합 권고) (#288). Case 상세 요약 카드에도 표시 |
 | `investigationTrace` | "조사 과정" 탭 (#294) |
+| `similarCases` | 결제별 카드 아래 "비슷한 과거 사건" 카드 (#296) |
 
 - **#288에서 더한 키 — 추가만 한다.** 그 전에 저장된 보고서에는 없으므로 화면 타입에서는 선택 항목(`?`)이고, ai-server 스키마와 Spring 저장 전 검사에서는 새 보고서에 필수다
   - `verdict.headline`: AI가 쓰는 결론 한 줄. 60자 이내 한 문장, 단정 금지 (아래 문장 품질 검사)
@@ -137,6 +148,9 @@ sequenceDiagram
   - 화면 타입에서는 선택 항목(`?`), ai-server 스키마에서는 필수다. **Spring 저장 전 검사는 이 키를 요구하지 않는다** — 판정에 쓰지 않는 표시용이라, 없어도 보고서는 성공으로 저장되고 탭에만 "기록 없음"이 보인다
   - AI 서버를 끈 고정 보고서(`FixedReportGenerator`)는 `provider: FIXED`와 시스템 단계만 남긴다
   - 사장님 화면(`MerchantCaseQueryService`)은 요약 · 권고만 골라 쓰므로 이 키는 보안 직원 화면에만 나간다
+- **#296에서 더한 키 — 추가만 한다.** `similarCases`: `cases[]`(`caseId` · `similarity` · `sharedRules[]`(`code` · `name`) · `closedAt` · `acceptCount` · `rejectCount`) · `totalMatched`
+  - Tool 기록(`find_similar_cases` 응답)에서 코드가 채운다. AI 판단 문장 형식에는 이 칸이 없다. AI에게는 사건 번호 없이 이유 · 결과만 참고로 보여 주고 "지난 결과만으로 권고를 정하지 말 것"을 지시한다
+  - 키가 없으면 예전 보고서(화면에서 카드 숨김), `null`이면 조회하지 못함(화면에 안내). Spring 저장 전 검사는 이 키를 요구하지 않는다 (`investigationTrace`와 같은 이유)
 - **문장 품질 검사 (ai-server, 걸리면 다시 쓰기 · 횟수 넘으면 `NARRATIVE_INVALID`):** 근거에 없는 숫자 · 코드값 · 확률 단정(기존)에 더해 한자 · 일본 문자, 같은 묶음 안 반복 문장, 영어 단어(`FDS` · `IP` · `OTP` · `VPN` · `ID` · `AI` 및 시연 표기 `mock` · `Qwen` 제외), 60자를 넘거나 두 문장인 결론
 - **권고 값:** `ACCEPT_REVIEW` / `REJECT_REVIEW` / `NEEDS_CHECK`. 참고용이며 최종 판정은 직원이 한다
 - **보고서 속 결제 ID:** Tool로 받은 실제 ID만 쓴다. 저장 전에 Case 소속인지 검증하고, 아니면 구조 검증 실패(시도 실패 1회)로 처리한다
@@ -216,11 +230,14 @@ investigation/report/
 | 근거 문장마다 출처를 AI가 붙임 (#288) | AI가 증거 ID를 지어낼 수 있다. 출처가 필요한 규칙 근거는 코드가 조회 기록에서 채운다 |
 | 조사 과정을 별도 테이블 · 컬럼에 저장 (#294) | 보고서와 항상 함께 읽고 따로 검색하지 않는다. `report_body` 안에 두면 보고서 버전별로 함께 쌓이고 migration이 필요 없다 |
 | Spring 저장 전 검사에서 `investigationTrace`를 필수로 요구 (#294) | 판정에 쓰지 않는 표시용인데, 필수로 두면 ai-server를 먼저 배포하지 않았을 때 보고서가 실패한다 (#288의 배포 순서 주의점과 같은 문제) |
+| 비슷한 사건을 같은 카드 · 기기 · IP로도 찾음 (#296) | P2 공개 창구(`FdsPaymentEvidence`)에 `card_token` · `device_id`가 없고, 결제 데이터에는 IP 주소 없이 국가 코드만 있다. 카드 · 기기는 P2 합의(수치 근거 이슈와 함께) 후 추가한다 |
+| 비슷한 사건의 결과를 사건 하나에 한 값("일부 승인 취소")으로 표시 (#296) | 결제가 2건인지 3건인지 구분되지 않는다. 판정은 원래 결제별로 저장되므로 건수를 그대로 보여 준다 |
+| 비슷한 사건 조회 실패를 보고서 실패로 처리 (#296) | 참고 자료 때문에 판정에 필요한 보고서가 막히면 수동 판정이 늘어난다. 값만 비운다 |
 | 프롬프트 · Tool 응답 원문을 그대로 저장 (#294) | 보고서가 커지고 결제 값이 본문과 중복 저장된다. 시연 · 확인에는 요약으로 충분하다 |
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
+- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases`, 구현은 현재 3종) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `/internal/ai/**`는 identity의 전용 보안 체인이 서비스 키로 확인한다 — #266, P1 동의 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md))
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
@@ -228,8 +245,9 @@ investigation/report/
 - P1: `get_security_events`용 조회 api
 - CakeShop: `get_order_context` 제공 범위 (§5.7)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
+- P3: `find_similar_cases`용 읽기 쿼리 추가 — `SecurityCaseRepository`(종료 사건 2종) · `CasePaymentRepository` · `PaymentDecisionRepository`(여러 사건 한 번에) (#296, P4 개선 작업 범위로 P3 허락)
 - 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리. #288의 새 키는 화면에서 선택 항목이며 #292 보고서 전문 페이지에서 표시한다. `investigationTrace`는 #294 "조사 과정" 탭
-- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294)
+- 테스트: 다른 Case · 가맹점의 결제를 Tool로 조회하면 거부되는지, 구버전 결과가 최신 보고서를 덮어쓰지 않는지, 다른 `attemptId`의 콜백(재시작 전 시도 포함)이 무시되는지, 완료 처리 중 병합돼도 다음 버전이 생기는지, 같은 증거 버전 재요청이 새 행을 만들지 않는지(`FAILED` 포함), 202 직후 성공 콜백이 `RUNNING`으로 덮이지 않는지, 같은 Case 동시 요청이 오류 없이 하나로 합류하는지, 3회 실패 시 `FAILED` · `report_body.error`가 남는지, 실행 중 병합되면 다음 버전이 예약되는지, 화면 응답에 `error`가 없는지, 보고서 속 결제 ID가 Case 소속이 아니면 거부되는지, 결론(`verdict`)이 없거나 종합 권고 값이 허용 밖이면 거부되는지(#288), 규칙 근거의 증거 ID가 실제 조회 기록과 맞는지(#288), 조사 과정 기록이 실제 순서대로 남고 시스템 보충을 AI와 구분하며 원본 값 · 실패한 AI 문장을 담지 않는지(#294), 비슷한 사건이 다른 가맹점의 같은 `customer_ref`를 같은 고객으로 보지 않는지 · 진행 중 사건을 빼는지 · 결과를 결제별로 세는지 · AI가 안 부르면 보충되는지 · 조회 실패에도 보고서가 만들어지는지(#296)
 - 문서: README Architecture · AGENTS.md §6
 
 ## 검증

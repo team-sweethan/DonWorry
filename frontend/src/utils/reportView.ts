@@ -1,4 +1,4 @@
-import type { AiReport, InvestigationTrace, ReportBody } from '../types/case.ts'
+import type { AiReport, InvestigationTrace, ReportBody, SimilarCaseItem } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
@@ -80,4 +80,16 @@ export function traceProviderLabel(trace: Pick<InvestigationTrace, 'provider' | 
 export function durationText(ms: number | null): string {
   if (ms === null) return '-'
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}초`
+}
+
+export type OutcomeTag = { label: string; tone: 'accept' | 'reject' | 'none' }
+
+// 비슷한 사건 결과 태그 (#296 B안) — 매입 진행 · 승인 취소를 결제별 건수로 따로 보여 준다
+export function similarOutcomeTags(
+  item: Pick<SimilarCaseItem, 'acceptCount' | 'rejectCount'>,
+): OutcomeTag[] {
+  const tags: OutcomeTag[] = []
+  if (item.acceptCount > 0) tags.push({ label: `매입 진행 ${item.acceptCount}건`, tone: 'accept' })
+  if (item.rejectCount > 0) tags.push({ label: `승인 취소 ${item.rejectCount}건`, tone: 'reject' })
+  return tags.length ? tags : [{ label: '판정 기록 없음', tone: 'none' }]
 }

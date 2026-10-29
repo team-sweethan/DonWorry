@@ -1,7 +1,7 @@
 import httpx
 
 from app.schemas.investigation import InvestigationResult
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
+from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
 
 # 서비스 키 헤더 이름 — Spring 쪽 확인(#253)과 같게 둔다
 API_KEY_HEADER = "X-Internal-Api-Key"
@@ -36,6 +36,12 @@ class SpringToolClient:
         res = self._http.get("/internal/ai/tools/get_fds_evidence", params=params)
         res.raise_for_status()
         return FdsEvidenceTool.model_validate(res.json())
+
+    # 이 Case와 비슷한 종료 사건 (#296)
+    def find_similar_cases(self, case_id: str) -> SimilarCasesTool:
+        res = self._http.get("/internal/ai/tools/find_similar_cases", params={"caseId": case_id})
+        res.raise_for_status()
+        return SimilarCasesTool.model_validate(res.json())
 
     # 조사가 끝나면 결과를 돌려준다 (ADR-0009 결정 1 결과 수신)
     # 전송이 실패해도 Spring이 상태 조회로 복구한다

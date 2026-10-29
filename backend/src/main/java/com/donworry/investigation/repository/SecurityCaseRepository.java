@@ -54,6 +54,13 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
     // 보안 직원 Case 목록 — 최근 생성 순
     List<SecurityCase> findAllByOrderByCreatedAtDesc();
 
+    // P4 비슷한 과거 사건(#296) — 같은 가맹점 · 고객의 종료 사건, 최근 종료 순 (읽기 전용)
+    List<SecurityCase> findByMerchantIdAndCustomerRefAndStatusOrderByClosedAtDesc(
+            Long merchantId, String customerRef, CaseStatus status);
+
+    // P4 비슷한 과거 사건(#296) — 규칙 조합을 비교할 최근 종료 사건 100건 (읽기 전용)
+    List<SecurityCase> findTop100ByStatusOrderByClosedAtDesc(CaseStatus status);
+
     // 사이드바 배지용 상태별 건수 — 결제 · 보고서를 읽지 않고 security_cases만 센다 (#224)
     @Query("""
             SELECT new com.donworry.investigation.repository.CaseStatusCount(c.status, COUNT(c))

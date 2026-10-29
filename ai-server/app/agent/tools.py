@@ -2,10 +2,10 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.client.spring import SpringToolClient
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
+from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
 
 # Qwen에게 보여 주는 허용 도구 — 읽기 전용만 둔다
-# (AGENTS.md 6절, ADR-0009 Tool 6종 중 1차 2종)
+# (AGENTS.md 6절, ADR-0009 Tool 6종 중 1차 2종 + #296 비슷한 과거 사건)
 # caseId는 Qwen이 고르지 않고 코드가 묶는다 — 다른 Case를 조회할 수 없게
 TOOL_SPECS: list[dict[str, Any]] = [
     {
@@ -39,6 +39,17 @@ TOOL_SPECS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_similar_cases",
+            "description": (
+                "이 사건과 비슷한 지난 종료 사건(같은 고객 · 같은 규칙 조합)과 "
+                "결제별 직원 판정 결과를 본다. 참고 근거다."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 ]
 
 ALLOWED_TOOL_NAMES = frozenset(spec["function"]["name"] for spec in TOOL_SPECS)
@@ -55,7 +66,7 @@ TOOL_ARGS: dict[str, frozenset[str]] = {
 class ToolRecord:
     tool_name: str
     args: dict[str, Any]
-    result: CasePaymentsTool | FdsEvidenceTool
+    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool
     filled_by_system: bool = False
 
 
@@ -64,6 +75,8 @@ class ToolBox(Protocol):
     def get_case_payments(self) -> CasePaymentsTool: ...
 
     def get_fds_evidence(self, payment_ids: list[str] | None) -> FdsEvidenceTool: ...
+
+    def find_similar_cases(self) -> SimilarCasesTool: ...
 
 
 class SpringToolBox:
@@ -77,12 +90,32 @@ class SpringToolBox:
     def get_fds_evidence(self, payment_ids: list[str] | None) -> FdsEvidenceTool:
         return self._client.get_fds_evidence(self._case_id, payment_ids)
 
+    def find_similar_cases(self) -> SimilarCasesTool:
+        return self._client.find_similar_cases(self._case_id)
+
 
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
-    def __init__(self, case_payments: CasePaymentsTool, fds_evidence: FdsEvidenceTool) -> None:
+    # similar를 주지 않으면 비슷한 사건이 없는 응답을 돌려준다
+    def __init__(
+        self,
+        case_payments: CasePaymentsTool,
+        fds_evidence: FdsEvidenceTool,
+        similar: SimilarCasesTool | None = None,
+    ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
+        self._similar = similar or SimilarCasesTool(
+            caseId=case_payments.caseId,
+            evidenceVersion=case_payments.evidenceVersion,
+            source="P3·P2",
+            retrievedAt=case_payments.retrievedAt,
+            cases=[],
+            totalMatched=0,
+        )
+
+    def find_similar_cases(self) -> SimilarCasesTool:
+        return self._similar
 
     def get_case_payments(self) -> CasePaymentsTool:
         return self._case_payments

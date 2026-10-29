@@ -28,13 +28,18 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "evidence",
         "verdict",
         "investigationTrace",
+        "similarCases",
     ]
     first = report["paymentAnalyses"][0]
     assert (first["paymentId"], first["amount"], first["riskScore"]) == ("9001", 650000, 65)
     assert first["ruleHits"] == ["HIGH_AMOUNT", "NEW_CARD"]
     assert report["overview"]["totalAmount"] == 770000
-    assert [e["toolName"] for e in report["evidence"]] == ["get_case_payments", "get_fds_evidence"]
-    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2"]
+    assert [e["toolName"] for e in report["evidence"]] == [
+        "get_case_payments",
+        "get_fds_evidence",
+        "find_similar_cases",
+    ]
+    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2"]
     assert report["evidence"][0]["dataVersion"] == "evidence v2"
     assert "FDS 점수는 부정거래 확률이 아닙니다." in report["recommendation"]["limitations"]
 
@@ -47,6 +52,7 @@ def test_missing_evidence_is_nudged_and_agent_picks_it() -> None:
             [call("get_fds_evidence", payment_ids=["9001"])],
             None,
             [call("get_fds_evidence", payment_ids=["9002"])],
+            [call("find_similar_cases")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],
@@ -59,6 +65,7 @@ def test_missing_evidence_is_nudged_and_agent_picks_it() -> None:
         {},
         {"payment_ids": ["9001"]},
         {"payment_ids": ["9002"]},
+        {},
     ]
     assert not any(r.filled_by_system for r in outcome.records)
     nudges = [m for m in llm.choose_messages[-1] if isinstance(m, HumanMessage)]
@@ -73,8 +80,11 @@ def test_agent_ignoring_nudges_gets_system_fill() -> None:
 
     assert outcome.status == "SUCCEEDED"
     filled = [r for r in outcome.records if r.filled_by_system]
-    assert [r.tool_name for r in filled] == ["get_fds_evidence"]
-    assert outcome.report.evidence[-1].source == "P2 (자동 보충)"
+    assert [r.tool_name for r in filled] == ["get_fds_evidence", "find_similar_cases"]
+    assert [e.source for e in outcome.report.evidence][-2:] == [
+        "P2 (자동 보충)",
+        "P3·P2 (자동 보충)",
+    ]
 
 
 # 허용 목록에 없는 도구는 실행하지 않고 Agent에게 거절을 알린다
@@ -123,6 +133,7 @@ def test_payment_outside_case_is_reported_to_agent() -> None:
             [call("get_case_payments")],
             [call("get_fds_evidence", payment_ids=["7777"])],
             [call("get_fds_evidence")],
+            [call("find_similar_cases")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],
@@ -131,7 +142,7 @@ def test_payment_outside_case_is_reported_to_agent() -> None:
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
-    assert [r.args for r in outcome.records] == [{}, {}]
+    assert [r.args for r in outcome.records] == [{}, {}, {}]
 
 
 # 형식이 틀리면 오류를 알려 고쳐 쓰게 한다

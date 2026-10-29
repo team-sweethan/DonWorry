@@ -4,6 +4,7 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InvestigationErrorCode;
@@ -31,6 +32,7 @@ public class AiToolService {
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
     private final PaymentInfoReader paymentInfoReader;
+    private final SimilarCaseFinder similarCaseFinder;
 
     @Transactional(readOnly = true)
     public CasePaymentsToolResponse casePayments(Long caseId) {
@@ -87,6 +89,11 @@ public class AiToolService {
                 scope.retrievedAt(),
                 payments,
                 missing);
+    }
+
+    // 비슷한 과거 사건 (#296) — 고정 보고서와 같은 규칙을 쓰도록 SimilarCaseFinder에 맡긴다 (트랜잭션도 그쪽이 연다)
+    public SimilarCasesToolResponse similarCases(Long caseId) {
+        return similarCaseFinder.find(caseId);
     }
 
     // 증거 버전과 결제 목록을 같은 읽기 트랜잭션에서 읽어 같은 시점 값으로 맞춘다
