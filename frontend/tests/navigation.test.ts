@@ -32,7 +32,11 @@ test('역할별 첫 화면으로 보낸다', () => {
 test('사장님 메뉴는 권한이 있는 것만 보인다', () => {
   const paths = (user: AuthUser) =>
     sessionNavigation(user).groups.flatMap((group) => group.items.map((item) => item.path))
-  assert.deepEqual(paths(owner(['FINANCE_VIEW'])), ['/owner/settlements'])
+  assert.deepEqual(paths(owner(['FINANCE_VIEW'])), [
+    '/owner/settlements',
+    '/owner/funds',
+    '/owner/loans',
+  ])
   assert.equal(sessionNavigation(owner(['FINANCE_VIEW'])).landing, '/owner/settlements')
   assert.equal(sessionNavigation(owner([])).landing, null)
 })
@@ -43,6 +47,13 @@ test('다른 역할 화면과 권한 없는 메뉴는 열 수 없다', () => {
   assert.equal(canOpenPath(staff, '/owner/actions'), false)
   assert.equal(canOpenPath(admin, '/security/cases'), false)
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/settlements'), true)
+  assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/funds'), true)
+  assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/funds/loans'), true)
+  assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/loans'), true)
+  assert.equal(canOpenPath(owner(['FDS_VIEW']), '/owner/loans'), false)
+  assert.equal(canOpenPath(owner(['FDS_VIEW']), '/owner/funds/loans'), false)
+  assert.equal(canOpenPath(owner(['FDS_VIEW']), '/owner/funds'), false)
+  assert.equal(canOpenPath(owner([]), '/owner/funds'), false)
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/actions'), false)
   // 없는 화면은 404가 처리하도록 막지 않는다.
   assert.equal(canOpenPath(owner(['FINANCE_VIEW']), '/owner/unknown'), true)
