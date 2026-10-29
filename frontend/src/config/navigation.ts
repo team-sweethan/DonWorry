@@ -44,8 +44,9 @@ export const navByRole: Record<Role, NavGroup[]> = {
 
 export const adminNavigation = {
   label: '관리자',
-  landing: '/admin/fds/rules',
+  landing: '/admin/home',
   groups: [
+    { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
     {
       title: '탐지',
       items: [

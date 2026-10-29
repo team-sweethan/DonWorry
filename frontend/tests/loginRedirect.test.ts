@@ -21,6 +21,16 @@ const owner: AuthUser = {
   permissions: ['FINANCE_VIEW'],
 }
 
+test('관리자 첫 로그인은 관리자 홈으로 보내고 유효한 복귀 경로는 유지한다', () => {
+  const admin: AuthUser = { ...staff, role: 'ADMIN' }
+  assert.equal(loginDestination(admin, null), '/admin/home')
+  assert.equal(loginDestination(admin, { returnTo: '/admin/fds/rules' }), '/admin/fds/rules')
+  assert.equal(
+    loginDestination({ ...admin, passwordChangeRequired: true }, null),
+    '/account/password',
+  )
+})
+
 // 같은 계정으로 재로그인하면 상세 경로와 쿼리를 그대로 복원한다.
 test('loginDestination_whenSameAccount_preservesPathAndQuery', () => {
   const returnTo = '/security/cases/3?page=2&keyword=%ED%99%95%EC%9D%B8&next=https://example.com'

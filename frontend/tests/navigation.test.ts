@@ -24,9 +24,24 @@ const owner = (permissions: string[]): AuthUser => ({
 })
 
 test('역할별 첫 화면으로 보낸다', () => {
-  assert.equal(sessionNavigation(admin).landing, '/admin/fds/rules')
+  assert.equal(sessionNavigation(admin).landing, '/admin/home')
   assert.equal(sessionNavigation(staff).landing, '/security/home')
   assert.equal(sessionNavigation(owner(['FDS_VIEW', 'FINANCE_VIEW'])).landing, '/owner/actions')
+})
+
+test('관리자 홈이 첫 메뉴이며 다른 역할과 임시 비밀번호 계정은 접근하지 못한다', () => {
+  assert.deepEqual(sessionNavigation(admin).groups[0].items[0], {
+    label: '홈',
+    path: '/admin/home',
+  })
+  assert.equal(canOpenPath(admin, '/admin/home'), true)
+  for (const user of [
+    staff,
+    owner(['FDS_VIEW', 'FINANCE_VIEW']),
+    { ...admin, passwordChangeRequired: true },
+  ]) {
+    assert.equal(canOpenPath(user, '/admin/home'), false)
+  }
 })
 
 test('사장님 메뉴는 권한이 있는 것만 보인다', () => {

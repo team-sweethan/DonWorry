@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api } from './client.ts'
 
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'

@@ -19,7 +19,7 @@ npm run dev
 | ------------------------ | ------------ | -------- | ---------------- |
 | 보안 직원                | `staff_test` | `1234`   | `/security/home` |
 | 사장님 (DEMOSHOP 가맹점) | `boss`       | `1234`   | `/owner/actions` |
-| 관리자                   | `admin`      | 담당자   | `/admin/fds`     |
+| 관리자                   | `admin`      | 담당자   | `/admin/home`    |
 
 보안 직원·사장님은 공개된 시연 계정입니다.
 관리 화면은 최소 1280px 기준이며, 작은 창에서는 가로 스크롤을 사용합니다.
@@ -28,19 +28,21 @@ npm run dev
 
 현재 라우터에 연결된 화면은 다음과 같습니다.
 
-| 경로                                       | 현재 상태                                                                                                 |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `/login`                                   | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                                                |
-| `/`                                        | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                  |
-| `/admin/fds`, `/admin/finance`             | ADMIN 전용 메뉴·헤더와 담당자 구현 영역 (`EmptyPage`)                                                     |
-| `/demo/login`                              | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                       |
-| `/security/home`                           | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                    |
-| `/security/cases`, `/security/cases/:id`   | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업 |
-| `/security/alerts`, `/security/alerts/:id` | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                     |
-| `/security/transactions`                   | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                  |
-| `/owner/actions`, `/owner/actions/:id`     | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)      |
-| `/owner/settlements`                       | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                  |
-| `/dev/components`                          | 공통 UI 예시                                                                                              |
+| 경로                                                  | 현재 상태                                                                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `/login`                                              | 실제 세션 로그인·입력 검증·오류 안내 (#78)                                                                |
+| `/`                                                   | `/login`으로 이동. 로그인 상태면 역할별 첫 화면으로 이동                                                  |
+| `/admin/home`                                         | 관리자 첫 화면 — 승인 대기 요청 수·최신 5건, 꺼진 Rule 수, 전체 계정·가맹점 수 (#307). 기존 조회 API 사용 |
+| `/admin/fds/rules`, `/admin/fds/rule-change-requests` | Rule 카탈로그·룰 변경 요청 관리                                                                           |
+| `/admin/finance`                                      | 자금관리 담당자 구현 영역 (`EmptyPage`)                                                                   |
+| `/demo/login`                                         | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                       |
+| `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                    |
+| `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업 |
+| `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                     |
+| `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                  |
+| `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)      |
+| `/owner/settlements`                                  | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                  |
+| `/dev/components`                                     | 공통 UI 예시                                                                                              |
 
 Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 실제 요청됩니다. "시연: HELD 결제 발생"으로 만든 시연 결제는 백엔드 목업이 처리합니다. AI 보고서는 서버가 만듭니다(AI 서버를 끄면 고정 문장 보고서). 판정 직후에는 "금융 처리 대기 중"이고, "인계 상태 다시 확인"을 누르면 완료됩니다.
 
