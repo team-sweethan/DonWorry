@@ -92,6 +92,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 | --- | --- | --- |
 | `GET /api/security-cases` | 보안 직원 | Case 목록 |
 | `GET /api/security-cases/counts` | 보안 직원 | 상태별 Case 건수 — 사이드바 처리 필요 배지 (#224) |
+| `GET /api/security-cases/payment-links?paymentIds=` | 보안 직원 | 결제 ID(1~100개) → 연결된 Case. P2 경보 화면에서 Case로 이동 (#309) |
 | `GET /api/security-cases/{caseId}` | 보안 직원 | Case 상세 (결제 · 보고서 · 판정 · 인계 · 이력) |
 | `POST /api/security-cases/{caseId}/decisions` | 보안 직원 | 결제별 판정 |
 | `POST /api/security-cases/{caseId}/reports` | 보안 직원 | 현재 버전 보고서가 없을 때 다시 요청 |
@@ -100,7 +101,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 | `GET /api/merchant/security-cases/{caseId}` | 사장님(`FDS_VIEW`) | 핵심 요약 · 결제별 판정과 실제 결제 상태 (#205) |
 | `POST /api/demo/held-payments` | 시연 | 50~79점 HELD 결제 만들기 (#163 2단계에서 삭제) |
 
-- 오류는 `code`가 있는 problem 응답이다(`INV_001`~`INV_014`). 코드별 의미와 상태는 ADR-0019와 `InvestigationErrorCode`를 본다.
+- 오류는 `code`가 있는 problem 응답이다(`INV_001`~`INV_015`). 코드별 의미와 상태는 ADR-0019와 `InvestigationErrorCode`를 본다.
 - 고객사 API는 가맹점을 세션으로만 정하고, 다른 가맹점 Case는 `INV_001` 404로 답한다. 적중 규칙 · 점수 · 판정 사유 같은 내부 근거는 보내지 않는다.
 
 ## 7. 목업 범위와 지울 조건

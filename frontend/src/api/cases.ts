@@ -94,6 +94,21 @@ export async function getCaseCounts(): Promise<Record<CaseStatus, number>> {
   return statusCounts
 }
 
+/** 결제 ID → 연결된 Case (#309). 경보 화면이 Case로 이동할 때 쓴다. Case가 없는 결제는 결과에 없다. 한 번에 1~100개. */
+export type CasePaymentLink = { paymentId: string; caseId: string; caseStatus: CaseStatus }
+
+export async function getCaseLinksByPayments(paymentIds: string[]): Promise<CasePaymentLink[]> {
+  const params = new URLSearchParams({ paymentIds: paymentIds.join(',') })
+  const links = await api<Array<{ paymentId: Id; caseId: Id; caseStatus: CaseStatus }>>(
+    `/security-cases/payment-links?${params}`,
+  )
+  return links.map((l) => ({
+    paymentId: str(l.paymentId),
+    caseId: str(l.caseId),
+    caseStatus: l.caseStatus,
+  }))
+}
+
 export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {
   try {
     return toDetail(await fetchDetail(caseId))
