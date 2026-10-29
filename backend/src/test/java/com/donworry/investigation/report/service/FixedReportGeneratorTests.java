@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse.StatusCount;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
@@ -49,6 +50,9 @@ class FixedReportGeneratorTests {
     @Mock
     PaymentHistoryFinder paymentHistoryFinder;
 
+    @Mock
+    PaymentSignalReader paymentSignalReader;
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -67,7 +71,8 @@ class FixedReportGeneratorTests {
                 casePaymentRepository,
                 paymentInfoReader,
                 similarCaseFinder,
-                paymentHistoryFinder);
+                paymentHistoryFinder,
+                paymentSignalReader);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -103,7 +108,8 @@ class FixedReportGeneratorTests {
                 casePaymentRepository,
                 paymentInfoReader,
                 similarCaseFinder,
-                paymentHistoryFinder);
+                paymentHistoryFinder,
+                paymentSignalReader);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -138,7 +144,8 @@ class FixedReportGeneratorTests {
                 casePaymentRepository,
                 paymentInfoReader,
                 similarCaseFinder,
-                paymentHistoryFinder);
+                paymentHistoryFinder,
+                paymentSignalReader);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -243,6 +250,25 @@ class FixedReportGeneratorTests {
         assertThat(evidenceOf(body, "get_payment_history")).isEmpty();
     }
 
+    // AI 서버를 끈 시연에서도 결제별 카드 · 기기 · 접속 국가가 채워진다 — 값은 PaymentSignalReader 결과 그대로 (#346)
+    @Test
+    void generate_aiDisabled_addsPaymentSignals() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(paymentSignalReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(3L, new Signals("신한 ****1234", true, true, null, false)));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("cardDisplayLabel", "신한 ****1234");
+        expected.put("cardProvided", true);
+        expected.put("deviceProvided", true);
+        expected.put("ipCountryCode", null);
+        expected.put("ipProvided", false);
+        assertThat(analysis.get("signals")).isEqualTo(expected);
+    }
+
     private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
         List<Map<?, ?>> found = new ArrayList<>();
         for (Object item : (List<?>) body.get("evidence")) {
@@ -269,6 +295,7 @@ class FixedReportGeneratorTests {
                 casePaymentRepository,
                 paymentInfoReader,
                 similarCaseFinder,
-                paymentHistoryFinder);
+                paymentHistoryFinder,
+                paymentSignalReader);
     }
 }

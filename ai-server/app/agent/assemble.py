@@ -11,6 +11,7 @@ from app.schemas.report import (
     Overview,
     PaymentAnalysis,
     PaymentHistory,
+    PaymentSignals,
     Recommendation,
     ReportBody,
     ReportRecommendation,
@@ -25,13 +26,14 @@ from app.schemas.tools import (
     FdsEvidenceTool,
     FdsPayment,
     PaymentHistoryTool,
+    Signals,
     SimilarCasesTool,
 )
 
 # 사실 값은 Tool 기록에서만 채운다 — Qwen이 숫자 · ID를 잘못 옮겨 적어도 보고서 사실은 틀리지 않는다
 
 ALWAYS_LIMITATIONS = (
-    "기기 · 로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
+    "로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
     "FDS 점수는 부정거래 확률이 아닙니다.",
     "AI 권고는 참고용이며 최종 판정은 보안 직원이 합니다.",
 )
@@ -61,6 +63,45 @@ def analyzable(payment: CasePayment) -> bool:
 
 
 SIMILARITY_KO = {"SAME_CUSTOMER": "같은 고객", "SHARED_RULES": "같은 규칙 조합"}
+
+# 가맹점이 보내지 않은 카드 · 기기 · IP — 위험 근거가 아니라 한계로 남긴다 (#346)
+MISSING_SIGNAL_LIMITATIONS = {
+    "card": "카드 정보가 없어 결제 카드를 확인하지 못했습니다 (가맹점이 보내지 않음).",
+    "device": "기기 정보가 없어 결제 기기를 확인하지 못했습니다 (가맹점이 보내지 않음).",
+    "ip": "접속 IP 정보가 없어 접속 국가를 확인하지 못했습니다 (가맹점이 보내지 않음).",
+}
+NOT_SENT = "정보 없음 (가맹점이 보내지 않음)"
+
+
+# AI에게 보여 줄 카드 · 기기 · 접속 국가 — 있음/없음과 국가만 (#346)
+# 카드 표시값(끝자리 숫자)은 넣지 않는다 — 문장에 섞이면 숫자 검사에 걸린다
+def signal_facts(signals: Signals | None) -> dict[str, str] | str:
+    if signals is None:
+        return "정보 없음"
+    if signals.ipCountryCode:
+        code = signals.ipCountryCode
+        country = "한국" if code == "KR" else f"해외({code})"
+    else:
+        country = "국가 모름" if signals.ipProvided else NOT_SENT
+    return {
+        "카드 정보": "있음" if signals.cardProvided else NOT_SENT,
+        "기기 정보": "있음" if signals.deviceProvided else NOT_SENT,
+        "접속 국가": country,
+    }
+
+
+# 결제 중 하나라도 가맹점이 보내지 않은 값이 있으면 종류별로 한 줄씩
+def missing_signal_limitations(fds: dict[str, FdsPayment], payment_ids: list[str]) -> list[str]:
+    found = [fds[p].signals for p in payment_ids if p in fds and fds[p].signals is not None]
+    lines = []
+    if any(not s.cardProvided for s in found):
+        lines.append(MISSING_SIGNAL_LIMITATIONS["card"])
+    if any(not s.deviceProvided for s in found):
+        lines.append(MISSING_SIGNAL_LIMITATIONS["device"])
+    if any(not s.ipProvided for s in found):
+        lines.append(MISSING_SIGNAL_LIMITATIONS["ip"])
+    return lines
+
 
 # AI에게 보여 줄 고객 최근 결제 목록 수 — 나머지는 상태별 건수로만 본다
 HISTORY_SHOWN_TO_AI = 5
@@ -106,6 +147,7 @@ def facts_json(
                 ]
                 if evidence
                 else [],
+                "카드 · 기기 · 접속": signal_facts(evidence.signals if evidence else None),
                 "확인 못 함": [
                     label
                     for label, missing in (
@@ -247,6 +289,9 @@ def assemble_report(
     limitations = _drop_nothing_unknown(list(narrative.limitations))
     if history is None:
         limitations.append(HISTORY_UNAVAILABLE)
+    limitations += missing_signal_limitations(
+        fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
+    )
     checks = list(narrative.additionalChecks)
     fds_evidence_ids = _fds_evidence_ids(context, records)
     for payment in case_payments.payments:
@@ -286,6 +331,9 @@ def assemble_report(
                 ]
                 if evidence
                 else [],
+                signals=PaymentSignals.model_validate(evidence.signals.model_dump())
+                if evidence and evidence.signals
+                else None,
             )
         )
         timeline.append(payment_timeline_item(payment, evidence))

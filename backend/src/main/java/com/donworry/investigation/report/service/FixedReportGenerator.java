@@ -2,6 +2,7 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
@@ -50,6 +51,7 @@ class FixedReportGenerator {
     private final PaymentInfoReader paymentInfoReader;
     private final SimilarCaseFinder similarCaseFinder;
     private final PaymentHistoryFinder paymentHistoryFinder;
+    private final PaymentSignalReader paymentSignalReader;
 
     // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
@@ -71,6 +73,7 @@ class FixedReportGenerator {
         return Optional.of(body(
                 securityCase,
                 payments,
+                paymentSignalReader.findAll(paymentIds),
                 similarOrNull(caseId),
                 historyOrNull(caseId, now),
                 reportVersion,
@@ -108,6 +111,7 @@ class FixedReportGenerator {
     private static Map<String, Object> body(
             SecurityCase securityCase,
             List<PaymentInfo> payments,
+            Map<Long, Signals> signals,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             int reportVersion,
@@ -119,7 +123,7 @@ class FixedReportGenerator {
         String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
         for (PaymentInfo payment : payments) {
             // 정상 근거는 비워 둔다 — 고정 보고서는 결제 · FDS 근거 외에 확인한 것이 없다 (#288)
-            analyses.add(Map.ofEntries(
+            Map<String, Object> analysis = new HashMap<>(Map.ofEntries(
                     Map.entry("paymentId", payment.paymentId()),
                     Map.entry("amount", payment.amount()),
                     Map.entry("requestedAt", payment.requestedAt().toString()),
@@ -141,6 +145,9 @@ class FixedReportGenerator {
                             payment.ruleHits().stream()
                                     .map(rule -> ruleHitDetail(rule, fdsEvidenceId))
                                     .toList())));
+            // 카드 · 기기 · 접속 국가 (#346) — ai-server와 같은 키. 평가가 없으면 null
+            analysis.put("signals", signalsOf(signals.get(payment.paymentId())));
+            analyses.add(analysis);
         }
         Map<String, Object> body = new HashMap<>(Map.ofEntries(
                 Map.entry(
@@ -243,6 +250,20 @@ class FixedReportGenerator {
                     "evidence v" + history.evidenceVersion()));
         }
         return list;
+    }
+
+    // 값이 없는 칸(null)이 있어 Map.of 대신 HashMap을 쓴다
+    private static Map<String, Object> signalsOf(Signals s) {
+        if (s == null) {
+            return null;
+        }
+        Map<String, Object> map = new HashMap<>();
+        map.put("cardDisplayLabel", s.cardDisplayLabel());
+        map.put("cardProvided", s.cardProvided());
+        map.put("deviceProvided", s.deviceProvided());
+        map.put("ipCountryCode", s.ipCountryCode());
+        map.put("ipProvided", s.ipProvided());
+        return map;
     }
 
     // 고객 최근 결제 (#338) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다

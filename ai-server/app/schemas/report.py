@@ -33,6 +33,15 @@ class Overview(BaseModel):
     reportVersion: int
 
 
+# 결제별 카드 · 기기 · 접속 국가 (#346) — Tool 기록 값 그대로 코드가 채운다
+class PaymentSignals(BaseModel):
+    cardDisplayLabel: str | None
+    cardProvided: bool
+    deviceProvided: bool
+    ipCountryCode: str | None
+    ipProvided: bool
+
+
 class PaymentAnalysis(BaseModel):
     paymentId: str
     amount: int
@@ -45,6 +54,8 @@ class PaymentAnalysis(BaseModel):
     recommendation: Recommendation
     reason: str
     ruleHitDetails: list[RuleHitDetail]
+    # 없으면 None — 예전 Spring · FDS 평가 없음
+    signals: PaymentSignals | None = None
 
 
 # 사건 경위 한 줄 — kind는 화면 점 색 구분용 (결제 · 사건 생성)

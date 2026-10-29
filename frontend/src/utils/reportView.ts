@@ -1,4 +1,10 @@
-import type { AiReport, InvestigationTrace, ReportBody, SimilarCaseItem } from '../types/case.ts'
+import type {
+  AiReport,
+  InvestigationTrace,
+  PaymentSignals,
+  ReportBody,
+  SimilarCaseItem,
+} from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
@@ -102,4 +108,24 @@ export function similarOutcomeTags(
   if (item.acceptCount > 0) tags.push({ label: `매입 진행 ${item.acceptCount}건`, tone: 'accept' })
   if (item.rejectCount > 0) tags.push({ label: `승인 취소 ${item.rejectCount}건`, tone: 'reject' })
   return tags.length ? tags : [{ label: '판정 기록 없음', tone: 'none' }]
+}
+
+// 카드 · 기기 · 접속 국가 한 줄의 칸 (#346) — 가맹점이 안 보낸 값은 "정보 없음"으로 남긴다
+export type SignalText = { label: string; value: string; missing: boolean }
+const NOT_SENT = '정보 없음 (가맹점이 보내지 않음)'
+
+export function signalTexts(s: PaymentSignals): SignalText[] {
+  const card = s.cardDisplayLabel ?? (s.cardProvided ? '있음 (표시값 없음)' : NOT_SENT)
+  const country = s.ipCountryCode
+    ? s.ipCountryCode === 'KR'
+      ? '한국 (KR)'
+      : `해외 (${s.ipCountryCode})`
+    : s.ipProvided
+      ? '국가 모름'
+      : NOT_SENT
+  return [
+    { label: '카드', value: card, missing: !s.cardProvided },
+    { label: '기기', value: s.deviceProvided ? '정보 있음' : NOT_SENT, missing: !s.deviceProvided },
+    { label: '접속 국가', value: country, missing: !s.ipProvided },
+  ]
 }

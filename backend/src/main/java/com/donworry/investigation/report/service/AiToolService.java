@@ -38,6 +38,7 @@ public class AiToolService {
     private final PaymentInfoReader paymentInfoReader;
     private final SimilarCaseFinder similarCaseFinder;
     private final PaymentHistoryFinder paymentHistoryFinder;
+    private final PaymentSignalReader paymentSignalReader;
 
     @Transactional(readOnly = true)
     public CasePaymentsToolResponse casePayments(Long caseId) {
@@ -68,18 +69,22 @@ public class AiToolService {
     @Transactional(readOnly = true)
     public FdsEvidenceToolResponse fdsEvidence(Long caseId, Collection<Long> paymentIds) {
         Scope scope = scope(caseId, paymentIds == null ? List.of() : paymentIds);
+        // 카드 · 기기 · 접속 국가는 결제 ID로 짝을 맞춘다 — 평가가 없는 결제는 null (#346)
+        Map<Long, FdsEvidenceToolResponse.Signals> signals = paymentSignalReader.findAll(scope.paymentIds());
         List<FdsEvidenceToolResponse.Payment> payments = scope.paymentIds().stream()
                 .map(id -> {
                     PaymentInfo info = scope.infos().get(id);
                     return info == null
-                            ? new FdsEvidenceToolResponse.Payment(String.valueOf(id), null, null, List.of())
+                            ? new FdsEvidenceToolResponse.Payment(
+                                    String.valueOf(id), null, null, List.of(), signals.get(id))
                             : new FdsEvidenceToolResponse.Payment(
                                     String.valueOf(id),
                                     info.riskScore(),
                                     info.fdsResult(),
                                     info.ruleHits().stream()
                                             .map(AiToolService::toolRuleHit)
-                                            .toList());
+                                            .toList(),
+                                    signals.get(id));
                 })
                 .toList();
         List<String> missing = payments.stream()

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsPaymentEvidence.PaymentSignals;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.api.FdsRuleHitOutcome;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -118,6 +119,52 @@ class FdsEvidenceQueryServiceTests {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> queryService.findLatestByPaymentIds(List.of(0L)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 카드 · IP는 표시용 요약만 나간다 — 카드 토큰 · IP 주소 · 기기 ID · 이메일 원문은 P2 밖으로 나가지 않는다 (#346)
+    @Test
+    void findLatestByPaymentIds_withIdentifiers_returnsMaskedSignalsOnly() {
+        var at = Instant.parse("2026-10-26T01:00:00Z");
+        var request = FdsEvaluationRequest.builder()
+                .evaluationRequestId(UUID.randomUUID())
+                .paymentId(103L)
+                .merchantId(1L)
+                .customerRef("hong-gildong")
+                .amount(150_000L)
+                .paymentRequestedAt(at)
+                .deviceId("device-secret-1")
+                .cardToken("tok_secret_card")
+                .cardDisplayLabel("신한 ****1234")
+                .ipCountryCode("US")
+                .ipAddress("203.0.113.5")
+                .buyerEmail("buyer@example.com")
+                .build();
+        var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
+                .willReturn(List.of(FdsEvaluation.completed(request, FdsResult.REVIEW, 60, at)));
+
+        var result = queryService.findLatestByPaymentIds(List.of(103L));
+
+        assertThat(result).singleElement().satisfies(evidence -> {
+            assertThat(evidence.signals()).isEqualTo(new PaymentSignals("신한 ****1234", true, true, "US", true));
+            assertThat(evidence.toString())
+                    .doesNotContain("tok_secret_card", "203.0.113.5", "device-secret-1", "buyer@example.com");
+        });
+    }
+
+    // 가맹점이 보내지 않은 값은 "보냄"으로 표시하지 않고 비워 둔다 (#346)
+    @Test
+    void findLatestByPaymentIds_withoutIdentifiers_marksNotProvided() {
+        var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
+                .willReturn(List.of(evaluation(104L, FdsResult.ALLOW, Instant.parse("2026-10-26T01:00:00Z"))));
+
+        var result = queryService.findLatestByPaymentIds(List.of(104L));
+
+        assertThat(result)
+                .singleElement()
+                .extracting(evidence -> evidence.signals())
+                .isEqualTo(new PaymentSignals(null, false, false, null, false));
     }
 
     private FdsEvaluation evaluation(Long paymentId, FdsResult result, Instant evaluatedAt) {

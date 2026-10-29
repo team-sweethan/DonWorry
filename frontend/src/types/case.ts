@@ -154,6 +154,8 @@ export type ReportBody = {
     recommendation: AiRecommendation
     reason?: string
     ruleHitDetails?: ReportRuleHitDetail[]
+    // 카드 · 기기 · 접속 국가 (#346) — 없으면(undefined) 예전 보고서, null이면 FDS 평가 없음
+    signals?: PaymentSignals | null
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
   timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
@@ -175,6 +177,16 @@ export type ReportBody = {
   similarCases?: SimilarCases | null
   // 고객 최근 결제 (#338) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   paymentHistory?: PaymentHistory | null
+}
+
+// 결제별 카드 · 기기 · 접속 국가 (#346) — 카드는 마스킹 표시값, IP는 국가 코드만 온다
+// *Provided는 가맹점이 그 값을 보냈는지 여부
+export type PaymentSignals = {
+  cardDisplayLabel: string | null
+  cardProvided: boolean
+  deviceProvided: boolean
+  ipCountryCode: string | null
+  ipProvided: boolean
 }
 
 // 고객 최근 결제 (#338) — 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제는 빠져 있다

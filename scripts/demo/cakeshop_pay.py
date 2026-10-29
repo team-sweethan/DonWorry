@@ -3,6 +3,9 @@
 # 필요: Spring payment.http.enabled=true, Spring과 같은 DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수
 # 실행: 저장소 맨 위에서 py scripts/demo/cakeshop_pay.py (macOS · Linux: python3)
 # 같은 손님으로 다시: py scripts/demo/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
+# 카드 · 기기도 보내기: --signals (손님마다 고정된 가짜 카드 · 기기), IP까지: --ip 203.0.113.5 --country US (#346)
+#   카드 · 기기를 보내면 FDS 규칙(새 기기 · 처음 쓰는 카드)이 걸려 몇 번째 결제가 보류될지 달라질 수 있다
+import argparse
 import base64
 import hashlib
 import hmac
@@ -73,11 +76,28 @@ def send(key: bytes, method: str, target: str, body: bytes = b"", idempotency_ke
     return response.status, data
 
 
-def pay(key: bytes, customer_ref: str, n: int):
+# 가맹점이 보내는 FDS 식별자 (#325) — 카드는 원문이 아니라 토큰 · 마스킹 표시값만. 시연용 가짜 값이다
+def signals(customer_ref: str, args: argparse.Namespace) -> dict:
+    found = {}
+    if args.signals:
+        found.update(
+            cardToken=f"tok_demo_{customer_ref}",
+            cardDisplayLabel=f"데모카드 ****{customer_ref[-4:]}",
+            deviceId=f"device-demo-{customer_ref[-6:]}",
+        )
+    if args.ip:
+        found["ipAddress"] = args.ip
+    if args.country:
+        found["ipCountryCode"] = args.country
+    return found
+
+
+def pay(key: bytes, customer_ref: str, n: int, extra: dict):
     order_ref = f"CAKE-{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6]}-{n}"
     created_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     body = json.dumps(
-        {"orderRef": order_ref, "customerRef": customer_ref, "amount": AMOUNT, "orderCreatedAt": created_at},
+        # Python 3.8에서도 돌게 dict 합치기는 ** 로 한다
+        {"orderRef": order_ref, "customerRef": customer_ref, "amount": AMOUNT, "orderCreatedAt": created_at, **extra},
         separators=(",", ":"),
     ).encode("utf-8")
     status, data = send(key, "POST", "/api/payments", body, str(uuid.uuid4()))
@@ -91,12 +111,20 @@ def pay(key: bytes, customer_ref: str, n: int):
 
 
 def main() -> int:
-    key = load_key()
+    parser = argparse.ArgumentParser(description="돈워리 로컬 시연 결제")
     # 손님 번호를 주면 그 손님으로 결제한다. 없으면 매번 새 손님
-    customer_ref = sys.argv[1] if len(sys.argv) > 1 else str(random.randint(10**11, 10**12 - 1))
-    print(f"손님 번호 {customer_ref} 로 {AMOUNT:,}원 결제를 {COUNT}번 보냅니다\n")
+    parser.add_argument("customer", nargs="?", help="손님 번호 (같은 손님으로 다시 결제할 때)")
+    parser.add_argument("--signals", action="store_true", help="손님마다 고정된 가짜 카드 · 기기를 함께 보냄")
+    parser.add_argument("--ip", help="구매자 접속 IP (예: 203.0.113.5)")
+    parser.add_argument("--country", help="접속 국가 코드 2자리 (예: US, KR)")
+    args = parser.parse_args()
+    key = load_key()
+    customer_ref = args.customer or str(random.randint(10**11, 10**12 - 1))
+    extra = signals(customer_ref, args)
+    print(f"손님 번호 {customer_ref} 로 {AMOUNT:,}원 결제를 {COUNT}번 보냅니다")
+    print(f"함께 보내는 값: {', '.join(extra) if extra else '없음'}\n")
     for n in range(1, COUNT + 1):
-        order_ref, status, data = pay(key, customer_ref, n)
+        order_ref, status, data = pay(key, customer_ref, n, extra)
         if status >= 400:
             print(f"{n}번째 실패: HTTP {status} {data.get('code', '')} {data.get('detail', data)}")
             if status == 401:
