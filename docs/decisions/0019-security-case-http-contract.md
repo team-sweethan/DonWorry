@@ -1,16 +1,16 @@
 # 0019. P3 Case 조회 · 판정 HTTP 계약
 
 - **상태:** 제안
-- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회 · #205 개정: 고객사 보안 조치 결과 조회 · #212 개정: 시연 결제 금융 조치를 처리 대기 → 다시 확인 완료로)
-- **관련:** Issue #98 · #107 · #160 · #161 · #163 · #205, ADR-0020, ADR-0026, ADR-0027, ADR-0034, PR #103 · #113, ADR-0009, Notion FDS 정본 02 §2.5 · 03 §3.5, Notion "목업 데이터 · 연동 현황"
+- **날짜:** 2026-10-23 (2026-10-26 #160 개정: 판정 직원을 로그인 세션으로 · #161 개정: 완료 기반 인계와 다시 확인 · #163 개정: 결제 · FDS 실제 조회 · #205 개정: 고객사 보안 조치 결과 조회 · #212 개정: 시연 결제 금융 조치를 처리 대기 → 다시 확인 완료로 · 2026-10-29 #297 개정: #224 건수 API와 P4 보고서 실제 연동(#250 · #253) 반영)
+- **관련:** Issue #98 · #107 · #160 · #161 · #163 · #205 · #224 · #250 · #297, ADR-0020, ADR-0026, ADR-0027, ADR-0034, PR #103 · #113, ADR-0009, Notion FDS 정본 02 §2.5 · 03 §3.5, Notion "목업 데이터 · 연동 현황"
 - **영향 받는 담당:** P3 수민 (소유), P1 주환 (frontend · identity), P2 정후 (평가 근거), P4 현규 (보고서), P5 시은 (결제 정보 · 금융 조치 결과)
 
 ## 배경
 
 보안 직원 Case 화면(#107)이 목업 대신 `/api/security-cases`를 쓰게 되면서, 화면과 백엔드 사이에 HTTP 계약이 생겼다.
-이 API는 P5 결제 정보 · P2 FDS 평가 · P4 보고서를 합쳐 보여 준다. 처음에는 셋 다 P3 목업(`MockPaymentInfoStore` · `MockReportGateway`, 메모리)이었고, #163부터 결제 · FDS는 P5 `PaymentReader`(ADR-0026)와 P2 `FdsEvidenceReader`(ADR-0034)로 조회한다. 보고서는 아직 목업이다.
-백엔드를 다시 띄우면 Case · 판정 · 인계는 DB에 남지만 목 결제 정보와 보고서는 사라진다. 이때 일부 값만으로 합계를 내거나, 결제 0건 보고서를 성공으로 내보내면 직원이 잘못된 근거로 판정할 수 있다(#113 리뷰).
-금융 조치 인계는 #161부터 목업이 아니라 P5 `PaymentActionRequester` · `PaymentActionResult`(ADR-0027)를 쓴다. P4 보고서 요청 계약(ADR-0009)은 아직 없다. P1 로그인 사용자 조회 공개 경계는 ADR-0020(`identity.api.CurrentStaff`)으로 생겼고, 판정 직원 확인에 쓴다(#160).
+이 API는 P5 결제 정보 · P2 FDS 평가 · P4 보고서를 합쳐 보여 준다. 처음에는 셋 다 P3 목업(`MockPaymentInfoStore` · `MockReportGateway`, 메모리)이었고, #163부터 결제 · FDS는 P5 `PaymentReader`(ADR-0026)와 P2 `FdsEvidenceReader`(ADR-0034)로 조회한다. 보고서는 #250부터 P4 `AiReportService`가 `ai_reports`에 저장한다(ADR-0009). ai-server를 켜지 않으면 같은 자리에서 고정 문장 보고서를 만든다.
+목업이던 때는 백엔드를 다시 띄우면 Case · 판정 · 인계는 DB에 남지만 목 결제 정보와 보고서는 사라졌다(지금은 시연 결제의 목 결제 정보만 사라진다). 이때 일부 값만으로 합계를 내거나, 결제 0건 보고서를 성공으로 내보내면 직원이 잘못된 근거로 판정할 수 있다(#113 리뷰).
+금융 조치 인계는 #161부터 목업이 아니라 P5 `PaymentActionRequester` · `PaymentActionResult`(ADR-0027)를 쓴다. P3 → P4 보고서 요청 · 조회는 P3의 `ReportGateway` 경계를 P4가 구현한다(ADR-0009, #250). P1 로그인 사용자 조회 공개 경계는 ADR-0020(`identity.api.CurrentStaff`)으로 생겼고, 판정 직원 확인에 쓴다(#160).
 
 ## 결정
 
@@ -19,6 +19,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 | 메서드 · 경로 | 용도 |
 | --- | --- |
 | `GET /api/security-cases?merchantId=` | Case 목록 (`merchantId`는 표시 필터, 인가 아님) |
+| `GET /api/security-cases/counts` | 상태별 Case 건수 `{ statusCounts: { OPEN: n, … } }` — 사이드바 처리 필요 배지 (#224) |
 | `GET /api/security-cases/{caseId}` | Case 상세 — 결제 · 보고서 전 버전 · 판정 · 인계 · 이력 |
 | `POST /api/security-cases/{caseId}/decisions` | 결제별 ACCEPT · REJECT 판정, 반영된 상세 반환 |
 | `POST /api/security-cases/{caseId}/reports` | 현재 증거 버전 보고서가 없을 때만 다시 요청, 반영된 상세 반환 |
@@ -33,7 +34,8 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 - 조회 오류(DB 오류 등)는 `null`로 숨기지 않고 그대로 전파한다(500). `null`은 "없음"일 때만 쓴다.
 - `ruleHits`는 `[{ code, name, appliedScore }]`다(#163 이전에는 코드 문자열 목록). 경보 상세 화면과 같은 정보를 보여 준다. 보고서 본문(`reportBody`) 안의 `ruleHits`는 P4 계약 영역이라 코드 문자열 목록 그대로다.
 - 보고서 재요청: 최신 보고서의 `evidenceVersion`이 현재 Case보다 낮거나 보고서가 없을 때만 요청한다. 이미 있으면 새로 만들지 않고, 종료된 Case는 그대로 둔다. 요청은 외부 호출이라 트랜잭션 밖에서 한다.
-- 목 보고서: 연결 결제 정보를 하나라도 찾지 못하거나 금액 · 요청 시각 · 점수 중 하나라도 비면 `SUCCEEDED`가 아니라 `FAILED`(본문 `null`)로 남긴다. 직원은 정본 02 §2.5의 수동 판정(`reportId: null`)으로 간다.
+- 상태별 건수(#224): 모든 `CaseStatus`를 키로 보내고 Case가 없는 상태는 `0`이다. 목록과 같은 보안 직원 확인(401 · 403)을 한다. 화면은 화면 이동 · 탭 복귀 · 판정 · 다시 확인 뒤에만 부른다. 시간 간격으로 부르면 요청마다 세션이 연장되어 무활동 만료(ADR-0014 세션 인증)가 오지 않기 때문이다.
+- 고정 문장 보고서(ai-server를 켜지 않을 때, P4 `FixedReportGenerator`. #250 전에는 P3 목 보고서): 연결 결제 정보를 하나라도 찾지 못하거나 금액 · 요청 시각 · 점수 중 하나라도 비면 `SUCCEEDED`가 아니라 `FAILED`(본문 `null`)로 남긴다. 직원은 정본 02 §2.5의 수동 판정(`reportId: null`)으로 간다.
 - 판정 직원은 요청 본문으로 받지 않는다. 서버가 `CurrentStaff`로 로그인 사용자를 확인해 `staff_id`로 저장한다. 본문에 `staffId`가 있어도 무시한다(#160).
 - 판정은 `SECURITY_STAFF`만 할 수 있다(정본 02 §2.8 · §2.12). 로그인하지 않았으면 `INV_010` 401, 다른 역할(OPERATOR · ADMIN)이면 `INV_009` 403이다. ADMIN 허용이 필요해지면 허용 역할 조건만 바꾼다.
 - Case 목록 · 상세 · 보고서 재요청도 `SECURITY_STAFF`만 쓴다(#163, PR #198 리뷰). 실제 P5 결제 · P2 평가 근거를 내보내므로 HTTP 조회 경계(컨트롤러)에서 같은 401 · 403으로 막는다. 보안 직원은 모든 가맹점 Case를 보므로 가맹점 범위는 검사하지 않고, `merchantId`는 표시 필터다. 사장님 화면은 아래 고객사 조회 API를 따로 쓴다(#205). 시연 API는 실제 데이터를 내보내지 않아 그대로 두고 #163 2단계에서 지운다.
@@ -82,14 +84,14 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 ## 영향
 
 - API: 이 문서의 표. 소비자는 이 저장소 frontend뿐이다. `totalAmount`는 #103의 `long`에서 nullable로 바뀌었다(병합 전 #113에서 변경, 다른 소비자 없음).
-- DB: 없음. 목업 데이터는 메모리이고 `ai_reports`(P4 소유)는 쓰지 않는다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
+- DB: 없음. 목 결제 정보는 메모리다. 보고서는 P4가 `ai_reports`(P4 소유)에 저장하고, P3는 `ReportGateway`로만 조회한다. 이력 종류 `HANDOFF_RECHECKED` · `HANDOFF_COMPLETION_RECORDED`는 `event_type` VARCHAR 값만 추가한다.
 - 화면: 고객사 `/owner/actions` 목록 · 상세가 `src/api/merchantCases.ts`로 고객사 조회 API를 쓴다(#205). `src/api/cases.ts`가 숫자 ID를 문자열로 바꾸고, `null`은 `-`로 표시한다. 현재 버전 보고서가 없으면 "AI 보고서 다시 요청" 버튼을 보인다. 인계가 `REQUESTED`면 "금융 처리 대기 중"과 "다시 확인" 버튼, `FAILED`면 거절 코드 문구를 보이고, 이력에 실제 완료 시각을 표시한다.
 - 테스트: `CaseFlowTests`(목록 `null` 합계 · 최고 점수, 재요청 1회 · FAILED, 시연 결제의 목 조회 · 목 금융 조치 처리 대기 → 다시 확인 → 종료), `MockFinancialActionGatewayTests`(처리 중 · 완료 · 결제 상태 · 멱등), `HandoffReceiptTests`(결과 이벤트 · 다시 확인), `PaymentActionFlowTests`(실제 P5 · P6 연결), `PaymentFdsInfoReaderTests`(한쪽만 있음 · ERROR · 시연/실제 혼합 · 조회 오류), `PaymentFdsInfoFlowTests`(실제 P5 결제 · P2 평가), `MerchantCaseFlowTests`(고객사 조회 가맹점 범위 · 권한 · 제외 항목 · 직접 조사 표시).
-- 문서: P4 보고서 계약이 정해지면 보고서 재요청과 FAILED 의미를 그 계약에 맞춰 이 ADR을 개정한다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
+- 문서: 보고서 재요청과 FAILED 의미는 P4 구현(#250 · #253) 뒤에도 위 결정과 같다. 보고서 생성 · 재시도 세부는 ADR-0009를 본다. `staffId` 요청값은 #160에서 없앴다. 시연 `merchantId: 1` 가정은 #163에서 없앤다.
 
 ## 검증
 
 - `./gradlew spotlessApply check mariaDbTest` — PR #113 커밋 기준 결과는 PR 본문 "테스트 결과"에 적는다
 - `npm run lint && npm run format:check && npm run build` — 같음
-- 미검증: Case API는 역할만 확인하고 가맹점 범위는 확인하지 않는다(보안 직원 전용이라 필요 없음). 전체 API 접근 제어(`SecurityConfig`)는 P1 EPIC #68 범위다. P4 실제 연동 전이라 보고서는 목업 기준으로만 확인. P5 · P2 실제 조회는 테스트에서 P5 결제를 저장소에 직접 만들어 확인했다(P5 결제 입구 #151이 꺼져 있음). P2 평가 값은 룰 설정에 따라 달라서 P2 조회 결과와 같은지만 확인했다
+- 미검증: Case API는 역할만 확인하고 가맹점 범위는 확인하지 않는다(보안 직원 전용이라 필요 없음). 전체 API 접근 제어(`SecurityConfig`)는 P1 EPIC #68 범위다. 보고서는 이 ADR 작성 당시 목업 기준으로 확인했고, P4 실제 연동(#250 · #253)의 검증은 그 PR들을 따른다. P5 · P2 실제 조회는 테스트에서 P5 결제를 저장소에 직접 만들어 확인했다(P5 결제 입구 #151이 꺼져 있음). P2 평가 값은 룰 설정에 따라 달라서 P2 조회 결과와 같은지만 확인했다
 - #160: 판정 권한 테스트는 `CurrentStaff`를 대역으로 바꿔 확인했다. 실제 로그인 세션 → `CurrentStaff` 연결은 P1 테스트(ADR-0020)를 따른다
