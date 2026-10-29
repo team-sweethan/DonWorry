@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import dayjs from 'dayjs'
 import { test } from 'node:test'
 import {
   calculatePreviewCashFlow,
@@ -15,6 +16,12 @@ import {
 } from '../src/pages/owner/financePreviewState.ts'
 import type { PreviewState } from '../src/pages/owner/financePreviewState.ts'
 const today = '2026-10-29'
+
+test('calendarToday_whenOutsideSelectedPeriod_isNotAnAllowedTarget', () => {
+  assert.equal(dateInPeriod(today, '2028-01-01', '2028-01-31'), false)
+  assert.equal(dateInPeriod(today, today, today), true)
+  assert.equal(dateInPeriod(today, '2026-09-01', '2026-09-30'), false)
+})
 const initialized = (): PreviewState =>
   setInitialBalance({ ...createPreviewState(today), expenses: [] }, 500000)
 
@@ -83,6 +90,73 @@ test('expenseManagement_whenForecastIsShort_keepsDistantRegisteredExpense', () =
   }
   const rows = expenseRows(state, previewExpenseHorizon(state, today, '2026-11-04'))
   assert.equal(rows.find((row) => row.expenseId === 99)?.date, '2029-05-20')
+})
+
+test('forecast_whenYear9999Requested_countsEarlierDailyCostsWithoutExpandingThem', () => {
+  const state: PreviewState = {
+    ...initialized(),
+    recurring: [
+      {
+        recurringExpenseId: 999,
+        title: '매일 비용',
+        memo: null,
+        amount: 10,
+        category: 'OTHER',
+        frequency: 'DAILY',
+        startDate: today,
+        endDate: null,
+        stoppedFrom: null,
+      },
+    ],
+    expenses: [
+      {
+        id: 999,
+        title: '먼 미래 지출',
+        amount: 100,
+        category: 'OTHER',
+        memo: '',
+        date: '9999-12-31',
+        paidAt: null,
+      },
+    ],
+  }
+  const result = calculatePreviewCashFlow(state, today, '9999-12-31', '9999-12-31')
+  assert.equal(result.calculationError, null)
+  assert.equal(result.days.length, 1)
+  assert.equal(result.rows.filter((row) => row.kind === 'RECURRING').length, 1)
+  const earlierDays = dayjs('9999-12-31').diff(dayjs(today), 'day')
+  const earlierIncome = calculatePreviewCashFlow(
+    state,
+    today,
+    today,
+    '2026-12-31',
+  ).projected.reduce((sum, entry) => sum + entry.amount, 0)
+  assert.equal(result.days[0].opening, result.currentBalance + earlierIncome - earlierDays * 10)
+  assert.equal(result.days[0].closing, result.days[0].opening - 110)
+  assert.ok(expenseRows(state, previewExpenseHorizon(state, today, '9999-12-31')).length <= 368)
+})
+
+test('forecast_whenAggregateExceedsSafeInteger_returnsErrorInsteadOfRoundedLoanAmount', () => {
+  const state: PreviewState = {
+    ...initialized(),
+    recurring: [
+      {
+        recurringExpenseId: 100,
+        title: '큰 지출',
+        memo: null,
+        amount: Number.MAX_SAFE_INTEGER,
+        category: 'OTHER',
+        frequency: 'DAILY',
+        startDate: today,
+        endDate: null,
+        stoppedFrom: null,
+      },
+    ],
+  }
+  const result = calculatePreviewCashFlow(state, today, today, '2026-10-30')
+  assert.ok(result.calculationError)
+  assert.equal(result.valid, false)
+  assert.deepEqual(result.days, [])
 })
 
 test('initialBalance_whenSaved_locksAmountAndKeepsFirstDate', () => {

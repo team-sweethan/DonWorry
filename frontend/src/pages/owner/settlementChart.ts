@@ -36,7 +36,9 @@ export function settlementDays(
   )
     return []
   const grouped = new Map<string, SettlementDay>()
-  for (let d = dayjs(from); d.format('YYYY-MM-DD') <= to; d = d.add(1, 'day')) {
+  const dayCount = dayjs(to).diff(dayjs(from), 'day') + 1
+  for (let index = 0; index < dayCount; index++) {
+    const d = dayjs(from).add(index, 'day')
     const date = d.format('YYYY-MM-DD')
     grouped.set(date, { date, completedAmount: 0, scheduledAmount: 0, expectedAmount: 0 })
   }

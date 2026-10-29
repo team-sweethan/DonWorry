@@ -382,6 +382,12 @@ export function SettlementPrototype({
                   ›
                 </button>
                 <button
+                  disabled={!dateInPeriod(dateInput(today), rangeStart, rangeEnd)}
+                  title={
+                    dateInPeriod(dateInput(today), rangeStart, rangeEnd)
+                      ? '오늘 보기'
+                      : '오늘은 조회 기간 밖입니다.'
+                  }
                   onClick={() => {
                     setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
                     setSelected(today)

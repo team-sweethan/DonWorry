@@ -2,6 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { settlementDays, settlementSeries } from '../src/pages/owner/settlementChart.ts'
 
+test('settlementChart_whenAtLastFourDigitYear_stopsAtSelectedEnd', () => {
+  assert.deepEqual(
+    settlementDays('9999-12-31', '9999-12-31', []).map((day) => day.date),
+    ['9999-12-31'],
+  )
+})
+
 // 날짜별 금액을 누적하지 않고 빈 날짜는 0으로 채운다.
 test('settlementChart_whenDailyAmounts_doesNotAccumulateAndFillsMissingDays', () => {
   const days = settlementDays('2026-10-25', '2026-10-28', [

@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
 import type { RecurringExpense } from './financePreviewTypes.ts'
-import { expandRecurring } from './recurringExpenses.ts'
+import { expandRecurring, recurringTotal } from './recurringExpenses.ts'
 import { previewSettlements } from './settlementPreviewData.ts'
 
 export type PreviewExpense = {
@@ -39,12 +39,8 @@ export function validPreviewPeriod(from: string, to: string) {
 }
 export const dateInPeriod = (date: string, from: string, to: string) =>
   validPreviewPeriod(from, to) && date >= from && date <= to
-export function previewExpenseHorizon(state: PreviewState, today: string, ...ends: string[]) {
-  return [
-    dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
-    ...ends,
-    ...state.expenses.map((e) => e.date),
-  ]
+export function previewExpenseHorizon(_state: PreviewState, today: string, ...ends: string[]) {
+  return [dayjs(today).add(365, 'day').format('YYYY-MM-DD'), ...ends]
     .filter((date) => validPreviewPeriod(date, date))
     .sort()
     .at(-1)!
@@ -114,7 +110,9 @@ export function setInitialBalance(state: PreviewState, amount: number): PreviewS
     throw new Error('시작 잔액은 0 이상의 정수로 입력해 주세요.')
   return { ...state, opening: amount }
 }
-export function expenseRows(state: PreviewState, through: string): ExpenseRow[] {
+export function expenseRows(state: PreviewState, through: string, from?: string): ExpenseRow[] {
+  const windowStart = from ?? dayjs(through).subtract(365, 'day').format('YYYY-MM-DD')
+  const start = windowStart > state.base ? windowStart : state.base
   const single: ExpenseRow[] = state.expenses.map((e) => ({
     key: `oneoff-${e.id}`,
     date: e.paidAt ?? e.date,
@@ -127,7 +125,7 @@ export function expenseRows(state: PreviewState, through: string): ExpenseRow[] 
     kind: 'ONEOFF',
     expenseId: e.id,
   }))
-  const rules: ExpenseRow[] = expandRecurring(state.recurring, state.base, through)
+  const rules: ExpenseRow[] = expandRecurring(state.recurring, start, through)
     .map<ExpenseRow>((e) => ({
       key: `rule-${e.recurringExpenseId}-${e.expenseDate}`,
       date: e.expenseDate,
@@ -161,13 +159,18 @@ export function completePreviewExpense(
     paidRecurring: { ...state.paidRecurring, [row.key]: { ...row, date: today, paidAt: today } },
   }
 }
-export function calculatePreviewCashFlow(
-  state: PreviewState,
-  today: string,
-  from: string,
-  to: string,
-) {
-  const rows = expenseRows(state, to > today ? to : today)
+const safeMoney = (value: bigint): number => {
+  const result = Number(value)
+  if (!Number.isSafeInteger(result))
+    throw new RangeError('금액 합계가 안전한 정수 범위를 초과했습니다.')
+  return result
+}
+const moneyTotal = (values: number[]) =>
+  safeMoney(values.reduce((sum, value) => sum + BigInt(value), 0n))
+function calculateCashFlow(state: PreviewState, today: string, from: string, to: string) {
+  const valid = state.opening !== null && from >= today && validPreviewPeriod(from, to)
+  const rows = expenseRows(state, valid ? to : today, valid ? from : today)
+  const history = expenseRows(state, today)
   const entries = previewSettlements(new Date(today + 'T12:00:00'))
   const inflows = entries
     .filter((e) => e.status !== 'can')
@@ -177,36 +180,67 @@ export function calculatePreviewCashFlow(
       status: e.status,
       amount: e.gross - Math.floor(e.gross * 0.015) * 2,
     }))
-  const completedIncome = inflows
-    .filter((e) => e.status === 'done' && e.date >= state.base && e.date <= today)
-    .reduce((n, e) => n + e.amount, 0)
-  const paidExpenses = rows
-    .filter((e) => e.paidAt && e.paidAt >= state.base && e.paidAt <= today)
-    .reduce((n, e) => n + e.amount, 0)
-  const currentBalance = (state.opening ?? 0) + completedIncome - paidExpenses
-  const overdue = rows.filter((e) => !e.paidAt && e.plannedDate < today)
+  const completedIncome = moneyTotal(
+    inflows
+      .filter((e) => e.status === 'done' && e.date >= state.base && e.date <= today)
+      .map((e) => e.amount),
+  )
+  const paidExpenses = moneyTotal(
+    rows
+      .filter((e) => e.paidAt && e.paidAt >= state.base && e.paidAt <= today)
+      .map((e) => e.amount),
+  )
+  const currentBalance = moneyTotal([state.opening ?? 0, completedIncome, -paidExpenses])
+  const overdue = history.filter((e) => !e.paidAt && e.plannedDate < today)
   const pending = rows.filter((e) => !e.paidAt && e.plannedDate >= today)
   const projected = inflows.filter((e) => e.status !== 'done' && e.date >= today)
-  const valid = state.opening !== null && from >= today && validPreviewPeriod(from, to)
   let balance = currentBalance
   const days = []
-  if (valid)
-    for (let d = dayjs(today); d.format('YYYY-MM-DD') <= to; d = d.add(1, 'day')) {
+  if (valid) {
+    const beforeEnd = dayjs(from).subtract(1, 'day').format('YYYY-MM-DD')
+    const before = (date: string) => date >= today && date < from
+    const paidBefore = Object.values(state.paidRecurring).filter((e) => {
+      const rule = state.recurring.find(
+        (r) => `rule-${r.recurringExpenseId}-${e.plannedDate}` === e.key,
+      )
+      return (
+        before(e.plannedDate) &&
+        rule &&
+        expandRecurring([rule], e.plannedDate, e.plannedDate).length > 0
+      )
+    })
+    balance = safeMoney(
+      BigInt(currentBalance) +
+        BigInt(moneyTotal(projected.filter((e) => before(e.date)).map((e) => e.amount))) -
+        BigInt(
+          moneyTotal(
+            state.expenses.filter((e) => !e.paidAt && before(e.date)).map((e) => e.amount),
+          ),
+        ) -
+        recurringTotal(state.recurring, today, beforeEnd) +
+        BigInt(moneyTotal(paidBefore.map((e) => e.amount))),
+    )
+    const dayCount = dayjs(to).diff(dayjs(from), 'day') + 1
+    for (let index = 0; index < dayCount; index++) {
+      const d = dayjs(from).add(index, 'day')
       const date = d.format('YYYY-MM-DD'),
         opening = balance
-      const scheduled = projected
-        .filter((e) => e.date === date && e.status === 'sch')
-        .reduce((n, e) => n + e.amount, 0)
-      const expected = projected
-        .filter((e) => e.date === date && e.status === 'exp')
-        .reduce((n, e) => n + e.amount, 0)
-      const expenses = pending
-        .filter((e) => e.plannedDate === date)
-        .reduce((n, e) => n + e.amount, 0)
-      balance += scheduled + expected - expenses
+      const scheduled = moneyTotal(
+        projected.filter((e) => e.date === date && e.status === 'sch').map((e) => e.amount),
+      )
+      const expected = moneyTotal(
+        projected.filter((e) => e.date === date && e.status === 'exp').map((e) => e.amount),
+      )
+      const expenses = moneyTotal(
+        pending.filter((e) => e.plannedDate === date).map((e) => e.amount),
+      )
+      balance = moneyTotal([balance, scheduled, expected, -expenses])
       if (date >= from)
         days.push({ date, opening, completed: 0, scheduled, expected, expenses, closing: balance })
     }
+    moneyTotal(days.map((d) => d.expenses))
+    moneyTotal(days.map((d) => d.scheduled + d.expected))
+  }
   return {
     days,
     rows,
@@ -217,6 +251,24 @@ export function calculatePreviewCashFlow(
     completedIncome,
     paidExpenses,
     valid,
+  }
+}
+export function calculatePreviewCashFlow(
+  state: PreviewState,
+  today: string,
+  from: string,
+  to: string,
+) {
+  try {
+    return { ...calculateCashFlow(state, today, from, to), calculationError: null }
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    const empty = { ...state, opening: null, expenses: [], recurring: [], paidRecurring: {} }
+    return {
+      ...calculateCashFlow(empty, today, today, today),
+      calculationError:
+        '금액 합계가 정확하게 표시할 수 있는 범위를 초과했습니다. 금액이나 조회 기간을 줄여 주세요.',
+    }
   }
 }
 export type PreviewStore = ReturnType<typeof createPreviewStore>

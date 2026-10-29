@@ -8,6 +8,7 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { SettlementPrototype } from './SettlementPrototype'
 import { CashFlowOverview } from './CashFlowOverview'
 import { RecurringExpensePanel } from './RecurringExpensePanel'
+import { MAX_PREVIEW_EXPENSE } from './recurringExpenses'
 import {
   calculatePreviewCashFlow,
   completePreviewExpense,
@@ -16,6 +17,7 @@ import {
   normalizeFinancePath,
   setInitialBalance,
   previewExpenseHorizon,
+  validPreviewPeriod,
 } from './financePreviewState'
 import type { ExpenseRow, PreviewExpense } from './financePreviewState'
 import './finance-preview.css'
@@ -53,7 +55,8 @@ export function FinancePreview() {
   )
   const calendarExpenses = expenseRows(
     state,
-    previewExpenseHorizon(state, today, calendarPeriod.to),
+    validPreviewPeriod(calendarPeriod.from, calendarPeriod.to) ? calendarPeriod.to : today,
+    validPreviewPeriod(calendarPeriod.from, calendarPeriod.to) ? calendarPeriod.from : today,
   ).map((e) => ({
     id: e.key,
     date: e.date,
@@ -105,9 +108,10 @@ export function FinancePreview() {
       !draft.date ||
       draft.date < state.base ||
       !Number.isSafeInteger(draft.amount) ||
-      draft.amount <= 0
+      draft.amount <= 0 ||
+      draft.amount > MAX_PREVIEW_EXPENSE
     ) {
-      setError('항목명·기준일 이후 날짜·양의 정수 금액을 확인해 주세요.')
+      setError('항목명·기준일 이후 날짜·1원~10억 원의 정수 금액을 확인해 주세요.')
       return
     }
     store.update((previous) => ({
@@ -190,6 +194,18 @@ export function FinancePreview() {
                 최초 잔액 저장
               </Button>
             </section>
+          ) : result.calculationError ? (
+            <Alert
+              type="error"
+              showIcon
+              message={result.calculationError}
+              action={
+                <div>
+                  <Button onClick={() => preset(7)}>조회 기간 초기화</Button>
+                  <Button onClick={() => manage('expenses')}>지출 설정 확인</Button>
+                </div>
+              }
+            />
           ) : (
             <>
               <div className="finance-current-balance">
@@ -315,7 +331,13 @@ export function FinancePreview() {
             ) : manageTab === 'recurring' ? (
               <RecurringExpensePanel
                 rules={state.recurring}
-                onCreate={async (input) =>
+                onCreate={async (input) => {
+                  if (
+                    !Number.isSafeInteger(input.amount) ||
+                    input.amount <= 0 ||
+                    input.amount > MAX_PREVIEW_EXPENSE
+                  )
+                    throw new Error('정기 지출은 1원~10억 원의 정수로 입력해 주세요.')
                   store.update((previous) => ({
                     ...previous,
                     recurring: [
@@ -323,7 +345,7 @@ export function FinancePreview() {
                       { ...input, recurringExpenseId: Date.now(), stoppedFrom: null },
                     ],
                   }))
-                }
+                }}
                 onStop={async (id) =>
                   store.update((previous) => ({
                     ...previous,
@@ -361,7 +383,12 @@ export function FinancePreview() {
                   예정 지출은 예측에만 반영합니다. 실제 지급했다면 ‘지출 완료’를 눌러 오늘의 실제
                   차감을 기록하세요. 완료 기록은 수정·삭제하지 않습니다. 일회성 지출은 예측 조회
                   기간과 무관하게 모두 표시합니다. 정기 지출 회차는
-                  {previewExpenseHorizon(state, today, end, calendarPeriod.to)}까지 표시합니다.
+                  {dayjs(previewExpenseHorizon(state, today, end, calendarPeriod.to))
+                    .subtract(365, 'day')
+                    .format('YYYY-MM-DD')}
+                  부터
+                  {previewExpenseHorizon(state, today, end, calendarPeriod.to)}까지 최대 366일을
+                  표시합니다.
                 </p>
                 <Select
                   aria-label="지출 상태 필터"
@@ -545,7 +572,7 @@ export function FinancePreview() {
               금액 (원)
               <InputNumber
                 min={1}
-                max={1000000000000}
+                max={MAX_PREVIEW_EXPENSE}
                 precision={0}
                 value={draft.amount}
                 onChange={(amount) => setDraft({ ...draft, amount: amount ?? 0 })}

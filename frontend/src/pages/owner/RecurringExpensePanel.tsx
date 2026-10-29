@@ -15,6 +15,7 @@ import {
 } from 'antd'
 import dayjs from 'dayjs'
 import type { RecurringExpense, RecurringExpenseInput } from './financePreviewTypes'
+import { MAX_PREVIEW_EXPENSE } from './recurringExpenses'
 
 export function RecurringExpensePanel({
   rules,
@@ -161,8 +162,12 @@ export function RecurringExpensePanel({
                 ]}
               />
             </Form.Item>
-            <Form.Item name="amount" label="금액 (원)" rules={[{ required: true }]}>
-              <InputNumber min={1} max={Number.MAX_SAFE_INTEGER} precision={0} />
+            <Form.Item
+              name="amount"
+              label="금액 (원, 최대 10억)"
+              rules={[{ required: true }, { type: 'integer', min: 1, max: MAX_PREVIEW_EXPENSE }]}
+            >
+              <InputNumber min={1} max={MAX_PREVIEW_EXPENSE} precision={0} />
             </Form.Item>
           </Space>
           <Form.Item
