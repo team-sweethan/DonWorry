@@ -1,35 +1,17 @@
-import type { SettlementPreviewEntry } from './financePreviewTypes'
+import { previewSettlements, mockOrderItems } from './settlementPreviewData'
+import type { PreviewOrderEntry, OrderProduct } from './settlementPreviewData'
+import { validPreviewPeriod, dateInPeriod } from './financePreviewState'
 import { SettlementLineChart } from './FinanceCharts'
 import { settlementDays } from './settlementChart'
 import { useState, useRef, useEffect } from 'react'
+import dayjs from 'dayjs'
 import { Alert, Button, Input, Modal, Pagination, Select } from 'antd'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../../components/common/PageHeader'
 import './settlement-prototype.css'
 
 type Status = 'done' | 'sch' | 'exp' | 'can'
-type OrderProduct = { productName: string; quantity: number }
-// 주문 상품은 현재 목 화면 전용이며 실제 API 응답 계약에는 추가하지 않는다.
-type Entry = SettlementPreviewEntry & { orderItems?: OrderProduct[] }
-const mockOrderItems: OrderProduct[][] = [
-  [{ productName: '딸기 생크림 케이크 2호', quantity: 1 }],
-  [
-    { productName: '초코 케이크 1호', quantity: 2 },
-    { productName: '레터링 케이크', quantity: 1 },
-  ],
-  [
-    { productName: '딸기 생크림 케이크 2호', quantity: 2 },
-    { productName: '초코 케이크 1호', quantity: 1 },
-    { productName: '레터링 케이크', quantity: 1 },
-  ],
-  [
-    { productName: '생크림 케이크 3호', quantity: 1 },
-    { productName: '과일 타르트', quantity: 2 },
-    { productName: '미니 치즈 케이크', quantity: 3 },
-    { productName: '초코 케이크 1호', quantity: 1 },
-    { productName: '레터링 케이크', quantity: 1 },
-  ],
-]
+type Entry = PreviewOrderEntry
 const orderSummary = (items: OrderProduct[]) =>
   items[0].productName + (items.length > 1 ? ' 외 ' + (items.length - 1) + '종' : '')
 const orderQuantity = (items: OrderProduct[]) =>
@@ -50,36 +32,10 @@ const stamp = (d: Date | null) =>
 const cardFee = (e: Entry) => e.cardFeeAmount ?? Math.floor(e.gross * 0.015)
 const pgFee = (e: Entry) => e.pgFeeAmount ?? Math.floor(e.gross * 0.015)
 const net = (e: Entry) => e.settlementAmount ?? e.gross - cardFee(e) - pgFee(e)
+const dayLimit = (from: string) =>
+  dayjs(from).isValid() ? dayjs(from).add(365, 'day').format('YYYY-MM-DD') : undefined
 const dateInput = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-
-// 원본 HTML의 시연 데이터다. 실제 정산 API와 수수료 정책에 사용하지 않는다.
-function samples(now: Date): Entry[] {
-  const items: [number, number, Status][] = [
-    [32000, -14, 'done'],
-    [64000, -11, 'done'],
-    [280000, -8, 'done'],
-    [38000, -6, 'done'],
-    [32000, -5, 'done'],
-    [120000, -4, 'sch'],
-    [32000, -3, 'sch'],
-    [250000, -2, 'sch'],
-    [29000, -1, 'sch'],
-    [45000, 1, 'exp'],
-    [250000, 3, 'exp'],
-    [58000, 5, 'exp'],
-    [120000, 9, 'exp'],
-  ]
-  return items.map(([gross, offset, status], i) => ({
-    id: `CS-${now.getFullYear()}-${String(i + 1).padStart(4, '0')}`,
-    item: '주문번호 기준 정산',
-    orderItems: mockOrderItems[i % mockOrderItems.length],
-    gross,
-    status,
-    pickup: new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 15, 20),
-    date: new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset + 3, 15, 20),
-  }))
-}
 
 type CalendarExpense = { id: string; date: string; title: string; amount: number; note?: string }
 export function SettlementPrototype({
@@ -96,7 +52,7 @@ export function SettlementPrototype({
   headerActions?: React.ReactNode
 }) {
   const [today] = useState(() => new Date())
-  const [entries] = useState(() => samples(today))
+  const [entries] = useState(() => previewSettlements(today))
   const [month, setMonth] = useState(() =>
     period
       ? new Date(period.from + 'T00:00:00')
@@ -149,9 +105,16 @@ export function SettlementPrototype({
     setPage(1)
     setView('list')
   }
-  const inPeriod = data.filter(
-    (e) => dateInput(e.date) >= rangeStart && dateInput(e.date) <= rangeEnd,
-  )
+  const validPeriod = validPreviewPeriod(rangeStart, rangeEnd)
+  const selectedDate = dateInPeriod(dateInput(selected), rangeStart, rangeEnd)
+    ? selected
+    : validPeriod
+      ? new Date(rangeStart + 'T12:00:00')
+      : selected
+  const scopedExpenses = validPeriod
+    ? expenses.filter((e) => dateInPeriod(e.date, rangeStart, rangeEnd))
+    : []
+  const inPeriod = data.filter((e) => dateInPeriod(dateInput(e.date), rangeStart, rangeEnd))
   const byStatus = (s: Status) => inPeriod.filter((e) => e.status === s)
   const monthDone = data.filter(
     (e) =>
@@ -182,15 +145,15 @@ export function SettlementPrototype({
     { length: 42 },
     (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
   )
-  const daily = data.filter((e) => key(e.date) === key(selected))
-  const dailyExpenses = expenses.filter((e) => e.date === dateInput(selected))
-  const expenseRows = expenses
+  const daily = inPeriod.filter((e) => key(e.date) === key(selectedDate))
+  const dailyExpenses = scopedExpenses.filter((e) => e.date === dateInput(selectedDate))
+  const expenseRows = scopedExpenses
     .filter((e) =>
-      dateOnly ? e.date === dateInput(selected) : e.date >= rangeStart && e.date <= rangeEnd,
+      dateOnly ? e.date === dateInput(selectedDate) : e.date >= rangeStart && e.date <= rangeEnd,
     )
     .filter((e) => e.title.toLowerCase().includes(query.trim().toLowerCase()))
     .toSorted((a, b) => b.date.localeCompare(a.date))
-  const pickups = data.filter((e) => e.pickup !== null && key(e.pickup) === key(selected))
+  const pickups = inPeriod.filter((e) => e.pickup !== null && key(e.pickup) === key(selectedDate))
   const scope = dateOnly ? daily : inPeriod
   const rows = scope
     .filter((e) => filter === 'all' || e.status === filter)
@@ -213,7 +176,7 @@ export function SettlementPrototype({
     <div className="stl-prototype">
       <PageHeader
         title="정산 현황"
-        description="언제 얼마가 정산되는지 날짜별로 확인합니다. 정산 완료는 실제 입금이 아니라 정산금 확정입니다."
+        description="언제 얼마가 정산되는지 날짜별로 확인합니다. 이 시연에서는 정산 완료를 입금된 것으로 간주합니다."
         actions={
           <div className="finance-header-actions">
             {headerActions}
@@ -246,6 +209,7 @@ export function SettlementPrototype({
             <input
               type="date"
               value={rangeStart}
+              max={rangeEnd}
               onChange={(e) => {
                 setRangeStart(e.target.value)
                 setPage(1)
@@ -259,6 +223,7 @@ export function SettlementPrototype({
               type="date"
               value={rangeEnd}
               min={rangeStart}
+              max={dayLimit(rangeStart)}
               onChange={(e) => {
                 setRangeEnd(e.target.value)
                 setPage(1)
@@ -276,8 +241,11 @@ export function SettlementPrototype({
           </Button>
         </div>
       )}
-      {rangeStart > rangeEnd && (
-        <Alert type="warning" message="종료일은 시작일 이후로 선택해 주세요." />
+      {!validPeriod && (
+        <Alert
+          type="warning"
+          message="올바른 날짜로 최대 366일의 조회 기간을 선택해 주세요. 기간 밖의 정산·지출은 표시하지 않습니다."
+        />
       )}
       {preview && (
         <div className="stl-demo-tools">
@@ -404,15 +372,15 @@ export function SettlementPrototype({
               {days.map((d) => (
                 <button
                   key={key(d)}
-                  disabled={!preview && (dateInput(d) < rangeStart || dateInput(d) > rangeEnd)}
+                  disabled={!dateInPeriod(dateInput(d), rangeStart, rangeEnd)}
                   aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일`}
-                  aria-pressed={key(d) === key(selected)}
+                  aria-pressed={key(d) === key(selectedDate)}
                   onClick={() => setSelected(d)}
                   className={`stl-day ${d.getMonth() !== month.getMonth() ? 'stl-out' : ''} ${key(d) === key(today) ? 'stl-today' : ''}`}
                 >
                   <span className={`stl-day-number stl-week-${d.getDay()}`}>{d.getDate()}</span>
                   {(Object.keys(labels) as Status[]).map((s) => {
-                    const es = data.filter((e) => e.status === s && key(e.date) === key(d))
+                    const es = inPeriod.filter((e) => e.status === s && key(e.date) === key(d))
                     return (
                       es.length > 0 && (
                         <span key={s} className={`stl-chip stl-${s}`}>
@@ -421,19 +389,20 @@ export function SettlementPrototype({
                       )
                     )
                   })}
-                  {expenses.some((e) => e.date === dateInput(d)) && (
+                  {scopedExpenses.some((e) => e.date === dateInput(d)) && (
                     <span className="stl-chip stl-expense">
                       지출 −
-                      {expenses
+                      {scopedExpenses
                         .filter((e) => e.date === dateInput(d))
                         .reduce((n, e) => n + e.amount, 0)
                         .toLocaleString('ko-KR')}
                     </span>
                   )}
-                  {data.some((e) => e.pickup !== null && key(e.pickup) === key(d)) && (
+                  {inPeriod.some((e) => e.pickup !== null && key(e.pickup) === key(d)) && (
                     <span className="stl-chip stl-pick">
                       픽업{' '}
-                      {data.filter((e) => e.pickup !== null && key(e.pickup) === key(d)).length}건
+                      {inPeriod.filter((e) => e.pickup !== null && key(e.pickup) === key(d)).length}
+                      건
                     </span>
                   )}
                 </button>
@@ -442,8 +411,8 @@ export function SettlementPrototype({
           </section>
           <section className="stl-panel stl-detail">
             <h2>
-              {selected.getMonth() + 1}월 {selected.getDate()}일 ({weekdays[selected.getDay()]})
-              <small>정산 {daily.length}건</small>
+              {selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 (
+              {weekdays[selectedDate.getDay()]})<small>정산 {daily.length}건</small>
             </h2>
             {daily.length > 0 && (
               <div className="stl-total">
@@ -534,7 +503,7 @@ export function SettlementPrototype({
                 : '전체 정산·지출 내역'}
             </h2>
             <p>
-              {dateOnly ? dateInput(selected) : rangeStart + ' ~ ' + rangeEnd} · 정산금과 예정
+              {dateOnly ? dateInput(selectedDate) : rangeStart + ' ~ ' + rangeEnd} · 정산금과 예정
               지출을 나누어 확인하세요.
             </p>
             <div className="stl-report-summary">

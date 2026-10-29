@@ -388,3 +388,48 @@
   color: #64748b;
   font-size: 12px;
 }
+
+.finance-opening-setup {
+  margin-top: 20px;
+  max-width: 760px;
+}
+.finance-current-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  margin: 20px 0;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+}
+.finance-current-balance small {
+  display: block;
+  color: #475569;
+  font-size: 13px;
+}
+.finance-current-balance strong {
+  display: block;
+  font-size: 30px;
+  margin: 8px 0;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.finance-current-balance p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.finance-table td small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.finance-table td .ant-btn + .ant-btn {
+  margin-left: 6px;
+}

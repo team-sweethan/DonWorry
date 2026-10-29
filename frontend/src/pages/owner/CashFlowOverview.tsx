@@ -54,11 +54,13 @@ export function CashFlowOverview({
   onManage,
   onDetails,
   preview = false,
+  currentBalance,
 }: {
   days: ForecastDayView[]
   incomes: ForecastSource[]
   costs: ForecastSource[]
   preview?: boolean
+  currentBalance?: number
   onManage: () => void
   onDetails: (date: string) => void
 }) {
@@ -101,11 +103,19 @@ export function CashFlowOverview({
       </div>
       <div className="cashflow-summary-grid">
         {[
-          ['기간 시작 잔액', days[0].opening, '직접 설정한 잔액을 기준으로 계산'],
+          [
+            currentBalance === undefined ? '기간 시작 잔액' : '오늘 계산 잔액',
+            currentBalance ?? days[0].opening,
+            currentBalance === undefined
+              ? '직접 설정한 잔액을 기준으로 계산'
+              : '시작 잔액 + 입금 간주 정산 완료 − 실제 지출 완료',
+          ],
           [
             '기간 내 정산 유입',
             days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
-            '정산 완료 · 예정 · 픽업 전 예상 포함',
+            currentBalance === undefined
+              ? '정산 완료 · 예정 · 픽업 전 예상 포함'
+              : '예정 · 픽업 전 예상만 포함 · 완료액은 오늘 잔액에 반영됨',
           ],
           [
             '기간 내 예정 지출',
