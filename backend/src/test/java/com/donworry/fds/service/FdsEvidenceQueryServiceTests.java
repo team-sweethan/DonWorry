@@ -48,6 +48,35 @@ class FdsEvidenceQueryServiceTests {
         });
     }
 
+    // 적중 룰에는 평가 당시 저장한 기준값 · 실제값 JSON 원본이 그대로 실린다 (#326)
+    @Test
+    void findLatestByPaymentIds_matchedRule_includesThresholdAndObserved() {
+        var review = evaluation(102L, FdsResult.REVIEW, Instant.parse("2026-10-26T01:00:00Z"));
+        review.addRuleHit(
+                "R01",
+                FdsRuleHitOutcome.MATCH,
+                30,
+                "고액 결제",
+                "{\"amountGte\":500000,\"score\":30}",
+                "{\"amount\":600000}",
+                null,
+                null);
+        var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
+                .willReturn(List.of(review));
+
+        var result = queryService.findLatestByPaymentIds(List.of(102L));
+
+        assertThat(result)
+                .singleElement()
+                .satisfies(evidence -> assertThat(evidence.matchedRules())
+                        .singleElement()
+                        .satisfies(rule -> {
+                            assertThat(rule.thresholdSnapshot()).isEqualTo("{\"amountGte\":500000,\"score\":30}");
+                            assertThat(rule.observedValue()).isEqualTo("{\"amount\":600000}");
+                        }));
+    }
+
     // 정상 판정이 전혀 없으면 최신 ERROR를 반환해 평가 이력 없음과 구분한다.
     @Test
     void findLatestByPaymentIds_whenOnlyErrors_returnsLatestError() {

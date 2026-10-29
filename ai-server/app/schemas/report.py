@@ -17,6 +17,9 @@ class RuleHitDetail(BaseModel):
     name: str
     appliedScore: int | None
     evidenceId: str
+    # 기준 · 실제 문장 (#326) — Tool 응답 값 그대로, AI 문장이 아니다
+    criterion: str | None = None
+    observed: str | None = None
 
 
 class Overview(BaseModel):

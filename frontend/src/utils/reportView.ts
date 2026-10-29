@@ -50,6 +50,8 @@ export type RuleEvidenceRow = {
   name: string
   appliedScore: number | null
   evidenceId: string | null
+  criterion: string | null
+  observed: string | null
 }
 
 // 위험 근거의 규칙 줄. ruleHitDetails(FDS 조회 기록)가 없는 예전 보고서는 규칙 이름만 보여 준다
@@ -59,9 +61,17 @@ export function ruleEvidenceRows(analysis: PaymentAnalysis): RuleEvidenceRow[] {
       name: d.name,
       appliedScore: d.appliedScore,
       evidenceId: d.evidenceId,
+      criterion: d.criterion ?? null,
+      observed: d.observed ?? null,
     }))
   }
-  return analysis.ruleHits.map((name) => ({ name, appliedScore: null, evidenceId: null }))
+  return analysis.ruleHits.map((name) => ({
+    name,
+    appliedScore: null,
+    evidenceId: null,
+    criterion: null,
+    observed: null,
+  }))
 }
 
 // 결제별 "미확인"을 한 목록으로 모은다 (같은 문장은 한 번만)

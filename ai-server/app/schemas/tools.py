@@ -27,6 +27,9 @@ class RuleHit(BaseModel):
     code: str
     name: str
     appliedScore: int | None
+    # Spring이 FDS 기준값 · 실제값으로 만든 문장 (#326). 정리할 수 없는 규칙 · 예전 Spring이면 None
+    criterion: str | None = None
+    observed: str | None = None
 
 
 class FdsPayment(BaseModel):

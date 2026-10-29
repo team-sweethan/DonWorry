@@ -106,6 +106,35 @@ class AiToolHttpTests {
                 .andExpect(jsonPath("$.missingPaymentIds").isEmpty());
     }
 
+    // 적중 룰의 기준값 · 실제값은 정리한 문장만 나가고 원본 JSON은 나가지 않는다 (#326)
+    @Test
+    void getFdsEvidence_ruleHit_includesCriterionAndObserved() throws Exception {
+        SecurityCase securityCase = openCase();
+        long paymentId = link(securityCase);
+        givenInfo(new PaymentInfo(
+                paymentId,
+                600_000L,
+                "HELD",
+                Instant.now(),
+                30,
+                "REVIEW",
+                List.of(RuleHit.builder()
+                        .code("R01")
+                        .name("고액 결제")
+                        .appliedScore(30)
+                        .thresholdSnapshot("{\"amountGte\":500000,\"score\":30}")
+                        .observedValue("{\"amount\":600000}")
+                        .build())));
+
+        mvc.perform(get(FDS_EVIDENCE).param("caseId", securityCase.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.payments[0].ruleHits[0].criterion").value("50만 원 이상"))
+                .andExpect(jsonPath("$.payments[0].ruleHits[0].observed").value("60만 원"))
+                .andExpect(
+                        jsonPath("$.payments[0].ruleHits[0].thresholdSnapshot").doesNotExist())
+                .andExpect(jsonPath("$.payments[0].ruleHits[0].observedValue").doesNotExist());
+    }
+
     // paymentIds를 주면 그 결제만 나온다
     @Test
     void fdsEvidence_withPaymentIds_returnsOnlyThose() throws Exception {

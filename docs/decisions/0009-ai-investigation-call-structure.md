@@ -143,6 +143,8 @@ sequenceDiagram
   - `verdict.overallRecommendation`: 코드가 결제별 권고로 계산한다. 하나라도 `REJECT_REVIEW`면 `REJECT_REVIEW`, 모두 `ACCEPT_REVIEW`면 `ACCEPT_REVIEW`, 그 외 `NEEDS_CHECK`
   - `paymentAnalyses[].reason`: AI가 쓰는 결제별 권고 이유 한 문장
   - `paymentAnalyses[].ruleHitDetails[]`: `code` · `name` · `appliedScore` · `evidenceId`. 코드가 FDS 조회 기록에서 채우고, `evidenceId`는 그 값을 받은 `evidence` 줄의 ID다. AI 문장으로 만들지 않는다
+- **#326에서 더한 키 — 추가만 한다.** `paymentAnalyses[].ruleHitDetails[]`의 `criterion`(기준, 예: "50만 원 이상") · `observed`(이번 결제, 예: "60만 원"). 아래 `get_fds_evidence` 값을 코드가 그대로 옮긴다. AI 문장이 아니고, AI가 판단 문장을 쓸 때 받는 근거에도 넣지 않는다 (판단 문장의 숫자 금지는 그대로)
+  - 화면 타입 · ai-server 스키마 모두 선택 항목이다. 그 전 보고서와 정리할 수 없는 규칙은 값이 없고, 화면은 규칙 이름 · 점수만 보여 준다
 - **#294에서 더한 키 — 추가만 한다.** `investigationTrace`: `provider`(`OLLAMA` · `MOCK` · `FIXED`) · `model` · `durationMs` · `steps[]`(`kind` · `actor` · `title` · `durationMs` · `asked` · `received` · `retryReason`)
   - `kind`: `DECIDE`(AI가 다음 조회를 고름) · `TOOL`(조회 실행) · `NUDGE`(빠진 근거 다시 요청) · `WRITE`(판단 문장 쓰기 · 형식 검사) · `ASSEMBLE`(조립 · 증거 버전 확인). `actor`: `AI` / `SYSTEM`(코드가 보충하거나 확인한 단계)
   - 코드가 만든 짧은 요약만 담는다. 결제 금액 · 시각 같은 Tool 응답 원본, 프롬프트, 형식 검사에 걸린 AI 문장은 넣지 않는다 (재시도 사유는 검사 규칙만)
@@ -196,7 +198,8 @@ sequenceDiagram
 - 경로: `GET /internal/ai/tools/get_case_payments?caseId=…`, `GET /internal/ai/tools/get_fds_evidence?caseId=…[&paymentIds=…]`
 - 공통 필드: `caseId` · `evidenceVersion`(조회 시점 Case 증거 버전) · `source`(`P3·P5` / `P2`) · `retrievedAt` · `payments` · `missingPaymentIds`. ID는 문자열 (결정 4)
 - `get_case_payments`의 결제: `paymentId` · `amount` · `paymentStatus` · `requestedAt`
-- `get_fds_evidence`의 결제: `paymentId` · `riskScore` · `fdsResult` · `ruleHits`(`code` · `name` · `appliedScore`). `paymentIds`를 비우면 Case 결제 전체
+- `get_fds_evidence`의 결제: `paymentId` · `riskScore` · `fdsResult` · `ruleHits`(`code` · `name` · `appliedScore` · `criterion` · `observed`). `paymentIds`를 비우면 Case 결제 전체
+  - `criterion` · `observed`(#326): Spring이 P2 기준값 · 실제값 JSON에서 허용한 규칙의 숫자 키만 골라 만든 문장. R01 · R02 · R03 · R04 · R06 · R08만 만들고, 식별자가 든 R05 · R07과 모르는 규칙 · 깨진 JSON은 `null`. 원본 JSON은 응답에 넣지 않는다 (카드 토큰 · IP가 AI 입력에 들어가지 않게)
 - 값을 못 찾은 결제는 추측하지 않고 `null`로 두고 `missingPaymentIds`에 넣는다 (`get_case_payments`는 금액, `get_fds_evidence`는 점수 기준). 응답은 성공(200)이다 — 보고서에 "미확인"으로 적을지는 AI 쪽에서 정한다
 - 거부: 없는 Case `404 INV_001`, Case 소속이 아닌 결제 `400 INV_006`, `caseId` 누락 · 형식 오류 `400`
 - 증거 버전과 결제 목록은 같은 읽기 트랜잭션에서 읽어 같은 시점 값이다
@@ -248,6 +251,9 @@ investigation/report/
 | 화면이 진행 조회용 타이머를 따로 둠 (#322) | 요청마다 세션이 연장돼 자리를 비워도 무활동 만료가 오지 않는다 (#238과 같은 문제) |
 | 진행 조회 중 끝난 결과를 받으면 바로 반영 (#322) | 화면 조회가 상태를 바꾸면 결과 반영 경로가 둘이 되어 결정 2의 검증 · 멱등 규칙을 우회할 수 있다 |
 | 프롬프트 · Tool 응답 원문을 그대로 저장 (#294) | 보고서가 커지고 결제 값이 본문과 중복 저장된다. 시연 · 확인에는 요약으로 충분하다 |
+| Tool 응답에 P2 기준값 · 실제값 JSON 원본을 그대로 실음 (#326) | 차단 목록(R07) 실제값의 카드 토큰 · IP · 이메일이 AI 입력과 보고서에 남는다. 숫자 키만 골라 문장으로 만든다 |
+| 기준 · 실제 문장을 ai-server나 화면에서 만듦 (#326) | 금액 단위 처리를 Python · TS에 따로 두게 되고, AI 서버를 끈 고정 보고서와 문장이 달라진다. Spring 한 곳에서 만든다 |
+| AI 판단 문장에도 기준값 숫자를 허용 (#326) | 7B 모델이 숫자를 틀리게 옮길 위험이 있고 문장 검사(`fact_numbers`)를 넓혀야 한다. 숫자는 코드가 채운 규칙 근거 줄에만 둔다 |
 
 ## 영향
 
