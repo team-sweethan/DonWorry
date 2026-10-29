@@ -6,12 +6,14 @@ from typing import Any
 import httpx
 from fastapi.testclient import TestClient
 
+from app.agent.graph import ProgressListener
+from app.agent.trace import step
 from app.client.spring import API_KEY_HEADER, SpringToolClient
 from app.controller.investigation_controller import get_api_key, get_service
 from app.main import app
 from app.schemas.case_context import CaseContext
 from app.schemas.investigation import InvestigationRequest, InvestigationResult
-from app.schemas.report import ReportBody
+from app.schemas.report import ReportBody, TraceStep
 from app.service.investigation_service import InvestigationService
 from app.service.report_generator import ReportResult
 
@@ -50,12 +52,27 @@ class ManualExecutor:
 
 
 class FakeGenerator:
-    def __init__(self, fail: Exception | None = None) -> None:
+    def __init__(
+        self,
+        fail: Exception | None = None,
+        progress: list[list[TraceStep]] | None = None,
+        during: Callable[[], None] | None = None,
+    ) -> None:
         self.contexts: list[CaseContext] = []
         self._fail = fail
+        # 조사 중에 알릴 진행 기록과, 알린 직후(아직 끝나기 전)에 할 일
+        self._progress = progress or []
+        self._during = during
 
-    def generate(self, context: CaseContext) -> ReportResult:
+    def generate(
+        self, context: CaseContext, on_progress: ProgressListener | None = None
+    ) -> ReportResult:
         self.contexts.append(context)
+        for steps in self._progress:
+            if on_progress is not None:
+                on_progress(steps)
+        if self._during is not None:
+            self._during()
         if self._fail:
             raise self._fail
         return ReportResult(
@@ -142,6 +159,55 @@ def test_late_result_of_previous_attempt_is_dropped() -> None:
     second()
 
     assert [r.attemptId for r in spring.sent] == ["attempt-2"]
+
+
+PAYMENTS_DONE = [
+    step("DECIDE", "AI", "다음에 볼 조회 고르기", duration_ms=2100, received="결제 목록 조회 선택"),
+    step("TOOL", "AI", "결제 목록 조회", duration_ms=200, received="결제 3건"),
+]
+
+
+# 조사 중 상태 조회에 지금까지 끝난 단계가 실린다 — Spring · 화면이 생성 중 진행을 보여 준다 (#322)
+def test_status_while_running_returns_finished_steps() -> None:
+    seen: list[dict[str, Any]] = []
+    generator = FakeGenerator(
+        progress=[PAYMENTS_DONE[:1], PAYMENTS_DONE],
+        during=lambda: seen.append(client.get("/investigations/5", headers=HEADERS).json()),
+    )
+    client, _, executor, _, spring = setup(generator=generator)
+
+    client.post("/investigations", json=request(), headers=HEADERS)
+    executor.run_all()
+
+    running = seen[0]
+    assert running["status"] == "RUNNING"
+    assert [s["title"] for s in running["progress"]] == ["다음에 볼 조회 고르기", "결제 목록 조회"]
+    assert running["progress"][1] == {
+        "kind": "TOOL",
+        "actor": "AI",
+        "title": "결제 목록 조회",
+        "durationMs": 200,
+        "asked": None,
+        "received": "결제 3건",
+        "retryReason": None,
+    }
+    # 끝나면 진행 기록 대신 보고서(investigationTrace)로 본다
+    assert spring.sent[0].progress is None
+
+
+# 새 시도가 오면 이전 시도가 늦게 알린 진행 단계는 버린다 — 두 시도의 단계가 섞이지 않는다
+def test_progress_from_old_attempt_is_ignored() -> None:
+    client, _, executor, _, _ = setup(generator=FakeGenerator(progress=[PAYMENTS_DONE]))
+
+    client.post("/investigations", json=request("attempt-1"), headers=HEADERS)
+    client.post("/investigations", json=request("attempt-2"), headers=HEADERS)
+    first, _ = executor.tasks
+    first()
+
+    status = client.get("/investigations/5", headers=HEADERS).json()
+    assert status["attemptId"] == "attempt-2"
+    assert status["status"] == "RUNNING"
+    assert status["progress"] is None
 
 
 # 생성기 장애는 FAILED로 끝내고 그대로 알린다 — 자동 판정 없음

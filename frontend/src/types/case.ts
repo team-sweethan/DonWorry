@@ -199,6 +199,13 @@ export type TraceStep = {
   retryReason: string | null
 }
 
+// 생성 중인 보고서의 끝난 단계 (#322) — RUNNING이 아니거나 AI 서버를 끄면 steps는 빈 목록
+export type ReportProgress = {
+  reportId: string
+  status: ReportStatus
+  steps: TraceStep[]
+}
+
 // provider는 실제로 쓴 LLM 제공자, FIXED는 AI 서버를 끈 시연의 고정 문장 보고서
 export type InvestigationTrace = {
   provider: 'OLLAMA' | 'MOCK' | 'FIXED'

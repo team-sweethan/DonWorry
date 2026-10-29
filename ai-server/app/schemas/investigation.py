@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.schemas.case_context import CaseContext
-from app.schemas.report import ReportBody
+from app.schemas.report import ReportBody, TraceStep
 
 # Spring ↔ AI 서버 조사 계약 (ADR-0009 결정 1 · 2) — 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
 
@@ -33,9 +33,11 @@ class InvestigationRequest(BaseModel):
 
 # 진행 상태 조회 응답이자 결과 콜백 본문 — 콜백은 SUCCEEDED · FAILED일 때만 보낸다
 # 실패면 reportBody 없이 error(code · reason)만 둔다. 자동 판정은 하지 않는다
+# progress는 RUNNING일 때 지금까지 끝난 단계 (#322) — 끝나면 reportBody.investigationTrace에 담긴다
 class InvestigationResult(BaseModel):
     reportId: str
     attemptId: str
     status: Literal["RUNNING", "SUCCEEDED", "FAILED"]
     reportBody: ReportBody | None = None
     error: dict[str, str] | None = None
+    progress: list[TraceStep] | None = None

@@ -1,8 +1,16 @@
+import { useEffect, useRef, useState } from 'react'
+import { CheckCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Card, Empty, Space, Spin, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { AiReport } from '../../../types/case'
+import { getReportProgress } from '../../../api/cases'
+import type { AiReport, TraceStep } from '../../../types/case'
 import { latestReport } from '../../../utils/caseRules'
-import { hasReadableReport, reportHeadline, topRiskScore } from '../../../utils/reportView'
+import {
+  durationText,
+  hasReadableReport,
+  reportHeadline,
+  topRiskScore,
+} from '../../../utils/reportView'
 import { dateTime, recommendationLabel, reportStatusLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
 import { ScoreGauge } from './ReportFull'
@@ -22,6 +30,26 @@ export function ReportCard({
   const listReturn = useLocation().state
   const report = latestReport(reports)
   const body = report?.status === 'SUCCEEDED' ? report.reportBody : null
+  const running = report?.status === 'RUNNING' ? report : null
+  // 끝난 단계 (#322). 사건 상세가 3초마다 다시 조회해 report가 새로 올 때마다 함께 가져온다
+  // 자동 조회가 2분 뒤 멈추면 이것도 멈춘다 — 세션 무활동 만료(ADR-0014)를 막지 않는다
+  const [progress, setProgress] = useState<{ reportId: string; steps: TraceStep[] } | null>(null)
+  // 같은 보고서의 조회가 아직 끝나지 않았으면 새로 보내지 않는다 — 느릴 때 요청이 쌓이지 않게
+  const inFlight = useRef<string | null>(null)
+  useEffect(() => {
+    if (!running || inFlight.current === running.reportId) return
+    const reportId = running.reportId
+    inFlight.current = reportId
+    // 상세가 다시 조회돼도 응답을 버리지 않는다 — 보고서 번호로 맞는 응답인지 가린다 (아래 steps)
+    getReportProgress(caseId, reportId)
+      .then((p) => setProgress({ reportId, steps: p.steps }))
+      // 진행 표시는 보조 정보라 실패해도 안내하지 않고 이전 단계를 그대로 둔다
+      .catch(() => {})
+      .finally(() => {
+        if (inFlight.current === reportId) inFlight.current = null
+      })
+  }, [caseId, running])
+  const steps = running && progress?.reportId === running.reportId ? progress.steps : []
 
   return (
     <Card
@@ -58,15 +86,18 @@ export function ReportCard({
               description={`Case는 증거 v${evidenceVersion}입니다. 이 보고서로 최종 판정할 수 없습니다.`}
             />
           )}
-          {(report.status === 'PENDING' || report.status === 'RUNNING') && (
-            <div style={{ padding: '20px 0', textAlign: 'center' }}>
-              <Spin />
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-                AI가 Case를 조사하고 있습니다. 완료되면 화면에 자동으로 반영됩니다. 2분이 지나 자동
-                갱신이 멈추면 새로고침하세요.
-              </Typography.Paragraph>
-            </div>
-          )}
+          {(report.status === 'PENDING' || report.status === 'RUNNING') &&
+            (steps.length > 0 ? (
+              <LiveSteps steps={steps} />
+            ) : (
+              <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                <Spin />
+                <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
+                  AI가 Case를 조사하고 있습니다. 완료되면 화면에 자동으로 반영됩니다. 2분이 지나
+                  자동 갱신이 멈추면 새로고침하세요.
+                </Typography.Paragraph>
+              </div>
+            ))}
           {report.status === 'FAILED' && (
             <Alert
               type="error"
@@ -100,4 +131,41 @@ export function ReportCard({
       )}
     </Card>
   )
+}
+
+// 생성 중 끝난 단계 목록 + 진행 중 줄 (#322) — 문구는 "조사 과정" 탭과 같은 요약이다
+function LiveSteps({ steps }: { steps: TraceStep[] }) {
+  return (
+    <div>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        AI가 지금까지 한 일 — 3초마다 갱신됩니다
+      </Typography.Text>
+      <ol style={liveList}>
+        {steps.map((s, i) => (
+          <li key={i} style={liveRow}>
+            <CheckCircleFilled style={{ color: '#16A34A', marginTop: 3 }} />
+            <span style={{ flex: 1 }}>
+              <strong>{s.actor === 'AI' ? s.title : `${s.title} (시스템)`}</strong>
+              {s.received && <span style={{ color: '#64748b' }}> — {s.received}</span>}
+            </span>
+            <span style={{ color: '#94A3B8', fontSize: 12 }}>{durationText(s.durationMs)}</span>
+          </li>
+        ))}
+        <li style={{ ...liveRow, color: '#2563EB' }}>
+          <Spin size="small" />
+          <span>진행 중… 완료되면 보고서가 자동으로 나옵니다</span>
+        </li>
+      </ol>
+    </div>
+  )
+}
+
+const liveList = { listStyle: 'none', padding: 0, margin: '8px 0 0' }
+const liveRow = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 8,
+  padding: '6px 0',
+  borderBottom: '1px solid #F1F5F9',
+  fontSize: 13,
 }
