@@ -139,33 +139,7 @@ class FixedReportGenerator {
                                 "추가 확인 후 결제별로 판정할 것을 권고합니다.",
                                 "limitations",
                                 List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
-                Map.entry(
-                        "evidence",
-                        List.of(
-                                evidence(
-                                        "get_case_payments",
-                                        "P3·P5",
-                                        securityCase.getId(),
-                                        reportVersion,
-                                        1,
-                                        now,
-                                        dataVersion),
-                                evidence(
-                                        "get_fds_evidence",
-                                        "P2",
-                                        securityCase.getId(),
-                                        reportVersion,
-                                        2,
-                                        now,
-                                        dataVersion),
-                                evidence(
-                                        "find_similar_cases",
-                                        SimilarCaseFinder.SOURCE,
-                                        securityCase.getId(),
-                                        reportVersion,
-                                        3,
-                                        now,
-                                        dataVersion))),
+                Map.entry("evidence", evidenceList(securityCase.getId(), similar, reportVersion, now, dataVersion)),
                 Map.entry(
                         "verdict",
                         Map.of(
@@ -176,6 +150,25 @@ class FixedReportGenerator {
                 Map.entry("investigationTrace", fixedTrace(payments.size(), similar))));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         return body;
+    }
+
+    // 증거 추적 줄 — 비슷한 사건은 조회에 성공했을 때만, 실제 응답의 출처 · 조회 시각 · 증거 버전으로 남긴다 (#296 리뷰)
+    private static List<Map<String, Object>> evidenceList(
+            Long caseId, SimilarCasesToolResponse similar, int reportVersion, Instant now, String dataVersion) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        list.add(evidence("get_case_payments", "P3·P5", caseId, reportVersion, 1, now, dataVersion));
+        list.add(evidence("get_fds_evidence", "P2", caseId, reportVersion, 2, now, dataVersion));
+        if (similar != null) {
+            list.add(evidence(
+                    "find_similar_cases",
+                    similar.source(),
+                    caseId,
+                    reportVersion,
+                    3,
+                    similar.retrievedAt(),
+                    "evidence v" + similar.evidenceVersion()));
+        }
+        return list;
     }
 
     // 비슷한 과거 사건 (#296) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다

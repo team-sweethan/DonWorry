@@ -16,6 +16,7 @@ import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -106,7 +107,7 @@ class FixedReportGeneratorTests {
                         "7",
                         1,
                         "P3·P2",
-                        NOW,
+                        NOW.plusSeconds(5),
                         List.of(new SimilarCase(
                                 "3", "SAME_CUSTOMER", List.of(new SharedRule("R01", "고액 결제")), NOW, 1, 1)),
                         4));
@@ -119,6 +120,12 @@ class FixedReportGeneratorTests {
         assertThat(first.get("caseId")).isEqualTo("3");
         assertThat(first.get("acceptCount")).isEqualTo(1);
         assertThat(first.get("rejectCount")).isEqualTo(1);
+        // 증거 추적 줄은 실제 조회 응답의 출처 · 조회 시각 · 증거 버전을 쓴다 (#296 리뷰)
+        assertThat(evidenceOf(body, "find_similar_cases")).singleElement().satisfies(e -> {
+            assertThat(e.get("source")).isEqualTo("P3·P2");
+            assertThat(e.get("retrievedAt")).isEqualTo(NOW.plusSeconds(5).toString());
+            assertThat(e.get("dataVersion")).isEqualTo("evidence v1");
+        });
     }
 
     // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만들어지고, 값만 비어 있다 (#296)
@@ -132,6 +139,19 @@ class FixedReportGeneratorTests {
         assertThat(body).containsKey("similarCases");
         assertThat(body.get("similarCases")).isNull();
         assertThat(body.get("verdict")).isNotNull();
+        // 조회하지 못한 자료는 증거 추적 표에 조회한 것처럼 남기지 않는다 (#296 리뷰)
+        assertThat(evidenceOf(body, "find_similar_cases")).isEmpty();
+        assertThat(evidenceOf(body, "get_fds_evidence")).hasSize(1);
+    }
+
+    private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
+        List<Map<?, ?>> found = new ArrayList<>();
+        for (Object item : (List<?>) body.get("evidence")) {
+            if (item instanceof Map<?, ?> evidence && toolName.equals(evidence.get("toolName"))) {
+                found.add(evidence);
+            }
+        }
+        return found;
     }
 
     private FixedReportGenerator generatorForCase7() {
