@@ -267,9 +267,11 @@ class MerchantApplicationHttpTests {
     void resend_whenAllowed_revokesPreviousLinkAndKeepsSingleApplication() throws Exception {
         send("POST", PATH, body("owner@example.com", "1234567890"), true);
         String resend = "{\"email\":\"OWNER@example.com\"}";
+        // 최초 메일 직후 1분 안에는 없는 주소와 같은 202를 주고 발송만 생략한다.
         assertThat(send("POST", PATH + "/email-verification-resends", resend, true)
                         .statusCode())
-                .isEqualTo(429);
+                .isEqualTo(202);
+        assertThat(sent).hasSize(1);
         setTime(instant.plusSeconds(60));
         assertThat(send("POST", PATH + "/email-verification-resends", resend, true)
                         .statusCode())
@@ -300,6 +302,37 @@ class MerchantApplicationHttpTests {
                         .statusCode())
                 .isEqualTo(429);
         assertThat(sent).hasSize(6);
+    }
+    // 재발송은 IP당 1시간 10회까지라, 없는 주소를 바꿔 가며 요청해도 제한 행이 무한히 늘지 않는다.
+    @Test
+    void resend_whenManyEmailsFromOneIp_limitsByIp() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            assertThat(send(
+                                    "POST",
+                                    PATH + "/email-verification-resends",
+                                    "{\"email\":\"r" + i + "@example.com\"}",
+                                    true)
+                            .statusCode())
+                    .isEqualTo(202);
+        }
+        assertThat(send("POST", PATH + "/email-verification-resends", "{\"email\":\"r10@example.com\"}", true)
+                        .statusCode())
+                .isEqualTo(429);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM application_rate_limits WHERE scope <> 'RESEND_IP'", Integer.class))
+                .isEqualTo(10);
+    }
+    // 만료 행이 한 번의 삭제 묶음(1,000행)보다 많아도 정리 한 번에 모두 지운다.
+    @Test
+    void deleteExpired_whenMoreThanOneBatch_removesAll() {
+        jdbc.batchUpdate(
+                "INSERT INTO application_rate_limits (scope, subject_hash, attempt_times, expires_at) VALUES ('RESEND_EMAIL', ?, '', ?)",
+                java.util.stream.IntStream.range(0, 2500)
+                        .mapToObj(i -> new Object[] {String.format("%064d", i), LocalDateTime.of(2026, 10, 28, 0, 0)})
+                        .toList());
+        limits.deleteExpired();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM application_rate_limits", Integer.class))
+                .isZero();
     }
     // 메일 재발송은 없는 주소와 확인 완료 주소를 같은 응답으로 처리한다.
     @Test
@@ -340,12 +373,12 @@ class MerchantApplicationHttpTests {
         setTime(instant);
         for (int i = 0; i < 5; i++) {
             setTime(instant.plusSeconds(i * 60));
-            limits.resend("limit@example.com");
+            limits.resend("limit@example.com", "192.0.2.9");
         }
         setTime(instant.plusSeconds(3600));
-        assertCode(() -> limits.resend("limit@example.com"), ApplicationErrorCode.RATE_LIMITED);
+        assertCode(() -> limits.resend("limit@example.com", "192.0.2.9"), ApplicationErrorCode.RATE_LIMITED);
         setTime(instant.plusSeconds(86400));
-        limits.resend("limit@example.com");
+        limits.resend("limit@example.com", "192.0.2.9");
         setTime(instant.plusSeconds(172801));
         limits.deleteExpired();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM application_rate_limits", Integer.class))

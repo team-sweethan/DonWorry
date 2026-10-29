@@ -8,7 +8,7 @@
 
 - 공개 `/apply` 신청 폼(가맹점 → 담당자 → 입력 확인 → 제출)과 `/apply/verify` 이메일 확인 화면. 확인 링크 토큰은 URL fragment로 받아 즉시 주소창에서 지운다.
 - 공개 POST 3개(신청 · 이메일 확인 · 재발송)는 전역 설정과 관계없이 CSRF를 검사하고 `Cache-Control: no-store`를 붙인다.
-- 요청 제한: 신청 IP 1시간 5회, 재발송 이메일 1분 1회 · 24시간 5회. 최초 메일은 1분 쿨다운만 걸고 하루 5회에는 세지 않는다.
+- 요청 제한: 신청 IP 1시간 5회, 재발송 IP 1시간 10회, 재발송 이메일 1분 1회 · 24시간 5회. 최초 메일은 1분 쿨다운만 걸고 하루 5회에는 세지 않는다. 쿨다운 중 재발송은 신청 여부가 드러나지 않게 202를 주고 발송만 생략한다.
 - 메일은 커밋 후 SMTP로 보내고, 실패해도 신청은 유지한다(발송 결과는 `application_mail_deliveries`). 로컬은 `docker compose up -d`의 Mailpit(http://localhost:8025).
 - 운영 프로필은 `DONWORRY_APPLICATIONS_ENABLED` 기본 false. 켜면 HTTPS 공개 주소와 SMTP 인증·STARTTLS가 없을 때 기동을 거절한다.
 
@@ -16,9 +16,9 @@
 
 2026-10-29, `feature/315-application`, 기준 dev `8cf8d4f`(#330 MariaDB 연결 한도 300 포함) 위 커밋 전 작업 트리에서 실행했다.
 
-- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 641개(기존 1개 건너뜀), MariaDB 475개, 실패·오류 0개.
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 641개(기존 1개 건너뜀), MariaDB 477개, 실패·오류 0개. PR #331 Codex 리뷰 반영(재발송 IP 제한 · 쿨다운 응답 통일 · 만료 행 전부 정리) 뒤 다시 실행했다.
 - `cd frontend && npm run lint && npm run format:check && npm run build && npm test`: 통과. 220개. 기존 `router.tsx` lint 경고 1개 유지.
-- 새 MariaDB 테스트: 공개 CSRF · 입력 오류, 중복 · 동시 제출, 메일 실패에도 접수 유지, 재발송 시 이전 링크 폐기, 만료 · 사용 · 폐기 · 용도 구별, 확인 · 재발송 경쟁, IP/이메일 제한 경계, 최초 메일 뒤 재발송 5회, 실제 Mailpit SMTP 수신 링크로 확인 완료.
+- 새 MariaDB 테스트: 공개 CSRF · 입력 오류, 중복 · 동시 제출, 메일 실패에도 접수 유지, 재발송 시 이전 링크 폐기, 만료 · 사용 · 폐기 · 용도 구별, 확인 · 재발송 경쟁, IP/이메일 제한 경계, 최초 메일 뒤 재발송 5회, 쿨다운 중 202 · 발송 생략, 재발송 IP 10회, 만료 행 2,500개 정리, 실제 Mailpit SMTP 수신 링크로 확인 완료.
 - 브라우저: 신청 → Mailpit 수신 → 링크로 이메일 확인 완료를 확인했다. 재발송 횟수 기준 변경 · 랜딩 버튼 SPA 이동 수정 이전 작업 트리에서 확인했다.
 
 미검증: Gmail 실제 발송, 수정 후 브라우저 재확인, CI. 미확인 7일이 지난 신청은 PR 4 자동 삭제 전까지 재발송도 재신청도 할 수 없다(설계 문서에 기록).

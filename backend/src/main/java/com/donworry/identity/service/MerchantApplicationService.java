@@ -45,9 +45,11 @@ public class MerchantApplicationService {
         return new Verification("REVIEW_PENDING");
     }
 
-    public void resend(ResendRequest input) {
+    public void resend(ResendRequest input, HttpServletRequest request) {
         settings.requireEnabled();
-        limits.resend(input.email());
+        String ip = metadata.clientIp(request);
+        if (ip == null) throw new ApplicationException(ApplicationErrorCode.UNAVAILABLE);
+        if (!limits.resend(input.email(), ip)) return;
         persistence.resend(input.email()).ifPresent(this::deliver);
     }
 

@@ -1,6 +1,7 @@
 package com.donworry.identity.repository;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -8,6 +9,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 @RequiredArgsConstructor
 public class ApplicationRateLimitRepository {
+    public static final int DELETE_BATCH = 1000;
+
     private final JdbcTemplate jdbc;
 
     public String lock(String scope, String hash, LocalDateTime expiry) {
@@ -23,6 +26,18 @@ public class ApplicationRateLimitRepository {
                 hash);
     }
 
+    // 행을 만들지 않고 읽기만 한다. 없는 대상의 조회로 행이 늘지 않게 한다.
+    public Optional<String> find(String scope, String hash) {
+        return jdbc
+                .queryForList(
+                        "SELECT attempt_times FROM application_rate_limits WHERE scope = ? AND subject_hash = ?",
+                        String.class,
+                        scope,
+                        hash)
+                .stream()
+                .findFirst();
+    }
+
     public void update(String scope, String hash, String attempts, LocalDateTime expiry) {
         jdbc.update(
                 "UPDATE application_rate_limits SET attempt_times = ?, expires_at = ? WHERE scope = ? AND subject_hash = ?",
@@ -32,7 +47,7 @@ public class ApplicationRateLimitRepository {
                 hash);
     }
 
-    public void deleteExpired(LocalDateTime now) {
-        jdbc.update("DELETE FROM application_rate_limits WHERE expires_at <= ? LIMIT 1000", now);
+    public int deleteExpired(LocalDateTime now) {
+        return jdbc.update("DELETE FROM application_rate_limits WHERE expires_at <= ? LIMIT " + DELETE_BATCH, now);
     }
 }

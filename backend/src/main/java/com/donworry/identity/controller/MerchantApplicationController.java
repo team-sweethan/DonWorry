@@ -26,8 +26,8 @@ public class MerchantApplicationController {
     }
 
     @PostMapping("/email-verification-resends")
-    public ResponseEntity<Void> resend(@Valid @RequestBody ResendRequest input) {
-        service.resend(input);
+    public ResponseEntity<Void> resend(@Valid @RequestBody ResendRequest input, HttpServletRequest request) {
+        service.resend(input, request);
         return ResponseEntity.accepted().build();
     }
 }

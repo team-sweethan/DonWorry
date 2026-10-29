@@ -20,7 +20,7 @@ public class ApplicationRateLimitService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void submission(String ip) {
-        consume("SUBMIT_IP", ip, Duration.ofHours(1), false);
+        consume("SUBMIT_IP", ip, Duration.ofHours(1), 5, false);
     }
 
     // 최초 메일은 재발송 쿨다운만 건다. 신청 저장과 같은 트랜잭션·연결에서 기록하고 하루 5회에는 세지 않는다.
@@ -32,20 +32,24 @@ public class ApplicationRateLimitService {
         limits.update(INITIAL_EMAIL, hash, String.valueOf(now), expiry(COOLDOWN));
     }
 
+    // 재발송 허용 여부를 판정하고, 최초 메일 직후 1분 안이면 false로 발송만 생략하게 한다.
+    // 신청 여부가 응답 코드로 드러나지 않게 쿨다운 중에도 같은 202를 반환한다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void resend(String email) {
+    public boolean resend(String email, String ip) {
+        // 없는 이메일을 바꿔 가며 요청해 제한 행을 무한히 만들지 못하게 IP 상한을 먼저 본다.
+        consume("RESEND_IP", ip, Duration.ofHours(1), 10, false);
+        consume("RESEND_EMAIL", email, Duration.ofHours(24), 5, true);
         long now = identityClock.millis();
-        String hash = ApplicationTokenCodec.hash(email);
-        if (!recent(INITIAL_EMAIL, hash, COOLDOWN, now).isEmpty())
-            throw new ApplicationException(ApplicationErrorCode.RATE_LIMITED);
-        consume("RESEND_EMAIL", email, Duration.ofHours(24), true);
+        return limits.find(INITIAL_EMAIL, ApplicationTokenCodec.hash(email))
+                .map(times -> parse(times, COOLDOWN, now).isEmpty())
+                .orElse(true);
     }
 
-    private void consume(String scope, String subject, Duration window, boolean cooldown) {
+    private void consume(String scope, String subject, Duration window, int max, boolean cooldown) {
         long now = identityClock.millis();
         String hash = ApplicationTokenCodec.hash(subject);
         var times = recent(scope, hash, window, now);
-        if (times.size() >= 5 || (cooldown && times.stream().anyMatch(time -> time > now - COOLDOWN.toMillis())))
+        if (times.size() >= max || (cooldown && times.stream().anyMatch(time -> time > now - COOLDOWN.toMillis())))
             throw new ApplicationException(ApplicationErrorCode.RATE_LIMITED);
         times.add(now);
         limits.update(
@@ -54,7 +58,11 @@ public class ApplicationRateLimitService {
 
     // 행을 잠그고 시간창 안의 허용 시각만 돌려준다.
     private List<Long> recent(String scope, String hash, Duration window, long now) {
-        return Arrays.stream(limits.lock(scope, hash, expiry(window)).split(","))
+        return parse(limits.lock(scope, hash, expiry(window)), window, now);
+    }
+
+    private static List<Long> parse(String stored, Duration window, long now) {
+        return Arrays.stream(stored.split(","))
                 .filter(s -> !s.isEmpty())
                 .map(Long::parseLong)
                 .filter(time -> time > now - window.toMillis())
@@ -65,8 +73,12 @@ public class ApplicationRateLimitService {
         return LocalDateTime.ofInstant(identityClock.instant().plus(window), ZoneOffset.UTC);
     }
 
-    @Transactional
+    // 1,000행씩 나눠 지우되 만료 행이 남지 않을 때까지 반복한다. 각 DELETE는 따로 커밋한다.
     public void deleteExpired() {
-        limits.deleteExpired(LocalDateTime.ofInstant(identityClock.instant(), ZoneOffset.UTC));
+        var now = LocalDateTime.ofInstant(identityClock.instant(), ZoneOffset.UTC);
+        int deleted;
+        do {
+            deleted = limits.deleteExpired(now);
+        } while (deleted >= ApplicationRateLimitRepository.DELETE_BATCH);
     }
 }
