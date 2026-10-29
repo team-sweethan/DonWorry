@@ -204,7 +204,6 @@ export function AdminApplicationsPage() {
 type ApprovalFields = {
   merchantCode: string
   feePercent: string
-  loginId: string
   permissions: string[]
 }
 export function AdminApplicationDetailPage() {
@@ -388,6 +387,11 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       },
                       { key: 'phone', label: '연락처', children: data.phone },
                       {
+                        key: 'requestedLoginId',
+                        label: '신청 로그인 아이디',
+                        children: data.requestedLoginId ?? '이전 양식 · 미입력',
+                      },
+                      {
                         key: 'created',
                         label: '접수일',
                         children: formatApplicationTime(app.createdAt),
@@ -507,92 +511,103 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       가맹점명은 <strong>{app.merchantName}</strong>, 계정 이름은{' '}
                       <strong>{app.contactName}</strong>으로 등록합니다.
                     </p>
-                    <Form<ApprovalFields>
-                      form={approvalForm}
-                      layout="vertical"
-                      requiredMark={false}
-                      initialValues={{ feePercent: '1', permissions: ['FDS_VIEW', 'FINANCE_VIEW'] }}
-                      disabled={sending || needsRefresh}
-                      onFinish={(values) => {
-                        const fee = percentToFeeRate(values.feePercent)
-                        if (fee)
-                          setConfirmation({
-                            kind: 'approve',
-                            fee: values.feePercent,
-                            input: {
-                              merchantCode: values.merchantCode,
-                              pgFeeRate: fee,
-                              loginId: values.loginId,
-                              permissions: values.permissions,
+                    {!data.requestedLoginId && (
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="로그인 아이디가 없는 기존 신청입니다"
+                        description="관리자가 임의로 아이디를 정할 수 없습니다. 아래에서 새 양식으로 재신청이 필요하다는 사유를 적어 반려해 주세요."
+                      />
+                    )}
+                    {data.requestedLoginId && (
+                      <Form<ApprovalFields>
+                        form={approvalForm}
+                        layout="vertical"
+                        requiredMark={false}
+                        initialValues={{
+                          feePercent: '1',
+                          permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
+                        }}
+                        disabled={sending || needsRefresh}
+                        onFinish={(values) => {
+                          const fee = percentToFeeRate(values.feePercent)
+                          if (fee)
+                            setConfirmation({
+                              kind: 'approve',
+                              fee: values.feePercent,
+                              input: {
+                                merchantCode: values.merchantCode,
+                                pgFeeRate: fee,
+                                permissions: values.permissions,
+                              },
+                            })
+                        }}
+                      >
+                        <Form.Item
+                          name="merchantCode"
+                          label="가맹점 코드"
+                          extra="영문 대문자·숫자 3~40자. 기존 코드와 달라야 합니다."
+                          rules={[
+                            { required: true, message: '가맹점 코드를 입력해 주세요.' },
+                            {
+                              pattern: /^[A-Z0-9]{3,40}$/,
+                              message: '영문 대문자와 숫자로 3~40자를 입력해 주세요.',
                             },
-                          })
-                      }}
-                    >
-                      <Form.Item
-                        name="merchantCode"
-                        label="가맹점 코드"
-                        extra="영문 대문자·숫자 3~40자. 기존 코드와 달라야 합니다."
-                        rules={[
-                          { required: true, message: '가맹점 코드를 입력해 주세요.' },
-                          {
-                            pattern: /^[A-Z0-9]{3,40}$/,
-                            message: '영문 대문자와 숫자로 3~40자를 입력해 주세요.',
-                          },
-                        ]}
-                      >
-                        <Input autoComplete="off" maxLength={40} placeholder="예: SWEET001" />
-                      </Form.Item>
-                      <Form.Item
-                        name="feePercent"
-                        label="수수료율"
-                        extra="등록 수수료율입니다. 현재 정산 계산은 1% 고정값을 사용합니다."
-                        rules={[
-                          {
-                            validator: (_, value: string) =>
-                              percentToFeeRate(value ?? '') !== null
-                                ? Promise.resolve()
-                                : Promise.reject(
-                                    new Error('0 이상 100 미만, 소수 4자리까지 입력해 주세요.'),
-                                  ),
-                          },
-                        ]}
-                      >
-                        <Input suffix="%" inputMode="decimal" maxLength={7} />
-                      </Form.Item>
-                      <Form.Item
-                        name="loginId"
-                        label="사장님 로그인 아이디"
-                        extra="영문 소문자·숫자·밑줄(_) 3~30자."
-                        rules={[
-                          { required: true, message: '로그인 아이디를 입력해 주세요.' },
-                          {
-                            pattern: /^[a-z0-9_]{3,30}$/,
-                            message: '영문 소문자·숫자·밑줄로 3~30자를 입력해 주세요.',
-                          },
-                        ]}
-                      >
-                        <Input autoComplete="off" maxLength={30} placeholder="예: sweet_owner" />
-                      </Form.Item>
-                      <Form.Item
-                        name="permissions"
-                        label="사장님 기능 권한"
-                        extra={
-                          selectedPermissions?.length === 0
-                            ? '기능 권한을 선택하지 않으면 업무 화면에 접근할 수 없습니다.'
-                            : '사장님 계정으로 발급됩니다. 관리자 권한은 부여되지 않습니다.'
-                        }
-                      >
-                        <Checkbox.Group
-                          options={[
-                            { label: '조치 결과 조회', value: 'FDS_VIEW' },
-                            { label: '정산·자금관리', value: 'FINANCE_VIEW' },
                           ]}
-                        />
-                      </Form.Item>
-                      <Button type="primary" htmlType="submit" block icon={<CheckCircleOutlined />}>
-                        승인하고 계정 발급
-                      </Button>
-                    </Form>
+                        >
+                          <Input autoComplete="off" maxLength={40} placeholder="예: SWEET001" />
+                        </Form.Item>
+                        <Form.Item
+                          name="feePercent"
+                          label="수수료율"
+                          extra="등록 수수료율입니다. 현재 정산 계산은 1% 고정값을 사용합니다."
+                          rules={[
+                            {
+                              validator: (_, value: string) =>
+                                percentToFeeRate(value ?? '') !== null
+                                  ? Promise.resolve()
+                                  : Promise.reject(
+                                      new Error('0 이상 100 미만, 소수 4자리까지 입력해 주세요.'),
+                                    ),
+                            },
+                          ]}
+                        >
+                          <Input suffix="%" inputMode="decimal" maxLength={7} />
+                        </Form.Item>
+                        <div className="ar-selected-login">
+                          <span>신청자가 선택한 로그인 아이디</span>
+                          <strong>{data.requestedLoginId}</strong>
+                          <p>
+                            이 아이디로 계정을 발급합니다. 비밀번호는 신청자가 승인 메일에서 직접
+                            설정합니다.
+                          </p>
+                        </div>
+                        <Form.Item
+                          name="permissions"
+                          label="사장님 기능 권한"
+                          extra={
+                            selectedPermissions?.length === 0
+                              ? '기능 권한을 선택하지 않으면 업무 화면에 접근할 수 없습니다.'
+                              : '사장님 계정으로 발급됩니다. 관리자 권한은 부여되지 않습니다.'
+                          }
+                        >
+                          <Checkbox.Group
+                            options={[
+                              { label: '조치 결과 조회', value: 'FDS_VIEW' },
+                              { label: '정산·자금관리', value: 'FINANCE_VIEW' },
+                            ]}
+                          />
+                        </Form.Item>
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          block
+                          icon={<CheckCircleOutlined />}
+                        >
+                          승인하고 계정 발급
+                        </Button>
+                      </Form>
+                    )}
                   </Card>
                   <Card title="신청 반려" className="ar-reject">
                     <p className="ar-card-intro">
@@ -664,7 +679,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
               items={[
                 { key: 'merchant', label: '가맹점', children: app?.merchantName },
                 { key: 'code', label: '가맹점 코드', children: confirmation.input.merchantCode },
-                { key: 'login', label: '로그인 아이디', children: confirmation.input.loginId },
+                { key: 'login', label: '로그인 아이디', children: data?.requestedLoginId },
                 { key: 'fee', label: '수수료율', children: `${confirmation.fee}%` },
                 {
                   key: 'permissions',

@@ -36,6 +36,7 @@ public final class ApplicationReviewResponses {
     @Builder
     public record Detail(
             Summary application,
+            String requestedLoginId,
             String email,
             String phone,
             String inquiry,

@@ -15,9 +15,21 @@ public class AccountProvisioningService {
     private final PlatformUserRepository users;
     private final MerchantRepository merchants;
     private final AdminChangeHistoryService histories;
+    private final MerchantApplicationRepository applications;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public PlatformUser create(SessionUser actor, CreateUserRequest input, String passwordHash) {
+        return provision(actor, input, passwordHash, null);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public PlatformUser createForApplication(
+            SessionUser actor, CreateUserRequest input, String passwordHash, Long applicationId) {
+        return provision(actor, input, passwordHash, applicationId);
+    }
+
+    private PlatformUser provision(
+            SessionUser actor, CreateUserRequest input, String passwordHash, Long applicationId) {
         if (!input.loginId().matches("[a-z0-9_]{3,30}")
                 || input.displayName().isBlank()
                 || input.displayName().length() > 100) invalid();
@@ -25,6 +37,10 @@ public class AccountProvisioningService {
         if (role == UserRole.ADMIN) invalid();
         if (users.findByLoginId(input.loginId()).isPresent())
             throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
+        if (applications
+                .findReservedLoginId(input.loginId())
+                .filter(a -> !a.getApplicationId().equals(applicationId))
+                .isPresent()) throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
         if (role == UserRole.OPERATOR) {
             if (input.merchantId() == null
                     || merchants

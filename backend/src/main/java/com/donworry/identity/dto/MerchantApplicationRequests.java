@@ -7,7 +7,7 @@ import lombok.Builder;
 public final class MerchantApplicationRequests {
     private MerchantApplicationRequests() {}
 
-    public static final String CONSENT_VERSION = "2026-10-29";
+    public static final String CONSENT_VERSION = "2026-10-29.1";
 
     @Builder
     public record SubmitRequest(
@@ -16,15 +16,17 @@ public final class MerchantApplicationRequests {
             @NotBlank @Size(max = 100) String contactName,
             @NotBlank @Email @Size(max = 254) String email,
             @NotNull @Pattern(regexp = "[0-9]{9,15}") String phone,
+            @NotBlank @Pattern(regexp = "[a-z0-9_]{3,30}") String requestedLoginId,
             @Size(max = 1000) String inquiry,
             @NotNull @AssertTrue Boolean consent,
-            @NotNull @Pattern(regexp = "2026-10-29") String consentVersion) {
+            @NotNull @Pattern(regexp = "2026-10-29\\.1") String consentVersion) {
         public SubmitRequest {
             merchantName = trim(merchantName);
             businessRegistrationNumber = digits(businessRegistrationNumber);
             contactName = trim(contactName);
             email = normalizeEmail(email);
             phone = digits(phone);
+            requestedLoginId = trim(requestedLoginId);
             inquiry = trim(inquiry);
         }
     }

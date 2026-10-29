@@ -111,8 +111,8 @@ class MerchantApplicationHttpTests {
 
     private String body(String email, String business) {
         return """
-   {"merchantName":" 가맹점 ","businessRegistrationNumber":"%s","contactName":" 담당자 ","email":"%s","phone":"010-1234-5678","inquiry":" 문의 ","consent":true,"consentVersion":"2026-10-29"}
-   """.formatted(business, email);
+   {"merchantName":" 가맹점 ","businessRegistrationNumber":"%s","contactName":" 담당자 ","email":"%s","phone":"010-1234-5678","inquiry":" 문의 ","requestedLoginId":"owner_%s","consent":true,"consentVersion":"2026-10-29.1"}
+   """.formatted(business, email, business.replaceAll("[- ]", ""));
     }
 
     private String raw(int index) {
@@ -124,14 +124,19 @@ class MerchantApplicationHttpTests {
     }
 
     private SubmitRequest input(String email, String business) {
+        return input(email, business, "owner_" + business);
+    }
+
+    private SubmitRequest input(String email, String business, String loginId) {
         return SubmitRequest.builder()
                 .merchantName("가맹점")
                 .businessRegistrationNumber(business)
                 .contactName("담당자")
                 .email(email)
                 .phone("01012345678")
+                .requestedLoginId(loginId)
                 .consent(true)
-                .consentVersion("2026-10-29")
+                .consentVersion("2026-10-29.1")
                 .build();
     }
 
@@ -455,6 +460,52 @@ class MerchantApplicationHttpTests {
         assertThat(applications.count()).isEqualTo(1);
         assertThat(deliveries.findAll().getFirst().getStatus()).isEqualTo(ApplicationMailStatus.PENDING);
         assertThat(sent).hasSize(1);
+    }
+    // 사용 중인 아이디는 저장 전에 거절하고 필수·형식 오류를 구분한다.
+    @Test
+    void submit_whenRequestedLoginUnavailableOrInvalid_rejectsWithoutSaving() throws Exception {
+        var occupied =
+                send("POST", PATH, body("owner@example.com", "1234567890").replace("owner_1234567890", "admin"), true);
+        assertThat(occupied.statusCode()).isEqualTo(409);
+        assertThat(occupied.body()).contains("APPLICATION_018");
+        for (String login : List.of("", "AOwner", "ab", "has-dash")) {
+            var invalid = send(
+                    "POST", PATH, body("owner@example.com", "1234567890").replace("owner_1234567890", login), true);
+            assertThat(invalid.statusCode()).isEqualTo(400);
+            assertThat(invalid.body()).contains("APPLICATION_001");
+        }
+        assertThat(applications.count()).isZero();
+        verifyNoInteractions(mail);
+    }
+    // 서로 다른 이메일·사업자번호로 같은 아이디를 동시에 신청해도 한 건만 예약한다.
+    @Test
+    void submit_whenRequestedLoginRaces_reservesOnlyOnce() throws Exception {
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var go = new CountDownLatch(1);
+            var futures = new ArrayList<Future<String>>();
+            for (int i = 0; i < 2; i++) {
+                final int n = i;
+                futures.add(executor.submit(() -> {
+                    go.await();
+                    try {
+                        service.submit(
+                                input("claim" + n + "@example.com", "123456789" + n, "shared_owner"),
+                                request("192.0.2." + (n + 10)));
+                        return "created";
+                    } catch (ApplicationException e) {
+                        return e.getErrorCode().name();
+                    }
+                }));
+            }
+            go.countDown();
+            assertThat(List.of(
+                            futures.get(0).get(20, TimeUnit.SECONDS),
+                            futures.get(1).get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("created", "LOGIN_ID_UNAVAILABLE");
+        }
+        assertThat(applications.count()).isEqualTo(1);
+        assertThat(sent).hasSize(1);
+        assertThat(applications.findAll().getFirst().getRequestedLoginId()).isEqualTo("shared_owner");
     }
     // 동일 IP의 동시 제한 판정은 최대 5건만 허용한다.
     @Test

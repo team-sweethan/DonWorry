@@ -15,7 +15,6 @@ public final class ApplicationReviewRequests {
             @NotNull @DecimalMin("0") @DecimalMax(value = "1", inclusive = false) @Digits(integer = 1, fraction = 6)
             BigDecimal pgFeeRate,
 
-            @NotBlank @Pattern(regexp = "[a-z0-9_]{3,30}") String loginId,
             @NotNull @Size(max = 2) List<@NotNull @Pattern(regexp = "FDS_VIEW|FINANCE_VIEW") String> permissions) {}
 
     public record RejectRequest(@NotBlank @Size(max = 1000) String reason) {}

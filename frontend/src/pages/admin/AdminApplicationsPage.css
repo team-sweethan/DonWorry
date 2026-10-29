@@ -254,3 +254,29 @@
     gap: 10px 18px;
   }
 }
+
+.ar-selected-login {
+  padding: 16px 18px;
+  margin: 0 0 24px;
+  border: 1px solid #dce7f8;
+  border-radius: 10px;
+  background: #f5f8ff;
+  overflow-wrap: anywhere;
+}
+.ar-selected-login > span {
+  display: block;
+  color: #62718a;
+  font-size: 12px;
+}
+.ar-selected-login strong {
+  display: block;
+  color: #213a60;
+  font-size: 17px;
+  margin: 8px 0;
+}
+.ar-selected-login p {
+  color: #536982;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0;
+}

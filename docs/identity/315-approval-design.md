@@ -1,7 +1,7 @@
 # #315 PR 3 — 관리자 검토·계정 발급·첫 비밀번호 설정
 
 기준: dev `09c2b0c` (#331 / PR 2). P1 담당자가 2026-10-29 설계와 구현을 승인했다.
-PR 2의 [신청 저장 계약](315-application-design.md)과 ADR-0043~0045를 이어 쓴다. 새 스키마·모듈 의존·다른 담당 API 변경은 없다.
+PR 2의 [신청 저장 계약](315-application-design.md)과 ADR-0043~0045를 이어 쓴다. P1 신청 아이디 컬럼·예약 UNIQUE를 새 migration으로 추가한다. 모듈 의존·다른 담당 API 변경은 없다.
 
 ## 화면과 상태
 
@@ -10,7 +10,7 @@ PR 2의 [신청 저장 계약](315-application-design.md)과 ADR-0043~0045를 �
 EMAIL_PENDING은 조회만 가능하다. 이메일 확인은 주소 사용 확인이며 사업자 자격 확인으로 표시하지 않는다.
 
 상세는 신청 정보와 발급 입력을 나란히 표시하고 좁은 화면에서는 신청 정보부터 세로로 배치한다.
-승인은 코드·수수료·아이디·권한 입력 → 발급 정보 최종 확인 → ‘승인·계정 발급’ 순서다.
+신청자는 신청 폼에서 로그인 아이디를 선택한다. 관리자는 선택된 아이디를 확인하며 수정하지 않는다. 승인은 코드·수수료·권한 입력 → 발급 정보 최종 확인 → ‘승인·계정 발급’ 순서다.
 반려는 사유 입력 → 신청자에게 보낼 내용 확인 → 확정 순서다. 오류 시 입력을 유지한다.
 동시 처리 충돌·응답 유실 시 최신 상태를 조회하기 전에는 다시 처리하지 않는다. 변경 요청을 자동 재시도하지 않는다.
 
@@ -24,8 +24,8 @@ SMTP 수락은 실제 수신을 보장하지 않으며 발급 결과와 별도�
 | 메서드·경로 | 계약 |
 | --- | --- |
 | GET `/api/admin/merchant-applications` | page=0, size=20(1~100), keyword(100자), status(생략 시 전체). items/page/size/totalElements |
-| GET `/api/admin/merchant-applications/{id}` | 신청 정보·검토 기록·발급 ID·로그인 아이디·현재 비밀번호 변경 필요 여부·같은 사업자번호의 기존 가맹점 |
-| POST `/api/admin/merchant-applications/{id}/approve` | merchantCode, pgFeeRate, loginId, permissions → status/merchantId/userId/mailStatus |
+| GET `/api/admin/merchant-applications/{id}` | 신청 정보·신청자 선택 아이디(requestedLoginId)·검토 기록·발급 ID·실제 로그인 아이디·현재 비밀번호 변경 필요 여부·같은 사업자번호의 기존 가맹점 |
+| POST `/api/admin/merchant-applications/{id}/approve` | merchantCode, pgFeeRate, permissions → status/merchantId/userId/mailStatus |
 | POST `/api/admin/merchant-applications/{id}/reject` | reason(공백 제외 필수, 최대 1000자) → status와 mailStatus, 발급 ID는 null |
 | POST `/api/merchant-applications/initial-password-setups` | token, newPassword → 204. 토큰·비밀번호를 응답하지 않는다 |
 
@@ -41,15 +41,24 @@ SMTP 수락은 실제 수신을 보장하지 않으며 발급 결과와 별도�
 기존 AdminMerchantService·AdminAccountService의 독립 REQUIRES_NEW 생성 메서드를 연속 호출하지 않는다.
 MerchantProvisioningService·AccountProvisioningService로 검증·생성·기존 이력을 추출한다. 두 내부 서비스는 MANDATORY여서 호출자의 트랜잭션에 반드시 참여한다. 기존 관리자 수동 생성도 같은 서비스를 사용한다.
 
-승인: 수행자·새 아이디 AccountLockService → 수행자 세션 확인 → READ_COMMITTED/REQUIRES_NEW → 관리자 재확인 → 신청 PESSIMISTIC_WRITE → REVIEW_PENDING/이메일 확인 검사 → 가맹점·계정·권한·관리 이력 → 신청 승인·검토자·발급 참조 → 첫 설정 토큰·PENDING 발송 이력 → 커밋 → 잠금 해제 → SMTP → 별도 트랜잭션으로 발송 결과 기록.
+승인: 수행자·신청에 저장된 아이디 AccountLockService → 수행자 세션 확인 → READ_COMMITTED/REQUIRES_NEW → 관리자 재확인 → 신청 PESSIMISTIC_WRITE → REVIEW_PENDING/이메일 확인 검사 → 가맹점·계정·권한·관리 이력 → 신청 승인·검토자·발급 참조 → 첫 설정 토큰·PENDING 발송 이력 → 커밋 → 잠금 해제 → SMTP → 별도 트랜잭션으로 발송 결과 기록.
 새 가맹점은 커밋 전 다른 요청에 보이지 않으며 기존 가맹점 잠금을 계정 잠금 안에서 추가 획득하지 않는다.
 메일 발송은 DB 트랜잭션·계정 잠금 밖이다. 어느 INSERT/UPDATE/커밋이 실패해도 발급 전체가 롤백된다.
 신청 행 잠금으로 승인/승인·승인/반려를 직렬화하고 두 번째 요청은 409로 끝낸다. 다시 승인하거나 메일을 반복 발송하지 않는다.
 
 가맹점명·계정 표시 이름은 신청에서 가져온다. 역할은 OPERATOR 고정, 기능 권한은 기존 두 코드만 허용한다.
-코드·아이디 규칙은 기존 계약 그대로다. 수수료 기본 1% → 0.010000, 0 이상 1 미만·소수 6자리.
+아이디는 신청에 저장된 requestedLoginId를 사용한다. 승인 요청에 임의 loginId를 넣어도 채택하지 않는다. 코드·아이디 형식 규칙은 기존 계약 그대로다. 수수료 기본 1% → 0.010000, 0 이상 1 미만·소수 6자리.
 사업자번호는 merchants에 복사하고 연락처는 신청에만 둔다. 기존 가맹점의 같은 사업자번호는 경고로 보여주고 승인 차단/기존 계정 연결을 자동 수행하지 않는다.
 secret_reference는 설정하지 않으며 결제 연동은 별도 진행임을 승인 화면·메일에 명시한다.
+
+## 신청 아이디 예약과 기존 신청
+
+2026-10-29 P1 사용자가 아이디를 직접 선택해 신청하도록 변경을 승인했다. 원래 #315 관리자 입력 계약을 대체한다.
+requested_login_id VARCHAR(30) NULL과 진행 중 신청의 SHA-256 pending_login_id 생성 컬럼·UNIQUE를 추가한다. 신규 API에서는 필수, NULL은 이전 양식 호환만을 위한 것이다.
+신청 제출은 IP 제한 → 선택 아이디의 계정 잠금 → 기존 계정 중복 검사 → 신청/예약/메일 시도 커밋 → 잠금 해제 → SMTP 순서다. 신청 간 예약 충돌은 DB UNIQUE가 판정한다.
+수동 계정 생성도 같은 아이디 잠금 안에서 기존 계정과 신청 예약을 검사한다. 승인만 자기 신청의 예약을 사용할 수 있다. 반려/삭제 시 예약이 해제되고 승인 후에는 platform_users UNIQUE가 보호한다. 다중 서버는 기존 세션/잠금 전제 밖이다.
+아이디 중복은 APPLICATION_018/409, 기존 신청의 아이디 누락은 APPLICATION_019/409. 기존 계정 충돌이 예외적으로 승인 시 발견되면 전체 롤백하며 관리자가 임의 아이디로 우회하지 않는다.
+기존 아이디 없는 신청은 상세에 미입력 사유를 표시하고 승인 입력 폼을 제공하지 않는다. 반려 사유로 새 양식 재신청을 안내한다. 승인된 기존 계정의 아이디와 데이터는 그대로 유지한다.
 
 ## 첫 비밀번호와 초기화
 

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class MerchantApplicationService {
     private final ApplicationSettings settings;
+    private final AccountLockService accountLocks;
     private final ApplicationPersistenceService persistence;
     private final ApplicationRateLimitService limits;
     private final LoginHistoryRequestMetadata metadata;
@@ -27,9 +28,11 @@ public class MerchantApplicationService {
         limits.submission(ip);
         PreparedApplicationMail prepared;
         try {
-            prepared = persistence.submit(input);
+            prepared = accountLocks.withAccount(input.requestedLoginId(), () -> persistence.submit(input));
         } catch (DataIntegrityViolationException exception) {
             String message = exception.getMostSpecificCause().getMessage();
+            if (message != null && message.contains("uk_merchant_applications_pending_login"))
+                throw new ApplicationException(ApplicationErrorCode.LOGIN_ID_UNAVAILABLE);
             if (message != null
                     && (message.contains("uk_merchant_applications_pending_email")
                             || message.contains("uk_merchant_applications_pending_business")))

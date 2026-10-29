@@ -53,13 +53,13 @@ test('review_whenPosting_usesCorrectTargetAndPayload', async () => {
   const input = {
     merchantCode: 'SWEET001',
     pgFeeRate: '0.010000',
-    loginId: 'sweet_owner',
     permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
   }
   await approveApplication(31, input)
   await rejectApplication(32, '  번호 확인 필요  ')
   assert.equal(calls[0][0], '/api/admin/merchant-applications/31/approve')
   assert.deepEqual(JSON.parse(String(calls[0][1].body)), input)
+  assert.equal('loginId' in JSON.parse(String(calls[0][1].body)), false)
   assert.equal(calls[1][0], '/api/admin/merchant-applications/32/reject')
   assert.deepEqual(JSON.parse(String(calls[1][1].body)), { reason: '번호 확인 필요' })
   for (const [, init] of calls) {
@@ -78,7 +78,6 @@ test('review_whenTransportFails_doesNotRepeatApproval', async () => {
     approveApplication(31, {
       merchantCode: 'SWEET001',
       pgFeeRate: '0.010000',
-      loginId: 'owner',
       permissions: [],
     }),
   )

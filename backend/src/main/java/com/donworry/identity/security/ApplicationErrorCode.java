@@ -28,7 +28,10 @@ public enum ApplicationErrorCode {
     REVOKED_SETUP_TOKEN("APPLICATION_014", "더 이상 사용할 수 없는 링크입니다. 최신 안내 메일을 확인하거나 관리자에게 문의해 주세요.", HttpStatus.GONE),
     SETUP_UNAVAILABLE("APPLICATION_015", "현재 이 계정의 비밀번호를 설정할 수 없습니다. 관리자에게 계정·가맹점 상태를 문의해 주세요.", HttpStatus.CONFLICT),
     INVALID_REVIEW_INPUT("APPLICATION_016", "승인 정보 또는 신청자에게 전달할 반려 사유를 확인해 주세요.", HttpStatus.BAD_REQUEST),
-    INVALID_SETUP_INPUT("APPLICATION_017", "메일의 비밀번호 설정 링크와 새 비밀번호를 확인해 주세요.", HttpStatus.BAD_REQUEST);
+    INVALID_SETUP_INPUT("APPLICATION_017", "메일의 비밀번호 설정 링크와 새 비밀번호를 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    LOGIN_ID_UNAVAILABLE("APPLICATION_018", "이미 사용 중이거나 다른 신청에서 선택한 로그인 아이디입니다. 다른 아이디를 입력해 주세요.", HttpStatus.CONFLICT),
+    LOGIN_ID_REQUIRED(
+            "APPLICATION_019", "이전 양식으로 접수되어 로그인 아이디가 없습니다. 신청자에게 새 양식으로 재신청하도록 안내해 주세요.", HttpStatus.CONFLICT);
     private final String code;
     private final String message;
     private final HttpStatus status;

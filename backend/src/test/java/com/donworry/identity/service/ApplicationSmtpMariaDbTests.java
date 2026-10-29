@@ -69,8 +69,9 @@ class ApplicationSmtpMariaDbTests {
                 .contactName("담당자")
                 .email("smtp@example.com")
                 .phone("01012345678")
+                .requestedLoginId("smtp_owner")
                 .consent(true)
-                .consentVersion("2026-10-29")
+                .consentVersion("2026-10-29.1")
                 .build();
         try {
             assertThat(service.submit(input, request).mailStatus()).isEqualTo("SENT");

@@ -46,7 +46,7 @@ class ApplicationApprovalHttpTests {
     JsonMapper json;
 
     @Autowired
-    InitialPasswordService initialPasswords;
+    MerchantApplicationService applicationService;
 
     @MockitoBean
     ApplicationMailSender mail;
@@ -112,12 +112,17 @@ class ApplicationApprovalHttpTests {
     }
 
     Long application(boolean verified) {
+        return application(verified, "approval_owner");
+    }
+
+    Long application(boolean verified, String requestedLoginId) {
         var app = applications.saveAndFlush(MerchantApplication.submit(
                 "달콤한 가게",
                 "1234567890",
                 "신청자",
                 "approval@example.com",
                 "01012345678",
+                requestedLoginId,
                 "가맹점 문의",
                 "2026-10-29",
                 LocalDateTime.now(ZoneOffset.UTC)));
@@ -515,7 +520,7 @@ class ApplicationApprovalHttpTests {
     void approve_whenBusinessAlreadyRegistered_warnsButAllowsSeparateMerchant() throws Exception {
         Long first = application(true);
         assertThat(approve(first).statusCode()).isEqualTo(200);
-        Long second = application(true);
+        Long second = application(true, "approval_owner2");
         var detail = admin.send("GET", BASE + "/" + second, null, false);
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(json.readTree(detail.body()).get("duplicateMerchants").size())
@@ -549,6 +554,88 @@ class ApplicationApprovalHttpTests {
                         "SELECT password_hash FROM platform_users WHERE user_id=?", String.class, userId))
                 .isEqualTo(hash);
         assertThat(tokens.findAll().getFirst().getRevokedAt()).isNull();
+    }
+
+    // 관리자가 다른 아이디를 보내도 신청자가 선택한 아이디로만 계정을 발급한다.
+    @Test
+    void approve_whenAdminSuppliesDifferentLogin_usesApplicantSelection() throws Exception {
+        Long id = application(true);
+        assertThat(admin.send("POST", BASE + "/" + id + "/approve", approval("APPR001", "admin_chosen_id"), true)
+                        .statusCode())
+                .isEqualTo(200);
+        assertThat(jdbc.queryForObject(
+                        "SELECT login_id FROM platform_users WHERE user_id=?",
+                        String.class,
+                        saved(id).getUserId()))
+                .isEqualTo("approval_owner");
+        verify(mail).sendApproval(eq("approval@example.com"), eq("approval_owner"), anyString());
+    }
+    // 진행 중 신청의 아이디는 수동 계정 생성도 가져갈 수 없고 반려 후에는 해제된다.
+    @Test
+    void createAccount_whenLoginReserved_blocksUntilApplicationRejected() throws Exception {
+        Long id = application(true);
+        String input = "{\"loginId\":\"approval_owner\",\"displayName\":\"직원\",\"role\":\"SECURITY_STAFF\"}";
+        var conflict = admin.send("POST", "/api/admin/users", input, true);
+        assertThat(conflict.statusCode()).isEqualTo(409);
+        assertThat(conflict.body()).contains("ADMIN_003");
+        assertThat(admin.send("POST", BASE + "/" + id + "/reject", "{\"reason\":\"새 신청 안내\"}", true)
+                        .statusCode())
+                .isEqualTo(200);
+        assertThat(admin.send("POST", "/api/admin/users", input, true).statusCode())
+                .isEqualTo(201);
+    }
+    // 공개 신청과 관리자 수동 생성이 겹쳐도 같은 아이디를 계정·신청에 동시에 부여하지 않는다.
+    @Test
+    void submit_whenRacingManualAccountCreation_assignsLoginToOneOwner() throws Exception {
+        var input = com.donworry.identity.dto.MerchantApplicationRequests.SubmitRequest.builder()
+                .merchantName("가맹점")
+                .businessRegistrationNumber("3456789012")
+                .contactName("담당자")
+                .email("claim@example.com")
+                .phone("01012345678")
+                .requestedLoginId("approval_claim")
+                .consent(true)
+                .consentVersion("2026-10-29.1")
+                .build();
+        var request = mock(jakarta.servlet.http.HttpServletRequest.class);
+        when(request.getRemoteAddr()).thenReturn("192.0.2.44");
+        var statuses = concurrent(
+                () -> {
+                    try {
+                        applicationService.submit(input, request);
+                        return 201;
+                    } catch (ApplicationException e) {
+                        assertThat(e.getErrorCode()).isEqualTo(ApplicationErrorCode.LOGIN_ID_UNAVAILABLE);
+                        return 409;
+                    }
+                },
+                () -> admin.send(
+                                "POST",
+                                "/api/admin/users",
+                                "{\"loginId\":\"approval_claim\",\"displayName\":\"직원\",\"role\":\"SECURITY_STAFF\"}",
+                                true)
+                        .statusCode());
+        assertThat(statuses).containsExactlyInAnyOrder(201, 409);
+        int reserved = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM merchant_applications WHERE requested_login_id='approval_claim'", Integer.class);
+        int issued = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM platform_users WHERE login_id='approval_claim'", Integer.class);
+        assertThat(reserved + issued).isEqualTo(1);
+    }
+    // 이전 양식의 아이디 없는 신청을 관리자가 임의 아이디로 승인할 수 없다.
+    @Test
+    void approve_whenLegacyApplicationHasNoLogin_requiresNewApplication() throws Exception {
+        Long id = application(true, null);
+        var result = approve(id);
+        assertThat(result.statusCode()).isEqualTo(409);
+        assertThat(result.body()).contains("APPLICATION_019");
+        assertThat(saved(id).getStatus()).isEqualTo(ApplicationStatus.REVIEW_PENDING);
+        assertThat(saved(id).getUserId()).isNull();
+        verifyNoInteractions(mail);
+        assertThat(json.readTree(admin.send("GET", BASE + "/" + id, null, false).body())
+                        .get("requestedLoginId")
+                        .isNull())
+                .isTrue();
     }
 
     private List<Integer> concurrent(Callable<Integer> one, Callable<Integer> two) throws Exception {

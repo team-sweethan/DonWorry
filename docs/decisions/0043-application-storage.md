@@ -9,6 +9,8 @@
 
 신청은 identity 소유의 독립 기록으로 두고 연락처는 신청에 보관한다. 사업자번호만 승인 시 가맹점에 복사한다. 신청·토큰·발송 상태를 분리하고 진행 중 중복은 DB UNIQUE로 막는다.
 
+PR 3에서 P1 후속 승인으로 신청자 선택 로그인 아이디와 진행 중 예약 UNIQUE를 추가한다. 기존 NULL 행은 보존한다([ADR-0046](0046-application-approval-and-initial-password.md)).
+
 상세 스키마·오류·유효기간·트랜잭션·후속 경계는 [설계](../identity/315-application-design.md)를 따른다.
 P1 담당자의 이번 진행 승인으로 저장소 ERD·ADR에 먼저 기록한다. Notion 최신 대조·동기화는 미수행이다.
 

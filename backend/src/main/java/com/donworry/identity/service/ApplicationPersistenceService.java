@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ApplicationPersistenceService {
     private final MerchantApplicationRepository applications;
+    private final PlatformUserRepository users;
     private final ApplicationTokenRepository tokens;
     private final ApplicationMailDeliveryRepository deliveries;
     private final ApplicationTokenCodec codec;
@@ -27,12 +28,14 @@ public class ApplicationPersistenceService {
 
     @Transactional
     public PreparedApplicationMail submit(SubmitRequest input) {
+        if (users.findByLoginId(input.requestedLoginId()).isPresent()) fail(ApplicationErrorCode.LOGIN_ID_UNAVAILABLE);
         var app = applications.saveAndFlush(MerchantApplication.submit(
                 input.merchantName(),
                 input.businessRegistrationNumber(),
                 input.contactName(),
                 input.email(),
                 input.phone(),
+                input.requestedLoginId(),
                 input.inquiry(),
                 input.consentVersion(),
                 now()));

@@ -25,6 +25,7 @@ export type ApplicationPage = {
 }
 export type ApplicationDetail = {
   application: ApplicationSummary
+  requestedLoginId: string | null
   email: string
   phone: string
   inquiry: string | null
@@ -43,7 +44,6 @@ export type ApplicationDetail = {
 export type ApprovalInput = {
   merchantCode: string
   pgFeeRate: string
-  loginId: string
   permissions: string[]
 }
 export type ReviewResult = {

@@ -26,6 +26,7 @@ afterEach(() => {
   else Reflect.deleteProperty(globalThis, 'document')
 })
 const input = {
+  requestedLoginId: ' sweet_owner ',
   merchantName: ' 가맹점 ',
   businessRegistrationNumber: '123-45-67890',
   contactName: ' 담당자 ',
@@ -37,6 +38,7 @@ const input = {
 // 신청 정규화는 주소 별칭을 합치지 않고 동의 버전을 함께 전송한다.
 test('application_whenNormalized_preservesEmailAliasesAndConsent', () => {
   assert.deepEqual(normalizeApplication(input), {
+    requestedLoginId: 'sweet_owner',
     merchantName: '가맹점',
     businessRegistrationNumber: '1234567890',
     contactName: '담당자',
@@ -44,7 +46,7 @@ test('application_whenNormalized_preservesEmailAliasesAndConsent', () => {
     phone: '01012345678',
     inquiry: '문의',
     consent: true,
-    consentVersion: '2026-10-29',
+    consentVersion: '2026-10-29.1',
   })
   assert.equal(
     normalizeApplication({ ...input, email: ' A.B+tag@Gmail.com ' }).email,
@@ -75,6 +77,10 @@ test('applicationApi_whenPosting_usesCsrfAndBodyOnlyToken', async () => {
     assert.equal(init.cache, 'no-store')
     assert.equal(new Headers(init.headers).get('X-XSRF-TOKEN'), 'public-token')
   }
+  const submitted = JSON.parse(String(calls[0][1].body)) as Record<string, unknown>
+  assert.equal(submitted.requestedLoginId, 'sweet_owner')
+  for (const field of ['password', 'newPassword', 'merchantCode', 'pgFeeRate', 'permissions'])
+    assert.equal(field in submitted, false)
   assert.deepEqual(JSON.parse(String(calls[1][1].body)), { token: 'secret-token' })
   assert.deepEqual(JSON.parse(String(calls[2][1].body)), { email: 'owner@example.com' })
 })

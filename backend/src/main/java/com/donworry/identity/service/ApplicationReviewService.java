@@ -92,6 +92,7 @@ public class ApplicationReviewService {
                 .reviewerName(reviewer)
                 .rejectionReason(a.getRejectionReason())
                 .merchantId(a.getMerchantId())
+                .requestedLoginId(a.getRequestedLoginId())
                 .userId(a.getUserId())
                 .loginId(u == null ? null : u.getLoginId())
                 .passwordChangeRequired(u == null ? null : u.isPasswordChangeRequired())
@@ -106,7 +107,9 @@ public class ApplicationReviewService {
     public ReviewResult approve(SessionUser actor, Long id, ApproveRequest input, HttpServletRequest request) {
         SessionUser.require(actor);
         settings.requireEnabled();
-        var prepared = locks.withAccounts(actor.loginId(), input.loginId(), () -> {
+        String requestedLoginId = find(id).getRequestedLoginId();
+        if (requestedLoginId == null) fail(ApplicationErrorCode.LOGIN_ID_REQUIRED);
+        var prepared = locks.withAccounts(actor.loginId(), requestedLoginId, () -> {
             requireSession(actor, request);
             try {
                 return transaction(() -> {
@@ -122,11 +125,12 @@ public class ApplicationReviewService {
                             new AdminMerchantRequests.CreateMerchantRequest(
                                     input.merchantCode(), a.getMerchantName(), input.pgFeeRate()));
                     merchant.registerBusinessNumber(a.getBusinessRegistrationNumber());
-                    var user = accountProvisioning.create(
+                    var user = accountProvisioning.createForApplication(
                             actor,
                             new AdminAccountRequests.CreateUserRequest(
-                                    input.loginId(), a.getContactName(), "OPERATOR", merchant.getMerchantId()),
-                            encoder.encode(codec.generate()));
+                                    a.getRequestedLoginId(), a.getContactName(), "OPERATOR", merchant.getMerchantId()),
+                            encoder.encode(codec.generate()),
+                            id);
                     var codes = new TreeSet<>(input.permissions());
                     codes.forEach(code -> permissions.save(UserPermission.grant(user.getUserId(), code)));
                     if (!codes.isEmpty())

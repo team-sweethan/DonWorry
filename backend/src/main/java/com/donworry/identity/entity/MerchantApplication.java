@@ -31,6 +31,9 @@ public class MerchantApplication {
     @Column(name = "phone", nullable = false, length = 15)
     private String phone;
 
+    @Column(name = "requested_login_id", length = 30)
+    private String requestedLoginId;
+
     @Column(name = "inquiry", length = 1000)
     private String inquiry;
 
@@ -76,6 +79,7 @@ public class MerchantApplication {
             String contactName,
             String email,
             String phone,
+            String requestedLoginId,
             String inquiry,
             String consentVersion,
             LocalDateTime consentedAt,
@@ -92,6 +96,7 @@ public class MerchantApplication {
         this.contactName = contactName;
         this.email = email;
         this.phone = phone;
+        this.requestedLoginId = requestedLoginId;
         this.inquiry = inquiry;
         this.consentVersion = consentVersion;
         this.consentedAt = consentedAt;
@@ -111,6 +116,7 @@ public class MerchantApplication {
             String contactName,
             String email,
             String phone,
+            String requestedLoginId,
             String inquiry,
             String consentVersion,
             LocalDateTime now) {
@@ -120,6 +126,7 @@ public class MerchantApplication {
                 .contactName(contactName)
                 .email(email)
                 .phone(phone)
+                .requestedLoginId(requestedLoginId)
                 .inquiry(inquiry)
                 .consentVersion(consentVersion)
                 .consentedAt(now)
