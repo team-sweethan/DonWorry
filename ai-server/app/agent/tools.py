@@ -86,6 +86,18 @@ class ToolRecord:
     filled_by_system: bool = False
 
 
+# AI에게 돌려줄 도구 응답 — 카드 표시값(카드사 · 끝자리 숫자)은 뺀다 (#346 리뷰)
+# 보고서를 채우는 Tool 기록(ToolRecord)에는 원래 응답을 그대로 둔다
+def llm_content(
+    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool,
+) -> str:
+    if isinstance(result, FdsEvidenceTool):
+        return result.model_dump_json(
+            exclude={"payments": {"__all__": {"signals": {"cardDisplayLabel"}}}}
+        )
+    return result.model_dump_json()
+
+
 # 한 Case로 묶인 도구 실행기 — 실제는 Spring, 테스트 · 샘플 실행은 고정 응답
 class ToolBox(Protocol):
     def get_case_payments(self) -> CasePaymentsTool: ...

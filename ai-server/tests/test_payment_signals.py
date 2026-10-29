@@ -1,13 +1,15 @@
 import copy
 import json
 
+from langchain_core.messages import ToolMessage
+
 from app.agent.assemble import MISSING_SIGNAL_LIMITATIONS, facts_json
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
-from tests.fakes import context
+from tests.fakes import ScriptedLlm, call, context, narrative
 
 # 결제별 카드 · 기기 · 접속 국가 (#346) — 사실 값은 Tool 기록에서 코드가 채우고,
 # AI에는 있음/없음과 국가만 보여 준다. 가맹점이 안 보낸 값은 한계 줄로 남긴다
@@ -76,3 +78,26 @@ def test_missing_ip_adds_limitation() -> None:
 
     assert MISSING_SIGNAL_LIMITATIONS["ip"] in without_ip.report.recommendation.limitations
     assert MISSING_SIGNAL_LIMITATIONS["ip"] not in with_ip.report.recommendation.limitations
+
+
+# 도구를 고르는 단계에서 AI가 받는 도구 응답에도 카드 표시값이 없다 (#346 리뷰)
+# 보고서를 채우는 Tool 기록에는 그대로 남는다
+def test_card_label_not_in_tool_messages() -> None:
+    llm = ScriptedLlm(
+        turns=[
+            [call("get_case_payments")],
+            [call("get_fds_evidence")],
+            [call("find_similar_cases")],
+            [call("get_payment_history")],
+            None,
+        ],
+        outputs=[narrative(["9001", "9002"])],
+    )
+
+    outcome = run_investigation(context(), llm, _toolbox([CARD_ONLY, FULL]), SETTINGS)
+
+    seen = " ".join(str(m.content) for m in llm.choose_messages[-1] if isinstance(m, ToolMessage))
+    assert '"cardProvided":true' in seen
+    for label in ("신한", "1234", "국민", "5678"):
+        assert label not in seen
+    assert outcome.report.paymentAnalyses[0].signals.cardDisplayLabel == "신한 ****1234"

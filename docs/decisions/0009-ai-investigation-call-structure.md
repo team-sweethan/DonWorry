@@ -164,7 +164,7 @@ sequenceDiagram
   - 키가 없으면 예전 보고서(화면에서 카드 숨김), `null`이면 조회하지 못함(화면에 안내). Spring 저장 전 검사는 이 키를 요구하지 않는다 (`investigationTrace`와 같은 이유)
 - **#346에서 더한 키 — 추가만 한다.** `paymentAnalyses[].signals`: `cardDisplayLabel` · `cardProvided` · `deviceProvided` · `ipCountryCode` · `ipProvided` (FDS 평가가 없으면 `null`)
   - P4 `PaymentSignalReader`가 P2 `FdsEvidenceReader`를 직접 읽어 `get_fds_evidence` 응답의 결제별 `signals`로 내보내고(P3 결제 정보 창구는 거치지 않음), ai-server는 Tool 기록에서 코드가 채운다. AI를 끈 고정 보고서도 같은 값
-  - 원문 식별자는 P2 밖으로 나오지 않는다. AI에게는 "카드 정보 있음 · 기기 정보 있음 · 접속 국가(한국/해외(코드)/정보 없음)"만 보여 주고 카드 표시값(끝자리 숫자)은 넣지 않는다
+  - 원문 식별자는 P2 밖으로 나오지 않는다. AI에게는 "카드 정보 있음 · 기기 정보 있음 · 접속 국가(한국/해외(코드)/정보 없음)"만 보여 주고 카드 표시값(끝자리 숫자)은 넣지 않는다 — 도구를 고르는 단계(도구 응답을 AI에게 돌려줄 때, `llm_content`)와 판단 문장을 쓰는 단계 모두. 보고서를 채우는 Tool 기록에는 표시값을 남긴다 (#346 리뷰)
   - 가맹점이 보내지 않은 값은 "정보 없음 (가맹점이 보내지 않음)"으로 표시하고, AI 보고서 한계 줄에 종류별로 남긴다. AI에게 "정보 없음은 위험 근거가 아니다"를 지시한다 (돈워리가 받는 접속 IP는 가맹점 서버 IP라 구매자 IP로 쓸 수 없다)
   - AI 고정 한계 줄에서 "기기"를 뺐다 — 이제 기기 정보 유무는 확인한다
 - **#338에서 더한 키 — 추가만 한다.** `paymentHistory`: `lookbackDays` · `payments[]`(`paymentId` · `amount` · `paymentStatus` · `requestedAt`) · `statusCounts[]`(`paymentStatus` · `count`) · `truncated`
