@@ -152,6 +152,7 @@ export function SettlementPrototype({
     setView('list')
   }
   const validPeriod = validPreviewPeriod(rangeStart, rangeEnd)
+  const canSelectToday = dateInPeriod(dateInput(today), rangeStart, rangeEnd)
   const selectedDate = dateInPeriod(dateInput(selected), rangeStart, rangeEnd)
     ? selected
     : validPeriod
@@ -296,10 +297,18 @@ export function SettlementPrototype({
         <div className="stl-demo-tools">
           <Button
             size="small"
+            disabled={!busyDemo && !canSelectToday}
+            title={
+              !busyDemo && !canSelectToday
+                ? '오늘을 포함한 기간에서 시연할 수 있습니다.'
+                : undefined
+            }
             onClick={() => {
               setBusyDemo(!busyDemo)
-              setSelected(today)
-              setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+              if (canSelectToday) {
+                setSelected(today)
+                setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
+              }
               setPage(1)
             }}
           >
@@ -382,12 +391,8 @@ export function SettlementPrototype({
                   ›
                 </button>
                 <button
-                  disabled={!dateInPeriod(dateInput(today), rangeStart, rangeEnd)}
-                  title={
-                    dateInPeriod(dateInput(today), rangeStart, rangeEnd)
-                      ? '오늘 보기'
-                      : '오늘은 조회 기간 밖입니다.'
-                  }
+                  disabled={!canSelectToday}
+                  title={canSelectToday ? '오늘 보기' : '오늘은 조회 기간 밖입니다.'}
                   onClick={() => {
                     setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
                     setSelected(today)
