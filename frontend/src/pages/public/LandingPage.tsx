@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Alert, Button } from 'antd'
 import {
   ArrowRightOutlined,
@@ -32,9 +33,18 @@ const features = [
 const steps = ['신청 및 이메일 확인', '관리자 검토', '승인 후 계정 발급', '첫 비밀번호 설정']
 
 export function LandingPage({ onRetry }: { onRetry?: () => void }) {
+  const main = useRef<HTMLElement>(null)
   return (
     <div className="dw-landing">
-      <a className="dw-landing-skip" href="#landing-main">
+      {/* 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 포커스만 옮긴다. */}
+      <a
+        className="dw-landing-skip"
+        href="#landing-main"
+        onClick={(event) => {
+          event.preventDefault()
+          main.current?.focus()
+        }}
+      >
         본문 바로가기
       </a>
       <header className="dw-landing-header">
@@ -58,7 +68,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
           />
         </div>
       )}
-      <main id="landing-main" tabIndex={-1}>
+      <main id="landing-main" ref={main} tabIndex={-1}>
         <section className="dw-landing-hero" aria-labelledby="landing-title">
           <div className="dw-landing-container">
             <p className="dw-landing-eyebrow">거래를 살피고, 안심을 더합니다</p>
@@ -81,15 +91,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
               >
                 이용 신청 · 준비 중
               </Button>
-              <p id="landing-apply-description">
-                온라인 이용 신청은 준비 중입니다.
-                <br />
-                기존 계정이 있다면 로그인해 주세요.
-              </p>
-            </div>
-            <div className="dw-landing-hero-note">
-              <SafetyCertificateOutlined aria-hidden="true" />
-              <span>거래 확인부터 조치 결과까지 이어지는 관리</span>
+              <p id="landing-apply-description">기존 계정이 있다면 로그인해 주세요.</p>
             </div>
           </div>
         </section>
@@ -118,7 +120,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
         <section className="dw-landing-start" aria-labelledby="landing-start-title">
           <div className="dw-landing-container">
             <p className="dw-landing-section-label">이용 시작 안내</p>
-            <h2 id="landing-start-title">이용 신청은 준비 중입니다</h2>
+            <h2 id="landing-start-title">이용 시작 절차</h2>
             <p className="dw-landing-start-description">
               온라인 신청이 열리면 다음 절차로 이용을 시작합니다.
             </p>
@@ -141,7 +143,6 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
           <span>
             <strong>돈워리</strong> DonWorry
           </span>
-          <p>거래를 살피고, 안심을 더합니다.</p>
         </div>
       </footer>
     </div>

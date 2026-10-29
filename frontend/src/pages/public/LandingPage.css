@@ -60,7 +60,7 @@
   padding-block: 20px;
 }
 .dw-landing-hero {
-  padding: 88px 0 40px;
+  padding: 88px 0 80px;
   background: radial-gradient(ellipse at 90% 20%, #243f7c 0%, transparent 60%), #172554;
   color: #fff;
 }
@@ -103,16 +103,6 @@
 }
 .dw-landing-apply p {
   margin: 0;
-  color: #c8d5ee;
-  font-size: 13px;
-}
-.dw-landing-hero-note {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 64px;
-  padding-top: 24px;
-  border-top: 1px solid #3a4e79;
   color: #c8d5ee;
   font-size: 13px;
 }
@@ -223,9 +213,6 @@
   color: #172554;
   font-size: 16px;
 }
-.dw-landing-footer p {
-  margin: 0;
-}
 @media (max-width: 900px) {
   .dw-landing-feature-grid {
     gap: 16px;
@@ -252,9 +239,6 @@
   }
   .dw-landing-lead {
     font-size: 16px;
-  }
-  .dw-landing-hero-note {
-    margin-top: 40px;
   }
   .dw-landing-features {
     padding-block: 48px;
