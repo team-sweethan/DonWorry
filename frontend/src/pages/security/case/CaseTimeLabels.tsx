@@ -13,7 +13,7 @@ export function HelpLabel({ label, help }: { label: string; help: string }) {
   return (
     <Space size={4}>
       {label}
-      <Tooltip title={help}>
+      <Tooltip title={help} trigger={['hover', 'focus']}>
         <QuestionCircleOutlined
           tabIndex={0}
           aria-label={`${label} 설명: ${help}`}
