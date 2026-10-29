@@ -89,10 +89,6 @@ export function AlertListPage() {
       refreshSummary = false,
     ) => {
       if (nextMerchantId === undefined) {
-        requestSequence.current += 1
-        setListLoading(false)
-        setSummaryLoading(false)
-        setError('가맹점을 먼저 불러와 선택해 주세요.')
         return
       }
       const sequence = ++requestSequence.current
@@ -242,10 +238,11 @@ export function AlertListPage() {
     setError(null)
     reevaluateMockFdsError()
       .then(() => {
-        conditions.current = { filter: 'ALL', query: '', merchantId, page: 0 }
+        const current = conditions.current
+        conditions.current = { filter: 'ALL', query: '', merchantId: current.merchantId, page: 0 }
         setFilter('ALL')
         setQuery('')
-        load(0, 'ALL', '', merchantId, true)
+        load(0, 'ALL', '', current.merchantId, true)
       })
       .catch(() =>
         setError('ERROR 평가 재탐지를 실행하지 못했습니다. 먼저 ERROR 케이스를 생성해 주세요.'),
