@@ -131,5 +131,30 @@
   "verdict": {
     "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
     "overallRecommendation": "NEEDS_CHECK"
+  },
+  "investigationTrace": {
+    "provider": "MOCK",
+    "model": "mock",
+    "durationMs": 12,
+    "steps": [
+      {
+        "kind": "DECIDE",
+        "actor": "AI",
+        "title": "다음에 볼 조회 고르기",
+        "durationMs": 1,
+        "asked": null,
+        "received": "결제 목록 조회 선택",
+        "retryReason": null
+      },
+      {
+        "kind": "TOOL",
+        "actor": "AI",
+        "title": "결제 목록 조회",
+        "durationMs": 3,
+        "asked": "이 사건의 결제 전체",
+        "received": "결제 2건",
+        "retryReason": null
+      }
+    ]
   }
 }

@@ -63,4 +63,31 @@ class FixedReportGeneratorTests {
         assertThat(new ReportBodyValidator(casePaymentRepository).validate(AiReport.pending(7L, 1, 1, NOW), body))
                 .isEmpty();
     }
+
+    // AI 서버를 끈 시연의 보고서는 "고정 문장"으로 표시되고, AI가 한 단계는 하나도 없다 (#294)
+    @Test
+    void generate_aiDisabled_addsFixedProviderTrace() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
+        FixedReportGenerator generator =
+                new FixedReportGenerator(securityCaseRepository, casePaymentRepository, paymentInfoReader);
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> trace = (Map<?, ?>) body.get("investigationTrace");
+        assertThat(trace.get("provider")).isEqualTo("FIXED");
+        List<?> steps = (List<?>) trace.get("steps");
+        assertThat(steps).isNotEmpty();
+        assertThat(steps)
+                .allSatisfy(step -> assertThat(((Map<?, ?>) step).get("actor")).isEqualTo("SYSTEM"));
+        assertThat(trace.toString()).doesNotContain("600000");
+    }
 }

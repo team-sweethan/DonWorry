@@ -27,6 +27,7 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "recommendation",
         "evidence",
         "verdict",
+        "investigationTrace",
     ]
     first = report["paymentAnalyses"][0]
     assert (first["paymentId"], first["amount"], first["riskScore"]) == ("9001", 650000, 65)

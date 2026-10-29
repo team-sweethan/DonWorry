@@ -148,6 +148,27 @@ export type ReportBody = {
   }>
   // headline은 AI 결론 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
   verdict?: { headline: string; overallRecommendation: AiRecommendation }
+  // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
+  investigationTrace?: InvestigationTrace
+}
+
+// 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 온다 (#294)
+export type TraceStep = {
+  kind: 'DECIDE' | 'TOOL' | 'NUDGE' | 'WRITE' | 'ASSEMBLE'
+  actor: 'AI' | 'SYSTEM'
+  title: string
+  durationMs: number | null
+  asked: string | null
+  received: string | null
+  retryReason: string | null
+}
+
+// provider는 실제로 쓴 LLM 제공자, FIXED는 AI 서버를 끈 시연의 고정 문장 보고서
+export type InvestigationTrace = {
+  provider: 'OLLAMA' | 'MOCK' | 'FIXED'
+  model: string
+  durationMs: number | null
+  steps: TraceStep[]
 }
 
 export type AiReport = {

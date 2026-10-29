@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# AI 보고서 본문 8개 섹션 + 결론(verdict)
+# AI 보고서 본문 8개 섹션 + 결론(verdict) + 조사 과정(investigationTrace)
 # frontend/src/types/case.ts의 ReportBody와 키 · 타입을 같게 둔다
 # (ADR-0009 결정 4)
 # 한쪽만 고치지 않는다. 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
@@ -67,6 +67,27 @@ class Verdict(BaseModel):
     overallRecommendation: Recommendation
 
 
+# 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 둔다 (#294)
+# kind: AI 판단 · 조회 · 빠진 근거 재요청 · 판단 문장 쓰기 · 보고서 조립
+# actor: AI가 했는지 코드가 보충했는지
+class TraceStep(BaseModel):
+    kind: Literal["DECIDE", "TOOL", "NUDGE", "WRITE", "ASSEMBLE"]
+    actor: Literal["AI", "SYSTEM"]
+    title: str
+    durationMs: int | None
+    asked: str | None
+    received: str | None
+    retryReason: str | None
+
+
+# 조사 과정 기록 — provider는 실제로 쓴 LLM 제공자, FIXED는 Spring 고정 문장 보고서
+class InvestigationTrace(BaseModel):
+    provider: Literal["OLLAMA", "MOCK", "FIXED"]
+    model: str
+    durationMs: int | None
+    steps: list[TraceStep]
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
@@ -77,3 +98,4 @@ class ReportBody(BaseModel):
     recommendation: ReportRecommendation
     evidence: list[EvidenceItem]
     verdict: Verdict
+    investigationTrace: InvestigationTrace
