@@ -92,7 +92,7 @@ export function buildReportBody(
           (p.paymentStatus === 'HELD' ? ' → 매입 보류' : ''),
         kind: 'PAYMENT' as const,
       })),
-      { at: securityCase.createdAt, event: '사건 자동 생성 · AI 조사 시작', kind: 'CASE' as const },
+      { at: securityCase.createdAt, event: '사건 자동 생성', kind: 'CASE' as const },
     ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at)),
     overallAnalysis: ['결제 간 공통 기기·계정 관계는 확인되지 않았습니다.'],
     additionalChecks: ['고객 본인 확인 필요 여부'],

@@ -29,7 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class FixedReportGenerator {
 
-    static final String CASE_CREATED_EVENT = "사건 자동 생성 · AI 조사 시작";
+    // AI가 조사하지 않는 고정 보고서라 "AI 조사 시작"은 남기지 않는다 (#310 리뷰)
+    static final String CASE_CREATED_EVENT = "사건 자동 생성";
     // 화면에 코드값 대신 한국어로 — ai-server assemble.py와 같은 이름
     private static final Map<String, String> FDS_RESULT_KO =
             Map.of("ALLOW", "허용", "REVIEW", "검토", "DENY", "차단", "ERROR", "평가 오류");
