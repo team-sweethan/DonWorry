@@ -2,6 +2,7 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
 import com.donworry.investigation.repository.CasePaymentRepository;
@@ -48,6 +49,7 @@ class FixedReportGenerator {
     private final CasePaymentRepository casePaymentRepository;
     private final PaymentInfoReader paymentInfoReader;
     private final SimilarCaseFinder similarCaseFinder;
+    private final PaymentHistoryFinder paymentHistoryFinder;
 
     // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
@@ -66,7 +68,14 @@ class FixedReportGenerator {
         if (payments.size() != paymentIds.size()) {
             return Optional.empty();
         }
-        return Optional.of(body(securityCase, payments, similarOrNull(caseId), reportVersion, evidenceVersion, now));
+        return Optional.of(body(
+                securityCase,
+                payments,
+                similarOrNull(caseId),
+                historyOrNull(caseId, now),
+                reportVersion,
+                evidenceVersion,
+                now));
     }
 
     // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만든다 — 값 없음(null)으로 남겨 화면이 "조회하지 못함"을 보여 준다
@@ -75,6 +84,16 @@ class FixedReportGenerator {
             return similarCaseFinder.find(caseId);
         } catch (RuntimeException e) {
             log.warn("비슷한 과거 사건 조회 실패 caseId={}", caseId, e);
+            return null;
+        }
+    }
+
+    // 고객 최근 결제도 참고 자료라 조회에 실패해도 보고서는 만든다 (#338)
+    private PaymentHistoryToolResponse historyOrNull(Long caseId, Instant now) {
+        try {
+            return paymentHistoryFinder.find(caseId, now);
+        } catch (RuntimeException e) {
+            log.warn("고객 최근 결제 조회 실패 caseId={}", caseId, e);
             return null;
         }
     }
@@ -90,6 +109,7 @@ class FixedReportGenerator {
             SecurityCase securityCase,
             List<PaymentInfo> payments,
             SimilarCasesToolResponse similar,
+            PaymentHistoryToolResponse history,
             int reportVersion,
             int evidenceVersion,
             Instant now) {
@@ -150,7 +170,9 @@ class FixedReportGenerator {
                                 "추가 확인 후 결제별로 판정할 것을 권고합니다.",
                                 "limitations",
                                 List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
-                Map.entry("evidence", evidenceList(securityCase.getId(), similar, reportVersion, now, dataVersion)),
+                Map.entry(
+                        "evidence",
+                        evidenceList(securityCase.getId(), similar, history, reportVersion, now, dataVersion)),
                 Map.entry(
                         "verdict",
                         Map.of(
@@ -158,8 +180,9 @@ class FixedReportGenerator {
                                 "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.",
                                 "overallRecommendation",
                                 "NEEDS_CHECK")),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar))));
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history))));
         body.put("similarCases", similar == null ? null : similarCases(similar));
+        body.put("paymentHistory", history == null ? null : paymentHistory(history));
         return body;
     }
 
@@ -188,9 +211,14 @@ class FixedReportGenerator {
         return status == null ? event : event + " → " + status;
     }
 
-    // 증거 추적 줄 — 비슷한 사건은 조회에 성공했을 때만, 실제 응답의 출처 · 조회 시각 · 증거 버전으로 남긴다 (#296 리뷰)
+    // 증거 추적 줄 — 비슷한 사건 · 고객 최근 결제는 조회에 성공했을 때만, 실제 응답의 출처 · 조회 시각 · 증거 버전으로 남긴다 (#296 리뷰)
     private static List<Map<String, Object>> evidenceList(
-            Long caseId, SimilarCasesToolResponse similar, int reportVersion, Instant now, String dataVersion) {
+            Long caseId,
+            SimilarCasesToolResponse similar,
+            PaymentHistoryToolResponse history,
+            int reportVersion,
+            Instant now,
+            String dataVersion) {
         List<Map<String, Object>> list = new ArrayList<>();
         list.add(evidence("get_case_payments", "P3·P5", caseId, reportVersion, 1, now, dataVersion));
         list.add(evidence("get_fds_evidence", "P2", caseId, reportVersion, 2, now, dataVersion));
@@ -204,7 +232,45 @@ class FixedReportGenerator {
                     similar.retrievedAt(),
                     "evidence v" + similar.evidenceVersion()));
         }
+        if (history != null) {
+            list.add(evidence(
+                    "get_payment_history",
+                    history.source(),
+                    caseId,
+                    reportVersion,
+                    4,
+                    history.retrievedAt(),
+                    "evidence v" + history.evidenceVersion()));
+        }
         return list;
+    }
+
+    // 고객 최근 결제 (#338) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다
+    private static Map<String, Object> paymentHistory(PaymentHistoryToolResponse history) {
+        return Map.of(
+                "lookbackDays", history.lookbackDays(),
+                "payments",
+                        history.payments().stream()
+                                .map(p -> {
+                                    // 결제 정보가 비어 있을 수 있어 null을 받는 HashMap을 쓴다
+                                    Map<String, Object> payment = new HashMap<>();
+                                    payment.put("paymentId", p.paymentId());
+                                    payment.put("amount", p.amount());
+                                    payment.put("paymentStatus", p.paymentStatus());
+                                    payment.put(
+                                            "requestedAt",
+                                            p.requestedAt() == null
+                                                    ? null
+                                                    : p.requestedAt().toString());
+                                    return payment;
+                                })
+                                .toList(),
+                "statusCounts",
+                        history.statusCounts().stream()
+                                .map(c ->
+                                        Map.<String, Object>of("paymentStatus", c.paymentStatus(), "count", c.count()))
+                                .toList(),
+                "truncated", history.truncated());
     }
 
     // 비슷한 과거 사건 (#296) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다
@@ -228,7 +294,8 @@ class FixedReportGenerator {
     }
 
     // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다
-    private static Map<String, Object> fixedTrace(int paymentCount, SimilarCasesToolResponse similar) {
+    private static Map<String, Object> fixedTrace(
+            int paymentCount, SimilarCasesToolResponse similar, PaymentHistoryToolResponse history) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
         trace.put("model", "fixed");
@@ -246,6 +313,13 @@ class FixedReportGenerator {
                                 "비슷한 과거 사건 조회",
                                 "이 사건과 비슷한 종료 사건",
                                 similar == null ? "조회 실패" : "비슷한 사건 " + similar.totalMatched() + "건"),
+                        traceStep(
+                                "TOOL",
+                                "고객 최근 결제 조회",
+                                "같은 고객의 최근 " + PaymentHistoryFinder.LOOKBACK_DAYS + "일 결제 (이 사건 제외)",
+                                history == null
+                                        ? "조회 실패"
+                                        : "결제 " + history.payments().size() + "건"),
                         traceStep("ASSEMBLE", "고정 문장 보고서 조립", null, "AI 서버가 꺼져 정해진 문장으로 조립")));
         return trace;
     }

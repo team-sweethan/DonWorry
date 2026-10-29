@@ -39,7 +39,12 @@ class OllamaLlmClient:
 class MockLlmClient:
     def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
         called = {message.name for message in messages if isinstance(message, ToolMessage)}
-        for name in ("get_case_payments", "get_fds_evidence", "find_similar_cases"):
+        for name in (
+            "get_case_payments",
+            "get_fds_evidence",
+            "find_similar_cases",
+            "get_payment_history",
+        ):
             if name not in called:
                 call = {"name": name, "args": {}, "id": f"mock-{name}", "type": "tool_call"}
                 return AIMessage(content="", tool_calls=[call])

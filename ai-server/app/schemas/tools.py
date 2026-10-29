@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 # Spring AI Tool API 응답 — #254 CasePaymentsToolResponse · FdsEvidenceToolResponse ·
-# #296 SimilarCasesToolResponse와 같게 둔다
+# #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse와 같게 둔다
 # 못 찾은 값은 null이고 missingPaymentIds에 들어온다. 추측해서 채우지 않는다
 
 
@@ -72,3 +72,29 @@ class SimilarCasesTool(BaseModel):
     retrievedAt: str
     cases: list[SimilarCase]
     totalMatched: int
+
+
+# 고객 최근 결제 (#338) — 같은 가맹점 · 같은 고객의 최근 lookbackDays일 결제
+# 이 사건 결제는 빠져 있다
+class HistoryPayment(BaseModel):
+    paymentId: str
+    amount: int | None
+    paymentStatus: str | None
+    requestedAt: str | None
+
+
+class StatusCount(BaseModel):
+    paymentStatus: str
+    count: int
+
+
+# statusCounts는 payments(최대 20건) 안에서 Spring이 센 값이다. 기간 안에 더 있으면 truncated
+class PaymentHistoryTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    lookbackDays: int
+    payments: list[HistoryPayment]
+    statusCounts: list[StatusCount]
+    truncated: bool

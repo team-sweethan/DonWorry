@@ -173,6 +173,25 @@ export type ReportBody = {
   investigationTrace?: InvestigationTrace
   // 비슷한 과거 사건 (#296) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   similarCases?: SimilarCases | null
+  // 고객 최근 결제 (#338) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  paymentHistory?: PaymentHistory | null
+}
+
+// 고객 최근 결제 (#338) — 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제는 빠져 있다
+// 상태는 P5 코드값 그대로라 모르는 값이 올 수 있어 string으로 받는다
+export type PaymentHistoryItem = {
+  paymentId: string
+  amount: number | null
+  paymentStatus: string | null
+  requestedAt: string | null
+}
+
+// payments는 최근 순 최대 20건, statusCounts는 그 안에서 코드가 센 값. 기간 안에 더 있으면 truncated
+export type PaymentHistory = {
+  lookbackDays: number
+  payments: PaymentHistoryItem[]
+  statusCounts: Array<{ paymentStatus: string; count: number }>
+  truncated: boolean
 }
 
 // 비슷한 과거 사건 (#296) — 결과는 결제별 직원 판정 건수 그대로 (해석하지 않는다)

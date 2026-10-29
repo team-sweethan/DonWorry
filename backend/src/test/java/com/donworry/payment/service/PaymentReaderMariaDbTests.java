@@ -11,6 +11,7 @@ import com.donworry.payment.repository.PaymentRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Tag;
@@ -140,5 +141,43 @@ class PaymentReaderMariaDbTests {
         assertThatIllegalArgumentException().isThrownBy(() -> reader.findById(0L));
         assertThatIllegalArgumentException().isThrownBy(() -> reader.findById(-1L));
         assertThat(reader.findById(Long.MAX_VALUE)).isEmpty();
+    }
+    // 고객별 최근 결제 (#338) — customer_ref는 가맹점마다 따로 매기는 값이라 가맹점이 다르면 다른 고객이다
+    @Test
+    void findRecentByCustomer_sameCustomerRefOtherMerchant_isExcluded() {
+        String customer = UUID.randomUUID().toString();
+        Instant at = Instant.parse("2026-10-25T03:00:00Z");
+        long mine = saveFor(999L, customer, at);
+        saveFor(998L, customer, at.plusSeconds(1));
+        saveFor(999L, UUID.randomUUID().toString(), at.plusSeconds(2));
+
+        assertThat(reader.findRecentByCustomer(999L, customer, at.minusSeconds(60), 20))
+                .extracting(PaymentSummary::paymentId)
+                .containsExactly(mine);
+    }
+
+    // since보다 오래된 결제는 빼고, 최근 순으로 limit건만 읽는다 (#338)
+    @Test
+    void findRecentByCustomer_olderThanSince_excluded_limitsNewestFirst() {
+        String customer = UUID.randomUUID().toString();
+        Instant since = Instant.parse("2026-10-01T00:00:00Z");
+        saveFor(999L, customer, since.minusSeconds(1));
+        long first = saveFor(999L, customer, since);
+        long second = saveFor(999L, customer, since.plusSeconds(10));
+        long third = saveFor(999L, customer, since.plusSeconds(20));
+
+        assertThat(reader.findRecentByCustomer(999L, customer, since, 2))
+                .extracting(PaymentSummary::paymentId)
+                .containsExactly(third, second);
+        assertThat(reader.findRecentByCustomer(999L, customer, since, 20))
+                .extracting(PaymentSummary::paymentId)
+                .isEqualTo(List.of(third, second, first));
+    }
+
+    private long saveFor(Long merchantId, String customerRef, Instant createdAt) {
+        return transaction()
+                .execute(status -> payments.save(Payment.pending(
+                                merchantId, customerRef, UUID.randomUUID().toString(), 123_456L, createdAt))
+                        .getPaymentId());
     }
 }
