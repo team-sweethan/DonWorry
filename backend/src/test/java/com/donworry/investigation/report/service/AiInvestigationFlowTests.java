@@ -289,7 +289,13 @@ class AiInvestigationFlowTests {
         Long reportId = reportOf(f).getId();
         String attemptId = submittedFor(reportId).getFirst().attemptId();
         CaseStatus before = caseStatus(f);
-        AiTraceStep payments = new AiTraceStep("TOOL", "AI", "결제 목록 조회", 200L, null, "결제 1건", null);
+        AiTraceStep payments = AiTraceStep.builder()
+                .kind("TOOL")
+                .actor("AI")
+                .title("결제 목록 조회")
+                .durationMs(200L)
+                .received("결제 1건")
+                .build();
         given(aiServerClient.status(reportId))
                 .willReturn(Optional.of(new AiInvestigationResult(
                         String.valueOf(reportId), attemptId, "RUNNING", null, null, List.of(payments))));
@@ -323,7 +329,7 @@ class AiInvestigationFlowTests {
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", other.caseId(), otherReportId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reportId").value(otherReportId))
+                .andExpect(jsonPath("$.reportId").value(String.valueOf(otherReportId)))
                 .andExpect(jsonPath("$.status").value("RUNNING"));
     }
 

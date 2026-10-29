@@ -33,7 +33,7 @@ public class AiReportProgressService {
                 .findById(reportId)
                 .filter(report -> report.getCaseId().equals(caseId))
                 .map(report -> new ReportProgressResponse(
-                        report.getId(), report.getStatus().name(), steps(report)));
+                        String.valueOf(report.getId()), report.getStatus().name(), steps(report)));
     }
 
     // 고정 보고서(ai-server 꺼짐)는 진행 기록이 없다. 현재 시도의 기록만 보여 준다

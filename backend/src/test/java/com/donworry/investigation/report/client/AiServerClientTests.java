@@ -74,7 +74,14 @@ class AiServerClientTests {
 
         assertThat(result.status()).isEqualTo("RUNNING");
         assertThat(result.progress())
-                .containsExactly(new AiTraceStep("TOOL", "AI", "결제 목록 조회", 200L, "이 사건의 결제 전체", "결제 3건", null));
+                .containsExactly(AiTraceStep.builder()
+                        .kind("TOOL")
+                        .actor("AI")
+                        .title("결제 목록 조회")
+                        .durationMs(200L)
+                        .asked("이 사건의 결제 전체")
+                        .received("결제 3건")
+                        .build());
     }
 
     private AiServerClient client() {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Card, Empty, Space, Spin, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -34,18 +34,20 @@ export function ReportCard({
   // 끝난 단계 (#322). 사건 상세가 3초마다 다시 조회해 report가 새로 올 때마다 함께 가져온다
   // 자동 조회가 2분 뒤 멈추면 이것도 멈춘다 — 세션 무활동 만료(ADR-0014)를 막지 않는다
   const [progress, setProgress] = useState<{ reportId: string; steps: TraceStep[] } | null>(null)
+  // 같은 보고서의 조회가 아직 끝나지 않았으면 새로 보내지 않는다 — 느릴 때 요청이 쌓이지 않게
+  const inFlight = useRef<string | null>(null)
   useEffect(() => {
-    if (!running) return
-    let alive = true
-    getReportProgress(caseId, running.reportId)
-      .then((p) => {
-        if (alive) setProgress({ reportId: running.reportId, steps: p.steps })
-      })
+    if (!running || inFlight.current === running.reportId) return
+    const reportId = running.reportId
+    inFlight.current = reportId
+    // 상세가 다시 조회돼도 응답을 버리지 않는다 — 보고서 번호로 맞는 응답인지 가린다 (아래 steps)
+    getReportProgress(caseId, reportId)
+      .then((p) => setProgress({ reportId, steps: p.steps }))
       // 진행 표시는 보조 정보라 실패해도 안내하지 않고 이전 단계를 그대로 둔다
       .catch(() => {})
-    return () => {
-      alive = false
-    }
+      .finally(() => {
+        if (inFlight.current === reportId) inFlight.current = null
+      })
   }, [caseId, running])
   const steps = running && progress?.reportId === running.reportId ? progress.steps : []
 
