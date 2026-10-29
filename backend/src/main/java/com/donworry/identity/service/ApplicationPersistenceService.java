@@ -42,7 +42,12 @@ public class ApplicationPersistenceService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Optional<PreparedApplicationMail> resend(String email) {
-        var found = applications.lockUnverifiedByEmail(email);
+        // 상태 인덱스를 먼저 잠그면 확인(기본키 → 상태 변경)과 순서가 엇갈려 교착이 난다 (#335).
+        // id만 먼저 찾고 기본키로 잠근 뒤, 그사이 확인이 끝났을 수 있어 상태를 다시 본다.
+        var found = applications
+                .findUnverifiedIdByEmail(email)
+                .flatMap(applications::lockById)
+                .filter(app -> app.getStatus() == ApplicationStatus.EMAIL_PENDING);
         if (found.isEmpty() || !found.get().getCreatedAt().plusDays(7).isAfter(now())) return Optional.empty();
         return Optional.of(prepare(found.get()));
     }
