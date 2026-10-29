@@ -44,6 +44,7 @@ class MockLlmClient:
             "get_fds_evidence",
             "find_similar_cases",
             "get_payment_history",
+            "find_linked_payments",
         ):
             if name not in called:
                 call = {"name": name, "args": {}, "id": f"mock-{name}", "type": "tool_call"}

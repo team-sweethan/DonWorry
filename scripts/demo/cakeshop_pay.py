@@ -5,6 +5,7 @@
 # 같은 손님으로 다시: py scripts/demo/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
 # 카드 · 기기도 보내기: --signals (손님마다 고정된 가짜 카드 · 기기), IP까지: --ip 203.0.113.5 --country US (#346)
 #   카드 · 기기를 보내면 FDS 규칙(새 기기 · 처음 쓰는 카드)이 걸려 몇 번째 결제가 보류될지 달라질 수 있다
+# 손님이 달라도 같은 카드: --card A (#352) — 두 번 실행하면 두 번째 사건 보고서의 "같은 카드"에 앞 손님 결제가 잡힌다
 import argparse
 import base64
 import hashlib
@@ -85,6 +86,9 @@ def signals(customer_ref: str, args: argparse.Namespace) -> dict:
             cardDisplayLabel=f"데모카드 ****{customer_ref[-4:]}",
             deviceId=f"device-demo-{customer_ref[-6:]}",
         )
+    # 이름이 같으면 손님이 달라도 같은 카드 토큰 — --signals의 손님별 카드보다 우선한다
+    if args.card:
+        found.update(cardToken=f"tok_demo_shared_{args.card}", cardDisplayLabel=f"데모 공유카드 {args.card}"[:50])
     if args.ip:
         found["ipAddress"] = args.ip
     if args.country:
@@ -115,6 +119,7 @@ def main() -> int:
     # 손님 번호를 주면 그 손님으로 결제한다. 없으면 매번 새 손님
     parser.add_argument("customer", nargs="?", help="손님 번호 (같은 손님으로 다시 결제할 때)")
     parser.add_argument("--signals", action="store_true", help="손님마다 고정된 가짜 카드 · 기기를 함께 보냄")
+    parser.add_argument("--card", help="손님이 달라도 같은 카드로 보낼 이름 (예: A)")
     parser.add_argument("--ip", help="구매자 접속 IP (예: 203.0.113.5)")
     parser.add_argument("--country", help="접속 국가 코드 2자리 (예: US, KR)")
     args = parser.parse_args()

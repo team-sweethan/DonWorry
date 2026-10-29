@@ -27,11 +27,11 @@ from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
     FdsPayment,
+    LinkedPaymentsTool,
     PaymentHistoryTool,
     SimilarCasesTool,
+    ToolResult,
 )
-
-ToolResult = CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool
 
 # 조사 Agent — Qwen이 다음에 볼 도구를 고르고, 코드는 허용 · 횟수 · 필수 근거 · 기록을 지킨다
 # 흐름: 고르기 ↔ 실행 → 필수 근거 확인 → 판단 문장 쓰기(형식 검사 · 고쳐 쓰기) → 보고서 조립
@@ -82,6 +82,11 @@ def _latest_similar(records: list[ToolRecord]) -> SimilarCasesTool | None:
 
 def _latest_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     found = [r.result for r in records if isinstance(r.result, PaymentHistoryTool)]
+    return found[-1] if found else None
+
+
+def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
+    found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
     return found[-1] if found else None
 
 
@@ -176,6 +181,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         return "check" if state["tool_calls_used"] >= max_calls else "choose"
 
     # 필수 근거: 결제 목록 + 모든 결제의 FDS 근거 + 비슷한 과거 사건(#296) + 고객 최근 결제(#338)
+    # + 같은 카드 · 기기 · IP를 쓴 다른 결제(#352)
     # 빠지면 Qwen에게 알리고, 그래도 안 보면 코드가 보충한다
     def check(state: AgentState) -> AgentState:
         records = list(state["records"])
@@ -192,6 +198,8 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             missing.append("비슷한 과거 사건(find_similar_cases)")
         if _latest_history(records) is None:
             missing.append("고객 최근 결제(get_payment_history)")
+        if _latest_linked(records) is None:
+            missing.append("같은 카드 · 기기 · IP 결제(find_linked_payments)")
         steps = list(state["trace"])
         if not missing:
             return _ready_to_write(records, steps)
@@ -221,7 +229,8 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             filled = toolbox.get_fds_evidence(unseen)
             records.append(ToolRecord("get_fds_evidence", {"payment_ids": unseen}, filled, True))
             steps.append(_system_fill("get_fds_evidence", {"payment_ids": unseen}, filled, started))
-        # 비슷한 사건 · 고객 최근 결제는 참고 자료라 보충 조회가 실패해도 보고서는 만든다
+        # 비슷한 사건 · 고객 최근 결제 · 연관 결제는 참고 자료라
+        # 보충 조회가 실패해도 보고서는 만든다
         # (카드에는 "조회하지 못함")
         if _latest_similar(records) is None:
             _fill_reference(
@@ -230,6 +239,14 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         if _latest_history(records) is None:
             _fill_reference(
                 "get_payment_history", toolbox.get_payment_history, "고객 최근 결제", records, steps
+            )
+        if _latest_linked(records) is None:
+            _fill_reference(
+                "find_linked_payments",
+                toolbox.find_linked_payments,
+                "같은 카드 · 기기 · IP 결제",
+                records,
+                steps,
             )
         return _ready_to_write(records, steps)
 
@@ -269,12 +286,14 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                         _fds_by_payment(records),
                         _latest_similar(records),
                         _latest_history(records),
+                        _latest_linked(records),
                     )
                 )
             ),
         ]
         started = time.perf_counter()
         raw = llm.write_json(messages, narrative_schema(payment_ids))
+        # 연관 결제(#352)는 AI에게 숫자를 보여 주지 않으므로 허용 숫자에 넣지 않는다
         allowed = fact_numbers(
             case_payments,
             _fds_by_payment(records),
@@ -339,6 +358,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             trace.build_trace(settings, list(state["trace"]), 0),
             _latest_similar(records),
             _latest_history(records),
+            _latest_linked(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -430,6 +450,8 @@ def _execute(toolbox: ToolBox, name: str, args: dict[str, Any]) -> ToolResult:
         return toolbox.find_similar_cases()
     if name == "get_payment_history":
         return toolbox.get_payment_history()
+    if name == "find_linked_payments":
+        return toolbox.find_linked_payments()
     payment_ids = args.get("payment_ids") or None
     return toolbox.get_fds_evidence([str(p) for p in payment_ids] if payment_ids else None)
 

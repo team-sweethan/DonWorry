@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 # AI 보고서 본문 8개 섹션 + 결론(verdict) + 조사 과정(investigationTrace)
 # + 비슷한 과거 사건(similarCases) + 고객 최근 결제(paymentHistory, #338)
+# + 같은 카드 · 기기 · IP를 쓴 다른 결제(linkedPayments, #352)
 # frontend/src/types/case.ts의 ReportBody와 키 · 타입을 같게 둔다
 # (ADR-0009 결정 4)
 # 한쪽만 고치지 않는다. 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
@@ -145,6 +146,29 @@ class PaymentHistory(BaseModel):
     truncated: bool
 
 
+# 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352) — Tool 기록 값 그대로 코드가 채운다
+# 숫자를 AI가 쓰지 않는다
+class LinkedResultCount(BaseModel):
+    result: str
+    count: int
+
+
+# provided=False면 이 사건 결제가 그 값을 보내지 않음 — 화면은 "정보 없음"을 보여 준다
+class LinkedMatch(BaseModel):
+    provided: bool
+    otherCustomerCount: int
+    paymentCount: int
+    resultCounts: list[LinkedResultCount]
+    declinedCount: int
+
+
+class LinkedPayments(BaseModel):
+    lookbackDays: int
+    card: LinkedMatch
+    device: LinkedMatch
+    ip: LinkedMatch
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
@@ -160,3 +184,5 @@ class ReportBody(BaseModel):
     similarCases: SimilarCases | None
     # 조회하지 못했으면 None — 화면은 "조회하지 못함"을 보여 준다
     paymentHistory: PaymentHistory | None
+    # 조회하지 못했으면 None — 화면은 "조회하지 못함"을 보여 준다
+    linkedPayments: LinkedPayments | None

@@ -3,7 +3,8 @@ from typing import Literal
 from pydantic import BaseModel
 
 # Spring AI Tool API 응답 — #254 CasePaymentsToolResponse · FdsEvidenceToolResponse ·
-# #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse와 같게 둔다
+# #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse ·
+# #352 LinkedPaymentsToolResponse와 같게 둔다
 # 못 찾은 값은 null이고 missingPaymentIds에 들어온다. 추측해서 채우지 않는다
 
 
@@ -111,3 +112,37 @@ class PaymentHistoryTool(BaseModel):
     payments: list[HistoryPayment]
     statusCounts: list[StatusCount]
     truncated: bool
+
+
+# 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352) — 같은 가맹점 · 최근 lookbackDays일
+# 건수 · 고객 수 · 판정만 온다
+# 카드 토큰 · IP 주소 · 기기 ID · 다른 고객 번호 · 결제 ID는 오지 않는다
+class ResultCount(BaseModel):
+    result: str
+    count: int
+
+
+# provided=False면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻 ("정보 없음")
+class LinkedMatch(BaseModel):
+    provided: bool
+    otherCustomerCount: int
+    paymentCount: int
+    resultCounts: list[ResultCount]
+    declinedCount: int
+
+
+class LinkedPaymentsTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    lookbackDays: int
+    card: LinkedMatch
+    device: LinkedMatch
+    ip: LinkedMatch
+
+
+# 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다
+ToolResult = (
+    CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool | LinkedPaymentsTool
+)

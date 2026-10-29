@@ -177,6 +177,26 @@ export type ReportBody = {
   similarCases?: SimilarCases | null
   // 고객 최근 결제 (#338) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   paymentHistory?: PaymentHistory | null
+  // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  linkedPayments?: LinkedPayments | null
+}
+
+// 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 (#352) — 건수 · 고객 수 · 판정만 온다
+// provided=false면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻 ("정보 없음")
+// result는 FDS 판정 코드값 그대로라 모르는 값이 올 수 있어 string으로 받는다
+export type LinkedMatch = {
+  provided: boolean
+  otherCustomerCount: number
+  paymentCount: number
+  resultCounts: Array<{ result: string; count: number }>
+  declinedCount: number
+}
+
+export type LinkedPayments = {
+  lookbackDays: number
+  card: LinkedMatch
+  device: LinkedMatch
+  ip: LinkedMatch
 }
 
 // 결제별 카드 · 기기 · 접속 국가 (#346) — 카드는 마스킹 표시값, IP는 국가 코드만 온다

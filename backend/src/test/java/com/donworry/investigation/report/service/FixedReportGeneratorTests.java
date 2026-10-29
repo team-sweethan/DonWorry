@@ -7,6 +7,9 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse.StatusCount;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
@@ -53,6 +56,9 @@ class FixedReportGeneratorTests {
     @Mock
     PaymentSignalReader paymentSignalReader;
 
+    @Mock
+    LinkedPaymentFinder linkedPaymentFinder;
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -72,7 +78,8 @@ class FixedReportGeneratorTests {
                 paymentInfoReader,
                 similarCaseFinder,
                 paymentHistoryFinder,
-                paymentSignalReader);
+                paymentSignalReader,
+                linkedPaymentFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -109,7 +116,8 @@ class FixedReportGeneratorTests {
                 paymentInfoReader,
                 similarCaseFinder,
                 paymentHistoryFinder,
-                paymentSignalReader);
+                paymentSignalReader,
+                linkedPaymentFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -145,7 +153,8 @@ class FixedReportGeneratorTests {
                 paymentInfoReader,
                 similarCaseFinder,
                 paymentHistoryFinder,
-                paymentSignalReader);
+                paymentSignalReader,
+                linkedPaymentFinder);
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -269,6 +278,55 @@ class FixedReportGeneratorTests {
         assertThat(analysis.get("signals")).isEqualTo(expected);
     }
 
+    // AI 서버를 끈 시연에서도 같은 카드 · 기기 · IP 결제 카드가 채워진다 — 값은 LinkedPaymentFinder 결과 그대로 (#352)
+    @Test
+    void generate_aiDisabled_addsLinkedPayments() {
+        FixedReportGenerator generator = generatorForCase7();
+        Match none = new Match(false, 0, 0, List.of(), 0);
+        when(linkedPaymentFinder.find(7L, NOW))
+                .thenReturn(new LinkedPaymentsToolResponse(
+                        "7",
+                        1,
+                        "P2",
+                        NOW,
+                        30,
+                        new Match(true, 2, 3, List.of(new ResultCount("REVIEW", 2), new ResultCount("DENY", 1)), 1),
+                        new Match(true, 0, 0, List.of(), 0),
+                        none));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> linked = (Map<?, ?>) body.get("linkedPayments");
+        assertThat(linked.get("lookbackDays")).isEqualTo(30);
+        assertThat(linked.get("card"))
+                .isEqualTo(Map.of(
+                        "provided", true,
+                        "otherCustomerCount", 2,
+                        "paymentCount", 3,
+                        "resultCounts",
+                                List.of(Map.of("result", "REVIEW", "count", 2), Map.of("result", "DENY", "count", 1)),
+                        "declinedCount", 1));
+        assertThat(((Map<?, ?>) linked.get("ip")).get("provided")).isEqualTo(false);
+        assertThat(evidenceOf(body, "find_linked_payments")).singleElement().satisfies(e -> {
+            assertThat(e.get("source")).isEqualTo("P2");
+            assertThat(e.get("dataVersion")).isEqualTo("evidence v1");
+        });
+    }
+
+    // 같은 카드 · 기기 · IP 결제는 참고 자료라 조회에 실패해도 보고서는 만들어지고, 값만 비어 있다 (#352)
+    @Test
+    void generate_linkedLookupFails_reportStillSucceeds() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(linkedPaymentFinder.find(7L, NOW)).thenThrow(new IllegalStateException("P2 조회 실패"));
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        assertThat(body).containsKey("linkedPayments");
+        assertThat(body.get("linkedPayments")).isNull();
+        assertThat(body.get("verdict")).isNotNull();
+        assertThat(evidenceOf(body, "find_linked_payments")).isEmpty();
+    }
+
     private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
         List<Map<?, ?>> found = new ArrayList<>();
         for (Object item : (List<?>) body.get("evidence")) {
@@ -296,6 +354,7 @@ class FixedReportGeneratorTests {
                 paymentInfoReader,
                 similarCaseFinder,
                 paymentHistoryFinder,
-                paymentSignalReader);
+                paymentSignalReader,
+                linkedPaymentFinder);
     }
 }

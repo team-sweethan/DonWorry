@@ -4,6 +4,7 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
@@ -39,6 +40,7 @@ public class AiToolService {
     private final SimilarCaseFinder similarCaseFinder;
     private final PaymentHistoryFinder paymentHistoryFinder;
     private final PaymentSignalReader paymentSignalReader;
+    private final LinkedPaymentFinder linkedPaymentFinder;
 
     @Transactional(readOnly = true)
     public CasePaymentsToolResponse casePayments(Long caseId) {
@@ -121,6 +123,11 @@ public class AiToolService {
     // 고객 최근 결제 (#338) — 고정 보고서와 같은 규칙을 쓰도록 PaymentHistoryFinder에 맡긴다 (트랜잭션도 그쪽이 연다)
     public PaymentHistoryToolResponse paymentHistory(Long caseId) {
         return paymentHistoryFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    // 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352) — 고정 보고서와 같은 규칙을 쓰도록 LinkedPaymentFinder에 맡긴다
+    public LinkedPaymentsToolResponse linkedPayments(Long caseId) {
+        return linkedPaymentFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
     // 증거 버전과 결제 목록을 같은 읽기 트랜잭션에서 읽어 같은 시점 값으로 맞춘다

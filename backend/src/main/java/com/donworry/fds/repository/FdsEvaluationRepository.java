@@ -41,4 +41,14 @@ public interface FdsEvaluationRepository
 
     @EntityGraph(attributePaths = "ruleHits")
     List<FdsEvaluation> findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(Collection<Long> paymentIds);
+
+    // 같은 가맹점 · 기간 안에서 같은 카드 · 기기 · IP를 쓴 평가 (#352) — 같은 고객 · 사건 결제 제외는 조회 서비스가 한다
+    List<FdsEvaluation> findByMerchantIdAndCardTokenInAndPaymentRequestedAtGreaterThanEqual(
+            Long merchantId, Collection<String> cardTokens, Instant since);
+
+    List<FdsEvaluation> findByMerchantIdAndDeviceIdInAndPaymentRequestedAtGreaterThanEqual(
+            Long merchantId, Collection<String> deviceIds, Instant since);
+
+    List<FdsEvaluation> findByMerchantIdAndIpAddressInAndPaymentRequestedAtGreaterThanEqual(
+            Long merchantId, Collection<String> ipAddresses, Instant since);
 }

@@ -2,6 +2,7 @@ package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.AiToolService;
@@ -45,5 +46,11 @@ public class AiToolController {
     @GetMapping("/get_payment_history")
     public PaymentHistoryToolResponse paymentHistory(@RequestParam Long caseId) {
         return aiToolService.paymentHistory(caseId);
+    }
+
+    // 같은 가맹점 · 최근 30일에 같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 건수 · 고객 수 · 판정 (#352)
+    @GetMapping("/find_linked_payments")
+    public LinkedPaymentsToolResponse linkedPayments(@RequestParam Long caseId) {
+        return aiToolService.linkedPayments(caseId);
     }
 }

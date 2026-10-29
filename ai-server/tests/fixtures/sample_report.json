@@ -165,5 +165,6 @@
     ]
   },
   "similarCases": null,
-  "paymentHistory": null
+  "paymentHistory": null,
+  "linkedPayments": null
 }
