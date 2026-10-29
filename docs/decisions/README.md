@@ -65,6 +65,10 @@
 | [0041](0041-ai-server-internal-api-key-authentication.md) | AI 서버 내부 API 서비스 키 인증 | 제안 — #266 P1 동의, PR 리뷰 대상 |
 | [0042](0042-fds-rule-management.md) | FDS 룰 활성화와 변경 승인 관리 | 제안 — #283 구현 반영, PR 리뷰 대상 |
 
+| [0043](0043-application-storage.md) | 이용 신청·토큰·개인정보 저장 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
+| [0044](0044-application-smtp.md) | 신청 메일 SMTP와 커밋 후 발송 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
+| [0045](0045-application-public-http.md) | 공개 신청·이메일 확인 HTTP와 CSRF | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
+
 ## 현재 적용 상태와 기록의 구분
 
 2026-10-22, `ba9427f` 기준으로 ADR-0011의 Flyway·버전 생성·DB 검사와 ADR-0013의 포매터·CI 검사가 구현되어 있습니다.

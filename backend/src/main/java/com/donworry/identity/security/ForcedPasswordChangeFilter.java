@@ -18,7 +18,10 @@ class ForcedPasswordChangeFilter extends OncePerRequestFilter {
             "/api/auth/password",
             "/api/auth/logout",
             "/api/auth/logout-all",
-            "/api/auth/csrf");
+            "/api/auth/csrf",
+            "/api/merchant-applications",
+            "/api/merchant-applications/email-verifications",
+            "/api/merchant-applications/email-verification-resends");
     private final SecurityProblemResponseWriter writer;
 
     @Override

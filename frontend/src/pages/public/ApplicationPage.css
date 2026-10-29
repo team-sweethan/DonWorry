@@ -1,0 +1,98 @@
+.dw-application-shell {
+  min-height: 100vh;
+  background: #f4f7fc;
+  color: #172b4d;
+  padding: 0 24px 48px;
+}
+.dw-application-header {
+  max-width: 1100px;
+  margin: auto;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dw-application-header a {
+  color: #174b9c;
+}
+.dw-application-header .dw-landing-brand {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 24px;
+  font-weight: 800;
+  text-decoration: none;
+}
+.dw-application-header .dw-landing-brand span {
+  font-size: 14px;
+  font-weight: 500;
+}
+.dw-application-main {
+  max-width: 700px;
+  margin: 24px auto 0;
+  background: white;
+  padding: 40px;
+  border: 1px solid #dce4f0;
+  border-radius: 20px;
+}
+.dw-application-main h1 {
+  font-size: 28px;
+  line-height: 1.4;
+  margin: 0 0 16px;
+}
+.dw-application-main h2 {
+  font-size: 18px;
+  margin: 32px 0 16px;
+}
+.dw-application-main p {
+  line-height: 1.8;
+  color: #4b5f7e;
+}
+.dw-application-main .ant-alert {
+  margin: 16px 0;
+}
+.dw-application-main .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.dw-application-consent {
+  background: #f4f7fc;
+  padding: 1px 20px 12px;
+  border-radius: 12px;
+  margin: 24px 0;
+}
+.dw-application-consent dt {
+  font-weight: 700;
+  margin-top: 12px;
+}
+.dw-application-consent dd {
+  margin: 4px 0 0;
+  line-height: 1.7;
+}
+.dw-application-resend {
+  border-top: 1px solid #dce4f0;
+  margin-top: 36px;
+  padding-top: 8px;
+}
+.dw-application-actions {
+  margin-top: 24px;
+}
+.dw-application-bottom {
+  margin-top: 32px;
+}
+@media (max-width: 600px) {
+  .dw-application-shell {
+    padding: 0 16px 32px;
+  }
+  .dw-application-header {
+    min-height: 72px;
+  }
+  .dw-application-main {
+    padding: 24px 20px;
+    margin-top: 12px;
+  }
+  .dw-application-main h1 {
+    font-size: 24px;
+  }
+}

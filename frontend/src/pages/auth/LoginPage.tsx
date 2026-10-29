@@ -152,7 +152,7 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
           <div className="dw-login-public-intro">
             <span>돈워리가 처음이신가요?</span>
             <Link to="/">서비스 소개</Link>
-            <p>이용 신청은 준비 중입니다.</p>
+            <Link to="/apply">이용 신청</Link>
           </div>
         </section>
       </div>

@@ -2,6 +2,19 @@ spring:
   application:
     name: donworry
 
+  mail:
+    host: ${DONWORRY_SMTP_HOST:localhost}
+    port: ${DONWORRY_SMTP_PORT:1025}
+    username: ${DONWORRY_SMTP_USERNAME:}
+    password: ${DONWORRY_SMTP_PASSWORD:}
+    properties:
+      "[mail.smtp.auth]": ${DONWORRY_SMTP_AUTH:false}
+      "[mail.smtp.starttls.enable]": ${DONWORRY_SMTP_STARTTLS:false}
+      "[mail.smtp.starttls.required]": ${DONWORRY_SMTP_STARTTLS:false}
+      "[mail.smtp.connectiontimeout]": 3000
+      "[mail.smtp.timeout]": 3000
+      "[mail.smtp.writetimeout]": 3000
+
   datasource:
     url: jdbc:mariadb://${DONWORRY_DB_HOST:localhost}:${DONWORRY_DB_PORT:3307}/${DONWORRY_DB_NAME:donworry}
     username: ${DONWORRY_DB_USER:donworry}
@@ -44,6 +57,10 @@ server:
         same-site: lax
 
 donworry:
+  applications:
+    enabled: ${DONWORRY_APPLICATIONS_ENABLED:true}
+    public-base-url: ${DONWORRY_PUBLIC_BASE_URL:http://localhost:5173}
+    mail-from: ${DONWORRY_MAIL_FROM:donworry@localhost}
   scheduling:
     # 로그인 이력 90일 삭제 등 예약 작업. 테스트는 build.gradle에서 끄고 작업을 직접 호출한다.
     enabled: ${DONWORRY_SCHEDULING_ENABLED:true}

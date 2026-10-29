@@ -140,12 +140,22 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-reevaluations"),
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
+        var applicationPosts = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/merchant-applications"),
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/merchant-applications/email-verifications"),
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/merchant-applications/email-verification-resends"));
+        http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                PathPatternRequestMatcher.withDefaults().matcher("/api/merchant-applications/**"),
+                (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         // ADR-0036: 두 복구 POST는 전역 CSRF 설정과 관계없이 보호한다.
         http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
                 fdsRecoveryPosts, (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         http.csrf(csrf -> csrf.spa()
                         .csrfTokenRepository(csrfTokenRepository)
-                        .requireCsrfProtectionMatcher(request -> fdsRecoveryPosts.matches(request)
+                        .requireCsrfProtectionMatcher(request -> applicationPosts.matches(request)
+                                || fdsRecoveryPosts.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
                         .ignoringRequestMatchers("/internal/**"))

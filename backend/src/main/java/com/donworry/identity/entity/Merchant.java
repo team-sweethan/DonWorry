@@ -31,6 +31,9 @@ public class Merchant {
     @Column(name = "status", nullable = false, length = 20)
     private MerchantStatus status;
 
+    @Column(name = "business_registration_number", length = 10)
+    private String businessRegistrationNumber;
+
     @Column(name = "secret_reference", length = 200)
     private String secretReference;
 
