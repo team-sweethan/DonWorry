@@ -79,7 +79,7 @@ sequenceDiagram
 
 **`get_payment_history` (#338)** — 구현: `PaymentHistoryFinder` + P5 `PaymentReader.findRecentByCustomer`. AI Tool과 AI를 끈 고정 보고서가 같은 규칙을 쓴다
 - "같은 고객": Case의 `merchant_id` + `customer_ref` (`find_similar_cases`와 같은 기준). 다른 가맹점 결제는 읽지 않는다
-- 이 사건에 묶인 결제는 뺀다 — "평소 결제"와 비교하는 것이 목적이라, 사건 결제가 섞이면 사건 자체가 정상 근거처럼 보인다
+- 이 사건에 묶인 결제는 뺀다 — "평소 결제"와 비교하는 것이 목적이라, 사건 결제가 섞이면 사건 자체가 정상 근거처럼 보인다. P5 조회에서 건수를 세기 전에 빼서, 사건 결제가 아무리 많아도 사건 밖 결제를 놓치지 않는다 (#338 리뷰)
 - 기간 · 건수는 코드에 고정: 조회 시각 기준 최근 30일, 최근 순 최대 20건. 기간 안에 더 있으면 `truncated: true`. AI가 기간을 고르지 않는다 (처음 표의 `lookbackDays` 입력은 뺐다 — 아래 고려한 대안)
 - 상태별 건수(`statusCounts`)는 반환한 결제(최대 20건) 안에서 코드가 센다. 응답: `lookbackDays` · `payments[]`(`paymentId` · `amount` · `paymentStatus` · `requestedAt`) · `statusCounts[]`(`paymentStatus` · `count`) · `truncated`
 - 필수 근거 · 실패 처리 · 별도 읽기 트랜잭션은 `find_similar_cases`와 같다 (안 부르면 다시 요청 → 시스템 보충, 실패하면 `paymentHistory: null`로 두고 보고서는 만든다. AI 보고서는 한계 줄에 "고객 최근 결제를 조회하지 못했습니다"를 더한다)
@@ -278,7 +278,7 @@ investigation/report/
 - 보안: `/internal/ai/**`는 identity의 전용 보안 체인이 서비스 키로 확인한다 — #266, P1 동의 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md))
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
 - P5: Tool 3종(`get_case_payments` 결제 정보 · `get_payment_history` · `get_payment_authentication`)용 조회 api
-  - #338: `PaymentReader.findRecentByCustomer(merchantId, customerRef, since, limit)` 읽기 전용 추가 (P5 허락). `payments`에 `(merchant_id, customer_ref, created_at)` 인덱스는 추가하지 않았다 — 필요하면 P5가 정한다
+  - #338: `PaymentReader.findRecentByCustomer(merchantId, customerRef, since, excludePaymentIds, limit)` 읽기 전용 추가 (P5 허락). `payments`에 `(merchant_id, customer_ref, created_at)` 인덱스는 추가하지 않았다 — 필요하면 P5가 정한다
 - P1: `get_security_events`용 조회 api
 - CakeShop: `get_order_context` 제공 범위 (§5.7)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)

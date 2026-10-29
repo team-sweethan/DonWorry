@@ -47,10 +47,11 @@ Optional<PaymentSummary> payment = paymentReader.findById(authorizedPaymentId);
 
 ### 추가 — 고객별 최근 결제 (#338, P5 허락)
 
-`PaymentReader.findRecentByCustomer(Long merchantId, String customerRef, Instant since, int limit)`가 `List<PaymentSummary>`를 반환한다. 위 "목록 조회는 별도 계약으로 확장"에 따른 첫 확장이며, P4 AI 보고서의 고객 최근 결제(`get_payment_history`, [ADR-0009](0009-ai-investigation-call-structure.md))가 쓴다.
+`PaymentReader.findRecentByCustomer(Long merchantId, String customerRef, Instant since, Collection<Long> excludePaymentIds, int limit)`가 `List<PaymentSummary>`를 반환한다. 위 "목록 조회는 별도 계약으로 확장"에 따른 첫 확장이며, P4 AI 보고서의 고객 최근 결제(`get_payment_history`, [ADR-0009](0009-ai-investigation-call-structure.md))가 쓴다.
 
 - 같은 `merchant_id` + `customer_ref`, `created_at >= since`인 결제를 `created_at` 최근 순(같으면 `payment_id` 큰 것 먼저)으로 최대 `limit`건. `PaymentSummary` 4필드는 그대로다
-- merchantId · customerRef · since가 비었거나 `limit`이 1~100 밖이면 IllegalArgumentException. 결과가 없으면 빈 목록이다
+- `excludePaymentIds`(호출자의 사건 결제 등)는 `limit`을 세기 **전에** SQL에서 뺀다 — 뺄 결제가 최근 쪽에 많이 몰려도 그 밖의 결제로 `limit`을 채운다 (#338 리뷰). 빈 목록이면 아무것도 빼지 않는다
+- merchantId · customerRef · since · excludePaymentIds가 비었거나 `limit`이 1~100 밖이면 IllegalArgumentException. 결과가 없으면 빈 목록이다
 - 권한 책임은 단건 조회와 같다. P5는 호출자를 인가하지 않고, 호출자(P4)가 검증한 Case의 가맹점 · 고객으로만 부른다
 - 읽기 전용 트랜잭션, 스키마 변경 없음. `(merchant_id, customer_ref, created_at)` 인덱스는 추가하지 않았다 (시연 규모. 필요하면 P5가 정한다)
 

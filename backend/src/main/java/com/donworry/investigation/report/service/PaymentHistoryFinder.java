@@ -33,8 +33,6 @@ public class PaymentHistoryFinder {
     static final String SOURCE = "P5";
     static final int LOOKBACK_DAYS = 30;
     static final int MAX_PAYMENTS = 20;
-    // P5 PaymentReader 한 번 조회 상한과 같다
-    static final int MAX_READ = 100;
     // 화면 · 보고서에 상태를 늘어놓는 순서 — 모르는 상태는 맨 뒤에 나온 순서대로
     static final List<String> STATUS_ORDER =
             List.of("CAPTURED", "HELD", "PENDING", "VOIDED", "DECLINED", "DENIED", "EXPIRED");
@@ -52,17 +50,14 @@ public class PaymentHistoryFinder {
         Set<Long> casePaymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
                 .map(CasePayment::getPaymentId)
                 .collect(Collectors.toSet());
-        // 사건 결제를 빼고도 상한을 넘는지 알 수 있게 사건 결제 수 + 1건 더 읽는다
-        int limit = Math.min(MAX_PAYMENTS + casePaymentIds.size() + 1, MAX_READ);
-        List<PaymentSummary> others = paymentReader
-                .findRecentByCustomer(
-                        securityCase.getMerchantId(),
-                        securityCase.getCustomerRef(),
-                        now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS),
-                        limit)
-                .stream()
-                .filter(payment -> !casePaymentIds.contains(payment.paymentId()))
-                .toList();
+        // 사건 결제는 P5 조회에서 먼저 뺀다 — 사건 결제가 아무리 많아도 사건 밖 결제를 놓치지 않게 (#338 리뷰)
+        // 상한을 넘는지 알 수 있게 1건 더 읽는다
+        List<PaymentSummary> others = paymentReader.findRecentByCustomer(
+                securityCase.getMerchantId(),
+                securityCase.getCustomerRef(),
+                now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS),
+                casePaymentIds,
+                MAX_PAYMENTS + 1);
         List<PaymentSummary> shown = others.stream().limit(MAX_PAYMENTS).toList();
         return new PaymentHistoryToolResponse(
                 String.valueOf(caseId),

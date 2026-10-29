@@ -3,6 +3,7 @@ package com.donworry.investigation.report.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -20,6 +21,7 @@ import com.donworry.payment.api.PaymentSummary;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -64,12 +66,14 @@ class PaymentHistoryFinderTests {
                 .thenAnswer(inv -> casePaymentIds.stream()
                         .map(id -> CasePayment.link(securityCase, id, NOW))
                         .toList());
-        // P5 쿼리처럼 since 이후를 최근 순으로 limit건 — 가맹점 · 고객 조건은 목 데이터가 모두 같은 고객이라 생략
-        when(paymentReader.findRecentByCustomer(anyLong(), anyString(), any(), anyInt()))
+        // P5 쿼리처럼 뺄 결제를 빼고 since 이후를 최근 순으로 limit건 — 가맹점 · 고객 조건은 목 데이터가 모두 같은 고객이라 생략
+        when(paymentReader.findRecentByCustomer(anyLong(), anyString(), any(), anyCollection(), anyInt()))
                 .thenAnswer(inv -> {
                     Instant since = inv.getArgument(2);
-                    int limit = inv.getArgument(3);
+                    Collection<Long> excluded = inv.getArgument(3);
+                    int limit = inv.getArgument(4);
                     return stored.stream()
+                            .filter(p -> !excluded.contains(p.paymentId()))
                             .filter(p -> !p.requestedAt().isBefore(since))
                             .sorted(Comparator.comparing(PaymentSummary::requestedAt)
                                     .reversed())
@@ -129,6 +133,22 @@ class PaymentHistoryFinderTests {
                 .doesNotContain(String.valueOf(old));
         assertThat(history.truncated()).isTrue();
         assertThat(history.statusCounts()).containsExactly(new StatusCount("CAPTURED", 20));
+    }
+
+    // 사건에 결제가 많이 묶여도(조회 상한보다 많아도) 그 전 사건 밖 결제를 놓치지 않는다 (#338 리뷰)
+    @Test
+    void paymentHistory_manyCasePayments_stillFindsOlderPayments() {
+        long before = payment("CAPTURED", 5);
+        for (int i = 0; i < 100; i++) {
+            casePaymentIds.add(payment("HELD", 0));
+        }
+
+        PaymentHistoryToolResponse history = finder.find(7L, NOW);
+
+        assertThat(history.payments())
+                .extracting(PaymentHistoryToolResponse.Payment::paymentId)
+                .containsExactly(String.valueOf(before));
+        assertThat(history.truncated()).isFalse();
     }
 
     // daysAgo일 전(같은 날이면 나중에 만든 결제가 더 최근)에 저장된 결제

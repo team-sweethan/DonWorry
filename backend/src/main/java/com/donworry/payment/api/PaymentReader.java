@@ -1,6 +1,7 @@
 package com.donworry.payment.api;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -10,6 +11,7 @@ public interface PaymentReader {
     Optional<PaymentSummary> findById(Long paymentId);
 
     // 같은 가맹점 · 같은 고객의 since 이후 결제를 최근 순으로 최대 limit건 (#338). 호출자가 가맹점 · 고객 범위를 정한다
-    // merchantId · customerRef · since가 비었거나 limit이 1~100 밖이면 IllegalArgumentException
-    List<PaymentSummary> findRecentByCustomer(Long merchantId, String customerRef, Instant since, int limit);
+    // excludePaymentIds는 limit을 세기 전에 뺀다 (빈 목록 가능). 인자가 null이거나 limit이 1~100 밖이면 IllegalArgumentException
+    List<PaymentSummary> findRecentByCustomer(
+            Long merchantId, String customerRef, Instant since, Collection<Long> excludePaymentIds, int limit);
 }
