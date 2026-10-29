@@ -95,7 +95,14 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// 공개 신청 요청은 업무 세션 활동·만료 알림을 발생시키지 않는다. CSRF 교환은 공유한다.
+export async function publicApi<T>(path: string, init?: RequestInit): Promise<T> {
+  const timeout = AbortSignal.timeout(SESSION_REQUEST_GRACE_MS)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+  return request<T>(path, { ...init, signal }, true)
+}
+
+async function request<T>(path: string, init?: RequestInit, publicRequest = false): Promise<T> {
   const activityId = sessionActivity.getSnapshot()?.id
   const generation = sessionGeneration
   const version = readSessionVersion()
@@ -110,7 +117,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       await loadCsrfToken()
     } catch (error) {
       // 선행 토큰 요청에서 세션 만료가 확인돼도 원래 업무 요청의 만료 정책을 따른다.
-      if (error instanceof ApiError) notifyError(path, generation, version, error)
+      if (!publicRequest && error instanceof ApiError) notifyError(path, generation, version, error)
       throw error
     }
   }
@@ -140,6 +147,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   const recordActivity = () => {
+    if (publicRequest) return
     if (
       generation !== sessionGeneration ||
       version !== readSessionVersion() ||
@@ -165,7 +173,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail =
       'detail' in fields && typeof fields.detail === 'string' ? fields.detail : undefined
     const error = new ApiError(res.status, code, detail)
-    notifyError(path, generation, version, error)
+    if (!publicRequest) notifyError(path, generation, version, error)
     throw error
   }
   if (res.status === 204 || res.status === 205) {

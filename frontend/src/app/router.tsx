@@ -1,3 +1,5 @@
+import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPage'
+import { takeVerificationToken } from '../pages/public/applicationFeedback'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { useDemo } from '../demo/DemoContext'
 import { AdminLayout } from '../layouts/AdminLayout'
@@ -68,6 +70,12 @@ export const router = createBrowserRouter([
       ]
     : []),
   { path: '/', element: <LandingRoute /> },
+  { path: '/apply', element: <ApplicationPage /> },
+  {
+    path: '/apply/verify',
+    loader: () => ({ token: takeVerificationToken(window.location, window.history) }),
+    element: <VerifyEmailPage />,
+  },
   { path: '/login', element: <LoginRoute /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/home" replace /> },

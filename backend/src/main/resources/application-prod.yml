@@ -16,3 +16,7 @@ fds:
   mock:
     # 인증 없이 Mock 평가를 기록하는 개발용 API다. 운영에서는 끈다 (시작 검사도 거절).
     seed-enabled: false
+
+donworry:
+  applications:
+    enabled: ${DONWORRY_APPLICATIONS_ENABLED:false}

@@ -282,3 +282,8 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 - 기존 `payments`는 결제 정본, `payment_requests`는 현재 적용 평가·처리 단계다. 기존 ERROR는 복구 행에 보존하고 제한된 새 결과 적용 전이를 추가할 계획이다.
 - 같은 P5 payments 참조에만 물리 FK를 사용하고, P2 평가·분석 ID와 P1 직원 ID는 논리 참조한다. 원본/작업 키 불변·물리 삭제 금지·중복 방지는 상세 계약을 따른다.
 - #273 작업 브랜치에 신규 migration·Entity·Repository를 추가했다. 사용자 요청에 따른 Notion 담당 ERD 필드·제약 반영을 마쳤으며 보고·분석 리스너와 상세 GET 응답 확장까지 연결했다. 운영 DB 적용은 후속이다. 이번 사용자 설계 승인을 이미 운영 적용·다른 담당 상세 검토까지 마친 것으로 해석하지 않는다.
+
+### #315 PR 2 P1 이용 신청 계약 (2026-10-29)
+
+P1 담당자가 설계·구현 진행을 승인했다. [상세 컬럼·FK·보관 계약](../identity/315-application-design.md#저장-계약-모두-p1), [ADR-0043](../decisions/0043-application-storage.md)을 따른다. Notion 선행 대조·동기화는 미수행이다.
+`merchant_applications`·`application_tokens`·`application_mail_deliveries`·`application_rate_limits`를 추가하고 `merchants.business_registration_number VARCHAR(10) NULL`을 추가한다. 모두 P1 소유, 다른 담당 FK 없음. 연락처는 신청에만 보관한다. 승인·반려와 첫 설정 토큰 컬럼은 PR 2에 준비하고 실제 동작은 PR 3에서 연결한다. 개인정보 자동 삭제는 PR 4이며 이번 PR에서 완료됐다고 표현하지 않는다.
