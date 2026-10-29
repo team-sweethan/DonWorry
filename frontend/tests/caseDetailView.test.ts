@@ -39,7 +39,8 @@ const report = (
 // 보고서 본문(report_body)은 api/cases.ts의 ID 변환을 거치지 않아 숫자가 그대로 온다
 const asWire = (v: number) => v as unknown as string
 
-test('recommendationFor_결제ID가숫자와문자로달라도_권고를찾음', () => {
+// 보고서의 결제 ID가 숫자든 문자든 화면의 결제와 이어 권고를 찾는다
+test('recommendationFor_paymentIdNumberOrString_findsRecommendation', () => {
   // 화면의 결제 ID는 문자 "15", 고정 보고서 본문은 숫자 15
   const aiReport = report('7', [{ paymentId: '15', recommendation: 'REJECT_REVIEW' }])
   assert.equal(recommendationFor(aiReport, '15'), 'REJECT_REVIEW')
@@ -49,21 +50,24 @@ test('recommendationFor_결제ID가숫자와문자로달라도_권고를찾음',
   assert.equal(recommendationFor(null, '15'), null)
 })
 
-test('isOpposing_REJECT검토에ACCEPT와ACCEPT검토에REJECT_반대로봄', () => {
+// REJECT 검토에 ACCEPT, ACCEPT 검토에 REJECT는 권고 반대다
+test('isOpposing_decisionAgainstReview_returnsTrue', () => {
   assert.equal(isOpposing('REJECT_REVIEW', 'ACCEPT'), true)
   assert.equal(isOpposing('ACCEPT_REVIEW', 'REJECT'), true)
   assert.equal(isOpposing('REJECT_REVIEW', 'REJECT'), false)
   assert.equal(isOpposing('ACCEPT_REVIEW', 'ACCEPT'), false)
 })
 
-test('isOpposing_NEEDS_CHECK_반대로보지않음', () => {
+// 추가 확인 우선은 어느 쪽을 골라도 반대로 보지 않는다
+test('isOpposing_needsCheck_returnsFalse', () => {
   assert.equal(isOpposing('NEEDS_CHECK', 'ACCEPT'), false)
   assert.equal(isOpposing('NEEDS_CHECK', 'REJECT'), false)
   // 권고가 없으면(수동 판정 · 분석 없는 결제) 반대도 없다
   assert.equal(isOpposing(null, 'ACCEPT'), false)
 })
 
-test('decisionBlocker_반대판정사유가공백제외20자미만_확정불가', () => {
+// 권고와 반대인 판정은 사유가 공백 빼고 20자가 안 되면 확정할 수 없다
+test('decisionBlocker_opposingReasonUnderMinLength_blocksSubmit', () => {
   assert.equal(OPPOSE_MIN_REASON, 20)
   const short = '고객 확인함'
   const padded = '고객 확인함' + ' '.repeat(30)
@@ -95,7 +99,8 @@ test('decisionBlocker_반대판정사유가공백제외20자미만_확정불가'
   assert.equal(decisionBlocker([{ reason: '', recommendation: null }]), 'NOTHING_SELECTED')
 })
 
-test('caseProgress_ACTION_FAILED와보고서FAILED_해당단계를실패로표시', () => {
+// 금융 처리 실패 · 보고서 실패는 해당 단계를 실패(빨간색)로 보인다
+test('caseProgress_actionOrReportFailed_marksStepAsError', () => {
   const states = (input: Parameters<typeof caseProgress>[0]) =>
     caseProgress(input).map((s) => s.state)
 
@@ -123,7 +128,8 @@ test('caseProgress_ACTION_FAILED와보고서FAILED_해당단계를실패로표�
   )
 })
 
-test('decidedOpposition_판정의reportId보고서기준_반대여부표시', () => {
+// "AI 권고와 다름"은 판정 때 쓴 보고서를 기준으로 계산한다
+test('decidedOpposition_withDecisionReportId_comparesWithThatReport', () => {
   // v1은 REJECT 검토, 병합 뒤 v2는 ACCEPT 검토 — 판정은 v1 기준으로 ACCEPT
   const v1 = report('1', [{ paymentId: '15', recommendation: 'REJECT_REVIEW' }])
   const v2 = report('2', [{ paymentId: '15', recommendation: 'ACCEPT_REVIEW' }])
