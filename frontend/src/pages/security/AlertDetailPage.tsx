@@ -125,6 +125,7 @@ export function AlertDetailPage() {
   const [policyError, setPolicyError] = useState(false)
   const [blocklistOpen, setBlocklistOpen] = useState(false)
   const [blocklistSubmitting, setBlocklistSubmitting] = useState(false)
+  const [blocklistError, setBlocklistError] = useState<string | null>(null)
   const [blockedCandidates, setBlockedCandidates] = useState<Set<string>>(new Set())
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([])
   const [blocklistForm] = Form.useForm<{ reason: string }>()
@@ -207,6 +208,7 @@ export function AlertDetailPage() {
   const closeBlocklistModal = () => {
     if (blocklistSubmitting) return
     setBlocklistOpen(false)
+    setBlocklistError(null)
     setSelectedCandidates([])
     blocklistForm.resetFields()
   }
@@ -220,7 +222,7 @@ export function AlertDetailPage() {
     if (candidates.length === 0) return
     setBlocklistSubmitting(true)
     try {
-      await Promise.all(
+      const results = await Promise.allSettled(
         candidates.map((candidate) =>
           addFdsBlocklistEntry({
             identifierType: candidate.identifierType,
@@ -230,15 +232,25 @@ export function AlertDetailPage() {
           }),
         ),
       )
-      setBlockedCandidates(
-        (current) =>
-          new Set([...current, ...candidates.map((candidate) => candidateKey(candidate))]),
-      )
+      const succeeded = candidates.filter((_, index) => results[index].status === 'fulfilled')
+      const failed = candidates.filter((_, index) => results[index].status === 'rejected')
+      if (succeeded.length > 0) {
+        setBlockedCandidates(
+          (current) =>
+            new Set([...current, ...succeeded.map((candidate) => candidateKey(candidate))]),
+        )
+      }
+      if (failed.length > 0) {
+        setSelectedCandidates(failed.map((candidate) => candidateKey(candidate)))
+        setBlocklistError(
+          '일부 항목을 등록하지 못했습니다. 이미 등록된 값인지 확인 후 다시 시도해주세요.',
+        )
+        return
+      }
       setBlocklistOpen(false)
+      setBlocklistError(null)
       setSelectedCandidates([])
       blocklistForm.resetFields()
-    } catch {
-      setError('차단 목록 등록을 완료하지 못했습니다. 이미 등록된 값인지 확인해주세요.')
     } finally {
       setBlocklistSubmitting(false)
     }
@@ -253,7 +265,10 @@ export function AlertDetailPage() {
             <Button
               danger
               disabled={detail.blocklistCandidates.length === 0}
-              onClick={() => setBlocklistOpen(true)}
+              onClick={() => {
+                setBlocklistError(null)
+                setBlocklistOpen(true)
+              }}
             >
               카드 · 기기 · IP · 이메일 차단 목록 등록
             </Button>
@@ -467,6 +482,9 @@ export function AlertDetailPage() {
         <Typography.Paragraph type="secondary">
           평가 당시 P5가 전달한 식별값을 선택해 등록합니다. 이미 차단된 값은 다시 등록하지 않습니다.
         </Typography.Paragraph>
+        {blocklistError && (
+          <Alert type="error" showIcon message={blocklistError} style={{ marginBottom: 16 }} />
+        )}
         <Checkbox.Group
           value={selectedCandidates}
           onChange={(values) => setSelectedCandidates(values as string[])}

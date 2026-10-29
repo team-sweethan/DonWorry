@@ -11,7 +11,7 @@ v0.2의 신규 단말기·신규 카드·고위험 국가·카드 테스팅·차
 
 ## 결정
 
-P5는 P2 공개 평가 계약으로 `deviceId`, 카드 원문이 아닌 `cardToken`, 카드 표시 전용 마스킹 값 `cardDisplayLabel`, 검증된 `ipCountryCode`, 실제 결제 요청의 `ipAddress`, 구매자 `buyerEmail`을 기존 평가 입력과 함께 전달한다. `deviceId`는 기기명(예: 갤럭시25)이 아니라 P5가 안정적으로 생성·재전달하는 불투명 식별값이다. `cardDisplayLabel`은 `VISA •••• 1234`처럼 표시 전용이며 차단 판정에는 쓰지 않는다. P2는 전달받은 스냅샷, `fds_evaluations`의 자체 이력, P2 소유 `fds_high_risk_countries`·`fds_blocklist_entries`만 조회한다. 실제 승인 성공·거절은 P5가 P2 공개 계약으로 기록해 R02/R03/R06의 근거로 쓴다. R08은 이번 변경 범위에서 제외한다.
+P5는 P2 공개 평가 계약으로 `deviceId`, 카드 원문이 아닌 `cardToken`, 카드 표시 전용 마스킹 값 `cardDisplayLabel`, 검증된 `ipCountryCode`, 실제 결제 요청의 `ipAddress`, 구매자 `buyerEmail`을 기존 평가 입력과 함께 전달한다. `deviceId`는 기기명(예: 갤럭시25)이 아니라 P5가 안정적으로 생성·재전달하는 불투명 식별값이다. `cardDisplayLabel`은 `VISA •••• 1234`처럼 표시 전용이며 차단 판정에는 쓰지 않는다. 일시 오류의 실패 보고와 재탐지 요청도 같은 입력 스냅샷을 전달해 P2가 원본 평가와 동등성을 검증할 수 있게 한다. P2는 전달받은 스냅샷, `fds_evaluations`의 자체 이력, P2 소유 `fds_high_risk_countries`·`fds_blocklist_entries`만 조회한다. 실제 승인 성공·거절은 P5가 P2 공개 계약으로 기록해 R02/R03/R06의 근거로 쓴다. R08은 이번 변경 범위에서 제외한다.
 
 ## 고려한 대안
 
@@ -22,7 +22,7 @@ P5는 P2 공개 평가 계약으로 `deviceId`, 카드 원문이 아닌 `cardTok
 
 ## 영향
 
-- API: P5 → P2 평가 입력과 승인 결과 기록 계약이 확장된다. P5는 `deviceId`(최대 100자), `cardToken`(최대 255자), `cardDisplayLabel`(최대 50자·마스킹 값), `ipCountryCode`(ISO alpha-2), `ipAddress`(최대 45자), `buyerEmail`(최대 254자·소문자 정규화)을 함께 전달한다.
+- API: P5 → P2 평가 입력·실패 보고·재탐지와 승인 결과 기록 계약이 확장된다. P5는 `deviceId`(최대 100자), `cardToken`(최대 255자), `cardDisplayLabel`(최대 50자·마스킹 값), `ipCountryCode`(ISO alpha-2), `ipAddress`(최대 45자), `buyerEmail`(최대 254자·소문자 정규화)을 같은 평가 스냅샷으로 전달한다.
 - DB: P2 `fds_evaluations`에 룰 입력·승인 결과를 보존하고, P2 소유 정책·차단 목록을 관리한다. 카드 원문은 저장하지 않는다.
 - 화면: 보안 직원은 차단 목록을 등록·해제하고, 경보 상세의 기기·IP·이메일 후보를 차단 목록에 추가할 수 있다.
 - 테스트: 룰별 입력 누락, 이력, 차단·해제 및 중복 요청을 검증한다.

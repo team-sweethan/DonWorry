@@ -109,6 +109,25 @@ class FdsBlocklistServiceTests {
         verify(entries, never()).save(any());
     }
 
+    @Test
+    // 만료된 차단값을 다시 등록하면 영구 차단으로 되살린다.
+    void add_whenExistingEntryIsExpired_reactivatesWithoutExpiry() {
+        var entry = FdsBlocklistEntry.active("IP_ADDRESS", "203.0.113.10", "초기 사유", java.time.Instant.now());
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                entry, "expiresAt", java.time.Instant.now().minusSeconds(1));
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
+        when(entries.findByIdentifierTypeAndIdentifierValue("IP_ADDRESS", "203.0.113.10"))
+                .thenReturn(java.util.List.of(entry));
+
+        service()
+                .add(new CreateFdsBlocklistEntryRequest(
+                        CreateFdsBlocklistEntryRequest.IdentifierType.IP_ADDRESS, "203.0.113.10", "재차단 사유"));
+
+        assertThat(entry.isActiveAt(java.time.Instant.now())).isTrue();
+        assertThat(entry.getExpiresAt()).isNull();
+        verify(entries, never()).save(any());
+    }
+
     private FdsBlocklistService service() {
         return new FdsBlocklistService(entries, currentStaff);
     }

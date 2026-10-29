@@ -76,6 +76,7 @@ public class FdsBlocklistEntry {
 
     public void reactivate(String displayLabel, String reason) {
         this.active = true;
+        this.expiresAt = null;
         if (displayLabel != null) {
             this.displayLabel = displayLabel;
         }
