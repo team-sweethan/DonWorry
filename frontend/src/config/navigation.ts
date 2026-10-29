@@ -48,6 +48,14 @@ export const adminNavigation = {
   groups: [
     { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
     {
+      title: '관리',
+      items: [
+        { label: '계정 관리', path: '/admin/users' },
+        { label: '가맹점 관리', path: '/admin/merchants' },
+        { label: '자금관리', path: '/admin/finance' },
+      ],
+    },
+    {
       title: '탐지',
       items: [
         { label: '탐지 룰 목록', path: '/admin/fds/rules' },
@@ -56,14 +64,6 @@ export const adminNavigation = {
           path: '/admin/fds/rule-change-requests',
           badge: 'ruleChangeRequests',
         },
-      ],
-    },
-    {
-      title: '관리',
-      items: [
-        { label: '자금관리', path: '/admin/finance' },
-        { label: '계정 관리', path: '/admin/users' },
-        { label: '가맹점 관리', path: '/admin/merchants' },
       ],
     },
   ] satisfies NavGroup[],
