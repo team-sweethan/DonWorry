@@ -32,11 +32,24 @@ class RuleHit(BaseModel):
     observed: str | None = None
 
 
+# 카드 · 기기 · 접속 국가 요약 (#346) — 카드는 마스킹 표시값, IP는 국가 코드만
+# 원문(카드 토큰 · IP 주소 · 기기 ID · 이메일)은 Spring이 보내지 않는다
+# *Provided는 가맹점이 그 값을 보냈는지 여부
+class Signals(BaseModel):
+    cardDisplayLabel: str | None
+    cardProvided: bool
+    deviceProvided: bool
+    ipCountryCode: str | None
+    ipProvided: bool
+
+
 class FdsPayment(BaseModel):
     paymentId: str
     riskScore: int | None
     fdsResult: str | None
     ruleHits: list[RuleHit]
+    # FDS 평가가 없거나 예전 Spring이면 None
+    signals: Signals | None = None
 
 
 class FdsEvidenceTool(BaseModel):

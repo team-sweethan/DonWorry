@@ -12,7 +12,14 @@ from app.agent import prompts, trace
 from app.agent.assemble import analyzable, assemble_report, fact_numbers, facts_json
 from app.agent.llm import LlmClient
 from app.agent.narrative import Narrative, narrative_schema, validate_narrative
-from app.agent.tools import ALLOWED_TOOL_NAMES, TOOL_ARGS, TOOL_SPECS, ToolBox, ToolRecord
+from app.agent.tools import (
+    ALLOWED_TOOL_NAMES,
+    TOOL_ARGS,
+    TOOL_SPECS,
+    ToolBox,
+    ToolRecord,
+    llm_content,
+)
 from app.config import Settings
 from app.schemas.case_context import CaseContext
 from app.schemas.report import ReportBody, TraceStep
@@ -147,7 +154,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                     asked = trace.tool_asked(name, args)
                     result = _execute(toolbox, name, args)
                     records.append(ToolRecord(name, args, result))
-                    content = result.model_dump_json()
+                    content = llm_content(result)
                     received = trace.tool_received(result)
                 except Exception as e:  # 도구 실패는 Qwen에게 알려 다시 고르게 한다
                     content = f"도구 실행 실패: {e}"

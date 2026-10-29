@@ -14,7 +14,18 @@ public record FdsEvidenceToolResponse(
         List<Payment> payments,
         List<String> missingPaymentIds) {
 
-    public record Payment(String paymentId, Integer riskScore, String fdsResult, List<RuleHit> ruleHits) {}
+    // signals: 카드 · 기기 · 접속 국가 요약 (#346). FDS 평가가 없으면 null
+    public record Payment(
+            String paymentId, Integer riskScore, String fdsResult, List<RuleHit> ruleHits, Signals signals) {}
+
+    // 카드는 마스킹 표시값, IP는 국가 코드만 — 원문(카드 토큰 · IP 주소 · 기기 ID · 이메일)은 없다
+    // *Provided는 가맹점이 그 값을 보냈는지 여부 (#346)
+    public record Signals(
+            String cardDisplayLabel,
+            boolean cardProvided,
+            boolean deviceProvided,
+            String ipCountryCode,
+            boolean ipProvided) {}
 
     // 적중 룰 이름은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값
     // criterion · observed는 코드가 만든 기준 · 실제 문장 (#326). 숫자를 정리할 수 없는 규칙은 null

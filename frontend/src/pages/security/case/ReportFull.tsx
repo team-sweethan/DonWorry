@@ -4,6 +4,7 @@ import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
   reportHeadline,
   ruleEvidenceRows,
+  signalTexts,
   topRiskScore,
   unknownItems,
 } from '../../../utils/reportView'
@@ -113,6 +114,7 @@ function PaymentEvidence({ analysis: p }: { analysis: PaymentAnalysis }) {
       }
       extra={<CodeTag value={recommendationLabel[p.recommendation]} />}
     >
+      {p.signals !== undefined && <SignalLine signals={p.signals} />}
       {p.reason && (
         <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
           <AiTag /> {p.reason}
@@ -160,6 +162,26 @@ function PaymentEvidence({ analysis: p }: { analysis: PaymentAnalysis }) {
         </div>
       </div>
     </Card>
+  )
+}
+
+// 카드 · 기기 · 접속 국가 한 줄 (#346). 가맹점이 안 보낸 값은 숨기지 않고 "정보 없음"으로 보여 준다
+function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
+  return (
+    <div style={signalLineStyle}>
+      {signals ? (
+        signalTexts(signals).map((text) => (
+          <span key={text.label}>
+            <span style={{ color: '#94A3B8' }}>{text.label}</span>{' '}
+            <span style={{ fontWeight: 600, color: text.missing ? '#94A3B8' : '#0F172A' }}>
+              {text.value}
+            </span>
+          </span>
+        ))
+      ) : (
+        <span style={{ color: '#94A3B8' }}>카드 · 기기 · 접속 국가 정보 없음 (FDS 평가 없음)</span>
+      )}
+    </div>
   )
 }
 
@@ -379,6 +401,16 @@ function Bullets({ items }: { items: string[] }) {
 }
 
 const cardStyle: CSSProperties = { borderColor: '#E2E8F0' }
+const signalLineStyle: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 16,
+  fontSize: 13,
+  margin: '0 0 12px',
+  padding: '8px 12px',
+  background: '#F8FAFC',
+  borderRadius: 8,
+}
 const verdictStyle: CSSProperties = {
   background: 'radial-gradient(ellipse at top right, #284D91, transparent 60%), #172554',
   color: '#fff',

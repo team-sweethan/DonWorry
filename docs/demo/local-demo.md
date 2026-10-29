@@ -156,6 +156,11 @@ AI_SERVER_INTERNAL_API_KEY=①에서 만든 값
 2. 스크립트 끝에 찍힌 손님 번호로 다시 보냅니다: `py scripts/demo/cakeshop_pay.py <손님 번호>`
 3. 새 Case의 보고서 전문에 첫 실행의 결제가 "고객 최근 결제"로 보입니다 (이 사건 결제는 빠짐)
 
+**결제별 카드 · 기기 · 접속 국가 확인 (#346)** — 기본 실행은 카드 · 기기 · IP를 보내지 않아 보고서 결제 카드에 "정보 없음 (가맹점이 보내지 않음)"이 보입니다.
+- 카드 · 기기까지: `py scripts/demo/cakeshop_pay.py --signals`
+- IP(해외 접속)까지: `py scripts/demo/cakeshop_pay.py --signals --ip 203.0.113.5 --country US`
+- 카드 · 기기를 보내면 FDS 규칙(새 기기 · 처음 쓰는 카드)이 함께 걸려, 몇 번째 결제가 보류되는지가 위 표와 달라질 수 있습니다
+
 ## 4. Qwen으로 바꾸기
 
 3절을 끝낸 상태에서, 보고서를 실제 LLM(Qwen)이 쓰게 바꿉니다.
