@@ -19,7 +19,11 @@ public class MariaDbTestContainerConfig {
     private static MariaDBContainer start() {
         MariaDBContainer container = new MariaDBContainer(IMAGE)
                 .withDatabaseName("donworry")
-                .withCommand("--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci");
+                // 테스트마다 따로 뜨는 Spring 앱이 연결 풀(앱당 10개)을 들고 있어 기본 151로는 모자란다 (#328)
+                .withCommand(
+                        "--character-set-server=utf8mb4",
+                        "--collation-server=utf8mb4_unicode_ci",
+                        "--max-connections=300");
         container.start();
         return container;
     }
