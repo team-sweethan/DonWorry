@@ -57,6 +57,40 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
 - 같은 주문의 customerRef·amount·orderCreatedAt은 모든 시도에서 동일하다. 금액 변경은 새 주문번호를 사용한다는 제한을 P1과 확인한다.
 - 주문이 여전히 결제 대기이고 재고·쿠폰을 확보했는지는 CakeShop 책임이다. P5는 외부 주문 DB를 확인했다고 주장하지 않는다.
 
+#### FDS 식별자 (선택, #325)
+
+[#305](https://github.com/team-sweethan/DonWorry/pull/305)에서 P2 평가 계약이 받게 된 식별자를 가맹점 요청에서 받아 P2로 전달한다. 모두 선택값이다. 보내지 않으면 해당 룰(R02 신규 단말기 · R03 신규 카드 · R05 고위험 국가 IP · R06 카드 테스팅 · R07 차단 목록의 해당 식별자)만 적중하지 않고 나머지는 그대로 동작한다.
+
+```json
+{
+  "orderRef": "ORDER-20261025-0001",
+  "customerRef": "42",
+  "amount": 25000,
+  "orderCreatedAt": "2026-10-25T10:00:00Z",
+  "deviceId": "3f2c9a1e-...",
+  "cardToken": "9f86d081884c7d65...",
+  "cardDisplayLabel": "신한 **** 1234",
+  "ipCountryCode": "KR",
+  "ipAddress": "203.0.113.10",
+  "buyerEmail": "buyer@example.com"
+}
+```
+
+| 필드 | 최대 길이 | 규칙 |
+| --- | --- | --- |
+| deviceId | 100 | 가맹점이 발급한 기기 식별자 |
+| cardToken | 255 | 카드 원문이 아닌 토큰 · 해시. 숫자 13자리 이상만으로 된 값(카드번호)은 400 |
+| cardDisplayLabel | 50 | 마스킹한 표시값. 마스킹하지 않은 13자리 이상 숫자(공백 · 하이픈 구분 포함)가 있으면 400 |
+| ipCountryCode | 2 | 영문 2자, 대문자로 저장 |
+| ipAddress | 45 | IPv4 · IPv6 리터럴. 호스트 이름은 400 |
+| buyerEmail | 254 | `@`가 있는 형식, 소문자로 저장 |
+
+- 모든 값은 양끝 공백이 없어야 한다. 길이 · 정규화는 P2 `FdsEvaluationRequest`와 같다.
+- 값은 결제 시도(`payment_requests`) 단위로 저장한다. 같은 주문의 새 시도는 다른 카드 · 기기를 쓸 수 있다.
+- 최초 평가 · 평가 오류 보고 · 재평가 모두 이 저장값을 그대로 보낸다.
+- 같은 Idempotency-Key 재전송은 식별자까지 처음 요청과 같아야 한다. 다르면 409 `IDEMPOTENCY_KEY_CONFLICT`다.
+- 결제 응답 · 로그에는 식별자를 넣지 않는다.
+
 ### 단건 응답
 
 ```json
@@ -241,7 +275,7 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 - `payment.http.enabled` 기본값은 false(설정 생략)이며 Controller를 등록하지 않는다. true로 바꿔도 `PaymentMerchantIdentity` 어댑터가 없으면 POST/GET 모두 503 PAYMENT_AUTH_NOT_READY다. 이 인터페이스는 P5 내부 연결 지점이며 P1의 CurrentMerchant를 임의로 정의한 것이 아니다. 운영 구현과 고정 가맹점 fallback은 없다.
 - 테스트 소스의 어댑터만 X-Test-Identity를 읽는다. 운영 코드에는 테스트 헤더를 신뢰하는 코드가 없다. 실제 P1 연결 시 서버 간 인증 결과만 읽는 어댑터를 작성하고 직원 세션으로 대체하지 않아야 한다.
 - POST `/api/payments`, GET `/api/payments/{paymentId}`, GET `/api/payment-orders`를 연결한다. Controller의 모델 초기화에서 본문/인자 바인딩 전에 가맹점을 확인한다. 인증 없는 요청은 401, 미등록 가맹점도 401, 정지 가맹점 POST는 403이다. 유효 인증의 정지 가맹점 GET 허용은 현재 제안 기준이며 P1 확인 후 운영 반영한다.
-- 본문 필드는 orderRef/customerRef/amount/orderCreatedAt이다. 키는 Idempotency-Key의 정규 UUID 형식이다. 고객 번호는 양수 Long 십진 문자열로 제한하며 내부에서는 merchantId:customerRef로 변환한다. 금액은 양수, 시각은 미래가 아닌 마이크로초 정밀도다. 가맹점 ID를 요청 body/query에서 받아 인증을 대신하지 않는다.
+- 본문 필드는 orderRef/customerRef/amount/orderCreatedAt이다. #325에서 선택 FDS 식별자 6개를 추가했다(3절). 키는 Idempotency-Key의 정규 UUID 형식이다. 고객 번호는 양수 Long 십진 문자열로 제한하며 내부에서는 merchantId:customerRef로 변환한다. 금액은 양수, 시각은 미래가 아닌 마이크로초 정밀도다. 가맹점 ID를 요청 body/query에서 받아 인증을 대신하지 않는다.
 - POST는 현재 결과가 PENDING/HELD면 202, 그 외면 200이다. Location은 결제 단건 경로다. GET은 200, 타 가맹점·없는 결제는 동일 404다. 응답과 처리기 오류에 Cache-Control: no-store를 지정한다.
 - 오류는 이 Controller에만 적용되는 ProblemDetail+code다. 입력 400 INVALID_REQUEST, 충돌 409(접수 내부 코드와 동일), DB 장애 503 PAYMENT_PROCESSING_UNAVAILABLE, 예상 밖 실패 500 PAYMENT_INTERNAL_ERROR다. 내부 예외·평가 사유·키 원문을 노출하지 않는다. 공통 BusinessException이나 전역 보안 처리기를 만들지 않는다.
 - identity/SecurityConfig·직원 세션·CSRF 정책은 변경하지 않는다. 실제 운영 활성화 전에 P1 필터의 적용 경로·키 정책·CSRF 범위 및 고객 참조/정지 조회 정책을 확인하고 통합 테스트해야 한다. HTTP 대역 테스트는 실제 API Key 인증 검증이 아니다.

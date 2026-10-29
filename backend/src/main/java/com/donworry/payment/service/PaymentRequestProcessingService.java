@@ -31,6 +31,7 @@ public class PaymentRequestProcessingService {
                 .customerRef(payment.getCustomerRef())
                 .amount(payment.getAmount())
                 .paymentRequestedAt(payment.getCreatedAt())
+                .riskSignals(request.riskSignals())
                 .build());
     }
 

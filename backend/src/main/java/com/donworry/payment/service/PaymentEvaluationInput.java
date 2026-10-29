@@ -1,5 +1,6 @@
 package com.donworry.payment.service;
 
+import com.donworry.payment.entity.PaymentRiskSignals;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Builder;
@@ -11,7 +12,8 @@ public record PaymentEvaluationInput(
         Long merchantId,
         String customerRef,
         long amount,
-        Instant paymentRequestedAt) {
+        Instant paymentRequestedAt,
+        PaymentRiskSignals riskSignals) {
 
     public PaymentEvaluationInput {
         if (evaluationRequestId == null) {
@@ -32,5 +34,6 @@ public record PaymentEvaluationInput(
         if (paymentRequestedAt == null) {
             throw new IllegalArgumentException("paymentRequestedAt must not be null");
         }
+        riskSignals = PaymentRiskSignals.orNone(riskSignals);
     }
 }

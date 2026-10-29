@@ -61,15 +61,24 @@ public class PaymentFdsReevaluationExecutionService {
             return result(recovery, payment, request, PAYMENT_STATE_CHANGED);
         }
 
-        var response = reevaluation.reevaluate(new FdsReevaluationRequest(
-                recovery.getOriginalEvaluationRequestId(),
-                recovery.getNewEvaluationRequestId(),
-                paymentId,
-                payment.getMerchantId(),
-                payment.getCustomerRef(),
-                payment.getAmount(),
-                payment.getCreatedAt(),
-                retryId));
+        // 재평가도 최초 평가와 같은 입력이어야 하므로 시도별로 저장한 FDS 식별자를 그대로 보낸다 (#325).
+        var signals = request.riskSignals();
+        var response = reevaluation.reevaluate(FdsReevaluationRequest.builder()
+                .originalEvaluationRequestId(recovery.getOriginalEvaluationRequestId())
+                .newEvaluationRequestId(recovery.getNewEvaluationRequestId())
+                .paymentId(paymentId)
+                .merchantId(payment.getMerchantId())
+                .customerRef(payment.getCustomerRef())
+                .amount(payment.getAmount())
+                .paymentRequestedAt(payment.getCreatedAt())
+                .deviceId(signals.deviceId())
+                .cardToken(signals.cardToken())
+                .cardDisplayLabel(signals.cardDisplayLabel())
+                .ipCountryCode(signals.ipCountryCode())
+                .ipAddress(signals.ipAddress())
+                .buyerEmail(signals.buyerEmail())
+                .retryId(retryId)
+                .build());
         var snapshot = validatedSnapshot(response, recovery);
         request.applyReevaluation(recovery, snapshot);
         if (response.result() != FdsResult.ERROR) {

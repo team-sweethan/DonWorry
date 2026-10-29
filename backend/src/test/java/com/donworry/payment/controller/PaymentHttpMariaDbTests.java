@@ -228,6 +228,47 @@ class PaymentHttpMariaDbTests {
                 .isEqualTo(400);
         verifyNoInteractions(evaluator);
     }
+    // FDS 식별자는 P2 평가 요청에 전달하고 가맹점 응답에는 되돌려 주지 않는다. 카드 원문 · 잘못된 형식은 400 (#325).
+    @Test
+    void post_withRiskSignals_passesThemToFdsWithoutEcho() throws Exception {
+        verdict(FdsResult.ALLOW);
+        String base = body(UUID.randomUUID().toString(), 1000);
+        String body = base.substring(0, base.length() - 1)
+                + ",\"deviceId\":\"device-1\",\"cardToken\":\"token-1\",\"cardDisplayLabel\":\"신한 **** 1234\""
+                + ",\"ipCountryCode\":\"kr\",\"ipAddress\":\"203.0.113.10\",\"buyerEmail\":\"Buyer@Example.com\"}";
+        var response =
+                call("POST", "/api/payments", "merchant-a", UUID.randomUUID().toString(), body);
+        assertThat(response.statusCode()).isIn(200, 202);
+        assertThat(response.body())
+                .doesNotContain("device-1", "token-1", "203.0.113.10", "buyer@example.com", "**** 1234");
+        verify(evaluator)
+                .evaluate(argThat(r -> "device-1".equals(r.deviceId())
+                        && "token-1".equals(r.cardToken())
+                        && "신한 **** 1234".equals(r.cardDisplayLabel())
+                        && "KR".equals(r.ipCountryCode())
+                        && "203.0.113.10".equals(r.ipAddress())
+                        && "buyer@example.com".equals(r.buyerEmail())));
+
+        for (var invalid : new String[] {
+            ",\"cardDisplayLabel\":\"4111 1111 1111 1111\"}",
+            ",\"ipAddress\":\"localhost\"}",
+            ",\"ipCountryCode\":\"KOR\"}",
+            ",\"buyerEmail\":\"not-email\"}"
+        }) {
+            String other = body(UUID.randomUUID().toString(), 1000);
+            assertThat(call(
+                                    "POST",
+                                    "/api/payments",
+                                    "merchant-a",
+                                    UUID.randomUUID().toString(),
+                                    other.substring(0, other.length() - 1) + invalid)
+                            .statusCode())
+                    .as(invalid)
+                    .isEqualTo(400);
+        }
+        verify(evaluator).evaluate(any());
+    }
+
     // 확정 거절은 정상 결과 200이며 내부 평가 오류는 응답에 노출하지 않는다.
     @Test
     void verdicts_distinguishDeclineFromPending() throws Exception {
