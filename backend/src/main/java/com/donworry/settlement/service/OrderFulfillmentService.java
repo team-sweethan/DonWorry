@@ -38,16 +38,17 @@ public class OrderFulfillmentService {
 
     // 매입과 픽업이 같은 주문 행을 먼저 잠가 도착 순서에 관계없이 연결한다.
     @Transactional(propagation = Propagation.MANDATORY)
-    public OrderFulfillment lockOrder(String orderId) {
+    public OrderFulfillment lockOrder(Long merchantId, String orderId) {
+        if (merchantId == null || merchantId <= 0) throw new IllegalArgumentException("가맹점 ID는 양수여야 합니다.");
         if (orderId == null || orderId.isBlank() || orderId.length() > 100)
             throw new IllegalArgumentException("주문번호가 올바르지 않습니다.");
-        fulfillments.ensureOrder(orderId, LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
-        return fulfillments.findForUpdate(orderId).orElseThrow();
+        fulfillments.ensureOrder(merchantId, orderId, LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
+        return fulfillments.findForUpdate(merchantId, orderId).orElseThrow();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockForCapture(String orderId, Long merchantId) {
-        lockOrder(orderId).bindMerchant(merchantId, Instant.now());
+        lockOrder(merchantId, orderId).bindMerchant(merchantId, Instant.now());
     }
 
     private PickupResponse record(
@@ -58,7 +59,7 @@ public class OrderFulfillmentService {
             List<PickupOrderItemRequest> itemRequests) {
         if (merchantId == null || merchantId <= 0) throw new IllegalArgumentException("가맹점 ID는 양수여야 합니다.");
         if (at == null) throw new IllegalArgumentException("픽업 시각이 필요합니다.");
-        var fulfillment = lockOrder(orderId);
+        var fulfillment = lockOrder(merchantId, orderId);
         var now = Instant.now();
         if (fulfillment.getMerchantId() != null && !Objects.equals(fulfillment.getMerchantId(), merchantId))
             throw new SettlementRequestException(404, "SETTLEMENT_ORDER_NOT_FOUND", "주문을 찾을 수 없습니다.");
@@ -68,7 +69,7 @@ public class OrderFulfillmentService {
             fulfillment.recordSchedule(at, now);
             storeItems(fulfillment.getFulfillmentId(), itemRequests, now);
         }
-        var candidates = captures.findAllByOrderId(orderId);
+        var candidates = captures.findAllByMerchantIdAndOrderId(merchantId, orderId);
         if (candidates.size() > 1) throw new IllegalStateException("같은 주문번호의 매입이 여러 건입니다.");
         if (candidates.isEmpty()) return new PickupResponse(fulfillment.getOrderId(), "STORED", "PENDING_CAPTURE");
         var capture = candidates.getFirst();
@@ -123,8 +124,10 @@ public class OrderFulfillmentService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void connectCapture(Capture capture, Settlement settlement) {
-        var fulfillment = fulfillments.findForUpdate(capture.getOrderId()).orElseThrow();
-        var candidates = captures.findAllByOrderId(capture.getOrderId());
+        var fulfillment = fulfillments
+                .findForUpdate(capture.getMerchantId(), capture.getOrderId())
+                .orElseThrow();
+        var candidates = captures.findAllByMerchantIdAndOrderId(capture.getMerchantId(), capture.getOrderId());
         if (candidates.size() != 1) throw new IllegalStateException("같은 주문번호의 매입을 하나로 특정할 수 없습니다.");
         link(fulfillment, capture, settlement, Instant.now());
     }

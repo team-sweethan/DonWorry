@@ -14,7 +14,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(
         name = "order_fulfillments",
-        uniqueConstraints = @UniqueConstraint(name = "uk_order_fulfillments_order", columnNames = "order_id"))
+        uniqueConstraints =
+                @UniqueConstraint(
+                        name = "uk_order_fulfillments_merchant_order",
+                        columnNames = {"merchant_id", "order_id"}))
 public class OrderFulfillment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

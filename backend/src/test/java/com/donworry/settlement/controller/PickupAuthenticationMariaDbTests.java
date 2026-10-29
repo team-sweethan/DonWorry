@@ -136,16 +136,25 @@ class PickupAuthenticationMariaDbTests {
 
     // 인증에 성공해도 다른 가맹점의 주문에는 픽업 정보를 쓰지 않는다.
     @Test
-    void pickup_whenDifferentMerchant_returnsNotFoundWithoutMutation() throws Exception {
+    void pickup_whenDifferentMerchant_createsOwnOrderWithoutForeignMutation() throws Exception {
         String order = code + "-OTHER";
         jdbc.update(
                 "INSERT INTO order_fulfillments(merchant_id,order_id,created_at,updated_at) VALUES (?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
                 merchantId + 1000000,
                 order);
         var response = send(signed("/api/v1/order-fulfillments/" + order + "/completion"));
-        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.statusCode()).isEqualTo(200);
         assertThat(jdbc.queryForObject(
-                        "SELECT fulfilled_at IS NULL FROM order_fulfillments WHERE order_id=?", Boolean.class, order))
+                        "SELECT fulfilled_at IS NULL FROM order_fulfillments WHERE order_id=? AND merchant_id=?",
+                        Boolean.class,
+                        order,
+                        merchantId + 1000000))
+                .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT fulfilled_at IS NOT NULL FROM order_fulfillments WHERE order_id=? AND merchant_id=?",
+                        Boolean.class,
+                        order,
+                        merchantId))
                 .isTrue();
     }
 }

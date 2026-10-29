@@ -58,9 +58,11 @@ class PickupScheduleMariaDbTests {
     void process_whenPickupFirst_linksAfterCapture() {
         pickups.recordSchedule(1L, ORDER, AT, java.util.List.of(new PickupOrderItemRequest("케이크", 1)));
         pickups.recordCompletion(1L, ORDER, AT.plusSeconds(60));
-        assertThat(orders.findByOrderId(ORDER).orElseThrow().getMerchantId()).isEqualTo(1L);
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getMerchantId())
+                .isEqualTo(1L);
         captureService.processCapture(PAYMENT, 1L, ORDER, 10001L);
-        assertThat(orders.findByOrderId(ORDER).orElseThrow().getMerchantId()).isEqualTo(1L);
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getMerchantId())
+                .isEqualTo(1L);
         var s = settlements.findByPaymentId(PAYMENT).orElseThrow();
         assertThat(s.getExpectedSettlementAt()).isEqualTo(AT.plusSeconds(72 * 3600));
         assertThat(s.getScheduledAt()).isEqualTo(AT.plusSeconds(72 * 3600 + 60));
@@ -75,9 +77,10 @@ class PickupScheduleMariaDbTests {
                 .isNull();
         pickups.recordCompletion(1L, ORDER, AT);
         pickups.recordSchedule(1L, ORDER, AT.plusSeconds(60), java.util.List.of(new PickupOrderItemRequest("케이크", 1)));
-        var before = orders.findByOrderId(ORDER).orElseThrow().getUpdatedAt();
+        var before = orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getUpdatedAt();
         pickups.recordCompletion(1L, ORDER, AT);
-        assertThat(orders.findByOrderId(ORDER).orElseThrow().getUpdatedAt()).isEqualTo(before);
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getUpdatedAt())
+                .isEqualTo(before);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
                 .isEqualTo(AT.plusSeconds(72 * 3600));
     }
@@ -89,10 +92,28 @@ class PickupScheduleMariaDbTests {
         pickups.recordCompletion(1L, ORDER, AT);
         assertThatIllegalStateException().isThrownBy(() -> pickups.recordCompletion(1L, ORDER, AT.plusSeconds(1)));
         assertThatIllegalStateException()
-                .isThrownBy(() -> captureService.processCapture(PAYMENT + 1, 2L, ORDER, 10001L));
-        assertThat(orders.findByOrderId(ORDER).orElseThrow().getFulfilledAt()).isEqualTo(AT);
+                .isThrownBy(() -> captureService.processCapture(PAYMENT + 1, 1L, ORDER, 10001L));
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getFulfilledAt())
+                .isEqualTo(AT);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM captures WHERE payment_id = ?", Long.class, PAYMENT + 1))
                 .isZero();
+    }
+
+    // 서로 다른 가맹점의 같은 주문번호는 각각 자신의 매입·정산에만 연결한다.
+    @Test
+    void process_whenOrderNumberSharedBetweenMerchants_linksOwnSettlement() {
+        pickups.recordCompletion(2L, ORDER, AT.plusSeconds(60));
+        captureService.processCapture(PAYMENT, 1L, ORDER, 10001L);
+        captureService.processCapture(PAYMENT + 1, 2L, ORDER, 20001L);
+        pickups.recordCompletion(1L, ORDER, AT);
+        assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
+                .isEqualTo(AT.plusSeconds(72 * 3600));
+        assertThat(settlements.findByPaymentId(PAYMENT + 1).orElseThrow().getScheduledAt())
+                .isEqualTo(AT.plusSeconds(72 * 3600 + 60));
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getFulfillmentId())
+                .isNotEqualTo(orders.findByMerchantIdAndOrderId(2L, ORDER)
+                        .orElseThrow()
+                        .getFulfillmentId());
     }
 
     // 매입과 픽업이 동시에 도착해도 하나의 주문 행에 연결과 일정을 모두 남긴다
@@ -112,7 +133,8 @@ class PickupScheduleMariaDbTests {
             capture.get(20, TimeUnit.SECONDS);
             pickup.get(20, TimeUnit.SECONDS);
         }
-        assertThat(orders.findByOrderId(ORDER).orElseThrow().getMerchantId()).isEqualTo(1L);
+        assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getMerchantId())
+                .isEqualTo(1L);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
                 .isEqualTo(AT.plusSeconds(72 * 3600));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_fulfillments WHERE order_id = ?", Long.class, ORDER))

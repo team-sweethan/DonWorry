@@ -49,7 +49,7 @@
 P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillments`와
 `order_fulfillment_items`를 추가하고 `settlements`에 nullable 정산 시각 3개를 추가한다.
 상품은 같은 P6 주문만 물리 FK로 참조하며 다른 모듈과는 논리 참조를 유지한다.
-상세 컬럼·제약·단일 CakeShop 주문번호 범위는 [픽업 ERD](../settlement/pickup-schema.md)를 따른다.
+상세 컬럼·제약·가맹점별 주문번호 범위는 [픽업 ERD](../settlement/pickup-schema.md)를 따른다.
 실제 Notion 최신 동기화·운영 DB 적용 완료를 뜻하지 않는다.
 
 | 모듈 | 담당 | 테이블 | migration (테이블 순서대로, 테이블당 1개) |

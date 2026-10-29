@@ -62,7 +62,7 @@ class OrderFulfillmentItemStorageMariaDbTests {
     }
 
     private List<OrderFulfillmentItem> saved() {
-        var order = orders.findByOrderId(orderId).orElseThrow();
+        var order = orders.findByMerchantIdAndOrderId(MERCHANT, orderId).orElseThrow();
         return items.findAllByFulfillmentIdOrderByItemSequenceAsc(order.getFulfillmentId());
     }
 
@@ -72,7 +72,9 @@ class OrderFulfillmentItemStorageMariaDbTests {
         assertThat(service.recordSchedule(MERCHANT, orderId, AT, ITEMS).linkStatus())
                 .isEqualTo("PENDING_CAPTURE");
         var before = saved();
-        var updatedAt = orders.findByOrderId(orderId).orElseThrow().getUpdatedAt();
+        var updatedAt = orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                .orElseThrow()
+                .getUpdatedAt();
         service.recordSchedule(MERCHANT, orderId, AT, ITEMS);
         assertThat(saved())
                 .extracting(OrderFulfillmentItem::getFulfillmentItemId)
@@ -85,7 +87,10 @@ class OrderFulfillmentItemStorageMariaDbTests {
                 .extracting(OrderFulfillmentItem::getCreatedAt)
                 .containsExactlyElementsOf(
                         before.stream().map(OrderFulfillmentItem::getCreatedAt).toList());
-        assertThat(orders.findByOrderId(orderId).orElseThrow().getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                        .orElseThrow()
+                        .getUpdatedAt())
+                .isEqualTo(updatedAt);
     }
 
     // 충돌 재전달은 이름·수량·순서·건수를 바꾸지 않고 롤백한다.
@@ -105,7 +110,9 @@ class OrderFulfillmentItemStorageMariaDbTests {
         }
         assertThat(saved()).extracting(OrderFulfillmentItem::getProductName).containsExactly("딸기 케이크", "초코 케이크");
         assertThat(saved()).extracting(OrderFulfillmentItem::getQuantity).containsExactly(2, 1);
-        assertThat(orders.findByOrderId(orderId).orElseThrow().getScheduledFulfillmentAt())
+        assertThat(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                        .orElseThrow()
+                        .getScheduledFulfillmentAt())
                 .isEqualTo(AT);
     }
 
@@ -117,7 +124,10 @@ class OrderFulfillmentItemStorageMariaDbTests {
         var ids =
                 saved().stream().map(OrderFulfillmentItem::getFulfillmentItemId).toList();
         service.recordCompletion(MERCHANT, orderId, AT.plusSeconds(60));
-        assertThat(orders.findByOrderId(orderId).orElseThrow().getFulfilledAt()).isEqualTo(AT.plusSeconds(60));
+        assertThat(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                        .orElseThrow()
+                        .getFulfilledAt())
+                .isEqualTo(AT.plusSeconds(60));
         assertThat(saved())
                 .extracting(OrderFulfillmentItem::getFulfillmentItemId)
                 .containsExactlyElementsOf(ids);
@@ -130,7 +140,7 @@ class OrderFulfillmentItemStorageMariaDbTests {
         captures.saveAndFlush(Capture.processing(8060001L, MERCHANT, orderId, 10000L, AT));
         captures.saveAndFlush(Capture.processing(8060002L, MERCHANT, orderId, 10000L, AT));
         assertThatIllegalStateException().isThrownBy(() -> service.recordSchedule(MERCHANT, orderId, AT, ITEMS));
-        assertThat(orders.findByOrderId(orderId)).isEmpty();
+        assertThat(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)).isEmpty();
         assertThat(items.count()).isEqualTo(countBefore);
     }
 
@@ -141,22 +151,46 @@ class OrderFulfillmentItemStorageMariaDbTests {
         captures.saveAndFlush(Capture.processing(8060001L, MERCHANT, orderId, 10000L, AT));
         captures.saveAndFlush(Capture.processing(8060002L, MERCHANT, orderId, 10000L, AT));
         assertThatIllegalStateException().isThrownBy(() -> service.recordSchedule(MERCHANT, orderId, AT, ITEMS));
-        var order = orders.findByOrderId(orderId).orElseThrow();
+        var order = orders.findByMerchantIdAndOrderId(MERCHANT, orderId).orElseThrow();
         assertThat(order.getFulfilledAt()).isEqualTo(AT.plusSeconds(60));
         assertThat(order.getScheduledFulfillmentAt()).isNull();
         assertThat(saved()).isEmpty();
     }
 
-    // 다른 가맹점은 이미 저장된 주문의 상품을 변경하거나 읽기 경로로 연결하지 못한다.
+    // 같은 주문번호를 먼저 보내도 다른 가맹점의 상품·시각을 선점하지 못한다.
     @Test
-    void recordSchedule_whenMerchantDiffers_rejectsBeforeChangingItems() {
+    void recordSchedule_whenMerchantDiffers_storesIndependentSnapshot() {
         service.recordSchedule(MERCHANT, orderId, AT, ITEMS);
-        assertThatThrownBy(() -> service.recordSchedule(MERCHANT + 1, orderId, AT, ITEMS))
-                .isInstanceOfSatisfying(
-                        SettlementRequestException.class,
-                        exception -> assertThat(exception.getStatus()).isEqualTo(404));
-        assertThat(saved()).hasSize(2);
-        assertThat(orders.findByOrderId(orderId).orElseThrow().getMerchantId()).isEqualTo(MERCHANT);
+        service.recordSchedule(
+                MERCHANT + 1, orderId, AT.plusSeconds(60), List.of(new PickupOrderItemRequest("다른 상품", 3)));
+        assertThat(saved()).extracting(OrderFulfillmentItem::getProductName).containsExactly("딸기 케이크", "초코 케이크");
+        var other = orders.findByMerchantIdAndOrderId(MERCHANT + 1, orderId).orElseThrow();
+        assertThat(other.getFulfillmentId())
+                .isNotEqualTo(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                        .orElseThrow()
+                        .getFulfillmentId());
+        assertThat(items.findAllByFulfillmentIdOrderByItemSequenceAsc(other.getFulfillmentId()))
+                .extracting(OrderFulfillmentItem::getProductName)
+                .containsExactly("다른 상품");
+    }
+
+    // 소유자를 모르는 기존 행은 자동 귀속하지 않고 과거 픽업 시각도 그대로 받는다.
+    @Test
+    void recordSchedule_whenLegacyUnboundOrderExists_preservesLegacyAndAcceptsPastTime() {
+        jdbc.update(
+                "INSERT INTO order_fulfillments(order_id,created_at,updated_at) VALUES (?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+                orderId);
+        var past = Instant.parse("2020-01-01T00:00:00Z");
+        service.recordSchedule(MERCHANT, orderId, past, ITEMS);
+        assertThat(orders.findByMerchantIdAndOrderId(MERCHANT, orderId)
+                        .orElseThrow()
+                        .getScheduledFulfillmentAt())
+                .isEqualTo(past);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM order_fulfillments WHERE order_id=? AND merchant_id IS NULL AND scheduled_fulfillment_at IS NULL",
+                        Long.class,
+                        orderId))
+                .isEqualTo(1L);
     }
 
     // 동시 동일 요청도 DB의 부모 행 잠금으로 직렬화해 항목 수가 늘어나지 않는다.

@@ -31,8 +31,8 @@ class OrderFulfillmentServiceTests {
     @Test
     void recordSchedule_whenCaptureMissing_keepsAuthenticatedMerchant() {
         var f = order();
-        when(orders.findForUpdate("ORDER")).thenReturn(Optional.of(f));
-        when(captures.findAllByOrderId("ORDER")).thenReturn(List.of());
+        when(orders.findForUpdate(2L, "ORDER")).thenReturn(Optional.of(f));
+        when(captures.findAllByMerchantIdAndOrderId(2L, "ORDER")).thenReturn(List.of());
         service.recordSchedule(2L, "ORDER", AT, List.of(new PickupOrderItemRequest("케이크", 1)));
         assertThat(f.getMerchantId()).isEqualTo(2L);
         assertThat(f.getScheduledFulfillmentAt()).isEqualTo(AT);
@@ -49,8 +49,8 @@ class OrderFulfillmentServiceTests {
         var s = mock(Settlement.class);
         when(s.getCaptureId()).thenReturn(3L);
         when(s.getMerchantId()).thenReturn(2L);
-        when(orders.findForUpdate("ORDER")).thenReturn(Optional.of(f));
-        when(captures.findAllByOrderId("ORDER")).thenReturn(List.of(c));
+        when(orders.findForUpdate(2L, "ORDER")).thenReturn(Optional.of(f));
+        when(captures.findAllByMerchantIdAndOrderId(2L, "ORDER")).thenReturn(List.of(c));
         when(settlements.findByCaptureId(3L)).thenReturn(Optional.of(s));
         service.recordCompletion(2L, "ORDER", AT);
         assertThat(f.getMerchantId()).isEqualTo(2L);
@@ -71,8 +71,9 @@ class OrderFulfillmentServiceTests {
     @Test
     void record_whenMultipleCaptures_rejectsAmbiguousOrder() {
         var f = order();
-        when(orders.findForUpdate("ORDER")).thenReturn(Optional.of(f));
-        when(captures.findAllByOrderId("ORDER")).thenReturn(List.of(mock(Capture.class), mock(Capture.class)));
+        when(orders.findForUpdate(2L, "ORDER")).thenReturn(Optional.of(f));
+        when(captures.findAllByMerchantIdAndOrderId(2L, "ORDER"))
+                .thenReturn(List.of(mock(Capture.class), mock(Capture.class)));
         assertThatIllegalStateException()
                 .isThrownBy(
                         () -> service.recordSchedule(2L, "ORDER", AT, List.of(new PickupOrderItemRequest("케이크", 1))));
@@ -82,7 +83,7 @@ class OrderFulfillmentServiceTests {
     // 동일 상품 목록 재전달은 INSERT와 스냅샷 갱신을 하지 않는다.
     @Test
     void recordSchedule_whenItemsMatch_doesNotInsertAgain() {
-        when(orders.findForUpdate("ORDER")).thenReturn(Optional.of(order()));
+        when(orders.findForUpdate(2L, "ORDER")).thenReturn(Optional.of(order()));
         when(items.findAllByFulfillmentIdOrderByItemSequenceAsc(1L))
                 .thenReturn(List.of(OrderFulfillmentItem.snapshot(1L, 1, "케이크", 2, AT)));
         service.recordSchedule(2L, "ORDER", AT, List.of(new PickupOrderItemRequest("케이크", 2)));
@@ -92,7 +93,7 @@ class OrderFulfillmentServiceTests {
     // 상품명·수량·원본 순서·항목 수가 바뀌면 기존 목록을 덮어쓰지 않는다.
     @Test
     void recordSchedule_whenItemsDiffer_rejectsConflictWithoutInsert() {
-        when(orders.findForUpdate("ORDER")).thenReturn(Optional.of(order()));
+        when(orders.findForUpdate(2L, "ORDER")).thenReturn(Optional.of(order()));
         when(items.findAllByFulfillmentIdOrderByItemSequenceAsc(1L))
                 .thenReturn(List.of(
                         OrderFulfillmentItem.snapshot(1L, 1, "딸기", 2, AT),

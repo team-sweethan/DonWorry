@@ -1,7 +1,7 @@
 # P6 픽업·상품 저장 ERD
 
 상태: 사용자 승인, PR 리뷰 대상. Notion 최신 동기화·실제 CakeShop 호출·배포 완료와 구분한다.
-현재 지원은 CakeShop 단일 연동이며 주문번호 전역 유일성을 전제로 한다.
+주문 식별·잠금·조회는 `(merchant_id, order_id)`를 함께 사용한다. 다른 가맹점은 같은 주문번호를 독립적으로 사용할 수 있다.
 
 ## 테이블
 
@@ -9,12 +9,13 @@
 | --- | --- | --- | --- |
 | fulfillment_id | BIGINT | N | PK AUTO_INCREMENT |
 | merchant_id | BIGINT | Y | P1 논리 참조, FK 없음 |
-| order_id | VARCHAR(100) | N | CakeShop 주문번호, UNIQUE |
+| order_id | VARCHAR(100) | N | CakeShop 주문번호, 가맹점과 복합 UNIQUE |
 | scheduled_fulfillment_at | DATETIME(6) | Y | 예정 픽업 시각 |
 | fulfilled_at | DATETIME(6) | Y | 실제 픽업 완료 시각 |
 | created_at / updated_at | DATETIME(6) | N | UTC 저장·갱신 시각 |
 
-내부 매입 선도착의 주문 확보 행은 가맹점·두 시각이 비어 있을 수 있다. 픽업 수신은 인증된 가맹점을 즉시 연결한다.
+신규 주문 확보 행은 매입 요청 또는 HMAC 인증의 양수 가맹점 ID를 처음부터 저장한다. 두 픽업 시각은 비어 있을 수 있다.
+기존 `merchant_id IS NULL` 행은 삭제·추정 귀속하지 않고 보존하며 정상 수신 경로에서 조회·연결하지 않는다. 별도 소유자 확인 후 명시적인 정리가 필요하다.
 외부 API의 필수 시각 검증과 내부 자리 확보 행의 NULL 조건을 구분한다.
 
 | order_fulfillment_items 컬럼 | 타입 | NULL | 의미 |
@@ -47,8 +48,9 @@ erDiagram
     CAPTURES ||--o| SETTLEMENTS : capture_id
 ```
 
-order_fulfillments와 captures는 order_id로 찾고 merchant_id 일치를 확인한다. 도착 순서가 자유로워 둘 사이에 FK는 두지 않는다.
-UNIQUE(order_id)는 다중 가맹점의 같은 주문번호를 지원하는 키가 아니다. 확대 시 인증·외부 시스템 식별과 복합키를 새 migration으로 재설계한다.
+order_fulfillments는 UNIQUE(merchant_id, order_id), captures는 비고유 인덱스 idx_captures_merchant_order(merchant_id, order_id)를 사용한다.
+매입의 UNIQUE(payment_id)는 유지한다. 같은 가맹점·주문에 매입이 여러 건이면 임의 선택하지 않고 충돌로 처리한다. 도착 순서가 자유로워 주문과 매입 사이에 FK는 두지 않는다.
+기존 NULL 행 보존을 위해 DB nullable은 유지하지만 신규 서비스 경로에서는 NULL 가맹점 ID를 거절한다.
 
 ## 동시성·원자성
 
@@ -61,6 +63,7 @@ UNIQUE(order_id)는 다중 가맹점의 같은 주문번호를 지원하는 키�
 
 ## SQL 범위
 
-신규 3개: create_order_fulfillments, add_settlement_schedule_times, create_order_fulfillment_items.
+신규 5개: create_order_fulfillments, add_settlement_schedule_times, create_order_fulfillment_items, scope_order_fulfillments_by_merchant, index_captures_merchant_order.
+기존 3개 SQL을 수정하지 않고 후속 migration으로 키를 전환하고 인덱스를 추가한다.
 현재 dev에 있는 migration은 수정·삭제하지 않는다. 취소·현금흐름·지출 SQL은 포함하지 않는다.
 픽업을 받았다는 이유로 매입·정산을 새로 생성하거나 정산 상태를 COMPLETED로 바꾸지 않는다.

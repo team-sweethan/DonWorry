@@ -11,5 +11,5 @@ public interface CaptureRepository extends JpaRepository<Capture, Long> {
 
     boolean existsByPaymentId(Long paymentId);
 
-    List<Capture> findAllByOrderId(String orderId);
+    List<Capture> findAllByMerchantIdAndOrderId(Long merchantId, String orderId);
 }
