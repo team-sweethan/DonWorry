@@ -27,6 +27,7 @@ import {
   type FdsResult,
   type FdsRulePolicy,
 } from '../../api/fds'
+import { getMerchantDirectory } from '../../api/merchants'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
@@ -119,6 +120,7 @@ export function AlertDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<FdsEvaluationDetail | null>(null)
+  const [merchantName, setMerchantName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,11 +145,23 @@ export function AlertDetailPage() {
       setError(null)
       setPolicyError(false)
       setPolicies([])
+      setMerchantName(null)
       setCaseIdsByPaymentId(new Map())
       try {
         const response = await getFdsEvaluation(id)
         if (active) {
           setDetail(response)
+          void getMerchantDirectory()
+            .then((merchants) => {
+              if (!active) return
+              setMerchantName(
+                merchants.find((merchant) => merchant.merchantId === response.evaluation.merchantId)
+                  ?.displayName ?? null,
+              )
+            })
+            .catch(() => {
+              if (active) setMerchantName(null)
+            })
           void Promise.all(
             response.blocklistCandidates.map(async (candidate) => ({
               key: `${candidate.identifierType}:${candidate.identifierValue}`,
@@ -215,6 +229,7 @@ export function AlertDetailPage() {
     return <Alert type="error" showIcon message={error ?? '경보 상세가 없습니다.'} />
 
   const evaluation = detail.evaluation
+  const merchantLabel = merchantName ?? `ID ${evaluation.merchantId}`
   const policyByRuleCode = new Map(policies.map((policy) => [policy.ruleCode, policy]))
   const score = evaluation.riskScore
   const caseId = caseIdsByPaymentId.get(String(evaluation.paymentId))
@@ -278,7 +293,7 @@ export function AlertDetailPage() {
     <>
       <PageHeader
         title="경보 상세"
-        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${evaluation.merchantId} · 고객 ${evaluation.customerRef}`}
+        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${merchantLabel} · 고객 ${evaluation.customerRef}`}
         actions={
           <>
             {caseId && (
@@ -488,7 +503,7 @@ export function AlertDetailPage() {
           >
             <Descriptions column={2} colon={false}>
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
-              <Descriptions.Item label="가맹점 ID">{evaluation.merchantId}</Descriptions.Item>
+              <Descriptions.Item label="가맹점">{merchantLabel}</Descriptions.Item>
               <Descriptions.Item label="고객 식별자">{evaluation.customerRef}</Descriptions.Item>
               <Descriptions.Item label="마스킹 카드">
                 {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
