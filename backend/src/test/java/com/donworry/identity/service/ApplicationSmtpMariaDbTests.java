@@ -55,6 +55,9 @@ class ApplicationSmtpMariaDbTests {
     @Autowired
     JsonMapper mapper;
 
+    @Autowired
+    ApplicationMailSender sender;
+
     // 실제 Mailpit SMTP에서 받은 한국어 메일과 링크로 이메일 확인을 완료한다.
     @Test
     void smtp_whenUsingMailpit_deliversRealMessageAndVerifiableLink() throws Exception {
@@ -98,6 +101,40 @@ class ApplicationSmtpMariaDbTests {
                     .findFirst()
                     .orElseThrow();
             assertThat(app.getStatus()).isEqualTo(ApplicationStatus.REVIEW_PENDING);
+            sender.sendApproval(
+                    "smtp@example.com", "smtp_owner", "http://localhost:5173/apply/password#token=" + "A".repeat(43));
+            sender.sendRejection("smtp@example.com", "사업자등록번호를 다시 확인해 주세요.");
+            var reviewedMessages = mapper.readTree(http.send(
+                                    HttpRequest.newBuilder(URI.create(base + "/api/v1/messages"))
+                                            .build(),
+                                    HttpResponse.BodyHandlers.ofString())
+                            .body())
+                    .get("messages");
+            assertThat(reviewedMessages.size()).isEqualTo(3);
+            boolean approvalSeen = false;
+            boolean rejectionSeen = false;
+            for (var entry : reviewedMessages) {
+                var received = mapper.readTree(http.send(
+                                HttpRequest.newBuilder(URI.create(base + "/api/v1/message/"
+                                                + entry.get("ID").asString()))
+                                        .build(),
+                                HttpResponse.BodyHandlers.ofString())
+                        .body());
+                String subject = received.get("Subject").asString();
+                String body = received.get("Text").asString();
+                if (subject.contains("이용 승인")) {
+                    approvalSeen = true;
+                    assertThat(body)
+                            .contains("smtp_owner", "/apply/password#token=", "72시간", "결제 연동은 별도")
+                            .doesNotContain("임시 비밀번호");
+                }
+                if (subject.contains("검토 결과")) {
+                    rejectionSeen = true;
+                    assertThat(body).contains("사업자등록번호를 다시 확인해 주세요.", "계정은 발급되지", "/apply");
+                }
+            }
+            assertThat(approvalSeen).isTrue();
+            assertThat(rejectionSeen).isTrue();
         } finally {
             var ids = jdbc.queryForList(
                     "SELECT application_id FROM merchant_applications WHERE email='smtp@example.com'", Long.class);

@@ -9,6 +9,7 @@ import com.donworry.identity.controller.AdminAccountController;
 import com.donworry.identity.controller.AdminMerchantController;
 import com.donworry.identity.controller.AuthController;
 import com.donworry.identity.controller.AuthExceptionHandler;
+import com.donworry.identity.repository.ApplicationTokenRepository;
 import com.donworry.identity.repository.MerchantRepository;
 import com.donworry.identity.repository.PlatformUserRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
@@ -63,6 +64,8 @@ class AuthPrincipalRaceTests {
                 new PasswordChangeService(users, encoder, passwordPolicy, accountLocks, sessions, transactions);
         var adminAccountService = new AdminAccountService(
                 users,
+                mock(AccountProvisioningService.class),
+                mock(ApplicationTokenRepository.class),
                 permissions,
                 merchants,
                 changeHistories,
@@ -73,7 +76,14 @@ class AuthPrincipalRaceTests {
                 temporaryPasswords,
                 transactions);
         var adminMerchantService = new AdminMerchantService(
-                merchants, users, changeHistories, merchantLocks, accountLocks, sessions, transactions);
+                merchants,
+                mock(MerchantProvisioningService.class),
+                users,
+                changeHistories,
+                merchantLocks,
+                accountLocks,
+                sessions,
+                transactions);
         var context = SecurityContextHolder.createEmptyContext();
         SecurityContextHolder.setContext(context);
         authenticate();

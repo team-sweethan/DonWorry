@@ -5,7 +5,8 @@ import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.*;
 
-public interface MerchantApplicationRepository extends JpaRepository<MerchantApplication, Long> {
+public interface MerchantApplicationRepository
+        extends JpaRepository<MerchantApplication, Long>, JpaSpecificationExecutor<MerchantApplication> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from MerchantApplication a where a.applicationId = :id")
     Optional<MerchantApplication> lockById(Long id);

@@ -26,6 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class AdminAccountService {
     private final PlatformUserRepository users;
+    private final AccountProvisioningService provisioning;
+    private final ApplicationTokenRepository applicationTokens;
     private final UserPermissionRepository permissions;
     private final MerchantRepository merchants;
     private final AdminChangeHistoryService histories;
@@ -90,29 +92,8 @@ public class AdminAccountService {
                     try {
                         return transaction(() -> {
                             requireAdmin(actor);
-                            if (!input.loginId().matches("[a-z0-9_]{3,30}")
-                                    || input.displayName().isBlank()
-                                    || input.displayName().length() > 100) invalid();
-                            UserRole role = role(input.role());
-                            if (role == UserRole.ADMIN) invalid();
-                            if (users.findByLoginId(input.loginId()).isPresent())
-                                throw new AccountManagementException(AuthErrorCode.ADMIN_LOGIN_ID_CONFLICT);
-                            if (role == UserRole.OPERATOR) {
-                                if (input.merchantId() == null
-                                        || merchants
-                                                .findById(input.merchantId())
-                                                .filter(m -> m.getStatus() == MerchantStatus.ACTIVE)
-                                                .isEmpty())
-                                    throw new AccountManagementException(AuthErrorCode.ADMIN_MERCHANT_REQUIRED);
-                            } else if (input.merchantId() != null) invalid();
                             String password = temporaryPasswords.generate(input.loginId());
-                            var user = users.saveAndFlush(PlatformUser.create(
-                                    input.loginId(),
-                                    input.displayName().trim(),
-                                    role,
-                                    input.merchantId(),
-                                    encoder.encode(password)));
-                            record(actor, user, "USER_CREATED", null, snapshot(user));
+                            var user = provisioning.create(actor, input, encoder.encode(password));
                             return new TemporaryPasswordResponse(response(user), password);
                         });
                     } catch (DataIntegrityViolationException exception) {
@@ -170,6 +151,9 @@ public class AdminAccountService {
                 boolean previous = user.isPasswordChangeRequired();
                 String password = temporaryPasswords.generate(user.getLoginId());
                 user.resetPasswordHash(encoder.encode(password));
+                applicationTokens
+                        .findByUserIdAndPurpose(id, ApplicationTokenPurpose.INITIAL_PASSWORD_SETUP)
+                        .forEach(t -> t.revoke(java.time.LocalDateTime.now(java.time.ZoneOffset.UTC)));
                 record(
                         actor,
                         user,
@@ -264,17 +248,6 @@ public class AdminAccountService {
                 .passwordChangeRequired(user.isPasswordChangeRequired())
                 .createdAt(user.getCreatedAt())
                 .build();
-    }
-
-    private Map<String, Object> snapshot(PlatformUser user) {
-        var data = new LinkedHashMap<String, Object>();
-        data.put("loginId", user.getLoginId());
-        data.put("displayName", user.getDisplayName());
-        data.put("role", user.getRole().name());
-        data.put("status", user.getStatus().name());
-        data.put("merchantId", user.getMerchantId());
-        data.put("passwordChangeRequired", user.isPasswordChangeRequired());
-        return data;
     }
 
     private void record(SessionUser actor, PlatformUser user, String type, Object before, Object after) {

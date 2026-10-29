@@ -128,6 +128,21 @@ public class MerchantApplication {
                 .build();
     }
 
+    public void approve(Long actorId, Long merchantId, Long userId, LocalDateTime now) {
+        status = ApplicationStatus.APPROVED;
+        reviewerUserId = actorId;
+        reviewedAt = now;
+        this.merchantId = merchantId;
+        this.userId = userId;
+    }
+
+    public void reject(Long actorId, String reason, LocalDateTime now) {
+        status = ApplicationStatus.REJECTED;
+        reviewerUserId = actorId;
+        reviewedAt = now;
+        rejectionReason = reason;
+    }
+
     public void verifyEmail(LocalDateTime now) {
         this.status = ApplicationStatus.REVIEW_PENDING;
         this.emailVerifiedAt = now;

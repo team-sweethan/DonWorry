@@ -18,7 +18,7 @@ public class MerchantApplicationService {
     private final ApplicationPersistenceService persistence;
     private final ApplicationRateLimitService limits;
     private final LoginHistoryRequestMetadata metadata;
-    private final ApplicationMailSender mail;
+    private final ApplicationMailDispatchService dispatch;
 
     public Submission submit(SubmitRequest input, HttpServletRequest request) {
         settings.requireEnabled();
@@ -54,24 +54,9 @@ public class MerchantApplicationService {
     }
 
     private ApplicationMailStatus deliver(PreparedApplicationMail prepared) {
-        ApplicationMailStatus status = ApplicationMailStatus.SENT;
-        String failure = null;
-        try {
-            mail.sendVerification(prepared.email(), settings.verificationLink(prepared.token()));
-        } catch (org.springframework.mail.MailPreparationException
-                | org.springframework.mail.MailAuthenticationException exception) {
-            status = ApplicationMailStatus.FAILED;
-            failure = "SMTP_REJECTED";
-        } catch (RuntimeException exception) {
-            status = ApplicationMailStatus.UNKNOWN;
-            failure = "SMTP_OUTCOME_UNKNOWN";
-        }
-        try {
-            persistence.complete(prepared.deliveryId(), status, failure);
-        } catch (RuntimeException exception) {
-            log.warn("신청 메일 결과 저장 실패 deliveryId={}", prepared.deliveryId());
-            return ApplicationMailStatus.UNKNOWN;
-        }
-        return status;
+        return dispatch.deliver(
+                prepared.deliveryId(),
+                () -> dispatch.sender()
+                        .sendVerification(prepared.email(), settings.verificationLink(prepared.token())));
     }
 }

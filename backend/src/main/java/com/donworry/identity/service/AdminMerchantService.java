@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class AdminMerchantService {
     private final MerchantRepository merchants;
+    private final MerchantProvisioningService provisioning;
     private final PlatformUserRepository users;
     private final AdminChangeHistoryService histories;
     private final MerchantLockService merchantLocks;
@@ -68,33 +69,7 @@ public class AdminMerchantService {
             try {
                 return transaction(() -> {
                     requireAdmin(actor);
-                    if (input.merchantCode() == null
-                            || !input.merchantCode().matches("[A-Z0-9]{3,40}")
-                            || input.displayName() == null
-                            || input.displayName().isBlank()
-                            || input.displayName().length() > 100
-                            || input.pgFeeRate() == null
-                            || input.pgFeeRate().signum() < 0
-                            || input.pgFeeRate().compareTo(java.math.BigDecimal.ONE) >= 0
-                            || input.pgFeeRate().scale() > 6) invalid();
-                    if (merchants.existsByMerchantCode(input.merchantCode()))
-                        throw new AccountManagementException(AuthErrorCode.ADMIN_MERCHANT_CODE_CONFLICT);
-                    var merchant = merchants.saveAndFlush(Merchant.create(
-                            input.merchantCode(), input.displayName().trim(), input.pgFeeRate()));
-                    histories.recordMerchant(
-                            actor.userId(),
-                            merchant.getMerchantId(),
-                            "MERCHANT_CREATED",
-                            null,
-                            Map.of(
-                                    "merchantCode",
-                                    merchant.getMerchantCode(),
-                                    "displayName",
-                                    merchant.getDisplayName(),
-                                    "status",
-                                    merchant.getStatus().name(),
-                                    "pgFeeRate",
-                                    merchant.getPgFeeRate()));
+                    var merchant = provisioning.create(actor, input);
                     return AdminMerchantResponse.from(merchant);
                 });
             } catch (DataIntegrityViolationException exception) {

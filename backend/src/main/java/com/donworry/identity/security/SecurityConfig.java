@@ -141,6 +141,8 @@ public class SecurityConfig {
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
         var applicationPosts = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults()
+                        .matcher(HttpMethod.POST, "/api/merchant-applications/initial-password-setups"),
                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/merchant-applications"),
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/merchant-applications/email-verifications"),
@@ -152,6 +154,9 @@ public class SecurityConfig {
         // ADR-0036: 두 복구 POST는 전역 CSRF 설정과 관계없이 보호한다.
         http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
                 fdsRecoveryPosts, (request, response) -> response.setHeader("Cache-Control", "no-store"))));
+        http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchant-applications/**"),
+                (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         http.csrf(csrf -> csrf.spa()
                         .csrfTokenRepository(csrfTokenRepository)
                         .requireCsrfProtectionMatcher(request -> applicationPosts.matches(request)

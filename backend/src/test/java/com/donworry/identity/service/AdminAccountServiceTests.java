@@ -31,6 +31,8 @@ class AdminAccountServiceTests {
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private final AdminAccountService service = new AdminAccountService(
             users,
+            mock(AccountProvisioningService.class),
+            mock(ApplicationTokenRepository.class),
             mock(UserPermissionRepository.class),
             mock(MerchantRepository.class),
             histories,

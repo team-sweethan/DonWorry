@@ -14,6 +14,14 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class MerchantApplicationController {
     private final MerchantApplicationService service;
+    private final com.donworry.identity.service.InitialPasswordService initialPasswords;
+
+    @PostMapping("/initial-password-setups")
+    public ResponseEntity<Void> setup(
+            @Valid @RequestBody com.donworry.identity.dto.ApplicationReviewRequests.SetupRequest input) {
+        initialPasswords.setup(input);
+        return ResponseEntity.noContent().build();
+    }
 
     @PostMapping
     public ResponseEntity<Submission> submit(@Valid @RequestBody SubmitRequest input, HttpServletRequest request) {

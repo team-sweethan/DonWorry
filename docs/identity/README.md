@@ -2,6 +2,13 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #315 PR 3 관리자 검토·계정 발급·첫 비밀번호 설정
+
+설계는 [315-approval-design.md](315-approval-design.md), 결정은 [ADR-0046](../decisions/0046-application-approval-and-initial-password.md).
+관리자 홈/메뉴의 이용 신청에서 목록·상세·승인·반려를 제공한다. 승인 시 가맹점·계정·권한·이력·토큰·발송 시도는 한 번에 저장하고, SMTP는 커밋 뒤 수행한다.
+공개 `/apply/password`는 승인 메일의 fragment 링크로 진입하며 기존 PasswordPolicy·72시간/1회 토큰을 사용한다. 관리자 초기화는 기존 링크를 함께 폐기한다.
+메일 실패 관리·재발송, 자동 삭제·운영 화면 비활성화는 PR 4다.
+
 ## #315 PR 2 이용 신청과 이메일 확인
 
 설계는 [315-application-design.md](315-application-design.md), 결정은 ADR-0043 · 0044 · 0045. 관리자 검토·승인·계정 발급은 PR 3, 메일 실패 복구·미확인 7일/반려 30일 자동 삭제는 PR 4다.

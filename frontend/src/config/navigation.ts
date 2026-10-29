@@ -56,6 +56,7 @@ export const adminNavigation = {
     {
       title: '관리',
       items: [
+        { label: '이용 신청', path: '/admin/applications' },
         { label: '계정 관리', path: '/admin/users' },
         { label: '가맹점 관리', path: '/admin/merchants' },
         { label: '자금관리', path: '/admin/finance' },

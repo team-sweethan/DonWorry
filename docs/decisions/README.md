@@ -69,6 +69,8 @@
 | [0044](0044-application-smtp.md) | 신청 메일 SMTP와 커밋 후 발송 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
 | [0045](0045-application-public-http.md) | 공개 신청·이메일 확인 HTTP와 CSRF | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
 
+| [0046](0046-application-approval-and-initial-password.md) | 이용 신청 승인 원자성과 첫 비밀번호 설정 | 제안 — P1 설계·구현 승인, PR 리뷰 대상 |
+
 ## 현재 적용 상태와 기록의 구분
 
 2026-10-22, `ba9427f` 기준으로 ADR-0011의 Flyway·버전 생성·DB 검사와 ADR-0013의 포매터·CI 검사가 구현되어 있습니다.

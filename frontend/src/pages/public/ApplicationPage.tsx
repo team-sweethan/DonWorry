@@ -12,7 +12,7 @@ import {
 import { applicationError } from './applicationFeedback'
 import './ApplicationPage.css'
 
-function PublicShell({ children }: { children: ReactNode }) {
+export function PublicShell({ children }: { children: ReactNode }) {
   return (
     <div className="dw-application-shell">
       <header className="dw-application-header">

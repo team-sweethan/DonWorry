@@ -124,6 +124,17 @@ export function AdminHomePage() {
           </Button>
         }
       />
+      <section className="ah-application-entry" aria-label="신규 가맹점 이용 신청">
+        <div>
+          <h2>신규 이용 신청 검토</h2>
+          <p>이메일 확인이 끝난 신청을 검토하고 가맹점·사장님 계정을 발급합니다.</p>
+        </div>
+        <Link to="/admin/applications">
+          <Button type="primary" icon={<ArrowRightOutlined />}>
+            이용 신청 보기
+          </Button>
+        </Link>
+      </section>
       {failed && (
         <Alert
           type="error"

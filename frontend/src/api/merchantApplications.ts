@@ -37,6 +37,9 @@ export function submitApplication(input: ApplicationInput) {
 export function verifyApplicationEmail(token: string) {
   return post<{ status: 'REVIEW_PENDING' }>('/email-verifications', { token })
 }
+export function setupInitialPassword(token: string, newPassword: string) {
+  return post<void>('/initial-password-setups', { token, newPassword })
+}
 export function resendApplicationEmail(email: string) {
   return post<void>('/email-verification-resends', { email: email.trim().toLowerCase() })
 }

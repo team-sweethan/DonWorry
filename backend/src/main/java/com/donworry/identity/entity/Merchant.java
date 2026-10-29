@@ -61,6 +61,10 @@ public class Merchant {
         this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
+    public void registerBusinessNumber(String number) {
+        this.businessRegistrationNumber = number;
+    }
+
     public void changeStatus(MerchantStatus status) {
         this.status = status;
     }

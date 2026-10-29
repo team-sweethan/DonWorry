@@ -18,6 +18,8 @@ public interface MerchantRepository extends Repository<Merchant, Long>, JpaSpeci
 
     Merchant saveAndFlush(Merchant merchant);
 
+    List<Merchant> findByBusinessRegistrationNumber(String businessRegistrationNumber);
+
     boolean existsByMerchantCode(String merchantCode);
 
     List<Merchant> findByMerchantIdIn(Collection<Long> merchantIds);
