@@ -9,6 +9,22 @@
 공개 `/apply/password`는 승인 메일의 fragment 링크로 진입하며 기존 PasswordPolicy·72시간/1회 토큰을 사용한다. 관리자 초기화는 기존 링크를 함께 폐기한다.
 메일 실패 관리·재발송, 자동 삭제·운영 화면 비활성화는 PR 4다.
 
+### #315 PR 3 검증·미검증
+
+2026-10-29, `feature/315-approval`, 구현 커밋 `0675cbb`(기준 dev `09c2b0c`)와 동일한 최종 코드 작업 트리에서 실행했다. 이후 검증 기록만 보완한다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: 통과. 일반 641개(기존 1개 건너뜀), MariaDB 497개, 실패·오류 0. 전체 Flyway/JPA validate·ModularityTests·ArchitectureTests 포함.
+- 신규 MariaDB HTTP 검사 20개: 승인 원자성·코드/아이디 충돌·이력 저장 실패 롤백, 다른 관리자 동시 승인·승인/반려 경쟁, 반려 후 재신청, 메일 실패/결과 저장 실패, 첫 설정 CSRF·로그인·비밀번호 정책·용도/만료/사용/폐기·동시 사용·초기화 경쟁·초기화 롤백·정지 상태·관리자 인가·목록 필터. 기존 관리자 생성·초기화 검사를 함께 실행했다.
+- 실제 Mailpit SMTP: 접수·승인·반려 세 메일의 한국어 본문, 로그인 아이디·72시간 첫 설정 링크·반려 사유·결제 연동 별도 안내를 확인했다. Gmail 검증과 구분한다.
+- `cd frontend && npm run lint && npm run format:check && npm run build && npm test`: 통과. 226개(신규 6개). 기존 router Fast Refresh lint 경고 1개·번들 크기 경고 유지.
+- 브라우저: 별도 MariaDB 컨테이너와 18315/15315 포트, 가상 신청 3건·로컬 Mailpit으로 확인했다. 관리자 로그인·홈 진입, 신청 목록·상세 데이터 표시, 승인 입력·기본 권한, 이메일 미확인의 검토 폼 미표시, 첫 설정 화면·fragment 제거를 확인했다. 1440px 데스크톱·960px 창·390px 모바일에서 배치와 가로 넘침을 점검하고 신청 화면에만 반응형 레이아웃을 적용했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 새 migration·모듈 공개 API 변경 없음.
+- 최초 전체 검사에서 신규 테스트가 남긴 가맹점이 기존 PR 2 검사의 빈 사업자번호 전제를 깨뜨려, 신규 테스트의 종료 정리를 추가했다. 초기화 이력 실패의 기존 계약은 AUTH_007/500이므로 그 계약에 맞춰 롤백을 검사했다. 위 전체 검사는 두 보완 뒤 결과다.
+
+미검증: Gmail 실제 수신, 운영 HTTPS·배포, Notion 최신 대조·동기화. 브라우저의 승인/반려 최종 확인창 실행·오류 후 복구·첫 비밀번호 실제 입력부터 로그인까지 전체 동작과 전체 키보드 흐름은 미검증이다. 기본 Google Chrome 앱 입력으로 추가 확인하려 했으나 자동 승인 검토가 `Computer Use was not approved to use Google Chrome`로 거절했다. 승인·반려·첫 설정·초기화의 서버 흐름은 위 MariaDB HTTP 통합 검사로 별도 검증했으며 브라우저 완료로 표현하지 않는다.
+
+문서·코드에 답이 없어 새로 결정해야 할 사항과 다른 담당 계약 변경은 없다. 메일 실패 재발송·자동 삭제·운영 공개 화면 진입 차단은 PR 4 범위다.
+
 ## #315 PR 2 이용 신청과 이메일 확인
 
 설계는 [315-application-design.md](315-application-design.md), 결정은 ADR-0043 · 0044 · 0045. 관리자 검토·승인·계정 발급은 PR 3, 메일 실패 복구·미확인 7일/반려 30일 자동 삭제는 PR 4다.
