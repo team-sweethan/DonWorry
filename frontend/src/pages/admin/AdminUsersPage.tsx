@@ -16,7 +16,7 @@ import {
   Tag,
   Typography,
 } from 'antd'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   createUser,
   getMerchantOptions,
@@ -90,13 +90,21 @@ function TemporaryPasswordModal({
 }
 
 export function AdminUsersPage() {
-  const [filter, setFilter] = useState({
+  // 관리자 홈의 "임시 비밀번호 미변경"은 ?passwordChangeRequired=true&status=ACTIVE로 들어온다.
+  const [searchParams] = useSearchParams()
+  const [filter, setFilter] = useState(() => ({
     page: 0,
     keyword: '',
     role: undefined as string | undefined,
-    status: undefined as string | undefined,
+    status: ['ACTIVE', 'DISABLED'].includes(searchParams.get('status') ?? '')
+      ? (searchParams.get('status') ?? undefined)
+      : undefined,
+    passwordChangeRequired:
+      searchParams.get('passwordChangeRequired') === 'true'
+        ? true
+        : (undefined as true | undefined),
     revision: 0,
-  })
+  }))
   const [search, setSearch] = useState('')
   const [result, setResult] = useState<{
     filter: typeof filter
@@ -105,7 +113,7 @@ export function AdminUsersPage() {
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getUsers(filter.page, filter.keyword, filter.role, filter.status)
+    getUsers(filter.page, filter.keyword, filter.role, filter.status, filter.passwordChangeRequired)
       .then((data) => {
         if (alive) setResult({ filter, data })
       })
@@ -164,6 +172,17 @@ export function AdminUsersPage() {
               { value: 'DISABLED', label: '정지' },
             ]}
             onChange={(status) => setFilter((f) => ({ ...f, status, page: 0 }))}
+          />
+          <Select
+            aria-label="비밀번호 필터"
+            placeholder="전체 비밀번호"
+            allowClear
+            style={{ width: 170 }}
+            value={filter.passwordChangeRequired}
+            options={[{ value: true, label: '임시 비밀번호 미변경' }]}
+            onChange={(passwordChangeRequired) =>
+              setFilter((f) => ({ ...f, passwordChangeRequired, page: 0 }))
+            }
           />
         </Space>
         {current?.error ? (

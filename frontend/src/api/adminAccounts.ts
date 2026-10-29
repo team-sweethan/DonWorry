@@ -27,10 +27,18 @@ const json = (method: string, body: unknown): RequestInit => ({
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(body),
 })
-export function getUsers(page: number, keyword: string, role?: string, status?: string) {
+export function getUsers(
+  page: number,
+  keyword: string,
+  role?: string,
+  status?: string,
+  passwordChangeRequired?: boolean,
+) {
   const query = new URLSearchParams({ page: String(page), size: '20', keyword })
   if (role) query.set('role', role)
   if (status) query.set('status', status)
+  if (passwordChangeRequired !== undefined)
+    query.set('passwordChangeRequired', String(passwordChangeRequired))
   return api<UserPage>(`/admin/users?${query}`, { cache: 'no-store' })
 }
 export const getUser = (id: number) => api<AdminUser>(`/admin/users/${id}`, { cache: 'no-store' })

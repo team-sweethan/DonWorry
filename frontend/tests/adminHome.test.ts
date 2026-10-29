@@ -26,12 +26,18 @@ test('관리자 현황은 전체 건수를 쓰고 최신 승인 대기 요청은
       return Response.json([{ active: true }, { active: false }, { active: false }])
     }
     assert.equal(url.searchParams.get('keyword'), '')
-    assert.equal(url.searchParams.has('status'), false)
     assert.equal(url.searchParams.has('role'), false)
+    // 임시 비밀번호 미변경은 사용 중 계정만 센다.
+    if (url.searchParams.has('passwordChangeRequired')) {
+      assert.equal(url.searchParams.get('passwordChangeRequired'), 'true')
+      assert.equal(url.searchParams.get('status'), 'ACTIVE')
+      return Response.json({ totalElements: 3, items: [] })
+    }
+    assert.equal(url.searchParams.has('status'), false)
     return Response.json({ totalElements: url.pathname.endsWith('users') ? 47 : 31, items: [] })
   }
   const result = await getAdminHome()
-  assert.equal(paths.length, 4)
+  assert.equal(paths.length, 5)
   assert.deepEqual(result.requests, {
     status: 'fulfilled',
     value: { count: 23, recent: [23, 22, 21, 20, 19].map((requestId) => ({ requestId })) },
@@ -39,6 +45,7 @@ test('관리자 현황은 전체 건수를 쓰고 최신 승인 대기 요청은
   assert.deepEqual(result.disabledRules, { status: 'fulfilled', value: 2 })
   assert.deepEqual(result.users, { status: 'fulfilled', value: 47 })
   assert.deepEqual(result.merchants, { status: 'fulfilled', value: 31 })
+  assert.deepEqual(result.passwordPendingUsers, { status: 'fulfilled', value: 3 })
 })
 
 test('부분 실패를 0건과 구분하고 재조회 성공으로 복구한다', async () => {

@@ -1,6 +1,7 @@
 import {
   ArrowRightOutlined,
   CheckOutlined,
+  ExclamationCircleOutlined,
   FileSearchOutlined,
   PauseCircleOutlined,
   ReloadOutlined,
@@ -59,6 +60,7 @@ function ManagementCard({
   icon,
   to,
   unit,
+  children,
 }: {
   title: string
   description: string
@@ -67,14 +69,20 @@ function ManagementCard({
   icon: ReactNode
   to: string
   unit: string
+  children?: ReactNode
 }) {
+  // 카드 안에 다른 링크를 둘 수 있게 제목 링크를 카드 전체로 넓힌다 (링크 안 링크 금지).
   return (
-    <Link to={to} className="ah-panel ah-management-card">
+    <div className="ah-panel ah-management-card">
       <div className="ah-management-heading">
         <span className="ah-management-icon" aria-hidden="true">
           {icon}
         </span>
-        <h2>{title}</h2>
+        <h2>
+          <Link to={to} className="ah-management-link">
+            {title}
+          </Link>
+        </h2>
         <ArrowRightOutlined className="ah-arrow" aria-hidden="true" />
       </div>
       <p>{description}</p>
@@ -82,7 +90,8 @@ function ManagementCard({
         <span>전체</span>
         <Count result={result} loading={loading} unit={unit} />
       </div>
-    </Link>
+      {children}
+    </div>
   )
 }
 
@@ -133,7 +142,23 @@ export function AdminHomePage() {
             loading={loading}
             to="/admin/users"
             unit="명"
-          />
+          >
+            {!loading &&
+              data?.passwordPendingUsers.status === 'fulfilled' &&
+              data.passwordPendingUsers.value > 0 && (
+                <Link
+                  to="/admin/users?status=ACTIVE&passwordChangeRequired=true"
+                  className="ah-management-alert"
+                >
+                  <ExclamationCircleOutlined aria-hidden="true" />
+                  <span>
+                    임시 비밀번호 미변경{' '}
+                    <strong>{data.passwordPendingUsers.value.toLocaleString('ko-KR')}명</strong>
+                  </span>
+                  <ArrowRightOutlined aria-hidden="true" />
+                </Link>
+              )}
+          </ManagementCard>
           <ManagementCard
             title="가맹점 관리"
             description="가맹점 정보와 운영 상태를 관리합니다."
