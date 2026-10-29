@@ -17,12 +17,13 @@ import { ScreenResult } from '../../components/common/ScreenResult'
 import { useDemo } from '../../demo/DemoContext'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
-import { decisionMode, latestReport, mergeRemainingMin, slaState } from '../../utils/caseRules'
+import { SLA_HOURS, decisionMode, latestReport, mergeRemainingMin } from '../../utils/caseRules'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { caseStatusLabel, dateTime, fdsResultLabel, paymentStatusLabel } from './case/caseLabels'
+import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { CodeTag } from './case/CodeTag'
 import { DecisionPanel } from './case/DecisionPanel'
 import { ReportCard } from './case/ReportCard'
@@ -114,7 +115,6 @@ export function CaseDetailPage() {
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
   const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
-  const sla = slaState(securityCase.createdAt, securityCase.status)
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
@@ -242,17 +242,15 @@ export function CaseDetailPage() {
             <Descriptions.Item label="생성 시각">
               {dateTime(securityCase.createdAt)}
             </Descriptions.Item>
-            <Descriptions.Item label="병합 마감">
+            <Descriptions.Item label={<HelpLabel label="결제 병합" help={mergeHelp} />}>
               {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
             </Descriptions.Item>
-            <Descriptions.Item label="SLA (권장 24h)">
-              {!sla ? (
-                '-'
-              ) : sla.exceeded ? (
-                <span style={{ color: '#dc2626', fontWeight: 700 }}>{sla.hours}시간 초과</span>
-              ) : (
-                `${sla.hours}시간 남음`
-              )}
+            <Descriptions.Item
+              label={
+                <HelpLabel label={`조사 기한 (생성 후 ${SLA_HOURS}시간)`} help={deadlineHelp} />
+              }
+            >
+              <DeadlineValue createdAt={securityCase.createdAt} status={securityCase.status} />
             </Descriptions.Item>
             <Descriptions.Item label="종료 시각">
               {securityCase.closedAt ? dateTime(securityCase.closedAt) : '-'}

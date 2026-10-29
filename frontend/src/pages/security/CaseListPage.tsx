@@ -8,7 +8,7 @@ import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseSummary } from '../../types/case'
-import { mergeRemainingMin, slaState } from '../../utils/caseRules'
+import { mergeRemainingMin } from '../../utils/caseRules'
 import {
   caseListSearch,
   matchesCaseListQuery,
@@ -21,6 +21,7 @@ import {
 import { won } from '../../utils/format'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
+import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { StatButton } from './case/StatButton'
 
 const statusOptions: Array<{ value: StatusFilter; label: string }> = [
@@ -33,8 +34,8 @@ const statusOptions: Array<{ value: StatusFilter; label: string }> = [
 ]
 
 const slaOptions = [
-  { value: 'ALL', label: 'SLA 전체' },
-  { value: 'EXCEEDED', label: '24시간 초과' },
+  { value: 'ALL', label: '조사 기한 전체' },
+  { value: 'EXCEEDED', label: '기한 지남' },
 ]
 
 const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
@@ -128,7 +129,7 @@ export function CaseListPage() {
   const page = Math.min(query.page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)))
 
   const open = cases.filter((c) => c.status !== 'CLOSED')
-  // 카드는 상태 · 24시간 초과 · AI 보고서 조건을 한 번에 건다. 검색어는 유지한다
+  // 카드는 상태 · 조사 기한 지남 · AI 보고서 조건을 한 번에 건다. 검색어는 유지한다
   const cards: Array<{
     title: string
     foot: string
@@ -225,9 +226,9 @@ export function CaseListPage() {
       render: dateTime,
     },
     {
-      title: '병합 마감',
+      title: <HelpLabel label="결제 병합" help={mergeHelp} />,
       key: 'merge',
-      width: 100,
+      width: 110,
       render: (_, c) => {
         const remaining = mergeRemainingMin(c.createdAt, c.decidedCount)
         return remaining === null ? (
@@ -238,18 +239,10 @@ export function CaseListPage() {
       },
     },
     {
-      title: 'SLA',
+      title: <HelpLabel label="조사 기한" help={deadlineHelp} />,
       key: 'sla',
-      width: 110,
-      render: (_, c) => {
-        const sla = slaState(c.createdAt, c.status)
-        if (!sla) return <span style={{ color: '#94a3b8' }}>-</span>
-        return sla.exceeded ? (
-          <span style={{ color: '#dc2626', fontWeight: 700 }}>{sla.hours}시간 초과</span>
-        ) : (
-          <span>{sla.hours}시간 남음</span>
-        )
-      },
+      width: 130,
+      render: (_, c) => <DeadlineValue createdAt={c.createdAt} status={c.status} />,
     },
     {
       title: 'AI 보고서',
@@ -333,8 +326,8 @@ export function CaseListPage() {
               options={statusOptions}
             />
             <Select
-              aria-label="SLA 필터"
-              style={{ width: 120 }}
+              aria-label="조사 기한 필터"
+              style={{ width: 130 }}
               value={query.slaExceeded ? 'EXCEEDED' : 'ALL'}
               onChange={(v: string) => setQuery({ slaExceeded: v === 'EXCEEDED' })}
               options={slaOptions}

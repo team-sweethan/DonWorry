@@ -7,18 +7,19 @@ import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseSummary } from '../../types/case'
-import { slaState } from '../../utils/caseRules'
 import { won } from '../../utils/format'
+import { SLA_HOURS } from '../../utils/caseRules'
 import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
 import { homeCounts, priorityCases, type PriorityReason } from '../../utils/securityHome'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
+import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
 import { StatButton } from './case/StatButton'
 
 /** 먼저 볼 이유 — 표의 첫 열. OTHER는 진행 중이라 따로 표시하지 않는다. */
 const reasonLabel: Record<PriorityReason, { label: string; color: string } | null> = {
   ACTION_FAILED: { label: '금융 처리 실패', color: 'red' },
-  SLA_EXCEEDED: { label: '24시간 초과', color: 'volcano' },
+  SLA_EXCEEDED: { label: '조사 기한 지남', color: 'volcano' },
   DECISION_PENDING: { label: '판정 필요', color: 'gold' },
   OTHER: null,
 }
@@ -117,18 +118,10 @@ export function SecurityHomePage() {
     },
     { title: '생성 시각', dataIndex: 'createdAt', width: 150, render: dateTime },
     {
-      title: 'SLA',
+      title: <HelpLabel label="조사 기한" help={deadlineHelp} />,
       key: 'sla',
-      width: 110,
-      render: (_, c) => {
-        const sla = slaState(c.createdAt, c.status)
-        if (!sla) return <span style={{ color: '#94a3b8' }}>-</span>
-        return sla.exceeded ? (
-          <span style={{ color: '#dc2626', fontWeight: 700 }}>{sla.hours}시간 초과</span>
-        ) : (
-          <span>{sla.hours}시간 남음</span>
-        )
-      },
+      width: 130,
+      render: (_, c) => <DeadlineValue createdAt={c.createdAt} status={c.status} />,
     },
     {
       title: 'AI 보고서',
@@ -242,9 +235,9 @@ export function SecurityHomePage() {
           onClick={() => openList({ status: 'ACTION_FAILED' })}
         />
         <StatButton
-          title="24시간 초과"
+          title="조사 기한 지남"
           value={counts.slaExceeded}
-          foot="권장 처리 시간(SLA) 경과"
+          foot={`생성 후 ${SLA_HOURS}시간 경과`}
           color="#C2410C"
           onClick={() => openList({ slaExceeded: true })}
         />
@@ -254,7 +247,7 @@ export function SecurityHomePage() {
           <div>
             <h3>지금 처리할 사건</h3>
             <p>
-              금융 처리 실패 → 24시간 초과 → 판정 대기 순, 같은 순위는 오래된 Case부터 6건입니다.
+              금융 처리 실패 → 조사 기한 지남 → 판정 대기 순, 같은 순위는 오래된 Case부터 6건입니다.
             </p>
           </div>
           <Button type="link" onClick={() => openList()}>

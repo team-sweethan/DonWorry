@@ -16,7 +16,7 @@ const isOpen = (c: CaseSummary) => c.status !== 'CLOSED'
 const isSlaExceeded = (c: CaseSummary, now: number) =>
   slaState(c.createdAt, c.status, now)?.exceeded === true
 
-/** 종료되지 않은 Case만 센다. 한 Case가 여러 카드에 동시에 잡힐 수 있다 (예: 판정 대기 + 24시간 초과). */
+/** 종료되지 않은 Case만 센다. 한 Case가 여러 카드에 동시에 잡힐 수 있다 (예: 판정 대기 + 조사 기한 지남). */
 export function homeCounts(cases: CaseSummary[], now = Date.now()): HomeCounts {
   const open = cases.filter(isOpen)
   const count = (match: (c: CaseSummary) => boolean) => open.filter(match).length
@@ -41,7 +41,7 @@ const rank: Record<PriorityReason, number> = {
   OTHER: 3,
 }
 
-/** 먼저 볼 이유 — 인계 실패 → 24시간 초과 → 판정 대기 → 나머지 순으로 하나만 고른다. */
+/** 먼저 볼 이유 — 인계 실패 → 조사 기한 지남 → 판정 대기 → 나머지 순으로 하나만 고른다. */
 export function priorityReason(c: CaseSummary, now = Date.now()): PriorityReason {
   if (c.status === 'ACTION_FAILED') return 'ACTION_FAILED'
   if (isSlaExceeded(c, now)) return 'SLA_EXCEEDED'
