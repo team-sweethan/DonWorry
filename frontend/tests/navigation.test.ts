@@ -116,6 +116,24 @@ test('관리자 계정 관리 메뉴와 하위 경로를 제공한다', () => {
   assert.equal(canOpenPath(staff, '/admin/users/1'), false)
 })
 
+test('보안 직원과 관리자는 탐지 메뉴를 업무 용어로 표시한다', () => {
+  const securityDetectionItems = sessionNavigation(staff).groups.find(
+    (group) => group.title === '탐지',
+  )
+  const adminDetectionItems = sessionNavigation(admin).groups.find(
+    (group) => group.title === '탐지',
+  )
+
+  assert.deepEqual(
+    securityDetectionItems?.items.map((item) => item.label),
+    ['경보', '탐지 룰 목록', '차단 목록'],
+  )
+  assert.deepEqual(
+    adminDetectionItems?.items.map((item) => item.label),
+    ['탐지 룰 목록', '룰 끄기 요청'],
+  )
+})
+
 test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공한다', () => {
   assert.ok(
     sessionNavigation(admin)

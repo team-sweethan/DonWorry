@@ -63,7 +63,7 @@ public class FdsRuleChangeRequest {
 
     public void review(Status status, Long reviewerUserId, String reviewerName, Instant reviewedAt) {
         if (this.status != Status.PENDING || (status != Status.APPROVED && status != Status.REJECTED)) {
-            throw new IllegalStateException("처리할 수 없는 룰 변경 요청입니다.");
+            throw new IllegalStateException("처리할 수 없는 룰 끄기 요청입니다.");
         }
         this.status = status;
         this.reviewedByUserId = reviewerUserId;

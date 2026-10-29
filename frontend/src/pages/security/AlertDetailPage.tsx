@@ -16,6 +16,7 @@ import {
 import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import {
   addFdsBlocklistEntry,
@@ -128,6 +129,7 @@ export function AlertDetailPage() {
   const [blocklistError, setBlocklistError] = useState<string | null>(null)
   const [blockedCandidates, setBlockedCandidates] = useState<Set<string>>(new Set())
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([])
+  const [caseIdsByPaymentId, setCaseIdsByPaymentId] = useState<Map<string, string>>(new Map())
   const [blocklistForm] = Form.useForm<{ reason: string }>()
   const initialDetailLoading = loading && detail === null
   const showInitialDetailLoading = useMinimumLoadingIndicator(initialDetailLoading)
@@ -141,6 +143,7 @@ export function AlertDetailPage() {
       setError(null)
       setPolicyError(false)
       setPolicies([])
+      setCaseIdsByPaymentId(new Map())
       try {
         const response = await getFdsEvaluation(id)
         if (active) {
@@ -174,6 +177,21 @@ export function AlertDetailPage() {
             .catch(() => {
               if (active) setPolicyError(true)
             })
+          const paymentIds = [
+            ...new Set(
+              [response.evaluation, ...response.history].map((evaluation) =>
+                String(evaluation.paymentId),
+              ),
+            ),
+          ]
+          void getCaseLinksByPayments(paymentIds)
+            .then((links) => {
+              if (active)
+                setCaseIdsByPaymentId(new Map(links.map((link) => [link.paymentId, link.caseId])))
+            })
+            .catch(() => {
+              if (active) setCaseIdsByPaymentId(new Map())
+            })
         }
       } catch (requestError) {
         if (!active) return
@@ -199,6 +217,7 @@ export function AlertDetailPage() {
   const evaluation = detail.evaluation
   const policyByRuleCode = new Map(policies.map((policy) => [policy.ruleCode, policy]))
   const score = evaluation.riskScore
+  const caseId = caseIdsByPaymentId.get(String(evaluation.paymentId))
   const resultDescription =
     score === null
       ? `오류 코드 ${evaluation.errorCode ?? '—'}`
@@ -262,6 +281,9 @@ export function AlertDetailPage() {
         description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${evaluation.merchantId} · 고객 ${evaluation.customerRef}`}
         actions={
           <>
+            {caseId && (
+              <Button onClick={() => navigate(`/security/cases/${caseId}`)}>사건 보기</Button>
+            )}
             <Button
               danger
               disabled={detail.blocklistCandidates.length === 0}
@@ -408,6 +430,26 @@ export function AlertDetailPage() {
                   dataIndex: 'errorCode',
                   render: (value: string | null) => (value ? <code>{value}</code> : '—'),
                 },
+                {
+                  title: '사건',
+                  key: 'case',
+                  render: (_, history) => {
+                    const historyCaseId = caseIdsByPaymentId.get(String(history.paymentId))
+                    if (!historyCaseId) return '—'
+                    return (
+                      <Button
+                        type="link"
+                        className="dw-alert-payment-link"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          navigate(`/security/cases/${historyCaseId}`)
+                        }}
+                      >
+                        CASE-{historyCaseId}
+                      </Button>
+                    )
+                  },
+                },
               ]}
               dataSource={detail.history}
               onRow={(record) => ({
@@ -444,7 +486,7 @@ export function AlertDetailPage() {
             title={<span className="dw-section-title">결제 정보</span>}
             className="dw-alert-card"
           >
-            <Descriptions column={1} colon={false}>
+            <Descriptions column={2} colon={false}>
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
               <Descriptions.Item label="가맹점 ID">{evaluation.merchantId}</Descriptions.Item>
               <Descriptions.Item label="고객 식별자">{evaluation.customerRef}</Descriptions.Item>
@@ -464,8 +506,7 @@ export function AlertDetailPage() {
             </Descriptions>
           </Card>
           <div className="dw-api-note">
-            주문·카드·현재 결제 상태는 P5가 관리합니다. P2는 평가 요청으로 받은 결제 식별자·고객
-            식별자·요청 시각과 평가 근거만 저장합니다.
+            평가 요청으로 받은 결제 식별자·고객 식별자·요청 시각 등 평가 근거만 저장합니다.
           </div>
         </div>
       </div>

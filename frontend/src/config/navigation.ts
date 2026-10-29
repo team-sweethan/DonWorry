@@ -20,9 +20,9 @@ export const navByRole: Record<Role, NavGroup[]> = {
     {
       title: '탐지',
       items: [
+        { label: '경보', path: '/security/alerts' },
         { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
-        { label: '경보', path: '/security/alerts' },
       ],
     },
     // 업무 흐름 순서 — 탐지(경보) → 조사(Case · 판정) → 조치(결제별 매입 · 취소) (#314)

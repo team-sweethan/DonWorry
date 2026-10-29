@@ -31,11 +31,11 @@ const typeLabels: Record<FdsBlocklistEntry['identifierType'], string> = {
 }
 
 const typePlaceholders: Record<FdsBlocklistEntry['identifierType'], string> = {
-  CARD_TOKEN: 'P5가 전달한 안전한 cardToken을 입력하세요.',
-  DEVICE_ID: 'P5가 전달한 deviceId를 입력하세요.',
-  BUYER_REF: 'P5가 전달한 buyerRef를 입력하세요.',
-  IP_ADDRESS: 'P5가 전달한 IP 주소를 입력하세요.',
-  BUYER_EMAIL: 'P5가 전달한 구매자 이메일을 입력하세요.',
+  CARD_TOKEN: 'cardToken을 입력하세요.',
+  DEVICE_ID: 'deviceId를 입력하세요.',
+  BUYER_REF: 'buyerRef를 입력하세요.',
+  IP_ADDRESS: 'IP 주소를 입력하세요.',
+  BUYER_EMAIL: '구매자 이메일을 입력하세요.',
 }
 
 function formatDate(value: string) {
