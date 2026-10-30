@@ -9,7 +9,7 @@
 ```text
 변경 감지 ──(frontend/ 변경 없음)──▶ 통과
    ▼
-   Node 22 준비 (npm 캐시 사용)
+   Node 22 최신 버전 준비 (프로젝트 최소 22.14) (npm 캐시 사용)
    ▼
 ① npm ci                ← package-lock.json 그대로 설치
    ▼

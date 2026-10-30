@@ -15,9 +15,11 @@
 
 ### 국제화 도메인 처리
 
-서버의 Unicode 호스트 검증에 `com.ibm.icu:icu4j:79.1`을 사용한다. Java 기본 IDN의 IDNA2003 문자 처리는 브라우저가 허용하는 `ẞ`·이모지와 불일치한다. [ICU IDNA 공식 API](https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/text/IDNA.html)의 UTS #46 인스턴스에 NONTRANSITIONAL_TO_ASCII·CHECK_BIDI·CHECK_CONTEXTJ·USE_STD3_RULES를 적용한다. 인스턴스는 공유하고 요청별 Info·출력 버퍼를 분리한다. URI가 이미 해석하는 ASCII·IP 호스트는 기존 처리를 유지한다.
+서버의 Unicode 호스트 검증에 `com.ibm.icu:icu4j:79.1`을 사용한다. Java 기본 IDN의 IDNA2003 문자 처리는 브라우저가 허용하는 `ẞ`·이모지와 불일치한다. [ICU IDNA 공식 API](https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/text/IDNA.html)의 UTS #46 인스턴스에 NONTRANSITIONAL_TO_ASCII·CHECK_BIDI·CHECK_CONTEXTJ·USE_STD3_RULES를 적용한다. 인스턴스는 공유하고 요청별 Info·출력 버퍼를 분리한다. IPv6는 URI 호스트 검사를 사용하고 ASCII·Unicode 도메인은 모두 UTS #46 검사를 거친다.
 
 [WHATWG 도메인 처리 규칙](https://url.spec.whatwg.org/#concept-domain-to-ascii)은 비전환 처리와 BiDi·Joiner 검사를 사용한다. 브라우저 비엄격 처리에서 검사하지 않는 HYPHEN_3_4·LABEL_TOO_LONG·DOMAIN_NAME_TOO_LONG 오류는 실패로 취급하지 않는다. 앱 자체는 앞뒤 하이픈·밑줄·빈 구간을 금지하고 주소 전체 2048자 제한을 유지한다. 원문 저장·조회·DB에는 추가 정규화를 하지 않는다.
+
+프론트는 `tr46@7.0.0`의 toASCII에 checkBidi·checkJoiners·useSTD3ASCIIRules를 켜고 transitionalProcessing·checkHyphens·verifyDNSLength·ignoreInvalidPunycode를 끈다. [공식 API](https://github.com/jsdom/tr46)에 따라 변환한 ASCII 호스트로 URL을 검증하되 입력 원문을 수정하지 않는다. Node 22·24의 기본 URL 변환이 BiDi·Punycode에서 서로 달랐으므로 기본 변환에만 검증을 맡기지 않는다. 두 라이브러리는 Unicode 18 데이터를 사용한다. 프론트 빌드의 main JS 압축 크기는 약 392 kB에서 462 kB로 증가했다.
 
 프론트와 서버는 같은 [호스트 사례 파일](../../backend/src/test/resources/identity/shop-url-cases.json)을 읽어 허용·거절 결과를 검사한다. 이 사례 대조는 모든 브라우저·Unicode 버전의 완전한 동등성 증명이 아니며 런타임·ICU 갱신 때 같은 사례를 재실행한다.
 
@@ -30,6 +32,7 @@
 | NOT NULL과 기본 주소로 기존 행 채우기 | 수집하지 않은 사실을 조작하고 기존 기록을 훼손한다 |
 | 주소 없는 기존 신청 전부 반려 | 이미 접수된 신청을 추가 수집 항목 때문에 중단시킨다 |
 | Java 기본 IDN 유지·문자별 예외 추가 | 브라우저 UTS #46과 문자 집합·매핑·Joiner 규칙이 달라 불일치가 반복된다 |
+| 프론트의 기본 URL 변환에만 의존 | Node 22와 24의 BiDi·Punycode 검증 차이가 실제 CI에서 재현됐다 |
 | 국제화 도메인을 프론트에서 모두 거절 | 한글을 포함한 정상 쇼핑몰 주소를 제한한다 |
 | 서버가 URL에 접속해 운영 여부 자동 판정 | 이번 범위는 관리자 수동 검토이며 별도 외부 접속이 필요 없다 |
 
@@ -38,7 +41,7 @@
 - API: 기존 공개 신청 POST `shopUrl` 필수, 관리자 상세 GET nullable `shopUrl` 추가. 구 양식은 새 동의 안내 확인 후 다시 제출한다.
 - DB: P1 merchant_applications에 shop_url VARCHAR(2048) NULL을 새 Flyway migration으로 추가. 기존 migration 보존.
 - 화면: 신청·입력 확인·개인정보 안내·관리자 상세 변경.
-- 빌드: ICU4J 79.1 런타임 의존성 추가. Gradle이 Maven Central에서 받으며 설정·서비스·DB 추가는 없다.
+- 빌드: ICU4J 79.1 런타임 의존성 추가. Gradle이 Maven Central에서 받는다. frontend는 tr46 7.0.0·타입 정의 5.0.1과 lockfile을 추가하며 npm ci로 받는다. 프론트 Node 최소 버전은 22.14로 명시하며 CI의 Node 22 최신 버전과 맞춘다. 서비스·DB 추가는 없다.
 - 테스트: 입력 검증·저장·상세·기존 승인·신청 보존 정책·프론트 계약 검사.
 - 문서: [PR A 설계](../identity/354-pr1-application-design.md), [ERD](../erd/README.md), 기존 신청 설계. 모듈 공개 Java API·다른 담당 스키마 변경 없음.
 

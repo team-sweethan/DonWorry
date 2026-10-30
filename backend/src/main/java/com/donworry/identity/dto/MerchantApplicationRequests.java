@@ -47,7 +47,7 @@ public final class MerchantApplicationRequests {
                 if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                         || authority == null
                         || authority.contains("@")) return false;
-                if (uri.getHost() != null) return true;
+                if (authority.startsWith("[")) return uri.getHost() != null;
                 // 브라우저와 같은 UTS #46으로 검증하고 원문은 변환하지 않는다.
                 int separator = authority.lastIndexOf(':');
                 String host = separator < 0 ? authority : authority.substring(0, separator);

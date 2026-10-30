@@ -16,7 +16,7 @@
 
 ## 주소 계약
 
-- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 ICU4J UTS #46 비전환 처리로 ASCII 호스트로 변환하며 입력 원문을 저장·표시한다. 프론트도 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
+- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 ICU4J UTS #46 비전환 처리로 ASCII 호스트로 변환하며 입력 원문을 저장·표시한다. 프론트는 tr46 7.0.0으로 UTS #46 검사 후 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
 - 주소의 경로·쿼리 대소문자를 바꾸지 않는다. 신청 검토 자료로만 사용하고 연동 주소·webhook_url로 복사하지 않는다.
 - `merchant_applications.shop_url VARCHAR(2048) NULL` 하나를 새 migration으로 추가한다. P1 소유이며 다른 담당 테이블·FK 변경이 없다.
 - 관리자 상세 GET에 nullable `shopUrl`을 추가한다. 목록에는 추가하지 않는다. HTTP(S) 검증을 통과하는 주소만 새 탭 링크로 보여주며 `noopener noreferrer`를 사용한다.
@@ -93,3 +93,18 @@ Notion 최신 대조·동기화와 운영 배포는 미수행이다. 이번 합�
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 
 미검증: 이번 보완 뒤 브라우저 재실행·새 커밋의 원격 CI·운영 배포·Notion 최신 대조·동기화. 기존 Gmail·브라우저 전체 접수→승인·모바일·키보드 미검증도 유지한다. 새 ICU4J jar는 빌드 시 Maven Central에서 자동으로 받는다. 다른 담당 Java API·이벤트·DB 변경이나 새 서비스 설정은 없다.
+
+## CI의 Node 런타임 차이 보완 (2026-10-30)
+
+`719dcf7`의 frontend CI가 공통 사례 `https://aא.example`에서 실패했다. 로컬 Node 24는 이를 거절하지만 CI Node 22는 기본 URL 파서에서 허용했다. 공통 사례가 런타임 차이를 실제로 발견한 결과다. 프론트도 tr46 7.0.0의 UTS #46 검사(BiDi·Joiner·STD3·비전환 처리)를 명시적으로 수행한 ASCII 호스트로만 URL을 검사하도록 변경했다. 입력·저장 원문은 유지한다. 서버도 IPv6 외 ASCII/Unicode 도메인 모두 같은 UTS #46 검사를 거쳐 불완전 Punycode를 거절한다.
+
+`719dcf7` 위 최종 보완 작업 트리에서 검증했다. 이후 애플리케이션·테스트 구현은 바꾸지 않았고 메타데이터·문서만 보완했다.
+
+- backend `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL (3분 32초). 일반 775개 중 774 통과·기존 1개 skip, MariaDB 560개 모두 통과, 실패·오류 0.
+- frontend `npm ci` 후 lint·format:check·test·build: 통과. Node 24 테스트 238개 통과.
+- `npx --yes --package=node@22 node --experimental-strip-types --test tests/*.test.ts`: 같은 소스에서 Node 22 테스트 238개 모두 통과. 공통 주소 사례 42개 포함.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+빌드 영향: frontend는 tr46 7.0.0·타입 정의 5.0.1을 lockfile에 고정한다. Node 지원 범위는 22.14 이상 22.x 또는 24 이상으로 명시했다. main JS gzip 크기는 약 392 kB → 462 kB다. 기존 경고는 유지하며 번들 최적화는 이번 범위에서 확장하지 않았다. 다른 담당 API·이벤트·DB·서비스 설정 변경은 없다.
+
+미검증: 최종 보완 뒤 브라우저 재실행·운영 배포·Notion 최신 대조·동기화·원격 CI. 기존 전체 브라우저 접수→승인·모바일·키보드·Gmail 미검증도 유지한다. 앞선 719dcf7의 CI 실패를 최신 수정의 통과 결과로 표현하지 않는다.
