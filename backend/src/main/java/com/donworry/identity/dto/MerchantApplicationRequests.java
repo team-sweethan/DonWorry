@@ -46,8 +46,9 @@ public final class MerchantApplicationRequests {
                 String authority = uri.getRawAuthority();
                 if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                         || authority == null
-                        || authority.contains("@")) return false;
-                if (authority.startsWith("[")) return uri.getHost() != null;
+                        || authority.contains("@")
+                        || authority.contains("%")) return false;
+                if (authority.startsWith("[")) return uri.getHost() != null && uri.getPort() <= 65535;
                 // 브라우저와 같은 UTS #46으로 검증하고 원문은 변환하지 않는다.
                 int separator = authority.lastIndexOf(':');
                 String host = separator < 0 ? authority : authority.substring(0, separator);
@@ -59,7 +60,9 @@ public final class MerchantApplicationRequests {
                         .anyMatch(error -> error != IDNA.Error.HYPHEN_3_4
                                 && error != IDNA.Error.LABEL_TOO_LONG
                                 && error != IDNA.Error.DOMAIN_NAME_TOO_LONG)) return false;
-                return new URI(uri.getScheme() + "://" + asciiHost + port).getHost() != null;
+                if (!hasValidIpv4Notation(asciiHost.toString())) return false;
+                var parsed = new URI(uri.getScheme() + "://" + asciiHost + port);
+                return parsed.getHost() != null && parsed.getPort() <= 65535;
             } catch (URISyntaxException | IllegalArgumentException e) {
                 return false;
             }
@@ -87,6 +90,18 @@ public final class MerchantApplicationRequests {
 
     private static String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private static boolean hasValidIpv4Notation(String host) {
+        String withoutRoot = host.endsWith(".") ? host.substring(0, host.length() - 1) : host;
+        String last = withoutRoot.substring(withoutRoot.lastIndexOf('.') + 1);
+        if (!last.matches("(?i)([0-9]+|0x[0-9a-f]*)")) return true;
+        String[] octets = host.split("\\.", -1);
+        if (octets.length != 4) return false;
+        for (String octet : octets) {
+            if (!octet.matches("0|[1-9][0-9]{0,2}") || Integer.parseInt(octet) > 255) return false;
+        }
+        return true;
     }
 
     private static String digits(String value) {

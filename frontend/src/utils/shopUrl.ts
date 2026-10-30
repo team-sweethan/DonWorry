@@ -3,7 +3,16 @@ import tr46 from 'tr46'
 // 검토용 주소는 HTTP(S) 절대 URL만 허용한다. URL 자동 보정으로 잘못된 입력을 통과시키지 않는다.
 export function isShopUrlValid(value: string): boolean {
   const trimmed = value.trim()
-  if (trimmed.length > 2048 || !/^https?:\/\/[^/?#]/i.test(trimmed) || /[\s\\]/.test(trimmed))
+  if (
+    trimmed.length > 2048 ||
+    !/^https?:\/\/[^/?#]/i.test(trimmed) ||
+    /[\s\\<>"{}|^`]/.test(trimmed) ||
+    /%(?![0-9a-f]{2})/i.test(trimmed) ||
+    [...trimmed].some((char) => {
+      const code = char.charCodeAt(0)
+      return code < 32 || (code >= 127 && code <= 159)
+    })
+  )
     return false
   try {
     const match = /^https?:\/\/([^/?#]+)/i.exec(trimmed)
@@ -24,6 +33,7 @@ export function isShopUrlValid(value: string): boolean {
         ignoreInvalidPunycode: false,
       })
       if (asciiHost === null) return false
+      if (!hasValidIpv4Notation(asciiHost)) return false
       // 런타임 기본 IDNA에 의존하지 않고 검증할 때만 ASCII 호스트로 URL을 해석한다.
       const prefix = trimmed.slice(0, match[0].length - authority.length)
       addressToValidate = prefix + asciiHost + port + trimmed.slice(match[0].length)
@@ -39,4 +49,14 @@ export function isShopUrlValid(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function hasValidIpv4Notation(host: string): boolean {
+  const last = host.replace(/\.$/, '').split('.').at(-1) ?? ''
+  if (!/^(?:[0-9]+|0x[0-9a-f]*)$/i.test(last)) return true
+  const octets = host.split('.')
+  return (
+    octets.length === 4 &&
+    octets.every((part) => /^(?:0|[1-9][0-9]{0,2})$/.test(part) && Number(part) <= 255)
+  )
 }

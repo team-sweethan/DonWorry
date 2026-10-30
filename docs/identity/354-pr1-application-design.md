@@ -16,7 +16,7 @@
 
 ## 주소 계약
 
-- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 ICU4J UTS #46 비전환 처리로 ASCII 호스트로 변환하며 입력 원문을 저장·표시한다. 프론트는 tr46 7.0.0으로 UTS #46 검사 후 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
+- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가, 포트는 생략 또는 0~65535. IPv4는 선행 0 없는 0~255 네 구간만 허용하며 IPv6 zone ID·authority percent escape는 거절한다. 국제화 도메인은 검증할 때만 ICU4J UTS #46 비전환 처리로 ASCII 호스트로 변환하며 입력 원문을 저장·표시한다. 프론트는 tr46 7.0.0으로 UTS #46 검사 후 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
 - 주소의 경로·쿼리 대소문자를 바꾸지 않는다. 신청 검토 자료로만 사용하고 연동 주소·webhook_url로 복사하지 않는다.
 - `merchant_applications.shop_url VARCHAR(2048) NULL` 하나를 새 migration으로 추가한다. P1 소유이며 다른 담당 테이블·FK 변경이 없다.
 - 관리자 상세 GET에 nullable `shopUrl`을 추가한다. 목록에는 추가하지 않는다. HTTP(S) 검증을 통과하는 주소만 새 탭 링크로 보여주며 `noopener noreferrer`를 사용한다.
@@ -108,3 +108,20 @@ Notion 최신 대조·동기화와 운영 배포는 미수행이다. 이번 합�
 빌드 영향: frontend는 tr46 7.0.0·타입 정의 5.0.1을 lockfile에 고정한다. Node 지원 범위는 22.14 이상 22.x 또는 24 이상으로 명시했다. main JS gzip 크기는 약 392 kB → 462 kB다. 기존 경고는 유지하며 번들 최적화는 이번 범위에서 확장하지 않았다. 다른 담당 API·이벤트·DB·서비스 설정 변경은 없다.
 
 미검증: 최종 보완 뒤 브라우저 재실행·운영 배포·Notion 최신 대조·동기화·원격 CI. 기존 전체 브라우저 접수→승인·모바일·키보드·Gmail 미검증도 유지한다. 앞선 719dcf7의 CI 실패를 최신 수정의 통과 결과로 표현하지 않는다.
+
+## 포트 범위·IPv4 표기 리뷰 보완 (2026-10-30)
+
+[포트 범위 리뷰](https://github.com/team-sweethan/DonWorry/pull/358#discussion_r4420030439)와 [IPv4 축약 리뷰](https://github.com/team-sweethan/DonWorry/pull/358#discussion_r4420030448)를 재현했다. `:99999`는 서버가 허용하고 `127.1`은 브라우저가 보정해 화면만 통과하던 문제다.
+
+서버는 ASCII·IDN·IPv6 모두 포트 상한 65535를 검사한다. 양쪽은 숫자 또는 0x 표기로 끝나는 호스트가 IP 주소로 해석되는 경우 선행 0 없는 네 구간·각 0~255 표기만 허용한다. 축약·정수·16진수·뒤 루트 점 표기는 거절한다. 추가 점검에서 IPv6 zone ID·authority percent escape를 양쪽 모두 거절하도록 맞췄다. 프론트는 서버 URI가 거절하는 raw 경로 문자·제어 문자·잘못된 percent escape도 미리 거절한다. Unicode 호스트 처리·원문 저장·일반 도메인 끝의 루트 점 허용은 유지한다.
+
+공통 사례는 42개에서 75개로 늘렸다. 포트 0·65535·65536·99999·부호·소수·정수 초과, IPv4 네 구간·경계·축약·선행 0·정수·16진수·끝 점, IPv6 zone ID, raw/encoded 경로 문자를 포함한다.
+
+검증은 `86c2bc1` 위 보완 작업 트리에서 실행했다.
+
+- 첫 수정 후 `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL (3분 36초), 일반 806개 중 기존 1개 skip, 전체 MariaDB 560개 통과. 이후 IPv6 zone ID 차단과 사례 2개를 추가했으므로 이 결과를 최종 코드 전체 실행으로 표현하지 않는다.
+- 최종 코드 `./gradlew spotlessApply check mariaDbTest --tests com.donworry.identity.security.MerchantApplicationHttpTests --console=plain`: BUILD SUCCESSFUL (41초), 일반 808개 중 807 통과·기존 1개 skip, 신청 HTTP MariaDB 21개 모두 통과, 실패·오류 0. 실제 범위 초과 포트·축약 IP·IPv6 zone ID POST 거절 포함.
+- 최종 frontend lint·format:check·test·build 통과, Node 24 테스트 238개. Node 22에서도 같은 전체 테스트 238개 통과. 공통 주소 사례 75개 포함.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+미검증: 최종 보완 뒤 브라우저 재실행·전체 MariaDB 로컬 재실행·원격 CI·운영 배포·Notion 최신 대조·동기화. 앞의 전체 브라우저 접수→승인·모바일·키보드·Gmail 미검증도 유지한다. 다른 담당 API·이벤트·DB·서비스 설정 변경은 없다.
