@@ -27,6 +27,11 @@ public class PaymentHttpExceptionHandler extends ResponseEntityExceptionHandler 
         return problem(409, e.getCode().name(), "기존 결제 요청과 충돌했습니다.");
     }
 
+    @ExceptionHandler(PaymentRiskSignalsRequiredException.class)
+    ResponseEntity<Object> riskSignalsRequired(PaymentRiskSignalsRequiredException e) {
+        return problem(400, "INVALID_REQUEST", "요청 형식을 확인해주세요.");
+    }
+
     @ExceptionHandler(DataAccessException.class)
     ResponseEntity<Object> unavailable(DataAccessException e) {
         return problem(503, "PAYMENT_PROCESSING_UNAVAILABLE", "처리 결과를 확인할 수 없습니다. 같은 요청 키로 확인해주세요.");

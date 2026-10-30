@@ -11,9 +11,9 @@ public record PaymentSubmitRequest(
         @NotBlank @Pattern(regexp = "[1-9][0-9]{0,18}") String customerRef,
         @NotNull @Positive Long amount,
         @NotNull @PastOrPresent Instant orderCreatedAt,
-        @NotBlank @Size(max = 100) String deviceId,
-        @NotBlank @Size(max = 255) String cardToken,
-        @NotBlank @Size(max = 50) String cardDisplayLabel,
-        @NotBlank @Pattern(regexp = "[A-Za-z]{2}") String ipCountryCode,
-        @NotBlank @Size(max = 45) String ipAddress,
-        @NotBlank @Email @Size(max = 254) String buyerEmail) {}
+        @Size(max = 100) String deviceId,
+        @Size(max = 255) String cardToken,
+        @Size(max = 50) String cardDisplayLabel,
+        @Pattern(regexp = "[A-Za-z]{2}") String ipCountryCode,
+        @Size(max = 45) String ipAddress,
+        @Email @Size(max = 254) String buyerEmail) {}

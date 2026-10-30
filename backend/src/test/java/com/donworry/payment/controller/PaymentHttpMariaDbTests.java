@@ -275,6 +275,41 @@ class PaymentHttpMariaDbTests {
         verify(evaluator).evaluate(any());
     }
 
+    // 위험 신호 도입 전 RECEIVED 결제는 같은 키와 NULL 스냅샷으로 평가를 재개한다.
+    @Test
+    void submit_whenHistoricalReceivedRequestIsReplayed_resumesWithStoredSnapshot() throws Exception {
+        String key = UUID.randomUUID().toString();
+        String request = body(UUID.randomUUID().toString(), 1000);
+        doThrow(new org.springframework.dao.DataAccessResourceFailureException("first attempt failed"))
+                .when(evaluator)
+                .evaluate(any());
+        assertThat(call("POST", "/api/payments", "merchant-a", key, request).statusCode())
+                .isEqualTo(503);
+        long paymentId =
+                jdbc.queryForObject("SELECT payment_id FROM payment_requests WHERE idempotency_key=?", Long.class, key);
+        jdbc.update(
+                "UPDATE payment_requests SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                paymentId);
+        doAnswer(i -> {
+                    FdsEvaluationRequest r = i.getArgument(0);
+                    return new FdsEvaluationResponse(
+                            r.evaluationRequestId(), 124L, FdsResult.REVIEW, 50, Instant.now(), null);
+                })
+                .when(evaluator)
+                .evaluateHistoricalSnapshot(any());
+        String historical = request.replace(",\"deviceId\":\"device-1\"", "")
+                .replace(",\"cardToken\":\"token-1\"", "")
+                .replace(",\"cardDisplayLabel\":\"신한 **** 1234\"", "")
+                .replace(",\"ipCountryCode\":\"KR\"", "")
+                .replace(",\"ipAddress\":\"203.0.113.10\"", "")
+                .replace(",\"buyerEmail\":\"buyer@example.test\"", "");
+
+        var replay = call("POST", "/api/payments", "merchant-a", key, historical);
+
+        assertThat(replay.statusCode()).isEqualTo(202);
+        verify(evaluator).evaluateHistoricalSnapshot(argThat(r -> r.deviceId() == null && r.buyerEmail() == null));
+    }
+
     // 확정 거절은 정상 결과 200이며 내부 평가 오류는 응답에 노출하지 않는다.
     @Test
     void verdicts_distinguishDeclineFromPending() throws Exception {

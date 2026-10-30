@@ -94,6 +94,31 @@ class PaymentRequestAdmissionMariaDbTests {
                 .isEqualTo(PaymentStatus.PENDING);
     }
 
+    // 신규 접수는 위험 신호를 필수로 받지만, 과거 NULL 스냅샷의 동일 키 재전송은 기존 결제를 반환한다.
+    @Test
+    void admit_whenHistoricalReplayHasNoRiskSignals_reusesExistingRequest() {
+        var c = command();
+        var first = admission.admit(c);
+        jdbc.update(
+                "UPDATE payment_requests SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                first.paymentId());
+        var historical = new PaymentRequestCommand(
+                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), c.idempotencyKey());
+
+        var replay = admission.admit(historical);
+
+        assertThat(replay.created()).isFalse();
+        assertThat(replay.paymentId()).isEqualTo(first.paymentId());
+        assertThatThrownBy(() -> admission.admit(new PaymentRequestCommand(
+                        c.merchantId(),
+                        "new-" + c.orderRef(),
+                        c.customerRef(),
+                        c.amount(),
+                        c.orderCreatedAt(),
+                        UUID.randomUUID())))
+                .isInstanceOf(PaymentRiskSignalsRequiredException.class);
+    }
+
     // 접수는 독립 커밋되므로 이후 호출자 실패에도 같은 키로 결제를 찾을 수 있다.
     @Test
     void admit_whenCallerRollsBack_preservesCommittedAdmission() {
