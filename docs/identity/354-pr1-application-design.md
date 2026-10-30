@@ -16,7 +16,7 @@
 
 ## 주소 계약
 
-- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 IDN.toASCII로 변환하며 입력 원문을 저장·표시한다. 프론트도 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
+- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 ICU4J UTS #46 비전환 처리로 ASCII 호스트로 변환하며 입력 원문을 저장·표시한다. 프론트도 변환된 호스트의 각 구간에 영숫자·구간 내부 하이픈만 허용하고 밑줄·빈 구간·앞뒤 하이픈을 거절한다. IPv6는 URL 파서 검증을 사용한다. 서버가 주소에 접속하지 않는다.
 - 주소의 경로·쿼리 대소문자를 바꾸지 않는다. 신청 검토 자료로만 사용하고 연동 주소·webhook_url로 복사하지 않는다.
 - `merchant_applications.shop_url VARCHAR(2048) NULL` 하나를 새 migration으로 추가한다. P1 소유이며 다른 담당 테이블·FK 변경이 없다.
 - 관리자 상세 GET에 nullable `shopUrl`을 추가한다. 목록에는 추가하지 않는다. HTTP(S) 검증을 통과하는 주소만 새 탭 링크로 보여주며 `noopener noreferrer`를 사용한다.
@@ -78,3 +78,18 @@ Notion 최신 대조·동기화와 운영 배포는 미수행이다. 이번 합�
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 
 미검증: 이번 보완 뒤 브라우저 재실행·전체 MariaDB 재실행·새 커밋의 원격 CI. 서버 구현 변경이 없어 이번에는 신청 HTTP 범위로 MariaDB 회귀 검사를 실행했다. 이전 377535a의 전체 MariaDB 559개 통과와 구분한다. 기존 운영·Notion·Gmail·브라우저 전체 흐름 미검증 범위도 유지한다. 다른 담당 계약 변경·새 사람 결정 사항은 없다.
+
+## 최신 IDN 문자 리뷰 후 UTS #46 전환 (2026-10-30)
+
+[추가 리뷰](https://github.com/team-sweethan/DonWorry/pull/358#discussion_r4419955230)의 `https://ẞ.de` 화면 허용·서버 거절을 재현했다. Java 기본 IDN과 브라우저의 국제화 도메인 표준 차이가 원인이므로 서버 Unicode 호스트 검증을 ICU4J 79.1 UTS #46 비전환 처리로 전환했다. BiDi·Joiner 검사를 켜고 원문 주소 보존·기존 ASCII/IP 호스트 처리·user-info 거절 정책은 유지한다. 처리 옵션·대안과 빌드 영향은 ADR-0049에 기록했다.
+
+프론트와 서버가 같은 `backend/src/test/resources/identity/shop-url-cases.json`의 42개 사례를 읽는다. 현대 IDN 문자·한글·일본어·중국어·아랍어·이모지·결합 문자·Joiner·호스트 구간 문법·user-info·포트·IPv6를 포함한다. 두 구현이 각자 별도의 사례만 테스트하던 한계를 보완했다. 공통 파일만 바뀌어도 frontend CI가 실행되게 경로 조건도 갱신했다. 모든 URL·Unicode 버전의 완전한 동등성을 주장하지 않는다.
+
+`6fb9fb9` 위 최종 보완 작업 트리에서 실행했고 이후 애플리케이션·테스트 코드를 바꾸지 않고 이 기록만 보완했다.
+
+- backend `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL (3분 30초). 일반 775개 중 774 통과·기존 1개 skip, MariaDB 560개 모두 통과, 실패·오류 0. 라이브러리 추가 후 전체 회귀·Flyway/JPA validate·모듈/계층 검사와 최신 IDN 신청 POST·원문 DB 저장 포함.
+- frontend `npm run lint`, `npm run format:check`, `npm test`, `npm run build`: 통과, 테스트 238개. 기존 lint·번들 경고 유지. 같은 42개 공통 사례를 모두 검사했다.
+- frontend CI 경로 조건: frontend 소스·공통 사례·workflow 변경의 포함, 일반 backend 소스·문서 변경의 제외 등 5건을 실제 grep 조건으로 검사했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+미검증: 이번 보완 뒤 브라우저 재실행·새 커밋의 원격 CI·운영 배포·Notion 최신 대조·동기화. 기존 Gmail·브라우저 전체 접수→승인·모바일·키보드 미검증도 유지한다. 새 ICU4J jar는 빌드 시 Maven Central에서 자동으로 받는다. 다른 담당 Java API·이벤트·DB 변경이나 새 서비스 설정은 없다.

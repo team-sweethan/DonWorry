@@ -1,0 +1,170 @@
+[
+  {
+    "url": "https://ẞ.de",
+    "valid": true
+  },
+  {
+    "url": "https://ß.de",
+    "valid": true
+  },
+  {
+    "url": "https://xn--zca.de",
+    "valid": true
+  },
+  {
+    "url": "https://ẞ.de:8443/Products?item=ABC",
+    "valid": true
+  },
+  {
+    "url": "https://faß.de",
+    "valid": true
+  },
+  {
+    "url": "https://ς.gr",
+    "valid": true
+  },
+  {
+    "url": "https://σ.gr",
+    "valid": true
+  },
+  {
+    "url": "https://☕.example",
+    "valid": true
+  },
+  {
+    "url": "https://😀.example",
+    "valid": true
+  },
+  {
+    "url": "https://쇼핑몰.한국",
+    "valid": true
+  },
+  {
+    "url": "https://ショッピング.日本/商品",
+    "valid": true
+  },
+  {
+    "url": "https://例子.中国",
+    "valid": true
+  },
+  {
+    "url": "https://é.example",
+    "valid": true
+  },
+  {
+    "url": "https://é.example",
+    "valid": true
+  },
+  {
+    "url": "https://ＦＯＯ。example",
+    "valid": true
+  },
+  {
+    "url": "https://مثال.إختبار",
+    "valid": true
+  },
+  {
+    "url": "https://example.com",
+    "valid": true
+  },
+  {
+    "url": "http://localhost:8080",
+    "valid": true
+  },
+  {
+    "url": "https://my-shop.example.com.",
+    "valid": true
+  },
+  {
+    "url": "https://ab--cd.example",
+    "valid": true
+  },
+  {
+    "url": "https://[::1]:8443/Products",
+    "valid": true
+  },
+  {
+    "url": "https://shop.example.com?contact=a@b.example",
+    "valid": true
+  },
+  {
+    "url": "https://exa_mple.com",
+    "valid": false
+  },
+  {
+    "url": "https://-shop.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop-.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop..example",
+    "valid": false
+  },
+  {
+    "url": "https://user:pass@ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://@ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://exa%5fmple.com",
+    "valid": false
+  },
+  {
+    "url": "https://ex%61mple.com",
+    "valid": false
+  },
+  {
+    "url": "https://ẞ.de:abc",
+    "valid": false
+  },
+  {
+    "url": "https:///ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "ftp://ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://a‍b.example",
+    "valid": false
+  },
+  {
+    "url": "https://a‌b.example",
+    "valid": false
+  },
+  {
+    "url": "https://́a.example",
+    "valid": false
+  },
+  {
+    "url": "https://aא.example",
+    "valid": false
+  },
+  {
+    "url": "https://xn--.example",
+    "valid": false
+  },
+  {
+    "url": "https://xn--0.example",
+    "valid": true
+  },
+  {
+    "url": "https://�.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop.example/a b",
+    "valid": false
+  },
+  {
+    "url": "https://shop.example\\path",
+    "valid": false
+  }
+]

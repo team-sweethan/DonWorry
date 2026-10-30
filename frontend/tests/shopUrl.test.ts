@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { isShopUrlValid } from '../src/utils/shopUrl.ts'
@@ -51,4 +52,15 @@ test('shopUrl_whenHostnameSyntaxInvalid_rejectsBeforeConfirmation', () => {
     'https://ex%61mple.com',
   ])
     assert.equal(isShopUrlValid(value), false, value)
+})
+
+// Java도 같은 파일을 읽는다. 한쪽 검증만 통과하는 회귀를 함께 검사한다.
+test('shopUrl_whenSharedCases_matchesServerContract', () => {
+  const cases: Array<{ url: string; valid: boolean }> = JSON.parse(
+    readFileSync(
+      new URL('../../backend/src/test/resources/identity/shop-url-cases.json', import.meta.url),
+      'utf8',
+    ),
+  )
+  for (const item of cases) assert.equal(isShopUrlValid(item.url), item.valid, item.url)
 })

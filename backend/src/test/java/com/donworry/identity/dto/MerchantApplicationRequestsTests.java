@@ -6,6 +6,29 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class MerchantApplicationRequestsTests {
+    // 프론트와 같은 JSON 사례를 읽어 허용·거절 결과가 함께 회귀 검증되게 한다.
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.MethodSource("sharedUrlCases")
+    void shopUrl_whenSharedCases_matchesBrowserContract(String url, boolean valid) {
+        assertThat(MerchantApplicationRequests.SubmitRequest.builder()
+                        .shopUrl(url)
+                        .build()
+                        .isShopUrlValid())
+                .as(url)
+                .isEqualTo(valid);
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> sharedUrlCases() throws Exception {
+        try (var input = MerchantApplicationRequestsTests.class.getResourceAsStream("/identity/shop-url-cases.json")) {
+            var cases = tools.jackson.databind.json.JsonMapper.builder().build().readTree(input);
+            var values = new java.util.ArrayList<org.junit.jupiter.params.provider.Arguments>();
+            for (var item : cases)
+                values.add(org.junit.jupiter.params.provider.Arguments.of(
+                        item.path("url").asString(), item.path("valid").asBoolean()));
+            return values.stream();
+        }
+    }
+
     // 국제화 도메인과 ASCII 표현을 모두 허용하되 입력한 경로·쿼리는 변환하지 않는다.
     @ParameterizedTest
     @ValueSource(

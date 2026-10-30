@@ -214,6 +214,20 @@ class MerchantApplicationHttpTests {
         verify(mail).sendVerification(eq("idn@example.com"), anyString());
     }
 
+    // 최신 IDN 문자는 브라우저와 같이 접수하고 원문을 보존한다.
+    @Test
+    void submit_whenModernIdn_persistsOriginalUrl() throws Exception {
+        String url = "https://ẞ.de:8443/Products?item=ABC";
+        var response = send(
+                "POST",
+                PATH,
+                body("modern-idn@example.com", "3540000003")
+                        .replace(" https://shop.example.com/Products?item=ABC ", url),
+                true);
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(applications.findAll().getFirst().getShopUrl()).isEqualTo(url);
+    }
+
     // 동의·필수값·오래된 동의 문구·잘못된 번호를 로그인 오류 없이 거절한다.
     @Test
     void submit_whenInvalid_rejectsBeforeSaving() throws Exception {

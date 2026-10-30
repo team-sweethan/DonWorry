@@ -1,7 +1,7 @@
 package com.donworry.identity.dto;
 
+import com.ibm.icu.text.IDNA;
 import jakarta.validation.constraints.*;
-import java.net.IDN;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Locale;
@@ -9,6 +9,9 @@ import lombok.Builder;
 
 public final class MerchantApplicationRequests {
     private MerchantApplicationRequests() {}
+
+    private static final IDNA SHOP_URL_IDNA = IDNA.getUTS46Instance(
+            IDNA.USE_STD3_RULES | IDNA.CHECK_BIDI | IDNA.CHECK_CONTEXTJ | IDNA.NONTRANSITIONAL_TO_ASCII);
 
     public static final String CONSENT_VERSION = "2026-10-30.1";
 
@@ -45,11 +48,17 @@ public final class MerchantApplicationRequests {
                         || authority == null
                         || authority.contains("@")) return false;
                 if (uri.getHost() != null) return true;
-                // URI는 국제화 호스트를 getHost()로 반환하지 않는다. 검증할 때만 ASCII로 바꾼다.
+                // 브라우저와 같은 UTS #46으로 검증하고 원문은 변환하지 않는다.
                 int separator = authority.lastIndexOf(':');
                 String host = separator < 0 ? authority : authority.substring(0, separator);
                 String port = separator < 0 ? "" : authority.substring(separator);
-                String asciiHost = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
+                var info = new IDNA.Info();
+                var asciiHost = SHOP_URL_IDNA.nameToASCII(host, new StringBuilder(), info);
+                // WHATWG 비엄격 처리는 구간 3·4번째 하이픈과 DNS 길이를 오류로 취급하지 않는다.
+                if (info.getErrors().stream()
+                        .anyMatch(error -> error != IDNA.Error.HYPHEN_3_4
+                                && error != IDNA.Error.LABEL_TOO_LONG
+                                && error != IDNA.Error.DOMAIN_NAME_TOO_LONG)) return false;
                 return new URI(uri.getScheme() + "://" + asciiHost + port).getHost() != null;
             } catch (URISyntaxException | IllegalArgumentException e) {
                 return false;
