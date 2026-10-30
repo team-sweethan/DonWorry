@@ -16,10 +16,10 @@ P1은 `/api/v1/settlements`와 그 하위 경로 전체에 세션 인가를 적�
 | --- | --- | --- |
 | `CurrentStaff.findCurrent()` | `Optional<StaffSummary>`; 비로그인·익명은 empty, 예상 밖 인증 principal은 내부 오류 | 사장님을 포함한 현재 로그인 계정 확인 |
 | `StaffSummary` | `userId`, `role`(String), `merchantId`, `permissions`(변경 불가 List) | 역할·권한·가맹점 확인 |
-| `TenantReader.findById(merchantId)` | 없는 가맹점만 empty; INACTIVE도 반환; null·0 이하 ID는 IllegalArgumentException; DB 오류는 전파 | 이름·상태가 업무상 필요한 경우 조회 |
+| `TenantReader.findById(merchantId)` | 없는 가맹점만 empty; INACTIVE도 반환; null·0 이하 ID는 IllegalArgumentException; DB 오류는 전파 | 이름·상태·PG 수수료율이 업무상 필요한 경우 조회 |
 
 `CurrentStaff`는 세션 정보이며 DB를 재조회하지 않는다. 계정·권한 변경과 가맹점 정지는 기존 P1 관리 API가 세션을 무효화한다.
-`TenantReader`는 수수료율을 제공하지 않는다. 이번 연결을 위해 새 공개 필드나 요청별 DB 조회를 추가하지 않는다.
+최초 #240 연결에서는 수수료율을 추가하지 않았다. #356에서 `TenantSummary.pgFeeRate()`를 추가한다. 값은 저장된 `BigDecimal` 비율이며 `0.02 = 2%`다. 없는 가맹점·DB 오류를 임의 수수료율로 대체하지 않는다. P6 정산 계산 연결은 P6 후속이며 카드 수수료 모의 정책 2%는 유지한다. 상세 계약은 [ADR-0048](../decisions/0048-tenant-pg-fee-read-contract.md)을 따른다.
 
 P6는 내부 `service/`의 기존 접근 어댑터에 `CurrentStaff`를 연결한다. 권장 처리 순서는 다음과 같다.
 
