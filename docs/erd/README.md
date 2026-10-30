@@ -309,3 +309,10 @@ P1 담당자가 이 PR에서 아이디를 신청자가 선택하도록 변경하
 ### #354 PR A 쇼핑몰 주소 (2026-10-30)
 
 P1 사용자가 주소만 수집하는 설계·구현 진행을 승인했다. `merchant_applications.shop_url VARCHAR(2048) NULL`을 새 migration으로 추가한다. 신규 신청은 HTTP(S) 절대 URL 필수이며 기존 행은 NULL로 보존한다. 신청 검토 자료로만 보관하고 merchants·webhook으로 복사하지 않는다. 미확인 7일·반려 30일 정리와 승인 신청 보존 정책을 그대로 따른다. Notion 선행 대조·동기화는 미수행이다. 상세는 [PR A 설계](../identity/354-pr1-application-design.md)를 따른다.
+
+## P6 최초 잔액·일회성 지출 (#229, 2026-10-30)
+
+사용자 구현 승인에 따라 P6 소유 `cash_flow_settings`와 `planned_expenses`를 신규 migration으로 추가한다.
+가맹점별 최초 잔액·기준일은 불변이고, 실제 지출 완료 시각은 nullable `paid_at` UTC DATETIME(6)로 보관한다.
+가맹점은 논리 참조이며 다른 담당 FK를 추가하지 않는다. 금액·PK·인덱스·API·미검증 범위는 [P6 설계/ERD](../settlement/balance-expenses-api.md)를 따른다.
+Notion 최신 동기화·팀 전체 ERD 합의·개인 DB 적용 완료를 뜻하지 않는다.
