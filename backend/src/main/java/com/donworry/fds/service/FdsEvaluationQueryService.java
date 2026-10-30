@@ -193,6 +193,7 @@ public class FdsEvaluationQueryService {
         var blocklistCandidates = new ArrayList<FdsBlocklistCandidate>();
         addBlocklistCandidate(
                 blocklistCandidates, "CARD_TOKEN", evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+        addBlocklistCandidate(blocklistCandidates, "BUYER_REF", evaluation.getCustomerRef(), null);
         addBlocklistCandidate(blocklistCandidates, "DEVICE_ID", evaluation.getDeviceId(), null);
         addBlocklistCandidate(blocklistCandidates, "IP_ADDRESS", evaluation.getIpAddress(), null);
         addBlocklistCandidate(blocklistCandidates, "BUYER_EMAIL", evaluation.getBuyerEmail(), null);

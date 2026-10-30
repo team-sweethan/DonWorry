@@ -487,12 +487,35 @@ class FdsEvaluationServiceTests {
 
     private FdsEvaluationRequest request(
             UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(requestId, paymentId, merchantId, customerRef, amount, requestedAt);
+        return new FdsEvaluationRequest(
+                requestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                "card-token-test-" + paymentId,
+                "VISA •••• " + paymentId,
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 
     private FdsEvaluationRequest request(
             Long paymentId, String customerRef, long amount, Instant requestedAt, String cardToken) {
         return new FdsEvaluationRequest(
-                UUID.randomUUID(), paymentId, 1L, customerRef, amount, requestedAt, null, cardToken, null);
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                cardToken == null ? "card-token-test-" + paymentId : cardToken,
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 }

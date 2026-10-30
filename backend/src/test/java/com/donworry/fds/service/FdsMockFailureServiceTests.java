@@ -63,7 +63,13 @@ class FdsMockFailureServiceTests {
                         1L,
                         "hong-gildong",
                         100_000L,
-                        java.time.Instant.parse("2026-10-27T01:00:00Z")),
+                        java.time.Instant.parse("2026-10-27T01:00:00Z"),
+                        "device-mock-hong-gildong",
+                        "card-token-mock-4242",
+                        "VISA •••• 4242",
+                        "KR",
+                        "203.0.113.10",
+                        "hong-gildong@example.test"),
                 "TRANSIENT_MODEL_UNAVAILABLE",
                 java.time.Instant.parse("2026-10-27T01:00:01Z"));
         when(evaluations.findByEvaluationRequestId(any())).thenReturn(Optional.of(original));

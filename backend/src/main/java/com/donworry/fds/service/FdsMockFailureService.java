@@ -23,6 +23,12 @@ public class FdsMockFailureService {
     private static final long MERCHANT_ID = 1L;
     private static final long PAYMENT_REQUEST_ID = 900_004L;
     private static final String CUSTOMER_REF = "hong-gildong";
+    private static final String DEVICE_ID = "device-mock-hong-gildong";
+    private static final String CARD_TOKEN = "card-token-mock-4242";
+    private static final String CARD_DISPLAY_LABEL = "VISA •••• 4242";
+    private static final String IP_COUNTRY_CODE = "KR";
+    private static final String IP_ADDRESS = "203.0.113.10";
+    private static final String BUYER_EMAIL = "hong-gildong@example.test";
     private static final String ERROR_CODE = "TRANSIENT_MODEL_UNAVAILABLE";
 
     private final FdsEvaluationRepository evaluations;
@@ -33,7 +39,18 @@ public class FdsMockFailureService {
     public FdsEvaluationResponse createMockError() {
         var requestedAt = Instant.now();
         var request = new FdsEvaluationRequest(
-                EVALUATION_REQUEST_ID, PAYMENT_ID, MERCHANT_ID, CUSTOMER_REF, 100_000L, requestedAt);
+                EVALUATION_REQUEST_ID,
+                PAYMENT_ID,
+                MERCHANT_ID,
+                CUSTOMER_REF,
+                100_000L,
+                requestedAt,
+                DEVICE_ID,
+                CARD_TOKEN,
+                CARD_DISPLAY_LABEL,
+                IP_COUNTRY_CODE,
+                IP_ADDRESS,
+                BUYER_EMAIL);
         var evaluation = evaluations
                 .findByEvaluationRequestId(EVALUATION_REQUEST_ID)
                 .orElseGet(() -> evaluations.saveAndFlush(FdsEvaluation.failed(request, ERROR_CODE, Instant.now())));
@@ -48,6 +65,12 @@ public class FdsMockFailureService {
                 CUSTOMER_REF,
                 100_000L,
                 evaluation.getPaymentRequestedAt(),
+                DEVICE_ID,
+                CARD_TOKEN,
+                CARD_DISPLAY_LABEL,
+                IP_COUNTRY_CODE,
+                IP_ADDRESS,
+                BUYER_EMAIL,
                 FdsResult.ERROR,
                 ERROR_CODE,
                 "시연용 FDS 내부 모델 처리 실패",
@@ -83,6 +106,12 @@ public class FdsMockFailureService {
                 CUSTOMER_REF,
                 100_000L,
                 original.getPaymentRequestedAt(),
+                DEVICE_ID,
+                CARD_TOKEN,
+                CARD_DISPLAY_LABEL,
+                IP_COUNTRY_CODE,
+                IP_ADDRESS,
+                BUYER_EMAIL,
                 REEVALUATION_RETRY_ID));
     }
 }

@@ -43,13 +43,7 @@ class PaymentRequestRealFlowMariaDbTests {
     JdbcTemplate jdbc;
 
     private PaymentRequestCommand command() {
-        return new PaymentRequestCommand(
-                2L,
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                1000L,
-                Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+        return command(UUID.randomUUID().toString(), signals("KR"));
     }
 
     private PaymentRequestCommand command(String customerRef, PaymentRiskSignals signals) {
@@ -69,7 +63,7 @@ class PaymentRequestRealFlowMariaDbTests {
                 .deviceId("device-" + id)
                 .cardToken("card-" + id)
                 .cardDisplayLabel("신한 **** 1234")
-                .ipCountryCode(country)
+                .ipCountryCode(country == null ? "KR" : country)
                 .ipAddress("203.0.113.10")
                 .buyerEmail("Buyer-" + id + "@Example.com")
                 .build();
@@ -190,16 +184,19 @@ class PaymentRequestRealFlowMariaDbTests {
                 .containsEntry("risk_score", 90);
     }
 
-    // 식별자를 보내지 않으면 지금처럼 비워 두고 해당 룰만 적중하지 않는다.
+    // 정상 결제는 필수 위험 신호를 저장하고 P2 평가에도 같은 스냅샷을 전달한다.
     @Test
-    void submit_withoutRiskSignals_keepsSignalsEmpty() {
+    void submit_withRequiredRiskSignals_keepsSignalsInEvaluationSnapshot() {
         var receipt = flow.submit(command());
         completed(receipt.paymentId());
-        assertThat(requests.findByPaymentId(receipt.paymentId()).orElseThrow().riskSignals())
-                .isEqualTo(PaymentRiskSignals.none());
+        assertThat(requests.findByPaymentId(receipt.paymentId())
+                        .orElseThrow()
+                        .riskSignals()
+                        .deviceId())
+                .isNotBlank();
         assertThat(jdbc.queryForObject(
-                        "SELECT COUNT(*) FROM fds_evaluations WHERE payment_id=? AND device_id IS NULL"
-                                + " AND card_token IS NULL AND buyer_email IS NULL",
+                        "SELECT COUNT(*) FROM fds_evaluations WHERE payment_id=? AND device_id IS NOT NULL"
+                                + " AND card_token IS NOT NULL AND buyer_email IS NOT NULL",
                         Long.class,
                         receipt.paymentId()))
                 .isEqualTo(1);

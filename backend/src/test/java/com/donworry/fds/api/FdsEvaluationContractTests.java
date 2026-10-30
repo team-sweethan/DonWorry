@@ -14,7 +14,7 @@ class FdsEvaluationContractTests {
     void request_whenRequiredFieldsPresent_createsRequest() {
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), 101L, 1L, "hong-gildong", 150_000L, requestedAt);
+        var request = request(UUID.randomUUID(), 101L, 1L, "hong-gildong", 150_000L, requestedAt);
 
         assertThat(request.merchantId()).isEqualTo(1L);
         assertThat(request.customerRef()).isEqualTo("hong-gildong");
@@ -50,18 +50,56 @@ class FdsEvaluationContractTests {
         var requestId = UUID.randomUUID();
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        assertThatThrownBy(() -> new FdsEvaluationRequest(null, 101L, 1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(null, 101L, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, null, 1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, null, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, null, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, null, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, 0L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, 0L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, -1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, -1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, 1L, "hong-gildong", 150_000L, null))
+        assertThatThrownBy(() -> request(requestId, 101L, 1L, "hong-gildong", 150_000L, null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 신규 평가에는 룰 탐지와 보고서에 필요한 위험 신호 6개가 모두 있어야 한다.
+    @Test
+    void request_whenRiskSignalIsMissing_throwsIllegalArgumentException() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        assertThatThrownBy(() -> new FdsEvaluationRequest(
+                        UUID.randomUUID(),
+                        101L,
+                        1L,
+                        "hong-gildong",
+                        150_000L,
+                        requestedAt,
+                        null,
+                        "card-token-opaque-1",
+                        "VISA •••• 1234",
+                        "KR",
+                        "203.0.113.10",
+                        "hong@example.test"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    private FdsEvaluationRequest request(
+            UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
+        return new FdsEvaluationRequest(
+                requestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-opaque-1",
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
     }
 
     // ERROR는 점수 대신 실패 코드를 반환해 P5가 정상 판정과 구분한다.
