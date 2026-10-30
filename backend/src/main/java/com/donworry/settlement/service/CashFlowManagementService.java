@@ -34,7 +34,10 @@ public class CashFlowManagementService {
                 .map(s -> new CashFlowSettingResponse(s.getOpeningBalance(), s.getBaseDate()));
     }
 
-    @Transactional
+    // 다른 최초 요청이 커밋한 값을 다시 읽을 수 있어야 오래된 스냅샷으로 INSERT가 충돌하지 않는다.
+    @Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public CashFlowSettingResponse saveSettings(Long merchant, Long balance, LocalDate date) {
         validateMerchant(merchant);
         if (balance == null || balance < 0 || balance > 9007199254740991L || date == null)

@@ -62,6 +62,23 @@ class BalanceExpenseMariaDbTests {
         }
     }
 
+    // 같은 값의 동시 최초 요청은 둘 다 성공하고 최초 한 행·한 값을 보존한다.
+    @Test
+    void saveSettings_whenSameValueConcurrent_returnsSameSetting() throws Exception {
+        var barrier = new CyclicBarrier(2);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var a = pool.submit(() -> attempt(barrier, 1000L));
+            var b = pool.submit(() -> attempt(barrier, 1000L));
+            assertThat(List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS)))
+                    .containsOnly("SAVED")
+                    .hasSize(2);
+        }
+        assertThat(management.settings(MERCHANT).orElseThrow().openingBalance()).isEqualTo(1000L);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM cash_flow_settings WHERE merchant_id=?", Long.class, MERCHANT))
+                .isEqualTo(1);
+    }
+
     // 지출은 예정일과 실제 완료일을 구분하고 중복 완료·타 가맹점 변경을 막는다.
     @Test
     void expense_whenCompleted_movesToActualDayAndPreservesAmounts() {

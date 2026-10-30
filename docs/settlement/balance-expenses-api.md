@@ -11,6 +11,7 @@
 | planned_expenses | expense_id BIGINT PK, merchant_id BIGINT 논리 참조, title VARCHAR(100), expense_date DATE(예정일), amount BIGINT(양수), category VARCHAR(30), memo VARCHAR(500) NULL, paid_at UTC DATETIME(6) NULL, created_at/updated_at UTC DATETIME(6), deleted_at UTC DATETIME(6) NULL |
 
 금액 상한은 JavaScript 안전 정수 9007199254740991원이다. 가맹점 FK는 만들지 않는다. 최초 잔액은 설정 후 수정하지 않는다.
+최초 설정은 독립 REQUIRES_NEW·READ_COMMITTED 트랜잭션에서 처리한다. 기본 REPEATABLE_READ의 이전 조회 스냅샷과 동시 INSERT 충돌을 피하고, UNIQUE·no-op INSERT·현재 행 잠금 조회로 한 값을 확정한다. 호출자의 외부 트랜잭션 롤백에 설정 저장을 묶지 않는다.
 지출 category는 MATERIAL/RENT/PAYROLL/UTILITIES/OTHER다. 완료 지출의 삭제·금액 수정은 금지하고 paid_at/deleted_at 동시 존재도 DB 제약으로 차단한다.
 두 테이블은 신규 migration으로 생성한다. 기존 공유 migration·개인 DB는 변경하지 않는다. 예전 로컬 초안 SQL 두 개와 중복 적용하지 않는다.
 
