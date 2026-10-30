@@ -8,6 +8,7 @@ from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
     InvestigationTrace,
+    LinkedPayments,
     Overview,
     PaymentAnalysis,
     PaymentHistory,
@@ -25,6 +26,8 @@ from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
     FdsPayment,
+    LinkedMatch,
+    LinkedPaymentsTool,
     PaymentHistoryTool,
     Signals,
     SimilarCasesTool,
@@ -116,6 +119,24 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
     }
 
 
+LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
+
+
+# AI에게 보여 줄 연관 결제 — 숫자 대신 있음/없음 · 한 명/여러 명 · 판정 이름만 (#352)
+# 건수 · 고객 수는 보고서 카드에 코드가 채운다. AI 문장에 숫자가 섞이지 않게 넣지 않는다
+def linked_facts(match: LinkedMatch) -> dict[str, object] | str:
+    if not match.provided:
+        return NOT_SENT
+    if match.paymentCount == 0:
+        return "다른 고객 결제 없음"
+    return {
+        "다른 고객 결제": "있음",
+        "다른 고객": "한 명" if match.otherCustomerCount == 1 else "여러 명",
+        "그 결제들의 FDS 판정": [FDS_RESULT_KO.get(c.result, c.result) for c in match.resultCounts],
+        "카드사 거절": "있음" if match.declinedCount else "없음",
+    }
+
+
 def similar_outcome(accept: int, reject: int) -> str:
     parts = [f"매입 진행 {accept}건"] if accept else []
     parts += [f"승인 취소 {reject}건"] if reject else []
@@ -130,6 +151,7 @@ def facts_json(
     fds: dict[str, FdsPayment],
     similar: SimilarCasesTool | None = None,
     history: PaymentHistoryTool | None = None,
+    linked: LinkedPaymentsTool | None = None,
 ) -> str:
     payments = []
     for payment in case_payments.payments:
@@ -185,6 +207,15 @@ def facts_json(
                 }
                 for p in history.payments[:HISTORY_SHOWN_TO_AI]
             ],
+        }
+    key = "같은 카드 · 기기 · IP를 쓴 다른 고객 결제(최근 30일)"
+    if linked is None:
+        facts[key] = "조회하지 못함"
+    else:
+        facts[key] = {
+            "같은 카드": linked_facts(linked.card),
+            "같은 기기": linked_facts(linked.device),
+            "같은 IP": linked_facts(linked.ip),
         }
     return json.dumps(facts, ensure_ascii=False, indent=2)
 
@@ -283,12 +314,15 @@ def assemble_report(
     trace: InvestigationTrace,
     similar: SimilarCasesTool | None = None,
     history: PaymentHistoryTool | None = None,
+    linked: LinkedPaymentsTool | None = None,
 ) -> ReportBody:
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     limitations = _drop_nothing_unknown(list(narrative.limitations))
     if history is None:
         limitations.append(HISTORY_UNAVAILABLE)
+    if linked is None:
+        limitations.append(LINKED_UNAVAILABLE)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -385,5 +419,10 @@ def assemble_report(
             history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
         )
         if history is not None
+        else None,
+        linkedPayments=LinkedPayments.model_validate(
+            linked.model_dump(include={"lookbackDays", "card", "device", "ip"})
+        )
+        if linked is not None
         else None,
     )

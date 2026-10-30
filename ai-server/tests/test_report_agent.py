@@ -30,6 +30,7 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "investigationTrace",
         "similarCases",
         "paymentHistory",
+        "linkedPayments",
     ]
     first = report["paymentAnalyses"][0]
     assert (first["paymentId"], first["amount"], first["riskScore"]) == ("9001", 650000, 65)
@@ -40,8 +41,9 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "get_fds_evidence",
         "find_similar_cases",
         "get_payment_history",
+        "find_linked_payments",
     ]
-    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2", "P5"]
+    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2", "P5", "P2"]
     assert report["evidence"][0]["dataVersion"] == "evidence v2"
     assert "FDS 점수는 부정거래 확률이 아닙니다." in report["recommendation"]["limitations"]
 
@@ -56,6 +58,7 @@ def test_missing_evidence_is_nudged_and_agent_picks_it() -> None:
             [call("get_fds_evidence", payment_ids=["9002"])],
             [call("find_similar_cases")],
             [call("get_payment_history")],
+            [call("find_linked_payments")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],
@@ -68,6 +71,7 @@ def test_missing_evidence_is_nudged_and_agent_picks_it() -> None:
         {},
         {"payment_ids": ["9001"]},
         {"payment_ids": ["9002"]},
+        {},
         {},
         {},
     ]
@@ -88,11 +92,13 @@ def test_agent_ignoring_nudges_gets_system_fill() -> None:
         "get_fds_evidence",
         "find_similar_cases",
         "get_payment_history",
+        "find_linked_payments",
     ]
-    assert [e.source for e in outcome.report.evidence][-3:] == [
+    assert [e.source for e in outcome.report.evidence][-4:] == [
         "P2 (자동 보충)",
         "P3·P2 (자동 보충)",
         "P5 (자동 보충)",
+        "P2 (자동 보충)",
     ]
 
 
@@ -144,6 +150,7 @@ def test_payment_outside_case_is_reported_to_agent() -> None:
             [call("get_fds_evidence")],
             [call("find_similar_cases")],
             [call("get_payment_history")],
+            [call("find_linked_payments")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],
@@ -152,7 +159,7 @@ def test_payment_outside_case_is_reported_to_agent() -> None:
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
-    assert [r.args for r in outcome.records] == [{}, {}, {}, {}]
+    assert [r.args for r in outcome.records] == [{}, {}, {}, {}, {}]
 
 
 # 형식이 틀리면 오류를 알려 고쳐 쓰게 한다

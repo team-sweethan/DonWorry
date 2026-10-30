@@ -47,6 +47,9 @@ class AiToolServiceTests {
     @Mock
     PaymentSignalReader paymentSignalReader;
 
+    @Mock
+    LinkedPaymentFinder linkedPaymentFinder;
+
     // FDS 평가가 없는 결제는 카드 정보가 비고, 다른 결제의 카드 정보가 붙지 않는다 (#346)
     @Test
     void fdsEvidence_noEvaluation_signalsNull() {
@@ -67,7 +70,8 @@ class AiToolServiceTests {
                 paymentInfoReader,
                 similarCaseFinder,
                 paymentHistoryFinder,
-                paymentSignalReader);
+                paymentSignalReader,
+                linkedPaymentFinder);
 
         FdsEvidenceToolResponse response = service.fdsEvidence(7L, List.of());
 

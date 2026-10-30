@@ -40,6 +40,8 @@ def test_trace_records_steps_in_actual_order() -> None:
         ("DECIDE", "AI"),
         ("TOOL", "AI"),
         ("DECIDE", "AI"),
+        ("TOOL", "AI"),
+        ("DECIDE", "AI"),
         ("WRITE", "AI"),
         ("ASSEMBLE", "SYSTEM"),
     ]
@@ -48,8 +50,9 @@ def test_trace_records_steps_in_actual_order() -> None:
         "FDS 근거 조회",
         "비슷한 과거 사건 조회",
         "고객 최근 결제 조회",
+        "같은 카드 · 기기 · IP 결제 조회",
     ]
-    assert trace.steps[8].received == "조사 완료라고 답함"
+    assert trace.steps[10].received == "조사 완료라고 답함"
     assert all(s.durationMs is not None and s.durationMs >= 0 for s in trace.steps)
     assert trace.durationMs is not None
 
@@ -68,6 +71,7 @@ def test_trace_marks_system_filled_calls_as_system() -> None:
         "FDS 근거 조회 (시스템 보충)",
         "비슷한 과거 사건 조회 (시스템 보충)",
         "고객 최근 결제 조회 (시스템 보충)",
+        "같은 카드 · 기기 · IP 결제 조회 (시스템 보충)",
     ]
     assert system_tools[0].asked == "결제 9001 · 9002의 FDS 근거"
     assert [s.actor for s in steps if s.kind == "NUDGE"] == ["SYSTEM", "SYSTEM"]

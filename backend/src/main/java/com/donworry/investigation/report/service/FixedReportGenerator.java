@@ -3,6 +3,7 @@ package com.donworry.investigation.report.service;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
@@ -52,6 +53,7 @@ class FixedReportGenerator {
     private final SimilarCaseFinder similarCaseFinder;
     private final PaymentHistoryFinder paymentHistoryFinder;
     private final PaymentSignalReader paymentSignalReader;
+    private final LinkedPaymentFinder linkedPaymentFinder;
 
     // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
@@ -76,6 +78,7 @@ class FixedReportGenerator {
                 paymentSignalReader.findAll(paymentIds),
                 similarOrNull(caseId),
                 historyOrNull(caseId, now),
+                linkedOrNull(caseId, now),
                 reportVersion,
                 evidenceVersion,
                 now));
@@ -101,6 +104,16 @@ class FixedReportGenerator {
         }
     }
 
+    // 같은 카드 · 기기 · IP를 쓴 다른 결제도 참고 자료라 조회에 실패해도 보고서는 만든다 (#352)
+    private LinkedPaymentsToolResponse linkedOrNull(Long caseId, Instant now) {
+        try {
+            return linkedPaymentFinder.find(caseId, now);
+        } catch (RuntimeException e) {
+            log.warn("같은 카드 · 기기 · IP 결제 조회 실패 caseId={}", caseId, e);
+            return null;
+        }
+    }
+
     private static boolean hasEvidence(PaymentInfo payment) {
         return payment != null
                 && payment.amount() != null
@@ -114,6 +127,7 @@ class FixedReportGenerator {
             Map<Long, Signals> signals,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
+            LinkedPaymentsToolResponse linked,
             int reportVersion,
             int evidenceVersion,
             Instant now) {
@@ -179,7 +193,7 @@ class FixedReportGenerator {
                                 List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
                 Map.entry(
                         "evidence",
-                        evidenceList(securityCase.getId(), similar, history, reportVersion, now, dataVersion)),
+                        evidenceList(securityCase.getId(), similar, history, linked, reportVersion, now, dataVersion)),
                 Map.entry(
                         "verdict",
                         Map.of(
@@ -187,9 +201,10 @@ class FixedReportGenerator {
                                 "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.",
                                 "overallRecommendation",
                                 "NEEDS_CHECK")),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history))));
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked))));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
+        body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
         return body;
     }
 
@@ -223,6 +238,7 @@ class FixedReportGenerator {
             Long caseId,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
+            LinkedPaymentsToolResponse linked,
             int reportVersion,
             Instant now,
             String dataVersion) {
@@ -248,6 +264,16 @@ class FixedReportGenerator {
                     4,
                     history.retrievedAt(),
                     "evidence v" + history.evidenceVersion()));
+        }
+        if (linked != null) {
+            list.add(evidence(
+                    "find_linked_payments",
+                    linked.source(),
+                    caseId,
+                    reportVersion,
+                    5,
+                    linked.retrievedAt(),
+                    "evidence v" + linked.evidenceVersion()));
         }
         return list;
     }
@@ -294,6 +320,27 @@ class FixedReportGenerator {
                 "truncated", history.truncated());
     }
 
+    // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — ai-server와 같은 키. 숫자만 옮기고 해석하지 않는다
+    private static Map<String, Object> linkedPayments(LinkedPaymentsToolResponse linked) {
+        return Map.of(
+                "lookbackDays", linked.lookbackDays(),
+                "card", linkedMatch(linked.card()),
+                "device", linkedMatch(linked.device()),
+                "ip", linkedMatch(linked.ip()));
+    }
+
+    private static Map<String, Object> linkedMatch(LinkedPaymentsToolResponse.Match match) {
+        return Map.of(
+                "provided", match.provided(),
+                "otherCustomerCount", match.otherCustomerCount(),
+                "paymentCount", match.paymentCount(),
+                "resultCounts",
+                        match.resultCounts().stream()
+                                .map(c -> Map.<String, Object>of("result", c.result(), "count", c.count()))
+                                .toList(),
+                "declinedCount", match.declinedCount());
+    }
+
     // 비슷한 과거 사건 (#296) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다
     private static Map<String, Object> similarCases(SimilarCasesToolResponse similar) {
         return Map.of(
@@ -316,7 +363,10 @@ class FixedReportGenerator {
 
     // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다
     private static Map<String, Object> fixedTrace(
-            int paymentCount, SimilarCasesToolResponse similar, PaymentHistoryToolResponse history) {
+            int paymentCount,
+            SimilarCasesToolResponse similar,
+            PaymentHistoryToolResponse history,
+            LinkedPaymentsToolResponse linked) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
         trace.put("model", "fixed");
@@ -341,8 +391,26 @@ class FixedReportGenerator {
                                 history == null
                                         ? "조회 실패"
                                         : "결제 " + history.payments().size() + "건"),
+                        traceStep(
+                                "TOOL",
+                                "같은 카드 · 기기 · IP 결제 조회",
+                                "같은 가맹점 최근 " + LinkedPaymentFinder.LOOKBACK_DAYS + "일, 다른 고객 결제",
+                                linked == null ? "조회 실패" : linkedSummary(linked)),
                         traceStep("ASSEMBLE", "고정 문장 보고서 조립", null, "AI 서버가 꺼져 정해진 문장으로 조립")));
         return trace;
+    }
+
+    // "카드 결제 3건 · 기기 없음 · IP 정보 없음" — ai-server trace 요약과 같은 말
+    private static String linkedSummary(LinkedPaymentsToolResponse linked) {
+        return "카드 " + matchSummary(linked.card()) + " · 기기 " + matchSummary(linked.device()) + " · IP "
+                + matchSummary(linked.ip());
+    }
+
+    private static String matchSummary(LinkedPaymentsToolResponse.Match match) {
+        if (!match.provided()) {
+            return "정보 없음";
+        }
+        return match.paymentCount() == 0 ? "없음" : "결제 " + match.paymentCount() + "건";
     }
 
     // 값이 없는 칸(null)이 있어 Map.of 대신 HashMap을 쓴다

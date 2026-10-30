@@ -40,7 +40,7 @@ public class FdsEvidenceQueryService implements FdsEvidenceReader {
         return distinctPaymentIds.stream()
                 .map(evaluationsByPaymentId::get)
                 .filter(Objects::nonNull)
-                .map(this::latestUsableOrLatestError)
+                .map(FdsEvidenceQueryService::latestUsableOrLatestError)
                 .map(this::evidenceOf)
                 .toList();
     }
@@ -59,7 +59,8 @@ public class FdsEvidenceQueryService implements FdsEvidenceReader {
         return distinctPaymentIds;
     }
 
-    private FdsEvaluation latestUsableOrLatestError(List<FdsEvaluation> evaluations) {
+    // 연관 결제 집계(FdsLinkedPaymentQueryService)도 같은 규칙으로 결제마다 평가 하나를 고른다 (#352)
+    static FdsEvaluation latestUsableOrLatestError(List<FdsEvaluation> evaluations) {
         var latest = Comparator.comparing(FdsEvaluation::getEvaluatedAt)
                 .thenComparing(FdsEvaluation::getEvaluationId, Comparator.nullsLast(Comparator.naturalOrder()));
         return evaluations.stream()

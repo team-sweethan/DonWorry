@@ -76,6 +76,7 @@ def test_payment_history_nudged_then_system_filled() -> None:
             [call("get_case_payments")],
             [call("get_fds_evidence")],
             [call("find_similar_cases")],
+            [call("find_linked_payments")],
             None,
         ],
         outputs=[narrative(["9001", "9002"])],

@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     max_kept_results: int = 500
 
     # Agent 안전장치 — Tool 호출 최대 횟수, 필수 근거 재요청 횟수, 보고서 고쳐 쓰기 횟수
-    agent_max_tool_calls: int = 6
+    # 필수 도구 5종(#352) + 여유 2번
+    agent_max_tool_calls: int = 7
     agent_max_nudges: int = 2
     agent_max_repairs: int = 2
 

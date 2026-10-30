@@ -6,9 +6,11 @@ from app.config import Settings
 from app.schemas.report import InvestigationTrace, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
-    FdsEvidenceTool,
+    LinkedMatch,
+    LinkedPaymentsTool,
     PaymentHistoryTool,
     SimilarCasesTool,
+    ToolResult,
 )
 
 # 조사 과정 기록(investigationTrace, #294) — 화면 "조사 과정" 탭이 그대로 보여 준다
@@ -19,6 +21,7 @@ TOOL_TITLES = {
     "get_fds_evidence": "FDS 근거 조회",
     "find_similar_cases": "비슷한 과거 사건 조회",
     "get_payment_history": "고객 최근 결제 조회",
+    "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
 }
 
 # 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
@@ -69,6 +72,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
         return "이 사건과 비슷한 종료 사건"
     if name == "get_payment_history":
         return "같은 고객의 최근 결제 (이 사건 제외)"
+    if name == "find_linked_payments":
+        return "같은 가맹점 최근 30일, 다른 고객 결제"
     payment_ids = args.get("payment_ids") or []
     # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
     if not isinstance(payment_ids, list):
@@ -79,9 +84,9 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
 
 
 # 받은 것 요약 — 건수만 쓴다. 금액 · 점수 같은 원본 값은 보고서 본문에 이미 있다
-def tool_received(
-    result: CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool,
-) -> str:
+def tool_received(result: ToolResult) -> str:
+    if isinstance(result, LinkedPaymentsTool):
+        return linked_summary(result)
     if isinstance(result, PaymentHistoryTool):
         head = f"최근 {result.lookbackDays}일 결제 {len(result.payments)}건"
         return head + (" (더 있음, 최근 것만)" if result.truncated else "")
@@ -102,6 +107,20 @@ def tool_received(
         return f"결제 {len(result.payments)}건{missing}"
     rules = sum(len(p.ruleHits) for p in result.payments)
     return f"FDS 평가 {len(result.payments)}건 · 적중 규칙 {rules}개{missing}"
+
+
+# "카드 결제 3건 · 기기 없음 · IP 정보 없음" — Spring 고정 보고서 조사 과정과 같은 말 (#352)
+def linked_summary(result: LinkedPaymentsTool) -> str:
+    return " · ".join(
+        f"{label} {_match_summary(match)}"
+        for label, match in (("카드", result.card), ("기기", result.device), ("IP", result.ip))
+    )
+
+
+def _match_summary(match: LinkedMatch) -> str:
+    if not match.provided:
+        return "정보 없음"
+    return "없음" if match.paymentCount == 0 else f"결제 {match.paymentCount}건"
 
 
 def retry_reason(errors: list[str]) -> str:
