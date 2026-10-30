@@ -109,7 +109,10 @@ public class CashFlowManagementService {
     @Transactional
     public void deleteExpense(Long merchant, Long id) {
         validateMerchant(merchant);
-        owned(merchant, id).remove(Instant.now());
+        var expense = owned(merchant, id);
+        if (expense.getDeletedAt() != null)
+            throw new SettlementRequestException(404, "SETTLEMENT_EXPENSE_NOT_FOUND", "지출을 찾을 수 없습니다.");
+        expense.remove(Instant.now());
     }
 
     @Transactional

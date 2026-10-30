@@ -11,6 +11,24 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class BalanceExpenseTests {
+    // 이미 삭제된 지출은 재삭제 성공으로 응답하지 않고 없는 지출과 동일하게 처리한다.
+    @Test
+    void deleteExpense_whenAlreadyDeleted_returnsNotFound() {
+        var costs = mock(PlannedExpenseRepository.class);
+        var expense =
+                PlannedExpense.planned(1L, "재료", LocalDate.now(), 100L, ExpenseCategory.MATERIAL, null, Instant.now());
+        var deletedAt = Instant.parse("2026-10-30T01:00:00Z");
+        expense.remove(deletedAt);
+        when(costs.findOwnedForUpdate(10L, 1L)).thenReturn(Optional.of(expense));
+        var service = new CashFlowManagementService(mock(CashFlowSettingRepository.class), costs);
+        assertThatThrownBy(() -> service.deleteExpense(1L, 10L))
+                .isInstanceOfSatisfying(SettlementRequestException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(404);
+                    assertThat(e.getCode()).isEqualTo("SETTLEMENT_EXPENSE_NOT_FOUND");
+                });
+        assertThat(expense.getDeletedAt()).isEqualTo(deletedAt);
+    }
+
     // 최초 설정은 같은 내용만 재전달할 수 있고 변경 시 DB 쓰기를 하지 않는다.
     @Test
     void saveSettings_whenAlreadySet_preservesOriginal() {

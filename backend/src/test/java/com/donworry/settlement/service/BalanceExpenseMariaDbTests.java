@@ -17,6 +17,35 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest
 @Import(MariaDbTestContainerConfig.class)
 class BalanceExpenseMariaDbTests {
+    // 반복 삭제는 404이며 최초 삭제 시각과 삭제 행을 그대로 보존한다.
+    @Test
+    void deleteExpense_whenRepeated_preservesDeletedRecord() {
+        management.saveSettings(MERCHANT, 1000L, today());
+        var expense = management.createExpense(
+                MERCHANT,
+                ExpenseRequest.builder()
+                        .title("재료")
+                        .expenseDate(today())
+                        .amount(100L)
+                        .category("MATERIAL")
+                        .build());
+        management.deleteExpense(MERCHANT, expense.expenseId());
+        var first = jdbc.queryForObject(
+                "SELECT deleted_at FROM planned_expenses WHERE expense_id=?",
+                java.sql.Timestamp.class,
+                expense.expenseId());
+        assertThatThrownBy(() -> management.deleteExpense(MERCHANT, expense.expenseId()))
+                .isInstanceOfSatisfying(
+                        SettlementRequestException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(404));
+        assertThat(jdbc.queryForObject(
+                        "SELECT deleted_at FROM planned_expenses WHERE expense_id=?",
+                        java.sql.Timestamp.class,
+                        expense.expenseId()))
+                .isEqualTo(first);
+        assertThat(management.expenses(MERCHANT, today(), today())).isEmpty();
+    }
+
     private static final long MERCHANT = 71801L;
 
     @Autowired
