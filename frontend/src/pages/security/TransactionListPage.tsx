@@ -1,4 +1,4 @@
-import { ReloadOutlined } from '@ant-design/icons'
+import { InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
   Button,
@@ -49,6 +49,29 @@ const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((
   value: status,
   label: paymentStatusLabel[status].label,
 }))
+
+// 처음 보는 직원이 칸 뜻을 알 수 있게 제목 옆 ⓘ에 설명을 둔다
+const help = {
+  order: '가맹점이 손님 영수증에 찍은 번호예요. 가맹점에 문의할 때 이 번호로 찾아요.',
+  customer:
+    '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 아래 줄은 일부를 가린 이메일이에요.',
+  device: '결제한 기기의 식별값 앞부분만 보여요. 개인정보 보호를 위해 나머지는 가렸어요.',
+  ip: '결제한 나라와 IP 앞부분이에요. 별표(*)는 가린 부분이에요.',
+}
+
+function HelpTitle({ label, text }: { label: string; text: string }) {
+  return (
+    <span>
+      {label}{' '}
+      <Tooltip title={text}>
+        <InfoCircleOutlined aria-label={`${label} 설명`} style={{ color: 'rgba(0, 0, 0, 0.45)' }} />
+      </Tooltip>
+    </span>
+  )
+}
+
+// 가맹점에 전달하거나 검색칸에 붙여 넣을 때 쓰는 번호는 복사 버튼을 단다
+const copyable = (text: string) => ({ text, tooltips: ['복사', '복사됨'] })
 
 const missing = <Typography.Text type="secondary">정보 없음</Typography.Text>
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
@@ -171,12 +194,14 @@ export function TransactionListPage() {
       render: (value: number) => merchantNames.get(value) ?? `가맹점 #${value}`,
     },
     {
-      title: '구매자',
+      title: <HelpTitle label="구매자" text={help.customer} />,
       key: 'buyer',
       width: 190,
       render: (_, t) => (
         <div>
-          <div>{t.customerRef}</div>
+          <div>
+            <Typography.Text copyable={copyable(t.customerRef)}>{t.customerRef}</Typography.Text>
+          </div>
           <div>
             <Typography.Text type="secondary">
               {t.maskedBuyerEmail ?? '이메일 정보 없음'}
@@ -186,12 +211,14 @@ export function TransactionListPage() {
       ),
     },
     {
-      title: '주문번호',
+      title: <HelpTitle label="주문번호" text={help.order} />,
       key: 'order',
       width: 200,
       render: (_, t) => (
         <div>
-          <code>{t.orderRef}</code>
+          <Typography.Text code copyable={copyable(t.orderRef)}>
+            {t.orderRef}
+          </Typography.Text>
           {t.attemptNo !== null && t.attemptNo > 1 && (
             <div>
               <Typography.Text type="secondary">{t.attemptNo}번째 시도</Typography.Text>
@@ -260,7 +287,7 @@ export function TransactionListPage() {
       render: (value: string | null) => value ?? missing,
     },
     {
-      title: '접속',
+      title: <HelpTitle label="접속" text={help.ip} />,
       key: 'ip',
       width: 150,
       render: (_, t) => {
@@ -269,7 +296,7 @@ export function TransactionListPage() {
       },
     },
     {
-      title: '기기',
+      title: <HelpTitle label="기기" text={help.device} />,
       dataIndex: 'maskedDeviceId',
       width: 110,
       render: (value: string | null) => (value ? <code>{value}</code> : missing),
