@@ -70,7 +70,7 @@ class PaymentCaptureRecoveryTests {
 
     private PaymentEvaluationFlowInput input() {
         return new PaymentEvaluationFlowInput(
-                999L, UUID.randomUUID().toString(), UUID.randomUUID().toString(), 150_000L);
+                2L, UUID.randomUUID().toString(), UUID.randomUUID().toString(), 150_000L);
     }
 
     private String state(long id) {

@@ -23,6 +23,7 @@
 | [#152 조회 설계](152-payment-operations-design.md) | 목록·상세 정보·권한·P2/P3/P6 계약과 #188~#191 후속 범위. 설계 확인 완료·구현 전 |
 | [#188 운영 조회 HTTP 계약](188-payment-operations-api.md) | GET 경로·DTO·필터·페이지·오류 규칙 및 #188 브랜치 구현·검사 기록. 병합·배포 전 |
 | [#190 FDS 복구 저장·API 계약](190-fds-recovery-contract.md) | 단일 복구 테이블·명시적 1회 실행·행 잠금·직원 전달 복구 POST·선택적 CSRF·응답/오류 계약. 사용자 승인. #273 저장·보고·분석 수신·상세 GET 구현, 재평가·전달 복구 POST는 후속 |
+| [#363 거래 내역 조회 HTTP 계약](363-payment-transactions-api.md) | 보안 직원 거래 내역 — 모든 결제 · 최신순 · 최대 31일 · 서버 가리기. P5 · P1 확인 완료, 병합 전 |
 | [#152 담당별 합의 기록](152-policy-confirmation.md) | P1·P2·P3·P5·P6 회신·사용자 확인 근거와 미정 범위. CakeShop 예약은 별도 |
 | [ADR-0035](../decisions/0035-long-held-payment-policy.md) | 제안 — 확인 기한과 실제 금융 종료 분리. 대안·영향 기록 |
 | [ADR-0027](../decisions/0027-payment-actions.md) | 현재 직원 조치 계약·#158 P3 확인과 CAPTURE 확정 실패 후속 협의 |

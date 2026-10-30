@@ -44,9 +44,11 @@ public class AccountProvisioningService {
         if (role == UserRole.OPERATOR) {
             if (input.merchantId() == null
                     || merchants
-                            .findById(input.merchantId())
+                            .lockById(input.merchantId())
                             .filter(m -> m.getStatus() == MerchantStatus.ACTIVE)
                             .isEmpty()) throw new AccountManagementException(AuthErrorCode.ADMIN_MERCHANT_REQUIRED);
+            if (users.existsByMerchantIdAndRole(input.merchantId(), UserRole.OPERATOR))
+                throw new AccountManagementException(AuthErrorCode.ADMIN_OPERATOR_ALREADY_EXISTS);
         } else if (input.merchantId() != null) invalid();
         var user = users.saveAndFlush(PlatformUser.create(
                 input.loginId(), input.displayName().trim(), role, input.merchantId(), passwordHash));

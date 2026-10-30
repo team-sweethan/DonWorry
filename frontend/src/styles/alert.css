@@ -285,6 +285,10 @@
   font-weight: 600;
 }
 
+.dw-alert-detail .ant-table-cell {
+  overflow-wrap: anywhere;
+}
+
 .dw-alert-result-tag,
 .dw-alert-payment-status-tag {
   margin: 0;

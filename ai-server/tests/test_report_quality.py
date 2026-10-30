@@ -6,7 +6,7 @@ from app.agent.assemble import ALWAYS_LIMITATIONS, ALWAYS_UNKNOWN, facts_json
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.narrative import validate_narrative
-from app.agent.prompts import WRITE_EXAMPLE
+from app.agent.prompts import WRITE_EXAMPLES
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePayment, CasePaymentsTool, FdsEvidenceTool, FdsPayment
@@ -25,20 +25,32 @@ def _run(*outputs: str) -> tuple[ScriptedLlm, object]:
 
 # 근거에 없는 숫자("60점 이상" — 실제는 65 · 55)는 돌려보내 고쳐 쓰게 한다
 def test_number_not_in_facts_is_repaired() -> None:
-    wrong = narrative(PAYMENTS, overallAnalysis=["두 결제 모두 FDS 점수가 60점 이상입니다."])
+    wrong = narrative(
+        PAYMENTS,
+        overallAnalysis=[
+            "두 결제 모두 FDS 점수가 60점 이상입니다.",
+            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+        ],
+    )
 
     llm, outcome = _run(wrong, narrative(PAYMENTS))
 
     assert llm.write_calls == 2
     assert outcome.status == "SUCCEEDED"
-    assert outcome.report.overallAnalysis == ["짧은 간격의 반복 결제입니다."]
+    assert outcome.report.overallAnalysis == [
+        "짧은 간격의 반복 결제입니다.",
+        "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+    ]
 
 
 # 근거에 있는 숫자는 쉼표 · "만 원" 표기여도 통과한다
 def test_fact_numbers_are_allowed() -> None:
     ok = narrative(
         PAYMENTS,
-        summary=["65만 원(650,000원) 결제가 65점, 결제 9002가 55점으로 2건입니다."],
+        summary=[
+            "65만 원(650,000원) 결제가 65점, 결제 9002가 55점으로 2건입니다.",
+            "짧은 간격으로 이어진 결제라 본인 결제인지 확인이 필요합니다.",
+        ],
     )
 
     llm, outcome = _run(ok)
@@ -57,7 +69,13 @@ def test_code_value_is_repaired() -> None:
 
 
 def test_status_code_is_repaired() -> None:
-    wrong = narrative(PAYMENTS, summary=["두 결제 모두 HELD 상태입니다."])
+    wrong = narrative(
+        PAYMENTS,
+        summary=[
+            "두 결제 모두 HELD 상태입니다.",
+            "짧은 간격으로 이어진 결제라 본인 결제인지 확인이 필요합니다.",
+        ],
+    )
 
     llm, _ = _run(wrong, narrative(PAYMENTS))
 
@@ -66,7 +84,13 @@ def test_status_code_is_repaired() -> None:
 
 # 확률처럼 단정하는 표현은 쓰지 못하게 한다 (FDS 점수는 확률이 아니다)
 def test_assertive_phrase_is_repaired() -> None:
-    wrong = narrative(PAYMENTS, overallAnalysis=["두 결제 모두 사기 가능성이 높습니다."])
+    wrong = narrative(
+        PAYMENTS,
+        overallAnalysis=[
+            "두 결제 모두 사기 가능성이 높습니다.",
+            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+        ],
+    )
 
     llm, outcome = _run(wrong, narrative(PAYMENTS))
 
@@ -76,7 +100,13 @@ def test_assertive_phrase_is_repaired() -> None:
 
 # 고쳐 쓰기 횟수를 넘어도 계속 틀리면 실패로 끝낸다
 def test_content_keeps_failing_ends_failed() -> None:
-    wrong = narrative(PAYMENTS, overallAnalysis=["사기 확률은 80%입니다."])
+    wrong = narrative(
+        PAYMENTS,
+        overallAnalysis=[
+            "사기 확률은 80%입니다.",
+            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+        ],
+    )
 
     llm, outcome = _run(wrong)
 
@@ -123,16 +153,14 @@ def test_invented_tool_args_are_dropped() -> None:
 
 
 # 프롬프트 예시 문장도 내용 검사를 통과해야 한다 — 예시가 규칙을 어기면 Qwen이 따라 한다
-def test_prompt_example_passes_content_checks() -> None:
-    example = dict(WRITE_EXAMPLE)
-    example["payments"] = {"9201": WRITE_EXAMPLE["payments"]["<결제 ID>"]}
+# 예시 2개(#355) 모두 본다
+@pytest.mark.parametrize("example", WRITE_EXAMPLES)
+def test_prompt_example_passes_content_checks(example: dict) -> None:
+    written = {**example, "payments": {"9201": example["payments"]["<결제 ID>"]}}
 
-    narrative_obj, errors = validate_narrative(
-        json.dumps(example, ensure_ascii=False), ["9201"], set()
-    )
+    _, errors = validate_narrative(json.dumps(written, ensure_ascii=False), ["9201"], set())
 
     assert errors == []
-    assert narrative_obj is not None
 
 
 # 타임라인은 코드가 만드는 칸이라 코드값 대신 한국어로 쓴다
@@ -159,7 +187,13 @@ def test_small_score_not_in_facts_is_repaired() -> None:
 
 
 def test_small_counts_are_allowed() -> None:
-    ok = narrative(PAYMENTS, overallAnalysis=["10분 안에 3회 결제 시도가 있었고 결제는 2건입니다."])
+    ok = narrative(
+        PAYMENTS,
+        overallAnalysis=[
+            "10분 안에 3회 결제 시도가 있었고 결제는 2건입니다.",
+            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+        ],
+    )
 
     llm, _ = _run(ok)
 
@@ -245,7 +279,10 @@ def test_allowed_abbreviations_and_normal_headline_pass() -> None:
             "FDS 규칙 적중 외에는 근거가 없어 AI 권고는 참고만 하고"
             " 보안 직원이 본인 확인 후 판정해야 합니다."
         ),
-        summary=["FDS 규칙과 접속 IP를 함께 확인했습니다."],
+        summary=[
+            "FDS 규칙과 접속 IP를 함께 확인했습니다.",
+            "짧은 간격으로 이어진 결제라 본인 결제인지 확인이 필요합니다.",
+        ],
     )
 
     llm, outcome = _run(ok)

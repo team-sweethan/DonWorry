@@ -90,7 +90,7 @@ public class AdminAccountService {
                 () -> locks.withAccounts(actor.loginId(), input.loginId(), () -> {
                     requireSession(actor, request);
                     try {
-                        return transaction(() -> {
+                        return transaction(TransactionDefinition.ISOLATION_READ_COMMITTED, () -> {
                             requireAdmin(actor);
                             String password = temporaryPasswords.generate(input.loginId());
                             var user = provisioning.create(actor, input, encoder.encode(password));
@@ -255,7 +255,12 @@ public class AdminAccountService {
     }
 
     private <T> T transaction(Supplier<T> work) {
+        return transaction(TransactionDefinition.ISOLATION_DEFAULT, work);
+    }
+
+    private <T> T transaction(int isolation, Supplier<T> work) {
         var template = new TransactionTemplate(transactionManager);
+        template.setIsolationLevel(isolation);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         return template.execute(status -> work.get());
     }

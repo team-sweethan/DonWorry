@@ -1,3 +1,4 @@
+import { isShopUrlValid } from '../../utils/shopUrl.ts'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -413,6 +414,18 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                         label: '사업자등록번호',
                         children: formatBusinessNumber(app.businessRegistrationNumber),
                       },
+                      {
+                        key: 'shopUrl',
+                        label: '쇼핑몰 주소',
+                        children:
+                          data.shopUrl && isShopUrlValid(data.shopUrl) ? (
+                            <a href={data.shopUrl} target="_blank" rel="noopener noreferrer">
+                              {data.shopUrl}
+                            </a>
+                          ) : (
+                            (data.shopUrl ?? '기존 신청으로 수집하지 않은 정보입니다.')
+                          ),
+                      },
                       { key: 'contact', label: '담당자', children: app.contactName },
                       {
                         key: 'email',
@@ -600,7 +613,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                         <Form.Item
                           name="feePercent"
                           label="수수료율"
-                          extra="등록 수수료율입니다. 현재 정산 계산은 1% 고정값을 사용합니다."
+                          extra="신규 정산에 등록 수수료율을 적용합니다. 기존 정산금은 유지됩니다."
                           rules={[
                             {
                               validator: (_, value: string) =>

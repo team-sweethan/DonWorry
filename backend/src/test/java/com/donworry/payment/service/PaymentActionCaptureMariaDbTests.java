@@ -119,7 +119,7 @@ class PaymentActionCaptureMariaDbTests {
 
     private PaymentActionCommand command() {
         long id = tx().execute(s -> {
-            var p = Payment.pending(999L, "action-capture", UUID.randomUUID().toString(), 123456L, Instant.now());
+            var p = Payment.pending(2L, "action-capture", UUID.randomUUID().toString(), 123456L, Instant.now());
             p.recordAuthorizationSuccess("held-auth", true);
             return payments.save(p).getPaymentId();
         });

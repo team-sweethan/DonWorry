@@ -1,17 +1,24 @@
 package com.donworry.identity.dto;
 
+import com.ibm.icu.text.IDNA;
 import jakarta.validation.constraints.*;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Locale;
 import lombok.Builder;
 
 public final class MerchantApplicationRequests {
     private MerchantApplicationRequests() {}
 
-    public static final String CONSENT_VERSION = "2026-10-29.1";
+    private static final IDNA SHOP_URL_IDNA = IDNA.getUTS46Instance(
+            IDNA.USE_STD3_RULES | IDNA.CHECK_BIDI | IDNA.CHECK_CONTEXTJ | IDNA.NONTRANSITIONAL_TO_ASCII);
+
+    public static final String CONSENT_VERSION = "2026-10-30.1";
 
     @Builder
     public record SubmitRequest(
             @NotBlank @Size(max = 100) String merchantName,
+            @NotBlank @Size(max = 2048) String shopUrl,
             @NotNull @Pattern(regexp = "[0-9]{10}") String businessRegistrationNumber,
             @NotBlank @Size(max = 100) String contactName,
             @NotBlank @Email @Size(max = 254) String email,
@@ -19,15 +26,46 @@ public final class MerchantApplicationRequests {
             @NotBlank @Pattern(regexp = "[a-z0-9_]{3,30}") String requestedLoginId,
             @Size(max = 1000) String inquiry,
             @NotNull @AssertTrue Boolean consent,
-            @NotNull @Pattern(regexp = "2026-10-29\\.1") String consentVersion) {
+            @NotNull @Pattern(regexp = "2026-10-30\\.1") String consentVersion) {
         public SubmitRequest {
             merchantName = trim(merchantName);
+            shopUrl = trim(shopUrl);
             businessRegistrationNumber = digits(businessRegistrationNumber);
             contactName = trim(contactName);
             email = normalizeEmail(email);
             phone = digits(phone);
             requestedLoginId = trim(requestedLoginId);
             inquiry = trim(inquiry);
+        }
+
+        @AssertTrue(message = "쇼핑몰 주소는 사용자 정보가 없는 HTTP(S) 절대 URL이어야 합니다.")
+        public boolean isShopUrlValid() {
+            if (shopUrl == null || shopUrl.isBlank()) return true;
+            try {
+                var uri = new URI(shopUrl);
+                String authority = uri.getRawAuthority();
+                if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                        || authority == null
+                        || authority.contains("@")
+                        || authority.contains("%")) return false;
+                if (authority.startsWith("[")) return uri.getHost() != null && uri.getPort() <= 65535;
+                // 브라우저와 같은 UTS #46으로 검증하고 원문은 변환하지 않는다.
+                int separator = authority.lastIndexOf(':');
+                String host = separator < 0 ? authority : authority.substring(0, separator);
+                String port = separator < 0 ? "" : authority.substring(separator);
+                var info = new IDNA.Info();
+                var asciiHost = SHOP_URL_IDNA.nameToASCII(host, new StringBuilder(), info);
+                // WHATWG 비엄격 처리는 구간 3·4번째 하이픈과 DNS 길이를 오류로 취급하지 않는다.
+                if (info.getErrors().stream()
+                        .anyMatch(error -> error != IDNA.Error.HYPHEN_3_4
+                                && error != IDNA.Error.LABEL_TOO_LONG
+                                && error != IDNA.Error.DOMAIN_NAME_TOO_LONG)) return false;
+                if (!hasValidIpv4Notation(asciiHost.toString())) return false;
+                var parsed = new URI(uri.getScheme() + "://" + asciiHost + port);
+                return parsed.getHost() != null && parsed.getPort() <= 65535;
+            } catch (URISyntaxException | IllegalArgumentException e) {
+                return false;
+            }
         }
     }
 
@@ -52,6 +90,18 @@ public final class MerchantApplicationRequests {
 
     private static String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private static boolean hasValidIpv4Notation(String host) {
+        String withoutRoot = host.endsWith(".") ? host.substring(0, host.length() - 1) : host;
+        String last = withoutRoot.substring(withoutRoot.lastIndexOf('.') + 1);
+        if (!last.matches("(?i)([0-9]+|0x[0-9a-f]*)")) return true;
+        String[] octets = host.split("\\.", -1);
+        if (octets.length != 4) return false;
+        for (String octet : octets) {
+            if (!octet.matches("0|[1-9][0-9]{0,2}") || Integer.parseInt(octet) > 255) return false;
+        }
+        return true;
     }
 
     private static String digits(String value) {

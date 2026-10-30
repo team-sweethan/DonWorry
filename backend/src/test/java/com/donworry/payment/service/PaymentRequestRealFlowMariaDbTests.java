@@ -44,7 +44,7 @@ class PaymentRequestRealFlowMariaDbTests {
 
     private PaymentRequestCommand command() {
         return new PaymentRequestCommand(
-                999L,
+                2L,
                 UUID.randomUUID().toString(),
                 UUID.randomUUID().toString(),
                 1000L,
@@ -54,7 +54,7 @@ class PaymentRequestRealFlowMariaDbTests {
 
     private PaymentRequestCommand command(String customerRef, PaymentRiskSignals signals) {
         return new PaymentRequestCommand(
-                999L,
+                2L,
                 UUID.randomUUID().toString(),
                 customerRef,
                 1000L,

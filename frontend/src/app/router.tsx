@@ -23,6 +23,7 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
@@ -145,7 +146,7 @@ export const router = createBrowserRouter([
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'blocklist', element: <BlocklistPage /> },
-          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
+          { path: 'transactions', element: <TransactionListPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
         ],
       },

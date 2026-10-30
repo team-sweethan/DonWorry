@@ -27,8 +27,8 @@ import {
 import type { AdminMerchant, MerchantPage, MerchantStatus } from '../../api/adminMerchants'
 
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
-// 정산은 아직 settlement의 SettlementFeeCalculator 고정값(0.01)을 쓴다. P6 정산 연동 시 이 안내를 지운다.
-const settlementFeeNotice = '정산 미반영, 현재 1% 고정'
+// 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
+const settlementFeeNotice = '신규 정산에 등록 요율 적용 · 기존 정산 유지'
 const errorMessage = (error: unknown) =>
   error instanceof ApiError
     ? (error.detail ?? '요청을 처리하지 못했습니다. 다시 시도해 주세요.')
@@ -131,7 +131,7 @@ export function AdminMerchantsPage() {
             },
             { title: '가맹점 이름', dataIndex: 'displayName' },
             { title: '상태', dataIndex: 'status', render: statusTag },
-            { title: '수수료율(정산 미반영)', dataIndex: 'pgFeeRate', render: feeRatePercent },
+            { title: 'PG 수수료율', dataIndex: 'pgFeeRate', render: feeRatePercent },
           ]}
         />
       </Card>
