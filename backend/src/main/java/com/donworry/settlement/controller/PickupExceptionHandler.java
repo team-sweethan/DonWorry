@@ -8,7 +8,12 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice(
-        assignableTypes = {PickupController.class, OwnerSettlementController.class, OwnerCashFlowController.class})
+        assignableTypes = {
+            PickupController.class,
+            OwnerSettlementController.class,
+            OwnerCashFlowController.class,
+            OwnerRecurringExpenseController.class
+        })
 public class PickupExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<Object> problem(int status, String code, String detail) {
         var body = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detail);
