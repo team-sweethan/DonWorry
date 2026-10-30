@@ -86,7 +86,8 @@ class PaymentFdsDeliveryConcurrencyMariaDbTests {
                 "customer",
                 100L,
                 now.minusSeconds(1),
-                UUID.randomUUID()));
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals()));
         // JDBC Timestamp의 JVM 시간대 변환을 피하고 실제 저장된 UTC 입력을 복사한다.
         jdbc.update(
                 "INSERT INTO fds_evaluations (evaluation_request_id, payment_id, merchant_id, customer_ref, payment_requested_at, requested_amount, result, evaluated_at, error_code) SELECT ?, payment_id, merchant_id, customer_ref, created_at, amount, 'ERROR', UTC_TIMESTAMP(6), ? FROM payments WHERE payment_id = ?",
@@ -490,7 +491,13 @@ class PaymentFdsDeliveryConcurrencyMariaDbTests {
     void delivery_rejectsMissingRecovery() {
         doReturn(1L).when(access).requireStaff();
         var receipt = admission.admit(new PaymentRequestCommand(
-                9000000000273L, UUID.randomUUID().toString(), "customer", 100L, Instant.now(), UUID.randomUUID()));
+                9000000000273L,
+                UUID.randomUUID().toString(),
+                "customer",
+                100L,
+                Instant.now(),
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals()));
         assertThatThrownBy(() -> delivery.recover(receipt.paymentId()))
                 .isInstanceOfSatisfying(
                         PaymentFdsDeliveryNotAllowedException.class,

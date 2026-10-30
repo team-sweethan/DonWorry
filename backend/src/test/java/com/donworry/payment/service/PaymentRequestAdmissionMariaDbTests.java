@@ -54,12 +54,13 @@ class PaymentRequestAdmissionMariaDbTests {
                 "customer",
                 1000L,
                 Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     private PaymentRequestCommand key(PaymentRequestCommand c, UUID key) {
         return new PaymentRequestCommand(
-                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), key);
+                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), key, c.riskSignals());
     }
 
     private void conflict(PaymentRequestCommand c, PaymentRequestConflictException.Code code) {
@@ -112,7 +113,13 @@ class PaymentRequestAdmissionMariaDbTests {
         var c = command();
         admission.admit(c);
         var changed = new PaymentRequestCommand(
-                c.merchantId(), c.orderRef(), c.customerRef(), 2000L, c.orderCreatedAt(), c.idempotencyKey());
+                c.merchantId(),
+                c.orderRef(),
+                c.customerRef(),
+                2000L,
+                c.orderCreatedAt(),
+                c.idempotencyKey(),
+                c.riskSignals());
         conflict(changed, IDEMPOTENCY_KEY_CONFLICT);
         conflict(key(changed, UUID.randomUUID()), ORDER_CONTENT_CONFLICT);
         conflict(
@@ -122,7 +129,8 @@ class PaymentRequestAdmissionMariaDbTests {
                         c.customerRef(),
                         c.amount(),
                         c.orderCreatedAt(),
-                        c.idempotencyKey()),
+                        c.idempotencyKey(),
+                        c.riskSignals()),
                 IDEMPOTENCY_KEY_CONFLICT);
         assertThat(count(c)).isEqualTo(1);
     }
@@ -215,7 +223,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 c.customerRef(),
                 c.amount(),
                 Instant.now().minusSeconds(601),
-                c.idempotencyKey());
+                c.idempotencyKey(),
+                c.riskSignals());
         conflict(expired, ORDER_DEADLINE_PASSED);
         assertThat(orders.findByMerchantIdAndOrderRef(c.merchantId(), c.orderRef()))
                 .isEmpty();
@@ -233,7 +242,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 c.customerRef(),
                 c.amount(),
                 c.orderCreatedAt().minusSeconds(1200),
-                c.idempotencyKey());
+                c.idempotencyKey(),
+                c.riskSignals());
         assertThat(admission.admit(old).paymentId()).isEqualTo(first.paymentId());
         conflict(key(old, UUID.randomUUID()), ORDER_DEADLINE_PASSED);
     }
@@ -256,7 +266,13 @@ class PaymentRequestAdmissionMariaDbTests {
         var c = command();
         var first = admission.admit(c);
         var other = new PaymentRequestCommand(
-                992L, c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), c.idempotencyKey());
+                992L,
+                c.orderRef(),
+                c.customerRef(),
+                c.amount(),
+                c.orderCreatedAt(),
+                c.idempotencyKey(),
+                c.riskSignals());
         assertThat(admission.admit(other).paymentId()).isNotEqualTo(first.paymentId());
     }
 
@@ -337,7 +353,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 a.customerRef(),
                 a.amount(),
                 a.orderCreatedAt(),
-                a.idempotencyKey());
+                a.idempotencyKey(),
+                a.riskSignals());
         var results = race(a, b);
         assertThat(results).contains(IDEMPOTENCY_KEY_CONFLICT);
         assertThat(count(a) + count(b)).isEqualTo(1);

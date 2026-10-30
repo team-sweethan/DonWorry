@@ -68,7 +68,8 @@ class PaymentRequestFlowMariaDbTests {
                 UUID.randomUUID().toString(),
                 1000L,
                 Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     private FdsEvaluationResponse response(FdsEvaluationRequest r, FdsResult result) {

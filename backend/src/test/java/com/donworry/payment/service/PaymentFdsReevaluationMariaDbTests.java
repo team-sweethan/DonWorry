@@ -103,7 +103,7 @@ class PaymentFdsReevaluationMariaDbTests {
     }
 
     private long ready() {
-        return ready(PaymentRiskSignals.none());
+        return ready(PaymentEvaluationFixtures.riskSignals());
     }
 
     // 최초 P2 평가 행에도 P5가 보낸 식별자를 그대로 저장해, 보고 · 재평가 입력이 같은지 P2가 대조할 수 있게 한다.
