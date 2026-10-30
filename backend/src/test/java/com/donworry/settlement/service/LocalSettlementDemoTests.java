@@ -3,6 +3,8 @@ package com.donworry.settlement.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.settlement.entity.Capture;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -31,7 +33,7 @@ class LocalSettlementDemoTests {
         var row = jdbcTemplate.queryForMap("""
                 SELECT c.capture_id, c.status AS capture_status,
                        s.status AS settlement_status, s.gross_amount,
-                       s.card_fee_amount, s.pg_fee_amount, s.settlement_amount
+                       s.card_fee_amount, s.pg_fee_rate, s.pg_fee_amount, s.settlement_amount
                 FROM captures c
                 JOIN settlements s ON s.capture_id = c.capture_id
                 WHERE c.payment_id = ?
@@ -42,11 +44,19 @@ class LocalSettlementDemoTests {
         assertThat(row.get("settlement_status")).isEqualTo("SCHEDULED");
         assertThat(((Number) row.get("gross_amount")).longValue()).isEqualTo(10001L);
         assertThat(((Number) row.get("card_fee_amount")).longValue()).isEqualTo(200L);
-        assertThat(((Number) row.get("pg_fee_amount")).longValue()).isEqualTo(100L);
-        assertThat(((Number) row.get("settlement_amount")).longValue()).isEqualTo(9701L);
+        var expectedRate =
+                jdbcTemplate.queryForObject("SELECT pg_fee_rate FROM merchants WHERE merchant_id=1", BigDecimal.class);
+        long expectedPgFee = new BigDecimal("10001")
+                .multiply(expectedRate)
+                .setScale(0, RoundingMode.DOWN)
+                .longValueExact();
+        long expectedNet = 10001L - 200L - expectedPgFee;
+        assertThat((BigDecimal) row.get("pg_fee_rate")).isEqualByComparingTo(expectedRate);
+        assertThat(((Number) row.get("pg_fee_amount")).longValue()).isEqualTo(expectedPgFee);
+        assertThat(((Number) row.get("settlement_amount")).longValue()).isEqualTo(expectedNet);
 
         System.out.printf(
-                "LOCAL SETTLEMENT SAVED: paymentId=%d, orderId=%s, captureId=%d, net=9701%n",
-                paymentId, orderId, capture.getCaptureId());
+                "LOCAL SETTLEMENT SAVED: paymentId=%d, orderId=%s, captureId=%d, net=%d%n",
+                paymentId, orderId, capture.getCaptureId(), expectedNet);
     }
 }

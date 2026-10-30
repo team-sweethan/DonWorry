@@ -1,5 +1,6 @@
 package com.donworry.settlement.service;
 
+import com.donworry.identity.api.TenantReader;
 import com.donworry.settlement.entity.Capture;
 import com.donworry.settlement.entity.CaptureStatus;
 import com.donworry.settlement.entity.Settlement;
@@ -16,6 +17,7 @@ public class SettlementService {
 
     private final SettlementRepository settlementRepository;
     private final SettlementFeeCalculator feeCalculator;
+    private final TenantReader tenants;
 
     @Transactional
     public Settlement createSettlement(Capture capture) {
@@ -35,7 +37,10 @@ public class SettlementService {
             return existingSettlement;
         }
 
-        FeeResult fees = feeCalculator.calculate(capture.getCaptureAmount());
+        // 기존 정산에는 생성 당시의 요율을 보존하고, 신규 생성에만 현재 계약 요율을 적용한다.
+        var merchant = tenants.findById(capture.getMerchantId())
+                .orElseThrow(() -> new IllegalStateException("정산할 가맹점을 찾을 수 없습니다."));
+        FeeResult fees = feeCalculator.calculate(capture.getCaptureAmount(), merchant.pgFeeRate());
 
         Settlement settlement = Settlement.scheduled(
                 capture.getCaptureId(),

@@ -68,7 +68,9 @@ class CaptureRequestedIntegrationTests {
             var settlement = settlements.findByPaymentId(event.paymentId()).orElseThrow();
             assertThat(capture.getStatus()).isEqualTo(CaptureStatus.COMPLETED);
             assertThat(settlement.getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
-            assertThat(settlement.getSettlementAmount()).isEqualTo(9701L);
+            assertThat(settlement.getCardFeeRate()).isEqualByComparingTo("0.02");
+            assertThat(settlement.getPgFeeRate()).isEqualByComparingTo("0.02");
+            assertThat(settlement.getSettlementAmount()).isEqualTo(9601L);
             var completed = completions.received().stream()
                     .filter(result -> result.paymentId().equals(event.paymentId()))
                     .toList();
