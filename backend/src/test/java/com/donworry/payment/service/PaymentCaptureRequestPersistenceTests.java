@@ -98,7 +98,7 @@ class PaymentCaptureRequestPersistenceTests {
             return new MockPaymentAuthorizer().authorize(command);
         });
         String order = UUID.randomUUID().toString();
-        var input = new PaymentEvaluationFlowInput(999L, UUID.randomUUID().toString(), order, 150_000L);
+        var input = new PaymentEvaluationFlowInput(2L, UUID.randomUUID().toString(), order, 150_000L);
         if (rollback) {
             assertThatThrownBy(() -> flow.createAndAuthorize(input)).isSameAs(failure);
             assertThat(jdbc.queryForObject(
@@ -129,7 +129,7 @@ class PaymentCaptureRequestPersistenceTests {
                                 "SELECT COUNT(*) FROM captures WHERE payment_id = ? AND merchant_id = ? AND order_id = ? AND capture_amount = ? AND status = 'COMPLETED'",
                                 Long.class,
                                 id.get(),
-                                999L,
+                                2L,
                                 order,
                                 150_000L))
                         .isEqualTo(1);
@@ -157,7 +157,7 @@ class PaymentCaptureRequestPersistenceTests {
         when(authorizer.authorize(any()))
                 .thenAnswer(invocation -> new MockPaymentAuthorizer().authorize(invocation.getArgument(0)));
         var result = flow.createAndAuthorize(new PaymentEvaluationFlowInput(
-                999L, UUID.randomUUID().toString(), UUID.randomUUID().toString(), 150_000L));
+                2L, UUID.randomUUID().toString(), UUID.randomUUID().toString(), 150_000L));
         long id = result.paymentId();
         await().atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> assertThat(jdbc.queryForObject(

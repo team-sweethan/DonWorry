@@ -600,7 +600,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                         <Form.Item
                           name="feePercent"
                           label="수수료율"
-                          extra="등록 수수료율입니다. 현재 정산 계산은 1% 고정값을 사용합니다."
+                          extra="신규 정산에 등록 수수료율을 적용합니다. 기존 정산금은 유지됩니다."
                           rules={[
                             {
                               validator: (_, value: string) =>
