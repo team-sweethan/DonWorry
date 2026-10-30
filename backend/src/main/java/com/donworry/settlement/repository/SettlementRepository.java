@@ -1,6 +1,7 @@
 package com.donworry.settlement.repository;
 
 import com.donworry.settlement.entity.Settlement;
+import com.donworry.settlement.entity.SettlementStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -34,4 +35,41 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             """)
     List<SettlementCompletionCandidate> findCompletionCandidates(
             @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
+
+    @Query("""
+            SELECT COALESCE(SUM(s.settlementAmount), 0)
+            FROM Settlement s
+            WHERE s.merchantId = :merchantId AND s.status = :status
+            """)
+    Long sumAmountByMerchantIdAndStatus(@Param("merchantId") Long merchantId, @Param("status") SettlementStatus status);
+
+    @Query("""
+            SELECT s.settlementId AS settlementId, s.captureId AS captureId, s.paymentId AS paymentId,
+                   c.orderId AS orderId, s.grossAmount AS grossAmount, s.cardFeeAmount AS cardFeeAmount,
+                   s.pgFeeAmount AS pgFeeAmount, s.settlementAmount AS settlementAmount, s.status AS status,
+                   s.expectedSettlementAt AS expectedSettlementAt, s.scheduledAt AS scheduledAt, s.completedAt AS completedAt,
+                   f.scheduledFulfillmentAt AS scheduledPickupAt, f.fulfilledAt AS pickedUpAt
+            FROM Settlement s JOIN Capture c ON s.captureId = c.captureId
+            LEFT JOIN OrderFulfillment f ON f.orderId = c.orderId AND f.merchantId = s.merchantId
+            WHERE s.merchantId = :merchant
+              AND c.merchantId = :merchant
+              AND ((s.status = com.donworry.settlement.entity.SettlementStatus.COMPLETED
+                    AND s.completedAt >= :from AND s.completedAt < :until)
+                OR (s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+                    AND COALESCE(s.scheduledAt, s.expectedSettlementAt) >= :from
+                    AND COALESCE(s.scheduledAt, s.expectedSettlementAt) < :until))
+            ORDER BY s.settlementId
+            """)
+    List<SettlementReportProjection> findReport(
+            @Param("merchant") Long merchant,
+            @Param("from") Instant from,
+            @Param("until") Instant until,
+            Pageable pageable);
+
+    @Query("""
+            SELECT COALESCE(SUM(s.settlementAmount), 0) FROM Settlement s
+            WHERE s.merchantId = :merchant AND s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+            AND s.scheduledAt IS NULL AND s.expectedSettlementAt IS NULL
+            """)
+    Long sumUndated(@Param("merchant") Long merchant);
 }
