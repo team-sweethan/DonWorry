@@ -68,6 +68,16 @@ public class Settlement {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    // 완료 시각은 확정 가능 시각이 아니라 실제 처리 시각을 기록한다.
+    public void complete(Instant now) {
+        if (status == SettlementStatus.COMPLETED) return;
+        if (status != SettlementStatus.SCHEDULED || scheduledAt == null || now == null || now.isBefore(scheduledAt))
+            throw new IllegalStateException("정산 확정 가능 시각이 지나야 합니다.");
+        status = SettlementStatus.COMPLETED;
+        completedAt = now;
+        updatedAt = now;
+    }
+
     public void applyPickupSchedule(Instant expectedAt, Instant eligibleAt, Instant now) {
         if (java.util.Objects.equals(expectedSettlementAt, expectedAt)
                 && java.util.Objects.equals(scheduledAt, eligibleAt)) return;
