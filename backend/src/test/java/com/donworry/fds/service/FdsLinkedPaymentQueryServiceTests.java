@@ -146,6 +146,7 @@ class FdsLinkedPaymentQueryServiceTests {
         ReflectionTestUtils.setField(evaluation, "cardToken", cardToken);
         if (cardToken == null) ReflectionTestUtils.setField(evaluation, "cardDisplayLabel", null);
         ReflectionTestUtils.setField(evaluation, "deviceId", deviceId);
+        ReflectionTestUtils.setField(evaluation, "ipAddress", null);
         return evaluation;
     }
 }
