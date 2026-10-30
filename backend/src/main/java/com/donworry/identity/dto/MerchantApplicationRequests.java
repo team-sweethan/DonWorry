@@ -1,6 +1,9 @@
 package com.donworry.identity.dto;
 
 import jakarta.validation.constraints.*;
+import java.net.IDN;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Locale;
 import lombok.Builder;
 
@@ -36,11 +39,19 @@ public final class MerchantApplicationRequests {
         public boolean isShopUrlValid() {
             if (shopUrl == null || shopUrl.isBlank()) return true;
             try {
-                var uri = new java.net.URI(shopUrl);
-                return ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
-                        && uri.getHost() != null
-                        && uri.getRawUserInfo() == null;
-            } catch (java.net.URISyntaxException e) {
+                var uri = new URI(shopUrl);
+                String authority = uri.getRawAuthority();
+                if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                        || authority == null
+                        || authority.contains("@")) return false;
+                if (uri.getHost() != null) return true;
+                // URI는 국제화 호스트를 getHost()로 반환하지 않는다. 검증할 때만 ASCII로 바꾼다.
+                int separator = authority.lastIndexOf(':');
+                String host = separator < 0 ? authority : authority.substring(0, separator);
+                String port = separator < 0 ? "" : authority.substring(separator);
+                String asciiHost = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES);
+                return new URI(uri.getScheme() + "://" + asciiHost + port).getHost() != null;
+            } catch (URISyntaxException | IllegalArgumentException e) {
                 return false;
             }
         }

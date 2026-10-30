@@ -175,3 +175,14 @@ test('applicationConfig_whenDisabledOrUnauthorized_usesPublicRead', async () => 
     off()
   }
 })
+
+// 브라우저 URL 검증과 달리 전송 payload는 국제화 도메인·경로 원문을 변환하지 않는다.
+test('application_whenInternationalDomainSubmitted_preservesOriginalUrl', async () => {
+  const url = 'https://쇼핑몰.한국:8443/Products?item=ABC'
+  globalThis.fetch = async (_path, init) => {
+    const payload = JSON.parse(String(init?.body)) as Record<string, unknown>
+    assert.equal(payload.shopUrl, url)
+    return Response.json({ mailStatus: 'SENT' })
+  }
+  await submitApplication({ ...input, shopUrl: ' ' + url + ' ' })
+})

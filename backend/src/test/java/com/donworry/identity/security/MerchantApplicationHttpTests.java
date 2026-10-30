@@ -199,6 +199,21 @@ class MerchantApplicationHttpTests {
                         "SELECT COUNT(*) FROM merchants WHERE business_registration_number IS NOT NULL", Integer.class))
                 .isZero();
     }
+    // 한글 도메인은 실제 신청 POST에서도 통과하고 표시용 원문을 그대로 보관한다.
+    @Test
+    void submit_whenInternationalDomain_persistsOriginalUrl() throws Exception {
+        String url = "https://쇼핑몰.한국:8443/Products?item=ABC";
+        var response = send(
+                "POST",
+                PATH,
+                body("idn@example.com", "3540000002")
+                        .replace(" https://shop.example.com/Products?item=ABC ", " " + url + " "),
+                true);
+        assertThat(response.statusCode()).isEqualTo(201);
+        assertThat(applications.findAll().getFirst().getShopUrl()).isEqualTo(url);
+        verify(mail).sendVerification(eq("idn@example.com"), anyString());
+    }
+
     // 동의·필수값·오래된 동의 문구·잘못된 번호를 로그인 오류 없이 거절한다.
     @Test
     void submit_whenInvalid_rejectsBeforeSaving() throws Exception {
@@ -228,6 +243,8 @@ class MerchantApplicationHttpTests {
                 "javascript:alert(1)",
                 "ftp://shop.example.com",
                 "https://user:pass@shop.example.com",
+                "https://user:pass@쇼핑몰.한국",
+                "https://@쇼핑몰.한국",
                 "https:///shop",
                 "https://shop.example.com/" + "a".repeat(2048))) {
             var response = send("POST", PATH, body.replace(valid, value), true);

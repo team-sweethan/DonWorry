@@ -16,7 +16,7 @@
 
 ## 주소 계약
 
-- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 서버가 주소에 접속하지 않는다.
+- 기존 공개 신청 POST에 `shopUrl` 추가: 신규 신청 필수, trim 후 최대 2048자, 호스트가 있는 HTTP(S) 절대 URI, user-info 불가. 국제화 도메인은 검증할 때만 IDN.toASCII로 변환하며 입력 원문을 저장·표시한다. 서버가 주소에 접속하지 않는다.
 - 주소의 경로·쿼리 대소문자를 바꾸지 않는다. 신청 검토 자료로만 사용하고 연동 주소·webhook_url로 복사하지 않는다.
 - `merchant_applications.shop_url VARCHAR(2048) NULL` 하나를 새 migration으로 추가한다. P1 소유이며 다른 담당 테이블·FK 변경이 없다.
 - 관리자 상세 GET에 nullable `shopUrl`을 추가한다. 목록에는 추가하지 않는다. HTTP(S) 검증을 통과하는 주소만 새 탭 링크로 보여주며 `noopener noreferrer`를 사용한다.
@@ -52,3 +52,17 @@ Notion 최신 대조·동기화와 운영 배포는 미수행이다. 이번 합�
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 
 미검증: 브라우저 실제 접수부터 관리자 상세·승인까지의 전체 흐름, 모바일·키보드 전체 검증, Gmail 실제 수신, Notion 최신 대조·동기화, 운영 배포, 원격 CI. 주소 저장·관리자 상세·승인·메일은 MariaDB HTTP/SMTP 테스트 결과로만 검증하며 브라우저 완료로 표현하지 않는다. 승인 신청의 이용 종료·백업 폐기 기준은 기존 미정 사항이다. 다른 담당 Java API·테이블 계약 변경은 없다.
+
+## 리뷰 후 국제화 도메인 검증 보완 (2026-10-30)
+
+[리뷰 지적](https://github.com/team-sweethan/DonWorry/pull/358#discussion_r4419766286)을 `bf4b712` 위 회귀 테스트로 재현했다. 브라우저에서는 허용하던 한글 도메인 2건이 서버 URI.getHost()에서 거절되어 신규 단위 테스트 13건 중 2건이 실패했다.
+
+서버는 user-info를 원문 authority에서 먼저 거절하고, URI.getHost()가 해석하지 못하는 국제화 호스트를 검증할 때만 IDN.toASCII(USE_STD3_ASCII_RULES)로 변환해 URI 호스트를 검사한다. 포트는 호스트와 분리하여 보존한다. 입력·DB 저장·표시·전송의 주소 원문과 경로·쿼리는 바꾸지 않는다. 스키마와 계정 생성 정책 변경은 없다.
+
+`bf4b712` 위 최종 보완 작업 트리에서 다음을 실행했고 이후 구현·테스트는 변경하지 않고 이 기록만 보완했다.
+
+- backend `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL (3분 34초). 일반 725개 중 724 통과·기존 1개 skip, MariaDB 559개 모두 통과, 실패·오류 0. 단위 테스트 13건과 실제 한글 도메인 신청 POST·DB 원문 보존, 한글 호스트에 user-info가 있는 요청 거절을 포함한다.
+- frontend `npm run lint`, `npm run format:check`, `npm test`, `npm run build`: 통과, 테스트 236개. 국제화 도메인·포트·경로 입력 허용, user-info 거절과 신청 payload 원문 보존을 검사했다. 기존 lint·번들 경고 유지.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+
+미검증: 이번 보완 뒤 브라우저 재실행, 운영 배포, Notion 최신 대조·동기화, 보완 커밋의 원격 CI. 앞의 브라우저 전체 접수→승인·모바일·키보드·Gmail 미검증 범위도 유지한다. 다른 담당 계약 변경이나 새 사람 결정 사항은 없다.
