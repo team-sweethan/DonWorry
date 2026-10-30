@@ -259,6 +259,8 @@ class MerchantApplicationHttpTests {
                 "https://user:pass@shop.example.com",
                 "https://exa_mple.com",
                 "https://example.com:99999",
+                "https://example.com/products/[123]",
+                "https://[::1]/products/[123]",
                 "https://ẞ.de:99999",
                 "https://[::1]:99999",
                 "https://[fe80::1%25eth0]/shop",

@@ -18,6 +18,7 @@ export function isShopUrlValid(value: string): boolean {
     const match = /^https?:\/\/([^/?#]+)/i.exec(trimmed)
     const authority = match?.[1]
     if (!match || !authority || /[@%]/.test(authority)) return false
+    if (!hasValidUriComponents(trimmed.slice(match[0].length))) return false
     let addressToValidate = trimmed
     if (!authority.startsWith('[')) {
       const separator = authority.lastIndexOf(':')
@@ -49,6 +50,30 @@ export function isShopUrlValid(value: string): boolean {
   } catch {
     return false
   }
+}
+
+// Java URI의 path와 query/fragment는 허용 문자가 다르다. IPv6 authority와 분리해 검사한다.
+function hasValidUriComponents(suffix: string): boolean {
+  const hash = suffix.indexOf('#')
+  const beforeFragment = hash < 0 ? suffix : suffix.slice(0, hash)
+  const fragment = hash < 0 ? '' : suffix.slice(hash + 1)
+  const question = beforeFragment.indexOf('?')
+  const path = question < 0 ? beforeFragment : beforeFragment.slice(0, question)
+  const query = question < 0 ? '' : beforeFragment.slice(question + 1)
+  return (
+    hasValidUriCharacters(path, false) &&
+    hasValidUriCharacters(query, true) &&
+    hasValidUriCharacters(fragment, true)
+  )
+}
+
+function hasValidUriCharacters(component: string, allowQueryCharacters: boolean): boolean {
+  return [...component].every(
+    (char) =>
+      char.charCodeAt(0) >= 128 ||
+      /^[a-z0-9._~!$&'()*+,;=:@/%-]$/i.test(char) ||
+      (allowQueryCharacters && '[]?'.includes(char)),
+  )
 }
 
 function hasValidIpv4Notation(host: string): boolean {

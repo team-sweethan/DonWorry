@@ -125,3 +125,19 @@ Notion 최신 대조·동기화와 운영 배포는 미수행이다. 이번 합�
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 
 미검증: 최종 보완 뒤 브라우저 재실행·전체 MariaDB 로컬 재실행·원격 CI·운영 배포·Notion 최신 대조·동기화. 앞의 전체 브라우저 접수→승인·모바일·키보드·Gmail 미검증도 유지한다. 다른 담당 API·이벤트·DB·서비스 설정 변경은 없다.
+
+## URI 경로 대괄호 리뷰 보완 (2026-10-30)
+
+[리뷰](https://github.com/team-sweethan/DonWorry/pull/358#discussion_r4420212311)의 `https://example.com/products/[123]` 화면 통과·서버 거절을 재현했다. 앞선 금지 문자 나열에 경로와 쿼리·fragment의 문법 차이가 빠져 있었다.
+
+프론트에서 authority 뒤를 path·query·fragment로 분리하고 Java 21 URI의 각 구성요소가 허용하는 ASCII 문자 집합을 검사한다. 경로의 원시 대괄호는 거절하며 인코딩한 `%5B123%5D`는 허용한다. 쿼리의 `filter[status]`·fragment의 `[section]`·IPv6 호스트는 유지한다. fragment의 추가 `#`도 거절한다. 호스트·포트·국제화 도메인 처리와 DB 저장 원문은 바꾸지 않는다.
+
+공통 사례는 75개에서 367개로 늘렸다. 명시적 회귀 사례 7개와 출력 가능한 ASCII 95개 × 경로·쿼리·fragment 3개 위치의 285개 사례를 추가했다. 기대값은 Java 21의 문법에서 정했고 서버 자체의 현재 반환값에서 생성하지 않았다. Java와 프론트가 같은 파일을 읽어 모두 검사한다. [사례 근거](../../backend/src/test/resources/identity/README.md)를 참고한다.
+
+`763c058` 위 최종 보완 작업 트리에서 실행했고 이후 구현·테스트는 변경하지 않고 문서만 보완했다.
+
+- backend `./gradlew spotlessApply check mariaDbTest --tests com.donworry.identity.security.MerchantApplicationHttpTests --console=plain`: BUILD SUCCESSFUL (41초), 일반 1100개 중 1099 통과·기존 1개 skip, 신청 HTTP MariaDB 21개 모두 통과, 실패·오류 0. 실제 원시 대괄호 경로 POST 거절 포함. backend 구현·스키마 변경은 없다.
+- frontend lint·format:check·test·build 통과. Node 24 전체 테스트 238개와 Node 22 전체 테스트 238개 통과. 같은 공통 사례 367개를 포함한다.
+- 문서 링크·`git diff --check`: 통과.
+
+미검증: 이번 보완 뒤 브라우저 재실행·전체 MariaDB 로컬 재실행·최신 커밋 원격 CI·운영 배포·Notion 최신 대조·동기화. 기존 전체 접수→승인·모바일·키보드·Gmail 미검증도 유지한다. 다른 담당 API·이벤트·DB·서비스 설정 변경과 새 사람 결정 사항은 없다.
