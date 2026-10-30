@@ -57,9 +57,9 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
 - 같은 주문의 customerRef·amount·orderCreatedAt은 모든 시도에서 동일하다. 금액 변경은 새 주문번호를 사용한다는 제한을 P1과 확인한다.
 - 주문이 여전히 결제 대기이고 재고·쿠폰을 확보했는지는 CakeShop 책임이다. P5는 외부 주문 DB를 확인했다고 주장하지 않는다.
 
-#### FDS 식별자 (선택, #325)
+#### FDS 식별자 (필수, #325)
 
-[#305](https://github.com/team-sweethan/DonWorry/pull/305)에서 P2 평가 계약이 받게 된 식별자를 가맹점 요청에서 받아 P2로 전달한다. 모두 선택값이다. 보내지 않으면 해당 룰(R02 신규 단말기 · R03 신규 카드 · R05 고위험 국가 IP · R06 카드 테스팅 · R07 차단 목록의 해당 식별자)만 적중하지 않고 나머지는 그대로 동작한다.
+[#305](https://github.com/team-sweethan/DonWorry/pull/305)에서 P2 평가 계약이 받게 된 식별자를 가맹점 요청에서 받아 P2로 전달한다. 신규 정상 결제 요청은 여섯 값을 모두 보내야 하며, 하나라도 없으면 P5는 `400 INVALID_REQUEST`로 거절한다. 이 계약으로 P2는 R02~R08과 차단 목록에 필요한 입력을 항상 받은 상태에서 평가한다.
 
 ```json
 {
@@ -85,7 +85,7 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
 | ipAddress | 45 | IPv4 · IPv6 리터럴. 호스트 이름은 400 |
 | buyerEmail | 254 | `@`가 있는 형식, 소문자로 저장 |
 
-- 모든 값은 양끝 공백이 없어야 한다. 길이 · 정규화는 P2 `FdsEvaluationRequest`와 같다.
+- 모든 값은 양끝 공백이 없어야 한다. 길이 · 정규화는 P2 `FdsEvaluationRequest`와 같다. 과거 결제 이력의 비어 있는 값은 신규 요청의 예외가 아니라 이력 호환을 위한 저장 상태다.
 - 값은 결제 시도(`payment_requests`) 단위로 저장한다. 같은 주문의 새 시도는 다른 카드 · 기기를 쓸 수 있다.
 - 최초 평가 · 평가 오류 보고 · 재평가 모두 이 저장값을 그대로 보낸다.
 - 같은 Idempotency-Key 재전송은 식별자까지 처음 요청과 같아야 한다. 다르면 409 `IDEMPOTENCY_KEY_CONFLICT`다.

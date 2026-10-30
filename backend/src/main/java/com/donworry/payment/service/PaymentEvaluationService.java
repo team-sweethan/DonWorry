@@ -41,14 +41,20 @@ public class PaymentEvaluationService {
     public PaymentObservedEvaluation evaluateObserved(PaymentEvaluationInput input) {
         var request = request(input);
         var requestedAt = java.time.Instant.now();
-        var response = fdsEvaluator.evaluate(request);
+        var response = evaluateStoredSnapshot(input, request);
         var respondedAt = java.time.Instant.now();
         decide(PaymentRules.State.pending(), input, response);
         return new PaymentObservedEvaluation(response, requestedAt, respondedAt);
     }
 
     public FdsEvaluationResponse evaluate(PaymentEvaluationInput input) {
-        return fdsEvaluator.evaluate(request(input));
+        return evaluateStoredSnapshot(input, request(input));
+    }
+
+    private FdsEvaluationResponse evaluateStoredSnapshot(PaymentEvaluationInput input, FdsEvaluationRequest request) {
+        return input.riskSignals().isComplete()
+                ? fdsEvaluator.evaluate(request)
+                : fdsEvaluator.evaluateHistoricalSnapshot(request);
     }
 
     private FdsEvaluationRequest request(PaymentEvaluationInput input) {

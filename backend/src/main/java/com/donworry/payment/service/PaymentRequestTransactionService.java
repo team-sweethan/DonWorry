@@ -34,6 +34,7 @@ public class PaymentRequestTransactionService {
         // 같은 주문의 선행 접수가 커밋되는 동안 기다렸다면 그 키를 다시 확인한다.
         existing = requests.findByMerchantIdAndIdempotencyKey(command.merchantId(), command.idempotencyKey());
         if (existing.isPresent()) return replay(command, existing.get());
+        if (!command.riskSignals().isComplete()) throw new PaymentRiskSignalsRequiredException();
         if (!matches(order, command)) throw new PaymentRequestConflictException(ORDER_CONTENT_CONFLICT);
         if (payments.countUntrackedByMerchantIdAndOrderRef(command.merchantId(), command.orderRef()) > 0)
             throw new PaymentRequestConflictException(LEGACY_ORDER_EXISTS);

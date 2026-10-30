@@ -49,61 +49,6 @@ public record FdsReevaluationRequest(
         buyerEmail = evaluationRequest.buyerEmail();
     }
 
-    public FdsReevaluationRequest(
-            UUID originalEvaluationRequestId,
-            UUID newEvaluationRequestId,
-            Long paymentId,
-            Long merchantId,
-            String customerRef,
-            long amount,
-            Instant paymentRequestedAt,
-            String deviceId,
-            String cardToken,
-            String ipCountryCode,
-            UUID retryId) {
-        this(
-                originalEvaluationRequestId,
-                newEvaluationRequestId,
-                paymentId,
-                merchantId,
-                customerRef,
-                amount,
-                paymentRequestedAt,
-                deviceId,
-                cardToken,
-                null,
-                ipCountryCode,
-                null,
-                null,
-                retryId);
-    }
-
-    public FdsReevaluationRequest(
-            UUID originalEvaluationRequestId,
-            UUID newEvaluationRequestId,
-            Long paymentId,
-            Long merchantId,
-            String customerRef,
-            long amount,
-            Instant paymentRequestedAt,
-            UUID retryId) {
-        this(
-                originalEvaluationRequestId,
-                newEvaluationRequestId,
-                paymentId,
-                merchantId,
-                customerRef,
-                amount,
-                paymentRequestedAt,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                retryId);
-    }
-
     public FdsEvaluationRequest evaluationRequest() {
         return new FdsEvaluationRequest(
                 newEvaluationRequestId,

@@ -45,12 +45,19 @@ class MerchantPaymentQueryMariaDbTests {
                 "customer",
                 12345L,
                 Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     private PaymentRequestCommand newKey(PaymentRequestCommand c) {
         return new PaymentRequestCommand(
-                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), UUID.randomUUID());
+                c.merchantId(),
+                c.orderRef(),
+                c.customerRef(),
+                c.amount(),
+                c.orderCreatedAt(),
+                UUID.randomUUID(),
+                c.riskSignals());
     }
 
     private void deny(long id) {

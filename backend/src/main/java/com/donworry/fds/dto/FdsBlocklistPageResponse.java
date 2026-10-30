@@ -10,7 +10,9 @@ public record FdsBlocklistPageResponse(List<Item> content, int page, int size, l
             String identifierValue,
             String displayLabel,
             String reason,
+            String deactivationReason,
             boolean active,
             Instant createdAt,
+            Instant deactivatedAt,
             Instant expiresAt) {}
 }

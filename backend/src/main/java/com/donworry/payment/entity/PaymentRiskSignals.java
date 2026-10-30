@@ -52,6 +52,15 @@ public record PaymentRiskSignals(
         return signals == null ? NONE : signals;
     }
 
+    public boolean isComplete() {
+        return deviceId != null
+                && cardToken != null
+                && cardDisplayLabel != null
+                && ipCountryCode != null
+                && ipAddress != null
+                && buyerEmail != null;
+    }
+
     private static String optional(String value, int maxLength) {
         if (value == null) return null;
         if (value.isBlank() || !value.equals(value.strip()) || value.codePointCount(0, value.length()) > maxLength)

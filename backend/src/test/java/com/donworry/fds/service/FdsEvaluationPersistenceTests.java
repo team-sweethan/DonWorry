@@ -81,6 +81,18 @@ class FdsEvaluationPersistenceTests {
     }
 
     private FdsEvaluationRequest request(Long paymentId, String orderRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", amount, requestedAt);
+        return new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                "hong-gildong",
+                amount,
+                requestedAt,
+                "device-test-1",
+                "card-token-test-1",
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
     }
 }

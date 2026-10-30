@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.donworry.fds.dto.CreateFdsBlocklistEntryRequest;
+import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.repository.FdsBlocklistEntryRepository;
 import com.donworry.identity.api.CurrentStaff;
@@ -15,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
@@ -86,16 +89,18 @@ class FdsBlocklistServiceTests {
         when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
         when(entries.findById(11L)).thenReturn(Optional.of(entry));
 
-        service().deactivate(11L);
+        service().deactivate(11L, "오탐으로 확인");
 
         assertThat(entry.isActive()).isFalse();
+        assertThat(entry.getDeactivationReason()).isEqualTo("오탐으로 확인");
+        assertThat(entry.getDeactivatedAt()).isNotNull();
     }
 
     @Test
     // 해제된 식별값은 새 사유로 다시 차단할 수 있다.
     void add_whenExistingEntryIsInactive_reactivatesEntry() {
         var entry = FdsBlocklistEntry.active("IP_ADDRESS", "203.0.113.10", "초기 사유", java.time.Instant.now());
-        entry.deactivate();
+        entry.deactivate("초기 해제", java.time.Instant.now());
         when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
         when(entries.findByIdentifierTypeAndIdentifierValue("IP_ADDRESS", "203.0.113.10"))
                 .thenReturn(java.util.List.of(entry));
@@ -106,6 +111,8 @@ class FdsBlocklistServiceTests {
 
         assertThat(entry.isActive()).isTrue();
         assertThat(entry.getReason()).isEqualTo("재차단 사유");
+        assertThat(entry.getDeactivationReason()).isNull();
+        assertThat(entry.getDeactivatedAt()).isNull();
         verify(entries, never()).save(any());
     }
 
@@ -126,6 +133,23 @@ class FdsBlocklistServiceTests {
         assertThat(entry.isActiveAt(java.time.Instant.now())).isTrue();
         assertThat(entry.getExpiresAt()).isNull();
         verify(entries, never()).save(any());
+    }
+
+    @Test
+    // 목록은 활성 상태와 검색어를 DB 페이지 조회에 함께 전달한다.
+    void list_whenActiveWithSearch_returnsMatchingPage() {
+        var entry = FdsBlocklistEntry.active("DEVICE_ID", "device-1", "사기 결제 확인", java.time.Instant.now());
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
+        when(entries.findActiveAtWithSearch(any(), eq("device"), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(entry), PageRequest.of(0, 10), 1));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, " device ");
+
+        assertThat(result.content()).singleElement().satisfies(item -> {
+            assertThat(item.identifierType()).isEqualTo("DEVICE_ID");
+            assertThat(item.identifierValue()).isEqualTo("device-1");
+        });
+        verify(entries, never()).findInactiveAtWithSearch(any(), any(), any());
     }
 
     private FdsBlocklistService service() {

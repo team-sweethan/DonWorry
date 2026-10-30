@@ -14,7 +14,7 @@ class FdsEvaluationContractTests {
     void request_whenRequiredFieldsPresent_createsRequest() {
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), 101L, 1L, "hong-gildong", 150_000L, requestedAt);
+        var request = request(UUID.randomUUID(), 101L, 1L, "hong-gildong", 150_000L, requestedAt);
 
         assertThat(request.merchantId()).isEqualTo(1L);
         assertThat(request.customerRef()).isEqualTo("hong-gildong");
@@ -50,18 +50,97 @@ class FdsEvaluationContractTests {
         var requestId = UUID.randomUUID();
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        assertThatThrownBy(() -> new FdsEvaluationRequest(null, 101L, 1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(null, 101L, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, null, 1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, null, 1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, null, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, null, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, 0L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, 0L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, -1L, "hong-gildong", 150_000L, requestedAt))
+        assertThatThrownBy(() -> request(requestId, 101L, -1L, "hong-gildong", 150_000L, requestedAt))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new FdsEvaluationRequest(requestId, 101L, 1L, "hong-gildong", 150_000L, null))
+        assertThatThrownBy(() -> request(requestId, 101L, 1L, "hong-gildong", 150_000L, null))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 신규 평가에는 룰 탐지와 보고서에 필요한 위험 신호 6개가 모두 있어야 한다.
+    @Test
+    void request_whenRiskSignalIsMissing_requiresItOnlyForNewEvaluation() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                requestedAt,
+                null,
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
+
+        assertThatThrownBy(request::requireRiskSignals).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 마이그레이션 이전 ERROR 결제의 저장 스냅샷은 누락된 위험 신호를 그대로 보고·재평가한다.
+    @Test
+    void historicalRequests_whenRiskSignalsAreMissing_preserveNullSnapshot() {
+        var originalRequestId = UUID.randomUUID();
+        var paymentRequestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var report = FdsEvaluationFailureReport.builder()
+                .failureReportId(UUID.randomUUID())
+                .originalEvaluationRequestId(originalRequestId)
+                .evaluationRequestId(originalRequestId)
+                .evaluationId(1L)
+                .paymentId(101L)
+                .merchantId(1L)
+                .customerRef("legacy-customer")
+                .amount(150_000L)
+                .paymentRequestedAt(paymentRequestedAt)
+                .evaluationResult(FdsResult.ERROR)
+                .errorCode("TRANSIENT_MODEL_UNAVAILABLE")
+                .requestedAt(paymentRequestedAt)
+                .respondedAt(paymentRequestedAt.plusSeconds(1))
+                .paymentStatus("PENDING")
+                .processingStage("NEEDS_REVIEW")
+                .requestId(1L)
+                .idempotencyKey(UUID.randomUUID())
+                .evaluationAttemptNo(1)
+                .build();
+        var reevaluation = FdsReevaluationRequest.builder()
+                .originalEvaluationRequestId(originalRequestId)
+                .newEvaluationRequestId(UUID.randomUUID())
+                .paymentId(101L)
+                .merchantId(1L)
+                .customerRef("legacy-customer")
+                .amount(150_000L)
+                .paymentRequestedAt(paymentRequestedAt)
+                .retryId(UUID.randomUUID())
+                .build();
+
+        assertThat(report.deviceId()).isNull();
+        assertThat(reevaluation.evaluationRequest().buyerEmail()).isNull();
+    }
+
+    private FdsEvaluationRequest request(
+            UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
+        return new FdsEvaluationRequest(
+                requestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-opaque-1",
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
     }
 
     // ERROR는 점수 대신 실패 코드를 반환해 P5가 정상 판정과 구분한다.

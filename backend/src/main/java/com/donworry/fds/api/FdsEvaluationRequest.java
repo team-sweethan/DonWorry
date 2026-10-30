@@ -19,53 +19,6 @@ public record FdsEvaluationRequest(
         String ipAddress,
         String buyerEmail) {
 
-    public FdsEvaluationRequest(
-            UUID evaluationRequestId,
-            Long paymentId,
-            Long merchantId,
-            String customerRef,
-            long amount,
-            Instant paymentRequestedAt,
-            String deviceId,
-            String cardToken,
-            String ipCountryCode) {
-        this(
-                evaluationRequestId,
-                paymentId,
-                merchantId,
-                customerRef,
-                amount,
-                paymentRequestedAt,
-                deviceId,
-                cardToken,
-                null,
-                ipCountryCode,
-                null,
-                null);
-    }
-
-    public FdsEvaluationRequest(
-            UUID evaluationRequestId,
-            Long paymentId,
-            Long merchantId,
-            String customerRef,
-            long amount,
-            Instant paymentRequestedAt) {
-        this(
-                evaluationRequestId,
-                paymentId,
-                merchantId,
-                customerRef,
-                amount,
-                paymentRequestedAt,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
-    }
-
     public FdsEvaluationRequest {
         if (evaluationRequestId == null) {
             throw new IllegalArgumentException("evaluationRequestId must not be null");
@@ -91,17 +44,24 @@ public record FdsEvaluationRequest(
         deviceId = optionalIdentifier(deviceId, "deviceId", 100);
         cardToken = optionalIdentifier(cardToken, "cardToken", 255);
         cardDisplayLabel = optionalIdentifier(cardDisplayLabel, "cardDisplayLabel", 50);
-        if (ipCountryCode != null) {
-            ipCountryCode = ipCountryCode.strip().toUpperCase(java.util.Locale.ROOT);
-            if (!ipCountryCode.matches("[A-Z]{2}")) {
-                throw new IllegalArgumentException("ipCountryCode must be an ISO alpha-2 code");
-            }
+        ipCountryCode = optionalIdentifier(ipCountryCode, "ipCountryCode", 2);
+        if (ipCountryCode != null) ipCountryCode = ipCountryCode.toUpperCase(java.util.Locale.ROOT);
+        if (ipCountryCode != null && !ipCountryCode.matches("[A-Z]{2}")) {
+            throw new IllegalArgumentException("ipCountryCode must be an ISO alpha-2 code");
         }
         ipAddress = optionalIdentifier(ipAddress, "ipAddress", 45);
         buyerEmail = optionalIdentifier(buyerEmail, "buyerEmail", 254);
-        if (buyerEmail != null) {
-            buyerEmail = buyerEmail.toLowerCase(java.util.Locale.ROOT);
-        }
+        if (buyerEmail != null) buyerEmail = buyerEmail.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    public FdsEvaluationRequest requireRiskSignals() {
+        required(deviceId, "deviceId");
+        required(cardToken, "cardToken");
+        required(cardDisplayLabel, "cardDisplayLabel");
+        required(ipCountryCode, "ipCountryCode");
+        required(ipAddress, "ipAddress");
+        required(buyerEmail, "buyerEmail");
+        return this;
     }
 
     private static String optionalIdentifier(String value, String name, int maxLength) {
@@ -110,5 +70,9 @@ public record FdsEvaluationRequest(
             throw new IllegalArgumentException(name + " must be a trimmed identifier");
         }
         return value;
+    }
+
+    private static void required(String value, String name) {
+        if (value == null) throw new IllegalArgumentException(name + " must not be null");
     }
 }

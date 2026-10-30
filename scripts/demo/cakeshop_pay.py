@@ -3,8 +3,7 @@
 # 필요: Spring payment.http.enabled=true, Spring과 같은 DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수
 # 실행: 저장소 맨 위에서 py scripts/demo/cakeshop_pay.py (macOS · Linux: python3)
 # 같은 손님으로 다시: py scripts/demo/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
-# 카드 · 기기도 보내기: --signals (손님마다 고정된 가짜 카드 · 기기), IP까지: --ip 203.0.113.5 --country US (#346)
-#   카드 · 기기를 보내면 FDS 규칙(새 기기 · 처음 쓰는 카드)이 걸려 몇 번째 결제가 보류될지 달라질 수 있다
+# 위험 신호 6개는 기본으로 가짜 값을 보낸다. IP · 국가 · 이메일 변경: --ip 203.0.113.5 --country US --email buyer@example.test (#346)
 # 손님이 달라도 같은 카드: --card A (#352) — 두 번 실행하면 두 번째 사건 보고서의 "같은 카드"에 앞 손님 결제가 잡힌다
 import argparse
 import base64
@@ -79,20 +78,17 @@ def send(key: bytes, method: str, target: str, body: bytes = b"", idempotency_ke
 
 # 가맹점이 보내는 FDS 식별자 (#325) — 카드는 원문이 아니라 토큰 · 마스킹 표시값만. 시연용 가짜 값이다
 def signals(customer_ref: str, args: argparse.Namespace) -> dict:
-    found = {}
-    if args.signals:
-        found.update(
-            cardToken=f"tok_demo_{customer_ref}",
-            cardDisplayLabel=f"데모카드 ****{customer_ref[-4:]}",
-            deviceId=f"device-demo-{customer_ref[-6:]}",
-        )
-    # 이름이 같으면 손님이 달라도 같은 카드 토큰 — --signals의 손님별 카드보다 우선한다
+    found = {
+        "cardToken": f"tok_demo_{customer_ref}",
+        "cardDisplayLabel": f"데모카드 ****{customer_ref[-4:]}",
+        "deviceId": f"device-demo-{customer_ref[-6:]}",
+        "ipAddress": args.ip or "203.0.113.5",
+        "ipCountryCode": args.country or "KR",
+        "buyerEmail": args.email or f"demo-{customer_ref}@example.test",
+    }
+    # 이름이 같으면 손님이 달라도 같은 카드 토큰 — 손님별 기본 카드보다 우선한다
     if args.card:
         found.update(cardToken=f"tok_demo_shared_{args.card}", cardDisplayLabel=f"데모 공유카드 {args.card}"[:50])
-    if args.ip:
-        found["ipAddress"] = args.ip
-    if args.country:
-        found["ipCountryCode"] = args.country
     return found
 
 
@@ -118,10 +114,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="돈워리 로컬 시연 결제")
     # 손님 번호를 주면 그 손님으로 결제한다. 없으면 매번 새 손님
     parser.add_argument("customer", nargs="?", help="손님 번호 (같은 손님으로 다시 결제할 때)")
-    parser.add_argument("--signals", action="store_true", help="손님마다 고정된 가짜 카드 · 기기를 함께 보냄")
+    parser.add_argument("--signals", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--card", help="손님이 달라도 같은 카드로 보낼 이름 (예: A)")
     parser.add_argument("--ip", help="구매자 접속 IP (예: 203.0.113.5)")
     parser.add_argument("--country", help="접속 국가 코드 2자리 (예: US, KR)")
+    parser.add_argument("--email", help="구매자 이메일 (기본: 손님 번호 기반 example.test 주소)")
     args = parser.parse_args()
     key = load_key()
     customer_ref = args.customer or str(random.randint(10**11, 10**12 - 1))

@@ -63,6 +63,27 @@ class FdsEvaluationServiceTests {
         evaluator = new FdsEvaluationService(evaluationRepository, transactionService);
     }
 
+    // 공개 신규 평가 경계는 과거 스냅샷과 달리 위험 신호 6개를 계속 필수로 받는다.
+    @Test
+    void evaluate_whenRiskSignalIsMissing_rejectsBeforeTransaction() {
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                Instant.parse("2026-10-22T01:00:00Z"),
+                null,
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
+
+        assertThatThrownBy(() -> evaluator.evaluate(request)).isInstanceOf(IllegalArgumentException.class);
+        org.mockito.Mockito.verifyNoInteractions(transactionService);
+    }
+
     @Test
     // 세 번째 단시간 결제와 고액 결제가 함께 적중하면 REVIEW를 반환한다.
     void evaluate_highAmountAndThirdPaymentWithinWindow_returnsReview() {
@@ -487,12 +508,35 @@ class FdsEvaluationServiceTests {
 
     private FdsEvaluationRequest request(
             UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(requestId, paymentId, merchantId, customerRef, amount, requestedAt);
+        return new FdsEvaluationRequest(
+                requestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                "card-token-test-" + paymentId,
+                "VISA •••• " + paymentId,
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 
     private FdsEvaluationRequest request(
             Long paymentId, String customerRef, long amount, Instant requestedAt, String cardToken) {
         return new FdsEvaluationRequest(
-                UUID.randomUUID(), paymentId, 1L, customerRef, amount, requestedAt, null, cardToken, null);
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                cardToken == null ? "card-token-test-" + paymentId : cardToken,
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 }

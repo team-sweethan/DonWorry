@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class FdsLinkedPaymentQueryServiceTests {
@@ -133,9 +134,19 @@ class FdsLinkedPaymentQueryServiceTests {
                 .customerRef(customerRef)
                 .amount(50_000L)
                 .paymentRequestedAt(AT)
-                .cardToken(cardToken)
-                .deviceId(deviceId)
+                .cardToken(cardToken == null ? "card-token-" + paymentId : cardToken)
+                .deviceId(deviceId == null ? "device-" + paymentId : deviceId)
+                .cardDisplayLabel("테스트 **** 0001")
+                .ipCountryCode("KR")
+                .ipAddress("203.0.113.10")
+                .buyerEmail("buyer@example.test")
                 .build();
-        return FdsEvaluation.completed(request, result, result == FdsResult.ERROR ? 0 : 60, at);
+        var evaluation = FdsEvaluation.completed(request, result, result == FdsResult.ERROR ? 0 : 60, at);
+        // 신규 평가는 식별자를 모두 받지만, 이 테스트는 과거 이력의 누락값도 조회할 수 있어야 한다.
+        ReflectionTestUtils.setField(evaluation, "cardToken", cardToken);
+        if (cardToken == null) ReflectionTestUtils.setField(evaluation, "cardDisplayLabel", null);
+        ReflectionTestUtils.setField(evaluation, "deviceId", deviceId);
+        ReflectionTestUtils.setField(evaluation, "ipAddress", null);
+        return evaluation;
     }
 }

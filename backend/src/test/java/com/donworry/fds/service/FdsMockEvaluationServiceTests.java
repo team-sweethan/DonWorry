@@ -63,7 +63,19 @@ class FdsMockEvaluationServiceTests {
         var requestId = UUID.fromString("00000000-0000-0000-0000-000000000003");
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
         var evaluation = FdsEvaluation.completed(
-                new FdsEvaluationRequest(requestId, 900_003L, 1L, "hong-gildong", 500_000L, requestedAt),
+                new FdsEvaluationRequest(
+                        requestId,
+                        900_003L,
+                        1L,
+                        "hong-gildong",
+                        500_000L,
+                        requestedAt,
+                        "device-mock-hong-gildong",
+                        "card-token-mock-4242",
+                        "VISA •••• 4242",
+                        "KR",
+                        "203.0.113.10",
+                        "hong-gildong@example.test"),
                 FdsResult.REVIEW,
                 60,
                 requestedAt.plusSeconds(1));

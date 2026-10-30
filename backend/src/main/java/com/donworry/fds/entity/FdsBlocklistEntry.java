@@ -25,8 +25,13 @@ public class FdsBlocklistEntry {
     @Column(nullable = false, length = 500)
     private String reason;
 
+    @Column(length = 500)
+    private String deactivationReason;
+
     @Column(nullable = false)
     private boolean active;
+
+    private Instant deactivatedAt;
 
     @Column(nullable = false)
     private Instant createdAt;
@@ -70,13 +75,17 @@ public class FdsBlocklistEntry {
         return active && (expiresAt == null || expiresAt.isAfter(at));
     }
 
-    public void deactivate() {
+    public void deactivate(String deactivationReason, Instant deactivatedAt) {
         this.active = false;
+        this.deactivationReason = deactivationReason;
+        this.deactivatedAt = deactivatedAt;
     }
 
     public void reactivate(String displayLabel, String reason) {
         this.active = true;
         this.expiresAt = null;
+        this.deactivationReason = null;
+        this.deactivatedAt = null;
         if (displayLabel != null) {
             this.displayLabel = displayLabel;
         }

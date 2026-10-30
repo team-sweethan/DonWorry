@@ -1,5 +1,6 @@
 package com.donworry.payment.service;
 
+import com.donworry.payment.entity.PaymentRiskSignals;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -17,6 +18,18 @@ final class PaymentEvaluationFixtures {
                 .merchantId(42L)
                 .customerRef("customer-001")
                 .amount(150_000L)
-                .paymentRequestedAt(REQUESTED_AT);
+                .paymentRequestedAt(REQUESTED_AT)
+                .riskSignals(riskSignals());
+    }
+
+    static PaymentRiskSignals riskSignals() {
+        return PaymentRiskSignals.builder()
+                .deviceId("device-test-001")
+                .cardToken("card-token-test-001")
+                .cardDisplayLabel("테스트 **** 0001")
+                .ipCountryCode("KR")
+                .ipAddress("203.0.113.10")
+                .buyerEmail("buyer@example.test")
+                .build();
     }
 }

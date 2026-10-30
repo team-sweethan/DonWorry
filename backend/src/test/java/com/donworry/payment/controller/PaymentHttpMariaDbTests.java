@@ -85,7 +85,9 @@ class PaymentHttpMariaDbTests {
 
     private String body(String order, long amount) {
         return "{\"orderRef\":\"" + order + "\",\"customerRef\":\"42\",\"amount\":" + amount + ",\"orderCreatedAt\":\""
-                + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS) + "\"}";
+                + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+                + "\",\"deviceId\":\"device-1\",\"cardToken\":\"token-1\",\"cardDisplayLabel\":\"신한 **** 1234\""
+                + ",\"ipCountryCode\":\"KR\",\"ipAddress\":\"203.0.113.10\",\"buyerEmail\":\"buyer@example.test\"}";
     }
 
     private HttpResponse<String> call(String method, String path, String identity, String key, String body)
@@ -228,7 +230,7 @@ class PaymentHttpMariaDbTests {
                 .isEqualTo(400);
         verifyNoInteractions(evaluator);
     }
-    // FDS 식별자는 P2 평가 요청에 전달하고 가맹점 응답에는 되돌려 주지 않는다. 카드 원문 · 잘못된 형식은 400 (#325).
+    // FDS 식별자는 필수로 P2 평가 요청에 전달하고 가맹점 응답에는 되돌려 주지 않는다. 카드 원문 · 누락 · 잘못된 형식은 400 (#325).
     @Test
     void post_withRiskSignals_passesThemToFdsWithoutEcho() throws Exception {
         verdict(FdsResult.ALLOW);
@@ -266,7 +268,46 @@ class PaymentHttpMariaDbTests {
                     .as(invalid)
                     .isEqualTo(400);
         }
+        String missingDeviceId = base.replace(",\"deviceId\":\"device-1\"", "");
+        assertThat(call("POST", "/api/payments", "merchant-a", UUID.randomUUID().toString(), missingDeviceId)
+                        .statusCode())
+                .isEqualTo(400);
         verify(evaluator).evaluate(any());
+    }
+
+    // 위험 신호 도입 전 RECEIVED 결제는 같은 키와 NULL 스냅샷으로 평가를 재개한다.
+    @Test
+    void submit_whenHistoricalReceivedRequestIsReplayed_resumesWithStoredSnapshot() throws Exception {
+        String key = UUID.randomUUID().toString();
+        String request = body(UUID.randomUUID().toString(), 1000);
+        doThrow(new org.springframework.dao.DataAccessResourceFailureException("first attempt failed"))
+                .when(evaluator)
+                .evaluate(any());
+        assertThat(call("POST", "/api/payments", "merchant-a", key, request).statusCode())
+                .isEqualTo(503);
+        long paymentId =
+                jdbc.queryForObject("SELECT payment_id FROM payment_requests WHERE idempotency_key=?", Long.class, key);
+        jdbc.update(
+                "UPDATE payment_requests SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                paymentId);
+        doAnswer(i -> {
+                    FdsEvaluationRequest r = i.getArgument(0);
+                    return new FdsEvaluationResponse(
+                            r.evaluationRequestId(), 124L, FdsResult.REVIEW, 50, Instant.now(), null);
+                })
+                .when(evaluator)
+                .evaluateHistoricalSnapshot(any());
+        String historical = request.replace(",\"deviceId\":\"device-1\"", "")
+                .replace(",\"cardToken\":\"token-1\"", "")
+                .replace(",\"cardDisplayLabel\":\"신한 **** 1234\"", "")
+                .replace(",\"ipCountryCode\":\"KR\"", "")
+                .replace(",\"ipAddress\":\"203.0.113.10\"", "")
+                .replace(",\"buyerEmail\":\"buyer@example.test\"", "");
+
+        var replay = call("POST", "/api/payments", "merchant-a", key, historical);
+
+        assertThat(replay.statusCode()).isEqualTo(202);
+        verify(evaluator).evaluateHistoricalSnapshot(argThat(r -> r.deviceId() == null && r.buyerEmail() == null));
     }
 
     // 확정 거절은 정상 결과 200이며 내부 평가 오류는 응답에 노출하지 않는다.

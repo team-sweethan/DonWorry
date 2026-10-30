@@ -54,12 +54,13 @@ class PaymentRequestAdmissionMariaDbTests {
                 "customer",
                 1000L,
                 Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     private PaymentRequestCommand key(PaymentRequestCommand c, UUID key) {
         return new PaymentRequestCommand(
-                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), key);
+                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), key, c.riskSignals());
     }
 
     private void conflict(PaymentRequestCommand c, PaymentRequestConflictException.Code code) {
@@ -93,6 +94,31 @@ class PaymentRequestAdmissionMariaDbTests {
                 .isEqualTo(PaymentStatus.PENDING);
     }
 
+    // 신규 접수는 위험 신호를 필수로 받지만, 과거 NULL 스냅샷의 동일 키 재전송은 기존 결제를 반환한다.
+    @Test
+    void admit_whenHistoricalReplayHasNoRiskSignals_reusesExistingRequest() {
+        var c = command();
+        var first = admission.admit(c);
+        jdbc.update(
+                "UPDATE payment_requests SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                first.paymentId());
+        var historical = new PaymentRequestCommand(
+                c.merchantId(), c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), c.idempotencyKey());
+
+        var replay = admission.admit(historical);
+
+        assertThat(replay.created()).isFalse();
+        assertThat(replay.paymentId()).isEqualTo(first.paymentId());
+        assertThatThrownBy(() -> admission.admit(new PaymentRequestCommand(
+                        c.merchantId(),
+                        "new-" + c.orderRef(),
+                        c.customerRef(),
+                        c.amount(),
+                        c.orderCreatedAt(),
+                        UUID.randomUUID())))
+                .isInstanceOf(PaymentRiskSignalsRequiredException.class);
+    }
+
     // 접수는 독립 커밋되므로 이후 호출자 실패에도 같은 키로 결제를 찾을 수 있다.
     @Test
     void admit_whenCallerRollsBack_preservesCommittedAdmission() {
@@ -112,7 +138,13 @@ class PaymentRequestAdmissionMariaDbTests {
         var c = command();
         admission.admit(c);
         var changed = new PaymentRequestCommand(
-                c.merchantId(), c.orderRef(), c.customerRef(), 2000L, c.orderCreatedAt(), c.idempotencyKey());
+                c.merchantId(),
+                c.orderRef(),
+                c.customerRef(),
+                2000L,
+                c.orderCreatedAt(),
+                c.idempotencyKey(),
+                c.riskSignals());
         conflict(changed, IDEMPOTENCY_KEY_CONFLICT);
         conflict(key(changed, UUID.randomUUID()), ORDER_CONTENT_CONFLICT);
         conflict(
@@ -122,7 +154,8 @@ class PaymentRequestAdmissionMariaDbTests {
                         c.customerRef(),
                         c.amount(),
                         c.orderCreatedAt(),
-                        c.idempotencyKey()),
+                        c.idempotencyKey(),
+                        c.riskSignals()),
                 IDEMPOTENCY_KEY_CONFLICT);
         assertThat(count(c)).isEqualTo(1);
     }
@@ -215,7 +248,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 c.customerRef(),
                 c.amount(),
                 Instant.now().minusSeconds(601),
-                c.idempotencyKey());
+                c.idempotencyKey(),
+                c.riskSignals());
         conflict(expired, ORDER_DEADLINE_PASSED);
         assertThat(orders.findByMerchantIdAndOrderRef(c.merchantId(), c.orderRef()))
                 .isEmpty();
@@ -233,7 +267,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 c.customerRef(),
                 c.amount(),
                 c.orderCreatedAt().minusSeconds(1200),
-                c.idempotencyKey());
+                c.idempotencyKey(),
+                c.riskSignals());
         assertThat(admission.admit(old).paymentId()).isEqualTo(first.paymentId());
         conflict(key(old, UUID.randomUUID()), ORDER_DEADLINE_PASSED);
     }
@@ -256,7 +291,13 @@ class PaymentRequestAdmissionMariaDbTests {
         var c = command();
         var first = admission.admit(c);
         var other = new PaymentRequestCommand(
-                992L, c.orderRef(), c.customerRef(), c.amount(), c.orderCreatedAt(), c.idempotencyKey());
+                992L,
+                c.orderRef(),
+                c.customerRef(),
+                c.amount(),
+                c.orderCreatedAt(),
+                c.idempotencyKey(),
+                c.riskSignals());
         assertThat(admission.admit(other).paymentId()).isNotEqualTo(first.paymentId());
     }
 
@@ -337,7 +378,8 @@ class PaymentRequestAdmissionMariaDbTests {
                 a.customerRef(),
                 a.amount(),
                 a.orderCreatedAt(),
-                a.idempotencyKey());
+                a.idempotencyKey(),
+                a.riskSignals());
         var results = race(a, b);
         assertThat(results).contains(IDEMPOTENCY_KEY_CONFLICT);
         assertThat(count(a) + count(b)).isEqualTo(1);
