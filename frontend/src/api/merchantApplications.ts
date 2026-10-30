@@ -7,9 +7,10 @@ export function getApplicationConfig(signal?: AbortSignal) {
   })
 }
 
-export const CONSENT_VERSION = '2026-10-29.1'
+export const CONSENT_VERSION = '2026-10-30.1'
 export type ApplicationInput = {
   merchantName: string
+  shopUrl: string
   businessRegistrationNumber: string
   contactName: string
   email: string
@@ -22,6 +23,7 @@ export type MailStatus = 'PENDING' | 'SENT' | 'FAILED' | 'UNKNOWN'
 export function normalizeApplication(input: ApplicationInput) {
   return {
     merchantName: input.merchantName.trim(),
+    shopUrl: input.shopUrl.trim(),
     businessRegistrationNumber: input.businessRegistrationNumber.replace(/[- ]/g, ''),
     contactName: input.contactName.trim(),
     email: input.email.trim().toLowerCase(),

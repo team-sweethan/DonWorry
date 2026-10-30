@@ -19,6 +19,9 @@ public class MerchantApplication {
     @Column(name = "merchant_name", nullable = false, length = 100)
     private String merchantName;
 
+    @Column(name = "shop_url", length = 2048)
+    private String shopUrl;
+
     @Column(name = "business_registration_number", nullable = false, length = 10)
     private String businessRegistrationNumber;
 
@@ -75,6 +78,7 @@ public class MerchantApplication {
     @Builder(access = AccessLevel.PRIVATE)
     private MerchantApplication(
             String merchantName,
+            String shopUrl,
             String businessRegistrationNumber,
             String contactName,
             String email,
@@ -92,6 +96,7 @@ public class MerchantApplication {
             Long userId,
             LocalDateTime createdAt) {
         this.merchantName = merchantName;
+        this.shopUrl = shopUrl;
         this.businessRegistrationNumber = businessRegistrationNumber;
         this.contactName = contactName;
         this.email = email;
@@ -112,6 +117,7 @@ public class MerchantApplication {
 
     public static MerchantApplication submit(
             String merchantName,
+            String shopUrl,
             String businessRegistrationNumber,
             String contactName,
             String email,
@@ -122,6 +128,7 @@ public class MerchantApplication {
             LocalDateTime now) {
         return MerchantApplication.builder()
                 .merchantName(merchantName)
+                .shopUrl(shopUrl)
                 .businessRegistrationNumber(businessRegistrationNumber)
                 .contactName(contactName)
                 .email(email)

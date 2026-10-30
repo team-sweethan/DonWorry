@@ -118,6 +118,7 @@ class ApplicationApprovalHttpTests {
     Long application(boolean verified, String requestedLoginId) {
         var app = applications.saveAndFlush(MerchantApplication.submit(
                 "달콤한 가게",
+                null,
                 "1234567890",
                 "신청자",
                 "approval@example.com",
@@ -588,6 +589,7 @@ class ApplicationApprovalHttpTests {
     @Test
     void submit_whenRacingManualAccountCreation_assignsLoginToOneOwner() throws Exception {
         var input = com.donworry.identity.dto.MerchantApplicationRequests.SubmitRequest.builder()
+                .shopUrl("https://shop.example.com/Products?item=ABC")
                 .merchantName("가맹점")
                 .businessRegistrationNumber("3456789012")
                 .contactName("담당자")
@@ -595,7 +597,7 @@ class ApplicationApprovalHttpTests {
                 .phone("01012345678")
                 .requestedLoginId("approval_claim")
                 .consent(true)
-                .consentVersion("2026-10-29.1")
+                .consentVersion("2026-10-30.1")
                 .build();
         var request = mock(jakarta.servlet.http.HttpServletRequest.class);
         when(request.getRemoteAddr()).thenReturn("192.0.2.44");
@@ -622,6 +624,29 @@ class ApplicationApprovalHttpTests {
                 "SELECT COUNT(*) FROM platform_users WHERE login_id='approval_claim'", Integer.class);
         assertThat(reserved + issued).isEqualTo(1);
     }
+    // 주소는 관리자 상세에서만 검토 자료로 조회하고, 기존 주소 없는 신청도 승인할 수 있다.
+    @Test
+    void detail_whenShopUrlPresentOrLegacy_preservesApprovalPolicy() throws Exception {
+        Long id = application(true);
+        assertThat(json.readTree(admin.send("GET", BASE + "/" + id, null, false).body())
+                        .get("shopUrl")
+                        .isNull())
+                .isTrue();
+        String url = "https://shop.example.com/Products?item=ABC";
+        jdbc.update("UPDATE merchant_applications SET shop_url=? WHERE application_id=?", url, id);
+        assertThat(json.readTree(admin.send("GET", BASE + "/" + id, null, false).body())
+                        .path("shopUrl")
+                        .asString())
+                .isEqualTo(url);
+        assertThat(approve(id).statusCode()).isEqualTo(200);
+        assertThat(saved(id).getShopUrl()).isEqualTo(url);
+        assertThat(jdbc.queryForObject(
+                        "SELECT webhook_url FROM merchants WHERE merchant_id=?",
+                        String.class,
+                        saved(id).getMerchantId()))
+                .isNull();
+    }
+
     // 이전 양식의 아이디 없는 신청을 관리자가 임의 아이디로 승인할 수 없다.
     @Test
     void approve_whenLegacyApplicationHasNoLogin_requiresNewApplication() throws Exception {
@@ -825,9 +850,13 @@ class ApplicationApprovalHttpTests {
         var now = LocalDateTime.ofInstant(fixed, ZoneOffset.UTC);
         Long approved = application(true);
         approve(approved);
+        jdbc.update(
+                "UPDATE merchant_applications SET shop_url='https://shop.example.com' WHERE application_id=?",
+                approved);
         Long expired = applications
                 .saveAndFlush(MerchantApplication.submit(
                         "만료",
+                        null,
                         "9999999999",
                         "담당자",
                         "expired@example.com",
@@ -844,6 +873,7 @@ class ApplicationApprovalHttpTests {
         Long rejected = applications
                 .saveAndFlush(MerchantApplication.submit(
                         "반려",
+                        null,
                         "8888888888",
                         "담당자",
                         "rejected@example.com",
@@ -860,6 +890,7 @@ class ApplicationApprovalHttpTests {
         Long reviewed = applications
                 .saveAndFlush(MerchantApplication.submit(
                         "검토",
+                        null,
                         "7777777777",
                         "담당자",
                         "review@example.com",
@@ -938,6 +969,7 @@ class ApplicationApprovalHttpTests {
         for (int i = 0; i < 102; i++) {
             var a = applications.saveAndFlush(MerchantApplication.submit(
                     "만료",
+                    null,
                     String.format("6%09d", i),
                     "담당",
                     "batch" + i + "@example.com",
@@ -973,6 +1005,7 @@ class ApplicationApprovalHttpTests {
         when(request.getRemoteAddr()).thenReturn("192.0.2.200");
         applicationService.submit(
                 com.donworry.identity.dto.MerchantApplicationRequests.SubmitRequest.builder()
+                        .shopUrl("https://shop.example.com/Products?item=ABC")
                         .merchantName("신청")
                         .businessRegistrationNumber("5555555555")
                         .contactName("담당")
@@ -980,7 +1013,7 @@ class ApplicationApprovalHttpTests {
                         .phone("01011112222")
                         .requestedLoginId("shared_owner")
                         .consent(true)
-                        .consentVersion("2026-10-29.1")
+                        .consentVersion("2026-10-30.1")
                         .build(),
                 request);
         Long id = applications.findAll().getFirst().getApplicationId();

@@ -64,6 +64,7 @@ class ApplicationSmtpMariaDbTests {
         var request = mock(jakarta.servlet.http.HttpServletRequest.class);
         when(request.getRemoteAddr()).thenReturn("192.0.2.250");
         var input = SubmitRequest.builder()
+                .shopUrl("https://shop.example.com/Products?item=ABC")
                 .merchantName("SMTP 가맹점")
                 .businessRegistrationNumber("9876543210")
                 .contactName("담당자")
@@ -71,7 +72,7 @@ class ApplicationSmtpMariaDbTests {
                 .phone("01012345678")
                 .requestedLoginId("smtp_owner")
                 .consent(true)
-                .consentVersion("2026-10-29.1")
+                .consentVersion("2026-10-30.1")
                 .build();
         try {
             assertThat(service.submit(input, request).mailStatus()).isEqualTo("SENT");

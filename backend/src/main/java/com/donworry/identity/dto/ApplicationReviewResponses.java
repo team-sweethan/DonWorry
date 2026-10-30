@@ -43,6 +43,7 @@ public final class ApplicationReviewResponses {
     public record Detail(
             Summary application,
             String requestedLoginId,
+            String shopUrl,
             String email,
             String phone,
             String inquiry,

@@ -18,6 +18,7 @@ function detail(status: ApplicationDetail['application']['status'], id = 31): Ap
       emailVerifiedAt: '2026-10-29T00:01:00',
       latestMail: null,
     },
+    shopUrl: null,
     requestedLoginId: 'owner',
     email: 'owner@example.com',
     phone: '01011112222',

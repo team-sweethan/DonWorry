@@ -28,6 +28,7 @@ afterEach(() => {
 const input = {
   requestedLoginId: ' sweet_owner ',
   merchantName: ' 가맹점 ',
+  shopUrl: ' https://shop.example.com/Products?item=ABC ',
   businessRegistrationNumber: '123-45-67890',
   contactName: ' 담당자 ',
   email: ' Owner@Example.com ',
@@ -40,13 +41,14 @@ test('application_whenNormalized_preservesEmailAliasesAndConsent', () => {
   assert.deepEqual(normalizeApplication(input), {
     requestedLoginId: 'sweet_owner',
     merchantName: '가맹점',
+    shopUrl: 'https://shop.example.com/Products?item=ABC',
     businessRegistrationNumber: '1234567890',
     contactName: '담당자',
     email: 'owner@example.com',
     phone: '01012345678',
     inquiry: '문의',
     consent: true,
-    consentVersion: '2026-10-29.1',
+    consentVersion: '2026-10-30.1',
   })
   assert.equal(
     normalizeApplication({ ...input, email: ' A.B+tag@Gmail.com ' }).email,

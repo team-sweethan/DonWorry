@@ -111,7 +111,7 @@ class MerchantApplicationHttpTests {
 
     private String body(String email, String business) {
         return """
-   {"merchantName":" 가맹점 ","businessRegistrationNumber":"%s","contactName":" 담당자 ","email":"%s","phone":"010-1234-5678","inquiry":" 문의 ","requestedLoginId":"owner_%s","consent":true,"consentVersion":"2026-10-29.1"}
+   {"shopUrl":" https://shop.example.com/Products?item=ABC ","merchantName":" 가맹점 ","businessRegistrationNumber":"%s","contactName":" 담당자 ","email":"%s","phone":"010-1234-5678","inquiry":" 문의 ","requestedLoginId":"owner_%s","consent":true,"consentVersion":"2026-10-30.1"}
    """.formatted(business, email, business.replaceAll("[- ]", ""));
     }
 
@@ -129,6 +129,7 @@ class MerchantApplicationHttpTests {
 
     private SubmitRequest input(String email, String business, String loginId) {
         return SubmitRequest.builder()
+                .shopUrl("https://shop.example.com/Products?item=ABC")
                 .merchantName("가맹점")
                 .businessRegistrationNumber(business)
                 .contactName("담당자")
@@ -136,7 +137,7 @@ class MerchantApplicationHttpTests {
                 .phone("01012345678")
                 .requestedLoginId(loginId)
                 .consent(true)
-                .consentVersion("2026-10-29.1")
+                .consentVersion("2026-10-30.1")
                 .build();
     }
 
@@ -176,6 +177,8 @@ class MerchantApplicationHttpTests {
         var app = applications.findAll().getFirst();
         assertThat(app.getEmail()).isEqualTo("owner@example.com");
         assertThat(app.getMerchantName()).isEqualTo("가맹점");
+        assertThat(app.getShopUrl()).isEqualTo("https://shop.example.com/Products?item=ABC");
+        assertThat(app.getConsentVersion()).isEqualTo("2026-10-30.1");
         assertThat(app.getBusinessRegistrationNumber()).isEqualTo("1234567890");
         assertThat(app.getPhone()).isEqualTo("01012345678");
         assertThat(app.getConsentedAt()).isEqualTo(LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
@@ -203,7 +206,7 @@ class MerchantApplicationHttpTests {
                 body("bad-email", "1234567890"),
                 body("owner@example.com", "123"),
                 body("owner@example.com", "1234567890").replace("true", "false"),
-                body("owner@example.com", "1234567890").replace("2026-10-29", "2020-01-01"),
+                body("owner@example.com", "1234567890").replace("2026-10-30", "2020-01-01"),
                 "{}")) {
             var r = send("POST", PATH, b, true);
             assertThat(r.statusCode()).isEqualTo(400);
@@ -212,6 +215,31 @@ class MerchantApplicationHttpTests {
         assertThat(applications.count()).isZero();
         verifyNoInteractions(mail);
     }
+    // 주소 누락·위험 스킴·상대 주소·사용자 정보·길이 초과는 메일 발송과 저장 전에 거절한다.
+    @Test
+    void submit_whenShopUrlInvalid_rejectsBeforeSaving() throws Exception {
+        String valid = " https://shop.example.com/Products?item=ABC ";
+        String body = body("owner@example.com", "1234567890");
+        for (String value : List.of(
+                "",
+                "   ",
+                "/shop",
+                "shop.example.com",
+                "javascript:alert(1)",
+                "ftp://shop.example.com",
+                "https://user:pass@shop.example.com",
+                "https:///shop",
+                "https://shop.example.com/" + "a".repeat(2048))) {
+            var response = send("POST", PATH, body.replace(valid, value), true);
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.body()).contains("APPLICATION_001");
+        }
+        var missing = send("POST", PATH, body.replace("\"shopUrl\":\"" + valid + "\",", ""), true);
+        assertThat(missing.statusCode()).isEqualTo(400);
+        assertThat(applications.count()).isZero();
+        verifyNoInteractions(mail);
+    }
+
     // 동시 신청은 같은 이메일·사업자번호 중 하나라도 중복되면 한 건만 만든다.
     @Test
     void submit_whenConcurrentOrDuplicate_createsOnlyOne() throws Exception {

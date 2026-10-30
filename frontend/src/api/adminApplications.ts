@@ -27,6 +27,7 @@ export type ApplicationPage = {
 export type ApplicationDetail = {
   application: ApplicationSummary
   requestedLoginId: string | null
+  shopUrl: string | null
   email: string
   phone: string
   inquiry: string | null
