@@ -375,11 +375,13 @@ export function AlertDetailPage() {
                 {
                   title: '위험 신호',
                   dataIndex: 'ruleName',
+                  width: 108,
                   render: (value: string) => <strong>{value}</strong>,
                 },
                 {
                   title: '결과',
                   dataIndex: 'outcome',
+                  width: 92,
                   render: (outcome: string) => (
                     <Tag color={outcome === 'MATCH' ? 'gold' : 'default'}>{outcome}</Tag>
                   ),
@@ -387,6 +389,7 @@ export function AlertDetailPage() {
                 {
                   title: '현재 정책',
                   key: 'currentPolicy',
+                  width: 98,
                   render: (_, rule) => {
                     if (policyError) return <Tag color="warning">조회 실패</Tag>
                     const policy = policyByRuleCode.get(rule.ruleCode)
@@ -402,20 +405,24 @@ export function AlertDetailPage() {
                   title: '점수',
                   dataIndex: 'appliedScore',
                   align: 'right',
+                  width: 55,
                   render: (points: number) => <strong>{points ? `+${points}` : '0'}</strong>,
                 },
                 {
                   title: '평가 당시 값',
                   key: 'observedValue',
+                  width: 330,
                   render: (_, rule) => observedValue(rule.ruleCode, rule.observedValue),
                 },
                 {
                   title: '기준',
                   key: 'thresholdSnapshot',
+                  width: 168,
                   render: (_, rule) => threshold(rule.ruleCode, rule.thresholdSnapshot),
                 },
               ]}
               dataSource={detail.ruleHits}
+              tableLayout="fixed"
             />
           </Card>
           <Card
