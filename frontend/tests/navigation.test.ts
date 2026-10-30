@@ -51,9 +51,20 @@ test('사장님 메뉴는 권한이 있는 것만 보인다', () => {
     '/owner/settlements',
     '/owner/funds',
     '/owner/loans',
+    '/owner/integration',
   ])
   assert.equal(sessionNavigation(owner(['FINANCE_VIEW'])).landing, '/owner/settlements')
-  assert.equal(sessionNavigation(owner([])).landing, null)
+})
+
+// 연동은 권한 코드가 없어도 사장님이면 써야 하므로, 권한 없는 사장님의 첫 화면이 된다 (#354).
+test('권한 없는 사장님도 시크릿 키 발급 화면은 열 수 있다', () => {
+  assert.deepEqual(sessionNavigation(owner([])).groups, [
+    { title: '연동', items: [{ label: '시크릿 키 발급', path: '/owner/integration' }] },
+  ])
+  assert.equal(sessionNavigation(owner([])).landing, '/owner/integration')
+  assert.equal(canOpenPath(owner([]), '/owner/integration'), true)
+  assert.equal(canOpenPath(owner([]), '/owner/settlements'), false)
+  assert.equal(canOpenPath(staff, '/owner/integration'), false)
 })
 
 test('다른 역할 화면과 권한 없는 메뉴는 열 수 없다', () => {

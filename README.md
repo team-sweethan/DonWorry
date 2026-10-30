@@ -113,7 +113,7 @@ sequenceDiagram
 | --- | --- |
 | JDK 21 | backend 빌드·실행 |
 | Docker Desktop | 개발용 MariaDB 실행 (직접 설치한 MariaDB도 가능) |
-| Node.js 22 | frontend |
+| Node.js 22.14 이상 | frontend |
 | Python 3.13 + [uv](https://docs.astral.sh/uv/) | ai-server |
 | [Ollama](https://ollama.com) (선택) | Qwen이 쓰는 AI 보고서 |
 

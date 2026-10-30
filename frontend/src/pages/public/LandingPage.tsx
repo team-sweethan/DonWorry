@@ -19,7 +19,7 @@ import {
 
 // 첫 화면 요약 — 한 줄에 하나씩, 짧게
 const heroPoints = [
-  { label: '멈춤', text: '의심되는 결제는 정산 전에 보류돼요' },
+  { label: '멈춤', text: '의심되는 결제는 매입 전에 보류돼요' },
   { label: '확인', text: '보안 담당자가 확인하고 처리를 정해요' },
   { label: '결과', text: '처리가 끝나면 사장님 화면에서 확인해요' },
 ]
@@ -40,6 +40,7 @@ const steps = [
 
 const checklist = [
   '가맹점명과 사업자등록번호',
+  '운영 중인 쇼핑몰 주소',
   '담당자 이름 · 이메일 · 연락처',
   '앞으로 쓸 로그인 아이디',
 ]
@@ -61,7 +62,8 @@ const faqs = [
   },
   {
     question: '결제 연동도 신청과 함께 되나요?',
-    answer: '결제 연동은 계정 발급과 별도로 진행해요.',
+    answer:
+      '신청과는 따로 진행해요. 지금은 담당자가 연결을 도와드리고, 로그인 후 [시크릿 키 발급]에서 직접 키를 받는 기능은 준비 중이에요.',
   },
 ]
 
@@ -90,19 +92,19 @@ const flow: { label: string; title: string; body: string; panel: ReactNode }[] =
   {
     label: '탐지',
     title: '결제마다 위험 점수를 매겨요',
-    body: '탐지 룰이 결제 하나하나를 살펴 점수를 매기고, 확인이 필요한 결제를 골라내요.',
+    body: '탐지 룰이 결제 하나하나를 살펴 점수를 매겨요. 확인이 필요한 결제는 골라내고, 위험이 아주 높은 결제는 바로 거절해요.',
     panel: <DetectPanel />,
   },
   {
     label: '보류',
-    title: '확인이 필요하면 정산 전에 멈춰요',
-    body: '바로 처리하지 않고 보류해 두니까, 보안 담당자가 확인할 시간이 생겨요.',
+    title: '확인이 필요하면 매입 전에 멈춰요',
+    body: '카드 승인은 됐지만 매입은 하지 않고 보류해 두니까, 보안 담당자가 확인할 시간이 생겨요.',
     panel: <HoldPanel />,
   },
   {
     label: '조사',
     title: 'AI가 근거를 정리해 둬요',
-    body: '고객의 최근 결제, 접속 국가, 걸린 탐지 룰을 보고서로 묶어요. 판정은 하지 않아요.',
+    body: '고객의 최근 결제, 접속 국가, 카드·기기 정보, 같은 카드를 쓴 다른 결제, 걸린 탐지 룰을 보고서로 묶어요. 판정은 하지 않아요.',
     panel: <ReportPreview />,
   },
   {
@@ -297,7 +299,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
           <div className="dw-landing-container">
             <div className="dw-landing-owner-head">
               <p className="dw-landing-eyebrow">사장님이 쓰는 화면</p>
-              <h2 id="landing-owner-title">내 가게 결제와 돈의 흐름을 한 곳에서</h2>
+              <h2 id="landing-owner-title">보류된 결제의 결과와 돈의 흐름을 한 곳에서</h2>
               <p>로그인하면 사장님 화면이 열려요. 보안 담당자가 쓰는 내부 화면과는 따로 있어요.</p>
             </div>
             <div className="dw-landing-owner-grid">

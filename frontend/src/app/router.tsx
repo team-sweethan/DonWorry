@@ -23,8 +23,10 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
+import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
 import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
@@ -144,7 +146,7 @@ export const router = createBrowserRouter([
           { path: 'alerts/:id', element: <AlertDetailPage /> },
           { path: 'rules', element: <RuleCatalogPage /> },
           { path: 'blocklist', element: <BlocklistPage /> },
-          { path: 'transactions', element: <EmptyPage title="거래 내역" /> },
+          { path: 'transactions', element: <TransactionListPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
         ],
       },
@@ -158,6 +160,8 @@ export const router = createBrowserRouter([
           { path: 'funds', element: <SettlementRoute /> },
           { path: 'loans', element: <LoanProductsRoute /> },
           { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
+          // 키 발급 API(#354 PR B) 전에는 서버를 부르지 않는 예시 화면을 제공한다.
+          { path: 'integration', element: <IntegrationPreviewPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],
       },

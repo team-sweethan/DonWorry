@@ -14,6 +14,10 @@ import org.springframework.data.repository.Repository;
 public interface MerchantRepository extends Repository<Merchant, Long>, JpaSpecificationExecutor<Merchant> {
     Optional<Merchant> findById(Long merchantId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT m FROM Merchant m WHERE m.merchantId = :merchantId")
+    Optional<Merchant> lockById(@org.springframework.data.repository.query.Param("merchantId") Long merchantId);
+
     Optional<Merchant> findByMerchantCode(String merchantCode);
 
     Merchant saveAndFlush(Merchant merchant);

@@ -99,6 +99,7 @@ class ApplicationRecoverySmtpMariaDbTests {
         assertThat(applications
                         .submit(
                                 SubmitRequest.builder()
+                                        .shopUrl("https://shop.example.com/Products?item=ABC")
                                         .merchantName("SMTP 복구")
                                         .businessRegistrationNumber(business)
                                         .contactName("담당")
@@ -106,7 +107,7 @@ class ApplicationRecoverySmtpMariaDbTests {
                                         .phone("01011112222")
                                         .requestedLoginId(login)
                                         .consent(true)
-                                        .consentVersion("2026-10-29.1")
+                                        .consentVersion("2026-10-30.1")
                                         .build(),
                                 request)
                         .mailStatus())

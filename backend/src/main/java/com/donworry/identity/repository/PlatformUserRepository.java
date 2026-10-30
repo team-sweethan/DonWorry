@@ -18,6 +18,8 @@ public interface PlatformUserRepository
 
     List<PlatformUser> findByMerchantIdAndRole(Long merchantId, UserRole role);
 
+    boolean existsByMerchantIdAndRole(Long merchantId, UserRole role);
+
     // 두 식 모두 변경 전 횟수를 사용한다. MariaDB의 SET 평가에서도 시각을 먼저 정한다.
     // 잠금 중에는 WHERE에서 제외하고, 만료된 5회는 새로운 1회로 시작한다.
     @Modifying

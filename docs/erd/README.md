@@ -306,6 +306,10 @@ P1 담당자가 이 PR에서 아이디를 신청자가 선택하도록 변경하
 진행 중 신청의 `pending_login_id` SHA-256 생성 컬럼과 UNIQUE로 같은 아이디 예약을 막는다. P1 계정 생성·신청·승인은 같은 아이디 잠금을 공유하며, 수동 계정 생성도 예약을 존중한다. 승인 시 자기 신청의 예약만 사용할 수 있다. 반려/삭제 후 예약을 해제하며 승인 후에는 platform_users의 기존 UNIQUE가 아이디를 보호한다.
 기존 아이디 없는 신청은 임의 발급하지 않고 반려·새 양식 재신청으로 안내한다. 비밀번호는 계속 승인 후 본인이 설정한다. 다른 소유 테이블·공개 Java 계약 변경 없음. 상세는 [PR 3 설계](../identity/315-approval-design.md).
 
+### #354 PR A 쇼핑몰 주소 (2026-10-30)
+
+P1 사용자가 주소만 수집하는 설계·구현 진행을 승인했다. `merchant_applications.shop_url VARCHAR(2048) NULL`을 새 migration으로 추가한다. 신규 신청은 HTTP(S) 절대 URL 필수이며 기존 행은 NULL로 보존한다. 신청 검토 자료로만 보관하고 merchants·webhook으로 복사하지 않는다. 미확인 7일·반려 30일 정리와 승인 신청 보존 정책을 그대로 따른다. Notion 선행 대조·동기화는 미수행이다. 상세는 [PR A 설계](../identity/354-pr1-application-design.md)를 따른다.
+
 ## P6 최초 잔액·일회성 지출 (#229, 2026-10-30)
 
 사용자 구현 승인에 따라 P6 소유 `cash_flow_settings`와 `planned_expenses`를 신규 migration으로 추가한다.

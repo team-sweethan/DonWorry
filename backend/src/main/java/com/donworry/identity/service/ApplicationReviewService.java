@@ -136,6 +136,7 @@ public class ApplicationReviewService {
                 .resendBlockedReason(availability.blockedReason())
                 .nextResendAt(availability.nextResendAt())
                 .application(Summary.from(a))
+                .shopUrl(a.getShopUrl())
                 .email(a.getEmail())
                 .phone(a.getPhone())
                 .inquiry(a.getInquiry())

@@ -63,11 +63,14 @@ test('landingEntry_whenPasswordChangeRequired_usesPasswordPage', async () => {
   }
 })
 
-// 업무 권한 없는 사장님을 로그인과 랜딩 사이에서 반복 이동시키지 않는다.
-test('landingEntry_whenNoBusinessPermissions_showsAccountActions', async () => {
+// 업무 권한 없는 사장님도 권한 없이 열리는 시크릿 키 발급 화면에서 시작한다 (#354).
+test('landingEntry_whenNoBusinessPermissions_usesIntegrationPage', async () => {
   const store = setup(async () => ({ ...admin, role: 'OPERATOR', merchantId: 10 }))
   await store.check('/')
-  assert.deepEqual(landingEntry(store.getSnapshot(), '/'), { kind: 'noPermissions' })
+  assert.deepEqual(landingEntry(store.getSnapshot(), '/'), {
+    kind: 'redirect',
+    destination: '/owner/integration',
+  })
 })
 
 // 새 경로 확인 전과 확인 실패에는 이전 계정 정보로 이동하지 않고 재시도로 복구한다.

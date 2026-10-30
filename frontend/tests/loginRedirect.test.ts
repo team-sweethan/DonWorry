@@ -89,14 +89,17 @@ test('loginDestination_whenPasswordChangeRequired_usesPasswordPage', () => {
   )
 })
 
-// 업무 권한이 없어도 본인 계정 화면은 복원하고 첫 화면도 없으면 403 처리를 맡긴다.
+// 업무 권한이 없어도 본인 계정 화면은 복원하고, 권한 메뉴 대신 시크릿 키 발급 화면으로 보낸다 (#354).
 test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
   const noPermissions = { ...owner, permissions: [] }
   for (const returnTo of ['/account/login-history?page=2', '/account/password/']) {
     assert.equal(loginDestination(noPermissions, { returnTo }), returnTo)
   }
-  assert.equal(loginDestination(noPermissions, { returnTo: '/owner/actions' }), null)
-  assert.equal(loginDestination(noPermissions, null), null)
+  assert.equal(
+    loginDestination(noPermissions, { returnTo: '/owner/actions' }),
+    '/owner/integration',
+  )
+  assert.equal(loginDestination(noPermissions, null), '/owner/integration')
 })
 
 // 잘못된 Router state와 현재 계정 ID와 일치하지 않는 이전 사용자 ID는 예외 없이 버린다.

@@ -181,7 +181,12 @@ public class SecurityConfig {
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.HEAD, "/api/payment-operations"),
                                 PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.HEAD, "/api/payment-operations/{paymentId}"))
+                                        .matcher(HttpMethod.HEAD, "/api/payment-operations/{paymentId}"),
+                                // 거래 내역 (#363) — 등록하지 않으면 마지막 permitAll에 걸려 로그인 없이 조회된다
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-transactions"),
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.HEAD, "/api/payment-transactions"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

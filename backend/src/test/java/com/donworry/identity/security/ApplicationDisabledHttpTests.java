@@ -47,6 +47,7 @@ class ApplicationDisabledHttpTests {
         assertThat(head.body()).isEmpty();
         var a = applications.saveAndFlush(MerchantApplication.submit(
                 "기한경과",
+                null,
                 "4444444444",
                 "담당",
                 "disabled@example.com",
