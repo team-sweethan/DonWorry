@@ -438,9 +438,10 @@ export function DetectPanel() {
         <strong>PAY-8841 · 1,280,000원</strong>
         <span className="dw-preview-tag is-gray">케이크샵 강남점</span>
       </div>
+      {/* 보류(REVIEW)는 50~79점, 80점 이상은 바로 거절(DENY)이다 (FdsEvaluationTransactionService). */}
       <div className="dw-journey-score">
-        <div className="dw-journey-gauge" style={{ ['--score' as string]: 92 }}>
-          <b>92</b>
+        <div className="dw-journey-gauge" style={{ ['--score' as string]: 68 }}>
+          <b>68</b>
           <small>위험 점수</small>
         </div>
         <ul className="dw-journey-rules">
@@ -522,7 +523,7 @@ export function ReportPreview({ decided = false }: { decided?: boolean }) {
 const ownerSteps = [
   { title: '취소 결정', detail: '보안 담당자가 매입을 거부했어요', time: '14:52', state: 'done' },
   { title: '조사 중', detail: '보고서와 근거를 검토하고 있어요', time: '14:40', state: 'done' },
-  { title: '결제 보류', detail: '위험 점수 92 · 해외 IP 고액 결제', time: '14:31', state: 'past' },
+  { title: '결제 보류', detail: '위험 점수 68 · 해외 IP 고액 결제', time: '14:31', state: 'past' },
 ]
 
 /** 5 결과 — 사장님은 내 가게 결제가 어떻게 처리됐는지 본다. 문구는 고객사 화면(ownerLabels)과 맞춘다. */
