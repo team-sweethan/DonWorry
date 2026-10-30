@@ -74,6 +74,7 @@
 | [0047](0047-application-recovery-and-retention.md) | 신청 메일 수동 복구와 보관 기한 정리 | 제안 — #315 PR 4 사용자 구현 승인·구현 반영, PR 리뷰 대상 |
 
 | [0048](0048-tenant-pg-fee-read-contract.md) | 가맹점별 PG 수수료율 공개 조회 | 제안 — #356 P6 요청·P1 사용자 구현 승인, PR 리뷰 대상 |
+| [0051](0051-payment-transactions-read.md) | 보안 직원 거래 내역 조회 — 모든 결제 · 서버 가리기 | 제안 — #363 P5 · P1 확인, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

@@ -205,6 +205,20 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(secondPage.path("hasNext").asBoolean()).isFalse();
     }
 
+    // 대소문자만 다른 주문번호 · 고객 번호는 다른 주문 · 고객이다 — DB 기본 비교(_ci)에 섞이지 않고 정확히 일치만 나온다
+    @Test
+    void list_whenRefsDifferOnlyByCase_matchesExactly() throws Exception {
+        Instant createdAt = now.minus(Duration.ofHours(1));
+        long upper = payment(merchantId, "Cust-" + prefix, "ORD-A-" + prefix, createdAt);
+        long lower = payment(merchantId, "cust-" + prefix, "ord-a-" + prefix, createdAt);
+        String base = PATH + "?merchantId=" + merchantId;
+
+        assertThat(ids(json(base + "&orderRef=ORD-A-" + prefix))).containsExactly(upper);
+        assertThat(ids(json(base + "&orderRef=ord-a-" + prefix))).containsExactly(lower);
+        assertThat(ids(json(base + "&customerRef=Cust-" + prefix))).containsExactly(upper);
+        assertThat(ids(json(base + "&customerRef=cust-" + prefix))).containsExactly(lower);
+    }
+
     private List<Long> ids(JsonNode page) {
         return page.path("items")
                 .valueStream()
@@ -252,6 +266,12 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
         assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
         return mapper.readTree(response.body());
+    }
+
+    private long payment(long merchant, String customerRef, String orderRef, Instant createdAt) {
+        return new TransactionTemplate(manager)
+                .execute(tx -> payments.save(Payment.pending(merchant, customerRef, orderRef, 1000L, createdAt))
+                        .getPaymentId());
     }
 
     private long payment(long merchant, String customerRef, Instant createdAt, boolean held) {

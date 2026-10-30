@@ -2,6 +2,7 @@
 
 - 상태: feature 브랜치 구현. 병합 · 배포 전이다. 검사 결과는 PR "테스트 결과"를 따른다.
 - 관련: [Issue #363](https://github.com/team-sweethan/DonWorry/issues/363) — P5 · P1 담당 확인 완료 (2026-10-30). 화면은 보안 직원 메뉴 "결제 > 거래 내역" (`/security/transactions`)
+- 결정 이유 · 버린 대안: [ADR-0051](../decisions/0051-payment-transactions-read.md)
 - [#188 운영 조회](188-payment-operations-api.md)와 별개다. 운영 조회는 미처리 후보만 오래된 순으로 주고, 이 API는 모든 결제를 최신순으로 준다. 운영 조회 계약은 바꾸지 않는다.
 
 ## 1. 경로와 권한
@@ -25,13 +26,14 @@
 | `to` | ISO-8601 offset 시각, 기본 요청 시각 | 결제 시각 상한, 제외 |
 | `merchantId` | 양수 Long | 가맹점 ID 일치 |
 | `status` | PaymentStatus 이름 (대문자) | 현재 결제 상태 일치 |
-| `orderRef` | 양끝 공백 없는 1~100자 | 주문번호 전체 일치 (부분 검색 아님) |
-| `customerRef` | 양끝 공백 없는 1~100자 | 고객 참조 전체 일치 (부분 검색 아님) |
+| `orderRef` | 양끝 공백 없는 1~100자 | 주문번호 전체 일치, 대소문자 구분 (부분 검색 아님) |
+| `customerRef` | 양끝 공백 없는 1~100자 | 고객 참조 전체 일치, 대소문자 구분 (부분 검색 아님) |
 | `page` | 0 이상, 기본 0 | 페이지 번호 |
 | `size` | 1~100, 기본 20 | 페이지 크기. 최대 100은 P3 `payment-links`가 한 번에 받는 최대 개수와 같다 |
 
 - 기간은 `from < to`, 최대 31일. `payments.created_at`에 색인이 없어 전체 기간 조회를 막는다 (색인 추가는 이번 범위 밖, P5 확인)
 - 정렬은 `payment_id` 내림차순 (= 생성 순서, PK)
+- `payments`의 참조 칸은 DB 기본 비교(`utf8mb4_unicode_ci`)라 대소문자를 무시한다. `payment_orders`는 `utf8mb4_bin`이라 `ORD-A`와 `ord-a`가 다른 주문일 수 있으므로, 이 조회는 `utf8mb4_bin`으로 다시 비교한다
 
 ## 3. 응답
 

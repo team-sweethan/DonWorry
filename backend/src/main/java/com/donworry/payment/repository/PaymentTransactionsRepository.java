@@ -37,8 +37,11 @@ public class PaymentTransactionsRepository {
         String where = " where p.createdAt >= :from and p.createdAt < :to";
         if (q.merchantId() != null) where += " and p.merchantId = :merchantId";
         if (q.status() != null) where += " and p.status = :status";
-        if (q.orderRef() != null) where += " and p.orderRef = :orderRef";
-        if (q.customerRef() != null) where += " and p.customerRef = :customerRef";
+        // payments 참조 칸은 DB 기본 비교(_ci)라 대소문자를 무시한다. 앞 조건은 색인용, collate가 정확히 일치를 판단한다
+        if (q.orderRef() != null)
+            where += " and p.orderRef = :orderRef and collate(p.orderRef as utf8mb4_bin) = :orderRef";
+        if (q.customerRef() != null)
+            where += " and p.customerRef = :customerRef and collate(p.customerRef as utf8mb4_bin) = :customerRef";
         return where;
     }
 
