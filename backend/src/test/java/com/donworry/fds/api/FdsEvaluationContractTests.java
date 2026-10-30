@@ -66,23 +66,64 @@ class FdsEvaluationContractTests {
 
     // 신규 평가에는 룰 탐지와 보고서에 필요한 위험 신호 6개가 모두 있어야 한다.
     @Test
-    void request_whenRiskSignalIsMissing_throwsIllegalArgumentException() {
+    void request_whenRiskSignalIsMissing_requiresItOnlyForNewEvaluation() {
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
-        assertThatThrownBy(() -> new FdsEvaluationRequest(
-                        UUID.randomUUID(),
-                        101L,
-                        1L,
-                        "hong-gildong",
-                        150_000L,
-                        requestedAt,
-                        null,
-                        "card-token-opaque-1",
-                        "VISA •••• 1234",
-                        "KR",
-                        "203.0.113.10",
-                        "hong@example.test"))
-                .isInstanceOf(IllegalArgumentException.class);
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                requestedAt,
+                null,
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
+
+        assertThatThrownBy(request::requireRiskSignals).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // 마이그레이션 이전 ERROR 결제의 저장 스냅샷은 누락된 위험 신호를 그대로 보고·재평가한다.
+    @Test
+    void historicalRequests_whenRiskSignalsAreMissing_preserveNullSnapshot() {
+        var originalRequestId = UUID.randomUUID();
+        var paymentRequestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var report = FdsEvaluationFailureReport.builder()
+                .failureReportId(UUID.randomUUID())
+                .originalEvaluationRequestId(originalRequestId)
+                .evaluationRequestId(originalRequestId)
+                .evaluationId(1L)
+                .paymentId(101L)
+                .merchantId(1L)
+                .customerRef("legacy-customer")
+                .amount(150_000L)
+                .paymentRequestedAt(paymentRequestedAt)
+                .evaluationResult(FdsResult.ERROR)
+                .errorCode("TRANSIENT_MODEL_UNAVAILABLE")
+                .requestedAt(paymentRequestedAt)
+                .respondedAt(paymentRequestedAt.plusSeconds(1))
+                .paymentStatus("PENDING")
+                .processingStage("NEEDS_REVIEW")
+                .requestId(1L)
+                .idempotencyKey(UUID.randomUUID())
+                .evaluationAttemptNo(1)
+                .build();
+        var reevaluation = FdsReevaluationRequest.builder()
+                .originalEvaluationRequestId(originalRequestId)
+                .newEvaluationRequestId(UUID.randomUUID())
+                .paymentId(101L)
+                .merchantId(1L)
+                .customerRef("legacy-customer")
+                .amount(150_000L)
+                .paymentRequestedAt(paymentRequestedAt)
+                .retryId(UUID.randomUUID())
+                .build();
+
+        assertThat(report.deviceId()).isNull();
+        assertThat(reevaluation.evaluationRequest().buyerEmail()).isNull();
     }
 
     private FdsEvaluationRequest request(

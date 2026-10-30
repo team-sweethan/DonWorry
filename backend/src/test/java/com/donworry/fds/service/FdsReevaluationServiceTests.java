@@ -45,7 +45,7 @@ class FdsReevaluationServiceTests {
         when(analyses.existsByOriginalEvaluationRequestIdAndDisposition(
                         request.originalEvaluationRequestId(), FdsFailureDisposition.REEVALUATION_AVAILABLE))
                 .thenReturn(true);
-        when(evaluator.evaluate(request.evaluationRequest()))
+        when(evaluator.evaluateHistoricalSnapshot(request.evaluationRequest()))
                 .thenReturn(new FdsEvaluationResponse(
                         request.newEvaluationRequestId(),
                         101L,
@@ -60,6 +60,48 @@ class FdsReevaluationServiceTests {
         assertThat(response.result()).isEqualTo(FdsResult.ALLOW);
         assertThat(reevaluated.getOriginalEvaluationRequestId()).isEqualTo(request.originalEvaluationRequestId());
         assertThat(reevaluated.getReevaluationRetryId()).isEqualTo(request.retryId());
+    }
+
+    @Test
+    // 마이그레이션 이전 ERROR 평가는 누락된 위험 신호를 원본 그대로 사용해 재탐지한다.
+    void reevaluate_whenHistoricalRiskSignalsAreMissing_callsHistoricalEvaluation() {
+        var request = FdsReevaluationRequest.builder()
+                .originalEvaluationRequestId(UUID.randomUUID())
+                .newEvaluationRequestId(UUID.randomUUID())
+                .paymentId(10L)
+                .merchantId(1L)
+                .customerRef("legacy-customer")
+                .amount(10_000L)
+                .paymentRequestedAt(Instant.parse("2026-10-27T01:00:00Z"))
+                .retryId(UUID.randomUUID())
+                .build();
+        var original = FdsEvaluation.failed(
+                originalRequest(request), "TRANSIENT_MODEL_UNAVAILABLE", Instant.parse("2026-10-27T01:00:01Z"));
+        var reevaluated = FdsEvaluation.completed(
+                request.evaluationRequest(), FdsResult.ALLOW, 0, Instant.parse("2026-10-27T01:00:02Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(reevaluated, "evaluationId", 102L);
+        when(evaluations.findByReevaluationRetryId(request.retryId())).thenReturn(Optional.empty());
+        when(evaluations.findByEvaluationRequestIdForUpdate(request.originalEvaluationRequestId()))
+                .thenReturn(Optional.of(original));
+        when(evaluations.findByEvaluationRequestId(request.newEvaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(analyses.existsByOriginalEvaluationRequestIdAndDisposition(
+                        request.originalEvaluationRequestId(), FdsFailureDisposition.REEVALUATION_AVAILABLE))
+                .thenReturn(true);
+        when(evaluator.evaluateHistoricalSnapshot(request.evaluationRequest()))
+                .thenReturn(new FdsEvaluationResponse(
+                        request.newEvaluationRequestId(),
+                        102L,
+                        FdsResult.ALLOW,
+                        0,
+                        reevaluated.getEvaluatedAt(),
+                        null));
+        when(evaluations.findById(102L)).thenReturn(Optional.of(reevaluated));
+
+        var response = new FdsReevaluationService(evaluations, analyses, evaluator).reevaluate(request);
+
+        assertThat(response.result()).isEqualTo(FdsResult.ALLOW);
+        verify(evaluator).evaluateHistoricalSnapshot(request.evaluationRequest());
     }
 
     @Test

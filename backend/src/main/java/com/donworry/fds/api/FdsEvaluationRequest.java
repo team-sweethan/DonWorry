@@ -41,24 +41,38 @@ public record FdsEvaluationRequest(
         if (paymentRequestedAt == null) {
             throw new IllegalArgumentException("paymentRequestedAt must not be null");
         }
-        deviceId = requiredIdentifier(deviceId, "deviceId", 100);
-        cardToken = requiredIdentifier(cardToken, "cardToken", 255);
-        cardDisplayLabel = requiredIdentifier(cardDisplayLabel, "cardDisplayLabel", 50);
-        ipCountryCode = requiredIdentifier(ipCountryCode, "ipCountryCode", 2).toUpperCase(java.util.Locale.ROOT);
-        if (!ipCountryCode.matches("[A-Z]{2}")) {
+        deviceId = optionalIdentifier(deviceId, "deviceId", 100);
+        cardToken = optionalIdentifier(cardToken, "cardToken", 255);
+        cardDisplayLabel = optionalIdentifier(cardDisplayLabel, "cardDisplayLabel", 50);
+        ipCountryCode = optionalIdentifier(ipCountryCode, "ipCountryCode", 2);
+        if (ipCountryCode != null) ipCountryCode = ipCountryCode.toUpperCase(java.util.Locale.ROOT);
+        if (ipCountryCode != null && !ipCountryCode.matches("[A-Z]{2}")) {
             throw new IllegalArgumentException("ipCountryCode must be an ISO alpha-2 code");
         }
-        ipAddress = requiredIdentifier(ipAddress, "ipAddress", 45);
-        buyerEmail = requiredIdentifier(buyerEmail, "buyerEmail", 254).toLowerCase(java.util.Locale.ROOT);
+        ipAddress = optionalIdentifier(ipAddress, "ipAddress", 45);
+        buyerEmail = optionalIdentifier(buyerEmail, "buyerEmail", 254);
+        if (buyerEmail != null) buyerEmail = buyerEmail.toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static String requiredIdentifier(String value, String name, int maxLength) {
-        if (value == null) {
-            throw new IllegalArgumentException(name + " must not be null");
-        }
+    public FdsEvaluationRequest requireRiskSignals() {
+        required(deviceId, "deviceId");
+        required(cardToken, "cardToken");
+        required(cardDisplayLabel, "cardDisplayLabel");
+        required(ipCountryCode, "ipCountryCode");
+        required(ipAddress, "ipAddress");
+        required(buyerEmail, "buyerEmail");
+        return this;
+    }
+
+    private static String optionalIdentifier(String value, String name, int maxLength) {
+        if (value == null) return null;
         if (value.isBlank() || !value.equals(value.strip()) || value.codePointCount(0, value.length()) > maxLength) {
             throw new IllegalArgumentException(name + " must be a trimmed identifier");
         }
         return value;
+    }
+
+    private static void required(String value, String name) {
+        if (value == null) throw new IllegalArgumentException(name + " must not be null");
     }
 }

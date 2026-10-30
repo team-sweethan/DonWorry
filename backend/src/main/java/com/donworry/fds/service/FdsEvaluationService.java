@@ -23,6 +23,15 @@ public class FdsEvaluationService implements FdsEvaluator {
 
     @Override
     public FdsEvaluationResponse evaluate(FdsEvaluationRequest request) {
+        return evaluateInternal(request.requireRiskSignals());
+    }
+
+    @Override
+    public FdsEvaluationResponse evaluateHistoricalSnapshot(FdsEvaluationRequest request) {
+        return evaluateInternal(request);
+    }
+
+    private FdsEvaluationResponse evaluateInternal(FdsEvaluationRequest request) {
         try {
             return transactionService.evaluate(request);
         } catch (DataIntegrityViolationException exception) {

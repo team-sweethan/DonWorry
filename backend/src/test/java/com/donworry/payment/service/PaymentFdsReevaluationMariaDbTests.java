@@ -188,6 +188,28 @@ class PaymentFdsReevaluationMariaDbTests {
                 .isEqualTo(2);
     }
 
+    // 마이그레이션 이전 ERROR 결제는 NULL 위험 신호를 원본 그대로 유지해 재평가할 수 있다.
+    @Test
+    void reevaluate_whenHistoricalRiskSignalsAreNull_completesWithStoredSnapshot() {
+        long id = ready();
+        jdbc.update(
+                "UPDATE payment_requests SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                id);
+        jdbc.update(
+                "UPDATE fds_evaluations SET device_id=NULL,card_token=NULL,card_display_label=NULL,ip_country_code=NULL,ip_address=NULL,buyer_email=NULL WHERE payment_id=?",
+                id);
+
+        var result = flow.reevaluate(id);
+
+        assertThat(result.status()).isEqualTo("COMPLETED");
+        assertThat(evaluationCount(id)).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM fds_evaluations WHERE payment_id=? AND device_id IS NULL AND card_token IS NULL AND card_display_label IS NULL AND ip_country_code IS NULL AND ip_address IS NULL AND buyer_email IS NULL",
+                        Long.class,
+                        id))
+                .isEqualTo(2);
+    }
+
     // 결과 분기용 평가 대역도 실제 P2 재평가 트랜잭션 안에서 평가 행을 저장한다.
     private void evaluationResult(FdsResult result) {
         doAnswer(i -> {
@@ -214,7 +236,7 @@ class PaymentFdsReevaluationMariaDbTests {
                             result == FdsResult.ERROR ? "RETRY_ERROR" : null);
                 })
                 .when(evaluator)
-                .evaluate(any());
+                .evaluateHistoricalSnapshot(any());
     }
 
     // 실제 P2 평가·계보 저장·모의 승인·이벤트와 복구 종료를 연결하고 재호출은 재실행하지 않는다.
