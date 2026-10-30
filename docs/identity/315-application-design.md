@@ -57,3 +57,7 @@ Spring Boot mail starter + JavaMailSender를 사용한다. 로컬 Mailpit SMTP 1
 MariaDB: 실제 Flyway/JPA, 공개 CSRF와 입력 오류, 중복/동시 제출, 메일 실패에도 접수 보존, 재발송 구 토큰 폐기, 만료·사용·용도 구별, 확인/재발송 경쟁, IP/이메일 제한과 시간 경계, 강제 변경 세션 공개 진입.
 프론트: 정규화·동의·재발송 API 계약·토큰 fragment 제거·결과 안내, 기존 인증 회귀 검사. Mailpit 실제 SMTP/본문 링크 확인과 Gmail 실제 수신은 별도 기록한다.
 실행 결과는 identity README와 PR의 테스트 결과·미검증에 기록한다.
+
+## #354 PR A 후속 변경
+
+신규 신청에 운영 확인용 쇼핑몰 주소를 필수로 추가하고 동의 버전을 2026-10-30.1로 올린다. 기존 행의 주소·동의 기록은 그대로 둔다. 종류는 수집하지 않는다. 주소는 신청에만 보관하며 연동 설정으로 사용하지 않는다. [후속 설계](354-pr1-application-design.md)와 [ADR-0049](../decisions/0049-application-shop-url.md)를 따른다.

@@ -294,6 +294,14 @@ export function AdminCreateUserPage() {
       form.resetFields()
     } catch (error) {
       setError(errorMessage(error))
+      if (error instanceof ApiError && error.code === 'ADMIN_010') {
+        form.setFields([
+          {
+            name: 'merchantId',
+            errors: ['이미 사장님 계정이 있습니다. 기존 계정의 상태를 확인해 주세요.'],
+          },
+        ])
+      }
     } finally {
       pending.current = false
       setBusy(false)
@@ -355,7 +363,8 @@ export function AdminCreateUserPage() {
                 preserve={false}
                 extra={
                   <span>
-                    사용 중인 가맹점만 선택할 수 있습니다. 이름으로 검색하세요.{' '}
+                    사용 중인 가맹점만 선택할 수 있습니다. 가맹점당 사장님 계정은 1개만 생성할 수
+                    있습니다. 이름으로 검색하세요.{' '}
                     <Link to="/admin/merchants/new">가맹점 만들기</Link>
                   </span>
                 }

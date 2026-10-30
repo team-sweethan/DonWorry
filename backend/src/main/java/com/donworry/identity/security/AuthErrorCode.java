@@ -34,7 +34,8 @@ public enum AuthErrorCode {
     ADMIN_OPERATOR_PERMISSIONS_ONLY("ADMIN_006", "기능 권한은 사장님 계정에만 설정할 수 있습니다.", HttpStatus.BAD_REQUEST),
     ADMIN_MERCHANT_INVALID_INPUT("ADMIN_007", "가맹점 관리 입력값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     ADMIN_MERCHANT_NOT_FOUND("ADMIN_008", "가맹점을 찾을 수 없습니다.", HttpStatus.NOT_FOUND),
-    ADMIN_MERCHANT_CODE_CONFLICT("ADMIN_009", "이미 사용 중인 가맹점 코드입니다.", HttpStatus.CONFLICT);
+    ADMIN_MERCHANT_CODE_CONFLICT("ADMIN_009", "이미 사용 중인 가맹점 코드입니다.", HttpStatus.CONFLICT),
+    ADMIN_OPERATOR_ALREADY_EXISTS("ADMIN_010", "이미 사장님 계정이 있는 가맹점입니다. 기존 계정을 확인해 주세요.", HttpStatus.CONFLICT);
 
     private final String code;
     private final String message;

@@ -31,6 +31,7 @@ public class ApplicationPersistenceService {
         if (users.findByLoginId(input.requestedLoginId()).isPresent()) fail(ApplicationErrorCode.LOGIN_ID_UNAVAILABLE);
         var app = applications.saveAndFlush(MerchantApplication.submit(
                 input.merchantName(),
+                input.shopUrl(),
                 input.businessRegistrationNumber(),
                 input.contactName(),
                 input.email(),

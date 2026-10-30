@@ -28,6 +28,7 @@ afterEach(() => {
 const input = {
   requestedLoginId: ' sweet_owner ',
   merchantName: ' 가맹점 ',
+  shopUrl: ' https://shop.example.com/Products?item=ABC ',
   businessRegistrationNumber: '123-45-67890',
   contactName: ' 담당자 ',
   email: ' Owner@Example.com ',
@@ -40,13 +41,14 @@ test('application_whenNormalized_preservesEmailAliasesAndConsent', () => {
   assert.deepEqual(normalizeApplication(input), {
     requestedLoginId: 'sweet_owner',
     merchantName: '가맹점',
+    shopUrl: 'https://shop.example.com/Products?item=ABC',
     businessRegistrationNumber: '1234567890',
     contactName: '담당자',
     email: 'owner@example.com',
     phone: '01012345678',
     inquiry: '문의',
     consent: true,
-    consentVersion: '2026-10-29.1',
+    consentVersion: '2026-10-30.1',
   })
   assert.equal(
     normalizeApplication({ ...input, email: ' A.B+tag@Gmail.com ' }).email,
@@ -172,4 +174,15 @@ test('applicationConfig_whenDisabledOrUnauthorized_usesPublicRead', async () => 
   } finally {
     off()
   }
+})
+
+// 브라우저 URL 검증과 달리 전송 payload는 국제화 도메인·경로 원문을 변환하지 않는다.
+test('application_whenInternationalDomainSubmitted_preservesOriginalUrl', async () => {
+  const url = 'https://쇼핑몰.한국:8443/Products?item=ABC'
+  globalThis.fetch = async (_path, init) => {
+    const payload = JSON.parse(String(init?.body)) as Record<string, unknown>
+    assert.equal(payload.shopUrl, url)
+    return Response.json({ mailStatus: 'SENT' })
+  }
+  await submitApplication({ ...input, shopUrl: ' ' + url + ' ' })
 })

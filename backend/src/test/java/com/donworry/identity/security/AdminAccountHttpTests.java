@@ -70,8 +70,12 @@ class AdminAccountHttpTests {
                 adminLogin,
                 encoder.encode("AdminPass123"));
         adminId = jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, adminLogin);
-        merchantId =
-                jdbc.queryForObject("SELECT merchant_id FROM merchants WHERE merchant_code='DEMOSHOP'", Long.class);
+        jdbc.update(
+                "INSERT INTO merchants(merchant_code,display_name,status,pg_fee_rate,created_at) VALUES (?,?,'ACTIVE',0.02,UTC_TIMESTAMP(6))",
+                prefix + "_base",
+                prefix + "_base");
+        merchantId = jdbc.queryForObject(
+                "SELECT merchant_id FROM merchants WHERE merchant_code=?", Long.class, prefix + "_base");
         admin = client();
         assertThat(login(admin, adminLogin, "AdminPass123").statusCode()).isEqualTo(200);
     }
@@ -133,6 +137,93 @@ class AdminAccountHttpTests {
     private int historyCount(long id) {
         return jdbc.queryForObject(
                 "SELECT COUNT(*) FROM admin_change_histories WHERE target_user_id=?", Integer.class, id);
+    }
+
+    // 기존·정지·첫 설정 전 계정 모두 추가 생성을 막고, 기존 복수 계정은 유지한다.
+    @Test
+    void create_whenOperatorExists_rejectsWithoutChangingExistingAccounts() throws Exception {
+        var first = create("_owner", "OPERATOR");
+        long firstId = first.path("user").path("userId").asLong();
+        var input = Map.of(
+                "loginId", prefix + "_second", "displayName", "사장님", "role", "OPERATOR", "merchantId", merchantId);
+        problem(send(admin, "POST", "/api/admin/users", input), 409, "ADMIN_010");
+        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", firstId);
+        problem(send(admin, "POST", "/api/admin/users", input), 409, "ADMIN_010");
+        // 과거 복수 계정을 가진 데이터는 서비스로 다시 만들지 않고 기존 데이터로 준비한다.
+        jdbc.update(
+                "INSERT INTO platform_users(login_id,password_hash,display_name,status,role,merchant_id,created_at) VALUES (?,?,'기존 사장님','ACTIVE','OPERATOR',?,UTC_TIMESTAMP(6))",
+                prefix + "_legacy",
+                encoder.encode("OwnerPass123"),
+                merchantId);
+        problem(send(admin, "POST", "/api/admin/users", input), 409, "ADMIN_010");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM platform_users WHERE merchant_id=? AND role='OPERATOR'",
+                        Integer.class,
+                        merchantId))
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM platform_users WHERE login_id=?", Integer.class, prefix + "_second"))
+                .isZero();
+        assertThat(historyCount(firstId)).isOne();
+    }
+
+    @Autowired
+    com.donworry.identity.service.AccountProvisioningService provisioning;
+
+    @Autowired
+    org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    // JVM 잠금을 거치지 않는 별도 트랜잭션끼리 경쟁시켜 DB 잠금이 실제로 1개를 보장하는지 검사한다.
+    @Test
+    void provision_whenDifferentLoginIdsRace_createsExactlyOneOperator() throws Exception {
+        var actor = SessionUser.builder()
+                .userId(adminId)
+                .loginId(adminLogin)
+                .role(com.donworry.identity.entity.UserRole.ADMIN)
+                .build();
+        var ready = new CountDownLatch(2);
+        var go = new CountDownLatch(1);
+        String hash = encoder.encode("OwnerPass123");
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var futures = new ArrayList<Future<String>>();
+            for (int i = 0; i < 2; i++) {
+                int n = i;
+                futures.add(executor.submit(() -> {
+                    ready.countDown();
+                    assertThat(go.await(10, TimeUnit.SECONDS)).isTrue();
+                    var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+                    tx.setIsolationLevel(
+                            org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+                    try {
+                        tx.executeWithoutResult(status -> provisioning.create(
+                                actor,
+                                new com.donworry.identity.dto.AdminAccountRequests.CreateUserRequest(
+                                        prefix + "_race" + n, "사장님", "OPERATOR", merchantId),
+                                hash));
+                        return "created";
+                    } catch (AccountManagementException e) {
+                        return e.getErrorCode().name();
+                    }
+                }));
+            }
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            go.countDown();
+            var results = new ArrayList<String>();
+            for (var f : futures) results.add(f.get(20, TimeUnit.SECONDS));
+            assertThat(results).containsExactlyInAnyOrder("created", "ADMIN_OPERATOR_ALREADY_EXISTS");
+        } finally {
+            go.countDown();
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM platform_users WHERE merchant_id=? AND role='OPERATOR'",
+                        Integer.class,
+                        merchantId))
+                .isOne();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM admin_change_histories WHERE actor_user_id=? AND change_type='USER_CREATED'",
+                        Integer.class,
+                        adminId))
+                .isOne();
     }
 
     // 관리자 영역의 모든 작업은 비로그인·다른 역할을 서버에서 거절한다
@@ -438,7 +529,7 @@ class AdminAccountHttpTests {
                         Map.of("loginId", prefix, "displayName", "이름", "role", "OPERATOR", "merchantId", inactive)),
                 400,
                 "ADMIN_005");
-        var options = send(admin, "GET", "/api/admin/merchants/options?keyword=" + prefix, null);
+        var options = send(admin, "GET", "/api/admin/merchants/options?keyword=" + prefix + "_m", null);
         assertThat(options.statusCode()).isEqualTo(200);
         assertThat(mapper.readTree(options.body()).size()).isZero();
     }

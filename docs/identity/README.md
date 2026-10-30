@@ -2,6 +2,10 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #354 PR A 신청 주소·사장님 계정 추가 생성 제한
+
+[설계](354-pr1-application-design.md), [ADR-0049](../decisions/0049-application-shop-url.md). 신규 신청은 운영 확인용 쇼핑몰 주소만 받고 종류는 수집하지 않는다. 기존 신청은 주소 NULL로 유지한다. 승인·관리자 직접 생성에서 같은 가맹점 사장님 계정 추가 생성을 막되 기존 복수 계정은 유지한다. HMAC 키·연결 확인은 후속 PR이다. 실행 결과는 설계와 PR에 기록한다.
+
 ## #356 가맹점별 PG 수수료율 공개 조회
 
 `TenantReader.findById(merchantId)`가 반환하는 `TenantSummary.pgFeeRate()`로 가맹점에 저장된 `BigDecimal` 수수료율을 읽는다. 단위는 비율(`0.020000 = 2%`)이며 0·소수 6자리를 변환 없이 반환한다. ACTIVE/INACTIVE 모두 조회되고, 없는 가맹점만 empty다. 잘못된 ID 거절·DB 오류 전파는 기존과 같다.
@@ -384,7 +388,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 
 - `/admin/users` 목록·검색·역할/상태 필터·페이지 나누기, `/admin/users/new` 생성, `/admin/users/:id` 권한·정지/복구·비밀번호 초기화를 제공한다.
 - `GET /api/admin/users?page=0&size=20&keyword=&role=&status=&passwordChangeRequired=`: items·page·size·totalElements. role/status/passwordChangeRequired(true·false, 임시 비밀번호 미변경 여부)는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
-- `POST /api/admin/users`: loginId·displayName·role·merchantId. 아이디 `[a-z0-9_]{3,30}`, 이름 1~100자, 역할은 OPERATOR·SECURITY_STAFF만 허용한다. OPERATOR는 ACTIVE 가맹점이 필수이고 다른 역할은 merchantId를 받지 않는다. 생성 시 기능 권한은 비어 있다. 응답은 201 `{user, temporaryPassword}`다.
+- `POST /api/admin/users`: loginId·displayName·role·merchantId. 아이디 `[a-z0-9_]{3,30}`, 이름 1~100자, 역할은 OPERATOR·SECURITY_STAFF만 허용한다. OPERATOR는 ACTIVE 가맹점이 필수이고 #354 PR A부터 기존 OPERATOR가 있으면 상태와 관계없이 409 ADMIN_010으로 거절한다. 기존 복수 계정은 유지한다. 다른 역할은 merchantId를 받지 않는다. 생성 시 기능 권한은 비어 있다. 응답은 201 `{user, temporaryPassword}`다.
 - `PUT /api/admin/users/{id}/permissions`: `{permissions:[...]}` 최종 집합. OPERATOR만 FDS_VIEW·FINANCE_VIEW를 설정한다. ADMIN의 조회 권한은 기존 역할 계산이다.
 - `PUT /api/admin/users/{id}/status`: `{status:"ACTIVE"|"DISABLED"}`. 자기 정지는 거절한다. 역할·소속 변경과 계정 삭제 API는 없다.
 - `POST /api/admin/users/{id}/password-reset`: `{user, temporaryPassword}`를 반환하고 다음 로그인에서 변경을 요구한다. 자기 초기화도 가능하며 성공 응답 후 다음 요청부터 현재 세션이 만료된다.

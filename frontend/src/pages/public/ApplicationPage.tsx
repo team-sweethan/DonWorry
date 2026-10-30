@@ -1,3 +1,4 @@
+import { isShopUrlValid } from '../../utils/shopUrl.ts'
 import { useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Checkbox, Descriptions, Form, Input, Result, Space } from 'antd'
 import { Link, useLoaderData } from 'react-router-dom'
@@ -114,11 +115,11 @@ function ConsentNotice() {
       <dl>
         <dt>수집 항목</dt>
         <dd>
-          가맹점명, 사업자등록번호, 담당자명, 이메일, 연락처, 로그인 아이디, 선택 입력한 문의·요청
-          사항
+          가맹점명, 사업자등록번호, 쇼핑몰 주소, 담당자명, 이메일, 연락처, 로그인 아이디, 선택
+          입력한 문의·요청 사항
         </dd>
         <dt>이용 목적</dt>
-        <dd>이용 신청 확인, 검토 결과 안내, 계정 발급</dd>
+        <dd>이용 신청 확인, 쇼핑몰 운영 여부 확인, 검토 결과 안내, 계정 발급</dd>
         <dt>보관 기간</dt>
         <dd>이메일 미확인 신청 7일, 반려 신청 30일, 승인 신청은 가맹점 이용 기간 동안</dd>
       </dl>
@@ -248,6 +249,31 @@ export function ApplicationPage() {
               >
                 <Input maxLength={20} inputMode="numeric" placeholder="000-00-00000" />
               </Form.Item>
+              <Form.Item
+                name="shopUrl"
+                label="쇼핑몰 주소"
+                extra="현재 운영 중인 쇼핑몰 주소를 입력해 주세요. 이용 신청 검토에 사용합니다."
+                rules={[
+                  { required: true, whitespace: true, message: '쇼핑몰 주소를 입력해 주세요.' },
+                  {
+                    validator: (_, value: string | undefined) =>
+                      !value?.trim() || isShopUrlValid(value)
+                        ? Promise.resolve()
+                        : Promise.reject(
+                            new Error(
+                              'http:// 또는 https://로 시작하는 쇼핑몰 주소를 입력해 주세요.',
+                            ),
+                          ),
+                  },
+                ]}
+              >
+                <Input
+                  maxLength={2048}
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://shop.example.com"
+                />
+              </Form.Item>
               <h2>담당자 정보</h2>
               <Form.Item
                 name="contactName"
@@ -354,6 +380,7 @@ export function ApplicationPage() {
                 size="small"
                 items={[
                   { key: 'merchant', label: '가맹점명', children: review.merchantName },
+                  { key: 'shopUrl', label: '쇼핑몰 주소', children: review.shopUrl.trim() },
                   {
                     key: 'business',
                     label: '사업자등록번호',
