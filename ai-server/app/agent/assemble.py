@@ -116,25 +116,34 @@ HISTORY_UNAVAILABLE = "고객 최근 결제를 조회하지 못했습니다."
 BURST_WINDOW = timedelta(minutes=10)
 BURST_KEY = "같은 연속 결제(사건 결제 앞뒤 10분 안, 평소 결제 아님)"
 EARLIER_KEY = "그 전 결제"
+# 나중에 다시 조사하면 조회 시각 기준 30일에 사건 뒤 결제가 섞인다
+# 평소 구매 근거로 쓰지 않게 따로 묶는다 (#355 리뷰)
+LATER_KEY = "사건 뒤 결제(사건 결제 10분 뒤부터, 평소 결제 아님)"
 
 
 def _at(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
-# 고객 최근 결제를 "같은 연속 결제"와 "그 전 결제"로 나눈다 (#355, Case 8 · 9)
+# 고객 최근 결제를 "같은 연속 결제" · "그 전 결제" · "사건 뒤 결제"로 나눈다 (#355, Case 8 · 9)
 # 사건 결제 몇 초 전의 결제가 "평소 결제 · 매입 완료"로 정상 정황에 쓰였다
 def split_history(
     case_payments: CasePaymentsTool, history: PaymentHistoryTool
-) -> tuple[list[HistoryPayment], list[HistoryPayment]]:
+) -> tuple[list[HistoryPayment], list[HistoryPayment], list[HistoryPayment]]:
     case_times = [t for t in (_at(p.requestedAt) for p in case_payments.payments) if t]
     burst: list[HistoryPayment] = []
     earlier: list[HistoryPayment] = []
+    later: list[HistoryPayment] = []
     for payment in history.payments:
         at = _at(payment.requestedAt)
-        near = at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times)
-        (burst if near else earlier).append(payment)
-    return burst[:HISTORY_SHOWN_TO_AI], earlier[:HISTORY_SHOWN_TO_AI]
+        if at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times):
+            burst.append(payment)
+        elif at is not None and case_times and at > max(case_times):
+            later.append(payment)
+        else:
+            earlier.append(payment)
+    shown = HISTORY_SHOWN_TO_AI
+    return burst[:shown], earlier[:shown], later[:shown]
 
 
 def _history_items(payments: list[HistoryPayment]) -> list[dict[str, object]]:
@@ -156,10 +165,13 @@ OUTSIDE_RULE_LABELS = {
 }
 
 
+# payment_id를 주면 그 결제의 이유를 검사할 정황만 — 해외 접속은 그 결제가 해외일 때만 (#355 리뷰)
+# 연관 결제 · 고객 최근 결제는 사건 전체 정보라 모든 결제에 해당한다
 def outside_rule_evidence(
     fds: dict[str, FdsPayment],
     history: PaymentHistoryTool | None = None,
     linked: LinkedPaymentsTool | None = None,
+    payment_id: str | None = None,
 ) -> list[str]:
     found: list[str] = []
     if linked is not None and any(
@@ -170,9 +182,8 @@ def outside_rule_evidence(
         c.paymentStatus in {"VOIDED", "DECLINED", "DENIED"} for c in history.statusCounts
     ):
         found.append(OUTSIDE_RULE_LABELS["history"])
-    if any(
-        e.signals is not None and e.signals.ipCountryCode not in (None, "KR") for e in fds.values()
-    ):
+    evidence = fds.values() if payment_id is None else [e for e in [fds.get(payment_id)] if e]
+    if any(e.signals is not None and e.signals.ipCountryCode not in (None, "KR") for e in evidence):
         found.append(OUTSIDE_RULE_LABELS["overseas"])
     return found
 
@@ -279,7 +290,7 @@ def facts_json(
     if history is None:
         facts[key] = "조회하지 못함"
     else:
-        burst, earlier = split_history(case_payments, history)
+        burst, earlier, later = split_history(case_payments, history)
         facts[key] = {
             "기간(일)": history.lookbackDays,
             "건수": len(history.payments),
@@ -287,6 +298,7 @@ def facts_json(
             "상태별 건수": history_counts(history),
             BURST_KEY: _history_items(burst),
             EARLIER_KEY: _history_items(earlier),
+            LATER_KEY: _history_items(later),
         }
     key = "같은 카드 · 기기 · IP를 쓴 다른 고객 결제(최근 30일)"
     if linked is None:
@@ -312,8 +324,7 @@ def fact_numbers(
     if history is not None:
         numbers |= {history.lookbackDays, len(history.payments)}
         numbers |= {c.count for c in history.statusCounts}
-        burst, earlier = split_history(case_payments, history)
-        for p in [*burst, *earlier]:
+        for p in [p for group in split_history(case_payments, history) for p in group]:
             numbers |= {int(d) for d in re.findall(r"\d+", p.requestedAt or "")}
             if p.amount is not None:
                 numbers |= {p.amount, p.amount // 10000}

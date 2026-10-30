@@ -219,30 +219,36 @@ def style_errors(narrative: Narrative) -> list[str]:
 
 # 규칙 밖 정황이 근거에 있는데 이유 · 결론 문장이 "다른 근거가 없다"고 쓴 곳 (#355, Case 8 · 9)
 # 근거가 정말 규칙뿐이면(outside 비어 있음) 검사하지 않는다 — 맞는 문장까지 막지 않게
-def evidence_mismatch_errors(narrative: Narrative, outside: list[str]) -> list[str]:
-    if not outside:
-        return []
-    texts = [
-        *narrative.summary,
-        *narrative.overallAnalysis,
-        narrative.recommendationSummary,
-        *(p.reason for p in narrative.payments.values()),
-    ]
+# 요약 · 종합 분석 · 권고 요약은 사건 전체 정황으로,
+# 결제별 이유는 그 결제의 정황으로 검사한다 (#355 리뷰)
+# by_payment가 없으면 결제별 이유도 사건 전체 정황으로 본다
+def evidence_mismatch_errors(
+    narrative: Narrative,
+    outside: list[str],
+    by_payment: dict[str, list[str]] | None = None,
+) -> list[str]:
+    case_texts = [*narrative.summary, *narrative.overallAnalysis, narrative.recommendationSummary]
+    checks = [(outside, text) for text in case_texts]
+    for pid, payment in narrative.payments.items():
+        found = outside if by_payment is None else by_payment.get(pid, [])
+        checks.append((found, f"결제 {pid} reason: {payment.reason}"))
     return [
-        f"근거에 규칙 밖 정황({' · '.join(outside)})이 있다. "
+        f"근거에 규칙 밖 정황({' · '.join(found)})이 있다. "
         f'"다른 근거가 없다/부족하다"고 쓰지 말고 그 정황을 이유에 넣어라: "{text}"'
-        for text in texts
-        if _NO_OTHER_EVIDENCE.search(text)
+        for found, text in checks
+        if found and _NO_OTHER_EVIDENCE.search(text)
     ]
 
 
 # 형식 · 내용 검사 — 통과하면 Narrative, 아니면 Qwen에게 돌려줄 오류 문장 목록
 # outside_rule_evidence: 근거에 있는 규칙 밖 정황 이름 (#355). None이면 이유 어긋남은 보지 않는다
+# outside_by_payment: 결제별 이유를 검사할 그 결제의 정황 (#355 리뷰)
 def validate_narrative(
     raw: str,
     payment_ids: list[str],
     allowed_numbers: set[int] | None = None,
     outside_rule_evidence: list[str] | None = None,
+    outside_by_payment: dict[str, list[str]] | None = None,
 ) -> tuple[Narrative | None, list[str]]:
     try:
         narrative = Narrative.model_validate_json(raw)
@@ -252,7 +258,7 @@ def validate_narrative(
     if allowed_numbers is not None:
         errors += content_errors(narrative, allowed_numbers)
     errors += style_errors(narrative)
-    errors += evidence_mismatch_errors(narrative, outside_rule_evidence or [])
+    errors += evidence_mismatch_errors(narrative, outside_rule_evidence or [], outside_by_payment)
     for name, items in (
         ("summary", narrative.summary),
         ("overallAnalysis", narrative.overallAnalysis),
@@ -297,14 +303,20 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
     overall = keep(narrative.overallAnalysis, copied)
     checks = keep(narrative.additionalChecks, copied)
     # 2) 요약 · 종합 분석 문장을 결제별 근거에 그대로 복사한 문장 — 화면에 두 번 나온다 (Case 10)
+    # 그 문장뿐이면 남긴다 — 빼면 이유는 "정황이 있다"는데 목록이 비어 보였다 (Case 13)
     top = {_key(text) for text in [*summary, *overall]}
+
+    def evidence(items: list[str]) -> list[str]:
+        items = keep(items, copied)
+        if all(_key(t) in top for t in items):
+            return items
+        return keep(items, lambda t: _key(t) in top)
+
     payments = {
         payment_id: payment.model_copy(
             update={
-                "riskEvidence": keep(payment.riskEvidence, lambda t: copied(t) or _key(t) in top),
-                "normalEvidence": keep(
-                    payment.normalEvidence, lambda t: copied(t) or _key(t) in top
-                ),
+                "riskEvidence": evidence(payment.riskEvidence),
+                "normalEvidence": evidence(payment.normalEvidence),
                 "unknowns": keep(payment.unknowns, copied),
             }
         )
@@ -319,3 +331,17 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
         }
     )
     return cleaned, removed
+
+
+# 문장을 뺀 뒤 요약 · 종합 분석 · 확인할 것이 비면 다시 쓰게 한다 (#355 리뷰)
+# 예시 문장만으로 채운 경우다. 비운 채 조립하면 요약 최소 1줄 제약에 걸려 조사가 오류로 끝났다
+def emptied_errors(narrative: Narrative) -> list[str]:
+    return [
+        f"{name}에 출력 예시 문장만 썼다. 예시는 다른 사건이다. 이번 [조사 근거]로 새로 써라"
+        for name, items in (
+            ("summary", narrative.summary),
+            ("overallAnalysis", narrative.overallAnalysis),
+            ("additionalChecks", narrative.additionalChecks),
+        )
+        if not items
+    ]

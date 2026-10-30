@@ -19,6 +19,7 @@ from app.agent.assemble import (
 from app.agent.llm import LlmClient
 from app.agent.narrative import (
     Narrative,
+    emptied_errors,
     narrative_schema,
     sanitize_narrative,
     validate_narrative,
@@ -312,10 +313,14 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             _latest_history(records),
         )
         # 규칙 밖 정황이 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
-        outside = outside_rule_evidence(
-            _fds_by_payment(records), _latest_history(records), _latest_linked(records)
+        fds, history, linked = (
+            _fds_by_payment(records),
+            _latest_history(records),
+            _latest_linked(records),
         )
-        narrative, errors = validate_narrative(raw, payment_ids, allowed, outside)
+        outside = outside_rule_evidence(fds, history, linked)
+        by_payment = {pid: outside_rule_evidence(fds, history, linked, pid) for pid in payment_ids}
+        narrative, errors = validate_narrative(raw, payment_ids, allowed, outside, by_payment)
         used_tokens = trace.tokens(getattr(raw, "usage", None))
         attempt = state["repairs"] + 1
 
@@ -334,13 +339,16 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         if narrative is not None:
             # 틀리거나 겹친 문장은 다시 쓰게 하지 않고 코드가 뺀다 (#355)
             narrative, removed = sanitize_narrative(narrative)
-            passed = "형식 검사 통과" + (f" · 문장 {removed}개 뺌" if removed else "")
-            return {
-                "narrative": narrative,
-                "write_messages": messages,
-                "next": "assemble",
-                "trace": written(passed),
-            }
+            # 빼고 나서 필수 목록이 비었으면 그때만 다시 쓰게 한다 (#355 리뷰)
+            errors = emptied_errors(narrative)
+            if not errors:
+                passed = "형식 검사 통과" + (f" · 문장 {removed}개 뺌" if removed else "")
+                return {
+                    "narrative": narrative,
+                    "write_messages": messages,
+                    "next": "assemble",
+                    "trace": written(passed),
+                }
         if state["repairs"] < settings.agent_max_repairs:
             repair = HumanMessage(content=prompts.REPAIR.format(errors="; ".join(errors)))
             return {

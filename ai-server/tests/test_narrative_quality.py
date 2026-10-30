@@ -197,7 +197,8 @@ def test_case10_like_output_succeeds_without_rewrite() -> None:
     assert outcome.status == "SUCCEEDED"
     assert llm.write_calls == 1
     first = outcome.report.paymentAnalyses[0]
-    assert first.riskEvidence == []
+    # 위험 근거가 요약 복사 문장뿐이라 남기고(Case 13), 규칙만 말한 문장은 뺀다
+    assert first.riskEvidence == [shared]
     assert first.reason == reason
     assert outcome.report.recommendation.summary == reason
 
@@ -230,3 +231,115 @@ def test_limitations_come_only_from_tool_records() -> None:
     assert not any("알 수 없었습니다" in line for line in limitations)
     assert LINKED_PRIVACY in limitations
     assert "limitations" not in narrative_schema(PAYMENTS)["properties"]
+
+
+# --- Codex 리뷰 재현 (#355) ---
+
+
+# 예시 문장만으로 요약 · 종합 분석 · 확인할 것을 채우면 코드가 다 빼서 요약이 빈다
+# 비면 조립에서 오류(AGENT_ERROR)가 나던 것을 다시 쓰기로 돌려보낸다
+def test_example_only_summary_is_rewritten_not_crashed() -> None:
+    from app.agent.graph import run_investigation
+    from app.agent.prompts import WRITE_EXAMPLES
+    from app.config import Settings
+    from tests.fakes import ScriptedLlm, call, context
+
+    example = WRITE_EXAMPLES[0]
+    copied = narrative(
+        PAYMENTS,
+        summary=example["summary"],
+        overallAnalysis=example["overallAnalysis"],
+        additionalChecks=example["additionalChecks"],
+    )
+    llm = ScriptedLlm(turns=[[call("get_case_payments")]], outputs=[copied, narrative(PAYMENTS)])
+
+    outcome = run_investigation(context(), llm, _toolbox_with_linked(), Settings(_env_file=None))
+
+    assert outcome.status == "SUCCEEDED"
+    assert llm.write_calls == 2
+    assert outcome.report.summary == json.loads(narrative(PAYMENTS))["summary"]
+
+
+# 나중에 다시 조사하면 고객 최근 결제에 사건 뒤 결제가 섞인다 (조회 시각 기준 30일)
+# 사건 뒤 결제는 "그 전 결제"(평소 구매 근거)가 아니라 따로 묶는다
+def test_history_after_case_is_not_earlier() -> None:
+    cases = CasePaymentsTool.model_validate(FIXTURE["casePayments"])
+    last = datetime.fromisoformat(max(p.requestedAt for p in cases.payments))
+    history = PaymentHistoryTool(
+        caseId="101",
+        evidenceVersion=2,
+        source="P5",
+        retrievedAt=(last + timedelta(days=2)).isoformat(),
+        lookbackDays=30,
+        payments=[
+            HistoryPayment(
+                paymentId="8201",
+                amount=590000,
+                paymentStatus="CAPTURED",
+                requestedAt=(last + timedelta(days=1)).isoformat(),
+            ),
+            HistoryPayment(
+                paymentId="8001",
+                amount=580000,
+                paymentStatus="CAPTURED",
+                requestedAt=(last - timedelta(days=20)).isoformat(),
+            ),
+        ],
+        statusCounts=[StatusCount(paymentStatus="CAPTURED", count=2)],
+        truncated=False,
+    )
+
+    facts = json.loads(facts_json(cases, {}, None, history, None))["고객 최근 결제(이 사건 밖)"]
+    after = [v for k, v in facts.items() if k.startswith("사건 뒤 결제")]
+
+    assert [p["금액(원)"] for p in facts[EARLIER_KEY]] == [580000]
+    assert [[p["금액(원)"] for p in group] for group in after] == [[590000]]
+
+
+# 결제 A만 해외 접속이면 B의 "규칙 말고 다른 근거가 없다"는 사실이라 통과한다
+# A의 같은 문장은 해외 접속을 빠뜨렸으니 다시 쓰게 한다
+def test_payment_reason_checked_with_its_own_evidence() -> None:
+    from app.schemas.tools import FdsPayment
+
+    def fds(pid: str, country: str) -> FdsPayment:
+        signals = {"cardProvided": True, "deviceProvided": True, "ipProvided": True}
+        return FdsPayment(
+            paymentId=pid,
+            riskScore=60,
+            fdsResult="REVIEW",
+            ruleHits=[],
+            signals={**signals, "cardDisplayLabel": None, "ipCountryCode": country},
+        )
+
+    evidence = {"9001": fds("9001", "US"), "9002": fds("9002", "KR")}
+    written = json.loads(narrative(PAYMENTS))
+    only_rules = "규칙 적중 외에 다른 근거가 없어 추가 확인이 필요합니다."
+    for pid in PAYMENTS:
+        written["payments"][pid]["reason"] = only_rules
+    by_payment = {pid: outside_rule_evidence(evidence, None, None, pid) for pid in PAYMENTS}
+
+    _, errors = validate_narrative(
+        json.dumps(written, ensure_ascii=False),
+        PAYMENTS,
+        None,
+        outside_rule_evidence(evidence),
+        by_payment,
+    )
+
+    assert by_payment == {"9001": ["해외 접속"], "9002": []}
+    assert len(errors) == 1
+    assert "9001" in errors[0]
+
+
+# 요약을 복사한 결제 근거가 그 목록의 유일한 문장이면 남긴다 (Case 13)
+# 빼면 "정상 정황이 있다"는 이유 아래 정상 정황 목록이 비어 보였다
+def test_copied_payment_evidence_kept_when_it_is_the_only_one() -> None:
+    written = json.loads(narrative(PAYMENTS))
+    copied = written["overallAnalysis"][0]
+    written["payments"]["9001"]["normalEvidence"] = [copied]
+    parsed, _ = validate_narrative(json.dumps(written, ensure_ascii=False), PAYMENTS, None)
+
+    cleaned, removed = sanitize_narrative(parsed)
+
+    assert cleaned.payments["9001"].normalEvidence == [copied]
+    assert removed == 0
