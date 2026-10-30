@@ -68,28 +68,25 @@ public class RecurringExpenseService {
     public List<RecurringExpenseOccurrence> occurrences(Long merchant, LocalDate from, LocalDate to) {
         CashFlowManagementService.validateMerchant(merchant);
         CashFlowManagementService.validatePeriod(from, to);
-        var pending = expander.expand(
-                repository.findApplicable(merchant, from, to).stream()
-                        .map(RecurringExpenseResponse::from)
-                        .toList(),
-                from,
-                to);
-        // 예정일이 기간 안에 있어도 다른 날짜에 이미 지출한 회차는 다시 예정으로 계산하지 않는다.
-        var paidDue = payments.findByMerchantIdAndOccurrenceDateBetween(merchant, from, to, PageRequest.of(0, 10001));
         var paidActual = payments.findByMerchantIdAndPaidAtGreaterThanEqualAndPaidAtLessThan(
                 merchant,
                 from.atStartOfDay(SettlementReportService.ZONE).toInstant(),
                 to.plusDays(1).atStartOfDay(SettlementReportService.ZONE).toInstant(),
                 PageRequest.of(0, 10001));
-        if (paidDue.size() > 10000 || paidActual.size() > 10000) throw tooLarge();
-        var paidKeys = new HashSet<String>();
-        paidDue.forEach(p -> paidKeys.add(key(p.getRecurringExpenseId(), p.getOccurrenceDate())));
+        if (paidActual.size() > 10000) throw tooLarge();
         var result = new ArrayList<RecurringExpenseOccurrence>();
-        pending.stream()
-                .filter(p -> !paidKeys.contains(key(p.recurringExpenseId(), p.expenseDate())))
-                .forEach(result::add);
         paidActual.stream().map(this::paidResponse).forEach(result::add);
-        if (result.size() > 10000) throw tooLarge();
+        for (var rule : repository.findApplicable(merchant, from, to)) {
+            // 다른 날 이미 지출한 회차를 먼저 제외한다. 완료 기록 수가 아니라 최종 반환 수를 제한한다.
+            var completed =
+                    new HashSet<>(payments.findCompletedDates(merchant, rule.getRecurringExpenseId(), from, to));
+            result.addAll(expander.expand(
+                    List.of(RecurringExpenseResponse.from(rule)),
+                    from,
+                    to,
+                    Map.of(rule.getRecurringExpenseId(), completed)));
+            if (result.size() > 10000) throw tooLarge();
+        }
         result.sort(Comparator.comparing(
                         (RecurringExpenseOccurrence p) -> p.paidDate() == null ? p.expenseDate() : p.paidDate())
                 .thenComparing(RecurringExpenseOccurrence::recurringExpenseId));
@@ -112,10 +109,6 @@ public class RecurringExpenseService {
             throw new SettlementRequestException(
                     409, "SETTLEMENT_RECURRING_OCCURRENCE_INVALID", "유효한 정기 지출 발생일이 아닙니다.");
         return paidResponse(payments.save(RecurringExpensePayment.completed(rule, date, Instant.now())));
-    }
-
-    private String key(Long id, LocalDate date) {
-        return id + ":" + date;
     }
 
     private SettlementRequestException tooLarge() {

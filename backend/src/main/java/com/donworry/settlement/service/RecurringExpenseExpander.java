@@ -8,6 +8,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class RecurringExpenseExpander {
     public List<RecurringExpenseOccurrence> expand(List<RecurringExpenseResponse> rules, LocalDate from, LocalDate to) {
+        return expand(rules, from, to, Map.of());
+    }
+
+    public List<RecurringExpenseOccurrence> expand(
+            List<RecurringExpenseResponse> rules,
+            LocalDate from,
+            LocalDate to,
+            Map<Long, Set<LocalDate>> completedDates) {
         CashFlowManagementService.validatePeriod(from, to);
         var result = new ArrayList<RecurringExpenseOccurrence>();
         var seen = new HashSet<Long>();
@@ -24,7 +32,10 @@ public class RecurringExpenseExpander {
                         || (r.frequency().equals("WEEKLY")
                                 ? d.getDayOfWeek() == r.startDate().getDayOfWeek()
                                 : d.getDayOfMonth() == Math.min(r.startDate().getDayOfMonth(), d.lengthOfMonth()));
-                if (occurs) {
+                if (occurs
+                        && !completedDates
+                                .getOrDefault(r.recurringExpenseId(), Set.of())
+                                .contains(d)) {
                     if (result.size() >= 10000)
                         throw new SettlementRequestException(
                                 422, "SETTLEMENT_RECURRING_PERIOD_TOO_LARGE", "조회 기간을 줄여 주세요.");
