@@ -89,7 +89,7 @@ test('loginDestination_whenPasswordChangeRequired_usesPasswordPage', () => {
   )
 })
 
-// 업무 권한이 없어도 본인 계정 화면은 복원하고, 권한 메뉴 대신 개발 연동 화면으로 보낸다 (#354).
+// 업무 권한이 없어도 본인 계정 화면은 복원하고, 권한 메뉴 대신 시크릿 키 발급 화면으로 보낸다 (#354).
 test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
   const noPermissions = { ...owner, permissions: [] }
   for (const returnTo of ['/account/login-history?page=2', '/account/password/']) {

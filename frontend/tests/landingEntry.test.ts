@@ -63,7 +63,7 @@ test('landingEntry_whenPasswordChangeRequired_usesPasswordPage', async () => {
   }
 })
 
-// 업무 권한 없는 사장님도 권한 없이 열리는 개발 연동 화면에서 시작한다 (#354).
+// 업무 권한 없는 사장님도 권한 없이 열리는 시크릿 키 발급 화면에서 시작한다 (#354).
 test('landingEntry_whenNoBusinessPermissions_usesIntegrationPage', async () => {
   const store = setup(async () => ({ ...admin, role: 'OPERATOR', merchantId: 10 }))
   await store.check('/')

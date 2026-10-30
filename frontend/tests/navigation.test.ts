@@ -57,9 +57,9 @@ test('사장님 메뉴는 권한이 있는 것만 보인다', () => {
 })
 
 // 연동은 권한 코드가 없어도 사장님이면 써야 하므로, 권한 없는 사장님의 첫 화면이 된다 (#354).
-test('권한 없는 사장님도 개발 연동 화면은 열 수 있다', () => {
+test('권한 없는 사장님도 시크릿 키 발급 화면은 열 수 있다', () => {
   assert.deepEqual(sessionNavigation(owner([])).groups, [
-    { title: '연동', items: [{ label: '개발 연동', path: '/owner/integration' }] },
+    { title: '연동', items: [{ label: '시크릿 키 발급', path: '/owner/integration' }] },
   ])
   assert.equal(sessionNavigation(owner([])).landing, '/owner/integration')
   assert.equal(canOpenPath(owner([]), '/owner/integration'), true)

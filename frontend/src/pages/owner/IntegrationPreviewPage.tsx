@@ -5,7 +5,7 @@ import { PageHeader } from '../../components/common/PageHeader'
 import './integration-preview.css'
 
 /**
- * 사장님 [개발 연동] 미리보기 (#354).
+ * 사장님 [시크릿 키 발급] 미리보기 (#354).
  * 키 발급 API(PR B) 전이라 서버를 호출하지 않는다. 실제 가맹점 값으로 오해하지 않도록 모든 값에 "예시"를 붙인다.
  */
 type IssueRecord = { at: string; action: string; actor: string }
@@ -38,8 +38,8 @@ export function IntegrationPreviewPage() {
   return (
     <>
       <PageHeader
-        title="개발 연동"
-        description="쇼핑몰 서버가 돈워리 결제 API를 쓸 수 있도록 연결합니다."
+        title="시크릿 키 발급"
+        description="쇼핑몰 서버가 돈워리 결제 API를 쓸 수 있도록 시크릿 키를 발급하고 연결 상태를 확인합니다."
       />
       <Alert
         type="info"
