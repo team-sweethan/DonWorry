@@ -9,9 +9,21 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts, trace
-from app.agent.assemble import analyzable, assemble_report, fact_numbers, facts_json
+from app.agent.assemble import (
+    analyzable,
+    assemble_report,
+    fact_numbers,
+    facts_json,
+    outside_rule_evidence,
+)
 from app.agent.llm import LlmClient
-from app.agent.narrative import Narrative, narrative_schema, validate_narrative
+from app.agent.narrative import (
+    Narrative,
+    emptied_errors,
+    narrative_schema,
+    sanitize_narrative,
+    validate_narrative,
+)
 from app.agent.tools import (
     ALLOWED_TOOL_NAMES,
     TOOL_ARGS,
@@ -121,7 +133,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             "AI",
             "다음에 볼 조회 고르기",
             duration_ms=trace.elapsed_ms(started),
-            received=trace.decided(calls),
+            received=trace.decided(calls) + trace.tokens(getattr(reply, "usage_metadata", None)),
         )
         return {"messages": [*state["messages"], reply], "trace": [*state["trace"], decided]}
 
@@ -300,7 +312,16 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             _latest_similar(records),
             _latest_history(records),
         )
-        narrative, errors = validate_narrative(raw, payment_ids, allowed)
+        # 규칙 밖 정황이 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
+        fds, history, linked = (
+            _fds_by_payment(records),
+            _latest_history(records),
+            _latest_linked(records),
+        )
+        outside = outside_rule_evidence(fds, history, linked)
+        by_payment = {pid: outside_rule_evidence(fds, history, linked, pid) for pid in payment_ids}
+        narrative, errors = validate_narrative(raw, payment_ids, allowed, outside, by_payment)
+        used_tokens = trace.tokens(getattr(raw, "usage", None))
         attempt = state["repairs"] + 1
 
         def written(received: str, reason: str | None = None) -> list[TraceStep]:
@@ -310,18 +331,24 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                 f"판단 문장 쓰기 {attempt}차",
                 duration_ms=trace.elapsed_ms(started),
                 asked=f"결제 {len(payment_ids)}건의 근거 요약을 보고 판단 문장 쓰기",
-                received=received,
+                received=received + used_tokens,
                 retry_reason=reason,
             )
             return [*state["trace"], done]
 
         if narrative is not None:
-            return {
-                "narrative": narrative,
-                "write_messages": messages,
-                "next": "assemble",
-                "trace": written("형식 검사 통과"),
-            }
+            # 틀리거나 겹친 문장은 다시 쓰게 하지 않고 코드가 뺀다 (#355)
+            narrative, removed = sanitize_narrative(narrative)
+            # 빼고 나서 필수 목록이 비었으면 그때만 다시 쓰게 한다 (#355 리뷰)
+            errors = emptied_errors(narrative)
+            if not errors:
+                passed = "형식 검사 통과" + (f" · 문장 {removed}개 뺌" if removed else "")
+                return {
+                    "narrative": narrative,
+                    "write_messages": messages,
+                    "next": "assemble",
+                    "trace": written(passed),
+                }
         if state["repairs"] < settings.agent_max_repairs:
             repair = HumanMessage(content=prompts.REPAIR.format(errors="; ".join(errors)))
             return {

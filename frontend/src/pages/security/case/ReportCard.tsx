@@ -7,7 +7,9 @@ import type { AiReport, TraceStep } from '../../../types/case'
 import { latestReport } from '../../../utils/caseRules'
 import {
   durationText,
+  elapsedText,
   hasReadableReport,
+  liveCurrentTask,
   reportHeadline,
   topRiskScore,
 } from '../../../utils/reportView'
@@ -86,18 +88,9 @@ export function ReportCard({
               description={`Case는 증거 v${evidenceVersion}입니다. 이 보고서로 최종 판정할 수 없습니다.`}
             />
           )}
-          {(report.status === 'PENDING' || report.status === 'RUNNING') &&
-            (steps.length > 0 ? (
-              <LiveSteps steps={steps} />
-            ) : (
-              <div style={{ padding: '20px 0', textAlign: 'center' }}>
-                <Spin />
-                <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-                  AI가 Case를 조사하고 있습니다. 완료되면 화면에 자동으로 반영됩니다. 2분이 지나
-                  자동 갱신이 멈추면 새로고침하세요.
-                </Typography.Paragraph>
-              </div>
-            ))}
+          {(report.status === 'PENDING' || report.status === 'RUNNING') && (
+            <LiveSteps status={report.status} createdAt={report.createdAt} steps={steps} />
+          )}
           {report.status === 'FAILED' && (
             <Alert
               type="error"
@@ -133,12 +126,28 @@ export function ReportCard({
   )
 }
 
-// 생성 중 끝난 단계 목록 + 진행 중 줄 (#322) — 문구는 "조사 과정" 탭과 같은 요약이다
-function LiveSteps({ steps }: { steps: TraceStep[] }) {
+// 생성 중 끝난 단계 목록 + 지금 하는 일 줄 (#322, #355 A안) — 문구는 "조사 과정" 탭과 같은 요약이다
+function LiveSteps({
+  status,
+  createdAt,
+  steps,
+}: {
+  status: AiReport['status']
+  createdAt: string
+  steps: TraceStep[]
+}) {
+  // 지난 시간은 화면 안에서만 1초마다 센다 — 서버 요청이 아니라 세션 무활동 만료(ADR-0014)에 영향 없음
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const current = liveCurrentTask(status, steps)
   return (
     <div>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        AI가 지금까지 한 일 — 3초마다 갱신됩니다
+        AI가 지금까지 한 일 — 3초마다 갱신 · 조사 시작 후 {elapsedText(createdAt, now)} (2분이 지나
+        갱신이 멈추면 새로고침하세요)
       </Typography.Text>
       <ol style={liveList}>
         {steps.map((s, i) => (
@@ -153,7 +162,10 @@ function LiveSteps({ steps }: { steps: TraceStep[] }) {
         ))}
         <li style={{ ...liveRow, color: '#2563EB' }}>
           <Spin size="small" />
-          <span>진행 중… 완료되면 보고서가 자동으로 나옵니다</span>
+          <span>
+            <strong>지금: {current.title}</strong>
+            {current.note && <span> — {current.note}</span>}
+          </span>
         </li>
       </ol>
     </div>
