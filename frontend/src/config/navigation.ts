@@ -45,6 +45,8 @@ export const navByRole: Record<Role, NavGroup[]> = {
         { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
       ],
     },
+    // 연동은 권한 코드와 상관없이 가맹점 사장님이면 볼 수 있다 (#354). 기존 첫 화면이 바뀌지 않게 맨 뒤에 둔다.
+    { title: '연동', items: [{ label: '시크릿 키 발급', path: '/owner/integration' }] },
   ],
 }
 
