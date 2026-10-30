@@ -46,7 +46,7 @@ export function IntegrationPreviewPage() {
         showIcon
         style={{ marginBottom: 16 }}
         message="직접 발급 기능은 준비 중입니다"
-        description="지금은 담당자가 설정한 임시 시크릿 키(서버 환경변수)로 연결합니다. 발급 기능이 열리면 이 화면에서 직접 키를 받을 수 있습니다."
+        description="지금은 돈워리 담당자가 직접 키를 설정해 연결을 도와드립니다. 연결이 필요하면 담당자에게 문의해 주세요. 발급 기능이 열리면 이 화면에서 직접 키를 받을 수 있습니다."
       />
 
       <Card
@@ -100,7 +100,7 @@ export function IntegrationPreviewPage() {
         />
       </Card>
 
-      <Card title="연동은 3단계로 끝나요" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
+      <Card title="연동은 3단계로 끝납니다" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
         <Steps
           className="dw-integration-steps"
           responsive
@@ -114,7 +114,7 @@ export function IntegrationPreviewPage() {
                   <br />
                   <Tag color="blue">→ 연동 전</Tag>
                   <br />
-                  연동 전까지는 키를 다시 볼 수 있어요.
+                  연동 완료 전까지는 키를 다시 볼 수 있습니다.
                 </>
               ),
             },
@@ -125,7 +125,7 @@ export function IntegrationPreviewPage() {
                 <>
                   쇼핑몰 서버에 가맹점 코드와 키를 넣습니다.
                   <br />
-                  개발자에게 연동 문서를 전달하세요.
+                  쇼핑몰 개발자가 연동 문서를 보고 설정합니다. (연동 문서 준비 중)
                 </>
               ),
             },
@@ -134,11 +134,11 @@ export function IntegrationPreviewPage() {
               title: '연결 확인',
               description: (
                 <>
-                  쇼핑몰이 확인 요청을 보내면 끝납니다.
+                  쇼핑몰이 연결 확인 요청을 보내면 끝납니다.
                   <br />
                   <Tag color="green">→ 연동 완료 · 결제 가능</Tag>
                   <br />
-                  이후 키는 숨겨지고 재발급만 가능해요.
+                  이후 키는 숨겨지고 재발급만 할 수 있습니다.
                 </>
               ),
             },
@@ -148,7 +148,8 @@ export function IntegrationPreviewPage() {
 
       <Card title="요청 예시" style={{ borderColor: '#E2E8F0' }}>
         <Typography.Paragraph type="secondary">
-          쇼핑몰 서버는 요청마다 아래 헤더를 붙입니다. 서명 만드는 방법은 연동 문서를 참고하세요.
+          쇼핑몰 서버는 요청마다 아래 헤더를 붙입니다. 서명 만드는 방법은 연동 문서에서 안내합니다
+          (준비 중).
         </Typography.Paragraph>
         <pre className="dw-integration-code">{requestExample}</pre>
         <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
@@ -164,7 +165,10 @@ export function IntegrationPreviewPage() {
         </div>
         {showCautions && (
           <ul className="dw-integration-cautions">
-            <li>재발급하면 이전 키는 바로 막히고, 새 키로 연결 확인할 때까지 결제가 멈춥니다.</li>
+            <li>
+              재발급하면 이전 키는 바로 막히고, 새 키로 연결 확인할 때까지 새 결제를 받을 수
+              없습니다.
+            </li>
             <li>키를 다른 사람에게 보여 주거나 메일·메신저로 보내지 마세요.</li>
           </ul>
         )}
