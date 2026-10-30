@@ -21,9 +21,11 @@ public class TenantReaderService implements TenantReader {
         }
         return repository
                 .findById(merchantId)
-                .map(merchant -> new TenantSummary(
-                        merchant.getMerchantId(),
-                        merchant.getDisplayName(),
-                        merchant.getStatus().name()));
+                .map(merchant -> TenantSummary.builder()
+                        .merchantId(merchant.getMerchantId())
+                        .name(merchant.getDisplayName())
+                        .status(merchant.getStatus().name())
+                        .pgFeeRate(merchant.getPgFeeRate())
+                        .build());
     }
 }

@@ -2,6 +2,12 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #356 가맹점별 PG 수수료율 공개 조회
+
+`TenantReader.findById(merchantId)`가 반환하는 `TenantSummary.pgFeeRate()`로 가맹점에 저장된 `BigDecimal` 수수료율을 읽는다. 단위는 비율(`0.020000 = 2%`)이며 0·소수 6자리를 변환 없이 반환한다. ACTIVE/INACTIVE 모두 조회되고, 없는 가맹점만 empty다. 잘못된 ID 거절·DB 오류 전파는 기존과 같다.
+
+공개 계약과 대안은 [ADR-0048](../decisions/0048-tenant-pg-fee-read-contract.md)을 따른다. P6 정산 계산 연결은 후속이며 카드 수수료 2%·현재 PG 계산 임시값 1%는 이번 작업에서 변경하지 않는다. 검증 결과와 실행 커밋은 #356 PR에 기록한다.
+
 ## #315 PR 4 메일 복구·자동 삭제·운영 진입 제어
 
 [설계와 운영 절차](315-recovery-design.md#11-pr4-구현-상태와-운영-절차), [ADR-0047](../decisions/0047-application-recovery-and-retention.md).
@@ -444,7 +450,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 상세 계약·버린 대안: [ADR-0020](../decisions/0020-identity-public-read-contracts.md).
 
 - `CurrentStaff.findCurrent()`: 모든 역할의 로그인 계정을 `StaffSummary(userId, role, merchantId, permissions)`로 반환한다. 세션을 읽고 DB는 재조회하지 않는다. 비로그인·익명·인증 미완료는 empty, 인증된 예상 밖 principal은 내부 오류다. 권한은 /login·/me와 같은 계산을 사용하며 변경 불가 사본이다.
-- `TenantReader.findById(merchantId)`: 기존 merchants에서 `TenantSummary(merchantId, name, status)`를 반환한다. ACTIVE·INACTIVE 모두 반환하고 없는 가맹점만 empty다. 잘못된 ID는 IllegalArgumentException이며 DB 오류는 전파한다. 수수료율은 공개하지 않는다.
+- `TenantReader.findById(merchantId)`: 기존 merchants에서 `TenantSummary(merchantId, name, status, pgFeeRate)`를 반환한다. ACTIVE·INACTIVE 모두 반환하고 없는 가맹점만 empty다. 잘못된 ID는 IllegalArgumentException이며 DB 오류는 전파한다. `pgFeeRate`는 DB에 저장된 비율을 그대로 반환한다 (`0.02 = 2%`, #356·[ADR-0048](../decisions/0048-tenant-pg-fee-read-contract.md)).
 - /login·/me의 tenantScope는 OPERATOR=MERCHANT, SECURITY_STAFF·ADMIN=ALL이다. ALL은 기능 권한을 부여하지 않는다. 프론트 타입에서 null을 제거했다.
 - api에는 인터페이스·record만 두고 구현은 service에 둔다. identity는 다른 모듈에 의존하지 않는다. P3·P5 연결, SecuritySignalReader, 서버 접근 제한·CSRF 활성화는 이번 범위에 없다.
 
