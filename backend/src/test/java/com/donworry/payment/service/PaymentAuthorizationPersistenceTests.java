@@ -58,7 +58,8 @@ class PaymentAuthorizationPersistenceTests {
     PaymentAuthorizer authorizer;
 
     private PaymentEvaluationFlowInput input(String customer, long amount) {
-        return new PaymentEvaluationFlowInput(999L, customer, UUID.randomUUID().toString(), amount);
+        return new PaymentEvaluationFlowInput(
+                999L, customer, UUID.randomUUID().toString(), amount, PaymentEvaluationFixtures.riskSignals());
     }
 
     private PaymentEvaluationFlowInput input() {

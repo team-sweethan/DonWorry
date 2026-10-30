@@ -45,6 +45,7 @@ public class PaymentEvaluationFlowService {
                 .customerRef(payment.customerRef())
                 .amount(payment.amount())
                 .paymentRequestedAt(payment.createdAt())
+                .riskSignals(input.riskSignals())
                 .build();
         var result = evaluationService.evaluateAndDecide(state, evaluationInput);
         return new PaymentAuthorizationContext(payment, evaluationInput.evaluationRequestId(), result);
