@@ -8,6 +8,10 @@ test('shopUrl_whenHttpAbsolute_acceptsAndPreservesCaseSensitiveParts', () => {
     ' http://localhost:8080/shop ',
     'HTTPS://SHOP.EXAMPLE.COM',
     'https://[::1]/shop',
+    'https://[::1]:8443/shop',
+    'https://shop.example.com./Products',
+    'https://my-shop.example.com',
+    'https://shop.example.com?contact=a@b.example#contact',
     'https://쇼핑몰.한국/Products?item=ABC',
     'https://쇼핑몰.한국:8443/상품?item=ABC',
     'https://xn--2j1bq83a3qd.xn--3e0b707e/Products?item=ABC',
@@ -30,6 +34,21 @@ test('shopUrl_whenUnsafeOrMalformed_rejectsBeforeSubmitOrLinkRendering', () => {
     'https:///shop',
     'https://shop.example.com/a b',
     'https://shop.example.com/' + 'a'.repeat(2048),
+  ])
+    assert.equal(isShopUrlValid(value), false, value)
+})
+
+// 브라우저 URL 파서가 허용해도 서버 호스트 문법에서 거절되는 주소는 제출 전에 차단한다.
+test('shopUrl_whenHostnameSyntaxInvalid_rejectsBeforeConfirmation', () => {
+  for (const value of [
+    'https://exa_mple.com',
+    'https://_shop.example.com',
+    'https://-shop.example.com',
+    'https://shop-.example.com',
+    'https://shop..example.com',
+    'https://.example.com',
+    'https://exa%5fmple.com',
+    'https://ex%61mple.com',
   ])
     assert.equal(isShopUrlValid(value), false, value)
 })

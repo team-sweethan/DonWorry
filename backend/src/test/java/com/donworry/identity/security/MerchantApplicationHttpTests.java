@@ -243,6 +243,8 @@ class MerchantApplicationHttpTests {
                 "javascript:alert(1)",
                 "ftp://shop.example.com",
                 "https://user:pass@shop.example.com",
+                "https://exa_mple.com",
+                "https://-shop.example.com",
                 "https://user:pass@쇼핑몰.한국",
                 "https://@쇼핑몰.한국",
                 "https:///shop",

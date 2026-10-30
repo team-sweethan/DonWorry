@@ -35,7 +35,15 @@ class MerchantApplicationRequestsTests {
                 "https://-쇼핑몰.한국",
                 "https:///쇼핑몰.한국",
                 "https://쇼핑몰.한국/공 백",
-                "ftp://쇼핑몰.한국"
+                "ftp://쇼핑몰.한국",
+                "https://exa_mple.com",
+                "https://_shop.example.com",
+                "https://-shop.example.com",
+                "https://shop-.example.com",
+                "https://shop..example.com",
+                "https://.example.com",
+                "https://exa%5fmple.com",
+                "https://ex%61mple.com"
             })
     void shopUrl_whenInvalidInternationalAuthority_rejects(String url) {
         assertThat(MerchantApplicationRequests.SubmitRequest.builder()
