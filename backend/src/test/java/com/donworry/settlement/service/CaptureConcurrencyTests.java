@@ -78,7 +78,8 @@ class CaptureConcurrencyTests {
             assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM settlements WHERE payment_id = ?", Long.class, 90001L))
                     .isEqualTo(1);
             assertThat(settlements.findByPaymentId(90001L).orElseThrow().getSettlementAmount())
-                    .isEqualTo(9701L);
+                    // Flyway의 CAKESHOP 계약 PG 수수료율 2%와 모의 카드 수수료율 2%를 적용한다.
+                    .isEqualTo(9601L);
         }
     }
 
