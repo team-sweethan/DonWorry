@@ -89,11 +89,19 @@ class PaymentFdsDeliveryConcurrencyMariaDbTests {
                 UUID.randomUUID(),
                 PaymentEvaluationFixtures.riskSignals()));
         // JDBC Timestamp의 JVM 시간대 변환을 피하고 실제 저장된 UTC 입력을 복사한다.
-        jdbc.update(
-                "INSERT INTO fds_evaluations (evaluation_request_id, payment_id, merchant_id, customer_ref, payment_requested_at, requested_amount, result, evaluated_at, error_code) SELECT ?, payment_id, merchant_id, customer_ref, created_at, amount, 'ERROR', UTC_TIMESTAMP(6), ? FROM payments WHERE payment_id = ?",
-                receipt.evaluationRequestId().toString(),
-                code,
-                receipt.paymentId());
+        jdbc.update("""
+                INSERT INTO fds_evaluations
+                    (evaluation_request_id, payment_id, merchant_id, customer_ref,
+                     device_id, card_token, card_display_label, ip_country_code, ip_address, buyer_email,
+                     payment_requested_at, requested_amount, result, evaluated_at, error_code)
+                SELECT ?, p.payment_id, p.merchant_id, p.customer_ref,
+                       r.device_id, r.card_token, r.card_display_label,
+                       r.ip_country_code, r.ip_address, r.buyer_email,
+                       p.created_at, p.amount, 'ERROR', UTC_TIMESTAMP(6), ?
+                FROM payments p
+                JOIN payment_requests r ON r.payment_id = p.payment_id
+                WHERE p.payment_id = ?
+                """, receipt.evaluationRequestId().toString(), code, receipt.paymentId());
         long evaluationId = jdbc.queryForObject(
                 "SELECT evaluation_id FROM fds_evaluations WHERE evaluation_request_id = ?",
                 Long.class,

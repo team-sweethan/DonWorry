@@ -287,7 +287,7 @@ class PaymentRequestFlowMariaDbTests {
                     assertThat(report.requestedAt()).isEqualTo(recovery.getEvaluationRequestedAt());
                     assertThat(report.respondedAt()).isEqualTo(recovery.getEvaluationRespondedAt());
                     assertThat(report.sanitizedErrorMessage()).isNull();
-                    assertThat(report.deviceId()).isNull();
+                    assertThat(report.deviceId()).isEqualTo(c.riskSignals().deviceId());
                     throw new IllegalStateException("sensitive internal message");
                 })
                 .when(failureReporter)
