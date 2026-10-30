@@ -4,6 +4,7 @@ import type {
   PaymentSignals,
   ReportBody,
   SimilarCaseItem,
+  TraceStep,
 } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
 
@@ -128,4 +129,46 @@ export function signalTexts(s: PaymentSignals): SignalText[] {
     { label: '기기', value: s.deviceProvided ? '정보 있음' : NOT_SENT, missing: !s.deviceProvided },
     { label: '접속 국가', value: country, missing: !s.ipProvided },
   ]
+}
+
+export type LiveTask = { title: string; note: string | null }
+
+// 생성 중 "지금 하는 일" (#355 A안) — 서버는 끝난 단계만 주므로 마지막 단계를 보고 다음 단계를 추측한다
+export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]): LiveTask {
+  if (status === 'PENDING') {
+    return { title: '조사 시작을 기다리는 중', note: '다른 조사가 끝나면 시작합니다' }
+  }
+  const last = steps.at(-1)
+  if (!last) return { title: '사건 근거를 보고 첫 조회를 고르는 중', note: null }
+  const writes = steps.filter((s) => s.kind === 'WRITE').length
+  const writing = (attempt: number): LiveTask => ({
+    title: attempt === 1 ? '판단 문장 쓰는 중 (1차)' : `판단 문장 다시 쓰는 중 (${attempt}차)`,
+    note: '가장 오래 걸리는 단계입니다',
+  })
+  switch (last.kind) {
+    case 'DECIDE':
+      return last.received?.startsWith('조사 완료')
+        ? writing(1)
+        : { title: '고른 조회를 실행하는 중', note: null }
+    case 'TOOL':
+      // 시스템 보충 조회는 AI가 조사 완료라고 답한 뒤에 하므로 다음은 판단 문장 쓰기다
+      return last.actor === 'SYSTEM'
+        ? writing(1)
+        : { title: '다음에 볼 조회를 고르는 중', note: null }
+    case 'NUDGE':
+      return { title: '다음에 볼 조회를 고르는 중', note: null }
+    case 'WRITE':
+      return last.received?.startsWith('형식 검사 통과')
+        ? { title: '보고서 조립 중', note: null }
+        : writing(writes + 1)
+    case 'ASSEMBLE':
+      return { title: '보고서 저장 중', note: null }
+  }
+}
+
+// 조사 시작 후 지난 시간 — 보고서 요청 시각 기준. 기기 시계가 조금 달라도 음수는 0초로 보인다
+export function elapsedText(createdAt: string, now: number): string {
+  const seconds = Math.max(0, Math.floor((now - Date.parse(createdAt)) / 1000))
+  if (seconds < 60) return `${seconds}초`
+  return `${Math.floor(seconds / 60)}분 ${seconds % 60}초`
 }

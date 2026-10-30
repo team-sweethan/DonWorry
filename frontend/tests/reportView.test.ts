@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { AiReport, ReportBody } from '../src/types/case.ts'
+import type { AiReport, ReportBody, TraceStep } from '../src/types/case.ts'
 import {
+  elapsedText,
   hasReadableReport,
+  liveCurrentTask,
   pickReport,
   reportHeadline,
   ruleEvidenceRows,
@@ -174,4 +176,76 @@ test('similarOutcomeTags_mixedDecisions_returnsAcceptAndRejectTags', () => {
   assert.deepEqual(similarOutcomeTags({ acceptCount: 0, rejectCount: 1 }), [
     { label: '승인 취소 1건', tone: 'reject' },
   ])
+})
+
+// ── 생성 중 "지금 하는 일" (#355 A안) ──
+const step = (
+  kind: TraceStep['kind'],
+  received: string | null,
+  actor: TraceStep['actor'] = 'AI',
+): TraceStep => ({
+  kind,
+  actor,
+  title: kind,
+  durationMs: 100,
+  asked: null,
+  received,
+  retryReason: null,
+})
+
+test('liveCurrentTask_pending_waitsForStart', () => {
+  assert.equal(liveCurrentTask('PENDING', []).title, '조사 시작을 기다리는 중')
+})
+
+// 첫 단계(조회 고르기)가 15초 걸려도 빈 화면이 아니게
+test('liveCurrentTask_noStepsYet_choosingFirstTool', () => {
+  assert.equal(liveCurrentTask('RUNNING', []).title, '사건 근거를 보고 첫 조회를 고르는 중')
+})
+
+test('liveCurrentTask_afterChooseOrTool_runsThenChoosesNext', () => {
+  const chose = [step('DECIDE', '결제 목록 조회 선택 · 입력 803 · 출력 93 토큰')]
+  assert.equal(liveCurrentTask('RUNNING', chose).title, '고른 조회를 실행하는 중')
+  assert.equal(
+    liveCurrentTask('RUNNING', [...chose, step('TOOL', '결제 1건')]).title,
+    '다음에 볼 조회를 고르는 중',
+  )
+  assert.equal(
+    liveCurrentTask('RUNNING', [...chose, step('NUDGE', null, 'SYSTEM')]).title,
+    '다음에 볼 조회를 고르는 중',
+  )
+})
+
+test('liveCurrentTask_doneOrSystemFill_writesFirstAttempt', () => {
+  const done = liveCurrentTask('RUNNING', [
+    step('DECIDE', '조사 완료라고 답함 · 입력 2,308 · 출력 6 토큰'),
+  ])
+  assert.deepEqual(done, { title: '판단 문장 쓰는 중 (1차)', note: '가장 오래 걸리는 단계입니다' })
+  const filled = liveCurrentTask('RUNNING', [step('TOOL', 'FDS 평가 1건', 'SYSTEM')])
+  assert.equal(filled.title, '판단 문장 쓰는 중 (1차)')
+})
+
+test('liveCurrentTask_writeFailed_showsNextAttempt', () => {
+  const failed = [step('DECIDE', '조사 완료라고 답함'), step('WRITE', '형식 검사 실패 → 다시 쓰기')]
+  assert.equal(liveCurrentTask('RUNNING', failed).title, '판단 문장 다시 쓰는 중 (2차)')
+  const twice = [...failed, step('WRITE', '형식 검사 실패 → 다시 쓰기')]
+  assert.equal(liveCurrentTask('RUNNING', twice).title, '판단 문장 다시 쓰는 중 (3차)')
+})
+
+test('liveCurrentTask_writePassed_assemblesThenSaves', () => {
+  const passed = [step('WRITE', '형식 검사 통과 · 문장 4개 뺌 · 입력 3,649 · 출력 371 토큰')]
+  assert.equal(liveCurrentTask('RUNNING', passed).title, '보고서 조립 중')
+  assert.equal(
+    liveCurrentTask('RUNNING', [...passed, step('ASSEMBLE', '증거 v1 기준으로 조립', 'SYSTEM')])
+      .title,
+    '보고서 저장 중',
+  )
+})
+
+test('elapsedText_secondsThenMinutes_neverNegative', () => {
+  const created = '2026-10-30T02:02:51Z'
+  const at = (seconds: number) => Date.parse(created) + seconds * 1000
+  assert.equal(elapsedText(created, at(58.9)), '58초')
+  assert.equal(elapsedText(created, at(104)), '1분 44초')
+  // 기기 시계가 서버보다 조금 느려도 음수로 보이지 않는다
+  assert.equal(elapsedText(created, at(-2)), '0초')
 })
