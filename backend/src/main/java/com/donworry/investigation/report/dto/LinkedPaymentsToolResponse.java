@@ -2,9 +2,12 @@ package com.donworry.investigation.report.dto;
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 // AI Tool find_linked_payments 응답 — 이 사건 결제와 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 집계 (#352, ADR-0009)
 // 건수 · 고객 수 · 판정만 싣는다. 카드 토큰 · IP 주소 · 기기 ID · 다른 고객 번호 · 다른 결제 ID는 싣지 않는다
+// 칸이 많고 같은 타입(int · Match)이 나란히 있어 builder로 만든다 (02-code.md @Builder)
+@Builder
 public record LinkedPaymentsToolResponse(
         String caseId,
         int evidenceVersion,
@@ -17,6 +20,7 @@ public record LinkedPaymentsToolResponse(
 
     // provided=false면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻이다 ("정보 없음")
     // resultCounts는 FDS 판정 순서(허용 · 검토 · 차단 · 평가 오류), declinedCount는 카드사 거절 결제 수
+    @Builder
     public record Match(
             boolean provided,
             int otherCustomerCount,

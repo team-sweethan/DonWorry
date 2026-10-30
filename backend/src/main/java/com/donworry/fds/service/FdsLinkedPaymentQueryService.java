@@ -103,7 +103,13 @@ public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader {
                 .count();
         int customers = (int)
                 latest.stream().map(FdsEvaluation::getCustomerRef).distinct().count();
-        return new Match(true, customers, latest.size(), Collections.unmodifiableMap(resultCounts), declined);
+        return Match.builder()
+                .provided(true)
+                .otherCustomerCount(customers)
+                .paymentCount(latest.size())
+                .resultCounts(Collections.unmodifiableMap(resultCounts))
+                .declinedCount(declined)
+                .build();
     }
 
     private static boolean present(String value) {

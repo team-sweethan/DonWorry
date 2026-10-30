@@ -48,8 +48,13 @@ class FdsLinkedPaymentQueryServiceTests {
         var result = service().findLinked(MERCHANT, CASE_CUSTOMER, List.of(100L), SINCE);
 
         assertThat(result.card())
-                .isEqualTo(
-                        new Match(true, 2, 3, Map.of(FdsResult.ALLOW, 1, FdsResult.REVIEW, 1, FdsResult.DENY, 1), 1));
+                .isEqualTo(Match.builder()
+                        .provided(true)
+                        .otherCustomerCount(2)
+                        .paymentCount(3)
+                        .resultCounts(Map.of(FdsResult.ALLOW, 1, FdsResult.REVIEW, 1, FdsResult.DENY, 1))
+                        .declinedCount(1)
+                        .build());
         assertThat(result.toString()).doesNotContain("tok_shared", "other-1", "other-2", CASE_CUSTOMER);
     }
 
@@ -100,7 +105,14 @@ class FdsLinkedPaymentQueryServiceTests {
 
         var result = service().findLinked(MERCHANT, CASE_CUSTOMER, List.of(100L), SINCE);
 
-        assertThat(result.device()).isEqualTo(new Match(true, 1, 1, Map.of(FdsResult.DENY, 1), 0));
+        assertThat(result.device())
+                .isEqualTo(Match.builder()
+                        .provided(true)
+                        .otherCustomerCount(1)
+                        .paymentCount(1)
+                        .resultCounts(Map.of(FdsResult.DENY, 1))
+                        .declinedCount(0)
+                        .build());
     }
 
     private FdsLinkedPaymentQueryService service() {

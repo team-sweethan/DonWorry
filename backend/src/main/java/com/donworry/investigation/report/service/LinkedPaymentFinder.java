@@ -49,15 +49,16 @@ public class LinkedPaymentFinder {
                 securityCase.getCustomerRef(),
                 casePaymentIds,
                 now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS));
-        return new LinkedPaymentsToolResponse(
-                String.valueOf(caseId),
-                securityCase.getEvidenceVersion(),
-                SOURCE,
-                now,
-                LOOKBACK_DAYS,
-                match(linked.card()),
-                match(linked.device()),
-                match(linked.ip()));
+        return LinkedPaymentsToolResponse.builder()
+                .caseId(String.valueOf(caseId))
+                .evidenceVersion(securityCase.getEvidenceVersion())
+                .source(SOURCE)
+                .retrievedAt(now)
+                .lookbackDays(LOOKBACK_DAYS)
+                .card(match(linked.card()))
+                .device(match(linked.device()))
+                .ip(match(linked.ip()))
+                .build();
     }
 
     // 판정별 건수는 FDS 판정 순서로 늘어놓고 0건은 뺀다
@@ -66,6 +67,12 @@ public class LinkedPaymentFinder {
                 .filter(result -> m.resultCounts().getOrDefault(result, 0) > 0)
                 .map(result -> new ResultCount(result.name(), m.resultCounts().get(result)))
                 .toList();
-        return new Match(m.provided(), m.otherCustomerCount(), m.paymentCount(), counts, m.declinedCount());
+        return Match.builder()
+                .provided(m.provided())
+                .otherCustomerCount(m.otherCustomerCount())
+                .paymentCount(m.paymentCount())
+                .resultCounts(counts)
+                .declinedCount(m.declinedCount())
+                .build();
     }
 }

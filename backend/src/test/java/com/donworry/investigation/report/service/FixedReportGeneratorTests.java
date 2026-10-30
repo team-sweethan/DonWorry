@@ -282,17 +282,38 @@ class FixedReportGeneratorTests {
     @Test
     void generate_aiDisabled_addsLinkedPayments() {
         FixedReportGenerator generator = generatorForCase7();
-        Match none = new Match(false, 0, 0, List.of(), 0);
+        Match cardMatch = Match.builder()
+                .provided(true)
+                .otherCustomerCount(2)
+                .paymentCount(3)
+                .resultCounts(List.of(new ResultCount("REVIEW", 2), new ResultCount("DENY", 1)))
+                .declinedCount(1)
+                .build();
+        Match noOther = Match.builder()
+                .provided(true)
+                .otherCustomerCount(0)
+                .paymentCount(0)
+                .resultCounts(List.of())
+                .declinedCount(0)
+                .build();
+        Match notProvided = Match.builder()
+                .provided(false)
+                .otherCustomerCount(0)
+                .paymentCount(0)
+                .resultCounts(List.of())
+                .declinedCount(0)
+                .build();
         when(linkedPaymentFinder.find(7L, NOW))
-                .thenReturn(new LinkedPaymentsToolResponse(
-                        "7",
-                        1,
-                        "P2",
-                        NOW,
-                        30,
-                        new Match(true, 2, 3, List.of(new ResultCount("REVIEW", 2), new ResultCount("DENY", 1)), 1),
-                        new Match(true, 0, 0, List.of(), 0),
-                        none));
+                .thenReturn(LinkedPaymentsToolResponse.builder()
+                        .caseId("7")
+                        .evidenceVersion(1)
+                        .source("P2")
+                        .retrievedAt(NOW)
+                        .lookbackDays(30)
+                        .card(cardMatch)
+                        .device(noOther)
+                        .ip(notProvided)
+                        .build());
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
