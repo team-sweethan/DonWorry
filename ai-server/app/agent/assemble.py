@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.agent.narrative import Narrative
 from app.agent.tools import ToolRecord
@@ -26,6 +26,7 @@ from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
     FdsPayment,
+    HistoryPayment,
     LinkedMatch,
     LinkedPaymentsTool,
     PaymentHistoryTool,
@@ -35,10 +36,11 @@ from app.schemas.tools import (
 
 # 사실 값은 Tool 기록에서만 채운다 — Qwen이 숫자 · ID를 잘못 옮겨 적어도 보고서 사실은 틀리지 않는다
 
+# "AI 권고는 참고용…"은 넣지 않는다 (#355)
+# 보고서 전문 화면이 항상 같은 안내를 보여 줘 두 번 나왔다
 ALWAYS_LIMITATIONS = (
     "로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
     "FDS 점수는 부정거래 확률이 아닙니다.",
-    "AI 권고는 참고용이며 최종 판정은 보안 직원이 합니다.",
 )
 
 # 구매자 확인 기능이 없어 결제마다 항상 미확인이다
@@ -109,6 +111,70 @@ def missing_signal_limitations(fds: dict[str, FdsPayment], payment_ids: list[str
 # AI에게 보여 줄 고객 최근 결제 목록 수 — 나머지는 상태별 건수로만 본다
 HISTORY_SHOWN_TO_AI = 5
 HISTORY_UNAVAILABLE = "고객 최근 결제를 조회하지 못했습니다."
+# 사건 결제 앞뒤 이 시간 안의 결제는 같은 연속 결제로 본다 (#355)
+# 단시간 반복 규칙(10분 안 3회)과 같은 기준
+BURST_WINDOW = timedelta(minutes=10)
+BURST_KEY = "같은 연속 결제(사건 결제 앞뒤 10분 안, 평소 결제 아님)"
+EARLIER_KEY = "그 전 결제"
+
+
+def _at(value: str | None) -> datetime | None:
+    return datetime.fromisoformat(value) if value else None
+
+
+# 고객 최근 결제를 "같은 연속 결제"와 "그 전 결제"로 나눈다 (#355, Case 8 · 9)
+# 사건 결제 몇 초 전의 결제가 "평소 결제 · 매입 완료"로 정상 정황에 쓰였다
+def split_history(
+    case_payments: CasePaymentsTool, history: PaymentHistoryTool
+) -> tuple[list[HistoryPayment], list[HistoryPayment]]:
+    case_times = [t for t in (_at(p.requestedAt) for p in case_payments.payments) if t]
+    burst: list[HistoryPayment] = []
+    earlier: list[HistoryPayment] = []
+    for payment in history.payments:
+        at = _at(payment.requestedAt)
+        near = at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times)
+        (burst if near else earlier).append(payment)
+    return burst[:HISTORY_SHOWN_TO_AI], earlier[:HISTORY_SHOWN_TO_AI]
+
+
+def _history_items(payments: list[HistoryPayment]) -> list[dict[str, object]]:
+    return [
+        {
+            "금액(원)": p.amount,
+            "결제 상태": PAYMENT_STATUS_KO.get(p.paymentStatus or "", None),
+            "요청 시각": p.requestedAt,
+        }
+        for p in payments
+    ]
+
+
+# 근거에 있는 규칙 밖 정황 — 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
+OUTSIDE_RULE_LABELS = {
+    "linked": "같은 카드 · 기기 · IP를 쓴 다른 고객 결제",
+    "history": "고객 최근 결제의 승인 취소 · 거절 · 차단",
+    "overseas": "해외 접속",
+}
+
+
+def outside_rule_evidence(
+    fds: dict[str, FdsPayment],
+    history: PaymentHistoryTool | None = None,
+    linked: LinkedPaymentsTool | None = None,
+) -> list[str]:
+    found: list[str] = []
+    if linked is not None and any(
+        m.provided and m.paymentCount > 0 for m in (linked.card, linked.device, linked.ip)
+    ):
+        found.append(OUTSIDE_RULE_LABELS["linked"])
+    if history is not None and any(
+        c.paymentStatus in {"VOIDED", "DECLINED", "DENIED"} for c in history.statusCounts
+    ):
+        found.append(OUTSIDE_RULE_LABELS["history"])
+    if any(
+        e.signals is not None and e.signals.ipCountryCode not in (None, "KR") for e in fds.values()
+    ):
+        found.append(OUTSIDE_RULE_LABELS["overseas"])
+    return found
 
 
 # 코드가 센 상태별 건수를 한국어 이름으로 — "매입 완료 3건 · 승인 취소 1건"
@@ -120,6 +186,12 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
 
 
 LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
+# 다른 고객 결제를 찾았을 때 — AI가 "다른 고객 결제 이력은 알 수 없었다"고 쓰던 자리 (#355, Case 12)
+LINKED_PRIVACY = (
+    "같은 카드 · 기기 · IP를 쓴 다른 고객 결제는 건수 · 판정만 보고, "
+    "개별 결제 내용은 보지 않았습니다 (다른 고객 정보 보호)."
+)
+MOCK_LIMITATION = "mock 조사입니다(Qwen 미사용). 판단 문장은 고정 문장입니다."
 
 
 # AI에게 보여 줄 연관 결제 — 숫자 대신 있음/없음 · 한 명/여러 명 · 판정 이름만 (#352)
@@ -129,12 +201,24 @@ def linked_facts(match: LinkedMatch) -> dict[str, object] | str:
         return NOT_SENT
     if match.paymentCount == 0:
         return "다른 고객 결제 없음"
+    # 고객 수와 결제 수를 따로 준다 (#355, Case 9)
+    # 고객 수만 주면 "한 명"을 "결제 한 건"으로 바꿔 쓴다
     return {
         "다른 고객 결제": "있음",
         "다른 고객": "한 명" if match.otherCustomerCount == 1 else "여러 명",
+        "그 고객들의 결제": "한 건" if match.paymentCount == 1 else "여러 건",
         "그 결제들의 FDS 판정": [FDS_RESULT_KO.get(c.result, c.result) for c in match.resultCounts],
         "카드사 거절": "있음" if match.declinedCount else "없음",
     }
+
+
+# "고액 결제와 단시간 반복 결제 규칙에 걸렸습니다"처럼 규칙만 되풀이한 위험 근거 (#355, Case 10)
+# 규칙 카드에 이미 있는 내용이라 코드가 뺀다 — 프롬프트로는 안 막혔고, 다시 쓰기보다 싸다
+_RULE_ONLY = re.compile(r"^[^,，]*규칙(?:에|이|을)?\s*(?:걸렸|적중했|적중되었)습니다\.?$")
+
+
+def drop_rule_only(items: list[str]) -> list[str]:
+    return [item for item in items if not _RULE_ONLY.match(item.strip())]
 
 
 def similar_outcome(accept: int, reject: int) -> str:
@@ -146,6 +230,7 @@ def similar_outcome(accept: int, reject: int) -> str:
 # Qwen에게 보여 줄 근거 요약 — 판단 문장을 쓸 결제와 각 결제의 사실 값
 # 비슷한 과거 사건은 이유 · 결과만 보여 준다 (참고 근거, 사건 번호는 문장에 쓰지 않으므로 넣지 않음)
 # 고객 최근 결제는 건수 · 상태별 건수 · 최근 몇 건의 금액 · 상태만 보여 준다 (#338)
+# 사건 결제 앞뒤 10분 안의 결제는 "같은 연속 결제"로 따로 보여 준다 (#355)
 def facts_json(
     case_payments: CasePaymentsTool,
     fds: dict[str, FdsPayment],
@@ -194,19 +279,14 @@ def facts_json(
     if history is None:
         facts[key] = "조회하지 못함"
     else:
+        burst, earlier = split_history(case_payments, history)
         facts[key] = {
             "기간(일)": history.lookbackDays,
             "건수": len(history.payments),
             "더 있음": history.truncated,
             "상태별 건수": history_counts(history),
-            "최근 결제": [
-                {
-                    "금액(원)": p.amount,
-                    "결제 상태": PAYMENT_STATUS_KO.get(p.paymentStatus or "", None),
-                    "요청 시각": p.requestedAt,
-                }
-                for p in history.payments[:HISTORY_SHOWN_TO_AI]
-            ],
+            BURST_KEY: _history_items(burst),
+            EARLIER_KEY: _history_items(earlier),
         }
     key = "같은 카드 · 기기 · IP를 쓴 다른 고객 결제(최근 30일)"
     if linked is None:
@@ -232,7 +312,8 @@ def fact_numbers(
     if history is not None:
         numbers |= {history.lookbackDays, len(history.payments)}
         numbers |= {c.count for c in history.statusCounts}
-        for p in history.payments[:HISTORY_SHOWN_TO_AI]:
+        burst, earlier = split_history(case_payments, history)
+        for p in [*burst, *earlier]:
             numbers |= {int(d) for d in re.findall(r"\d+", p.requestedAt or "")}
             if p.amount is not None:
                 numbers |= {p.amount, p.amount // 10000}
@@ -318,11 +399,16 @@ def assemble_report(
 ) -> ReportBody:
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
-    limitations = _drop_nothing_unknown(list(narrative.limitations))
+    # 한계 줄은 조회 기록으로 코드만 쓴다 — 무엇을 봤는지는 AI보다 코드가 정확히 안다 (#355)
+    limitations: list[str] = []
+    if trace.provider == "MOCK":
+        limitations.append(MOCK_LIMITATION)
     if history is None:
         limitations.append(HISTORY_UNAVAILABLE)
     if linked is None:
         limitations.append(LINKED_UNAVAILABLE)
+    elif any(m.provided and m.paymentCount > 0 for m in (linked.card, linked.device, linked.ip)):
+        limitations.append(LINKED_PRIVACY)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -347,7 +433,7 @@ def assemble_report(
                 requestedAt=payment.requestedAt,
                 riskScore=evidence.riskScore if evidence else None,
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
-                riskEvidence=written.riskEvidence,
+                riskEvidence=drop_rule_only(written.riskEvidence),
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
                 recommendation=written.recommendation,

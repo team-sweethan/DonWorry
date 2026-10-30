@@ -37,21 +37,26 @@ def call(name: str, **args: Any) -> dict[str, Any]:
 def narrative(payment_ids: list[str], **overrides: Any) -> str:
     body = {
         "headline": "처음 쓰는 카드로 연달아 결제해 본인 확인이 필요합니다.",
-        "summary": ["결제 2건 모두 처음 쓰는 카드로 결제됐습니다."],
+        "summary": [
+            "결제 2건 모두 처음 쓰는 카드로 결제됐습니다.",
+            "짧은 간격으로 이어진 결제라 본인 결제인지 확인이 필요합니다.",
+        ],
         "payments": {
             payment_id: {
                 "riskEvidence": ["처음 쓰는 카드 규칙 적중"],
                 "normalEvidence": ["확인된 정상 정황 없음"],
                 "unknowns": ["고객 본인의 결제 의사"],
                 "recommendation": "NEEDS_CHECK",
-                "reason": "규칙 적중 외에 판단할 근거가 없습니다.",
+                "reason": "처음 쓰는 카드로 이어진 결제라 본인 확인이 필요합니다.",
             }
             for payment_id in payment_ids
         },
-        "overallAnalysis": ["짧은 간격의 반복 결제입니다."],
-        "additionalChecks": ["고객 본인 확인"],
+        "overallAnalysis": [
+            "짧은 간격의 반복 결제입니다.",
+            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
+        ],
+        "additionalChecks": ["고객 본인 확인", "카드 명의 확인"],
         "recommendationSummary": "본인 확인 후 판정을 권고합니다.",
-        "limitations": ["결제 이력은 조회하지 않았습니다."],
     }
     body.update(overrides)
     return json.dumps(body, ensure_ascii=False)

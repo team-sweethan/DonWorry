@@ -123,6 +123,14 @@ def _match_summary(match: LinkedMatch) -> str:
     return "없음" if match.paymentCount == 0 else f"결제 {match.paymentCount}건"
 
 
+# " · 입력 3,512 · 출력 640 토큰" — Ollama가 알려 줄 때만 붙인다 (mock은 없음, #355)
+# 시간이 긴 입력 때문인지 긴 출력 때문인지 조사 과정 탭에서 바로 보이게
+def tokens(usage: dict[str, int] | None) -> str:
+    if not usage or usage.get("input_tokens") is None or usage.get("output_tokens") is None:
+        return ""
+    return f" · 입력 {usage['input_tokens']:,} · 출력 {usage['output_tokens']:,} 토큰"
+
+
 def retry_reason(errors: list[str]) -> str:
     rules = [_QUOTED_SENTENCE.sub("", error).strip() for error in errors]
     unique = list(dict.fromkeys(rule for rule in rules if rule))

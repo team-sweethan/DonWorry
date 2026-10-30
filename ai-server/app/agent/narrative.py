@@ -1,8 +1,10 @@
 import re
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+from app.agent.prompts import EXAMPLE_SENTENCES
 from app.schemas.report import Recommendation
 
 # Qwen이 쓰는 판단 문장 부분 — 결제 ID · 금액 · 점수 같은 사실은 넣지 않는다
@@ -41,15 +43,17 @@ class Narrative(BaseModel):
     overallAnalysis: list[str]
     additionalChecks: list[str]
     recommendationSummary: str
-    limitations: list[str]
+    # 한계 줄(무엇을 조회했나 · 못 했나)은 AI가 쓰지 않는다 (#355, Case 10 · 12)
+    # 코드가 조회 기록으로 쓴다
 
-    check_lists = field_validator("summary", "overallAnalysis", "additionalChecks", "limitations")(
-        _no_blank
-    )
+    check_lists = field_validator("summary", "overallAnalysis", "additionalChecks")(_no_blank)
     check_headline = field_validator("headline")(_not_blank)
 
 
 _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
+# 요약 · 종합 분석 · 확인할 것은 2문장 이상 (#355) — Ollama가 이 형식대로만 출력하게 한다
+MIN_SENTENCES = 2
+_TEXT_LIST_2 = {**_TEXT_LIST, "minItems": MIN_SENTENCES}
 
 
 # 결제 ID를 키로 고정한 JSON Schema — Ollama format으로 넘겨 모델이 정확히 이 결제들만 쓰게 한다
@@ -72,16 +76,15 @@ def narrative_schema(payment_ids: list[str]) -> dict[str, Any]:
         "type": "object",
         "properties": {
             "headline": {"type": "string"},
-            "summary": _TEXT_LIST,
+            "summary": _TEXT_LIST_2,
             "payments": {
                 "type": "object",
                 "properties": {payment_id: payment for payment_id in payment_ids},
                 "required": payment_ids,
             },
-            "overallAnalysis": _TEXT_LIST,
-            "additionalChecks": _TEXT_LIST,
+            "overallAnalysis": _TEXT_LIST_2,
+            "additionalChecks": _TEXT_LIST_2,
             "recommendationSummary": {"type": "string"},
-            "limitations": _TEXT_LIST,
         },
         "required": [
             "headline",
@@ -90,7 +93,6 @@ def narrative_schema(payment_ids: list[str]) -> dict[str, Any]:
             "overallAnalysis",
             "additionalChecks",
             "recommendationSummary",
-            "limitations",
         ],
     }
 
@@ -128,6 +130,12 @@ _SENTENCE_BREAK = re.compile(r"[.!?。]\s*\S")
 # 반복 비교용 — 띄어쓰기 · 문장부호를 빼고 같은 문장인지 본다
 _SPACING = re.compile(r"[\s.,·!?~\"'()\[\]]")
 
+# "규칙 외에 다른 근거가 없어" · "다른 근거가 부족하여" (#355)
+# 규칙 밖 정황이 있는데 이렇게 쓰면 근거와 어긋난다
+_NO_OTHER_EVIDENCE = re.compile(
+    r"(?:다른|추가|그\s*외의?|외에|별도의?)\s*(?:판단할\s*|뒷받침할\s*)?(?:근거|정황)[가이]?\s*(?:없|부족)"
+)
+
 
 def _top_level(narrative: Narrative) -> list[str]:
     return [
@@ -135,7 +143,6 @@ def _top_level(narrative: Narrative) -> list[str]:
         *narrative.overallAnalysis,
         *narrative.additionalChecks,
         narrative.recommendationSummary,
-        *narrative.limitations,
     ]
 
 
@@ -210,9 +217,32 @@ def style_errors(narrative: Narrative) -> list[str]:
     return errors
 
 
+# 규칙 밖 정황이 근거에 있는데 이유 · 결론 문장이 "다른 근거가 없다"고 쓴 곳 (#355, Case 8 · 9)
+# 근거가 정말 규칙뿐이면(outside 비어 있음) 검사하지 않는다 — 맞는 문장까지 막지 않게
+def evidence_mismatch_errors(narrative: Narrative, outside: list[str]) -> list[str]:
+    if not outside:
+        return []
+    texts = [
+        *narrative.summary,
+        *narrative.overallAnalysis,
+        narrative.recommendationSummary,
+        *(p.reason for p in narrative.payments.values()),
+    ]
+    return [
+        f"근거에 규칙 밖 정황({' · '.join(outside)})이 있다. "
+        f'"다른 근거가 없다/부족하다"고 쓰지 말고 그 정황을 이유에 넣어라: "{text}"'
+        for text in texts
+        if _NO_OTHER_EVIDENCE.search(text)
+    ]
+
+
 # 형식 · 내용 검사 — 통과하면 Narrative, 아니면 Qwen에게 돌려줄 오류 문장 목록
+# outside_rule_evidence: 근거에 있는 규칙 밖 정황 이름 (#355). None이면 이유 어긋남은 보지 않는다
 def validate_narrative(
-    raw: str, payment_ids: list[str], allowed_numbers: set[int] | None = None
+    raw: str,
+    payment_ids: list[str],
+    allowed_numbers: set[int] | None = None,
+    outside_rule_evidence: list[str] | None = None,
 ) -> tuple[Narrative | None, list[str]]:
     try:
         narrative = Narrative.model_validate_json(raw)
@@ -222,8 +252,14 @@ def validate_narrative(
     if allowed_numbers is not None:
         errors += content_errors(narrative, allowed_numbers)
     errors += style_errors(narrative)
-    if not narrative.summary:
-        errors.append("summary가 비어 있다")
+    errors += evidence_mismatch_errors(narrative, outside_rule_evidence or [])
+    for name, items in (
+        ("summary", narrative.summary),
+        ("overallAnalysis", narrative.overallAnalysis),
+        ("additionalChecks", narrative.additionalChecks),
+    ):
+        if len(items) < MIN_SENTENCES:
+            errors.append(f"{name}는 {MIN_SENTENCES}개 이상 써라 (지금 {len(items)}개)")
     if not narrative.recommendationSummary.strip():
         errors.append("recommendationSummary가 비어 있다")
     expected = set(payment_ids)
@@ -233,3 +269,53 @@ def validate_narrative(
     if written - expected:
         errors.append(f"payments에 근거에 없는 결제: {sorted(written - expected)}")
     return (narrative, []) if not errors else (None, errors)
+
+
+# 형식 검사를 통과한 문장에서 틀리거나 겹친 문장을 코드가 뺀다 (#355)
+# 다시 쓰기로 돌려보내면 temperature 0인 7B가 같은 문장을 3번 내
+# 조사 실패(NARRATIVE_INVALID)가 됐다 (3차 실측)
+# 빼도 잃는 게 없는 것만 뺀다 — 결론 · 이유 · 권고 요약은 건드리지 않는다
+def _key(text: str) -> str:
+    return _SPACING.sub("", text)
+
+
+def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
+    examples = {_key(text) for text in EXAMPLE_SENTENCES}
+    removed = 0
+
+    def keep(items: list[str], drop: Callable[[str], bool]) -> list[str]:
+        nonlocal removed
+        kept = [item for item in items if not drop(item)]
+        removed += len(items) - len(kept)
+        return kept
+
+    def copied(text: str) -> bool:
+        return _key(text) in examples
+
+    # 1) 샘플 문장을 그대로 쓴 문장 — 이번 사건과 상관없는 사실 (Case 8 "카드사 거절 사유 확인")
+    summary = keep(narrative.summary, copied)
+    overall = keep(narrative.overallAnalysis, copied)
+    checks = keep(narrative.additionalChecks, copied)
+    # 2) 요약 · 종합 분석 문장을 결제별 근거에 그대로 복사한 문장 — 화면에 두 번 나온다 (Case 10)
+    top = {_key(text) for text in [*summary, *overall]}
+    payments = {
+        payment_id: payment.model_copy(
+            update={
+                "riskEvidence": keep(payment.riskEvidence, lambda t: copied(t) or _key(t) in top),
+                "normalEvidence": keep(
+                    payment.normalEvidence, lambda t: copied(t) or _key(t) in top
+                ),
+                "unknowns": keep(payment.unknowns, copied),
+            }
+        )
+        for payment_id, payment in narrative.payments.items()
+    }
+    cleaned = narrative.model_copy(
+        update={
+            "summary": summary,
+            "overallAnalysis": overall,
+            "additionalChecks": checks,
+            "payments": payments,
+        }
+    )
+    return cleaned, removed

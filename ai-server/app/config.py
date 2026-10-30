@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
+    # Ollama 입력 창 크기 (#355)
+    # PC마다 Ollama 기본값이 달라(2048 · 4096 · 8192) 작으면 프롬프트 앞부분이 잘린다
+    ollama_num_ctx: int = 8192
+    # 도구 고르기 답의 최대 길이 (#355) — "조사 완료" 한 마디에 설명을 307토큰 써서 28초가 걸렸다
+    # 256으로도 꽉 찼다(Case 12). 도구 4개를 한 번에 골라도 93토큰이라 128이면 충분하다
+    ollama_choose_max_tokens: int = 128
 
     # Spring 내부 API(Tool · 결과 콜백) 주소와 서비스 키 — 같은 키를 양방향에 쓴다
     # 키가 비어 있으면 Spring에서 오는 조사 접수를 모두 거절한다 (설정 누락으로 문이 열리지 않게)
