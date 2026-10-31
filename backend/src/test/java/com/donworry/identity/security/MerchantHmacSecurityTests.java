@@ -38,6 +38,8 @@ import org.springframework.web.bind.annotation.*;
     JsonAuthenticationEntryPoint.class,
     JsonAccessDeniedHandler.class,
     MerchantHmacService.class,
+    MerchantConnectionService.class,
+    com.donworry.identity.controller.MerchantConnectionController.class,
     CurrentMerchantService.class
 })
 class MerchantHmacSecurityTests {
@@ -49,6 +51,9 @@ class MerchantHmacSecurityTests {
 
     @MockitoBean
     MerchantRepository merchants;
+
+    @MockitoBean
+    com.donworry.identity.repository.MerchantIntegrationRepository integrations;
 
     @MockitoBean
     MerchantSecretService secrets;
@@ -74,6 +79,11 @@ class MerchantHmacSecurityTests {
         when(merchant.getMerchantCode()).thenReturn("CAKESHOP");
         when(merchant.getStatus()).thenReturn(MerchantStatus.ACTIVE);
         when(merchant.getSecretReference()).thenReturn("DONWORRY_MERCHANT_HMAC_TEST");
+        when(merchants.lockById(7L)).thenReturn(Optional.of(merchant));
+        var integration = mock(MerchantIntegration.class);
+        when(integration.getKeyVersion()).thenReturn(1L);
+        when(integration.getStatus()).thenReturn(IntegrationStatus.CONNECTED);
+        when(integrations.findByMerchantId(7L)).thenReturn(Optional.of(integration));
         when(merchants.findByMerchantCode("CAKESHOP")).thenReturn(Optional.of(merchant));
         when(secrets.resolve(anyString())).thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(key, 1));
         when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(true);
@@ -102,6 +112,21 @@ class MerchantHmacSecurityTests {
                 .header("X-Signature", HexFormat.of().formatHex(MerchantHmacSigner.sign(key, input)));
         if (!attempt.isEmpty()) request.header("Idempotency-Key", attempt);
         return request;
+    }
+
+    // 연결 확인은 직원 세션·CSRF 없이 현재 키로만 수행하며 다른 메서드와 본문은 거절한다
+    @Test
+    void connection_whenSigned_enforcesEmptyPostAndMerchantChain() throws Exception {
+        mvc.perform(post("/api/merchant-connections/check")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/merchant-connections/check")).andExpect(status().isMethodNotAllowed());
+        mvc.perform(signed("POST", "/api/merchant-connections/check", "{}", 0))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_007"));
+        var result = mvc.perform(signed("POST", "/api/merchant-connections/check", "", 0))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
     }
 
     // CSRF 활성화 상태에서도 HMAC POST는 통과하고 검사한 본문을 Controller가 다시 읽는다

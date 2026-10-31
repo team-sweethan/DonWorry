@@ -55,6 +55,7 @@ DB 기록 저장이 실패하면 503으로 차단하며 업무 코드를 실행�
 
 | 메서드 | 경로 |
 | --- | --- |
+| POST | `/api/merchant-connections/check` (빈 본문, 성공 204) |
 | POST | `/api/payments` |
 | GET | `/api/payments/{paymentId}` |
 | GET | `/api/payment-orders` |
@@ -91,7 +92,7 @@ P6가 인증된 ID를 픽업 저장·매입의 ID와 대조한다(#226·#227). �
 
 #354 PR B부터 키 보관 부분은 [ADR-0052](../decisions/0052-merchant-key-management.md)를 따른다. DB 암호문을 복호화하고 nonce 소비 시 키 버전을 재확인한다. 신규 발급 키는 32바이트 표준 Base64이며 기존 키는 동일 바이트로 이전한다. 환경변수 fallback은 없다. 미이전 레거시 참조는 503, 키 없음·폐기는 401이다. 기존 가맹점은 아래 환경변수 방식에서 ADR의 명시적 기동 이전 절차를 거쳐야 한다. 키 관리 응답만 본인 비밀번호 확인 뒤 원문을 반환하고 no-store로 처리한다. 관리자 응답에는 원문이 없다.
 
-아래 환경변수 보관 설명과 기존 실행 기록은 PR B 이전 구현의 이력이다. 서명·nonce·가맹점 ACTIVE 검사 계약은 유지하며 연동 전 결제 차단은 C다.
+아래 환경변수 보관 설명과 기존 실행 기록은 PR B 이전 구현의 이력이다. 서명 형식과 nonce 계약은 유지한다. PR C부터 신규 결제 POST는 CONNECTED + ACTIVE만 허용한다. 연결 확인 요청은 연동 전에도 가능하며 정지 가맹점은 거절한다. [개발자 연동 안내](354-merchant-integration.md)를 따른다.
 
 
 - 기존 `merchants.secret_reference`는 `DONWORRY_MERCHANT_HMAC_`로 시작하는 환경변수 이름만 저장한다. 이 기존 컬럼을 Entity에 매핑하며 기존 migration은 바꾸지 않는다.
@@ -108,11 +109,13 @@ P6가 인증된 ID를 픽업 저장·매입의 ID와 대조한다(#226·#227). �
 
 | HTTP | code | 의미 |
 | --- | --- | --- |
-| 401 | MERCHANT_AUTH_001 | 누락·형식 오류·없는 가맹점·서명 불일치·만료·nonce 재사용·연동하지 않은 가맹점 |
+| 401 | MERCHANT_AUTH_001 | 누락·형식 오류·없는 가맹점·서명 불일치·만료·nonce 재사용·키 없음·폐기·오래된 키 버전 |
 | 503 | MERCHANT_AUTH_002 | 키 설정·가맹점 조회·nonce 기록 저장 장애 |
 | 403 | MERCHANT_AUTH_003 | 유효 서명의 정지 가맹점 POST |
 | 405 | MERCHANT_AUTH_004 | 지정 경로의 미지원 메서드 |
 | 413 | MERCHANT_AUTH_005 | 본문 크기 초과 |
+| 403 | MERCHANT_AUTH_006 | 유효한 키의 연결 확인 전 신규 결제 POST |
+| 400 | MERCHANT_AUTH_007 | 연결 확인 요청 본문이 비어 있지 않음 |
 
 P5 업무 입력·충돌·다른 가맹점 조회·처리 장애 오류는 기존 P5 코드를 유지한다.
 `payment.http.enabled` 기본 비활성은 유지한다. 인증 구현과 실제 CakeShop 운영 활성화·HTTPS 검증은 구분한다.

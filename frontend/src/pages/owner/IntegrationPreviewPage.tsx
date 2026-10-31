@@ -20,7 +20,12 @@ import {
   requestIntegrationKey,
   revokeIntegrationKey,
 } from '../../api/integration'
-import type { IntegrationInfo, KeyAction, KeyResult } from '../../api/integration'
+import type {
+  IntegrationInfo,
+  IntegrationStatus,
+  KeyAction,
+  KeyResult,
+} from '../../api/integration'
 import { useAuth } from '../../auth/useAuth'
 import './integration-preview.css'
 
@@ -29,6 +34,23 @@ const actionLabels: Record<string, string> = {
   REISSUE: '재발급',
   REVOKE: '폐기',
   MIGRATE: '기존 키 이전',
+}
+const ownerGuides: Record<IntegrationStatus, { message: string; description: string }> = {
+  NO_KEY: {
+    message: '시크릿 키 발급이 필요합니다',
+    description:
+      '키를 발급해 쇼핑몰 서버에 설정한 뒤 연결 확인을 진행해 주세요. 키가 없으면 신규 결제를 요청할 수 없습니다.',
+  },
+  PENDING_CONNECTION: {
+    message: '쇼핑몰 연결 확인이 필요합니다',
+    description:
+      '키를 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.',
+  },
+  CONNECTED: {
+    message: '쇼핑몰 연동이 완료되었습니다',
+    description:
+      '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다.',
+  },
 }
 const failure = (error: unknown) =>
   error instanceof ApiError
@@ -249,8 +271,8 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               <Alert
                 type="info"
                 showIcon
-                message="키 발급 기능을 사용할 수 있습니다"
-                description="쇼핑몰의 연결 확인 기능과 연동 상태에 따른 신규 결제 차단은 준비 중입니다. 현재는 키를 발급하고 쇼핑몰 서버에 보관하는 단계까지 진행할 수 있습니다."
+                message={ownerGuides[data.status].message}
+                description={ownerGuides[data.status].description}
                 style={{ margin: '16px 0' }}
               />
               <Space wrap>
@@ -278,6 +300,15 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
                 키를 발급·조회·재발급할 때마다 비밀번호를 확인합니다. 키는 쇼핑몰 서버에만 보관하고
                 메일·메신저로 보내지 마세요.
+              </Typography.Paragraph>
+              <Typography.Paragraph>
+                <a
+                  href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/identity/354-merchant-integration.md"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  쇼핑몰 개발자 연동 안내
+                </a>
               </Typography.Paragraph>
             </>
           )}
@@ -353,7 +384,7 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
             type="warning"
             showIcon
             message="결제가 일시 중단됩니다"
-            description="이전 키는 즉시 폐기됩니다. 새 키를 쇼핑몰에 설정해야 합니다. 연결 확인과 연동 전 신규 결제 차단 기능은 준비 중입니다."
+            description="이전 키는 즉시 폐기됩니다. 새 키를 쇼핑몰 서버에 설정하고 연결 확인을 마칠 때까지 신규 결제가 중단됩니다."
             style={{ marginBottom: 16 }}
           />
         )}

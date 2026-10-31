@@ -8,6 +8,8 @@
 
 미이전 레거시 가맹점은 503이며, 관리자 폐기 이후 환경변수 키로 되돌아가지 않는다. DB와 해당 마스터 키를 별도로 백업·함께 복원한다. 실제 키 이전·배포 완료를 뜻하지 않는다. 아래는 기존 #246 등록·검증 이력이다.
 
+PR C의 연결 확인·결제 게이트는 [개발자 안내](354-merchant-integration.md)를 따른다. 동일 키 이전으로 이미 CONNECTED인 CAKESHOP은 재확인 없이 인증된다. 재발급했다면 새 키로 연결 확인해야 신규 결제가 재개된다. CakeShop 실제 발신 코드 변경(#242)·운영 이전은 별도다.
+
 ## 등록 값과 적용
 
 새 [Flyway 시드](../../backend/src/main/resources/db/migration/V20261027_221311__seed_cakeshop_merchant_and_owner.sql)가 앱 기동 때 다음을 함께 등록한다. 기존 `DEMOSHOP`과 계정은 보존하며 ID는 자동 생성하므로 숫자로 가정하지 않는다.
