@@ -1,6 +1,6 @@
 # 0012. 모듈 간 의존 방향 — Payment → Settlement 개정
 
-- **상태:** 채택
+- **상태:** 취소 제한 전제만 대체됨 (→ [0054](0054-full-cancellation-policy.md)); 모듈 의존 방향·이벤트 타입 배치 규칙은 채택 유지
 - **날짜:** 2026-10-22
 - **관련:** Issue #35, [ADR-0001](0001-module-dependency-direction.md)(이 ADR로 대체), Notion fds 정본 — 03 설계 3.2 데이터 소유권 · 3.10 Spring Modulith 통신 설계, [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** 전원 (특히 P5 시은 · P6 민정)
