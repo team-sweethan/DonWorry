@@ -57,7 +57,7 @@ test('사장님 메뉴는 권한이 있는 것만 보인다', () => {
   assert.equal(sessionNavigation(owner(['FINANCE_VIEW'])).landing, '/owner')
 })
 
-// 홈과 키 관리는 업무 권한 없이 접근하고, 로그인 첫 화면은 연동 상태로 정한다 (#354).
+// 홈과 키 관리는 업무 권한 없이 접근하고, 로그인 첫 화면은 연동 상태와 상관없이 홈이다 (#354).
 test('권한 없는 사장님도 시크릿 키 발급 화면은 열 수 있다', () => {
   assert.deepEqual(sessionNavigation(owner([])).groups, [
     { title: '개요', items: [{ label: '홈', path: '/owner' }] },

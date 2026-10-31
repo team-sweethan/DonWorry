@@ -14,8 +14,8 @@ const info = (status: IntegrationInfo['status']): IntegrationInfo => ({
   totalElements: 0,
 })
 
-// 조회 실패를 키 없음으로 다루지 않고 재조회 중에는 과거 연동 완료 상태도 숨긴다.
-test('ownerIntegration_whenRefreshFails_hidesPreviousStatusAndRecovers', async () => {
+// 재조회 중에는 마지막 상태를 유지하고, 실패하면 키 없음이나 낡은 상태 대신 오류를 보여 준다.
+test('ownerIntegration_whenRefreshFails_keepsStatusUntilFailureAndRecovers', async () => {
   let fail = false
   const store = createOwnerIntegrationStore(async () => {
     if (fail) throw new TypeError('offline')
@@ -23,10 +23,18 @@ test('ownerIntegration_whenRefreshFails_hidesPreviousStatusAndRecovers', async (
   })
   assert.deepEqual(store.getSnapshot(), { kind: 'loading' })
   await store.refresh()
-  assert.deepEqual(store.getSnapshot(), { kind: 'ready', data: info('CONNECTED') })
+  assert.deepEqual(store.getSnapshot(), {
+    kind: 'ready',
+    data: info('CONNECTED'),
+    refreshing: false,
+  })
   fail = true
   const pending = store.refresh()
-  assert.deepEqual(store.getSnapshot(), { kind: 'loading' })
+  assert.deepEqual(store.getSnapshot(), {
+    kind: 'ready',
+    data: info('CONNECTED'),
+    refreshing: true,
+  })
   await pending
   assert.deepEqual(store.getSnapshot(), { kind: 'error', inactive: false })
   fail = false
@@ -47,12 +55,12 @@ test('ownerIntegration_whenRequestsRaceOrUnmount_ignoresLateResponses', async ()
   await second
   requests[0].resolve(info('CONNECTED'))
   await first
-  assert.deepEqual(store.getSnapshot(), { kind: 'ready', data: info('NO_KEY') })
+  assert.deepEqual(store.getSnapshot(), { kind: 'ready', data: info('NO_KEY'), refreshing: false })
   const third = store.refresh()
   store.reset()
   requests[2].resolve(info('CONNECTED'))
   await third
-  assert.deepEqual(store.getSnapshot(), { kind: 'loading' })
+  assert.deepEqual(store.getSnapshot(), { kind: 'ready', data: info('NO_KEY'), refreshing: true })
 })
 
 // 가맹점 정지를 통신 장애와 구분하고 실패 뒤 재조회가 가능하다.

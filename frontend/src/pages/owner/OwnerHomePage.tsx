@@ -70,6 +70,7 @@ function OwnerHome({ user }: { user: NonNullable<ReturnType<typeof useAuth>['use
   const data = state.kind === 'ready' ? state.data : null
   const guide = data ? guides[data.status] : null
   const connected = data?.status === 'CONNECTED'
+  const busy = state.kind === 'loading' || (state.kind === 'ready' && state.refreshing)
   const menus = sessionNavigation(user)
     .groups.flatMap((group) => group.items)
     .filter((item) => item.permission)
@@ -78,20 +79,19 @@ function OwnerHome({ user }: { user: NonNullable<ReturnType<typeof useAuth>['use
       <PageHeader
         title="홈"
         description={`${user.displayName}님, 쇼핑몰 연동 상태와 이용할 메뉴를 확인하세요.`}
+        // 오류일 때는 카드 안의 다시 시도 버튼 하나만 둔다.
         actions={
-          <Button
-            icon={<ReloadOutlined />}
-            loading={state.kind === 'loading'}
-            onClick={() => void refresh()}
-          >
-            새로고침
-          </Button>
+          state.kind !== 'error' && (
+            <Button icon={<ReloadOutlined />} loading={busy} onClick={() => void refresh()}>
+              새로고침
+            </Button>
+          )
         }
       />
       <section
         className={`oh-connection${connected ? ' is-connected' : ''}`}
         aria-label="쇼핑몰 연동"
-        aria-busy={state.kind === 'loading'}
+        aria-busy={busy}
       >
         <div className="oh-section-heading">
           <span className="oh-eyebrow">

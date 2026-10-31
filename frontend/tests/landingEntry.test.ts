@@ -63,7 +63,7 @@ test('landingEntry_whenPasswordChangeRequired_usesPasswordPage', async () => {
   }
 })
 
-// 업무 권한 없는 사장님도 사장님 진입점을 얻고 UI가 서버 연동 상태를 확인한다 (#354).
+// 업무 권한 없는 사장님도 홈에서 시작하고, 홈이 서버 연동 상태를 보여 준다 (#354).
 test('landingEntry_whenNoBusinessPermissions_usesOwnerEntry', async () => {
   const store = setup(async () => ({ ...admin, role: 'OPERATOR', merchantId: 10 }))
   await store.check('/')

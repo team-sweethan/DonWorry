@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { loginDestination, ownerLoginDestination } from '../src/auth/loginRedirect.ts'
+import { loginDestination } from '../src/auth/loginRedirect.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
 const staff: AuthUser = {
@@ -163,40 +163,24 @@ test('requiresLogin_whenStateMalformed_acceptsOnlyExplicitFlag', async () => {
   )
 })
 
-// 모든 권한 조합에서 연동 전에는 복귀 경로보다 키 발급을 우선하고 완료 후 홈을 연다.
-test('ownerLoginDestination_whenStatusChanges_usesIntegrationBeforeReturnPath', () => {
+// 사장님은 연동 상태와 상관없이 홈에서 시작하고, 같은 계정 재로그인만 보던 화면으로 돌아간다 (#354).
+test('loginDestination_whenOwnerLogsIn_usesHomeOrSameAccountReturn', () => {
   for (const permissions of [[], ['FDS_VIEW'], ['FINANCE_VIEW'], ['FDS_VIEW', 'FINANCE_VIEW']]) {
     const user = { ...owner, permissions }
-    const state = { returnTo: '/owner/settlements?page=2', previousUserId: user.userId }
-    for (const status of ['NO_KEY', 'PENDING_CONNECTION'] as const) {
-      assert.equal(ownerLoginDestination(user, state, status), '/owner/integration')
-    }
-    assert.equal(ownerLoginDestination(user, null, 'CONNECTED'), '/owner')
+    assert.equal(loginDestination(user, null), '/owner')
     assert.equal(
-      ownerLoginDestination(user, { returnTo: '/owner/integration' }, 'CONNECTED'),
-      '/owner',
+      loginDestination(user, { returnTo: '/owner/integration', previousUserId: user.userId }),
+      '/owner/integration',
     )
+    const state = { returnTo: '/owner/settlements?page=2', previousUserId: user.userId }
     assert.equal(
-      ownerLoginDestination(user, state, 'CONNECTED'),
+      loginDestination(user, state),
       permissions.includes('FINANCE_VIEW') ? state.returnTo : '/owner',
     )
+    assert.equal(loginDestination(user, { ...state, previousUserId: user.userId + 1 }), '/owner')
     assert.equal(
-      ownerLoginDestination({ ...user, passwordChangeRequired: true }, state, 'NO_KEY'),
+      loginDestination({ ...user, passwordChangeRequired: true }, state),
       '/account/password',
     )
-  }
-})
-
-// 연동 완료 후에도 외부 주소·다른 계정·권한 없는 복귀는 허용하지 않는다.
-test('ownerLoginDestination_whenReturnUnsafe_usesHome', () => {
-  for (const state of [
-    null,
-    [],
-    {},
-    { returnTo: '//example.com', previousUserId: owner.userId },
-    { returnTo: '/owner/settlements', previousUserId: owner.userId + 1 },
-    { returnTo: '/owner/actions', previousUserId: owner.userId },
-  ]) {
-    assert.equal(ownerLoginDestination(owner, state, 'CONNECTED'), '/owner')
   }
 })
