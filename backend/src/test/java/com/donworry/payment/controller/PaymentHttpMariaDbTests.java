@@ -484,6 +484,38 @@ class PaymentHttpMariaDbTests {
         }
     }
 
+    // 실제 매입이 끝나도 운영 환불 발행 어댑터가 없으면 503이며 요청·작업을 남기지 않는다.
+    @Test
+    void cancellation_whenCapturedButRefundNotReady_preservesPaymentWithoutWork() throws Exception {
+        verdict(FdsResult.ALLOW);
+        var created = call(
+                "POST",
+                "/api/payments",
+                "merchant-a",
+                UUID.randomUUID().toString(),
+                body(UUID.randomUUID().toString(), 1000));
+        long id = mapper.readTree(created.body()).path("paymentId").asLong();
+        org.awaitility.Awaitility.await()
+                .atMost(java.time.Duration.ofSeconds(15))
+                .untilAsserted(() -> assertThat(
+                                jdbc.queryForObject("SELECT status FROM payments WHERE payment_id=?", String.class, id))
+                        .isEqualTo("CAPTURED"));
+        String key = UUID.randomUUID().toString();
+        var result = call("POST", "/api/payments/" + id + "/cancellations", "merchant-a", key, "{\"reason\":\"환불\"}");
+        assertThat(result.statusCode()).isEqualTo(503);
+        assertThat(result.body()).contains("CANCELLATION_NOT_READY").doesNotContain("requestStatus");
+        assertThat(call("GET", "/api/payment-cancellation-requests/" + key, "merchant-a", null, null)
+                        .statusCode())
+                .isEqualTo(404);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM payment_cancellation_requests WHERE payment_id=?", Long.class, id))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payment_cancellations WHERE payment_id=?", Long.class, id))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM payments WHERE payment_id=?", String.class, id))
+                .isEqualTo("CAPTURED");
+    }
+
     // 새 취소 경로도 본문 파싱 전에 HMAC을 검사하고 HEAD·PUT 등 다른 메서드를 막는다.
     @Test
     void cancellation_whenUnauthenticatedOrWrongMethod_rejectsBeforeController() throws Exception {

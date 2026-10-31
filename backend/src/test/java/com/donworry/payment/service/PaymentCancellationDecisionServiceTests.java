@@ -59,15 +59,13 @@ class PaymentCancellationDecisionServiceTests {
                 .isEqualTo(PaymentCancellationResolution.REVIEW_REQUIRED);
     }
 
-    // 정산 상태는 환불 후보 판단에 영향을 주지 않으며 실행 미준비 응답을 유지한다
+    // 정산 상태는 환불 후보 판단에 영향을 주지 않으며 실행 준비는 접수 단계에서 확인한다
     @ParameterizedTest
     @ValueSource(strings = {"SCHEDULED", "COMPLETED", "CANCELED"})
     void decide_whenCaptured_ignoresSettlementStatus(String settlementStatus) {
         var payment = payment(PaymentStatus.CAPTURED, "AUTH");
         var capture = new CaptureSnapshot(1L, 3L, "COMPLETED", 100L, Instant.now(), true, settlementStatus);
-        assertThatThrownBy(() -> service.decide(payment, null, null, capture))
-                .isInstanceOfSatisfying(
-                        PaymentHttpException.class, e -> assertThat(e.getCode()).isEqualTo("CANCELLATION_NOT_READY"));
+        assertThat(service.decide(payment, null, null, capture)).isEqualTo(PaymentCancellationResolution.ACCEPTED);
     }
 
     // 매입 금액·완료 시각이 맞지 않는 CAPTURED는 복구 확인이 필요하다

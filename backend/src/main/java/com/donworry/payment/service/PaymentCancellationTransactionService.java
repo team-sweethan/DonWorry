@@ -21,6 +21,7 @@ public class PaymentCancellationTransactionService {
     private final PaymentCancellationDecisionService decisions;
     private final PaymentCancellationResultService results;
     private final PaymentCustomerVoidService customerVoid;
+    private final PaymentCustomerRefundService customerRefund;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public PaymentCancellationResponse admit(PaymentCancellationCommand command) {
@@ -37,14 +38,20 @@ public class PaymentCancellationTransactionService {
         }
         var action = actions.findByPaymentId(payment.getPaymentId()).orElse(null);
         var work = cancellations.findByPaymentId(payment.getPaymentId());
+        var capture = work.isPresent()
+                ? null
+                : captures.findByPaymentId(payment.getPaymentId()).orElse(null);
         var resolution = work.isPresent()
                 ? PaymentCancellationResolution.LINKED
                 : decisions.decide(
                         payment,
                         originals.findByPaymentId(payment.getPaymentId()).orElse(null),
                         action,
-                        captures.findByPaymentId(payment.getPaymentId()).orElse(null));
-        if (resolution == PaymentCancellationResolution.ACCEPTED) customerVoid.requireReady();
+                        capture);
+        if (resolution == PaymentCancellationResolution.ACCEPTED) {
+            if (payment.getStatus() == PaymentStatus.CAPTURED) customerRefund.requireReady();
+            else customerVoid.requireReady();
+        }
         var legacy = resolution == PaymentCancellationResolution.LEGACY_VOID ? action : null;
         if (request == null) {
             request = requests.save(PaymentCancellationRequest.recordDecision(
@@ -52,7 +59,10 @@ public class PaymentCancellationTransactionService {
         } else {
             request.reconsider(payment, resolution, legacy, Instant.now());
         }
-        if (resolution == PaymentCancellationResolution.ACCEPTED) customerVoid.execute(request, payment);
+        if (resolution == PaymentCancellationResolution.ACCEPTED) {
+            if (payment.getStatus() == PaymentStatus.CAPTURED) customerRefund.execute(request, payment, capture);
+            else customerVoid.execute(request, payment);
+        }
         // 업무 거절도 정상 반환해야 키·최초 내용이 커밋된다. HTTP 상태 변환은 커밋 밖에서 한다.
         return results.result(request, payment);
     }
