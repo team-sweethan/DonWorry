@@ -56,7 +56,7 @@ public class PaymentCancellationDecisionService {
                                 || !capture.captureId().equals(action.getCaptureId())
                                 || !capture.capturedAt().equals(action.getCompletedAt()))) yield review();
                 // 정산 상태는 판단하지 않는다. 금융 실행·필수 성공 수신부 연결은 #383이다.
-                throw notReady();
+                yield PaymentCancellationResolution.ACCEPTED;
             }
             case VOIDED -> {
                 if (!authorized || !authorizedOriginal(original, "REVIEW")) yield review();
@@ -88,9 +88,5 @@ public class PaymentCancellationDecisionService {
 
     private PaymentCancellationResolution review() {
         return PaymentCancellationResolution.REVIEW_REQUIRED;
-    }
-
-    private PaymentHttpException notReady() {
-        return new PaymentHttpException(503, "CANCELLATION_NOT_READY", "취소 실행 연결이 준비되지 않았습니다.");
     }
 }
