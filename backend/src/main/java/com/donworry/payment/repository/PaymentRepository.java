@@ -24,6 +24,14 @@ public interface PaymentRepository extends Repository<Payment, Long> {
 
     Optional<Payment> findById(Long paymentId);
 
+    // 고객 취소도 직원 조치와 같은 결제 잠금을 먼저 잡는다. 타 가맹점 결제는 잠그지 않는다.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.QueryHints(
+            @jakarta.persistence.QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000"))
+    @Query("select p from Payment p where p.paymentId = :paymentId and p.merchantId = :merchantId")
+    Optional<Payment> findOwnedForCancellation(
+            @Param("paymentId") Long paymentId, @Param("merchantId") Long merchantId);
+
     Optional<Payment> findByPaymentIdAndMerchantId(Long paymentId, Long merchantId);
 
     // 고객별 최근 결제 (#338) — 뺄 결제를 먼저 빼고 limit을 센다. 같은 시각이면 나중에 저장된 결제가 먼저

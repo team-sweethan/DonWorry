@@ -388,6 +388,31 @@ class MerchantHmacSecurityTests {
                 .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_002"));
     }
 
+    // 취소 POST만 정지 가맹점을 허용하며 직원 세션·잘못된 서명·폐기된 키는 우회할 수 없다.
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "GET"})
+    void cancellation_whenAuthenticated_preservesMerchantBoundary(String method) throws Exception {
+        String path = method.equals("POST")
+                ? "/api/payments/1/cancellations"
+                : "/api/payment-cancellation-requests/00000000-0000-0000-0000-000000000001";
+        var session = new MockHttpSession();
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("staff", null, List.of()));
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method), path)
+                        .session(session)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
+        mvc.perform(signed(method, path, "{}", 0)).andExpect(status().isOk());
+        mvc.perform(signed(method, path, "{}", 0).content("{ }")).andExpect(status().isUnauthorized());
+        // 폐기/버전 변경된 키는 nonce 저장 경계에서 거절된다.
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(false);
+        mvc.perform(signed(method, path, "{}", 0)).andExpect(status().isUnauthorized());
+        verify(merchants, never()).lockById(anyLong());
+    }
+
     @RestController
     static class ProbeController {
         private final CurrentMerchant current;
@@ -396,7 +421,7 @@ class MerchantHmacSecurityTests {
             this.current = current;
         }
 
-        @PostMapping("/api/payments")
+        @PostMapping({"/api/payments", "/api/payments/{id}/cancellations"})
         String post(@RequestBody String body) {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }
@@ -407,7 +432,7 @@ class MerchantHmacSecurityTests {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }
 
-        @GetMapping({"/api/payments/{id}", "/api/payment-orders"})
+        @GetMapping({"/api/payments/{id}", "/api/payment-orders", "/api/payment-cancellation-requests/{key}"})
         String get() {
             return current.findCurrent().orElseThrow().merchantId().toString();
         }
