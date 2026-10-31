@@ -40,13 +40,16 @@ public class MerchantHmacService {
                 .orElseThrow(() -> new MerchantAuthenticationException(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED));
         // DB collation이 대소문자를 무시하더라도 공개 코드의 별칭은 허용하지 않는다.
         if (!input.merchantCode().equals(merchant.getMerchantCode())) reject();
-        byte[] expected = MerchantHmacSigner.sign(secrets.resolve(merchant.getSecretReference()), input);
+        var material = secrets.resolve(merchant.getMerchantCode());
+        byte[] expected = MerchantHmacSigner.sign(material.key(), input);
         if (!MessageDigest.isEqual(expected, HexFormat.of().parseHex(input.signature()))) reject();
         // 미래 시각의 서명도 최초 수신 후 만료까지 재사용되지 않도록 서명 시각을 기준으로 보관한다.
         // 상태 검사보다 먼저 소비해, 정지 중 거절한 서명이 재활성화 뒤 다시 실행되지 않게 한다.
         if (!nonces.consume(
-                merchant.getMerchantId(), UUID.fromString(input.nonce()), Instant.ofEpochSecond(timestamp + 301)))
-            reject();
+                merchant.getMerchantId(),
+                UUID.fromString(input.nonce()),
+                Instant.ofEpochSecond(timestamp + 301),
+                material.version())) reject();
         // 비활성 가맹점도 기존 결제 조회·픽업 PUT은 허용한다. 주문 소유권은 업무 모듈이 검사한다.
         if ("POST".equals(input.method()) && merchant.getStatus() != MerchantStatus.ACTIVE)
             throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_INACTIVE);

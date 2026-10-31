@@ -316,3 +316,10 @@ P1 사용자가 주소만 수집하는 설계·구현 진행을 승인했다. `m
 가맹점별 최초 잔액·기준일은 불변이고, 실제 지출 완료 시각은 nullable `paid_at` UTC DATETIME(6)로 보관한다.
 가맹점은 논리 참조이며 다른 담당 FK를 추가하지 않는다. 금액·PK·인덱스·API·미검증 범위는 [P6 설계/ERD](../settlement/balance-expenses-api.md)를 따른다.
 Notion 최신 동기화·팀 전체 ERD 합의·개인 DB 적용 완료를 뜻하지 않는다.
+
+
+### #354 PR B 키·연동 관리 (2026-10-31)
+
+P1 사용자가 신규 테이블 2개를 포함한 설계·구현을 승인했다. `merchant_integrations`는 가맹점별 현재 키 암호문·IV·마스터 키 ID·키 버전·연동 상태·발급/연결/갱신 시각을 저장한다. `merchant_key_histories`는 발급·재발급·폐기·시스템 이전의 실행 계정·버전·사유·시각을 보존하며 원문·암호문은 넣지 않는다. 모두 P1 소유이며 merchants·platform_users로만 물리 FK를 건다.
+
+컬럼·타입·NULL·상태 조합은 [승인 설계](../identity/354-pr-b-key-design.md#3-p1-확인을-받을-저장-구조-제안), 실제 제약은 [현재 설정 SQL](../../backend/src/main/resources/db/migration/V20261031_151333__create_merchant_integrations.sql)·[키 이력 SQL](../../backend/src/main/resources/db/migration/V20261031_151342__create_merchant_key_histories.sql)을 따른다. [ADR-0052](../decisions/0052-merchant-key-management.md)에 저장·복구·이전·B/C 경계를 기록한다. 기존 secret_reference는 이전 대상 식별용으로 유지하되 런타임 키 fallback에 쓰지 않는다. Notion 선행 대조·동기화와 운영 DB 적용은 미수행이다.

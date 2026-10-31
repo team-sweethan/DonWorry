@@ -24,6 +24,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(MariaDbTestContainerConfig.class)
 class MerchantNonceMariaDbTests {
     @Autowired
+    com.donworry.identity.repository.MerchantIntegrationRepository integrations;
+
+    @Autowired
     DatabaseMerchantNonceStore store;
 
     @Autowired
@@ -135,7 +138,7 @@ class MerchantNonceMariaDbTests {
     void consume_whenStoreRecreated_preservesReplayProtection() {
         UUID nonce = UUID.randomUUID();
         assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isTrue();
-        var recreated = new DatabaseMerchantNonceStore(repository, transactions, clock);
+        var recreated = new DatabaseMerchantNonceStore(repository, transactions, clock, integrations);
         assertThat(recreated.consume(merchantId, nonce, now.plusSeconds(301))).isFalse();
     }
 

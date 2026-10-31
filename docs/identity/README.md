@@ -2,6 +2,10 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #354 PR B 시크릿 키 실제 관리
+
+[설계·검증](354-pr-b-key-design.md), [ADR-0052](../decisions/0052-merchant-key-management.md). P1 사용자 승인으로 가맹점별 키를 암호화해 DB에 보관하고 사장님 발급·보기·재발급과 관리자 폐기를 구현한다. 이전 플래그·마스터 키 준비가 필요하며 기존 CAKESHOP은 같은 키로 옮긴다. 연결 확인·연동 전 신규 결제 차단·사장님 홈은 C 범위다. 아래 과거 기록과 현재 계약을 구분한다.
+
 ## #354 PR A 신청 주소·사장님 계정 추가 생성 제한
 
 [설계](354-pr1-application-design.md), [ADR-0049](../decisions/0049-application-shop-url.md). 신규 신청은 운영 확인용 쇼핑몰 주소만 받고 종류는 수집하지 않는다. 기존 신청은 주소 NULL로 유지한다. 승인·관리자 직접 생성에서 같은 가맹점 사장님 계정 추가 생성을 막되 기존 복수 계정은 유지한다. HMAC 키·연결 확인은 후속 PR이다. 실행 결과는 설계와 PR에 기록한다.

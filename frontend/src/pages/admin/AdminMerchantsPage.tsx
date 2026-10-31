@@ -26,6 +26,8 @@ import {
 } from '../../api/adminMerchants'
 import type { AdminMerchant, MerchantPage, MerchantStatus } from '../../api/adminMerchants'
 
+import { IntegrationPanel } from '../owner/IntegrationPreviewPage'
+
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
 // 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
 const settlementFeeNotice = '신규 정산에 등록 요율 적용 · 기존 정산 유지'
@@ -349,6 +351,7 @@ export function AdminMerchantDetailPage() {
           </Space>
         </Card>
       )}
+      {merchant && <IntegrationPanel key={merchant.merchantId} merchantId={merchant.merchantId} />}
       <Modal
         open={confirming && !!merchant}
         title={

@@ -2,6 +2,12 @@
 
 [Identity 목차](README.md) · [HMAC 계약](219-merchant-hmac.md) · [이슈 결정](https://github.com/team-sweethan/DonWorry/issues/246#issuecomment-6442207054)
 
+## #354 PR B 이후 키 이전
+
+현재 키 저장은 [ADR-0052 배포 절차](../decisions/0052-merchant-key-management.md#기존-키-이전과-배포)를 따른다. **시연 이후** 기존 CAKESHOP 환경변수 값을 그대로 유지한 상태에서 마스터 키를 준비하고 `donworry.integration.legacy-import-enabled=true`로 기동해 DB로 암호화 이전한다. 같은 키로 서명 인증·CONNECTED·MIGRATE 이력을 확인한 다음 이전 플래그와 DonWorry의 레거시 환경변수를 제거한다. CakeShop 서버의 키 값은 변경하지 않는다. 아래 신규 키 생성 명령을 기존 환경의 키 이전에 실행하지 않는다.
+
+미이전 레거시 가맹점은 503이며, 관리자 폐기 이후 환경변수 키로 되돌아가지 않는다. DB와 해당 마스터 키를 별도로 백업·함께 복원한다. 실제 키 이전·배포 완료를 뜻하지 않는다. 아래는 기존 #246 등록·검증 이력이다.
+
 ## 등록 값과 적용
 
 새 [Flyway 시드](../../backend/src/main/resources/db/migration/V20261027_221311__seed_cakeshop_merchant_and_owner.sql)가 앱 기동 때 다음을 함께 등록한다. 기존 `DEMOSHOP`과 계정은 보존하며 ID는 자동 생성하므로 숫자로 가정하지 않는다.

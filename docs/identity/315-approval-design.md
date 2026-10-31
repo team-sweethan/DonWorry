@@ -49,7 +49,7 @@ MerchantProvisioningService·AccountProvisioningService로 검증·생성·기�
 가맹점명·계정 표시 이름은 신청에서 가져온다. 역할은 OPERATOR 고정, 기능 권한은 기존 두 코드만 허용한다.
 아이디는 신청에 저장된 requestedLoginId를 사용한다. 승인 요청에 임의 loginId를 넣어도 채택하지 않는다. 코드·아이디 형식 규칙은 기존 계약 그대로다. 수수료 기본 1% → 0.010000, 0 이상 1 미만·소수 6자리.
 사업자번호는 merchants에 복사하고 연락처는 신청에만 둔다. 기존 가맹점의 같은 사업자번호는 경고로 보여주고 승인 차단/기존 계정 연결을 자동 수행하지 않는다.
-secret_reference는 설정하지 않으며 결제 연동은 별도 진행임을 승인 화면·메일에 명시한다.
+secret_reference는 설정하지 않는다. #354 PR B부터 승인된 사장님은 로그인 후 시크릿 키를 직접 발급하며 DB 암호화 저장은 [ADR-0052](../decisions/0052-merchant-key-management.md)를 따른다. 연결 확인·신규 결제 차단은 PR C 범위이며 결제 연동은 별도 진행임을 승인 화면·메일에 명시한다.
 
 ## 신청 아이디 예약과 기존 신청
 

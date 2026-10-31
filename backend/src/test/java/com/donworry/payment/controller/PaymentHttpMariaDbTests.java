@@ -57,14 +57,16 @@ class PaymentHttpMariaDbTests {
                             + "ON DUPLICATE KEY UPDATE status='ACTIVE'",
                     id,
                     "HMAC" + id);
+            com.donworry.identity.service.MerchantIntegrationTestFixtures.installKey(jdbc, id, signingKey);
         }
-        when(secrets.resolve(anyString())).thenReturn(signingKey);
+        when(secrets.resolve(anyString())).thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(signingKey, 1));
         verdict(FdsResult.REVIEW);
     }
 
     @AfterEach
     void cleanUpMerchants() {
         jdbc.update("DELETE FROM merchant_request_nonces WHERE merchant_id IN (997,998)");
+        jdbc.update("DELETE FROM merchant_integrations WHERE merchant_id IN (997,998)");
         jdbc.update("DELETE FROM merchants WHERE merchant_code IN ('HMAC997','HMAC998')");
     }
 
