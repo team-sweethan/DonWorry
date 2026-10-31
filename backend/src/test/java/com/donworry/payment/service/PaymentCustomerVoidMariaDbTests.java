@@ -40,6 +40,9 @@ class PaymentCustomerVoidMariaDbTests {
     PaymentCancellationQueryService queries;
 
     @Autowired
+    PaymentCustomerVoidReader customerVoidReader;
+
+    @Autowired
     PaymentActionRequester staff;
 
     @Autowired
@@ -211,6 +214,31 @@ class PaymentCustomerVoidMariaDbTests {
                 .isEqualTo(new PaymentCustomerVoidSucceeded(
                         first.cancellationId(), p.getPaymentId(), p.getMerchantId(), 2500L, first.completedAt()));
         assertThat(count("payment_actions", p.getPaymentId())).isZero();
+        assertThat(count("payment_cancellations", p.getPaymentId())).isEqualTo(1);
+        assertThat(eventCount(p.getPaymentId())).isEqualTo(1);
+        verify(voider).voidAuthorization(new AuthorizationVoidCommand(p.getPaymentId(), "stored-authorization"));
+    }
+
+    // 호출자 스냅샷 이후 커밋된 고객 취소도 새 조회 트랜잭션에서 보며 재조회는 실행하지 않는다.
+    @Test
+    void findSucceeded_whenOuterSnapshotPredatesCancellation_readsCommittedSuccess() {
+        var p = payment(true);
+        tx().executeWithoutResult(status -> {
+            assertThat(payments.findById(p.getPaymentId()).orElseThrow().getStatus())
+                    .isEqualTo(PaymentStatus.HELD);
+            assertThat(customerVoidReader.findSucceeded(p.getMerchantId(), p.getPaymentId()))
+                    .isEmpty();
+            var result = customers.admit(command(p));
+            var expected = new PaymentCustomerVoidSummary(
+                    result.cancellationId(), p.getPaymentId(), p.getMerchantId(), p.getAmount(), result.completedAt());
+            assertThat(customerVoidReader.findSucceeded(p.getMerchantId(), p.getPaymentId()))
+                    .contains(expected);
+            assertThat(customerVoidReader.findSucceeded(p.getMerchantId(), p.getPaymentId()))
+                    .contains(expected);
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> customerVoidReader.findSucceeded(9982L, p.getPaymentId()));
+        });
+        delivered(p.getPaymentId(), 1);
         assertThat(count("payment_cancellations", p.getPaymentId())).isEqualTo(1);
         assertThat(eventCount(p.getPaymentId())).isEqualTo(1);
         verify(voider).voidAuthorization(new AuthorizationVoidCommand(p.getPaymentId(), "stored-authorization"));

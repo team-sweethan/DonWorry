@@ -229,3 +229,22 @@ P3 이력은 Case 잠금 아래 cancellationId 기준으로 한 번만 기록한
 필수 검증은 고객/직원 VOID 구분, 가맹점 범위·원본 불일치, 실패/미완료 취소 제외, 반복 조회 무변경, 이벤트 중복·순서 역전·재전달, 판정과 취소 경합, 다중 결제 Case의 조기 종료 방지다.
 
 이번 단계는 공개 조회의 부족한 정보와 연결 지점을 코드로 대조하고 설계를 수정했다. 새 조회 API·P3 연결 코드는 아직 미구현이며 운영 NOT_READY를 유지한다. 문서 링크·공백 검사만 수행하고, 새 연결 시나리오는 미검증이다. 별도 P3 테이블 생성 승인은 더 이상 이 방향의 선행 조건이 아니다.
+
+## 14. P5 고객 승인 취소 성공 조회 구현
+
+설계 수정은 `707446e`에 커밋했다. 그 위 작업 트리에서 `payment.api.PaymentCustomerVoidReader`와 `PaymentCustomerVoidSummary`, 구현 서비스와 테스트를 추가했다.
+
+- `findSucceeded(merchantId, paymentId)`는 같은 앱의 Java 조회다. HTTP 엔드포인트를 추가하지 않는다. 호출자는 가맹점 접근 권한을 확인하고 전달한다.
+- 해당 소유 결제에 고객 VOID/SUCCEEDED가 없으면 empty다. 직원 VOID·REFUND·고객 취소 PROCESSING/UNKNOWN/FAILED를 성공으로 취급하지 않는다.
+- null/양수가 아닌 ID, 없는 결제 또는 가맹점 불일치는 `IllegalArgumentException`이다. 고객 성공 작업의 원 요청/소유/금액/결제 상태/완료 시각 등이 맞지 않으면 `IllegalStateException`, DB 오류는 원래 예외를 전달한다. 정상 미취소 결과로 숨기지 않는다.
+- 응답은 cancellationId·paymentId·merchantId·amount·completedAt이며 저장된 값만 반환한다. 고객 요청 키·사유·승인 참조는 공개하지 않는다.
+- 조회는 `REQUIRES_NEW`, `REPEATABLE_READ`, readOnly로 수행한다. P3 호출자의 이전 스냅샷을 물려받지 않으면서 P5 결제/작업/원 요청은 같은 스냅샷으로 대조한다. 금융 잠금·재실행·이벤트 발행·재판단은 하지 않는다. 반환 직후 발생하는 취소와의 경합은 P5 실행 잠금 및 후속 이벤트가 처리해야 한다.
+- 새 DB 테이블이나 컬럼은 없다. P3 Case 정책·운영 수신자·발행 어댑터는 변경하지 않았으며 NOT_READY는 유지한다.
+
+검증(2026-10-31, `707446e` 위 조회 구현 작업 트리):
+
+- `cd backend && ./gradlew -I /tmp/donworry-381-test-defaults.gradle spotlessApply check mariaDbTest --tests '*PaymentCustomerVoidMariaDbTests' --console=plain`: BUILD SUCCESSFUL(1분 13초). 전체 일반 검사 및 고객 VOID MariaDB 검사 통과. 임시 init script는 기존과 같이 테스트의 `ai.server.enabled=false`만 지정한다.
+- 새 단위 검사는 고객/직원 VOID 구분, 실패/진행/UNKNOWN/REFUND 제외, 잘못된 ID·가맹점 범위, 원 요청·상태·금액·완료 시각 불일치, DB 장애 전파와 반복 조회 무변경을 확인한다.
+- MariaDB 검사는 기존 고객 VOID 18건에 새 조회 1건을 더한 19건이다. 호출자 트랜잭션에서 결제를 먼저 읽은 뒤 별도 취소가 커밋되어도 조회는 성공 원본을 반환하고, 반복 조회가 취소 실행이나 발행을 늘리지 않는 것을 확인했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+- 미검증: MariaDB 전체 suite는 이번에 재실행하지 않았다(직전 P5 구현 검증은 12절). 실제 P3 연결·Case 종료 정책·CakeShop 성공 흐름은 이 단계의 검증 범위에 포함하지 않는다. 조회 구현은 아직 미커밋이며 PR·운영 활성화는 하지 않았다.
