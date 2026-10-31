@@ -62,7 +62,8 @@ class PickupAuthenticationMariaDbTests {
                         + "VALUES (?, 'pickup test', 'INACTIVE', 0.01, 'DONWORRY_MERCHANT_HMAC_TEST', UTC_TIMESTAMP(6))",
                 code);
         merchantId = jdbc.queryForObject("SELECT merchant_id FROM merchants WHERE merchant_code=?", Long.class, code);
-        when(secrets.resolve(anyString())).thenReturn(key);
+        com.donworry.identity.service.MerchantIntegrationTestFixtures.installKey(jdbc, merchantId, key);
+        when(secrets.resolve(anyString())).thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(key, 1));
     }
 
     @AfterEach
@@ -75,6 +76,7 @@ class PickupAuthenticationMariaDbTests {
                 code + "-OTHER");
         jdbc.update("DELETE FROM order_fulfillments WHERE order_id IN (?, ?)", code, code + "-OTHER");
         jdbc.update("DELETE FROM merchant_request_nonces WHERE merchant_id=?", merchantId);
+        jdbc.update("DELETE FROM merchant_integrations WHERE merchant_id=?", merchantId);
         jdbc.update("DELETE FROM merchants WHERE merchant_id=?", merchantId);
     }
 

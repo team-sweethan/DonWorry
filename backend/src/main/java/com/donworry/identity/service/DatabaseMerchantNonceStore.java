@@ -25,9 +25,10 @@ public class DatabaseMerchantNonceStore implements MerchantNonceStore {
     private final MerchantRequestNonceRepository repository;
     private final PlatformTransactionManager transactions;
     private final Clock identityClock;
+    private final com.donworry.identity.repository.MerchantIntegrationRepository integrations;
 
     @Override
-    public boolean consume(Long merchantId, UUID nonce, Instant expiresAt) {
+    public boolean consume(Long merchantId, UUID nonce, Instant expiresAt, long keyVersion) {
         if (merchantId == null || merchantId <= 0) throw new IllegalArgumentException("invalid merchant identity");
         Objects.requireNonNull(nonce);
         Objects.requireNonNull(expiresAt);
@@ -38,6 +39,12 @@ public class DatabaseMerchantNonceStore implements MerchantNonceStore {
                 // 같은 가맹점의 짧은 인증 기록만 직렬화해 정상 중복을 SQL 오류로 발생시키지 않는다.
                 if (!repository.lockMerchant(merchantId))
                     throw new DataIntegrityViolationException("merchant not found");
+                // 서명 확인 뒤 키가 바뀌었으면 폐기된 키 요청을 소비하지 않는다.
+                if (!integrations
+                        .findByMerchantId(merchantId)
+                        .filter(i -> i.getStatus() != com.donworry.identity.entity.IntegrationStatus.NO_KEY
+                                && i.getKeyVersion() == keyVersion)
+                        .isPresent()) return false;
                 // 잠금 대기 중 서명이 만료됐다면 삭제된 옛 nonce를 다시 소비하지 않는다.
                 if (!expiresAt.isAfter(identityClock.instant())) return false;
                 if (repository.containsNonce(merchantId, nonce.toString())) return false;

@@ -1,178 +1,415 @@
-import { useState } from 'react'
-import { Alert, Button, Card, Descriptions, Space, Steps, Table, Tag, Typography } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Input,
+  Modal,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  Typography,
+} from 'antd'
 import { PageHeader } from '../../components/common/PageHeader'
+import { ApiError, subscribeUnauthorized } from '../../api/client'
+import {
+  getIntegration,
+  integrationLabels,
+  requestIntegrationKey,
+  revokeIntegrationKey,
+} from '../../api/integration'
+import type { IntegrationInfo, KeyAction, KeyResult } from '../../api/integration'
+import { useAuth } from '../../auth/useAuth'
 import './integration-preview.css'
 
-/**
- * 사장님 [시크릿 키 발급] 미리보기 (#354).
- * 키 발급 API(PR B) 전이라 서버를 호출하지 않는다. 실제 가맹점 값으로 오해하지 않도록 모든 값에 "예시"를 붙인다.
- */
-type IssueRecord = { at: string; action: string; actor: string }
-
-const exampleRecords: IssueRecord[] = [
-  { at: '2026-10-30 13:55', action: '발급', actor: '사장님 (myshop_owner)' },
-]
-
-const recordColumns: ColumnsType<IssueRecord> = [
-  { title: '시각', dataIndex: 'at', width: 200 },
-  { title: '작업', dataIndex: 'action', width: 120 },
-  { title: '실행', dataIndex: 'actor' },
-]
-
-// 연결 확인 API는 PR C에서 정한다. 경로는 형식만 보여 주는 예시다.
-const requestExample = `# 연결 확인 요청 예시 (주소·값 모두 예시)
-curl -X POST https://api.donworry.example/api/v1/merchant-connection/check \\
-  -H "X-Merchant-Code: {가맹점 코드}" \\
-  -H "X-Timestamp: {Unix 초}" \\
-  -H "X-Nonce: {요청마다 새 UUID}" \\
-  -H "X-Signature: {시크릿 키로 만든 서명}"`
-
-function ExampleTag() {
-  return <Tag className="dw-integration-example">예시</Tag>
+const actionLabels: Record<string, string> = {
+  ISSUE: '발급',
+  REISSUE: '재발급',
+  REVOKE: '폐기',
+  MIGRATE: '기존 키 이전',
 }
+const failure = (error: unknown) =>
+  error instanceof ApiError
+    ? (error.detail ?? '요청에 실패했습니다.')
+    : '처리 결과를 확인할 수 없습니다. 새로고침 후 상태를 확인해 주세요.'
+type Confirmation = { action: KeyAction | 'revoke'; version: number }
 
 export function IntegrationPreviewPage() {
-  const [showCautions, setShowCautions] = useState(false)
-
+  const { user } = useAuth()
   return (
     <>
       <PageHeader
         title="시크릿 키 발급"
-        description="쇼핑몰 서버가 돈워리 결제 API를 쓸 수 있도록 시크릿 키를 발급하고 연결 상태를 확인합니다."
+        description="쇼핑몰 서버에서 사용할 시크릿 키를 발급하고 관리합니다."
       />
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="직접 발급 기능은 준비 중입니다"
-        description="지금은 돈워리 담당자가 직접 키를 설정해 연결을 도와드립니다. 연결이 필요하면 담당자에게 문의해 주세요. 발급 기능이 열리면 이 화면에서 직접 키를 받을 수 있습니다."
-      />
-
-      <Card
-        className="dw-integration-preview"
-        style={{ marginBottom: 16, borderColor: '#E2E8F0' }}
-        title={
-          <Space size={8}>
-            내 연동 정보
-            <ExampleTag />
-          </Space>
-        }
-        extra={<Tag color="default">예시 화면 · 준비 중</Tag>}
-      >
-        <Descriptions column={1} size="middle" colon={false} labelStyle={{ width: 140 }}>
-          <Descriptions.Item label="연동 상태">
-            <Tag color="blue">연동 전</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="가맹점 코드">
-            <Typography.Text code>MYSHOP</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="시크릿 키">
-            <Typography.Text code>dw_sk_••••••••••••••••a3f9</Typography.Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="마지막 연결 확인">
-            아직 연결 확인 요청이 없습니다
-          </Descriptions.Item>
-        </Descriptions>
-        <Space wrap style={{ marginTop: 16 }}>
-          <Button type="primary" disabled>
-            시크릿 키 발급
-          </Button>
-          <Button disabled>다시 보기</Button>
-          <Button disabled>복사</Button>
-          <Button disabled>재발급</Button>
-          <Typography.Text type="secondary">
-            키를 보거나 재발급할 때 비밀번호를 한 번 더 확인합니다
-          </Typography.Text>
-        </Space>
-        <div className="dw-section-title" style={{ margin: '24px 0 12px' }}>
-          <Space size={8}>
-            발급 기록
-            <ExampleTag />
-          </Space>
-        </div>
-        <Table
-          rowKey="at"
-          size="small"
-          columns={recordColumns}
-          dataSource={exampleRecords}
-          pagination={false}
-        />
-      </Card>
-
-      <Card title="연동은 3단계로 끝납니다" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
-        <Steps
-          className="dw-integration-steps"
-          responsive
-          items={[
-            {
-              status: 'process',
-              title: '시크릿 키 발급',
-              description: (
-                <>
-                  이 화면에서 키를 받습니다.
-                  <br />
-                  <Tag color="blue">→ 연동 전</Tag>
-                  <br />
-                  연동 완료 전까지는 키를 다시 볼 수 있습니다.
-                </>
-              ),
-            },
-            {
-              status: 'process',
-              title: '쇼핑몰에 설정',
-              description: (
-                <>
-                  쇼핑몰 서버에 가맹점 코드와 키를 넣습니다.
-                  <br />
-                  쇼핑몰 개발자가 연동 문서를 보고 설정합니다. (연동 문서 준비 중)
-                </>
-              ),
-            },
-            {
-              status: 'process',
-              title: '연결 확인',
-              description: (
-                <>
-                  쇼핑몰이 연결 확인 요청을 보내면 끝납니다.
-                  <br />
-                  <Tag color="green">→ 연동 완료 · 결제 가능</Tag>
-                  <br />
-                  이후 키는 숨겨지고 재발급만 할 수 있습니다.
-                </>
-              ),
-            },
-          ]}
-        />
-      </Card>
-
-      <Card title="요청 예시" style={{ borderColor: '#E2E8F0' }}>
-        <Typography.Paragraph type="secondary">
-          쇼핑몰 서버는 요청마다 아래 헤더를 붙입니다. 서명 만드는 방법은 연동 문서에서 안내합니다
-          (준비 중).
-        </Typography.Paragraph>
-        <pre className="dw-integration-code">{requestExample}</pre>
-        <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
-          시크릿 키 자체는 절대 요청에 넣지 않습니다. 키로 만든 <strong>서명</strong>만 보냅니다.
-        </Typography.Paragraph>
-        <div className="dw-integration-foot">
-          <Typography.Text type="secondary">
-            쇼핑몰 개발자용 연동 문서는 준비 중입니다.
-          </Typography.Text>
-          <Button type="link" onClick={() => setShowCautions((open) => !open)}>
-            키를 다룰 때 주의할 점 {showCautions ? '접기' : '보기'}
-          </Button>
-        </div>
-        {showCautions && (
-          <ul className="dw-integration-cautions">
-            <li>
-              재발급하면 이전 키는 바로 막히고, 새 키로 연결 확인할 때까지 새 결제를 받을 수
-              없습니다.
-            </li>
-            <li>키를 다른 사람에게 보여 주거나 메일·메신저로 보내지 마세요.</li>
-          </ul>
-        )}
-      </Card>
+      <IntegrationPanel key={user?.userId} />
     </>
+  )
+}
+
+export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
+  const { user } = useAuth()
+  const userId = user?.userId
+  const admin = merchantId !== undefined
+  const [revision, setRevision] = useState(0)
+  const [page, setPage] = useState(0)
+  const [result, setResult] = useState<{
+    merchantId?: number
+    page: number
+    revision: number
+    data: IntegrationInfo
+  } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
+  const [password, setPassword] = useState('')
+  const [reason, setReason] = useState('')
+  const [key, setKey] = useState<KeyResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [needsRefresh, setNeedsRefresh] = useState(false)
+  const pending = useRef<AbortController | null>(null)
+  const generation = useRef(0)
+  const data =
+    result !== null &&
+    result.merchantId === merchantId &&
+    result.page === page &&
+    result.revision === revision
+      ? result.data
+      : null
+  useEffect(() => {
+    const controller = new AbortController()
+    const id = generation.current
+    getIntegration(merchantId, page, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted && generation.current === id) {
+          setResult({ merchantId, page, revision, data: value })
+          setNeedsRefresh(false)
+        }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(failure(err))
+      })
+    return () => controller.abort()
+  }, [merchantId, page, revision])
+  useEffect(() => {
+    const clear = () => {
+      generation.current++
+      pending.current?.abort()
+      pending.current = null
+      setBusy(false)
+      setKey(null)
+      setPassword('')
+      setReason('')
+      setConfirmation(null)
+      setNeedsRefresh(true)
+    }
+    const hide = () => {
+      if (document.visibilityState === 'hidden') clear()
+    }
+    const unsubscribe = subscribeUnauthorized(clear)
+    document.addEventListener('visibilitychange', hide)
+    window.addEventListener('pagehide', clear)
+    return () => {
+      clear()
+      unsubscribe()
+      document.removeEventListener('visibilitychange', hide)
+      window.removeEventListener('pagehide', clear)
+    }
+  }, [merchantId, userId])
+  const refresh = () => {
+    setKey(null)
+    setPassword('')
+    setReason('')
+    setConfirmation(null)
+    setError(null)
+    setRevision((v) => v + 1)
+  }
+  const open = (action: Confirmation['action']) => {
+    if (!data) return
+    setKey(null)
+    setPassword('')
+    setReason('')
+    setError(null)
+    setConfirmation({ action, version: data.keyVersion })
+  }
+  const submit = async () => {
+    if (!confirmation || pending.current) return
+    const controller = new AbortController(),
+      id = generation.current
+    pending.current = controller
+    setBusy(true)
+    setError(null)
+    const supplied = password
+    setPassword('')
+    try {
+      if (confirmation.action === 'revoke' && merchantId !== undefined)
+        await revokeIntegrationKey(
+          merchantId,
+          reason.trim(),
+          confirmation.version,
+          controller.signal,
+        )
+      else if (confirmation.action !== 'revoke') {
+        const value = await requestIntegrationKey(
+          confirmation.action,
+          supplied,
+          confirmation.version,
+          controller.signal,
+        )
+        if (generation.current === id && !controller.signal.aborted) setKey(value)
+      }
+      if (generation.current === id && !controller.signal.aborted) {
+        setConfirmation(null)
+        setReason('')
+        setRevision((v) => v + 1)
+      }
+    } catch (err) {
+      if (generation.current === id && !controller.signal.aborted) {
+        setConfirmation(null)
+        setReason('')
+        setKey(null)
+        setNeedsRefresh(true)
+        setError(failure(err))
+      }
+    } finally {
+      if (generation.current === id) {
+        pending.current = null
+        setBusy(false)
+      }
+    }
+  }
+  return (
+    <Card
+      title={admin ? '쇼핑몰 연동 관리' : '내 연동 정보'}
+      extra={
+        <Button disabled={busy} onClick={refresh}>
+          새로고침
+        </Button>
+      }
+    >
+      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {needsRefresh && (
+        <Alert
+          type="warning"
+          showIcon
+          message="새로고침으로 최신 상태를 확인한 뒤 진행해 주세요."
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      {!data ? (
+        !error && <Spin />
+      ) : (
+        <>
+          <Descriptions
+            column={1}
+            items={[
+              {
+                key: 'code',
+                label: '가맹점 코드',
+                children: <Typography.Text code>{data.merchantCode}</Typography.Text>,
+              },
+              {
+                key: 'status',
+                label: '연동 상태',
+                children: (
+                  <Tag color={data.status === 'CONNECTED' ? 'green' : 'default'}>
+                    {integrationLabels[data.status]}
+                  </Tag>
+                ),
+              },
+              {
+                key: 'issued',
+                label: '키 발급 시각 (UTC)',
+                children: data.keyIssuedAt?.replace('T', ' ') ?? '아직 발급하지 않았습니다',
+              },
+              {
+                key: 'connected',
+                label: '연결 확인 시각 (UTC)',
+                children: data.connectedAt?.replace('T', ' ') ?? '연결 확인 기록이 없습니다',
+              },
+            ]}
+          />
+          {admin ? (
+            <>
+              <Typography.Paragraph>
+                관리자는 키 원문을 볼 수 없습니다. 폐기하면 현재 키는 즉시 사용할 수 없으며 실행
+                계정과 사유가 기록됩니다.
+              </Typography.Paragraph>
+              <Button
+                danger
+                disabled={busy || needsRefresh || data.status === 'NO_KEY'}
+                onClick={() => open('revoke')}
+              >
+                키 폐기
+              </Button>
+            </>
+          ) : (
+            <>
+              <Alert
+                type="info"
+                showIcon
+                message="키 발급 기능을 사용할 수 있습니다"
+                description="쇼핑몰의 연결 확인 기능과 연동 상태에 따른 신규 결제 차단은 준비 중입니다. 현재는 키를 발급하고 쇼핑몰 서버에 보관하는 단계까지 진행할 수 있습니다."
+                style={{ margin: '16px 0' }}
+              />
+              <Space wrap>
+                <Button
+                  type="primary"
+                  disabled={busy || needsRefresh || data.status !== 'NO_KEY'}
+                  onClick={() => open('issue')}
+                >
+                  시크릿 키 발급
+                </Button>
+                <Button
+                  disabled={busy || needsRefresh || data.status !== 'PENDING_CONNECTION'}
+                  onClick={() => open('reveal')}
+                >
+                  다시 보기
+                </Button>
+                <Button
+                  danger
+                  disabled={busy || needsRefresh || data.status === 'NO_KEY'}
+                  onClick={() => open('reissue')}
+                >
+                  재발급
+                </Button>
+              </Space>
+              <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
+                키를 발급·조회·재발급할 때마다 비밀번호를 확인합니다. 키는 쇼핑몰 서버에만 보관하고
+                메일·메신저로 보내지 마세요.
+              </Typography.Paragraph>
+            </>
+          )}
+          <Table
+            rowKey="historyId"
+            size="small"
+            style={{ marginTop: 24 }}
+            dataSource={data.histories}
+            scroll={{ x: 600 }}
+            pagination={{
+              disabled: busy,
+              current: page + 1,
+              pageSize: 20,
+              total: data.totalElements,
+              showSizeChanger: false,
+              onChange: (p) => {
+                setKey(null)
+                setPassword('')
+                setReason('')
+                setConfirmation(null)
+                setPage(p - 1)
+              },
+            }}
+            columns={[
+              {
+                title: '시각 (UTC)',
+                dataIndex: 'createdAt',
+                render: (v: string) => v.replace('T', ' '),
+              },
+              { title: '작업', dataIndex: 'action', render: (v: string) => actionLabels[v] ?? v },
+              {
+                title: '실행 계정 ID',
+                dataIndex: 'actorUserId',
+                render: (v: number | null) => v ?? '시스템',
+              },
+              { title: '사유', dataIndex: 'reason' },
+            ]}
+          />
+        </>
+      )}
+      <Modal
+        open={!!confirmation}
+        title={
+          confirmation?.action === 'revoke'
+            ? '키를 폐기할까요?'
+            : confirmation?.action === 'reissue'
+              ? '키를 재발급할까요?'
+              : confirmation?.action === 'reveal'
+                ? '비밀번호 확인 후 키 보기'
+                : '비밀번호 확인 후 키 발급'
+        }
+        okText="확인"
+        cancelText="취소"
+        confirmLoading={busy}
+        closable={!busy}
+        maskClosable={!busy}
+        cancelButtonProps={{ disabled: busy }}
+        okButtonProps={{
+          danger: confirmation?.action === 'revoke' || confirmation?.action === 'reissue',
+          disabled: confirmation?.action === 'revoke' ? !reason.trim() : !password,
+        }}
+        onOk={submit}
+        onCancel={() => {
+          if (!pending.current) {
+            setConfirmation(null)
+            setPassword('')
+            setReason('')
+          }
+        }}
+      >
+        {confirmation?.action === 'reissue' && (
+          <Alert
+            type="warning"
+            showIcon
+            message="결제가 일시 중단됩니다"
+            description="이전 키는 즉시 폐기됩니다. 새 키를 쇼핑몰에 설정해야 합니다. 연결 확인과 연동 전 신규 결제 차단 기능은 준비 중입니다."
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        {confirmation?.action === 'revoke' ? (
+          <>
+            <p>기존 키로 새 요청을 인증할 수 없습니다. 폐기 사유를 입력해 주세요.</p>
+            <Input.TextArea
+              aria-label="폐기 사유"
+              maxLength={500}
+              value={reason}
+              disabled={busy}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </>
+        ) : (
+          <Input.Password
+            aria-label="현재 비밀번호"
+            autoComplete="off"
+            maxLength={256}
+            value={password}
+            disabled={busy}
+            onChange={(e) => setPassword(e.target.value)}
+            onPressEnter={() => {
+              if (password) void submit()
+            }}
+          />
+        )}
+      </Modal>
+      <Modal
+        open={!!key}
+        title="시크릿 키"
+        footer={<Button onClick={() => setKey(null)}>닫기</Button>}
+        onCancel={() => setKey(null)}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message="쇼핑몰 서버에만 보관하세요"
+          description="이 창을 닫거나 다른 화면으로 이동하면 표시된 키를 지웁니다."
+        />
+        <Typography.Paragraph code style={{ overflowWrap: 'anywhere', marginTop: 16 }}>
+          {key?.secret}
+        </Typography.Paragraph>
+        <Button
+          onClick={() => {
+            if (key)
+              void navigator.clipboard
+                .writeText(key.secret)
+                .catch(() =>
+                  setError('클립보드에 복사할 수 없습니다. 키를 직접 선택해 복사해 주세요.'),
+                )
+          }}
+        >
+          복사
+        </Button>
+      </Modal>
+    </Card>
   )
 }

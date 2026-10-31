@@ -1,32 +1,40 @@
 package com.donworry.identity.service;
 
-import com.donworry.identity.security.AuthErrorCode;
-import com.donworry.identity.security.MerchantAuthenticationException;
-import java.util.Base64;
+import com.donworry.identity.dto.MerchantKeyMaterial;
+import com.donworry.identity.entity.IntegrationStatus;
+import com.donworry.identity.repository.*;
+import com.donworry.identity.security.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
+@RequiredArgsConstructor
 public class MerchantSecretService {
-    public byte[] resolve(String reference) {
-        if (reference == null)
+    private final MerchantIntegrationRepository integrations;
+    private final MerchantRepository merchants;
+    private final MerchantKeyCipher cipher;
+
+    @Transactional(readOnly = true)
+    public MerchantKeyMaterial resolve(String merchantCode) {
+        var merchant = merchants
+                .findByMerchantCode(merchantCode)
+                .orElseThrow(() -> new MerchantAuthenticationException(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED));
+        var integration = integrations
+                .findByMerchantId(merchant.getMerchantId())
+                .orElseThrow(() -> new MerchantAuthenticationException(
+                        merchant.getSecretReference() == null
+                                ? AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED
+                                : AuthErrorCode.MERCHANT_AUTHENTICATION_UNAVAILABLE));
+        if (integration.getStatus() == IntegrationStatus.NO_KEY)
             throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED);
-        if (!reference.matches("DONWORRY_MERCHANT_HMAC_[A-Z0-9_]{1,150}")) return unavailable();
-        // Spring property/시스템 속성이 아니라 서버 환경변수에서만 키를 읽는다.
-        return decode(System.getenv(reference));
-    }
-
-    byte[] decode(String encoded) {
-        if (encoded == null || encoded.length() > 512) return unavailable();
-        try {
-            byte[] key = Base64.getDecoder().decode(encoded);
-            if (key.length < 32) return unavailable();
-            return key;
-        } catch (IllegalArgumentException exception) {
-            return unavailable();
-        }
-    }
-
-    private byte[] unavailable() {
-        throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_AUTHENTICATION_UNAVAILABLE);
+        return new MerchantKeyMaterial(
+                cipher.decrypt(
+                        merchant.getMerchantId(),
+                        integration.getKeyVersion(),
+                        integration.getMasterKeyId(),
+                        integration.getEncryptedSecret(),
+                        integration.getEncryptionNonce()),
+                integration.getKeyVersion());
     }
 }

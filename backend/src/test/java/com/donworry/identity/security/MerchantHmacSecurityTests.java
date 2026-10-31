@@ -75,8 +75,8 @@ class MerchantHmacSecurityTests {
         when(merchant.getStatus()).thenReturn(MerchantStatus.ACTIVE);
         when(merchant.getSecretReference()).thenReturn("DONWORRY_MERCHANT_HMAC_TEST");
         when(merchants.findByMerchantCode("CAKESHOP")).thenReturn(Optional.of(merchant));
-        when(secrets.resolve(anyString())).thenReturn(key);
-        when(nonces.consume(anyLong(), any(), any())).thenReturn(true);
+        when(secrets.resolve(anyString())).thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(key, 1));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(true);
     }
 
     private MockHttpServletRequestBuilder signed(String method, String target, String body, long offset) {
@@ -154,14 +154,14 @@ class MerchantHmacSecurityTests {
     void timestamp_whenAtBoundary_enforcesWindow(long offset) throws Exception {
         mvc.perform(signed("GET", "/api/payments/1", "", offset))
                 .andExpect(status().is(Math.abs(offset) <= 300 ? 200 : 401));
-        if (Math.abs(offset) <= 300) verify(nonces).consume(eq(7L), any(), eq(now.plusSeconds(offset + 301)));
+        if (Math.abs(offset) <= 300) verify(nonces).consume(eq(7L), any(), eq(now.plusSeconds(offset + 301)), eq(1L));
         else verifyNoInteractions(merchants, nonces);
     }
 
     // 이미 받은 nonce는 같은 서명으로 다시 사용할 수 없다
     @Test
     void nonce_whenReplayed_returnsUnauthorized() throws Exception {
-        when(nonces.consume(anyLong(), any(), any())).thenReturn(true, false);
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(true, false);
         var request = signed("GET", "/api/payments/1", "", 0);
         mvc.perform(request).andExpect(status().isOk());
         mvc.perform(request)
@@ -184,7 +184,7 @@ class MerchantHmacSecurityTests {
     @Test
     void inactive_whenPostRejected_consumesNonceBeforeReactivation() throws Exception {
         var used = new HashSet<UUID>();
-        when(nonces.consume(anyLong(), any(), any())).thenAnswer(call -> used.add(call.getArgument(1)));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenAnswer(call -> used.add(call.getArgument(1)));
         when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
         var request = signed("POST", "/api/payments", "{}", 0);
         mvc.perform(request)
@@ -203,7 +203,8 @@ class MerchantHmacSecurityTests {
         mvc.perform(signed("GET", "/api/payments/1", "", 0)).andExpect(status().isUnauthorized());
         when(merchants.findByMerchantCode("CAKESHOP")).thenReturn(Optional.of(merchant));
         when(secrets.resolve(anyString()))
-                .thenReturn("other-key-012345678901234567890123".getBytes(StandardCharsets.UTF_8));
+                .thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(
+                        "other-key-012345678901234567890123".getBytes(StandardCharsets.UTF_8), 1));
         mvc.perform(signed("GET", "/api/payments/1", "", 0)).andExpect(status().isUnauthorized());
         when(merchants.findByMerchantCode("CAKESHOP"))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
@@ -250,7 +251,7 @@ class MerchantHmacSecurityTests {
     // nonce 저장 장애는 업무 실행 없이 503으로 끝난다
     @Test
     void nonce_whenStorageFails_returnsUnavailable() throws Exception {
-        when(nonces.consume(anyLong(), any(), any()))
+        when(nonces.consume(anyLong(), any(), any(), anyLong()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
         mvc.perform(signed("POST", "/api/payments", "{}", 0))
                 .andExpect(status().isServiceUnavailable())
@@ -278,7 +279,7 @@ class MerchantHmacSecurityTests {
                 .andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
         assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
-        verify(nonces).consume(eq(7L), any(), any());
+        verify(nonces).consume(eq(7L), any(), any(), eq(1L));
     }
 
     // 직원 세션만 있거나 서명이 누락되면 픽업 수신부에 도달하지 않는다
@@ -344,7 +345,7 @@ class MerchantHmacSecurityTests {
         String path = "/api/v1/order-fulfillments/ORDER-1/" + action;
         mvc.perform(signed("PUT", path, "{}", -301)).andExpect(status().isUnauthorized());
         var used = new HashSet<UUID>();
-        when(nonces.consume(anyLong(), any(), any())).thenAnswer(call -> used.add(call.getArgument(1)));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenAnswer(call -> used.add(call.getArgument(1)));
         var request = signed("PUT", path, "{}", 0);
         mvc.perform(request).andExpect(status().isOk());
         mvc.perform(request).andExpect(status().isUnauthorized());
@@ -355,7 +356,7 @@ class MerchantHmacSecurityTests {
     @ParameterizedTest
     @ValueSource(strings = {"schedule", "completion"})
     void pickup_whenNonceStorageFails_returnsUnavailable(String action) throws Exception {
-        when(nonces.consume(anyLong(), any(), any()))
+        when(nonces.consume(anyLong(), any(), any(), anyLong()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
         mvc.perform(signed("PUT", "/api/v1/order-fulfillments/ORDER-1/" + action, "{}", 0))
                 .andExpect(status().isServiceUnavailable())
