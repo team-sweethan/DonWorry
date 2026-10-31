@@ -13,6 +13,8 @@ public enum AuthErrorCode {
     MERCHANT_INACTIVE("MERCHANT_AUTH_003", "신규 결제 요청을 할 수 없는 가맹점입니다.", HttpStatus.FORBIDDEN),
     MERCHANT_METHOD_NOT_ALLOWED("MERCHANT_AUTH_004", "지원하지 않는 요청 메서드입니다.", HttpStatus.METHOD_NOT_ALLOWED),
     MERCHANT_BODY_TOO_LARGE("MERCHANT_AUTH_005", "요청 본문이 너무 큽니다.", HttpStatus.CONTENT_TOO_LARGE),
+    MERCHANT_CONNECTION_REQUIRED("MERCHANT_AUTH_006", "쇼핑몰 연결 확인을 먼저 완료해 주세요.", HttpStatus.FORBIDDEN),
+    MERCHANT_CONNECTION_INVALID("MERCHANT_AUTH_007", "연결 확인 요청 본문은 비워 주세요.", HttpStatus.BAD_REQUEST),
     INTEGRATION_CONFLICT("INTEGRATION_001", "키 상태가 변경되었습니다. 새로고침 후 다시 시도해 주세요.", HttpStatus.CONFLICT),
     INTEGRATION_KEY_HIDDEN("INTEGRATION_002", "연동 전인 키만 다시 볼 수 있습니다.", HttpStatus.CONFLICT),
     INTEGRATION_PASSWORD_LOCKED("INTEGRATION_003", "비밀번호 확인이 잠겼습니다. 15분 후 다시 시도해 주세요.", HttpStatus.TOO_MANY_REQUESTS),

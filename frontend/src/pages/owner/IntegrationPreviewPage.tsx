@@ -249,8 +249,16 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               <Alert
                 type="info"
                 showIcon
-                message="키 발급 기능을 사용할 수 있습니다"
-                description="쇼핑몰의 연결 확인 기능과 연동 상태에 따른 신규 결제 차단은 준비 중입니다. 현재는 키를 발급하고 쇼핑몰 서버에 보관하는 단계까지 진행할 수 있습니다."
+                message={
+                  data.status === 'CONNECTED'
+                    ? '쇼핑몰 연동이 완료되었습니다'
+                    : '쇼핑몰 연결 확인이 필요합니다'
+                }
+                description={
+                  data.status === 'CONNECTED'
+                    ? '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다.'
+                    : '키를 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.'
+                }
                 style={{ margin: '16px 0' }}
               />
               <Space wrap>
@@ -278,6 +286,15 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
                 키를 발급·조회·재발급할 때마다 비밀번호를 확인합니다. 키는 쇼핑몰 서버에만 보관하고
                 메일·메신저로 보내지 마세요.
+              </Typography.Paragraph>
+              <Typography.Paragraph>
+                <a
+                  href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/identity/354-merchant-integration.md"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  쇼핑몰 개발자 연동 안내
+                </a>
               </Typography.Paragraph>
             </>
           )}
@@ -353,7 +370,7 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
             type="warning"
             showIcon
             message="결제가 일시 중단됩니다"
-            description="이전 키는 즉시 폐기됩니다. 새 키를 쇼핑몰에 설정해야 합니다. 연결 확인과 연동 전 신규 결제 차단 기능은 준비 중입니다."
+            description="이전 키는 즉시 폐기됩니다. 새 키를 쇼핑몰 서버에 설정하고 연결 확인을 마칠 때까지 신규 결제가 중단됩니다."
             style={{ marginBottom: 16 }}
           />
         )}

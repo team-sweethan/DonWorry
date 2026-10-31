@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,8 +20,19 @@ public class MerchantKeyCipher {
     private final SecureRandom random = new SecureRandom();
 
     @org.springframework.beans.factory.annotation.Autowired
-    public MerchantKeyCipher(@Value("${donworry.integration.active-master-key-id:V1}") String activeId) {
-        this(activeId, System::getenv);
+    public MerchantKeyCipher(
+            @Value("${donworry.integration.active-master-key-id:V1}") String activeId, Environment configuration) {
+        this(activeId, System::getenv, configuration);
+    }
+
+    MerchantKeyCipher(String activeId, Function<String, String> environment, Environment configuration) {
+        this(activeId, name -> {
+            String value = environment.apply(name);
+            // prod가 다른 프로필과 함께 켜져도 로컬 설정의 비밀값은 사용하지 않는다.
+            if (value != null || configuration.matchesProfiles("prod")) return value;
+            return configuration.getProperty(
+                    "donworry.integration.local-master-keys." + name.substring("DONWORRY_HMAC_MASTER_KEY_".length()));
+        });
     }
 
     MerchantKeyCipher(String activeId, Function<String, String> environment) {

@@ -152,7 +152,7 @@ GRANT ALL PRIVILEGES ON donworry.* TO 'donworry'@'%';
 
 ### 3. 개인 설정 (필요할 때만)
 
-내 PC의 DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다를 때만 개인 설정 파일을 만듭니다. 이 파일은 Git에 올라가지 않습니다.
+내 PC의 DB가 기본값(`localhost:3307` / `donworry` / `donworry`)과 다르거나 개발용 키·결제 API를 설정할 때 개인 설정 파일을 만듭니다. 이 파일은 Git과 배포 JAR에서 제외됩니다. 기존 파일이 있다면 복사로 덮어쓰지 않고 필요한 항목만 추가합니다.
 
 ```powershell
 # Windows PowerShell
@@ -168,6 +168,8 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 
 바꿀 값(포트·비밀번호)만 남기고 나머지 줄은 지워도 됩니다.
 결제 API·AI 서버를 켜는 시연용 설정도 이 파일에 둡니다 → [로컬 시연 가이드 2 · 3절](docs/demo/local-demo.md#2-실제-결제부터-매입까지)
+
+시크릿 키 발급·쇼핑몰 연동을 확인할 때는 예제의 `donworry.integration.local-master-keys.V1`에 개발용 마스터 키(32바이트 Base64)를 한 번 설정하고 같은 DB를 쓰는 동안 유지합니다. `prod`에서는 로컬 키를 읽지 않고 운영 환경변수만 사용합니다. 자세한 준비·검증 순서는 [쇼핑몰 연동 안내](docs/identity/354-merchant-integration.md#로컬-실행-준비)를 따릅니다.
 
 ### 4. backend 실행
 

@@ -24,6 +24,7 @@ public class MerchantSecurityConfiguration {
             HttpSecurity http, MerchantHmacService service, SecurityProblemResponseWriter writer) throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
         Map<RequestMatcher, HttpMethod> routes = Map.of(
+                paths.matcher("/api/merchant-connections/check"), HttpMethod.POST,
                 paths.matcher("/api/payments"), HttpMethod.POST,
                 paths.matcher("/api/payments/{paymentId}"), HttpMethod.GET,
                 paths.matcher("/api/payment-orders"), HttpMethod.GET,

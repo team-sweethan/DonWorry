@@ -25,7 +25,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Tag("mariadb")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "security.csrf.enabled=false")
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"security.csrf.enabled=false", "payment.http.enabled=true"})
 @Import({MariaDbTestContainerConfig.class, MerchantIntegrationHttpMariaDbTests.Keys.class})
 class MerchantIntegrationHttpMariaDbTests {
     @TestConfiguration
@@ -42,6 +44,12 @@ class MerchantIntegrationHttpMariaDbTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    ApplicationMailSender mail;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.donworry.fds.api.FdsEvaluator evaluator;
 
     @Autowired
     JsonMapper json;
@@ -487,9 +495,292 @@ class MerchantIntegrationHttpMariaDbTests {
         }
     }
 
+    HttpRequest merchantRequest(String secret, String method, String target, String body) {
+        String timestamp = Long.toString(Instant.now().getEpochSecond());
+        String nonce = UUID.randomUUID().toString();
+        String attempt = UUID.randomUUID().toString();
+        String contentType = body.isEmpty() ? "" : "application/json";
+        var input = new MerchantSignedRequest(
+                code,
+                timestamp,
+                nonce,
+                "",
+                method,
+                target,
+                contentType,
+                attempt,
+                body.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + target))
+                .header("X-Merchant-Code", code)
+                .header("X-Timestamp", timestamp)
+                .header("X-Nonce", nonce)
+                .header(
+                        "X-Signature",
+                        HexFormat.of()
+                                .formatHex(MerchantHmacSigner.sign(
+                                        Base64.getDecoder().decode(secret), input)))
+                .header("Idempotency-Key", attempt)
+                .method(method, HttpRequest.BodyPublishers.ofString(body));
+        if (!contentType.isEmpty()) request.header("Content-Type", contentType);
+        return request.build();
+    }
+
+    HttpResponse<String> merchantSend(String secret, String method, String target, String body) throws Exception {
+        return HttpClient.newHttpClient()
+                .send(merchantRequest(secret, method, target, body), HttpResponse.BodyHandlers.ofString());
+    }
+
+    // 키 없음·연동 전은 거절하고 연결 확인만으로 결제 없이 연동 완료가 된다
+    @Test
+    void connection_whenPending_connectsIdempotentlyAndPreservesNonceRejection() throws Exception {
+        String fake = Base64.getEncoder().encodeToString(new byte[32]);
+        problem(merchantSend(fake, "POST", "/api/payments", "{}"), 401, "MERCHANT_AUTH_001");
+        String secret = issue().path("secret").asString();
+        var blocked = merchantRequest(secret, "POST", "/api/payments", "{}");
+        problem(
+                HttpClient.newHttpClient().send(blocked, HttpResponse.BodyHandlers.ofString()),
+                403,
+                "MERCHANT_AUTH_006");
+        // 연동 전의 조회·픽업은 연동 게이트를 통과해 업무 입력 검사까지 도달한다.
+        assertThat(merchantSend(secret, "GET", "/api/payments/99999999", "").statusCode())
+                .isEqualTo(404);
+        assertThat(merchantSend(secret, "PUT", "/api/v1/order-fulfillments/99999999/completion", "{}")
+                        .statusCode())
+                .isNotEqualTo(403);
+        problem(merchantSend(secret, "POST", "/api/merchant-connections/check", "{}"), 400, "MERCHANT_AUTH_007");
+        assertThat(integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt())
+                .isNull();
+        int payments =
+                jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE merchant_id=?", Integer.class, merchantId);
+        var check = merchantRequest(secret, "POST", "/api/merchant-connections/check", "");
+        assertThat(HttpClient.newHttpClient()
+                        .send(check, HttpResponse.BodyHandlers.ofString())
+                        .statusCode())
+                .isEqualTo(204);
+        var connectedAt =
+                integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt();
+        assertThat(connectedAt).isNotNull();
+        problem(HttpClient.newHttpClient().send(check, HttpResponse.BodyHandlers.ofString()), 401, "MERCHANT_AUTH_001");
+        assertThat(merchantSend(secret, "POST", "/api/merchant-connections/check", "")
+                        .statusCode())
+                .isEqualTo(204);
+        assertThat(integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt())
+                .isEqualTo(connectedAt);
+        problem(
+                HttpClient.newHttpClient().send(blocked, HttpResponse.BodyHandlers.ofString()),
+                401,
+                "MERCHANT_AUTH_001");
+        problem(owner.send("POST", path("reveal"), keyInput(1, PASSWORD), true), 409, "INTEGRATION_002");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE merchant_id=?", Integer.class, merchantId))
+                .isEqualTo(payments);
+        assertThat(admin.send("GET", adminPath(), null, false).body())
+                .contains("CONNECTED")
+                .doesNotContain(secret);
+        assertThat(owner.send("POST", path("reissue"), keyInput(1, PASSWORD), true)
+                        .statusCode())
+                .isEqualTo(200);
+        problem(merchantSend(secret, "POST", "/api/merchant-connections/check", ""), 401, "MERCHANT_AUTH_001");
+        assertThat(integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt())
+                .isNull();
+        verifyNoInteractions(evaluator);
+    }
+
+    // 정지 가맹점의 확인은 거절하며 계정 정지는 쇼핑몰 키의 연결 확인을 막지 않는다
+    @Test
+    void connection_whenMerchantInactive_rejectsButOwnerDisabledDoesNotBlock() throws Exception {
+        String secret = issue().path("secret").asString();
+        jdbc.update("UPDATE merchants SET status='INACTIVE' WHERE merchant_id=?", merchantId);
+        problem(merchantSend(secret, "POST", "/api/merchant-connections/check", ""), 403, "MERCHANT_AUTH_003");
+        assertThat(integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt())
+                .isNull();
+        jdbc.update("UPDATE merchants SET status='ACTIVE' WHERE merchant_id=?", merchantId);
+        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", ownerId);
+        assertThat(merchantSend(secret, "POST", "/api/merchant-connections/check", "")
+                        .statusCode())
+                .isEqualTo(204);
+        jdbc.update("UPDATE merchants SET status='INACTIVE' WHERE merchant_id=?", merchantId);
+        problem(merchantSend(secret, "POST", "/api/payments", "{}"), 403, "MERCHANT_AUTH_003");
+        assertThat(merchantSend(secret, "GET", "/api/payments/99999999", "").statusCode())
+                .isEqualTo(404);
+    }
+
+    // nonce 소비 뒤 재발급이 먼저 완료돼도 옛 요청은 새 키를 연동 완료로 만들지 못한다
+    @Test
+    void connection_whenReissuedAfterNonceConsumption_rechecksVersionUnderLock() throws Exception {
+        String secret = issue().path("secret").asString();
+        var consumed = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(call -> {
+                    var result = call.callRealMethod();
+                    consumed.countDown();
+                    if (!release.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("timeout");
+                    return result;
+                })
+                .when(nonces)
+                .consume(eq(merchantId), any(), any(), eq(1L));
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var result = executor.submit(() -> merchantSend(secret, "POST", "/api/merchant-connections/check", ""));
+            try {
+                assertThat(consumed.await(10, TimeUnit.SECONDS)).isTrue();
+                assertThat(owner.send("POST", path("reissue"), keyInput(1, PASSWORD), true)
+                                .statusCode())
+                        .isEqualTo(200);
+            } finally {
+                release.countDown();
+            }
+            problem(result.get(10, TimeUnit.SECONDS), 401, "MERCHANT_AUTH_001");
+        } finally {
+            reset(nonces);
+        }
+        var current = integrations.findByMerchantId(merchantId).orElseThrow();
+        assertThat(current.getKeyVersion()).isEqualTo(2);
+        assertThat(current.getConnectedAt()).isNull();
+    }
+
+    // 승인으로 생성한 신규 가맹점이 첫 설정·키 발급·실제 스크립트 연결 확인 뒤 결제를 접수한다
+    @Test
+    void onboarding_whenNewApplication_completesThroughRealScriptAndPayment() throws Exception {
+        var verification = new java.util.concurrent.atomic.AtomicReference<String>();
+        var approval = new java.util.concurrent.atomic.AtomicReference<String>();
+        doAnswer(call -> {
+                    verification.set(call.getArgument(1));
+                    return null;
+                })
+                .when(mail)
+                .sendVerification(anyString(), anyString());
+        doAnswer(call -> {
+                    approval.set(call.getArgument(2));
+                    return null;
+                })
+                .when(mail)
+                .sendApproval(anyString(), anyString(), anyString());
+        var applicant = new Visitor();
+        String login = prefix + "new";
+        String newCode = code + "NEW";
+        var input = com.donworry.identity.dto.MerchantApplicationRequests.SubmitRequest.builder()
+                .merchantName("새 쇼핑몰")
+                .shopUrl("https://shop.example.com")
+                .businessRegistrationNumber("9123456780")
+                .contactName("신청인")
+                .email(prefix + "@example.com")
+                .phone("01012345678")
+                .requestedLoginId(login)
+                .consent(true)
+                .consentVersion("2026-10-30.1")
+                .build();
+        Long applicationId = null, newMerchantId = null, newUserId = null;
+        try {
+            assertThat(applicant
+                            .send("POST", "/api/merchant-applications", input, true)
+                            .statusCode())
+                    .isEqualTo(201);
+            applicationId = jdbc.queryForObject(
+                    "SELECT application_id FROM merchant_applications WHERE requested_login_id=?", Long.class, login);
+            assertThat(applicant
+                            .send(
+                                    "POST",
+                                    "/api/merchant-applications/email-verifications",
+                                    Map.of("token", verification.get().split("#token=")[1]),
+                                    true)
+                            .statusCode())
+                    .isEqualTo(200);
+            assertThat(admin.send(
+                                    "POST",
+                                    "/api/admin/merchant-applications/" + applicationId + "/approve",
+                                    Map.of("merchantCode", newCode, "pgFeeRate", "0.010000", "permissions", List.of()),
+                                    true)
+                            .statusCode())
+                    .isEqualTo(200);
+            newMerchantId =
+                    jdbc.queryForObject("SELECT merchant_id FROM merchants WHERE merchant_code=?", Long.class, newCode);
+            newUserId = jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, login);
+            assertThat(applicant
+                            .send(
+                                    "POST",
+                                    "/api/merchant-applications/initial-password-setups",
+                                    Map.of("token", approval.get().split("#token=")[1], "newPassword", PASSWORD),
+                                    true)
+                            .statusCode())
+                    .isEqualTo(204);
+            applicant.login(login);
+            assertThat(json.readTree(applicant
+                                    .send("GET", "/api/auth/me", null, false)
+                                    .body())
+                            .path("permissions")
+                            .size())
+                    .isZero();
+            var keyResponse = applicant.send("POST", path(""), keyInput(0, PASSWORD), true);
+            assertThat(keyResponse.statusCode()).isEqualTo(200);
+            String secret = json.readTree(keyResponse.body()).path("secret").asString();
+            doAnswer(call -> {
+                        com.donworry.fds.api.FdsEvaluationRequest request = call.getArgument(0);
+                        return new com.donworry.fds.api.FdsEvaluationResponse(
+                                request.evaluationRequestId(),
+                                354L,
+                                com.donworry.fds.api.FdsResult.REVIEW,
+                                50,
+                                Instant.now(),
+                                null);
+                    })
+                    .when(evaluator)
+                    .evaluate(any());
+            var process = new ProcessBuilder(
+                            "python3",
+                            "../scripts/demo/merchant_connect.py",
+                            "--base-url",
+                            "http://localhost:" + port,
+                            "--merchant-code",
+                            newCode,
+                            "--payment")
+                    .redirectErrorStream(true)
+                    .start();
+            try (var stdin = process.outputWriter()) {
+                stdin.write(secret + "\n");
+            }
+            assertThat(process.waitFor(40, TimeUnit.SECONDS)).isTrue();
+            String output =
+                    new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(process.exitValue()).withFailMessage("%s", output).isZero();
+            assertThat(output).contains("HTTP 204", "HTTP 202", "HELD").doesNotContain(secret);
+            assertThat(applicant
+                            .send("GET", "/api/owner/integration", null, false)
+                            .body())
+                    .contains("CONNECTED")
+                    .doesNotContain(secret);
+            assertThat(jdbc.queryForObject(
+                            "SELECT COUNT(*) FROM payments WHERE merchant_id=?", Integer.class, newMerchantId))
+                    .isEqualTo(1);
+        } finally {
+            if (applicationId != null) {
+                jdbc.update("DELETE FROM application_mail_deliveries WHERE application_id=?", applicationId);
+                jdbc.update("DELETE FROM application_tokens WHERE application_id=?", applicationId);
+                jdbc.update("DELETE FROM merchant_applications WHERE application_id=?", applicationId);
+            }
+            if (newUserId != null) {
+                sessions.expireAll(newUserId);
+                jdbc.update("DELETE FROM merchant_key_histories WHERE merchant_id=?", newMerchantId);
+                jdbc.update(
+                        "DELETE FROM admin_change_histories WHERE target_user_id=? OR target_merchant_id=?",
+                        newUserId,
+                        newMerchantId);
+                jdbc.update("DELETE FROM login_histories WHERE user_id=?", newUserId);
+                jdbc.update("DELETE FROM platform_users WHERE user_id=?", newUserId);
+            }
+            if (newMerchantId != null) {
+                jdbc.update("DELETE FROM merchant_integrations WHERE merchant_id=?", newMerchantId);
+                jdbc.update("DELETE FROM merchant_request_nonces WHERE merchant_id=?", newMerchantId);
+                jdbc.update("DELETE FROM merchants WHERE merchant_id=?", newMerchantId);
+            }
+        }
+    }
+
     class Visitor {
         final CookieManager cookies = new CookieManager();
         final HttpClient client = HttpClient.newBuilder().cookieHandler(cookies).build();
+
+        Visitor() throws Exception {
+            send("GET", "/api/auth/csrf", null, false);
+        }
 
         void login(String login) throws Exception {
             assertThat(send("POST", "/api/auth/login", Map.of("loginId", login, "password", PASSWORD), false)

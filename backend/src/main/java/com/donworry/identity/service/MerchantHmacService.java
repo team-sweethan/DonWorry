@@ -2,7 +2,6 @@ package com.donworry.identity.service;
 
 import com.donworry.identity.api.MerchantIdentity;
 import com.donworry.identity.dto.MerchantSignedRequest;
-import com.donworry.identity.entity.MerchantStatus;
 import com.donworry.identity.repository.MerchantRepository;
 import com.donworry.identity.security.AuthErrorCode;
 import com.donworry.identity.security.MerchantAuthenticationException;
@@ -21,6 +20,7 @@ public class MerchantHmacService {
     private final MerchantSecretService secrets;
     private final MerchantNonceStore nonces;
     private final Clock identityClock;
+    private final MerchantConnectionService connections;
 
     public MerchantIdentity authenticate(MerchantSignedRequest input) {
         if (!matches(input.merchantCode(), "[A-Z0-9]{3,40}")
@@ -50,9 +50,7 @@ public class MerchantHmacService {
                 UUID.fromString(input.nonce()),
                 Instant.ofEpochSecond(timestamp + 301),
                 material.version())) reject();
-        // 비활성 가맹점도 기존 결제 조회·픽업 PUT은 허용한다. 주문 소유권은 업무 모듈이 검사한다.
-        if ("POST".equals(input.method()) && merchant.getStatus() != MerchantStatus.ACTIVE)
-            throw new MerchantAuthenticationException(AuthErrorCode.MERCHANT_INACTIVE);
+        connections.authorize(merchant.getMerchantId(), material.version(), input);
         return new MerchantIdentity(merchant.getMerchantId());
     }
 

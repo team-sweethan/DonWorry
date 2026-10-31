@@ -15,7 +15,11 @@
 
 ### 저장과 복구
 
-`merchant_integrations`에 가맹점별 현재 키를 AES-256-GCM으로 암호화해 저장한다. 마스터 키는 `DONWORRY_HMAC_MASTER_KEY_<ID>` 환경변수의 표준 Base64 32바이트다. Spring property·시스템 속성으로 원문을 대신 읽지 않는다. 활성 ID는 `donworry.integration.active-master-key-id`(기본 V1)로 정한다. ID는 대문자·숫자·밑줄 1~40자다.
+`merchant_integrations`에 가맹점별 현재 키를 AES-256-GCM으로 암호화해 저장한다. 마스터 키는 표준 Base64 32바이트다. 운영(`prod`)에서는 `DONWORRY_HMAC_MASTER_KEY_<ID>` **실제 프로세스 환경변수만** 읽으며 Spring property·시스템 속성·로컬 YAML로 대신하지 않는다. 활성 ID는 `donworry.integration.active-master-key-id`(기본 V1)로 정한다. ID는 대문자·숫자·밑줄 1~40자다.
+
+2026-10-31 PR C 사용자 승인으로 개발 환경에 한해 예외를 추가한다. `prod`가 활성화되지 않았고 해당 환경변수가 없을 때만 `donworry.integration.local-master-keys.<ID>`를 읽는다. Git 제외된 `backend/src/main/resources/application-local.yml`에 개발용 키를 한 번 생성해 저장하고 같은 DB를 사용하는 동안 유지한다. 환경변수가 있으면 그것이 우선이고, 형식이 잘못된 환경변수를 로컬 키로 대체하지 않는다. `prod`가 다른 프로필과 함께 켜져도 로컬 값은 무시한다. 기본 `application.yml`은 `!prod`에서만 로컬 파일을 import하며 복호화 코드도 독립적으로 prod를 검사한다.
+
+이 설정 파일에는 키 원문이 있으므로 Git·배포 아티팩트에 포함하지 않는다. `build.gradle`의 기존 `tasks.withType(Jar)` 제외 규칙이 로컬 작업 트리의 `application-local.yml`도 jar/bootJar에 넣지 않는다. 배포는 `prod`로 실행하고 환경변수에 운영 키를 설정한다. 예제에는 설정 이름과 자리표시자만 둔다. 런타임 자동 키 생성은 하지 않는다. 버린 대안: 실행마다 환경변수에 새 키를 생성하면 기존 DB를 읽을 수 없고, 배포 직전 수동 삭제는 누락될 수 있다. 개발 편의는 로컬 파일·프로필 제한으로 제공하고 운영 키 경계는 유지한다. API·DB·화면 계약 변경은 없으며 프로필 차단·환경변수 우선순위·재시작 복호화 테스트를 같은 PR에 추가한다.
 
 암호화마다 무작위 12바이트 IV와 128비트 태그를 사용한다. AAD는 `DONWORRY-KEY-V1`·merchant_id·key_version을 LF로 연결한다. 새 HMAC 키는 무작위 32바이트를 표준 Base64로 표시한다. 기존 32바이트 이상 키는 원래 바이트를 그대로 보존한다.
 
@@ -55,13 +59,19 @@ B의 API는 [설계 5절](../identity/354-pr-b-key-design.md#5-api인가동시�
 
 롤백 시 새 버전에서 키 재발급·폐기를 했는지 먼저 확인한다. 옛 앱은 환경변수 키를 다시 받아들일 수 있으므로 키 변경 후에는 단순 구 버전 재기동으로 롤백하지 않는다. 이전 전 백업 복원·쇼핑몰 설정 정합성을 검토하고 서비스 재개를 결정한다.
 
-### PR C에서 구현할 계약
+### PR C 연결 확인과 신규 결제 차단
 
-B에서는 연결 확인·연동 전 신규 결제 차단을 구현하지 않는다. B 화면은 이 기능이 준비 중임을 표시한다. B만 배포하면 PENDING_CONNECTION 키도 기존 ACTIVE 조건으로 결제 인증이 가능하므로, 전체 연동 게이트가 필요한 운영 활성화는 C까지 반영한 뒤 진행한다.
+`POST /api/merchant-connections/check`는 빈 본문·기존 HMAC 헤더를 사용하고 성공하면 204를 반환한다. 직원 세션·CSRF로 대신 인증하지 않으며 로그인 세션을 만들지 않는다. 별도 연결 버튼으로 상태를 변경하지 않는다. 이 경로는 결제 API 활성화 여부와 무관하게 제공한다.
 
-C의 연결 확인 제안은 `POST /api/merchant-connections/check`, 빈 본문, 기존 HMAC 헤더, 성공 204다. ACTIVE 가맹점의 현재 키만 CONNECTED로 바꾸며 키 버전을 잠금 후 확인한다. 연결 확인은 연동 전 차단에서 제외하되 INACTIVE는 거절한다. 연결 확인 경로·필터·오류의 최종 계약은 C에서 이 ADR과 함께 갱신한다.
+서명 확인 → 키 버전 재검사와 nonce 독립 커밋 → 가맹점 행 잠금 → 현재 키 버전·키 존재·가맹점 상태 재검사 → 연결 확인 또는 신규 결제 허용 순서다. HMAC 필터가 서비스 트랜잭션으로 연결 확인을 커밋한 뒤에만 Controller의 204에 도달한다. 중간에 재발급·폐기가 완료된 요청은 401이며 새 키 상태를 변경하지 않는다. 상태 검사 실패에도 nonce는 복구하지 않는다. 인증을 모두 끝낸 업무 요청을 나중의 재발급으로 소급 취소하지 않는다.
 
-C의 신규 결제 허용 조건은 CONNECTED + ACTIVE이며 `POST /api/payments`에만 연동 상태 차단을 추가한다. 조회·픽업 PUT·기존 결제 처리는 유지한다. 미연동 유효 서명의 새 오류 코드는 C에서 추가한다. 첫 비밀번호 설정은 로그인·키 발급의 선행 단계이므로 PENDING_SETUP 계정 상태를 추가하지 않는다.
+ACTIVE + PENDING_CONNECTION의 올바른 연결 확인만 CONNECTED·connected_at·updated_at을 변경한다. 이미 CONNECTED면 새 nonce의 재확인도 204이며 최초 연결 시각을 유지한다. key_version은 연결 확인으로 증가하지 않는다. 키 발급·폐기 이력에 CONNECT 작업을 섞지 않고 현재 행의 connected_at으로 확인을 기록한다. INACTIVE는 403 MERCHANT_AUTH_003, 빈 본문이 아니면 400 MERCHANT_AUTH_007이다. POST 경로는 위 연결 확인 경로와 `/api/payments`의 원문 표기를 사용하며 인코딩된 별칭으로 게이트를 우회하지 못하게 거절한다.
+
+`POST /api/payments`는 CONNECTED + ACTIVE에서만 허용한다. 유효한 키가 있지만 PENDING_CONNECTION이면 403 MERCHANT_AUTH_006이다. NO_KEY는 검증할 키가 없어 401 MERCHANT_AUTH_001이며, 미이전 레거시는 기존 503을 유지한다. `GET /api/payments/{paymentId}`, `GET /api/payment-orders`, 기존 픽업 PUT·직원 업무 처리는 연동 상태로 막지 않는다. 폐기된 키로 기존 조회를 할 수 있다는 뜻은 아니다. 기존 키를 동일 값으로 이전한 CAKESHOP은 CONNECTED를 유지하므로 추가 연결 확인 없이 계속 인증된다.
+
+사장님 계정 정지는 쇼핑몰 HMAC 인증에 추가 조건으로 쓰지 않는다. 첫 비밀번호 설정은 로그인·키 발급의 선행 단계라 PENDING_SETUP 계정 상태를 만들지 않는다. P5의 결제 업무 코드·공개 Java 계약·DB 스키마는 변경하지 않는다. P5에는 PR의 리뷰어 지정과 본문의 허용 조건·새 오류 코드로 공지한다.
+
+버린 대안: 모든 POST를 미연동 차단하면 연결 확인 자체가 막힌다. Controller에서 키 버전 없이 CONNECTED로 바꾸면 재발급 직전 검증된 옛 요청이 새 키를 연결할 수 있다. nonce와 상태 변경을 한 트랜잭션에서 예외로 롤백하면 거절한 서명이 다시 살아난다. 별도 테이블·마이그레이션은 B의 현재 상태·시각 컬럼으로 충족되어 추가하지 않는다.
 
 ## 고려한 대안
 

@@ -72,4 +72,11 @@ public class MerchantIntegration {
         keyVersion++;
         updatedAt = now;
     }
+
+    public void connect(LocalDateTime now) {
+        if (status != IntegrationStatus.PENDING_CONNECTION) return;
+        status = IntegrationStatus.CONNECTED;
+        connectedAt = now;
+        updatedAt = now;
+    }
 }

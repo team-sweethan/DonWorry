@@ -1,4 +1,5 @@
 import { isShopUrlValid } from '../../utils/shopUrl.ts'
+import { IntegrationStatusSummary } from './IntegrationStatusSummary'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -519,6 +520,9 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                       관리자가 비밀번호를 초기화한 경우에도 ‘설정 또는 변경 필요’로 표시됩니다.
                     </p>
                   </Card>
+                )}
+                {app.status === 'APPROVED' && data.merchantId !== null && (
+                  <IntegrationStatusSummary key={data.merchantId} merchantId={data.merchantId} />
                 )}
                 {data.reviewedAt && (
                   <Card title="검토 기록">

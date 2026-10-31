@@ -57,7 +57,7 @@ export function InitialPasswordPage() {
           status="success"
           icon={<Mascot size={140} className="dw-mascot-float" />}
           title="비밀번호 설정이 완료되었습니다"
-          subTitle="승인 안내 메일에 적힌 로그인 아이디와 방금 설정한 비밀번호로 로그인해 주세요."
+          subTitle="승인 안내 메일에 적힌 로그인 아이디와 방금 설정한 비밀번호로 로그인해 주세요. 로그인 후 시크릿 키를 발급하고 쇼핑몰 연결 확인을 진행합니다."
           extra={
             <Link to="/login">
               <Button type="primary" size="large">
@@ -164,7 +164,8 @@ export function InitialPasswordPage() {
           )}
           <p className="initial-password-note">
             설정 링크는 발급 후 72시간 동안 한 번만 사용할 수 있습니다. 결제 연동은 계정 발급과
-            별도로 진행합니다.
+            별도로 진행합니다. 로그인 후 시크릿 키를 발급받아 쇼핑몰 서버에 설정하고 연결 확인을
+            완료해 주세요.
           </p>
         </>
       )}

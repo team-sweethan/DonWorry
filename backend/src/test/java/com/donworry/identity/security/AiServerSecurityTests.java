@@ -56,6 +56,9 @@ class AiServerSecurityTests {
     MerchantSecretService secrets;
 
     @MockitoBean
+    MerchantConnectionService connections;
+
+    @MockitoBean
     MerchantNonceStore nonces;
 
     @MockitoBean(name = "identityClock")

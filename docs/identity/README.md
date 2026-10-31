@@ -2,6 +2,10 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #354 PR C 연결 확인·신규 결제 차단
+
+[개발자 안내·검증 기록](354-merchant-integration.md), [ADR-0052](../decisions/0052-merchant-key-management.md#pr-c-연결-확인과-신규-결제-차단). 서명된 빈 POST로 현재 키의 연결을 확인하고 신규 결제는 CONNECTED + ACTIVE만 허용한다. 조회·픽업 PUT·P5 업무 코드는 유지한다. 새 신청 가맹점의 HTTP 흐름과 실제 Python 스크립트를 함께 검증한다. 사장님 홈·로그인 첫 이동은 미구현으로 남는다. 현재 구현을 PR로 제출하며 #354 전체 완료·운영 배포를 뜻하지 않는다. 사용자 로컬 확인과 남은 범위는 위 검증 기록을 따른다.
+
 ## #354 PR B 시크릿 키 실제 관리
 
 [설계·검증](354-pr-b-key-design.md), [ADR-0052](../decisions/0052-merchant-key-management.md). P1 사용자 승인으로 가맹점별 키를 암호화해 DB에 보관하고 사장님 발급·보기·재발급과 관리자 폐기를 구현한다. 이전 플래그·마스터 키 준비가 필요하며 기존 CAKESHOP은 같은 키로 옮긴다. 연결 확인·연동 전 신규 결제 차단·사장님 홈은 C 범위다. 아래 과거 기록과 현재 계약을 구분한다.
