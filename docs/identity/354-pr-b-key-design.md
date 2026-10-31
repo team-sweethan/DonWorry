@@ -111,3 +111,13 @@ C의 연결 확인도 같은 키 버전·가맹점 잠금으로 상태를 바꿔
 - `git diff origin/dev --check`, 설계/ADR의 상대 파일 링크 검사: 통과.
 
 실행 보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`. 위 미검증 항목과 PR C 범위는 유지한다. 원격 CI는 PR의 해당 커밋 결과로 별도 확인한다.
+
+### 재리뷰 보완
+
+PR #376 재리뷰에서 나온 항목을 아래와 같이 처리했다.
+
+- 관리자 폐기: integration 행이 있으면 NO_KEY일 때 409(`INTEGRATION_001`)로 거절한다. 행이 없는 레거시 참조만 이전 전 폐기를 허용한다. 이전에는 `secret_reference`가 남은 가맹점의 이미 폐기한 키를 반복 폐기해 버전·REVOKE 이력이 늘어날 수 있었다. 이전·폐기 테스트에 재폐기 거절을 추가했다.
+- nonce 소비: 키 버전 없이 소비하는 `MerchantNonceStore.consume` 3인자 메서드를 삭제했다. 운영 코드는 이미 쓰지 않았고, 남겨 두면 키 버전 재확인을 건너뛰는 경로가 된다. nonce MariaDB 테스트는 실제 키 행을 준비해 버전과 함께 소비하며, 옛 버전 거절 테스트를 추가했다.
+- 미결정: 행이 없는 미이전 레거시 가맹점은 조회 응답이 `NO_KEY`라 사장님 화면 발급 버튼이 켜져 있으나 요청은 503이고, 관리자 화면 폐기 버튼은 꺼져 백엔드의 이전 전 폐기를 화면에서 쓸 수 없다. 응답에 이전 필요 표시를 추가할지, 운영 이전 절차로만 다룰지 정해야 한다.
+
+검사: `./gradlew spotlessApply` 후 `./gradlew check mariaDbTest --console=plain` BUILD SUCCESSFUL(4분 10초). 일반 1,172개 중 1,171개 성공·기존 1개 skip, MariaDB 599개 모두 성공, 실패/오류 0. 프론트 코드는 바꾸지 않아 다시 실행하지 않았다.

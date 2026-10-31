@@ -28,16 +28,7 @@ public class DatabaseMerchantNonceStore implements MerchantNonceStore {
     private final com.donworry.identity.repository.MerchantIntegrationRepository integrations;
 
     @Override
-    public boolean consume(Long merchantId, UUID nonce, Instant expiresAt) {
-        return consumeInternal(merchantId, nonce, expiresAt, null);
-    }
-
-    @Override
     public boolean consume(Long merchantId, UUID nonce, Instant expiresAt, long keyVersion) {
-        return consumeInternal(merchantId, nonce, expiresAt, keyVersion);
-    }
-
-    private boolean consumeInternal(Long merchantId, UUID nonce, Instant expiresAt, Long keyVersion) {
         if (merchantId == null || merchantId <= 0) throw new IllegalArgumentException("invalid merchant identity");
         Objects.requireNonNull(nonce);
         Objects.requireNonNull(expiresAt);
@@ -49,12 +40,11 @@ public class DatabaseMerchantNonceStore implements MerchantNonceStore {
                 if (!repository.lockMerchant(merchantId))
                     throw new DataIntegrityViolationException("merchant not found");
                 // 서명 확인 뒤 키가 바뀌었으면 폐기된 키 요청을 소비하지 않는다.
-                if (keyVersion != null
-                        && !integrations
-                                .findByMerchantId(merchantId)
-                                .filter(i -> i.getStatus() != com.donworry.identity.entity.IntegrationStatus.NO_KEY
-                                        && i.getKeyVersion() == keyVersion)
-                                .isPresent()) return false;
+                if (!integrations
+                        .findByMerchantId(merchantId)
+                        .filter(i -> i.getStatus() != com.donworry.identity.entity.IntegrationStatus.NO_KEY
+                                && i.getKeyVersion() == keyVersion)
+                        .isPresent()) return false;
                 // 잠금 대기 중 서명이 만료됐다면 삭제된 옛 nonce를 다시 소비하지 않는다.
                 if (!expiresAt.isAfter(identityClock.instant())) return false;
                 if (repository.containsNonce(merchantId, nonce.toString())) return false;

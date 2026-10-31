@@ -103,13 +103,14 @@ public class MerchantIntegrationService {
                 true,
                 () -> transaction(() -> {
                     var merchant = find(merchantId, true);
-                    var integration = integrations
-                            .findByMerchantId(merchantId)
-                            .orElseGet(() -> MerchantIntegration.empty(merchantId));
+                    var existing = integrations.findByMerchantId(merchantId);
+                    var integration = existing.orElseGet(() -> MerchantIntegration.empty(merchantId));
                     if (integration.getKeyVersion() != input.expectedKeyVersion())
                         throw failure(AuthErrorCode.INTEGRATION_CONFLICT);
-                    if (integration.getStatus() == IntegrationStatus.NO_KEY && merchant.getSecretReference() == null)
-                        throw failure(AuthErrorCode.INTEGRATION_CONFLICT);
+                    // 행이 없는 레거시 참조만 이전 전 폐기 대상이다. 이미 폐기한 행은 다시 폐기하지 않는다.
+                    if (existing.isPresent()
+                            ? integration.getStatus() == IntegrationStatus.NO_KEY
+                            : merchant.getSecretReference() == null) throw failure(AuthErrorCode.INTEGRATION_CONFLICT);
                     var now = now();
                     integration.revoke(now);
                     integrations.saveAndFlush(integration);

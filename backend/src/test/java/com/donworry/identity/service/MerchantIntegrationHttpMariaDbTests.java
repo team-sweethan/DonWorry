@@ -360,6 +360,11 @@ class MerchantIntegrationHttpMariaDbTests {
                                     true)
                             .statusCode())
                     .isEqualTo(204);
+            // 레거시 참조가 남아 있어도 이미 폐기한 키는 다시 폐기하지 않는다.
+            problem(
+                    admin.send("POST", adminPath() + "/revoke", Map.of("reason", "재폐기", "expectedKeyVersion", 2), true),
+                    409,
+                    "INTEGRATION_001");
             migration.afterSingletonsInstantiated();
             assertThat(historyCount()).isEqualTo(2);
             assertThatThrownBy(() -> secrets.resolve(code)).isInstanceOf(MerchantAuthenticationException.class);
