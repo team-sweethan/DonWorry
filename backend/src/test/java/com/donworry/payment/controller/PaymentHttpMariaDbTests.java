@@ -324,4 +324,181 @@ class PaymentHttpMariaDbTests {
         assertThat(r.statusCode()).isEqualTo(500);
         assertThat(r.body()).contains("PAYMENT_INTERNAL_ERROR").doesNotContain("INTERNAL_TEST_SECRET");
     }
+
+    @Autowired
+    com.donworry.payment.repository.PaymentRepository cancellationPayments;
+
+    @Autowired
+    com.donworry.payment.repository.PaymentOrderRepository cancellationOrders;
+
+    @Autowired
+    com.donworry.payment.repository.PaymentRequestRepository cancellationOriginals;
+
+    @Autowired
+    org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    private long pendingCancellationPayment() {
+        return new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(tx -> {
+            var now = Instant.now();
+            var ref = UUID.randomUUID().toString();
+            var order = cancellationOrders.save(
+                    com.donworry.payment.entity.PaymentOrder.register(997L, ref, "customer", 100L, now, now));
+            var payment = cancellationPayments.save(
+                    com.donworry.payment.entity.Payment.pending(997L, "customer", ref, 100L, now));
+            cancellationOriginals.save(com.donworry.payment.entity.PaymentRequest.received(
+                    order, payment, order.allocateAttempt(now), UUID.randomUUID(), UUID.randomUUID()));
+            return payment.getPaymentId();
+        });
+    }
+
+    // 일시 거절도 커밋하고 새 서명의 같은 요청 및 조회에서 원래 기록을 반환한다.
+    @Test
+    void cancellation_whenPending_commitsConflictAndSupportsSignedReplay() throws Exception {
+        long id = pendingCancellationPayment();
+        String path = "/api/payments/" + id + "/cancellations";
+        String key = UUID.randomUUID().toString();
+        String body = "{\"reason\":\"고객 취소\"}";
+        var signed = signedRequest("POST", path, "merchant-a", key, body);
+        var first = client.send(signed, HttpResponse.BodyHandlers.ofString());
+        assertThat(first.statusCode()).isEqualTo(409);
+        assertThat(first.body()).contains("PAYMENT_IN_PROGRESS", "DEFERRED", key);
+        assertThat(first.headers().firstValue("Cache-Control")).contains("no-store");
+        String location = "/api/payment-cancellation-requests/" + key;
+        assertThat(first.headers().firstValue("Location")).contains(location);
+        var duplicate = client.send(signed, HttpResponse.BodyHandlers.ofString());
+        assertThat(duplicate.statusCode()).isEqualTo(401);
+        assertThat(duplicate.headers().firstValue("Cache-Control")).contains("no-store");
+        assertThat(call("POST", path, "merchant-a", key, body).statusCode()).isEqualTo(409);
+        var get = call("GET", location, "merchant-a", null, null);
+        assertThat(get.statusCode()).isEqualTo(200);
+        assertThat(get.body()).contains("DEFERRED", "QUERY_PAYMENT_THEN_RESUBMIT");
+        assertThat(get.headers().firstValue("Cache-Control")).contains("no-store");
+        var changed = call("POST", path, "merchant-a", key, "{\"reason\":\"다른 사유\"}");
+        assertThat(changed.statusCode()).isEqualTo(409);
+        assertThat(changed.body()).contains("IDEMPOTENCY_KEY_CONFLICT").doesNotContain("requestStatus");
+        var again = call("GET", location, "merchant-a", null, null);
+        assertThat(again.body()).isEqualTo(get.body());
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM payment_cancellation_requests WHERE merchant_id=997 AND request_key=?",
+                        Integer.class,
+                        key))
+                .isEqualTo(1);
+    }
+
+    // 인증 후에도 금액·가맹점 주입, 문자열 강제 변환과 잘못된 키는 저장 전에 거절한다.
+    @Test
+    void cancellation_whenInputInvalid_rejectsWithoutReservingKey() throws Exception {
+        long id = pendingCancellationPayment();
+        String path = "/api/payments/" + id + "/cancellations";
+        String key = UUID.randomUUID().toString();
+        for (String body : List.of(
+                "{}",
+                "null",
+                "[]",
+                "{",
+                "{\"reason\":123}",
+                "{\"reason\":\" 취소\"}",
+                "{\"reason\":\"취소\",\"amount\":1}",
+                "{\"reason\":\"취소\",\"merchantId\":998}",
+                "{\"reason\":\"취소\",\"decisionId\":1}")) {
+            var response = call("POST", path, "merchant-a", key, body);
+            assertThat(response.statusCode()).as(body).isEqualTo(400);
+            assertThat(response.body()).contains("INVALID_CANCELLATION_REQUEST");
+            assertThat(response.headers().firstValue("Cache-Control")).contains("no-store");
+        }
+        for (String invalid : List.of("1-1-1-1-1", "bad")) {
+            assertThat(call("POST", path, "merchant-a", invalid, "{\"reason\":\"취소\"}")
+                            .statusCode())
+                    .isEqualTo(400);
+            assertThat(call("GET", "/api/payment-cancellation-requests/" + invalid, "merchant-a", null, null)
+                            .statusCode())
+                    .isEqualTo(400);
+        }
+        assertThat(call("POST", path, "merchant-a", null, "{\"reason\":\"취소\"}").statusCode())
+                .isEqualTo(400);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM payment_cancellation_requests WHERE merchant_id=997 AND request_key=?",
+                        Integer.class,
+                        key))
+                .isZero();
+    }
+
+    // 타 가맹점은 결제와 요청 기록을 볼 수 없고 같은 키를 자기 결제에 독립적으로 쓸 수 있다.
+    @Test
+    void cancellation_whenForeignMerchant_hidesPaymentAndRequest() throws Exception {
+        long id = pendingCancellationPayment();
+        String key = UUID.randomUUID().toString();
+        String path = "/api/payments/" + id + "/cancellations";
+        String body = "{\"reason\":\"취소\"}";
+        assertThat(call("POST", path, "merchant-a", key, body).statusCode()).isEqualTo(409);
+        var foreign = call("POST", path, "merchant-b", key, body);
+        assertThat(foreign.statusCode()).isEqualTo(404);
+        assertThat(foreign.body()).contains("PAYMENT_NOT_FOUND");
+        var query = call("GET", "/api/payment-cancellation-requests/" + key, "merchant-b", null, null);
+        assertThat(query.statusCode()).isEqualTo(404);
+        assertThat(query.body()).contains("CANCELLATION_REQUEST_NOT_FOUND");
+    }
+
+    // 정지 가맹점도 유효한 키로 기존 결제 요청·조회를 할 수 있고 실행 미연결은 503이다.
+    @Test
+    void cancellation_whenInactive_allowsExistingPaymentButDoesNotPretendExecution() throws Exception {
+        var payment = call(
+                "POST",
+                "/api/payments",
+                "merchant-a",
+                UUID.randomUUID().toString(),
+                body(UUID.randomUUID().toString(), 1000));
+        long id = mapper.readTree(payment.body()).path("paymentId").asLong();
+        jdbc.update("UPDATE merchants SET status='INACTIVE' WHERE merchant_id=997");
+        try {
+            String key = UUID.randomUUID().toString();
+            var result =
+                    call("POST", "/api/payments/" + id + "/cancellations", "merchant-a", key, "{\"reason\":\"취소\"}");
+            assertThat(result.statusCode()).isEqualTo(503);
+            assertThat(result.body()).contains("CANCELLATION_NOT_READY").doesNotContain("requestStatus");
+            assertThat(call("GET", "/api/payment-cancellation-requests/" + key, "merchant-a", null, null)
+                            .statusCode())
+                    .isEqualTo(404);
+            assertThat(call(
+                                    "POST",
+                                    "/api/payments",
+                                    "merchant-a",
+                                    UUID.randomUUID().toString(),
+                                    body(UUID.randomUUID().toString(), 1000))
+                            .statusCode())
+                    .isEqualTo(403);
+            long pending = pendingCancellationPayment();
+            assertThat(call(
+                                    "POST",
+                                    "/api/payments/" + pending + "/cancellations",
+                                    "merchant-a",
+                                    key,
+                                    "{\"reason\":\"취소\"}")
+                            .statusCode())
+                    .isEqualTo(409);
+            assertThat(call("GET", "/api/payment-cancellation-requests/" + key, "merchant-a", null, null)
+                            .statusCode())
+                    .isEqualTo(200);
+        } finally {
+            jdbc.update("UPDATE merchants SET status='ACTIVE' WHERE merchant_id=997");
+        }
+    }
+
+    // 새 취소 경로도 본문 파싱 전에 HMAC을 검사하고 HEAD·PUT 등 다른 메서드를 막는다.
+    @Test
+    void cancellation_whenUnauthenticatedOrWrongMethod_rejectsBeforeController() throws Exception {
+        var post = call("POST", "/api/payments/1/cancellations", null, null, "{");
+        assertThat(post.statusCode()).isEqualTo(401);
+        assertThat(post.headers().firstValue("Cache-Control")).contains("no-store");
+        String location = "/api/payment-cancellation-requests/" + UUID.randomUUID();
+        assertThat(call("GET", location, null, null, null).statusCode()).isEqualTo(401);
+        for (String method : List.of("HEAD", "PUT", "DELETE", "POST")) {
+            var result = call(method, location, "merchant-a", null, null);
+            assertThat(result.statusCode()).isEqualTo(405);
+            assertThat(result.headers().firstValue("Allow")).contains("GET");
+        }
+        assertThat(call("GET", "/api/payments/1/cancellations", "merchant-a", null, null)
+                        .statusCode())
+                .isEqualTo(405);
+    }
 }

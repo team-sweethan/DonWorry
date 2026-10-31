@@ -1,6 +1,6 @@
 # #381 고객 취소 저장 구조
 
-상태: **설계 PR #385 병합 후 저장 기반 구현·검증(2026-10-31)**. 기준 `dev 476b5ee`, 작업 브랜치 `feature/381-cancellation-storage`. SQL·Entity·Repository와 저장 검증을 추가하며 API·업무 실행은 후속이다.
+상태: **설계 PR #385 병합 후 저장 기반 구현·검증(2026-10-31)**. 기준 `dev 476b5ee`, 작업 브랜치 `feature/381-cancellation-storage`. SQL·Entity·Repository에 접수/조회 Service·HTTP/HMAC을 연결했다. 단계별 검증은 10~12절이며 금융 실행은 후속이다.
 
 [API 초안](381-cancellation-api-contract.md), [ADR-0056](../decisions/0056-cancellation-request-contract.md), [진행 단계 정책](380-cancellation-stage-policy.md)을 함께 본다. 사용자가 두 기록 분리 방향에 동의하고 설계 PR #385를 병합한 뒤 다음 단계 진행을 요청했다. 아래 명세로 저장 기반을 구현하며, 운영 DB 적용·Notion 동기화·다른 담당의 상세 계약 확인까지 완료된 것으로 해석하지 않는다.
 
@@ -167,7 +167,7 @@ DB CHECK는 요청의 코드·직원 ID 조합과 작업의 상태·결과·capt
 4. 접수·조회 Service에서 기존 직원 조치와의 잠금·무결성 조건을 연결한다. 실제 금융 실행 없는 저장 테스트 fixture를 기능 완료로 보고하지 않는다.
 5. HTTP 계약·인증 연결과 미연결 실행 차단을 검증한 뒤 #382·#383에서 실제 상태별 실행을 연결한다.
 
-현재 단계는 1~3번 저장 기반이다. 4~5번 서비스·HTTP는 후속이다. 저장 fixture에서 ACCEPTED·PROCESSING 행을 만들 수 있다는 사실은 실제 취소 기능의 접수·복구가 연결됐다는 뜻이 아니다.
+저장 기반 1~3번은 `05da941`로 커밋했다. 4번 접수·조회 Service와 5번 HTTP/HMAC 연결까지 구현했다. 실제 금융 실행은 #382·#383 후속이다. 저장 fixture에서 ACCEPTED·PROCESSING 행을 만들 수 있다는 사실은 실제 취소 기능의 접수·복구가 연결됐다는 뜻이 아니다.
 
 ## 9. 검증 계획
 
@@ -187,9 +187,45 @@ DB CHECK는 요청의 코드·직원 ID 조합과 작업의 상태·결과·capt
 - `PaymentCancellation`: 전액 금액과 최초 요청·매입 ID를 고정한다. PROCESSING/UNKNOWN에서 결과를 확정하고, 종료 후에는 코드·완료 시각까지 동일한 결과만 재반영한다. DB 예외를 UNKNOWN으로 변환하는 실행 경로는 추가하지 않았다.
 - 두 Repository는 저장·조회만 제공한다. 삭제 메서드·키 만료 배치·새 API는 없다.
 - 접수 서비스가 보장해야 할 항목: 인증 가맹점 소유, payment 선행 잠금, ACCEPTED/LINKED의 실제 작업 존재·일치, P6 매입 사실, 직원 조치와 상호 배제, 실행 미연결 차단. 이번 Entity·DB 검증만으로 이 기능들이 완료되지 않는다.
-- 실행 기준: `dev 476b5ee`에서 분기한 `feature/381-cancellation-storage`의 미커밋 구현. 과거 설계 PR의 검사 결과와 구분한다.
+- 실행 기준: `dev 476b5ee`에서 분기한 `feature/381-cancellation-storage`의 저장 기반 변경(후속 커밋 `05da941`). 과거 설계 PR의 검사 결과와 구분한다.
 - `./gradlew spotlessApply check mariaDbTest`: 포맷·컴파일·check 통과(단위 검사 1,191건, 실패 0, 기존 skip 1). MariaDB 609건 중 새 저장 검사 6건은 통과했으나 개인 `application-local.yml`의 `ai.server.enabled=true`로 실제 AI 서버에 연결하지 못해 조사·보고서 검사 30건 실패.
 - 개인 설정은 변경하지 않았다. 임시 Gradle init script가 Test 작업에 `systemProperty 'ai.server.enabled', 'false'`를 지정하여 저장소 기본값으로 재검사했다. **MariaDB 전체 609건 통과(실패·skip 0)**. 명령: `./gradlew -I /tmp/donworry-381-test-defaults.gradle mariaDbTest`.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check` 통과.
 - 새 단위 검사 14건: 요청 내용 보존·사유 검증·일시 거절 재판단·직원 VOID 근거·결과 전이 및 확정 결과 보존 통과. 새 MariaDB 검사 6건: 전체 Flyway/JPA 환경에서 저장·가맹점 키 격리·작업 UNIQUE·복합 FK·CHECK·롤백 통과.
 - 미검증: 운영 DB 적용·API·동시 요청 접수·실제 금융 실행·이벤트 전달. P1/P3/P6 연동 및 장기 보존 정책·Notion 동기화는 후속이다.
+
+## 11. 접수·조회 Service 구현
+
+기준: 저장 기반 커밋 `05da941` 이후 동일 브랜치의 Service 단계 변경. 당시 HTTP endpoint·새 금융 작업 실행은 없었으며 HTTP 후속은 12절을 따른다.
+
+- `MerchantPaymentCancellationService`는 인증된 가맹점을 `PaymentMerchantAccess`로 확인한다. 정지 가맹점도 기존 결제 취소·조회는 허용하고 신규 결제 차단은 유지한다. 내부 Command의 merchantId는 이 인증 경계에서만 받아야 한다.
+- `PaymentCancellationTransactionService`는 소유 가맹점 조건으로 payment 쓰기 잠금을 먼저 획득한다. READ_COMMITTED에서 잠금 대기 후 요청·직원 조치를 읽고 동일 키 최초 내용을 비교한다. DEFERRED/REVIEW_REQUIRED만 명시적 요청으로 재판단한다.
+- 업무 거절은 DTO로 정상 반환하여 독립 트랜잭션에서 요청 기록을 커밋한다. 새 키 UNIQUE 경합만 `PaymentCancellationAdmissionService`가 최대 3회 새 트랜잭션으로 대조한다. 다른 DB 오류·잠금 실패·P6 조회 오류는 업무 거절로 저장하지 않고 전파한다. HTTP 오류 변환은 후속이다.
+- 판단은 기존 단계 정책을 사용한다. 진행 중은 DEFERRED, FDS 오류·누락·모순·실패 직원 조치는 REVIEW_REQUIRED, 승인/매입 없는 종료는 REJECTED다. P6 스냅샷은 완료 증거 대조에 쓰며 빈 결과를 실행 허가로 취급하지 않는다. 정산 상태는 조건에 넣지 않는다.
+- 기존 고객 작업은 LINKED로 연결한다. 결과 조립 시 source request의 ACCEPTED·동일 결제/가맹점·금액·작업 유형별 현재 결제 상태를 대조한다. 원시 금융 실패 코드는 노출하지 않고 자기 키/다른 키의 계약 코드를 반환한다. 직원 VOID는 기존 완료 시각만 반환하며 고객 cancellationId를 생성하지 않는다.
+- `PaymentCancellationQueryService`는 별도 읽기 전용 REPEATABLE_READ에서 요청·결제·작업을 같은 스냅샷으로 읽는다. 조회에서 P6 호출·재판단·시각 갱신·실행을 하지 않는다.
+- 정상 HELD·CAPTURED도 실행부가 없으므로 CANCELLATION_NOT_READY다. 신규 요청/작업을 남기지 않고 기존 거절은 보존한다. 이번에는 ACCEPTED/PROCESSING을 새로 만드는 운영 경로가 없다. 성공·실패·미확정 테스트의 작업은 명시적인 저장 fixture다.
+- 경합 검증은 동일 결제 여러 키의 기존 작업 연결, 서로 다른 결제의 같은 키 UNIQUE 경합, 직원 매입 기록의 선행 결제 잠금/커밋을 대상으로 한다. 고객 VOID가 먼저 실행되는 반대 경합과 금융 성공 이벤트 원자성은 #382/#380 후속이다.
+- 검사 기준: `05da941` 이후 현재 미커밋 Service 변경. `./gradlew -I /tmp/donworry-381-test-defaults.gradle spotlessApply check mariaDbTest` 통과. check는 1,202건(실패 0, 기존 skip 1), MariaDB 전체는 627건(실패·skip 0) 통과했다. 임시 init script는 개인 설정 파일을 수정하지 않고 Test 작업의 `ai.server.enabled=false`만 지정한다.
+- 취소 관련 MariaDB 선행 검사 `--tests '*PaymentCancellation*'`: 저장 6건 + 새 Service 18건 모두 통과. 동일 키·다른 내용, 가맹점 격리, 일시 거절 커밋과 재판단, 기존 결과 연결, 미준비·조회 실패 롤백, 결과 정합성 실패, 두 종류의 동시 키 요청과 직원 매입 선행 잠금을 검증했다.
+- 새 단위 검사 11건: 키 UNIQUE 경합의 제한된 재시도, 예상 밖 무결성 오류 전파, 입력 검증, 진행 상태/매입 근거 판단, 정산 상태 무관, 정지 가맹점 취소 허용과 신규 결제 차단 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check` 통과.
+- 미검증: 운영 DB·HTTP/HMAC 새 경로·실제 금융 실행·P3/P6 성공 전달. 이 단계에서 #381 전체나 #380/#382/#383을 완료 처리하지 않는다.
+
+## 12. HTTP/HMAC 연결
+
+기준: `05da941` 이후 같은 브랜치의 Service 및 HTTP 미커밋 작업 트리. 이전 단계 검사 결과와 구분한다.
+
+- `PaymentCancellationController`·전용 오류 처리기·입력 DTO를 추가했다. POST는 Service 커밋 후 409/422로 변환하고 조회 Location을 돌려준다. GET은 기록된 결과를 200으로 반환한다. DB/트랜잭션 장애는 안전한 503, 예상 밖 오류는 500이며 저장 상태를 추측하지 않는다.
+- 취소 입력만 reason 문자열 하나를 허용한다. 알려지지 않은 필드·숫자/객체/배열·누락을 거절하며 기존 결제 JSON 설정은 유지한다. UUID는 기존 결제와 같은 완전한 형식으로 검사한다.
+- P1 `MerchantSecurityConfiguration`에 취소 POST·요청 GET의 경로/메서드를 추가했다. 모든 메서드를 먼저 가맹점 체인에서 잡아 HEAD·직원 세션 우회를 막는다. `MerchantConnectionService`는 취소 POST에 신규 결제용 활성/연결 조건을 적용하지 않으며 nonce 소비의 키 유효성/버전 검사는 유지한다. `MerchantHmacFilter`가 오류를 포함한 응답에 no-store를 지정한다.
+- 초기 HTTP 검사에서 기존 인증 코드가 취소 POST까지 차단하는 실패 4건을 확인하여 위 경로별 조건을 보완했다.
+- 성공/처리 중/미확정/실패의 HTTP 매핑은 저장 결과 DTO 대역으로 검증한다. 실제 금융 실행 성공을 뜻하지 않는다. HELD·CAPTURED 실행부는 여전히 CANCELLATION_NOT_READY이며 요청/작업을 새로 만들지 않는다.
+- 미검증: 실제 CakeShop 호출·운영 배포/DB 적용·서버 및 프록시 접근 로그의 UUID 마스킹·실제 금융 실행·P3/P6 성공 전달. 애플리케이션에 원문 키/사유 로그를 추가하지 않았다. P1 보안 경계 변경은 담당 리뷰 대상으로 남긴다. 신규 테이블·P3/P6 API 변경은 없다.
+
+검증 결과(2026-10-31, 위 미커밋 작업 트리):
+
+- `cd backend && ./gradlew -I /tmp/donworry-381-test-defaults.gradle spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(5분 29초). 일반 1,216건(실패/오류 0, 기존 skip 1), MariaDB 632건(실패/오류/skip 0). 전체 Flyway/JPA validate·모듈/계층 검사 포함. 임시 init script는 개인 로컬 파일을 수정하지 않고 테스트의 `ai.server.enabled=false`만 지정한다.
+- 신규 일반 14건: HTTP 상태/Location 매핑 11건·안전한 장애 응답 1건·취소 POST/조회 GET의 HMAC/정지/직원 세션/서명 변경/nonce 키 거절 경계 2건 통과.
+- 신규 실제 HTTP/MariaDB 5건: 일시 거절 커밋·동일 서명 재사용 거절·새 nonce의 같은 키 재요청·읽기 전용 조회·내용 충돌, 엄격한 입력 검증/키 미예약, 타 가맹점 404, 정지 가맹점 기존 결제 허용/신규 결제 차단/미준비 503, 인증 선행/다른 메서드 차단 통과.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 검사 이후 구현/테스트 코드는 변경하지 않고 이 기록만 추가했다.

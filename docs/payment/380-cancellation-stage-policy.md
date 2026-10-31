@@ -4,6 +4,8 @@
 
 2026-10-31 사용자가 **진행 중에는 잠시 거절하고 조회 후 재요청**하는 방식을 선택했다. 이번 작업은 정책 단계이며 API·DB·금융 처리 구현은 하지 않는다. 아래 코드 사실은 `dev 8be3df5` 기준 읽기 결과이고 실행 검증이 아니다.
 
+후속 구현: #381의 [접수·조회 Service](381-cancellation-storage.md#11-접수조회-service-구현)에서 일시 거절 기록·키 경합·기존 결과 조회와 직원 매입 선행 잠금을 연결했다. [HTTP/HMAC 연결](381-cancellation-storage.md#12-httphmac-연결)에서 같은 키 재요청·조회와 정지 가맹점 허용을 검증한다. 아래 미구현 표시는 정책 작성 시점 기준이며, 실제 고객 VOID/REFUND 실행과 반대 방향 경합은 여전히 후속이다.
+
 ## 1. 현재 코드에서 확인한 사실
 
 - [Payment](../../backend/src/main/java/com/donworry/payment/entity/Payment.java)의 `recordAuthorizationSuccess()`는 자동 매입이면 승인 참조를 저장하면서 PENDING을 유지하고, 직원 판정 대상이면 HELD로 바꾼다.

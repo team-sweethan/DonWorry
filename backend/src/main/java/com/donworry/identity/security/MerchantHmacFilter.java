@@ -32,6 +32,7 @@ final class MerchantHmacFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
+        response.setHeader("Cache-Control", "no-store");
         HttpMethod method = routes.entrySet().stream()
                 .filter(route -> route.getKey().matches(request))
                 .map(Map.Entry::getValue)
