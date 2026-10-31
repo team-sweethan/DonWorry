@@ -130,9 +130,9 @@ function useStory(target: RefObject<HTMLElement | null>) {
 
 // 사장님 메뉴 (navigation.ts의 owner)
 const ownerNav: { title: string; items: { icon: ReactNode; label: string }[] }[] = [
-  { title: '조치 결과', items: [{ icon: <AuditOutlined />, label: '조치 결과' }] },
+  { title: '결제 보안', items: [{ icon: <AuditOutlined />, label: '조치 결과' }] },
   {
-    title: '자금',
+    title: '자금관리',
     items: [
       { icon: <CalendarOutlined />, label: '정산 내역' },
       { icon: <WalletOutlined />, label: '자금 현황' },
