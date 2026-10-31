@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.settlement.dto.RecurringExpenseRequest;
+import com.donworry.settlement.repository.RecurringExpensePaymentRepository;
 import java.time.*;
+import java.util.List;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,9 @@ class RecurringExpenseMariaDbTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    RecurringExpensePaymentRepository payments;
 
     private LocalDate today() {
         return LocalDate.now(ZoneId.of("Asia/Seoul"));
@@ -51,6 +56,27 @@ class RecurringExpenseMariaDbTests {
                 .frequency(frequency)
                 .startDate(start)
                 .build();
+    }
+
+    // 완료 키 묶음 조회는 선택한 규칙·가맹점·예정일 범위만 반환한다.
+    @Test
+    void completedOccurrences_whenBatchQueried_filtersMerchantRulesAndDates() {
+        var first = create("DAILY", today());
+        var second = service.create(MERCHANT, request("DAILY", today())).recurringExpenseId();
+        service.complete(MERCHANT, first, today());
+        service.complete(MERCHANT, first, today().plusDays(1));
+        service.complete(MERCHANT, second, today());
+        var keys = payments.findCompletedOccurrences(MERCHANT, List.of(first, second), today(), today());
+        assertThat(keys)
+                .extracting(RecurringExpensePaymentRepository.CompletedOccurrence::getRecurringExpenseId)
+                .containsExactlyInAnyOrder(first, second);
+        assertThat(keys)
+                .extracting(RecurringExpensePaymentRepository.CompletedOccurrence::getOccurrenceDate)
+                .containsOnly(today());
+        assertThat(payments.findCompletedOccurrences(MERCHANT, List.of(first), today(), today()))
+                .hasSize(1);
+        assertThat(payments.findCompletedOccurrences(MERCHANT + 1, List.of(first, second), today(), today()))
+                .isEmpty();
     }
 
     // 같은 회차의 동시 완료는 최초 완료 기록 하나와 동일한 응답을 보존한다.

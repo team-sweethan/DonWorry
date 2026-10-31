@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class RecurringExpenseService {
+    private static final int COMPLETION_BATCH_SIZE = 100;
     private final RecurringExpenseRepository repository;
     private final RecurringExpenseExpander expander;
     private final RecurringExpensePaymentRepository payments;
@@ -76,15 +77,20 @@ public class RecurringExpenseService {
         if (paidActual.size() > 10000) throw tooLarge();
         var result = new ArrayList<RecurringExpenseOccurrence>();
         paidActual.stream().map(this::paidResponse).forEach(result::add);
-        for (var rule : repository.findApplicable(merchant, from, to)) {
-            // 다른 날 이미 지출한 회차를 먼저 제외한다. 완료 기록 수가 아니라 최종 반환 수를 제한한다.
-            var completed =
-                    new HashSet<>(payments.findCompletedDates(merchant, rule.getRecurringExpenseId(), from, to));
+        var applicable = repository.findApplicable(merchant, from, to);
+        for (int offset = 0; offset < applicable.size(); offset += COMPLETION_BATCH_SIZE) {
+            var batch = applicable.subList(offset, Math.min(offset + COMPLETION_BATCH_SIZE, applicable.size()));
+            var ids =
+                    batch.stream().map(RecurringExpense::getRecurringExpenseId).toList();
+            var completed = new HashMap<Long, Set<LocalDate>>();
+            for (var key : payments.findCompletedOccurrences(merchant, ids, from, to)) {
+                completed
+                        .computeIfAbsent(key.getRecurringExpenseId(), ignored -> new HashSet<>())
+                        .add(key.getOccurrenceDate());
+            }
+            // 완료 회차를 제외한 예정 회차와 실제 완료 지출만 최종 한도에 포함한다.
             result.addAll(expander.expand(
-                    List.of(RecurringExpenseResponse.from(rule)),
-                    from,
-                    to,
-                    Map.of(rule.getRecurringExpenseId(), completed)));
+                    batch.stream().map(RecurringExpenseResponse::from).toList(), from, to, completed));
             if (result.size() > 10000) throw tooLarge();
         }
         result.sort(Comparator.comparing(

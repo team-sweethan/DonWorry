@@ -22,7 +22,11 @@ class RecurringExpenseLimitTests {
     private final List<LocalDate> dates = from.datesUntil(to.plusDays(1)).toList();
 
     private void givenRules() {
-        var entities = IntStream.rangeClosed(1, 28)
+        givenRules(28);
+    }
+
+    private void givenRules(int count) {
+        var entities = IntStream.rangeClosed(1, count)
                 .mapToObj(i -> {
                     var rule = RecurringExpense.recurring(
                             2L,
@@ -43,20 +47,57 @@ class RecurringExpenseLimitTests {
                 .thenReturn(List.of());
     }
 
+    private void givenCompletedDates(boolean leaveLastUnpaid) {
+        when(payments.findCompletedOccurrences(eq(2L), anyCollection(), eq(from), eq(to)))
+                .thenAnswer(invocation -> {
+                    Collection<Long> ids = invocation.getArgument(1);
+                    return ids.stream()
+                            .flatMap(id -> dates.stream()
+                                    .filter(date -> !(leaveLastUnpaid && id == 28L && date.equals(to)))
+                                    .map(date -> new RecurringExpensePaymentRepository.CompletedOccurrence() {
+                                        public Long getRecurringExpenseId() {
+                                            return id;
+                                        }
+
+                                        public LocalDate getOccurrenceDate() {
+                                            return date;
+                                        }
+                                    }))
+                            .toList();
+                });
+    }
+
+    // 완료된 규칙이 많아 응답이 비어도 완료 키 조회는 100개 ID 묶음당 한 번만 실행한다.
+    @Test
+    void occurrences_whenManyRulesAlreadyPaid_boundsCompletionQueries() {
+        givenRules(201);
+        givenCompletedDates(false);
+        assertThat(service.occurrences(2L, from, to)).isEmpty();
+        verify(payments, times(3))
+                .findCompletedOccurrences(eq(2L), argThat(ids -> ids.size() <= 100), eq(from), eq(to));
+    }
+
+    // 적용 규칙이 없으면 빈 IN 조건으로 완료 키 조회를 실행하지 않는다.
+    @Test
+    void occurrences_whenNoRules_skipsCompletionLookup() {
+        assertThat(service.occurrences(2L, from, to)).isEmpty();
+        verify(payments, never()).findCompletedOccurrences(anyLong(), anyCollection(), any(), any());
+    }
+
     // 전체 예정 회차 10,248건이 다른 날 이미 완료되었다면 빈 응답이 정상이다.
     @Test
     void occurrences_whenOverLimitButAllPaidOutsidePeriod_returnsEmpty() {
         givenRules();
-        when(payments.findCompletedDates(eq(2L), anyLong(), eq(from), eq(to))).thenReturn(dates);
+        givenCompletedDates(false);
         assertThat(service.occurrences(2L, from, to)).isEmpty();
+        verify(payments, times(1)).findCompletedOccurrences(eq(2L), anyCollection(), eq(from), eq(to));
     }
 
     // 완료 제외 후 남는 회차만 한도에 포함하고, 실제 미완료 10,000건 초과는 계속 거절한다.
     @Test
     void occurrences_whenOverLimitButOnlyOneUnpaid_returnsOne() {
         givenRules();
-        when(payments.findCompletedDates(eq(2L), anyLong(), eq(from), eq(to))).thenReturn(dates);
-        when(payments.findCompletedDates(2L, 28L, from, to)).thenReturn(dates.subList(0, 365));
+        givenCompletedDates(true);
         assertThat(service.occurrences(2L, from, to)).singleElement().satisfies(p -> {
             assertThat(p.recurringExpenseId()).isEqualTo(28L);
             assertThat(p.expenseDate()).isEqualTo(to);
@@ -67,7 +108,7 @@ class RecurringExpenseLimitTests {
     @Test
     void occurrences_whenUnpaidRowsExceedLimit_stillRejects() {
         givenRules();
-        when(payments.findCompletedDates(eq(2L), anyLong(), eq(from), eq(to))).thenReturn(List.of());
+
         assertThatThrownBy(() -> service.occurrences(2L, from, to))
                 .isInstanceOfSatisfying(
                         SettlementRequestException.class,
