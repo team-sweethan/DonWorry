@@ -50,6 +50,8 @@ P1 HMAC으로 인증된 merchantId만 사용한다. 본문·쿼리로 merchantId
 
 접수 전 상태와 접수 후 상태를 구분하기 위한 외부 표현이며 DB 상태 설계는 후속이다. DEFERRED/REVIEW_REQUIRED의 갱신은 명시적 POST에서만 수행한다. GET은 현재 결제 상태를 읽을 수 있지만 요청 상태 재판정·취소 접수·이벤트 재전달을 실행하지 않는다.
 
+[저장 구조 제안](381-cancellation-storage.md)에서는 요청의 접수 판단과 금융 작업 상태를 분리한다. 다른 키로 기존 작업을 확인한 요청은 LINKED로 연결하며 GET은 기존 작업의 PROCESSING/UNKNOWN/FAILED 또는 ALREADY_CANCELED를 반환한다. 자신의 요청이 새 작업을 만들었다는 뜻은 아니므로 code로 CANCELLATION_ALREADY_IN_PROGRESS / CANCELLATION_PREVIOUSLY_FAILED를 함께 제공한다.
+
 ## 4. 정상 응답 초안
 
 ```json
@@ -73,7 +75,7 @@ P1 HMAC으로 인증된 merchantId만 사용한다. 본문·쿼리로 merchantId
 - ALREADY_CANCELED의 cancellationId는 기존 고객 취소 작업이 확인되는 경우 그 ID다. 직원 VOID만 존재하면 null이며 직원 actionId를 취소 ID로 둔갑시키지 않는다. operation·completedAt도 확인한 사실만 반환하며 알 수 없으면 null이다. 새 요청 시각을 과거 취소 완료 시각으로 사용하지 않는다.
 - nextAction 제안: NONE / QUERY_PAYMENT_THEN_RESUBMIT / CONTACT_SUPPORT / QUERY_CANCELLATION / RETRY_SAME_REQUEST. 재시도 간격·횟수·자동 재시도를 약속하지 않는다.
 - 기존 결제 조회의 paymentStatus를 환불 완료 증거로 사용하지 않는다. 신규 환불 후 결제 상태 표현은 #383의 별도 계약이며 이 문서에서 REFUNDED 등의 새 PaymentStatus를 확정하지 않는다.
-- POST는 접수된 PROCESSING/UNKNOWN일 때 202, SUCCEEDED/ALREADY_CANCELED일 때 200이다. 확정된 거절·실패는 아래 오류 표를 따른다.
+- POST는 자신이 최초 접수한 작업의 PROCESSING/UNKNOWN일 때 202, SUCCEEDED/ALREADY_CANCELED일 때 200이다. 다른 키로 기존 진행·실패 작업을 확인한 경우는 409이며 새 금융 작업을 생성하지 않는다. 확정된 거절·실패는 아래 오류 표를 따른다.
 - GET은 해당 요청 기록이 있으면 상태와 관계없이 200으로 이 DTO를 반환한다. 기록이 없으면 404이며 원 요청이 처리 중·롤백·미도달 중 무엇인지 단정하지 않는다. 응답 유실 시 조회 후에도 새 키로 바꾸지 말고 기존 키·내용으로 확인한다.
 - 모든 응답은 `Cache-Control: no-store`. 요청 기록 생성/조회가 가능한 POST 응답의 Location은 위 요청 키 GET 경로다. UUID 경로도 서버·프록시 접근 로그에 원문 키가 남지 않도록 마스킹 대상이다.
 
@@ -91,7 +93,7 @@ P1 HMAC으로 인증된 merchantId만 사용한다. 본문·쿼리로 merchantId
 | 409 | PAYMENT_IN_PROGRESS | DEFERRED. 결제 결과 조회 후 같은 키·내용 재요청 |
 | 409 | PAYMENT_REVIEW_REQUIRED | REVIEW_REQUIRED. FDS 오류·P5/P6 불일치·불명확한 상태 등. 내부 원인 노출 없이 운영 확인 후 재요청 |
 | 409 | PAYMENT_NOT_CANCELABLE | REJECTED. DENIED/DECLINED 등 취소할 금융 거래 없음. 취소 성공이 아님 |
-| 409 | CANCELLATION_ALREADY_IN_PROGRESS | 다른 키의 취소 실행이 진행/미확정. 새 작업 생성 없음. 해당 가맹점이 기존 작업 결과를 확인하도록 기존 요청 조회 Location 제공 |
+| 409 | CANCELLATION_ALREADY_IN_PROGRESS | 다른 키의 취소 실행이 진행/미확정. 새 작업 생성 없이 연결하고 현재 요청 키의 조회 Location 제공 |
 | 409 | CANCELLATION_PREVIOUSLY_FAILED | 다른 키의 확정 실패 작업이 있음. 신규 실행으로 우회하지 않고 운영 확인 |
 | 422 | CANCELLATION_DECLINED | 접수 작업의 명시적 업무 실패 확정(FAILED). 같은 키는 실패 결과 유지 |
 | 503 | CANCELLATION_UNAVAILABLE | DB·잠금·조회 장애. 결과 단정 금지. 기존 키로 조회/재확인 |
@@ -128,6 +130,6 @@ P1 HMAC으로 인증된 merchantId만 사용한다. 본문·쿼리로 merchantId
 - P1: 새 HMAC 경로/메서드, 정지 가맹점 취소·조회 인가, 오류·헤더·키 마스킹 확인.
 - P3: 기존 직원 취소 결과 확인과 고객 취소 경합의 Case·판정 반영. 직원 기록을 임의로 수정하지 않음.
 - P6: #383·#233 성공 전달 필드·재전달과 정산 차감. 이 문서의 고객 응답은 P6 반영 완료나 실제 은행 입출금 완료를 보장하지 않음.
-- 저장 설계: 요청 키와 금융 작업의 관계, 키 보존 기간·범위·UNIQUE·상태 전이·원자성, 직원 VOID 근거 조회, 미확정 복구 경계. 테이블/컬럼은 ERD 확인 후 별도 제안.
+- 저장 설계: [P5 테이블 2개·관계·제약·트랜잭션 제안](381-cancellation-storage.md). 2개 테이블 분리 방향은 사용자 승인이다. 상세 필드·제약·보존 명세는 migration 생성 전 확인하며 실행/복구 및 담당별 상세 계약도 후속 확인한다.
 - 검증 계획: 인증·가맹점 격리·정지 가맹점, 키 충돌, 409 후 동일 키 접수, GET 부작용 없음, 응답 유실, 서로 다른 키 동시 접수, 기존 직원 취소, FAILED/UNKNOWN 재요청, 키 기록 롤백, 미연결 실행부의 성공 금지.
 - 이번 검사는 Markdown 링크·공백과 예시 JSON 문법만 수행한다. API·보안·DB·금융 실행은 미구현·미검증이다.
