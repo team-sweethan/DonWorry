@@ -98,3 +98,16 @@ C의 연결 확인도 같은 키 버전·가맹점 잠금으로 상태를 바꿔
 작업 중 검증에서 기존 결제·픽업 HTTP 테스트의 대역 키 조회만으로는 새 DB 버전 검사를 통과하지 못함을 확인했다. 검사를 우회하지 않고 실제 암호화 키·버전 데이터를 테스트에 준비했으며, 해당 결제·픽업·신규 키 HTTP 회귀 테스트 묶음이 통과했다. 기존 환경변수 참조·Base64·길이 검사 테스트는 이전 전용 경계의 테스트로 옮겨 유지한다.
 
 최신 dev 통합 후 최종 명령·테스트 수치·결과는 아래에 추가한다. **브라우저 수동 확인·실제 환경 키 이전/프로세스 기동·마스터 키 백업 복원·운영 배포·Notion 대조/동기화는 미수행**이다. 연결 확인·연동 상태에 따른 신규 결제 차단·새 가맹점 전체 흐름 검증은 PR C 범위다.
+
+
+### 최신 dev 통합 후 최종 검사
+
+`origin/dev 0b1d75d`(#373)을 통합한 **`58a720d`**에서 실행했다. 이후 애플리케이션·테스트 코드는 바꾸지 않고 이 검증 기록만 추가했다. 프론트는 통합 전후 동일한 소스이며 아래 검사를 통과한 내용 그대로 커밋했다.
+
+- backend `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL, 4분 3초. 일반 1,172개 중 1,171개 성공·기존 1개 skip, MariaDB 598개 모두 성공, 실패/오류 0. 전체 Flyway/JPA validate·ModularityTests·ArchitectureTests 포함.
+- 신규 키 관리 HTTP/MariaDB 14개: 무권한 OPERATOR 발급·암호화·재조회, 재발급/폐기 후 옛 키 거절, CONNECTED 보기 차단, 실패 잠금/해제, 전역 off CSRF, 역할·계정/가맹점 정지·강제 변경, 동시 발급·재발급/폐기 경합, 서명 검증 직후 폐기, 이력 실패 롤백, 입력 버전·사유, 대상 ID 주입, 동일 키 이전·재실행·폐기 보존·이전 실패 롤백을 확인했다.
+- 암호화 단위 검사: 변조·다른 가맹점/버전 AAD·마스터 키 누락/형식·다른 활성 마스터 키에서도 저장된 ID 사용. 기존 레거시 참조/키 형식 검사는 이전 전용 경계로 옮겨 32/48/64바이트 원문 보존을 확인했다.
+- frontend `npm run lint`, `npm run format:check`, `npm test`, `npm run build`: 모두 종료 코드 0, 테스트 252개 성공. 기존 Fast Refresh 경고 1개·번들 크기 경고 유지. 새 API 4개 테스트는 POST/CSRF/no-store·대상·응답 유실/충돌 시 자동 반복 없음·세션 만료·다른 로그인/취소 뒤 늦은 키 응답 폐기를 확인했다.
+- `git diff origin/dev --check`, 설계/ADR의 상대 파일 링크 검사: 통과.
+
+실행 보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`. 위 미검증 항목과 PR C 범위는 유지한다. 원격 CI는 PR의 해당 커밋 결과로 별도 확인한다.
