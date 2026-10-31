@@ -40,7 +40,7 @@ public class PaymentCancellationDecisionService {
                         yield PaymentCancellationResolution.DEFERRED;
                     yield review();
                 }
-                throw notReady();
+                yield PaymentCancellationResolution.ACCEPTED;
             }
             case CAPTURED -> {
                 if (!authorized

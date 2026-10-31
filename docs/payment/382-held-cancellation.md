@@ -1,7 +1,7 @@
 # #382 HELD 고객 전액 승인 취소 — 조사와 실행·전달 계약 제안
 
 기준: `dev 2bd7f87`(PR #386 병합), 2026-10-31. 브랜치 `feature/382-held-cancellation`.
-1단계 코드 조사에 이어 2단계 실행·전달 계약을 제안한다. 상세안은 7~11절과 [ADR-0057](../decisions/0057-held-customer-void-contract.md)을 따른다. 실행 코드·DB·공개 계약은 변경하지 않았다. 아래 구현안은 제안이며 P3 담당 합의나 실행 검증을 뜻하지 않는다.
+1단계 코드 조사에 이어 2단계 실행·전달 계약을 제안한다. 상세안은 7~11절과 [ADR-0057](../decisions/0057-held-customer-void-contract.md)을 따른다. 1~2단계에서는 실행 코드·DB·공개 계약을 변경하지 않았다. 후속 P5 구현 범위는 12절을 따른다. P3 계약·Case 정책은 여전히 담당 합의 전이다.
 
 관련: #382, [#380 정책](380-cancellation-stage-policy.md), [#381 저장/실행 경계](381-cancellation-storage.md), [직원 조치 ADR](../decisions/0027-payment-actions.md), [의존 방향](../decisions/0012-payment-settlement-dependency.md).
 
@@ -161,3 +161,32 @@ P3의 현재 CLOSED 계산은 전체 결제에 직원 판정과 ACCEPTED 인계�
 - [ADR-0057](../decisions/0057-held-customer-void-contract.md)에 대안과 영향 범위를 기록했다. 담당 승인·전달 완료로 표시하지 않는다.
 - 현재 코드의 모의 실행기, 취소 결과 조립, P3 CasePayment/ActionHandoff·CaseIntakeService·InvestigationRules를 대조했다.
 - 문서 링크·공백 검사를 실행했다. 실행 코드·DB·테스트를 바꾸지 않았으므로 backend check/mariaDbTest는 실행하지 않았다. 이벤트·P3 저장·케이크샵 실제 흐름은 미구현/미검증이다.
+
+## 12. P5 모의 실행 기반 구현 (3단계)
+
+기준: `a7f0dcc` 조사·계약 문서 커밋 위 `feature/382-held-cancellation` 작업 트리. 신규 DB 변경은 없다.
+
+- `PaymentCancellationDecisionService`는 정합한 HELD를 ACCEPTED 후보로 반환한다. `PaymentCancellationTransactionService`는 실제 준비 여부를 확인한 뒤 요청 기록·`PaymentCustomerVoidService` 실행·결과 조립을 같은 결제 잠금/트랜잭션에 둔다. CAPTURED 실행은 계속 NOT_READY다.
+- `PaymentCustomerVoidService`는 기존 모의 취소기를 사용한다. 성공은 VOIDED·SUCCEEDED·성공 발행, DECLINED는 HELD·FAILED/VOID_DECLINED다. 결제 상태 전이 시각을 작업·이벤트 completedAt에 재사용한다. 식별 가능한 `AuthorizationVoidUnavailableException`과 null은 안전한 503으로 변환하며 예상 밖 예외는 기존 500 경계를 유지한다.
+- `payment.api.PaymentCustomerVoidSucceeded` 타입을 추가하고 필수 양수 식별자/전액/UTC 마이크로초 시각을 검증한다. P3 계약 확인 전 타입이며 실제 P3 수신자는 추가하지 않았다.
+- 운영 발행 어댑터 `PaymentCustomerVoidCompletion` Bean은 **등록하지 않았다**. 준비 확인 시 어댑터가 없으면 요청/작업 저장·모의 실행 전에 NOT_READY를 반환한다. HTTP 활성 플래그만 켜거나 이벤트 타입을 추가했다고 실행 가능해지지 않는다. 후속 P3 운영 수신/복구 계약과 검증이 끝난 뒤 P5 발행 어댑터를 연결해야 한다.
+- 테스트에서만 명시적인 발행 어댑터와 Modulith 수신 대역을 등록한다. 실제 영속 발행 기록·커밋 후 수신·실패 재전달을 검사하며 P3 Case 구현 검증으로 해석하지 않는다.
+- `PaymentActionAdmissionService`는 기존 직원 키 재조회·충돌 검사 후 신규 요청만 고객 작업과 대조한다. SUCCEEDED, PROCESSING/UNKNOWN, FAILED에 각각 8절의 접수 거절 코드를 반환한다. 고객 요청 기록만 DEFERRED/REVIEW_REQUIRED인 경우에는 직원 실행을 막지 않는다.
+- P3 `PaymentFinancialActionGateway`에는 위 3개 코드의 응답 전용 매핑만 추가했다. 존재하지 않는 직원 결과 이벤트를 기다리지 않도록 한다. 현재 인계 실패 표시는 기존 동작을 유지하며, 고객 취소 별도 표시·Case 종료·판정 제외·고객 성공 수신은 미구현이다.
+- 초기 통합 검사는 Mockito가 테스트용 lambda 발행 어댑터를 spy할 수 없어 컨텍스트 로딩에서 실패했다. 명시적 테스트 어댑터 클래스로 바꾸었으며 검증 조건은 유지한다.
+
+미검증/미완료: 실제 P3 수신·Case/판정·순서 역전 영속 처리, 운영 발행 어댑터/실행 활성화, CakeShop 실제 성공 흐름, 외부 카드사 및 UNKNOWN 복구, 고객 FAILED 후 운영 복구 정책. P1/P6의 API·스키마 변경은 없다. 이번 단계로 #382를 완료 처리하지 않는다.
+
+선행 검사:
+
+- `./gradlew -I /tmp/donworry-381-test-defaults.gradle spotlessApply test --tests '*PaymentCustomerVoid*' --tests '*PaymentCancellationDecision*' mariaDbTest --tests '*PaymentCustomerVoidMariaDbTests' --console=plain`: BUILD SUCCESSFUL(39초). 판단/응답 단위 10건(기존 6 + 신규 4), 새 MariaDB 18건 모두 통과.
+- MariaDB에서는 성공/동일·다른 키 결과 보존, 명시적 거절/직원 우회 차단, 식별된 기술 오류/null/예상 밖 예외 롤백, 이전 확인 필요 기록 보존, 커밋/발행 실패 원자성, 수신 실패 publication 재전달, 고객 선행의 같은 키/다른 키/직원 CAPTURE/VOID 경합, 직원 CAPTURE/VOID 선행, PROCESSING/UNKNOWN의 직원 실행 차단, 늦은 매입 완료 거절을 확인했다.
+- 직원 CAPTURE 선행 검사는 결제 잠금 안의 실제 접수 커밋을 대상으로 한다. P6 외부 금융 실행이나 실제 P3 고객 취소 수신을 검증했다고 해석하지 않는다.
+
+최종 전체 검사(2026-10-31, `a7f0dcc` 위 P5 구현 미커밋 작업 트리):
+
+- `cd backend && ./gradlew -I /tmp/donworry-381-test-defaults.gradle spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(5분 50초). 일반 1,220건(실패/오류 0, 기존 skip 1), MariaDB 651건(실패/오류/skip 0). 전체 Flyway/JPA validate와 모듈/계층 검사 포함.
+- 임시 Gradle init script는 개인 로컬 파일을 변경하지 않고 Test 작업의 `ai.server.enabled=false`만 지정한다. 실제 AI 서버 호출을 켠 개인 설정 대신 저장소 기본값으로 검증했다.
+- 새 고객 VOID MariaDB 18건 외에 기존 직원 VOID 9건, 공통 취소 Service 18건, 실제 HMAC HTTP 15건을 포함해 통과했다. 운영 발행 어댑터가 없는 기본 Service/HTTP의 NOT_READY·기록 미생성 및 이전 기록 보존도 회귀 검증했다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 검사 후 구현/테스트 코드는 변경하지 않고 이 검증 기록만 추가했다.
+- 문서 제안은 `a7f0dcc`에 커밋했다. 위 구현·검증 기록은 아직 미커밋이며 PR·운영 활성화는 하지 않았다. P3 계약 미확정·실제 Case 수신 미검증 범위는 앞의 기록을 유지한다.

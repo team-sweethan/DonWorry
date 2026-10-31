@@ -84,4 +84,23 @@ class PaymentCancellationDecisionServiceTests {
                         payment, null, null, new CaptureSnapshot(1L, 3L, "COMPLETED", 100L, null, true, "SCHEDULED")))
                 .isEqualTo(PaymentCancellationResolution.REVIEW_REQUIRED);
     }
+
+    // 정합한 HELD만 실행 후보이고 직원 매입 대기·P6 기록 모순은 실행하지 않는다.
+    @Test
+    void decide_whenHeld_selectsOnlyConsistentCandidate() {
+        var payment = payment(PaymentStatus.HELD, "AUTH");
+        assertThat(service.decide(payment, original(PaymentProcessingStage.AUTHORIZED, "REVIEW"), null, null))
+                .isEqualTo(PaymentCancellationResolution.ACCEPTED);
+        var action = mock(PaymentAction.class);
+        when(action.getPaymentId()).thenReturn(1L);
+        when(action.getActionType()).thenReturn(PaymentActionType.CAPTURE);
+        when(action.getStatus()).thenReturn(PaymentActionStatus.PENDING);
+        assertThat(service.decide(payment, null, action, null)).isEqualTo(PaymentCancellationResolution.DEFERRED);
+        assertThat(service.decide(
+                        payment,
+                        null,
+                        null,
+                        new CaptureSnapshot(1L, 3L, "COMPLETED", 100L, Instant.now(), true, "SCHEDULED")))
+                .isEqualTo(PaymentCancellationResolution.REVIEW_REQUIRED);
+    }
 }
