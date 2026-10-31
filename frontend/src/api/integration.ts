@@ -24,11 +24,16 @@ export const integrationLabels: Record<IntegrationStatus, string> = {
   PENDING_CONNECTION: '연동 전',
   CONNECTED: '연동 완료',
 }
-export function getIntegration(merchantId?: number, page = 0, signal?: AbortSignal) {
-  return api<IntegrationInfo>(
+export async function getIntegration(merchantId?: number, page = 0, signal?: AbortSignal) {
+  const version = readSessionVersion()
+  const result = await api<IntegrationInfo>(
     `${merchantId === undefined ? '/owner/integration' : `/admin/merchants/${merchantId}/integration`}?page=${page}`,
     { cache: 'no-store', signal },
   )
+  signal?.throwIfAborted()
+  if (version !== readSessionVersion())
+    throw new DOMException('로그인 상태가 변경되었습니다.', 'AbortError')
+  return result
 }
 export async function requestIntegrationKey(
   action: KeyAction,

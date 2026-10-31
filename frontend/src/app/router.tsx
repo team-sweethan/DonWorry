@@ -27,6 +27,7 @@ import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
+import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
 import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
@@ -153,6 +154,7 @@ export const router = createBrowserRouter([
       {
         path: '/owner',
         children: [
+          { index: true, element: <OwnerHomePage /> },
           { path: 'actions', element: <MerchantCaseListPage /> },
           { path: 'actions/:id', element: <MerchantCaseDetailPage /> },
           // 정산 상세 API 연동 전에는 HTML 프로토타입의 예시 화면을 제공한다.
@@ -160,7 +162,7 @@ export const router = createBrowserRouter([
           { path: 'funds', element: <SettlementRoute /> },
           { path: 'loans', element: <LoanProductsRoute /> },
           { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
-          // 키 발급 API(#354 PR B) 전에는 서버를 부르지 않는 예시 화면을 제공한다.
+          // 권한 코드와 무관하게 자기 가맹점의 시크릿 키를 관리한다.
           { path: 'integration', element: <IntegrationPreviewPage /> },
           { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
         ],

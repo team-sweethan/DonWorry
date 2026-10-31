@@ -308,6 +308,37 @@ class MerchantIntegrationHttpMariaDbTests {
         }
         assertThat(historyCount()).isEqualTo(1);
     }
+    // 같은 버전의 동시 재발급은 한 요청만 성공하고 키와 이력이 한 번만 증가한다
+    @Test
+    void reissue_whenConcurrent_commitsOneNewVersion() throws Exception {
+        String previous = issue().path("secret").asString();
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new CountDownLatch(1);
+            var futures = new ArrayList<Future<HttpResponse<String>>>();
+            for (int n = 0; n < 2; n++)
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return owner.send("POST", path("reissue"), keyInput(1, PASSWORD), true);
+                }));
+            start.countDown();
+            var responses = new ArrayList<HttpResponse<String>>();
+            for (var future : futures) responses.add(future.get(20, TimeUnit.SECONDS));
+            assertThat(responses).extracting(HttpResponse::statusCode).containsExactlyInAnyOrder(200, 409);
+            var success = responses.stream()
+                    .filter(response -> response.statusCode() == 200)
+                    .findFirst()
+                    .orElseThrow();
+            String current = json.readTree(success.body()).path("secret").asString();
+            assertThat(hmac.authenticate(signed(current)).merchantId()).isEqualTo(merchantId);
+            assertThatThrownBy(() -> hmac.authenticate(signed(previous)))
+                    .isInstanceOf(MerchantAuthenticationException.class);
+        }
+        assertThat(historyCount()).isEqualTo(2);
+        var summary = json.readTree(
+                owner.send("GET", "/api/owner/integration", null, false).body());
+        assertThat(summary.path("keyVersion").asLong()).isEqualTo(2);
+        assertThat(summary.path("status").asString()).isEqualTo("PENDING_CONNECTION");
+    }
     // 이력 저장 실패는 발급한 키 저장도 함께 롤백한다
     @Test
     void issue_whenHistoryFails_rollsBackKey() throws Exception {

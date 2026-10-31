@@ -265,7 +265,7 @@ export function ServerSession() {
     return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
   const home = navigation.landing ?? '/account/password'
-  if (pathname === navigation.base) return <Navigate to={home} replace />
+  if (pathname === navigation.base && pathname !== home) return <Navigate to={home} replace />
   // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
   const forbidden = !canOpenPath(user, pathname) ? (
     <ScreenResult kind="403" homePath={home} />

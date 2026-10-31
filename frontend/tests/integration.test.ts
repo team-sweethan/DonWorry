@@ -114,6 +114,14 @@ test('다른 탭에서 로그인 세대가 바뀌거나 화면을 떠났으면 �
       requestIntegrationKey('reveal', 'Pass123', 2),
       (error: unknown) => error instanceof DOMException && error.name === 'AbortError',
     )
+    globalThis.fetch = async () => {
+      values.set('donworry.auth.version', 'third')
+      return Response.json({ status: 'CONNECTED' })
+    }
+    await assert.rejects(
+      getIntegration(),
+      (error: unknown) => error instanceof DOMException && error.name === 'AbortError',
+    )
     const controller = new AbortController()
     globalThis.fetch = async () => {
       controller.abort()
