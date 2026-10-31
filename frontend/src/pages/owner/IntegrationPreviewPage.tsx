@@ -20,7 +20,12 @@ import {
   requestIntegrationKey,
   revokeIntegrationKey,
 } from '../../api/integration'
-import type { IntegrationInfo, KeyAction, KeyResult } from '../../api/integration'
+import type {
+  IntegrationInfo,
+  IntegrationStatus,
+  KeyAction,
+  KeyResult,
+} from '../../api/integration'
 import { useAuth } from '../../auth/useAuth'
 import './integration-preview.css'
 
@@ -29,6 +34,23 @@ const actionLabels: Record<string, string> = {
   REISSUE: '재발급',
   REVOKE: '폐기',
   MIGRATE: '기존 키 이전',
+}
+const ownerGuides: Record<IntegrationStatus, { message: string; description: string }> = {
+  NO_KEY: {
+    message: '시크릿 키 발급이 필요합니다',
+    description:
+      '키를 발급해 쇼핑몰 서버에 설정한 뒤 연결 확인을 진행해 주세요. 키가 없으면 신규 결제를 요청할 수 없습니다.',
+  },
+  PENDING_CONNECTION: {
+    message: '쇼핑몰 연결 확인이 필요합니다',
+    description:
+      '키를 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.',
+  },
+  CONNECTED: {
+    message: '쇼핑몰 연동이 완료되었습니다',
+    description:
+      '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다.',
+  },
 }
 const failure = (error: unknown) =>
   error instanceof ApiError
@@ -249,16 +271,8 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               <Alert
                 type="info"
                 showIcon
-                message={
-                  data.status === 'CONNECTED'
-                    ? '쇼핑몰 연동이 완료되었습니다'
-                    : '쇼핑몰 연결 확인이 필요합니다'
-                }
-                description={
-                  data.status === 'CONNECTED'
-                    ? '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다.'
-                    : '키를 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.'
-                }
+                message={ownerGuides[data.status].message}
+                description={ownerGuides[data.status].description}
                 style={{ margin: '16px 0' }}
               />
               <Space wrap>

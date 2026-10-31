@@ -66,36 +66,10 @@ python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP --payment-only
 
 `--payment`와 `--payment-only`는 함께 쓰지 않는다. 테스트 대상 환경에서만 결제를 만든다. 200·202는 HTTP 처리 결과이며 실제 승인·매입 성공과 같지 않다. 스크립트는 `paymentId`·`paymentStatus`를 표시한다. 202면 결제 조회로 최종 상태를 확인한다. 실제 연동 코드는 결제 응답이 불명확할 때 **같은 Idempotency-Key·같은 본문**으로 새 시각·nonce·서명을 만들어 조회·재시도해야 한다. 이 스크립트는 실행마다 새 주문과 멱등 키를 만들므로 응답 유실 후 무작정 재실행하지 않는다.
 
-## 4. PR C 검증과 남은 확인
+## 4. 남은 확인
 
-`feature/354-merchant-connection`, 기준 `dev 628e6b8` 위 작업 트리에서 새 신청 HTTP → 이메일 확인(메일 발신 대역으로 링크 수집) → 관리자 승인 → 첫 비밀번호 설정 → 무권한 OPERATOR 로그인 → 키 발급 → **실제 Python 프로세스의 연결 확인·결제 POST**를 검증한다. 기존 시드 가맹점으로 대체하지 않는다. FDS 평가만 REVIEW 대역이며 결제는 202·HELD로 접수됨을 확인한다. 실제 PG·CakeShop·운영 배포 검증을 뜻하지 않는다.
+PR C 구현 범위의 검사 명령과 결과는 PR #377 본문에 기록한다. 이 문서에는 작업 기록을 쌓지 않는다.
 
-2026-10-31, 기준 `dev 628e6b8` 위 PR C **미커밋 작업 트리**에서 실행했다. 검사 뒤 구현·테스트 코드는 변경하지 않고 이 검증 기록만 추가했다.
-
-- backend `./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(3분 47초). 일반 1,173개 중 1,172개 통과·기존 1개 skip, MariaDB 603개 모두 통과, 실패/오류 0. 전체 Flyway/JPA validate·모듈 경계·계층 검사 포함.
-- 신규/확장 키 관리 HTTP 집중 검사 18개 통과. 새 연결 확인 4개는 키 없음·연동 전 차단, 조회/픽업 경로의 업무 검사 도달, 본문 거절, nonce 재사용 거절·연결 시각 보존·원문 숨김, 정지 가맹점·정지 사장님 구분, nonce 소비 뒤 재발급 경합, 새 신청→승인→첫 설정→키 발급→실제 Python 스크립트의 204·결제 202/HELD를 검증한다.
-- frontend `npm run lint`, `npm run format:check`, `npm test`, `npm run build`: 모두 종료 코드 0. 기존 Fast Refresh 경고 1개·번들 크기 경고 유지. 새 화면의 브라우저 검증과 구분한다.
-- `python3 .github/scripts/check_md_links.py`, `git diff --check`, 스크립트 `--help`: 통과.
-
-최초 스크립트 검사에서 Python urllib가 빈 바이트 본문에도 Content-Type을 자동 추가해 401이 발생했다. 빈 본문을 `None`으로 전송해 실제 헤더와 서명을 일치시켰고, 그 뒤 집중 검사와 위 전체 검사가 통과했다. 원격 CI·커밋 기준 결과는 아직 없다. 검사 보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`.
-
-사장님 홈 배치와 로그인 첫 이동은 이슈의 구현 전 목업 합의가 필요해 확인 대기 중이다. 브라우저에서 새 신청부터 화면 키 발급·복사·스크립트·연동 완료 표시까지의 전체 수동 검증, 실제 메일 수신·운영 키 이전·마스터 키 백업 복원·운영 HTTPS·Notion 대조는 미검증이다.
-
-
-### 개발용 로컬 마스터 키 설정 보완
-
-2026-10-31 사용자가 개발용 Git 제외 YAML 고정 키를 승인했다. `dev 628e6b8` 위 PR C 미커밋 작업 트리에서 `MerchantKeyCipher`의 비운영 로컬 설정 조회와 prod 차단을 추가하고 ADR-0052·설정 예제·README를 갱신했다. 개인 `application-local.yml`에는 개발용 고정 키와 `payment.http.enabled=true`를 준비했으며 키 원문은 Git·이 기록에 넣지 않았다. 기존 키 환경변수가 있으면 같은 값을 보관하고 없으면 한 번만 생성한다. 다른 담당 API·DB 변경은 없다.
-
-- `./gradlew spotlessApply check --console=plain`: BUILD SUCCESSFUL(30초). 일반 1,177개 중 1,176개 성공·기존 1개 skip. 암호화 테스트 8개 모두 통과(로컬 키 재사용·prod+local 차단·환경변수 우선·잘못된 환경변수의 fallback 금지·키 누락/형식 포함).
-- `./gradlew mariaDbTest bootJar --console=plain`: BUILD SUCCESSFUL(3분 22초). MariaDB 603개 성공, 실패/오류 0. 새 bootJar의 ZIP 목록에서 `application-local.yml`이 없는 것을 확인했다.
-- 별도 환경변수 설정·실행 인자 없이 `./gradlew bootRun`: 실제 로컬 DB 연결·Flyway 최신 상태·JPA validate·8081 기동 성공. `GET /api/merchant-applications/config` HTTP 200 확인 후 검증용 서버를 종료했다. 기동 시 운영 이전 플래그를 켜거나 기존 키를 이전하지 않았다.
-- `git check-ignore`와 `git ls-files`로 개인 파일의 Git 제외·미추적을 확인했다. 파일 권한은 0600이다. Markdown 상대 링크·`git diff --check` 통과. 검사 뒤 변경은 문서·예제 주석뿐이다.
-
-미검증: 실제 운영 프로세스 배포·키 주입·백업 복원, 브라우저 새 가맹점 전체 흐름. 이번 보완은 백엔드 설정만 바꿔 프론트 검사를 반복하지 않았다. 사장님 홈의 목업 합의 대기 상태는 유지한다.
-
-
-### 사용자 로컬 확인과 PR 범위
-
-2026-10-31 사용자가 같은 PR C 미커밋 작업 트리의 로컬 환경에서 직접 확인하고 대화에 결과를 공유했다. 가맹점 `BABO1234`의 연결 전 신규 결제는 403 `MERCHANT_AUTH_006`이었고, 연결 확인 후 화면의 연동 완료·다시 보기 비활성을 확인했다고 보고했다. 재발급한 새 키의 신규 결제도 403 `MERCHANT_AUTH_006`으로 차단됐고, 새 키로 재연결한 스크립트는 연결 확인 204와 결제 202, `paymentId: 2`, `paymentStatus: PENDING`을 반환했다. 따라서 재발급→차단→재연결→결제 재접수까지 사용자 확인 근거가 있다. 해당 결제의 최종 승인·매입 완료는 확인하지 않았다. 키 원문은 전달받거나 기록하지 않았다.
-
-사용자는 현재 구현을 PR로 올리는 것까지만 요청했고 원격 CI 확인은 직접 진행한다. 이 PR에는 연결 확인·신규 결제 차단·상태 안내·개발 문서/스크립트·개발용 로컬 키 설정을 포함한다. 사장님 홈(`/owner`)·로그인 첫 이동은 미구현으로 남겨 #354를 자동 종료하지 않는다. 최초 신청·실제 메일·승인부터 브라우저 전체 흐름을 완료했다는 추가 근거로 확대하지 않는다.
+- 메일 발신·FDS 평가는 테스트 대역이다. 실제 메일 수신부터 브라우저로 끝까지 진행하는 흐름, 실제 PG·CakeShop 발신 코드는 미검증이다.
+- 운영 배포·운영 키 주입·기존 키 운영 이전·마스터 키 백업 복원·운영 HTTPS는 미검증이다.
+- 사장님 홈(`/owner`)과 로그인 첫 이동은 이슈의 목업 합의 후 구현한다. #354는 이 범위가 끝날 때 닫는다.
