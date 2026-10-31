@@ -128,6 +128,10 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
     }
     const hide = () => {
       if (document.visibilityState === 'hidden') clear()
+      else {
+        setError(null)
+        setRevision((value) => value + 1)
+      }
     }
     const unsubscribe = subscribeUnauthorized(clear)
     document.addEventListener('visibilitychange', hide)

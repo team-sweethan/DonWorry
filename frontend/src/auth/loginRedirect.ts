@@ -1,5 +1,6 @@
 import { canOpenPath, sessionNavigation } from '../config/navigation.ts'
 import type { AuthUser } from '../types/auth.ts'
+import type { IntegrationStatus } from '../api/integration.ts'
 
 export type LoginRedirectState = {
   requireLogin?: boolean
@@ -46,4 +47,16 @@ export function requiresLogin(state: unknown): boolean {
     'requireLogin' in state &&
     state.requireLogin === true
   )
+}
+
+/** 일반 로그인은 홈, 같은 계정의 재로그인만 검증된 업무 화면으로 복귀한다. */
+export function ownerLoginDestination(user: AuthUser, state: unknown, status: IntegrationStatus) {
+  if (user.passwordChangeRequired) return '/account/password'
+  if (status !== 'CONNECTED') return '/owner/integration'
+  const sameAccount =
+    typeof state === 'object' &&
+    state !== null &&
+    'previousUserId' in state &&
+    state.previousUserId === user.userId
+  return sameAccount ? (loginDestination(user, state) ?? '/owner') : '/owner'
 }

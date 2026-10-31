@@ -9,7 +9,7 @@ export type NavGroup = { title: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string; userName: string; landing: string }> = {
   security: { label: '보안 직원', userName: '박지원', landing: '/security/home' },
-  owner: { label: '사장님', userName: '김사장', landing: '/owner/actions' },
+  owner: { label: '사장님', userName: '김사장', landing: '/owner' },
 }
 
 /** 메뉴 내용은 노션의 담당자 협의 후 수정할 수 있도록 데이터로 분리. */
@@ -33,6 +33,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
     { title: '조치', items: [{ label: '조치 내역', path: '/security/actions' }] },
   ],
   owner: [
+    { title: '개요', items: [{ label: '홈', path: '/owner' }] },
     {
       title: '조치 결과',
       items: [{ label: '조치 결과', path: '/owner/actions', permission: 'FDS_VIEW' }],
@@ -45,7 +46,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
         { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
       ],
     },
-    // 연동은 권한 코드와 상관없이 가맹점 사장님이면 볼 수 있다 (#354). 기존 첫 화면이 바뀌지 않게 맨 뒤에 둔다.
+    // 홈과 키 관리는 권한 코드 없이도 사장님이면 사용할 수 있다 (#354).
     { title: '연동', items: [{ label: '시크릿 키 발급', path: '/owner/integration' }] },
   ],
 }
@@ -130,7 +131,10 @@ export function canOpenPath(user: AuthUser, pathname: string) {
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups
     .flatMap((group) => group.items)
-    .find((item) => pathname === item.path || pathname.startsWith(item.path + '/'))
+    .find(
+      (item) =>
+        pathname === item.path || (item.path !== base && pathname.startsWith(item.path + '/')),
+    )
   if (!guarded?.permission) return true
   return groups.some((group) => group.items.some((item) => item.path === guarded.path))
 }

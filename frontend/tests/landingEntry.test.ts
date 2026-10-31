@@ -41,8 +41,8 @@ test('landingEntry_whenAuthenticated_usesRoleAndPermissions', async () => {
   const examples: Array<[AuthUser, string]> = [
     [admin, '/admin/home'],
     [{ ...admin, role: 'SECURITY_STAFF' }, '/security/home'],
-    [{ ...owner, permissions: ['FDS_VIEW', 'FINANCE_VIEW'] }, '/owner/actions'],
-    [{ ...owner, permissions: ['FINANCE_VIEW'] }, '/owner/settlements'],
+    [{ ...owner, permissions: ['FDS_VIEW', 'FINANCE_VIEW'] }, '/owner'],
+    [{ ...owner, permissions: ['FINANCE_VIEW'] }, '/owner'],
   ]
   for (const [user, destination] of examples) {
     const store = setup(async () => user)
@@ -63,13 +63,13 @@ test('landingEntry_whenPasswordChangeRequired_usesPasswordPage', async () => {
   }
 })
 
-// 업무 권한 없는 사장님도 권한 없이 열리는 시크릿 키 발급 화면에서 시작한다 (#354).
-test('landingEntry_whenNoBusinessPermissions_usesIntegrationPage', async () => {
+// 업무 권한 없는 사장님도 사장님 진입점을 얻고 UI가 서버 연동 상태를 확인한다 (#354).
+test('landingEntry_whenNoBusinessPermissions_usesOwnerEntry', async () => {
   const store = setup(async () => ({ ...admin, role: 'OPERATOR', merchantId: 10 }))
   await store.check('/')
   assert.deepEqual(landingEntry(store.getSnapshot(), '/'), {
     kind: 'redirect',
-    destination: '/owner/integration',
+    destination: '/owner',
   })
 })
 

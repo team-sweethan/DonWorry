@@ -26,7 +26,7 @@ const owner = (permissions: string[]): AuthUser => ({
 test('역할별 첫 화면으로 보낸다', () => {
   assert.equal(sessionNavigation(admin).landing, '/admin/home')
   assert.equal(sessionNavigation(staff).landing, '/security/home')
-  assert.equal(sessionNavigation(owner(['FDS_VIEW', 'FINANCE_VIEW'])).landing, '/owner/actions')
+  assert.equal(sessionNavigation(owner(['FDS_VIEW', 'FINANCE_VIEW'])).landing, '/owner')
 })
 
 test('관리자 홈이 첫 메뉴이며 다른 역할과 임시 비밀번호 계정은 접근하지 못한다', () => {
@@ -48,20 +48,24 @@ test('사장님 메뉴는 권한이 있는 것만 보인다', () => {
   const paths = (user: AuthUser) =>
     sessionNavigation(user).groups.flatMap((group) => group.items.map((item) => item.path))
   assert.deepEqual(paths(owner(['FINANCE_VIEW'])), [
+    '/owner',
     '/owner/settlements',
     '/owner/funds',
     '/owner/loans',
     '/owner/integration',
   ])
-  assert.equal(sessionNavigation(owner(['FINANCE_VIEW'])).landing, '/owner/settlements')
+  assert.equal(sessionNavigation(owner(['FINANCE_VIEW'])).landing, '/owner')
 })
 
-// 연동은 권한 코드가 없어도 사장님이면 써야 하므로, 권한 없는 사장님의 첫 화면이 된다 (#354).
+// 홈과 키 관리는 업무 권한 없이 접근하고, 로그인 첫 화면은 연동 상태로 정한다 (#354).
 test('권한 없는 사장님도 시크릿 키 발급 화면은 열 수 있다', () => {
   assert.deepEqual(sessionNavigation(owner([])).groups, [
+    { title: '개요', items: [{ label: '홈', path: '/owner' }] },
     { title: '연동', items: [{ label: '시크릿 키 발급', path: '/owner/integration' }] },
   ])
-  assert.equal(sessionNavigation(owner([])).landing, '/owner/integration')
+  assert.equal(sessionNavigation(owner([])).landing, '/owner')
+  assert.equal(canOpenPath(owner([]), '/owner'), true)
+  assert.equal(canOpenPath(staff, '/owner'), false)
   assert.equal(canOpenPath(owner([]), '/owner/integration'), true)
   assert.equal(canOpenPath(owner([]), '/owner/settlements'), false)
   assert.equal(canOpenPath(staff, '/owner/integration'), false)

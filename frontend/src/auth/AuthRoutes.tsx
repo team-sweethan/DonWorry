@@ -18,7 +18,13 @@ import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { loginWithPreferences } from './loginPreferences'
 import { LatestLogin } from './LatestLogin'
-import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
+import {
+  loginDestination,
+  ownerLoginDestination,
+  requiresLogin,
+  type LoginRedirectState,
+} from './loginRedirect'
+import { useOwnerIntegration } from '../hooks/useOwnerIntegration'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
 import { LandingPage } from '../pages/public/LandingPage'
@@ -137,12 +143,53 @@ export function LandingRoute() {
   if (entry.kind === 'noPermissions') {
     return <ScreenResult kind="403" action={<AccountActions />} />
   }
-  if (entry.kind === 'redirect') return <Navigate to={entry.destination} replace />
+  if (entry.kind === 'redirect')
+    return auth.user?.role === 'OPERATOR' && !auth.user.passwordChangeRequired ? (
+      <OwnerLoginDestination
+        key={`${auth.user.userId}:${auth.user.merchantId}`}
+        user={auth.user}
+        state={null}
+      />
+    ) : (
+      <Navigate to={entry.destination} replace />
+    )
   return (
     <LandingPage
       onRetry={entry.kind === 'unavailable' ? () => void auth.store.check(auth.key) : undefined}
     />
   )
+}
+
+function OwnerLoginDestination({ user, state: returnState }: { user: AuthUser; state: unknown }) {
+  const { state, refresh } = useOwnerIntegration(user.userId, user.merchantId)
+  if (state.kind === 'loading')
+    return (
+      <div className="dw-error-view" role="status">
+        <Spin size="large" />
+        <p>쇼핑몰 연동 상태를 확인하고 있습니다.</p>
+      </div>
+    )
+  if (state.kind === 'error')
+    return (
+      <Result
+        status="warning"
+        title={
+          state.inactive ? '가맹점이 사용 중지되어 있습니다' : '연동 상태를 확인할 수 없습니다'
+        }
+        subTitle={
+          state.inactive ? '돈워리 담당자에게 가맹점 상태를 확인해 주세요.' : networkMessage
+        }
+        extra={
+          <Space wrap>
+            <Button type="primary" onClick={() => void refresh()}>
+              다시 시도
+            </Button>
+            <LogoutButton />
+          </Space>
+        }
+      />
+    )
+  return <Navigate to={ownerLoginDestination(user, returnState, state.data.status)} replace />
 }
 
 export function LoginRoute() {
@@ -159,6 +206,15 @@ export function LoginRoute() {
   if (checkedKey !== key) return <CheckingSession />
   if (error === 'forbidden') return <ScreenResult kind="403" homePath="/admin" />
   if (status === 'authenticated' && user) {
+    if (!error && user.role === 'OPERATOR' && !user.passwordChangeRequired)
+      return (
+        <OwnerLoginDestination
+          key={`${user.userId}:${user.merchantId}`}
+          user={user}
+          state={loggedOut ? null : state}
+        />
+      )
+    if (error === 'unavailable') return <SessionError retry={() => void store.check(key)} />
     const destination = loginDestination(user, state)
     if (destination === null) {
       return <ScreenResult kind="403" action={<AccountActions />} />
@@ -194,6 +250,10 @@ export function LoginRoute() {
       }
       onSubmit={(values) =>
         loginWithPreferences(values, store.login, (loggedIn) => {
+          if (loggedIn.role === 'OPERATOR' && !loggedIn.passwordChangeRequired) {
+            void store.check(key)
+            return
+          }
           // 첫 화면도 없으면 로그인 경로에서 기존 403과 계정 메뉴를 보여 준다.
           navigate(loginDestination(loggedIn, loggedOut ? null : state) ?? '/login', {
             replace: true,
@@ -265,7 +325,7 @@ export function ServerSession() {
     return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
   const home = navigation.landing ?? '/account/password'
-  if (pathname === navigation.base) return <Navigate to={home} replace />
+  if (pathname === navigation.base && pathname !== home) return <Navigate to={home} replace />
   // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
   const forbidden = !canOpenPath(user, pathname) ? (
     <ScreenResult kind="403" homePath={home} />
