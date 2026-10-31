@@ -49,7 +49,7 @@ P6 소유 신규 테이블만 추가하며, 다른 모듈 테이블과 물리 FK
 
 ## 2. 테이블 소유
 
-#381의 [고객 취소 저장 구조](../payment/381-cancellation-storage.md)는 2026-10-31 사용자가 **요청 기록·실제 작업의 2개 테이블 분리 방향을 승인**했다. 상세 필드·제약·보존 명세는 검토안이며 SQL은 아직 없다. 현재 구현 테이블 목록·ERD 그림에는 포함하지 않고 상세 명세 확인 후 반영한다.
+#381은 설계 PR #385 병합 후 사용자의 다음 단계 진행 요청에 따라 [저장 명세](../payment/381-cancellation-storage.md)를 기준으로 P5 두 테이블의 migration·Entity·Repository를 구현한다. 최초 범위에 삭제·키 만료는 두지 않는다. Notion 담당 페이지 동기화·장기 보존 정책·운영 DB 적용은 미완료이며 API·실행 연결은 후속이다.
 
 P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillments`와
 `order_fulfillment_items`를 추가하고 `settlements`에 nullable 정산 시각 3개를 추가한다.
@@ -66,6 +66,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
+| `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_failure_analyses`, `fds_high_risk_countries`, `fds_blocklist_entries`, `fds_rule_policies`, `fds_rule_change_requests` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261023_135302](../../backend/src/main/resources/db/migration/V20261023_135302__add_fds_requested_amount.sql) · [20261026_174910](../../backend/src/main/resources/db/migration/V20261026_174910__add_fds_evaluation_merchant_id.sql) · [20261027_101722](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql) · [20261027_101804](../../backend/src/main/resources/db/migration/V20261027_101804__add_fds_reevaluation_lineage.sql) · [FDS v0.2](../../backend/src/main/resources/db/migration/V20261028_092416__add_fds_rule_inputs_and_policy_tables.sql) · [룰 관리](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [차단 식별값](../../backend/src/main/resources/db/migration/V20261028_201821__add_fds_blocklist_identifiers.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
@@ -99,6 +100,12 @@ erDiagram
 
     merchants ||..o{ payments : "merchant_id"
     payments ||--o| payment_actions : "payment_id (P5)"
+    payments ||--o{ payment_cancellation_requests : "payment_id (P5)"
+    payments ||--o| payment_cancellations : "payment_id (P5)"
+    payment_cancellation_requests ||--o| payment_cancellations : "source_request_id + payment_id"
+    payment_actions |o--o{ payment_cancellation_requests : "existing_void_action_id"
+    merchants ||..o{ payment_cancellation_requests : "merchant_id"
+    captures |o..o{ payment_cancellations : "capture_id (REFUND)"
     merchants ||..o{ fds_evaluations : "merchant_id"
     payments ||..o{ fds_evaluations : "payment_id"
     payments ||..o| case_payments : "payment_id"
