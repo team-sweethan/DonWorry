@@ -18,7 +18,7 @@ npm run dev
 | 역할                     | 아이디       | 비밀번호 | 첫 화면          |
 | ------------------------ | ------------ | -------- | ---------------- |
 | 보안 직원                | `staff_test` | `1234`   | `/security/home` |
-| 사장님 (DEMOSHOP 가맹점) | `boss`       | `1234`   | `/owner/actions` |
+| 사장님 (DEMOSHOP 가맹점) | `boss`       | `1234`   | `/owner`         |
 | 관리자                   | `admin`      | 담당자   | `/admin/home`    |
 
 보안 직원·사장님은 공개된 시연 계정입니다.
@@ -66,14 +66,34 @@ npm run dev
 | `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업              |
 | `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                                  |
 | `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                               |
+| `/owner`                                              | 사장님 공통 홈. 업무 권한과 관계없이 연동 상태·다음 행동·권한별 업무 바로가기 표시 (#378)                              |
 | `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)                   |
-| `/owner/settlements`                                  | 정산 현황(`FINANCE_VIEW`) 담당자 구현 영역 (`EmptyPage`)                                                               |
+| `/owner/settlements`, `/owner/funds`                  | 정산 내역·자금 현황(`FINANCE_VIEW`). `SettlementRoute`의 정산·자금 시연 화면                                           |
+| `/owner/loans`                                        | 연계 대출 상품(`FINANCE_VIEW`). `LoanProductsRoute`의 상품 안내 시연 화면                                              |
+| `/owner/integration`                                  | 시크릿 키 발급·재발급·연동 안내. 업무 권한과 관계없이 사장님 접근 가능                                                 |
 | `/dev/components`                                     | 공통 UI 예시                                                                                                           |
 
 Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 실제 요청됩니다. "시연: HELD 결제 발생"으로 만든 시연 결제는 백엔드 목업이 처리합니다. AI 보고서는 서버가 만듭니다(AI 서버를 끄면 고정 문장 보고서). 판정 직후에는 "금융 처리 대기 중"이고, "인계 상태 다시 확인"을 누르면 완료됩니다.
 
 [공통 레이아웃 적용 가이드](공통레이아웃_적용가이드.md)에서 담당 페이지 연결 방법과 수정 위치를 확인합니다.
 공통 UI 예시는 사이드바의 **UI 컴포넌트 보기**에서 확인할 수 있습니다.
+
+### 사장님 공통 홈·업무 메뉴 (#90)
+
+사장님은 연동 상태와 업무 권한 조합에 관계없이 `/owner` 공통 홈에서 시작합니다. 강제 비밀번호 변경과 기존의 안전한 로그인 복귀 규칙이 우선하며, 권한 있는 상세 URL로 직접 접근하면 해당 화면을 유지합니다. 로고는 공통 홈으로 이동합니다.
+
+왼쪽 메뉴는 아래 구역을 함께 표시하고, 권한 없는 업무 메뉴와 빈 업무 구역은 숨깁니다.
+
+| 구역      | 메뉴                               | 접근 조건      |
+| --------- | ---------------------------------- | -------------- |
+| 개요      | 홈                                 | 사장님         |
+| 결제 보안 | 조치 결과                          | `FDS_VIEW`     |
+| 자금관리  | 정산 내역·자금 현황·연계 대출 상품 | `FINANCE_VIEW` |
+| 연동      | 시크릿 키 발급                     | 사장님         |
+
+업무 권한이 없어도 홈과 시크릿 키 발급은 이용할 수 있습니다. 홈에서는 업무 권한 없음 안내를 보여줍니다. 별도 서비스 선택 화면·상단 서비스 전환·마지막 사용 서비스 저장은 추가하지 않습니다.
+
+담당 화면은 `src/app/router.tsx`의 기존 `/owner/*` 경로에 연결합니다. 메뉴 구역·표시 권한은 `src/config/navigation.ts`, 로그인 후 이동은 `src/auth/loginRedirect.ts`, 서버 세션 화면과 로고는 `src/auth/AuthRoutes.tsx`, 사이드바 선택 표시는 `src/layouts/AdminLayout.tsx`에서 관리합니다. 상세 화면에서도 상위 업무 메뉴를 선택 상태로 표시하며 홈 메뉴는 `/owner`에서만 선택됩니다. 관리자·보안 직원의 메뉴와 역할별 경로는 유지합니다.
 
 ```bash
 npm run lint

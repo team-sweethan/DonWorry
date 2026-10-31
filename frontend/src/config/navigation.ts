@@ -35,11 +35,11 @@ export const navByRole: Record<Role, NavGroup[]> = {
   owner: [
     { title: '개요', items: [{ label: '홈', path: '/owner' }] },
     {
-      title: '조치 결과',
+      title: '결제 보안',
       items: [{ label: '조치 결과', path: '/owner/actions', permission: 'FDS_VIEW' }],
     },
     {
-      title: '자금',
+      title: '자금관리',
       items: [
         { label: '정산 내역', path: '/owner/settlements', permission: 'FINANCE_VIEW' },
         { label: '자금 현황', path: '/owner/funds', permission: 'FINANCE_VIEW' },

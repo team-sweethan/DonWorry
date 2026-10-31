@@ -23,6 +23,31 @@ const owner = (permissions: string[]): AuthUser => ({
   permissions,
 })
 
+// 권한 조합과 관계없이 공통 홈을 유지하고 이용 가능한 업무 구역만 함께 표시한다 (#90).
+test('sessionNavigation_whenOwnerPermissionsVary_keepsHomeAndAvailableGroups', () => {
+  const scenarios = [
+    { permissions: [], titles: ['개요', '연동'] },
+    { permissions: ['FDS_VIEW'], titles: ['개요', '결제 보안', '연동'] },
+    { permissions: ['FINANCE_VIEW'], titles: ['개요', '자금관리', '연동'] },
+    {
+      permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
+      titles: ['개요', '결제 보안', '자금관리', '연동'],
+    },
+  ]
+  for (const { permissions, titles } of scenarios) {
+    const navigation = sessionNavigation(owner(permissions))
+    assert.equal(navigation.landing, '/owner')
+    assert.deepEqual(
+      navigation.groups.map((group) => group.title),
+      titles,
+    )
+    assert.ok(navigation.groups.every((group) => group.items.length > 0))
+    assert.deepEqual(navigation.groups.at(-1)?.items, [
+      { label: '시크릿 키 발급', path: '/owner/integration' },
+    ])
+  }
+})
+
 test('역할별 첫 화면으로 보낸다', () => {
   assert.equal(sessionNavigation(admin).landing, '/admin/home')
   assert.equal(sessionNavigation(staff).landing, '/security/home')
