@@ -26,6 +26,8 @@
 
 ## 목록
 
+P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6-recurring-expense-occurrences.md).
+
 | 번호 | 제목 | 상태 |
 | --- | --- | --- |
 | [0001](0001-module-dependency-direction.md) | 모듈 간 의존 방향 | 대체됨 (→ 0012) |
