@@ -236,9 +236,9 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 - `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공.
 - 미검증: 실제 운영 프록시·HTTPS 배포, 계정 드롭다운의 실제 브라우저 확인.
 
-## #131 운영 설정(부분 구현)
+## #131 운영 설정
 
-사용자 결정으로 이번에는 운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키만 구현한다. **시연 계정(`boss`·`staff_test`) 정지는 후속이며 #131 전체 완료가 아니다.** 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
+운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키(PR #146)에 더해, **`prod` 시작 시 시연 계정 `boss`·`staff_test`·`cakeshop_owner`를 INACTIVE로 정지한다 (PR B).** 실제 배포 검증이 남아 #131 전체 완료는 아니다. 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
 
 ### 로컬 개발
 
