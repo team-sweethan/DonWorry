@@ -34,8 +34,8 @@ class PaymentAuthorizationFlowTests {
             creation,
             new PaymentEvaluationService(evaluator),
             new PaymentAuthorizationService(repository, authorizer, events, authorizationResults));
-    private final PaymentEvaluationFlowInput input =
-            new PaymentEvaluationFlowInput(1L, "input-customer", "order", 1000L);
+    private final PaymentEvaluationFlowInput input = new PaymentEvaluationFlowInput(
+            1L, "input-customer", "order", 1000L, PaymentEvaluationFixtures.riskSignals());
     private final Payment payment =
             Payment.pending(1L, "stored-customer", "order", 2000L, PaymentEvaluationFixtures.REQUESTED_AT);
 

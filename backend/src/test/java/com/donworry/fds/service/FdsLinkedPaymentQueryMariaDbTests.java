@@ -63,7 +63,12 @@ class FdsLinkedPaymentQueryMariaDbTests {
                 .customerRef(customerRef)
                 .amount(50_000L)
                 .paymentRequestedAt(requestedAt)
+                .deviceId("device-linked-test")
                 .cardToken("tok_linked_test")
+                .cardDisplayLabel("VISA **** 1234")
+                .ipCountryCode("KR")
+                .ipAddress("203.0.113.10")
+                .buyerEmail("linked@example.test")
                 .build();
         evaluationRepository.save(FdsEvaluation.completed(request, FdsResult.REVIEW, 60, requestedAt));
     }

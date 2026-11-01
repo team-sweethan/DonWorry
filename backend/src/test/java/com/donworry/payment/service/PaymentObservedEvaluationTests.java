@@ -31,6 +31,7 @@ class PaymentObservedEvaluationTests {
                 .customerRef("customer")
                 .amount(100L)
                 .paymentRequestedAt(Instant.now())
+                .riskSignals(PaymentEvaluationFixtures.riskSignals())
                 .build();
         var observed = new PaymentEvaluationService(evaluator).evaluateObserved(input);
         assertThat(observed.requestedAt()).isBeforeOrEqualTo(during[0]);

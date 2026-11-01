@@ -1,9 +1,11 @@
 package com.donworry.payment.service;
 
+import com.donworry.payment.entity.PaymentRiskSignals;
 import lombok.Builder;
 
 @Builder
-public record PaymentEvaluationFlowInput(Long merchantId, String customerRef, String orderRef, Long amount) {
+public record PaymentEvaluationFlowInput(
+        Long merchantId, String customerRef, String orderRef, Long amount, PaymentRiskSignals riskSignals) {
 
     public PaymentEvaluationFlowInput {
         if (merchantId == null || merchantId <= 0) {
@@ -14,6 +16,7 @@ public record PaymentEvaluationFlowInput(Long merchantId, String customerRef, St
         if (amount == null || amount <= 0) {
             throw new IllegalArgumentException("amount must be positive");
         }
+        riskSignals = PaymentRiskSignals.orNone(riskSignals);
     }
 
     private static void requireReference(String value, String name) {

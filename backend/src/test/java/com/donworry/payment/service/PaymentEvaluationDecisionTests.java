@@ -55,6 +55,12 @@ class PaymentEvaluationDecisionTests {
                         .customerRef(input.customerRef())
                         .amount(input.amount())
                         .paymentRequestedAt(input.paymentRequestedAt())
+                        .deviceId(input.riskSignals().deviceId())
+                        .cardToken(input.riskSignals().cardToken())
+                        .cardDisplayLabel(input.riskSignals().cardDisplayLabel())
+                        .ipCountryCode(input.riskSignals().ipCountryCode())
+                        .ipAddress(input.riskSignals().ipAddress())
+                        .buyerEmail(input.riskSignals().buyerEmail())
                         .build());
         verifyNoMoreInteractions(evaluator);
     }

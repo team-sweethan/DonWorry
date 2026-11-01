@@ -23,7 +23,8 @@ class PaymentEvaluationFlowServiceTests {
             new PaymentEvaluationFlowService(creation, new PaymentEvaluationService(evaluator), authorization);
 
     private PaymentEvaluationFlowInput input() {
-        return new PaymentEvaluationFlowInput(999L, "input-customer", "order-1", 10_000L);
+        return new PaymentEvaluationFlowInput(
+                999L, "input-customer", "order-1", 10_000L, PaymentEvaluationFixtures.riskSignals());
     }
 
     private PaymentCreationSnapshot snapshot() {
@@ -70,6 +71,10 @@ class PaymentEvaluationFlowServiceTests {
         assertThat(request.customerRef()).isEqualTo(saved.customerRef());
         assertThat(request.amount()).isEqualTo(saved.amount());
         assertThat(request.paymentRequestedAt()).isEqualTo(saved.createdAt());
+        assertThat(request.deviceId())
+                .isEqualTo(PaymentEvaluationFixtures.riskSignals().deviceId());
+        assertThat(request.cardToken())
+                .isEqualTo(PaymentEvaluationFixtures.riskSignals().cardToken());
         assertThat(result.paymentId()).isEqualTo(saved.paymentId());
         assertThat(result.evaluationResult().evaluation().result()).isEqualTo(verdict);
         assertThat(result.evaluationResult().evaluation().evaluationRequestId())

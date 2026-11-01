@@ -289,6 +289,61 @@
   overflow-wrap: anywhere;
 }
 
+.dw-alert-blocklist-observed {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dw-alert-blocklist-match-label {
+  align-self: flex-start;
+  border-radius: 99px;
+  padding: 1px 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dw-alert-blocklist-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dw-alert-blocklist-candidate {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid #dbe4f0;
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dw-alert-blocklist-candidate > strong {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.dw-alert-blocklist-candidate > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dw-alert-blocklist-candidate--matched {
+  border-color: #f6c453;
+  background: #fffbeb;
+  color: #92400e;
+}
+
 .dw-alert-result-tag,
 .dw-alert-payment-status-tag {
   margin: 0;

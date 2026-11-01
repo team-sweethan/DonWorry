@@ -43,6 +43,14 @@ function won(value: unknown) {
   return typeof value === 'number' ? `${value.toLocaleString('ko-KR')}원` : '—'
 }
 
+const blocklistCandidateLabels: Record<string, string> = {
+  BUYER_REF: '구매자 식별자',
+  DEVICE_ID: '기기 ID',
+  CARD_TOKEN: '카드',
+  IP_ADDRESS: 'IP 주소',
+  BUYER_EMAIL: '이메일',
+}
+
 function snapshot(value: string | null) {
   if (!value) return null
   try {
@@ -71,6 +79,13 @@ function observedValue(ruleCode: string, rawValue: string | null) {
       : '—'
   }
   if (ruleCode === 'R07') {
+    const identifierTypes = [
+      'BUYER_REF',
+      'DEVICE_ID',
+      'CARD_TOKEN',
+      'IP_ADDRESS',
+      'BUYER_EMAIL',
+    ] as const
     const matchedTypes = Array.isArray(value.matchedIdentifierTypes)
       ? value.matchedIdentifierTypes.filter((type): type is string => typeof type === 'string')
       : []
@@ -84,17 +99,40 @@ function observedValue(ruleCode: string, rawValue: string | null) {
     const valueByType: Record<string, unknown> = {
       BUYER_REF: value.buyerRef,
       DEVICE_ID: value.deviceId,
-      CARD_TOKEN: value.cardDisplayLabel ?? value.cardToken,
+      // 카드 토큰은 화면에 노출하지 않고, P5가 준 마스킹 표시값만 쓴다.
+      CARD_TOKEN: value.cardDisplayLabel,
       IP_ADDRESS: value.ipAddress,
       BUYER_EMAIL: value.buyerEmail,
     }
-    const descriptions = matchedTypes
-      .map((type) => {
-        const matchedValue = valueByType[type]
-        return `${labelByType[type] ?? type}${typeof matchedValue === 'string' ? ` · ${matchedValue}` : ''}`
-      })
-      .join(' / ')
-    return descriptions || (typeof value.buyerRef === 'string' ? value.buyerRef : '—')
+    const candidates = identifierTypes.flatMap((type) => {
+      const matchedValue = valueByType[type]
+      return typeof matchedValue === 'string' && matchedValue.trim()
+        ? [{ type, label: labelByType[type], value: matchedValue }]
+        : []
+    })
+    if (!candidates.length) return '—'
+    return (
+      <div className="dw-alert-blocklist-observed">
+        {matchedTypes.length > 0 && (
+          <span className="dw-alert-blocklist-match-label">일치한 후보</span>
+        )}
+        <div className="dw-alert-blocklist-candidates">
+          {candidates.map((candidate) => (
+            <span
+              className={
+                matchedTypes.includes(candidate.type)
+                  ? 'dw-alert-blocklist-candidate dw-alert-blocklist-candidate--matched'
+                  : 'dw-alert-blocklist-candidate'
+              }
+              key={candidate.type}
+            >
+              <strong>{candidate.label}</strong>
+              <span>{candidate.value}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+    )
   }
   if (ruleCode === 'R08')
     return typeof value.declinedCount === 'number' ? `${value.declinedCount}회` : '—'
@@ -307,7 +345,7 @@ export function AlertDetailPage() {
                 setBlocklistOpen(true)
               }}
             >
-              카드 · 기기 · IP · 이메일 차단 목록 등록
+              차단 목록 등록
             </Button>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/security/alerts')}>
               목록으로
@@ -558,14 +596,8 @@ export function AlertDetailPage() {
             const blocked = blockedCandidates.has(key)
             return (
               <Checkbox key={key} value={key} disabled={blocked}>
-                {candidate.identifierType === 'CARD_TOKEN'
-                  ? '카드'
-                  : candidate.identifierType === 'DEVICE_ID'
-                    ? '기기 ID'
-                    : candidate.identifierType === 'IP_ADDRESS'
-                      ? 'IP 주소'
-                      : '이메일'}{' '}
-                · {candidate.displayLabel ?? candidate.identifierValue}{' '}
+                {blocklistCandidateLabels[candidate.identifierType] ?? candidate.identifierType} ·{' '}
+                {candidate.displayLabel ?? candidate.identifierValue}{' '}
                 {blocked && <Tag color="red">차단 중</Tag>}
               </Checkbox>
             )

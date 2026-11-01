@@ -10,15 +10,19 @@ class PaymentEvaluationFlowInputTests {
     @Test
     void constructor_withInvalidFields_rejectsInput() {
         for (Long invalid : new Long[] {null, 0L, -1L}) {
-            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(invalid, "customer", "order", 1L))
+            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(
+                            invalid, "customer", "order", 1L, PaymentEvaluationFixtures.riskSignals()))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(1L, "customer", "order", invalid))
+            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(
+                            1L, "customer", "order", invalid, PaymentEvaluationFixtures.riskSignals()))
                     .isInstanceOf(IllegalArgumentException.class);
         }
         for (String invalid : new String[] {null, "", " \t", "가".repeat(101)}) {
-            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(1L, invalid, "order", 1L))
+            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(
+                            1L, invalid, "order", 1L, PaymentEvaluationFixtures.riskSignals()))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(1L, "customer", invalid, 1L))
+            assertThatThrownBy(() -> new PaymentEvaluationFlowInput(
+                            1L, "customer", invalid, 1L, PaymentEvaluationFixtures.riskSignals()))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -32,6 +36,7 @@ class PaymentEvaluationFlowInputTests {
                 .customerRef(customer)
                 .orderRef(" order ")
                 .amount(Long.MAX_VALUE)
+                .riskSignals(PaymentEvaluationFixtures.riskSignals())
                 .build();
         assertThat(input.customerRef()).isEqualTo(customer);
         assertThat(input.orderRef()).isEqualTo(" order ");

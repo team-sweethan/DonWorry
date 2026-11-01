@@ -94,10 +94,14 @@ export type FdsBlocklistEntry = {
   identifierValue: string
   displayLabel: string | null
   reason: string
+  deactivationReason: string | null
   active: boolean
   createdAt: string
+  deactivatedAt: string | null
   expiresAt: string | null
 }
+
+export type FdsBlocklistStatusFilter = 'ACTIVE' | 'INACTIVE'
 
 export type FdsBlocklistPage = {
   content: FdsBlocklistEntry[]
@@ -182,9 +186,9 @@ export function reviewFdsRuleChangeRequest(requestId: number, approve: boolean) 
   })
 }
 
-export function getFdsBlocklist(page: number) {
+export function getFdsBlocklist(page: number, status: FdsBlocklistStatusFilter, search: string) {
   return api<FdsBlocklistPage>(
-    `/fds/blocklist?${new URLSearchParams({ page: String(page), size: '10' })}`,
+    `/fds/blocklist?${new URLSearchParams({ page: String(page), size: '10', status, search })}`,
     { cache: 'no-store' },
   )
 }
@@ -202,8 +206,12 @@ export function addFdsBlocklistEntry(input: {
   })
 }
 
-export function deactivateFdsBlocklistEntry(entryId: number) {
-  return api<void>(`/fds/blocklist/${entryId}/deactivate`, { method: 'PUT' })
+export function deactivateFdsBlocklistEntry(entryId: number, reason: string) {
+  return api<void>(`/fds/blocklist/${entryId}/deactivate`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  })
 }
 
 export function getFdsBlocklistStatus(

@@ -156,8 +156,14 @@ class FdsEvidenceQueryServiceTests {
     @Test
     void findLatestByPaymentIds_withoutIdentifiers_marksNotProvided() {
         var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        var historicalEvaluation = evaluation(104L, FdsResult.ALLOW, Instant.parse("2026-10-26T01:00:00Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(historicalEvaluation, "cardDisplayLabel", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(historicalEvaluation, "cardToken", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(historicalEvaluation, "deviceId", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(historicalEvaluation, "ipCountryCode", null);
+        org.springframework.test.util.ReflectionTestUtils.setField(historicalEvaluation, "ipAddress", null);
         given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
-                .willReturn(List.of(evaluation(104L, FdsResult.ALLOW, Instant.parse("2026-10-26T01:00:00Z"))));
+                .willReturn(List.of(historicalEvaluation));
 
         var result = queryService.findLatestByPaymentIds(List.of(104L));
 
@@ -168,7 +174,19 @@ class FdsEvidenceQueryServiceTests {
     }
 
     private FdsEvaluation evaluation(Long paymentId, FdsResult result, Instant evaluatedAt) {
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", 150_000L, evaluatedAt);
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                "hong-gildong",
+                150_000L,
+                evaluatedAt,
+                "device-opaque-1",
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
         return FdsEvaluation.completed(request, result, result == FdsResult.ERROR ? 0 : 60, evaluatedAt);
     }
 }

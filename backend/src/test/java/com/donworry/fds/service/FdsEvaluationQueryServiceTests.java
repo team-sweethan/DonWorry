@@ -78,6 +78,9 @@ class FdsEvaluationQueryServiceTests {
             assertThat(hit.thresholdSnapshot()).isEqualTo("{\"amountGte\":150000,\"score\":35}");
         });
         assertThat(result.history()).hasSize(1);
+        assertThat(result.blocklistCandidates())
+                .extracting(candidate -> candidate.identifierType())
+                .containsExactly("CARD_TOKEN", "BUYER_REF", "DEVICE_ID", "IP_ADDRESS", "BUYER_EMAIL");
     }
 
     // 없는 평가 ID는 조회 실패 예외를 반환한다.
@@ -120,7 +123,19 @@ class FdsEvaluationQueryServiceTests {
 
     private FdsEvaluation evaluation(Long paymentId, FdsResult result) {
         var requestedAt = Instant.now();
-        var request = new FdsEvaluationRequest(UUID.randomUUID(), paymentId, 1L, "hong-gildong", 150_000L, requestedAt);
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                "hong-gildong",
+                150_000L,
+                requestedAt,
+                "device-test-1",
+                "card-token-test-1",
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
         return FdsEvaluation.completed(
                 request, result, result == FdsResult.REVIEW ? 60 : 0, requestedAt.plusSeconds(1));
     }
