@@ -1,5 +1,4 @@
 import { SessionExpiryModal } from './SessionExpiryModal'
-import { BrandMark } from '../components/brand/BrandMark'
 import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
@@ -12,7 +11,7 @@ import {
   sessionNavigation,
 } from '../config/navigation'
 import type { AuthUser } from '../types/auth'
-import { ManagementLayout } from '../layouts/AdminLayout'
+import { ManagementBrand, ManagementLayout, type ManagementRole } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -264,6 +263,12 @@ export function ServerSession() {
   if (navigation.landing === null && !isAccountPath(pathname)) {
     return body ?? <ScreenResult kind="403" action={<AccountActions />} />
   }
+  const layoutRole: Record<AuthUser['role'], ManagementRole> = {
+    ADMIN: 'admin',
+    SECURITY_STAFF: 'security',
+    OPERATOR: 'owner',
+  }
+  const role = layoutRole[user.role]
   const home = navigation.landing ?? '/account/password'
   if (pathname === navigation.base && pathname !== home) return <Navigate to={home} replace />
   // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
@@ -272,15 +277,13 @@ export function ServerSession() {
   ) : undefined
   return (
     <ManagementLayout
+      role={role}
       responsive={pathname === '/admin/applications' || pathname.startsWith('/admin/applications/')}
       groups={navigation.groups}
       badges={{ securityCaseActions: caseActions, ruleChangeRequests }}
       header={
         <header className="dw-header">
-          <NavLink to={home} className="dw-brand" aria-label="돈워리 홈">
-            <BrandMark size={30} />
-            돈워리
-          </NavLink>
+          <ManagementBrand role={role} home={home} />
           <div className="dw-header-center" />
           <div className="dw-header-tools">
             {!user.passwordChangeRequired && <LatestLogin key={user.userId} />}
