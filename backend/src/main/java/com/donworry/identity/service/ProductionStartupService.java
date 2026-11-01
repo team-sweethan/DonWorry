@@ -1,5 +1,6 @@
 package com.donworry.identity.service;
 
+import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.entity.UserStatus;
 import com.donworry.identity.repository.PlatformUserRepository;
@@ -14,14 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Profile("prod")
 @RequiredArgsConstructor
-public class ProductionAdminService {
+public class ProductionStartupService {
     private final PlatformUserRepository users;
     private final PasswordPolicy policy;
     private final PasswordEncoder encoder;
     private final AdminChangeHistoryService histories;
 
     @Transactional
-    public void applyPassword(String password) {
+    public void initialize(String password) {
         // 설정값을 예외 메시지·검증 결과에 넣지 않아 기동 실패 로그에도 노출하지 않는다.
         try {
             policy.validate("admin", password);
@@ -31,6 +32,25 @@ public class ProductionAdminService {
         var admin = users.findByLoginId("admin")
                 .filter(user -> user.getRole() == UserRole.ADMIN && user.getStatus() == UserStatus.ACTIVE)
                 .orElseThrow(() -> new IllegalStateException("운영에는 활성 admin ADMIN 계정이 필요합니다."));
+        applyPassword(admin, password);
+        for (String loginId : new String[] {"boss", "staff_test", "cakeshop_owner"}) {
+            users.findByLoginId(loginId).ifPresent(user -> inactivateDemoAccount(admin, user));
+        }
+    }
+
+    private void inactivateDemoAccount(PlatformUser admin, PlatformUser user) {
+        if (user.getStatus() == UserStatus.INACTIVE) return;
+        String previous = user.getStatus().name();
+        user.changeStatus(UserStatus.INACTIVE);
+        histories.recordUser(
+                admin.getUserId(),
+                user.getUserId(),
+                "PRODUCTION_DEMO_ACCOUNT_INACTIVATED",
+                Map.of("status", previous),
+                Map.of("status", "INACTIVE", "source", "PRODUCTION_STARTUP"));
+    }
+
+    private void applyPassword(PlatformUser admin, String password) {
         boolean passwordMatches = encoder.matches(password, admin.getPasswordHash());
         if (passwordMatches && !admin.isPasswordChangeRequired()) return;
         boolean previouslyRequired = admin.isPasswordChangeRequired();

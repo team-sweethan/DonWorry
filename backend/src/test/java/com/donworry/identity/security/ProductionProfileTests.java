@@ -3,7 +3,7 @@ package com.donworry.identity.security;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.donworry.identity.service.ProductionAdminService;
+import com.donworry.identity.service.ProductionStartupService;
 import java.io.IOException;
 import java.net.URL;
 import java.util.Collections;
@@ -14,7 +14,7 @@ import org.springframework.boot.test.context.ConfigDataApplicationContextInitial
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class ProductionProfileTests {
-    private final ProductionAdminService service = mock(ProductionAdminService.class);
+    private final ProductionStartupService service = mock(ProductionStartupService.class);
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
             .withClassLoader(new ClassLoader(getClass().getClassLoader()) {
@@ -32,7 +32,7 @@ class ProductionProfileTests {
                 }
             })
             .withUserConfiguration(ProductionSecurityConfiguration.class)
-            .withBean(ProductionAdminService.class, () -> service);
+            .withBean(ProductionStartupService.class, () -> service);
 
     private ApplicationContextRunner production() {
         return runner.withPropertyValues(
@@ -72,7 +72,7 @@ class ProductionProfileTests {
             assertThat(environment.getProperty("security.csrf.enabled")).isEqualTo("false");
             assertThat(environment.getProperty("fds.mock.seed-enabled")).isEqualTo("false");
             assertThat(environment.getProperty("security.demo-api.enabled")).isEqualTo("false");
-            verify(service).applyPassword("Production123!");
+            verify(service).initialize("Production123!");
         });
     }
 
@@ -174,7 +174,7 @@ class ProductionProfileTests {
     // 비밀번호 적용 실패는 삼키지 않고 기동 실패로 전파한다
     @Test
     void configuration_whenBootstrapFails_propagatesStartupFailure() {
-        doThrow(new IllegalStateException("운영 초기화 실패")).when(service).applyPassword(any());
+        doThrow(new IllegalStateException("운영 초기화 실패")).when(service).initialize(any());
         production().run(context -> {
             assertThat(context).hasFailed();
             assertThat(context.getStartupFailure()).hasMessageContaining("운영 초기화 실패");
