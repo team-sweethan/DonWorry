@@ -8,6 +8,7 @@ import {
   reviewMailMessage,
   reviewError,
   formatApplicationTime,
+  applicationLabels,
 } from '../src/api/adminApplications.ts'
 import { setupInitialPassword } from '../src/api/merchantApplications.ts'
 import { ApiError, subscribePasswordChangeRequired } from '../src/api/client.ts'
@@ -170,4 +171,16 @@ test('mailRecovery_whenRejected_doesNotRepeatAndCanRefreshDetail', async () => {
   }
   await assert.rejects(resendApplicationMail(31, 97))
   assert.equal(count, 1)
+})
+
+// 이메일 확인 대기는 새 API 이름으로 조회하며 화면 의미를 유지한다.
+test('applications_whenEmailUnverified_usesNewStatusAndOriginalLabel', async () => {
+  globalThis.fetch = async (path) => {
+    const url = new URL(String(path), 'http://localhost')
+    assert.equal(url.searchParams.get('status'), 'EMAIL_VERIFICATION_PENDING')
+    return Response.json({ items: [{ status: 'EMAIL_VERIFICATION_PENDING' }] })
+  }
+  const result = await getApplications(0, '', 'EMAIL_VERIFICATION_PENDING')
+  assert.equal(result.items[0].status, 'EMAIL_VERIFICATION_PENDING')
+  assert.equal(applicationLabels.EMAIL_VERIFICATION_PENDING, '이메일 미확인')
 })

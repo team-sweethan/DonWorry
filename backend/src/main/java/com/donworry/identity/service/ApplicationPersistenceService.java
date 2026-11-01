@@ -51,7 +51,7 @@ public class ApplicationPersistenceService {
         var found = applications
                 .findUnverifiedIdByEmail(email)
                 .flatMap(applications::lockById)
-                .filter(app -> app.getStatus() == ApplicationStatus.EMAIL_PENDING);
+                .filter(app -> app.getStatus() == ApplicationStatus.EMAIL_VERIFICATION_PENDING);
         if (found.isEmpty() || !found.get().getCreatedAt().plusDays(7).isAfter(now())) return Optional.empty();
         return Optional.of(prepare(found.get()));
     }
@@ -85,7 +85,7 @@ public class ApplicationPersistenceService {
         if (token.getRevokedAt() != null) fail(ApplicationErrorCode.REVOKED_TOKEN);
         if (!token.getExpiresAt().isAfter(now)
                 || !app.getCreatedAt().plusDays(7).isAfter(now)) fail(ApplicationErrorCode.EXPIRED_TOKEN);
-        if (app.getStatus() != ApplicationStatus.EMAIL_PENDING) fail(ApplicationErrorCode.USED_TOKEN);
+        if (app.getStatus() != ApplicationStatus.EMAIL_VERIFICATION_PENDING) fail(ApplicationErrorCode.USED_TOKEN);
         token.use(now);
         app.verifyEmail(now);
     }

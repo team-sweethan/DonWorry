@@ -464,7 +464,7 @@ class ApplicationApprovalHttpTests {
         approve(id);
         var a = saved(id);
         var visitor = new Browser();
-        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", a.getUserId());
+        jdbc.update("UPDATE platform_users SET status='INACTIVE' WHERE user_id=?", a.getUserId());
         assertThat(visitor.send("POST", SETUP, setupBody(raw(), "OwnerPass123!"), true)
                         .body())
                 .contains("APPLICATION_015");
@@ -502,7 +502,7 @@ class ApplicationApprovalHttpTests {
         assertThat(admin.send("GET", BASE + "?keyword=123-45-67890", null, false)
                         .body())
                 .contains("달콤한 가게");
-        for (String query : List.of("?page=-1", "?size=101", "?status=UNKNOWN", "?page=abc"))
+        for (String query : List.of("?page=-1", "?size=101", "?status=UNKNOWN", "?status=EMAIL_PENDING", "?page=abc"))
             assertThat(admin.send("GET", BASE + query, null, false).statusCode())
                     .isEqualTo(400);
         assertThat(admin.send("GET", BASE + "/99999999", null, false).statusCode())
@@ -513,6 +513,12 @@ class ApplicationApprovalHttpTests {
         assertThat(admin.send("POST", BASE + "/" + id + "/approve", approval("bad", "approval_owner"), true)
                         .statusCode())
                 .isEqualTo(400);
+        jdbc.update(
+                "UPDATE merchant_applications SET status='EMAIL_VERIFICATION_PENDING',email_verified_at=NULL WHERE application_id=?",
+                id);
+        var pending = admin.send("GET", BASE + "?status=EMAIL_VERIFICATION_PENDING", null, false);
+        assertThat(pending.statusCode()).isEqualTo(200);
+        assertThat(pending.body()).contains("\"status\":\"EMAIL_VERIFICATION_PENDING\"", "달콤한 가게");
         verifyNoInteractions(mail);
     }
 

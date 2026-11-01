@@ -145,7 +145,7 @@ class AuthPrincipalRaceTests {
                         .content("{\"permissions\":[]}"),
                 put("/api/admin/users/2/status")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"DISABLED\"}"),
+                        .content("{\"status\":\"INACTIVE\"}"),
                 post("/api/admin/users/2/password-reset"),
                 post("/api/admin/merchants")
                         .contentType(MediaType.APPLICATION_JSON)

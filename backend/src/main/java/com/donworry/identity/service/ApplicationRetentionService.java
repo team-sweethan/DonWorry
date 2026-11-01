@@ -69,7 +69,7 @@ public class ApplicationRetentionService {
     }
 
     private boolean expired(MerchantApplication a, LocalDateTime now) {
-        return (a.getStatus() == ApplicationStatus.EMAIL_PENDING
+        return (a.getStatus() == ApplicationStatus.EMAIL_VERIFICATION_PENDING
                         && !a.getCreatedAt().plusDays(7).isAfter(now))
                 || (a.getStatus() == ApplicationStatus.REJECTED
                         && a.getReviewedAt() != null

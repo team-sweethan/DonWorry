@@ -2,6 +2,14 @@
 
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
+## #131 PR A 계정·신청 상태 전환
+
+현재 계약은 계정 `ACTIVE / INACTIVE`, 신청 `EMAIL_VERIFICATION_PENDING → REVIEW_PENDING → APPROVED / REJECTED`다. 정지·복구·세션 종료와 ‘이메일 미확인’ 표시 의미는 유지한다. 새 수동 정지 이력은 `USER_INACTIVATED`이며 과거 `USER_DISABLED` 유형·감사 JSON은 보존한다. 아래 과거 구현 기록의 상태 이름 안내는 현재 이름으로 맞췄으며, 당시 실행 결과가 이번 전환의 검증을 대신하지 않는다.
+
+기존 개발 DB는 초기화 없이 새 Flyway 두 개로 전환한다. **같은 DB에 연결하는 구버전 앱·예약 작업을 모두 종료**하고 백엔드·프론트를 같은 점검 배포로 맞춘다. 기존 탭을 새로고침한다. 백업·부분 DDL 실패 복구·롤백 절차는 [전환 운영 안내](131-status-transition.md), 결정·대안은 [ADR-0060](../decisions/0060-identity-status-names.md)을 따른다.
+
+PR A는 시드 계정 ACTIVE를 보존한다. `prod` 시작 시 `boss`·`staff_test`·`cakeshop_owner` 정지는 PR B이며 아직 구현하지 않았다. 가맹점·키·권한·메일 발송 상태와 다른 모듈 공개 Java 계약은 바꾸지 않는다. 이번 자동 검사 결과·미검증은 전환 운영 안내와 PR에 기록한다.
+
 ## #354 후속 사장님 홈·로그인 첫 이동
 
 [화면·이동 설계와 검증](354-owner-home.md). `/owner`에 권한 없는 사장님도 사용하는 홈을 추가하고 로그인·인증된 루트 진입에서 서버 연동 상태를 확인한다. 연동 전은 키 발급, 완료 후는 홈으로 안내하며 같은 계정의 세션 만료 복귀는 현재 권한으로 검사한다. 브라우저 검증·기존 로컬 CAKESHOP 키 이전은 남아 있다. 아래 PR C 기록의 홈 미구현은 당시 범위다.
@@ -289,7 +297,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - UTC 종료 시각과 같거나 늦으면 다시 시도할 수 있다. 만료 후 첫 오답은 1회부터 시작하고, 로그인 성공 시 0·NULL로 초기화한다. 별도 예약 작업은 없다.
 - 실패 증가와 다섯 번째의 종료 시각은 조건부 UPDATE 한 번이다. 실패 저장은 REQUIRES_NEW 커밋을 마친 뒤 401을 반환하며, 성공 초기화도 세션 등록 전에 커밋한다. 조회·저장·커밋 장애는 로그인 500 AUTH_005로 구분한다.
 - 기존 가맹점 → 실제 DB loginId 계정 잠금 → 짧은 세션 처리 순서를 유지한다. 단일 서버 전제이며 DB collation 별칭도 같은 계정을 사용한다.
-- 계정 DISABLED·가맹점 INACTIVE와 별도로 관리한다. 만료가 정지를 해제하지 않으며 본인 비밀번호 변경·관리자 초기화·재활성화도 잠금을 풀지 않는다. 계정 정지 자체·입력 400·DB 장애는 비밀번호 오류로 세지 않는다. 실제 오답은 ACTIVE 계정에 대해서만 센다.
+- 계정 INACTIVE·가맹점 INACTIVE와 별도로 관리한다. 만료가 정지를 해제하지 않으며 본인 비밀번호 변경·관리자 초기화·재활성화도 잠금을 풀지 않는다. 계정 정지 자체·입력 400·DB 장애는 비밀번호 오류로 세지 않는다. 실제 오답은 ACTIVE 계정에 대해서만 센다.
 - 실패·잠금은 기존 세션을 종료하지 않는다. 새 로그인 성공의 기존 단일 세션·CSRF 전략과 프론트 공통 오류 처리는 그대로다. 로그인 화면에 공통 정책 안내를 표시한다.
 - P1 테이블에 새 migration 하나만 추가한다. 사용자가 이번 작업은 저장소 ERD·ADR 기준으로 구현하고 Notion은 나중에 반영하도록 승인했다. Notion 최신 내용 확인·동기화는 미수행이다. 다른 담당 테이블·공개 Java 계약·모듈 의존은 변경하지 않는다.
 
@@ -314,10 +322,10 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - ADMIN 전용 목록·상세·생성·상태 변경을 `/api/admin/merchants`에 제공한다. 검색은 코드·이름, 상태 필터·서버 페이지네이션을 사용하며 기존 `/options`는 ACTIVE 가맹점 선택용으로 유지한다.
 - 코드는 대문자·숫자 3~40자로 생성 후 변경할 수 없다. 이름은 100자 이내다. 비율은 BigDecimal로 0 이상 1 미만·소수 6자리까지 받는다. 화면은 % 단위·기본값 1%이며 반올림 없이 `0.010000`으로 변환한다.
 - 입력 400 ADMIN_007, 없는 가맹점 404 ADMIN_008, 코드 중복 409 ADMIN_009. DB 유일 제약도 중복을 막으며 다른 DB 오류는 AUTH_007로 유지한다.
-- 사장님 로그인은 가맹점 ACTIVE를 확인한다. 정지·누락·연결 없는 가맹점은 DISABLED와 동일한 401 AUTH_004다. 가맹점 조회 DB 오류는 로그인 장애 AUTH_005로 구분한다.
+- 사장님 로그인은 가맹점 ACTIVE를 확인한다. 정지·누락·연결 없는 가맹점은 INACTIVE와 동일한 401 AUTH_004다. 가맹점 조회 DB 오류는 로그인 장애 AUTH_005로 구분한다.
 - 가맹점 잠금 → 실제 loginId 계정 잠금 → 세션 모니터 순서를 사용한다. 로그인은 상태 확인·세션 등록까지, 정지는 실제 커밋·소속 사장님 세션 종료까지 보호한다. #129 사장님 계정 생성도 가맹점 잠금을 공유한다.
 - 상태 변경·가맹점 대상 이력 INSERT는 같은 트랜잭션이다. 커밋 성공 후 사용자별 expireAll을 호출하며, 실패 시 변경을 롤백하고 세션을 보존한다. 같은 상태 재요청은 이력·세션 종료를 반복하지 않는다.
-- 가맹점 정지는 계정 status·권한을 바꾸지 않는다. 재활성화 후 ACTIVE 계정만 새 로그인 가능하며 별도 DISABLED 계정·만료된 옛 세션은 복구하지 않는다.
+- 가맹점 정지는 계정 status·권한을 바꾸지 않는다. 재활성화 후 ACTIVE 계정만 새 로그인 가능하며 별도 INACTIVE 계정·만료된 옛 세션은 복구하지 않는다.
 - `/admin/merchants` 목록·`/new` 생성·`/:id` 상세/정지/재활성화와 계정 생성의 가맹점 만들기 링크를 제공한다. 정지 확인에서 소속 사장님의 세션 종료를 안내한다.
 - 기존 DB 스키마·migration·TenantReader/TenantSummary·모듈 의존·정산 계산은 변경하지 않는다. P6 수수료율 공유는 예정이며 현재 정산 0.01·시드 0.020000 차이는 후속이다. CSRF 서버 기본값 false·전체 업무 인가의 #68 5단계 범위를 유지한다.
 
@@ -402,7 +410,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - `GET /api/admin/users?page=0&size=20&keyword=&role=&status=&passwordChangeRequired=`: items·page·size·totalElements. role/status/passwordChangeRequired(true·false, 임시 비밀번호 미변경 여부)는 필터 사용 시에만 보내며, size는 1~100이다. `GET /api/admin/users/{id}`는 상세다. 둘 다 비밀번호·해시를 반환하지 않는다.
 - `POST /api/admin/users`: loginId·displayName·role·merchantId. 아이디 `[a-z0-9_]{3,30}`, 이름 1~100자, 역할은 OPERATOR·SECURITY_STAFF만 허용한다. OPERATOR는 ACTIVE 가맹점이 필수이고 #354 PR A부터 기존 OPERATOR가 있으면 상태와 관계없이 409 ADMIN_010으로 거절한다. 기존 복수 계정은 유지한다. 다른 역할은 merchantId를 받지 않는다. 생성 시 기능 권한은 비어 있다. 응답은 201 `{user, temporaryPassword}`다.
 - `PUT /api/admin/users/{id}/permissions`: `{permissions:[...]}` 최종 집합. OPERATOR만 FDS_VIEW·FINANCE_VIEW를 설정한다. ADMIN의 조회 권한은 기존 역할 계산이다.
-- `PUT /api/admin/users/{id}/status`: `{status:"ACTIVE"|"DISABLED"}`. 자기 정지는 거절한다. 역할·소속 변경과 계정 삭제 API는 없다.
+- `PUT /api/admin/users/{id}/status`: `{status:"ACTIVE"|"INACTIVE"}`. 자기 정지는 거절한다. 역할·소속 변경과 계정 삭제 API는 없다.
 - `POST /api/admin/users/{id}/password-reset`: `{user, temporaryPassword}`를 반환하고 다음 로그인에서 변경을 요구한다. 자기 초기화도 가능하며 성공 응답 후 다음 요청부터 현재 세션이 만료된다.
 - `GET /api/admin/merchants/options?keyword=`: ACTIVE 가맹점의 ID·이름을 최대 50개 반환한다. 이름으로 검색하며 생성·정지는 #130이다.
 - 관리자 API는 ADMIN만 허용한다. 비로그인 401 AUTH_001, 비관리자 403 AUTH_002. 입력 오류 400 ADMIN_001, 없는 계정 404 ADMIN_002, 중복 아이디 409 ADMIN_003, 자기 정지 400 ADMIN_004, ACTIVE 가맹점 누락 400 ADMIN_005, 비사장님 권한 변경 400 ADMIN_006이다. DB 장애는 500 AUTH_007이다.
@@ -433,7 +441,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - POST /api/auth/logout: Security 로그아웃 필터에서 세션과 인증 정보를 제거하고 204를 반환한다. 비로그인 · 반복 요청도 204다. GET은 로그아웃하지 않는다.
 - POST /api/auth/logout-all: 로그인한 본인의 전체 세션을 만료시키고 현재 세션·인증·쿠키를 정리해 204를 반환한다. 비로그인은 401 AUTH_001이다. 사용자 ID는 인증 정보에서 읽는다.
 - 계정당 유효 로그인은 1개다. 새 로그인은 이전 세션을 만료시키며, 이전 세션의 다음 요청은 401 AUTH_001이다. 등록·조회 기준은 권한·이름과 무관한 userId다. 세션은 서버 메모리에 유지한다.
-- 없는 아이디 · 틀린 비밀번호 · DISABLED 계정은 같은 401 AUTH_004 ProblemDetail로 응답한다. 입력 누락 · 공백 · 아이디 100자 초과(DB login_id 컬럼 길이) · 잘못된 JSON은 400("아이디와 비밀번호를 확인해 주세요.")이다. 400이면 DB를 조회하지 않는다.
+- 없는 아이디 · 틀린 비밀번호 · INACTIVE 계정은 같은 401 AUTH_004 ProblemDetail로 응답한다. 입력 누락 · 공백 · 아이디 100자 초과(DB login_id 컬럼 길이) · 잘못된 JSON은 400("아이디와 비밀번호를 확인해 주세요.")이다. 400이면 DB를 조회하지 않는다.
 - 계정 조회 중 DB 오류 등 인증 처리 자체가 실패하면 500 AUTH_005 ProblemDetail로 응답하고 error 로그를 남긴다. 처리하지 않으면 Security 필터가 401 AUTH_001(로그인 필요)로 바꿔 장애가 드러나지 않는다.
 - 첫 로그인은 세션을 만들고, 기존 세션이 있으면 ID를 바꾼 뒤 인증을 명시적으로 저장한다.
 - 세션에는 Entity · 비밀번호 · 비밀번호 해시를 보관하지 않는다. 별도의 Serializable 사용자 객체만 저장한다. 이 객체의 role은 UserRole enum이고, 응답 JSON의 role은 문자열("ADMIN")로 내보낸다.
@@ -458,7 +466,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - 시드 ADMIN 계정으로 서버 기동 후 curl 로그인 → me → logout → me(401) 순서는 담당자가 직접 실행해 통과를 확인했다 (실행 기록은 저장소에 없음).
 - AUTH_003은 #128에서 현재 비밀번호 불일치에 사용한다. #124 조회 계약은 새 HTTP 에러 코드를 추가하지 않았다.
 - #68·#124에서 tenantScope를 역할 기준으로 확정했다. OPERATOR의 merchantId가 null이어도 MERCHANT이며 전체 조회로 승격하지 않는다. DB 제약은 후속 계정 관리, 실제 데이터 필터는 각 담당과 합의 후 구현한다.
-- 로그인 후 계정이 DISABLED로 바뀌어도 기존 세션에는 즉시 반영되지 않는다. #125에서 세션 종료 서비스를 제공하며, 계정 정지·권한 변경·비밀번호 초기화 연결은 최신 #68·#129 범위를 따른다. 전체 업무 API의 역할·가맹점별 차단은 #68 5단계다.
+- 로그인 후 계정이 INACTIVE로 바뀌어도 기존 세션에는 즉시 반영되지 않는다. #125에서 세션 종료 서비스를 제공하며, 계정 정지·권한 변경·비밀번호 초기화 연결은 최신 #68·#129 범위를 따른다. 전체 업무 API의 역할·가맹점별 차단은 #68 5단계다.
 - 로그인 실패 문구는 “아이디 또는 비밀번호가 올바르지 않습니다.”로 #76 리뷰에서 확정했다. 계정 존재 여부를 드러내지 않도록 모든 실패에 같은 문구를 쓴다.
 
 ## #124 공개 조회 계약

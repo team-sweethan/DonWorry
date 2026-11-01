@@ -233,7 +233,7 @@ class AuthApiTests {
     void login_whenInvalid_returnsSameUnauthorizedProblem(String reason) throws Exception {
         if (reason.equals("missingUser"))
             given(repository.findByLoginId("admin")).willReturn(Optional.empty());
-        if (reason.equals("disabledUser")) given(user.getStatus()).willReturn(UserStatus.DISABLED);
+        if (reason.equals("disabledUser")) given(user.getStatus()).willReturn(UserStatus.INACTIVE);
         var result = login("admin", reason.equals("wrongPassword") ? "wrong" : "test-password", null);
         assertThat(result.getRequest().getSession(false)).isNull();
         assertThat(result.getResponse().getStatus()).isEqualTo(401);
@@ -266,7 +266,7 @@ class AuthApiTests {
     // 정지된 계정도 BCrypt를 수행해 잠긴 계정과 같은 오류를 반환한다
     @Test
     void login_whenDisabled_stillComparesPassword() throws Exception {
-        given(user.getStatus()).willReturn(UserStatus.DISABLED);
+        given(user.getStatus()).willReturn(UserStatus.INACTIVE);
         var result = login("admin", "test-password", null);
         assertThat(result.getResponse().getStatus()).isEqualTo(401);
         verify(encoder).matches("test-password", user.getPasswordHash());

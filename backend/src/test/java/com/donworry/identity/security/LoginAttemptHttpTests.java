@@ -224,7 +224,7 @@ class LoginAttemptHttpTests {
         assertProblem(missing, 401, "AUTH_004");
         assertThat(wrong.body()).isEqualTo(missing.body());
         assertThat(failures()).isEqualTo(1);
-        jdbc.update("UPDATE platform_users SET status = 'DISABLED' WHERE user_id = ?", userId);
+        jdbc.update("UPDATE platform_users SET status = 'INACTIVE' WHERE user_id = ?", userId);
         assertThat(login(client(), loginId, password).body()).isEqualTo(missing.body());
         fail(5);
         assertThat(failures()).isEqualTo(1);
@@ -432,7 +432,7 @@ class LoginAttemptHttpTests {
         var temporary = mapper.readTree(reset.body()).path("temporaryPassword").asString();
         assertThat(temporary).isNotBlank();
         assertProblem(login(client(), loginId, temporary), 401, "AUTH_004");
-        for (String state : new String[] {"DISABLED", "ACTIVE"}) {
+        for (String state : new String[] {"INACTIVE", "ACTIVE"}) {
             assertThat(send(manager, "PUT", "/api/admin/users/" + userId + "/status", Map.of("status", state))
                             .statusCode())
                     .isEqualTo(204);

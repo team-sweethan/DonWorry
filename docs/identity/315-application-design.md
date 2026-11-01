@@ -12,8 +12,8 @@ GET·페이지 마운트만으로 토큰을 사용하지 않는다. 승인·반�
 ## 저장 계약 (모두 P1)
 
 - `merchant_applications`: 신청자 선택 로그인 아이디(30, PR 3 추가), 가맹점명(100), 사업자등록번호(10자리), 담당자명(100), 정규화 이메일(254), 연락처(9~15자리), 문의(1000), 동의 버전(현재 2026-10-29.1; PR 2 기록은 2026-10-29)·시각, 상태·이메일 확인 시각·검토 시각·관리자·반려 사유(1000)·발급 가맹점/계정 참조·생성 시각.
-- 상태는 EMAIL_PENDING → REVIEW_PENDING → APPROVED / REJECTED. PR 2에서는 앞 두 상태만 전이한다. 이메일 확인은 사업자 자격 검증이 아니다.
-- 진행 중(EMAIL_PENDING, REVIEW_PENDING) 이메일·사업자번호·로그인 아이디는 SHA-256 생성 컬럼과 UNIQUE로 중복 방지한다. 종료 상태는 NULL로 바뀌어 재신청 가능하다. 이메일은 trim·소문자, 사업자번호·전화는 하이픈·공백 제거. 점·플러스 주소를 합치지 않는다. 사업자번호는 형식만 확인하고 실재 여부를 확인했다고 표현하지 않는다.
+- 상태는 EMAIL_VERIFICATION_PENDING → REVIEW_PENDING → APPROVED / REJECTED. PR 2에서는 앞 두 상태만 전이한다. 이메일 확인은 사업자 자격 검증이 아니다.
+- 진행 중(EMAIL_VERIFICATION_PENDING, REVIEW_PENDING) 이메일·사업자번호·로그인 아이디는 SHA-256 생성 컬럼과 UNIQUE로 중복 방지한다. 종료 상태는 NULL로 바뀌어 재신청 가능하다. 이메일은 trim·소문자, 사업자번호·전화는 하이픈·공백 제거. 점·플러스 주소를 합치지 않는다. 사업자번호는 형식만 확인하고 실재 여부를 확인했다고 표현하지 않는다.
 - `application_tokens`: 신청 FK, 용도 EMAIL_VERIFICATION / INITIAL_PASSWORD_SETUP, 계정 FK(nullable, 첫 설정용), SHA-256 토큰 해시(64), 생성·만료·사용·폐기 시각. 원문은 SecureRandom 32바이트 URL-safe Base64(43자). 첫 설정 토큰은 계정 필수 CHECK. 확인·재발송은 READ_COMMITTED 격리로 실행한다. 기본 REPEATABLE_READ에서 옛 토큰을 읽은 후 잠금을 승격하면 MariaDB가 1020 스냅샷 충돌을 내므로 현재 읽기를 사용한다. 신청 잠금을 먼저 얻은 뒤 해당 용도 토큰 전체 폐기·발급/사용한다.
 - `application_mail_deliveries`: 신청 FK, 토큰 FK(nullable), 종류 EMAIL_VERIFICATION / APPROVAL / REJECTION, PENDING / SENT / FAILED / UNKNOWN, 시작·종료 시각·실패 코드(고정 문자열). 본문·수신 주소·원문 토큰·SMTP 예외를 복제하지 않는다. 지연된 결과는 해당 시도 행만 갱신한다.
 - `application_rate_limits`: BIGINT PK, scope·대상 SHA-256 UNIQUE, 최근 허용 요청 epoch millis 목록(최대 5개), 만료 시각. 원문 IP·이메일은 저장하지 않으나 해시는 익명 정보로 보지 않는다. 제한의 최대 창(24시간) 이후 정리한다. 요청별 INSERT/행 잠금/판정/갱신을 독립 트랜잭션으로 수행해 재시작·경쟁·업무 롤백으로 횟수가 초기화되지 않는다.

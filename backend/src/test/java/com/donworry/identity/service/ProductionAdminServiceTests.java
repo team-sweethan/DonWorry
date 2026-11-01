@@ -41,7 +41,7 @@ class ProductionAdminServiceTests {
         assertThatThrownBy(() -> service.applyPassword("Production123!")).isInstanceOf(IllegalStateException.class);
         for (var role : UserRole.values()) {
             var user = PlatformUser.create("admin", "admin", role, null, encoder.encode("Old12345!"));
-            user.changeStatus(UserStatus.DISABLED);
+            user.changeStatus(UserStatus.INACTIVE);
             when(users.findByLoginId("admin")).thenReturn(Optional.of(user));
             assertThatThrownBy(() -> service.applyPassword("Production123!")).isInstanceOf(IllegalStateException.class);
             if (role != UserRole.ADMIN) {

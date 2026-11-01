@@ -1,3 +1,7 @@
+import {
+  applicationListStatus,
+  normalizeApplicationListStatusQuery,
+} from '../../utils/applicationListStatusQuery.ts'
 import { isShopUrlValid } from '../../utils/shopUrl.ts'
 import { IntegrationStatusSummary } from './IntegrationStatusSummary'
 import { useEffect, useRef, useState } from 'react'
@@ -52,7 +56,7 @@ import {
 } from './applicationDetailSnapshot'
 import { mailStatusLabels } from '../../api/adminApplications'
 const colors = {
-  EMAIL_PENDING: 'default',
+  EMAIL_VERIFICATION_PENDING: 'default',
   REVIEW_PENDING: 'blue',
   APPROVED: 'green',
   REJECTED: 'red',
@@ -63,8 +67,12 @@ const statusTag = (status: ApplicationStatus) => (
 export function AdminApplicationsPage() {
   const [query, setQuery] = useSearchParams()
   const mailAttention = query.get('mailAttention') === 'true'
-  const statusValue = query.get('status') ?? (mailAttention ? 'ALL' : 'REVIEW_PENDING')
-  const status = statusValue in applicationLabels ? (statusValue as ApplicationStatus) : undefined
+  const statusValue = applicationListStatus(query)
+  const status = statusValue === 'ALL' ? undefined : statusValue
+  useEffect(() => {
+    const normalized = normalizeApplicationListStatusQuery(query)
+    if (normalized.toString() !== query.toString()) setQuery(normalized, { replace: true })
+  }, [query, setQuery])
   const pageValue = Number(query.get('page') ?? 0)
   const page =
     Number.isSafeInteger(pageValue) && pageValue >= 0 && pageValue < 100000 ? pageValue : 0
@@ -380,7 +388,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
               <h2>
                 {app.status === 'REVIEW_PENDING'
                   ? '이메일 확인이 끝났습니다. 신청 내용을 검토해 주세요.'
-                  : app.status === 'EMAIL_PENDING'
+                  : app.status === 'EMAIL_VERIFICATION_PENDING'
                     ? '신청자가 이메일을 확인해야 검토할 수 있습니다.'
                     : app.status === 'APPROVED'
                       ? '이용 승인이 완료되었습니다.'
@@ -389,7 +397,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
               <p>
                 {app.status === 'REVIEW_PENDING'
                   ? '승인하면 새 가맹점과 사장님 계정을 함께 만들고, 첫 비밀번호 설정 메일을 보냅니다.'
-                  : app.status === 'EMAIL_PENDING'
+                  : app.status === 'EMAIL_VERIFICATION_PENDING'
                     ? '확인 메일 발송만으로 이메일 확인이 완료되지는 않습니다.'
                     : app.status === 'APPROVED'
                       ? '계정 발급과 결제 연동은 별도 절차입니다. 결제 연동은 담당자와 따로 진행해 주세요.'

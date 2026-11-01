@@ -31,7 +31,7 @@ public class ApplicationMailQueryService {
 
     public static ApplicationMailKind kind(ApplicationStatus status) {
         return switch (status) {
-            case EMAIL_PENDING -> ApplicationMailKind.EMAIL_VERIFICATION;
+            case EMAIL_VERIFICATION_PENDING -> ApplicationMailKind.EMAIL_VERIFICATION;
             case APPROVED -> ApplicationMailKind.APPROVAL;
             case REJECTED -> ApplicationMailKind.REJECTION;
             default -> null;
@@ -130,7 +130,7 @@ public class ApplicationMailQueryService {
         if (!settings.isEnabled()) return blocked("FEATURE_DISABLED");
         var kind = kind(a.getStatus());
         if (kind == null) return blocked("STATE_NOT_ELIGIBLE");
-        if ((a.getStatus() == ApplicationStatus.EMAIL_PENDING
+        if ((a.getStatus() == ApplicationStatus.EMAIL_VERIFICATION_PENDING
                         && !a.getCreatedAt().plusDays(7).isAfter(now))
                 || (a.getStatus() == ApplicationStatus.REJECTED
                         && (a.getReviewedAt() == null

@@ -91,7 +91,7 @@ class AdminMerchantServiceTests {
     // 수행자 DB 상태가 바뀌었으면 오래된 관리자 인증으로 변경할 수 없다
     @Test
     void setStatus_whenActorDisabled_rejectsWithoutMutation() {
-        when(admin.getStatus()).thenReturn(UserStatus.DISABLED);
+        when(admin.getStatus()).thenReturn(UserStatus.INACTIVE);
         assertThatThrownBy(() -> service.setStatus(actor, 10L, new SetMerchantStatusRequest("INACTIVE"), request))
                 .isInstanceOf(AccountManagementException.class);
         verifyNoInteractions(histories);

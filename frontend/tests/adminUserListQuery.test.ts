@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { adminUserListParams, parseAdminUserListQuery } from '../src/utils/adminUserListQuery.ts'
+import {
+  adminUserListParams,
+  parseAdminUserListQuery,
+  normalizeAdminUserListStatusQuery,
+} from '../src/utils/adminUserListQuery.ts'
 
 const parse = (query: string) => parseAdminUserListQuery(new URLSearchParams(query))
 
@@ -25,7 +29,7 @@ test('검색·역할·상태·비밀번호·페이지를 주소로 복원하고 
     ...previous,
     keyword: '이름 & 아이디',
     role: 'OPERATOR' as const,
-    status: 'DISABLED' as const,
+    status: 'INACTIVE' as const,
     page: 3,
   }
   const current = adminUserListParams(changed)
@@ -43,4 +47,42 @@ test('알 수 없는 필터와 잘못된 페이지는 전체 조건과 첫 페�
     )
   }
   assert.equal(parse(`keyword=${'a'.repeat(101)}`).keyword.length, 100)
+})
+
+test('이전 DISABLED 주소도 첫 조회부터 정지 필터를 유지한다', () => {
+  const query = parse(
+    'status=DISABLED&page=3&keyword=이름&role=OPERATOR&passwordChangeRequired=true',
+  )
+  assert.deepEqual(query, {
+    status: 'INACTIVE',
+    page: 3,
+    keyword: '이름',
+    role: 'OPERATOR',
+    passwordChangeRequired: true,
+  })
+  assert.equal(adminUserListParams(query).get('status'), 'INACTIVE')
+})
+
+// 주소 정규화는 필터 밖의 파라미터도 보존하고 반복 실행해도 결과가 같다.
+test('adminUserStatus_whenLegacyUrl_normalizesOnlyStatusAndPreservesOriginal', () => {
+  const previous = new URLSearchParams(
+    'status=DISABLED&page=3&keyword=이름&role=OPERATOR&passwordChangeRequired=true&extra=keep',
+  )
+  const normalized = normalizeAdminUserListStatusQuery(previous)
+  assert.equal(normalized.get('status'), 'INACTIVE')
+  assert.equal(previous.get('status'), 'DISABLED')
+  for (const [key, value] of previous) {
+    if (key !== 'status') assert.equal(normalized.get(key), value)
+  }
+  assert.deepEqual(parseAdminUserListQuery(normalized), parseAdminUserListQuery(previous))
+  assert.equal(normalizeAdminUserListStatusQuery(normalized).toString(), normalized.toString())
+})
+
+// 정상·미지정·잘못된 상태의 기존 기본 동작은 정규화로 바뀌지 않는다.
+test('adminUserStatus_whenNotLegacy_preservesCurrentQuery', () => {
+  for (const status of ['ACTIVE', 'INACTIVE', 'UNKNOWN', '']) {
+    const query = new URLSearchParams({ status })
+    assert.equal(normalizeAdminUserListStatusQuery(query).toString(), query.toString())
+  }
+  assert.equal(normalizeAdminUserListStatusQuery(new URLSearchParams()).toString(), '')
 })

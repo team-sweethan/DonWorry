@@ -147,7 +147,7 @@ class AdminAccountHttpTests {
         var input = Map.of(
                 "loginId", prefix + "_second", "displayName", "사장님", "role", "OPERATOR", "merchantId", merchantId);
         problem(send(admin, "POST", "/api/admin/users", input), 409, "ADMIN_010");
-        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", firstId);
+        jdbc.update("UPDATE platform_users SET status='INACTIVE' WHERE user_id=?", firstId);
         problem(send(admin, "POST", "/api/admin/users", input), 409, "ADMIN_010");
         // 과거 복수 계정을 가진 데이터는 서비스로 다시 만들지 않고 기존 데이터로 준비한다.
         jdbc.update(
@@ -247,7 +247,7 @@ class AdminAccountHttpTests {
                 problem(send(caller, "GET", path, null), expected, code);
             problem(send(caller, "POST", "/api/admin/users", Map.of()), expected, code);
             problem(
-                    send(caller, "PUT", "/api/admin/users/" + id + "/status", Map.of("status", "DISABLED")),
+                    send(caller, "PUT", "/api/admin/users/" + id + "/status", Map.of("status", "INACTIVE")),
                     expected,
                     code);
             problem(
@@ -436,9 +436,26 @@ class AdminAccountHttpTests {
         assertThat(row.path("merchantName").isNull()).isFalse();
         caller = client();
         assertThat(login(caller, prefix + "_mutate", password).statusCode()).isEqualTo(200);
-        assertThat(send(admin, "PUT", base + "/status", Map.of("status", "DISABLED"))
+        assertThat(send(admin, "PUT", base + "/status", Map.of("status", "INACTIVE"))
                         .statusCode())
                 .isEqualTo(204);
+        assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, id))
+                .isEqualTo("INACTIVE");
+        var inactive = send(admin, "GET", "/api/admin/users?keyword=" + prefix + "_mutate&status=INACTIVE", null);
+        assertThat(inactive.statusCode()).isEqualTo(200);
+        assertThat(mapper.readTree(inactive.body())
+                        .path("items")
+                        .get(0)
+                        .path("status")
+                        .asString())
+                .isEqualTo("INACTIVE");
+        assertThat(jdbc.queryForObject(
+                        "SELECT change_type FROM admin_change_histories WHERE target_user_id=? ORDER BY history_id DESC LIMIT 1",
+                        String.class,
+                        id))
+                .isEqualTo("USER_INACTIVATED");
+        problem(send(admin, "GET", "/api/admin/users?status=DISABLED", null), 400, "ADMIN_001");
+        problem(send(admin, "PUT", base + "/status", Map.of("status", "DISABLED")), 400, "ADMIN_001");
         problem(send(caller, "GET", "/api/auth/me", null), 401, "AUTH_001");
         problem(login(client(), prefix + "_mutate", password), 401, "AUTH_004");
         assertThat(send(admin, "PUT", base + "/status", Map.of("status", "ACTIVE"))
@@ -461,7 +478,7 @@ class AdminAccountHttpTests {
                 .isEqualTo(200);
         assertThat(historyCount(id)).isEqualTo(6);
         problem(
-                send(admin, "PUT", "/api/admin/users/" + adminId + "/status", Map.of("status", "DISABLED")),
+                send(admin, "PUT", "/api/admin/users/" + adminId + "/status", Map.of("status", "INACTIVE")),
                 400,
                 "ADMIN_004");
         problem(
@@ -487,7 +504,7 @@ class AdminAccountHttpTests {
                         org.springframework.test.util.AopTestUtils.getUltimateTargetObject(histories))
                 .recordUser(anyLong(), anyLong(), anyString(), any(), any());
         problem(
-                send(admin, "PUT", "/api/admin/users/" + id + "/status", Map.of("status", "DISABLED")),
+                send(admin, "PUT", "/api/admin/users/" + id + "/status", Map.of("status", "INACTIVE")),
                 500,
                 "AUTH_007");
         assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, id))
@@ -605,7 +622,7 @@ class AdminAccountHttpTests {
             try {
                 assertThat(verified.await(10, TimeUnit.SECONDS)).isTrue();
                 Object body = switch (operation) {
-                    case "status" -> Map.of("status", "DISABLED");
+                    case "status" -> Map.of("status", "INACTIVE");
                     case "permissions" -> Map.of("permissions", List.of("FDS_VIEW"));
                     default -> null;
                 };
@@ -662,7 +679,7 @@ class AdminAccountHttpTests {
                 .recordUser(anyLong(), anyLong(), anyString(), any(), any());
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             Object body = switch (operation) {
-                case "status" -> Map.of("status", "DISABLED");
+                case "status" -> Map.of("status", "INACTIVE");
                 case "permissions" -> Map.of("permissions", List.of("FDS_VIEW"));
                 default -> null;
             };

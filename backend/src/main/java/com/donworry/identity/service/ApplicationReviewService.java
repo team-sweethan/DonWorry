@@ -83,7 +83,7 @@ public class ApplicationReviewService {
                                 cb.equal(x.get("kind"), d.get("kind")));
                 var kind = cb.or(
                         cb.and(
-                                cb.equal(root.get("status"), ApplicationStatus.EMAIL_PENDING),
+                                cb.equal(root.get("status"), ApplicationStatus.EMAIL_VERIFICATION_PENDING),
                                 cb.equal(d.get("kind"), ApplicationMailKind.EMAIL_VERIFICATION)),
                         cb.and(
                                 cb.equal(root.get("status"), ApplicationStatus.APPROVED),

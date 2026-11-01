@@ -1,9 +1,10 @@
 import { api, ApiError } from './client.ts'
 import type { AdminMerchant } from './adminMerchants.ts'
 import type { MailStatus } from './merchantApplications.ts'
-export type ApplicationStatus = 'EMAIL_PENDING' | 'REVIEW_PENDING' | 'APPROVED' | 'REJECTED'
+export type ApplicationStatus =
+  'EMAIL_VERIFICATION_PENDING' | 'REVIEW_PENDING' | 'APPROVED' | 'REJECTED'
 export const applicationLabels: Record<ApplicationStatus, string> = {
-  EMAIL_PENDING: '이메일 미확인',
+  EMAIL_VERIFICATION_PENDING: '이메일 미확인',
   REVIEW_PENDING: '검토 대기',
   APPROVED: '승인 완료',
   REJECTED: '반려',
