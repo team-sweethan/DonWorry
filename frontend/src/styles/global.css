@@ -762,3 +762,262 @@ textarea {
   margin: 0;
   color: #64748b;
 }
+
+/* ── 역할별 바깥 틀 (#399) ──────────────────────────────────────────
+   헤더 · 사이드바 · 메뉴 강조만 역할마다 다르게 한다.
+   업무 화면 본문, 대표 색(--dw-primary), 버튼은 건드리지 않는다.
+   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 금색 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
+.admin-viewport[data-role] {
+  --dw-header-height: 64px;
+  --dw-sidebar-width: 236px;
+  --shell-sidebar: #172554;
+  --shell-text: #c9d6f0;
+  --shell-muted: #a1b3d7;
+  --shell-line: #ffffff1f;
+  --shell-hover: #ffffff12;
+  --shell-active: #244681;
+  --shell-active-text: #fff;
+  --shell-accent: #80b7ff;
+  --shell-tint: #eaf2ff;
+  --shell-ink: #1e4f94;
+  --shell-header: #f8faff;
+  --shell-header-line: #dce5f4;
+}
+.admin-viewport[data-role='admin'] {
+  --shell-sidebar: #24272e;
+  --shell-text: #d6d8df;
+  --shell-muted: #a7abb6;
+  --shell-active: #3a372f;
+  --shell-active-text: #ffe2a1;
+  --shell-accent: #e9bd65;
+  --shell-tint: #f8f1e2;
+  --shell-ink: #6f4c12;
+  --shell-header: #fffdfa;
+  --shell-header-line: #e8e1d5;
+}
+.admin-viewport[data-role='owner'] {
+  --shell-sidebar: #fffcf5;
+  --shell-text: #4f4a3f;
+  /* 크림 배경 위 작은 글자도 4.5:1 이상 */
+  --shell-muted: #6b6454;
+  --shell-line: #ebe3d2;
+  --shell-hover: #f6efdf;
+  --shell-active: #f6e8c6;
+  --shell-active-text: #5c4012;
+  --shell-accent: #a8740f;
+  --shell-tint: #f8edcf;
+  --shell-ink: #6f4c0f;
+  --shell-header: #fffefa;
+  --shell-header-line: #ebe3d2;
+}
+
+/* 헤더 */
+.admin-viewport[data-role] .dw-header {
+  background: var(--shell-header);
+  border-color: var(--shell-header-line);
+}
+.admin-viewport[data-role] .dw-brand {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0 20px 0 24px;
+  gap: 10px;
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+}
+.dw-brand > svg {
+  flex-shrink: 0;
+}
+.dw-brand-wordmark {
+  font-size: 21px;
+  font-weight: 800;
+}
+.dw-brand-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 999px;
+  background: var(--shell-tint);
+  color: var(--shell-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.dw-brand-context-icon {
+  display: inline-flex;
+  font-size: 14px;
+}
+.admin-viewport[data-role] .dw-role-pill,
+.admin-viewport[data-role] .dw-account-avatar {
+  background: var(--shell-tint);
+  color: var(--shell-ink);
+}
+
+/* 사이드바 */
+.admin-viewport[data-role] .dw-sidebar {
+  background: var(--shell-sidebar);
+  color: var(--shell-text);
+  border-right: 1px solid var(--shell-line);
+  padding: 20px 12px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-line) transparent;
+}
+.admin-viewport[data-role] .dw-nav-group {
+  margin-bottom: 20px;
+}
+.admin-viewport[data-role] .dw-nav-heading {
+  margin: 0 12px 6px;
+  color: var(--shell-muted);
+}
+.admin-viewport[data-role] .dw-nav-link {
+  height: auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  margin: 2px 0;
+  border-radius: 8px;
+  color: var(--shell-text);
+  line-height: 1.4;
+  gap: 11px;
+}
+.admin-viewport[data-role] .dw-nav-link:hover {
+  color: var(--shell-active-text);
+  background: var(--shell-hover);
+}
+.admin-viewport[data-role] .dw-nav-link.active {
+  background: var(--shell-active);
+  color: var(--shell-active-text);
+  box-shadow: inset 3px 0 0 var(--shell-accent);
+  font-weight: 700;
+}
+.admin-viewport[data-role] .dw-nav-link:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: -2px;
+}
+.dw-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 16px;
+  opacity: 0.8;
+}
+.dw-nav-link:hover .dw-nav-icon,
+.dw-nav-link.active .dw-nav-icon {
+  opacity: 1;
+}
+.dw-nav-link.active .dw-nav-icon {
+  color: var(--shell-accent);
+}
+.admin-viewport[data-role='owner'] .dw-nav-link.active .dw-nav-icon {
+  color: var(--shell-ink);
+}
+.admin-viewport[data-role] .dw-sidebar-tip {
+  background: var(--shell-hover);
+  color: var(--shell-muted);
+  border-color: var(--shell-line);
+}
+.admin-viewport[data-role] .dw-sidebar-tip strong {
+  color: var(--shell-text);
+}
+
+/* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
+.dw-owner-note {
+  display: none;
+}
+.admin-viewport[data-role='owner'] .dw-owner-note {
+  display: block;
+  margin: auto 4px 0;
+  padding: 16px 14px;
+  border-radius: 12px;
+  background: #fbf3df;
+  text-align: center;
+}
+.admin-viewport[data-role='owner'] .dw-owner-note + .dw-sidebar-bottom {
+  margin-top: 12px;
+}
+.dw-owner-note-mascot {
+  display: block;
+  margin: 0 auto 8px;
+}
+.dw-owner-note strong {
+  display: block;
+  color: #463b29;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dw-owner-note p {
+  margin: 4px 0 0;
+  color: var(--shell-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+/* 키보드 사용자: 첫 Tab에 본문 바로가기 */
+.dw-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  transform: translateY(-200%);
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--shell-ink, #172554);
+  font-weight: 700;
+  text-decoration: none;
+}
+.dw-skip-link:focus {
+  transform: translateY(0);
+}
+.dw-main:focus {
+  outline: none;
+}
+
+/* 휴대폰 폭: 기존에 휴대폰 배치를 지원하는 화면(이용 신청 · 사장님 홈)에서만 메뉴를 가로로 접는다 */
+@media (max-width: 760px) {
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand {
+    padding: 0;
+    gap: 8px;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-context {
+    margin-left: 0;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-header-tools {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar {
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--shell-line);
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note,
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar-bottom {
+    display: none;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-group {
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link {
+    width: auto;
+    margin: 0;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link.active {
+    box-shadow: inset 0 -3px 0 var(--shell-accent);
+  }
+}
+@media (max-width: 400px) {
+  /* 아주 좁은 폭에서는 로고 글자를 빼고 화면 이름을 남긴다 */
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-wordmark {
+    display: none;
+  }
+}
+@media (max-height: 820px) {
+  /* 노트북 화면처럼 세로가 짧으면 메뉴가 먼저 보이게 마스코트를 뺀다 */
+  .dw-owner-note-mascot {
+    display: none;
+  }
+}
