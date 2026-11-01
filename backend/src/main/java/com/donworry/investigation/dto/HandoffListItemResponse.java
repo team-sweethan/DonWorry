@@ -7,7 +7,7 @@ public record HandoffListItemResponse(
         Long handoffId,
         Long caseId,
         Long paymentId,
-        // 결제 정보를 찾지 못하면 null — 서버 재시작으로 시연 결제 목업이 비었을 때
+        // 결제 정보를 찾지 못하면 null — P5 · P2 어디에도 없는 결제
         Long amount,
         String decision,
         String actionType,

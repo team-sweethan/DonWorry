@@ -17,7 +17,6 @@ import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.repository.ActionHandoffRepository;
 import com.donworry.investigation.service.FinancialActionGateway.Command;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 // 금융 조치 경계는 기본으로 처리 중(PENDING)을 돌려주게 바꿔 두고, 결과는 HandoffService에 직접 넣는다
 @Tag("mariadb")
 @SpringBootTest
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class})
 class HandoffReceiptTests {
 
     @MockitoBean
@@ -67,7 +66,7 @@ class HandoffReceiptTests {
     JdbcTemplate jdbcTemplate;
 
     @Autowired
-    MockPaymentInfoStore mockPaymentInfoStore;
+    TestPaymentInfoStore payments;
 
     Long caseId;
     Long handoffId;
@@ -306,10 +305,9 @@ class HandoffReceiptTests {
                 .isEqualTo(InvestigationErrorCode.SECURITY_STAFF_ONLY);
     }
 
-    // 결제 정보가 있어야 목 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
+    // 결제 정보가 있어야 고정 보고서가 SUCCEEDED로 만들어진다 (없으면 FAILED)
     private Long decidedCase(Decision decision) {
-        Long paymentId = mockPaymentInfoStore
-                .registerHeld(100_000L, 65, List.of("NEW_CARD"), Instant.now())
+        Long paymentId = payments.registerHeld(100_000L, 65, List.of("NEW_CARD"), Instant.now())
                 .paymentId();
         Long newCaseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));

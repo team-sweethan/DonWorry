@@ -5,7 +5,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getCase } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
-import { useDemo } from '../../demo/DemoContext'
 import type { AiReport, CaseDetail } from '../../types/case'
 import { pickReport } from '../../utils/reportView'
 import { dateTime } from './case/caseLabels'
@@ -18,33 +17,32 @@ export function CaseReportPage() {
   const navigate = useNavigate()
   // Case 상세에서 받은 목록 복귀 조건을 돌아갈 때 다시 넘긴다 (#243)
   const listReturn = useLocation().state
-  const { merchant } = useDemo()
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   // 버전을 바꿔도 보던 탭을 유지해 v1 · v2의 조사 과정을 바로 비교할 수 있게 한다 (#294)
   const [tab, setTab] = useState<'report' | 'trace'>('report')
   // Case 상세와 같이 조회 범위와 함께 저장해 다른 Case의 늦은 응답을 버린다
-  const scope = `${merchant}/${id}`
+  const scope = id
   const [loaded, setLoaded] = useState<{
     scope: string
     detail: CaseDetail | null | 'error'
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getCase(id, merchant)
+    getCase(id)
       .then((result) => {
-        if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
+        if (alive) setLoaded({ scope: id, detail: result })
       })
       .catch(() => {
         if (!alive) return
         message.error('보고서를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setLoaded({ scope: `${merchant}/${id}`, detail: 'error' })
+        setLoaded({ scope: id, detail: 'error' })
       })
     return () => {
       alive = false
     }
-  }, [id, merchant, refreshKey, message])
+  }, [id, refreshKey, message])
   const result = loaded?.scope === scope ? loaded.detail : undefined
   const reload = () => setRefreshKey((k) => k + 1)
 

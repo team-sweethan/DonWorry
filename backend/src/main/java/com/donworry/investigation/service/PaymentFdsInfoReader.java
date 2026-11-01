@@ -2,7 +2,6 @@ package com.donworry.investigation.service;
 
 import com.donworry.fds.api.FdsEvidenceReader;
 import com.donworry.fds.api.FdsPaymentEvidence;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import com.donworry.payment.api.PaymentReader;
 import com.donworry.payment.api.PaymentSummary;
 import java.util.ArrayList;
@@ -18,34 +17,24 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 // P5 결제 정보(ADR-0026)와 P2 FDS 평가 근거(ADR-0034)를 결제별로 합친다 (#163)
-// 시연 결제(P5 payments에 없음)만 목 저장소에서 읽는다 — 시연 API와 함께 이 분기도 지운다 (#163 2단계)
 @Component
 @RequiredArgsConstructor
 class PaymentFdsInfoReader implements PaymentInfoReader {
 
     private final PaymentReader paymentReader;
     private final FdsEvidenceReader fdsEvidenceReader;
-    private final MockPaymentInfoStore mockPaymentInfoStore;
 
     @Override
     public Map<Long, PaymentInfo> findAll(Collection<Long> paymentIds) {
         Map<Long, PaymentInfo> found = new LinkedHashMap<>();
-        List<Long> realIds = new ArrayList<>();
-        for (Long id : new LinkedHashSet<>(paymentIds)) {
-            Optional<PaymentInfo> demo = mockPaymentInfoStore.find(id);
-            if (demo.isPresent()) {
-                found.put(id, demo.get());
-            } else {
-                realIds.add(id);
-            }
-        }
-        if (realIds.isEmpty()) {
+        List<Long> ids = new ArrayList<>(new LinkedHashSet<>(paymentIds));
+        if (ids.isEmpty()) {
             return found;
         }
         // P2는 평가가 있는 결제만 돌려준다. 빠진 결제는 평가 없음이다
-        Map<Long, FdsPaymentEvidence> evidences = fdsEvidenceReader.findLatestByPaymentIds(realIds).stream()
+        Map<Long, FdsPaymentEvidence> evidences = fdsEvidenceReader.findLatestByPaymentIds(ids).stream()
                 .collect(Collectors.toMap(FdsPaymentEvidence::paymentId, Function.identity()));
-        for (Long id : realIds) {
+        for (Long id : ids) {
             Optional<PaymentSummary> payment = paymentReader.findById(id);
             FdsPaymentEvidence evidence = evidences.get(id);
             if (payment.isPresent() || evidence != null) {

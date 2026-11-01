@@ -6,8 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 
 import com.donworry.fds.api.FdsEvidenceReader;
 import com.donworry.fds.api.FdsPaymentEvidence;
@@ -15,7 +13,6 @@ import com.donworry.fds.api.FdsPaymentEvidence.MatchedRule;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
-import com.donworry.investigation.service.mock.MockPaymentInfoStore;
 import com.donworry.payment.api.PaymentReader;
 import com.donworry.payment.api.PaymentSummary;
 import java.time.Instant;
@@ -32,12 +29,11 @@ class PaymentFdsInfoReaderTests {
 
     PaymentReader paymentReader = mock(PaymentReader.class);
     FdsEvidenceReader fdsEvidenceReader = mock(FdsEvidenceReader.class);
-    MockPaymentInfoStore mockPaymentInfoStore = new MockPaymentInfoStore();
     PaymentFdsInfoReader reader;
 
     @BeforeEach
     void setUp() {
-        reader = new PaymentFdsInfoReader(paymentReader, fdsEvidenceReader, mockPaymentInfoStore);
+        reader = new PaymentFdsInfoReader(paymentReader, fdsEvidenceReader);
         given(paymentReader.findById(anyLong())).willReturn(Optional.empty());
         given(fdsEvidenceReader.findLatestByPaymentIds(any())).willReturn(List.of());
     }
@@ -107,20 +103,6 @@ class PaymentFdsInfoReaderTests {
     @Test
     void findAll_withNeither_omitsPayment() {
         assertThat(reader.findAll(List.of(1L))).isEmpty();
-    }
-
-    // 시연 결제는 목 저장소에서 읽고 P5 · P2에는 묻지 않는다. 실제 결제와 섞여도 각자 읽는다
-    @Test
-    void findAll_withDemoAndRealPayments_readsEachFromItsSource() {
-        PaymentInfo demo = mockPaymentInfoStore.registerHeld(300_000L, 65, List.of("NEW_CARD"), REQUESTED_AT);
-        given(paymentReader.findById(1L)).willReturn(Optional.of(payment(1L)));
-
-        Map<Long, PaymentInfo> found = reader.findAll(List.of(demo.paymentId(), 1L));
-
-        assertThat(found.get(demo.paymentId())).isEqualTo(demo);
-        assertThat(found.get(1L).amount()).isEqualTo(150_000L);
-        verify(paymentReader, never()).findById(demo.paymentId());
-        verify(fdsEvidenceReader).findLatestByPaymentIds(List.of(1L));
     }
 
     // 조회 오류는 null로 숨기지 않고 그대로 던진다 — 장애가 "값 모름"으로 보이면 빈 근거로 판정할 수 있다

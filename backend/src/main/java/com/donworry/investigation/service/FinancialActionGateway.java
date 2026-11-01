@@ -4,7 +4,7 @@ import com.donworry.investigation.entity.ActionType;
 import java.util.UUID;
 
 // P3 → P5 금융 조치 요청 경계 (fds 정본 02 §2.9, 03 §3.8, ADR-0027)
-// 실제 구현은 PaymentFinancialActionGateway(P5 PaymentActionRequester). 시연 결제용 목은 속성으로만 켠다
+// 실제 구현은 PaymentFinancialActionGateway(P5 PaymentActionRequester)
 public interface FinancialActionGateway {
 
     // 판정 커밋 뒤 · 다시 확인 때 부른다. 같은 멱등키로 다시 불러도 P5는 한 번만 접수하고 저장된 결과를 돌려준다

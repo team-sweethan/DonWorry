@@ -134,13 +134,17 @@ class InvestigationRepositoryTests {
     void findByStatusAndLastAttemptedAtBefore_returnsStaleRequestedHandoff() {
         SecurityCase securityCase = saveCase(1L, "customer-1", NOW);
         ActionHandoff stale = saveHandoff(securityCase, 4001L, NOW.minusSeconds(600));
-        saveHandoff(securityCase, 4002L, NOW);
+        ActionHandoff fresh = saveHandoff(securityCase, 4002L, NOW);
         entityManager.flush();
 
         var retryTargets = actionHandoffRepository.findByStatusAndLastAttemptedAtBefore(
                 HandoffStatus.REQUESTED, NOW.minusSeconds(300));
 
-        assertThat(retryTargets).extracting(ActionHandoff::getId).containsExactly(stale.getId());
+        // 다른 테스트가 커밋해 둔 REQUESTED 인계도 공유 DB에 있을 수 있어 이 테스트가 만든 두 인계만 본다
+        assertThat(retryTargets)
+                .extracting(ActionHandoff::getId)
+                .contains(stale.getId())
+                .doesNotContain(fresh.getId());
     }
 
     // 나노초가 있는 시각으로 만들어도 저장 전 값과 다시 읽은 값이 같다

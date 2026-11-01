@@ -8,7 +8,7 @@ import java.util.Optional;
 import lombok.Builder;
 
 // 화면 · 보고서에 보여 줄 P5 결제 정보와 P2 FDS 평가 근거 — P3는 금액 · 상태를 저장하지 않고 조회만 한다
-// 구현은 PaymentFdsInfoReader(P5 PaymentReader + P2 FdsEvidenceReader). 시연 결제만 목 저장소에서 읽는다 (#163)
+// 구현은 PaymentFdsInfoReader(P5 PaymentReader + P2 FdsEvidenceReader).
 public interface PaymentInfoReader {
 
     // P5 · P2 어디에도 없는 결제는 결과에서 빠진다. 한쪽만 있으면 다른 쪽 값은 null이다
@@ -39,7 +39,7 @@ public interface PaymentInfoReader {
     @Builder
     record RuleHit(String code, String name, Integer appliedScore, String thresholdSnapshot, String observedValue) {
 
-        // 기준값 · 실제값이 없는 시연 결제 · 테스트용
+        // 기준값 · 실제값이 없는 테스트용
         public RuleHit(String code, String name, Integer appliedScore) {
             this(code, name, appliedScore, null, null);
         }

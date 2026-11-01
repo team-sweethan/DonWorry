@@ -1,6 +1,7 @@
 package com.donworry.investigation.service;
 
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -10,7 +11,6 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
-import com.donworry.investigation.dto.DemoHeldPaymentResponse;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.util.HashMap;
@@ -37,14 +37,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 // 고객사 "보안 조치 결과" API — 가맹점 범위 · 접근 권한 · 내보내지 않는 항목을 HTTP로 확인한다 (#205)
-// Case는 시연 HELD 결제로 만들고, 판정은 보안 직원으로 로그인을 바꿔 보안 직원 API로 한다
+// Case는 테스트 HELD 결제(TestPaymentInfoStore)로 만들고, 판정은 보안 직원으로 로그인을 바꿔 보안 직원 API로 한다
 // 테스트마다 가맹점 ID를 새로 만들어 다른 테스트의 Case가 목록 · 지표에 섞이지 않게 한다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
 class MerchantCaseFlowTests {
 
     private static final AtomicLong MERCHANT_IDS = new AtomicLong(2_000_000_000L + System.nanoTime() % 1_000_000L);
@@ -67,6 +67,9 @@ class MerchantCaseFlowTests {
     @Autowired
     TransactionTemplate transactionTemplate;
 
+    @Autowired
+    TestPaymentInfoStore payments;
+
     @MockitoBean
     CurrentStaff currentStaff;
 
@@ -81,12 +84,12 @@ class MerchantCaseFlowTests {
     @Test
     void list_returnsOnlyMyCasesWithOverview() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse decided = createHeld(merchantId, customer, 300_000L, 65);
+        Held decided = createHeld(merchantId, customer, 300_000L, 65);
         createHeld(merchantId, customer, 500_000L, 72);
         decideAll(decided.caseId(), "ACCEPT", "REJECT");
         recheckAll(decided.caseId());
-        DemoHeldPaymentResponse waiting = createHeld(merchantId, customer(), 100_000L, 60);
-        DemoHeldPaymentResponse others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
+        Held waiting = createHeld(merchantId, customer(), 100_000L, 60);
+        Held others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
 
         loginAsOwner(merchantId);
         mvc.perform(get("/api/merchant/security-cases"))
@@ -111,7 +114,7 @@ class MerchantCaseFlowTests {
     // 상세는 보고서 핵심 요약 · 결제별 AI 결론 · 직원 판정 · P5 결제 상태를 따로 보내고, 내부 근거는 보내지 않는다
     @Test
     void detail_beforeAndAfterDecision_separatesDecisionAndPaymentStatus() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 300_000L, 65);
+        Held held = createHeld(merchantId, customer(), 300_000L, 65);
 
         loginAsOwner(merchantId);
         mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
@@ -179,7 +182,7 @@ class MerchantCaseFlowTests {
     // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약 · AI 결론을 내보내지 않는다 (PR #207 리뷰)
     @Test
     void detail_evidenceChangedBeforeNewReport_hidesOldSummary() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 300_000L, 65);
+        Held held = createHeld(merchantId, customer(), 300_000L, 65);
         // 새 보고서 요청 없이 증거 버전만 올려 "병합 직후 · 재조사 결과 전"을 만든다
         transactionTemplate.executeWithoutResult(status ->
                 securityCaseRepository.findById(held.caseId()).orElseThrow().increaseEvidenceVersion());
@@ -194,7 +197,7 @@ class MerchantCaseFlowTests {
     // 다른 가맹점 Case는 없는 Case와 같은 404다
     @Test
     void detail_otherMerchantCase_returnsNotFound() throws Exception {
-        DemoHeldPaymentResponse others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
+        Held others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
 
         loginAsOwner(merchantId);
         mvc.perform(get("/api/merchant/security-cases/{caseId}", others.caseId()))
@@ -204,7 +207,7 @@ class MerchantCaseFlowTests {
 
     @Test
     void readApis_withoutLogin_returnUnauthorized() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 100_000L, 60);
+        Held held = createHeld(merchantId, customer(), 100_000L, 60);
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
         mvc.perform(get("/api/merchant/security-cases"))
@@ -219,7 +222,7 @@ class MerchantCaseFlowTests {
     @ParameterizedTest
     @ValueSource(strings = {"SECURITY_STAFF", "ADMIN"})
     void readApis_byNonOwner_returnForbidden(String role) throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 100_000L, 60);
+        Held held = createHeld(merchantId, customer(), 100_000L, 60);
         loginAs(99L, role, merchantId, List.of("FDS_VIEW", "FINANCE_VIEW"));
 
         expectForbidden(held.caseId());
@@ -228,7 +231,7 @@ class MerchantCaseFlowTests {
     // FDS 조회 권한이 없는 사장님 (자금관리만 이용)
     @Test
     void readApis_ownerWithoutFdsView_returnForbidden() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 100_000L, 60);
+        Held held = createHeld(merchantId, customer(), 100_000L, 60);
         loginAs(99L, "OPERATOR", merchantId, List.of("FINANCE_VIEW"));
 
         expectForbidden(held.caseId());
@@ -237,7 +240,7 @@ class MerchantCaseFlowTests {
     // 가맹점이 없는 사장님은 비정상 데이터라 전체 조회로 넓히지 않고 거부한다 (ADR-0020)
     @Test
     void readApis_ownerWithoutMerchant_returnForbidden() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(merchantId, customer(), 100_000L, 60);
+        Held held = createHeld(merchantId, customer(), 100_000L, 60);
         loginAs(99L, "OPERATOR", null, List.of("FDS_VIEW"));
 
         expectForbidden(held.caseId());
@@ -268,12 +271,13 @@ class MerchantCaseFlowTests {
         }
     }
 
-    // 금융 처리 대기 중인 인계를 보안 직원으로 모두 다시 확인한다 — 시연 결제는 다시 확인에서 완료된다 (#212)
+    // 금융 처리 대기 중인 인계를 보안 직원으로 모두 다시 확인한다 — 테스트 대역은 다시 확인에서 완료된다 (#212)
     private void recheckAll(Long caseId) throws Exception {
         loginAs(7L, "SECURITY_STAFF", null, List.of());
         for (CaseDetailResponse.HandoffResponse handoff :
                 caseQueryService.detail(caseId).handoffs()) {
-            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId()))
+            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
+                            .with(csrf()))
                     .andExpect(status().isOk());
         }
     }
@@ -283,33 +287,24 @@ class MerchantCaseFlowTests {
         Map<String, Object> body = new HashMap<>();
         body.put("evidenceVersion", evidenceVersion);
         body.put("reportId", reportId);
-        body.put(
-                "decisions",
-                List.of(Map.of("casePaymentId", casePaymentId, "decision", decision, "reason", "시연 판정 사유")));
+        body.put("decisions", List.of(Map.of("casePaymentId", casePaymentId, "decision", decision, "reason", "판정 사유")));
         return post("/api/security-cases/{caseId}/decisions", caseId)
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(body));
     }
 
-    private DemoHeldPaymentResponse createHeld(long merchantId, String customerRef, long amount, int riskScore)
-            throws Exception {
-        String body = mvc.perform(post("/api/demo/held-payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(Map.of(
-                                "merchantId",
-                                merchantId,
-                                "customerRef",
-                                customerRef,
-                                "amount",
-                                amount,
-                                "riskScore",
-                                riskScore))))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return mapper.readValue(body, DemoHeldPaymentResponse.class);
+    // P5 HELD 이벤트 대신 테스트 결제를 만들어 Case 접수로 넘긴다 — 리스너처럼 트랜잭션 밖에서 불러 커밋 뒤 보고서 요청이 돈다
+    private Held createHeld(long merchantId, String customerRef, long amount, int riskScore) {
+        Instant now = Instant.now();
+        Long paymentId = payments.registerHeld(amount, riskScore, TestPaymentInfoStore.DEFAULT_RULES, now)
+                .paymentId();
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        return new Held(paymentId, caseId);
     }
+
+    record Held(Long paymentId, Long caseId) {}
 
     private void loginAsOwner(long merchantId) {
         loginAs(50L, "OPERATOR", merchantId, List.of("FDS_VIEW"));
