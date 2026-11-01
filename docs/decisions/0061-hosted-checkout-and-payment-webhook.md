@@ -49,9 +49,16 @@
 - 전송: 업무 트랜잭션 밖의 스케줄러(기본 5초)가 보낸다. 2xx면 보낸 상태를 기록하고 끝, 아니면 5초부터 두 배씩 최대 5분 간격으로 다시 보낸다. 타임아웃 3초, 리다이렉트를 따르지 않는다
 - 가맹점 쪽 규칙: 서명·시각 확인 → **본문은 믿지 않고 `paymentId`로 서명 조회(#149)해서 반영** → 같은 결과면 아무것도 바꾸지 않는다(중복·순서 역전 안전) → 2xx 응답. 웹훅을 놓쳐도 조회 배치(최근 결제를 주기 조회)로 맞춘다
 
+### 3-1. 서명 조회 응답에 `authorized` 추가 (#149 조회 계약 확장)
+
+- `GET /api/payments/{paymentId}`·`GET /api/payment-orders`(주문번호 조회) 응답(`MerchantPaymentResponse`)에 `authorized`(boolean, 카드 승인이 끝났는지)를 **추가**한다. 값은 승인 참조(`authorizationRef`)가 있는지로만 정하고, 승인 참조 원문은 계속 내보내지 않는다
+- 이유: `PENDING`은 "승인 전 평가 중·오류로 멈춤"과 "승인 후 매입 대기"를 함께 담는다(#149 설계). 웹훅 본문을 믿지 않고 조회로 반영하려면, 조회만으로 승인 여부를 알 수 있어야 4절 규칙(승인되면 결제 완료)을 지킬 수 있다. 결제창을 닫았거나 웹훅을 놓쳐 조회 배치로 복구할 때도 같다
+- 필드 추가만 하므로 이 값을 모르는 기존 호출자(`scripts/demo/cakeshop_pay.py` 등)는 그대로 동작한다. 새 `PaymentStatus`는 만들지 않는다
+- 결제창 결과(2절)와 웹훅 본문의 `authorized`도 같은 기준으로 계산한다
+
 ### 4. CakeShop이 결과를 해석하는 규칙
 
-- 카드 승인(ALLOW, 또는 REVIEW → HELD)이면 주문은 결제 완료다. HELD도 승인은 끝났으므로 구매자를 기다리게 하지 않는다
+- 조회 응답의 `authorized=true`이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 주문은 결제 완료다(ALLOW 승인 후 매입 대기, 또는 REVIEW → HELD). HELD도 승인은 끝났으므로 구매자를 기다리게 하지 않는다. `authorized=false`인 `PENDING`은 아직 처리 중이다
 - 직원 거절(HELD → VOIDED)이면 CakeShop이 주문을 취소한다(재고·쿠폰 복구, 고객 알림)
 - 매입(CAPTURED)·정산은 돈워리 안의 일이며 CakeShop 주문 상태를 바꾸지 않는다
 
@@ -92,14 +99,16 @@
 | outbox 테이블로 이벤트마다 행 저장 | 세션당 결제가 하나라 "마지막으로 알린 값"만으로 충분하다. 행이 쌓이는 저장·정리 비용만 생긴다 |
 | 결제창 API를 CSRF 검사 안에 두기 | 다른 사이트 iframe에서는 `SameSite=Lax` 쿠키가 오지 않아 CSRF를 켜면 결제가 막힌다. 쿠키 인증이 없는 경로라 CSRF가 지킬 대상도 없다 |
 | 승인돼도 매입(CAPTURED)까지 CakeShop 결제 완료를 미루기 | HELD는 직원 판정까지 오래 걸려 구매자가 결제창에서 기다릴 수 없다. 승인은 끝났으므로 완료로 보고, 거절되면 웹훅으로 취소한다 |
+| 승인 여부를 조회에 넣지 않고 웹훅 본문의 `authorized`만 쓰기 | 웹훅은 놓칠 수 있고 본문은 믿지 않기로 했다. 조회 배치로 복구할 때 승인된 `PENDING`과 평가 중 `PENDING`을 구분할 수 없다 |
+| 승인 후 매입 대기를 나타내는 새 `PaymentStatus` 추가 | P2·P3·P6가 읽는 상태 계약이 모두 바뀐다. 가맹점 조회에 필드 하나를 더하는 것으로 충분하다 |
 
 ## 영향
 
-- API: 새 가맹점 API `POST /api/payment-sessions`, 공개 API `/api/checkout/{sessionKey}` 3개, 가맹점에 보내는 웹훅. 모두 `payment.http.enabled=true`일 때만 켜진다. 기존 `POST /api/payments`·조회는 바뀌지 않는다
+- API: 새 가맹점 API `POST /api/payment-sessions`, 공개 API `/api/checkout/{sessionKey}` 3개, 가맹점에 보내는 웹훅. 모두 `payment.http.enabled=true`일 때만 켜진다. 기존 서명 조회 응답에 `authorized` 필드를 추가한다(3-1, 필드 추가만이라 기존 호출자 영향 없음). `POST /api/payments` 요청 계약은 바뀌지 않는다
 - 모듈: identity가 `identity/api/MerchantWebhookSigner`를 새로 공개한다(payment → identity 의존은 기존 허용 범위). `SecurityConfig`·`MerchantSecurityConfiguration`에 경로 등록(P1)
 - DB: P5 migration 1개(`payment_sessions`)
 - 화면: 돈워리 프론트 공개 화면 `/checkout/:sessionKey`. CakeShop 결제 화면의 모달·웹훅 수신·조회 배치는 CakeShop 저장소
-- 테스트: 세션 생성·멱등·만료·같은 출처 검사, 결제창 결제 중복 방지, 결과 주소, 웹훅 서명 고정 벡터(돈워리·CakeShop 같은 값), 재전송 간격, CSRF를 켠 상태의 결제창 결제
+- 테스트: 세션 생성·멱등·만료·같은 출처 검사, 조회 응답 `authorized`(승인 전·후 `PENDING`, HELD, DECLINED), 결제창 결제 중복 방지, 결과 주소, 웹훅 서명 고정 벡터(돈워리·CakeShop 같은 값), 재전송 간격, CSRF를 켠 상태의 결제창 결제
 - 문서: `docs/payment/`에 연동 안내, #154는 이 ADR로 결정 기록
 
 ## 남은 결정 (구현 전 또는 후속)
