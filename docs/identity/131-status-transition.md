@@ -67,3 +67,14 @@
 - backend·DB 변경이 없어 해당 검사는 재실행하지 않았다. API의 옛 상태 입력 400은 유지하며 브라우저 주소에서만 변환한다.
 
 미검증: 실제 브라우저의 이전 계정 탭·북마크·뒤로가기. CI는 요청대로 조회하지 않았다. 실제 DB/운영 배포·Notion 동기화의 미검증도 유지한다.
+
+## Codex 재리뷰 반영 — 이메일 미확인 CSS (2026-11-01)
+
+[세 번째 P3 지적](https://github.com/team-sweethan/DonWorry/pull/394#discussion_r4434781986)을 반영했다. 상세 화면의 동적 클래스는 상태 이름을 소문자로 변환하므로 `ar-state-email_verification_pending`인데 CSS에는 옛 선택자만 남아 있었다. 선택자 한 곳을 새 이름에 맞춰 이메일 미확인 안내의 기존 회색 배경(#f7f8fa)·테두리(#e1e5eb)가 적용되도록 했다. 앞선 검토의 대문자 위주 검색에서 소문자 CSS 참조를 놓쳤다.
+
+검사 대상은 `6d0632c` 위 이 절과 함께 커밋한 CSS 수정 작업 트리이며 검사 뒤 CSS/앱/테스트 코드는 바꾸지 않았다.
+
+- `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0, 기존 테스트 264개 모두 통과. 기존 router lint 경고 1개·번들 크기 경고 유지.
+- 소문자까지 포함해 frontend/src·backend/src/main/java의 옛 상태 참조를 재검색했다. 옛 이름 문자열은 이전 URL을 새 이름으로 옮기는 호환 처리 두 곳에만 남는다. CSS 선택자와 상세의 상태 소문자 클래스 생성 규칙을 대조했다.
+- `git diff --check`, `python3 .github/scripts/check_md_links.py`: 통과.
+- backend·DB 변경은 없어서 해당 검사를 재실행하지 않았다. 실제 브라우저의 색상 렌더링은 미검증이며 CI 상태는 조회하지 않았다. 앞선 운영/DB/Notion 미검증도 유지한다.
