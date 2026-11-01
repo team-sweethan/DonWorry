@@ -1,3 +1,7 @@
+import {
+  applicationListStatus,
+  normalizeApplicationListStatusQuery,
+} from '../../utils/applicationListStatusQuery.ts'
 import { isShopUrlValid } from '../../utils/shopUrl.ts'
 import { IntegrationStatusSummary } from './IntegrationStatusSummary'
 import { useEffect, useRef, useState } from 'react'
@@ -63,8 +67,12 @@ const statusTag = (status: ApplicationStatus) => (
 export function AdminApplicationsPage() {
   const [query, setQuery] = useSearchParams()
   const mailAttention = query.get('mailAttention') === 'true'
-  const statusValue = query.get('status') ?? (mailAttention ? 'ALL' : 'REVIEW_PENDING')
-  const status = statusValue in applicationLabels ? (statusValue as ApplicationStatus) : undefined
+  const statusValue = applicationListStatus(query)
+  const status = statusValue === 'ALL' ? undefined : statusValue
+  useEffect(() => {
+    const normalized = normalizeApplicationListStatusQuery(query)
+    if (normalized.toString() !== query.toString()) setQuery(normalized, { replace: true })
+  }, [query, setQuery])
   const pageValue = Number(query.get('page') ?? 0)
   const page =
     Number.isSafeInteger(pageValue) && pageValue >= 0 && pageValue < 100000 ? pageValue : 0
