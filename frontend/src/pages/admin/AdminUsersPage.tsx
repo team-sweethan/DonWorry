@@ -40,6 +40,7 @@ import { LoginHistoryTable } from '../auth/LoginHistoryPage'
 import {
   adminUserListParams,
   parseAdminUserListQuery,
+  normalizeAdminUserListStatusQuery,
   type AdminUserListQuery,
 } from '../../utils/adminUserListQuery'
 
@@ -97,6 +98,12 @@ function TemporaryPasswordModal({
 export function AdminUsersPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const filter = useMemo(() => parseAdminUserListQuery(searchParams), [searchParams])
+  useEffect(() => {
+    const normalized = normalizeAdminUserListStatusQuery(searchParams)
+    if (normalized.toString() !== searchParams.toString()) {
+      setSearchParams(normalized, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
   const [revision, setRevision] = useState(0)
   const updateFilter = (changes: Partial<AdminUserListQuery>) =>
     setSearchParams(adminUserListParams({ ...filter, ...changes }))

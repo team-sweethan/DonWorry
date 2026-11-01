@@ -11,7 +11,7 @@ export type AdminUserListQuery = {
 /** 화면·새로고침·뒤로가기가 같은 조건을 쓰도록 적용된 필터는 URL에서 읽는다. */
 export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQuery {
   const role = params.get('role')
-  const status = params.get('status')
+  const status = normalizeAdminUserListStatusQuery(params).get('status')
   const page = Number(params.get('page'))
   return {
     page: Number.isSafeInteger(page) && page >= 1 && page <= 2_147_483_647 ? page : 1,
@@ -31,4 +31,11 @@ export function adminUserListParams(query: AdminUserListQuery): URLSearchParams 
   if (query.passwordChangeRequired) params.set('passwordChangeRequired', 'true')
   if (query.page > 1) params.set('page', String(query.page))
   return params
+}
+
+/** 이전 북마크에서도 정지 필터를 유지하고 다른 검색 조건은 바꾸지 않는다. */
+export function normalizeAdminUserListStatusQuery(params: URLSearchParams): URLSearchParams {
+  const normalized = new URLSearchParams(params)
+  if (normalized.get('status') === 'DISABLED') normalized.set('status', 'INACTIVE')
+  return normalized
 }
