@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.donworry.investigation.entity.ActionType;
-import com.donworry.investigation.service.mock.*;
 import com.donworry.payment.api.*;
 import java.util.UUID;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,8 +20,7 @@ class PaymentCustomerVoidGatewayTests {
             })
     void request_whenCustomerCancellationBlocks_returnsResponseOnly(String code) {
         var requester = mock(PaymentActionRequester.class);
-        var gateway = new PaymentFinancialActionGateway(
-                requester, mock(MockPaymentInfoStore.class), mock(MockFinancialActionGateway.class));
+        var gateway = new PaymentFinancialActionGateway(requester);
         when(requester.request(any())).thenReturn(PaymentActionReceipt.rejected(code));
         var receipt =
                 gateway.request(new FinancialActionGateway.Command(1L, 2L, ActionType.CAPTURE, UUID.randomUUID()));

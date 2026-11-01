@@ -73,16 +73,14 @@ type ServerDetail = {
   handoffs: ServerHandoff[]
   history: ServerHistory[]
 }
-type DemoHeldPayment = { paymentId: Id; caseId: Id }
 
 const str = (id: Id) => String(id)
 const strOrNull = (id: Id | null) => (id === null ? null : String(id))
 
 /**
- * 보안 직원은 가맹점 소속 없이 모든 가맹점 Case를 본다 (platform_users.merchant_id = NULL).
- * 화면의 시연 가맹점 선택은 백엔드 merchantId와 다른 값이라 거르지 않는다. 인가는 백엔드 몫이다.
+ * 보안 직원은 가맹점 소속 없이 모든 가맹점 Case를 본다 (platform_users.merchant_id = NULL). 인가는 백엔드 몫이다.
  */
-export async function getCases(_merchant: string): Promise<CaseSummary[]> {
+export async function getCases(): Promise<CaseSummary[]> {
   const cases = await api<ServerSummary[]>('/security-cases', { cache: 'no-store' })
   return cases.map((c) => ({ ...c, caseId: str(c.caseId), merchantId: str(c.merchantId) }))
 }
@@ -140,7 +138,7 @@ export async function getReportProgress(caseId: string, reportId: string): Promi
   })
 }
 
-export async function getCase(caseId: string, _merchant: string): Promise<CaseDetail | null> {
+export async function getCase(caseId: string): Promise<CaseDetail | null> {
   try {
     return toDetail(await fetchDetail(caseId))
   } catch (error) {
@@ -189,58 +187,13 @@ export async function recheckHandoff(caseId: string, handoffId: string): Promise
   )
 }
 
-/** 시연 전용: P5 HELD 이벤트 대신 50~79점 HELD 결제를 만든다. 실제 연동 후 지운다. */
-export async function demoCreateHeldPayment(): Promise<string> {
-  const held = await postDemoHeld({
-    // 시연 가맹점 DEMOSHOP(#101 시드)이 첫 가맹점이라는 가정. Case의 merchantId는 논리 참조라 FK 오류는 없다
-    merchantId: 1,
-    customerRef: `demo-customer-${Date.now()}`,
-    amount: 300_000,
-    riskScore: 65,
-    ruleHits: ['NEW_CARD', 'HIGH_AMOUNT'],
-  })
-  return str(held.caseId)
-}
-
 /** 현재 증거 버전의 AI 보고서가 없을 때 다시 요청한다. 이미 있으면 백엔드가 새로 만들지 않는다. */
 export async function requestReport(caseId: string): Promise<CaseDetail> {
   return toDetail(await api<ServerDetail>(`/security-cases/${caseId}/reports`, { method: 'POST' }))
 }
 
-/**
- * 시연 전용: 열람 중 같은 고객의 보류 결제(고액 + 10분 내 반복 = 60점)가 병합되는 상황을 만든다.
- * 병합 기한이 지났거나 판정이 시작되면 백엔드는 그 결제로 새 Case를 만든다 — merged: false와 새 caseId를 돌려준다.
- */
-export async function demoMergePayment(
-  caseId: string,
-): Promise<{ merged: boolean; caseId: string }> {
-  const { securityCase } = await fetchDetail(caseId)
-  const held = await postDemoHeld({
-    merchantId: securityCase.merchantId,
-    customerRef: securityCase.customerRef,
-    amount: 540_000,
-    riskScore: 60,
-    ruleHits: ['HIGH_AMOUNT', 'RAPID_REPEAT'],
-  })
-  return { merged: str(held.caseId) === caseId, caseId: str(held.caseId) }
-}
-
 function fetchDetail(caseId: string) {
   return api<ServerDetail>(`/security-cases/${caseId}`, { cache: 'no-store' })
-}
-
-function postDemoHeld(body: {
-  merchantId: Id
-  customerRef: string
-  amount: number
-  riskScore: number
-  ruleHits: string[]
-}) {
-  return api<DemoHeldPayment>('/demo/held-payments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
 }
 
 function toDetail(detail: ServerDetail): CaseDetail {

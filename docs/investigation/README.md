@@ -102,21 +102,14 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 | `POST /api/security-cases/{caseId}/handoffs/{handoffId}/recheck` | 보안 직원 | 인계 상태 다시 확인 |
 | `GET /api/merchant/security-cases` | 사장님(`FDS_VIEW`) | 내 가맹점 Case 목록 · 요약 지표 (#205) |
 | `GET /api/merchant/security-cases/{caseId}` | 사장님(`FDS_VIEW`) | 핵심 요약 · 결제별 판정과 실제 결제 상태 (#205) |
-| `POST /api/demo/held-payments` | 시연 | 50~79점 HELD 결제 만들기 (#163 2단계에서 삭제) |
 
 - 오류는 `code`가 있는 problem 응답이다(`INV_001`~`INV_015`). 코드별 의미와 상태는 ADR-0019와 `InvestigationErrorCode`를 본다.
 - 고객사 API는 가맹점을 세션으로만 정하고, 다른 가맹점 Case는 `INV_001` 404로 답한다. 적중 규칙 · 점수 · 판정 사유 같은 내부 근거는 보내지 않는다.
 
-## 7. 목업 범위와 지울 조건
+## 7. 목업 범위
 
-| 목업 | 하는 일 | 지울 때 |
-| --- | --- | --- |
-| `MockPaymentInfoStore` | 시연 결제의 금액 · 점수 · 룰을 메모리에 둔다 | P5 결제 입구(#151)가 켜진 뒤 #163 2단계 |
-| `MockFinancialActionGateway` | 시연 결제의 금융 조치. 첫 요청은 처리 중(`PENDING`), "인계 상태 다시 확인"에서 완료되고 결제 상태를 `CAPTURED` · `VOIDED`로 바꾼다 (#212) | 같음 (#163 2단계) |
-| `DemoHeldPaymentController` · `DemoHeldPaymentService` | 시연 HELD 결제 API | 같음 (#163 2단계) |
-
-- 시연 결제와 실제 결제는 결제 ID로 나뉜다. 목 저장소에 등록된 ID만 목업으로 가고, 나머지는 실제 P5 · P2로 간다. 켜고 끄는 설정값은 없다.
-- 서버를 다시 띄우면 Case · 판정 · 인계 · 보고서는 DB에 남지만 시연 결제의 목 결제 정보는 사라진다. 이때 시연 결제 Case는 금액 · 점수가 `null`로 보인다.
+- P3 결제 · FDS 조회와 금융 조치에는 목업이 없다. 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 `MockPaymentInfoStore` · `MockFinancialActionGateway`는 #163 2단계에서 지웠다. HELD Case는 실제 결제의 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 로컬에서는 `scripts/demo/cakeshop_pay.py`로 만든다 ([로컬 시연 가이드](../demo/local-demo.md)).
+- 테스트는 같은 역할의 대역 `TestPaymentInfoStore` · `TestFinancialActionGateway`(테스트 소스)를 `@Import`해 쓴다. 실제 P5 · P2 연결은 `PaymentActionFlowTests` · `PaymentFdsInfoReaderTests` · `PaymentFdsInfoFlowTests`가 본다.
 - AI 보고서는 목업이 아니다(#250에서 `MockReportGateway`를 P4 `AiReportService`로 바꿨다). ai-server를 켜지 않은 로컬의 고정 문장 보고서도 실제 결제 근거로 만들고 DB에 저장한다.
 - 담당 전체의 목업 현황은 Notion [목업 데이터 · 연동 현황](https://www.notion.so/401ee45ba5e181a7b9f0ee51e9578999)을 본다.
 

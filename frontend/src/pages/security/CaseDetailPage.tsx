@@ -4,7 +4,6 @@ import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
-  demoMergePayment,
   getCase,
   recheckHandoff,
   requestReport,
@@ -14,7 +13,6 @@ import { ApiError } from '../../api/client'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
-import { useDemo } from '../../demo/DemoContext'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
 import { SLA_HOURS, decisionMode, latestReport, mergeRemainingMin } from '../../utils/caseRules'
@@ -35,15 +33,14 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   // 목록에서 왔으면 그 조건의 목록으로 돌아간다 (#243)
   const listPath = caseListReturnPath(useLocation().state)
-  const { merchant } = useDemo()
   const { toast } = useFeedback()
   // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   const [recheckingId, setRecheckingId] = useState<string | null>(null)
-  // 응답을 조회 범위(가맹점·Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
+  // 응답을 조회 범위(Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
   // 늦게 도착한 이전 범위의 응답은 버린다.
-  const scope = `${merchant}/${id}`
+  const scope = id
   // detail: null은 404(Case 없음), 'error'는 네트워크·5xx 등 일시 장애 — 404 화면으로 단정하지 않는다
   const [loaded, setLoaded] = useState<{
     scope: string
@@ -51,19 +48,19 @@ export function CaseDetailPage() {
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getCase(id, merchant)
+    getCase(id)
       .then((result) => {
-        if (alive) setLoaded({ scope: `${merchant}/${id}`, detail: result })
+        if (alive) setLoaded({ scope: id, detail: result })
       })
       .catch(() => {
         if (!alive) return
         message.error('Case를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
-        setLoaded({ scope: `${merchant}/${id}`, detail: 'error' })
+        setLoaded({ scope: id, detail: 'error' })
       })
     return () => {
       alive = false
     }
-  }, [id, merchant, refreshKey, message])
+  }, [id, refreshKey, message])
   const result = loaded?.scope === scope ? loaded.detail : undefined
   const detail = result === 'error' ? null : result
   // 자동 조회 제한 시간의 시작점. null이면 다음 자동 조회부터 다시 센다 (#238)
@@ -139,25 +136,6 @@ export function CaseDetailPage() {
     }
   }
 
-  const handleDemoMerge = async () => {
-    try {
-      // 판정 중 병합 충돌을 시연하려고 화면은 일부러 갱신하지 않는다.
-      const result = await demoMergePayment(securityCase.caseId)
-      if (result.merged) {
-        toast.info('시연: 같은 고객의 결제가 병합되었습니다. 화면은 아직 이전 상태입니다.')
-      } else {
-        // 병합되지 않은 결제는 새 Case가 된다. 숨기지 않고 새 Case로 안내한다
-        toast.info(
-          `병합 기한(30분)이 지났거나 판정이 시작되어 새 Case ${result.caseId}가 생성되었습니다.`,
-        )
-        navigate(`/security/cases/${result.caseId}`)
-      }
-    } catch {
-      toast.error('시연 결제를 병합하지 못했습니다. 잠시 후 다시 시도하세요.')
-      load()
-    }
-  }
-
   const handleRecheck = async (handoffId: string) => {
     setRecheckingId(handoffId)
     try {
@@ -206,7 +184,6 @@ export function CaseDetailPage() {
         actions={
           <Space>
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
-            {mergeRemaining !== null && <Button onClick={handleDemoMerge}>시연: 결제 병합</Button>}
             <Button icon={<ReloadOutlined />} onClick={load}>
               새로고침
             </Button>

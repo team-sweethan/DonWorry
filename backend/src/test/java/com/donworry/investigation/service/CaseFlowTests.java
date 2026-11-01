@@ -2,6 +2,7 @@ package com.donworry.investigation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -12,7 +13,6 @@ import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
-import com.donworry.investigation.dto.DemoHeldPaymentResponse;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.Decision;
@@ -50,16 +50,16 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.RequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
-// 시연 HELD 결제 → Case 생성 · 병합 → 보고서(P4 고정 결과) → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
-// 시연 결제는 P5 payments에 없으므로 결제 ID로 나뉘어 목 조회 · 목 금융 조치로 간다. 실제 P5 · P2 연결은 PaymentActionFlowTests ·
-// PaymentFdsInfoReaderTests가 본다
+// HELD 결제 → Case 생성 · 병합 → 보고서(P4 고정 결과) → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
+// 결제 정보 · 금융 조치는 테스트 대역(TestPaymentInfoStore · TestFinancialActionGateway)을 쓴다. 실제 P5 · P2 연결은
+// PaymentActionFlowTests · PaymentFdsInfoReaderTests가 본다
 // 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
 // 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(MariaDbTestContainerConfig.class)
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
 class CaseFlowTests {
 
     @Autowired
@@ -85,6 +85,9 @@ class CaseFlowTests {
 
     @Autowired
     ReportGateway reportGateway;
+
+    @Autowired
+    TestPaymentInfoStore payments;
 
     // 로그인 세션은 P1 공개 계약으로만 본다 — 기본은 보안 직원 7번, 권한 테스트에서만 바꾼다
     @MockitoBean
@@ -175,14 +178,16 @@ class CaseFlowTests {
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
         assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
-        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
+        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1))
                 .andExpect(jsonPath("$.reports[0].evidenceVersion").value(1))
                 // 연결 결제 정보를 찾지 못하면 성공 보고서를 만들지 않고 FAILED로 남긴다 (수동 판정 경로)
                 .andExpect(jsonPath("$.reports[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.reports[0].reportBody").isEmpty());
-        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId()))
+        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1));
     }
@@ -190,7 +195,7 @@ class CaseFlowTests {
     // 판정 항목에 null이 있으면 500이 아니라 400으로 거부한다
     @Test
     void decide_withNullItem_returnsBadRequest() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         List<Map<String, Object>> items = new ArrayList<>();
         items.add(null);
 
@@ -201,7 +206,7 @@ class CaseFlowTests {
     @Test
     void list_withMerchantId_returnsOnlyThatMerchant() throws Exception {
         long merchantId = 1_000_000L + System.nanoTime() % 1_000_000L;
-        DemoHeldPaymentResponse mine = createHeld(merchantId, customer(), 300_000L, 65);
+        Held mine = createHeld(merchantId, customer(), 300_000L, 65);
         createHeld(customer(), 300_000L, 65);
 
         mvc.perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
@@ -213,7 +218,7 @@ class CaseFlowTests {
     // HELD 결제 1건이면 Case가 생기고 보고서 v1이 나와 판정 대기가 된다
     @Test
     void heldPayment_createsCaseWithReportAndWaitsDecision() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
 
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
 
@@ -223,7 +228,7 @@ class CaseFlowTests {
             assertThat(payment.paymentId()).isEqualTo(held.paymentId());
             assertThat(payment.riskScore()).isEqualTo(65);
             assertThat(payment.paymentStatus()).isEqualTo("HELD");
-            // 시연 룰 코드는 목 저장소가 시연용 이름 · 점수로 채운다
+            // 룰 이름 · 점수는 결제 정보 조회(P2 근거) 값이 그대로 나온다
             assertThat(payment.ruleHits())
                     .containsExactly(
                             new CaseDetailResponse.RuleHitResponse("NEW_CARD", "첫 사용 카드", 30),
@@ -243,8 +248,8 @@ class CaseFlowTests {
     @Test
     void secondHeldPayment_sameCustomer_mergesIntoCase() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
-        DemoHeldPaymentResponse second = createHeld(customer, 500_000L, 72);
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 500_000L, 72);
 
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
@@ -272,11 +277,11 @@ class CaseFlowTests {
     }
 
     // 모든 결제를 판정하면 먼저 금융 처리 대기가 되고, 다시 확인으로 실제 완료가 확인되면 Case가 종료된다 (#212)
-    // 시연 결제도 실제 P5와 같은 순서 — 판정 직후 PENDING, 완료되면 결제 상태가 CAPTURED · VOIDED로 바뀐다
+    // 테스트 대역도 실제 P5와 같은 순서 — 판정 직후 PENDING, 완료되면 결제 상태가 CAPTURED · VOIDED로 바뀐다
     @Test
     void decideAllPayments_pendingThenRecheck_closesCaseWithCompletedPayments() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         List<CaseDetailResponse.CasePaymentResponse> payments = detail.payments();
@@ -328,7 +333,7 @@ class CaseFlowTests {
     @Test
     void decide_savesSessionStaffAndIgnoresBodyStaffId() throws Exception {
         loginAs(42L, "SECURITY_STAFF");
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
 
@@ -343,7 +348,7 @@ class CaseFlowTests {
     // 이미 완료된 인계는 다시 확인할 수 없다(409), 로그인하지 않았으면 401이다
     @Test
     void recheckHandoff_completedOrWithoutLogin_isRefused() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
@@ -352,11 +357,13 @@ class CaseFlowTests {
                 caseQueryService.detail(held.caseId()).handoffs().getFirst().handoffId();
         recheckAll(held.caseId());
 
-        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId))
+        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+                        .with(csrf()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INV_012"));
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
-        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId))
+        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+                        .with(csrf()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
     }
@@ -364,7 +371,7 @@ class CaseFlowTests {
     // 로그인하지 않았으면 401이고 판정은 저장되지 않는다
     @Test
     void decide_withoutLogin_returnsUnauthorized() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
@@ -380,7 +387,7 @@ class CaseFlowTests {
     @ParameterizedTest
     @ValueSource(strings = {"OPERATOR", "ADMIN"})
     void decide_byNonSecurityStaff_returnsForbidden(String role) throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
         loginAs(99L, role);
@@ -395,7 +402,7 @@ class CaseFlowTests {
     // Case 목록 · 건수 · 상세 · 보고서 재요청도 로그인하지 않았으면 401이다 — 실제 결제 · FDS 근거를 내보내기 때문이다
     @Test
     void readApis_withoutLogin_returnUnauthorized() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
         mvc.perform(get("/api/security-cases"))
@@ -413,7 +420,7 @@ class CaseFlowTests {
         mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(post("/api/security-cases/{caseId}/reports", held.caseId()))
+        mvc.perform(post("/api/security-cases/{caseId}/reports", held.caseId()).with(csrf()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("INV_010"));
     }
@@ -422,7 +429,7 @@ class CaseFlowTests {
     @ParameterizedTest
     @ValueSource(strings = {"OPERATOR", "ADMIN"})
     void readApis_byNonSecurityStaff_returnForbidden(String role) throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         loginAs(99L, role);
 
         mvc.perform(get("/api/security-cases"))
@@ -446,7 +453,7 @@ class CaseFlowTests {
     @Test
     void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
@@ -463,7 +470,7 @@ class CaseFlowTests {
     @Test
     void decide_withStaleEvidenceVersion_returnsConflict() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
@@ -481,7 +488,7 @@ class CaseFlowTests {
     @Test
     void decide_withOldReport_returnsConflict() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long oldReportId = detail.reports().get(0).reportId();
@@ -498,7 +505,7 @@ class CaseFlowTests {
     // 보고서가 성공했는데 보고서 없이(수동) 판정하면 거부한다
     @Test
     void decide_manualWhileReportSucceeded_returnsBadRequest() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
 
         mvc.perform(decide(
@@ -513,7 +520,7 @@ class CaseFlowTests {
     // 종료된 Case에는 더 판정할 수 없다
     @Test
     void decide_onClosedCase_returnsConflict() throws Exception {
-        DemoHeldPaymentResponse held = createHeld(customer(), 300_000L, 65);
+        Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
@@ -523,16 +530,6 @@ class CaseFlowTests {
         mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INV_002"));
-    }
-
-    // REVIEW 구간(50~79점) 밖의 점수는 데모 결제로 만들 수 없다
-    @Test
-    void demoHeldPayment_scoreOutOfReviewRange_returnsBadRequest() throws Exception {
-        mvc.perform(post("/api/demo/held-payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(
-                                Map.of("merchantId", 1, "customerRef", customer(), "amount", 1000, "riskScore", 80))))
-                .andExpect(status().isBadRequest());
     }
 
     // 없는 Case는 404와 코드로 응답한다
@@ -563,8 +560,8 @@ class CaseFlowTests {
     @Test
     void paymentLinks_returnsOnlyLinkedPayments() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
-        DemoHeldPaymentResponse second = createHeld(customer, 200_000L, 60);
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 200_000L, 60);
         long unlinked = System.nanoTime();
 
         mvc.perform(get("/api/security-cases/payment-links")
@@ -602,8 +599,8 @@ class CaseFlowTests {
     void handoffs_listsEachDecidedPaymentAndFollowsCompletion() throws Exception {
         loginAs(42L, "SECURITY_STAFF");
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
-        DemoHeldPaymentResponse second = createHeld(customer, 500_000L, 72);
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Map<Long, Long> casePaymentIds = new HashMap<>();
         detail.payments().forEach(p -> casePaymentIds.put(p.paymentId(), p.casePaymentId()));
@@ -645,7 +642,7 @@ class CaseFlowTests {
                 });
     }
 
-    // 결제 정보를 찾지 못한 결제(서버 재시작으로 목업이 비었을 때)의 조치도 빠지지 않고 금액만 null이다 (#314)
+    // 결제 정보를 찾지 못한 결제(P5 · P2 어디에도 없음)의 조치도 빠지지 않고 금액만 null이다 (#314)
     @Test
     void handoffs_missingPaymentInfo_keepsRowWithNullAmount() {
         Long paymentId = System.nanoTime();
@@ -674,7 +671,7 @@ class CaseFlowTests {
     @Test
     void list_includesCaseSummary() throws Exception {
         String customer = customer();
-        DemoHeldPaymentResponse first = createHeld(customer, 300_000L, 65);
+        Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
 
         mvc.perform(get("/api/security-cases"))
@@ -687,7 +684,7 @@ class CaseFlowTests {
                         .value(72));
     }
 
-    // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다 (서버 재시작으로 목업이 비었을 때)
+    // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다
     @Test
     void list_missingPaymentInfo_returnsNullTotalAmount() {
         Long caseId = caseIntakeService.receive(
@@ -703,35 +700,28 @@ class CaseFlowTests {
                 });
     }
 
-    private DemoHeldPaymentResponse createHeld(String customerRef, long amount, int riskScore) throws Exception {
+    private Held createHeld(String customerRef, long amount, int riskScore) {
         return createHeld(1L, customerRef, amount, riskScore);
     }
 
-    private DemoHeldPaymentResponse createHeld(long merchantId, String customerRef, long amount, int riskScore)
-            throws Exception {
-        String body = mvc.perform(post("/api/demo/held-payments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(Map.of(
-                                "merchantId",
-                                merchantId,
-                                "customerRef",
-                                customerRef,
-                                "amount",
-                                amount,
-                                "riskScore",
-                                riskScore))))
-                .andExpect(status().isCreated())
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return mapper.readValue(body, DemoHeldPaymentResponse.class);
+    // P5 HELD 이벤트 대신 테스트 결제를 만들어 Case 접수로 넘긴다 — 리스너처럼 트랜잭션 밖에서 불러 커밋 뒤 보고서 요청이 돈다
+    private Held createHeld(long merchantId, String customerRef, long amount, int riskScore) {
+        Instant now = Instant.now();
+        Long paymentId = payments.registerHeld(amount, riskScore, TestPaymentInfoStore.DEFAULT_RULES, now)
+                .paymentId();
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        return new Held(paymentId, caseId);
     }
 
-    // 금융 처리 대기 중인 인계를 모두 다시 확인한다 — 시연 결제는 다시 확인에서 완료된다 (#212)
+    record Held(Long paymentId, Long caseId) {}
+
+    // 금융 처리 대기 중인 인계를 모두 다시 확인한다 — 테스트 대역은 다시 확인에서 완료된다 (#212)
     private void recheckAll(Long caseId) throws Exception {
         for (CaseDetailResponse.HandoffResponse handoff :
                 caseQueryService.detail(caseId).handoffs()) {
-            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId()))
+            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
+                            .with(csrf()))
                     .andExpect(status().isOk());
         }
     }
@@ -744,6 +734,7 @@ class CaseFlowTests {
         body.put("reportId", reportId);
         body.put("decisions", items);
         return post("/api/security-cases/{caseId}/decisions", caseId)
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(body));
     }
@@ -755,7 +746,7 @@ class CaseFlowTests {
     }
 
     private static Map<String, Object> item(Long casePaymentId, String decision) {
-        return Map.of("casePaymentId", casePaymentId, "decision", decision, "reason", "시연 판정 사유");
+        return Map.of("casePaymentId", casePaymentId, "decision", decision, "reason", "판정 사유");
     }
 
     private static Long latestReportId(CaseDetailResponse detail) {

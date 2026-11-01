@@ -5,7 +5,6 @@ import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
-import { useDemo } from '../../demo/DemoContext'
 import type { CaseStatus, CaseSummary } from '../../types/case'
 import { won } from '../../utils/format'
 import { SLA_HOURS } from '../../utils/caseRules'
@@ -28,13 +27,11 @@ type Row = CaseSummary & { reason: PriorityReason }
 
 export function SecurityHomePage() {
   const navigate = useNavigate()
-  const { merchant } = useDemo()
-  // useFeedback()은 렌더마다 새 객체라 effect 의존성에는 App이 주는 message를 쓴다
+  // effect 의존성에는 렌더마다 바뀌지 않는 App의 message를 쓴다
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   // CaseListPage와 같이 어떤 요청에 대한 응답인지 함께 저장하고, 실패는 빈 목록과 구분한다
   const [result, setResult] = useState<{
-    merchant: string
     refreshKey: number
     cases: CaseSummary[]
     failed: boolean
@@ -42,33 +39,29 @@ export function SecurityHomePage() {
 
   useEffect(() => {
     let alive = true
-    getCases(merchant)
+    getCases()
       .then((cases) => {
-        if (alive) setResult({ merchant, refreshKey, cases, failed: false })
+        if (alive) setResult({ refreshKey, cases, failed: false })
       })
       .catch(() => {
         if (!alive) return
         message.error('Case 현황을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
         setResult((prev) => ({
-          merchant,
           refreshKey,
-          cases: prev?.merchant === merchant ? prev.cases : [],
+          cases: prev?.cases ?? [],
           failed: true,
         }))
       })
     return () => {
       alive = false
     }
-  }, [merchant, refreshKey, message])
+  }, [refreshKey, message])
 
-  const loading = result?.merchant !== merchant || result.refreshKey !== refreshKey
-  const cases = useMemo(
-    () => (result?.merchant === merchant ? result.cases : []),
-    [result, merchant],
-  )
+  const loading = result?.refreshKey !== refreshKey
+  const cases = useMemo(() => result?.cases ?? [], [result])
   const counts = useMemo(() => homeCounts(cases), [cases])
   const rows = useMemo(() => priorityCases(cases), [cases])
-  const failed = result?.merchant === merchant && result.failed
+  const failed = result?.failed === true
 
   // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243)
   const openList = (query: Partial<CaseListQuery> = {}) =>
