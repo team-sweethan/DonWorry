@@ -15,7 +15,7 @@
 
 계정과 신청을 각각 독립적인 새 Flyway 파일로 전환한다. 계정은 DISABLED 행만 UPDATE한다. 신청은 한 파일 안에서 ① 기존 CHECK와 생성 컬럼 3개를 구/신 이름 양쪽을 포함하도록 함께 ALTER ② 기존 상태 UPDATE ③ CHECK와 생성 컬럼을 새 이름으로 제한한다. 기존 UNIQUE 인덱스는 제거하지 않는다. 두 파일 사이의 적용 순서에 기대지 않는다. 기존 병합 migration·시드는 보존한다.
 
-새 수동 계정 정지 이력 유형은 `USER_INACTIVATED`(16자), 복구는 기존 `USER_ENABLED`다. 과거 `USER_DISABLED` 및 before/after JSON은 당시 사실이므로 변환하지 않는다. 이력 유형은 문자열이므로 과거 기록도 그대로 읽힌다. 운영 시작 전용 정지 유형·원자성은 PR B에서 별도로 정한다.
+새 수동 계정 정지 이력 유형은 `USER_INACTIVATED`(16자), 복구는 기존 `USER_ENABLED`다. 과거 `USER_DISABLED` 및 before/after JSON은 당시 사실이므로 변환하지 않는다. 이력 유형은 문자열이므로 과거 기록도 그대로 읽힌다. 운영 시작 전용 정지 유형(`PRODUCTION_DEMO_ACCOUNT_INACTIVATED`)·원자성은 PR B에서 [ADR-0032](0032-production-admin-startup.md)에 정했다.
 
 배포 전에 같은 DB의 모든 구버전 프로세스를 중단한다. HTTP뿐 아니라 예약 정리·메일 복구도 포함한다. 백업 후 DB 전환·신규 backend·frontend를 같은 점검 배포로 적용하며 기존 브라우저 탭은 새로고침한다. 구/신 이름을 동시에 쓰는 롤링 배포는 지원하지 않는다. MariaDB DDL은 자동 커밋되므로 실패 전체가 자동 롤백되지 않는다. DB 전환 뒤 구버전 앱만 재기동하지 않으며, 실패 시 [운영 안내](../identity/131-status-transition.md)에 따라 백업 전체 복원과 이전 앱 복구를 함께 수행한다.
 
