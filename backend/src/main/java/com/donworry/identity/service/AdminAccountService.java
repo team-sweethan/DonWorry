@@ -125,7 +125,7 @@ public class AdminAccountService {
     public void setStatus(SessionUser actor, Long id, SetStatusRequest input, HttpServletRequest request) {
         withTarget(actor, id, request, user -> {
             UserStatus next = status(input.status());
-            if (actor.userId().equals(id) && next == UserStatus.DISABLED)
+            if (actor.userId().equals(id) && next == UserStatus.INACTIVE)
                 throw new AccountManagementException(AuthErrorCode.ADMIN_SELF_DISABLE);
             if (user.getStatus() == next) return false;
             String previous = user.getStatus().name();
@@ -133,7 +133,7 @@ public class AdminAccountService {
             record(
                     actor,
                     user,
-                    next == UserStatus.DISABLED ? "USER_DISABLED" : "USER_ENABLED",
+                    next == UserStatus.INACTIVE ? "USER_INACTIVATED" : "USER_ENABLED",
                     Map.of("status", previous),
                     Map.of("status", next.name()));
             return true;

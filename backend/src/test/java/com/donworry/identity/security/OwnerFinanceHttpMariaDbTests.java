@@ -168,7 +168,7 @@ class OwnerFinanceHttpMariaDbTests {
     // 계정 정지는 관리 API의 기존 세션 종료 흐름을 통해 업무 요청과 재로그인을 막는다
     @Test
     void finance_whenAccountDisabled_rejectsOldSessionAndLogin() throws Exception {
-        assertThat(send(admin, "PUT", "/api/admin/users/" + ownerId + "/status", Map.of("status", "DISABLED"))
+        assertThat(send(admin, "PUT", "/api/admin/users/" + ownerId + "/status", Map.of("status", "INACTIVE"))
                         .statusCode())
                 .isEqualTo(204);
         problem(send(owner, "PUT", PROBE, Map.of()), 401, "AUTH_001");

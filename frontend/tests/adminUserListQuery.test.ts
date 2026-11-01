@@ -25,7 +25,7 @@ test('검색·역할·상태·비밀번호·페이지를 주소로 복원하고 
     ...previous,
     keyword: '이름 & 아이디',
     role: 'OPERATOR' as const,
-    status: 'DISABLED' as const,
+    status: 'INACTIVE' as const,
     page: 3,
   }
   const current = adminUserListParams(changed)
@@ -43,4 +43,8 @@ test('알 수 없는 필터와 잘못된 페이지는 전체 조건과 첫 페�
     )
   }
   assert.equal(parse(`keyword=${'a'.repeat(101)}`).keyword.length, 100)
+})
+
+test('이전 DISABLED 주소는 서버에 오래된 상태 필터를 보내지 않는다', () => {
+  assert.equal(parse('status=DISABLED').status, undefined)
 })

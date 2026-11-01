@@ -7,14 +7,14 @@ PR 2의 [신청 저장 계약](315-application-design.md)과 ADR-0043~0045를 �
 
 관리자 홈·메뉴 → `/admin/applications` → `/admin/applications/:id` → 승인 또는 반려.
 목록 기본값은 REVIEW_PENDING이며 상태·가맹점명/사업자번호 검색·20건 페이지를 URL에 보관해 상세에서 돌아갈 때 유지한다.
-EMAIL_PENDING은 조회만 가능하다. 이메일 확인은 주소 사용 확인이며 사업자 자격 확인으로 표시하지 않는다.
+EMAIL_VERIFICATION_PENDING은 조회만 가능하다. 이메일 확인은 주소 사용 확인이며 사업자 자격 확인으로 표시하지 않는다.
 
 상세는 신청 정보와 발급 입력을 나란히 표시하고 좁은 화면에서는 신청 정보부터 세로로 배치한다.
 신청자는 신청 폼에서 로그인 아이디를 선택한다. 관리자는 선택된 아이디를 확인하며 수정하지 않는다. 승인은 코드·수수료·권한 입력 → 발급 정보 최종 확인 → ‘승인·계정 발급’ 순서다.
 반려는 사유 입력 → 신청자에게 보낼 내용 확인 → 확정 순서다. 오류 시 입력을 유지한다.
 동시 처리 충돌·응답 유실 시 최신 상태를 조회하기 전에는 다시 처리하지 않는다. 변경 요청을 자동 재시도하지 않는다.
 
-신청은 EMAIL_PENDING → REVIEW_PENDING → APPROVED / REJECTED만 사용한다.
+신청은 EMAIL_VERIFICATION_PENDING → REVIEW_PENDING → APPROVED / REJECTED만 사용한다.
 발급 계정의 passwordChangeRequired와 메일 발송 결과를 신청 상태와 구별한다.
 APPROVED 상세의 ‘설정 또는 변경 필요’에는 관리자 초기화도 포함하므로 첫 설정 미완료로 단정하지 않는다.
 SMTP 수락은 실제 수신을 보장하지 않으며 발급 결과와 별도로 안내한다. 메일 실패 관리·재발송 화면은 PR 4다.

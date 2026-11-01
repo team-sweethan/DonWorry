@@ -85,7 +85,7 @@ test('api_whenOtherTabChangesSessionBeforeCsrfRejection_doesNotRefresh', async (
   }
   const pending = first.api('/admin/users/7/status', {
     method: 'PUT',
-    body: '{"status":"DISABLED"}',
+    body: '{"status":"INACTIVE"}',
   })
   second.advanceApiSession()
   cookies.cookie = 'XSRF-TOKEN=other-account'

@@ -46,7 +46,7 @@ test('생성·권한·상태·초기화는 지정한 대상과 값만 전송하�
   }
   await createUser({ loginId: 'new_staff', displayName: '보안 직원', role: 'SECURITY_STAFF' })
   await setUserPermissions(7, ['FDS_VIEW'])
-  await setUserStatus(7, 'DISABLED')
+  await setUserStatus(7, 'INACTIVE')
   await resetUserPassword(7)
   assert.deepEqual(
     calls.map((c) => [c.path, c.init.method]),
@@ -63,6 +63,7 @@ test('생성·권한·상태·초기화는 지정한 대상과 값만 전송하�
     role: 'SECURITY_STAFF',
   })
   assert.deepEqual(JSON.parse(String(calls[1].init.body)), { permissions: ['FDS_VIEW'] })
+  assert.deepEqual(JSON.parse(String(calls[2].init.body)), { status: 'INACTIVE' })
   assert.equal(calls[3].init.body, undefined)
   globalThis.fetch = async () => {
     calls.push({ path: 'failure', init: {} })

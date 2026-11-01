@@ -169,7 +169,7 @@ export function AdminUsersPage() {
             value={filter.status}
             options={[
               { value: 'ACTIVE', label: '사용 중' },
-              { value: 'DISABLED', label: '정지' },
+              { value: 'INACTIVE', label: '정지' },
             ]}
             onChange={(status) => updateFilter({ status, page: 1 })}
           />
@@ -446,7 +446,7 @@ export function AdminUserDetailPage() {
         setResult({ id: userId, revision, user: value.user })
       } else {
         if (action === 'permissions') await setUserPermissions(userId, selected)
-        else await setUserStatus(userId, user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE')
+        else await setUserStatus(userId, user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
         setRevision((value) => value + 1)
       }
     } catch (error) {

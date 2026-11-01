@@ -280,7 +280,7 @@ class MerchantIntegrationHttpMariaDbTests {
         jdbc.update("UPDATE platform_users SET password_change_required=true WHERE user_id=?", ownerId);
         problem(owner.send("POST", path("reveal"), keyInput(1, PASSWORD), true), 403, "AUTH_008");
         jdbc.update(
-                "UPDATE platform_users SET password_change_required=false,status='DISABLED' WHERE user_id=?", ownerId);
+                "UPDATE platform_users SET password_change_required=false,status='INACTIVE' WHERE user_id=?", ownerId);
         problem(owner.send("POST", path("reveal"), keyInput(1, PASSWORD), true), 401, "AUTH_001");
         jdbc.update("UPDATE platform_users SET status='ACTIVE' WHERE user_id=?", ownerId);
         jdbc.update("UPDATE merchants SET status='INACTIVE' WHERE merchant_id=?", merchantId);
@@ -625,7 +625,7 @@ class MerchantIntegrationHttpMariaDbTests {
         assertThat(integrations.findByMerchantId(merchantId).orElseThrow().getConnectedAt())
                 .isNull();
         jdbc.update("UPDATE merchants SET status='ACTIVE' WHERE merchant_id=?", merchantId);
-        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", ownerId);
+        jdbc.update("UPDATE platform_users SET status='INACTIVE' WHERE user_id=?", ownerId);
         assertThat(merchantSend(secret, "POST", "/api/merchant-connections/check", "")
                         .statusCode())
                 .isEqualTo(204);

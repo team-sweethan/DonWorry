@@ -21,5 +21,5 @@ public final class AdminAccountRequests {
             @NotNull @Size(max = 2) List<@NotNull @Pattern(regexp = "FDS_VIEW|FINANCE_VIEW") String> permissions) {}
 
     public record SetStatusRequest(
-            @NotNull @Pattern(regexp = "ACTIVE|DISABLED") String status) {}
+            @NotNull @Pattern(regexp = "ACTIVE|INACTIVE") String status) {}
 }

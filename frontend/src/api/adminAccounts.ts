@@ -6,7 +6,7 @@ export type AdminUser = {
   loginId: string
   displayName: string
   role: AuthUser['role']
-  status: 'ACTIVE' | 'DISABLED'
+  status: 'ACTIVE' | 'INACTIVE'
   merchantId: number | null
   merchantName: string | null
   permissions: string[]

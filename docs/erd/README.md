@@ -309,6 +309,12 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 - 같은 P5 payments 참조에만 물리 FK를 사용하고, P2 평가·분석 ID와 P1 직원 ID는 논리 참조한다. 원본/작업 키 불변·물리 삭제 금지·중복 방지는 상세 계약을 따른다.
 - #273 작업 브랜치에 신규 migration·Entity·Repository를 추가했다. 사용자 요청에 따른 Notion 담당 ERD 필드·제약 반영을 마쳤으며 보고·분석 리스너와 상세 GET 응답 확장까지 연결했다. 운영 DB 적용은 후속이다. 이번 사용자 설계 승인을 이미 운영 적용·다른 담당 상세 검토까지 마친 것으로 해석하지 않는다.
 
+### #131 PR A P1 상태 이름 전환 (2026-11-01)
+
+P1 사용자 승인(#131 최신 실행 계획)으로 계정 `DISABLED → INACTIVE`, 신청 `EMAIL_PENDING → EMAIL_VERIFICATION_PENDING`을 데이터 초기화 없이 전환한다. [계정 migration](../../backend/src/main/resources/db/migration/V20261101_160837__rename_user_inactive_status.sql)은 기존 정지 행만 변환하고 ACTIVE 시드와 감사 JSON·유형은 유지한다. [신청 migration](../../backend/src/main/resources/db/migration/V20261101_160844__rename_application_email_verification_status.sql)은 CHECK와 `pending_email`·`pending_business_number`·`pending_login_id`의 조건을 함께 변경한다. 기존 UNIQUE 3개는 유지하며 임시로 양쪽 이름을 예약 대상으로 포함한 뒤 데이터 UPDATE와 최종 조건 축소를 수행한다. 컬럼 타입·소유(P1)·FK·보관 정책은 유지한다. 메일 발송 PENDING은 별도 개념이다.
+
+구버전 앱·예약 작업 전부 종료 및 백엔드·프론트 점검 배포가 필요하다. [ADR-0060](../decisions/0060-identity-status-names.md)과 [복구 절차](../identity/131-status-transition.md)를 따른다. Notion 동기화와 실제 공용/운영 DB 적용은 미수행이다. 시연 계정 정지는 운영 시작 코드 PR B에서 처리하며 이 migration에 포함하지 않는다.
+
 ### #315 PR 2 P1 이용 신청 계약 (2026-10-29)
 
 P1 담당자가 설계·구현 진행을 승인했다. [상세 컬럼·FK·보관 계약](../identity/315-application-design.md#저장-계약-모두-p1), [ADR-0043](../decisions/0043-application-storage.md)을 따른다. Notion 선행 대조·동기화는 미수행이다.

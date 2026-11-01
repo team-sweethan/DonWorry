@@ -59,10 +59,10 @@ class AdminAccountServiceTests {
     // 이력 INSERT와 실제 커밋을 끝낸 뒤에만 세션을 종료한다
     @Test
     void setStatus_whenValid_commitsHistoryBeforeExpiringSession() {
-        service.setStatus(actor, 2L, new SetStatusRequest("DISABLED"), request);
+        service.setStatus(actor, 2L, new SetStatusRequest("INACTIVE"), request);
         var order = inOrder(sessions, target, histories, transactions);
         order.verify(sessions).requireActive(1L, request.getSession().getId());
-        order.verify(target).changeStatus(UserStatus.DISABLED);
+        order.verify(target).changeStatus(UserStatus.INACTIVE);
         order.verify(histories).recordUser(anyLong(), anyLong(), anyString(), any(), any());
         order.verify(transactions).commit(transaction);
         order.verify(sessions).expireAll(2L);
@@ -77,7 +77,7 @@ class AdminAccountServiceTests {
         doThrow(new TransactionSystemException("commit failure"))
                 .when(transactions)
                 .commit(transaction);
-        assertThatThrownBy(() -> service.setStatus(actor, 2L, new SetStatusRequest("DISABLED"), request))
+        assertThatThrownBy(() -> service.setStatus(actor, 2L, new SetStatusRequest("INACTIVE"), request))
                 .isInstanceOf(TransactionSystemException.class);
         verify(sessions, never()).expireAll(any());
     }
@@ -88,7 +88,7 @@ class AdminAccountServiceTests {
         doThrow(new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED))
                 .when(sessions)
                 .requireActive(any(), any());
-        assertThatThrownBy(() -> service.setStatus(actor, 2L, new SetStatusRequest("DISABLED"), request))
+        assertThatThrownBy(() -> service.setStatus(actor, 2L, new SetStatusRequest("INACTIVE"), request))
                 .isInstanceOf(PasswordChangeException.class);
         verifyNoInteractions(transactions, histories);
         verify(target, never()).changeStatus(any());

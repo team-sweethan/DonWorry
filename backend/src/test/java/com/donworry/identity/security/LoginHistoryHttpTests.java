@@ -199,10 +199,10 @@ class LoginHistoryHttpTests {
 
     // 정지·잠금·가맹점 정지의 거절도 기록하지만 입력 400과 서버 장애는 실패로 기록하지 않는다
     @ParameterizedTest
-    @ValueSource(strings = {"DISABLED", "LOCKED", "MERCHANT"})
+    @ValueSource(strings = {"INACTIVE", "LOCKED", "MERCHANT"})
     void failure_whenStatusRejects_recordsWithoutChangingLockState(String condition) throws Exception {
-        if (condition.equals("DISABLED"))
-            jdbc.update("UPDATE platform_users SET status = 'DISABLED' WHERE user_id = ?", userId);
+        if (condition.equals("INACTIVE"))
+            jdbc.update("UPDATE platform_users SET status = 'INACTIVE' WHERE user_id = ?", userId);
         if (condition.equals("LOCKED"))
             jdbc.update(
                     "UPDATE platform_users SET login_failure_count=5, login_locked_until=DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 15 MINUTE) WHERE user_id=?",

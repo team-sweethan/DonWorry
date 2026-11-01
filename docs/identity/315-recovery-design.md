@@ -33,11 +33,11 @@
 | FAILED | 발송 실패, 새 시도로 복구 |
 | UNKNOWN | 결과 불확실, 중복 수신 가능성을 확인하고 복구 |
 
-현재 신청 상태에 해당하는 종류의 최신 시도가 대표 메일이다. EMAIL_PENDING은 EMAIL_VERIFICATION, APPROVED는 APPROVAL, REJECTED는 REJECTION이다. REVIEW_PENDING은 확인 완료로 표시하며 과거 확인 메일 실패를 복구 대상으로 세지 않는다.
+현재 신청 상태에 해당하는 종류의 최신 시도가 대표 메일이다. EMAIL_VERIFICATION_PENDING은 EMAIL_VERIFICATION, APPROVED는 APPROVAL, REJECTED는 REJECTION이다. REVIEW_PENDING은 확인 완료로 표시하며 과거 확인 메일 실패를 복구 대상으로 세지 않는다.
 최신은 `deliveryId DESC`로 정한다. 같은 신청의 발급은 신청 PK 잠금 안에서 직렬화하므로 ID가 시도 순서를 나타낸다. startedAt/완료 시각은 표시·시간 제한에만 쓴다. 서버 시계가 뒤로 보정되어도 새 시도가 옛 시도보다 뒤로 밀리지 않게 한다.
 
 - 목록에 대표 메일 상태와 `메일 확인 필요` 필터를 추가한다. 필터는 대표 시도의 FAILED/UNKNOWN/오래된 PENDING이다. SENT의 링크 만료는 상세의 링크 상태로 따로 표시한다.
-- 기존 목록 기본 상태는 REVIEW_PENDING이므로 메일 필터를 켤 때 `status=ALL`, page=0을 URL에 명시한다. `mailAttention=true` 단독 URL도 전체 상태가 기본이다. 이후 EMAIL_PENDING/APPROVED/REJECTED를 선택하면 교집합으로 좁힐 수 있고, REVIEW_PENDING 선택 시 메일 필터를 해제한다. 검색·페이지 변경과 상세 복귀에서도 mailAttention을 보존한다.
+- 기존 목록 기본 상태는 REVIEW_PENDING이므로 메일 필터를 켤 때 `status=ALL`, page=0을 URL에 명시한다. `mailAttention=true` 단독 URL도 전체 상태가 기본이다. 이후 EMAIL_VERIFICATION_PENDING/APPROVED/REJECTED를 선택하면 교집합으로 좁힐 수 있고, REVIEW_PENDING 선택 시 메일 필터를 해제한다. 검색·페이지 변경과 상세 복귀에서도 mailAttention을 보존한다.
 - 상세는 신청·발급 결과와 메일 영역을 구분한다. 발송 이력은 20건 페이지로 조회한다.
 - 확인창에 종류·신청 이메일·옛 링크 폐기·중복 수신 가능성을 표시한다. 이메일·아이디·반려 사유를 바꾸는 입력은 없다.
 - 응답 유실/5xx 후 자동 재시도하지 않는다. 최신 상세와 이력을 다시 읽은 뒤에만 새 요청을 허용한다.
@@ -73,7 +73,7 @@ ADMIN 인가와 쓰기 직전 수행자 계정·세션·강제 변경 검사를 
 
 | 종류 | 조건·원자 저장 |
 | --- | --- |
-| 확인 | EMAIL_PENDING, createdAt+7일 > now. 종전 미사용 확인 토큰 폐기 + 새 24시간 토큰 + PENDING |
+| 확인 | EMAIL_VERIFICATION_PENDING, createdAt+7일 > now. 종전 미사용 확인 토큰 폐기 + 새 24시간 토큰 + PENDING |
 | 승인 | APPROVED, 발급 연결 일치, 가맹점/OPERATOR 계정 ACTIVE, passwordChangeRequired=true. 아래 이력 검사 + 종전 미사용 첫 설정 토큰 폐기 + 새 72시간 토큰 + PENDING |
 | 반려 | REJECTED, reviewedAt+30일 > now. 저장된 사유로 새 PENDING |
 
@@ -111,7 +111,7 @@ ADMIN 인가와 쓰기 직전 수행자 계정·세션·강제 변경 검사를 
 
 | 상태 | 삭제 경계 (UTC, 실행 시작 시각 고정) |
 | --- | --- |
-| EMAIL_PENDING | createdAt <= now-7일 |
+| EMAIL_VERIFICATION_PENDING | createdAt <= now-7일 |
 | REJECTED | reviewedAt <= now-30일 |
 | REVIEW_PENDING / APPROVED | 삭제하지 않음 |
 
@@ -119,7 +119,7 @@ ADMIN 인가와 쓰기 직전 수행자 계정·세션·강제 변경 검사를 
 
 - identity/service에 ApplicationRetentionService와 예약 진입점을 둔다. 기존 scheduling.enabled를 따르며 최초 60초 뒤·이후 1시간 간격 실행. applications.enabled=false여도 삭제한다.
 - 시작 시 최대 신청 ID를 고정하고 ID 커서로 후보 100건씩 잠금 없이 읽는다. 신청마다 별도 READ_COMMITTED/REQUIRES_NEW에서 PK 잠금 후 상태·기한을 재검사한다. 상태 인덱스 범위를 먼저 쓰기 잠금하지 않는다.
-- 후보 조건은 `lastId < application_id <= upperId AND ((status='EMAIL_PENDING' AND created_at<=emailCutoff) OR (status='REJECTED' AND reviewed_at<=rejectionCutoff))`이고 application_id ASC/LIMIT 100이다. 미삭제 신청에 OFFSET을 쓰면 앞 행 삭제 후 뒤 행을 건너뛰므로 OFFSET은 사용하지 않는다.
+- 후보 조건은 `lastId < application_id <= upperId AND ((status='EMAIL_VERIFICATION_PENDING' AND created_at<=emailCutoff) OR (status='REJECTED' AND reviewed_at<=rejectionCutoff))`이고 application_id ASC/LIMIT 100이다. 미삭제 신청에 OFFSET을 쓰면 앞 행 삭제 후 뒤 행을 건너뛰므로 OFFSET은 사용하지 않는다.
 - **발송 이력 → 토큰 → 신청**을 한 트랜잭션에서 삭제한다. 중간 실패는 해당 신청 전체 롤백이다. 가맹점·계정·금융/조사 기록은 삭제하지 않는다.
 - 삭제 커밋과 함께 미확인 신청의 이메일·사업자번호·아이디 예약이 해제된다. 반려 예약은 이미 반려 시 해제되어 있다.
 - 확인·재발송·삭제는 신청 PK 잠금으로 직렬화한다. 먼저 확인되어 REVIEW_PENDING이면 보존하고, 삭제가 먼저면 후속 요청은 기존 링크 오류/404다. 기한 지난 신청은 정리 대기 중에도 확인·재발송 불가다.
@@ -264,7 +264,7 @@ Gmail 계정·2단계 인증·앱 비밀번호 준비는 담당자 작업이며 
 4. 재발송은 새 링크만 유효하며 실패해도 이전 링크를 되살리지 않는다. 설정 완료/초기화 뒤에는 기존 로그인 또는 관리자 비밀번호 초기화 절차를 따른다.
 5. 삭제 스케줄러는 `DONWORRY_SCHEDULING_ENABLED=true`가 필요하다. 신청 기능 off에도 실행되며 기동 60초 후, 이후 fixedDelay 1시간이다. 종료 기한과 실제 물리 삭제는 일치하지 않으며 장애·백로그·실행 예산에 따라 지연될 수 있다.
 6. '신청 보관 정리' deleted/failed 건수와 '신청 삭제 실패'/'신청 보관 정리 중단' 로그를 확인한다. 실패 시 DB 상태·연결·FK를 점검하고 다음 회차/재기동 후 삭제를 재확인한다. 삭제 cursor는 재기동 시 초기화된다. 별도 공개 수동 삭제 API는 없다.
-7. 검토 대기는 이 정책의 삭제 대상이 아니다. 승인 신청은 이용 종료 기준이 정해질 때까지 보존한다. 가맹점 INACTIVE·계정 DISABLED를 이용 종료로 해석하지 않는다. 백업 보존/폐기는 별도 운영 정책이다.
+7. 검토 대기는 이 정책의 삭제 대상이 아니다. 승인 신청은 이용 종료 기준이 정해질 때까지 보존한다. 가맹점 INACTIVE·계정 INACTIVE를 이용 종료로 해석하지 않는다. 백업 보존/폐기는 별도 운영 정책이다.
 
 ### 실행 근거와 한계
 

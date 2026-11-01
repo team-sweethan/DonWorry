@@ -2,6 +2,8 @@
 
 상태: #129 구현 계약. 2026-10-25 사용자가 Notion 선행 반영 대신 저장소 ERD·ADR 기록 후 구현하도록 승인했다. Notion 최신 ERD 확인·동기화는 미수행이다.
 
+> #131 PR A 이후 현재 상태·이력 계약은 [ADR-0060](../decisions/0060-identity-status-names.md)을 따른다. 과거 `USER_DISABLED` 유형·감사 JSON은 그대로 보존하며 새 정지만 `USER_INACTIVATED`로 기록한다.
+
 ## 범위
 
 - P1 identity와 frontend만 변경한다. 타 담당 테이블·모듈 공개 Java 계약은 바꾸지 않는다.
@@ -29,7 +31,7 @@
 | actor_user_id | BIGINT NOT NULL FK platform_users | 변경한 관리자 |
 | target_user_id | BIGINT NULL FK platform_users | 대상 계정 |
 | target_merchant_id | BIGINT NULL FK merchants | #130 대상 가맹점 |
-| change_type | VARCHAR(40) NOT NULL | USER_CREATED, PERMISSIONS_CHANGED, USER_DISABLED, USER_ENABLED, PASSWORD_RESET 등 |
+| change_type | VARCHAR(40) NOT NULL | USER_CREATED, PERMISSIONS_CHANGED, USER_INACTIVATED, USER_ENABLED, PASSWORD_RESET 등 |
 | before_data | JSON NULL | 허용 필드의 변경 전 값 |
 | after_data | JSON NULL | 허용 필드의 변경 후 값 |
 | created_at | DATETIME(6) NOT NULL | UTC |
@@ -50,7 +52,7 @@
 | GET /api/admin/users/{id} | 공개 계정 정보·소속·권한·강제 변경 상태 |
 | POST /api/admin/users | loginId·displayName·role·merchantId, 201 계정 정보와 임시 비밀번호 |
 | PUT /api/admin/users/{id}/permissions | permissions 최종 집합, OPERATOR만 허용 |
-| PUT /api/admin/users/{id}/status | ACTIVE 또는 DISABLED, 자기 정지 거절 |
+| PUT /api/admin/users/{id}/status | ACTIVE 또는 INACTIVE, 자기 정지 거절 |
 | POST /api/admin/users/{id}/password-reset | 새 임시 비밀번호, 강제 변경 TRUE |
 | GET /api/admin/merchants/options | ACTIVE 가맹점 ID·이름의 제한된 검색 목록 |
 

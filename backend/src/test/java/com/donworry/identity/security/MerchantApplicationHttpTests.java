@@ -431,7 +431,8 @@ class MerchantApplicationHttpTests {
         Long userId = jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id='admin'", Long.class);
         jdbc.update("UPDATE application_tokens SET purpose='INITIAL_PASSWORD_SETUP', user_id=?", userId);
         assertCode(() -> persistence.verify(raw(0)), ApplicationErrorCode.INVALID_TOKEN);
-        assertThat(applications.findAll().getFirst().getStatus()).isEqualTo(ApplicationStatus.EMAIL_PENDING);
+        assertThat(applications.findAll().getFirst().getStatus())
+                .isEqualTo(ApplicationStatus.EMAIL_VERIFICATION_PENDING);
     }
     // 요청 제한은 최근 시간창·재시작을 견디는 DB 기록으로 판정하며 정확한 경계에서 해제한다.
     @Test

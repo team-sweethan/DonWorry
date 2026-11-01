@@ -221,7 +221,7 @@ class AdminMerchantHttpTests {
         long ownerId = user("owner", "OPERATOR", merchantId);
         user("owner2", "OPERATOR", merchantId);
         long disabledId = user("disabled", "OPERATOR", merchantId);
-        jdbc.update("UPDATE platform_users SET status='DISABLED' WHERE user_id=?", disabledId);
+        jdbc.update("UPDATE platform_users SET status='INACTIVE' WHERE user_id=?", disabledId);
         long otherMerchant = create(code + "OTHER").path("merchantId").asLong();
         user("other", "OPERATOR", otherMerchant);
         var owner = client();

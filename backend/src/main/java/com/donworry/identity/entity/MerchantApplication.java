@@ -138,7 +138,7 @@ public class MerchantApplication {
                 .consentVersion(consentVersion)
                 .consentedAt(now)
                 .createdAt(now)
-                .status(ApplicationStatus.EMAIL_PENDING)
+                .status(ApplicationStatus.EMAIL_VERIFICATION_PENDING)
                 .build();
     }
 

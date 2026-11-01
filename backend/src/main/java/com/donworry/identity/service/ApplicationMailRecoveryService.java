@@ -42,7 +42,7 @@ public class ApplicationMailRecoveryService {
             check(hint, expected);
             return null;
         });
-        if (hint.getStatus() == ApplicationStatus.EMAIL_PENDING) limits.adminResend(hint.getEmail());
+        if (hint.getStatus() == ApplicationStatus.EMAIL_VERIFICATION_PENDING) limits.adminResend(hint.getEmail());
         var target = hint.getUserId() == null
                 ? null
                 : users.findById(hint.getUserId()).orElse(null);
@@ -57,7 +57,7 @@ public class ApplicationMailRecoveryService {
                         var a = applications
                                 .lockById(id)
                                 .orElseThrow(() -> new ApplicationException(ApplicationErrorCode.NOT_FOUND));
-                        check(a, expected, a.getStatus() == ApplicationStatus.EMAIL_PENDING);
+                        check(a, expected, a.getStatus() == ApplicationStatus.EMAIL_VERIFICATION_PENDING);
                         var kind = ApplicationMailQueryService.kind(a.getStatus());
                         var now = query.now();
                         String raw = null;
