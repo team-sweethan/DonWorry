@@ -11,7 +11,7 @@
 
 ## 결정
 
-계정 enum·입력·조회 필터·응답을 `ACTIVE / INACTIVE`, 신청 enum·조회·업무 조건을 `EMAIL_VERIFICATION_PENDING / REVIEW_PENDING / APPROVED / REJECTED`로 바꾼다. 구 API 이름은 400으로 거절한다. 브라우저의 이전 신청 목록 주소 `status=EMAIL_PENDING`은 첫 조회 전부터 새 상태로 해석하고 URL을 replace로 정규화하여 기존 필터·검색·페이지 의미를 유지한다. 서버에 구 상태 별칭을 추가하지 않는다. 활성/정지 의미, 기존 세션 종료·복구 후 새 로그인, 신청 이메일 확인·재발송·검토·메일 복구·보존 기간 정리 정책은 유지한다. 메일 `ApplicationMailStatus.PENDING`, 가맹점 상태와 HMAC 계약은 유지한다.
+계정 enum·입력·조회 필터·응답을 `ACTIVE / INACTIVE`, 신청 enum·조회·업무 조건을 `EMAIL_VERIFICATION_PENDING / REVIEW_PENDING / APPROVED / REJECTED`로 바꾼다. 구 API 이름은 400으로 거절한다. 브라우저의 이전 신청 목록 주소 `status=EMAIL_PENDING`과 계정 목록 주소 `status=DISABLED`는 첫 조회 전부터 각각 새 상태로 해석하고 URL을 replace로 정규화하여 기존 필터·검색·페이지 의미를 유지한다. 서버에 구 상태 별칭을 추가하지 않는다. 활성/정지 의미, 기존 세션 종료·복구 후 새 로그인, 신청 이메일 확인·재발송·검토·메일 복구·보존 기간 정리 정책은 유지한다. 메일 `ApplicationMailStatus.PENDING`, 가맹점 상태와 HMAC 계약은 유지한다.
 
 계정과 신청을 각각 독립적인 새 Flyway 파일로 전환한다. 계정은 DISABLED 행만 UPDATE한다. 신청은 한 파일 안에서 ① 기존 CHECK와 생성 컬럼 3개를 구/신 이름 양쪽을 포함하도록 함께 ALTER ② 기존 상태 UPDATE ③ CHECK와 생성 컬럼을 새 이름으로 제한한다. 기존 UNIQUE 인덱스는 제거하지 않는다. 두 파일 사이의 적용 순서에 기대지 않는다. 기존 병합 migration·시드는 보존한다.
 
