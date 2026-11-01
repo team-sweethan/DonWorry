@@ -26,6 +26,17 @@
 
 ## 검증 기록
 
-기준 dev `b3ac3e4`, 브랜치 `feature/131-status-transition`. 실행 결과는 검사 후 기록한다. 기존 이슈/README에 있는 과거 통과 결과는 이번 전환의 근거로 쓰지 않는다.
+2026-11-01, 기준 dev `b3ac3e4`, 브랜치 `feature/131-status-transition`, 구현 커밋 `9df15f4`와 동일한 코드 작업 트리에서 실행했다. 이후 변경은 이 검증 기록 문서만 해당한다. 기존 이슈/README의 과거 결과와 구분한다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(4분 19초), 일반 1,259개 중 1,258 통과·기존 1개 skip, MariaDB 674개 모두 통과. 실패/오류 0. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0. 기존 router Fast Refresh lint 경고 1개와 번들 크기 경고 유지.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 기존 migration 수정 없음.
+
+신규 일회용 MariaDB 업그레이드 검사 2개는 이전 스키마에 정지 계정·진행/종료 신청·과거 감사 JSON·토큰/메일을 넣고 실제 Flyway 전환 후 보존과 예약을 확인한다. 별도 검사로 신청 SQL의 ALTER/UPDATE/ALTER 각 단계에서 구/신 이름 모두 이메일·사업자번호·아이디 중복을 거절하는지 확인했다. 최종 구 상태 CHECK 거절·재실행 무변경·반려 후 예약 해제도 확인했다.
+
+전체 HTTP 회귀에서 계정 생성/조회·INACTIVE 저장/필터·새 감사 유형·옛 이름 400·정지 로그인 거절/기존 세션 종료/복구 후 로그인, 신청→확인→검토 대기·재발송·복구·자동 정리·중복 신청/아이디 예약을 확인했다. 프론트는 새 상태 payload·필터 왕복·구 주소 제외·신청 새 필터/‘이메일 미확인’ 표시를 자동 검사했다. 브라우저 화면 실행과는 구분한다.
+
+최초 선택 실행에서 신규 HTTP 검사 추가 위치가 중복되어 로컬 변수 컴파일 오류가 발생했고, 중복 블록을 제거한 뒤 선택 검사와 위 전체 검사를 통과했다. 프론트 첫 포맷 검사에서 긴 타입 줄을 지적해 Prettier를 적용한 뒤 전체 검사를 통과했다. 테스트 단언을 제거하거나 skip을 추가하지 않았다. 검사는 실제 개발 DB 대신 Testcontainers에서만 수행했다.
+
 
 미검증: 실제 공용/운영 DB 전환·백업 복원 리허설, 실제 브라우저 관리 화면/기존 탭, HTTPS/프록시·배포 비밀값 주입·Notion 동기화. 운영 시연 계정 제한은 PR B다.
