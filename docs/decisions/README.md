@@ -55,7 +55,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0029](0029-login-attempt-lock.md) | 로그인 연속 실패의 고정 시간 잠금 | 제안 — #127 사용자 구현 승인, PR 리뷰 대상 |
 | [0030](0030-cakeshop-payment-attempts.md) | CakeShop 주문별 결제 시도와 HTTP 조회 | 제안 — #149 저장 구조 방향 사용자 승인, 상세 설계·인증 연결 확인 중 |
 | [0031](0031-fds-evaluation-request-id-conflict.md) | FDS 평가 요청 ID 재사용 충돌 처리 | 제안 — 팀 합의 필요 |
-| [0032](0032-production-admin-startup.md) | 운영 설정 분리와 관리자 비밀번호 기동 적용 | 제안 — #131 부분 구현, 시연 계정 정지는 후속 |
+| [0032](0032-production-admin-startup.md) | 운영 설정 분리와 관리자 비밀번호 기동 적용 | 제안 — #131 PR B 운영 시작 시 시연 계정 정지 확장 |
 | [0033](0033-login-history.md) | 로그인 이력의 독립 저장과 90일 조회 | 제안 — #147 사용자 승인·구현 반영, 팀 리뷰 대상 |
 | [0034](0034-fds-evidence-read-contract.md) | P3 Case 화면용 FDS 평가 근거 공개 조회 계약 | 제안 — #162 구현·P3 연동 대기 |
 | [0035](0035-long-held-payment-policy.md) | 장기 보류 결제의 확인 기한과 금융 종료 분리 | 전체 정책 제안 — 내부 조회 담당 확인 완료, 운영 시간·담당·CakeShop 정책·구현 미완료 |

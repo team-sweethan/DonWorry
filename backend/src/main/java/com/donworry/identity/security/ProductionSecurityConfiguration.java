@@ -1,6 +1,6 @@
 package com.donworry.identity.security;
 
-import com.donworry.identity.service.ProductionAdminService;
+import com.donworry.identity.service.ProductionStartupService;
 import java.util.Arrays;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
@@ -58,10 +58,10 @@ public class ProductionSecurityConfiguration {
     @Bean
     @Lazy(false)
     @DependsOnDatabaseInitialization
-    SmartInitializingSingleton productionAdminInitializer(Environment environment, ProductionAdminService service) {
+    SmartInitializingSingleton productionStartupInitializer(Environment environment, ProductionStartupService service) {
         // 웹 서버의 lifecycle 시작 전에 커밋을 끝낸다. 실패는 컨텍스트 기동 실패로 전파한다.
         return () -> {
-            service.applyPassword(environment.getProperty("DONWORRY_ADMIN_PASSWORD"));
+            service.initialize(environment.getProperty("DONWORRY_ADMIN_PASSWORD"));
         };
     }
 }

@@ -8,7 +8,7 @@
 
 기존 개발 DB는 초기화 없이 새 Flyway 두 개로 전환한다. **같은 DB에 연결하는 구버전 앱·예약 작업을 모두 종료**하고 백엔드·프론트를 같은 점검 배포로 맞춘다. 기존 탭을 새로고침한다. 백업·부분 DDL 실패 복구·롤백 절차는 [전환 운영 안내](131-status-transition.md), 결정·대안은 [ADR-0060](../decisions/0060-identity-status-names.md)을 따른다.
 
-PR A는 시드 계정 ACTIVE를 보존한다. `prod` 시작 시 `boss`·`staff_test`·`cakeshop_owner` 정지는 PR B이며 아직 구현하지 않았다. 가맹점·키·권한·메일 발송 상태와 다른 모듈 공개 Java 계약은 바꾸지 않는다. 이번 자동 검사 결과·미검증은 전환 운영 안내와 PR에 기록한다.
+PR A는 시드 계정 ACTIVE를 보존한다. `prod` 시작 시 `boss`·`staff_test`·`cakeshop_owner` 정지는 PR B에서 구현했다. 아래 운영 절차를 따른다. 가맹점·키·권한·메일 발송 상태와 다른 모듈 공개 Java 계약은 바꾸지 않는다. 이번 자동 검사 결과·미검증은 전환 운영 안내와 PR에 기록한다.
 
 ## #354 후속 사장님 홈·로그인 첫 이동
 
@@ -236,9 +236,9 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 - `cd frontend && npm ci && npm run lint && npm run format:check && npm run test && npm run build`: 통과. 63개 성공.
 - 미검증: 실제 운영 프록시·HTTPS 배포, 계정 드롭다운의 실제 브라우저 확인.
 
-## #131 운영 설정(부분 구현)
+## #131 운영 설정
 
-사용자 결정으로 이번에는 운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키만 구현한다. **시연 계정(`boss`·`staff_test`) 정지는 후속이며 #131 전체 완료가 아니다.** 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
+운영 설정 분리·관리자 비밀번호·Secure 세션 쿠키(PR #146)에 더해, **`prod` 시작 시 시연 계정 `boss`·`staff_test`·`cakeshop_owner`를 INACTIVE로 정지한다 (PR B).** 실제 배포 검증이 남아 #131 전체 완료는 아니다. 상세 정책·대안은 [ADR-0032](../decisions/0032-production-admin-startup.md)을 따른다.
 
 ### 로컬 개발
 
@@ -265,17 +265,32 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - Flyway/JPA 뒤, 웹 서버 시작 전에 활성 ADMIN `admin`의 비밀번호를 BCrypt로 적용한다. 없거나 정지/다른 역할이면 기동 실패한다. 관리자 생성·재활성화는 하지 않는다.
 - 매 재시작마다 환경값을 기준으로 맞춘다. 화면에서 바꾼 값을 유지하려면 환경변수도 함께 변경한다. 같은 비밀번호·강제 변경 false이면 저장·이력을 반복하지 않는다.
 - 실제 변경과 `PRODUCTION_PASSWORD_APPLIED` 이력은 같은 트랜잭션이다. 실패하면 롤백·기동 실패한다. 이력 출처는 `PRODUCTION_STARTUP`이며 원문·해시는 저장하지 않는다.
-- 시연 계정·다른 계정·권한·가맹점·로그인 실패 횟수/잠금은 유지한다. 시연 계정 로그인도 계속 가능하다. 관리자 15분 잠금 역시 재시작으로 풀지 않는다.
+- PR B: 관리자 비밀번호 적용과 `boss`·`staff_test`·`cakeshop_owner`의 INACTIVE 전환·각 이력을 하나의 시작 트랜잭션으로 처리한다. 관리자 비밀번호가 같아도 계정 정지를 실행한다. 이미 정지된 대상은 UPDATE·이력을 생략하고 부재 계정은 생성하지 않는다.
+- 시연 계정 이력은 `PRODUCTION_DEMO_ACCOUNT_INACTIVATED`, actor는 검증한 admin ID, target은 각 계정 ID, 출처는 `PRODUCTION_STARTUP`이다. 비밀번호·해시는 담지 않는다. 어느 이력 저장·커밋이 실패해도 시작 작업 전체를 롤백하고 웹 서버를 시작하지 않는다. Flyway DDL 롤백은 보장하지 않는다.
+- 다른 계정·권한·가맹점·HMAC 키·로그인 실패 횟수/잠금은 유지한다. 관리자 15분 잠금 역시 재시작으로 풀지 않는다.
+- 개발/운영 DB를 분리한다. 개발 DB에서 prod를 실행하면 정지가 영속 반영되며 프로필 변경으로 원복되지 않는다. 일반 로컬 시작은 시연 계정을 정지하거나 수동 정지 계정을 복구하지 않는다. 실행 중 관리자 복구는 허용되지만 다음 prod 시작 때 다시 정지된다.
 - 세션 쿠키는 Secure=true·HttpOnly·SameSite=Lax다. XSRF-TOKEN은 JavaScript 읽기 가능을 유지하고, 운영에서는 요청 HTTPS 여부와 무관하게 Secure로 고정한다(프록시 전달 정보를 믿지 않음). CSRF 검사 기본값은 계속 false다.
 
 ### 배포 시 남은 확인
 
 - XSRF-TOKEN Secure는 운영 설정만으로 보장한다(평문 HTTP 요청에서도 Secure를 MariaDB 테스트로 확인). 프록시에서 HTTPS를 종료해도 `forward-headers-strategy` 설정이 필요 없다. 실제 HTTPS 배포에서의 쿠키 확인만 남는다.
 - HTTPS 프록시 전달·신뢰 범위·프론트/API 동일 출처를 확정하고 실제 JSESSIONID/XSRF-TOKEN 속성·로그인/로그아웃·두 탭 흐름을 확인한다. 프록시 헤더를 무조건 신뢰하는 설정은 추가하지 않았다.
-- 시연 계정 제한·전체 업무 인가/가맹점 필터·CSRF 활성화는 후속이다. 이 부분 구현만으로 실제 운영 공개 준비가 끝난 것은 아니다.
+- 실제 배포 검증과 전체 업무 인가/가맹점 필터·CSRF 활성화는 각 후속 범위에서 확인한다. 이 부분 구현만으로 실제 운영 공개 준비가 끝난 것은 아니다.
 - 단일 서버·메모리 세션 전제다. 다른 실행 인스턴스의 세션 종료·다중 서버/롤링 배포는 범위 밖이다.
 
-### #131 검증·미검증
+### #131 PR B 검증·미검증
+
+2026-11-01, 기준 `dev 14930d0`, 브랜치 `feature/131-production-demo-accounts`, 구현 커밋 `1e297b9`와 동일한 코드·테스트 작업 트리에서 실행했다. 이후 변경은 이 검증 기록뿐이다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(4분 38초). 일반 1,260개 중 1,259개 성공·기존 1개 skip, MariaDB 677개 모두 성공. 실패·오류 0. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- 선택 실행의 운영 서비스·설정 검사와 별도 MariaDB 검사 6개도 통과했다. 웹 서버 시작 이벤트에서 별도 DB 연결로 세 계정 정지·이력 커밋을 확인했고, HTTP 로그인 401·admin 정상 로그인·쿠키·운영 Mock/시연 API 차단을 검사했다.
+- 동일 비밀번호·플래그 false에서도 활성 시연 계정을 정지하며 일부 정지/부재 대상을 건너뛰고, 재시작 시 해시·이력 수를 유지하는지 확인했다. 두 번째 시연 계정 이력 INSERT를 트리거로 거절해 관리자 해시/플래그·앞선 시연 계정 변경·감사 이력 전체의 롤백과 웹 서버 미시작을 확인했다. 기존 관리자 이력 실패·로그인 잠금 보존 검사도 유지했다.
+- 로컬에서는 세 시연 계정 로그인 200, 수동 정지 계정의 정지 유지, 일반 활성 계정과 운영 관리자 로그인 성공을 확인했다. 테스트별 별도 Testcontainers MariaDB만 사용했으며 실제 개발/운영 DB는 변경하지 않았다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 기존 migration 변경 없음.
+
+미검증: 실제 운영 DB 적용, HTTPS/프록시·배포 비밀값 주입·브라우저 쿠키/두 탭, Notion 동기화. 프론트·AI 서버 변경이 없어 해당 검사는 실행하지 않았다. 원격 CI·리뷰·병합은 PR에서 별도로 추적한다. 실행 중 계정 정지의 세션 종료 회귀는 전체 검사에 포함되며 다른 인스턴스 세션·다중 서버는 지원 범위 밖이다. #131 전체 완료나 CSRF 실제 활성화를 뜻하지 않는다.
+
+### #131 기존 PR #146 검증·미검증 (과거 기록)
 
 2026-10-26 재검증: `dev af79eb8`(#155) 위에서 ADR 번호 변경·jar의 개인 설정 제외·Codex 리뷰 3건(데이터소스 우회·쿠키 약화·FDS Mock)·운영 XSRF-TOKEN Secure 고정 반영까지 마친 작업 트리에서 실행했다. 기준 dev 단독 결과가 아니다. 이후에는 이 검증 기록만 고쳤다.
 
@@ -447,7 +462,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - 세션에는 Entity · 비밀번호 · 비밀번호 해시를 보관하지 않는다. 별도의 Serializable 사용자 객체만 저장한다. 이 객체의 role은 UserRole enum이고, 응답 JSON의 role은 문자열("ADMIN")로 내보낸다.
 - ADMIN 권한은 role로 계산한다. tenantScope는 OPERATOR=MERCHANT, SECURITY_STAFF·ADMIN=ALL이며 기능 권한과 별개다. ADMIN 권한은 FDS_VIEW · FINANCE_VIEW다.
 - ADMIN 외 역할은 비밀번호 검증이 성공한 뒤 user_permissions를 읽어 세션 사용자 객체에 담고 permissions로 반환한다. 검증 전에 읽으면 있는 아이디만 DB를 한 번 더 조회해 응답 시간으로 계정 존재 여부가 드러난다. 권한을 바꾸면 다시 로그인해야 반영된다. 권한 필드가 없는 이전 세션은 권한 없음으로 본다.
-- 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다.
+- 시연 계정 시드: DEMOSHOP 가맹점(pg_fee_rate 0.020000 임시값), 사장님 boss(OPERATOR, FDS_VIEW · FINANCE_VIEW), 보안 직원 staff_test(SECURITY_STAFF, 추가 권한 없음). 비밀번호는 둘 다 1234다. 운영(`prod`)에서는 시작 시 INACTIVE로 정지된다 ([#131 운영 설정](#131-운영-설정)).
 - #124에서 공개 Java 조회 계약과 프론트 tenantScope 타입을 추가했다. DB 스키마 변경은 없다. #128까지 /me·/logout-all·/password가 인증을 요구하며 다른 경로의 접근 허용과 CSRF 비활성화는 유지한다.
 - #129는 `/api/admin/**`를 ADMIN으로 제한하고 `/login`·`/me`에 `passwordChangeRequired`를 추가한다. 강제 변경 계정의 인증 경로 외 `/api/**`는 403 AUTH_008이다. 그 외 익명 업무 API·서버 간 경로와 CSRF 정책은 기존 #68 5단계 범위를 유지한다.
 
