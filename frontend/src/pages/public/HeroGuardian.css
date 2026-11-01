@@ -1,0 +1,682 @@
+/* 랜딩 첫 화면 동전이 연출 (#397)
+ * 기본값은 연출이 끝난 마지막 자세다. 움직임 줄이기 설정이 아니면 아래 @media 안에서 등장 연출을 붙인다.
+ * 방어막 SVG 좌표 1 = 1px. 카드가 부딪히는 위치는 HeroGuardian.tsx의 R(215)과 맞춘다. */
+.dw-guardian {
+  --dw-g-hit: 1.85s; /* 방패가 땅에 닿는 순간 */
+  position: relative;
+  width: 520px;
+  height: 520px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  user-select: none;
+}
+.dw-guardian > * {
+  grid-area: 1 / 1;
+}
+
+/* ── 방어막 ── */
+.dw-g-barrier {
+  position: relative;
+  z-index: 1;
+  width: 460px;
+  height: 460px;
+  overflow: visible;
+}
+.dw-g-front {
+  z-index: 4;
+}
+.dw-g-reveal,
+.dw-g-rim,
+.dw-g-spin,
+.dw-g-spin-rev,
+.dw-g-hit-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.dw-g-hit-ring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+}
+.dw-g-scan {
+  transform: translateY(-240px);
+}
+.dw-g-cell {
+  opacity: 0;
+}
+
+/* ── 동전이 ── */
+.dw-g-mascot {
+  position: relative;
+  z-index: 3;
+  width: 320px;
+  height: 320px;
+  overflow: visible;
+  filter: drop-shadow(0 20px 26px rgba(19, 32, 74, 0.3));
+}
+.dw-g-descend,
+.dw-g-squash,
+.dw-g-shield,
+.dw-g-emblem {
+  transform-box: view-box;
+}
+.dw-g-descend {
+  transform-origin: 90px 150px;
+}
+.dw-g-squash {
+  transform-origin: 90px 176px;
+}
+/* 마지막 자세: 방패를 몸 앞 가운데에 세웠다 */
+.dw-g-shield {
+  transform-origin: 154px 113px;
+  transform: translate(-76px, 22px) rotate(8deg) scale(1.12);
+}
+.dw-g-emblem {
+  transform-origin: 130px 102px;
+}
+.dw-g-brow-soft,
+.dw-g-struggle {
+  opacity: 0;
+}
+.dw-g-shine {
+  transform: translateX(-90px);
+}
+.dw-g-glint,
+.dw-g-dust {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* ── 연출 전용 요소 (기본은 숨김) ── */
+.dw-g-beam {
+  z-index: 2;
+  align-self: start;
+  width: 180px;
+  height: 100%;
+  opacity: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 244, 205, 0),
+    rgba(255, 240, 190, 0.9) 40%,
+    rgba(255, 244, 205, 0)
+  );
+  clip-path: polygon(35% 0, 65% 0, 100% 100%, 0 100%);
+  filter: blur(6px);
+}
+.dw-g-burst-light {
+  z-index: 5;
+  width: 360px;
+  height: 360px;
+  margin-top: 120px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(255, 247, 220, 0.95) 0%, rgba(255, 247, 220, 0) 60%);
+}
+.dw-g-ring {
+  z-index: 4;
+  width: 120px;
+  height: 120px;
+  margin-top: 120px;
+  border: 4px solid #e9c165;
+  border-radius: 50%;
+  opacity: 0;
+}
+.dw-g-ring-blue {
+  border-color: #6f8fe0;
+}
+.dw-g-particles,
+.dw-g-cards {
+  position: relative;
+  width: 0;
+  height: 0;
+}
+.dw-g-particles {
+  z-index: 5;
+  margin-top: 110px;
+}
+.dw-g-particles i {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle at 35% 35%, #fff6d6, #e9b84a 70%);
+  box-shadow: 0 0 8px rgba(248, 227, 166, 0.9);
+}
+.dw-g-motes {
+  position: relative;
+  z-index: 2;
+  width: 380px;
+  height: 380px;
+}
+.dw-g-motes i {
+  position: absolute;
+  bottom: 10%;
+  border-radius: 50%;
+  opacity: 0;
+  background: #f2cf7a;
+  box-shadow: 0 0 6px #f8e3a6;
+}
+
+.dw-g-star,
+.dw-g-speed {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.dw-g-pillar {
+  z-index: 2;
+  align-self: start;
+  width: 220px;
+  height: 436px; /* 위에서 바닥 받침 중심까지 */
+  opacity: 0;
+  transform-origin: bottom;
+  background: linear-gradient(0deg, rgba(255, 240, 190, 0.9), rgba(255, 240, 190, 0));
+  mask-image: linear-gradient(90deg, transparent, #000 30%, #000 70%, transparent);
+}
+/* 받침 아래 상태 표시 */
+.dw-g-status {
+  z-index: 6;
+  align-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid rgba(233, 193, 101, 0.7);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 16px rgba(19, 32, 74, 0.12);
+  color: var(--brand-navy, #13204a);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dw-g-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e9b84a;
+  box-shadow: 0 0 0 0 rgba(233, 184, 74, 0.6);
+}
+
+/* 막히는 의심 결제 카드 */
+.dw-g-cards {
+  z-index: 6;
+}
+.dw-g-card {
+  position: absolute;
+  left: -17px;
+  top: -11px;
+  width: 34px;
+  height: 22px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #ff7a7a, #c92a3a);
+  box-shadow: 0 4px 10px rgba(201, 42, 58, 0.35);
+}
+.dw-g-card::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  width: 8px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: #f6d27a;
+}
+.dw-g-card::after {
+  content: '!';
+  position: absolute;
+  right: 5px;
+  top: 2px;
+  color: #fff;
+  font:
+    800 13px/18px system-ui,
+    sans-serif;
+}
+.dw-g-shard {
+  position: absolute;
+  left: -3px;
+  top: -2px;
+  width: 6px;
+  height: 4px;
+  border-radius: 1px;
+  background: #e2464f;
+}
+.dw-g-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 5px 10px;
+  border: 1.5px solid #e9c165;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(19, 32, 74, 0.15);
+  color: var(--brand-navy, #13204a);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── 등장 연출 ── */
+@media (prefers-reduced-motion: no-preference) {
+  /* 빛줄기 속에서 천천히 내려와 쿵 착지 */
+  .dw-g-beam {
+    animation: dw-g-beam 1.2s 0.1s ease-out both;
+  }
+  .dw-g-descend {
+    animation: dw-g-descend 0.9s 0.15s cubic-bezier(0.55, 0, 0.75, 0.4) both;
+  }
+  .dw-g-pad {
+    animation: dw-g-pad-on 0.6s 1s ease-out both;
+  }
+  .dw-g-spin {
+    animation: dw-g-spin 18s linear infinite;
+  }
+  .dw-g-spin-rev {
+    animation: dw-g-spin 26s linear infinite reverse;
+  }
+
+  /* 방패: 옆에서 머리 위로 → 부들부들 힘 모으기 → 몸 앞으로 쾅 */
+  .dw-g-shield {
+    animation: dw-g-shield 1.05s 0.8s both;
+  }
+  .dw-g-struggle {
+    animation: dw-g-fade-out 0.2s 1.1s both;
+  }
+  .dw-g-brow-soft {
+    animation: dw-g-fade-out 0.1s var(--dw-g-hit) both;
+  }
+  .dw-g-brow-serious {
+    animation: dw-g-fade-in 0.1s var(--dw-g-hit) both;
+  }
+
+  /* 쾅 */
+  .dw-guardian {
+    animation: dw-g-shake 0.45s var(--dw-g-hit) linear both;
+  }
+  .dw-g-squash {
+    animation: dw-g-squash 0.4s var(--dw-g-hit) ease-out both;
+  }
+  .dw-g-burst-light {
+    animation: dw-g-burst-light 0.5s var(--dw-g-hit) ease-out both;
+  }
+  .dw-g-ring {
+    animation: dw-g-ring 0.8s var(--dw-g-hit) cubic-bezier(0.1, 0.7, 0.3, 1) both;
+  }
+  .dw-g-ring-blue {
+    animation-delay: calc(var(--dw-g-hit) + 0.12s);
+  }
+  .dw-g-particles i {
+    animation: dw-g-burst 1.1s var(--dw-g-hit) cubic-bezier(0.15, 0.8, 0.3, 1) both;
+  }
+  .dw-g-dust {
+    animation: dw-g-dust 0.7s var(--dw-g-hit) ease-out both;
+  }
+
+  /* 방어막이 방패 자리에서 퍼져 나간다 */
+  .dw-g-halo {
+    animation: dw-g-fade-in 0.5s var(--dw-g-hit) both;
+  }
+  .dw-g-reveal {
+    animation: dw-g-reveal 1.1s var(--dw-g-hit) cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  .dw-g-rim {
+    animation:
+      dw-g-rim-in 0.9s var(--dw-g-hit) cubic-bezier(0.2, 0.9, 0.3, 1.2) both,
+      dw-g-breathe 3s calc(var(--dw-g-hit) + 1.2s) ease-in-out infinite;
+  }
+  .dw-g-scan {
+    animation:
+      dw-g-scan 1.1s calc(var(--dw-g-hit) + 0.3s) ease-in-out both,
+      dw-g-scan 1.6s calc(var(--dw-g-hit) + 5s) ease-in-out infinite;
+  }
+  .dw-g-orbit {
+    animation: dw-g-fade-in 0.8s calc(var(--dw-g-hit) + 0.5s) both;
+  }
+
+  /* 방패 빛남 · ₩ 문장 · 눈 반짝 */
+  .dw-g-shield-glow {
+    animation:
+      dw-g-fade-in 0.3s var(--dw-g-hit) both,
+      dw-g-breathe 2.6s calc(var(--dw-g-hit) + 0.4s) ease-in-out infinite;
+  }
+  .dw-g-emblem {
+    animation: dw-g-emblem 0.6s calc(var(--dw-g-hit) + 0.25s) cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  }
+  .dw-g-shine {
+    animation: dw-g-shine 0.8s calc(var(--dw-g-hit) + 0.35s) ease-in-out both;
+  }
+  .dw-g-glint {
+    animation: dw-g-glint 0.7s calc(var(--dw-g-hit) + 0.9s) ease-out both;
+  }
+
+  /* 착지 전 소환진이 그려지고, 쾅 하면 빛기둥이 솟는다 */
+  .dw-g-summon {
+    animation: dw-g-draw 0.8s 0.2s cubic-bezier(0.6, 0, 0.3, 1) both;
+  }
+  .dw-g-summon-late {
+    animation-name: dw-g-draw-back;
+    animation-delay: 0.4s;
+  }
+  .dw-g-pillar {
+    animation: dw-g-pillar 1.1s calc(var(--dw-g-hit) + 0.05s) ease-out both;
+  }
+  .dw-g-speed {
+    animation: dw-g-speed 0.55s var(--dw-g-hit) cubic-bezier(0.1, 0.7, 0.3, 1) both;
+  }
+  .dw-g-status {
+    animation: dw-g-pop 0.5s calc(var(--dw-g-hit) + 1s) cubic-bezier(0.3, 1.6, 0.5, 1) both;
+  }
+  .dw-g-status i {
+    animation: dw-g-ping 1.6s calc(var(--dw-g-hit) + 1.5s) ease-out infinite;
+  }
+
+  /* 이후 계속 */
+  .dw-g-star {
+    animation: dw-g-twinkle 2.8s ease-in-out infinite;
+  }
+  .dw-g-float {
+    animation: dw-mascot-float 3.4s 3.2s ease-in-out infinite;
+  }
+  .dw-g-cell {
+    animation: dw-g-cell 3.2s ease-in-out infinite;
+  }
+  .dw-g-motes i {
+    animation: dw-g-mote 5s linear infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dw-g-dot {
+    display: none;
+  }
+}
+
+@keyframes dw-g-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes dw-g-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dw-g-breathe {
+  50% {
+    opacity: 0.5;
+  }
+}
+@keyframes dw-g-beam {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes dw-g-descend {
+  0% {
+    opacity: 0;
+    transform: translateY(-220px);
+  }
+  40% {
+    opacity: 1;
+  }
+  90% {
+    transform: translateY(4px) scale(1.04, 0.94);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes dw-g-pad-on {
+  0% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.6;
+  }
+}
+@keyframes dw-g-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes dw-g-shield {
+  0% {
+    transform: none;
+    animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1);
+  }
+  40% {
+    transform: translate(-34px, -62px) rotate(-14deg) scale(1.05);
+  }
+  50% {
+    transform: translate(-33px, -64px) rotate(-13deg) scale(1.05);
+  }
+  56% {
+    transform: translate(-35px, -63px) rotate(-15deg) scale(1.05);
+  }
+  62% {
+    transform: translate(-34px, -66px) rotate(-14deg) scale(1.06);
+    animation-timing-function: cubic-bezier(0.7, 0, 1, 0.6);
+  }
+  100% {
+    transform: translate(-76px, 22px) rotate(8deg) scale(1.12);
+  }
+}
+@keyframes dw-g-shake {
+  15% {
+    translate: -7px 4px;
+  }
+  30% {
+    translate: 6px -3px;
+  }
+  45% {
+    translate: -5px 2px;
+  }
+  60% {
+    translate: 4px -1px;
+  }
+  80% {
+    translate: -2px 0;
+  }
+}
+@keyframes dw-g-squash {
+  30% {
+    transform: scale(1.05, 0.93);
+  }
+}
+@keyframes dw-g-burst-light {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+}
+@keyframes dw-g-ring {
+  0% {
+    opacity: 1;
+    transform: scale(0.3);
+    border-width: 10px;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(3.4);
+    border-width: 1px;
+  }
+}
+@keyframes dw-g-burst {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.4);
+  }
+}
+@keyframes dw-g-dust {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8) translateY(-8px);
+  }
+}
+@keyframes dw-g-reveal {
+  from {
+    transform: scale(0);
+  }
+}
+@keyframes dw-g-rim-in {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+@keyframes dw-g-scan {
+  0% {
+    transform: translateY(-240px);
+  }
+  70%,
+  100% {
+    transform: translateY(240px);
+  }
+}
+@keyframes dw-g-emblem {
+  40% {
+    transform: scale(1.25);
+  }
+}
+@keyframes dw-g-shine {
+  to {
+    transform: translateX(90px);
+  }
+}
+@keyframes dw-g-glint {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.4) rotate(45deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(90deg);
+  }
+}
+@keyframes dw-g-cell {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  40% {
+    opacity: 0;
+  }
+}
+@keyframes dw-g-mote {
+  0% {
+    opacity: 0;
+    transform: none;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-260px);
+  }
+}
+@keyframes dw-g-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* 반대 방향으로 그린다 */
+@keyframes dw-g-draw-back {
+  from {
+    stroke-dashoffset: -1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes dw-g-pillar {
+  0% {
+    opacity: 0;
+    transform: scaleY(0);
+  }
+  25% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(1) scaleX(0.4);
+  }
+}
+@keyframes dw-g-speed {
+  0% {
+    opacity: 1;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes dw-g-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.7);
+  }
+}
+@keyframes dw-g-ping {
+  0% {
+    box-shadow: 0 0 0 0 rgba(233, 184, 74, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(233, 184, 74, 0);
+  }
+}
+@keyframes dw-g-twinkle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(0deg);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.1) rotate(45deg);
+  }
+  60% {
+    opacity: 0;
+    transform: scale(0.5) rotate(90deg);
+  }
+}
