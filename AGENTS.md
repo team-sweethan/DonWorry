@@ -68,7 +68,7 @@ Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
   - 정확한 메서드 · 경로로 적는다. `/**`처럼 넓게 열지 않는다
   - 역할(ADMIN · SECURITY_STAFF · OPERATOR)과 권한(FDS_VIEW · FINANCE_VIEW)으로 검사한다. 컨트롤러 안 Guard가 있어도 이 규칙을 같이 둔다
   - `permitAll`은 로그인 전에 써야 하는 공개 API만 쓴다. 막힌 것을 풀거나 테스트를 통과시키려고 쓰지 않는다
-  - 누가 써야 하는지 문서에 없으면 추측하지 않고 담당 · P1에게 묻는다
+  - 누가 써야 하는지 문서에 없으면 추측해서 정하지 말고 사람에게 확인한다
   - 예외: CakeShop 서명 API는 `MerchantSecurityConfiguration`, AI 서버 API(`/internal/ai/**`)는 `AiServerSecurityConfiguration`에 둔다
 - 코드 모양(들여쓰기·줄바꿈·import 순서)은 손으로 맞추지 않는다. 커밋 전 `./gradlew spotlessApply` (palantir-java-format, [ADR-0013](docs/decisions/0013-code-formatter.md))
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
