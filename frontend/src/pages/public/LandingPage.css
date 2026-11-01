@@ -732,6 +732,7 @@
   font-size: 17px;
 }
 /* 첫 화면에 있던 사장님 화면 미리보기 — 섹션 머리에 크게 보여 준다 */
+/* 미리보기는 데스크톱 화면(880px)을 그대로 두고, 폭이 모자라면 FitPreview가 통째로 줄인다 */
 .dw-landing-owner-preview {
   overflow: hidden;
   margin-bottom: 48px;
@@ -1635,13 +1636,6 @@
   }
   .dw-landing-hero-visual .dw-guardian {
     /* 방어막 전체가 휴대폰 폭 안에 들어오게 줄인다 */
-    zoom: 0.62;
-  }
-  .dw-landing-owner-preview {
-    height: 300px;
-  }
-  .dw-preview-app {
-    /* 데스크톱 화면을 그대로 줄여 보여 준다 */
     zoom: 0.62;
   }
   .dw-landing-features,

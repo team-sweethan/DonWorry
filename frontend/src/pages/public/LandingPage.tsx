@@ -188,6 +188,29 @@ function FlowStory() {
 }
 
 // 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 스크롤·포커스만 옮긴다.
+/** 예시 앱 화면 폭(.dw-preview-app) */
+const PREVIEW_WIDTH = 880
+
+/** 예시 앱 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다. */
+function FitPreview({ children }: { children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setScale(Math.min(1, entry.contentRect.width / PREVIEW_WIDTH))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return (
+    <div className="dw-landing-owner-preview" ref={box}>
+      <div style={{ zoom: scale }}>{children}</div>
+    </div>
+  )
+}
+
 function moveTo(target: RefObject<HTMLElement | null>) {
   target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   target.current?.focus({ preventScroll: true })
@@ -302,9 +325,9 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
               <h2 id="landing-owner-title">보류된 결제의 결과와 돈의 흐름을 한 곳에서</h2>
               <p>로그인하면 사장님 화면이 열려요. 보안 담당자가 쓰는 내부 화면과는 따로 있어요.</p>
             </div>
-            <div className="dw-landing-owner-preview">
+            <FitPreview>
               <OwnerHeroPreview />
-            </div>
+            </FitPreview>
             <div className="dw-landing-owner-grid">
               {ownerScreens.map((screen) => (
                 <article

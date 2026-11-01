@@ -107,12 +107,12 @@ function useBlockedCards(
     const cards = layer.current
     const glow = hits.current
     if (!host || !cards || !glow) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
     let timer: number | undefined
     let waveTimer: number | undefined
     let visible = false
-    let alive = true
+    let alive = false
     let count = 0
 
     /** (x0, y0)에서 가까운 칸부터 번지듯 육각 칸이 금빛으로 번쩍인다 */
@@ -210,9 +210,8 @@ function useBlockedCards(
 
     const spawn = () => {
       count += 1
-      // 위쪽 반원과 양옆에서 날아온다 (아래 받침 쪽은 피한다)
-      const side = Math.random() < 0.3 ? (Math.random() < 0.5 ? -1 : 1) * Math.PI * 0.35 : 0
-      const a = -Math.PI * 0.05 - Math.random() * Math.PI * 0.9 + side
+      // 위쪽 반원(-0.92π ~ -0.08π)에서만 날아온다. 아래 받침 · 상태 표시 쪽은 피한다
+      const a = -Math.PI * (0.08 + Math.random() * 0.84)
       const cx = Math.cos(a)
       const cy = Math.sin(a)
       const card = document.createElement('i')
@@ -243,21 +242,36 @@ function useBlockedCards(
       visible = entry.isIntersecting
     })
     observer.observe(host)
-    // 방패가 땅을 치는 순간(CSS --dw-g-hit), 그 자리에서 방어막 전체로 금빛 물결이 번진다
-    waveTimer = window.setTimeout(() => wave(-29, 67, 500, 2.2), 1900)
-    // 등장 연출(약 3초)이 끝난 뒤부터
-    schedule(3600)
 
-    return () => {
+    const start = () => {
+      alive = true
+      // 방패가 땅을 치는 순간(CSS --dw-g-hit), 그 자리에서 방어막 전체로 금빛 물결이 번진다
+      waveTimer = window.setTimeout(() => wave(-29, 67, 500, 2.2), 1900)
+      // 등장 연출(약 3초)이 끝난 뒤부터
+      schedule(3600)
+    }
+    const stop = () => {
       alive = false
       window.clearTimeout(timer)
       window.clearTimeout(waveTimer)
-      observer.disconnect()
       for (const animation of host.getAnimations({ subtree: true })) {
         if (!(animation instanceof CSSAnimation)) animation.cancel()
       }
       cards.replaceChildren()
       glow.replaceChildren()
+    }
+    // 페이지를 연 뒤 움직임 줄이기 설정을 바꿔도 따라간다 (CSS 연출은 @media가 알아서 따라간다)
+    const onMotionChange = () => {
+      stop()
+      if (!reduceMotion.matches) start()
+    }
+    reduceMotion.addEventListener('change', onMotionChange)
+    if (!reduceMotion.matches) start()
+
+    return () => {
+      reduceMotion.removeEventListener('change', onMotionChange)
+      observer.disconnect()
+      stop()
     }
   }, [root, layer, hits, shieldGlow])
 }
