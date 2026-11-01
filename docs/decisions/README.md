@@ -37,7 +37,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 의존 규칙 채택 유지, 취소 제한 전제만 0054로 대체 |
 | [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
-| [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 채택 |
+| [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 세션 인증 채택 유지, 그 외 경로 permitAll 항목만 0059로 대체 |
 | [0015](0015-fds-evaluation-list-query-contract.md) | FDS 평가 목록 조회의 서버 페이지네이션과 검색 계약 | 제안 — 팀 합의 필요 |
 | [0016](0016-capture-request-event-contract.md) | 1차 MVP 매입 요청 이벤트 계약 | 채택 — P6 요청 계약 |
 | [0017](0017-capture-completed-event-contract.md) | 1차 MVP 매입 완료 이벤트 계약 | 채택 — P5 수신 구현 별도 |
@@ -83,6 +83,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0052](0052-merchant-key-management.md) | 가맹점 HMAC 키 암호화 저장·사장님 관리 | 제안 — #354 PR B 사용자 승인, PR 리뷰 대상 |
 
 | [0054](0054-full-cancellation-policy.md) | 전액 취소·환불과 정산 완료 후 취소 허용 | 사용자 정책 확인, 상세 연동 계약 후속 합의 |
+| [0059](0059-security-default-deny.md) | 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`) | 제안 — #392 P1 구현, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

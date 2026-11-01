@@ -127,11 +127,12 @@ class CsrfApiTests {
         token(null);
     }
 
-    // 안전한 요청과 내부 호출은 통과하며 변경 요청의 누락·불일치는 전용 403이다.
+    // 안전한 요청과 내부 호출은 CSRF를 통과하며 변경 요청의 누락·불일치는 전용 403이다.
+    // 통과한 요청은 등록하지 않은 경로라 기본 거절(비로그인 401)에 걸린다 (#392)
     @Test
     void csrf_whenEnabled_checksOnlyUnsafeNonInternalRequests() throws Exception {
-        mvc.perform(get("/api/probe")).andExpect(status().isNotFound());
-        mvc.perform(post("/internal/probe")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/probe")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/internal/probe")).andExpect(status().isUnauthorized());
         mvc.perform(post("/api/probe"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("CSRF_001"));
@@ -142,10 +143,10 @@ class CsrfApiTests {
         mvc.perform(post("/api/probe").cookie(token).header("X-XSRF-TOKEN", "wrong"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("CSRF_001"));
-        mvc.perform(withToken(post("/api/probe"), token)).andExpect(status().isNotFound());
-        mvc.perform(withToken(put("/api/probe"), token)).andExpect(status().isNotFound());
-        mvc.perform(withToken(patch("/api/probe"), token)).andExpect(status().isNotFound());
-        mvc.perform(withToken(delete("/api/probe"), token)).andExpect(status().isNotFound());
+        mvc.perform(withToken(post("/api/probe"), token)).andExpect(status().isUnauthorized());
+        mvc.perform(withToken(put("/api/probe"), token)).andExpect(status().isUnauthorized());
+        mvc.perform(withToken(patch("/api/probe"), token)).andExpect(status().isUnauthorized());
+        mvc.perform(withToken(delete("/api/probe"), token)).andExpect(status().isUnauthorized());
     }
 
     // 수동 로그인도 이전 토큰을 지우며 강제 변경 계정이 새 토큰을 받을 수 있다.

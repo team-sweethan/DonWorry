@@ -71,6 +71,7 @@ class ProductionProfileTests {
                     .isEqualTo("jdbc:mariadb://production-db:3306/production");
             assertThat(environment.getProperty("security.csrf.enabled")).isEqualTo("false");
             assertThat(environment.getProperty("fds.mock.seed-enabled")).isEqualTo("false");
+            assertThat(environment.getProperty("security.demo-api.enabled")).isEqualTo("false");
             verify(service).applyPassword("Production123!");
         });
     }
@@ -148,6 +149,16 @@ class ProductionProfileTests {
                     assertThat(context.getStartupFailure()).hasMessageContaining(message);
                     verifyNoInteractions(service);
                 }));
+    }
+
+    // 인증 없는 시연용 API를 운영에서 다시 열면 기동하지 않는다 (#392)
+    @Test
+    void configuration_whenDemoApiEnabled_failsBeforeChangingPassword() {
+        production().withPropertyValues("security.demo-api.enabled=true").run(context -> {
+            assertThat(context).hasFailed();
+            assertThat(context.getStartupFailure()).hasMessageContaining("security.demo-api.enabled");
+            verifyNoInteractions(service);
+        });
     }
 
     // 인증 없는 개발용 Mock 평가 API를 운영에서 다시 켜면 기동하지 않는다

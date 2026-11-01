@@ -142,7 +142,10 @@ class AiServerSecurityTests {
         mvc.perform(post("/api/payments").header(HEADER, API_KEY).content("{}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_001"));
-        mvc.perform(post("/internal/other-probe")).andExpect(status().isOk());
+        // /internal/ai/** 밖의 내부 경로는 직원 체인의 기본 거절을 따른다 (#392)
+        mvc.perform(post("/internal/other-probe").header(HEADER, API_KEY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
     // Spring 키 설정이 비어 있으면 빈 키를 포함해 모든 요청을 거절한다
