@@ -60,6 +60,12 @@ class PaymentFdsInfoFlowTests {
                 .customerRef(customerRef)
                 .amount(150_000L)
                 .paymentRequestedAt(Instant.now())
+                .deviceId("device-investigation-flow")
+                .cardToken("card-token-investigation-flow")
+                .cardDisplayLabel("테스트 **** 0001")
+                .ipCountryCode("KR")
+                .ipAddress("203.0.113.30")
+                .buyerEmail("investigation-flow@example.test")
                 .build());
         FdsPaymentEvidence evidence =
                 fdsEvidenceReader.findLatestByPaymentIds(List.of(paymentId)).getFirst();

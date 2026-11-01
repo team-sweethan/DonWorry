@@ -161,8 +161,11 @@ export function RuleChangeRequestsPage() {
         <Pagination
           current={page + 1}
           pageSize={10}
-          total={result?.totalElements ?? 0}
+          // Preserve the first-page pagination UI for an empty request tab.
+          // A single effective item keeps previous/next disabled.
+          total={Math.max(result?.totalElements ?? 0, 1)}
           showSizeChanger={false}
+          hideOnSinglePage={false}
           style={{ marginTop: 16, textAlign: 'right' }}
           onChange={(next) => setPage(next - 1)}
         />

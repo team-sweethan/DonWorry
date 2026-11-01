@@ -26,6 +26,7 @@ class PaymentRequestFlowServiceTests {
             .customerRef("customer")
             .amount(100L)
             .paymentRequestedAt(Instant.now())
+            .riskSignals(PaymentEvaluationFixtures.riskSignals())
             .build();
 
     private void setup() {

@@ -44,7 +44,11 @@ class PaymentEvaluationFlowFailureTests {
 
     private PaymentEvaluationFlowInput input() {
         return new PaymentEvaluationFlowInput(
-                999L, UUID.randomUUID().toString(), UUID.randomUUID().toString(), 150_000L);
+                999L,
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                150_000L,
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     // 평가 전에 별도 트랜잭션에서 최초 결제를 조회할 수 있고 평가 실패와 호출자 롤백 후에도 남는다

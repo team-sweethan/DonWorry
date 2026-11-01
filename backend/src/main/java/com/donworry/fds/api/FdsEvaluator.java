@@ -4,4 +4,8 @@ package com.donworry.fds.api;
 public interface FdsEvaluator {
 
     FdsEvaluationResponse evaluate(FdsEvaluationRequest request);
+
+    default FdsEvaluationResponse evaluateHistoricalSnapshot(FdsEvaluationRequest request) {
+        return evaluate(request);
+    }
 }

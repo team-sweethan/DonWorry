@@ -68,7 +68,8 @@ class PaymentRequestFlowMariaDbTests {
                 UUID.randomUUID().toString(),
                 1000L,
                 Instant.now().minusSeconds(1),
-                UUID.randomUUID());
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals());
     }
 
     private FdsEvaluationResponse response(FdsEvaluationRequest r, FdsResult result) {
@@ -286,7 +287,7 @@ class PaymentRequestFlowMariaDbTests {
                     assertThat(report.requestedAt()).isEqualTo(recovery.getEvaluationRequestedAt());
                     assertThat(report.respondedAt()).isEqualTo(recovery.getEvaluationRespondedAt());
                     assertThat(report.sanitizedErrorMessage()).isNull();
-                    assertThat(report.deviceId()).isNull();
+                    assertThat(report.deviceId()).isEqualTo(c.riskSignals().deviceId());
                     throw new IllegalStateException("sensitive internal message");
                 })
                 .when(failureReporter)

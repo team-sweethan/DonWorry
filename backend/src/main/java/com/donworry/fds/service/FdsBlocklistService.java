@@ -2,6 +2,7 @@ package com.donworry.fds.service;
 
 import com.donworry.fds.dto.CreateFdsBlocklistEntryRequest;
 import com.donworry.fds.dto.FdsBlocklistPageResponse;
+import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.dto.FdsBlocklistStatusResponse;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.repository.FdsBlocklistEntryRepository;
@@ -21,9 +22,14 @@ public class FdsBlocklistService {
     private final FdsBlocklistEntryRepository entries;
     private final CurrentStaff currentStaff;
 
-    public FdsBlocklistPageResponse list(int page, int size) {
+    public FdsBlocklistPageResponse list(int page, int size, FdsBlocklistStatusFilter status, String search) {
         requireViewer();
-        var result = entries.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size));
+        var at = Instant.now();
+        var normalizedSearch = normalizeSearch(search);
+        var pageable = PageRequest.of(page, size);
+        var result = status == FdsBlocklistStatusFilter.ACTIVE
+                ? entries.findActiveAtWithSearch(at, normalizedSearch, pageable)
+                : entries.findInactiveAtWithSearch(at, normalizedSearch, pageable);
         return new FdsBlocklistPageResponse(
                 result.map(entry -> new FdsBlocklistPageResponse.Item(
                                 entry.getBlocklistEntryId(),
@@ -31,14 +37,27 @@ public class FdsBlocklistService {
                                 entry.getIdentifierValue(),
                                 entry.getDisplayLabel(),
                                 entry.getReason(),
+                                entry.getDeactivationReason(),
                                 entry.isActive(),
                                 entry.getCreatedAt(),
+                                entry.getDeactivatedAt(),
                                 entry.getExpiresAt()))
                         .toList(),
                 result.getNumber(),
                 result.getSize(),
                 result.getTotalElements(),
                 result.getTotalPages());
+    }
+
+    private String normalizeSearch(String search) {
+        if (search == null) {
+            return "";
+        }
+        var normalized = search.strip();
+        if (normalized.codePointCount(0, normalized.length()) > 100) {
+            throw new IllegalArgumentException("search must be at most 100 characters");
+        }
+        return normalized;
     }
 
     public FdsBlocklistStatusResponse status(CreateFdsBlocklistEntryRequest.IdentifierType type, String value) {
@@ -75,11 +94,12 @@ public class FdsBlocklistService {
     }
 
     @Transactional
-    public void deactivate(Long entryId) {
+    public void deactivate(Long entryId, String reason) {
         requireRole("SECURITY_STAFF");
+        var normalizedReason = requireReason(reason);
         var entry = entries.findById(entryId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "차단 식별값을 찾을 수 없습니다."));
-        entry.deactivate();
+        entry.deactivate(normalizedReason, Instant.now());
     }
 
     private String normalizeValue(CreateFdsBlocklistEntryRequest.IdentifierType type, String value) {
@@ -95,6 +115,13 @@ public class FdsBlocklistService {
             return null;
         }
         return value.strip();
+    }
+
+    private String requireReason(String reason) {
+        if (reason == null || reason.isBlank() || reason.codePointCount(0, reason.length()) > 500) {
+            throw new IllegalArgumentException("reason must be between 1 and 500 characters");
+        }
+        return reason.strip();
     }
 
     private void requireViewer() {

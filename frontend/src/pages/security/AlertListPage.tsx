@@ -508,8 +508,11 @@ export function AlertListPage() {
               pageSize: 10,
               showSizeChanger: false,
               showLessItems: false,
+              hideOnSinglePage: false,
               showTotal: () => `총 ${evaluationPage?.totalElements ?? 0}건`,
-              total: evaluationPage?.totalElements ?? 0,
+              // Render the page-1 shell even for an empty alert result. This
+              // keeps pagination consistent while leaving both arrows disabled.
+              total: Math.max(evaluationPage?.totalElements ?? 0, 1),
               onChange: (page) => {
                 conditions.current = { filter, query, merchantId, page: page - 1 }
                 load(page - 1, filter, query, merchantId)

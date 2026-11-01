@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.FdsEvaluationFailureReport;
 import com.donworry.fds.api.FdsFailureReporter;
+import com.donworry.fds.api.FdsReevaluationRequest;
 import com.donworry.fds.api.FdsReevaluationRequester;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -34,6 +35,9 @@ class FdsMockFailureServiceTests {
     @Captor
     ArgumentCaptor<FdsEvaluationFailureReport> reportCaptor;
 
+    @Captor
+    ArgumentCaptor<FdsReevaluationRequest> reevaluationCaptor;
+
     @Test
     // 개발용 ERROR 생성은 P2 오류 분석 계약에 필요한 P5 스냅샷도 함께 보고한다.
     void createMockError_createsErrorAndReportsFailure() {
@@ -54,18 +58,23 @@ class FdsMockFailureServiceTests {
     }
 
     @Test
+    // 기존 시연 ERROR를 재사용하면 실패 보고도 저장 당시의 NULL 위험 신호를 보존한다.
+    void createMockError_whenHistoricalEvaluationExists_reportsStoredRiskSignals() {
+        var original = historicalEvaluation();
+        org.springframework.test.util.ReflectionTestUtils.setField(original, "evaluationId", 4L);
+        when(evaluations.findByEvaluationRequestId(any())).thenReturn(Optional.of(original));
+
+        new FdsMockFailureService(evaluations, failureReporter, reevaluationRequester).createMockError();
+
+        verify(failureReporter).report(reportCaptor.capture());
+        assertThat(reportCaptor.getValue().deviceId()).isNull();
+        assertThat(reportCaptor.getValue().buyerEmail()).isNull();
+    }
+
+    @Test
     // 재탐지 버튼 경로는 P5가 새 UUID·멱등 키를 만든 요청을 P2 공개 API에 전달한 상황을 재현한다.
     void reevaluateMockError_delegatesToReevaluationRequester() {
-        var original = FdsEvaluation.failed(
-                new com.donworry.fds.api.FdsEvaluationRequest(
-                        java.util.UUID.fromString("00000000-0000-0000-0000-000000000004"),
-                        900_004L,
-                        1L,
-                        "hong-gildong",
-                        100_000L,
-                        java.time.Instant.parse("2026-10-27T01:00:00Z")),
-                "TRANSIENT_MODEL_UNAVAILABLE",
-                java.time.Instant.parse("2026-10-27T01:00:01Z"));
+        var original = historicalEvaluation();
         when(evaluations.findByEvaluationRequestId(any())).thenReturn(Optional.of(original));
         when(reevaluationRequester.reevaluate(any()))
                 .thenReturn(new com.donworry.fds.api.FdsEvaluationResponse(
@@ -75,6 +84,27 @@ class FdsMockFailureServiceTests {
                 new FdsMockFailureService(evaluations, failureReporter, reevaluationRequester).reevaluateMockError();
 
         assertThat(response.result()).isEqualTo(FdsResult.ALLOW);
-        verify(reevaluationRequester).reevaluate(any());
+        verify(reevaluationRequester).reevaluate(reevaluationCaptor.capture());
+        assertThat(reevaluationCaptor.getValue().deviceId()).isNull();
+        assertThat(reevaluationCaptor.getValue().buyerEmail()).isNull();
+    }
+
+    private FdsEvaluation historicalEvaluation() {
+        return FdsEvaluation.failed(
+                new com.donworry.fds.api.FdsEvaluationRequest(
+                        java.util.UUID.fromString("00000000-0000-0000-0000-000000000004"),
+                        900_004L,
+                        1L,
+                        "hong-gildong",
+                        100_000L,
+                        java.time.Instant.parse("2026-10-27T01:00:00Z"),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null),
+                "TRANSIENT_MODEL_UNAVAILABLE",
+                java.time.Instant.parse("2026-10-27T01:00:01Z"));
     }
 }

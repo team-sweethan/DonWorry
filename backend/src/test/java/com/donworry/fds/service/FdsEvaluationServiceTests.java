@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationRequestConflictException;
+import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -61,6 +62,31 @@ class FdsEvaluationServiceTests {
     void setUp() {
         transactionEvaluator = new FdsEvaluationTransactionService(evaluationRepository);
         evaluator = new FdsEvaluationService(evaluationRepository, transactionService);
+    }
+
+    // 공개 신규 평가도 누락된 선택 위험 신호를 P2 평가 트랜잭션으로 전달한다.
+    @Test
+    void evaluate_whenRiskSignalIsMissing_evaluatesWithNullSnapshot() {
+        var request = new FdsEvaluationRequest(
+                UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                Instant.parse("2026-10-22T01:00:00Z"),
+                null,
+                "card-token-opaque-1",
+                "VISA •••• 1234",
+                "KR",
+                "203.0.113.10",
+                "hong@example.test");
+
+        var response = new FdsEvaluationResponse(
+                request.evaluationRequestId(), 1L, FdsResult.ALLOW, 0, Instant.parse("2026-10-22T01:00:01Z"), null);
+        when(transactionService.evaluate(request)).thenReturn(response);
+
+        assertThat(evaluator.evaluate(request)).isEqualTo(response);
+        verify(transactionService).evaluate(request);
     }
 
     @Test
@@ -487,12 +513,35 @@ class FdsEvaluationServiceTests {
 
     private FdsEvaluationRequest request(
             UUID requestId, Long paymentId, Long merchantId, String customerRef, long amount, Instant requestedAt) {
-        return new FdsEvaluationRequest(requestId, paymentId, merchantId, customerRef, amount, requestedAt);
+        return new FdsEvaluationRequest(
+                requestId,
+                paymentId,
+                merchantId,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                "card-token-test-" + paymentId,
+                "VISA •••• " + paymentId,
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 
     private FdsEvaluationRequest request(
             Long paymentId, String customerRef, long amount, Instant requestedAt, String cardToken) {
         return new FdsEvaluationRequest(
-                UUID.randomUUID(), paymentId, 1L, customerRef, amount, requestedAt, null, cardToken, null);
+                UUID.randomUUID(),
+                paymentId,
+                1L,
+                customerRef,
+                amount,
+                requestedAt,
+                "device-test-" + paymentId,
+                cardToken == null ? "card-token-test-" + paymentId : cardToken,
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                "hong-gildong@example.test");
     }
 }

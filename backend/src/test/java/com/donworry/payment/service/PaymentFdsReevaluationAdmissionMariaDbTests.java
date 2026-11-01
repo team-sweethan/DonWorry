@@ -70,7 +70,13 @@ class PaymentFdsReevaluationAdmissionMariaDbTests {
     private long prepare(boolean analyzed, FdsFailureDisposition disposition) {
         var now = Instant.now();
         var receipt = initialAdmission.admit(new PaymentRequestCommand(
-                9000000000274L, UUID.randomUUID().toString(), "customer", 100L, now, UUID.randomUUID()));
+                9000000000274L,
+                UUID.randomUUID().toString(),
+                "customer",
+                100L,
+                now,
+                UUID.randomUUID(),
+                PaymentEvaluationFixtures.riskSignals()));
         var report = processing
                 .saveEvaluation(
                         receipt.paymentId(),
@@ -164,7 +170,8 @@ class PaymentFdsReevaluationAdmissionMariaDbTests {
                         "customer",
                         100L,
                         Instant.now(),
-                        UUID.randomUUID()))
+                        UUID.randomUUID(),
+                        PaymentEvaluationFixtures.riskSignals()))
                 .paymentId();
         rejected(legacy, PaymentFdsReevaluationNotAllowedException.Reason.RECOVERY_DATA_MISSING);
         assertThatThrownBy(() -> admission.admit(Long.MAX_VALUE)).isInstanceOf(PaymentOperationsException.class);

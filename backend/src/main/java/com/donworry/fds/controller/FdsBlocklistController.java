@@ -1,7 +1,9 @@
 package com.donworry.fds.controller;
 
 import com.donworry.fds.dto.CreateFdsBlocklistEntryRequest;
+import com.donworry.fds.dto.DeactivateFdsBlocklistEntryRequest;
 import com.donworry.fds.dto.FdsBlocklistPageResponse;
+import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.dto.FdsBlocklistStatusResponse;
 import com.donworry.fds.service.FdsBlocklistService;
 import jakarta.validation.Valid;
@@ -24,8 +26,11 @@ public class FdsBlocklistController {
 
     @GetMapping
     public FdsBlocklistPageResponse list(
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
-        return service.list(Math.max(page, 0), Math.min(Math.max(size, 1), 10));
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "ACTIVE") FdsBlocklistStatusFilter status,
+            @RequestParam(defaultValue = "") String search) {
+        return service.list(Math.max(page, 0), Math.min(Math.max(size, 1), 10), status, search);
     }
 
     @GetMapping("/status")
@@ -42,8 +47,9 @@ public class FdsBlocklistController {
     }
 
     @PutMapping("/{entryId}/deactivate")
-    public ResponseEntity<Void> deactivate(@PathVariable Long entryId) {
-        service.deactivate(entryId);
+    public ResponseEntity<Void> deactivate(
+            @PathVariable Long entryId, @Valid @RequestBody DeactivateFdsBlocklistEntryRequest request) {
+        service.deactivate(entryId, request.reason());
         return ResponseEntity.noContent().build();
     }
 }

@@ -38,6 +38,7 @@ class PaymentEvaluationFlowPersistenceTests {
                 .customerRef(customer)
                 .orderRef(UUID.randomUUID().toString())
                 .amount(amount)
+                .riskSignals(PaymentEvaluationFixtures.riskSignals())
                 .build();
     }
 

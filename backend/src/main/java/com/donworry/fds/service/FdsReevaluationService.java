@@ -41,7 +41,7 @@ public class FdsReevaluationService implements FdsReevaluationRequester {
             throw new IllegalArgumentException("새 평가 UUID가 이미 사용되었습니다");
         }
 
-        var response = evaluator.evaluate(request.evaluationRequest());
+        var response = evaluator.evaluateHistoricalSnapshot(request.evaluationRequest());
         var evaluation = evaluations.findById(response.evaluationId()).orElseThrow();
         evaluation.recordReevaluation(request.originalEvaluationRequestId(), request.retryId());
         return response;
