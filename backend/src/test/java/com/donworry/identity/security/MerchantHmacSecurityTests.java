@@ -38,6 +38,8 @@ import org.springframework.web.bind.annotation.*;
     JsonAuthenticationEntryPoint.class,
     JsonAccessDeniedHandler.class,
     MerchantHmacService.class,
+    MerchantConnectionService.class,
+    com.donworry.identity.controller.MerchantConnectionController.class,
     CurrentMerchantService.class
 })
 class MerchantHmacSecurityTests {
@@ -49,6 +51,9 @@ class MerchantHmacSecurityTests {
 
     @MockitoBean
     MerchantRepository merchants;
+
+    @MockitoBean
+    com.donworry.identity.repository.MerchantIntegrationRepository integrations;
 
     @MockitoBean
     MerchantSecretService secrets;
@@ -74,9 +79,14 @@ class MerchantHmacSecurityTests {
         when(merchant.getMerchantCode()).thenReturn("CAKESHOP");
         when(merchant.getStatus()).thenReturn(MerchantStatus.ACTIVE);
         when(merchant.getSecretReference()).thenReturn("DONWORRY_MERCHANT_HMAC_TEST");
+        when(merchants.lockById(7L)).thenReturn(Optional.of(merchant));
+        var integration = mock(MerchantIntegration.class);
+        when(integration.getKeyVersion()).thenReturn(1L);
+        when(integration.getStatus()).thenReturn(IntegrationStatus.CONNECTED);
+        when(integrations.findByMerchantId(7L)).thenReturn(Optional.of(integration));
         when(merchants.findByMerchantCode("CAKESHOP")).thenReturn(Optional.of(merchant));
-        when(secrets.resolve(anyString())).thenReturn(key);
-        when(nonces.consume(anyLong(), any(), any())).thenReturn(true);
+        when(secrets.resolve(anyString())).thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(key, 1));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(true);
     }
 
     private MockHttpServletRequestBuilder signed(String method, String target, String body, long offset) {
@@ -102,6 +112,21 @@ class MerchantHmacSecurityTests {
                 .header("X-Signature", HexFormat.of().formatHex(MerchantHmacSigner.sign(key, input)));
         if (!attempt.isEmpty()) request.header("Idempotency-Key", attempt);
         return request;
+    }
+
+    // 연결 확인은 직원 세션·CSRF 없이 현재 키로만 수행하며 다른 메서드와 본문은 거절한다
+    @Test
+    void connection_whenSigned_enforcesEmptyPostAndMerchantChain() throws Exception {
+        mvc.perform(post("/api/merchant-connections/check")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/merchant-connections/check")).andExpect(status().isMethodNotAllowed());
+        mvc.perform(signed("POST", "/api/merchant-connections/check", "{}", 0))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_007"));
+        var result = mvc.perform(signed("POST", "/api/merchant-connections/check", "", 0))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
     }
 
     // CSRF 활성화 상태에서도 HMAC POST는 통과하고 검사한 본문을 Controller가 다시 읽는다
@@ -154,14 +179,14 @@ class MerchantHmacSecurityTests {
     void timestamp_whenAtBoundary_enforcesWindow(long offset) throws Exception {
         mvc.perform(signed("GET", "/api/payments/1", "", offset))
                 .andExpect(status().is(Math.abs(offset) <= 300 ? 200 : 401));
-        if (Math.abs(offset) <= 300) verify(nonces).consume(eq(7L), any(), eq(now.plusSeconds(offset + 301)));
+        if (Math.abs(offset) <= 300) verify(nonces).consume(eq(7L), any(), eq(now.plusSeconds(offset + 301)), eq(1L));
         else verifyNoInteractions(merchants, nonces);
     }
 
     // 이미 받은 nonce는 같은 서명으로 다시 사용할 수 없다
     @Test
     void nonce_whenReplayed_returnsUnauthorized() throws Exception {
-        when(nonces.consume(anyLong(), any(), any())).thenReturn(true, false);
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(true, false);
         var request = signed("GET", "/api/payments/1", "", 0);
         mvc.perform(request).andExpect(status().isOk());
         mvc.perform(request)
@@ -184,7 +209,7 @@ class MerchantHmacSecurityTests {
     @Test
     void inactive_whenPostRejected_consumesNonceBeforeReactivation() throws Exception {
         var used = new HashSet<UUID>();
-        when(nonces.consume(anyLong(), any(), any())).thenAnswer(call -> used.add(call.getArgument(1)));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenAnswer(call -> used.add(call.getArgument(1)));
         when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
         var request = signed("POST", "/api/payments", "{}", 0);
         mvc.perform(request)
@@ -203,7 +228,8 @@ class MerchantHmacSecurityTests {
         mvc.perform(signed("GET", "/api/payments/1", "", 0)).andExpect(status().isUnauthorized());
         when(merchants.findByMerchantCode("CAKESHOP")).thenReturn(Optional.of(merchant));
         when(secrets.resolve(anyString()))
-                .thenReturn("other-key-012345678901234567890123".getBytes(StandardCharsets.UTF_8));
+                .thenReturn(new com.donworry.identity.dto.MerchantKeyMaterial(
+                        "other-key-012345678901234567890123".getBytes(StandardCharsets.UTF_8), 1));
         mvc.perform(signed("GET", "/api/payments/1", "", 0)).andExpect(status().isUnauthorized());
         when(merchants.findByMerchantCode("CAKESHOP"))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
@@ -250,7 +276,7 @@ class MerchantHmacSecurityTests {
     // nonce 저장 장애는 업무 실행 없이 503으로 끝난다
     @Test
     void nonce_whenStorageFails_returnsUnavailable() throws Exception {
-        when(nonces.consume(anyLong(), any(), any()))
+        when(nonces.consume(anyLong(), any(), any(), anyLong()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
         mvc.perform(signed("POST", "/api/payments", "{}", 0))
                 .andExpect(status().isServiceUnavailable())
@@ -278,7 +304,7 @@ class MerchantHmacSecurityTests {
                 .andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
         assertThat(result.getResponse().getHeaders("Set-Cookie")).isEmpty();
-        verify(nonces).consume(eq(7L), any(), any());
+        verify(nonces).consume(eq(7L), any(), any(), eq(1L));
     }
 
     // 직원 세션만 있거나 서명이 누락되면 픽업 수신부에 도달하지 않는다
@@ -344,7 +370,7 @@ class MerchantHmacSecurityTests {
         String path = "/api/v1/order-fulfillments/ORDER-1/" + action;
         mvc.perform(signed("PUT", path, "{}", -301)).andExpect(status().isUnauthorized());
         var used = new HashSet<UUID>();
-        when(nonces.consume(anyLong(), any(), any())).thenAnswer(call -> used.add(call.getArgument(1)));
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenAnswer(call -> used.add(call.getArgument(1)));
         var request = signed("PUT", path, "{}", 0);
         mvc.perform(request).andExpect(status().isOk());
         mvc.perform(request).andExpect(status().isUnauthorized());
@@ -355,11 +381,36 @@ class MerchantHmacSecurityTests {
     @ParameterizedTest
     @ValueSource(strings = {"schedule", "completion"})
     void pickup_whenNonceStorageFails_returnsUnavailable(String action) throws Exception {
-        when(nonces.consume(anyLong(), any(), any()))
+        when(nonces.consume(anyLong(), any(), any(), anyLong()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
         mvc.perform(signed("PUT", "/api/v1/order-fulfillments/ORDER-1/" + action, "{}", 0))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("MERCHANT_AUTH_002"));
+    }
+
+    // 취소 POST만 정지 가맹점을 허용하며 직원 세션·잘못된 서명·폐기된 키는 우회할 수 없다.
+    @ParameterizedTest
+    @ValueSource(strings = {"POST", "GET"})
+    void cancellation_whenAuthenticated_preservesMerchantBoundary(String method) throws Exception {
+        String path = method.equals("POST")
+                ? "/api/payments/1/cancellations"
+                : "/api/payment-cancellation-requests/00000000-0000-0000-0000-000000000001";
+        var session = new MockHttpSession();
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated("staff", null, List.of()));
+        session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, context);
+        mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method), path)
+                        .session(session)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
+        mvc.perform(signed(method, path, "{}", 0)).andExpect(status().isOk());
+        mvc.perform(signed(method, path, "{}", 0).content("{ }")).andExpect(status().isUnauthorized());
+        // 폐기/버전 변경된 키는 nonce 저장 경계에서 거절된다.
+        when(nonces.consume(anyLong(), any(), any(), anyLong())).thenReturn(false);
+        mvc.perform(signed(method, path, "{}", 0)).andExpect(status().isUnauthorized());
+        verify(merchants, never()).lockById(anyLong());
     }
 
     @RestController
@@ -370,7 +421,7 @@ class MerchantHmacSecurityTests {
             this.current = current;
         }
 
-        @PostMapping("/api/payments")
+        @PostMapping({"/api/payments", "/api/payments/{id}/cancellations"})
         String post(@RequestBody String body) {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }
@@ -381,7 +432,7 @@ class MerchantHmacSecurityTests {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }
 
-        @GetMapping({"/api/payments/{id}", "/api/payment-orders"})
+        @GetMapping({"/api/payments/{id}", "/api/payment-orders", "/api/payment-cancellation-requests/{key}"})
         String get() {
             return current.findCurrent().orElseThrow().merchantId().toString();
         }

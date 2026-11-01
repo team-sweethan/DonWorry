@@ -19,6 +19,9 @@ class PaymentFinancialActionGateway implements FinancialActionGateway {
 
     // 접수 단계 거절 — 응답으로만 오고 결과 이벤트가 없다 (#169). 그 밖의 완료 결과는 이벤트로도 온다
     private static final Set<String> RESPONSE_ONLY_CODES = Set.of(
+            "PAYMENT_CANCELED_BY_CUSTOMER",
+            "PAYMENT_CANCELLATION_IN_PROGRESS",
+            "PAYMENT_CANCELLATION_REVIEW_REQUIRED",
             "PAYMENT_NOT_FOUND",
             "PAYMENT_NOT_HELD",
             "PAYMENT_NOT_AUTHORIZED",

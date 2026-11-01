@@ -69,12 +69,12 @@ test('loginDestination_whenAccountOrRoleChanges_usesLanding', () => {
     loginDestination({ ...staff, userId: 2 }, { returnTo: '/security/cases/3', previousUserId: 1 }),
     '/security/home',
   )
-  assert.equal(loginDestination(owner, { returnTo: '/security/cases/3' }), '/owner/settlements')
+  assert.equal(loginDestination(owner, { returnTo: '/security/cases/3' }), '/owner')
 })
 
 // 사장님은 재로그인한 시점의 메뉴 권한으로 복귀 여부를 판단한다.
 test('loginDestination_whenPermissionRemoved_usesAvailableLanding', () => {
-  assert.equal(loginDestination(owner, { returnTo: '/owner/actions?page=2' }), '/owner/settlements')
+  assert.equal(loginDestination(owner, { returnTo: '/owner/actions?page=2' }), '/owner')
   assert.equal(
     loginDestination(owner, { returnTo: '/owner/settlements?page=2' }),
     '/owner/settlements?page=2',
@@ -95,11 +95,8 @@ test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
   for (const returnTo of ['/account/login-history?page=2', '/account/password/']) {
     assert.equal(loginDestination(noPermissions, { returnTo }), returnTo)
   }
-  assert.equal(
-    loginDestination(noPermissions, { returnTo: '/owner/actions' }),
-    '/owner/integration',
-  )
-  assert.equal(loginDestination(noPermissions, null), '/owner/integration')
+  assert.equal(loginDestination(noPermissions, { returnTo: '/owner/actions' }), '/owner')
+  assert.equal(loginDestination(noPermissions, null), '/owner')
 })
 
 // 잘못된 Router state와 현재 계정 ID와 일치하지 않는 이전 사용자 ID는 예외 없이 버린다.
@@ -143,10 +140,7 @@ test('loginDestination_whenPathUnsafe_usesLanding', () => {
   ]) {
     assert.equal(loginDestination(staff, { returnTo }), '/security/home', returnTo)
   }
-  assert.equal(
-    loginDestination(owner, { returnTo: '/owner/settlements/../actions' }),
-    '/owner/settlements',
-  )
+  assert.equal(loginDestination(owner, { returnTo: '/owner/settlements/../actions' }), '/owner')
 })
 
 // 재로그인 표식은 명시적 boolean만 받고 복귀 경로 검증은 그대로 적용한다.
@@ -167,4 +161,26 @@ test('requiresLogin_whenStateMalformed_acceptsOnlyExplicitFlag', async () => {
     loginDestination(staff, { requireLogin: true, returnTo: '//evil.example' }),
     '/security/home',
   )
+})
+
+// 사장님은 연동 상태와 상관없이 홈에서 시작하고, 같은 계정 재로그인만 보던 화면으로 돌아간다 (#354).
+test('loginDestination_whenOwnerLogsIn_usesHomeOrSameAccountReturn', () => {
+  for (const permissions of [[], ['FDS_VIEW'], ['FINANCE_VIEW'], ['FDS_VIEW', 'FINANCE_VIEW']]) {
+    const user = { ...owner, permissions }
+    assert.equal(loginDestination(user, null), '/owner')
+    assert.equal(
+      loginDestination(user, { returnTo: '/owner/integration', previousUserId: user.userId }),
+      '/owner/integration',
+    )
+    const state = { returnTo: '/owner/settlements?page=2', previousUserId: user.userId }
+    assert.equal(
+      loginDestination(user, state),
+      permissions.includes('FINANCE_VIEW') ? state.returnTo : '/owner',
+    )
+    assert.equal(loginDestination(user, { ...state, previousUserId: user.userId + 1 }), '/owner')
+    assert.equal(
+      loginDestination({ ...user, passwordChangeRequired: true }, state),
+      '/account/password',
+    )
+  }
 })

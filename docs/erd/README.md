@@ -13,6 +13,9 @@
 
 ## 1. 범위와 정본
 
+P6 정기 지출 확장: [규칙·회차 완료 기록 ERD](../settlement/recurring-expenses-api.md#erd).
+P6 소유 신규 테이블만 추가하며, 다른 모듈 테이블과 물리 FK를 만들지 않는다.
+
 - 합의 정본(무엇을 만들지)은 Notion **팀페이지 / ERD**의 담당별 페이지(P1~P6)입니다
 - 실제 DB의 기준(지금 무엇이 있는지)은 `backend/src/main/resources/db/migration/`의 SQL입니다. 이 문서는 소유 · 관계만 요약하고 컬럼은 복사하지 않습니다
 - DB 원칙과 INSERT/UPDATE 예시는 Notion fds 정본 **04 DB 설계 및 데이터 매핑**에 있습니다 (구현 가이드)
@@ -46,6 +49,8 @@
 
 ## 2. 테이블 소유
 
+#381은 설계 PR #385 병합 후 사용자의 다음 단계 진행 요청에 따라 [저장 명세](../payment/381-cancellation-storage.md)를 기준으로 P5 두 테이블의 migration·Entity·Repository를 구현한다. 최초 범위에 삭제·키 만료는 두지 않는다. Notion 담당 페이지 동기화·장기 보존 정책·운영 DB 적용은 미완료이며 API·실행 연결은 후속이다.
+
 P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillments`와
 `order_fulfillment_items`를 추가하고 `settlements`에 nullable 정산 시각 3개를 추가한다.
 상품은 같은 P6 주문만 물리 FK로 참조하며 다른 모듈과는 논리 참조를 유지한다.
@@ -61,6 +66,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
+| `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_failure_analyses`, `fds_high_risk_countries`, `fds_blocklist_entries`, `fds_rule_policies`, `fds_rule_change_requests` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261023_135302](../../backend/src/main/resources/db/migration/V20261023_135302__add_fds_requested_amount.sql) · [20261026_174910](../../backend/src/main/resources/db/migration/V20261026_174910__add_fds_evaluation_merchant_id.sql) · [20261027_101722](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql) · [20261027_101804](../../backend/src/main/resources/db/migration/V20261027_101804__add_fds_reevaluation_lineage.sql) · [FDS v0.2](../../backend/src/main/resources/db/migration/V20261028_092416__add_fds_rule_inputs_and_policy_tables.sql) · [룰 관리](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [차단 식별값](../../backend/src/main/resources/db/migration/V20261028_201821__add_fds_blocklist_identifiers.sql) · [차단 해제 이력](../../backend/src/main/resources/db/migration/V20261030_114028__add_fds_blocklist_deactivation.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
@@ -94,6 +100,12 @@ erDiagram
 
     merchants ||..o{ payments : "merchant_id"
     payments ||--o| payment_actions : "payment_id (P5)"
+    payments ||--o{ payment_cancellation_requests : "payment_id (P5)"
+    payments ||--o| payment_cancellations : "payment_id (P5)"
+    payment_cancellation_requests ||--o| payment_cancellations : "source_request_id + payment_id"
+    payment_actions |o--o{ payment_cancellation_requests : "existing_void_action_id"
+    merchants ||..o{ payment_cancellation_requests : "merchant_id"
+    captures |o..o{ payment_cancellations : "capture_id (REFUND)"
     merchants ||..o{ fds_evaluations : "merchant_id"
     payments ||..o{ fds_evaluations : "payment_id"
     payments ||..o| case_payments : "payment_id"
@@ -311,3 +323,17 @@ P1 담당자가 이 PR에서 아이디를 신청자가 선택하도록 변경하
 ### #354 PR A 쇼핑몰 주소 (2026-10-30)
 
 P1 사용자가 주소만 수집하는 설계·구현 진행을 승인했다. `merchant_applications.shop_url VARCHAR(2048) NULL`을 새 migration으로 추가한다. 신규 신청은 HTTP(S) 절대 URL 필수이며 기존 행은 NULL로 보존한다. 신청 검토 자료로만 보관하고 merchants·webhook으로 복사하지 않는다. 미확인 7일·반려 30일 정리와 승인 신청 보존 정책을 그대로 따른다. Notion 선행 대조·동기화는 미수행이다. 상세는 [PR A 설계](../identity/354-pr1-application-design.md)를 따른다.
+
+## P6 최초 잔액·일회성 지출 (#229, 2026-10-30)
+
+사용자 구현 승인에 따라 P6 소유 `cash_flow_settings`와 `planned_expenses`를 신규 migration으로 추가한다.
+가맹점별 최초 잔액·기준일은 불변이고, 실제 지출 완료 시각은 nullable `paid_at` UTC DATETIME(6)로 보관한다.
+가맹점은 논리 참조이며 다른 담당 FK를 추가하지 않는다. 금액·PK·인덱스·API·미검증 범위는 [P6 설계/ERD](../settlement/balance-expenses-api.md)를 따른다.
+Notion 최신 동기화·팀 전체 ERD 합의·개인 DB 적용 완료를 뜻하지 않는다.
+
+
+### #354 PR B 키·연동 관리 (2026-10-31)
+
+P1 사용자가 신규 테이블 2개를 포함한 설계·구현을 승인했다. `merchant_integrations`는 가맹점별 현재 키 암호문·IV·마스터 키 ID·키 버전·연동 상태·발급/연결/갱신 시각을 저장한다. `merchant_key_histories`는 발급·재발급·폐기·시스템 이전의 실행 계정·버전·사유·시각을 보존하며 원문·암호문은 넣지 않는다. 모두 P1 소유이며 merchants·platform_users로만 물리 FK를 건다.
+
+컬럼·타입·NULL·상태 조합은 [승인 설계](../identity/354-pr-b-key-design.md#3-p1-확인을-받을-저장-구조-제안), 실제 제약은 [현재 설정 SQL](../../backend/src/main/resources/db/migration/V20261031_151333__create_merchant_integrations.sql)·[키 이력 SQL](../../backend/src/main/resources/db/migration/V20261031_151342__create_merchant_key_histories.sql)을 따른다. [ADR-0052](../decisions/0052-merchant-key-management.md)에 저장·복구·이전·B/C 경계를 기록한다. 기존 secret_reference는 이전 대상 식별용으로 유지하되 런타임 키 fallback에 쓰지 않는다. Notion 선행 대조·동기화와 운영 DB 적용은 미수행이다.

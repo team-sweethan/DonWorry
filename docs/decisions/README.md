@@ -26,6 +26,8 @@
 
 ## 목록
 
+P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6-recurring-expense-occurrences.md).
+
 | 번호 | 제목 | 상태 |
 | --- | --- | --- |
 | [0001](0001-module-dependency-direction.md) | 모듈 간 의존 방향 | 대체됨 (→ 0012) |
@@ -33,7 +35,7 @@
 | [0009](0009-ai-investigation-call-structure.md) | AI 조사 호출 구조 (Spring ↔ FastAPI) | 제안 — 팀 합의 필요 |
 | [0010](0010-payment-operation-storage.md) | P5 요청·금융 작업·이력의 최소 저장 분리 | 제안 — 후속 검토, 1차 필수에서 분리 |
 | [0011](0011-flyway-migration-versioning.md) | Flyway 전환과 마이그레이션 버전 규칙 | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
-| [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 채택 |
+| [0012](0012-payment-settlement-dependency.md) | 모듈 간 의존 방향 — Payment → Settlement 개정 | 의존 규칙 채택 유지, 취소 제한 전제만 0054로 대체 |
 | [0013](0013-code-formatter.md) | 코드 모양 자동 정리 도구 (palantir-java-format, ruff format) | 제안 — 코드·CI 반영, ADR 채택 상태 확인 필요 |
 | [0014](0014-session-authentication.md) | MVP 세션 인증과 단계별 보안 적용 | 채택 |
 | [0015](0015-fds-evaluation-list-query-contract.md) | FDS 평가 목록 조회의 서버 페이지네이션과 검색 계약 | 제안 — 팀 합의 필요 |
@@ -78,7 +80,19 @@
 
 | [0049](0049-application-shop-url.md) | 신청 검토용 쇼핑몰 주소 수집 | 제안 — #354 PR A 사용자 설계·구현 승인, PR 리뷰 대상 |
 
+| [0052](0052-merchant-key-management.md) | 가맹점 HMAC 키 암호화 저장·사장님 관리 | 제안 — #354 PR B 사용자 승인, PR 리뷰 대상 |
+
+| [0054](0054-full-cancellation-policy.md) | 전액 취소·환불과 정산 완료 후 취소 허용 | 사용자 정책 확인, 상세 연동 계약 후속 합의 |
+
 ## 현재 적용 상태와 기록의 구분
+
+- [0058 CAPTURED 전액 환불과 P6 성공 전달](0058-captured-refund-contract.md): 제안 — P6 성공 전달 방향 확인·P5 모의 환불 기반 구현. 실제 수신·정산 경합·운영 복구 후속 (#383).
+
+- [0057 HELD 고객 모의 승인 취소와 P3 성공 전달](0057-held-customer-void-contract.md): 제안 — P5 실행 기반 구현, P3 계약/Case 정책·운영 활성화 후속 (#382).
+
+- [0056 고객 취소 요청 식별과 결과 조회 계약](0056-cancellation-request-contract.md): HTTP 계약 제안, 재요청 키·정지 가맹점 정책 사용자 확인 (#381).
+
+- [0055 진행 중 결제 취소의 일시 거절과 조회 후 재요청](0055-inflight-cancellation-policy.md): 사용자 정책 확인, 상세 계약·구현 후속 (#380).
 
 P6 PR 리뷰 대상: [0043 주문·픽업 수신과 상품 스냅샷 저장](0043-p6-pickup-receiving.md) — #226·#227·#333.
 

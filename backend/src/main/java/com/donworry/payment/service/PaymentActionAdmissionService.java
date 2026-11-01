@@ -6,6 +6,7 @@ import com.donworry.payment.entity.PaymentAction;
 import com.donworry.payment.entity.PaymentActionType;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentActionRepository;
+import com.donworry.payment.repository.PaymentCancellationRepository;
 import com.donworry.payment.repository.PaymentRepository;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentActionAdmissionService {
     private final PaymentRepository payments;
     private final PaymentActionRepository actions;
+    private final PaymentCancellationRepository cancellations;
 
     // 독립 커밋하지 않는다. 다음 단계 실행 서비스가 저장과 금융 이벤트를 원자적으로 묶는다.
     @Transactional(propagation = Propagation.MANDATORY)
@@ -37,6 +39,16 @@ public class PaymentActionAdmissionService {
         if (payment.isEmpty()) return rejected("PAYMENT_NOT_FOUND");
         if (actions.findByPaymentId(command.paymentId()).isPresent()) return rejected("PAYMENT_ACTION_CONFLICT");
         if (actions.findByDecisionId(command.decisionId()).isPresent()) return rejected("DECISION_ACTION_CONFLICT");
+        // 기존 직원 키 조회는 위에서 보존한다. 신규 실행만 고객 작업과 상호 배제한다.
+        var cancellation = cancellations.findByPaymentId(command.paymentId());
+        if (cancellation.isPresent()) {
+            return rejected(
+                    switch (cancellation.get().getStatus()) {
+                        case SUCCEEDED -> "PAYMENT_CANCELED_BY_CUSTOMER";
+                        case PROCESSING, UNKNOWN -> "PAYMENT_CANCELLATION_IN_PROGRESS";
+                        case FAILED -> "PAYMENT_CANCELLATION_REVIEW_REQUIRED";
+                    });
+        }
         if (payment.get().getStatus() != PaymentStatus.HELD) return rejected("PAYMENT_NOT_HELD");
         var reference = payment.get().getAuthorizationRef();
         if (reference == null || reference.isBlank()) return rejected("PAYMENT_NOT_AUTHORIZED");

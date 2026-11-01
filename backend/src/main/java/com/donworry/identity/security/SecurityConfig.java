@@ -140,6 +140,16 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-reevaluations"),
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
+        var integrationRoutes = new OrRequestMatcher(
+                PathPatternRequestMatcher.withDefaults().matcher("/api/owner/integration/**"),
+                PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchants/{id}/integration/**"));
+        org.springframework.security.web.util.matcher.RequestMatcher integrationPosts =
+                request -> integrationRoutes.matches(request) && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request);
+        http.headers(headers -> headers.addHeaderWriter(new DelegatingRequestMatcherHeaderWriter(
+                new OrRequestMatcher(
+                        PathPatternRequestMatcher.withDefaults().matcher("/api/owner/integration/**"),
+                        PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchants/{id}/integration/**")),
+                (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         var applicationPosts = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"),
@@ -161,12 +171,22 @@ public class SecurityConfig {
                 (request, response) -> response.setHeader("Cache-Control", "no-store"))));
         http.csrf(csrf -> csrf.spa()
                         .csrfTokenRepository(csrfTokenRepository)
-                        .requireCsrfProtectionMatcher(request -> applicationPosts.matches(request)
+                        .requireCsrfProtectionMatcher(request -> integrationPosts.matches(request)
+                                || applicationPosts.matches(request)
                                 || fdsRecoveryPosts.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
                         .ignoringRequestMatchers("/internal/**"))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(fdsRecoveryPosts)
+                .authorizeHttpRequests(auth -> auth.requestMatchers(
+                                "/api/owner/integration", "/api/owner/integration/**")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.OPERATOR
+                                    && user.merchantId() != null);
+                        })
+                        .requestMatchers(fdsRecoveryPosts)
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

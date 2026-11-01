@@ -1,0 +1,348 @@
+.oh-home {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.oh-home .dw-page-header {
+  margin-bottom: 28px;
+}
+.oh-connection {
+  padding: 28px 32px;
+  border: 1px solid #dce5f3;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #f5f8ff, #fff 70%);
+}
+.oh-connection.is-connected {
+  border-color: #d5e9e2;
+  background: linear-gradient(120deg, #f0faf6, #fff 70%);
+}
+.oh-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.oh-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 650;
+}
+.oh-section-heading .ant-tag {
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+.oh-connection-main {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.oh-connection-icon {
+  display: grid;
+  flex: 0 0 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 16px;
+  color: #2563eb;
+  background: #e7efff;
+  font-size: 26px;
+}
+.is-connected .oh-connection-icon {
+  color: #168465;
+  background: #def3e9;
+}
+.oh-connection-copy {
+  flex: 1;
+  min-width: 0;
+}
+.oh-connection h2 {
+  margin: 0 0 10px;
+  font-size: 23px;
+  letter-spacing: -0.6px;
+  line-height: 1.45;
+  color: #172b46;
+}
+.oh-connection p {
+  max-width: 620px;
+  margin: 0;
+  color: #52647c;
+  line-height: 1.8;
+  font-size: 14px;
+}
+.oh-primary-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  min-height: 46px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  color: #fff;
+  background: #2463db;
+  font-weight: 650;
+  font-size: 14px;
+  box-shadow: 0 3px 8px #2563eb18;
+}
+.oh-primary-link:hover {
+  color: #fff;
+  background: #1d4fb8;
+}
+.oh-primary-link:focus-visible,
+.oh-menu-card:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 4px;
+}
+.oh-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  margin: 26px 0 0 76px;
+  font-size: 13px;
+}
+.oh-details > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.oh-details dt {
+  color: #64748b;
+}
+.oh-details dd {
+  margin: 0;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+.oh-merchant-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 650;
+}
+.oh-steps {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  margin: 26px 0 0;
+  padding: 22px 0 0;
+  list-style: none;
+  border-top: 1px solid #e2e8f0;
+}
+.oh-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+.oh-steps li > span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  background: #e9edf4;
+  border-radius: 50%;
+  font-size: 12px;
+}
+.oh-steps .is-current {
+  color: #1d4ed8;
+  font-weight: 650;
+}
+.oh-steps .is-current > span {
+  background: #2563eb;
+  color: #fff;
+}
+.oh-steps .is-done > span {
+  background: #e0f2e9;
+  color: #168465;
+}
+.oh-menu-section {
+  margin-top: 36px;
+}
+.oh-menu-section .oh-section-heading {
+  margin-bottom: 16px;
+}
+.oh-section-heading h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #1e293b;
+}
+.oh-menu-section .oh-section-heading > span {
+  color: #64748b;
+  font-size: 12px;
+}
+.oh-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.oh-menu-card {
+  position: relative;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 14px;
+  color: #1e293b;
+}
+.oh-menu-card:hover {
+  color: #1d4ed8;
+  border-color: #b8cef5;
+  box-shadow: 0 4px 16px #223b6810;
+}
+.oh-menu-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: #f0f5fc;
+  color: #4b6a98;
+  font-size: 20px;
+}
+.oh-menu-card h3 {
+  margin: 18px 0 8px;
+  font-size: 16px;
+}
+.oh-menu-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.oh-menu-arrow {
+  position: absolute;
+  top: 30px;
+  right: 24px;
+  color: #7085a4;
+}
+.oh-no-menus {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+.oh-no-menus > .anticon {
+  color: #7085a4;
+  font-size: 24px;
+}
+.oh-no-menus h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.oh-no-menus p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.8;
+  font-size: 13px;
+}
+.oh-security-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 24px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.oh-error .ant-btn {
+  margin-top: 20px;
+}
+.admin-viewport:has(.oh-home) {
+  min-width: 0;
+}
+@media (max-width: 1050px) {
+  .oh-connection-main {
+    flex-wrap: wrap;
+  }
+  .oh-primary-link {
+    margin-left: 76px;
+  }
+}
+@media (max-width: 760px) {
+  .admin-viewport:has(.oh-home) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+  }
+  .admin-viewport:has(.oh-home) .dw-header {
+    position: static;
+    height: auto;
+    min-height: 64px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  .admin-viewport:has(.oh-home) .dw-brand {
+    width: auto;
+    flex: 0 0 auto;
+    border: 0;
+    padding: 0;
+  }
+  .admin-viewport:has(.oh-home) .dw-header-center,
+  .admin-viewport:has(.oh-home) .dw-last-login {
+    display: none;
+  }
+  .admin-viewport:has(.oh-home) .dw-header-tools {
+    padding: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .admin-viewport:has(.oh-home) .dw-sidebar {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 10px 16px;
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .admin-viewport:has(.oh-home) .dw-sidebar nav {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+  .admin-viewport:has(.oh-home) .dw-nav-group {
+    display: flex;
+    flex-shrink: 0;
+    margin: 0;
+    gap: 4px;
+  }
+  .admin-viewport:has(.oh-home) .dw-nav-heading {
+    display: none;
+  }
+  .admin-viewport:has(.oh-home) .dw-nav-link {
+    margin: 0;
+    white-space: nowrap;
+  }
+  .admin-viewport:has(.oh-home) .dw-main {
+    padding: 24px 16px;
+  }
+  .oh-home .dw-page-header {
+    gap: 12px;
+  }
+  .oh-connection {
+    padding: 22px;
+  }
+  .oh-connection h2 {
+    font-size: 20px;
+  }
+  .oh-connection-icon {
+    display: none;
+  }
+  .oh-primary-link {
+    margin-left: 0;
+    width: 100%;
+  }
+  .oh-details {
+    margin-left: 0;
+  }
+  .oh-menu-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .oh-steps {
+    gap: 12px;
+  }
+}

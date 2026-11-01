@@ -24,6 +24,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Import(MariaDbTestContainerConfig.class)
 class MerchantNonceMariaDbTests {
     @Autowired
+    com.donworry.identity.repository.MerchantIntegrationRepository integrations;
+
+    @Autowired
     DatabaseMerchantNonceStore store;
 
     @Autowired
@@ -47,6 +50,8 @@ class MerchantNonceMariaDbTests {
         when(clock.instant()).thenReturn(now);
         merchantId = merchant();
         otherMerchantId = merchant();
+        MerchantIntegrationTestFixtures.installKey(jdbc, merchantId, new byte[32]);
+        MerchantIntegrationTestFixtures.installKey(jdbc, otherMerchantId, new byte[32]);
     }
 
     private Long merchant() {
@@ -61,6 +66,7 @@ class MerchantNonceMariaDbTests {
     void cleanUp() {
         for (Long id : new Long[] {merchantId, otherMerchantId}) {
             jdbc.update("DELETE FROM merchant_request_nonces WHERE merchant_id=?", id);
+            jdbc.update("DELETE FROM merchant_integrations WHERE merchant_id=?", id);
             jdbc.update("DELETE FROM merchants WHERE merchant_id=?", id);
         }
     }
@@ -80,7 +86,7 @@ class MerchantNonceMariaDbTests {
             for (int i = 0; i < 12; i++)
                 futures.add(executor.submit(() -> {
                     start.await();
-                    return store.consume(merchantId, nonce, now.plusSeconds(301));
+                    return store.consume(merchantId, nonce, now.plusSeconds(301), 1);
                 }));
             start.countDown();
             int accepted = 0;
@@ -88,7 +94,16 @@ class MerchantNonceMariaDbTests {
             assertThat(accepted).isEqualTo(1);
         }
         assertThat(count()).isEqualTo(1);
-        assertThat(store.consume(otherMerchantId, nonce, now.plusSeconds(301))).isTrue();
+        assertThat(store.consume(otherMerchantId, nonce, now.plusSeconds(301), 1))
+                .isTrue();
+    }
+
+    // 서명을 검증한 키 버전이 현재 키와 다르면 nonce를 소비하지 않는다
+    @Test
+    void consume_whenKeyVersionIsStale_rejectsWithoutRecord() {
+        assertThat(store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(301), 2))
+                .isFalse();
+        assertThat(count()).isZero();
     }
 
     // 외부 업무 트랜잭션이 롤백돼도 먼저 커밋한 nonce는 남는다
@@ -96,11 +111,12 @@ class MerchantNonceMariaDbTests {
     void consume_whenOuterTransactionRollsBack_preservesNonce() {
         UUID nonce = UUID.randomUUID();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isTrue();
+            assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1))
+                    .isTrue();
             status.setRollbackOnly();
         });
         assertThat(count()).isEqualTo(1);
-        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isFalse();
+        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1)).isFalse();
     }
 
     // 가맹점 잠금을 기다리는 사이 만료된 요청은 기록이 지워져도 다시 통과하지 않는다
@@ -117,7 +133,8 @@ class MerchantNonceMariaDbTests {
             var pending = new java.util.concurrent.atomic.AtomicReference<Future<Boolean>>();
             new TransactionTemplate(transactions).executeWithoutResult(status -> {
                 jdbc.queryForList("SELECT merchant_id FROM merchants WHERE merchant_id=? FOR UPDATE", merchantId);
-                pending.set(executor.submit(() -> store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(301))));
+                pending.set(
+                        executor.submit(() -> store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(301), 1)));
                 try {
                     assertThat(entering.await(5, TimeUnit.SECONDS)).isTrue();
                 } catch (InterruptedException exception) {
@@ -134,23 +151,25 @@ class MerchantNonceMariaDbTests {
     @Test
     void consume_whenStoreRecreated_preservesReplayProtection() {
         UUID nonce = UUID.randomUUID();
-        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isTrue();
-        var recreated = new DatabaseMerchantNonceStore(repository, transactions, clock);
-        assertThat(recreated.consume(merchantId, nonce, now.plusSeconds(301))).isFalse();
+        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1)).isTrue();
+        var recreated = new DatabaseMerchantNonceStore(repository, transactions, clock, integrations);
+        assertThat(recreated.consume(merchantId, nonce, now.plusSeconds(301), 1))
+                .isFalse();
     }
 
     // 정상 중복 거절의 SQL 오류에 nonce 원문이 로그로 노출되지 않는다
     @Test
     void consume_whenDuplicate_doesNotLogNonce() {
         UUID nonce = UUID.randomUUID();
-        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isTrue();
+        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1)).isTrue();
         var logger =
                 (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
         var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
         appender.start();
         logger.addAppender(appender);
         try {
-            assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isFalse();
+            assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1))
+                    .isFalse();
             assertThat(appender.list)
                     .noneMatch(event -> event.getFormattedMessage().contains(nonce.toString()));
         } finally {
@@ -162,12 +181,12 @@ class MerchantNonceMariaDbTests {
     // FK 오류와 저장 장애를 nonce 중복으로 오인하지 않는다
     @Test
     void consume_whenDatabaseRejectsOrUnavailable_propagatesFailure() {
-        assertThatThrownBy(() -> store.consume(Long.MAX_VALUE, UUID.randomUUID(), now.plusSeconds(301)))
+        assertThatThrownBy(() -> store.consume(Long.MAX_VALUE, UUID.randomUUID(), now.plusSeconds(301), 1))
                 .isInstanceOf(DataIntegrityViolationException.class);
         doThrow(new DataAccessResourceFailureException("database unavailable"))
                 .when(repository)
                 .insertNonce(anyLong(), anyString(), anyString());
-        assertThatThrownBy(() -> store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(301)))
+        assertThatThrownBy(() -> store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(301), 1))
                 .isInstanceOf(DataAccessResourceFailureException.class);
         assertThat(count()).isZero();
     }
@@ -176,13 +195,13 @@ class MerchantNonceMariaDbTests {
     @Test
     void deleteExpired_whenAtBoundary_deletesOnlyExpiredRows() {
         UUID boundary = UUID.randomUUID(), future = UUID.randomUUID();
-        assertThat(store.consume(merchantId, boundary, now.plusSeconds(1))).isTrue();
-        assertThat(store.consume(merchantId, future, now.plusSeconds(301))).isTrue();
+        assertThat(store.consume(merchantId, boundary, now.plusSeconds(1), 1)).isTrue();
+        assertThat(store.consume(merchantId, future, now.plusSeconds(301), 1)).isTrue();
         when(clock.instant()).thenReturn(now.plusSeconds(1));
         store.deleteExpired();
         assertThat(count()).isEqualTo(1);
-        assertThat(store.consume(merchantId, future, now.plusSeconds(301))).isFalse();
-        assertThat(store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(1)))
+        assertThat(store.consume(merchantId, future, now.plusSeconds(301), 1)).isFalse();
+        assertThat(store.consume(merchantId, UUID.randomUUID(), now.plusSeconds(1), 1))
                 .isFalse();
     }
 
@@ -190,12 +209,12 @@ class MerchantNonceMariaDbTests {
     @Test
     void deleteExpired_whenDeleteFails_retainsProtectionAndRetries() {
         UUID nonce = UUID.randomUUID();
-        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isTrue();
+        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1)).isTrue();
         doThrow(new DataAccessResourceFailureException("database unavailable"))
                 .when(repository)
                 .deleteExpiredBatch(anyString());
         store.deleteExpired();
-        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301))).isFalse();
+        assertThat(store.consume(merchantId, nonce, now.plusSeconds(301), 1)).isFalse();
         reset(repository);
         when(clock.instant()).thenReturn(now.plusSeconds(301));
         store.deleteExpired();

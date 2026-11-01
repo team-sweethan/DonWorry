@@ -102,8 +102,9 @@ function Sidebar({
                 <NavLink
                   key={item.path}
                   to={item.path}
+                  end
                   className={({ isActive }) =>
-                    `dw-nav-link${isActive || location.pathname.startsWith(item.path + '/') ? ' active' : ''}`
+                    `dw-nav-link${isActive || (item.path !== '/owner' && location.pathname.startsWith(item.path + '/')) ? ' active' : ''}`
                   }
                 >
                   {item.label}

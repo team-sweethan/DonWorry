@@ -21,6 +21,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @Slf4j
 @RestControllerAdvice(basePackages = "com.donworry.identity.controller")
 public class AuthExceptionHandler {
+    @ExceptionHandler(com.donworry.identity.security.MerchantAuthenticationException.class)
+    public ProblemDetail integrationUnavailable(
+            com.donworry.identity.security.MerchantAuthenticationException exception) {
+        return problem(exception.getErrorCode());
+    }
+
     @ExceptionHandler(AccountManagementException.class)
     public ProblemDetail accountManagementFailed(AccountManagementException exception) {
         return problem(exception.getErrorCode());
@@ -54,6 +60,7 @@ public class AuthExceptionHandler {
         MethodArgumentTypeMismatchException.class
     })
     public ProblemDetail invalidInput(HttpServletRequest request) {
+        if (request.getRequestURI().contains("/integration")) return problem(AuthErrorCode.INTEGRATION_INVALID_INPUT);
         if (request.getRequestURI().contains("/login-histories")) return problem(AuthErrorCode.INVALID_HISTORY_INPUT);
         if (request.getRequestURI().startsWith("/api/admin/merchants"))
             return problem(AuthErrorCode.ADMIN_MERCHANT_INVALID_INPUT);

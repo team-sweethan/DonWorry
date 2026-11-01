@@ -8,6 +8,7 @@
 - [API·인증·재전달 계약](pickup-api.md)
 - [테이블·시간·동시성 설계](pickup-schema.md)
 - [ADR-0043: 저장·연결 방식과 대안](../decisions/0043-p6-pickup-receiving.md)
+- [정기 지출 관리 API·ERD (4단계)](recurring-expenses-api.md)
 
 ## 처리 흐름
 
