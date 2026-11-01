@@ -64,6 +64,12 @@ Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
 - 여러 모듈 데이터를 합치는 조회 API는 위층 모듈(예: `investigation`)에 둔다. 아래층이 위층을 호출하게 만들지 않는다
 - 같은 앱 안의 모듈끼리는 Java 호출. HTTP는 FastAPI · CakeShop과만
 - 모듈 안에서는 Controller → Service → Repository. Controller는 Repository·Entity를 직접 쓰지 않는다
+- 새 HTTP API를 만들면 같은 PR에서 `identity/security/SecurityConfig`에 권한 규칙을 추가한다. 등록하지 않은 경로는 기본 거절(비로그인 401 · 로그인 403)된다 ([ADR-0059](docs/decisions/0059-security-default-deny.md))
+  - 정확한 메서드 · 경로로 적는다. `/**`처럼 넓게 열지 않는다
+  - 역할(ADMIN · SECURITY_STAFF · OPERATOR)과 권한(FDS_VIEW · FINANCE_VIEW)으로 검사한다. 컨트롤러 안 Guard가 있어도 이 규칙을 같이 둔다
+  - `permitAll`은 로그인 전에 써야 하는 공개 API만 쓴다. 막힌 것을 풀거나 테스트를 통과시키려고 쓰지 않는다
+  - 누가 써야 하는지 문서에 없으면 추측해서 정하지 말고 사람에게 확인한다
+  - 예외: CakeShop 서명 API는 `MerchantSecurityConfiguration`, AI 서버 API(`/internal/ai/**`)는 `AiServerSecurityConfiguration`에 둔다
 - 코드 모양(들여쓰기·줄바꿈·import 순서)은 손으로 맞추지 않는다. 커밋 전 `./gradlew spotlessApply` (palantir-java-format, [ADR-0013](docs/decisions/0013-code-formatter.md))
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
   - 예외: `investigation` 모듈 안이라도 P4의 `ai_reports`와 P3 테이블(`security_cases` · `payment_decisions`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)

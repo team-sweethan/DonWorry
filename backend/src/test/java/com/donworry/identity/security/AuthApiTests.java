@@ -410,7 +410,8 @@ class AuthApiTests {
     void logout_whenGet_preservesAuthentication() throws Exception {
         var session = (MockHttpSession)
                 login("admin", "test-password", null).getRequest().getSession(false);
-        mvc.perform(get("/api/auth/logout").session(session)).andExpect(status().isNotFound());
+        // GET 로그아웃은 등록하지 않은 경로라 기본 거절(403)된다 (#392)
+        mvc.perform(get("/api/auth/logout").session(session)).andExpect(status().isForbidden());
         mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isOk());
     }
 

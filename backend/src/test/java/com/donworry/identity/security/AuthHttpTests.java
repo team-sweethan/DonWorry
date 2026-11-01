@@ -117,7 +117,8 @@ class AuthHttpTests {
         assertThat(sessionRegistry.getAllSessions(1L, true)).hasSize(1);
         assertThat(sessionRegistry.getSessionInformation(secondId)).isNotNull();
 
-        assertThat(send(client, "GET", "/api/auth/logout", null).statusCode()).isEqualTo(404);
+        // GET 로그아웃은 등록하지 않은 경로라 기본 거절(403)되고 세션은 유지된다 (#392)
+        assertThat(send(client, "GET", "/api/auth/logout", null).statusCode()).isEqualTo(403);
         assertThat(send(client, "GET", "/api/auth/me", null).statusCode()).isEqualTo(200);
         assertThat(send(client, "POST", "/api/auth/logout", null).statusCode()).isEqualTo(204);
         assertThat(send(client, "GET", "/api/auth/me", null).statusCode()).isEqualTo(401);
@@ -209,5 +210,26 @@ class AuthHttpTests {
         assertThat(send(first, "POST", "/api/auth/login", body).statusCode()).isEqualTo(200);
         assertThat(send(first, "GET", "/api/auth/me", null).statusCode()).isEqualTo(200);
         assertThat(send(second, "GET", "/api/auth/me", null).statusCode()).isEqualTo(401);
+    }
+
+    // 실제 서버에서 등록하지 않은 경로는 기본 거절되고, 공개 경로의 오류 응답은 /error를 거쳐 그대로 나온다 (#392)
+    @Test
+    void defaultDeny_whenUsingRealHttp_keepsErrorResponses() throws Exception {
+        var client = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
+
+        var anonymous = send(client, "GET", "/api/security-test-missing", null);
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+        assertThat(anonymous.body()).contains("AUTH_001");
+        // 열어 둔 경로에서 난 오류(번호 자리에 글자)는 /error가 막히지 않아 401·403이 아니라 400이다
+        assertThat(send(client, "GET", "/api/security-cases/not-a-number", null).statusCode())
+                .isEqualTo(400);
+
+        assertThat(send(client, "POST", "/api/auth/login", givenSessionUser()).statusCode())
+                .isEqualTo(200);
+        var authenticated = send(client, "GET", "/api/security-test-missing", null);
+        assertThat(authenticated.statusCode()).isEqualTo(403);
+        assertThat(authenticated.body()).contains("AUTH_002");
+        // 같은 계정을 쓰는 다른 테스트에 세션을 남기지 않는다
+        assertThat(send(client, "POST", "/api/auth/logout", null).statusCode()).isEqualTo(204);
     }
 }

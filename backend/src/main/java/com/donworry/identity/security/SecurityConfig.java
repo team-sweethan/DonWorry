@@ -133,8 +133,10 @@ public class SecurityConfig {
             JsonAccessDeniedHandler accessDeniedHandler,
             CookieCsrfTokenRepository csrfTokenRepository,
             LoginHistoryService loginHistories,
-            @Value("${security.csrf.enabled:false}") boolean csrfEnabled)
+            @Value("${security.csrf.enabled:false}") boolean csrfEnabled,
+            @Value("${security.demo-api.enabled:true}") boolean demoApiEnabled)
             throws Exception {
+        var paths = PathPatternRequestMatcher.withDefaults();
         var fdsRecoveryPosts = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-reevaluations"),
@@ -271,8 +273,50 @@ public class SecurityConfig {
                                 "/api/auth/login-histories",
                                 "/api/auth/login-histories/**")
                         .authenticated()
+                        // 로그인 전에 써야 하는 공개 경로. 와일드카드 없이 정확한 메서드·경로만 연다 (#392)
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.POST, "/api/auth/login"),
+                                paths.matcher(HttpMethod.POST, "/api/auth/logout"),
+                                paths.matcher(HttpMethod.GET, "/api/auth/csrf"),
+                                paths.matcher(HttpMethod.HEAD, "/api/auth/csrf"),
+                                paths.matcher(HttpMethod.GET, "/api/merchant-applications/config"),
+                                paths.matcher(HttpMethod.HEAD, "/api/merchant-applications/config"),
+                                paths.matcher(HttpMethod.POST, "/api/merchant-applications"),
+                                paths.matcher(HttpMethod.POST, "/api/merchant-applications/email-verifications"),
+                                paths.matcher(HttpMethod.POST, "/api/merchant-applications/email-verification-resends"),
+                                paths.matcher(HttpMethod.POST, "/api/merchant-applications/initial-password-setups"),
+                                // 오류 응답을 만드는 내부 경로. 막으면 404·400 응답이 401·403으로 바뀐다
+                                paths.matcher("/error"))
+                        .permitAll()
+                        // 아래 경로는 컨트롤러·서비스 안에서 역할을 검사한다 (SecurityStaffGuard · MerchantViewerGuard).
+                        // 지금 있는 경로만 정확히 연다 — 같은 접두사로 새 API를 추가하면 기본 거절된다.
+                        // 역할 규칙으로 옮기는 것은 담당(P3·P4) 확인 후 진행한다 (#392)
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/security-cases"),
+                                paths.matcher(HttpMethod.GET, "/api/security-cases/counts"),
+                                paths.matcher(HttpMethod.GET, "/api/security-cases/payment-links"),
+                                paths.matcher(HttpMethod.GET, "/api/security-cases/handoffs"),
+                                paths.matcher(HttpMethod.GET, "/api/security-cases/{caseId}"),
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/decisions"),
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/security-cases/{caseId}/handoffs/{handoffId}/recheck"),
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports"),
+                                paths.matcher(
+                                        HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
+                                paths.matcher(HttpMethod.GET, "/api/merchant/security-cases"),
+                                paths.matcher(HttpMethod.GET, "/api/merchant/security-cases/{caseId}"))
+                        .permitAll()
+                        // 인증 없는 시연용 API. 운영(security.demo-api.enabled=false)에서는 막는다.
+                        // 로컬·시연에서 역할 규칙으로 잠그는 것은 담당(P2·P3) 확인 후 진행한다 (#392)
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.POST, "/api/demo/held-payments"),
+                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock"),
+                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock/error"),
+                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock/error/reevaluate"))
+                        .access((authentication, context) -> new AuthorizationDecision(demoApiEnabled))
+                        // 위에 등록하지 않은 경로는 모두 막는다. 새 API는 이 파일에 권한 규칙을 함께 추가한다 (#392)
                         .anyRequest()
-                        .permitAll())
+                        .denyAll())
                 .addFilterBefore(new ForcedPasswordChangeFilter(responseWriter), AuthorizationFilter.class)
                 .securityContext(context -> context.securityContextRepository(securityContextRepository)
                         .requireExplicitSave(true))

@@ -128,10 +128,12 @@ class ProductionSecurityMariaDbTests {
                             .startsWith("XSRF-TOKEN=")
                             .contains("Secure", "SameSite=Lax")
                             .doesNotContain("HttpOnly"));
-            // 운영 기본값으로 인증 없는 개발용 Mock 평가 API가 등록되지 않는다.
-            // 같은 경로의 다른 GET 조회가 있으면 405, 없으면 404다
+            // 운영 기본값으로 인증 없는 시연용 API는 보안 설정에서 먼저 막힌다 (#392).
+            // FDS Mock 컨트롤러도 등록되지 않아 기록이 남지 않는다
             assertThat(post(context, "/api/fds/evaluations/mock", "").statusCode())
-                    .isIn(404, 405);
+                    .isEqualTo(401);
+            assertThat(post(context, "/api/demo/held-payments", "{}").statusCode())
+                    .isEqualTo(401);
             assertThat(jdbc(context).queryForObject("SELECT COUNT(*) FROM fds_evaluations", Integer.class))
                     .isZero();
             for (String demo : new String[] {"boss", "staff_test", "cakeshop_owner"}) {

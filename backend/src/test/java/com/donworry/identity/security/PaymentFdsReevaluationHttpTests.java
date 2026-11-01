@@ -178,11 +178,12 @@ class PaymentFdsReevaluationHttpTests {
     @org.springframework.beans.factory.annotation.Value("${security.csrf.enabled}")
     boolean csrfEnabled;
 
-    // 정확한 두 POST 외 경로는 기존 전역 설정을 유지하고 GET에 CSRF를 요구하지 않는다.
+    // 정확한 두 POST 외 경로는 기존 전역 설정을 따르고 GET에 CSRF를 요구하지 않는다.
+    // 등록하지 않은 경로·메서드는 기본 거절이라 비로그인은 401이다 (#392)
     @Test
     void matcher_preservesOtherPathsAndMethods() throws Exception {
-        mvc.perform(post("/unrelated-path")).andExpect(status().is(csrfEnabled ? 403 : 404));
-        mvc.perform(get(PATH)).andExpect(status().isMethodNotAllowed());
+        mvc.perform(post("/unrelated-path")).andExpect(status().is(csrfEnabled ? 403 : 401));
+        mvc.perform(get(PATH)).andExpect(status().isUnauthorized());
         verifyNoInteractions(service);
     }
 }

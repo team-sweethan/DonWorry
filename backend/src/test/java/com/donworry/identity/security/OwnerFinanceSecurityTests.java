@@ -154,10 +154,12 @@ class OwnerFinanceSecurityTests {
                 .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
-    // 비슷한 이름의 다른 경로까지 보호 범위를 넓히지 않는다
+    // 비슷한 이름의 다른 경로는 정산 규칙이 아니라 기본 거절을 따른다 (#392)
     @Test
     void finance_whenOutsidePrefix_preservesExistingPolicy() throws Exception {
-        mvc.perform(get("/api/v1/settlements-other")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/settlements-other"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
     @RestController

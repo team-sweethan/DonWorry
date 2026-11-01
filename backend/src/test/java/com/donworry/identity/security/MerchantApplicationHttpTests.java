@@ -165,8 +165,9 @@ class MerchantApplicationHttpTests {
         }
         assertThat(applications.count()).isZero();
         verifyNoInteractions(mail);
+        // POST 전용 경로의 GET은 등록하지 않은 메서드라 기본 거절(비로그인 401)된다 (#392)
         assertThat(send("GET", PATH + "/email-verifications", null, false).statusCode())
-                .isEqualTo(405);
+                .isEqualTo(401);
     }
     // 실제 저장·정규화·해시 보관·확인 상태 전이와 일회 사용을 검증한다.
     @Test
