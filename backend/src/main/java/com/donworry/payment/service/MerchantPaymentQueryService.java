@@ -33,7 +33,8 @@ public class MerchantPaymentQueryService {
                     payment.getCreatedAt(),
                     payment.getStatusChangedAt(),
                     payment.getAmount(),
-                    payment.getDeclineCode());
+                    payment.getDeclineCode(),
+                    payment.getAuthorizationRef() != null);
         });
     }
 

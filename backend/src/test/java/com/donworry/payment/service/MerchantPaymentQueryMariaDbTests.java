@@ -103,6 +103,51 @@ class MerchantPaymentQueryMariaDbTests {
         assertThat(before.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
     }
 
+    // PENDING은 승인 전(평가 중)과 승인 후(매입 대기)를 함께 담는다. authorized로 둘을 구분하고,
+    // 단건·주문 조회가 같은 값을 준다. 승인 참조 원문은 응답에 없다 (ADR-0061 3-1).
+    @Test
+    void findPayment_authorized_separatesApprovedPendingFromUnapproved() {
+        var c = command();
+        var id = admission.admit(c).paymentId();
+        assertThat(query.findPayment(c.merchantId(), id).orElseThrow().authorized())
+                .isFalse();
+
+        authorize(id, false);
+        var approved = query.findPayment(c.merchantId(), id).orElseThrow();
+        assertThat(approved.paymentStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(approved.authorized()).isTrue();
+        assertThat(query.findOrder(c.merchantId(), c.orderRef(), null, null)
+                        .orElseThrow()
+                        .latestPayment())
+                .isEqualTo(approved);
+
+        var held = command();
+        var heldId = admission.admit(held).paymentId();
+        authorize(heldId, true);
+        assertThat(query.findPayment(held.merchantId(), heldId).orElseThrow()).satisfies(r -> {
+            assertThat(r.paymentStatus()).isEqualTo(PaymentStatus.HELD);
+            assertThat(r.authorized()).isTrue();
+        });
+
+        var denied = command();
+        var deniedId = admission.admit(denied).paymentId();
+        deny(deniedId);
+        assertThat(query.findOrder(denied.merchantId(), denied.orderRef(), null, null)
+                        .orElseThrow()
+                        .attempts())
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.paymentStatus()).isEqualTo(PaymentStatus.DENIED);
+                    assertThat(r.authorized()).isFalse();
+                });
+    }
+
+    private void authorize(long id, boolean hold) {
+        new TransactionTemplate(manager)
+                .executeWithoutResult(s ->
+                        payments.findByIdForUpdate(id).orElseThrow().recordAuthorizationSuccess("AUTH-" + id, hold));
+    }
+
     // 과거 결제는 단건으로 읽되 알 수 없는 시도 번호·상태 변경 시각을 만들지 않는다.
     @Test
     void findPayment_whenLegacy_preservesNullMetadata() {

@@ -102,7 +102,8 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
   "requestedAt": "2026-10-25T10:01:00Z",
   "statusChangedAt": "2026-10-25T10:01:00Z",
   "amount": 25000,
-  "declineCode": null
+  "declineCode": null,
+  "authorized": false
 }
 ```
 
@@ -112,6 +113,7 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
 - authorizationRef, FDS 점수·규칙·내부 오류, API Key는 응답하지 않는다.
 - statusChangedAt은 **P5가 현재 paymentStatus로 전이시킨 시각**이다. P6 capturedAt·P3 acceptedAt과 다르다. 생성 시 requestedAt, 동일 상태 재반영/단순 조회/중복 완료에는 갱신하지 않는다.
 - declineCode는 최종 DENIED/DECLINED의 외부용 사유만: FDS_REJECTED / AUTHORIZATION_DECLINED 제안. 구체 탐지 규칙이나 승인기 내부 오류를 그대로 내보내지 않는다. 그 외 상태는 null. VOIDED는 거절이 아니라 취소 상태다.
+- authorized(2026-11-01 #402, ADR-0061 3-1 추가)는 카드 승인이 이뤄졌는지다. 승인 참조가 저장돼 있으면 true이며 이후 VOIDED가 돼도 true로 남는다. PENDING은 승인 전 평가 중·오류와 승인 후 매입 대기를 함께 담으므로 가맹점은 `authorized=true`이고 PENDING·HELD·CAPTURED면 결제됨으로 본다. 승인 참조 원문은 계속 내보내지 않는다. 필드 추가만이라 이 값을 읽지 않는 기존 호출자는 그대로 동작한다.
 - 이전 데이터의 실제 상태 변경 시각·거절 이유는 알 수 없으면 null. createdAt을 과거 변경 시각으로 꾸며 백필하지 않는다.
 
 ### 주문 조회
@@ -259,7 +261,7 @@ AUTHORIZED 이후 매입 미완료는 기존 CaptureRequested/CaptureCompleted �
 ### 후속 단계 — 가맹점별 결제 결과 조회
 
 - `MerchantPaymentQueryService.findPayment(merchantId, paymentId)`는 두 ID를 함께 조건으로 조회한다. 타 가맹점 건과 없는 건 모두 Optional.empty다. 기존 내부 PaymentReader 4필드는 변경하지 않는다.
-- 반환 DTO는 paymentId·orderRef·attemptNo·paymentStatus·requestedAt·statusChangedAt·amount·declineCode 8필드다. 고객 참조·승인 참조·평가·내부 처리 단계는 반환하지 않는다. 기존 미이관 결제의 attemptNo와 과거 변경 시각은 null을 보존한다.
+- 반환 DTO는 paymentId·orderRef·attemptNo·paymentStatus·requestedAt·statusChangedAt·amount·declineCode 8필드다(2026-11-01 #402에서 authorized를 더해 9필드). 고객 참조·승인 참조·평가·내부 처리 단계는 반환하지 않는다. 기존 미이관 결제의 attemptNo와 과거 변경 시각은 null을 보존한다.
 - `findOrder(merchantId, orderRef, size, beforeAttemptNo)`는 등록된 시도만 조회한다. 최신 시도와 순번 내림차순 이력, 다음 커서를 반환한다. 기본 20·최대 100, 커서는 양수·미만 조건이다. 추가 한 건을 읽어 다음 페이지 유무를 판단하며 빈 이력 페이지라도 최신 시도는 반환한다. 주문이 없거나 시도가 없으면 Optional.empty다.
 - 조회는 REQUIRES_NEW·readOnly·REPEATABLE_READ로 실행해 한 응답의 최신 시도와 이력을 같은 DB 스냅샷에서 읽는다. 다음 페이지 사이 새 시도가 생성되면 최신값은 달라질 수 있으나 커서는 이전 순번 아래를 계속 조회한다. 반환 목록은 불변이다.
 - GET 처리를 위한 읽기 서비스일 뿐 HTTP 엔드포인트는 아직 추가하지 않았다. 기준 코드의 P1 공개 API에는 CurrentStaff·TenantReader만 있고 가맹점 API Key 인증 경계는 없다. 향후 HTTP에서 인증 결과의 merchantId를 전달해야 하며 외부 요청 body/query의 merchantId를 그대로 신뢰하면 안 된다.
