@@ -86,6 +86,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0059](0059-security-default-deny.md) | 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`) | 제안 — #392 P1 구현, PR 리뷰 대상 |
 
 | [0060](0060-identity-status-names.md) | 계정·신청 상태 이름과 데이터 보존 전환 | 제안 — #131 PR A 사용자 구현 승인, PR 리뷰 대상 |
+| [0061](0061-hosted-checkout-and-payment-webhook.md) | 돈워리 호스팅 결제창과 결제 상태 웹훅 | 제안 — #402 샌드박스 확인, P1 확인·저장소 구현 전 |
 
 ## 현재 적용 상태와 기록의 구분
 
