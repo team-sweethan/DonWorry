@@ -4,7 +4,7 @@ import jakarta.validation.constraints.*;
 import java.time.Instant;
 import lombok.Builder;
 
-// 모든 신규 결제 요청은 FDS 평가에 필요한 식별자를 함께 보낸다. 카드는 원문이 아니라 토큰과 마스킹 표시값만 받는다.
+// 신규 FDS 식별자는 선택 입력이며, 제공할 때만 카드 원문이 아닌 토큰과 마스킹 표시값을 받는다.
 @Builder
 public record PaymentSubmitRequest(
         @NotBlank @Size(max = 100) String orderRef,

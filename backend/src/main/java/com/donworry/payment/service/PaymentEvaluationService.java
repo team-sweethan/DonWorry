@@ -52,9 +52,7 @@ public class PaymentEvaluationService {
     }
 
     private FdsEvaluationResponse evaluateStoredSnapshot(PaymentEvaluationInput input, FdsEvaluationRequest request) {
-        return input.riskSignals().isComplete()
-                ? fdsEvaluator.evaluate(request)
-                : fdsEvaluator.evaluateHistoricalSnapshot(request);
+        return fdsEvaluator.evaluate(request);
     }
 
     private FdsEvaluationRequest request(PaymentEvaluationInput input) {

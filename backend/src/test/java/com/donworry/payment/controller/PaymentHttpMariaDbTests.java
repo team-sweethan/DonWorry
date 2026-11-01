@@ -232,7 +232,7 @@ class PaymentHttpMariaDbTests {
                 .isEqualTo(400);
         verifyNoInteractions(evaluator);
     }
-    // FDS 식별자는 필수로 P2 평가 요청에 전달하고 가맹점 응답에는 되돌려 주지 않는다. 카드 원문 · 누락 · 잘못된 형식은 400 (#325).
+    // FDS 식별자는 제공되면 P2 평가 요청에 전달하고 가맹점 응답에는 되돌려 주지 않는다. 카드 원문과 잘못된 형식은 400 (#325).
     @Test
     void post_withRiskSignals_passesThemToFdsWithoutEcho() throws Exception {
         verdict(FdsResult.ALLOW);
@@ -273,7 +273,7 @@ class PaymentHttpMariaDbTests {
         String missingDeviceId = base.replace(",\"deviceId\":\"device-1\"", "");
         assertThat(call("POST", "/api/payments", "merchant-a", UUID.randomUUID().toString(), missingDeviceId)
                         .statusCode())
-                .isEqualTo(400);
+                .isIn(200, 202);
         verify(evaluator).evaluate(any());
     }
 
@@ -298,7 +298,7 @@ class PaymentHttpMariaDbTests {
                             r.evaluationRequestId(), 124L, FdsResult.REVIEW, 50, Instant.now(), null);
                 })
                 .when(evaluator)
-                .evaluateHistoricalSnapshot(any());
+                .evaluate(any());
         String historical = request.replace(",\"deviceId\":\"device-1\"", "")
                 .replace(",\"cardToken\":\"token-1\"", "")
                 .replace(",\"cardDisplayLabel\":\"신한 **** 1234\"", "")
@@ -309,7 +309,7 @@ class PaymentHttpMariaDbTests {
         var replay = call("POST", "/api/payments", "merchant-a", key, historical);
 
         assertThat(replay.statusCode()).isEqualTo(202);
-        verify(evaluator).evaluateHistoricalSnapshot(argThat(r -> r.deviceId() == null && r.buyerEmail() == null));
+        verify(evaluator).evaluate(argThat(r -> r.deviceId() == null && r.buyerEmail() == null));
     }
 
     // 확정 거절은 정상 결과 200이며 내부 평가 오류는 응답에 노출하지 않는다.

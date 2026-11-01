@@ -64,9 +64,9 @@ class FdsEvaluationContractTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    // 신규 평가에는 룰 탐지와 보고서에 필요한 위험 신호 6개가 모두 있어야 한다.
+    // 신규 위험 신호는 선택 입력이므로 누락된 값도 평가 스냅샷으로 보존한다.
     @Test
-    void request_whenRiskSignalIsMissing_requiresItOnlyForNewEvaluation() {
+    void request_whenRiskSignalIsMissing_preservesNullSnapshot() {
         var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
 
         var request = new FdsEvaluationRequest(
@@ -83,7 +83,7 @@ class FdsEvaluationContractTests {
                 "203.0.113.10",
                 "hong@example.test");
 
-        assertThatThrownBy(request::requireRiskSignals).isInstanceOf(IllegalArgumentException.class);
+        assertThat(request.deviceId()).isNull();
     }
 
     // 마이그레이션 이전 ERROR 결제의 저장 스냅샷은 누락된 위험 신호를 그대로 보고·재평가한다.

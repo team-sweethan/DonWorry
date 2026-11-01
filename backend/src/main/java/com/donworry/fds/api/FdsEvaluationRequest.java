@@ -54,25 +54,11 @@ public record FdsEvaluationRequest(
         if (buyerEmail != null) buyerEmail = buyerEmail.toLowerCase(java.util.Locale.ROOT);
     }
 
-    public FdsEvaluationRequest requireRiskSignals() {
-        required(deviceId, "deviceId");
-        required(cardToken, "cardToken");
-        required(cardDisplayLabel, "cardDisplayLabel");
-        required(ipCountryCode, "ipCountryCode");
-        required(ipAddress, "ipAddress");
-        required(buyerEmail, "buyerEmail");
-        return this;
-    }
-
     private static String optionalIdentifier(String value, String name, int maxLength) {
         if (value == null) return null;
         if (value.isBlank() || !value.equals(value.strip()) || value.codePointCount(0, value.length()) > maxLength) {
             throw new IllegalArgumentException(name + " must be a trimmed identifier");
         }
         return value;
-    }
-
-    private static void required(String value, String name) {
-        if (value == null) throw new IllegalArgumentException(name + " must not be null");
     }
 }

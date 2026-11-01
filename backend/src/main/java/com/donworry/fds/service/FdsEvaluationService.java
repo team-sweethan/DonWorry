@@ -23,7 +23,7 @@ public class FdsEvaluationService implements FdsEvaluator {
 
     @Override
     public FdsEvaluationResponse evaluate(FdsEvaluationRequest request) {
-        return evaluateInternal(request.requireRiskSignals());
+        return evaluateInternal(request);
     }
 
     @Override

@@ -184,9 +184,9 @@ class PaymentRequestRealFlowMariaDbTests {
                 .containsEntry("risk_score", 90);
     }
 
-    // 정상 결제는 필수 위험 신호를 저장하고 P2 평가에도 같은 스냅샷을 전달한다.
+    // 위험 신호가 제공된 정상 결제는 P2 평가에도 같은 스냅샷을 전달한다.
     @Test
-    void submit_withRequiredRiskSignals_keepsSignalsInEvaluationSnapshot() {
+    void submit_withProvidedRiskSignals_keepsSignalsInEvaluationSnapshot() {
         var receipt = flow.submit(command());
         completed(receipt.paymentId());
         assertThat(requests.findByPaymentId(receipt.paymentId())

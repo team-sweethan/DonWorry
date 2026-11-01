@@ -127,6 +127,7 @@ export function BlocklistPage() {
       await deactivateFdsBlocklistEntry(deactivationEntry.entryId, reason.trim())
       setDeactivationEntry(null)
       deactivationForm.resetFields()
+      setPage(0)
       reload()
     } catch {
       setError('차단 해제를 완료하지 못했습니다.')

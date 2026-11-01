@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsEvaluationRequestConflictException;
+import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -63,9 +64,9 @@ class FdsEvaluationServiceTests {
         evaluator = new FdsEvaluationService(evaluationRepository, transactionService);
     }
 
-    // 공개 신규 평가 경계는 과거 스냅샷과 달리 위험 신호 6개를 계속 필수로 받는다.
+    // 공개 신규 평가도 누락된 선택 위험 신호를 P2 평가 트랜잭션으로 전달한다.
     @Test
-    void evaluate_whenRiskSignalIsMissing_rejectsBeforeTransaction() {
+    void evaluate_whenRiskSignalIsMissing_evaluatesWithNullSnapshot() {
         var request = new FdsEvaluationRequest(
                 UUID.randomUUID(),
                 101L,
@@ -80,8 +81,12 @@ class FdsEvaluationServiceTests {
                 "203.0.113.10",
                 "hong@example.test");
 
-        assertThatThrownBy(() -> evaluator.evaluate(request)).isInstanceOf(IllegalArgumentException.class);
-        org.mockito.Mockito.verifyNoInteractions(transactionService);
+        var response = new FdsEvaluationResponse(
+                request.evaluationRequestId(), 1L, FdsResult.ALLOW, 0, Instant.parse("2026-10-22T01:00:01Z"), null);
+        when(transactionService.evaluate(request)).thenReturn(response);
+
+        assertThat(evaluator.evaluate(request)).isEqualTo(response);
+        verify(transactionService).evaluate(request);
     }
 
     @Test
