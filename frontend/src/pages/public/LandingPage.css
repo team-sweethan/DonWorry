@@ -217,11 +217,14 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* 오른쪽 — 방패를 든 동전이 연출 (HeroGuardian) */
 .dw-landing-hero-visual {
   position: relative;
-  align-self: end;
-  /* 오른쪽은 화면 끝까지 잘라 보여 준다 */
-  margin-right: calc((100vw - min(100vw - 96px, 1200px)) / -2);
+  min-width: 0;
+  align-self: center;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 40px;
 }
 
 /* ── 예시 앱 화면 ── */
@@ -729,6 +732,18 @@
   margin: 0;
   color: var(--sub);
   font-size: 17px;
+}
+/* 첫 화면에 있던 사장님 화면 미리보기 — 섹션 머리에 크게 보여 준다 */
+/* 미리보기는 데스크톱 화면(880px)을 그대로 두고, 폭이 모자라면 FitWidth가 통째로 줄인다 */
+.dw-landing-owner-preview {
+  overflow: hidden;
+  margin-bottom: 48px;
+  border-radius: 14px;
+}
+.dw-landing-owner-preview .dw-preview-app {
+  border-right: 1px solid #dfe3ea;
+  border-bottom: 1px solid #dfe3ea;
+  border-radius: 14px;
 }
 .dw-landing-owner-grid {
   display: grid;
@@ -1379,14 +1394,7 @@
   position: relative;
   z-index: 1;
 }
-/* 동전이 — 첫 화면에서는 사장님 화면을 지키듯 옆에 서 있고, 마지막 안내에서는 버튼 옆에 선다 */
-.dw-landing-mascot {
-  position: absolute;
-  z-index: 3;
-  left: -96px;
-  bottom: 18px;
-  filter: drop-shadow(0 18px 24px rgba(19, 32, 74, 0.28));
-}
+/* 동전이 — 마지막 안내에서는 버튼 옆에 선다 */
 .dw-landing-final-box > .dw-landing-final-mascot {
   position: absolute;
   right: 330px;
@@ -1459,9 +1467,6 @@
   .dw-landing-hero-copy > :nth-child(5) {
     animation-delay: 0.24s;
   }
-  .dw-landing-hero-visual {
-    animation: dw-landing-slide 0.8s 0.15s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  }
 
   @supports (animation-timeline: scroll()) {
     /* 내리기 시작하면 헤더에 그림자가 생긴다 */
@@ -1493,6 +1498,7 @@
   }
   @supports (animation-timeline: view()) {
     .dw-landing-steps li,
+    .dw-landing-owner-preview,
     .dw-landing-final-box {
       animation: dw-landing-rise linear both;
       animation-timeline: view();
@@ -1592,7 +1598,7 @@
     padding-bottom: 56px;
   }
   .dw-landing-hero-visual {
-    margin-right: -48px;
+    padding-bottom: 56px;
   }
   .dw-landing-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1602,10 +1608,6 @@
   }
 }
 @media (max-width: 720px) {
-  /* 좁은 화면에서는 미리보기 영역이 잘리므로 첫 화면 마스코트를 숨긴다 */
-  .dw-landing-mascot {
-    display: none;
-  }
   .dw-landing-final-box > .dw-landing-final-mascot {
     display: none;
   }
@@ -1633,15 +1635,6 @@
   }
   .dw-landing-hero-copy .dw-landing-cta .dw-btn {
     flex: 1;
-  }
-  .dw-landing-hero-visual {
-    margin-right: -20px;
-    height: 300px;
-    overflow: hidden;
-  }
-  .dw-preview-app {
-    /* 데스크톱 화면을 그대로 줄여 보여 준다 */
-    zoom: 0.62;
   }
   .dw-landing-features,
   .dw-landing-owner,

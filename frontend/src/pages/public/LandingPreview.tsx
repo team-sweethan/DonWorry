@@ -363,7 +363,7 @@ export function OwnerResultCard() {
   )
 }
 
-/** 정산 현황 — 날짜별 정산 금액 (앱에서도 시연 화면) */
+/** 정산 내역 — 날짜별 정산 금액 (앱에서도 시연 화면) */
 export function OwnerSettlementCard() {
   const days = [
     { d: 27, done: '41.2만' },

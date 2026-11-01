@@ -6,6 +6,7 @@ import './LandingPage.css'
 import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from './ApplicationEntry'
+import { HeroGuardian } from './HeroGuardian'
 import {
   DetectPanel,
   HoldPanel,
@@ -75,7 +76,7 @@ const ownerScreens: { title: string; body: string; soon?: boolean; visual: React
     visual: <OwnerResultCard />,
   },
   {
-    title: '정산 현황',
+    title: '정산 내역',
     body: '언제 얼마가 정산되는지 날짜별로 봐요.',
     soon: true,
     visual: <OwnerSettlementCard />,
@@ -187,6 +188,34 @@ function FlowStory() {
 }
 
 // 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 스크롤·포커스만 옮긴다.
+/** 고정 폭 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다 (예시 앱 880px · 첫 화면 연출 520px). */
+function FitWidth({
+  width,
+  className,
+  children,
+}: {
+  width: number
+  className: string
+  children: ReactNode
+}) {
+  const box = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      setScale(Math.min(1, entry.contentRect.width / width))
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [width])
+  return (
+    <div className={className} ref={box}>
+      <div style={{ zoom: scale }}>{children}</div>
+    </div>
+  )
+}
+
 function moveTo(target: RefObject<HTMLElement | null>) {
   target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   target.current?.focus({ preventScroll: true })
@@ -283,10 +312,9 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
                 </Link>
               </div>
             </div>
-            <div className="dw-landing-hero-visual">
-              <Mascot size={190} className="dw-landing-mascot dw-mascot-float" />
-              <OwnerHeroPreview />
-            </div>
+            <FitWidth width={520} className="dw-landing-hero-visual">
+              <HeroGuardian />
+            </FitWidth>
           </div>
         </section>
 
@@ -302,6 +330,9 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
               <h2 id="landing-owner-title">보류된 결제의 결과와 돈의 흐름을 한 곳에서</h2>
               <p>로그인하면 사장님 화면이 열려요. 보안 담당자가 쓰는 내부 화면과는 따로 있어요.</p>
             </div>
+            <FitWidth width={880} className="dw-landing-owner-preview">
+              <OwnerHeroPreview />
+            </FitWidth>
             <div className="dw-landing-owner-grid">
               {ownerScreens.map((screen) => (
                 <article
@@ -320,7 +351,7 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
               ))}
             </div>
             <p className="dw-landing-owner-note">
-              정산 현황과 자금 현황은 결제 연동과 함께 열릴 예정이에요.
+              정산 내역과 자금 현황은 결제 연동과 함께 열릴 예정이에요.
             </p>
           </div>
         </section>
