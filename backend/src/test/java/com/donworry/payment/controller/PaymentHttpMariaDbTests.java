@@ -270,11 +270,11 @@ class PaymentHttpMariaDbTests {
                     .as(invalid)
                     .isEqualTo(400);
         }
-        String missingDeviceId = base.replace(",\"deviceId\":\"device-1\"", "");
+        String missingDeviceId = body(UUID.randomUUID().toString(), 1000).replace(",\"deviceId\":\"device-1\"", "");
         assertThat(call("POST", "/api/payments", "merchant-a", UUID.randomUUID().toString(), missingDeviceId)
                         .statusCode())
                 .isIn(200, 202);
-        verify(evaluator).evaluate(any());
+        verify(evaluator).evaluate(argThat(r -> r.deviceId() == null));
     }
 
     // 위험 신호 도입 전 RECEIVED 결제는 같은 키와 NULL 스냅샷으로 평가를 재개한다.
