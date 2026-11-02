@@ -21,6 +21,9 @@ spring:
 # payment:
 #   http:
 #     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)
+# 결제 상태 웹훅을 http · 127.0.0.1(로컬 CakeShop)로도 보낸다. 운영은 false(https · 공인 주소만, #402)
+# 위 donworry: 블록과 겹치지 않게 한 줄(점 표기)로 둔다
+# donworry.payment.webhook.allow-local-targets: true
 # fds:
 #   demo-error:
 #     enabled: true            # scripts/demo/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.

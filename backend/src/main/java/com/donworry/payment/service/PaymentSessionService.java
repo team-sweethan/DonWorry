@@ -47,6 +47,7 @@ public class PaymentSessionService {
     private final PaymentRequestFlowService flow;
     private final MerchantPaymentQueryService query;
     private final TenantReader tenants;
+    private final PaymentWebhookTargetPolicy webhookTargets;
     private final TransactionTemplate transactions;
     private final String checkoutBaseUrl;
 
@@ -56,6 +57,7 @@ public class PaymentSessionService {
             PaymentRequestFlowService flow,
             MerchantPaymentQueryService query,
             TenantReader tenants,
+            PaymentWebhookTargetPolicy webhookTargets,
             PlatformTransactionManager transactionManager,
             @Value("${donworry.applications.public-base-url:http://localhost:5173}") String checkoutBaseUrl) {
         this.sessions = sessions;
@@ -63,6 +65,7 @@ public class PaymentSessionService {
         this.flow = flow;
         this.query = query;
         this.tenants = tenants;
+        this.webhookTargets = webhookTargets;
         this.transactions = new TransactionTemplate(transactionManager);
         this.checkoutBaseUrl = checkoutBaseUrl.replaceAll("/+$", "");
     }
@@ -83,7 +86,9 @@ public class PaymentSessionService {
         URI success = requireUrl(body.successUrl());
         URI fail = requireUrl(body.failUrl());
         if (!sameOrigin(success, fail)) throw invalid();
-        if (body.notifyUrl() != null) requireUrl(body.notifyUrl());
+        // 웹훅 주소는 운영에서 https · 공인 주소만 받는다(로컬 개발은 설정으로 허용). 보내기 직전에도 다시 본다 (ADR-0064 남은 결정)
+        if (body.notifyUrl() != null && !webhookTargets.acceptableAtCreate(requireUrl(body.notifyUrl())))
+            throw invalid();
         // 구매자 이메일은 결제 때 FDS 입력(PaymentRiskSignals)과 같은 규칙으로 검사한다.
         // 세션에 고정되어 구매자가 고칠 수 없으므로 잘못된 값은 결제 때 500이 아니라 여기서 400으로 막는다
         if (body.buyerEmail() != null && !validBuyerEmail(body.buyerEmail())) throw invalid();
