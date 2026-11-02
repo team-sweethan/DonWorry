@@ -21,6 +21,8 @@ P6 소유 신규 테이블만 추가하며, 다른 모듈 테이블과 물리 FK
 - DB 원칙과 INSERT/UPDATE 예시는 Notion fds 정본 **04 DB 설계 및 데이터 매핑**에 있습니다 (구현 가이드)
 - 2026-10-22 제공된 P1~P6 담당 ERD를 대조했습니다. [담당별 원문 링크와 차이](../README.md)를 함께 봅니다. 특히 P6의 픽업·정산 완료용 테이블·컬럼은 2차 범위이며 현재 SQL에 없습니다
 
+P6 #230 조회 인덱스: [20261102_112639](../../backend/src/main/resources/db/migration/V20261102_112639__index_settlement_cash_flow_queries.sql)은 settlements의 가맹점·상태·완료 시각/예정 시각 복합 인덱스 2개만 추가한다. 테이블·컬럼·데이터 변경은 없다. 상세 목적은 [예측 API](../settlement/cash-flow-forecast-api.md#조회-인덱스)를 따른다.
+
 ### 공통 규칙
 
 | 대상 | 규칙 | 예 |

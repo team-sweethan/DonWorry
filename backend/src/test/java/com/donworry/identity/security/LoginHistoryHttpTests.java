@@ -102,7 +102,8 @@ class LoginHistoryHttpTests {
 
     private HttpResponse<String> send(HttpClient client, String method, String path, Map<String, ?> body)
             throws Exception {
-        return client.send(
+        return com.donworry.HttpCsrfTestSupport.send(
+                client,
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                         .header("Content-Type", "application/json")
                         .header("User-Agent", "HistoryTest Chrome/120 Windows")
@@ -111,9 +112,7 @@ class LoginHistoryHttpTests {
                                 method,
                                 body == null
                                         ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))));
     }
 
     private HttpResponse<String> login(HttpClient c, String id, String pass) throws Exception {
@@ -307,14 +306,27 @@ class LoginHistoryHttpTests {
     void logout_whenConcurrentAcrossRoutes_recordsAtMostOnce() throws Exception {
         var browser = client();
         assertThat(login(browser, loginId, password).statusCode()).isEqualTo(200);
+        // 로그아웃 응답이 공유 쿠키 저장소를 지우기 전에 동일한 쿠키·토큰으로 요청을 고정한다.
+        var cookies = (CookieManager) browser.cookieHandler().orElseThrow();
+        var cookieHeader = cookies.getCookieStore().getCookies().stream()
+                .filter(cookie -> !cookie.hasExpired())
+                .map(cookie -> cookie.getName() + "=" + cookie.getValue())
+                .collect(java.util.stream.Collectors.joining("; "));
+        var concurrentClient = HttpClient.newHttpClient();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             var gate = new CountDownLatch(1);
             var requests = new ArrayList<Future<HttpResponse<String>>>();
             for (int i = 0; i < 6; i++) {
                 String path = i % 2 == 0 ? "/api/auth/logout" : "/api/auth/logout-all";
+                var request = com.donworry.HttpCsrfTestSupport.withCsrf(
+                                browser,
+                                HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                                        .header("Cookie", cookieHeader)
+                                        .POST(HttpRequest.BodyPublishers.noBody()))
+                        .build();
                 requests.add(executor.submit(() -> {
                     gate.await();
-                    return send(browser, "POST", path, null);
+                    return concurrentClient.send(request, HttpResponse.BodyHandlers.ofString());
                 }));
             }
             gate.countDown();

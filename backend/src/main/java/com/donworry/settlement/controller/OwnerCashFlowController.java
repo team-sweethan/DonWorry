@@ -18,10 +18,27 @@ import org.springframework.web.bind.annotation.*;
 public class OwnerCashFlowController {
     private final SettlementOwnerAccessService access;
     private final CashFlowManagementService management;
+    private final CashFlowForecastService forecasts;
 
     @ModelAttribute
     void authenticate(HttpServletRequest request) {
         request.setAttribute("settlement.ownerMerchant", access.requireMerchant());
+    }
+
+    @GetMapping("/forecast")
+    public ResponseEntity<CashFlowForecastResponse> forecast(
+            @RequestAttribute("settlement.ownerMerchant") Long merchant,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        return ok(forecasts.forecast(merchant, from, to));
+    }
+
+    @GetMapping("/shortages")
+    public ResponseEntity<List<CashFlowForecastResponse.Shortage>> shortages(
+            @RequestAttribute("settlement.ownerMerchant") Long merchant,
+            @RequestParam LocalDate from,
+            @RequestParam LocalDate to) {
+        return ok(forecasts.forecast(merchant, from, to).shortages());
     }
 
     @GetMapping("/settings")

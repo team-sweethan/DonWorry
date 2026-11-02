@@ -114,4 +114,30 @@ class RecurringExpenseLimitTests {
                         SettlementRequestException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(422));
     }
+    // cutoff 기반 예측 회차 조회도 규칙별 쿼리로 되돌아가지 않고 ID 100개씩 묶는다.
+    @Test
+    void pendingOccurrencesAsOf_whenManyRulesPaid_boundsQueriesAndUsesCutoff() {
+        givenRules(201);
+        var cutoff = Instant.parse("2027-12-31T00:00:00Z");
+        when(payments.findCompletedOccurrencesBefore(eq(2L), anyCollection(), eq(from), eq(to), eq(cutoff)))
+                .thenAnswer(invocation -> {
+                    Collection<Long> ids = invocation.getArgument(1);
+                    return ids.stream()
+                            .flatMap(id -> dates.stream()
+                                    .map(date -> new RecurringExpensePaymentRepository.CompletedOccurrence() {
+                                        public Long getRecurringExpenseId() {
+                                            return id;
+                                        }
+
+                                        public LocalDate getOccurrenceDate() {
+                                            return date;
+                                        }
+                                    }))
+                            .toList();
+                });
+        assertThat(service.pendingOccurrencesAsOf(2L, from, to, cutoff)).isEmpty();
+        verify(payments, times(3))
+                .findCompletedOccurrencesBefore(
+                        eq(2L), argThat(ids -> ids.size() <= 100), eq(from), eq(to), eq(cutoff));
+    }
 }

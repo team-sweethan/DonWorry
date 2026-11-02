@@ -1,4 +1,4 @@
-# 0063. 돈워리 호스팅 결제창과 결제 상태 웹훅
+# 0064. 돈워리 호스팅 결제창과 결제 상태 웹훅
 
 - **상태:** 제안 — 로컬 샌드박스 구현·확인 완료, 저장소 구현 전. P1 확인 완료(2026-11-02, PR #403). 사후 거절 시 정산 보장은 P6 확인 필요
 - **날짜:** 2026-11-01 (2026-11-02 개정: P1 확인 반영, 사후 거절을 이행 전·후로 나눔, 웹훅 역할 분담)
@@ -34,7 +34,7 @@
 | `GET /api/checkout/{sessionKey}/result` | 처리 중이면 결제창이 다시 조회 |
 
 - **로그인·쿠키를 쓰지 않는다.** 권한은 추측할 수 없는 세션 키뿐이다. 응답에 가맹점 내부 값(`customerRef`·`notifyUrl`)을 넣지 않고 `Cache-Control: no-store`를 붙인다
-- **CSRF 검사에서 제외한다.** CSRF는 쿠키로 인증하는 요청을 지키는 장치인데 이 경로는 쿠키 인증이 없다. 또 결제창은 다른 사이트(CakeShop) 안의 iframe으로 열리므로 돈워리의 `SameSite=Lax` 쿠키(`XSRF-TOKEN`)가 전송되지 않는다. 검사를 켜 두면 `security.csrf.enabled=true`(#68)가 되는 순간 결제 버튼이 403이 된다
+- **CSRF 검사에서 제외한다.** CSRF는 쿠키로 인증하는 요청을 지키는 장치인데 이 경로는 쿠키 인증이 없다. 또 결제창은 다른 사이트(CakeShop) 안의 iframe으로 열리므로 돈워리의 `SameSite=Lax` 쿠키(`XSRF-TOKEN`)가 전송되지 않는다. 검사를 켜 두면 결제 버튼이 403이 된다. CSRF 검사는 #416(ADR-0063)에서 기본으로 켜졌으므로 결제창 구현 PR에서 이 세 경로를 반드시 제외한다
 - ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다(P1 `SecurityConfig` 리뷰)
 - 결과: 카드 승인(`authorized`)이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 `successUrl?paymentKey=&orderId=&amount=`, 그 밖에는 `failUrl?code=`, 구매자가 닫으면 `failUrl?code=USER_CANCELED`
 - 화면 `/checkout/:sessionKey`(돈워리 프론트, 로그인 없음): iframe 안에서 열렸으면 높이 변화(`donworry-checkout-resize`)와 결과 이동(`donworry-checkout`)을 `postMessage`로 **가맹점 출처에만** 보낸다. 가맹점은 `event.origin`을 확인하고 같은 출처 주소로만 이동한다

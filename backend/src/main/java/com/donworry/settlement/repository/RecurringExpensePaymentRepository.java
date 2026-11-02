@@ -26,6 +26,15 @@ public interface RecurringExpensePaymentRepository extends JpaRepository<Recurri
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
 
+    @Query(
+            "SELECT p.recurringExpenseId AS recurringExpenseId, p.occurrenceDate AS occurrenceDate FROM RecurringExpensePayment p WHERE p.merchantId=:merchant AND p.recurringExpenseId IN :rules AND p.occurrenceDate BETWEEN :from AND :to AND p.paidAt<:asOf")
+    List<CompletedOccurrence> findCompletedOccurrencesBefore(
+            @Param("merchant") Long merchant,
+            @Param("rules") Collection<Long> rules,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            @Param("asOf") Instant asOf);
+
     List<RecurringExpensePayment> findByMerchantIdAndPaidAtGreaterThanEqualAndPaidAtLessThan(
             Long merchant, Instant from, Instant until, Pageable page);
 }

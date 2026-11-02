@@ -53,6 +53,8 @@ class ProductionProfileTests {
                     .isEqualTo("true");
             assertThat(context.getEnvironment().getProperty("server.servlet.session.cookie.secure"))
                     .isEqualTo("false");
+            assertThat(context.getEnvironment().getProperty("security.csrf.enabled"))
+                    .isEqualTo("true");
             verifyNoInteractions(service);
         });
     }
@@ -69,10 +71,20 @@ class ProductionProfileTests {
                     .isEqualTo("true");
             assertThat(environment.getProperty("spring.datasource.url"))
                     .isEqualTo("jdbc:mariadb://production-db:3306/production");
-            assertThat(environment.getProperty("security.csrf.enabled")).isEqualTo("false");
+            assertThat(environment.getProperty("security.csrf.enabled")).isEqualTo("true");
             assertThat(environment.getProperty("fds.mock.seed-enabled")).isEqualTo("false");
             assertThat(environment.getProperty("security.demo-api.enabled")).isEqualTo("false");
             verify(service).initialize("Production123!");
+        });
+    }
+
+    // 명시적 환경변수는 새 기본값보다 우선한다
+    @Test
+    void configuration_whenCsrfExplicitlyDisabled_preservesOverride() {
+        production().withPropertyValues("DONWORRY_CSRF_ENABLED=false").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getEnvironment().getProperty("security.csrf.enabled"))
+                    .isEqualTo("false");
         });
     }
 

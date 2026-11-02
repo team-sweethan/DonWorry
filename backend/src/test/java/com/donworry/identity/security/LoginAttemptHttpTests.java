@@ -101,16 +101,15 @@ class LoginAttemptHttpTests {
 
     private HttpResponse<String> send(HttpClient client, String method, String path, Map<String, ?> body)
             throws Exception {
-        return client.send(
+        return com.donworry.HttpCsrfTestSupport.send(
+                client,
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                         .header("Content-Type", "application/json")
                         .method(
                                 method,
                                 body == null
                                         ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))));
     }
 
     private HttpResponse<String> login(HttpClient client, String id, String value) throws Exception {

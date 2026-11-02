@@ -78,16 +78,15 @@ class PasswordChangeHttpTests {
     }
 
     private HttpResponse<String> send(HttpClient client, String method, String path, String body) throws Exception {
-        return client.send(
+        return com.donworry.HttpCsrfTestSupport.send(
+                client,
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/" + path))
                         .header("Content-Type", "application/json")
                         .method(
                                 method,
                                 body == null
                                         ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(body))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                        : HttpRequest.BodyPublishers.ofString(body)));
     }
 
     private HttpResponse<String> login(HttpClient client, String password) throws Exception {
