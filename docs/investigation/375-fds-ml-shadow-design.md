@@ -1,6 +1,6 @@
 # #375 FDS ML Shadow — Spring 연결 설계 (Phase 4-0)
 
-상태: **P2(정후님) 허락 (2026-11-02) — #409에서 P2 조회 구현 중**. 기준 `dev 78bdd50`. 작성 P4 현규.
+상태: **P2(정후님) 허락 (2026-11-02) — P2 조회 #409 병합(PR #411), P4 저장 #412 진행 중**. 기준 `dev 78bdd50`. 작성 P4 현규.
 결정 요약은 [ADR-0062](../decisions/0062-fds-ml-shadow-spring-connection.md). 앞 단계는 [ADR-0061](../decisions/0061-fds-ml-shadow-inference.md) (ai-server `POST /ml/fraud-score`, PR #406 병합).
 
 - **정후님(P2) 허락 받음:** 10절 (fds/api 새 조회 인터페이스 · 식별값 별칭 · 같은 카드 범위 · 80점 경계 공유)
@@ -243,8 +243,8 @@ ai:
 
 | 순서 | PR | 내용 | 담당 · 확인 |
 | --- | --- | --- | --- |
-| 1 | P2 조회 (#409) | `FdsMlInputReader` · record · 조회 서비스 · 테스트 (P2 코드, 평가 경로 무수정) · ADR-0062 · 이 문서 | P4 작성, 정후님 허락 · 리뷰 |
-| 2 | P4 저장 | `ml_shadow_scores` 마이그레이션 · Entity · Repository · ERD 문서 한 줄 | P4 (`mariaDbTest`) |
+| 1 | P2 조회 (#409, PR #411 병합) | `FdsMlInputReader` · record · 조회 서비스 · 테스트 (P2 코드, 평가 경로 무수정) · ADR-0062 · 이 문서 | P4 작성, 정후님 허락 · 리뷰 |
+| 2 | P4 저장 (#412) | `ml_shadow_scores` 마이그레이션 · Entity · Repository(커서 · 재시도 조회) · ERD 문서. 재시도 때 행을 고치는 메서드는 3번에서 | P4 (`mariaDbTest`) |
 | 3 | P4 실행 | client · service · scheduler · 설정 · 로컬 실행 문서 | P4 |
 | 이후 | | 조회 API · 거래 내역 ML 참고 칸 → v2 모델 → 통합 확인 | 별도 이슈 |
 
