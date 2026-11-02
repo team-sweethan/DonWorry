@@ -30,13 +30,14 @@
 | 경로 | 하는 일 |
 | --- | --- |
 | `GET /api/checkout/{sessionKey}` | 가맹점 이름·주문명·금액·만료 여부·모의 카드 목록·결과(있으면)·취소 주소·가맹점 출처 |
-| `POST /api/checkout/{sessionKey}/payments` | 모의 카드 선택 + 기기 ID로 결제. 기존 결제 접수·FDS 평가·모의 승인 흐름(`PaymentRequestFlowService`)을 그대로 탄다. IP는 요청에서 돈워리가 직접 읽는다 |
+| `POST /api/checkout/{sessionKey}/payments` | 모의 카드 선택 + 기기 ID로 결제. 기존 결제 접수·FDS 평가·모의 승인 흐름(`PaymentRequestFlowService`)을 그대로 탄다. IP는 돈워리가 요청에서 직접 읽되, 프록시 뒤에서도 구매자 IP가 되도록 identity의 신뢰 프록시 규칙(`identity/api/ClientIpResolver`, 로그인 이력과 같은 설정)으로 읽는다. 결제 시작 직전 가맹점이 `ACTIVE`인지 다시 확인한다(정지면 409 `MERCHANT_INACTIVE`). 처음 누른 카드·기기·IP를 세션에 고정해, 접수 뒤 평가·승인 중 실패해도 재시도는 같은 값으로 같은 시도를 이어 간다. 세션 만료(409 `SESSION_EXPIRED`)와 가맹점 정지 검사는 **새 접수만** 막는다. 같은 시도 키로 이미 접수된 결제는 만료 뒤에도 이어서 처리하고, 결제창 열기·결과 조회도 그 결제를 찾는다 |
 | `GET /api/checkout/{sessionKey}/result` | 처리 중이면 결제창이 다시 조회 |
 
 - **로그인·쿠키를 쓰지 않는다.** 권한은 추측할 수 없는 세션 키뿐이다. 응답에 가맹점 내부 값(`customerRef`·`notifyUrl`)을 넣지 않고 `Cache-Control: no-store`를 붙인다
+  - 결제창 화면도 직원 화면용 요청 함수(CSRF 준비 · 쿠키 전송 · 세션 활동 기록)를 쓰지 않고 `api/checkout.ts`의 전용 호출로 쿠키 없이(`credentials: omit`) 부른다(PR #425 P1 리뷰)
 - **CSRF 검사에서 제외한다.** CSRF는 쿠키로 인증하는 요청을 지키는 장치인데 이 경로는 쿠키 인증이 없다. 또 결제창은 다른 사이트(CakeShop) 안의 iframe으로 열리므로 돈워리의 `SameSite=Lax` 쿠키(`XSRF-TOKEN`)가 전송되지 않는다. 검사를 켜 두면 결제 버튼이 403이 된다. CSRF 검사는 #416(ADR-0063)에서 기본으로 켜졌으므로 결제창 구현 PR에서 이 세 경로를 반드시 제외한다
-- ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다(P1 `SecurityConfig` 리뷰)
-- 결과: 카드 승인(`authorized`)이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 `successUrl?paymentKey=&orderId=&amount=`, 그 밖에는 `failUrl?code=`, 구매자가 닫으면 `failUrl?code=USER_CANCELED`
+- ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다. ADR-0063이 직원 체인(`SecurityConfig`)에 새 CSRF 예외를 금지하므로, CakeShop 서명·AI 서버처럼 **결제창 전용 체인 `identity/security/CheckoutSecurityConfiguration`**(세션·쿠키 없음, CSRF 끔, 다른 메서드는 403)에 둔다(2026-11-02 구현 PR, P1 리뷰)
+- 결과: 카드 승인(`authorized`)이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 `successUrl?paymentKey=&orderId=&amount=`, 그 밖에는 `failUrl?code=`, 구매자가 닫으면 `failUrl?code=USER_CANCELED`. 구매자 이메일(`buyerEmail`)은 세션 생성 때 FDS 입력과 같은 규칙으로 검사해 잘못된 값은 400으로 거절한다. 결과 · 취소 · 만료 뒤 이동 신호를 가맹점 화면이 받지 못하면(복귀 주소와 다른 출처로 열린 경우 등) 4초 뒤 "쇼핑몰 화면으로 이동" 링크를 보인다(셋 다 같은 경로)
 - 화면 `/checkout/:sessionKey`(돈워리 프론트, 로그인 없음): iframe 안에서 열렸으면 높이 변화(`donworry-checkout-resize`)와 결과 이동(`donworry-checkout`)을 `postMessage`로 **가맹점 출처에만** 보낸다. 가맹점은 `event.origin`을 확인하고 같은 출처 주소로만 이동한다
 
 ### 3. 결제 상태 웹훅 (돈워리 → 가맹점 `notifyUrl`)
@@ -81,6 +82,7 @@
 
 - P5 소유 새 테이블 `payment_sessions`: 세션 키, 가맹점, 멱등 키, 시도 키, 주문 값, 세 주소, 상태(`OPEN`·`SUBMITTED`), 연결 결제 ID, 만료 시각, 마지막으로 알린 상태·승인 여부, 알림 시도 횟수·다음 시각
 - `payment_id`는 같은 담당(P5) `payments`로 물리 FK, `merchant_id`는 P1 `merchants` 논리 참조(AGENTS.md 4절)
+- `submitted_card`·`submitted_device_id`·`submitted_ip`·`submitted_at`: 처음 결제를 누른 값. 재시도는 이 값으로 같은 결제 시도를 이어 간다(2026-11-02 PR #425 리뷰)
 - 별도 이벤트 저장(outbox) 테이블은 두지 않는다. 세션 하나는 결제 하나만 알리므로 "마지막으로 알린 값"과 현재 결제 상태의 차이로 다시 보낼지 정한다
 
 ### 6. 주소와 실행 환경
@@ -123,7 +125,7 @@
 ## 영향
 
 - API: 새 가맹점 API `POST /api/payment-sessions`, 공개 API `/api/checkout/{sessionKey}` 3개, 가맹점에 보내는 웹훅. 모두 `payment.http.enabled=true`일 때만 켜진다. 기존 서명 조회 응답에 `authorized` 필드를 추가한다(3-1, 필드 추가만이라 기존 호출자 영향 없음). `POST /api/payments` 요청 계약은 바뀌지 않는다
-- 모듈: identity가 `identity/api/MerchantWebhookSigner`를 새로 공개한다(P1 구현, payment → identity 의존은 기존 허용 범위). `SecurityConfig`·`MerchantSecurityConfiguration` 경로 등록은 P5가 구현 PR에 넣고 P1이 리뷰한다(AGENTS.md 4절)
+- 모듈: identity가 `identity/api/MerchantWebhookSigner`를 새로 공개한다(P1 구현, payment → identity 의존은 기존 허용 범위). `SecurityConfig`·`MerchantSecurityConfiguration` 경로 등록은 P5가 구현 PR에 넣고 P1이 리뷰한다(AGENTS.md 4절). 구매자 IP 조회를 위해 `identity/api/ClientIpResolver`를 새로 공개한다(기존 `LoginHistoryRequestMetadata`가 구현, P1 리뷰)
 - 정산: 4-1 사후 거절 중 이행된 거래의 돈워리 부담분 지급(P6 확인 후 별도 구현)
 - DB: P5 migration 1개(`payment_sessions`)
 - 화면: 돈워리 프론트 공개 화면 `/checkout/:sessionKey`. CakeShop 결제 화면의 모달·웹훅 수신·조회 배치는 CakeShop 저장소
@@ -139,12 +141,16 @@
 - [ ] P6: 4-1 사후 거절 시 돈워리 부담분의 정산 지급 방식, VOIDED 결제의 정산 행 생성 시점, CakeShop "이행됨" 신호를 받는 경로
 - [ ] 4-1 남는 위험을 줄일 HELD 판정 기한(운영)
 - [ ] CakeShop 저장소: 이 연동은 Draft PR #22(서명 요청·조회 클라이언트) → #24(결제 수단 선택·결제창 모달) 위에 올린다. 두 PR을 먼저 정리한다
-- [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가, 돈워리 운영 프록시 설정 확인(배포 설정이 이 저장소에 없음)
+- [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가
+- [x] 돈워리 운영 프록시 확인(2026-11-02, PR #438(2026-11-02 기준 병합 전)의 `frontend/nginx.conf` 기준): `/api/`를 백엔드로 넘기며 `X-DonWorry-Client-IP: $remote_addr`를 붙이고, `/checkout/...`은 SPA 대체 경로(`try_files … /index.html`)로 열린다
+- [ ] 운영 환경변수(배포 VM, 저장소 밖): P1이 2026-11-03 배포 때 넣기로 함(PR #425 리뷰). 결제창 구매자 IP는 로그인 이력과 같은 설정을 쓴다. 기본값이 `DIRECT`라 `DONWORRY_LOGIN_HISTORY_IP_MODE=PROXY`와 nginx 컨테이너 주소의 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`가 없으면 nginx 주소가 구매자 IP로 기록된다
 - [ ] 운영 `notifyUrl`은 https만 허용하고 내부 주소(사설·루프백 IP)를 막는다. 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)도 정한다
 - [ ] 웹훅 재전송 한도(예: 24시간 뒤 중단, 조회 배치에 맡김)와 운영에서 실패를 보는 방법
-- [ ] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지(`X-Frame-Options`·`frame-ancestors`), 결제창의 `Referrer-Policy: no-referrer`
+- [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다
+- [ ] 결제창 `Referrer-Policy`: 지금은 따로 설정하지 않는다. 브라우저 기본값(`strict-origin-when-cross-origin`)이라 다른 출처로는 출처만 나가고 세션 키가 든 경로는 나가지 않는다. `no-referrer`로 더 좁힐지는 선택
 - [ ] 결제 접수 기한(10분)이 지난 뒤 늦게 승인된 결제를 누가 취소하는지
 - [ ] 고객 취소(환불) 연결은 ADR-0058(환불 후에도 `CAPTURED` 유지, 취소 작업으로 표현)에 맞춰 별도 결정. 그때 웹훅이 환불을 어떻게 알릴지 정한다
+- [ ] 결제창 결제는 IP 국가(`ipCountryCode`)를 아직 산출하지 않아 FDS R05(고위험 국가)가 적용되지 않는다(`null` 전달). 서버 GeoIP DB와 신뢰 프록시 국가 헤더 중 출처를 정하고 ADR로 남긴다 — #434 (PR #425 Codex 보안 리뷰)
 - [ ] #255(중위험도 매입·정산 보류, 손실은 PG 부담 제안)와 4-1의 관계 정리. 4-1은 "제작 이후 손실은 PG 부담"을 받아들인 것이며, 중위험도 매입 여부는 바꾸지 않는다
 
 ## 검증

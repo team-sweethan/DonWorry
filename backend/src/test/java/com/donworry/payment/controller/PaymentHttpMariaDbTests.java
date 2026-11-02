@@ -125,6 +125,88 @@ class PaymentHttpMariaDbTests {
                         body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body))
                 .build();
     }
+
+    private HttpResponse<String> anonymous(String method, String path, String body) throws Exception {
+        var b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json");
+        return client.send(
+                b.method(
+                                method,
+                                body == null
+                                        ? HttpRequest.BodyPublishers.noBody()
+                                        : HttpRequest.BodyPublishers.ofString(body))
+                        .build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    private String sessionBody(String order) {
+        return "{\"orderRef\":\"" + order + "\",\"customerRef\":\"42\",\"amount\":1000,\"orderCreatedAt\":\""
+                + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
+                + "\",\"orderName\":\"딸기 케이크\",\"successUrl\":\"http://127.0.0.1:8080/orders/1/payment/donworry/return\""
+                + ",\"failUrl\":\"http://127.0.0.1:8080/orders/1/payment/fail\""
+                + ",\"notifyUrl\":\"http://127.0.0.1:8080/webhooks/donworry\"}";
+    }
+
+    // 호스팅 결제창(ADR-0064): 가맹점 서명으로 세션을 만들고, 구매자는 로그인·쿠키·CSRF 토큰 없이 세션 키만으로 결제한다.
+    // CSRF는 기본으로 켜져 있지만(ADR-0063) 결제창 경로는 별도 체인이라 막히지 않는다. 중위험은 HELD이며 승인됐으므로 성공 주소로 보낸다.
+    @Test
+    void hostedCheckout_createSessionThenPayAnonymously_redirectsHeldToSuccess() throws Exception {
+        String order = UUID.randomUUID().toString(), key = UUID.randomUUID().toString();
+        String request = sessionBody(order);
+        var created = call("POST", "/api/payment-sessions", "merchant-a", key, request);
+        assertThat(created.statusCode()).isEqualTo(200);
+        assertThat(created.headers().firstValue("Cache-Control")).contains("no-store");
+        var session = mapper.readTree(created.body());
+        String sessionKey = session.path("sessionKey").asText();
+        assertThat(sessionKey).matches("pss_[0-9a-f]{32}");
+        assertThat(session.path("checkoutUrl").asText()).endsWith("/checkout/" + sessionKey);
+        assertThat(mapper.readTree(call("POST", "/api/payment-sessions", "merchant-a", key, request)
+                                .body())
+                        .path("sessionKey")
+                        .asText())
+                .as("같은 멱등 키·같은 내용이면 같은 세션")
+                .isEqualTo(sessionKey);
+        assertThat(call("POST", "/api/payment-sessions", null, key, request).statusCode())
+                .isEqualTo(401);
+
+        var opened = anonymous("GET", "/api/checkout/" + sessionKey, null);
+        assertThat(opened.statusCode()).isEqualTo(200);
+        var view = mapper.readTree(opened.body());
+        assertThat(view.path("orderName").asText()).isEqualTo("딸기 케이크");
+        assertThat(view.path("returnOrigin").asText()).isEqualTo("http://127.0.0.1:8080");
+        assertThat(view.path("cards").size()).isEqualTo(4);
+        assertThat(view.has("customerRef")).isFalse();
+        assertThat(view.has("notifyUrl")).isFalse();
+        assertThat(opened.headers().firstValue("Set-Cookie")).isEmpty();
+
+        String pay = "{\"card\":\"A\",\"deviceId\":\"abcdef12-3456\"}";
+        var paid = anonymous("POST", "/api/checkout/" + sessionKey + "/payments", pay);
+        assertThat(paid.statusCode()).isEqualTo(200);
+        var result = mapper.readTree(paid.body());
+        assertThat(result.path("paymentStatus").asText()).isEqualTo("HELD");
+        assertThat(result.path("authorized").asBoolean()).isTrue();
+        assertThat(result.path("redirectUrl").asText())
+                .startsWith("http://127.0.0.1:8080/orders/1/payment/donworry/return?paymentKey=");
+        var again = anonymous("POST", "/api/checkout/" + sessionKey + "/payments", pay);
+        assertThat(mapper.readTree(again.body()).path("redirectUrl").asText())
+                .isEqualTo(result.path("redirectUrl").asText());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM payments WHERE order_ref=?", Integer.class, order))
+                .as("같은 세션의 재결제는 같은 결제 시도라 결제가 하나")
+                .isEqualTo(1);
+        assertThat(mapper.readTree(anonymous("GET", "/api/checkout/" + sessionKey + "/result", null)
+                                .body())
+                        .path("paymentStatus")
+                        .asText())
+                .isEqualTo("HELD");
+        verify(evaluator).evaluate(any());
+
+        assertThat(anonymous("DELETE", "/api/checkout/" + sessionKey, null).statusCode())
+                .isEqualTo(403);
+        var unknown = anonymous("GET", "/api/checkout/pss_" + "0".repeat(32), null);
+        assertThat(unknown.statusCode()).isEqualTo(404);
+        assertThat(unknown.body()).contains("SESSION_NOT_FOUND");
+    }
+
     // 인증 없는 요청은 잘못된 본문보다 먼저 거절하고 업무 처리를 실행하지 않는다.
     @Test
     void post_withoutIdentity_rejectsBeforeBody() throws Exception {

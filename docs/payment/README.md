@@ -14,6 +14,7 @@
 
 | 문서 | 목적 |
 | --- | --- |
+| [ADR-0064 호스팅 결제창·웹훅](../decisions/0064-hosted-checkout-and-payment-webhook.md) | #402 결제 준비 `POST /api/payment-sessions`, 결제창 공개 API·화면 `/checkout/:sessionKey` 구현(PR ①). 웹훅 발송은 PR ②(P1 서명 기능 후), CakeShop 연동은 CakeShop 저장소 |
 | [#383 CAPTURED 전액 환불 조사](383-captured-refund.md) | P6 성공 전달 방향 확인·P5 모의 환불 기반 구현. 실제 P6 연결·활성화 후속 |
 | [#382 HELD 고객 승인 취소 조사](382-held-cancellation.md) | P5 모의 실행·직원 조치 차단, P3 수신부·Case 정책 연결, **HELD 고객 승인 취소 운영 활성화**(15절). CAPTURED 환불은 #383 |
 | [#381 고객 취소 API 계약](381-cancellation-api-contract.md) | 요청·응답·오류·동일 키 재요청 구현. 금융 실행·담당 상세 계약 확인 후속 |

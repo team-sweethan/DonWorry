@@ -6,6 +6,7 @@ import { ApplicationGate } from '../pages/public/ApplicationGate'
 import { InitialPasswordPage } from '../pages/public/InitialPasswordPage'
 import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPage'
 import { takeVerificationToken } from '../pages/public/applicationFeedback'
+import { CheckoutPage } from '../pages/public/CheckoutPage'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { LandingRoute, LoginRoute, NotFoundRoute, ServerSession } from '../auth/AuthRoutes'
@@ -96,6 +97,8 @@ export const router = createBrowserRouter([
     ),
   },
   { path: '/login', element: <LoginRoute /> },
+  // 돈워리 호스팅 결제창(ADR-0064). 로그인 없이 세션 키로 열리고, 가맹점 결제 화면의 레이어(iframe)로도 쓰인다
+  { path: '/checkout/:sessionKey', element: <CheckoutPage /> },
   // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
   { path: '/admin', element: <Navigate to="/admin/home" replace /> },
   { path: '/security', element: <Navigate to="/security/home" replace /> },

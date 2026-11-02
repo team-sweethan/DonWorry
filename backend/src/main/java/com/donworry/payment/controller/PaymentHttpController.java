@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentHttpController {
     private final PaymentMerchantAccess access;
     private final PaymentHttpService service;
+    private final PaymentSessionService sessions;
 
     // 본문/조회 인자 해석 전에 인증한다. 요청 파라미터를 인증 정보로 바인딩하지 않는다.
     @ModelAttribute
@@ -35,6 +36,15 @@ public class PaymentHttpController {
                 .cacheControl(CacheControl.noStore())
                 .location(URI.create("/api/payments/" + result.paymentId()))
                 .body(result);
+    }
+
+    // 호스팅 결제창 준비(ADR-0064 1절). 가맹점 서버가 서명해 보내고, 응답의 checkoutUrl을 구매자 브라우저에서 연다.
+    @PostMapping("/api/payment-sessions")
+    ResponseEntity<PaymentSessionResponse> createSession(
+            @RequestAttribute("payment.authenticatedMerchant") Long merchantId,
+            @RequestHeader("Idempotency-Key") String key,
+            @Valid @RequestBody PaymentSessionCreateRequest body) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(sessions.create(merchantId, key, body));
     }
 
     @GetMapping("/api/payments/{paymentId}")

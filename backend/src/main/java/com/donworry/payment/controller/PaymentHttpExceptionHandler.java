@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-@RestControllerAdvice(assignableTypes = PaymentHttpController.class)
+@RestControllerAdvice(assignableTypes = {PaymentHttpController.class, PaymentCheckoutController.class})
 public class PaymentHttpExceptionHandler extends ResponseEntityExceptionHandler {
     private ResponseEntity<Object> problem(int status, String code, String detail) {
         var body = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detail);
