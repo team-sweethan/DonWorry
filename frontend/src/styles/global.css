@@ -129,11 +129,6 @@ textarea {
   font-size: 13px;
   white-space: nowrap;
 }
-.dw-muted-label {
-  font-size: 12px;
-  color: #64748b;
-  white-space: nowrap;
-}
 .dw-role-pill {
   padding: 4px 8px;
   border-radius: 4px;
@@ -501,15 +496,6 @@ textarea {
   border: 1px dashed #cbd5e1;
   border-radius: 6px;
 }
-.dw-demo-label {
-  display: inline-flex;
-  background: #fef9c3;
-  color: #854d0e;
-  font-size: 11px;
-  font-weight: 650;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
 .dw-error-view {
   background: white;
   border: 1px solid var(--dw-border);
@@ -632,36 +618,6 @@ textarea {
 .dw-login-error {
   margin-bottom: 20px;
 }
-.dw-login-demo {
-  margin-top: 28px;
-  padding-top: 24px;
-  border-top: 1px solid var(--dw-border);
-}
-.dw-login-demo h3 {
-  margin: 0 0 7px;
-  font-size: 13px;
-}
-.dw-login-demo p {
-  font-size: 12px;
-  color: #64748b;
-  margin: 0 0 14px;
-  line-height: 1.7;
-}
-.dw-login-demo-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.dw-login-demo .dw-login-credentials {
-  margin: 12px 0 0;
-  font-size: 11px;
-}
-.dw-login-notice {
-  margin: 24px 0 0;
-  font-size: 11px;
-  color: #64748b;
-  line-height: 1.8;
-}
 @media (max-width: 760px) {
   .dw-login-shell {
     padding: 20px 16px;
@@ -692,26 +648,6 @@ textarea {
   background: #eff6ff;
   color: #1e40af;
   border-radius: 6px;
-  font-family: ui-monospace, monospace;
-}
-.dw-spec-swatches {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 10px;
-}
-.dw-swatch {
-  height: 62px;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 6px;
-}
-.dw-spec-label {
-  font-size: 11px;
-  color: #64748b;
-}
-.dw-spec-code {
-  font-size: 10px;
-  color: #475569;
   font-family: ui-monospace, monospace;
 }
 @media (max-width: 1390px) {

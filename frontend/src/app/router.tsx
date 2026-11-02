@@ -8,8 +8,7 @@ import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPag
 import { takeVerificationToken } from '../pages/public/applicationFeedback'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ScreenResult } from '../components/common/ScreenResult'
-import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
-import { LandingRoute, LoginRoute, ServerSession } from '../auth/AuthRoutes'
+import { LandingRoute, LoginRoute, NotFoundRoute, ServerSession } from '../auth/AuthRoutes'
 import { EmptyPage } from '../pages/EmptyPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
@@ -42,20 +41,8 @@ import {
 } from '../pages/admin/AdminMerchantsPage'
 import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
 
-// 업무·계정 화면은 서버 세션으로 보호하고 개발용 화면은 개발 환경에서만 제공한다.
+// 업무·계정 화면은 서버 세션으로 보호하고 정산 시연 화면은 개발 환경에서만 제공한다.
 export const router = createBrowserRouter([
-  ...(import.meta.env.DEV
-    ? [
-        {
-          path: '/dev/components',
-          element: (
-            <main style={{ padding: 24 }}>
-              <ComponentShowcasePage />
-            </main>
-          ),
-        },
-      ]
-    : []),
   // 실제 로그인·금액 조회 없이 로컬 개발 서버에서만 정산 시연 화면을 확인한다.
   ...(import.meta.env.DEV
     ? [
@@ -172,5 +159,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '*', element: <ScreenResult kind="404" /> },
+  { path: '*', element: <NotFoundRoute /> },
 ])

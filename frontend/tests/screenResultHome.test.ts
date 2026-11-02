@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { screenResultHome } from '../src/auth/screenResultHome.ts'
+import { screenResultHome, screenResultHomeLabel } from '../src/auth/screenResultHome.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
 const base: AuthUser = {
@@ -44,4 +44,11 @@ test('screenResultHome_whenHomePathProvided_preservesExplicitDestination', () =>
   assert.equal(screenResultHome(base, '/admin'), '/admin')
   assert.equal(screenResultHome(null, '/'), '/')
   assert.equal(screenResultHome({ ...base, passwordChangeRequired: true }, '/login'), '/login')
+})
+
+// 로그인 화면으로 가는 버튼은 이름도 로그인 화면으로 보여 준다.
+test('screenResultHomeLabel_whenDestinationIsLogin_saysLogin', () => {
+  assert.equal(screenResultHomeLabel(screenResultHome(null)), '로그인 화면으로 이동')
+  assert.equal(screenResultHomeLabel(screenResultHome(base)), '내 홈으로 이동')
+  assert.equal(screenResultHomeLabel('/owner'), '내 홈으로 이동')
 })

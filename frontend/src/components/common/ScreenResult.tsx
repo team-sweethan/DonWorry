@@ -2,7 +2,7 @@ import { Button, Result } from 'antd'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/useAuth'
-import { screenResultHome } from '../../auth/screenResultHome'
+import { screenResultHome, screenResultHomeLabel } from '../../auth/screenResultHome'
 
 export function ScreenResult({
   kind,
@@ -16,6 +16,7 @@ export function ScreenResult({
 }) {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const home = screenResultHome(user, homePath)
   const heading =
     kind === '403'
       ? '접근 권한이 없습니다'
@@ -38,13 +39,9 @@ export function ScreenResult({
           action ?? (
             <Button
               type="primary"
-              onClick={() =>
-                kind === '500'
-                  ? window.location.reload()
-                  : navigate(screenResultHome(user, homePath))
-              }
+              onClick={() => (kind === '500' ? window.location.reload() : navigate(home))}
             >
-              {kind === '500' ? '다시 시도' : '내 홈으로 이동'}
+              {kind === '500' ? '다시 시도' : screenResultHomeLabel(home)}
             </Button>
           )
         }
