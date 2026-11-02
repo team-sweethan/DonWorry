@@ -243,10 +243,12 @@ class PaymentTransactionsHttpMariaDbTests {
         }
         var caller = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
         var response = caller.send(
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(
-                                Map.of("loginId", prefix + suffix, "password", "TransactionsPass123"))))
+                com.donworry.HttpCsrfTestSupport.withCsrf(
+                                caller,
+                                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                                        .header("Content-Type", "application/json")
+                                        .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(Map.of(
+                                                "loginId", prefix + suffix, "password", "TransactionsPass123")))))
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);

@@ -133,7 +133,7 @@ public class SecurityConfig {
             JsonAccessDeniedHandler accessDeniedHandler,
             CookieCsrfTokenRepository csrfTokenRepository,
             LoginHistoryService loginHistories,
-            @Value("${security.csrf.enabled:false}") boolean csrfEnabled,
+            @Value("${security.csrf.enabled:true}") boolean csrfEnabled,
             @Value("${security.demo-api.enabled:true}") boolean demoApiEnabled)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();

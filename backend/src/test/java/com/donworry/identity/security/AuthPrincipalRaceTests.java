@@ -2,6 +2,7 @@ package com.donworry.identity.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -125,6 +126,7 @@ class AuthPrincipalRaceTests {
     @Test
     void changePassword_whenAuthenticationClearedBeforePrincipalResolution_returnsUnauthorized() throws Exception {
         mvc.perform(post("/api/auth/password")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"1234\",\"newPassword\":\"Changed123!\"}"))
                 .andExpect(status().isUnauthorized())
@@ -138,19 +140,24 @@ class AuthPrincipalRaceTests {
     void adminChanges_whenAuthenticationClearedBeforePrincipalResolution_returnUnauthorized() throws Exception {
         var requests = List.of(
                 post("/api/admin/users")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"new_user\",\"displayName\":\"신규\",\"role\":\"SECURITY_STAFF\"}"),
                 put("/api/admin/users/2/permissions")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"permissions\":[]}"),
                 put("/api/admin/users/2/status")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"INACTIVE\"}"),
-                post("/api/admin/users/2/password-reset"),
+                post("/api/admin/users/2/password-reset").with(csrf()),
                 post("/api/admin/merchants")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"merchantCode\":\"SHOP01\",\"displayName\":\"가게\",\"pgFeeRate\":0.03}"),
                 put("/api/admin/merchants/2/status")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"INACTIVE\"}"));
         for (var request : requests) {

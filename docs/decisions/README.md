@@ -48,7 +48,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0022](0022-self-service-password-change.md) | 본인 비밀번호 변경과 로그인 직렬화 | 제안 — #128 구현 반영, PR 리뷰 대상 |
 | [0023](0023-payment-held-event-contract.md) | P5 HELD 이벤트 계약 | 채택 — P3 필드·필수 조건·시각 기준 확인 |
 | [0024](0024-admin-account-management.md) | 관리자 계정 관리와 강제 비밀번호 변경 | 제안 — #129 사용자 구현 승인, PR 리뷰 대상 |
-| [0025](0025-csrf-preparation.md) | CSRF 토큰 교환 준비와 검사 설정 분리 | 제안 — #126 사용자 구현 승인, PR 리뷰 대상 |
+| [0025](0025-csrf-preparation.md) | CSRF 토큰 교환 준비와 검사 설정 분리 | 기본값·활성화 연기만 0063으로 대체, 토큰 계약 유지 |
 | [0026](0026-payment-read-api.md) | P5 결제 정보 단건 공개 조회 계약 | 제안 — #139 사용자 확정안·구현 승인, PR 리뷰 대상 |
 | [0027](0027-payment-actions.md) | P5 직원 금융 조치 단일 저장과 완료 기반 인계 | 제안 — #158 P3 계약 확인 반영, CAPTURE 확정 실패는 P5·P6 후속 협의 |
 | [0028](0028-admin-merchant-management.md) | 관리자 가맹점 관리와 정지·로그인 순서 보장 | 제안 — #130 사용자 구현 승인, PR 리뷰 대상 |
@@ -88,6 +88,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0060](0060-identity-status-names.md) | 계정·신청 상태 이름과 데이터 보존 전환 | 제안 — #131 PR A 사용자 구현 승인, PR 리뷰 대상 |
 | [0061](0061-fds-ml-shadow-inference.md) | FDS ML Shadow 평가 — RF 추론을 ai-server에 두고 결제 판정과 분리 | 제안 — #375 PR ① 구현, PR 리뷰 대상 |
 | [0062](0062-fds-ml-shadow-spring-connection.md) | FDS ML Shadow Spring 연결 — P4가 커밋된 평가를 주기적으로 읽어 채점 · 기록 | 제안 — #409 P2 조회 구현, PR 리뷰 대상 |
+| [0063](0063-csrf-default-enabled.md) | 브라우저 변경 요청의 CSRF 검사 기본 활성화 | 제안 — #408 PR B 사용자 구현 승인, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 
