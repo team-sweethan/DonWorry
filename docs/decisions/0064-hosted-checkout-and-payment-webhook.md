@@ -3,7 +3,7 @@
 - **상태:** 제안 — 로컬 샌드박스 구현·확인 완료, 저장소 구현 전. P1 확인 완료(2026-11-02, PR #403). 사후 거절 시 정산 보장은 P6 확인 필요
 - **날짜:** 2026-11-01 (2026-11-02 개정: P1 확인 반영, 사후 거절을 이행 전·후로 나눔, 웹훅 역할 분담)
 - **관련:** #402, #149, #154, #242, #255, [ADR-0037](0037-merchant-hmac-authentication.md), [ADR-0059](0059-security-default-deny.md), [ADR-0058](0058-captured-refund-contract.md)
-- **영향 받는 담당:** P5(결제 — 구현, CakeShop 연동 포함), P1(`identity/api/MerchantWebhookSigner` 구현, `SecurityConfig` 리뷰), P6(사후 거절 시 정산 보장 — 4절), CakeShop 저장소(`team-sweethan/cakeshop_refactoring`). P2·P3는 기존 결제 흐름을 그대로 쓰므로 계약 변경 없음
+- **영향 받는 담당:** P5(결제 — 구현, CakeShop 연동 포함), P1(`identity/api/MerchantWebhookSigner` 리뷰 — 구현은 P5로 변경 2026-11-02, `SecurityConfig` 리뷰), P6(사후 거절 시 정산 보장 — 4절), CakeShop 저장소(`team-sweethan/cakeshop_refactoring`). P2·P3는 기존 결제 흐름을 그대로 쓰므로 계약 변경 없음
 
 ## 배경
 
@@ -47,7 +47,8 @@
 - 헤더: `X-Merchant-Code`, `X-Timestamp`, `X-Event-Id`, `X-Signature`
 - 서명: 가맹점 API 서명(ADR-0037)과 **같은 가맹점 키**, 다른 접두어 `DONWORRY-WEBHOOK-V1`. 서명 원문은 `DONWORRY-WEBHOOK-V1\n{가맹점 코드}\n{timestamp}\n{eventId}\n{sha256(body) hex}`. 접두어가 달라 웹훅 서명을 API 요청 서명으로 재사용할 수 없다. 가맹점은 시각을 ±300초로 검사한다
 - 서명기는 키를 가진 identity가 `identity/api/MerchantWebhookSigner`로 공개한다. payment는 키를 직접 읽지 않는다
-- 역할(2026-11-02 P1 합의): identity 서명 기능은 P1이 구현하고, 돈워리 웹훅 발송과 CakeShop 수신·검증은 P5가 구현한다
+  - 계약: `sign(merchantId, eventId, body)` → `SignedWebhook(merchantCode, timestamp, eventId, signature)`(헤더 4개에 그대로). 쓸 수 있는 키가 없으면(연동 전 · 키 미발급 · 사용 불가) empty — 호출자는 보내지 않고 다시 시도한다. 없는 가맹점 · 형식이 틀린 eventId(`[A-Za-z0-9_.:-]{1,100}`) · null 본문은 `IllegalArgumentException`. 정지 가맹점도 서명한다(이미 받은 결제의 상태 변화는 알린다). 구현 `identity/service/MerchantWebhookSignerService`
+- 역할(2026-11-02 P1 합의, 같은 날 변경): 처음에는 identity 서명 기능을 P1이 구현하기로 했으나, P1 일정 때문에 **서명기도 P5가 구현하고 P1이 리뷰**한다. 돈워리 웹훅 발송과 CakeShop 수신·검증은 P5가 구현한다
 - 웹훅을 이번 범위에 넣는 이유: 4절처럼 "제작 전이면 취소"로 하려면 직원 거절을 CakeShop이 제작 시작 전에 빨리 알아야 한다. 조회 배치(60초)만으로는 그사이 제작이 시작될 수 있다
 - 전송: 업무 트랜잭션 밖의 스케줄러(기본 5초)가 보낸다. 2xx면 보낸 상태를 기록하고 끝, 아니면 5초부터 두 배씩 최대 5분 간격으로 다시 보낸다. 타임아웃 3초, 리다이렉트를 따르지 않는다
 - 가맹점 쪽 규칙: 서명·시각 확인 → **본문은 믿지 않고 `paymentId`로 서명 조회(#149)해서 반영** → 같은 결과면 아무것도 바꾸지 않는다(중복·순서 역전 안전) → 2xx 응답. 웹훅을 놓쳐도 조회 배치(최근 결제를 주기 조회)로 맞춘다
@@ -125,7 +126,7 @@
 ## 영향
 
 - API: 새 가맹점 API `POST /api/payment-sessions`, 공개 API `/api/checkout/{sessionKey}` 3개, 가맹점에 보내는 웹훅. 모두 `payment.http.enabled=true`일 때만 켜진다. 기존 서명 조회 응답에 `authorized` 필드를 추가한다(3-1, 필드 추가만이라 기존 호출자 영향 없음). `POST /api/payments` 요청 계약은 바뀌지 않는다
-- 모듈: identity가 `identity/api/MerchantWebhookSigner`를 새로 공개한다(P1 구현, payment → identity 의존은 기존 허용 범위). `SecurityConfig`·`MerchantSecurityConfiguration` 경로 등록은 P5가 구현 PR에 넣고 P1이 리뷰한다(AGENTS.md 4절). 구매자 IP 조회를 위해 `identity/api/ClientIpResolver`를 새로 공개한다(기존 `LoginHistoryRequestMetadata`가 구현, P1 리뷰)
+- 모듈: identity가 `identity/api/MerchantWebhookSigner`를 새로 공개한다(P5 구현 · P1 리뷰, payment → identity 의존은 기존 허용 범위). `SecurityConfig`·`MerchantSecurityConfiguration` 경로 등록은 P5가 구현 PR에 넣고 P1이 리뷰한다(AGENTS.md 4절). 구매자 IP 조회를 위해 `identity/api/ClientIpResolver`를 새로 공개한다(기존 `LoginHistoryRequestMetadata`가 구현, P1 리뷰)
 - 정산: 4-1 사후 거절 중 이행된 거래의 돈워리 부담분 지급(P6 확인 후 별도 구현)
 - DB: P5 migration 1개(`payment_sessions`)
 - 화면: 돈워리 프론트 공개 화면 `/checkout/:sessionKey`. CakeShop 결제 화면의 모달·웹훅 수신·조회 배치는 CakeShop 저장소
@@ -136,7 +137,7 @@
 
 - [x] P1: #242 재개와 담당 — CakeShop 연동은 P5(수민)가 맡는다 (2026-11-02)
 - [x] P1: 가맹점 세션 생성은 HMAC 체인, 결제창 API는 정확한 경로만 공개, CSRF 제외 — 동의. `SecurityConfig` 변경은 P1 리뷰 (2026-11-02)
-- [x] P1: 웹훅 포함. `identity/api/MerchantWebhookSigner`는 P1이 구현 (2026-11-02)
+- [x] P1: 웹훅 포함. `identity/api/MerchantWebhookSigner`는 처음 P1 구현으로 정했다가 P5 구현 · P1 리뷰로 변경 (2026-11-02)
 - [x] P1: 로컬 쿠키 충돌은 CakeShop을 `127.0.0.1`로 여는 안내 (2026-11-02)
 - [ ] P6: 4-1 사후 거절 시 돈워리 부담분의 정산 지급 방식, VOIDED 결제의 정산 행 생성 시점, CakeShop "이행됨" 신호를 받는 경로
 - [ ] 4-1 남는 위험을 줄일 HELD 판정 기한(운영)
