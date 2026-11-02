@@ -19,6 +19,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_release_target.py' -v
+
   backend-test:
     runs-on: ubuntu-latest
     defaults:
@@ -71,7 +77,7 @@ jobs:
       - run: uv run pytest
 
   images:
-    needs: [backend-test, frontend-test, ai-test]
+    needs: [release-checks, backend-test, frontend-test, ai-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -115,14 +121,10 @@ jobs:
       - name: Check release target is still main HEAD
         id: target
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
-        run: |
-          head=$(git ls-remote origin refs/heads/main | cut -f1)
-          if [ "$head" = "${{ github.sha }}" ]; then
-            echo "current=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "current=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::main이 $head 로 앞서 있어 marker를 건너뜁니다 (이 실행: ${{ github.sha }})"
-          fi
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash .github/scripts/check-release-target.sh
 
       - name: Publish release marker
         if: steps.target.outputs.current == 'true'
