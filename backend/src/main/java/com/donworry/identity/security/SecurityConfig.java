@@ -373,7 +373,9 @@ public class SecurityConfig {
                                         HttpMethod.POST, "/api/security-cases/{caseId}/handoffs/{handoffId}/recheck"),
                                 paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports"),
                                 paths.matcher(
-                                        HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"))
+                                        HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
+                                // 거래 내역 "ML 참고" 칸 (#441) — 옆 사건 칸(payment-links)과 같은 규칙 (ADR-0067)
+                                paths.matcher(HttpMethod.GET, "/api/ml-shadow-scores"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
