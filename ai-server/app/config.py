@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +35,9 @@ class Settings(BaseSettings):
     agent_max_tool_calls: int = 7
     agent_max_nudges: int = 2
     agent_max_repairs: int = 2
+
+    # RF 사기 확률 모델 (Shadow Mode) — 파일 이름이 모델 버전이 된다 (rf-v1.joblib → rf-v1)
+    ml_model_path: Path = Path(__file__).resolve().parents[1] / "models" / "rf-v1.joblib"
 
 
 settings = Settings()

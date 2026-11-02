@@ -86,6 +86,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0059](0059-security-default-deny.md) | 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`) | 제안 — #392 P1 구현, PR 리뷰 대상 |
 
 | [0060](0060-identity-status-names.md) | 계정·신청 상태 이름과 데이터 보존 전환 | 제안 — #131 PR A 사용자 구현 승인, PR 리뷰 대상 |
+| [0061](0061-fds-ml-shadow-inference.md) | FDS ML Shadow 평가 — RF 추론을 ai-server에 두고 결제 판정과 분리 | 제안 — #375 PR ① 구현, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 
