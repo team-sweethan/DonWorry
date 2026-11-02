@@ -51,12 +51,17 @@ export function CheckoutPage() {
   const [stuckUrl, setStuckUrl] = useState<string | null>(null)
   const busy = useRef(false)
 
+  // 결과 · 취소 · 만료 뒤 쇼핑몰로 돌아가는 공통 경로 (PR #425 리뷰)
+  // 이동 신호를 보내고 이동 중 화면을 보이며, 가맹점 화면이 넘어가지 않으면 직접 이동 링크를 보인다
+  const goTo = (url: string) => {
+    setPhase('leaving')
+    leave(url)
+    window.setTimeout(() => setStuckUrl(url), LEAVE_FALLBACK_MS)
+  }
+
   const follow = (result: CheckoutResult) => {
     if (result.redirectUrl) {
-      setPhase('leaving')
-      const url = result.redirectUrl
-      leave(url)
-      window.setTimeout(() => setStuckUrl(url), LEAVE_FALLBACK_MS)
+      goTo(result.redirectUrl)
       return
     }
     setPhase('waiting')
@@ -223,7 +228,7 @@ export function CheckoutPage() {
                 <button
                   type="button"
                   className="checkout-cancel"
-                  onClick={() => leave(session.cancelUrl)}
+                  onClick={() => goTo(session.cancelUrl)}
                 >
                   결제 취소
                 </button>
@@ -235,12 +240,12 @@ export function CheckoutPage() {
         {(phase === 'waiting' || phase === 'leaving') && (
           <div className="checkout-result" role="status">
             <span className="checkout-spin" aria-hidden="true" />
-            <b>{phase === 'waiting' ? '결제를 처리하고 있습니다' : '결과 화면으로 이동합니다'}</b>
+            <b>{phase === 'waiting' ? '결제를 처리하고 있습니다' : '쇼핑몰 화면으로 이동합니다'}</b>
             <span className="checkout-muted">잠시만 기다려 주세요.</span>
             {phase === 'leaving' && stuckUrl && (
               // 쇼핑몰 화면 전체를 결과 주소로 옮긴다. 사용자가 누른 링크라 iframe 안에서도 상위 화면 이동이 허용된다
               <a className="checkout-cancel" href={stuckUrl} target="_top" rel="noopener">
-                결과 화면으로 이동
+                쇼핑몰 화면으로 이동
               </a>
             )}
           </div>
@@ -253,7 +258,7 @@ export function CheckoutPage() {
               <button
                 type="button"
                 className="checkout-cancel"
-                onClick={() => leave(session.cancelUrl)}
+                onClick={() => goTo(session.cancelUrl)}
               >
                 쇼핑몰로 돌아가기
               </button>
