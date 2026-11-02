@@ -24,6 +24,7 @@ const make = (over: Partial<HandoffListItem> = {}): HandoffListItem => ({
   decidedAt: '2026-10-29T01:00:00Z',
   requestedAt: '2026-10-29T01:00:00Z',
   acceptedAt: null,
+  customerCanceledAt: null,
   ...over,
 })
 
@@ -45,7 +46,31 @@ test('탭으로 거르고 탭마다 건수를 센다', () => {
     make({ status: 'ACCEPTED' }),
     make({ status: 'FAILED' }),
   ]
-  assert.deepEqual(handoffCounts(items), { ALL: 4, REQUESTED: 1, ACCEPTED: 2, FAILED: 1 })
+  assert.deepEqual(handoffCounts(items), {
+    ALL: 4,
+    REQUESTED: 1,
+    ACCEPTED: 2,
+    FAILED: 1,
+    CUSTOMER_CANCELED: 0,
+  })
   assert.equal(items.filter((h) => matchesHandoffTab(h, 'ACCEPTED')).length, 2)
   assert.equal(items.filter((h) => matchesHandoffTab(h, 'ALL')).length, 4)
+})
+
+test('고객이 승인을 취소한 조치는 대기 · 실패가 아니라 고객 취소 탭에만 센다 (#439)', () => {
+  const canceledAt = '2026-11-02T01:00:00Z'
+  const items = [
+    make({ status: 'REQUESTED' }),
+    make({ status: 'REQUESTED', customerCanceledAt: canceledAt }),
+    make({ status: 'FAILED', customerCanceledAt: canceledAt }),
+  ]
+  assert.deepEqual(handoffCounts(items), {
+    ALL: 3,
+    REQUESTED: 1,
+    ACCEPTED: 0,
+    FAILED: 0,
+    CUSTOMER_CANCELED: 2,
+  })
+  assert.equal(items.filter((h) => matchesHandoffTab(h, 'FAILED')).length, 0)
+  assert.deepEqual(parse('?status=CUSTOMER_CANCELED'), { status: 'CUSTOMER_CANCELED', page: 1 })
 })

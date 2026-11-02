@@ -14,4 +14,7 @@ public interface CaseHistoryRepository extends Repository<CaseHistory, Long> {
 
     // 고객 취소 반영(#382)처럼 특정 종류의 이력만 읽는다
     List<CaseHistory> findBySecurityCaseIdAndEventType(Long caseId, CaseHistoryEventType eventType);
+
+    // 여러 Case에 걸친 특정 이력 — 조치 내역의 고객 취소 표시(#439)
+    List<CaseHistory> findByEventType(CaseHistoryEventType eventType);
 }

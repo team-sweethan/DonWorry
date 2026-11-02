@@ -70,6 +70,9 @@ class CustomerVoidFlowTests {
     CustomerVoidService customerVoidService;
 
     @Autowired
+    MerchantCaseQueryService merchantCaseQueryService;
+
+    @Autowired
     TestPaymentInfoStore payments;
 
     @MockitoBean
@@ -237,6 +240,36 @@ class CustomerVoidFlowTests {
                 .satisfies(handoff -> assertThat(handoff.status()).isEqualTo("REQUESTED"));
         assertThat(closed.payments().getFirst().customerCanceledAt()).isNotNull();
         assertThat(closedReason(closed)).isEqualTo("CUSTOMER_CANCELED");
+
+        // 조치 내역 · 고객사 조치 결과도 고객 취소를 구분한다 (#439)
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(item -> item.paymentId().equals(held.paymentId()))
+                .singleElement()
+                .satisfies(item -> assertThat(item.customerCanceledAt())
+                        .isEqualTo(closed.payments().getFirst().customerCanceledAt()));
+        assertThat(merchantCaseQueryService.detail(MERCHANT_ID, held.caseId()).payments())
+                .singleElement()
+                .satisfies(payment -> {
+                    assertThat(payment.customerCanceled()).isTrue();
+                    assertThat(payment.decision()).isEqualTo("ACCEPT");
+                });
+    }
+
+    // 고객 취소가 없는 결제는 조치 내역 · 고객사 결과에서 고객 취소로 보이지 않는다 (#439)
+    @Test
+    void views_withoutCustomerVoid_showNotCanceled() throws Exception {
+        Held held = createHeld(customer(), 300_000L);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        perform(decide(detail, List.of(item(detail.payments().getFirst().casePaymentId(), "REJECT"))))
+                .andExpect(status().isOk());
+
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(item -> item.paymentId().equals(held.paymentId()))
+                .singleElement()
+                .satisfies(item -> assertThat(item.customerCanceledAt()).isNull());
+        assertThat(merchantCaseQueryService.detail(MERCHANT_ID, held.caseId()).payments())
+                .singleElement()
+                .satisfies(payment -> assertThat(payment.customerCanceled()).isFalse());
     }
 
     // 결제가 아직 Case에 없으면 예외로 끝난다 — 리스너 publication이 미완료로 남아 재전달 · 대조 대상이 된다

@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class MerchantCaseQueryService {
     private final PaymentDecisionRepository paymentDecisionRepository;
     private final PaymentInfoReader paymentInfoReader;
     private final ReportGateway reportGateway;
+    private final CaseStatusService caseStatusService;
 
     @Transactional(readOnly = true)
     public MerchantCaseListResponse list(Long merchantId) {
@@ -88,6 +90,9 @@ public class MerchantCaseQueryService {
                 .map(ReportSnapshot::reportBody)
                 .orElse(null);
         Map<String, String> recommendations = recommendations(reportBody);
+        // 고객이 직접 승인을 취소한 결제(#382 · #439) — 직원 거절과 구분해 보인다
+        Set<Long> customerCanceled =
+                caseStatusService.canceledCasePayments(caseId).keySet();
         return MerchantCaseDetailResponse.builder()
                 .caseId(securityCase.getId())
                 .displayStatus(displayStatus(securityCase.getStatus()))
@@ -111,6 +116,7 @@ public class MerchantCaseQueryService {
                                                     found -> found.getDecision().name())
                                             .orElse(null))
                                     .aiRecommendation(recommendations.get(String.valueOf(casePayment.getPaymentId())))
+                                    .customerCanceled(customerCanceled.contains(casePayment.getId()))
                                     .build();
                         })
                         .toList())

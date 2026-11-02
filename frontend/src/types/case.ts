@@ -107,6 +107,8 @@ export type HandoffListItem = {
   decidedAt: string
   requestedAt: string
   acceptedAt: string | null
+  /** 판정한 결제를 고객이 직접 승인 취소한 시각(#439). 있으면 이 조치는 실행되지 않았다 — 직원 실패가 아니다 */
+  customerCanceledAt: string | null
 }
 
 export type CaseHistory = {
