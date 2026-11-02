@@ -207,4 +207,39 @@ class CashFlowForecastMariaDbTests {
                 Timestamp.from(Instant.now()));
         assertThat(String.valueOf(plan.get("possible_keys"))).contains("idx_settlements_merchant_completed");
     }
+    // 기준 시각 직후 완료된 기록을 스냅샷이 보더라도 실제와 예정 양쪽에서 누락하지 않는다.
+    @Test
+    void forecast_whenCompletionAfterCutoff_keepsIncomeAndExpensesProjected() {
+        var cutoff = Instant.now().minusSeconds(2);
+        var day = cutoff.atZone(SettlementReportService.ZONE).toLocalDate();
+        var expense = management.createExpense(MERCHANT, expense("동시 완료", today(), 500));
+        management.completeExpense(MERCHANT, expense.expenseId());
+        var rule = recurring.create(
+                MERCHANT,
+                RecurringExpenseRequest.builder()
+                        .title("동시 정기 완료")
+                        .amount(300L)
+                        .category("MATERIAL")
+                        .frequency("DAILY")
+                        .startDate(today())
+                        .endDate(today())
+                        .build());
+        recurring.complete(MERCHANT, rule.recurringExpenseId(), today());
+        capture(PAYMENT, MERCHANT);
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=?,status='COMPLETED',completed_at=? WHERE payment_id=?",
+                Timestamp.from(cutoff.plusMillis(500)),
+                Timestamp.from(cutoff.plusSeconds(1)),
+                PAYMENT);
+        var result = forecasts.forecastAt(
+                MERCHANT, day, today().plusDays(1), new CashFlowSettingResponse(1000L, today().minusYears(2)), cutoff);
+        assertThat(result.currentBalance()).isEqualTo(1000);
+        assertThat(result.paidExpensesSinceBase()).isZero();
+        assertThat(result.totalExpenses()).isEqualTo(800);
+        assertThat(result.days())
+                .extracting(CashFlowForecastResponse.Day::paidExpenses)
+                .containsOnly(0L);
+        assertThat(result.totalIncome()).isEqualTo(9700);
+        assertThat(result.closingBalance()).isEqualTo(9900);
+    }
 }

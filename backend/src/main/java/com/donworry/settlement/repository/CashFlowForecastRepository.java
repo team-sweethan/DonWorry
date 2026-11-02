@@ -53,11 +53,15 @@ public interface CashFlowForecastRepository extends Repository<Settlement, Long>
             Pageable page);
 
     @Query(
-            "SELECT s FROM Settlement s WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED AND (s.scheduledAt<:until OR (s.scheduledAt IS NULL AND s.expectedSettlementAt<:until)) ORDER BY s.settlementId")
-    List<Settlement> findScheduled(@Param("merchant") Long merchant, @Param("until") Instant until, Pageable page);
+            "SELECT s FROM Settlement s WHERE s.merchantId=:merchant AND (s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED OR (s.status=com.donworry.settlement.entity.SettlementStatus.COMPLETED AND s.completedAt>=:asOf)) AND (s.scheduledAt<:until OR (s.scheduledAt IS NULL AND s.expectedSettlementAt<:until)) ORDER BY s.settlementId")
+    List<Settlement> findScheduled(
+            @Param("merchant") Long merchant,
+            @Param("until") Instant until,
+            @Param("asOf") Instant asOf,
+            Pageable page);
 
     @Query(
-            "SELECT e FROM PlannedExpense e WHERE e.merchantId=:merchant AND e.deletedAt IS NULL AND ((e.paidAt>=:from AND e.paidAt<:until) OR (e.paidAt IS NULL AND e.expenseDate>=:today AND e.expenseDate<=:to)) ORDER BY e.expenseId")
+            "SELECT e FROM PlannedExpense e WHERE e.merchantId=:merchant AND e.deletedAt IS NULL AND ((e.paidAt>=:from AND e.paidAt<:until) OR ((e.paidAt IS NULL OR e.paidAt>=:until) AND e.expenseDate>=:today AND e.expenseDate<=:to)) ORDER BY e.expenseId")
     List<PlannedExpense> findExpenses(
             @Param("merchant") Long merchant,
             @Param("from") Instant from,

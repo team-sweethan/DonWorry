@@ -99,6 +99,32 @@ public class RecurringExpenseService {
         return List.copyOf(result);
     }
 
+    // 예측의 실제 지출 cutoff 이후 완료된 회차는 해당 예측에서 아직 예정으로 남긴다.
+    @Transactional(readOnly = true)
+    public List<RecurringExpenseOccurrence> pendingOccurrencesAsOf(
+            Long merchant, LocalDate from, LocalDate to, Instant asOf) {
+        CashFlowManagementService.validateMerchant(merchant);
+        CashFlowManagementService.validatePeriod(from, to);
+        if (asOf == null) throw new IllegalArgumentException("조회 기준 시각이 필요합니다.");
+        var result = new ArrayList<RecurringExpenseOccurrence>();
+        var applicable = repository.findApplicable(merchant, from, to);
+        for (int offset = 0; offset < applicable.size(); offset += COMPLETION_BATCH_SIZE) {
+            var batch = applicable.subList(offset, Math.min(offset + COMPLETION_BATCH_SIZE, applicable.size()));
+            var ids =
+                    batch.stream().map(RecurringExpense::getRecurringExpenseId).toList();
+            var completed = new HashMap<Long, Set<LocalDate>>();
+            for (var key : payments.findCompletedOccurrencesBefore(merchant, ids, from, to, asOf)) {
+                completed
+                        .computeIfAbsent(key.getRecurringExpenseId(), ignored -> new HashSet<>())
+                        .add(key.getOccurrenceDate());
+            }
+            result.addAll(expander.expand(
+                    batch.stream().map(RecurringExpenseResponse::from).toList(), from, to, completed));
+            if (result.size() > 10000) throw tooLarge();
+        }
+        return List.copyOf(result);
+    }
+
     @Transactional
     public RecurringExpenseOccurrence complete(Long merchant, Long id, LocalDate date) {
         CashFlowManagementService.validateMerchant(merchant);

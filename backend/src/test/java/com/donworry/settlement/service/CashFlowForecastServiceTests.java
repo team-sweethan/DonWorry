@@ -73,7 +73,7 @@ class CashFlowForecastServiceTests {
         when(payment.getPaidAt()).thenReturn(now.minusSeconds(1));
         when(payment.getAmount()).thenReturn(50L);
         when(repository.findPaidRecurring(eq(2L), any(), any(), any())).thenReturn(List.of(payment));
-        when(recurring.occurrences(2L, today, today.plusDays(3)))
+        when(recurring.pendingOccurrencesAsOf(2L, today, today.plusDays(3), now))
                 .thenReturn(List.of(
                         RecurringExpenseOccurrence.builder()
                                 .recurringExpenseId(3L)
@@ -93,13 +93,13 @@ class CashFlowForecastServiceTests {
         assertThat(result.totalExpenses()).isEqualTo(300);
         assertThat(result.days().getFirst().movements()).hasSize(4);
         verify(repository).sumCompleted(2L, base, at(today));
-        verify(recurring).occurrences(2L, today, today.plusDays(3));
+        verify(recurring).pendingOccurrencesAsOf(2L, today, today.plusDays(3), now);
     }
 
     // 실제 픽업 기준을 우선하고 지난 배치 유입은 잔액에 넣지 않으며 날짜 미정·취소는 별도다.
     @Test
     void forecast_whenScheduledExpectedAndOverdueMixed_classifiesExcludedIncome() {
-        when(repository.findScheduled(eq(2L), any(), any()))
+        when(repository.findScheduled(eq(2L), any(), eq(now), any()))
                 .thenReturn(List.of(
                         settlement(
                                 1,
@@ -125,7 +125,7 @@ class CashFlowForecastServiceTests {
     // 미래 조회 시작 전 발생하는 미완료 지출도 예상 시작 잔액에 반영한다.
     @Test
     void forecast_whenRequestedWindowStartsLater_carriesFutureExpenses() {
-        when(recurring.occurrences(2L, today, today.plusDays(3)))
+        when(recurring.pendingOccurrencesAsOf(2L, today, today.plusDays(3), now))
                 .thenReturn(List.of(RecurringExpenseOccurrence.builder()
                         .recurringExpenseId(1L)
                         .expenseDate(today.plusDays(1))
@@ -183,5 +183,37 @@ class CashFlowForecastServiceTests {
                 .isInstanceOfSatisfying(
                         SettlementRequestException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(422));
+    }
+    // 첫 DB 조회 뒤로 기준 시각이 움직이면 그 사이 커밋된 기록을 누락하므로 먼저 고정한다.
+    @Test
+    void forecast_whenSettingsRead_capturesCutoffBeforeFirstDatabaseRead() {
+        var firstRead = new java.util.concurrent.atomic.AtomicReference<Instant>();
+        when(management.settings(2L)).thenAnswer(invocation -> {
+            firstRead.set(Instant.now());
+            Thread.sleep(30);
+            return Optional.of(setting);
+        });
+        var day = LocalDate.now(SettlementReportService.ZONE);
+        var result = service.forecast(2L, day, day);
+        assertThat(result.asOf()).isBeforeOrEqualTo(firstRead.get());
+        verify(repository).sumCompleted(2L, at(setting.baseDate()), result.asOf());
+    }
+
+    // cutoff 이후 완료가 스냅샷에 보여도 현재 잔액에서 제외한 지출을 예정에서 누락하지 않는다.
+    @Test
+    void forecast_whenExpensePaidAfterCutoff_keepsItPlanned() {
+        var expense = mock(PlannedExpense.class);
+        when(expense.getExpenseId()).thenReturn(1L);
+        when(expense.getTitle()).thenReturn("조회 직후 완료");
+        when(expense.getExpenseDate()).thenReturn(today);
+        when(expense.getAmount()).thenReturn(500L);
+        when(expense.getPaidAt()).thenReturn(now.plusSeconds(1));
+        when(repository.findExpenses(eq(2L), any(), any(), eq(today), eq(today), any()))
+                .thenReturn(List.of(expense));
+        var result = service.forecastAt(2L, today, today, setting, now);
+        assertThat(result.currentBalance()).isEqualTo(1000);
+        assertThat(result.days().getFirst().paidExpenses()).isZero();
+        assertThat(result.days().getFirst().plannedExpenses()).isEqualTo(500);
+        assertThat(result.closingBalance()).isEqualTo(500);
     }
 }

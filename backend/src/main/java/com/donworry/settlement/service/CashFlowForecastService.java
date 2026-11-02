@@ -22,9 +22,9 @@ public class CashFlowForecastService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public CashFlowForecastResponse forecast(Long merchant, LocalDate from, LocalDate to) {
+        var cutoff = Instant.now();
         var setting = setting(merchant);
-        // 설정 조회로 시작한 DB 스냅샷 이후의 시각을 사용한다.
-        return forecastAt(merchant, from, to, setting, Instant.now());
+        return forecastAt(merchant, from, to, setting, cutoff);
     }
 
     private CashFlowSettingResponse setting(Long merchant) {
@@ -75,7 +75,7 @@ public class CashFlowForecastService {
                     .build());
         }
         long overdue = 0;
-        for (var s : bounded(repository.findScheduled(merchant, endAt.isAfter(now) ? endAt : now, page))) {
+        for (var s : bounded(repository.findScheduled(merchant, endAt.isAfter(now) ? endAt : now, now, page))) {
             var eligible = s.getScheduledAt() == null ? s.getExpectedSettlementAt() : s.getScheduledAt();
             var batch = schedule.projectedAt(eligible);
             if (batch.isBefore(now)) {
@@ -95,15 +95,16 @@ public class CashFlowForecastService {
                     .build());
         }
         for (var e : bounded(repository.findExpenses(merchant, startAt, actualUntil, today, to, page))) {
+            boolean paidBeforeCutoff = e.getPaidAt() != null && e.getPaidAt().isBefore(now);
             rows.add(Movement.builder()
                     .source("EXPENSE")
                     .referenceId(e.getExpenseId())
                     .occurrenceDate(e.getExpenseDate())
-                    .date(e.getPaidAt() == null ? e.getExpenseDate() : date(e.getPaidAt()))
+                    .date(paidBeforeCutoff ? date(e.getPaidAt()) : e.getExpenseDate())
                     .title(e.getTitle())
                     .amount(e.getAmount())
-                    .classification(e.getPaidAt() == null ? "PLANNED" : "PAID")
-                    .reflectedAt(e.getPaidAt())
+                    .classification(paidBeforeCutoff ? "PAID" : "PLANNED")
+                    .reflectedAt(paidBeforeCutoff ? e.getPaidAt() : null)
                     .build());
         }
         for (var p : bounded(repository.findPaidRecurring(merchant, startAt, actualUntil, page))) {
@@ -120,7 +121,7 @@ public class CashFlowForecastService {
         }
         if (!to.isBefore(today)) {
             // 원래 예정일이 미래여도 이미 완료한 회차는 이 목록의 예정액에 재포함하지 않는다.
-            for (var p : recurring.occurrences(merchant, today, to)) {
+            for (var p : recurring.pendingOccurrencesAsOf(merchant, today, to, now)) {
                 if (p.paidAt() != null) continue;
                 rows.add(Movement.builder()
                         .source("RECURRING_EXPENSE")
