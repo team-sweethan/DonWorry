@@ -1,12 +1,13 @@
 # P6 현금흐름 예측 API — 5단계
 
-관련 #230, #231. 기존 DB의 읽기·계산만 수행하며 신규 migration은 없다.
+관련 #230, #231. 기존 업무 데이터의 읽기·계산만 수행한다. P6 settlements 조회 인덱스 2개를 신규 migration으로 추가하며 테이블·컬럼·기존 데이터는 변경하지 않는다.
 실제 은행 잔액·미발생 주문 매출·AI 예측·자동 출금·시간 단위 부족 예측은 제공하지 않는다.
 
 ## 조회와 인증
 
 `settlement.owner-http.enabled=true`에서 기존 사장님 세션 인가를 사용한다.
 OPERATOR와 FINANCE_VIEW 권한을 가진 인증 가맹점만 조회하며 merchantId 입력은 사용하지 않는다.
+AGENTS 4절과 ADR-0059에 따라 SecurityConfig에 두 GET 경로를 명시적으로 등록하고 해당 경로의 다른 메서드는 거절한다.
 
 - `GET /api/v1/settlements/cash-flow/forecast?from=YYYY-MM-DD&to=YYYY-MM-DD`
 - `GET /api/v1/settlements/cash-flow/shortages?from=YYYY-MM-DD&to=YYYY-MM-DD` — 동일 계산의 shortages 배열
@@ -55,3 +56,13 @@ REPEATABLE_READ 읽기 트랜잭션에서 합계와 상세를 같은 스냅샷�
 
 프론트 실제 API 연결은 #236의 6단계에서 별도 PR로 진행한다. 기존 목업은 유지한다.
 P5 취소 이벤트 연동·대출 상품 API·운영 서버/실제 은행 지급 검증은 이 PR의 완료 범위가 아니다.
+
+## 조회 인덱스
+
+`V20261102_112639__index_settlement_cash_flow_queries.sql`은 settlements에 다음 인덱스만 추가한다.
+
+- idx_settlements_merchant_completed: (merchant_id, status, completed_at, settlement_amount). 가맹점별 완료 기간·누적 SUM과 상태별 진단 합계.
+- idx_settlements_merchant_scheduled: (merchant_id, status, scheduled_at, expected_settlement_at). 예정 후보·일정 미정 조회.
+
+예정 후보는 실제 시각 우선/예상 시각 보조 조건을 OR로 풀어 복합 인덱스의 가맹점·상태·시각 조건을 사용한다.
+기존 SQL은 수정하지 않는다. 인덱스 생성은 데이터가 있는 배포 DB의 DDL이므로 운영 반영 시간과 잠금 영향은 배포 전에 확인한다.

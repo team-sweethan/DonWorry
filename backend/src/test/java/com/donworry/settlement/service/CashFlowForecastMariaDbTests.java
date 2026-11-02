@@ -187,4 +187,24 @@ class CashFlowForecastMariaDbTests {
                         SettlementRequestException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(422));
     }
+    // 완료·예정 조회에 사용할 복합 인덱스를 migration이 실제 DB에 등록한다.
+    @Test
+    void forecastIndexes_whenMigrationsApplied_supportMerchantScopedQueries() {
+        var columns = jdbc.queryForList(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='settlements' AND INDEX_NAME='idx_settlements_merchant_completed' ORDER BY SEQ_IN_INDEX",
+                String.class);
+        assertThat(columns).containsExactly("merchant_id", "status", "completed_at", "settlement_amount");
+        var scheduled = jdbc.queryForList(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='settlements' AND INDEX_NAME='idx_settlements_merchant_scheduled' ORDER BY SEQ_IN_INDEX",
+                String.class);
+        assertThat(scheduled).containsExactly("merchant_id", "status", "scheduled_at", "expected_settlement_at");
+        capture(PAYMENT, MERCHANT);
+        complete(PAYMENT, at(today().minusDays(1)));
+        var plan = jdbc.queryForMap(
+                "EXPLAIN SELECT SUM(settlement_amount) FROM settlements WHERE merchant_id=? AND status='COMPLETED' AND completed_at>=? AND completed_at<?",
+                MERCHANT,
+                Timestamp.from(at(today().minusYears(2))),
+                Timestamp.from(Instant.now()));
+        assertThat(String.valueOf(plan.get("possible_keys"))).contains("idx_settlements_merchant_completed");
+    }
 }

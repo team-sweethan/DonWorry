@@ -53,7 +53,7 @@ public interface CashFlowForecastRepository extends Repository<Settlement, Long>
             Pageable page);
 
     @Query(
-            "SELECT s FROM Settlement s WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED AND COALESCE(s.scheduledAt,s.expectedSettlementAt)<:until ORDER BY s.settlementId")
+            "SELECT s FROM Settlement s WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED AND (s.scheduledAt<:until OR (s.scheduledAt IS NULL AND s.expectedSettlementAt<:until)) ORDER BY s.settlementId")
     List<Settlement> findScheduled(@Param("merchant") Long merchant, @Param("until") Instant until, Pageable page);
 
     @Query(

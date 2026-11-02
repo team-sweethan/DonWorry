@@ -234,6 +234,23 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/settlements/cash-flow/forecast",
+                                "/api/v1/settlements/cash-flow/shortages")
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.OPERATOR
+                                    && user.merchantId() != null
+                                    && user.merchantId() > 0
+                                    && user.permissions() != null
+                                    && user.permissions().contains("FINANCE_VIEW"));
+                        })
+                        .requestMatchers(
+                                "/api/v1/settlements/cash-flow/forecast", "/api/v1/settlements/cash-flow/shortages")
+                        .denyAll()
                         .requestMatchers("/api/v1/settlements", "/api/v1/settlements/**")
                         .access((authentication, context) -> {
                             var current = authentication.get();
