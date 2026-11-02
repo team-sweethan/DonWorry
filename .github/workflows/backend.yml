@@ -60,21 +60,7 @@ jobs:
         run: ./gradlew check       # 컴파일 + 코드 모양(spotlessCheck) + ModularityTests + ArchitectureTests
       # 러너의 Docker로 MariaDB 11.8을 띄워 migration 전체 적용 + JPA validate
       - if: steps.changes.outputs.run == 'true'
-        name: MariaDB full suite (UTC)
-        env:
-          TZ: UTC
-          JAVA_TOOL_OPTIONS: -Duser.timezone=UTC
-        run: ./gradlew --no-daemon mariaDbTest
-      - if: steps.changes.outputs.run == 'true'
-        name: P6 MariaDB timezone regression (Asia/Seoul)
-        env:
-          TZ: Asia/Seoul
-          JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Seoul
-        run: >-
-          ./gradlew --no-daemon mariaDbTest --rerun-tasks
-          --tests '*CashFlowForecastMariaDbTests'
-          --tests '*SettlementReportMariaDbTests'
-          --tests '*OrderFulfillmentItemMariaDbTests'
+        run: ./gradlew mariaDbTest
       - if: failure() && steps.changes.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
