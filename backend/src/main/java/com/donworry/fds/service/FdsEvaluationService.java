@@ -44,6 +44,8 @@ public class FdsEvaluationService implements FdsEvaluator {
     }
 
     private FdsEvaluationResponse evaluateInternal(FdsEvaluationRequest request) {
+        var existing = evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId());
+        if (existing.isPresent()) return responseOf(requireSameRequest(existing.get(), request));
         var forced = demoError.flatMap(service -> service.failNext(request));
         if (forced.isPresent()) return forced.get();
         try {

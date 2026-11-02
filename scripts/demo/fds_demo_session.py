@@ -28,7 +28,10 @@ def staff_session(base_url: str, login_id: str, password: str):
             data = {"raw": raw}
         return response.status, data
 
-    status, data = request("POST", "/api/auth/login", {"loginId": login_id, "password": password})
+    status, data = request("GET", "/api/auth/csrf")
+    if status != 204:
+        raise RuntimeError(f"로그인 전 CSRF 토큰을 받지 못했습니다: HTTP {status} {data.get('code', data)}")
+    status, data = request("POST", "/api/auth/login", {"loginId": login_id, "password": password}, csrf=True)
     if status != 200:
         raise RuntimeError(f"직원 로그인 실패: HTTP {status} {data.get('code', data)}")
     status, data = request("GET", "/api/auth/csrf")

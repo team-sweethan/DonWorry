@@ -80,6 +80,7 @@ def main() -> int:
     parser.add_argument("--staff-id", default="staff_test")
     parser.add_argument("--staff-password")
     args = parser.parse_args()
+    key = merchant_key()
     password = args.staff_password or getpass.getpass("보안 직원 비밀번호 (입력 숨김): ")
     base_url = args.base_url.rstrip("/")
     try:
@@ -91,7 +92,7 @@ def main() -> int:
         sys.exit(f"오류 주입 준비 실패: HTTP {status} {data.get('code', data)}\n"
                  "backend의 fds.demo-error.enabled=true 설정과 SECURITY_STAFF 계정을 확인하세요.")
     customer_ref = str(random.randint(10**11, 10**12 - 1))
-    status, data = signed_payment(base_url, merchant_key(), customer_ref)
+    status, data = signed_payment(base_url, key, customer_ref)
     if status >= 400:
         sys.exit(f"결제 실패: HTTP {status} {data.get('code', data)}\n다음 정상 FDS 평가가 대신 ERROR가 될 수 있으니 주의하세요.")
     payment_id = data.get("paymentId")

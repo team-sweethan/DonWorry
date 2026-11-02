@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
@@ -87,6 +88,22 @@ class FdsEvaluationServiceTests {
 
         assertThat(evaluator.evaluate(request)).isEqualTo(response);
         verify(transactionService).evaluate(request);
+    }
+
+    // 오류 주입을 무장했어도 기존 평가 요청은 원래 멱등 응답을 유지한다.
+    @Test
+    void evaluate_whenExistingRequestAndDemoErrorArmed_returnsStoredResponse() {
+        var request = request(101L, 50_000L, Instant.parse("2026-10-22T01:00:00Z"));
+        var stored = FdsEvaluation.completed(request, FdsResult.ALLOW, 0, Instant.parse("2026-10-22T01:00:01Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(stored, "evaluationId", 1L);
+        var demoError = org.mockito.Mockito.mock(FdsDemoErrorService.class);
+        evaluator = new FdsEvaluationService(evaluationRepository, transactionService, Optional.of(demoError));
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId())).thenReturn(Optional.of(stored));
+
+        var response = evaluator.evaluate(request);
+
+        assertThat(response.result()).isEqualTo(FdsResult.ALLOW);
+        verifyNoInteractions(demoError, transactionService);
     }
 
     @Test
