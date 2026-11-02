@@ -112,4 +112,34 @@ class CashFlowCalculatorTests {
         assertThat(result.totalIncome()).isEqualTo(1);
         assertThat(result.totalExpenses()).isEqualTo(1);
     }
+    // 이월 구간의 미반환 유입/지출 합계는 안전 상한을 넘어도 상쇄된 기간 시작 잔액이 안전하면 된다.
+    @Test
+    void calculate_whenCarryTotalsExceedSafeRange_offsetsBeforeCheckingReturnedBalance() {
+        var result = calculator.calculate(
+                0,
+                start,
+                start.plusDays(1),
+                start.plusDays(1),
+                List.of(
+                        movement(1, 0, 9007199254740991L, "SCHEDULED"), movement(2, 0, 1, "EXPECTED"),
+                        movement(3, 0, 9007199254740991L, "PAID"), movement(4, 0, 1, "PLANNED")));
+        assertThat(result.periodOpeningBalance()).isZero();
+        assertThat(result.closingBalance()).isZero();
+        assertThat(result.carryForwardMovements()).hasSize(4);
+        assertThat(result.totalIncome()).isZero();
+        assertThat(result.totalExpenses()).isZero();
+    }
+
+    // 이월 중 하루의 미반환 마감 잔액도 다음 날 상쇄될 수 있으므로 요청 기간 경계에서만 검사한다.
+    @Test
+    void calculate_whenUnreturnedCarryBalanceTemporarilyExceedsLimit_checksPeriodOpeningOnly() {
+        var result = calculator.calculate(
+                9007199254740991L,
+                start,
+                start.plusDays(2),
+                start.plusDays(2),
+                List.of(movement(1, 0, 1, "SCHEDULED"), movement(2, 1, 1, "PAID")));
+        assertThat(result.periodOpeningBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
+    }
 }

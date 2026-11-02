@@ -3,6 +3,7 @@ package com.donworry.settlement.service;
 import com.donworry.settlement.dto.*;
 import com.donworry.settlement.dto.CashFlowForecastResponse.*;
 import com.donworry.settlement.repository.CashFlowForecastRepository;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
@@ -53,12 +54,10 @@ public class CashFlowForecastService {
                 CashFlowCalculator.money(repository.sumPaidRecurring(merchant, baseAt, now)));
         long current = CashFlowCalculator.netBalance(setting.openingBalance(), completed, paid);
         // 기준일부터 조회 시작 전까지는 합계 쿼리로 누적한다. 계정 사용 기간을 366일로 제한하지 않는다.
-        long initial = CashFlowCalculator.netBalance(
-                setting.openingBalance(),
-                CashFlowCalculator.money(repository.sumCompleted(merchant, baseAt, startAt)),
-                CashFlowCalculator.add(
-                        CashFlowCalculator.money(repository.sumPaidExpenses(merchant, baseAt, startAt)),
-                        CashFlowCalculator.money(repository.sumPaidRecurring(merchant, baseAt, startAt))));
+        var initial = BigDecimal.valueOf(setting.openingBalance())
+                .add(repository.sumCompleted(merchant, baseAt, startAt))
+                .subtract(repository.sumPaidExpenses(merchant, baseAt, startAt))
+                .subtract(repository.sumPaidRecurring(merchant, baseAt, startAt));
         var page = PageRequest.of(0, LIMIT + 1);
         var rows = new ArrayList<Movement>();
         for (var s : bounded(repository.findCompleted(merchant, startAt, actualUntil, page))) {

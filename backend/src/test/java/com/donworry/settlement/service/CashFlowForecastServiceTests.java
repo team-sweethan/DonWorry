@@ -227,4 +227,27 @@ class CashFlowForecastServiceTests {
         assertThat(result.currentBalance()).isEqualTo(9007199254740991L);
         assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
     }
+    // 미래 조회 전날 실제 잔액의 미반환 중간 값이 상한을 넘어도 이월 후 시작 잔액을 안전하게 반환한다.
+    @Test
+    void forecast_whenUnreturnedInitialBalanceExceedsLimit_offsetsCarryBeforeValidation() {
+        when(repository.sumCompleted(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
+        when(repository.sumPaidExpenses(2L, at(setting.baseDate()), now)).thenReturn(BigDecimal.ONE);
+        var expense = mock(PlannedExpense.class);
+        when(expense.getExpenseId()).thenReturn(1L);
+        when(expense.getExpenseDate()).thenReturn(today);
+        when(expense.getAmount()).thenReturn(1L);
+        when(expense.getPaidAt()).thenReturn(now.minusSeconds(1));
+        when(repository.findExpenses(eq(2L), any(), any(), eq(today), eq(today.plusDays(1)), any()))
+                .thenReturn(List.of(expense));
+        var result = service.forecastAt(
+                2L,
+                today.plusDays(1),
+                today.plusDays(1),
+                new CashFlowSettingResponse(9007199254740991L, setting.baseDate()),
+                now);
+        assertThat(result.currentBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.periodOpeningBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.carryForwardMovements()).hasSize(1);
+    }
 }

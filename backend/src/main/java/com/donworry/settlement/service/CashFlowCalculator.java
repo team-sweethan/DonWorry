@@ -25,9 +25,13 @@ public class CashFlowCalculator {
             List<Shortage> shortages) {}
 
     public Result calculate(long opening, LocalDate start, LocalDate from, LocalDate to, List<Movement> movements) {
+        return calculate(BigDecimal.valueOf(opening), start, from, to, movements);
+    }
+
+    public Result calculate(
+            BigDecimal opening, LocalDate start, LocalDate from, LocalDate to, List<Movement> movements) {
         CashFlowManagementService.validatePeriod(from, to);
         if (start.isAfter(from)) throw new IllegalArgumentException("계산 시작일이 조회 시작일보다 늦습니다.");
-        money(BigDecimal.valueOf(opening));
         var grouped = new TreeMap<LocalDate, List<Movement>>();
         var unique = new HashSet<String>();
         for (var m : movements) {
@@ -38,10 +42,23 @@ public class CashFlowCalculator {
             if (!m.date().isBefore(start) && !m.date().isAfter(to))
                 grouped.computeIfAbsent(m.date(), ignored -> new ArrayList<>()).add(m);
         }
-        long balance = opening, periodOpening = opening, totalIncome = 0, totalExpense = 0;
         var carry = new ArrayList<Movement>();
+        var carriedBalance = opening;
+        for (var rows : grouped.headMap(from).values()) {
+            for (var row : rows) {
+                var amount = BigDecimal.valueOf(row.amount());
+                carriedBalance = switch (row.classification()) {
+                    case "COMPLETED", "SCHEDULED", "EXPECTED" -> carriedBalance.add(amount);
+                    case "PAID", "PLANNED" -> carriedBalance.subtract(amount);
+                    default -> throw new IllegalStateException("알 수 없는 현금흐름 분류입니다.");
+                };
+            }
+            carry.addAll(rows);
+        }
+        // 이월 중간 합계·잔액은 반환하지 않는다. 응답 기간의 시작 잔액에서만 범위를 검사한다.
+        long periodOpening = money(carriedBalance), balance = periodOpening, totalIncome = 0, totalExpense = 0;
         var days = new ArrayList<Day>();
-        for (var date = start; !date.isAfter(to); date = date.plusDays(1)) {
+        for (var date = from; !date.isAfter(to); date = date.plusDays(1)) {
             var rows = grouped.getOrDefault(date, List.of());
             long completed = sum(rows, "COMPLETED"),
                     scheduled = sum(rows, "SCHEDULED"),
@@ -50,11 +67,6 @@ public class CashFlowCalculator {
                     planned = sum(rows, "PLANNED");
             long income = add(add(completed, scheduled), expected), expense = add(paid, planned), before = balance;
             balance = netBalance(balance, income, expense);
-            if (date.isBefore(from)) {
-                periodOpening = balance;
-                carry.addAll(rows);
-                continue;
-            }
             totalIncome = add(totalIncome, income);
             totalExpense = add(totalExpense, expense);
             days.add(Day.builder()
