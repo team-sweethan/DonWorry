@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.donworry.investigation.entity.CaseStatus;
+import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.HandoffStatus;
 import com.donworry.investigation.service.InvestigationRules.CaseSnapshot;
 import com.donworry.investigation.service.InvestigationRules.ReportProgress;
@@ -17,6 +18,13 @@ import org.junit.jupiter.params.provider.EnumSource;
 class InvestigationRulesTests {
 
     static final Instant CREATED_AT = Instant.parse("2026-10-22T05:00:00Z");
+
+    // 결제 Case는 결제 1건 = Case 1개라 다음 결제를 합치지 않는다 (#428)
+    @Test
+    void mergesPayments_paymentFraud_isFalse() {
+        assertThat(InvestigationRules.mergesPayments(CaseType.PAYMENT_FRAUD)).isFalse();
+        assertThatThrownBy(() -> InvestigationRules.mergesPayments(null)).isInstanceOf(NullPointerException.class);
+    }
 
     // 병합 가능 상태 집합은 밖에서 바꿀 수 없다
     @Test

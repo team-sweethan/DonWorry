@@ -14,6 +14,11 @@ import type {
 /** 서버 코드값 → 화면 문구·색. 색은 antd Tag 프리셋. */
 type Label = { label: string; color: string }
 
+/** 조사 유형 (#428). 지금은 결제 부정 의심만 있다 */
+export const caseTypeLabel: Record<string, string> = {
+  PAYMENT_FRAUD: '결제 부정 의심',
+}
+
 export const caseStatusLabel: Record<CaseStatus, Label> = {
   OPEN: { label: '생성됨', color: 'blue' },
   INVESTIGATING: { label: '조사 중', color: 'processing' },

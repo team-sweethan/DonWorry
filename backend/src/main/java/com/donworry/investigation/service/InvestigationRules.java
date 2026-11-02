@@ -1,6 +1,7 @@
 package com.donworry.investigation.service;
 
 import com.donworry.investigation.entity.CaseStatus;
+import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.HandoffStatus;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,6 +13,7 @@ import java.util.Set;
 public final class InvestigationRules {
 
     // 병합 기한은 최초 created_at 기준이며 연장하지 않는다 (fds 정본 03 §3.9 ③)
+    // 결제 Case(PAYMENT_FRAUD)는 결제 1건 = Case 1개라 병합하지 않는다(#428). 이 규칙은 이후 로그인 보안 경보 Case에서 쓴다
     public static final Duration MERGE_WINDOW = Duration.ofMinutes(30);
 
     // 판정 전 단계만 결제를 더 받는다. 판정이 하나라도 있으면 대상 목록이 고정된다 (fds 정본 03 §3.5)
@@ -49,6 +51,13 @@ public final class InvestigationRules {
                 throw new IllegalArgumentException("인계는 판정 수보다 많을 수 없습니다");
             }
         }
+    }
+
+    // 이 유형의 Case가 같은 고객의 다음 경보(결제)를 합치는지 (#428)
+    public static boolean mergesPayments(CaseType caseType) {
+        return switch (Objects.requireNonNull(caseType, "caseType")) {
+            case PAYMENT_FRAUD -> false;
+        };
     }
 
     public static Instant mergeDeadline(Instant createdAt) {

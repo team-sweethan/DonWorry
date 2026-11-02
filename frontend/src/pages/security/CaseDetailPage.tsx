@@ -10,23 +10,44 @@ import {
   submitDecisions,
 } from '../../api/cases'
 import { ApiError } from '../../api/client'
+import { getMerchantDirectory } from '../../api/merchants'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
-import { SLA_HOURS, decisionMode, latestReport, mergeRemainingMin } from '../../utils/caseRules'
+import { SLA_HOURS, customerPart, decisionMode, latestReport } from '../../utils/caseRules'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { CaseBundle } from './case/CaseBundle'
 import { CaseProgress } from './case/CaseProgress'
-import { caseStatusLabel, dateTime, fdsResultLabel, paymentStatusLabel } from './case/caseLabels'
-import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
+import {
+  caseStatusLabel,
+  caseTypeLabel,
+  dateTime,
+  fdsResultLabel,
+  paymentStatusLabel,
+} from './case/caseLabels'
+import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
 import { CodeTag } from './case/CodeTag'
 import { DecisionPanel } from './case/DecisionPanel'
 import { ReportCard } from './case/ReportCard'
+
+// 제목 아래 한 줄: 가맹점 이름(ID) · 고객 · 유형 (#428)
+// 고객 참조는 결제 쪽 내부 형식 "가맹점ID:고객"이라 고객 부분만 보인다
+function caseHeaderLine(
+  securityCase: CaseDetail['securityCase'],
+  merchantName: string | undefined,
+): string {
+  const customer = customerPart(securityCase.customerRef)
+  const merchant = merchantName
+    ? `${merchantName} (ID ${securityCase.merchantId})`
+    : `ID ${securityCase.merchantId}`
+  const type = caseTypeLabel[securityCase.caseType] ?? securityCase.caseType
+  return `가맹점 ${merchant} · 고객 ${customer} · ${type}`
+}
 
 export function CaseDetailPage() {
   const { id = '' } = useParams()
@@ -38,6 +59,20 @@ export function CaseDetailPage() {
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   const [recheckingId, setRecheckingId] = useState<string | null>(null)
+  // 제목 아래 가맹점 이름 (#428). 경보 화면과 같은 가맹점 목록을 쓴다. 못 받으면 ID만 보인다
+  const [merchantNames, setMerchantNames] = useState<Map<string, string>>(new Map())
+  useEffect(() => {
+    let alive = true
+    getMerchantDirectory()
+      .then((merchants) => {
+        if (alive)
+          setMerchantNames(new Map(merchants.map((m) => [String(m.merchantId), m.displayName])))
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
   // 응답을 조회 범위(Case)와 함께 저장해, 범위가 바뀌면 이전 Case를 즉시 숨기고
   // 늦게 도착한 이전 범위의 응답은 버린다.
   const scope = id
@@ -113,7 +148,6 @@ export function CaseDetailPage() {
   if (detail === null || detail === undefined) return <ScreenResult kind="404" />
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
-  const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
@@ -179,8 +213,8 @@ export function CaseDetailPage() {
   return (
     <>
       <PageHeader
-        title="Case 상세"
-        description={`${securityCase.caseId} · ${securityCase.merchantId} · ${securityCase.customerRef}`}
+        title={`Case #${securityCase.caseId}`}
+        description={caseHeaderLine(securityCase, merchantNames.get(securityCase.merchantId))}
         actions={
           <Space>
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
@@ -212,16 +246,15 @@ export function CaseDetailPage() {
             <Descriptions.Item label="상태">
               <CodeTag value={caseStatusLabel[securityCase.status]} />
             </Descriptions.Item>
-            <Descriptions.Item label="조사 유형">{securityCase.caseType}</Descriptions.Item>
+            <Descriptions.Item label="조사 유형">
+              {caseTypeLabel[securityCase.caseType] ?? securityCase.caseType}
+            </Descriptions.Item>
             <Descriptions.Item label="증거 버전">v{securityCase.evidenceVersion}</Descriptions.Item>
             <Descriptions.Item label="AI 보고서">
               {latestReport(reports) ? `v${latestReport(reports)?.reportVersion}` : '-'}
             </Descriptions.Item>
             <Descriptions.Item label="생성 시각">
               {dateTime(securityCase.createdAt)}
-            </Descriptions.Item>
-            <Descriptions.Item label={<HelpLabel label="결제 병합" help={mergeHelp} />}>
-              {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
             </Descriptions.Item>
             <Descriptions.Item
               label={
@@ -242,11 +275,7 @@ export function CaseDetailPage() {
           allDecided={payments.length > 0 && decisions.length >= payments.length}
         />
 
-        <CaseBundle
-          securityCase={securityCase}
-          payments={payments}
-          mergeRemaining={mergeRemaining}
-        />
+        <CaseBundle securityCase={securityCase} payments={payments} />
 
         <Card
           title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}

@@ -6,16 +6,16 @@ P3 `investigation` 모듈이 하는 일과 현재 구현을 한곳에 모은 안
 ## 1. 한눈에 보기
 
 ```text
-P5 HELD 결제 ─(PaymentHeld 이벤트)→ Case 생성 · 30분 병합 → P4 AI 보고서
+P5 HELD 결제 ─(PaymentHeld 이벤트)→ Case 생성(결제 1건 = Case 1개) → P4 AI 보고서
   → 보안 직원 결제별 ACCEPT / REJECT → P5 금융 조치 인계(CAPTURE · VOID)
   → P5 완료 결과(PaymentActionResult 이벤트) → 모든 결제 실제 완료 → Case CLOSED
 ```
 
-- P3 책임: Case 생성 · 병합, 증거 버전, 결제별 판정, 금융 조치 인계 요청과 완료 반영, Case 상태 · 이력, 보안 직원 · 고객사 조회 API
+- P3 책임: Case 생성, 증거 버전, 결제별 판정, 금융 조치 인계 요청과 완료 반영, Case 상태 · 이력, 보안 직원 · 고객사 조회 API
 - P3가 하지 않는 것: 결제 상태 변경(P5), 매입 실행(P6), FDS 점수 계산(P2), 보고서 생성(P4), 로그인 · 권한 관리(P1)
 - 소유 테이블: `security_cases` · `case_payments` · `payment_decisions` · `action_handoffs` · `case_histories`. 실제 컬럼은 [migration SQL](../../backend/src/main/resources/db/migration/)과 [ERD](../erd/README.md)를 본다
 - 화면: 보안 직원 `/security/home` (#222) · `/security/cases` · `/security/cases/:id` · `/security/actions`(조치 내역, #314), 고객사 `/owner/actions` · `/owner/actions/:id`. AI 보고서 상세 `/security/cases/:id/report`는 P4 화면이다
-  - Case 목록 위 탭: 처리 중 / 종료 / 전체(#314). 종료 탭은 결제 병합 · 조사 기한 대신 종료 시각을 보인다
+  - Case 목록 위 탭: 처리 중 / 종료 / 전체(#314). 종료 탭은 조사 기한 대신 종료 시각을 보인다
   - 조치 내역: 판정한 결제마다 판정 · 조치 · 상태(금융 처리 대기 · 완료 · 실패와 실패 사유)를 모아 본다. 탭 · 페이지는 주소 쿼리에 둔다
   - Case 목록은 조건(상태 · 24시간 초과 · AI 보고서 · 검색어 · 페이지)을 주소 쿼리에 둔다. 상세에 갔다 와도 · 새로고침해도 같은 조건으로 열리고, 홈 · 목록의 건수 카드는 그 조건의 목록으로 간다(#243, `utils/caseListQuery.ts`)
   - 사이드바 "Case 목록"에 처리 필요 건수 배지를 단다. 화면 이동 · 탭 복귀 · 판정 · 다시 확인 뒤에만 다시 세고, 시간 간격으로 조회하지 않는다(무활동 세션 만료를 막지 않게, #224)
@@ -60,13 +60,13 @@ Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#40
 
 ## 4. 병합 규칙
 
-HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 기존 Case에 붙이거나 새 Case를 만든다(정본 02 §2.4 · 03 §3.4).
+**결제 Case(`PAYMENT_FRAUD`)는 결제 1건 = Case 1개이고 병합하지 않는다(#428, 2026-11-02).** HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 결제마다 새 Case를 만든다. 같은 결제가 다시 오면 이미 연결된 Case를 돌려준다(멱등, `UNIQUE(payment_id)` + 재시도). 결제 Case의 응답 `mergeUntil`은 `null`이다.
 
-기존 Case에 붙는 조건(모두 만족):
+아래 30분 병합 규칙은 원래 "한 사건에 경보가 여러 개 생기면 한 Case로 모으려고" 둔 것이다(정본 02 §2.4 · 03 §3.4 · §3.9 ③). 코드(`InvestigationRules.MERGE_WINDOW` · `canMerge`, `SecurityCaseRepository.findMergeCandidates`)는 **이후 돈워리 로그인 보안 경보 Case**에서 다시 쓰려고 남겨 두었고, `InvestigationRules.mergesPayments(CaseType)`가 유형별로 켜고 끈다. 그 유형에서 붙는 조건(모두 만족):
 
 1. 같은 `merchant_id`
 2. 같은 `customer_ref`
-3. 같은 조사 유형 `PAYMENT_FRAUD`
+3. 같은 조사 유형
 4. 상태가 `OPEN` · `INVESTIGATING` · `DECISION_PENDING` (`MERGEABLE_STATUSES`)
 5. Case 최초 생성 후 30분 미만 (`MERGE_WINDOW`, 결제가 붙어도 연장하지 않음)
 6. 판정이 하나도 없음

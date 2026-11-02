@@ -2,22 +2,10 @@ import type { AiReport, CaseStatus } from '../types/case.ts'
 
 /** 화면 표시용 업무 규칙. 최종 판단은 백엔드가 하며 여기 값은 안내용이다. */
 
-/** Case 병합 가능 기간 — 최초 생성 기준, 연장 없음 (기획 2.4). */
-export const MERGE_WINDOW_MIN = 30
 /** 조사 SLA 내부 목표 — 권장값, 미확정 (기획 2.11). */
 export const SLA_HOURS = 24
 
 const elapsedMin = (iso: string, now: number) => (now - Date.parse(iso)) / 60_000
-
-export function isMergeOpen(createdAt: string, decidedCount: number, now = Date.now()) {
-  return decidedCount === 0 && elapsedMin(createdAt, now) < MERGE_WINDOW_MIN
-}
-
-/** 병합 마감까지 남은 분. 이미 마감이면 null. */
-export function mergeRemainingMin(createdAt: string, decidedCount: number, now = Date.now()) {
-  if (!isMergeOpen(createdAt, decidedCount, now)) return null
-  return Math.max(1, Math.ceil(MERGE_WINDOW_MIN - elapsedMin(createdAt, now)))
-}
 
 /** SLA 경과 상태. 종료된 Case는 null. */
 export function slaState(createdAt: string, status: CaseStatus, now = Date.now()) {
@@ -53,4 +41,10 @@ export function decisionMode(evidenceVersion: number, reports: AiReport[]): Deci
   if (latest.evidenceVersion !== evidenceVersion)
     return { kind: 'blocked', message: '보고서가 현재 증거 버전과 다릅니다. 재조사 후 판정하세요.' }
   return latest.status === 'FAILED' ? { kind: 'manual' } : { kind: 'normal', report: latest }
+}
+
+/** 고객 참조의 고객 부분 (#428). 결제 쪽 내부 형식이 "가맹점ID:고객"이라 화면에는 고객 부분만 보인다. */
+export function customerPart(customerRef: string) {
+  const at = customerRef.indexOf(':')
+  return at < 0 ? customerRef : customerRef.slice(at + 1)
 }

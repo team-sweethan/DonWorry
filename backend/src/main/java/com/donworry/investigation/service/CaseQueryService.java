@@ -126,7 +126,12 @@ public class CaseQueryService {
         List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
         Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         return new CaseDetailResponse(
-                SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
+                // 병합하지 않는 유형(결제 Case)은 병합 기한이 없다 (#428)
+                SecurityCaseResponse.from(
+                        securityCase,
+                        InvestigationRules.mergesPayments(securityCase.getCaseType())
+                                ? InvestigationRules.mergeDeadline(securityCase.getCreatedAt())
+                                : null),
                 casePayments.stream()
                         .map(casePayment -> payment(casePayment, infos.get(casePayment.getPaymentId())))
                         .toList(),
