@@ -9,6 +9,7 @@ import {
   paymentStatusLabel,
 } from './caseLabels'
 import { CodeTag } from './CodeTag'
+import { historyDetail } from '../../../utils/caseHistoryText'
 
 /**
  * 결제별 금융 조치 인계 (설계 3.8, ADR-0027 완료 기반). ACCEPTED는 실제 매입·취소 완료다.
@@ -120,8 +121,8 @@ export function HistoryCard({ history }: { history: CaseHistory[] }) {
           children: (
             <div style={{ fontSize: 13 }}>
               <strong>{historyEventLabel[h.eventType]}</strong>
-              {Object.keys(h.eventData).length > 0 && (
-                <span style={{ color: '#475569' }}> · {eventDataText(h.eventData)}</span>
+              {historyDetail(h, dateTime) && (
+                <span style={{ color: '#475569' }}> · {historyDetail(h, dateTime)}</span>
               )}
               <div style={{ fontSize: 12, color: '#94a3b8' }}>
                 {dateTime(h.createdAt)} · {h.actorType === 'STAFF' ? h.actorId : '시스템'}
@@ -132,11 +133,4 @@ export function HistoryCard({ history }: { history: CaseHistory[] }) {
       />
     </Card>
   )
-}
-
-/** completedAt은 P5가 알려준 실제 완료 시각이다 — P3 반영 시각(이력 시각)과 구분해 보여준다. */
-function eventDataText(eventData: Record<string, string>) {
-  return Object.entries(eventData)
-    .map(([key, value]) => (key === 'completedAt' ? `실제 완료 ${dateTime(value)}` : value))
-    .join(' · ')
 }
