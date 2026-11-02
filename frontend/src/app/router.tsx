@@ -7,12 +7,9 @@ import { InitialPasswordPage } from '../pages/public/InitialPasswordPage'
 import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPage'
 import { takeVerificationToken } from '../pages/public/applicationFeedback'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
-import { useDemo } from '../demo/DemoContext'
-import { AdminLayout } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { ComponentShowcasePage } from '../pages/demo/ComponentShowcasePage'
 import { LandingRoute, LoginRoute, ServerSession } from '../auth/AuthRoutes'
-import { DemoLoginPage } from '../pages/demo/DemoLoginPage'
 import { EmptyPage } from '../pages/EmptyPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
@@ -45,14 +42,20 @@ import {
 } from '../pages/admin/AdminMerchantsPage'
 import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
 
-function DemoSession() {
-  const { loggedIn } = useDemo()
-  return loggedIn ? <AdminLayout /> : <Navigate to="/demo/login" replace />
-}
-
-// ADMIN · 보안 직원 · 사장님은 서버 세션으로, 컴포넌트 목록 같은 개발 화면은 DemoSession으로 진입한다.
-// 서버 인가는 #68 5단계다.
+// 업무·계정 화면은 서버 세션으로 보호하고 개발용 화면은 개발 환경에서만 제공한다.
 export const router = createBrowserRouter([
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/components',
+          element: (
+            <main style={{ padding: 24 }}>
+              <ComponentShowcasePage />
+            </main>
+          ),
+        },
+      ]
+    : []),
   // 실제 로그인·금액 조회 없이 로컬 개발 서버에서만 정산 시연 화면을 확인한다.
   ...(import.meta.env.DEV
     ? [
@@ -169,12 +172,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: '/demo/login', element: <DemoLoginPage /> },
-  {
-    element: <DemoSession />,
-    children: [
-      { path: '/dev/components', element: <ComponentShowcasePage /> },
-      { path: '*', element: <ScreenResult kind="404" /> },
-    ],
-  },
+  { path: '*', element: <ScreenResult kind="404" /> },
 ])

@@ -267,24 +267,6 @@ textarea {
   line-height: 20px;
   text-align: center;
 }
-.dw-sidebar-bottom {
-  margin-top: auto;
-  padding-top: 16px;
-}
-.dw-sidebar-tip {
-  color: #b5c5eb;
-  border: 1px solid #34477d;
-  background: #1e3164;
-  border-radius: 6px;
-  padding: 13px;
-  font-size: 11px;
-  line-height: 1.7;
-}
-.dw-sidebar-tip strong {
-  display: block;
-  margin-bottom: 2px;
-  color: white;
-}
 .dw-main {
   min-width: 0;
   padding: var(--dw-content-padding);
@@ -910,14 +892,6 @@ textarea {
 .admin-viewport[data-role='owner'] .dw-nav-link.active .dw-nav-icon {
   color: var(--shell-ink);
 }
-.admin-viewport[data-role] .dw-sidebar-tip {
-  background: var(--shell-hover);
-  color: var(--shell-muted);
-  border-color: var(--shell-line);
-}
-.admin-viewport[data-role] .dw-sidebar-tip strong {
-  color: var(--shell-text);
-}
 
 /* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
 .dw-owner-note {
@@ -930,9 +904,6 @@ textarea {
   border-radius: 12px;
   background: #fbf3df;
   text-align: center;
-}
-.admin-viewport[data-role='owner'] .dw-owner-note + .dw-sidebar-bottom {
-  margin-top: 12px;
 }
 .dw-owner-note-mascot {
   display: block;
@@ -991,8 +962,7 @@ textarea {
     border-right: 0;
     border-bottom: 1px solid var(--shell-line);
   }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note,
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar-bottom {
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note {
     display: none;
   }
   .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-group {

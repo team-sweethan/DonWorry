@@ -1,8 +1,8 @@
 import { Button, Result } from 'antd'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { roles } from '../../config/navigation'
-import { useDemo } from '../../demo/DemoContext'
+import { useAuth } from '../../auth/useAuth'
+import { screenResultHome } from '../../auth/screenResultHome'
 
 export function ScreenResult({
   kind,
@@ -15,7 +15,7 @@ export function ScreenResult({
   action?: ReactNode
 }) {
   const navigate = useNavigate()
-  const { role } = useDemo()
+  const { user } = useAuth()
   const heading =
     kind === '403'
       ? '접근 권한이 없습니다'
@@ -41,7 +41,7 @@ export function ScreenResult({
               onClick={() =>
                 kind === '500'
                   ? window.location.reload()
-                  : navigate(homePath ?? roles[role].landing)
+                  : navigate(screenResultHome(user, homePath))
               }
             >
               {kind === '500' ? '다시 시도' : '내 홈으로 이동'}
