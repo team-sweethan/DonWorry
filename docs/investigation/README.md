@@ -35,7 +35,7 @@ AI 보고서는 P4가 `ai_reports`에 버전별로 저장한다. `ai.server.enab
 결제 · FDS 조회는 `PaymentFdsInfoReader`가 합친다. 한쪽을 못 찾으면 그쪽 값만 `null`이고, 조회 오류는 숨기지 않고 그대로 던진다.
 모듈 의존은 `payment :: api` · `fds :: api` · `identity :: api`만 허용한다(`package-info.java`, [ADR-0012](../decisions/0012-payment-settlement-dependency.md)). P4(`investigation/report`)는 같은 모듈 안의 하위 패키지다.
 
-Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#408 PR C). 직원 Case·판정·보고서 경로는 `SECURITY_STAFF`만, 가맹점 조회는 `OPERATOR` + 세션 `merchantId` + `FDS_VIEW`가 필요하다. 필터 거절은 401 `AUTH_001` / 403 `AUTH_002`이며, CSRF 토큰 없는 변경 요청은 먼저 403 `CSRF_001`로 거절된다. 상세 계약은 [ADR-0064](../decisions/0064-case-session-authorization.md)를 본다.
+Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#408 PR C). 직원 Case·판정·보고서 경로는 `SECURITY_STAFF`만, 가맹점 조회는 `OPERATOR` + 세션 `merchantId` + `FDS_VIEW`가 필요하다. 필터 거절은 401 `AUTH_001` / 403 `AUTH_002`이며, CSRF 토큰 없는 변경 요청은 먼저 403 `CSRF_001`로 거절된다. 상세 계약은 [ADR-0065](../decisions/0065-case-session-authorization.md)를 본다.
 
 ## 3. Case 상태와 전이 우선순위
 
