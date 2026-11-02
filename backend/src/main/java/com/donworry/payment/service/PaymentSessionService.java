@@ -244,11 +244,14 @@ public class PaymentSessionService {
 
     // 가맹점이 등록한 주소의 기존 인코딩(예: next=%2Forders)은 그대로 두고, 새로 붙이는 값만 인코딩한다
     // 전체에 encode()를 걸면 기존 %까지 %25로 바뀐다. 주소는 세션 생성 때 requireUrl로 이미 검사했다
+    // encodeQueryParam은 +를 남기지만 가맹점 쿼리 파서(URLSearchParams 등)는 +를 공백으로 읽어 %2B로 바꾼다
     private static String withQuery(String registeredUrl, String... namesAndValues) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(asciiUrl(registeredUrl));
         for (int i = 0; i < namesAndValues.length; i += 2) {
             builder.queryParam(
-                    namesAndValues[i], UriUtils.encodeQueryParam(namesAndValues[i + 1], StandardCharsets.UTF_8));
+                    namesAndValues[i],
+                    UriUtils.encodeQueryParam(namesAndValues[i + 1], StandardCharsets.UTF_8)
+                            .replace("+", "%2B"));
         }
         return builder.build(true).toUriString();
     }

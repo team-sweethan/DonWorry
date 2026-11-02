@@ -129,9 +129,9 @@ class PaymentSessionServiceTests {
         String fail = FAIL + "?next=%2Fcart";
         when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
 
-        var ok = service.result(sessionWithPayment(session(recent(), success, fail, "ORD 1&x=2")));
+        var ok = service.result(sessionWithPayment(session(recent(), success, fail, "ORD+1 &x=2")));
 
-        assertThat(ok.redirectUrl()).isEqualTo(success + "&paymentKey=101&orderId=ORD%201%26x%3D2&amount=52000");
+        assertThat(ok.redirectUrl()).isEqualTo(success + "&paymentKey=101&orderId=ORD%2B1%20%26x%3D2&amount=52000");
 
         when(query.findPayment(MERCHANT_ID, 101L))
                 .thenReturn(Optional.of(payment(PaymentStatus.DENIED, false, "FDS_DENIED")));
