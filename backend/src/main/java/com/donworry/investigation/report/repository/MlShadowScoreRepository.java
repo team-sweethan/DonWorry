@@ -2,6 +2,7 @@ package com.donworry.investigation.report.repository;
 
 import com.donworry.investigation.report.entity.MlShadowScore;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -10,7 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
-// ML Shadow 기록은 쌓기만 하므로 삭제를 노출하지 않고 스케줄러(Ⓔ-4)가 쓸 저장 · 조회만 둔다
+// ML Shadow 기록은 쌓기만 하므로 삭제를 노출하지 않고 스케줄러(Ⓔ-4) · 거래 내역 조회(#441)가 쓸 저장 · 조회만 둔다
 public interface MlShadowScoreRepository extends Repository<MlShadowScore, Long> {
 
     MlShadowScore save(MlShadowScore score);
@@ -37,4 +38,7 @@ public interface MlShadowScoreRepository extends Repository<MlShadowScore, Long>
             + " ORDER BY s.evaluationId ASC")
     List<MlShadowScore> findRetryTargets(
             @Param("modelVersion") String modelVersion, @Param("maxAttempts") int maxAttempts, Limit limit);
+
+    // 거래 내역 "ML 참고" 칸 (#441) — 한 화면의 결제 번호로 이 모델의 기록만 읽는다. UNIQUE(payment_id, model_version) 색인을 쓴다
+    List<MlShadowScore> findByModelVersionAndPaymentIdIn(String modelVersion, Collection<Long> paymentIds);
 }

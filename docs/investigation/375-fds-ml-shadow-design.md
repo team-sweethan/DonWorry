@@ -40,7 +40,7 @@ flowchart LR
 
 범위 밖 (후속)
 
-- Shadow 결과 조회 API · 화면 (거래 내역 화면 `/security/transactions`에 "ML 참고" 칸 등) — 보는 사람 · 권한을 정한 뒤 별도 이슈
+- Shadow 결과 조회 API · 화면 (거래 내역 화면 `/security/transactions`에 "ML 참고" 칸 등) — #441에서 진행 (보안 직원만, `GET /api/ml-shadow-scores`)
 - 가맹점 번호를 뺀 v2 모델 (`rf-v2.joblib`, v1 덮어쓰기 금지)
 - Rule과 ML 성능 비교 방법 (정답은 직원 판정 `payment_decisions` 등 — Rule 결과를 정답으로 쓰지 않는다)
 - ML 결과를 결제 판정에 반영하는 것 (Shadow 기록을 근거로 별도 ADR)
