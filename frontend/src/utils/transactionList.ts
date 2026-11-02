@@ -1,4 +1,5 @@
 import type { PaymentStatus } from '../types/case.ts'
+import type { MlShadowScore } from '../types/mlShadowScore.ts'
 
 // 거래 내역 조건 (#363). Case 목록(#243)처럼 주소 쿼리에 두어 경보 · 사건으로 갔다가 뒤로 와도 같은 조건으로 열린다
 // 기본값은 주소에 쓰지 않는다. 모르는 값은 무시하고 기본값을 쓴다
@@ -119,4 +120,49 @@ export function caseCell(paymentId: string, links: CaseLinks): CaseCell {
   if (links.status === 'failed') return { kind: 'unknown' }
   const caseId = links.caseIdByPaymentId.get(paymentId)
   return caseId ? { kind: 'case', caseId } : { kind: 'none' }
+}
+
+// ML 참고 칸 조회 상태 (#441) — 사건 칸처럼 조회 실패를 "기록 없음"과 구분한다
+export type MlScores =
+  | { status: 'loading' }
+  | { status: 'failed' }
+  | { status: 'loaded'; scoreByPaymentId: ReadonlyMap<string, MlShadowScore> }
+
+export type MlCell =
+  | { kind: 'loading' }
+  | { kind: 'unknown' }
+  | { kind: 'none' }
+  | { kind: 'failed' }
+  | { kind: 'skipped' }
+  | {
+      kind: 'scored'
+      percent: number
+      thresholdPercent: number
+      aboveThreshold: boolean
+      modelVersion: string
+    }
+
+// 0~1 → 정수 %, 내림 — 29.96%를 "30%"로 올리면 기준 미만인데 기준값처럼 보인다
+// DB가 소수 6자리라 먼저 그 자리에서 맞춘다 (0.29 * 100 = 28.999…가 28%로 내려가지 않게)
+const floorPercent = (rate: number) => Math.floor(Math.round(rate * 1_000_000) / 10_000)
+
+// 채점하지 못한 경우는 숫자 없이 상태로만 보여 준다 — "0%"로 그리면 정상 결제로 읽힌다
+// 기준 이상 여부는 화면이 다시 계산하지 않고 서버 mlRiskLevel을 따른다
+export function mlCell(paymentId: string, scores: MlScores): MlCell {
+  if (scores.status === 'loading') return { kind: 'loading' }
+  if (scores.status === 'failed') return { kind: 'unknown' }
+  const score = scores.scoreByPaymentId.get(paymentId)
+  if (!score) return { kind: 'none' }
+  if (score.status === 'FAILED') return { kind: 'failed' }
+  if (score.status === 'SKIPPED') return { kind: 'skipped' }
+  if (score.fraudProbability === null || score.threshold === null || score.mlRiskLevel === null) {
+    return { kind: 'unknown' }
+  }
+  return {
+    kind: 'scored',
+    percent: floorPercent(score.fraudProbability),
+    thresholdPercent: floorPercent(score.threshold),
+    aboveThreshold: score.mlRiskLevel === 'HIGH',
+    modelVersion: score.modelVersion,
+  }
 }

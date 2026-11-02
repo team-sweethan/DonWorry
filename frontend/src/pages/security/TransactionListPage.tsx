@@ -19,6 +19,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
+import { getMlShadowScores } from '../../api/mlShadowScores'
 import { getPaymentTransactions } from '../../api/paymentTransactions'
 import { PageHeader } from '../../components/common/PageHeader'
 import type { FdsResult, PaymentStatus } from '../../types/case'
@@ -28,11 +29,13 @@ import {
   TRANSACTION_PAGE_SIZE,
   caseCell,
   defaultTransactionListQuery,
+  mlCell,
   parseTransactionListQuery,
   periodDays,
   transactionApiParams,
   transactionListSearch,
   type CaseLinks,
+  type MlScores,
   type TransactionListQuery,
 } from '../../utils/transactionList'
 import { paymentStatusLabel } from './case/caseLabels'
@@ -57,6 +60,8 @@ const help = {
     '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 아래 줄은 일부를 가린 이메일이에요.',
   device: '결제한 기기의 식별값 앞부분만 보여요. 개인정보 보호를 위해 나머지는 가렸어요.',
   ip: '결제한 나라와 IP 앞부분이에요. 별표(*)는 가린 부분이에요.',
+  // 판정처럼 읽히지 않게 "높음 · 위험" 대신 기준 이상만 표시한다 (#441, ADR-0061)
+  ml: 'ML이 매긴 참고 점수예요. 실제 사기 확률이 아니라 시연용 학습 데이터에서 나온 점수라서, 결제 결과는 바뀌지 않아요. 학습 때 정한 기준 이상이면 한 번 더 볼 만한 결제로 표시해요. 기준값은 점수에 마우스를 올리면 보여요.',
 }
 
 function HelpTitle({ label, text }: { label: string; text: string }) {
@@ -107,6 +112,7 @@ export function TransactionListPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [links, setLinks] = useState<{ key: string; links: CaseLinks } | null>(null)
+  const [ml, setMl] = useState<{ key: string; scores: MlScores } | null>(null)
 
   const tooLong = periodDays(query) > MAX_PERIOD_DAYS
   const apiSearch = transactionApiParams(query).toString()
@@ -137,8 +143,25 @@ export function TransactionListPage() {
         const paymentIds = page.items.map((item) => item.paymentId)
         if (paymentIds.length === 0) {
           setLinks({ key: requestKey, links: { status: 'loaded', caseIdByPaymentId: new Map() } })
+          setMl({ key: requestKey, scores: { status: 'loaded', scoreByPaymentId: new Map() } })
           return
         }
+        // ML 참고 칸은 사건 칸과 따로 부른다 — 한쪽이 실패해도 다른 칸은 그대로 보인다
+        setMl({ key: requestKey, scores: { status: 'loading' } })
+        getMlShadowScores(paymentIds)
+          .then((found) => {
+            if (!alive) return
+            setMl({
+              key: requestKey,
+              scores: {
+                status: 'loaded',
+                scoreByPaymentId: new Map(found.map((score) => [score.paymentId, score])),
+              },
+            })
+          })
+          .catch(() => {
+            if (alive) setMl({ key: requestKey, scores: { status: 'failed' } })
+          })
         setLinks({ key: requestKey, links: { status: 'loading' } })
         getCaseLinksByPayments(paymentIds)
           .then((found) => {
@@ -173,6 +196,7 @@ export function TransactionListPage() {
   const loading = !tooLong && current === null
   const page = current?.page ?? null
   const caseLinks: CaseLinks = links?.key === requestKey ? links.links : { status: 'loading' }
+  const mlScores: MlScores = ml?.key === requestKey ? ml.scores : { status: 'loading' }
 
   const merchantNames = new Map(
     (merchants ?? []).map((merchant) => [merchant.merchantId, merchant.displayName]),
@@ -277,6 +301,49 @@ export function TransactionListPage() {
           <Button type="link" size="small" onClick={() => openCase(cell.caseId)}>
             Case {cell.caseId} ↗
           </Button>
+        )
+      },
+    },
+    {
+      title: <HelpTitle label="ML 참고" text={help.ml} />,
+      key: 'ml',
+      width: 150,
+      render: (_, t) => {
+        const cell = mlCell(t.paymentId, mlScores)
+        if (cell.kind === 'loading') return <Typography.Text type="secondary">…</Typography.Text>
+        if (cell.kind === 'unknown')
+          return (
+            <Tooltip title="ML 참고 점수를 조회하지 못했습니다. 새로고침해 보세요.">
+              <Typography.Text type="secondary">확인 불가</Typography.Text>
+            </Tooltip>
+          )
+        if (cell.kind === 'none')
+          return (
+            <Tooltip title="아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요.">
+              <Typography.Text type="secondary">기록 없음</Typography.Text>
+            </Tooltip>
+          )
+        if (cell.kind === 'failed')
+          return (
+            <Tooltip title="ML 채점 중 오류가 났어요. 결제 결과와는 상관없어요.">
+              <Typography.Text type="secondary">채점 실패</Typography.Text>
+            </Tooltip>
+          )
+        if (cell.kind === 'skipped')
+          return (
+            <Tooltip title="이전 결제 기록이 너무 많거나 입력을 찾지 못해 채점하지 않았어요.">
+              <Typography.Text type="secondary">채점 안 함</Typography.Text>
+            </Tooltip>
+          )
+        const detail = `기준 ${cell.thresholdPercent}% · 모델 ${cell.modelVersion}`
+        return (
+          <Tooltip title={detail}>
+            {cell.aboveThreshold ? (
+              <Tag color="orange">{cell.percent}% · 기준 이상</Tag>
+            ) : (
+              <Typography.Text type="secondary">{cell.percent}%</Typography.Text>
+            )}
+          </Tooltip>
         )
       },
     },
@@ -393,7 +460,7 @@ export function TransactionListPage() {
           dataSource={page?.items ?? []}
           loading={loading}
           size="middle"
-          scroll={{ x: 1480 }}
+          scroll={{ x: 1630 }}
           pagination={{
             current: query.page,
             pageSize: TRANSACTION_PAGE_SIZE,
