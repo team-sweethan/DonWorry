@@ -60,8 +60,7 @@ class FdsDemoErrorServiceTests {
 
         service.armNextEvaluation(FdsDemoErrorScenario.FDS_EVALUATION_PROCESSING_FAILED);
 
-        assertThat(service.failNext(request()).orElseThrow().errorCode())
-                .isEqualTo("FDS_EVALUATION_PROCESSING_FAILED");
+        assertThat(service.failNext(request()).orElseThrow().errorCode()).isEqualTo("FDS_EVALUATION_PROCESSING_FAILED");
     }
 
     private FdsEvaluationRequest request() {

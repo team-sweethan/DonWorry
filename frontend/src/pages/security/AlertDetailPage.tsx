@@ -317,6 +317,13 @@ export function AlertDetailPage() {
   const score = evaluation.riskScore
   const isSecurityStaff = user?.role === 'SECURITY_STAFF'
   const caseId = caseIdsByPaymentId.get(String(evaluation.paymentId))
+  const alertListReturnPath =
+    typeof location.state?.alertListReturnPath === 'string'
+      ? location.state.alertListReturnPath
+      : null
+  const canRunReevaluation =
+    isSecurityStaff && (recovery?.status === 'READY' || recovery?.status === 'REQUESTED')
+  const resumingReevaluation = recovery?.status === 'REQUESTED'
   const resultDescription =
     score === null
       ? `오류 코드 ${evaluation.errorCode ?? '—'}`
@@ -330,6 +337,14 @@ export function AlertDetailPage() {
     setSelectedCandidates([])
     blocklistForm.resetFields()
   }
+  const openReevaluationModal = () => {
+    setReevaluationError(null)
+    setReevaluationOpen(true)
+  }
+  const openAlertDetail = (evaluationId: number) =>
+    navigate(`/security/alerts/${evaluationId}`, {
+      state: alertListReturnPath ? { alertListReturnPath } : undefined,
+    })
   const submitBlocklist = async () => {
     const { reason } = await blocklistForm.validateFields()
     const candidates = detail.blocklistCandidates.filter(
@@ -418,14 +433,7 @@ export function AlertDetailPage() {
             </Button>
             <Button
               icon={<ArrowLeftOutlined />}
-              onClick={() =>
-                navigate(
-                  typeof location.state?.alertListReturnPath === 'string'
-                    ? location.state.alertListReturnPath
-                    : '/security/alerts',
-                  { replace: true },
-                )
-              }
+              onClick={() => navigate(alertListReturnPath ?? '/security/alerts', { replace: true })}
             >
               목록으로
             </Button>
@@ -475,9 +483,9 @@ export function AlertDetailPage() {
             <Card
               title={<span className="dw-section-title">오류 분석·재평가</span>}
               extra={
-                recovery?.status === 'READY' && isSecurityStaff ? (
-                  <Button type="primary" onClick={() => setReevaluationOpen(true)}>
-                    재평가 실행
+                canRunReevaluation ? (
+                  <Button type="primary" onClick={openReevaluationModal}>
+                    {resumingReevaluation ? '재평가 재개' : '재평가 실행'}
                   </Button>
                 ) : undefined
               }
@@ -509,9 +517,7 @@ export function AlertDetailPage() {
                         <Button
                           type="link"
                           className="dw-alert-payment-link"
-                          onClick={() =>
-                            navigate(`/security/alerts/${recovery.reevaluationEvaluationId}`)
-                          }
+                          onClick={() => openAlertDetail(recovery.reevaluationEvaluationId!)}
                         >
                           경보 #{recovery.reevaluationEvaluationId}
                         </Button>
@@ -544,25 +550,18 @@ export function AlertDetailPage() {
                   style={{ marginTop: 16 }}
                 />
               )}
-              {recovery?.status === 'READY' && !isSecurityStaff && (
-                <Typography.Text type="secondary">
-                  재평가는 보안 직원만 실행할 수 있습니다.
-                </Typography.Text>
-              )}
+              {(recovery?.status === 'READY' || recovery?.status === 'REQUESTED') &&
+                !isSecurityStaff && (
+                  <Typography.Text type="secondary">
+                    재평가는 보안 직원만 실행할 수 있습니다.
+                  </Typography.Text>
+                )}
               {recovery?.status === 'MANUAL_REVIEW' && (
                 <Alert
                   type="warning"
                   showIcon
                   message="추가 자동 재평가는 허용되지 않습니다."
                   description="재평가 중 다시 오류가 발생했거나 결제 상태가 변경되어 수동 검토가 필요합니다."
-                  style={{ marginTop: 16 }}
-                />
-              )}
-              {reevaluationError && (
-                <Alert
-                  type="error"
-                  showIcon
-                  message={reevaluationError}
                   style={{ marginTop: 16 }}
                 />
               )}
@@ -691,7 +690,7 @@ export function AlertDetailPage() {
               ]}
               dataSource={detail.history}
               onRow={(record) => ({
-                onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
+                onClick: () => openAlertDetail(record.evaluationId),
                 style: { cursor: 'pointer' },
               })}
             />
@@ -749,9 +748,9 @@ export function AlertDetailPage() {
         </div>
       </div>
       <Modal
-        title="재평가 실행"
+        title={resumingReevaluation ? '재평가 재개' : '재평가 실행'}
         open={reevaluationOpen}
-        okText="재평가 실행"
+        okText={resumingReevaluation ? '재평가 재개' : '재평가 실행'}
         cancelText="취소"
         confirmLoading={reevaluationSubmitting}
         onCancel={() => {
@@ -760,9 +759,11 @@ export function AlertDetailPage() {
         onOk={() => void submitReevaluation()}
       >
         <Typography.Paragraph>
-          현재 ERROR 평가를 한 번만 재평가합니다. 실행 후 다시 오류가 발생하면 추가 자동 재평가 없이
-          수동 검토로 전환됩니다.
+          {resumingReevaluation
+            ? '중단된 기존 재평가 작업을 동일 요청으로 재개합니다. 새 평가를 추가로 만들지 않습니다.'
+            : '현재 ERROR 평가를 한 번만 재평가합니다. 실행 후 다시 오류가 발생하면 추가 자동 재평가 없이 수동 검토로 전환됩니다.'}
         </Typography.Paragraph>
+        {reevaluationError && <Alert type="error" showIcon message={reevaluationError} />}
       </Modal>
       <Modal
         title="차단 목록 등록"
