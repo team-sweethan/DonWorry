@@ -149,7 +149,7 @@ export async function getCase(caseId: string): Promise<CaseDetail | null> {
 
 /**
  * 판정 직원은 보내지 않는다 — 백엔드가 로그인 세션 사용자로 정한다 (#160).
- * 세션이 없으면 401(INV_010), 보안 직원이 아니면 403(INV_009)이 온다. 401은 client가 세션 만료로 처리한다.
+ * 세션이 없으면 401(AUTH_001), 보안 직원이 아니면 403(AUTH_002)이 온다. 401은 client가 세션 만료로 처리한다.
  */
 export async function submitDecisions(caseId: string, request: SubmitDecisionsRequest) {
   try {

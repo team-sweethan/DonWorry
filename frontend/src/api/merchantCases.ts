@@ -21,7 +21,7 @@ type ServerDetail = Omit<MerchantCaseDetail, 'caseId' | 'payments'> & {
   payments: ServerPayment[]
 }
 
-/** 권한 없음(403, INV_014)은 그대로 던진다. 화면이 권한 안내를 보여준다. */
+/** 권한 없음(403, AUTH_002)은 그대로 던진다. 화면이 권한 안내를 보여준다. */
 export async function getMerchantCases(): Promise<MerchantCaseList> {
   const list = await api<ServerList>('/merchant/security-cases', { cache: 'no-store' })
   return { ...list, cases: list.cases.map((c) => ({ ...c, caseId: String(c.caseId) })) }

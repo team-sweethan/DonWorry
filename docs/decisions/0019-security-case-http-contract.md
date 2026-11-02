@@ -41,8 +41,9 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
 - 고정 문장 보고서(ai-server를 켜지 않을 때, P4 `FixedReportGenerator`. #250 전에는 P3 목 보고서): 연결 결제 정보를 하나라도 찾지 못하거나 금액 · 요청 시각 · 점수 중 하나라도 비면 `SUCCEEDED`가 아니라 `FAILED`(본문 `null`)로 남긴다. 직원은 정본 02 §2.5의 수동 판정(`reportId: null`)으로 간다.
 - 판정 직원은 요청 본문으로 받지 않는다. 서버가 `CurrentStaff`로 로그인 사용자를 확인해 `staff_id`로 저장한다. 본문에 `staffId`가 있어도 무시한다(#160).
 - 판정은 `SECURITY_STAFF`만 할 수 있다(정본 02 §2.8 · §2.12). 로그인하지 않았으면 `INV_010` 401, 다른 역할(OPERATOR · ADMIN)이면 `INV_009` 403이다. ADMIN 허용이 필요해지면 허용 역할 조건만 바꾼다.
+  - (#408 PR C) HTTP 요청은 보안 필터가 먼저 같은 조건을 검사해 비로그인 401 `AUTH_001`, 역할 위반 403 `AUTH_002`로 응답한다. `INV_010` · `INV_009`는 Guard 자체 오류로 남는다([ADR-0065](0065-case-session-authorization.md)). 아래 Case 목록 · 상세 · 보고서 · 다시 확인 · 고객사 조회도 같다.
 - Case 목록 · 상세 · 보고서 재요청도 `SECURITY_STAFF`만 쓴다(#163, PR #198 리뷰). 실제 P5 결제 · P2 평가 근거를 내보내므로 HTTP 조회 경계(컨트롤러)에서 같은 401 · 403으로 막는다. 보안 직원은 모든 가맹점 Case를 보므로 가맹점 범위는 검사하지 않고, `merchantId`는 표시 필터다. 사장님 화면은 아래 고객사 조회 API를 따로 쓴다(#205). 시연 API는 #163 2단계에서 지웠다.
-- 고객사 조회(#205, 정본 02 §2.12 ②): 사장님(`OPERATOR`) 중 `FDS_VIEW` 권한과 `merchantId`가 있는 계정만 쓴다. 비로그인은 `INV_010` 401, 그 밖(보안 직원 · ADMIN · 권한 없음 · `merchantId` 없는 사장님)은 `INV_014` 403이다. `merchantId` 없는 사장님은 전체로 넓히지 않고 거부한다(ADR-0020).
+- 고객사 조회(#205, 정본 02 §2.12 ②): 사장님(`OPERATOR`) 중 `FDS_VIEW` 권한과 `merchantId`가 있는 계정만 쓴다. 비로그인은 `INV_010` 401, 그 밖(보안 직원 · ADMIN · 권한 없음 · `merchantId` 없는 사장님)은 `INV_014` 403이다(HTTP 필터 거절은 `AUTH_001` · `AUTH_002`, ADR-0065). `merchantId` 없는 사장님은 전체로 넓히지 않고 거부한다(ADR-0020).
   - 가맹점은 요청 값이 아니라 세션 `merchantId`로만 정한다. 다른 가맹점 Case 상세는 없는 Case와 같은 `INV_001` 404다. P5 `PaymentReader`는 범위를 검사하지 않으므로 가맹점을 확인한 Case의 결제 ID로만 조회한다(ADR-0026).
   - 표시 상태 `displayStatus`: `OPEN` · `INVESTIGATING` · `DECISION_PENDING` → `INVESTIGATING`(조사 중), `ACTION_PENDING` · `ACTION_FAILED` → `PROCESSING`(판정 완료 · 처리 진행 중), `CLOSED` → `CLOSED`(조사 종료).
   - 목록 지표는 조사 중 Case 수와 가맹점의 ACCEPT · REJECT 판정 건수다. FDS 차단(DENY) 건수는 Case가 없는 P2 평가라 넣지 않는다.
@@ -58,7 +59,7 @@ P3는 아래 계약을 `investigation` 모듈의 HTTP API로 둔다. 다른 모�
   - 다시 확인이 이벤트보다 먼저 같은 결과를 반영하면 그 이력에는 `completedAt`이 없다. 뒤에 온 결과 이벤트는 상태를 바꾸지 않고, 이 인계 이력에 `completedAt`이 아직 없을 때만 `HANDOFF_COMPLETION_RECORDED`(handoffId · completedAt)를 한 번 남긴다(PR #194 리뷰).
 - 다시 확인: `REQUESTED` 인계만 대상이다. 보안 직원만 부를 수 있고(판정과 같은 확인), 같은 멱등키로 P5에 저장된 결과를 받아 반영한다. P6 매입을 다시 실행하지 않고 새 키도 만들지 않는다. 계속 `PENDING`이면 상태는 그대로 두고 `last_attempted_at`과 `HANDOFF_RECHECKED` 이력(확인한 직원 · 결과)만 남긴다. 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다(#158).
 - (#163 2단계) 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 목 저장소(`MockPaymentInfoStore`) · 목 금융 조치(`MockFinancialActionGateway`), 결제 ID로 목에 보내던 분기를 지웠다. 결제 · FDS 조회와 금융 조치는 모두 실제 P5 · P2로 간다. HELD Case는 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 예전 목 금융 조치의 "판정 직후 `PENDING` → 다시 확인에서 완료" 순서(#212)는 테스트 대역 `TestFinancialActionGateway`(테스트 소스)가 이어받아 흐름 테스트에서만 쓴다.
-- 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` · `INV_015` 400, `INV_009` · `INV_014` 403, `INV_010` 401, `INV_013` 503. 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
+- 오류는 `code`가 있는 problem 응답이다: `INV_001` · `INV_011` 404, `INV_002` · `INV_003` · `INV_004` · `INV_007` · `INV_012` 409, `INV_005` · `INV_006` · `INV_008` · `INV_015` 400, `INV_009` · `INV_014` 403, `INV_010` 401, `INV_013` 503. 단, 인증 · 역할 거절은 보안 필터가 먼저 공통 `AUTH_001` 401 · `AUTH_002` 403으로 응답한다(#408 PR C, ADR-0065). 화면은 `INV_003` · `INV_004`를 "다시 확인 후 판정"으로 처리한다.
 
 ## 고려한 대안
 

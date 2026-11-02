@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.SessionUserTestSupport;
+import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.CaseType;
@@ -325,9 +327,17 @@ class AiInvestigationFlowTests {
         aiReportService.request(other.caseId(), 1);
         Long otherReportId = reportOf(other).getId();
 
-        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", mine.caseId(), otherReportId))
+        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", mine.caseId(), otherReportId)
+                        .with(SessionUserTestSupport.sessionUser(StaffSummary.builder()
+                                .userId(7L)
+                                .role("SECURITY_STAFF")
+                                .build())))
                 .andExpect(status().isNotFound());
-        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", other.caseId(), otherReportId))
+        mvc.perform(get("/api/security-cases/{caseId}/reports/{reportId}/progress", other.caseId(), otherReportId)
+                        .with(SessionUserTestSupport.sessionUser(StaffSummary.builder()
+                                .userId(7L)
+                                .role("SECURITY_STAFF")
+                                .build())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reportId").value(String.valueOf(otherReportId)))
                 .andExpect(jsonPath("$.status").value("RUNNING"));

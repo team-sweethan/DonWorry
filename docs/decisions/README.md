@@ -83,13 +83,15 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0052](0052-merchant-key-management.md) | 가맹점 HMAC 키 암호화 저장·사장님 관리 | 제안 — #354 PR B 사용자 승인, PR 리뷰 대상 |
 
 | [0054](0054-full-cancellation-policy.md) | 전액 취소·환불과 정산 완료 후 취소 허용 | 사용자 정책 확인, 상세 연동 계약 후속 합의 |
-| [0059](0059-security-default-deny.md) | 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`) | 제안 — #392 P1 구현, PR 리뷰 대상 |
+| [0059](0059-security-default-deny.md) | 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`) | 기본 거절 유지, Case 임시 공개만 0065로 대체 |
 
 | [0060](0060-identity-status-names.md) | 계정·신청 상태 이름과 데이터 보존 전환 | 제안 — #131 PR A 사용자 구현 승인, PR 리뷰 대상 |
 | [0061](0061-fds-ml-shadow-inference.md) | FDS ML Shadow 평가 — RF 추론을 ai-server에 두고 결제 판정과 분리 | 제안 — #375 PR ① 구현, PR 리뷰 대상 |
 | [0062](0062-fds-ml-shadow-spring-connection.md) | FDS ML Shadow Spring 연결 — P4가 커밋된 평가를 주기적으로 읽어 채점 · 기록 | 제안 — #409 P2 조회 구현, PR 리뷰 대상 |
 | [0063](0063-csrf-default-enabled.md) | 브라우저 변경 요청의 CSRF 검사 기본 활성화 | 제안 — #408 PR B 사용자 구현 승인, PR 리뷰 대상 |
 | [0064](0064-hosted-checkout-and-payment-webhook.md) | 돈워리 호스팅 결제창과 결제 상태 웹훅 | 제안 — #402 샌드박스 확인, P1 확인 완료, P6 정산 보장 확인·저장소 구현 전 |
+
+| [0065](0065-case-session-authorization.md) | Case HTTP 경로의 세션 역할 인가 | 제안 — #408 PR C 사용자 구현 승인, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 
