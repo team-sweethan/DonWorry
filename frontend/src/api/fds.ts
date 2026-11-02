@@ -111,15 +111,6 @@ export type FdsBlocklistPage = {
   totalPages: number
 }
 
-type FdsEvaluationResponse = {
-  evaluationRequestId: string
-  evaluationId: number
-  result: FdsResult
-  riskScore: number | null
-  evaluatedAt: string
-  errorCode: string | null
-}
-
 export function getFdsEvaluations({
   result,
   attentionOnly = false,
@@ -220,16 +211,4 @@ export function getFdsBlocklistStatus(
 ) {
   const query = new URLSearchParams({ identifierType, identifierValue })
   return api<{ blocked: boolean }>(`/fds/blocklist/status?${query}`, { cache: 'no-store' })
-}
-
-export function createMockFdsEvaluations() {
-  return api<FdsEvaluationResponse[]>('/fds/evaluations/mock', { method: 'POST' })
-}
-
-export function createMockFdsErrorEvaluation() {
-  return api<FdsEvaluationResponse>('/fds/evaluations/mock/error', { method: 'POST' })
-}
-
-export function reevaluateMockFdsError() {
-  return api<FdsEvaluationResponse>('/fds/evaluations/mock/error/reevaluate', { method: 'POST' })
 }

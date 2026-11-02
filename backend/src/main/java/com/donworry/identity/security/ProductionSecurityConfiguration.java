@@ -44,9 +44,6 @@ public class ProductionSecurityConfiguration {
                 throw new IllegalStateException("운영 세션 쿠키는 HttpOnly 설정이 필요합니다.");
             if (!"lax".equalsIgnoreCase(environment.getProperty("server.servlet.session.cookie.same-site")))
                 throw new IllegalStateException("운영 세션 쿠키는 SameSite=Lax 설정이 필요합니다.");
-            // 인증 없이 Mock 평가를 운영 DB에 기록하는 개발용 API를 운영에서 켜지 못하게 한다.
-            if (environment.getProperty("fds.mock.seed-enabled", Boolean.class, true))
-                throw new IllegalStateException("운영에서는 fds.mock.seed-enabled를 켤 수 없습니다.");
             // 인증 없는 시연용 API(시연 결제 생성 등)를 운영에서 열지 못하게 한다 (#392)
             if (environment.getProperty("security.demo-api.enabled", Boolean.class, true))
                 throw new IllegalStateException("운영에서는 security.demo-api.enabled를 켤 수 없습니다.");

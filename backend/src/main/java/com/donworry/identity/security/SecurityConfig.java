@@ -134,7 +134,8 @@ public class SecurityConfig {
             CookieCsrfTokenRepository csrfTokenRepository,
             LoginHistoryService loginHistories,
             @Value("${security.csrf.enabled:false}") boolean csrfEnabled,
-            @Value("${security.demo-api.enabled:true}") boolean demoApiEnabled)
+            @Value("${security.demo-api.enabled:true}") boolean demoApiEnabled,
+            @Value("${fds.demo-error.enabled:false}") boolean demoFdsErrorEnabled)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
         var fdsRecoveryPosts = new OrRequestMatcher(
@@ -142,6 +143,8 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-reevaluations"),
                 PathPatternRequestMatcher.withDefaults()
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
+        var demoFdsErrorPost =
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/demo/fds-errors/next");
         var integrationRoutes = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults().matcher("/api/owner/integration/**"),
                 PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchants/{id}/integration/**"));
@@ -176,6 +179,7 @@ public class SecurityConfig {
                         .requireCsrfProtectionMatcher(request -> integrationPosts.matches(request)
                                 || applicationPosts.matches(request)
                                 || fdsRecoveryPosts.matches(request)
+                                || demoFdsErrorPost.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
                         .ignoringRequestMatchers("/internal/**"))
@@ -192,6 +196,14 @@ public class SecurityConfig {
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.SECURITY_STAFF);
+                        })
+                        .requestMatchers(demoFdsErrorPost)
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(demoFdsErrorEnabled
+                                    && current.isAuthenticated()
                                     && current.getPrincipal() instanceof SessionUser user
                                     && user.role() == UserRole.SECURITY_STAFF);
                         })
@@ -324,12 +336,8 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/merchant/security-cases/{caseId}"))
                         .permitAll()
                         // 인증 없는 시연용 API. 운영(security.demo-api.enabled=false)에서는 막는다.
-                        // 로컬·시연에서 역할 규칙으로 잠그는 것은 담당(P2·P3) 확인 후 진행한다 (#392)
-                        .requestMatchers(
-                                paths.matcher(HttpMethod.POST, "/api/demo/held-payments"),
-                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock"),
-                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock/error"),
-                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/mock/error/reevaluate"))
+                        // 로컬·시연에서 역할 규칙으로 잠그는 것은 담당(P3) 확인 후 진행한다 (#392)
+                        .requestMatchers(paths.matcher(HttpMethod.POST, "/api/demo/held-payments"))
                         .access((authentication, context) -> new AuthorizationDecision(demoApiEnabled))
                         // 위에 등록하지 않은 경로는 모두 막는다. 새 API는 이 파일에 권한 규칙을 함께 추가한다 (#392)
                         .anyRequest()

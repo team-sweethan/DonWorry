@@ -74,13 +74,8 @@ security:
     # 실제 활성화는 #68 5단계에서 다른 담당에게 공지한 뒤 진행한다.
     enabled: ${DONWORRY_CSRF_ENABLED:false}
   demo-api:
-    # 인증 없는 시연용 API(/api/demo/held-payments, FDS Mock 평가)를 연다. 운영에서는 끈다 (#392)
+    # 인증 없는 시연용 API(/api/demo/held-payments)를 연다. 운영에서는 끈다 (#392)
     enabled: true
-
-fds:
-  mock:
-    # P5 요청이 아직 없는 로컬 화면용 Mock. P5 실연동 환경에서는 false로 끈다.
-    seed-enabled: ${FDS_MOCK_SEED_ENABLED:true}
 
 ai:
   server:

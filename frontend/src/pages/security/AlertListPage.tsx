@@ -6,10 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
 import {
-  createMockFdsEvaluations,
-  createMockFdsErrorEvaluation,
   getFdsEvaluations,
-  reevaluateMockFdsError,
   type FdsEvaluationPage,
   type FdsEvaluationSummary,
   type FdsResult,
@@ -56,9 +53,6 @@ export function AlertListPage() {
   const [summaryLoading, setSummaryLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [mockCreating, setMockCreating] = useState(false)
-  const [mockErrorCreating, setMockErrorCreating] = useState(false)
-  const [mockReevaluating, setMockReevaluating] = useState(false)
   const [caseIdsByPaymentId, setCaseIdsByPaymentId] = useState<Map<string, string>>(new Map())
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
@@ -208,47 +202,6 @@ export function AlertListPage() {
     },
     [load],
   )
-
-  const createMock = () => {
-    setMockCreating(true)
-    setError(null)
-    createMockFdsEvaluations()
-      .then(() => {
-        const current = conditions.current
-        load(0, current.filter, current.query, current.merchantId, true)
-      })
-      .catch(() => setError('Mock 평가를 생성하지 못했습니다.'))
-      .finally(() => setMockCreating(false))
-  }
-
-  const createMockError = () => {
-    setMockErrorCreating(true)
-    setError(null)
-    createMockFdsErrorEvaluation()
-      .then(() => {
-        const current = conditions.current
-        load(0, current.filter, current.query, current.merchantId, true)
-      })
-      .catch(() => setError('Mock ERROR 평가를 생성하지 못했습니다.'))
-      .finally(() => setMockErrorCreating(false))
-  }
-
-  const reevaluateMockError = () => {
-    setMockReevaluating(true)
-    setError(null)
-    reevaluateMockFdsError()
-      .then(() => {
-        const current = conditions.current
-        conditions.current = { filter: 'ALL', query: '', merchantId: current.merchantId, page: 0 }
-        setFilter('ALL')
-        setQuery('')
-        load(0, 'ALL', '', current.merchantId, true)
-      })
-      .catch(() =>
-        setError('ERROR 평가 재탐지를 실행하지 못했습니다. 먼저 ERROR 케이스를 생성해 주세요.'),
-      )
-      .finally(() => setMockReevaluating(false))
-  }
 
   const selectFilter = (nextFilter: Filter) => {
     cancelScheduledSearch()
@@ -453,15 +406,6 @@ export function AlertListPage() {
               onClick={() => loadMerchantDirectory(merchantId)}
             >
               새로고침
-            </Button>
-            <Button onClick={createMock} loading={mockCreating}>
-              Mock 평가 생성
-            </Button>
-            <Button danger onClick={createMockError} loading={mockErrorCreating}>
-              ERROR 케이스 생성
-            </Button>
-            <Button onClick={reevaluateMockError} loading={mockReevaluating}>
-              재탐지 실행
             </Button>
           </Space>
         </div>

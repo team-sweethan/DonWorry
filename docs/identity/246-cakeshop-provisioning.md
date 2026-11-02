@@ -38,7 +38,7 @@ DonWorry는 `System.getenv`로만 읽으므로 YAML·`-D`·Spring property에 �
 ```bash
 export DONWORRY_MERCHANT_HMAC_CAKESHOP="$(python3 -c 'import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())')"
 cd backend
-./gradlew --no-daemon bootRun --args='--payment.http.enabled=true --fds.mock.seed-enabled=false'
+./gradlew --no-daemon bootRun --args='--payment.http.enabled=true'
 ```
 
 같은 셸에서 실행한 두 서버는 같은 값을 상속할 수 있다. CakeShop을 다른 터미널·호스트에서 실행한다면 해당 환경의 서버 담당자끼리 접근 제한된 비밀 전달 수단으로 같은 값을 전달하고, CakeShop의 서버 전용 키 설정에 주입한다. 발신 `merchant_code`는 `CAKESHOP`이다. CakeShop의 실제 설정 이름·서명 코드 연결은 #242에서 확인한다.
