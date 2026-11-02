@@ -35,6 +35,8 @@ export type MerchantPaymentResult = {
   paymentStatus: PaymentStatus | null
   decision: Decision | null
   aiRecommendation: AiRecommendation | null
+  /** 고객이 가맹점에서 직접 승인을 취소한 결제(#439). 보안 담당자 거절과 다르다 */
+  customerCanceled: boolean
 }
 
 export type MerchantCaseDetail = {

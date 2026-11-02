@@ -28,5 +28,7 @@ public record MerchantCaseDetailResponse(
             Instant requestedAt,
             String paymentStatus,
             String decision,
-            String aiRecommendation) {}
+            String aiRecommendation,
+            // 고객이 가맹점에서 직접 승인을 취소한 결제(#382 · #439). 직원 거절(REJECT)과 구분한다
+            boolean customerCanceled) {}
 }

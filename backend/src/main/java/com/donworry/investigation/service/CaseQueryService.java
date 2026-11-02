@@ -103,6 +103,9 @@ public class CaseQueryService {
         List<Long> paymentIds =
                 rows.stream().map(HandoffListRow::paymentId).distinct().toList();
         Map<Long, PaymentInfo> infos = paymentIds.isEmpty() ? Map.of() : paymentInfoReader.findAll(paymentIds);
+        // 판정 뒤 고객이 승인을 취소한 결제(#439) — 인계가 대기 · 실패로 남아도 직원이 복구할 일이 아니다
+        Map<Long, Instant> customerCanceled = customerCanceledAt(
+                caseHistoryRepository.findByEventType(CaseHistoryEventType.PAYMENT_CANCELED_BY_CUSTOMER), "paymentId");
         return rows.stream()
                 .map(row -> new HandoffListItemResponse(
                         row.handoffId(),
@@ -118,7 +121,8 @@ public class CaseQueryService {
                         row.staffId(),
                         row.decidedAt(),
                         row.requestedAt(),
-                        row.acceptedAt()))
+                        row.acceptedAt(),
+                        customerCanceled.get(row.paymentId())))
                 .toList();
     }
 
@@ -130,7 +134,7 @@ public class CaseQueryService {
         List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
         Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         List<CaseHistory> histories = caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseId);
-        Map<Long, Instant> customerCanceled = customerCanceledAt(histories);
+        Map<Long, Instant> customerCanceled = customerCanceledAt(histories, "casePaymentId");
         return new CaseDetailResponse(
                 SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
                 casePayments.stream()
@@ -207,14 +211,13 @@ public class CaseQueryService {
                 casePayments.stream().map(CasePayment::getPaymentId).toList());
     }
 
-    // 고객 승인 취소 반영 이력(#382) → 연결 결제 ID별 P5 확정 시각
-    private static Map<Long, Instant> customerCanceledAt(List<CaseHistory> histories) {
+    // 고객 승인 취소 반영 이력(#382) → 키(casePaymentId · paymentId)별 P5 확정 시각
+    private static Map<Long, Instant> customerCanceledAt(List<CaseHistory> histories, String key) {
         Map<Long, Instant> canceled = new HashMap<>();
         for (CaseHistory history : histories) {
             if (history.getEventType() == CaseHistoryEventType.PAYMENT_CANCELED_BY_CUSTOMER) {
                 Map<String, Object> data = history.getEventData();
-                canceled.put(((Number) data.get("casePaymentId")).longValue(), Instant.parse((String)
-                        data.get("completedAt")));
+                canceled.put(((Number) data.get(key)).longValue(), Instant.parse((String) data.get("completedAt")));
             }
         }
         return canceled;

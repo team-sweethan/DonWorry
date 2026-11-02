@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getMerchantCase } from '../../api/merchantCases'
@@ -99,7 +99,9 @@ export function MerchantCaseDetailPage() {
       render: (_, p) => (
         <Space size={4} wrap>
           <CodeTag value={p.paymentStatus ? paymentStatusLabel[p.paymentStatus] : undefined} />
-          {isApplyingDecision(p.decision, p.paymentStatus) && (
+          {/* 고객이 가맹점에서 직접 취소한 결제 — 보안 담당자 거절과 구분한다 (#439) */}
+          {p.customerCanceled && <Tag>고객 취소</Tag>}
+          {!p.customerCanceled && isApplyingDecision(p.decision, p.paymentStatus) && (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               판정 반영 처리 중
             </Typography.Text>

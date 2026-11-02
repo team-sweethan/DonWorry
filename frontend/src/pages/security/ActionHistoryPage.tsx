@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Table, Typography } from 'antd'
+import { Alert, App, Button, Card, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getHandoffs } from '../../api/cases'
@@ -43,6 +43,12 @@ const cards: Array<{ tab: HandoffTab; title: string; foot: string; color?: strin
     color: '#15803D',
   },
   { tab: 'FAILED', title: '실패한 조치', foot: '결제별 · 실패 사유 확인 필요', color: '#B91C1C' },
+  {
+    tab: 'CUSTOMER_CANCELED',
+    title: '고객 취소',
+    foot: '판정 뒤 고객이 승인 취소 · 실행 안 됨',
+    color: '#64748B',
+  },
 ]
 
 /**
@@ -147,16 +153,25 @@ export function ActionHistoryPage() {
       title: '상태',
       dataIndex: 'status',
       width: 200,
-      render: (v: HandoffListItem['status'], h) => (
-        <>
-          <CodeTag value={handoffStatusLabel[v]} />
-          {h.lastErrorCode && (
-            <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>
-              {handoffErrorLabel[h.lastErrorCode] ?? h.lastErrorCode}
+      render: (v: HandoffListItem['status'], h) =>
+        h.customerCanceledAt ? (
+          // 직원 조치가 실패한 것이 아니라 고객이 먼저 승인을 취소해 실행되지 않았다 (#439)
+          <>
+            <Tag>고객 취소</Tag>
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+              {dateTime(h.customerCanceledAt)} · 조치 실행 안 됨
             </div>
-          )}
-        </>
-      ),
+          </>
+        ) : (
+          <>
+            <CodeTag value={handoffStatusLabel[v]} />
+            {h.lastErrorCode && (
+              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>
+                {handoffErrorLabel[h.lastErrorCode] ?? h.lastErrorCode}
+              </div>
+            )}
+          </>
+        ),
     },
     {
       title: '판정 직원',
