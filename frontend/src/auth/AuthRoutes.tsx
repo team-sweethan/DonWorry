@@ -22,11 +22,9 @@ import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
 import { LandingPage } from '../pages/public/LandingPage'
 import { landingEntry } from './landingEntry'
+import { screenResultHome } from './screenResultHome'
 
 const networkMessage = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
-
-// 볼 수 있는 메뉴가 없는 계정은 /login으로 보내고, 그곳에서 403과 로그아웃을 보여 준다.
-const homeOf = (user: AuthUser) => sessionNavigation(user).landing ?? '/login'
 
 function useSessionCheck() {
   const auth = useAuth()
@@ -144,6 +142,13 @@ export function LandingRoute() {
   )
 }
 
+/** 등록되지 않은 주소도 로그인 상태를 확인한 뒤 404를 보여 줘서 버튼이 바로 내 홈이나 로그인 화면으로 간다. */
+export function NotFoundRoute() {
+  const { checkedKey, key } = useSessionCheck()
+  if (checkedKey !== key) return <CheckingSession />
+  return <ScreenResult kind="404" />
+}
+
 export function LoginRoute() {
   const { store, status, user, checkedKey, error, expired, loggedOut, key } = useSessionCheck()
   const { state } = useLocation()
@@ -252,7 +257,7 @@ export function ServerSession() {
   ) : error === 'unavailable' ? (
     <SessionError retry={retry} />
   ) : error === 'forbidden' ? (
-    <ScreenResult kind="403" homePath={user ? homeOf(user) : '/login'} />
+    <ScreenResult kind="403" homePath={screenResultHome(user)} />
   ) : undefined
   if (status !== 'authenticated' || !user) return body ?? login
   if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {

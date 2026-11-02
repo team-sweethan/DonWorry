@@ -7,9 +7,9 @@ export type NavBadge = 'securityCaseActions' | 'ruleChangeRequests'
 export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 export type NavGroup = { title: string; items: NavItem[] }
 
-export const roles: Record<Role, { label: string; userName: string; landing: string }> = {
-  security: { label: '보안 직원', userName: '박지원', landing: '/security/home' },
-  owner: { label: '사장님', userName: '김사장', landing: '/owner' },
+export const roles: Record<Role, { label: string }> = {
+  security: { label: '보안 직원' },
+  owner: { label: '사장님' },
 }
 
 /** 메뉴 내용은 노션의 담당자 협의 후 수정할 수 있도록 데이터로 분리. */

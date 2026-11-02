@@ -61,7 +61,6 @@ npm run dev
 | `/admin/home`                                         | 관리자 첫 화면 — 룰 끄기 승인 대기 수·최신 5건, 사용 중지된 탐지 룰 수, 전체 계정·가맹점 수 (#307). 기존 조회 API 사용 |
 | `/admin/fds/rules`, `/admin/fds/rule-change-requests` | 탐지 룰 목록·룰 끄기 요청 관리                                                                                         |
 | `/admin/finance`                                      | 자금관리 담당자 구현 영역 (`EmptyPage`)                                                                                |
-| `/demo/login`                                         | 로컬 시연 로그인. 성공하면 `/dev/components`로 이동                                                                    |
 | `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                                 |
 | `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업              |
 | `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                                  |
@@ -71,12 +70,10 @@ npm run dev
 | `/owner/settlements`, `/owner/funds`                  | 정산 내역·자금 현황(`FINANCE_VIEW`). `SettlementRoute`의 정산·자금 시연 화면                                           |
 | `/owner/loans`                                        | 연계 대출 상품(`FINANCE_VIEW`). `LoanProductsRoute`의 상품 안내 시연 화면                                              |
 | `/owner/integration`                                  | 시크릿 키 발급·재발급·연동 안내. 업무 권한과 관계없이 사장님 접근 가능                                                 |
-| `/dev/components`                                     | 공통 UI 예시                                                                                                           |
 
 Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 실제 요청됩니다. HELD Case는 결제 스크립트(`scripts/demo/cakeshop_pay.py`, [로컬 시연 가이드](../docs/demo/local-demo.md))로 만듭니다. AI 보고서는 서버가 만듭니다(AI 서버를 끄면 고정 문장 보고서). 판정 직후에는 "금융 처리 대기 중"이고, "인계 상태 다시 확인"을 누르면 완료됩니다.
 
 [공통 레이아웃 적용 가이드](공통레이아웃_적용가이드.md)에서 담당 페이지 연결 방법과 수정 위치를 확인합니다.
-공통 UI 예시는 사이드바의 **UI 컴포넌트 보기**에서 확인할 수 있습니다.
 
 ### 사장님 공통 홈·업무 메뉴 (#90)
 
@@ -116,6 +113,6 @@ npm run test
 
 `/admin/*`·`/security/*`·`/owner/*`는 `auth/AuthRoutes.tsx`의 `ServerSession`이 지킵니다. 역할별 메뉴와 첫 화면은 `config/navigation.ts`의 `sessionNavigation`이 정합니다. 다른 역할 화면이나 권한이 없는 사장님 메뉴는 403과 "내 홈으로"를 보여주고, 볼 수 있는 메뉴가 없는 계정은 403과 로그아웃만 보여줍니다. 권한은 로그인할 때 세션에 담으므로 권한을 바꾸면 다시 로그인해야 반영됩니다.
 
-Case 화면은 시연 헤더의 가맹점(`DemoContext`) 값을 쓰지 않고 서버 응답을 그대로 보여줍니다(보안 직원은 모든 가맹점, 사장님은 자기 가맹점). 가맹점 선택은 시연 헤더에만 있어 서버 로그인 화면에서는 바꿀 수 없습니다.
+Case 화면은 서버 응답을 그대로 보여줍니다(보안 직원은 모든 가맹점, 사장님은 자기 가맹점). 시연 로그인·가맹점 선택 헤더는 #408에서 삭제했습니다.
 
 쇼핑몰 주소의 UTS #46 검증(`tr46@7.0.0`)을 위해 Node 22.14 이상(또는 Node 24 이상)을 사용합니다. CI는 Node 22 최신 버전으로 검사합니다.
