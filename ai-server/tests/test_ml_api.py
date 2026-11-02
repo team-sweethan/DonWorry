@@ -17,8 +17,9 @@ from app.service.fraud_score_service import build_fraud_score_service
 ROOT = Path(__file__).parents[1]
 KEY = "test-key"
 HEADERS = {"X-Internal-Api-Key": KEY}
-SERVICE = build_fraud_score_service(ROOT / "models/rf-v1.joblib")
-GOLDEN = json.loads((ROOT / "tests/fixtures/ml_golden.json").read_text(encoding="utf-8"))
+# 기본 모델(rf-v2)과 그 golden으로 API 계약을 확인한다 (#450)
+SERVICE = build_fraud_score_service(ROOT / "models/rf-v2.joblib")
+GOLDEN = json.loads((ROOT / "tests/fixtures/ml_golden_rf-v2.json").read_text(encoding="utf-8"))
 
 
 @pytest.fixture
@@ -142,7 +143,7 @@ def test_score_valid_request_returns_contract_fields(client: TestClient) -> None
         "latencyMs",
     }
     assert data["evaluationId"] == 7
-    assert data["modelVersion"] == "rf-v1"
+    assert data["modelVersion"] == "rf-v2"
     assert data["fraudProbability"] == pytest.approx(case["expectedProbability"], abs=1e-9)
     assert data["mlRiskLevel"] == "HIGH"
     assert set(data["features"]) == set(GOLDEN["featureColumns"])

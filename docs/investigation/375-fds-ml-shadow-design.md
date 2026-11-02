@@ -228,7 +228,8 @@ ai:
     settle-delay: PT30S
     max-attempts: 3
     # ai-server AI_SERVER_ML_MODEL_PATH의 파일 이름과 같아야 한다 (다르면 기록하지 않고 멈춘다)
-    model-version: rf-v1
+    # 기본 rf-v2 (#450). rf-v1로 되돌릴 때는 양쪽을 함께 바꾼다
+    model-version: ${ML_SHADOW_MODEL_VERSION:rf-v2}
 ```
 
 - ai-server 주소 · 서비스 키는 `ai.server.base-url` · `ai.server.api-key`를 그대로 쓴다. `ai.server.enabled`(AI 조사)와는 따로 켠다
@@ -238,7 +239,7 @@ ai:
 
 ### 로컬에서 켜는 법 (#415)
 
-1. ai-server를 켠다 — `ai-server/models/rf-v1.joblib`이 있어야 한다 (`AI_SERVER_ML_MODEL_PATH` 기본값)
+1. ai-server를 켠다 — `ai-server/models/rf-v2.joblib`이 있어야 한다 (`AI_SERVER_ML_MODEL_PATH` 기본값, #450 전에는 rf-v1)
 2. backend를 `--ai.ml-shadow.enabled=true`로 실행한다. `ai.server.api-key`는 AI 조사와 같은 값을 넘긴다 (AI 조사 `ai.server.enabled`는 꺼도 된다)
    - PowerShell 예: `.\gradlew.bat bootRun "--args=--ai.ml-shadow.enabled=true --ai.server.api-key=<ai-server/.env의 AI_SERVER_INTERNAL_API_KEY>"`
    - `application-local.yml`에는 넣지 않는다 (테스트도 읽는다)
