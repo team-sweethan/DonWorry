@@ -30,7 +30,7 @@
 | 경로 | 하는 일 |
 | --- | --- |
 | `GET /api/checkout/{sessionKey}` | 가맹점 이름·주문명·금액·만료 여부·모의 카드 목록·결과(있으면)·취소 주소·가맹점 출처 |
-| `POST /api/checkout/{sessionKey}/payments` | 모의 카드 선택 + 기기 ID로 결제. 기존 결제 접수·FDS 평가·모의 승인 흐름(`PaymentRequestFlowService`)을 그대로 탄다. IP는 돈워리가 요청에서 직접 읽되, 프록시 뒤에서도 구매자 IP가 되도록 identity의 신뢰 프록시 규칙(`identity/api/ClientIpResolver`, 로그인 이력과 같은 설정)으로 읽는다. 결제 시작 직전 가맹점이 `ACTIVE`인지 다시 확인한다(정지면 409 `MERCHANT_INACTIVE`). 처음 누른 카드·기기·IP를 세션에 고정해, 접수 뒤 평가·승인 중 실패해도 재시도는 같은 값으로 같은 시도를 이어 간다 |
+| `POST /api/checkout/{sessionKey}/payments` | 모의 카드 선택 + 기기 ID로 결제. 기존 결제 접수·FDS 평가·모의 승인 흐름(`PaymentRequestFlowService`)을 그대로 탄다. IP는 돈워리가 요청에서 직접 읽되, 프록시 뒤에서도 구매자 IP가 되도록 identity의 신뢰 프록시 규칙(`identity/api/ClientIpResolver`, 로그인 이력과 같은 설정)으로 읽는다. 결제 시작 직전 가맹점이 `ACTIVE`인지 다시 확인한다(정지면 409 `MERCHANT_INACTIVE`). 처음 누른 카드·기기·IP를 세션에 고정해, 접수 뒤 평가·승인 중 실패해도 재시도는 같은 값으로 같은 시도를 이어 간다. 세션 만료(409 `SESSION_EXPIRED`)와 가맹점 정지 검사는 **새 접수만** 막는다. 같은 시도 키로 이미 접수된 결제는 만료 뒤에도 이어서 처리하고, 결제창 열기·결과 조회도 그 결제를 찾는다 |
 | `GET /api/checkout/{sessionKey}/result` | 처리 중이면 결제창이 다시 조회 |
 
 - **로그인·쿠키를 쓰지 않는다.** 권한은 추측할 수 없는 세션 키뿐이다. 응답에 가맹점 내부 값(`customerRef`·`notifyUrl`)을 넣지 않고 `Cache-Control: no-store`를 붙인다

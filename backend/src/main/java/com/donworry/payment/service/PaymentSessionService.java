@@ -6,10 +6,12 @@ import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
 import com.donworry.payment.dto.PaymentSessionResponse;
+import com.donworry.payment.entity.PaymentRequest;
 import com.donworry.payment.entity.PaymentRiskSignals;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentSessionStatus;
 import com.donworry.payment.entity.PaymentStatus;
+import com.donworry.payment.repository.PaymentRequestRepository;
 import com.donworry.payment.repository.PaymentSessionRepository;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +22,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -40,6 +43,7 @@ public class PaymentSessionService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final PaymentSessionRepository sessions;
+    private final PaymentRequestRepository requests;
     private final PaymentRequestFlowService flow;
     private final MerchantPaymentQueryService query;
     private final TenantReader tenants;
@@ -48,12 +52,14 @@ public class PaymentSessionService {
 
     public PaymentSessionService(
             PaymentSessionRepository sessions,
+            PaymentRequestRepository requests,
             PaymentRequestFlowService flow,
             MerchantPaymentQueryService query,
             TenantReader tenants,
             PlatformTransactionManager transactionManager,
             @Value("${donworry.applications.public-base-url:http://localhost:5173}") String checkoutBaseUrl) {
         this.sessions = sessions;
+        this.requests = requests;
         this.flow = flow;
         this.query = query;
         this.tenants = tenants;
@@ -118,6 +124,8 @@ public class PaymentSessionService {
     // 결제창 화면 정보. 세션 키를 아는 사람만 연다.
     public CheckoutResponses.Session open(String sessionKey) {
         var session = requireSession(sessionKey);
+        // 접수됐지만 세션에 연결되기 전에 멈춘 결제도 있다. 만료로 막지 않고 결과를 보이거나 다시 누를 수 있게 한다
+        var admitted = admittedPaymentId(session);
         String merchantName = tenants.findById(session.getMerchantId())
                 .map(TenantSummary::name)
                 .orElse("가맹점");
@@ -132,9 +140,11 @@ public class PaymentSessionService {
                 session.getAmount(),
                 session.getBuyerEmail(),
                 session.getExpiresAt(),
-                session.getStatus() == PaymentSessionStatus.OPEN && session.expired(Instant.now()),
+                session.getStatus() == PaymentSessionStatus.OPEN
+                        && session.expired(Instant.now())
+                        && admitted.isEmpty(),
                 cards,
-                session.getPaymentId() == null ? null : result(session),
+                finishedResult(session, admitted),
                 cancelUrl(session),
                 origin(session.getSuccessUrl()));
     }
@@ -143,13 +153,17 @@ public class PaymentSessionService {
     public CheckoutResponses.Result pay(String sessionKey, CheckoutResponses.PayRequest body, String ipAddress) {
         var session = requireSession(sessionKey);
         if (session.getPaymentId() != null) return result(session);
-        if (session.expired(Instant.now())) throw new PaymentHttpException(409, "SESSION_EXPIRED", "결제 가능 시간이 지났습니다.");
         CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
-        // 세션을 만든 뒤 가맹점이 정지됐을 수 있다. 아직 접수하지 않은 결제는 시작 직전에 다시 확인한다
-        // (이미 연결된 결제의 결과 조회는 위에서 먼저 돌려주므로 막지 않는다)
-        tenants.findById(session.getMerchantId())
-                .filter(tenant -> "ACTIVE".equals(tenant.status()))
-                .orElseThrow(() -> new PaymentHttpException(409, "MERCHANT_INACTIVE", "지금은 이 가맹점에서 결제할 수 없습니다."));
+        // 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
+        // 평가 · 승인 · 세션 연결 중에 멈춘 것이라 기한이 지났어도 이어서 처리한다 (PR #425 리뷰)
+        if (admittedPaymentId(session).isEmpty()) {
+            if (session.expired(Instant.now()))
+                throw new PaymentHttpException(409, "SESSION_EXPIRED", "결제 가능 시간이 지났습니다.");
+            // 세션을 만든 뒤 가맹점이 정지됐을 수 있다. 아직 접수하지 않은 결제는 시작 직전에 다시 확인한다
+            tenants.findById(session.getMerchantId())
+                    .filter(tenant -> "ACTIVE".equals(tenant.status()))
+                    .orElseThrow(() -> new PaymentHttpException(409, "MERCHANT_INACTIVE", "지금은 이 가맹점에서 결제할 수 없습니다."));
+        }
         // 처음 누른 카드·기기·IP를 먼저 고정한다. 접수 뒤 평가·승인 중 실패해 다시 눌러도
         // 같은 값으로 같은 결제 시도를 이어 간다(카드를 바꿔 다시 눌러도 처음 값을 쓴다)
         var fixed = Objects.requireNonNull(transactions.execute(status -> {
@@ -186,14 +200,34 @@ public class PaymentSessionService {
 
     public CheckoutResponses.Result result(String sessionKey) {
         var session = requireSession(sessionKey);
-        if (session.getPaymentId() == null) return new CheckoutResponses.Result(null, false, false, null);
-        return result(session);
+        var admitted = admittedPaymentId(session);
+        if (admitted.isEmpty()) return new CheckoutResponses.Result(null, false, false, null);
+        return result(session, admitted.get());
+    }
+
+    // 세션에 연결된 결제, 없으면 이 세션의 결제 시도(attemptKey)로 이미 접수된 결제
+    private Optional<Long> admittedPaymentId(PaymentSession session) {
+        if (session.getPaymentId() != null) return Optional.of(session.getPaymentId());
+        return requests.findByMerchantIdAndIdempotencyKey(session.getMerchantId(), session.getAttemptKey())
+                .map(PaymentRequest::getPaymentId);
+    }
+
+    // 결제창을 열 때 보일 결과. 처리 중에 멈춘 결제(접수만 되고 연결 전)는 결과 대신 결제 버튼을 보여
+    // 다시 누르면 같은 시도를 이어 가게 한다 — 조회(GET)는 처리를 재개하지 않으므로 기다리게 하지 않는다
+    private CheckoutResponses.Result finishedResult(PaymentSession session, Optional<Long> admitted) {
+        if (admitted.isEmpty()) return null;
+        var result = result(session, admitted.get());
+        return session.getPaymentId() == null && result.inProgress() ? null : result;
     }
 
     // 승인되면(매입 전·보류 포함) 성공으로 돌려보낸다. 직원 거절(VOIDED)은 이후 웹훅으로 알린다.
     CheckoutResponses.Result result(PaymentSession session) {
-        MerchantPaymentResponse payment = query.findPayment(session.getMerchantId(), session.getPaymentId())
-                .orElseThrow();
+        return result(session, session.getPaymentId());
+    }
+
+    private CheckoutResponses.Result result(PaymentSession session, Long paymentId) {
+        MerchantPaymentResponse payment =
+                query.findPayment(session.getMerchantId(), paymentId).orElseThrow();
         PaymentStatus status = payment.paymentStatus();
         boolean authorized = payment.authorized();
         if (authorized

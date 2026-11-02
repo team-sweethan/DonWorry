@@ -14,8 +14,10 @@ import com.donworry.identity.api.TenantSummary;
 import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
+import com.donworry.payment.entity.PaymentRequest;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentStatus;
+import com.donworry.payment.repository.PaymentRequestRepository;
 import com.donworry.payment.repository.PaymentSessionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -33,11 +35,12 @@ class PaymentSessionServiceTests {
     private static final String FAIL = "http://shop.test/orders/1/payment/fail";
 
     private final PaymentSessionRepository sessions = mock(PaymentSessionRepository.class);
+    private final PaymentRequestRepository requests = mock(PaymentRequestRepository.class);
     private final PaymentRequestFlowService flow = mock(PaymentRequestFlowService.class);
     private final MerchantPaymentQueryService query = mock(MerchantPaymentQueryService.class);
     private final TenantReader tenants = mock(TenantReader.class);
     private final PaymentSessionService service = new PaymentSessionService(
-            sessions, flow, query, tenants, mock(PlatformTransactionManager.class), "http://pay.test/");
+            sessions, requests, flow, query, tenants, mock(PlatformTransactionManager.class), "http://pay.test/");
 
     @Test
     void create_savesSessionAndReturnsHostedCheckoutUrl() {
@@ -220,6 +223,73 @@ class PaymentSessionServiceTests {
             assertThat(command.riskSignals().ipAddress()).isEqualTo("203.0.113.10");
         });
         assertThat(session.getPaymentId()).isEqualTo(101L);
+    }
+
+    // 만료는 새 접수만 막는다. 아무것도 접수하지 않은 세션은 만료되면 409 (PR #425 리뷰)
+    @Test
+    void pay_expiredWithoutAdmission_isSessionExpired() {
+        var session = session(expiredCreatedAt());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.pay(
+                        session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10"))
+                .isInstanceOfSatisfying(
+                        PaymentHttpException.class, e -> assertThat(e.getCode()).isEqualTo("SESSION_EXPIRED"));
+        verify(flow, never()).submit(any());
+    }
+
+    // 만료 직전에 접수된 결제가 평가 · 승인 · 연결 중에 멈췄으면, 만료 · 가맹점 정지와 관계없이 같은 시도를 이어 간다
+    @Test
+    void pay_expiredButAlreadyAdmitted_resumesSameAttempt() {
+        var session = session(expiredCreatedAt());
+        session.fixAttempt("A", "abcdef12", "203.0.113.10", Instant.now());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        admitted(session, 101L);
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "INACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any())).thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        assertThat(session.getPaymentId()).isEqualTo(101L);
+        var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow).submit(command.capture());
+        assertThat(command.getValue().idempotencyKey()).isEqualTo(session.getAttemptKey());
+    }
+
+    // 접수됐지만 세션에 연결되기 전에 멈춘 결제도 결과 조회 · 결제창 열기에서 찾는다
+    @Test
+    void resultAndView_admittedButNotLinked_findPaymentByAttempt() {
+        var session = session(expiredCreatedAt());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        admitted(session, 101L);
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        assertThat(service.result(session.getSessionKey()).redirectUrl()).startsWith(SUCCESS);
+        var view = service.open(session.getSessionKey());
+        assertThat(view.expired()).isFalse();
+        assertThat(view.result().redirectUrl()).startsWith(SUCCESS);
+
+        // 처리 중에 멈춘 결제(PENDING)는 결과 대신 결제 버튼을 보여 다시 누르면 이어 가게 한다
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.PENDING, false, null)));
+        var stuck = service.open(session.getSessionKey());
+        assertThat(stuck.expired()).isFalse();
+        assertThat(stuck.result()).isNull();
+    }
+
+    private void admitted(PaymentSession session, long paymentId) {
+        var request = mock(PaymentRequest.class);
+        when(request.getPaymentId()).thenReturn(paymentId);
+        when(requests.findByMerchantIdAndIdempotencyKey(MERCHANT_ID, session.getAttemptKey()))
+                .thenReturn(Optional.of(request));
+    }
+
+    private static Instant expiredCreatedAt() {
+        return Instant.now().minus(20, ChronoUnit.MINUTES).truncatedTo(ChronoUnit.MICROS);
     }
 
     private static Instant recent() {
