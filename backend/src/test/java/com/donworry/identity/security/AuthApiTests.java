@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -118,6 +119,7 @@ class AuthApiTests {
 
     private MvcResult login(String loginId, String password, MockHttpSession session) throws Exception {
         var request = post("/api/auth/login")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(mapper.writeValueAsString(Map.of("loginId", loginId, "password", password)));
         if (session != null) request.session(session);
@@ -342,12 +344,14 @@ class AuthApiTests {
         var data = new java.util.HashMap<>(Map.of("loginId", "admin", "password", "secret"));
         data.remove(field);
         mvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(data)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
         data.put(field, " ");
         mvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(data)))
                 .andExpect(status().isBadRequest());
@@ -358,6 +362,7 @@ class AuthApiTests {
     @Test
     void login_whenLoginIdTooLong_returnsBadRequest() throws Exception {
         mvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("loginId", "a".repeat(101), "password", "secret"))))
                 .andExpect(status().isBadRequest())
@@ -370,6 +375,7 @@ class AuthApiTests {
     @Test
     void login_whenMalformedJson_returnsBadRequest() throws Exception {
         mvc.perform(post("/api/auth/login")
+                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{"))
                 .andExpect(status().isBadRequest())
@@ -389,17 +395,17 @@ class AuthApiTests {
     void logout_whenAuthenticated_invalidatesSession() throws Exception {
         var session = (MockHttpSession)
                 login("admin", "test-password", null).getRequest().getSession(false);
-        mvc.perform(post("/api/auth/logout").session(session))
+        mvc.perform(post("/api/auth/logout").with(csrf()).session(session))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""));
         assertThat(session.isInvalid()).isTrue();
-        mvc.perform(post("/api/auth/logout")).andExpect(status().isNoContent());
+        mvc.perform(post("/api/auth/logout").with(csrf())).andExpect(status().isNoContent());
     }
 
     // 비로그인 로그아웃은 세션을 만들지 않는다
     @Test
     void logout_whenAnonymous_returnsNoContent() throws Exception {
-        var result = mvc.perform(post("/api/auth/logout"))
+        var result = mvc.perform(post("/api/auth/logout").with(csrf()))
                 .andExpect(status().isNoContent())
                 .andReturn();
         assertThat(result.getRequest().getSession(false)).isNull();
@@ -492,7 +498,7 @@ class AuthApiTests {
                 login("admin", "test-password", null).getRequest().getSession(false);
         var current = (MockHttpSession)
                 login("admin", "test-password", null).getRequest().getSession(false);
-        mvc.perform(post("/api/auth/logout-all").session(current).content("{\"userId\":999}"))
+        mvc.perform(post("/api/auth/logout-all").with(csrf()).session(current).content("{\"userId\":999}"))
                 .andExpect(status().isNoContent())
                 .andExpect(content().string(""))
                 .andExpect(cookie().maxAge("JSESSIONID", 0));
@@ -502,13 +508,13 @@ class AuthApiTests {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_001"));
         mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/auth/logout-all")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout-all").with(csrf())).andExpect(status().isUnauthorized());
     }
 
     // 비로그인 전체 로그아웃은 새 세션을 만들지 않고 401을 반환한다
     @Test
     void logoutAll_whenAnonymous_returnsUnauthorizedWithoutSession() throws Exception {
-        var result = mvc.perform(post("/api/auth/logout-all"))
+        var result = mvc.perform(post("/api/auth/logout-all").with(csrf()))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_001"))
                 .andReturn();

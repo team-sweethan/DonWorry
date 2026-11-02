@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-@WebMvcTest(controllers = AuthController.class, properties = "security.csrf.enabled=true")
+@WebMvcTest(controllers = AuthController.class)
 @Import({
     SecurityConfig.class,
     JsonAuthenticationEntryPoint.class,

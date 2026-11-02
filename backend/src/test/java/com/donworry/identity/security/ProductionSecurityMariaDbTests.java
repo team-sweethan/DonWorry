@@ -84,8 +84,17 @@ class ProductionSecurityMariaDbTests {
     private HttpResponse<String> post(ConfigurableApplicationContext context, String path, String body)
             throws Exception {
         int port = ((ServletWebServerApplicationContext) context).getWebServer().getPort();
+        // 평문 테스트 서버에서도 운영 Secure 속성은 유지한다. 발급 쿠키를 명시적으로 돌려보낸다.
+        var issued = get(context, "/api/auth/csrf");
+        var token = issued.headers().allValues("set-cookie").stream()
+                .flatMap(value -> java.net.HttpCookie.parse(value).stream())
+                .filter(cookie -> cookie.getName().equals("XSRF-TOKEN"))
+                .findFirst()
+                .orElseThrow();
         var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .header("Content-Type", "application/json")
+                .header("Cookie", "XSRF-TOKEN=" + token.getValue())
+                .header("X-XSRF-TOKEN", token.getValue())
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());

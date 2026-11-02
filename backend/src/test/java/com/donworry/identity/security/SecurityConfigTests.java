@@ -41,6 +41,14 @@ import tools.jackson.databind.json.JsonMapper;
     SecurityProblemResponseWriter.class
 })
 class SecurityConfigTests {
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor token() {
+        return request -> {
+            request.setCookies(new jakarta.servlet.http.Cookie("XSRF-TOKEN", "security-test-token"));
+            request.addHeader("X-XSRF-TOKEN", "security-test-token");
+            return request;
+        };
+    }
+
     @MockitoBean
     com.donworry.identity.service.LoginHistoryService loginHistories;
 
@@ -107,12 +115,12 @@ class SecurityConfigTests {
                 .andExpect(jsonPath("$.code").value("AUTH_002"));
     }
 
-    // CSRF 검사가 꺼진 기본값에서 토큰 없는 POST는 CSRF가 아니라 권한 검사에서 막힌다
+    // 기본 설정은 토큰 없는 POST를 업무 처리 전에 거절한다
     @Test
-    void post_whenCsrfTokenMissing_reachesAuthorization() throws Exception {
+    void post_whenCsrfTokenMissing_returnsCsrfProblem() throws Exception {
         mockMvc.perform(post("/api/security-test-missing"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH_001"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("CSRF_001"));
     }
 
     // AI 서버 전용(/internal/ai/**) 밖의 내부 경로도 기본 거절을 따른다
@@ -125,9 +133,9 @@ class SecurityConfigTests {
     @Test
     void publicPaths_whenAnonymous_reachHandlers() throws Exception {
         mockMvc.perform(get("/api/auth/csrf")).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/auth/login")).andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/auth/login").with(token())).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/merchant-applications/config")).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/auth/logout")).andExpect(status().isNoContent());
+        mockMvc.perform(post("/api/auth/logout").with(token())).andExpect(status().isNoContent());
         // 이용 신청 POST는 CSRF를 항상 검사한다 — 토큰이 없으면 권한 거절(401)이 아니라 CSRF 403이다
         mockMvc.perform(post("/api/merchant-applications"))
                 .andExpect(status().isForbidden())
@@ -140,7 +148,7 @@ class SecurityConfigTests {
     @Test
     void publicPaths_withOtherMethod_areDenied() throws Exception {
         mockMvc.perform(get("/api/auth/login")).andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/api/auth/csrf")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/csrf").with(token())).andExpect(status().isUnauthorized());
     }
 
     // 컨트롤러·서비스 안 Guard가 검사하는 경로는 이번 단계에서 필터를 통과시킨다 (역할 규칙 이전은 담당 확인 후)
@@ -148,7 +156,7 @@ class SecurityConfigTests {
     void guardCheckedPaths_whenAnonymous_reachHandlers() throws Exception {
         mockMvc.perform(get("/api/security-cases")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/security-cases/1")).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/security-cases/1/decisions")).andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/security-cases/1/decisions").with(token())).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/security-cases/1/reports/2/progress")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/merchant/security-cases")).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/merchant/security-cases/1")).andExpect(status().isNotFound());
@@ -158,8 +166,8 @@ class SecurityConfigTests {
     @Test
     void guardAndPublicPrefixes_withUnregisteredPath_areDenied() throws Exception {
         mockMvc.perform(get("/api/security-cases/1/new-feature")).andExpect(status().isUnauthorized());
-        mockMvc.perform(delete("/api/security-cases/1")).andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/api/merchant/security-cases/1")).andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/api/security-cases/1").with(token())).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/merchant/security-cases/1").with(token())).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/merchant-applications/new-feature")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/merchant-applications")).andExpect(status().isUnauthorized());
     }
@@ -167,15 +175,15 @@ class SecurityConfigTests {
     // 시연용 API는 기본값(로컬·시연)에서 열려 있고 정한 메서드만 받는다
     @Test
     void demoApi_whenEnabled_reachesHandlers() throws Exception {
-        mockMvc.perform(post("/api/demo/held-payments")).andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/demo/held-payments").with(token())).andExpect(status().isNotFound());
         mockMvc.perform(get("/api/demo/held-payments")).andExpect(status().isUnauthorized());
-        mockMvc.perform(post("/api/demo/other")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/demo/other").with(token())).andExpect(status().isUnauthorized());
     }
 
     // 기본 비활성인 FDS 오류 주입 경로는 로그인 전 요청을 통과시키지 않는다.
     @Test
     void demoFdsError_whenDisabled_rejectsAnonymousRequest() throws Exception {
-        mockMvc.perform(post("/api/demo/fds-errors/next")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/demo/fds-errors/next").with(token())).andExpect(status().isUnauthorized());
     }
 
     // 운영처럼 시연용 API를 끄면 로그인 여부와 관계없이 막는다
@@ -184,8 +192,8 @@ class SecurityConfigTests {
     class WhenDemoApiDisabled {
         @Test
         void demoApi_isDenied() throws Exception {
-            mockMvc.perform(post("/api/demo/held-payments")).andExpect(status().isUnauthorized());
-            mockMvc.perform(post("/api/demo/held-payments").session(authenticatedSession()))
+            mockMvc.perform(post("/api/demo/held-payments").with(token())).andExpect(status().isUnauthorized());
+            mockMvc.perform(post("/api/demo/held-payments").with(token()).session(authenticatedSession()))
                     .andExpect(status().isForbidden());
         }
     }
@@ -198,7 +206,7 @@ class SecurityConfigTests {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andReturn();
         assertThat(loginPage.getResponse().getRedirectedUrl()).isNull();
-        mockMvc.perform(post("/logout")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/logout").with(token())).andExpect(status().isUnauthorized());
     }
 
     // 실제 권한 제한 경로가 생기기 전에도 403 응답 계약을 검증한다
