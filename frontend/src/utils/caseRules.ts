@@ -2,10 +2,22 @@ import type { AiReport, CaseStatus } from '../types/case.ts'
 
 /** 화면 표시용 업무 규칙. 최종 판단은 백엔드가 하며 여기 값은 안내용이다. */
 
+/** Case 병합 가능 기간 — 최초 생성 기준, 연장 없음 (기획 2.4). */
+export const MERGE_WINDOW_MIN = 30
 /** 조사 SLA 내부 목표 — 권장값, 미확정 (기획 2.11). */
 export const SLA_HOURS = 24
 
 const elapsedMin = (iso: string, now: number) => (now - Date.parse(iso)) / 60_000
+
+export function isMergeOpen(createdAt: string, decidedCount: number, now = Date.now()) {
+  return decidedCount === 0 && elapsedMin(createdAt, now) < MERGE_WINDOW_MIN
+}
+
+/** 병합 마감까지 남은 분. 이미 마감이면 null. */
+export function mergeRemainingMin(createdAt: string, decidedCount: number, now = Date.now()) {
+  if (!isMergeOpen(createdAt, decidedCount, now)) return null
+  return Math.max(1, Math.ceil(MERGE_WINDOW_MIN - elapsedMin(createdAt, now)))
+}
 
 /** SLA 경과 상태. 종료된 Case는 null. */
 export function slaState(createdAt: string, status: CaseStatus, now = Date.now()) {

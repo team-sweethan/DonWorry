@@ -46,12 +46,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({
-    MariaDbTestContainerConfig.class,
-    TestPaymentInfoStore.class,
-    TestFinancialActionGateway.class,
-    TestCaseMerger.class
-})
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
 class MerchantCaseFlowTests {
 
     private static final AtomicLong MERCHANT_IDS = new AtomicLong(2_000_000_000L + System.nanoTime() % 1_000_000L);
@@ -77,9 +72,6 @@ class MerchantCaseFlowTests {
     @Autowired
     TestPaymentInfoStore payments;
 
-    @Autowired
-    TestCaseMerger merger;
-
     @MockitoBean
     CurrentStaff currentStaff;
 
@@ -95,7 +87,7 @@ class MerchantCaseFlowTests {
     void list_returnsOnlyMyCasesWithOverview() throws Exception {
         String customer = customer();
         Held decided = createHeld(merchantId, customer, 300_000L, 65);
-        merger.attach(decided.caseId(), 500_000L, 72);
+        createHeld(merchantId, customer, 500_000L, 72);
         decideAll(decided.caseId(), "ACCEPT", "REJECT");
         recheckAll(decided.caseId());
         Held waiting = createHeld(merchantId, customer(), 100_000L, 60);

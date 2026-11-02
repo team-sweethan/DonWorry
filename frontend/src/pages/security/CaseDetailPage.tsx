@@ -16,7 +16,13 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
-import { SLA_HOURS, customerPart, decisionMode, latestReport } from '../../utils/caseRules'
+import {
+  SLA_HOURS,
+  customerPart,
+  decisionMode,
+  latestReport,
+  mergeRemainingMin,
+} from '../../utils/caseRules'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
@@ -30,7 +36,7 @@ import {
   fdsResultLabel,
   paymentStatusLabel,
 } from './case/caseLabels'
-import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
+import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { CodeTag } from './case/CodeTag'
 import { DecisionPanel } from './case/DecisionPanel'
 import { ReportCard } from './case/ReportCard'
@@ -148,6 +154,7 @@ export function CaseDetailPage() {
   if (detail === null || detail === undefined) return <ScreenResult kind="404" />
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
+  const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
@@ -256,6 +263,9 @@ export function CaseDetailPage() {
             <Descriptions.Item label="생성 시각">
               {dateTime(securityCase.createdAt)}
             </Descriptions.Item>
+            <Descriptions.Item label={<HelpLabel label="결제 병합" help={mergeHelp} />}>
+              {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
+            </Descriptions.Item>
             <Descriptions.Item
               label={
                 <HelpLabel label={`조사 기한 (생성 후 ${SLA_HOURS}시간)`} help={deadlineHelp} />
@@ -275,7 +285,11 @@ export function CaseDetailPage() {
           allDecided={payments.length > 0 && decisions.length >= payments.length}
         />
 
-        <CaseBundle securityCase={securityCase} payments={payments} />
+        <CaseBundle
+          securityCase={securityCase}
+          payments={payments}
+          mergeRemaining={mergeRemaining}
+        />
 
         <Card
           title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}

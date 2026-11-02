@@ -61,12 +61,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("mariadb")
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({
-    MariaDbTestContainerConfig.class,
-    TestPaymentInfoStore.class,
-    TestFinancialActionGateway.class,
-    TestCaseMerger.class
-})
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
 class CaseFlowTests {
 
     @Autowired
@@ -95,9 +90,6 @@ class CaseFlowTests {
 
     @Autowired
     TestPaymentInfoStore payments;
-
-    @Autowired
-    TestCaseMerger merger;
 
     // 로그인 세션은 P1 공개 계약으로만 본다 — 기본은 보안 직원 7번, 권한 테스트에서만 바꾼다
     @MockitoBean
@@ -132,9 +124,9 @@ class CaseFlowTests {
         }
     }
 
-    // 결제 1건 = Case 1개 (#428): 같은 고객의 서로 다른 결제가 동시에 와도 각자 Case가 생기고 결제마다 연결은 하나다
+    // 같은 고객의 서로 다른 결제가 동시에 처음 와도 Case는 하나로 모인다 (fds 정본 03 §3.4 생성 경쟁)
     @Test
-    void receive_differentPaymentsSameCustomerConcurrently_createSeparateCases() throws Exception {
+    void receive_differentPaymentsSameCustomerConcurrently_shareOneCase() throws Exception {
         String customer = customer();
         CountDownLatch start = new CountDownLatch(1);
         try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
@@ -153,12 +145,9 @@ class CaseFlowTests {
             start.countDown();
 
             Long caseId = firstCase.get(30, TimeUnit.SECONDS);
-            Long otherCaseId = secondCase.get(30, TimeUnit.SECONDS);
-            assertThat(otherCaseId).isNotEqualTo(caseId);
+            assertThat(secondCase.get(30, TimeUnit.SECONDS)).isEqualTo(caseId);
             assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId))
-                    .hasSize(1);
-            assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(otherCaseId))
-                    .hasSize(1);
+                    .hasSize(2);
         }
     }
 
@@ -257,28 +246,22 @@ class CaseFlowTests {
                 .containsExactly("CASE_CREATED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
     }
 
-    // 결제 1건 = Case 1개 (#428): 같은 고객의 두 번째 HELD 결제는 30분 안이어도 새 Case가 되고,
-    // 첫 Case의 증거 버전 · 보고서는 그대로다. 결제 Case에는 병합 기한(mergeUntil)이 없다
+    // 같은 고객의 두 번째 HELD 결제는 같은 Case에 병합되고 증거 버전 · 보고서 버전이 오른다
     @Test
-    void secondHeldPayment_sameCustomer_createsNewCase() throws Exception {
+    void secondHeldPayment_sameCustomer_mergesIntoCase() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
         Held second = createHeld(customer, 500_000L, 72);
 
-        assertThat(second.caseId()).isNotEqualTo(first.caseId());
-        for (Held held : List.of(first, second)) {
-            CaseDetailResponse detail = caseQueryService.detail(held.caseId());
-            assertThat(detail.securityCase().evidenceVersion()).isEqualTo(1);
-            assertThat(detail.securityCase().mergeUntil()).isNull();
-            assertThat(detail.payments())
-                    .singleElement()
-                    .extracting(CaseDetailResponse.CasePaymentResponse::paymentId)
-                    .isEqualTo(held.paymentId());
-            assertThat(detail.reports())
-                    .extracting(CaseDetailResponse.AiReportResponse::reportVersion)
-                    .containsExactly(1);
-            assertThat(detail.securityCase().status()).isEqualTo("DECISION_PENDING");
-        }
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+
+        assertThat(second.caseId()).isEqualTo(first.caseId());
+        assertThat(detail.securityCase().evidenceVersion()).isEqualTo(2);
+        assertThat(detail.payments()).hasSize(2);
+        assertThat(detail.reports())
+                .extracting(CaseDetailResponse.AiReportResponse::reportVersion)
+                .containsExactly(1, 2);
+        assertThat(detail.securityCase().status()).isEqualTo("DECISION_PENDING");
     }
 
     // 같은 결제가 두 번 와도 Case 연결은 한 번만 한다
@@ -301,7 +284,7 @@ class CaseFlowTests {
     void decideAllPayments_pendingThenRecheck_closesCaseWithCompletedPayments() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        merger.attach(first.caseId(), 500_000L, 72);
+        createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         List<CaseDetailResponse.CasePaymentResponse> payments = detail.payments();
 
@@ -473,7 +456,7 @@ class CaseFlowTests {
     void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        merger.attach(first.caseId(), 500_000L, 72);
+        createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
 
@@ -490,7 +473,7 @@ class CaseFlowTests {
     void decide_withStaleEvidenceVersion_returnsConflict() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        merger.attach(first.caseId(), 500_000L, 72);
+        createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
         perform(decide(
@@ -508,7 +491,7 @@ class CaseFlowTests {
     void decide_withOldReport_returnsConflict() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        merger.attach(first.caseId(), 500_000L, 72);
+        createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long oldReportId = detail.reports().get(0).reportId();
 
@@ -580,7 +563,7 @@ class CaseFlowTests {
     void paymentLinks_returnsOnlyLinkedPayments() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        Held second = new Held(merger.attach(first.caseId(), 200_000L, 60), first.caseId());
+        Held second = createHeld(customer, 200_000L, 60);
         long unlinked = System.nanoTime();
 
         perform(get("/api/security-cases/payment-links")
@@ -619,7 +602,7 @@ class CaseFlowTests {
         loginAs(42L, "SECURITY_STAFF");
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        Held second = new Held(merger.attach(first.caseId(), 500_000L, 72), first.caseId());
+        Held second = createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Map<Long, Long> casePaymentIds = new HashMap<>();
         detail.payments().forEach(p -> casePaymentIds.put(p.paymentId(), p.casePaymentId()));
@@ -691,7 +674,7 @@ class CaseFlowTests {
     void list_includesCaseSummary() throws Exception {
         String customer = customer();
         Held first = createHeld(customer, 300_000L, 65);
-        merger.attach(first.caseId(), 500_000L, 72);
+        createHeld(customer, 500_000L, 72);
 
         perform(get("/api/security-cases"))
                 .andExpect(status().isOk())

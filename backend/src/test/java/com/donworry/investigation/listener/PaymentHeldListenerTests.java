@@ -81,9 +81,9 @@ class PaymentHeldListenerTests {
                 .isEqualTo(1);
     }
 
-    // 결제 1건 = Case 1개 (#428): 같은 고객의 두 번째 HELD가 30분 안에 와도 새 Case가 되고 첫 Case 증거 버전은 그대로다
+    // 같은 고객의 두 번째 HELD가 30분 안에 오면 기존 Case에 병합되고 증거 버전이 오른다
     @Test
-    void on_secondHeldOfSameCustomerWithinWindow_createsSeparateCase() {
+    void on_secondHeldOfSameCustomerWithinWindow_mergesIntoExistingCase() {
         String customer = customer();
         PaymentHeld first = held(newPaymentId(), customer);
         PaymentHeld second = held(newPaymentId(), customer);
@@ -92,9 +92,9 @@ class PaymentHeldListenerTests {
         Long caseId = awaitLink(first.paymentId()).getSecurityCase().getId();
         publishAndCommit(second);
 
-        assertThat(awaitLink(second.paymentId()).getSecurityCase().getId()).isNotEqualTo(caseId);
+        assertThat(awaitLink(second.paymentId()).getSecurityCase().getId()).isEqualTo(caseId);
         assertThat(securityCaseRepository.findById(caseId).orElseThrow().getEvidenceVersion())
-                .isEqualTo(1);
+                .isEqualTo(2);
     }
 
     // P5가 롤백한 HELD 통지로는 Case를 만들지 않는다

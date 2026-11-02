@@ -1,17 +1,20 @@
 import { ArrowRightOutlined } from '@ant-design/icons'
-import { Card } from 'antd'
+import { Card, Space } from 'antd'
 import type { CasePayment, SecurityCase } from '../../../types/case'
 import { customerPart } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
+import { HelpLabel, mergeHelp } from './CaseTimeLabels'
 
 // 경보 → 사건 묶음 그림 (#320) — 보류된 결제들이 어떻게 사건 하나로 묶였는지 보인다
-// 결제 Case는 결제 1건 = Case 1개다 (#428). 결제 여러 건 묶음은 이후 로그인 보안 경보 Case에서 쓴다
+// 첫 결제가 사건을 만들고, 그 뒤 같은 고객 결제는 병합 기한 안에 들어와 합쳐진 것이다
 export function CaseBundle({
   securityCase,
   payments,
+  mergeRemaining,
 }: {
   securityCase: SecurityCase
   payments: CasePayment[]
+  mergeRemaining: number | null
 }) {
   const ordered = [...payments].sort((a, b) => Date.parse(a.linkedAt) - Date.parse(b.linkedAt))
   return (
@@ -37,7 +40,11 @@ export function CaseBundle({
         <div style={caseBox}>
           <strong>사건 {securityCase.caseId}</strong>
           <span style={{ color: '#64748b' }}>고객 {customerPart(securityCase.customerRef)}</span>
-          <span>결제 {payments.length}건</span>
+          <span>결제 {payments.length}건 묶음</span>
+          <Space size={4} style={{ color: '#64748b', fontSize: 12 }}>
+            <HelpLabel label="결제 병합" help={mergeHelp} />
+            {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
+          </Space>
         </div>
       </div>
     </Card>

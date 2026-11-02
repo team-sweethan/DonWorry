@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import type { CaseStatus, CaseSummary } from '../../types/case'
+import { mergeRemainingMin } from '../../utils/caseRules'
 import {
   caseListSearch,
   caseListTab,
@@ -21,7 +22,7 @@ import {
 import { won } from '../../utils/format'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
-import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
+import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { StatButton } from './case/StatButton'
 
 const statusOptions: Array<{ value: StatusFilter; label: string }> = [
@@ -224,6 +225,19 @@ export function CaseListPage() {
       render: (_, c) => (c.closedAt ? dateTime(c.closedAt) : '-'),
     },
     {
+      title: <HelpLabel label="결제 병합" help={mergeHelp} />,
+      key: 'merge',
+      width: 110,
+      render: (_, c) => {
+        const remaining = mergeRemainingMin(c.createdAt, c.decidedCount)
+        return remaining === null ? (
+          <span style={{ color: '#94a3b8' }}>마감</span>
+        ) : (
+          <span style={{ color: '#2563eb', fontWeight: 600 }}>{remaining}분 남음</span>
+        )
+      },
+    },
+    {
       title: <HelpLabel label="조사 기한" help={deadlineHelp} />,
       key: 'sla',
       width: 130,
@@ -238,9 +252,9 @@ export function CaseListPage() {
     },
   ]
 
-  // 종료 탭은 진행용 열(조사 기한)을 빼고 종료 시각을 보인다. 그 밖의 탭은 종료 시각을 뺀다
+  // 종료 탭은 진행용 열(결제 병합 · 조사 기한)을 빼고 종료 시각을 보인다. 그 밖의 탭은 종료 시각을 뺀다
   const columns = allColumns.filter((col) =>
-    tab === 'CLOSED' ? col.key !== 'sla' : col.key !== 'closedAt',
+    tab === 'CLOSED' ? col.key !== 'merge' && col.key !== 'sla' : col.key !== 'closedAt',
   )
 
   return (

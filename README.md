@@ -33,7 +33,7 @@ Spring Boot 4 · Spring Modulith 기반 백엔드, React 화면, FastAPI AI 서�
   아직: 나머지 업무 API의 접근 제한과 CSRF 검사 활성화(#68 5단계). → [P1 문서](docs/identity/README.md)
 - **P2 fds** — 결제마다 규칙 7개(고액·단시간 반복·새 기기·새 카드·고위험 국가 IP·카드 테스팅·차단 목록)로 점수 계산, 50점 이상 REVIEW · 80점 이상 DENY, 평가 실패는 ERROR(자동 승인 안 함), 평가·적중 근거 저장, 경보 목록·상세 API, 평가 오류 분석·재탐지.
   아직: 규칙·차단 목록 관리 화면(관리자 FDS 메뉴는 빈 화면).
-- **P3 investigation** — HELD 결제로 Case 생성(결제 1건 = Case 1개, #428), 결제별 ACCEPT / REJECT 판정, P5 금융 조치 인계(완료 기반)와 다시 확인, Case 종료, 24시간 조사 기한 표시(기한 초과만으로 자동 판정하지 않음), 사장님 조치 결과 조회. → [P3 문서](docs/investigation/README.md)
+- **P3 investigation** — HELD 결제로 Case 생성, 같은 가맹점·고객 30분 병합, 결제별 ACCEPT / REJECT 판정, P5 금융 조치 인계(완료 기반)와 다시 확인, Case 종료, 24시간 조사 기한 표시(기한 초과만으로 자동 판정하지 않음), 사장님 조치 결과 조회, 시연 버튼(메모리 결제). → [P3 문서](docs/investigation/README.md)
 - **P4 report + ai-server** — Case 생성·병합 때 보고서 자동 요청, ai-server(FastAPI·LangGraph)에 비동기 조사(202)·결과 콜백·재시도 3회·마감 확인·재시작 복구, 읽기 전용 Tool 2종(Case 결제·FDS 근거), Qwen `qwen2.5:7b` 또는 mock. AI 서버를 끄면 고정 문장 보고서. 결제가 병합되면 새 버전으로 다시 조사하고 이전 버전은 보존, 3번 모두 실패하면 직원이 직접 조사해 판정. AI는 결제를 바꾸지 않습니다.
   아직: 나머지 Tool(결제 이력·인증·보안 이벤트 등), 보고서 문장 품질. → [ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md)
 - **P5 payment** — CakeShop 결제 API(HMAC, `payment.http.enabled` 기본 꺼짐), FDS 평가 요청, 모의 카드 승인, REVIEW 승인 건 HELD, 직원 판정에 따른 CAPTURE · VOID, P6 매입 완료 반영, 보안 직원용 결제 운영 조회 API, FDS 오류 복구 저장.

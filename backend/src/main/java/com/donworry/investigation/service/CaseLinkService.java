@@ -34,14 +34,10 @@ public class CaseLinkService {
     // 같은 결제가 다시 와도 이미 연결된 Case를 돌려주고 아무것도 바꾸지 않는다 (AGENTS 4절 멱등)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long link(HeldPayment heldPayment) {
-        // 결제 Case는 결제 1건 = Case 1개라 병합 후보를 찾지 않는다 (#428). 병합하는 유형이 생기면
         // 잠금 조회를 트랜잭션의 첫 조회로 둔다 — 일반 조회가 먼저면 그 시점 스냅숏이 고정돼
         // 잠금을 기다린 뒤 MariaDB가 "Record has changed since last read"로 실패한다 (innodb_snapshot_isolation)
-        // 같은 결제가 동시에 두 번 와도 case_payments.payment_id UNIQUE와 CaseIntakeService 재시도로 하나만 남는다
         Instant now = Instant.now();
-        SecurityCase securityCase = InvestigationRules.mergesPayments(CaseType.PAYMENT_FRAUD)
-                ? findMergeTarget(heldPayment, now).orElse(null)
-                : null;
+        SecurityCase securityCase = findMergeTarget(heldPayment, now).orElse(null);
 
         Optional<CasePayment> linked = casePaymentRepository.findByPaymentId(heldPayment.paymentId());
         if (linked.isPresent()) {
