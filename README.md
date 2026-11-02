@@ -259,10 +259,9 @@ cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 1. `frontend/`에서 `npm run dev`를 실행하고 `http://localhost:5173`에 접속합니다. 로그인과 Case·조치 결과 화면은 백엔드(8081)와 DB가 필요합니다([프론트 README](frontend/README.md#실행)).
 2. [프론트 README](frontend/README.md)의 보안 직원 시연 계정으로 로그인합니다. [로컬 시연 가이드 2절](docs/demo/local-demo.md#2-실제-결제부터-매입까지)의 결제 스크립트로 HELD Case를 만들고, **Case 목록**에서 판정 → "금융 처리 대기 중" → "인계 상태 다시 확인" → Case 종료까지 확인합니다. 예전 "시연: HELD 결제 발생" 버튼은 #163에서 지웠습니다. **경보 목록 → 경보 상세**와 역할별 메뉴도 확인합니다.
 3. 사장님 시연 계정으로 로그인해 **조치 결과**에서 내 가맹점 Case의 직원 판정과 실제 결제 상태를 확인합니다.
-4. 사이드바의 **UI 컴포넌트 보기**에서 공통 UI 예시를 확인합니다.
-5. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
+4. 백엔드를 함께 띄웠다면 기동 로그에서 Flyway migration 적용을 확인합니다 ([Flyway 작업 가이드 4절](docs/flyway/05-guide.md#4-적용-결과-확인)).
 
-시연 계정은 로컬 확인 전용이며 실제 인증·인가를 제공하지 않습니다. 자세한 내용은 [프론트 README](frontend/README.md)를 봅니다.
+시연 계정은 로컬 확인 전용입니다. 자세한 내용은 [프론트 README](frontend/README.md)를 봅니다.
 
 ## Project Structure
 

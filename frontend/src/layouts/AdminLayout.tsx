@@ -3,32 +3,25 @@ import {
   AlertOutlined,
   AppstoreOutlined,
   BankOutlined,
-  BellOutlined,
   ControlOutlined,
   CreditCardOutlined,
-  DownOutlined,
   FileSearchOutlined,
   FormOutlined,
   FundOutlined,
   HomeOutlined,
   KeyOutlined,
-  LogoutOutlined,
   PoweroffOutlined,
   SafetyOutlined,
   SecurityScanOutlined,
-  SettingOutlined,
   ShopOutlined,
   StopOutlined,
   TeamOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
 import { BrandMark, Mascot } from '../components/brand/BrandMark'
-import { Button, Select, Tooltip } from 'antd'
 import type { ReactNode } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { navByRole, roles, type Role, type NavBadge, type NavGroup } from '../config/navigation'
-import { useDemo } from '../demo/DemoContext'
-import { useFeedback } from '../components/common/Feedback'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import type { NavBadge, NavGroup } from '../config/navigation'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
 
 export type ManagementRole = 'admin' | 'security' | 'owner'
@@ -82,82 +75,9 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/fds/rule-change-requests': <PoweroffOutlined />,
 }
 
-function Header() {
-  const { role, merchant, setRole, setMerchant, logout } = useDemo()
-  const navigate = useNavigate()
-  const { toast } = useFeedback()
-  return (
-    <header className="dw-header">
-      <ManagementBrand role={role} home={roles[role].landing} />
-      <div className="dw-header-center" />
-      <div className="dw-header-tools">
-        <span className="dw-muted-label">가맹점</span>
-        {role === 'security' ? (
-          <Select
-            aria-label="조회 가맹점"
-            value={merchant}
-            style={{ width: 118 }}
-            options={[
-              { value: 'CakeShop', label: 'CakeShop' },
-              { value: 'DemoMart', label: 'DemoMart' },
-            ]}
-            onChange={setMerchant}
-          />
-        ) : (
-          <span className="dw-user-name">CakeShop</span>
-        )}
-        <Tooltip title="알림: 실제 서버 연동 전">
-          <Button
-            aria-label="알림"
-            type="text"
-            shape="circle"
-            icon={<BellOutlined style={{ fontSize: 19, color: '#64748b' }} />}
-            onClick={() => toast.info('알림 기능은 아직 연결되지 않았습니다.')}
-          />
-        </Tooltip>
-        <span className="dw-user-name">{roles[role].userName}</span>
-        <span className="dw-role-pill">{roles[role].label}</span>
-        <Tooltip title="실제 권한 변경이 아닌 개발용 시연 역할 전환">
-          <Select
-            aria-label="시연 역할 전환"
-            value={role}
-            style={{ width: 116 }}
-            suffixIcon={<DownOutlined />}
-            options={[
-              { value: 'security', label: '보안 직원' },
-              { value: 'owner', label: '사장님' },
-            ]}
-            onChange={(v) => {
-              setRole(v as Role)
-              navigate(roles[v as Role].landing)
-            }}
-          />
-        </Tooltip>
-        <Button
-          icon={<LogoutOutlined />}
-          onClick={() => {
-            logout()
-            navigate('/demo/login')
-          }}
-        >
-          로그아웃
-        </Button>
-      </div>
-    </header>
-  )
-}
-
 type NavBadges = Partial<Record<NavBadge, number | null>>
 
-function Sidebar({
-  groups,
-  badges = {},
-  demo = false,
-}: {
-  groups: NavGroup[]
-  badges?: NavBadges
-  demo?: boolean
-}) {
+function Sidebar({ groups, badges = {} }: { groups: NavGroup[]; badges?: NavBadges }) {
   const location = useLocation()
 
   return (
@@ -199,35 +119,8 @@ function Sidebar({
         <strong>안심하고, 가게에 집중하세요</strong>
         <p>결제 보안부터 자금관리까지 돈워리가 함께 지켜요.</p>
       </div>
-      {demo && (
-        <div className="dw-sidebar-bottom">
-          <div className="dw-sidebar-tip">
-            <strong>공통 관리 화면 v1.0</strong>
-            <div>프론트 디자인 시스템 샘플</div>
-            <div style={{ marginTop: 5 }}>API 미연결 · 로컬 시연 데이터</div>
-            <NavLink
-              to="/dev/components"
-              style={{
-                display: 'inline-flex',
-                color: 'inherit',
-                marginTop: 8,
-                textDecoration: 'underline',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <SettingOutlined /> UI 컴포넌트 보기
-            </NavLink>
-          </div>
-        </div>
-      )}
     </aside>
   )
-}
-
-export function AdminLayout() {
-  const { role } = useDemo()
-  return <ManagementLayout role={role} header={<Header />} groups={navByRole[role]} demo />
 }
 
 export function ManagementLayout({
@@ -235,7 +128,6 @@ export function ManagementLayout({
   header,
   groups,
   badges,
-  demo = false,
   responsive = false,
   children,
 }: {
@@ -243,7 +135,6 @@ export function ManagementLayout({
   header: ReactNode
   groups: NavGroup[]
   badges?: NavBadges
-  demo?: boolean
   responsive?: boolean
   children?: ReactNode
 }) {
@@ -257,7 +148,7 @@ export function ManagementLayout({
         본문으로 바로 가기
       </a>
       {header}
-      <Sidebar groups={groups} badges={badges} demo={demo} />
+      <Sidebar groups={groups} badges={badges} />
       <main className="dw-main" id="main" tabIndex={-1}>
         <div className="dw-container">
           {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}

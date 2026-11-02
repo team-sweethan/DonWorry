@@ -135,7 +135,6 @@ test('loginDestination_whenPathUnsafe_usesLanding', () => {
     '/security//cases/3',
     ' /security/cases/3',
     '/security/cases/3#detail',
-    '/demo/login',
     '/api/auth/logout',
   ]) {
     assert.equal(loginDestination(staff, { returnTo }), '/security/home', returnTo)
