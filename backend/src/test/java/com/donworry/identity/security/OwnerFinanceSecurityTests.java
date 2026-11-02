@@ -90,14 +90,18 @@ class OwnerFinanceSecurityTests {
         assertThat(result.getResponse().getRedirectedUrl()).isNull();
     }
 
-    // 읽기·쓰기뿐 아니라 HEAD·OPTIONS도 같은 역할·권한 조건으로 검사한다
+    // 사장님도 등록한 메서드(GET)만 통과하고, 그 밖의 메서드는 HEAD·OPTIONS까지 기본 거절한다 (ADR-0067)
     @ParameterizedTest
     @ValueSource(strings = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
-    void finance_whenOwnerWithPermission_passesAllMethods(String method) throws Exception {
-        mvc.perform(request(HttpMethod.valueOf(method), URI.create("/api/v1/settlements/report"))
+    void finance_whenOwnerWithPermission_passesOnlyRegisteredMethod(String method) throws Exception {
+        var expected = method.equals("GET") ? status().isOk() : status().isForbidden();
+        var result = mvc.perform(request(HttpMethod.valueOf(method), URI.create("/api/v1/settlements/report"))
                         .with(authentication(owner()))
                         .with(csrf()))
-                .andExpect(status().isOk());
+                .andExpect(expected)
+                .andReturn();
+        if (!method.equals("GET") && !method.equals("HEAD"))
+            assertThat(result.getResponse().getContentAsString()).contains("AUTH_002");
         mvc.perform(request(HttpMethod.valueOf(method), URI.create("/api/v1/settlements/report"))
                         .with(csrf()))
                 .andExpect(status().isUnauthorized());

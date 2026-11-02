@@ -62,7 +62,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0036](0036-fds-failure-analysis-and-reevaluation.md) | P2 FDS 오류 분석·재탐지 계약 | 전체 계약 제안 — 내부 ERROR 정책·명시적 실행 방식 합의 완료, P5 저장·API 및 잠금·전달 복구·CSRF 설계 사용자 승인·문서화, 구현·통합 검증 전 |
 | [0037](0037-merchant-hmac-authentication.md) | CakeShop 요청 HMAC 인증과 가맹점 신원 | 제안 — #219·#241 사용자 구현 승인, P6 업무 연결 후속·PR 리뷰 대상 |
 | [0038](0038-settlement-identity-dependency.md) | Settlement → Identity 의존 허용 (ADR-0012 보류 항목 확정) | 채택 — #240·#241 선행, P1 결정 (P6 별도 리뷰 없음) |
-| [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 채택 — P1 결정 (P6 확인 전), P6 실제 통합 후속 |
+| [0039](0039-owner-finance-session-authorization.md) | 사장님 정산·자금관리의 세션 인가 | 채택 — P1 결정 (P6 확인 전), P6 실제 통합 후속. 모든 메서드 통과 부분은 0067로 대체 |
 | [0040](0040-fds-v02-rule-input-contract.md) | FDS v0.2 룰 입력과 P2 정책 저장소 | 제안 — P2·P5 구현 중 |
 | [0041](0041-ai-server-internal-api-key-authentication.md) | AI 서버 내부 API 서비스 키 인증 | 제안 — #266 P1 동의, PR 리뷰 대상 |
 | [0042](0042-fds-rule-management.md) | FDS 룰 활성화와 변경 승인 관리 | 제안 — #283 구현 반영, PR 리뷰 대상 |
@@ -93,6 +93,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 
 | [0065](0065-case-session-authorization.md) | Case HTTP 경로의 세션 역할 인가 | 제안 — #408 PR C 사용자 구현 승인, PR 리뷰 대상 |
 | [0066](0066-fds-error-analysis-detail-contract.md) | FDS 경보 상세의 오류 원인·분석 결과 공개 계약 | 제안 — 사용자 구현 승인, PR 리뷰 대상 |
+| [0067](0067-role-api-matrix.md) | 직원 세션 API의 역할 × 권한표와 가맹점 범위 | 제안 — #420 P1 결정, PR 리뷰 대상 |
 
 ## 현재 적용 상태와 기록의 구분
 

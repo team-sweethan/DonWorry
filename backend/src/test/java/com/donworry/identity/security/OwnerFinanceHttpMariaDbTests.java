@@ -3,12 +3,12 @@ package com.donworry.identity.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.MariaDbTestContainerConfig;
-import com.donworry.identity.api.CurrentStaff;
-import com.donworry.identity.api.StaffSummary;
 import com.donworry.identity.service.UserSessionService;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,18 +18,20 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.json.JsonMapper;
 
-// P6 업무 API가 아닌 테스트 수신부로 실제 로그인·공개 조회·공통 인가의 연결만 검증한다
+// 실제 P6 현금흐름 설정 API로 실제 로그인·세션 가맹점·공통 인가의 연결을 검증한다.
+// 정산 규칙은 등록한 메서드·경로만 열므로 테스트 전용 경로를 쓰면 허용 여부와 관계없이 거절된다 (ADR-0067)
 @Tag("mariadb")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import({MariaDbTestContainerConfig.class, OwnerFinanceHttpMariaDbTests.ProbeController.class})
+// P6 사장님 API는 기본 비활성이라 이 테스트에서만 켠다 (docs/settlement/balance-expenses-api.md)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "settlement.owner-http.enabled=true")
+@Import(MariaDbTestContainerConfig.class)
 // 테스트 전용 컨텍스트의 연결 풀을 반납해 뒤의 동시성 검사가 DB 연결 한도를 넘지 않게 한다.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class OwnerFinanceHttpMariaDbTests {
-    private static final String PROBE = "/api/v1/settlements/auth-probe";
+    private static final String SETTINGS = "/api/v1/settlements/cash-flow/settings";
 
     @LocalServerPort
     int port;
@@ -79,6 +81,7 @@ class OwnerFinanceHttpMariaDbTests {
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
         }
         for (Long id : ids) jdbc.update("DELETE FROM platform_users WHERE user_id=?", id);
+        jdbc.update("DELETE FROM cash_flow_settings WHERE merchant_id=?", merchantId);
         jdbc.update("DELETE FROM merchants WHERE merchant_id=?", merchantId);
     }
 
@@ -118,6 +121,12 @@ class OwnerFinanceHttpMariaDbTests {
                 caller, "POST", "/api/auth/login", Map.of("loginId", prefix + suffix, "password", "FinancePass123"));
     }
 
+    // 필터를 통과해 P6 업무 코드까지 갔다는 표시: 설정이 없는 가맹점은 업무 오류 404다
+    private void reachedSettings(HttpResponse<String> response) {
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).contains("SETTLEMENT_SETTING_REQUIRED");
+    }
+
     private void problem(HttpResponse<String> response, int status, String code) {
         assertThat(response.statusCode()).isEqualTo(status);
         assertThat(response.headers().firstValue("content-type").orElseThrow()).startsWith("application/problem+json");
@@ -125,22 +134,27 @@ class OwnerFinanceHttpMariaDbTests {
         assertThat(response.headers().firstValue("location")).isEmpty();
     }
 
-    // 실제 쿠키의 가맹점이 공개 API로 전달되고 기본 CSRF 보호 아래 읽기·쓰기가 유지된다
+    // 실제 쿠키의 가맹점이 업무 API로 전달되고, 요청에 넣은 다른 가맹점 번호는 쓰이지 않는다
     @Test
     void finance_whenRealOwnerSession_exposesAuthenticatedMerchantOnly() throws Exception {
-        problem(send(client(), "GET", PROBE, null), 401, "AUTH_001");
-        for (String method : List.of("GET", "POST", "PUT", "PATCH", "DELETE")) {
-            var response = send(owner, method, PROBE + "?merchantId=999999", Map.of("merchantId", 999999));
-            assertThat(response.statusCode()).isEqualTo(200);
-            var summary = mapper.readTree(response.body());
-            assertThat(summary.path("merchantId").asLong()).isEqualTo(merchantId);
-            assertThat(summary.path("userId").asLong()).isEqualTo(ownerId);
-        }
-        // 실제 P6 Controller가 없는 경로도 비로그인은 차단하고 정상 세션만 라우팅까지 진행한다.
-        problem(send(client(), "GET", "/api/v1/settlements/report", null), 401, "AUTH_001");
-        assertThat(send(owner, "GET", "/api/v1/settlements/report", null).statusCode())
-                .isEqualTo(404);
-        problem(send(admin, "GET", PROBE, null), 403, "AUTH_002");
+        problem(send(client(), "GET", SETTINGS, null), 401, "AUTH_001");
+        reachedSettings(send(owner, "GET", SETTINGS + "?merchantId=999999", null));
+        var today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString();
+        var saved = send(
+                owner,
+                "PUT",
+                SETTINGS + "?merchantId=999999",
+                Map.of("openingBalance", 1000, "baseDate", today, "merchantId", 999999));
+        assertThat(saved.statusCode()).isEqualTo(200);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM cash_flow_settings WHERE merchant_id=?", Integer.class, merchantId))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM cash_flow_settings WHERE merchant_id=999999", Integer.class))
+                .isZero();
+        // 등록하지 않은 메서드는 정상 사장님 세션이어도 기본 거절이다
+        problem(send(owner, "PATCH", SETTINGS, Map.of()), 403, "AUTH_002");
+        problem(send(admin, "GET", SETTINGS, null), 403, "AUTH_002");
         var me = mapper.readTree(send(admin, "GET", "/api/auth/me", null).body());
         assertThat(me.path("permissions").toString()).contains("FINANCE_VIEW");
         user("staff", "SECURITY_STAFF", null, true);
@@ -148,8 +162,8 @@ class OwnerFinanceHttpMariaDbTests {
         for (String suffix : List.of("staff", "no_permission")) {
             var denied = client();
             assertThat(login(denied, suffix).statusCode()).isEqualTo(200);
-            problem(send(denied, "GET", PROBE, null), 403, "AUTH_002");
-            problem(send(denied, "PUT", PROBE, Map.of()), 403, "AUTH_002");
+            problem(send(denied, "GET", SETTINGS, null), 403, "AUTH_002");
+            problem(send(denied, "PUT", SETTINGS, Map.of()), 403, "AUTH_002");
         }
     }
 
@@ -159,9 +173,9 @@ class OwnerFinanceHttpMariaDbTests {
         assertThat(send(admin, "PUT", "/api/admin/users/" + ownerId + "/permissions", Map.of("permissions", List.of()))
                         .statusCode())
                 .isEqualTo(204);
-        problem(send(owner, "GET", PROBE, null), 401, "AUTH_001");
+        problem(send(owner, "GET", SETTINGS, null), 401, "AUTH_001");
         assertThat(login(owner, "owner").statusCode()).isEqualTo(200);
-        problem(send(owner, "GET", PROBE, null), 403, "AUTH_002");
+        problem(send(owner, "GET", SETTINGS, null), 403, "AUTH_002");
     }
 
     // 계정 정지는 관리 API의 기존 세션 종료 흐름을 통해 업무 요청과 재로그인을 막는다
@@ -170,7 +184,7 @@ class OwnerFinanceHttpMariaDbTests {
         assertThat(send(admin, "PUT", "/api/admin/users/" + ownerId + "/status", Map.of("status", "INACTIVE"))
                         .statusCode())
                 .isEqualTo(204);
-        problem(send(owner, "PUT", PROBE, Map.of()), 401, "AUTH_001");
+        problem(send(owner, "PUT", SETTINGS, Map.of()), 401, "AUTH_001");
         problem(login(owner, "owner"), 401, "AUTH_004");
     }
 
@@ -180,7 +194,7 @@ class OwnerFinanceHttpMariaDbTests {
         assertThat(send(admin, "PUT", "/api/admin/merchants/" + merchantId + "/status", Map.of("status", "INACTIVE"))
                         .statusCode())
                 .isEqualTo(204);
-        problem(send(owner, "GET", PROBE, null), 401, "AUTH_001");
+        problem(send(owner, "GET", SETTINGS, null), 401, "AUTH_001");
         problem(login(owner, "owner"), 401, "AUTH_004");
     }
 
@@ -189,23 +203,9 @@ class OwnerFinanceHttpMariaDbTests {
     void finance_whenSessionExpiredOrLoggedOut_returnsUnauthorized() throws Exception {
         var next = client();
         assertThat(login(next, "owner").statusCode()).isEqualTo(200);
-        problem(send(owner, "GET", PROBE, null), 401, "AUTH_001");
-        assertThat(send(next, "GET", PROBE, null).statusCode()).isEqualTo(200);
+        problem(send(owner, "GET", SETTINGS, null), 401, "AUTH_001");
+        reachedSettings(send(next, "GET", SETTINGS, null));
         assertThat(send(next, "POST", "/api/auth/logout", null).statusCode()).isEqualTo(204);
-        problem(send(next, "GET", PROBE, null), 401, "AUTH_001");
-    }
-
-    @RestController
-    static class ProbeController {
-        private final CurrentStaff currentStaff;
-
-        ProbeController(CurrentStaff currentStaff) {
-            this.currentStaff = currentStaff;
-        }
-
-        @RequestMapping(PROBE)
-        StaffSummary probe() {
-            return currentStaff.findCurrent().orElseThrow();
-        }
+        problem(send(next, "GET", SETTINGS, null), 401, "AUTH_001");
     }
 }

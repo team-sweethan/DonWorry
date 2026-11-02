@@ -184,8 +184,12 @@ public class SecurityConfig {
                         // CakeShop HMAC은 MerchantSecurityConfiguration, AI 서버는 AiServerSecurityConfiguration이
                         // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
                         .ignoringRequestMatchers("/internal/**"))
+                // 권한 규칙은 정확한 메서드·경로로만 적는다. 같은 접두사로 새 API를 만들어도 저절로 열리지 않는다 (ADR-0067)
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                "/api/owner/integration", "/api/owner/integration/**")
+                                paths.matcher(HttpMethod.GET, "/api/owner/integration"),
+                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys"),
+                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys/reveal"),
+                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys/reissue"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -229,10 +233,9 @@ public class SecurityConfig {
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
                         .requestMatchers(
-                                PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.GET, "/api/fds/evaluations"),
-                                PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.GET, "/api/fds/evaluations/**"))
+                                paths.matcher(HttpMethod.GET, "/api/fds/evaluations"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/evaluations/rule-catalog"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/evaluations/{evaluationId}"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -264,7 +267,24 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/settlements/cash-flow/forecast", "/api/v1/settlements/cash-flow/shortages")
                         .denyAll()
-                        .requestMatchers("/api/v1/settlements", "/api/v1/settlements/**")
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/report"),
+                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/settings"),
+                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/settings"),
+                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/expenses"),
+                                paths.matcher(HttpMethod.POST, "/api/v1/settlements/cash-flow/expenses"),
+                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/expenses/{id}"),
+                                paths.matcher(HttpMethod.DELETE, "/api/v1/settlements/cash-flow/expenses/{id}"),
+                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/expenses/{id}/completion"),
+                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/recurring-expenses"),
+                                paths.matcher(HttpMethod.POST, "/api/v1/settlements/cash-flow/recurring-expenses"),
+                                paths.matcher(
+                                        HttpMethod.GET, "/api/v1/settlements/cash-flow/recurring-expenses/occurrences"),
+                                paths.matcher(
+                                        HttpMethod.DELETE, "/api/v1/settlements/cash-flow/recurring-expenses/{id}"),
+                                paths.matcher(
+                                        HttpMethod.PUT,
+                                        "/api/v1/settlements/cash-flow/recurring-expenses/{id}/occurrences/{date}/completion"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             // FINANCE_VIEW는 사장님의 읽기·쓰기 공통 권한이다 (#240).
@@ -277,19 +297,42 @@ public class SecurityConfig {
                                     && user.permissions().contains("FINANCE_VIEW"));
                         })
                         .requestMatchers(
-                                "/api/fds/rule-policies",
-                                "/api/fds/rules/**",
-                                "/api/fds/rule-change-requests",
-                                "/api/fds/rule-change-requests/**",
-                                "/api/fds/blocklist",
-                                "/api/fds/blocklist/**")
+                                paths.matcher(HttpMethod.GET, "/api/fds/rule-policies"),
+                                paths.matcher(HttpMethod.POST, "/api/fds/rules/{ruleCode}/disable-requests"),
+                                paths.matcher(HttpMethod.PUT, "/api/fds/rules/{ruleCode}/active"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/rule-change-requests"),
+                                paths.matcher(HttpMethod.PUT, "/api/fds/rule-change-requests/{requestId}/review"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/blocklist"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/blocklist/status"),
+                                paths.matcher(HttpMethod.POST, "/api/fds/blocklist"),
+                                paths.matcher(HttpMethod.PUT, "/api/fds/blocklist/{entryId}/deactivate"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
-                        .requestMatchers("/api/admin", "/api/admin/**")
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/admin/users"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/users"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/users/{id}"),
+                                paths.matcher(HttpMethod.PUT, "/api/admin/users/{id}/permissions"),
+                                paths.matcher(HttpMethod.PUT, "/api/admin/users/{id}/status"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/users/{id}/password-reset"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/users/{userId}/login-histories"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchants/options"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchants"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchants"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchants/{id}"),
+                                paths.matcher(HttpMethod.PUT, "/api/admin/merchants/{id}/status"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchants/{id}/integration"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchants/{id}/integration/revoke"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchant-applications"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchant-applications/{id}"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/approve"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/reject"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/merchant-applications/{id}/mail-deliveries"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -297,11 +340,11 @@ public class SecurityConfig {
                                     && user.role() == UserRole.ADMIN);
                         })
                         .requestMatchers(
-                                "/api/auth/me",
-                                "/api/auth/logout-all",
-                                "/api/auth/password",
-                                "/api/auth/login-histories",
-                                "/api/auth/login-histories/**")
+                                paths.matcher(HttpMethod.GET, "/api/auth/me"),
+                                paths.matcher(HttpMethod.POST, "/api/auth/logout-all"),
+                                paths.matcher(HttpMethod.POST, "/api/auth/password"),
+                                paths.matcher(HttpMethod.GET, "/api/auth/login-histories"),
+                                paths.matcher(HttpMethod.GET, "/api/auth/login-histories/latest-success"))
                         .authenticated()
                         // 로그인 전에 써야 하는 공개 경로. 와일드카드 없이 정확한 메서드·경로만 연다 (#392)
                         .requestMatchers(
