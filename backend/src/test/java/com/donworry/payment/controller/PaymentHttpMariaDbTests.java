@@ -175,6 +175,8 @@ class PaymentHttpMariaDbTests {
         var json = mapper.readTree(first.body());
         long id = json.path("paymentId").asLong();
         assertThat(json.path("paymentStatus").asText()).isEqualTo("HELD");
+        // HELD는 카드 승인이 끝난 상태다. 승인 여부만 내보내고 승인 참조 원문은 내보내지 않는다 (ADR-0062 3-1)
+        assertThat(json.path("authorized").asBoolean()).isTrue();
         assertThat(first.headers().firstValue("Location")).contains("/api/payments/" + id);
         assertThat(first.headers().firstValue("Cache-Control")).contains("no-store");
         assertThat(json.has("customerRef")).isFalse();
@@ -194,6 +196,11 @@ class PaymentHttpMariaDbTests {
         var history = call("GET", "/api/payment-orders?orderRef=" + order, "merchant-a", null, null);
         assertThat(history.statusCode()).isEqualTo(200);
         assertThat(mapper.readTree(history.body()).path("attempts").size()).isEqualTo(1);
+        assertThat(mapper.readTree(history.body())
+                        .path("latestPayment")
+                        .path("authorized")
+                        .asBoolean())
+                .isTrue();
         verify(evaluator).evaluate(argThat(r -> r.customerRef().equals("997:42")));
     }
     // 정지 가맹점은 POST 재전송도 금지하지만 유효 인증으로 기존 결과 조회는 허용한다.

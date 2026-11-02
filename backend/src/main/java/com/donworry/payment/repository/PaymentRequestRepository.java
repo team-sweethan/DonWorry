@@ -8,7 +8,8 @@ public interface PaymentRequestRepository extends Repository<PaymentRequest, Lon
     PaymentRequest save(PaymentRequest request);
 
     @org.springframework.data.jpa.repository.Query("select new com.donworry.payment.dto.MerchantPaymentResponse("
-            + "p.paymentId, p.orderRef, r.attemptNo, p.status, p.createdAt, p.statusChangedAt, p.amount, p.declineCode) "
+            + "p.paymentId, p.orderRef, r.attemptNo, p.status, p.createdAt, p.statusChangedAt, p.amount, p.declineCode, "
+            + "case when p.authorizationRef is not null then true else false end) "
             + "from PaymentRequest r join Payment p on p.paymentId = r.paymentId "
             + "where r.paymentOrderId = :orderId and r.merchantId = :merchantId and p.merchantId = :merchantId "
             + "and (:beforeAttemptNo is null or r.attemptNo < :beforeAttemptNo) order by r.attemptNo desc")
