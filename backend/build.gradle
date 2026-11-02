@@ -90,6 +90,23 @@ tasks.register('mariaDbTest', Test) {
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform { includeTags 'mariadb' }
+    systemProperty 'user.timezone', 'UTC'
+    dependsOn 'settlementSeoulMariaDbTest'
+}
+
+// #424: the existing CI mariaDbTest entry point also verifies P6 in a separate Korean-time JVM.
+tasks.register('settlementSeoulMariaDbTest', Test) {
+    group = 'verification'
+    description = 'P6 JDBC fixtures and JPA persistence under Asia/Seoul (Docker required).'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'mariadb' }
+    systemProperty 'user.timezone', 'Asia/Seoul'
+    filter {
+        includeTestsMatching '*CashFlowForecastMariaDbTests'
+        includeTestsMatching '*SettlementReportMariaDbTests'
+        includeTestsMatching '*OrderFulfillmentItemMariaDbTests'
+    }
 }
 
 // 버전을 사람이 정하면 브랜치끼리 겹친다. 생성 시각으로 찍고 설명만 받는다
