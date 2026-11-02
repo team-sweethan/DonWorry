@@ -10,10 +10,12 @@ on:
 permissions:
   contents: read
 
-# 같은 브랜치의 실행은 한 번에 하나만 — 진행 중인 발행은 끊지 않고, 대기 중인 것만 최신으로 교체.
-# 오래된 실행이 prod marker를 나중에 덮어쓰지 않게 한다 (#435)
+# 수동 검증은 자동 발행과 별도로 실행한다. 대기 실행은 교체하지 않아 오래된 실행의
+# 재시도가 최신 배포를 취소하지 않게 한다. 오래된 SHA의 marker 발행은 아래에서 막는다 (#435).
+# queue: max는 그룹당 최대 100개의 대기를 보존한다 (GitHub Actions concurrency).
 concurrency:
-  group: vm-images-${{ github.ref }}
+  group: vm-images-${{ github.event_name }}-${{ github.ref }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
