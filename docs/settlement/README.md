@@ -33,3 +33,5 @@
 분리한 브랜치에서 `spotlessApply`, `check`, `mariaDbTest`를 실행하고 PR에 커밋별 결과를 기록한다.
 MariaDB 테스트는 Docker 격리 DB에 Flyway 전체를 적용하고 JPA 매핑·잠금·재전달·롤백·인증을 확인한다.
 운영 키 배포·외부 도메인·프록시·실제 CakeShop 발신·최신 Notion 동기화는 검사 결과와 구분한다.
+
+- [현금흐름 예측 API·계산 기준 (5단계)](cash-flow-forecast-api.md)
