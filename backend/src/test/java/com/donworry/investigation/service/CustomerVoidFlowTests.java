@@ -2,7 +2,10 @@ package com.donworry.investigation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,6 +35,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -70,6 +74,13 @@ class CustomerVoidFlowTests {
 
     @MockitoBean
     CurrentStaff currentStaff;
+
+    // 보고서 요청 실패를 흉내 내는 테스트만 바꾼다. 테스트가 끝나면 원래 동작으로 돌아간다
+    @MockitoSpyBean
+    ReportGateway reportGateway;
+
+    @Autowired
+    com.donworry.investigation.repository.CasePaymentRepository casePaymentRepository;
 
     @BeforeEach
     void loginAsSecurityStaff() {
@@ -174,6 +185,35 @@ class CustomerVoidFlowTests {
         assertThat(caseQueryService.detail(caseId).history())
                 .filteredOn(history -> history.eventType().equals("PAYMENT_CANCELED_BY_CUSTOMER"))
                 .hasSize(1);
+    }
+
+    // 연결 직후 보고서 요청이 실패해도 고객 취소 확인은 따로 돌아 반영된다 (PR #436 리뷰)
+    @Test
+    void receive_whenReportRequestFails_stillReflectsCustomerVoid() {
+        doThrow(new IllegalStateException("report store down"))
+                .when(reportGateway)
+                .request(anyLong(), anyInt());
+        Instant now = Instant.now();
+        Long paymentId = payments.registerHeld(300_000L, 65, TestPaymentInfoStore.DEFAULT_RULES, now)
+                .paymentId();
+        payments.markCustomerVoided(MERCHANT_ID, paymentId, now);
+
+        try {
+            caseIntakeService.receive(
+                    new HeldPayment(paymentId, MERCHANT_ID, customer(), 300_000L, "TEST-AUTH", null, now));
+        } catch (RuntimeException ignored) {
+            // 커밋 뒤 리스너 예외가 호출자에게 전달될 수 있다 — 연결은 이미 커밋됐다
+        }
+
+        Long caseId = casePaymentRepository
+                .findByPaymentId(paymentId)
+                .orElseThrow()
+                .getSecurityCase()
+                .getId();
+        CaseDetailResponse detail = caseQueryService.detail(caseId);
+        assertThat(detail.reports()).isEmpty();
+        assertThat(detail.securityCase().status()).isEqualTo("CLOSED");
+        assertThat(detail.payments().getFirst().customerCanceledAt()).isNotNull();
     }
 
     // 이미 판정 · 인계한 결제를 고객이 취소하면 판정은 보존하고 고객 취소를 따로 남긴다. 결제가 그것뿐이면 Case는 닫힌다

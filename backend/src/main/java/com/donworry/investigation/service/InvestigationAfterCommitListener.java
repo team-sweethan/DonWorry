@@ -25,7 +25,13 @@ class InvestigationAfterCommitListener {
     void on(CaseEvidenceChanged event) {
         reportGateway.request(event.caseId(), event.evidenceVersion());
         caseStatusService.refreshById(event.caseId());
-        // 연결이 커밋된 뒤 고객 승인 취소를 확인한다 (#382) — 취소가 연결보다 먼저 확정됐으면 여기서 반영된다
+    }
+
+    // 연결이 커밋된 뒤 고객 승인 취소를 확인한다 (#382) — 취소가 연결보다 먼저 확정됐으면 여기서 반영된다
+    // 보고서 요청과 리스너를 나눈다. 보고서 요청이 실패해도 이 확인은 따로 돌고, 실패 기록(EVENT_PUBLICATION)도 따로 남는다
+    // (연결은 이미 커밋돼 HELD가 다시 와도 이 확인을 다시 부르지 않으므로 다른 실패에 묶이면 반영이 빠진다)
+    @TransactionalEventListener
+    void reflectCustomerVoid(CaseEvidenceChanged event) {
         customerVoidService.reflectCase(event.caseId());
     }
 
