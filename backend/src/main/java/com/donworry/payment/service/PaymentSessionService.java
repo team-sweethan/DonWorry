@@ -76,6 +76,9 @@ public class PaymentSessionService {
         URI fail = requireUrl(body.failUrl());
         if (!sameOrigin(success, fail)) throw invalid();
         if (body.notifyUrl() != null) requireUrl(body.notifyUrl());
+        // 구매자 이메일은 결제 때 FDS 입력(PaymentRiskSignals)과 같은 규칙으로 검사한다.
+        // 세션에 고정되어 구매자가 고칠 수 없으므로 잘못된 값은 결제 때 500이 아니라 여기서 400으로 막는다
+        if (body.buyerEmail() != null && !validBuyerEmail(body.buyerEmail())) throw invalid();
 
         var existing = sessions.findByMerchantIdAndRequestKey(merchantId, requestKey);
         if (existing.isPresent()) return reuse(existing.get(), body);
@@ -139,7 +142,21 @@ public class PaymentSessionService {
         var session = requireSession(sessionKey);
         if (session.getPaymentId() != null) return result(session);
         if (session.expired(Instant.now())) throw new PaymentHttpException(409, "SESSION_EXPIRED", "결제 가능 시간이 지났습니다.");
-        var card = CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
+        CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
+        // 세션을 만든 뒤 가맹점이 정지됐을 수 있다. 아직 접수하지 않은 결제는 시작 직전에 다시 확인한다
+        // (이미 연결된 결제의 결과 조회는 위에서 먼저 돌려주므로 막지 않는다)
+        tenants.findById(session.getMerchantId())
+                .filter(tenant -> "ACTIVE".equals(tenant.status()))
+                .orElseThrow(() -> new PaymentHttpException(409, "MERCHANT_INACTIVE", "지금은 이 가맹점에서 결제할 수 없습니다."));
+        // 처음 누른 카드·기기·IP를 먼저 고정한다. 접수 뒤 평가·승인 중 실패해 다시 눌러도
+        // 같은 값으로 같은 결제 시도를 이어 간다(카드를 바꿔 다시 눌러도 처음 값을 쓴다)
+        var fixed = Objects.requireNonNull(transactions.execute(status -> {
+            var locked = sessions.findByIdForUpdate(session.getSessionId()).orElseThrow();
+            locked.fixAttempt(body.card(), body.deviceId(), ipAddress, Instant.now());
+            return locked;
+        }));
+        if (fixed.getPaymentId() != null) return result(fixed);
+        var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
         String internalCustomer = session.getMerchantId() + ":" + session.getCustomerRef();
         var command = new PaymentRequestCommand(
                 session.getMerchantId(),
@@ -149,11 +166,11 @@ public class PaymentSessionService {
                 session.getOrderCreatedAt(),
                 session.getAttemptKey(),
                 new PaymentRiskSignals(
-                        body.deviceId(),
+                        fixed.getSubmittedDeviceId(),
                         card.token(internalCustomer),
                         card.displayLabel(),
                         null,
-                        ipAddress,
+                        fixed.getSubmittedIp(),
                         session.getBuyerEmail()));
         // 접수·평가·승인은 트랜잭션 밖에서 기존 흐름이 처리한다(P2 호출 포함).
         var receipt = flow.submit(command);
@@ -241,6 +258,15 @@ public class PaymentSessionService {
         byte[] bytes = new byte[16];
         RANDOM.nextBytes(bytes);
         return "pss_" + HexFormat.of().formatHex(bytes);
+    }
+
+    private static boolean validBuyerEmail(String email) {
+        try {
+            new PaymentRiskSignals(null, null, null, null, null, email);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private URI requireUrl(String value) {

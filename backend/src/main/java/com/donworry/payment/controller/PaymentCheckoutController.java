@@ -1,5 +1,6 @@
 package com.donworry.payment.controller;
 
+import com.donworry.identity.api.ClientIpResolver;
 import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.service.PaymentSessionService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,8 @@ import org.springframework.web.bind.annotation.*;
 @ConditionalOnProperty(name = "payment.http.enabled", havingValue = "true")
 public class PaymentCheckoutController {
     private final PaymentSessionService sessions;
+    // 프록시(운영 nginx · 개발 Vite) 뒤에서도 구매자 IP를 쓰도록 identity의 신뢰 프록시 규칙으로 읽는다 (PR #425 리뷰)
+    private final ClientIpResolver clientIps;
 
     @GetMapping("/api/checkout/{sessionKey}")
     ResponseEntity<CheckoutResponses.Session> open(@PathVariable String sessionKey) {
@@ -30,7 +33,7 @@ public class PaymentCheckoutController {
             HttpServletRequest request) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(sessions.pay(sessionKey, body, request.getRemoteAddr()));
+                .body(sessions.pay(sessionKey, body, clientIps.clientIp(request)));
     }
 
     @GetMapping("/api/checkout/{sessionKey}/result")

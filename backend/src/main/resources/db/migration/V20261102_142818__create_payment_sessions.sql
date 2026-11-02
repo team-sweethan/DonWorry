@@ -10,6 +10,7 @@
 -- 구매자는 세션 키로 결제창을 연다. 결제창에서 결제하면 기존 결제 접수(payments)로 이어진다.
 -- 상태 변경 알림(웹훅)은 notified_* 컬럼으로 마지막으로 알린 상태를 기억해 다시 보낸다. 발송은 웹훅 PR(②)에서 연결하며,
 -- 그 전에는 결제 접수 시 next_notify_at만 기록되고 아무도 보내지 않는다.
+-- submitted_*는 처음 결제를 누른 카드·기기·IP다. 접수 뒤 평가·승인 중 실패해도 재시도는 이 값으로 같은 시도를 이어 간다.
 -- merchant_id는 P1 소유 merchants의 논리 참조다(물리 FK 없음).
 CREATE TABLE payment_sessions (
     session_id BIGINT NOT NULL AUTO_INCREMENT,
@@ -28,6 +29,10 @@ CREATE TABLE payment_sessions (
     notify_url VARCHAR(500) NULL,
     status VARCHAR(20) NOT NULL,
     payment_id BIGINT NULL,
+    submitted_card VARCHAR(1) NULL,
+    submitted_device_id VARCHAR(100) NULL,
+    submitted_ip VARCHAR(45) NULL,
+    submitted_at DATETIME(6) NULL,
     expires_at DATETIME(6) NOT NULL,
     created_at DATETIME(6) NOT NULL,
     notified_status VARCHAR(30) NULL,

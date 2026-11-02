@@ -5,20 +5,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.donworry.identity.api.TenantReader;
+import com.donworry.identity.api.TenantSummary;
+import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentSessionRepository;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 class PaymentSessionServiceTests {
@@ -30,13 +35,9 @@ class PaymentSessionServiceTests {
     private final PaymentSessionRepository sessions = mock(PaymentSessionRepository.class);
     private final PaymentRequestFlowService flow = mock(PaymentRequestFlowService.class);
     private final MerchantPaymentQueryService query = mock(MerchantPaymentQueryService.class);
+    private final TenantReader tenants = mock(TenantReader.class);
     private final PaymentSessionService service = new PaymentSessionService(
-            sessions,
-            flow,
-            query,
-            mock(TenantReader.class),
-            mock(PlatformTransactionManager.class),
-            "http://pay.test/");
+            sessions, flow, query, tenants, mock(PlatformTransactionManager.class), "http://pay.test/");
 
     @Test
     void create_savesSessionAndReturnsHostedCheckoutUrl() {
@@ -127,6 +128,70 @@ class PaymentSessionServiceTests {
                 .isInstanceOfSatisfying(
                         PaymentHttpException.class,
                         e -> assertThat(e.getStatus()).isEqualTo(404));
+    }
+
+    // 구매자 이메일은 세션에 고정되므로 FDS 입력과 같은 규칙으로 만들 때 거절한다 (PR #425 리뷰)
+    @Test
+    void create_invalidBuyerEmail_isBadRequest() {
+        for (String email : new String[] {"", "not-an-email", " buyer@example.test"}) {
+            var body = new PaymentSessionCreateRequest(
+                    "ORD-1", "42", 52_000L, recent(), "딸기 케이크", email, SUCCESS, FAIL, null);
+            assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
+                    .as(email)
+                    .isInstanceOfSatisfying(
+                            PaymentHttpException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(400));
+        }
+        verify(sessions, never()).save(any());
+    }
+
+    // 세션을 만든 뒤 가맹점이 정지되면 아직 접수하지 않은 결제를 시작하지 않는다 (PR #425 리뷰)
+    @Test
+    void pay_merchantInactive_isConflictWithoutSubmitting() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "INACTIVE", BigDecimal.ONE)));
+
+        assertThatThrownBy(() -> service.pay(
+                        session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10"))
+                .isInstanceOfSatisfying(PaymentHttpException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(409);
+                    assertThat(e.getCode()).isEqualTo("MERCHANT_INACTIVE");
+                });
+        verify(flow, never()).submit(any());
+        assertThat(session.attemptFixed()).isFalse();
+    }
+
+    // 접수 뒤 평가·승인 중 실패해도, 다시 누르면 처음 카드·기기·IP로 같은 결제 시도를 이어 간다 (PR #425 리뷰)
+    @Test
+    void pay_retryAfterFailure_reusesFirstCardDeviceAndIp() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "ACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any()))
+                .thenThrow(new IllegalStateException("evaluation failed"))
+                .thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        assertThatThrownBy(() -> service.pay(
+                        session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10"))
+                .isInstanceOf(IllegalStateException.class);
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("B", "99999999"), "198.51.100.7");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        var commands = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow, times(2)).submit(commands.capture());
+        assertThat(commands.getAllValues()).allSatisfy(command -> {
+            assertThat(command.idempotencyKey()).isEqualTo(session.getAttemptKey());
+            assertThat(command.riskSignals().cardDisplayLabel()).contains("모의 카드 A");
+            assertThat(command.riskSignals().deviceId()).isEqualTo("abcdef12");
+            assertThat(command.riskSignals().ipAddress()).isEqualTo("203.0.113.10");
+        });
+        assertThat(session.getPaymentId()).isEqualTo(101L);
     }
 
     private static Instant recent() {

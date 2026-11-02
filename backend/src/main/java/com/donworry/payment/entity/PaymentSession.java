@@ -70,6 +70,19 @@ public class PaymentSession {
 
     private Long paymentId;
 
+    // 처음 결제를 누른 값. 접수 뒤 평가·승인 중 실패해도 재시도는 이 값으로 같은 결제 시도를 이어 간다(카드를 바꿔도 무시)
+    @Column(length = 1)
+    private String submittedCard;
+
+    @Column(length = 100)
+    private String submittedDeviceId;
+
+    @Column(length = 45)
+    private String submittedIp;
+
+    @Column(columnDefinition = "DATETIME(6)")
+    private Instant submittedAt;
+
     @Column(nullable = false, columnDefinition = "DATETIME(6)", updatable = false)
     private Instant expiresAt;
 
@@ -146,6 +159,19 @@ public class PaymentSession {
                 && this.successUrl.equals(successUrl)
                 && this.failUrl.equals(failUrl)
                 && Objects.equals(this.notifyUrl, notifyUrl);
+    }
+
+    // 처음 결제한 카드·기기·IP를 고정한다. 이미 고정됐으면 바꾸지 않는다
+    public void fixAttempt(String card, String deviceId, String ip, Instant now) {
+        if (submittedAt != null) return;
+        this.submittedCard = Objects.requireNonNull(card, "card");
+        this.submittedDeviceId = deviceId;
+        this.submittedIp = ip;
+        this.submittedAt = PaymentStorageValues.micros(now);
+    }
+
+    public boolean attemptFixed() {
+        return submittedAt != null;
     }
 
     public void submitted(Long paymentId, Instant now) {

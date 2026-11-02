@@ -27,6 +27,9 @@ function deviceId() {
   }
 }
 
+// 이동 신호를 보낸 뒤 이 시간 안에 가맹점 화면이 넘어가지 않으면 직접 이동 버튼을 보인다.
+const LEAVE_FALLBACK_MS = 4000
+
 // 가맹점 화면 안 레이어(iframe)로 열렸으면 가맹점 페이지가 이동하도록 알리고, 단독으로 열렸으면 직접 이동한다.
 function leave(url: string) {
   if (window.parent !== window) {
@@ -44,12 +47,16 @@ export function CheckoutPage() {
     'loading' | 'ready' | 'paying' | 'waiting' | 'leaving' | 'error'
   >('loading')
   const [error, setError] = useState('')
+  // 가맹점 화면이 이동 신호를 받지 못하면(주소가 성공 주소와 다른 출처 등) 직접 이동할 버튼을 보인다
+  const [stuckUrl, setStuckUrl] = useState<string | null>(null)
   const busy = useRef(false)
 
   const follow = (result: CheckoutResult) => {
     if (result.redirectUrl) {
       setPhase('leaving')
-      leave(result.redirectUrl)
+      const url = result.redirectUrl
+      leave(url)
+      window.setTimeout(() => setStuckUrl(url), LEAVE_FALLBACK_MS)
       return
     }
     setPhase('waiting')
@@ -230,6 +237,12 @@ export function CheckoutPage() {
             <span className="checkout-spin" aria-hidden="true" />
             <b>{phase === 'waiting' ? '결제를 처리하고 있습니다' : '결과 화면으로 이동합니다'}</b>
             <span className="checkout-muted">잠시만 기다려 주세요.</span>
+            {phase === 'leaving' && stuckUrl && (
+              // 쇼핑몰 화면 전체를 결과 주소로 옮긴다. 사용자가 누른 링크라 iframe 안에서도 상위 화면 이동이 허용된다
+              <a className="checkout-cancel" href={stuckUrl} target="_top" rel="noopener">
+                결과 화면으로 이동
+              </a>
+            )}
           </div>
         )}
 

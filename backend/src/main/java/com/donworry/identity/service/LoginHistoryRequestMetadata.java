@@ -1,5 +1,6 @@
 package com.donworry.identity.service;
 
+import com.donworry.identity.api.ClientIpResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -9,7 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
-public class LoginHistoryRequestMetadata {
+public class LoginHistoryRequestMetadata implements ClientIpResolver {
     private final boolean proxy;
     private final Set<String> trusted;
 
@@ -37,6 +38,7 @@ public class LoginHistoryRequestMetadata {
             throw new IllegalArgumentException("PROXY mode requires trusted proxy addresses");
     }
 
+    @Override
     public String clientIp(HttpServletRequest request) {
         String peer = literal(request.getRemoteAddr());
         if (!proxy) return peer;
