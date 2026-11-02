@@ -162,9 +162,37 @@ class OwnerFinanceSecurityTests {
                 .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
+    // 새 조회는 실제 보안 체인에서 사장님·가맹점·FINANCE_VIEW를 함께 요구한다.
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/settlements/cash-flow/forecast", "/api/v1/settlements/cash-flow/shortages"})
+    void forecast_whenOwnerAuthorized_allowsOnlyGet(String path) throws Exception {
+        mvc.perform(get(path).with(authentication(owner()))).andExpect(status().isOk());
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+        for (String method : List.of("POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")) {
+            mvc.perform(request(HttpMethod.valueOf(method), URI.create(path))
+                            .with(authentication(owner()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    // 새 경로도 관리자·보안 직원·권한/가맹점 누락 세션과 HMAC 신원만으로 통과할 수 없다.
+    @ParameterizedTest
+    @MethodSource("deniedCallers")
+    void forecast_whenConditionsMissing_rejectsBothPaths(Authentication caller) throws Exception {
+        for (String path :
+                List.of("/api/v1/settlements/cash-flow/forecast", "/api/v1/settlements/cash-flow/shortages")) {
+            mvc.perform(get(path).with(authentication(caller))).andExpect(status().isForbidden());
+        }
+    }
+
     @RestController
     static class ProbeController {
-        @RequestMapping("/api/v1/settlements/report")
+        @RequestMapping({
+            "/api/v1/settlements/report",
+            "/api/v1/settlements/cash-flow/forecast",
+            "/api/v1/settlements/cash-flow/shortages"
+        })
         String report() {
             return "probe";
         }
