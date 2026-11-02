@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 // P6 업무 API가 아닌 테스트 수신부로 실제 로그인·공개 조회·공통 인가의 연결만 검증한다
 @Tag("mariadb")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "security.csrf.enabled=false")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import({MariaDbTestContainerConfig.class, OwnerFinanceHttpMariaDbTests.ProbeController.class})
 // 테스트 전용 컨텍스트의 연결 풀을 반납해 뒤의 동시성 검사가 DB 연결 한도를 넘지 않게 한다.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
@@ -102,16 +102,15 @@ class OwnerFinanceHttpMariaDbTests {
     }
 
     private HttpResponse<String> send(HttpClient caller, String method, String path, Object body) throws Exception {
-        return caller.send(
+        return com.donworry.HttpCsrfTestSupport.send(
+                caller,
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                         .header("Content-Type", "application/json")
                         .method(
                                 method,
                                 body == null
                                         ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))));
     }
 
     private HttpResponse<String> login(HttpClient caller, String suffix) throws Exception {
@@ -126,7 +125,7 @@ class OwnerFinanceHttpMariaDbTests {
         assertThat(response.headers().firstValue("location")).isEmpty();
     }
 
-    // 실제 쿠키의 가맹점이 공개 API로 전달되고 CSRF 기본 비활성의 읽기·쓰기가 유지된다
+    // 실제 쿠키의 가맹점이 공개 API로 전달되고 기본 CSRF 보호 아래 읽기·쓰기가 유지된다
     @Test
     void finance_whenRealOwnerSession_exposesAuthenticatedMerchantOnly() throws Exception {
         problem(send(client(), "GET", PROBE, null), 401, "AUTH_001");

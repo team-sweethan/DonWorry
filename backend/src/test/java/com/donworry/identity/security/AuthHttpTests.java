@@ -47,13 +47,15 @@ class AuthHttpTests {
     PlatformUserRepository repository;
 
     private HttpResponse<String> send(HttpClient client, String method, String path, String body) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
-                .header("Content-Type", "application/json")
-                .method(
-                        method,
-                        body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(body))
-                .build();
-        return client.send(request, HttpResponse.BodyHandlers.ofString());
+        return com.donworry.HttpCsrfTestSupport.send(
+                client,
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                        .header("Content-Type", "application/json")
+                        .method(
+                                method,
+                                body == null
+                                        ? HttpRequest.BodyPublishers.noBody()
+                                        : HttpRequest.BodyPublishers.ofString(body)));
     }
 
     private String givenSessionUser() throws Exception {

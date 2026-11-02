@@ -269,7 +269,7 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 - 시연 계정 이력은 `PRODUCTION_DEMO_ACCOUNT_INACTIVATED`, actor는 검증한 admin ID, target은 각 계정 ID, 출처는 `PRODUCTION_STARTUP`이다. 비밀번호·해시는 담지 않는다. 어느 이력 저장·커밋이 실패해도 시작 작업 전체를 롤백하고 웹 서버를 시작하지 않는다. Flyway DDL 롤백은 보장하지 않는다.
 - 다른 계정·권한·가맹점·HMAC 키·로그인 실패 횟수/잠금은 유지한다. 관리자 15분 잠금 역시 재시작으로 풀지 않는다.
 - 개발/운영 DB를 분리한다. 개발 DB에서 prod를 실행하면 정지가 영속 반영되며 프로필 변경으로 원복되지 않는다. 일반 로컬 시작은 시연 계정을 정지하거나 수동 정지 계정을 복구하지 않는다. 실행 중 관리자 복구는 허용되지만 다음 prod 시작 때 다시 정지된다.
-- 세션 쿠키는 Secure=true·HttpOnly·SameSite=Lax다. XSRF-TOKEN은 JavaScript 읽기 가능을 유지하고, 운영에서는 요청 HTTPS 여부와 무관하게 Secure로 고정한다(프록시 전달 정보를 믿지 않음). CSRF 검사 기본값은 계속 false다.
+- 세션 쿠키는 Secure=true·HttpOnly·SameSite=Lax다. XSRF-TOKEN은 JavaScript 읽기 가능을 유지하고, 운영에서는 요청 HTTPS 여부와 무관하게 Secure로 고정한다(프록시 전달 정보를 믿지 않음). CSRF 검사 기본값은 #408 PR B에서 true로 전환한다 ([ADR-0063](../decisions/0063-csrf-default-enabled.md)).
 
 ### 배포 시 남은 확인
 
@@ -382,16 +382,16 @@ DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL`
 
 실제 브라우저 E2E는 2026-10-25 담당자(P1 주환)가 직접 확인했다(사용자 보고, 기준 head `abc10b0`): 목록·검색·필터·생성 폼·상세·확인 모달·정지/재활성화·계정 생성의 가맹점 선택 연결, 리뷰 반영 안내 문구·모달 오류 표시. 위 #130 기록들의 실제 브라우저 미검증 항목은 이 확인으로 해소한다.
 
-## #126 CSRF 준비 (서버 검사 기본값 끔)
+## CSRF 기본 활성화 (#126 준비 → #408 PR B)
 
-상세 계약·대안은 [ADR-0025](../decisions/0025-csrf-preparation.md)를 따른다.
+토큰 교환 계약은 [ADR-0025](../decisions/0025-csrf-preparation.md), 현재 기본값과 도구 사용법은 [ADR-0063](../decisions/0063-csrf-default-enabled.md)를 따른다. 아래 과거 검증 기록은 당시 설정의 결과다.
 
-- `security.csrf.enabled=false`가 기본값이다. 환경변수는 `DONWORRY_CSRF_ENABLED`다. false에서도 토큰 발급·전송·로그인/로그아웃 정리는 동작하며 토큰 없는 기존 변경 요청도 CSRF로 막지 않는다. 실제 활성화는 다른 담당에게 공지한 뒤 #68 5단계에서 한다.
+- `security.csrf.enabled=true`가 기본값이다. 환경변수는 `DONWORRY_CSRF_ENABLED`다. 토큰 없는 변경 요청은 기본적으로 403 `CSRF_001`이다. 명시적 false에서도 토큰 교환과 기존 특정 경로의 강제 보호는 유지한다. 로컬·운영 외부 설정의 false 지정 여부는 별도로 확인한다.
 - `GET /api/auth/csrf` → 204, `Cache-Control: no-store`. 로그인 전·비밀번호 강제 변경 중에도 호출할 수 있고, 토큰이 없으면 `XSRF-TOKEN` 쿠키를 발급한다. 로그인 세션을 새로 만들지 않는다. 쿠키는 JavaScript 읽기 가능·Path=/·SameSite=Lax이며, Secure는 요청 HTTPS 여부를 따른다(운영 `prod`는 항상 Secure, #131). 인증용 JSESSIONID는 기존 HttpOnly 정책을 유지한다.
 - 프론트 공통 `src/api/client.ts`가 POST·PUT·PATCH·DELETE 등 변경 요청에 `X-XSRF-TOKEN`을 붙인다. GET·HEAD·OPTIONS·TRACE는 토큰이 필요 없다. 토큰이 없으면 `/csrf`를 먼저 부르고 동시 발급은 공유한다. 발급 뒤에도 쿠키를 읽지 못하면 헤더 없이 보내 서버 설정에 맡기고, 같은 로그인 동안은 선행 발급을 반복하지 않는다. 쿠키를 메모리·localStorage에 복사해 보관하지 않는다.
 - 검사가 켜졌을 때 누락·불일치는 403 `CSRF_001` ProblemDetail이다. 이 응답에만 거절된 쿠키를 지우고 새 토큰을 받아 한 번 재시도하며, AUTH_002·AUTH_008·네트워크·5xx와 Stream 본문은 자동 재시도하지 않는다. 세션이 바뀌거나 요청이 취소되면 대기하던 변경을 보내지 않는다. 다른 탭의 인증 변경도 `localStorage`의 임의 변경 표식으로 비교하며 사용자 정보·세션 ID·토큰을 저장하지 않는다. 공유 저장소를 읽거나 쓸 수 없으면 CSRF 자동 재전송을 생략한다.
 - 수동 로그인 합성 전략에 `CsrfAuthenticationStrategy`를 추가했다. 일반·전체 로그아웃도 쿠키를 폐기하며 다음 안전한 요청 또는 다음 변경 전 `/csrf`에서 새 토큰을 받는다. #125 단일 세션 정책과 #128 본인 비밀번호 변경의 현재 세션 유지는 그대로다.
-- `/internal/**`만 검사 예외를 준비했다. CakeShop 웹훅의 정확한 경로와 서버 간 인증은 #68 5단계에서 합의한다. DB·다른 모듈의 공개 Java 계약 변경은 없다. 운영 HTTPS·프록시 쿠키 확인은 #131 후속이다.
+- HMAC 전용 체인의 정확한 경로·메서드 예외와 `/internal/ai/**` 서비스 키 체인은 유지한다. 직원 체인의 기존 `/internal/**` 예외도 유지하며 새 예외는 추가하지 않는다. DB·다른 모듈의 공개 Java 계약 변경은 없다. 운영 HTTPS·프록시 쿠키 확인은 #131 후속이다.
 - 쿠키 저장 방식이므로 새 쿠키에 예전 헤더를 보내는 경우를 거부한다. 예전 쿠키·헤더 쌍 자체의 영구 폐기를 보장하는 세션 저장 토큰 방식은 아니다.
 
 ### #126 로컬 검증

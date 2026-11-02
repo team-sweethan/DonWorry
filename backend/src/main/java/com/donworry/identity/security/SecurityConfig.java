@@ -133,7 +133,7 @@ public class SecurityConfig {
             JsonAccessDeniedHandler accessDeniedHandler,
             CookieCsrfTokenRepository csrfTokenRepository,
             LoginHistoryService loginHistories,
-            @Value("${security.csrf.enabled:false}") boolean csrfEnabled,
+            @Value("${security.csrf.enabled:true}") boolean csrfEnabled,
             @Value("${security.demo-api.enabled:true}") boolean demoApiEnabled)
             throws Exception {
         var paths = PathPatternRequestMatcher.withDefaults();
@@ -177,7 +177,8 @@ public class SecurityConfig {
                                 || applicationPosts.matches(request)
                                 || fdsRecoveryPosts.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
-                        // CakeShop 웹훅의 정확한 예외 경로는 #68 5단계 합의 후 추가한다.
+                        // CakeShop HMAC은 MerchantSecurityConfiguration, AI 서버는 AiServerSecurityConfiguration이
+                        // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
                         .ignoringRequestMatchers("/internal/**"))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 "/api/owner/integration", "/api/owner/integration/**")

@@ -94,16 +94,15 @@ class AdminMerchantHttpTests {
     }
 
     private HttpResponse<String> send(HttpClient caller, String method, String path, Object body) throws Exception {
-        return caller.send(
+        return com.donworry.HttpCsrfTestSupport.send(
+                caller,
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                         .header("Content-Type", "application/json")
                         .method(
                                 method,
                                 body == null
                                         ? HttpRequest.BodyPublishers.noBody()
-                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString());
+                                        : HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))));
     }
 
     private HttpResponse<String> login(HttpClient caller, String suffix) throws Exception {
