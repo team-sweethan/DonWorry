@@ -1,5 +1,6 @@
 package com.donworry.settlement.service;
 
+import static com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.MariaDbTestContainerConfig;
@@ -60,6 +61,21 @@ class SettlementReportMariaDbTests {
         jdbc.update("DELETE FROM merchants WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
     }
 
+    @Test
+    void productionPickup_whenScheduledAtKoreanBoundary_storesUtcAndReportsSameDay() {
+        var eligibleAt = Instant.parse("2026-11-01T18:00:00.123456Z");
+        captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-UTC", 10000L);
+        pickups.recordCompletion(MERCHANT, "P6-REPORT-UTC", eligibleAt.minusSeconds(72 * 3600));
+        assertThat(jdbc.queryForObject(
+                        "SELECT scheduled_at FROM settlements WHERE payment_id=?",
+                        java.time.LocalDateTime.class,
+                        PAYMENT))
+                .isEqualTo(java.time.LocalDateTime.of(2026, 11, 1, 18, 0, 0, 123456000));
+        var result = reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2));
+        assertThat(result.scheduledAmount()).isEqualTo(9700);
+        assertThat(result.entries()).hasSize(1);
+    }
+
     // 같은 주문번호도 가맹점별 상품·금액을 분리하고 한국 날짜의 시작 경계를 포함한다.
     @Test
     void report_whenOrderShared_returnsOwnOrderedItemsAndKoreanDay() {
@@ -94,7 +110,7 @@ class SettlementReportMariaDbTests {
         pickups.recordCompletion(MERCHANT, "P6-REPORT-DONE", START.minusSeconds(72 * 3600));
         jdbc.update(
                 "UPDATE settlements SET status='COMPLETED',completed_at=? WHERE payment_id=?",
-                java.sql.Timestamp.from(START.plusSeconds(3600)),
+                utcTimestamp(START.plusSeconds(3600)),
                 PAYMENT);
         captures.processCapture(PAYMENT + 1, MERCHANT, "P6-REPORT-SCHEDULED", 20000L);
         pickups.recordCompletion(MERCHANT, "P6-REPORT-SCHEDULED", START.minusSeconds(72 * 3600));
