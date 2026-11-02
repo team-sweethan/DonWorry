@@ -1,4 +1,6 @@
 import { defaultPreviewLoan } from './loanForecast'
+import { useAuth } from '../../auth/useAuth'
+import { matchesFinanceSnapshot } from './financeView'
 import { useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { Alert, Button, Modal, Tag } from 'antd'
@@ -78,8 +80,13 @@ export function LoanProductsPage() {
   const { pathname, state } = useLocation()
   const input: unknown = state
   const [defaultSnapshot] = useState(() => defaultPreviewLoan())
-  const fromForecast = isSnapshot(input)
-  const snapshot = fromForecast ? input : defaultSnapshot
+  const { user } = useAuth()
+  const ownerScope = `${user?.userId}:${user?.merchantId}`
+  const validSnapshot = isSnapshot(input)
+  const fromForecast =
+    validSnapshot && matchesFinanceSnapshot(input, ownerScope, pathname.startsWith('/dev/'))
+  const snapshot =
+    fromForecast && validSnapshot ? input : pathname.startsWith('/dev/') ? defaultSnapshot : null
   const [selected, setSelected] = useState<(typeof products)[number] | null>(null)
   const back = pathname.startsWith('/dev/') ? '/dev/funds' : '/owner/funds'
   return (
@@ -150,7 +157,9 @@ export function LoanProductsPage() {
           <small>
             {fromForecast
               ? '자금 현황에서 전달된 계산값입니다. 최신 값은 다시 조회해 주세요.'
-              : '현재는 기본 예시입니다. 변경한 잔액·지출을 반영하려면 자금 현황에서 상품 보기 버튼으로 이동하세요.'}
+              : pathname.startsWith('/dev/')
+                ? '기본 시연 예시입니다. 자금 현황에서 변경한 예시를 확인할 수 있습니다.'
+                : '자금 현황에서 실제 데이터를 조회한 뒤 상품 보기로 이동해 주세요.'}
           </small>
         </section>
       </div>

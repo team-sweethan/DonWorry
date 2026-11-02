@@ -39,6 +39,7 @@ const dateInput = (d: Date) =>
 
 type CalendarExpense = { id: string; date: string; title: string; amount: number; note?: string }
 export function SettlementPrototype({
+  todayValue,
   expenses = [],
   actualEntries,
   period,
@@ -46,6 +47,7 @@ export function SettlementPrototype({
   headerActions,
   onPeriodChange,
 }: {
+  todayValue?: string
   expenses?: CalendarExpense[]
   actualEntries?: Entry[]
   period?: { from: string; to: string }
@@ -53,7 +55,8 @@ export function SettlementPrototype({
   headerActions?: React.ReactNode
   onPeriodChange?: (period: { from: string; to: string }) => void
 }) {
-  const [today] = useState(() => new Date())
+  const [previewToday] = useState(() => new Date())
+  const today = todayValue ? new Date(todayValue + 'T12:00:00') : previewToday
   const [entries] = useState(() => previewSettlements(today))
   const initialMonth = () =>
     period
@@ -204,14 +207,14 @@ export function SettlementPrototype({
   const scope = dateOnly ? daily : inPeriod
   const rows = scope
     .filter((e) => filter === 'all' || e.status === filter)
-    .filter((e) => e.id.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((e) => (e.orderId ?? e.id).toLowerCase().includes(query.trim().toLowerCase()))
     .toSorted((a, b) =>
       sort === 'high'
         ? net(b) - net(a)
         : sort === 'low'
           ? net(a) - net(b)
           : sort === 'order'
-            ? a.id.localeCompare(b.id)
+            ? (a.orderId ?? a.id).localeCompare(b.orderId ?? b.id)
             : b.date.getTime() - a.date.getTime(),
     )
   const settlementPage = Math.min(page, Math.max(1, Math.ceil(rows.length / 20)))
@@ -223,7 +226,7 @@ export function SettlementPrototype({
     <div className="stl-prototype">
       <PageHeader
         title="정산 현황"
-        description="언제 얼마가 정산되는지 날짜별로 확인합니다. 이 시연에서는 정산 완료를 입금된 것으로 간주합니다."
+        description="언제 얼마가 정산되는지 날짜별로 확인합니다. 정산 완료는 입금된 것으로 간주하며 실제 은행 잔액 조회는 아닙니다."
         actions={
           <div className="finance-header-actions">
             {headerActions}
@@ -365,6 +368,7 @@ export function SettlementPrototype({
       <section className="finance-card" style={{ marginBottom: 20 }}>
         <h2>날짜별 정산 금액</h2>
         <SettlementLineChart
+          todayValue={dateInput(today)}
           days={chartDays}
           onSelect={(date) => {
             setSelected(new Date(date + 'T00:00:00'))
@@ -486,7 +490,7 @@ export function SettlementPrototype({
             {daily.slice(0, 3).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
-                  <b>{e.id}</b>
+                  <b>{e.orderId ?? e.id}</b>
                   <span className={`stl-chip stl-${e.status}`}>{labels[e.status]}</span>
                 </div>
                 {e.orderItems?.length ? (
@@ -533,7 +537,7 @@ export function SettlementPrototype({
             {pickups.slice(0, 3).map((e) => (
               <article key={`pickup-${e.id}`}>
                 <div className="stl-detail-title">
-                  <b>{e.id}</b>
+                  <b>{e.orderId ?? e.id}</b>
                   <span className="stl-chip stl-pick">
                     픽업 {e.status === 'exp' ? '예정' : '완료'}
                   </span>
@@ -686,7 +690,7 @@ export function SettlementPrototype({
                     {visibleRows.map((e) => (
                       <tr key={e.id}>
                         <td>
-                          <b>{e.id}</b>
+                          <b>{e.orderId ?? e.id}</b>
                           {e.orderItems?.length ? (
                             <>
                               <small className="stl-order-product-name">
@@ -701,7 +705,9 @@ export function SettlementPrototype({
                         <td>
                           {dateInput(e.date)}
                           <small>
-                            {e.status === 'exp' ? '픽업 전 예상 일정' : stamp(e.date).split(' ')[1]}
+                            {e.status === 'exp'
+                              ? '픽업 전 예상 일정'
+                              : (e.dateLabel ?? stamp(e.date)).split(' ').slice(-2).join(' ')}
                           </small>
                         </td>
                         <td>
@@ -787,7 +793,7 @@ export function SettlementPrototype({
       >
         {detail && (
           <div className="stl-order-modal">
-            <h3>{detail.id}</h3>
+            <h3>{detail.orderId ?? detail.id}</h3>
             <span className={`stl-chip stl-${detail.status}`}>{labels[detail.status]}</span>
             {detail.orderItems?.length ? (
               <section className="stl-order-products" aria-label="주문 상품 전체 목록">
@@ -825,9 +831,9 @@ export function SettlementPrototype({
                 <b>{won(net(detail))}</b>
               </dd>
               <dt>픽업 {detail.status === 'exp' ? '예정' : '완료'}</dt>
-              <dd>{stamp(detail.pickup)}</dd>
+              <dd>{detail.pickupLabel ?? stamp(detail.pickup)}</dd>
               <dt>정산일{detail.status === 'exp' && ' (예상)'}</dt>
-              <dd>{stamp(detail.date)}</dd>
+              <dd>{detail.dateLabel ?? stamp(detail.date)}</dd>
             </dl>
             {preview && <p>화면 확인용 예시 데이터입니다.</p>}
           </div>
