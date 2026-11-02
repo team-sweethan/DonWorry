@@ -171,3 +171,41 @@ def test_score_history_over_limit_rejected_422(client: TestClient) -> None:
     res = client.post("/ml/fraud-score", json=body(target, history), headers=HEADERS)
 
     assert res.status_code == 422
+
+
+# 재평가 행이 겹쳐 오면 같은 결제가 두 번 세져 거래 횟수가 부풀어 오른다
+def test_score_duplicate_payment_id_rejected_422(client: TestClient) -> None:
+    target = tx(2, "2026-11-02T05:00:00Z")
+    first = tx(1, "2026-11-02T04:00:00Z")
+    reevaluated = tx(1, "2026-11-02T04:00:00Z")
+
+    res = client.post("/ml/fraud-score", json=body(target, [first, reevaluated]), headers=HEADERS)
+
+    assert res.status_code == 422
+
+
+# 다른 고객 거래가 내 이력으로 섞이면 정상 고객이 의심받는다
+def test_score_customer_history_other_customer_rejected_422(client: TestClient) -> None:
+    target = tx(2, "2026-11-02T05:00:00Z")
+    other = tx(1, "2026-11-02T04:00:00Z", customer="1:99")
+
+    res = client.post("/ml/fraud-score", json=body(target, [other]), headers=HEADERS)
+
+    assert res.status_code == 422
+
+
+# 카드가 다른 거래나 내 거래가 "카드 공유"로 잡히면 도용 신호가 잘못 켜진다
+def test_score_shared_card_history_mismatch_rejected_422(client: TestClient) -> None:
+    target = tx(3, "2026-11-02T05:00:00Z")
+    other_card = tx(1, "2026-11-02T04:00:00Z", customer="1:99", card="card-b")
+    same_customer = tx(2, "2026-11-02T04:00:00Z")
+
+    wrong_card = client.post(
+        "/ml/fraud-score", json=body(target, shared=[other_card]), headers=HEADERS
+    )
+    mine = client.post(
+        "/ml/fraud-score", json=body(target, shared=[same_customer]), headers=HEADERS
+    )
+
+    assert wrong_card.status_code == 422
+    assert mine.status_code == 422
