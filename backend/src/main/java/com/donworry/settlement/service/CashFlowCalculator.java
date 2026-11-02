@@ -49,7 +49,7 @@ public class CashFlowCalculator {
                     paid = sum(rows, "PAID"),
                     planned = sum(rows, "PLANNED");
             long income = add(add(completed, scheduled), expected), expense = add(paid, planned), before = balance;
-            balance = subtract(add(balance, income), expense);
+            balance = netBalance(balance, income, expense);
             if (date.isBefore(from)) {
                 periodOpening = balance;
                 carry.addAll(rows);
@@ -114,6 +114,11 @@ public class CashFlowCalculator {
         } catch (ArithmeticException e) {
             throw new SettlementRequestException(422, "SETTLEMENT_CASH_FLOW_AMOUNT_OVERFLOW", "금액 합계가 지원 범위를 초과합니다.");
         }
+    }
+
+    public static long netBalance(long opening, long income, long expenses) {
+        return money(
+                BigDecimal.valueOf(opening).add(BigDecimal.valueOf(income)).subtract(BigDecimal.valueOf(expenses)));
     }
 
     public static long add(long a, long b) {

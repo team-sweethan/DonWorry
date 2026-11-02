@@ -99,4 +99,17 @@ class CashFlowCalculatorTests {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> calculator.calculate(0, start, start, start.plusDays(366), List.of()));
     }
+    // 같은 날 상쇄되는 1원 입출금은 중간 합이 상한을 넘어도 최종 잔액이 안전하면 허용한다.
+    @Test
+    void calculate_whenIncomeAndExpenseOffsetAtSafeLimit_returnsFinalSafeBalance() {
+        var result = calculator.calculate(
+                9007199254740991L,
+                start,
+                start,
+                start,
+                List.of(movement(1, 0, 1, "COMPLETED"), movement(2, 0, 1, "PAID")));
+        assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.totalIncome()).isEqualTo(1);
+        assertThat(result.totalExpenses()).isEqualTo(1);
+    }
 }

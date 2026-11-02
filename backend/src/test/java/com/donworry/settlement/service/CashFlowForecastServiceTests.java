@@ -216,4 +216,15 @@ class CashFlowForecastServiceTests {
         assertThat(result.days().getFirst().plannedExpenses()).isEqualTo(500);
         assertThat(result.closingBalance()).isEqualTo(500);
     }
+    // 현재 잔액도 유입과 지출을 모두 반영한 식의 최종 값으로 범위를 검사한다.
+    @Test
+    void forecast_whenActualAmountsOffsetAtSafeLimit_returnsSafeCurrentBalance() {
+        when(repository.sumCompleted(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
+        when(repository.sumPaidExpenses(eq(2L), eq(at(setting.baseDate())), any()))
+                .thenReturn(BigDecimal.ONE);
+        var result = service.forecastAt(
+                2L, today, today, new CashFlowSettingResponse(9007199254740991L, setting.baseDate()), now);
+        assertThat(result.currentBalance()).isEqualTo(9007199254740991L);
+        assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
+    }
 }

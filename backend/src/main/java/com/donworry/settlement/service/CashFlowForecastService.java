@@ -51,12 +51,11 @@ public class CashFlowForecastService {
         long paid = CashFlowCalculator.add(
                 CashFlowCalculator.money(repository.sumPaidExpenses(merchant, baseAt, now)),
                 CashFlowCalculator.money(repository.sumPaidRecurring(merchant, baseAt, now)));
-        long current = CashFlowCalculator.subtract(CashFlowCalculator.add(setting.openingBalance(), completed), paid);
+        long current = CashFlowCalculator.netBalance(setting.openingBalance(), completed, paid);
         // 기준일부터 조회 시작 전까지는 합계 쿼리로 누적한다. 계정 사용 기간을 366일로 제한하지 않는다.
-        long initial = CashFlowCalculator.subtract(
-                CashFlowCalculator.add(
-                        setting.openingBalance(),
-                        CashFlowCalculator.money(repository.sumCompleted(merchant, baseAt, startAt))),
+        long initial = CashFlowCalculator.netBalance(
+                setting.openingBalance(),
+                CashFlowCalculator.money(repository.sumCompleted(merchant, baseAt, startAt)),
                 CashFlowCalculator.add(
                         CashFlowCalculator.money(repository.sumPaidExpenses(merchant, baseAt, startAt)),
                         CashFlowCalculator.money(repository.sumPaidRecurring(merchant, baseAt, startAt))));
