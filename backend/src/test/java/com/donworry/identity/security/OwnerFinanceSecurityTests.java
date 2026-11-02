@@ -90,7 +90,7 @@ class OwnerFinanceSecurityTests {
         assertThat(result.getResponse().getRedirectedUrl()).isNull();
     }
 
-    // 사장님도 등록한 메서드(GET)만 통과하고, 그 밖의 메서드는 HEAD·OPTIONS까지 기본 거절한다 (ADR-0066)
+    // 사장님도 등록한 메서드(GET)만 통과하고, 그 밖의 메서드는 HEAD·OPTIONS까지 기본 거절한다 (ADR-0067)
     @ParameterizedTest
     @ValueSource(strings = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
     void finance_whenOwnerWithPermission_passesOnlyRegisteredMethod(String method) throws Exception {

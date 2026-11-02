@@ -1,12 +1,12 @@
 package com.donworry.settlement.service;
 
+import static com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp;
 import static org.assertj.core.api.Assertions.*;
 
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.settlement.dto.*;
 import com.donworry.settlement.repository.CashFlowForecastRepository;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.time.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -84,7 +84,7 @@ class CashFlowForecastMariaDbTests {
     private void complete(long payment, Instant at) {
         jdbc.update(
                 "UPDATE settlements SET status='COMPLETED',completed_at=? WHERE payment_id=?",
-                Timestamp.from(at),
+                utcTimestamp(at),
                 payment);
     }
 
@@ -95,6 +95,16 @@ class CashFlowForecastMariaDbTests {
                 .amount(amount)
                 .category("MATERIAL")
                 .build();
+    }
+
+    @Test
+    void fixture_whenInstantBound_storesUtcDateTime() {
+        capture(PAYMENT, MERCHANT);
+        var instant = Instant.parse("2026-11-02T18:00:00.123456Z");
+        complete(PAYMENT, instant);
+        assertThat(jdbc.queryForObject(
+                        "SELECT completed_at FROM settlements WHERE payment_id=?", LocalDateTime.class, PAYMENT))
+                .isEqualTo(LocalDateTime.of(2026, 11, 2, 18, 0, 0, 123456000));
     }
 
     // 2년 전 설정·조회 이전 거래를 누적하고 타 가맹점·삭제·연체 예정 지출을 섞지 않는다.
@@ -143,16 +153,14 @@ class CashFlowForecastMariaDbTests {
         var batch = at(today().plusDays(1)).plusSeconds(3 * 3600);
         jdbc.update(
                 "UPDATE settlements SET scheduled_at=?,expected_settlement_at=? WHERE payment_id=?",
-                Timestamp.from(batch.plusSeconds(1)),
-                Timestamp.from(batch.minusSeconds(86400)),
+                utcTimestamp(batch.plusSeconds(1)),
+                utcTimestamp(batch.minusSeconds(86400)),
                 PAYMENT);
         jdbc.update(
-                "UPDATE settlements SET expected_settlement_at=? WHERE payment_id=?",
-                Timestamp.from(batch),
-                PAYMENT + 1);
+                "UPDATE settlements SET expected_settlement_at=? WHERE payment_id=?", utcTimestamp(batch), PAYMENT + 1);
         jdbc.update(
                 "UPDATE settlements SET scheduled_at=? WHERE payment_id=?",
-                Timestamp.from(at(today().minusDays(1))),
+                utcTimestamp(at(today().minusDays(1))),
                 PAYMENT + 2);
         jdbc.update("UPDATE settlements SET status='CANCELED' WHERE payment_id=?", PAYMENT + 4);
         var result = forecasts.forecast(MERCHANT, today(), today().plusDays(2));
@@ -203,8 +211,8 @@ class CashFlowForecastMariaDbTests {
         var plan = jdbc.queryForMap(
                 "EXPLAIN SELECT SUM(settlement_amount) FROM settlements WHERE merchant_id=? AND status='COMPLETED' AND completed_at>=? AND completed_at<?",
                 MERCHANT,
-                Timestamp.from(at(today().minusYears(2))),
-                Timestamp.from(Instant.now()));
+                utcTimestamp(at(today().minusYears(2))),
+                utcTimestamp(Instant.now()));
         assertThat(String.valueOf(plan.get("possible_keys"))).contains("idx_settlements_merchant_completed");
     }
     // 기준 시각 직후 완료된 기록을 스냅샷이 보더라도 실제와 예정 양쪽에서 누락하지 않는다.
@@ -228,8 +236,8 @@ class CashFlowForecastMariaDbTests {
         capture(PAYMENT, MERCHANT);
         jdbc.update(
                 "UPDATE settlements SET scheduled_at=?,status='COMPLETED',completed_at=? WHERE payment_id=?",
-                Timestamp.from(cutoff.plusMillis(500)),
-                Timestamp.from(cutoff.plusSeconds(1)),
+                utcTimestamp(cutoff.plusMillis(500)),
+                utcTimestamp(cutoff.plusSeconds(1)),
                 PAYMENT);
         var result = forecasts.forecastAt(
                 MERCHANT, day, today().plusDays(1), new CashFlowSettingResponse(1000L, today().minusYears(2)), cutoff);

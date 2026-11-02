@@ -174,7 +174,7 @@ class PasswordChangeHttpTests {
             assertThat(response.statusCode()).isEqualTo(400);
             assertThat(response.body()).doesNotContain("1234", "rejectedValue", "Exception");
         }
-        // 등록한 메서드(POST)가 아니면 필터가 먼저 거절한다 (ADR-0066). 예전에는 405였다
+        // 등록한 메서드(POST)가 아니면 필터가 먼저 거절한다 (ADR-0067). 예전에는 405였다
         assertProblem(send(current, "GET", "password", null), 403, "AUTH_002");
         assertThat(send(current, "GET", "me", null).statusCode()).isEqualTo(200);
         assertThat(hash()).isEqualTo(before);

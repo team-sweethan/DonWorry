@@ -1,5 +1,6 @@
 package com.donworry.settlement.service;
 
+import static com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -100,11 +101,11 @@ class OrderFulfillmentItemMariaDbTests {
     void insert_whenInvalidValues_rejectsDatabaseConstraintViolations() {
         String sql =
                 "INSERT INTO order_fulfillment_items(fulfillment_id,item_sequence,product_name,quantity,created_at) VALUES (?,?,?,?,?)";
-        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 1, "케이크", 0, java.sql.Timestamp.from(NOW)))
+        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 1, "케이크", 0, utcTimestamp(NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 0, "케이크", 1, java.sql.Timestamp.from(NOW)))
+        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 0, "케이크", 1, utcTimestamp(NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 1, " ", 1, java.sql.Timestamp.from(NOW)))
+        assertThatThrownBy(() -> jdbc.update(sql, fulfillmentId, 1, " ", 1, utcTimestamp(NOW)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 

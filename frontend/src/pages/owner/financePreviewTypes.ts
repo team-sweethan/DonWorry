@@ -18,6 +18,9 @@ export type RecurringExpense = RecurringExpenseInput & {
 export type RecurringOccurrence = ExpenseInput & { recurringExpenseId: number }
 export type SettlementPreviewEntry = {
   id: string
+  orderId?: string
+  dateLabel?: string
+  pickupLabel?: string
   item: string
   gross: number
   pickup: Date | null

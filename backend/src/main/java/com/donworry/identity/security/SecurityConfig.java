@@ -184,7 +184,7 @@ public class SecurityConfig {
                         // CakeShop HMAC은 MerchantSecurityConfiguration, AI 서버는 AiServerSecurityConfiguration이
                         // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
                         .ignoringRequestMatchers("/internal/**"))
-                // 권한 규칙은 정확한 메서드·경로로만 적는다. 같은 접두사로 새 API를 만들어도 저절로 열리지 않는다 (ADR-0066)
+                // 권한 규칙은 정확한 메서드·경로로만 적는다. 같은 접두사로 새 API를 만들어도 저절로 열리지 않는다 (ADR-0067)
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 paths.matcher(HttpMethod.GET, "/api/owner/integration"),
                                 paths.matcher(HttpMethod.POST, "/api/owner/integration/keys"),

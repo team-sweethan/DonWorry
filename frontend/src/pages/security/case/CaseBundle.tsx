@@ -1,6 +1,7 @@
 import { ArrowRightOutlined } from '@ant-design/icons'
 import { Card, Space } from 'antd'
 import type { CasePayment, SecurityCase } from '../../../types/case'
+import { customerPart } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
 import { HelpLabel, mergeHelp } from './CaseTimeLabels'
 
@@ -38,7 +39,7 @@ export function CaseBundle({
         <ArrowRightOutlined style={{ color: '#94a3b8', fontSize: 18 }} aria-hidden />
         <div style={caseBox}>
           <strong>사건 {securityCase.caseId}</strong>
-          <span style={{ color: '#64748b' }}>고객 {securityCase.customerRef}</span>
+          <span style={{ color: '#64748b' }}>고객 {customerPart(securityCase.customerRef)}</span>
           <span>결제 {payments.length}건 묶음</span>
           <Space size={4} style={{ color: '#64748b', fontSize: 12 }}>
             <HelpLabel label="결제 병합" help={mergeHelp} />

@@ -10,6 +10,8 @@ public interface FdsFailureAnalysisRepository extends JpaRepository<FdsFailureAn
 
     Optional<FdsFailureAnalysis> findByFailureReportId(UUID failureReportId);
 
+    Optional<FdsFailureAnalysis> findByEvaluationRequestId(UUID evaluationRequestId);
+
     boolean existsByOriginalEvaluationRequestIdAndDisposition(
             UUID originalEvaluationRequestId, FdsFailureDisposition disposition);
 }

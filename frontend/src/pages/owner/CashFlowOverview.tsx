@@ -1,4 +1,5 @@
 import { loanRequirement } from './loanForecast'
+import type { CashFlowForecast } from '../../api/finance'
 import { useRef, useState } from 'react'
 import { Button, Empty } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -55,12 +56,18 @@ export function CashFlowOverview({
   onDetails,
   preview = false,
   currentBalance,
+  summary,
+  capturedAt,
+  ownerScope,
 }: {
   days: ForecastDayView[]
   incomes: ForecastSource[]
   costs: ForecastSource[]
   preview?: boolean
   currentBalance?: number
+  summary?: CashFlowForecast
+  capturedAt?: string
+  ownerScope?: string
   onManage: () => void
   onDetails: (date: string) => void
 }) {
@@ -69,9 +76,11 @@ export function CashFlowOverview({
   const { pathname } = useLocation()
   const evidenceRef = useRef<HTMLElement>(null)
   if (!days.length) return <Empty description="올바른 조회 기간을 선택해 주세요." />
-  const firstShortage = days.find((d) => d.closing < 0)
+  const firstShortage = summary
+    ? days.find((d) => d.date === summary.firstShortageDate)
+    : days.find((d) => d.closing < 0)
   const requirement = loanRequirement(days)!
-  const maximumShortage = requirement.required
+  const maximumShortage = summary?.maximumShortage ?? requirement.required
   const active = days.find((d) => d.date === selected) ?? firstShortage ?? days[0]
   const dayIncome = incomes.filter((e) => e.date === active.date)
   const dayCosts = costs.filter((e) => e.date === active.date)
@@ -112,19 +121,18 @@ export function CashFlowOverview({
           ],
           [
             '기간 내 정산 유입',
-            days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
-            currentBalance === undefined
-              ? '정산 완료 · 예정 · 픽업 전 예상 포함'
-              : '예정 · 픽업 전 예상만 포함 · 완료액은 오늘 잔액에 반영됨',
+            summary?.totalIncome ??
+              days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
+            '실제 완료 · 픽업 완료 기준 예정 · 픽업 전 예상 포함',
           ],
           [
-            '기간 내 예정 지출',
-            days.reduce((n, d) => n + d.expenses, 0),
+            '기간 내 지출 (완료·예정)',
+            summary?.totalExpenses ?? days.reduce((n, d) => n + d.expenses, 0),
             '일회성 지출 · 정기 지출 포함',
           ],
           [
             '최저 예상 잔액',
-            Math.min(...days.map((d) => d.closing)),
+            summary?.lowestBalance ?? Math.min(...days.map((d) => d.closing)),
             '일 마감 기준 · 실제 은행 잔액 아님',
           ],
         ].map(([label, amount, note], index) => (
@@ -196,7 +204,7 @@ export function CashFlowOverview({
         </div>
         <div className="cashflow-chart-legend">
           <span style={{ color: '#15803d' }}>■ 정산 유입</span>
-          <span style={{ color: '#dc2626' }}>■ 예정 지출</span>
+          <span style={{ color: '#dc2626' }}>■ 지출 (완료·예정)</span>
           <span style={{ color: '#172554' }}>━ 예상 잔액</span>
           <span>주황색 점 · 부족 예상일</span>
         </div>
@@ -237,7 +245,7 @@ export function CashFlowOverview({
           </div>
           <span>−</span>
           <div>
-            <small>이날 예정 지출</small>
+            <small>이날 지출 (완료·예정)</small>
             <b>{money(active.expenses)}</b>
           </div>
           <span>＝</span>
@@ -250,8 +258,8 @@ export function CashFlowOverview({
           {active.closing < 0
             ? active.opening < 0
               ? '이전 날짜에서 이어진 부족액에 이날의 유입과 지출을 반영한 결과입니다.'
-              : `전날 잔액과 이날 유입을 합친 ${money(active.opening + incoming)}보다 예정 지출 ${money(active.expenses)}이 많습니다.`
-            : '전날 잔액에 이날 정산 유입을 더하고 예정 지출을 차감했습니다.'}{' '}
+              : `전날 잔액 ${money(active.opening)}에 유입 ${money(incoming)}과 지출 ${money(active.expenses)}을 반영한 결과입니다.`
+            : '전날 잔액에 이날 정산 유입을 더하고 지출 (완료·예정)을 차감했습니다.'}{' '}
           {largest &&
             costsMatch &&
             `이날 가장 큰 지출은 '${largest.title}' ${money(largest.amount)}입니다.`}
@@ -302,13 +310,16 @@ export function CashFlowOverview({
             navigate(pathname.startsWith('/dev/') ? '/dev/funds/loans' : '/owner/loans', {
               state: {
                 required: maximumShortage,
-                minimum: Math.min(...days.map((d) => d.closing)),
-                totalIn: days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
+                minimum: summary?.lowestBalance ?? Math.min(...days.map((d) => d.closing)),
+                totalIn:
+                  summary?.totalIncome ??
+                  days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
                 firstShortage: firstShortage?.date ?? null,
                 minimumDate: requirement.minimumDate,
                 from: days[0].date,
                 to: days.at(-1)!.date,
-                capturedAt: new Date().toISOString(),
+                capturedAt: capturedAt ?? new Date().toISOString(),
+                ownerScope,
                 preview,
               },
             })

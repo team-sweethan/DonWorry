@@ -54,3 +54,9 @@ export function decisionMode(evidenceVersion: number, reports: AiReport[]): Deci
     return { kind: 'blocked', message: '보고서가 현재 증거 버전과 다릅니다. 재조사 후 판정하세요.' }
   return latest.status === 'FAILED' ? { kind: 'manual' } : { kind: 'normal', report: latest }
 }
+
+/** 고객 참조의 고객 부분 (#428). 결제 쪽 내부 형식이 "가맹점ID:고객"이라 화면에는 고객 부분만 보인다. */
+export function customerPart(customerRef: string) {
+  const at = customerRef.indexOf(':')
+  return at < 0 ? customerRef : customerRef.slice(at + 1)
+}

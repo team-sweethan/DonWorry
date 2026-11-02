@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
-// 직원 세션 체인의 역할 × API 권한표를 한 곳에서 검사한다 (#420, ADR-0066).
+// 직원 세션 체인의 역할 × API 권한표를 한 곳에서 검사한다 (#420, ADR-0067).
 // CakeShop HMAC · AI 서버 체인과 로그인 전 공개 경로는 각 전용 테스트가 검사한다.
 @WebMvcTest(controllers = SecurityConfigTests.ProbeController.class)
 @Import({
