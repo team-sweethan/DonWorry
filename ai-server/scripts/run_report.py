@@ -8,6 +8,7 @@ from pathlib import Path
 from app.agent.graph import run_investigation
 from app.agent.llm import build_llm_client
 from app.agent.tools import SpringToolBox, StaticToolBox, ToolBox
+from app.agent.trace import provider_and_model
 from app.client.spring import SpringToolClient
 from app.config import Settings
 from app.schemas.case_context import CaseContext
@@ -62,7 +63,8 @@ def main() -> int:
         customer_ref=args.customer_ref,
         case_created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
-    model = settings.ollama_model if settings.llm_provider == "ollama" else "mock"
+    # 조사 과정 기록과 같은 함수로 모델 이름을 찍는다 (#453 — openai도 "mock"으로 찍혔다)
+    _, model = provider_and_model(settings)
     print(f"조사 시작 · Case {case_id} · LLM {settings.llm_provider} ({model})", file=sys.stderr)
     started = time.monotonic()
     outcome = run_investigation(context, build_llm_client(settings), toolbox, settings)
