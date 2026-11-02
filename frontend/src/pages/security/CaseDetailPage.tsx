@@ -23,7 +23,7 @@ import {
   latestReport,
   mergeRemainingMin,
 } from '../../utils/caseRules'
-import { customerCanceledClosure } from '../../utils/caseHistoryText'
+import { customerCanceledClosure, customerClosureNote } from '../../utils/caseHistoryText'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
@@ -248,7 +248,7 @@ export function CaseDetailPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message={`고객이 모든 결제의 승인을 취소해 Case가 종료됐습니다 (${dateTime(customerClosedAt)}).`}
-          description="판정 · 금융 조치 없이 끝난 Case입니다. 결제별 취소 시각은 아래 결제 표에, 처리 순서는 Case 이력에 있습니다."
+          description={customerClosureNote(decisions.length)}
         />
       )}
       {waiting && pollStopped && (

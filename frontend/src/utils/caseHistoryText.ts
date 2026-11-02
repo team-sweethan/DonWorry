@@ -39,3 +39,15 @@ export function historyDetail(h: CaseHistory, time: (iso: string) => string): st
         .join(' · ')
   }
 }
+
+/**
+ * 고객 취소로 닫힌 Case 안내의 설명 (#443, PR #444 리뷰).
+ * 판정한 결제가 있었으면 "판정 없이 끝났다"고 단정하지 않는다. 고객이 취소한 결제의 금융 조치는 실행되지 않는다
+ * (돈워리는 보류 결제만 고객 취소를 실행하고, 이미 매입 · 취소된 결제는 고객 취소가 성공하지 않는다).
+ */
+export function customerClosureNote(decisionCount: number): string {
+  const where = '결제별 취소 시각은 아래 결제 표에, 처리 순서는 Case 이력에 있습니다.'
+  return decisionCount === 0
+    ? `판정 · 금융 조치 없이 끝난 Case입니다. ${where}`
+    : `판정한 결제도 고객이 승인을 취소해 그 판정의 금융 조치는 실행되지 않았습니다. 판정 · 인계 기록은 아래에 그대로 남아 있습니다. ${where}`
+}

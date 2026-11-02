@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { CaseHistory } from '../src/types/case.ts'
-import { customerCanceledClosure, historyDetail } from '../src/utils/caseHistoryText.ts'
+import {
+  customerCanceledClosure,
+  customerClosureNote,
+  historyDetail,
+} from '../src/utils/caseHistoryText.ts'
 
 const make = (over: Partial<CaseHistory>): CaseHistory => ({
   historyId: '1',
@@ -75,4 +79,10 @@ test('그 밖의 이력은 예전처럼 값을 잇고 completedAt만 실제 완�
     ),
     'OPEN · INVESTIGATING',
   )
+})
+
+test('고객 취소 종료 안내는 판정이 있었으면 "판정 없이 끝났다"고 하지 않는다 (PR #444 리뷰)', () => {
+  assert.match(customerClosureNote(0), /^판정 · 금융 조치 없이 끝난 Case입니다/)
+  assert.doesNotMatch(customerClosureNote(1), /판정 · 금융 조치 없이/)
+  assert.match(customerClosureNote(1), /판정 · 인계 기록은 아래에 그대로 남아 있습니다/)
 })
