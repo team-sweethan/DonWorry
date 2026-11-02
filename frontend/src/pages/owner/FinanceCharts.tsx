@@ -6,14 +6,16 @@ import type { SettlementDay } from './settlementChart'
 import './finance-charts.css'
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 export function SettlementLineChart({
+  todayValue,
   days,
   onSelect,
 }: {
+  todayValue?: string
   days: SettlementDay[]
   onSelect: (date: string) => void
 }) {
   const [selected, setSelected] = useState('')
-  const today = dayjs().format('YYYY-MM-DD')
+  const today = todayValue ?? dayjs().format('YYYY-MM-DD')
   const data = settlementSeries(days, today)
   if (!data.length) return <Empty description="조회할 날짜를 선택해 주세요." />
   const active =
@@ -106,9 +108,7 @@ export function SettlementLineChart({
                         }
                       }}
                     >
-                      <title>
-                        {d.date} · {won(d[field]!)}
-                      </title>
+                      <title>{`${d.date} · ${won(d[field]!)}`}</title>
                     </circle>
                   ),
               )}

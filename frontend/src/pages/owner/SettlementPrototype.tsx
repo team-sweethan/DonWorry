@@ -368,6 +368,7 @@ export function SettlementPrototype({
       <section className="finance-card" style={{ marginBottom: 20 }}>
         <h2>날짜별 정산 금액</h2>
         <SettlementLineChart
+          todayValue={dateInput(today)}
           days={chartDays}
           onSelect={(date) => {
             setSelected(new Date(date + 'T00:00:00'))
