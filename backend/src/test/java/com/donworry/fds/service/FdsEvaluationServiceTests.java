@@ -98,7 +98,8 @@ class FdsEvaluationServiceTests {
         org.springframework.test.util.ReflectionTestUtils.setField(stored, "evaluationId", 1L);
         var demoError = org.mockito.Mockito.mock(FdsDemoErrorService.class);
         evaluator = new FdsEvaluationService(evaluationRepository, transactionService, Optional.of(demoError));
-        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId())).thenReturn(Optional.of(stored));
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.of(stored));
 
         var response = evaluator.evaluate(request);
 
