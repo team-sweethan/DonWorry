@@ -104,7 +104,7 @@ class MerchantPaymentQueryMariaDbTests {
     }
 
     // PENDING은 승인 전(평가 중)과 승인 후(매입 대기)를 함께 담는다. authorized로 둘을 구분하고,
-    // 단건·주문 조회가 같은 값을 준다. 승인 참조 원문은 응답에 없다 (ADR-0061 3-1).
+    // 단건·주문 조회가 같은 값을 준다. 승인 참조 원문은 응답에 없다 (ADR-0064 3-1).
     @Test
     void findPayment_authorized_separatesApprovedPendingFromUnapproved() {
         var c = command();
