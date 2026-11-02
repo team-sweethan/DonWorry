@@ -12,6 +12,8 @@ import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.HandoffListItemResponse;
+import com.donworry.investigation.entity.CaseHistory;
+import com.donworry.investigation.entity.CaseHistoryEventType;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.SecurityCase;
@@ -24,7 +26,9 @@ import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
+import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,10 +129,15 @@ public class CaseQueryService {
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
         List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
         Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
+        List<CaseHistory> histories = caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseId);
+        Map<Long, Instant> customerCanceled = customerCanceledAt(histories);
         return new CaseDetailResponse(
                 SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
                 casePayments.stream()
-                        .map(casePayment -> payment(casePayment, infos.get(casePayment.getPaymentId())))
+                        .map(casePayment -> payment(
+                                casePayment,
+                                infos.get(casePayment.getPaymentId()),
+                                customerCanceled.get(casePayment.getId())))
                         .toList(),
                 reportGateway.findByCase(caseId).stream()
                         .sorted(Comparator.comparingInt(ReportSnapshot::reportVersion))
@@ -140,9 +149,7 @@ public class CaseQueryService {
                 actionHandoffRepository.findByDecisionCasePaymentSecurityCaseId(caseId).stream()
                         .map(HandoffResponse::from)
                         .toList(),
-                caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseId).stream()
-                        .map(HistoryResponse::from)
-                        .toList());
+                histories.stream().map(HistoryResponse::from).toList());
     }
 
     private CaseSummaryResponse summary(SecurityCase securityCase) {
@@ -200,7 +207,20 @@ public class CaseQueryService {
                 casePayments.stream().map(CasePayment::getPaymentId).toList());
     }
 
-    private static CasePaymentResponse payment(CasePayment casePayment, PaymentInfo found) {
+    // 고객 승인 취소 반영 이력(#382) → 연결 결제 ID별 P5 확정 시각
+    private static Map<Long, Instant> customerCanceledAt(List<CaseHistory> histories) {
+        Map<Long, Instant> canceled = new HashMap<>();
+        for (CaseHistory history : histories) {
+            if (history.getEventType() == CaseHistoryEventType.PAYMENT_CANCELED_BY_CUSTOMER) {
+                Map<String, Object> data = history.getEventData();
+                canceled.put(((Number) data.get("casePaymentId")).longValue(), Instant.parse((String)
+                        data.get("completedAt")));
+            }
+        }
+        return canceled;
+    }
+
+    private static CasePaymentResponse payment(CasePayment casePayment, PaymentInfo found, Instant customerCanceledAt) {
         Optional<PaymentInfo> info = Optional.ofNullable(found);
         return new CasePaymentResponse(
                 casePayment.getId(),
@@ -213,7 +233,8 @@ public class CaseQueryService {
                 info.map(PaymentInfo::fdsResult).orElse(null),
                 info.map(PaymentInfo::ruleHits).orElse(List.of()).stream()
                         .map(rule -> new RuleHitResponse(rule.code(), rule.name(), rule.appliedScore()))
-                        .toList());
+                        .toList(),
+                customerCanceledAt);
     }
 
     private static AiReportResponse report(ReportSnapshot report) {

@@ -73,6 +73,11 @@ export const handoffErrorLabel: Record<string, string> = {
   PAYMENT_ACTION_CONFLICT: '이 결제에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
   DECISION_ACTION_CONFLICT: '이 판정에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
   VOID_DECLINED: '승인 취소가 거절되었습니다. P5에 확인을 요청하세요.',
+  // 고객 취소(#382) — 직원 조치가 실패한 것이 아니라 고객이 먼저 승인을 취소해 실행되지 않은 것이다
+  PAYMENT_CANCELED_BY_CUSTOMER: '고객이 승인을 취소해 실행되지 않았습니다.',
+  PAYMENT_CANCELLATION_IN_PROGRESS: '고객 승인 취소가 진행 중이라 실행하지 않았습니다.',
+  PAYMENT_CANCELLATION_REVIEW_REQUIRED:
+    '고객 승인 취소가 실패해 확인이 필요합니다. P5에 확인을 요청하세요.',
 }
 
 export const actionTypeLabel: Record<ActionType, string> = {
@@ -96,6 +101,7 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_RECHECKED: '인계 상태 다시 확인',
   HANDOFF_COMPLETION_RECORDED: '실제 완료 시각 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
+  PAYMENT_CANCELED_BY_CUSTOMER: '고객 승인 취소',
   CASE_CLOSED: 'Case 종료',
 }
 

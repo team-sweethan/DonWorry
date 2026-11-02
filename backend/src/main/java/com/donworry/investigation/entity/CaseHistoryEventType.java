@@ -14,5 +14,9 @@ public enum CaseHistoryEventType {
     HANDOFF_COMPLETION_RECORDED,
     // CASE_CREATED · CASE_CLOSED 외의 상태 전이 — event_data에 from · to를 남긴다
     CASE_STATUS_CHANGED,
+    // 고객이 HELD 결제의 승인을 직접 취소했다(P5 원본 확인 뒤 반영, #382) — event_data에 paymentId · casePaymentId · cancellationId ·
+    // completedAt
+    // 직원 판정 · 인계 결과가 아니다. 이 결제는 새 판정 대상에서 빠지고 금융 처리가 끝난 것으로 본다
+    PAYMENT_CANCELED_BY_CUSTOMER,
     CASE_CLOSED
 }

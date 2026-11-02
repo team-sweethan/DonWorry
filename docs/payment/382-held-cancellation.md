@@ -248,3 +248,40 @@ P3 이력은 Case 잠금 아래 cancellationId 기준으로 한 번만 기록한
 - MariaDB 검사는 기존 고객 VOID 18건에 새 조회 1건을 더한 19건이다. 호출자 트랜잭션에서 결제를 먼저 읽은 뒤 별도 취소가 커밋되어도 조회는 성공 원본을 반환하고, 반복 조회가 취소 실행이나 발행을 늘리지 않는 것을 확인했다.
 - `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
 - 미검증: MariaDB 전체 suite는 이번에 재실행하지 않았다(직전 P5 구현 검증은 12절). 실제 P3 연결·Case 종료 정책·CakeShop 성공 흐름은 이 단계의 검증 범위에 포함하지 않는다. 조회 구현은 아직 미커밋이며 PR·운영 활성화는 하지 않았다.
+
+## 15. P3 수신부 연결과 운영 활성화 (5단계, 2026-11-02)
+
+13절 2~4단계를 구현했다. P3 · P5 모두 수민 담당(P5 인수)이라 Case 종료 정책은 2026-11-02에 정했다.
+
+**Case 정책**
+
+| 상황 | 처리 |
+| --- | --- |
+| 판정 전 Case의 결제가 **모두** 고객 취소 | Case `CLOSED`. `CASE_CLOSED` 이력에 `reason: CUSTOMER_CANCELED` |
+| **일부만** 고객 취소 | 그 결제만 판정 대상에서 빼고 나머지 결제로 계속. 나머지가 모두 접수되면 종료 |
+| 이미 판정 · 인계된 결제에 고객 취소 | 판정 · 인계 보존, "고객 취소로 실행되지 않음" 표시. 인계를 `ACCEPTED`로 위장하지 않음. 취소된 결제의 인계 `FAILED`(P5 거절 `PAYMENT_CANCELED_BY_CUSTOMER`)는 Case를 `ACTION_FAILED`로 만들지 않음 |
+
+**연결 지점**
+
+| 지점 | 구현 |
+| --- | --- |
+| P3 조회 경계 | `investigation/service/CustomerVoidReader` → `PaymentCustomerVoidGateway`(P5 `PaymentCustomerVoidReader`). 테스트는 `TestPaymentInfoStore.markCustomerVoided` |
+| 이벤트 수신 | `PaymentCustomerVoidListener` → `CustomerVoidService.apply`. 연결 결제를 찾고 Case를 잠근 뒤(READ_COMMITTED) 가맹점 · P5 원본과 대조해 이력을 남긴다. 결제가 아직 Case에 없거나 원본과 다르면 예외 → publication 미완료 |
+| 연결 직후 확인 | `InvestigationAfterCommitListener.on(CaseEvidenceChanged)` → `CustomerVoidService.reflectCase`. 아직 반영하지 않은 결제만 P5에 묻는다 |
+| 상태 계산 | `CaseStatusService.refresh`가 이력으로 취소 결제를 세어 `CaseSnapshot.canceledCount`로 넘기고, 결제 · 판정 · 인계 계산에서 뺀다. `InvestigationRules.nextStatus`: 남은 결제가 0이면 `CLOSED` |
+| 판정 차단 | `CaseDecisionService.decide`: 반영 이력 또는 P5 원본에 고객 취소가 있으면 `INV_016` 409 |
+| 조회 · 화면 | `CasePaymentResponse.customerCanceledAt`. Case 상세 결제 표에 "고객 취소" 표시, 판정 패널에서 제외, 인계 오류 문구 3종 |
+| P5 운영 발행 | `PaymentCustomerVoidEventPublisher`(Modulith 이벤트) 등록. **HELD 고객 승인 취소가 운영 경로에서 실행된다(NOT_READY 해제)**. CAPTURED 환불은 계속 NOT_READY(#383) |
+
+**순서 역전 처리**
+
+- 취소가 결제 연결 커밋 **전**에 확정: 수신은 결제를 못 찾아 미완료로 남지만, 연결 커밋 직후 확인이 P5에서 취소를 찾아 반영한다.
+- 취소가 연결 커밋 **뒤**에 확정: 수신이 연결 결제를 찾아 반영한다.
+- 둘 다 반영하려 해도 `cancellationId`가 같으면 한 번만 기록한다. 같은 결제에 다른 `cancellationId`가 오면 덮어쓰지 않고 예외.
+- 수신이 미완료로 남은 publication은 자동 재발행 설정이 없어 그대로 남는다. 반영은 연결 직후 확인이 하므로 Case 결과는 같다. 운영에서 미완료 publication을 정리하는 방법은 이벤트 공통 설정 작업에서 정한다.
+
+**하지 않은 것**
+
+- CAPTURED 환불(#383) · P6 정산 차감
+- 고객사 화면(`/owner/actions`)과 조치 내역(`/security/actions`)의 고객 취소 구분 표시 — 지금은 인계 `FAILED`와 오류 문구로 보인다
+- 새 테이블 · 컬럼 없음(이력 종류 `PAYMENT_CANCELED_BY_CUSTOMER`만 추가, `event_type`은 VARCHAR)

@@ -17,7 +17,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.*;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.*;
@@ -84,29 +83,12 @@ class PaymentCustomerVoidMariaDbTests {
     @MockitoSpyBean
     PaymentCustomerVoidCompletion completion;
 
+    // 발행은 운영 PaymentCustomerVoidEventPublisher를 그대로 쓴다(#382). 여기서는 받는 쪽 대역만 더한다
     @TestConfiguration(proxyBeanMethods = false)
     static class DeliveryConfig {
         @Bean
-        PaymentCustomerVoidCompletion customerVoidTestCompletion(ApplicationEventPublisher events) {
-            return new TestCompletion(events);
-        }
-
-        @Bean
         Receiver customerVoidTestReceiver(JdbcTemplate jdbc) {
             return new Receiver(jdbc);
-        }
-    }
-
-    static class TestCompletion implements PaymentCustomerVoidCompletion {
-        private final ApplicationEventPublisher events;
-
-        TestCompletion(ApplicationEventPublisher events) {
-            this.events = events;
-        }
-
-        @Override
-        public void publish(PaymentCustomerVoidSucceeded event) {
-            events.publishEvent(event);
         }
     }
 
@@ -163,20 +145,27 @@ class PaymentCustomerVoidMariaDbTests {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE payment_id=?", Long.class, id);
     }
 
+    // 같은 이벤트를 실제 P3 수신부(PaymentCustomerVoidListener, #382)도 받으므로 이 테스트 대역의 발행 기록만 본다
+    private static final String RECEIVER_LISTENER = Receiver.class.getName() + "%";
+
     private long eventCount(long id) {
         return jdbc.queryForObject(
-                "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?",
+                "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?"
+                        + " AND LISTENER_ID LIKE ?",
                 Long.class,
                 PaymentCustomerVoidSucceeded.class.getName(),
-                id);
+                id,
+                RECEIVER_LISTENER);
     }
 
     private UUID publication(long id) {
         return UUID.fromString(jdbc.queryForObject(
-                "SELECT ID FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?",
+                "SELECT ID FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?"
+                        + " AND LISTENER_ID LIKE ?",
                 String.class,
                 PaymentCustomerVoidSucceeded.class.getName(),
-                id));
+                id,
+                RECEIVER_LISTENER));
     }
 
     private void delivered(long id, int attempts) {

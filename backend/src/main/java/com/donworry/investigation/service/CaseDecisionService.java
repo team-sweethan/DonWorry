@@ -40,6 +40,7 @@ public class CaseDecisionService {
     private final ReportGateway reportGateway;
     private final ApplicationEventPublisher events;
     private final SecurityStaffGuard securityStaffGuard;
+    private final CustomerVoidReader customerVoidReader;
 
     // P5 호출은 커밋 뒤 HandoffRequested 리스너가 한다 — 판정 저장이 롤백되면 인계 요청도 나가지 않는다
     @Transactional
@@ -64,6 +65,9 @@ public class CaseDecisionService {
                 .map(decision -> decision.getCasePayment().getId())
                 .collect(Collectors.toSet());
         Set<Long> inRequest = new HashSet<>();
+        // 고객이 승인을 취소한 결제는 새 판정 대상이 아니다 (#382). P3에 반영된 이력과 함께 P5 원본도 본다 —
+        // 취소 이벤트가 아직 반영되기 전이어도 판정 · 인계를 만들지 않는다
+        Set<Long> canceled = caseStatusService.canceledCasePayments(caseId).keySet();
 
         Instant now = Instant.now();
         for (DecisionSubmitRequest.Item item : request.decisions()) {
@@ -76,6 +80,12 @@ public class CaseDecisionService {
             }
             if (decided.contains(item.casePaymentId())) {
                 throw new InvestigationException(InvestigationErrorCode.PAYMENT_ALREADY_DECIDED);
+            }
+            if (canceled.contains(item.casePaymentId())
+                    || customerVoidReader
+                            .find(securityCase.getMerchantId(), casePayment.getPaymentId())
+                            .isPresent()) {
+                throw new InvestigationException(InvestigationErrorCode.PAYMENT_CANCELED_BY_CUSTOMER);
             }
             PaymentDecision decision = paymentDecisionRepository.save(PaymentDecision.confirm(
                     casePayment,

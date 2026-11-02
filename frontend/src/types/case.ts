@@ -26,6 +26,8 @@ export type CaseHistoryEventType =
   | 'HANDOFF_COMPLETION_RECORDED'
   /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
   | 'CASE_STATUS_CHANGED'
+  /** 고객이 HELD 결제 승인을 직접 취소함(P5 확인 뒤 반영, #382). eventData에 paymentId · casePaymentId · cancellationId · completedAt */
+  | 'PAYMENT_CANCELED_BY_CUSTOMER'
   | 'CASE_CLOSED'
 
 // ── 엔터티 (설계 3.9) ──
@@ -64,6 +66,8 @@ export type CasePayment = {
   riskScore: number | null
   fdsResult: FdsResult | null
   ruleHits: RuleHit[]
+  /** 고객이 승인을 직접 취소한 시각(#382). 있으면 판정 대상이 아니다 */
+  customerCanceledAt: string | null
 }
 
 export type PaymentDecision = {

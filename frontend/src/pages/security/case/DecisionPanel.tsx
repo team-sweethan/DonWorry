@@ -47,7 +47,8 @@ export function DecisionPanel({
   const { confirmDanger } = useFeedback()
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const decisionOf = (id: string) => decisions.find((d) => d.casePaymentId === id)
-  const undecided = payments.filter((p) => !decisionOf(p.casePaymentId))
+  // 고객이 승인을 취소한 결제(#382)는 판정할 수 없다
+  const undecided = payments.filter((p) => !decisionOf(p.casePaymentId) && !p.customerCanceledAt)
   const editable = mode.kind !== 'blocked' && undecided.length > 0
   const draftOf = (id: string): Draft => drafts[id] ?? { reason: '' }
   const update = (id: string, patch: Partial<Draft>) =>
@@ -151,6 +152,18 @@ export function DecisionPanel({
                   {analysis.reason}
                 </Typography.Paragraph>
               )}
+              {p.customerCanceledAt && (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 8 }}
+                  message={
+                    decided
+                      ? '고객이 승인을 취소해 이 판정의 금융 조치는 실행되지 않습니다.'
+                      : '고객이 승인을 취소한 결제라 판정하지 않습니다.'
+                  }
+                />
+              )}
               {decided ? (
                 <div style={{ fontSize: 13 }}>
                   <Space size={4} wrap>
@@ -167,7 +180,7 @@ export function DecisionPanel({
                     {decided.reportId ? `보고서 ${decided.reportId}` : '수동 판정'}
                   </Typography.Text>
                 </div>
-              ) : (
+              ) : p.customerCanceledAt ? null : (
                 <>
                   <Radio.Group
                     disabled={!editable}
