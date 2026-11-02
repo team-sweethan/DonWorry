@@ -107,6 +107,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
   - 이미 판정 · 인계된 결제 → 판정 · 인계는 보존하고 화면에 "고객이 승인을 취소해 실행되지 않음"으로 표시. 인계를 `ACCEPTED`로 위장하지 않는다
 - 판정 차단: 반영된 이력 또는 P5 원본에 고객 취소가 있으면 `INV_016`(409). 이벤트가 아직 반영되기 전이어도 막는다.
 - 응답: Case 상세 결제마다 `customerCanceledAt`(P5 확정 시각, 없으면 `null`).
+- 화면(#443): 모든 결제가 고객 취소로 닫힌 Case는 상세 위쪽에 "고객이 모든 결제의 승인을 취소해 Case가 종료됐습니다" 안내. 이력은 "Case 종료 · 고객이 모든 결제의 승인을 취소함", "고객 승인 취소 · 결제 N · 실제 완료 시각"으로 보인다(`utils/caseHistoryText.ts`).
 - 다른 화면(#439): 조치 내역(`GET /api/security-cases/handoffs`) 항목마다 `customerCanceledAt`, 화면에 "고객 취소" 탭 — 대기 · 실패 건수에서 뺀다. 고객사 조치 결과 상세 결제마다 `customerCanceled`(참 · 거짓만, 시각 · ID는 보내지 않음), 화면에 "고객 취소" 표시.
 - 설계 근거와 경합 분석은 [#382 설계 13 · 15절](../payment/382-held-cancellation.md), [ADR-0057](../decisions/0057-held-customer-void-contract.md).
 

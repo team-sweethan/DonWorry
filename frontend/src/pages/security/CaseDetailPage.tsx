@@ -23,6 +23,7 @@ import {
   latestReport,
   mergeRemainingMin,
 } from '../../utils/caseRules'
+import { customerCanceledClosure, customerClosureNote } from '../../utils/caseHistoryText'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
@@ -154,6 +155,7 @@ export function CaseDetailPage() {
   if (detail === null || detail === undefined) return <ScreenResult kind="404" />
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
+  const customerClosedAt = customerCanceledClosure(history)
   // 고객이 승인을 취소한 결제는 판정 대상이 아니다 (#382). 기존 판정이 있으면 그대로 보인다
   const decidable = payments.filter((p) => !p.customerCanceledAt)
   const decidedCount = decisions.filter((d) =>
@@ -239,6 +241,16 @@ export function CaseDetailPage() {
           </Space>
         }
       />
+      {/* 고객이 모든 결제의 승인을 취소해 닫힌 Case (#382 · #443) — 이력까지 내려가지 않아도 이유가 보이게 한다 */}
+      {customerClosedAt && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`고객이 모든 결제의 승인을 취소해 Case가 종료됐습니다 (${dateTime(customerClosedAt)}).`}
+          description={customerClosureNote(decisions.length)}
+        />
+      )}
       {waiting && pollStopped && (
         <Alert
           type="info"
