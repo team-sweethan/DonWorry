@@ -49,6 +49,12 @@ export function financeErrorMessage(error: unknown): string {
     ? error.message
     : '서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 조회해 주세요.'
 }
+export function financeWriteErrorMessage(error: unknown): string {
+  return error instanceof TypeError ||
+    (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError'))
+    ? '처리 결과를 확인하지 못했습니다. 다시 등록하기 전에 새로고침하여 중복 여부를 확인해 주세요.'
+    : financeErrorMessage(error)
+}
 const safe = (value: number) => {
   if (!Number.isSafeInteger(value))
     throw new Error('서버 금액이 지원 범위를 벗어났습니다. 다시 조회해 주세요.')

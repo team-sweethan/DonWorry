@@ -42,6 +42,7 @@ import { RecurringExpensePanel } from './RecurringExpensePanel'
 import {
   MAX_FINANCE_AMOUNT,
   financeErrorMessage,
+  financeWriteErrorMessage,
   managementRows,
   money,
   validFinancePeriod,
@@ -113,11 +114,7 @@ export function FinanceExpenseManager({
       setDraft(null)
       onChanged()
     } catch (e) {
-      const message =
-        e instanceof TypeError
-          ? '처리 결과를 확인하지 못했습니다. 다시 등록하기 전에 새로고침하여 중복 여부를 확인해 주세요.'
-          : financeErrorMessage(e)
-      const failure = new Error(message)
+      const failure = new Error(financeWriteErrorMessage(e))
       setError(failure)
       throw failure
     } finally {

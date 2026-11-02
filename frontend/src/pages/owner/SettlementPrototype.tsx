@@ -39,6 +39,7 @@ const dateInput = (d: Date) =>
 
 type CalendarExpense = { id: string; date: string; title: string; amount: number; note?: string }
 export function SettlementPrototype({
+  todayValue,
   expenses = [],
   actualEntries,
   period,
@@ -46,6 +47,7 @@ export function SettlementPrototype({
   headerActions,
   onPeriodChange,
 }: {
+  todayValue?: string
   expenses?: CalendarExpense[]
   actualEntries?: Entry[]
   period?: { from: string; to: string }
@@ -53,7 +55,8 @@ export function SettlementPrototype({
   headerActions?: React.ReactNode
   onPeriodChange?: (period: { from: string; to: string }) => void
 }) {
-  const [today] = useState(() => new Date())
+  const [previewToday] = useState(() => new Date())
+  const today = todayValue ? new Date(todayValue + 'T12:00:00') : previewToday
   const [entries] = useState(() => previewSettlements(today))
   const initialMonth = () =>
     period

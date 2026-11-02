@@ -160,3 +160,27 @@ test('취소 또는 계정 변경 뒤 도착한 읽기 결과는 화면 데이�
     (e) => e instanceof DOMException && e.name === 'AbortError',
   )
 })
+
+test('write timeouts keep an unknown result and never resend the POST', async () => {
+  const { financeWriteErrorMessage } = await import('../src/pages/owner/financeView.ts')
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    throw new DOMException('Request timed out', 'TimeoutError')
+  }
+  await assert.rejects(
+    createPlannedExpense({
+      title: 'rent',
+      expenseDate: '2026-11-02',
+      amount: 100,
+      category: 'RENT',
+      memo: null,
+    }),
+    (error: unknown) => {
+      assert.match(financeWriteErrorMessage(error), /새로고침/)
+      assert.match(financeWriteErrorMessage(error), /중복/)
+      return true
+    },
+  )
+  assert.equal(calls, 1)
+})

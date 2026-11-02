@@ -12,6 +12,7 @@ import {
   getSettlementReport,
   saveCashFlowSettings,
 } from '../../api/finance'
+import type { CashFlowSettings } from '../../api/finance'
 import { CashFlowOverview } from './CashFlowOverview'
 import { SettlementPrototype } from './SettlementPrototype'
 import { FinanceExpenseManager } from './FinanceExpenseManager'
@@ -24,6 +25,7 @@ import {
 import {
   MAX_FINANCE_AMOUNT,
   financeErrorMessage,
+  financeWriteErrorMessage,
   forecastView,
   koreanTime,
   managementRows,
@@ -50,7 +52,13 @@ export function FinanceConnected() {
     <ConnectedSettlements key={scope} />
   )
 }
-function InitialBalance({ today, onSaved }: { today: string; onSaved: () => void }) {
+function InitialBalance({
+  today,
+  onSaved,
+}: {
+  today: string
+  onSaved: (settings: CashFlowSettings) => void
+}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   return (
@@ -69,10 +77,13 @@ function InitialBalance({ today, onSaved }: { today: string; onSaved: () => void
           setBusy(true)
           setError(null)
           try {
-            await saveCashFlowSettings({ openingBalance: value.openingBalance, baseDate: today })
-            onSaved()
+            const saved = await saveCashFlowSettings({
+              openingBalance: value.openingBalance,
+              baseDate: today,
+            })
+            onSaved(saved)
           } catch (e) {
-            setError(e)
+            setError(new Error(financeWriteErrorMessage(e)))
           } finally {
             setBusy(false)
           }
@@ -108,6 +119,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
     to: dayjs(today).add(6, 'day').format('YYYY-MM-DD'),
   }))
   const [revision, setRevision] = useState(0)
+  const [savedInitialBalance, setSavedInitialBalance] = useState<CashFlowSettings | null>(null)
   const [manage, setManage] = useState(false)
   const [details, setDetails] = useState<string | null>(null)
   const refresh = useCallback(() => setRevision((n) => n + 1), [])
@@ -189,10 +201,24 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           message="잔액 기준일 이후 최대 366일, 종료일은 오늘+365일 이내로 선택해 주세요."
         />
       )}
+      {savedInitialBalance && (
+        <Alert
+          type="success"
+          showIcon
+          message="최초 잔액 저장이 완료되었습니다. 다시 저장할 필요가 없습니다."
+          description={`기준일 ${savedInitialBalance.baseDate} · 시작 잔액 ${money(savedInitialBalance.openingBalance)}. 이후 조회에 실패하면 새로고침해 주세요. 저장한 값은 변경할 수 없습니다.`}
+        />
+      )}
       {settings.status === 'error' && <FinanceFailure error={settings.error} onRetry={refresh} />}
       {settings.status === 'loading' && <FinanceLoading />}
-      {settings.status === 'success' && setting === null && (
-        <InitialBalance today={today} onSaved={refresh} />
+      {settings.status === 'success' && setting === null && !savedInitialBalance && (
+        <InitialBalance
+          today={today}
+          onSaved={(saved) => {
+            setSavedInitialBalance(saved)
+            refresh()
+          }}
+        />
       )}
       {forecast.status === 'error' && <FinanceFailure error={forecast.error} onRetry={refresh} />}
       {forecast.status === 'loading' && <FinanceLoading />}
@@ -354,6 +380,7 @@ function ConnectedSettlements() {
             description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
           />
           <SettlementPrototype
+            todayValue={today}
             period={period}
             onPeriodChange={setPeriod}
             headerActions={actions}
