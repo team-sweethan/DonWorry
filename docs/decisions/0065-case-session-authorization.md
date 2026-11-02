@@ -2,7 +2,7 @@
 
 - **상태:** 제안 — #408 PR C 사용자 구현 승인, PR 리뷰 대상
 - **날짜:** 2026-11-02
-- **관련:** Issue #408, #68, [ADR-0059](0059-security-default-deny.md) (Case 경로의 임시 `permitAll` 항목을 대체)
+- **관련:** Issue #408, #68, [ADR-0059](0059-security-default-deny.md) (Case 경로의 임시 `permitAll` 항목을 대체), [ADR-0019](0019-security-case-http-contract.md) (HTTP 인증 오류 코드 `INV_010` · `INV_009` · `INV_014`를 대체)
 - **영향 받는 담당:** P1 주환 (보안 필터), P3 수민 (Case·가맹점 조회·판정), P4 현규 (보고서 요청·진행 조회)
 
 ## 배경
@@ -40,7 +40,7 @@ CSRF 계약은 [ADR-0063](0063-csrf-default-enabled.md)을 유지한다. 변경 
 - DB: 없음. 모듈 간 공개 API·이벤트·의존 방향 변경도 없다.
 - 화면: 공통 클라이언트의 HTTP 상태 기반 401·403 처리는 유지한다. `cases.ts`·`merchantCases.ts`의 오류 코드 주석을 갱신한다.
 - 테스트: 공통 `SessionUserTestSupport`로 `CurrentStaff` 대역과 HTTP 인증 principal을 맞춘다. `CaseFlowTests`·`MerchantCaseFlowTests`는 실제 업무 흐름과 공통 오류 응답을 검증한다. `AiInvestigationFlowTests`의 진행 조회에 보안 직원 인증을 붙인다. `AuthHttpTests`는 실제 쿠키 로그인 전 401·로그인 후 잘못된 Case ID의 400 보존을 확인한다. `HandoffReceiptTests`는 서비스 직접 호출뿐이라 수정하지 않는다.
-- 문서: ADR-0059의 Case 임시 공개 결정을 이 ADR로 대체하고 investigation README에 현재 계약을 연결한다.
+- 문서: ADR-0059의 Case 임시 공개 결정을 이 ADR로 대체하고 investigation README에 현재 계약을 연결한다. ADR-0019의 인증 오류 코드 설명에 필터 응답(`AUTH_001` · `AUTH_002`)을 덧붙인다.
 
 ## 검증
 
