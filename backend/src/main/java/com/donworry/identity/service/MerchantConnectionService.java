@@ -36,12 +36,14 @@ public class MerchantConnectionService {
                 .filter(i -> i.getStatus() != IntegrationStatus.NO_KEY && i.getKeyVersion() == keyVersion)
                 .orElseThrow(() -> failure(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED));
         if (merchant.getStatus() != MerchantStatus.ACTIVE) throw failure(AuthErrorCode.MERCHANT_INACTIVE);
-        if (!path.equals("/api/merchant-connections/check") && !path.equals("/api/payments"))
+        // 결제 준비(호스팅 결제창, ADR-0064)도 신규 결제와 같은 연결 조건을 적용한다.
+        boolean newPayment = path.equals("/api/payments") || path.equals("/api/payment-sessions");
+        if (!path.equals("/api/merchant-connections/check") && !newPayment)
             throw failure(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED);
         if (path.equals("/api/merchant-connections/check")) {
             if (input.body().length != 0) throw failure(AuthErrorCode.MERCHANT_CONNECTION_INVALID);
             integration.connect(LocalDateTime.ofInstant(identityClock.instant(), ZoneOffset.UTC));
-        } else if (path.equals("/api/payments") && integration.getStatus() != IntegrationStatus.CONNECTED) {
+        } else if (newPayment && integration.getStatus() != IntegrationStatus.CONNECTED) {
             throw failure(AuthErrorCode.MERCHANT_CONNECTION_REQUIRED);
         }
     }

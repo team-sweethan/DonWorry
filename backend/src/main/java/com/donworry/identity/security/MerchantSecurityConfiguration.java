@@ -26,6 +26,7 @@ public class MerchantSecurityConfiguration {
         Map<RequestMatcher, HttpMethod> routes = Map.of(
                 paths.matcher("/api/merchant-connections/check"), HttpMethod.POST,
                 paths.matcher("/api/payments"), HttpMethod.POST,
+                paths.matcher("/api/payment-sessions"), HttpMethod.POST,
                 paths.matcher("/api/payments/{paymentId}"), HttpMethod.GET,
                 paths.matcher("/api/payment-orders"), HttpMethod.GET,
                 paths.matcher("/api/payments/{paymentId}/cancellations"), HttpMethod.POST,

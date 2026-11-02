@@ -1,0 +1,187 @@
+/* 돈워리 결제창. 프로토타입 v4.2 결제창(cobg · win)과 같은 구성 */
+.checkout-bg {
+  min-height: 100%;
+  background: #e9ecf0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 12px;
+  color: #0f172a;
+}
+
+.checkout-win {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(23, 37, 84, 0.08);
+}
+
+.checkout-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.checkout-brand {
+  color: #2563eb;
+  font-size: 20px;
+  letter-spacing: -1px;
+}
+
+.checkout-brand span {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.checkout-muted {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.checkout-summary {
+  margin: 0;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.checkout-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.checkout-row dt {
+  color: #64748b;
+}
+
+.checkout-row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.checkout-row--amount {
+  align-items: baseline;
+}
+
+.checkout-row--amount b {
+  font-size: 22px;
+}
+
+.checkout-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.checkout-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.checkout-cards legend {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.checkout-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.checkout-card:has(input:checked) {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.checkout-card__face {
+  flex: none;
+  width: 42px;
+  height: 28px;
+  border-radius: 5px;
+}
+
+.checkout-note {
+  margin: 4px 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.checkout-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+.checkout-pay,
+.checkout-cancel {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkout-pay {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.checkout-cancel {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.checkout-processing,
+.checkout-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  text-align: center;
+}
+
+.checkout-spin {
+  width: 36px;
+  height: 36px;
+  border: 4px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: checkout-spin 0.9s linear infinite;
+}
+
+@keyframes checkout-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-spin {
+    animation: none;
+  }
+}

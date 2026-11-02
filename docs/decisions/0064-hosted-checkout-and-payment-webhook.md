@@ -35,7 +35,7 @@
 
 - **로그인·쿠키를 쓰지 않는다.** 권한은 추측할 수 없는 세션 키뿐이다. 응답에 가맹점 내부 값(`customerRef`·`notifyUrl`)을 넣지 않고 `Cache-Control: no-store`를 붙인다
 - **CSRF 검사에서 제외한다.** CSRF는 쿠키로 인증하는 요청을 지키는 장치인데 이 경로는 쿠키 인증이 없다. 또 결제창은 다른 사이트(CakeShop) 안의 iframe으로 열리므로 돈워리의 `SameSite=Lax` 쿠키(`XSRF-TOKEN`)가 전송되지 않는다. 검사를 켜 두면 결제 버튼이 403이 된다. CSRF 검사는 #416(ADR-0063)에서 기본으로 켜졌으므로 결제창 구현 PR에서 이 세 경로를 반드시 제외한다
-- ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다(P1 `SecurityConfig` 리뷰)
+- ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다. ADR-0063이 직원 체인(`SecurityConfig`)에 새 CSRF 예외를 금지하므로, CakeShop 서명·AI 서버처럼 **결제창 전용 체인 `identity/security/CheckoutSecurityConfiguration`**(세션·쿠키 없음, CSRF 끔, 다른 메서드는 403)에 둔다(2026-11-02 구현 PR, P1 리뷰)
 - 결과: 카드 승인(`authorized`)이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 `successUrl?paymentKey=&orderId=&amount=`, 그 밖에는 `failUrl?code=`, 구매자가 닫으면 `failUrl?code=USER_CANCELED`
 - 화면 `/checkout/:sessionKey`(돈워리 프론트, 로그인 없음): iframe 안에서 열렸으면 높이 변화(`donworry-checkout-resize`)와 결과 이동(`donworry-checkout`)을 `postMessage`로 **가맹점 출처에만** 보낸다. 가맹점은 `event.origin`을 확인하고 같은 출처 주소로만 이동한다
 
