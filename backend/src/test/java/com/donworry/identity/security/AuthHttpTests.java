@@ -222,12 +222,16 @@ class AuthHttpTests {
         var anonymous = send(client, "GET", "/api/security-test-missing", null);
         assertThat(anonymous.statusCode()).isEqualTo(401);
         assertThat(anonymous.body()).contains("AUTH_001");
-        // 열어 둔 경로에서 난 오류(번호 자리에 글자)는 /error가 막히지 않아 401·403이 아니라 400이다
-        assertThat(send(client, "GET", "/api/security-cases/not-a-number", null).statusCode())
-                .isEqualTo(400);
+        // Case는 인자가 잘못되어도 비로그인 요청이면 컨트롤러 전에 막는다 (#408).
+        var anonymousCase = send(client, "GET", "/api/security-cases/not-a-number", null);
+        assertThat(anonymousCase.statusCode()).isEqualTo(401);
+        assertThat(anonymousCase.body()).contains("AUTH_001");
 
         assertThat(send(client, "POST", "/api/auth/login", givenSessionUser()).statusCode())
                 .isEqualTo(200);
+        // 허용된 보안 직원의 잘못된 인자 오류는 /error를 거쳐 기존 400을 유지한다.
+        assertThat(send(client, "GET", "/api/security-cases/not-a-number", null).statusCode())
+                .isEqualTo(400);
         var authenticated = send(client, "GET", "/api/security-test-missing", null);
         assertThat(authenticated.statusCode()).isEqualTo(403);
         assertThat(authenticated.body()).contains("AUTH_002");

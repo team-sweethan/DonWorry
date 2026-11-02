@@ -4,16 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.donworry.SessionUserTestSupport;
+import com.donworry.identity.api.StaffSummary;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -27,6 +31,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.json.JsonMapper;
@@ -151,15 +156,99 @@ class SecurityConfigTests {
         mockMvc.perform(post("/api/auth/csrf").with(token())).andExpect(status().isUnauthorized());
     }
 
-    // 컨트롤러·서비스 안 Guard가 검사하는 경로는 이번 단계에서 필터를 통과시킨다 (역할 규칙 이전은 담당 확인 후)
+    private static final List<String> STAFF_CASE_ROUTES = List.of(
+            "GET /api/security-cases",
+            "GET /api/security-cases/counts",
+            "GET /api/security-cases/payment-links",
+            "GET /api/security-cases/handoffs",
+            "GET /api/security-cases/1",
+            "POST /api/security-cases/1/decisions",
+            "POST /api/security-cases/1/handoffs/2/recheck",
+            "POST /api/security-cases/1/reports",
+            "GET /api/security-cases/1/reports/2/progress");
+
+    private static final List<String> MERCHANT_CASE_ROUTES =
+            List.of("GET /api/merchant/security-cases", "GET /api/merchant/security-cases/1");
+
+    private static MockHttpServletRequestBuilder caseRequest(String route) {
+        String[] parts = route.split(" ");
+        return request(HttpMethod.valueOf(parts[0]), parts[1]).with(token());
+    }
+
+    // 모든 Case 경로는 유효 CSRF 토큰이 있어도 세션이 없으면 공통 인증 오류로 거절한다.
     @Test
-    void guardCheckedPaths_whenAnonymous_reachHandlers() throws Exception {
-        mockMvc.perform(get("/api/security-cases")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/security-cases/1")).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/security-cases/1/decisions").with(token())).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/security-cases/1/reports/2/progress")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/merchant/security-cases")).andExpect(status().isNotFound());
-        mockMvc.perform(get("/api/merchant/security-cases/1")).andExpect(status().isNotFound());
+    void caseApis_whenAnonymous_returnUnauthorizedProblem() throws Exception {
+        for (var routes : List.of(STAFF_CASE_ROUTES, MERCHANT_CASE_ROUTES)) {
+            for (String route : routes) {
+                mockMvc.perform(caseRequest(route))
+                        .andExpect(status().isUnauthorized())
+                        .andExpect(jsonPath("$.code").value("AUTH_001"));
+            }
+        }
+    }
+
+    // ADMIN도 직원 Case API에 접근할 수 없다. 허용된 보안 직원만 핸들러 탐색까지 도달한다.
+    @Test
+    void staffCaseApis_onlySecurityStaff_reachesHandlers() throws Exception {
+        for (String role : List.of("SECURITY_STAFF", "ADMIN", "OPERATOR")) {
+            var staff = StaffSummary.builder()
+                    .userId(7L)
+                    .role(role)
+                    .merchantId(1L)
+                    .permissions(List.of("FDS_VIEW"))
+                    .build();
+            for (String route : STAFF_CASE_ROUTES) {
+                var result = mockMvc.perform(caseRequest(route).with(SessionUserTestSupport.sessionUser(staff)));
+                if (role.equals("SECURITY_STAFF")) result.andExpect(status().isNotFound());
+                else
+                    result.andExpect(status().isForbidden())
+                            .andExpect(jsonPath("$.code").value("AUTH_002"));
+            }
+        }
+    }
+
+    // 가맹점 Case는 OPERATOR · merchantId · FDS_VIEW를 모두 요구한다.
+    @Test
+    void merchantCaseApis_onlyOwnerWithMerchantAndFdsView_reachesHandlers() throws Exception {
+        var allowed = StaffSummary.builder()
+                .userId(50L)
+                .role("OPERATOR")
+                .merchantId(1L)
+                .permissions(List.of("FDS_VIEW"))
+                .build();
+        var denied = List.of(
+                StaffSummary.builder()
+                        .userId(7L)
+                        .role("SECURITY_STAFF")
+                        .merchantId(1L)
+                        .permissions(List.of("FDS_VIEW"))
+                        .build(),
+                StaffSummary.builder()
+                        .userId(1L)
+                        .role("ADMIN")
+                        .merchantId(1L)
+                        .permissions(List.of("FDS_VIEW"))
+                        .build(),
+                StaffSummary.builder()
+                        .userId(50L)
+                        .role("OPERATOR")
+                        .permissions(List.of("FDS_VIEW"))
+                        .build(),
+                StaffSummary.builder()
+                        .userId(50L)
+                        .role("OPERATOR")
+                        .merchantId(1L)
+                        .permissions(List.of("FINANCE_VIEW"))
+                        .build());
+        for (String route : MERCHANT_CASE_ROUTES) {
+            mockMvc.perform(caseRequest(route).with(SessionUserTestSupport.sessionUser(allowed)))
+                    .andExpect(status().isNotFound());
+            for (var staff : denied) {
+                mockMvc.perform(caseRequest(route).with(SessionUserTestSupport.sessionUser(staff)))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.code").value("AUTH_002"));
+            }
+        }
     }
 
     // 열어 둔 경로와 같은 접두사라도 등록하지 않은 경로·메서드는 기본 거절한다
@@ -170,6 +259,29 @@ class SecurityConfigTests {
         mockMvc.perform(post("/api/merchant/security-cases/1").with(token())).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/merchant-applications/new-feature")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/merchant-applications")).andExpect(status().isUnauthorized());
+    }
+
+    // 허용 역할이어도 등록하지 않은 Case 경로·메서드는 기본 거절한다.
+    @Test
+    void caseApis_whenAuthorizedButUnregistered_returnForbiddenProblem() throws Exception {
+        var staff = StaffSummary.builder().userId(7L).role("SECURITY_STAFF").build();
+        for (String route : List.of(
+                "GET /api/security-cases/1/new-feature", "DELETE /api/security-cases/1", "HEAD /api/security-cases")) {
+            mockMvc.perform(caseRequest(route).with(SessionUserTestSupport.sessionUser(staff)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("AUTH_002"));
+        }
+        var owner = StaffSummary.builder()
+                .userId(50L)
+                .role("OPERATOR")
+                .merchantId(1L)
+                .permissions(List.of("FDS_VIEW"))
+                .build();
+        mockMvc.perform(post("/api/merchant/security-cases/1")
+                        .with(token())
+                        .with(SessionUserTestSupport.sessionUser(owner)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
     }
 
     // 시연용 API는 기본값(로컬·시연)에서 열려 있고 정한 메서드만 받는다

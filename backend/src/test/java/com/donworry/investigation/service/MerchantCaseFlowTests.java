@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
@@ -32,7 +33,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -92,7 +94,7 @@ class MerchantCaseFlowTests {
         Held others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
 
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases"))
+        perform(get("/api/merchant/security-cases"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.overview.investigatingCount").value(1))
                 .andExpect(jsonPath("$.overview.acceptDecisionCount").value(1))
@@ -117,7 +119,7 @@ class MerchantCaseFlowTests {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);
 
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+        perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayStatus").value("INVESTIGATING"))
                 .andExpect(jsonPath("$.summary.length()").value(2))
@@ -137,7 +139,7 @@ class MerchantCaseFlowTests {
 
         // 판정 직후 — 금융 처리 대기 중이라 결제는 아직 보류 상태다 (화면은 "판정 반영 처리 중")
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+        perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayStatus").value("PROCESSING"))
                 .andExpect(jsonPath("$.payments[0].decision").value("REJECT"))
@@ -146,7 +148,7 @@ class MerchantCaseFlowTests {
         // 실제 취소가 확인되면 Case가 종료되고 결제 상태도 VOIDED다 (#212)
         recheckAll(held.caseId());
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+        perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayStatus").value("CLOSED"))
                 .andExpect(jsonPath("$.closedAt").isNotEmpty())
@@ -166,11 +168,11 @@ class MerchantCaseFlowTests {
                 new HeldPayment(System.nanoTime(), merchantId, customer(), 100_000L, "AUTH", null, Instant.now()));
         loginAs(7L, "SECURITY_STAFF", null, List.of());
         CaseDetailResponse detail = caseQueryService.detail(caseId);
-        mvc.perform(decide(caseId, 1, null, detail.payments().getFirst().casePaymentId(), "ACCEPT"))
+        perform(decide(caseId, 1, null, detail.payments().getFirst().casePaymentId(), "ACCEPT"))
                 .andExpect(status().isOk());
 
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", caseId))
+        perform(get("/api/merchant/security-cases/{caseId}", caseId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary").doesNotExist())
                 .andExpect(jsonPath("$.directInvestigation").value(true))
@@ -188,7 +190,7 @@ class MerchantCaseFlowTests {
                 securityCaseRepository.findById(held.caseId()).orElseThrow().increaseEvidenceVersion());
 
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+        perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist());
@@ -200,7 +202,7 @@ class MerchantCaseFlowTests {
         Held others = createHeld(MERCHANT_IDS.incrementAndGet(), customer(), 100_000L, 60);
 
         loginAsOwner(merchantId);
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", others.caseId()))
+        perform(get("/api/merchant/security-cases/{caseId}", others.caseId()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INV_001"));
     }
@@ -210,12 +212,12 @@ class MerchantCaseFlowTests {
         Held held = createHeld(merchantId, customer(), 100_000L, 60);
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
-        mvc.perform(get("/api/merchant/security-cases"))
+        perform(get("/api/merchant/security-cases"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
     // 보안 직원 · 관리자는 각자 화면을 쓴다. 가맹점이 있어도 사장님 전용 API는 막는다
@@ -247,12 +249,12 @@ class MerchantCaseFlowTests {
     }
 
     private void expectForbidden(Long caseId) throws Exception {
-        mvc.perform(get("/api/merchant/security-cases"))
+        perform(get("/api/merchant/security-cases"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_014"));
-        mvc.perform(get("/api/merchant/security-cases/{caseId}", caseId))
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/merchant/security-cases/{caseId}", caseId))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_014"));
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
     }
 
     // 결제를 연결 순서대로 하나씩 판정한다 — 보안 직원 API로 최신 보고서를 참고한 판정
@@ -261,7 +263,7 @@ class MerchantCaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         Long reportId = detail.reports().getLast().reportId();
         for (int i = 0; i < decisions.length; i++) {
-            mvc.perform(decide(
+            perform(decide(
                             caseId,
                             detail.securityCase().evidenceVersion(),
                             reportId,
@@ -276,13 +278,13 @@ class MerchantCaseFlowTests {
         loginAs(7L, "SECURITY_STAFF", null, List.of());
         for (CaseDetailResponse.HandoffResponse handoff :
                 caseQueryService.detail(caseId).handoffs()) {
-            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
+            perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
                             .with(csrf()))
                     .andExpect(status().isOk());
         }
     }
 
-    private RequestBuilder decide(
+    private MockHttpServletRequestBuilder decide(
             Long caseId, int evidenceVersion, Long reportId, Long casePaymentId, String decision) {
         Map<String, Object> body = new HashMap<>();
         body.put("evidenceVersion", evidenceVersion);
@@ -318,6 +320,10 @@ class MerchantCaseFlowTests {
                         .merchantId(merchantId)
                         .permissions(permissions)
                         .build()));
+    }
+
+    private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(SessionUserTestSupport.asCurrentStaff(request, currentStaff));
     }
 
     private static String customer() {

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import com.donworry.investigation.dto.CaseDetailResponse;
@@ -47,7 +48,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.json.JsonMapper;
 
 // HELD 결제 → Case 생성 · 병합 → 보고서(P4 고정 결과) → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
@@ -178,7 +180,7 @@ class CaseFlowTests {
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
         assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
-        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+        perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1))
@@ -186,7 +188,7 @@ class CaseFlowTests {
                 // 연결 결제 정보를 찾지 못하면 성공 보고서를 만들지 않고 FAILED로 남긴다 (수동 판정 경로)
                 .andExpect(jsonPath("$.reports[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.reports[0].reportBody").isEmpty());
-        mvc.perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+        perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
                         .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reports.length()").value(1));
@@ -199,7 +201,7 @@ class CaseFlowTests {
         List<Map<String, Object>> items = new ArrayList<>();
         items.add(null);
 
-        mvc.perform(decide(held.caseId(), 1, 1L, items)).andExpect(status().isBadRequest());
+        perform(decide(held.caseId(), 1, 1L, items)).andExpect(status().isBadRequest());
     }
 
     // 가맹점을 고르면 그 가맹점 Case만 목록에 나온다
@@ -209,7 +211,7 @@ class CaseFlowTests {
         Held mine = createHeld(merchantId, customer(), 300_000L, 65);
         createHeld(customer(), 300_000L, 65);
 
-        mvc.perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
+        perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].caseId").value(mine.caseId()));
@@ -286,7 +288,7 @@ class CaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         List<CaseDetailResponse.CasePaymentResponse> payments = detail.payments();
 
-        mvc.perform(decide(
+        perform(decide(
                         first.caseId(),
                         detail.securityCase().evidenceVersion(),
                         latestReportId(detail),
@@ -337,7 +339,7 @@ class CaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
 
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isOk());
 
         assertThat(caseQueryService.detail(held.caseId()).decisions())
@@ -351,21 +353,21 @@ class CaseFlowTests {
         Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isOk());
         Long handoffId =
                 caseQueryService.detail(held.caseId()).handoffs().getFirst().handoffId();
         recheckAll(held.caseId());
 
-        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+        perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
                         .with(csrf()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INV_012"));
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
-        mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+        perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
                         .with(csrf()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
     // 로그인하지 않았으면 401이고 판정은 저장되지 않는다
@@ -376,9 +378,9 @@ class CaseFlowTests {
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
 
         assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
     }
@@ -392,9 +394,9 @@ class CaseFlowTests {
         Long casePaymentId = detail.payments().getFirst().casePaymentId();
         loginAs(99L, role);
 
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
 
         assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
     }
@@ -405,24 +407,24 @@ class CaseFlowTests {
         Held held = createHeld(customer(), 300_000L, 65);
         given(currentStaff.findCurrent()).willReturn(Optional.empty());
 
-        mvc.perform(get("/api/security-cases"))
+        perform(get("/api/security-cases"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(get("/api/security-cases/counts"))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/counts"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/handoffs"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
-        mvc.perform(post("/api/security-cases/{caseId}/reports", held.caseId()).with(csrf()))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(post("/api/security-cases/{caseId}/reports", held.caseId()).with(csrf()))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("INV_010"));
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
     // 보안 직원이 아닌 역할(사장님 · 관리자)은 Case 목록 · 건수 · 상세를 볼 수 없다 (403)
@@ -432,21 +434,21 @@ class CaseFlowTests {
         Held held = createHeld(customer(), 300_000L, 65);
         loginAs(99L, role);
 
-        mvc.perform(get("/api/security-cases"))
+        perform(get("/api/security-cases"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
-        mvc.perform(get("/api/security-cases/counts"))
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/counts"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
-        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
-        mvc.perform(get("/api/security-cases/handoffs"))
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/handoffs"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
-        mvc.perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("INV_009"));
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
     }
 
     // 일부만 판정하면 판정 대기로 남고, 같은 결제를 다시 판정하면 거부한다
@@ -458,10 +460,10 @@ class CaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
 
-        mvc.perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.securityCase.status").value("DECISION_PENDING"));
-        mvc.perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "REJECT"))))
+        perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "REJECT"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INV_007"));
     }
@@ -474,7 +476,7 @@ class CaseFlowTests {
         createHeld(customer, 500_000L, 72);
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
 
-        mvc.perform(decide(
+        perform(decide(
                         first.caseId(),
                         1,
                         latestReportId(detail),
@@ -493,7 +495,7 @@ class CaseFlowTests {
         CaseDetailResponse detail = caseQueryService.detail(first.caseId());
         Long oldReportId = detail.reports().get(0).reportId();
 
-        mvc.perform(decide(
+        perform(decide(
                         first.caseId(),
                         2,
                         oldReportId,
@@ -508,7 +510,7 @@ class CaseFlowTests {
         Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
 
-        mvc.perform(decide(
+        perform(decide(
                         held.caseId(),
                         1,
                         null,
@@ -523,11 +525,11 @@ class CaseFlowTests {
         Held held = createHeld(customer(), 300_000L, 65);
         CaseDetailResponse detail = caseQueryService.detail(held.caseId());
         Long casePaymentId = detail.payments().get(0).casePaymentId();
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(jsonPath("$.securityCase.status").value("ACTION_PENDING"));
         recheckAll(held.caseId());
 
-        mvc.perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INV_002"));
     }
@@ -535,7 +537,7 @@ class CaseFlowTests {
     // 없는 Case는 404와 코드로 응답한다
     @Test
     void detail_unknownCase_returnsNotFound() throws Exception {
-        mvc.perform(get("/api/security-cases/{caseId}", Long.MAX_VALUE))
+        perform(get("/api/security-cases/{caseId}", Long.MAX_VALUE))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INV_001"));
     }
@@ -550,7 +552,7 @@ class CaseFlowTests {
         assertThat(before)
                 .containsOnlyKeys(
                         "OPEN", "INVESTIGATING", "DECISION_PENDING", "ACTION_PENDING", "ACTION_FAILED", "CLOSED");
-        mvc.perform(get("/api/security-cases/counts"))
+        perform(get("/api/security-cases/counts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
                 .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
@@ -564,7 +566,7 @@ class CaseFlowTests {
         Held second = createHeld(customer, 200_000L, 60);
         long unlinked = System.nanoTime();
 
-        mvc.perform(get("/api/security-cases/payment-links")
+        perform(get("/api/security-cases/payment-links")
                         .param("paymentIds", unlinked + "," + second.paymentId() + "," + first.paymentId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
@@ -575,7 +577,7 @@ class CaseFlowTests {
                         .value(first.caseId().intValue()))
                 .andExpect(jsonPath("$[?(@.paymentId == %d)].caseStatus", first.paymentId())
                         .value("DECISION_PENDING"));
-        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(unlinked)))
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(unlinked)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
     }
@@ -586,10 +588,10 @@ class CaseFlowTests {
         String tooMany =
                 LongStream.rangeClosed(1, 101).mapToObj(String::valueOf).collect(Collectors.joining(","));
 
-        mvc.perform(get("/api/security-cases/payment-links"))
+        perform(get("/api/security-cases/payment-links"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INV_015"));
-        mvc.perform(get("/api/security-cases/payment-links").param("paymentIds", tooMany))
+        perform(get("/api/security-cases/payment-links").param("paymentIds", tooMany))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INV_015"));
     }
@@ -605,7 +607,7 @@ class CaseFlowTests {
         Map<Long, Long> casePaymentIds = new HashMap<>();
         detail.payments().forEach(p -> casePaymentIds.put(p.paymentId(), p.casePaymentId()));
 
-        mvc.perform(decide(
+        perform(decide(
                         first.caseId(),
                         detail.securityCase().evidenceVersion(),
                         latestReportId(detail),
@@ -614,7 +616,7 @@ class CaseFlowTests {
                                 item(casePaymentIds.get(second.paymentId()), "REJECT"))))
                 .andExpect(status().isOk());
 
-        mvc.perform(get("/api/security-cases/handoffs"))
+        perform(get("/api/security-cases/handoffs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", first.paymentId())
                         .value(first.caseId().intValue()))
@@ -674,7 +676,7 @@ class CaseFlowTests {
         Held first = createHeld(customer, 300_000L, 65);
         createHeld(customer, 500_000L, 72);
 
-        mvc.perform(get("/api/security-cases"))
+        perform(get("/api/security-cases"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.caseId == %d)].paymentCount", first.caseId())
                         .value(2))
@@ -720,13 +722,14 @@ class CaseFlowTests {
     private void recheckAll(Long caseId) throws Exception {
         for (CaseDetailResponse.HandoffResponse handoff :
                 caseQueryService.detail(caseId).handoffs()) {
-            mvc.perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
+            perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
                             .with(csrf()))
                     .andExpect(status().isOk());
         }
     }
 
-    private RequestBuilder decide(Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {
+    private MockHttpServletRequestBuilder decide(
+            Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {
         Map<String, Object> body = new HashMap<>();
         // 예전 화면이 보내던 값 — 서버는 무시하고 로그인 세션 사용자로 저장해야 한다
         body.put("staffId", 7);
@@ -751,6 +754,10 @@ class CaseFlowTests {
 
     private static Long latestReportId(CaseDetailResponse detail) {
         return detail.reports().getLast().reportId();
+    }
+
+    private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(SessionUserTestSupport.asCurrentStaff(request, currentStaff));
     }
 
     private static String customer() {

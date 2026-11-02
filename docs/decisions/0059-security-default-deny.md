@@ -1,6 +1,6 @@
 # 0059. 직원 보안 체인의 기본 거절 (`anyRequest().denyAll()`)
 
-- **상태:** 제안 — #392 P1 구현, PR 리뷰 대상
+- **상태:** 기본 거절 유지, Case 경로의 임시 `permitAll` 항목만 대체됨 (→ [0064](0064-case-session-authorization.md)); 그 외 제안·PR 리뷰 대상
 - **날짜:** 2026-11-01
 - **관련:** Issue #392, #68, #390, [ADR-0014](0014-session-authentication.md) (그 외 경로 `permitAll` 유지 항목을 대체), [ADR-0041](0041-ai-server-internal-api-key-authentication.md), [ADR-0032](0032-production-admin-startup.md)
 - **영향 받는 담당:** P1 주환 (SecurityConfig), P2 정후 (FDS Mock), P3 수민 (Case · 시연 결제), P4 현규 (보고서 진행 조회), P5 · P6 (새 API 등록)
