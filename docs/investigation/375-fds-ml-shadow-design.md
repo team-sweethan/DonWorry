@@ -1,6 +1,6 @@
 # #375 FDS ML Shadow — Spring 연결 설계 (Phase 4-0)
 
-상태: **P2(정후님) 허락 (2026-11-02) — P2 조회 #409 병합(PR #411), P4 저장 #412 병합(PR #413), P4 ai-server 호출 #414 진행 중 · 실행(스케줄러) #415**. 기준 `dev 78bdd50`. 작성 P4 현규.
+상태: **P2(정후님) 허락 (2026-11-02) — P2 조회 #409 병합(PR #411), P4 저장 #412 병합(PR #413), P4 ai-server 호출 #414 병합(PR #433), 실행(스케줄러) #415 진행 중**. 기준 `dev 78bdd50`. 작성 P4 현규.
 결정 요약은 [ADR-0062](../decisions/0062-fds-ml-shadow-spring-connection.md). 앞 단계는 [ADR-0061](../decisions/0061-fds-ml-shadow-inference.md) (ai-server `POST /ml/fraud-score`, PR #406 병합).
 
 - **정후님(P2) 허락 받음:** 10절 (fds/api 새 조회 인터페이스 · 식별값 별칭 · 같은 카드 범위 · 80점 경계 공유)
@@ -186,8 +186,9 @@ public record FdsMlTransaction(
 한 주기 (기본 30초 간격, 한 번에 최대 50건)
 
 1. 커서 = 이 테이블에서 현재 `model_version`의 가장 큰 `evaluation_id` (없으면 0)
-2. `FAILED`이면서 `attempt_count < 3`인 행부터 다시 시도한다
-3. `findNewTargets(커서, 지금 − 30초, 50)` → 대상마다 `findInput` → ai-server 호출 → 행 저장 (대상마다 짧은 트랜잭션, HTTP 호출은 트랜잭션 밖)
+2. `FAILED`이면서 `attempt_count < 3`인 행부터 다시 시도한다 (`ML_REQUEST_REJECTED`는 빼고, 재시도 몫도 50건에 포함)
+3. `findNewTargets(커서, 지금, 50)`을 번호 순서로 받아, 평가 시각이 30초 안 된 첫 대상에서 멈춘다 → 대상마다 `findInput` → ai-server 호출 → 행 저장 (대상마다 짧은 트랜잭션, HTTP 호출은 트랜잭션 밖)
+   - 시각으로 미리 거르지 않는 이유 (#415 리뷰): P2는 평가 시각을 정한 뒤 저장할 때 번호를 받아서, 동시에 들어온 결제는 "번호는 작은데 시각은 늦은" 평가가 생긴다. `지금 − 30초`로 거르면 그 평가만 빠지고 더 큰 번호가 기록되어 커서가 영영 건너뛴다
 
 대상은 결제당 한 번만 나오고 결과(성공 · 실패 · 건너뜀)마다 행이 생기므로 커서는 항상 앞으로 간다. 별도 커서 테이블은 두지 않는다.
 
@@ -195,13 +196,16 @@ public record FdsMlTransaction(
 | --- | --- | --- |
 | 200 응답 | `SUCCEEDED` | 끝 |
 | 이력 2,000건 초과 (`historyOverLimit`) | `SKIPPED` · `HISTORY_LIMIT_EXCEEDED`, 호출 안 함 | 끝 (Shadow 기록으로 빈도를 본다) |
-| 422 (요청 검사 실패) | `FAILED` · `ML_REQUEST_REJECTED` | 다시 해도 같으므로 재시도 안 함 — P2 조회 규칙 버그 신호 |
-| 500 `ML_INFERENCE_FAILED` · 응답 시간 초과 | `FAILED` · 해당 코드, `attempt_count + 1` | 3번까지 다음 주기에 재시도 |
+| 입력을 찾지 못함 (`findInput` 빈 값) | `SKIPPED` · `INPUT_NOT_FOUND`, 호출 안 함 | 끝 (기록하지 않으면 커서가 그 자리에 멈춘다, #415) |
+| 422 (요청 검사 실패) | `FAILED` · `ML_REQUEST_REJECTED` | 다시 해도 같으므로 재시도 안 함 (재시도 조회에서 이 코드를 뺀다) — P2 조회 규칙 버그 신호 |
+| 500 `ML_INFERENCE_FAILED` | `FAILED` · 해당 코드, `attempt_count + 1` | 3번까지 다음 주기에 재시도 |
+| 응답 시간 초과 (`ai.server.read-timeout` 10초 공용) | `FAILED` · `ML_TIMEOUT`, `attempt_count + 1` | 3번까지 재시도. **이번 주기는 여기서 멈춘다** — 예약 작업 스레드가 1개라 시간 초과가 이어지면 다른 예약 작업이 막힌다 (#415) |
 | 연결 실패 · 503 `ML_MODEL_UNAVAILABLE` · 응답 `modelVersion`이 설정과 다름 | **기록 안 함**, 이번 주기 중단, 경고 로그 | 다음 주기에 그 자리부터 다시 (서버 · 모델 문제라 결제마다 실패로 굳히지 않는다) |
 
 - 처음 켜면 커서 0부터 기존 평가를 모두 채운다 (주기당 50건 → 분당 약 100건). 시연 데이터 규모에서는 몇 분 안에 끝난다
-- 30초 안정 지연은 커밋이 늦게 끝나 작은 ID가 뒤늦게 보이는 경우를 막는다. 평가 트랜잭션은 짧아 충분하다고 본다. 두 VM의 시계 차가 크면 지연을 늘린다 (미검증)
-- Spring이 두 대에서 동시에 돌아도 UNIQUE 위반은 "이미 채점됨"으로 보고 넘어간다
+- 30초 안정 지연은 커밋이 늦게 끝나 작은 ID가 뒤늦게 보이는 경우를 막는다 (번호 순서로 멈추므로 평가 시각 · 번호 순서가 엇갈려도 건너뛰지 않는다). 평가 트랜잭션은 짧아 충분하다고 본다. 두 VM의 시계 차가 크면 지연을 늘린다 (미검증)
+- Spring이 두 대에서 동시에 돌아도 UNIQUE 위반은 "이미 채점됨"으로 보고 넘어간다. 재시도 결과는 행을 잠그고(`PESSIMISTIC_WRITE`) 다시 읽어 FAILED일 때만 고친다 — 한쪽 성공을 다른 쪽 실패가 덮어쓰지 않게 (#415 리뷰, `@Version`은 칸 추가가 필요해 쓰지 않음)
+- 상태 이름에 `REJECTED`를 따로 두지 않는다 — 직원 판정 `Decision.REJECT`(승인 취소) 등과 같은 단어라 판정처럼 읽힌다 (#415)
 
 ## 9. 결정 7 — 위치 · 설정 (P4 `investigation/report`)
 
@@ -230,6 +234,16 @@ ai:
 - ai-server 주소 · 서비스 키는 `ai.server.base-url` · `ai.server.api-key`를 그대로 쓴다. `ai.server.enabled`(AI 조사)와는 따로 켠다
 - 켜기 값은 `application-local.yml`에 넣지 않고 `run-local.local.ps1` 인자로만 넘긴다 (테스트가 읽어 예약 작업이 도는 문제 방지 — 10/30 정리 방식)
 - 새 HTTP API가 없어 `SecurityConfig` 변경은 없다
+- 실제 위치 (#415): `MlShadowService.runOnce` · `MlShadowWriter`(건마다 새 트랜잭션으로 저장) · `MlShadowScheduler` · `MlShadowProperties`(`batch-size` · `settle-delay` · `max-attempts` · `model-version`). 이력 상한 2,000은 ai-server `MAX_HISTORY_ROWS`와 같은 상수
+
+### 로컬에서 켜는 법 (#415)
+
+1. ai-server를 켠다 — `ai-server/models/rf-v1.joblib`이 있어야 한다 (`AI_SERVER_ML_MODEL_PATH` 기본값)
+2. backend를 `--ai.ml-shadow.enabled=true`로 실행한다. `ai.server.api-key`는 AI 조사와 같은 값을 넘긴다 (AI 조사 `ai.server.enabled`는 꺼도 된다)
+   - PowerShell 예: `.\gradlew.bat bootRun "--args=--ai.ml-shadow.enabled=true --ai.server.api-key=<ai-server/.env의 AI_SERVER_INTERNAL_API_KEY>"`
+   - `application-local.yml`에는 넣지 않는다 (테스트도 읽는다)
+3. 결제 1건 → 약 30 ~ 60초 뒤 `SELECT * FROM ml_shadow_scores ORDER BY shadow_score_id DESC;`에 1행. 처음 켜면 기존 평가부터 주기당 50건씩 채운다
+4. 멈췄다면 backend 로그의 `ML Shadow 주기 중단` 경고에서 이유(연결 실패 · 모델 버전 · 시간 초과)를 본다
 
 ## 10. 확인 요청 — 정후님(P2) (2026-11-02 허락)
 
