@@ -1,0 +1,27 @@
+.finance-connected > .ant-alert {
+  margin: 16px 0;
+}
+.finance-connected .finance-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.finance-connected .finance-period input {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: white;
+  color: #17243b;
+}
+.finance-connected .finance-period label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.finance-connected details > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.finance-connected .finance-current-balance {
+  margin-top: 20px;
+}

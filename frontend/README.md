@@ -116,3 +116,11 @@ npm run test
 Case 화면은 서버 응답을 그대로 보여줍니다(보안 직원은 모든 가맹점, 사장님은 자기 가맹점). 시연 로그인·가맹점 선택 헤더는 #408에서 삭제했습니다.
 
 쇼핑몰 주소의 UTS #46 검증(`tr46@7.0.0`)을 위해 Node 22.14 이상(또는 Node 24 이상)을 사용합니다. CI는 Node 22 최신 버전으로 검사합니다.
+
+## P6 정산·자금관리 실제 연결 (#235·#236)
+
+`/owner/settlements`와 `/owner/funds`는 서버 세션의 실제 API를 호출합니다. backend의 `settlement.owner-http.enabled=true`와 FINANCE_VIEW 권한이 필요합니다.
+정산 달력·목록·상품/수수료 상세, 실제/예상 잔액과 부족 근거, 최초 잔액·일회성/정기 지출 관리를 연결합니다.
+개발 `/dev/settlements`, `/dev/funds` 목업은 유지하며 실제 조회 오류를 예시 금액으로 대체하지 않습니다.
+대출 상품은 가상 예시이고 은행 실잔액·실제 신청 API는 연결하지 않습니다.
+계약·동시 조회·검증/미검증 범위와 수동 확인 목록은 [6단계 연결 문서](../docs/settlement/frontend-connection.md)를 참조합니다.

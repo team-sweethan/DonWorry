@@ -21,7 +21,11 @@ export function RecurringExpensePanel({
   rules,
   onCreate,
   onStop,
+  maxAmount = MAX_PREVIEW_EXPENSE,
+  todayValue,
 }: {
+  maxAmount?: number
+  todayValue?: string
   rules: RecurringExpense[]
   onCreate: (input: RecurringExpenseInput) => Promise<void>
   onStop: (id: number) => Promise<void>
@@ -30,7 +34,7 @@ export function RecurringExpensePanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
   const [form] = Form.useForm<RecurringExpenseInput>()
-  const today = dayjs().format('YYYY-MM-DD')
+  const today = todayValue ?? dayjs().format('YYYY-MM-DD')
   async function write(action: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -108,7 +112,7 @@ export function RecurringExpensePanel({
               ) : (
                 <Popconfirm
                   title="오늘부터 정기 지출을 중단할까요?"
-                  description="오늘 이전 내역은 보존됩니다. 중단 후에는 되돌릴 수 없습니다."
+                  description="완료 기록은 보존하고 오늘부터의 미완료 회차를 중단합니다. 되돌릴 수 없습니다."
                   onConfirm={() => write(() => onStop(r.recurringExpenseId))}
                 >
                   <Button size="small" disabled={busy}>
@@ -139,6 +143,7 @@ export function RecurringExpensePanel({
         )}
         <Form
           form={form}
+          disabled={busy}
           layout="vertical"
           onFinish={(v) =>
             void write(() => onCreate({ ...v, memo: v.memo || null, endDate: v.endDate || null }))
@@ -164,10 +169,10 @@ export function RecurringExpensePanel({
             </Form.Item>
             <Form.Item
               name="amount"
-              label="금액 (원, 최대 10억)"
-              rules={[{ required: true }, { type: 'integer', min: 1, max: MAX_PREVIEW_EXPENSE }]}
+              label="금액 (원)"
+              rules={[{ required: true }, { type: 'integer', min: 1, max: maxAmount }]}
             >
-              <InputNumber min={1} max={MAX_PREVIEW_EXPENSE} precision={0} />
+              <InputNumber min={1} max={maxAmount} precision={0} />
             </Form.Item>
           </Space>
           <Form.Item

@@ -35,3 +35,5 @@ MariaDB 테스트는 Docker 격리 DB에 Flyway 전체를 적용하고 JPA 매�
 운영 키 배포·외부 도메인·프록시·실제 CakeShop 발신·최신 Notion 동기화는 검사 결과와 구분한다.
 
 - [현금흐름 예측 API·계산 기준 (5단계)](cash-flow-forecast-api.md)
+
+- [정산·자금관리 화면 실제 API 연결 (6단계)](frontend-connection.md)
