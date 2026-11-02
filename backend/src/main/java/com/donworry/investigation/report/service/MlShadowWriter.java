@@ -24,11 +24,11 @@ class MlShadowWriter {
         mlShadowScoreRepository.saveAndFlush(score);
     }
 
-    // 재시도 결과 반영 — 그사이 다른 Spring이 끝낸 행이면 건드리지 않는다
+    // 재시도 결과 반영 — 행을 잠그고 읽어, 그사이 다른 Spring이 끝낸 행이면 건드리지 않는다
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void succeedOnRetry(Long id, MlScoreValues values, Instant now) {
         mlShadowScoreRepository
-                .findById(id)
+                .findByIdForUpdate(id)
                 .filter(MlShadowWriter::isFailed)
                 .ifPresent(score -> score.succeedOnRetry(values, now));
     }
@@ -36,7 +36,7 @@ class MlShadowWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failOnRetry(Long id, String failureCode, Instant now) {
         mlShadowScoreRepository
-                .findById(id)
+                .findByIdForUpdate(id)
                 .filter(MlShadowWriter::isFailed)
                 .ifPresent(score -> score.failOnRetry(failureCode, now));
     }
@@ -44,7 +44,7 @@ class MlShadowWriter {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void skipOnRetry(Long id, String failureCode, Instant now) {
         mlShadowScoreRepository
-                .findById(id)
+                .findByIdForUpdate(id)
                 .filter(MlShadowWriter::isFailed)
                 .ifPresent(score -> score.skipOnRetry(failureCode, now));
     }

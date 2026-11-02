@@ -56,9 +56,13 @@ class MlShadowService {
         }
         // 커서 = 이 모델로 기록한 가장 큰 평가 번호. 결과마다 행이 생기므로 따로 커서를 두지 않는다
         long cursor = mlShadowScoreRepository.findMaxEvaluationId(modelVersion).orElse(0L);
-        List<FdsMlTarget> targets =
-                fdsMlInputReader.findNewTargets(cursor, now.minus(properties.settleDelay()), remaining);
-        for (FdsMlTarget target : targets) {
+        // 시각으로 거르지 않고 번호 순서로 받아, 아직 안정 지연이 안 지난 첫 평가에서 멈춘다
+        // P2는 평가 시각을 정한 뒤 저장할 때 번호를 받아서 번호 · 시각 순서가 엇갈릴 수 있다 — 시각으로 거르면 작은 번호를 커서가 건너뛴다
+        Instant settledBefore = now.minus(properties.settleDelay());
+        for (FdsMlTarget target : fdsMlInputReader.findNewTargets(cursor, now, remaining)) {
+            if (!target.evaluatedAt().isBefore(settledBefore)) {
+                return;
+            }
             if (!score(target.evaluationId(), new NewRecorder(target, now))) {
                 return;
             }

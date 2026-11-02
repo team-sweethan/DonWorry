@@ -54,8 +54,6 @@ class MlShadowServiceTests {
     // DATETIME(6)은 마이크로초까지만 저장하므로 비교값도 맞춰 둔다
     static final Instant NOW = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-    static final Instant SETTLED_BEFORE = NOW.minusSeconds(30);
-
     static final AtomicLong IDS = new AtomicLong(3_000_000_000L + System.nanoTime() % 1_000_000_000L);
 
     @Autowired
@@ -280,9 +278,42 @@ class MlShadowServiceTests {
         verify(aiServerClient, never()).score(requestFor(second));
     }
 
+    // 번호는 작은데 평가 시각이 늦은 평가가 있어도 커서가 그 평가를 건너뛰지 않는다 (#415 Codex 리뷰)
+    // P2는 평가 시각을 정한 뒤 저장할 때 번호를 받아서, 동시에 들어온 결제는 번호와 시각 순서가 엇갈릴 수 있다
+    @Test
+    void runOnce_smallerIdSettledLater_notSkipped() {
+        long base = IDS.addAndGet(10);
+        FdsMlTarget smaller = target(base + 1, NOW.minusSeconds(10));
+        FdsMlTarget larger = target(base + 2, NOW.minusSeconds(40));
+        List<FdsMlTarget> committed = List.of(smaller, larger);
+        // 실제 P2 조회처럼 커서보다 크고 settledBefore 전에 평가된 것만 번호 순서로 준다
+        given(inputReader.findNewTargets(anyLong(), any(), anyInt())).willAnswer(invocation -> {
+            long after = invocation.getArgument(0);
+            Instant settledBefore = invocation.getArgument(1);
+            int limit = invocation.getArgument(2);
+            return committed.stream()
+                    .filter(target -> target.evaluationId() > after)
+                    .filter(target -> target.evaluatedAt().isBefore(settledBefore))
+                    .limit(limit)
+                    .toList();
+        });
+        givenInput(smaller);
+        givenInput(larger);
+        given(aiServerClient.score(any())).willAnswer(invocation -> {
+            MlFraudScoreRequest request = invocation.getArgument(0);
+            return scored(request.evaluationId() == smaller.evaluationId() ? smaller : larger, modelVersion);
+        });
+
+        service.runOnce(NOW);
+        service.runOnce(NOW.plusSeconds(60));
+
+        assertThat(rows())
+                .extracting(MlShadowScore::getEvaluationId)
+                .containsExactly(smaller.evaluationId(), larger.evaluationId());
+    }
+
     private void givenNewTargets(long cursor, FdsMlTarget... targets) {
-        given(inputReader.findNewTargets(eq(cursor), eq(SETTLED_BEFORE), anyInt()))
-                .willReturn(List.of(targets));
+        given(inputReader.findNewTargets(eq(cursor), eq(NOW), anyInt())).willReturn(List.of(targets));
     }
 
     private void givenInput(FdsMlTarget target) {
@@ -332,13 +363,18 @@ class MlShadowServiceTests {
                 .build();
     }
 
-    private static FdsMlTarget newTarget() {
+    private static FdsMlTarget target(long evaluationId, Instant evaluatedAt) {
         return FdsMlTarget.builder()
-                .evaluationId(IDS.incrementAndGet())
+                .evaluationId(evaluationId)
                 .paymentId(IDS.incrementAndGet())
                 .result(FdsResult.REVIEW)
                 .riskScore(72)
-                .evaluatedAt(NOW)
+                .evaluatedAt(evaluatedAt)
                 .build();
+    }
+
+    // 안정 지연(30초)이 이미 지난 평가
+    private static FdsMlTarget newTarget() {
+        return target(IDS.incrementAndGet(), NOW.minusSeconds(60));
     }
 }
