@@ -175,7 +175,7 @@ class PaymentHttpMariaDbTests {
         var json = mapper.readTree(first.body());
         long id = json.path("paymentId").asLong();
         assertThat(json.path("paymentStatus").asText()).isEqualTo("HELD");
-        // HELD는 카드 승인이 끝난 상태다. 승인 여부만 내보내고 승인 참조 원문은 내보내지 않는다 (ADR-0061 3-1)
+        // HELD는 카드 승인이 끝난 상태다. 승인 여부만 내보내고 승인 참조 원문은 내보내지 않는다 (ADR-0064 3-1)
         assertThat(json.path("authorized").asBoolean()).isTrue();
         assertThat(first.headers().firstValue("Location")).contains("/api/payments/" + id);
         assertThat(first.headers().firstValue("Cache-Control")).contains("no-store");

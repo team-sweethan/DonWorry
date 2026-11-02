@@ -113,7 +113,7 @@ POST 헤더: `Idempotency-Key: <UUID>` 제안. 키는 가맹점 범위이며 원
 - authorizationRef, FDS 점수·규칙·내부 오류, API Key는 응답하지 않는다.
 - statusChangedAt은 **P5가 현재 paymentStatus로 전이시킨 시각**이다. P6 capturedAt·P3 acceptedAt과 다르다. 생성 시 requestedAt, 동일 상태 재반영/단순 조회/중복 완료에는 갱신하지 않는다.
 - declineCode는 최종 DENIED/DECLINED의 외부용 사유만: FDS_REJECTED / AUTHORIZATION_DECLINED 제안. 구체 탐지 규칙이나 승인기 내부 오류를 그대로 내보내지 않는다. 그 외 상태는 null. VOIDED는 거절이 아니라 취소 상태다.
-- authorized(2026-11-01 #402, ADR-0061 3-1 추가)는 카드 승인이 이뤄졌는지다. 승인 참조가 저장돼 있으면 true이며 이후 VOIDED가 돼도 true로 남는다. PENDING은 승인 전 평가 중·오류와 승인 후 매입 대기를 함께 담으므로 가맹점은 `authorized=true`이고 PENDING·HELD·CAPTURED면 결제됨으로 본다. 승인 참조 원문은 계속 내보내지 않는다. 필드 추가만이라 이 값을 읽지 않는 기존 호출자는 그대로 동작한다.
+- authorized(2026-11-01 #402, ADR-0064 3-1 추가)는 카드 승인이 이뤄졌는지다. 승인 참조가 저장돼 있으면 true이며 이후 VOIDED가 돼도 true로 남는다. PENDING은 승인 전 평가 중·오류와 승인 후 매입 대기를 함께 담으므로 가맹점은 `authorized=true`이고 PENDING·HELD·CAPTURED면 결제됨으로 본다. 승인 참조 원문은 계속 내보내지 않는다. 필드 추가만이라 이 값을 읽지 않는 기존 호출자는 그대로 동작한다.
 - 이전 데이터의 실제 상태 변경 시각·거절 이유는 알 수 없으면 null. createdAt을 과거 변경 시각으로 꾸며 백필하지 않는다.
 
 ### 주문 조회
