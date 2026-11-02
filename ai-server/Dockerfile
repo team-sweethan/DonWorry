@@ -13,6 +13,9 @@ RUN uv sync --locked --no-dev
 # FastAPI 소스 복사
 COPY app ./app
 
+# ML 추론 모델 — config.py의 ml_model_path(/app/models/rf-v1.joblib). 없으면 ML API가 503
+COPY models ./models
+
 # 설치된 가상환경 사용
 ENV PATH="/app/.venv/bin:$PATH"
 

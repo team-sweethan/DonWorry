@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# 같은 브랜치의 실행은 한 번에 하나만 — 진행 중인 발행은 끊지 않고, 대기 중인 것만 최신으로 교체.
+# 오래된 실행이 prod marker를 나중에 덮어쓰지 않게 한다 (#435)
+concurrency:
+  group: vm-images-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   backend-test:
     runs-on: ubuntu-latest
@@ -25,6 +31,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew
       - run: ./gradlew check
+      # MariaDB 컨테이너에 Flyway 전체 적용 + JPA validate — 필수 검사 backend와 같은 기준
+      - run: ./gradlew mariaDbTest
 
   frontend-test:
     runs-on: ubuntu-latest
@@ -41,6 +49,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      - run: npm run test
       - run: npm run build
 
   ai-test:
@@ -56,6 +65,7 @@ jobs:
       - run: pip install uv
       - run: uv sync --locked
       - run: uv run ruff check .
+      - run: uv run ruff format --check .
       - run: uv run pytest
 
   images:
@@ -98,8 +108,22 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
           tags: ghcr.io/team-sweethan/donworry-ai:sha-${{ github.sha }}
 
-      - name: Publish release marker
+      # marker 직전 확인: 이 실행의 SHA가 아직 main 최신이어야 prod로 가리킨다.
+      # 그 사이 main이 앞서 갔으면 이미지(sha-태그)만 남기고 marker는 다음 실행에 맡긴다
+      - name: Check release target is still main HEAD
+        id: target
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
+        run: |
+          head=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$head" = "${{ github.sha }}" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::main이 $head 로 앞서 있어 marker를 건너뜁니다 (이 실행: ${{ github.sha }})"
+          fi
+
+      - name: Publish release marker
+        if: steps.target.outputs.current == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
