@@ -43,6 +43,7 @@ public record CaseDetailResponse(
     }
 
     // P5 결제 · P2 평가 값은 조회하지 못하면 null로 둔다 — 추정값을 채우지 않는다
+    // customerCanceledAt: 고객이 승인을 직접 취소한 시각(P5 확정 시각, #382). 아니면 null — 이 결제는 판정 대상이 아니다
     public record CasePaymentResponse(
             Long casePaymentId,
             Long paymentId,
@@ -52,7 +53,8 @@ public record CaseDetailResponse(
             Instant requestedAt,
             Integer riskScore,
             String fdsResult,
-            List<RuleHitResponse> ruleHits) {}
+            List<RuleHitResponse> ruleHits,
+            Instant customerCanceledAt) {}
 
     // P2 MATCH 적중 룰 — 경보 상세 화면과 같은 정보(코드 · 평가 당시 이름 · 더한 점수)
     public record RuleHitResponse(String code, String name, Integer appliedScore) {}

@@ -71,6 +71,34 @@ class InvestigationRulesTests {
         assertThat(InvestigationRules.nextStatus(snapshot)).isEqualTo(CaseStatus.OPEN);
     }
 
+    // 모든 결제를 고객이 직접 취소했으면 판정할 결제가 없어 닫는다 (#382)
+    @Test
+    void nextStatus_allPaymentsCanceledByCustomer_returnsClosed() {
+        var snapshot = new CaseSnapshot(CaseStatus.DECISION_PENDING, 0, 2, 0, List.of(), ReportProgress.COMPLETED);
+
+        assertThat(InvestigationRules.nextStatus(snapshot)).isEqualTo(CaseStatus.CLOSED);
+    }
+
+    // 일부만 고객이 취소했으면 남은 결제로 계속 판단한다 — 남은 결제가 모두 접수되면 닫는다 (#382)
+    @Test
+    void nextStatus_someCanceledByCustomer_usesRemainingPayments() {
+        var waiting = new CaseSnapshot(CaseStatus.DECISION_PENDING, 1, 1, 0, List.of(), ReportProgress.COMPLETED);
+        var accepted = new CaseSnapshot(
+                CaseStatus.ACTION_PENDING, 1, 1, 1, List.of(HandoffStatus.ACCEPTED), ReportProgress.COMPLETED);
+
+        assertThat(InvestigationRules.nextStatus(waiting)).isEqualTo(CaseStatus.DECISION_PENDING);
+        assertThat(InvestigationRules.nextStatus(accepted)).isEqualTo(CaseStatus.CLOSED);
+    }
+
+    // 결제가 하나도 없는 요약은 만들 수 없다 — 취소 수도 음수일 수 없다
+    @Test
+    void caseSnapshot_withoutAnyPayment_isRejected() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new CaseSnapshot(CaseStatus.OPEN, 0, 0, 0, List.of(), ReportProgress.NONE));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new CaseSnapshot(CaseStatus.OPEN, 1, -1, 0, List.of(), ReportProgress.NONE));
+    }
+
     // 최신 보고서를 만드는 중이면 조사 중이다
     @Test
     void nextStatus_whileReportInProgress_returnsInvestigating() {

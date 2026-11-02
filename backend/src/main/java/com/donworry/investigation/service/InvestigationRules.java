@@ -29,17 +29,30 @@ public final class InvestigationRules {
     }
 
     // 상태 결정에 필요한 Case 요약. handoffs는 판정된 결제의 인계 상태 목록이다
+    // 고객이 승인을 취소한 결제(#382)는 canceledCount로 따로 세고 paymentCount · decidedCount · handoffs에서 뺀다
     public record CaseSnapshot(
             CaseStatus current,
             int paymentCount,
+            int canceledCount,
             int decidedCount,
             List<HandoffStatus> handoffs,
             ReportProgress latestReport) {
+
+        // 고객 취소가 없는 Case
+        public CaseSnapshot(
+                CaseStatus current,
+                int paymentCount,
+                int decidedCount,
+                List<HandoffStatus> handoffs,
+                ReportProgress latestReport) {
+            this(current, paymentCount, 0, decidedCount, handoffs, latestReport);
+        }
+
         public CaseSnapshot {
             Objects.requireNonNull(current, "current");
             Objects.requireNonNull(latestReport, "latestReport");
             handoffs = List.copyOf(Objects.requireNonNull(handoffs, "handoffs"));
-            if (paymentCount < 1) {
+            if (paymentCount < 0 || canceledCount < 0 || paymentCount + canceledCount < 1) {
                 throw new IllegalArgumentException("Case에는 결제가 한 건 이상 있어야 합니다");
             }
             if (decidedCount < 0 || decidedCount > paymentCount) {
@@ -62,11 +75,15 @@ public final class InvestigationRules {
         return MERGEABLE_STATUSES.contains(status) && decidedCount == 0 && now.isBefore(mergeDeadline(createdAt));
     }
 
-    // 우선순위: 종료 유지 > 인계 실패 > 모두 접수 > 모두 판정 > 보고서 생성 중 > 보고서 없음 > 판정 대기
+    // 우선순위: 종료 유지 > 모두 고객 취소 > 인계 실패 > 모두 접수 > 모두 판정 > 보고서 생성 중 > 보고서 없음 > 판정 대기
     public static CaseStatus nextStatus(CaseSnapshot snapshot) {
         Objects.requireNonNull(snapshot, "snapshot");
         if (snapshot.current() == CaseStatus.CLOSED) {
             // 종료 뒤의 금융 실행 결과는 Case를 다시 열지 않는다 (fds 정본 03 §3.3)
+            return CaseStatus.CLOSED;
+        }
+        if (snapshot.paymentCount() == 0) {
+            // 모든 결제를 고객이 직접 취소했다 — 판정 · 금융 조치할 결제가 없으므로 닫는다 (#382)
             return CaseStatus.CLOSED;
         }
         if (snapshot.handoffs().contains(HandoffStatus.FAILED)) {

@@ -178,20 +178,18 @@ class PaymentCancellationServiceMariaDbTests {
         assertThat(admission.admit(c)).isEqualTo(linked);
     }
 
-    // 실행부가 없으면 새 작업을 만들지 않고 기존 거절 기록도 그대로 둔다
+    // HELD 고객 승인 취소는 운영 발행 어댑터(#382)로 실행된다. 결제가 HELD가 되기 전의 거절 기록은 그대로 둔다
+    // (예전에는 실행부가 없어 CANCELLATION_NOT_READY였다)
     @Test
-    void admit_whenExecutorMissing_keepsOldRequestAndDoesNotReserveNewKey() {
+    void admit_whenHeld_executesNewRequestAndKeepsOldRecord() {
         var payment = pending(901);
         var c = command(payment);
         var first = admission.admit(c);
         held(payment);
-        error(() -> admission.admit(c), "CANCELLATION_NOT_READY");
-        assertThat(queries.find(901L, c.requestKey())).isEqualTo(first);
         var newRequest = command(payment);
-        error(() -> admission.admit(newRequest), "CANCELLATION_NOT_READY");
-        assertThat(requests.findByMerchantIdAndRequestKey(901L, newRequest.requestKey()))
-                .isEmpty();
-        assertThat(cancellations.findByPaymentId(c.paymentId())).isEmpty();
+        assertThat(admission.admit(newRequest).requestStatus()).isEqualTo("SUCCEEDED");
+        assertThat(queries.find(901L, c.requestKey())).isEqualTo(first);
+        assertThat(cancellations.findByPaymentId(c.paymentId())).isPresent();
     }
 
     // 기존 성공·실패·미확정은 자기 키와 다른 키를 구분하되 새 금융 작업을 만들지 않는다

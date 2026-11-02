@@ -154,6 +154,11 @@ export function CaseDetailPage() {
   if (detail === null || detail === undefined) return <ScreenResult kind="404" />
 
   const { securityCase, payments, reports, decisions, handoffs, history } = detail
+  // 고객이 승인을 취소한 결제는 판정 대상이 아니다 (#382). 기존 판정이 있으면 그대로 보인다
+  const decidable = payments.filter((p) => !p.customerCanceledAt)
+  const decidedCount = decisions.filter((d) =>
+    decidable.some((p) => p.casePaymentId === d.casePaymentId),
+  ).length
   const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
   const mode = decisionMode(securityCase.evidenceVersion, reports)
 
@@ -282,7 +287,7 @@ export function CaseDetailPage() {
         <CaseProgress
           status={securityCase.status}
           latestReportStatus={latest?.status ?? null}
-          allDecided={payments.length > 0 && decisions.length >= payments.length}
+          allDecided={decidable.length > 0 && decidedCount >= decidable.length}
         />
 
         <CaseBundle
@@ -316,8 +321,15 @@ export function CaseDetailPage() {
               {
                 title: '결제 상태 (P5)',
                 dataIndex: 'paymentStatus',
-                render: (v: CasePayment['paymentStatus']) => (
-                  <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
+                render: (v: CasePayment['paymentStatus'], p) => (
+                  <>
+                    <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
+                    {p.customerCanceledAt && (
+                      <Tag color="default" style={{ marginTop: 4 }}>
+                        고객 취소 · {dateTime(p.customerCanceledAt)}
+                      </Tag>
+                    )}
+                  </>
                 ),
               },
               {

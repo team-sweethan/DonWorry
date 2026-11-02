@@ -19,11 +19,14 @@ class InvestigationAfterCommitListener {
     private final FinancialActionGateway financialActionGateway;
     private final CaseStatusService caseStatusService;
     private final HandoffService handoffService;
+    private final CustomerVoidService customerVoidService;
 
     @TransactionalEventListener
     void on(CaseEvidenceChanged event) {
         reportGateway.request(event.caseId(), event.evidenceVersion());
         caseStatusService.refreshById(event.caseId());
+        // 연결이 커밋된 뒤 고객 승인 취소를 확인한다 (#382) — 취소가 연결보다 먼저 확정됐으면 여기서 반영된다
+        customerVoidService.reflectCase(event.caseId());
     }
 
     // P5 호출은 P3 트랜잭션 밖에서 한다 — P5 접수와 P3 반영의 트랜잭션을 섞지 않는다

@@ -46,6 +46,7 @@ Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#40
 | 순서 | 조건 | 다음 상태 |
 | --- | --- | --- |
 | 1 | 이미 `CLOSED` | `CLOSED` 유지 — 종료 뒤의 금융 결과로 다시 열지 않는다 |
+| 1-1 | 모든 결제를 고객이 직접 승인 취소함(#382) | `CLOSED` — `CASE_CLOSED` 이력에 `reason: CUSTOMER_CANCELED` |
 | 2 | 인계 중 하나라도 `FAILED` | `ACTION_FAILED` |
 | 3 | 모든 결제 판정 + 모든 인계 `ACCEPTED`(실제 매입 · 취소 완료) | `CLOSED` |
 | 4 | 모든 결제 판정 (인계 대기 중) | `ACTION_PENDING` |
@@ -56,6 +57,7 @@ Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#40
 - 보고서 `FAILED`도 "완료"로 본다. 직원이 수동 판정(`reportId = null`)할 수 있어야 하기 때문이다(정본 02 §2.5).
 - 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다. 오래 대기한 인계는 24시간 SLA 경고와 "인계 상태 다시 확인"으로 처리한다(#158).
 - 규칙과 테스트는 `FAILED` 인계가 다시 `REQUESTED`가 되면 `ACTION_PENDING`으로 돌아가는 경우도 다룬다. 다만 지금 `FAILED`를 되돌리는 경로는 없다. 판정 정정은 후속 확장이다(정본 02 §2.13).
+- 고객이 승인을 취소한 결제(#382)는 2~7의 "결제 · 판정 · 인계"에서 뺀다. 그 결제의 기존 판정 · 인계(예: P5가 `PAYMENT_CANCELED_BY_CUSTOMER`로 거절한 `FAILED`)는 보존하지만 상태를 막지 않는다. 자세한 흐름은 5-1절
 - 기준 테스트: `InvestigationRulesTests`
 
 ## 4. 병합 규칙
@@ -89,6 +91,23 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
   - 결과 이벤트는 멱등키로 인계를 찾고 결제 · 판정 · 조치 유형을 대조한다. 같은 결과가 다시 오면 무시한다.
   - "인계 상태 다시 확인"은 같은 멱등키로 P5에 저장된 결과를 받아 온다. P6 매입을 다시 실행하지 않는다.
 - 세부 규칙과 버린 대안은 [ADR-0019](../decisions/0019-security-case-http-contract.md) "결정"절을 본다.
+
+## 5-1. 고객 HELD 승인 취소 반영 (#382)
+
+고객이 가맹점(CakeShop)에서 보류(HELD) 결제를 취소하면 P5가 승인을 취소(VOIDED)하고 `payment.api.PaymentCustomerVoidSucceeded`를 발행한다. 직원 판정 · 인계 결과가 아니다.
+
+- 원본은 P5다. P3는 따로 저장하지 않고, P5 공개 조회(`PaymentCustomerVoidReader.findSucceeded`)로 확인한 뒤 Case 이력 `PAYMENT_CANCELED_BY_CUSTOMER`(paymentId · casePaymentId · cancellationId · completedAt)만 남긴다(`CustomerVoidService`).
+- 반영 경로 두 가지, 둘 다 `cancellationId` 기준으로 한 번만 기록한다.
+  1. 이벤트 수신(`PaymentCustomerVoidListener`) — 결제가 아직 Case에 없거나 P5 원본과 다르면 예외로 끝나 publication이 미완료로 남는다.
+  2. 결제 연결 커밋 직후(`CaseEvidenceChanged` → `reflectCase`) — 취소가 연결보다 먼저 확정된 경우를 잡는다.
+  취소가 연결 커밋 전에 확정되면 2가, 뒤에 확정되면 1이 반영한다.
+- 정책(2026-11-02 결정)
+  - 모든 결제가 고객 취소 → Case `CLOSED`(사유 `CUSTOMER_CANCELED`)
+  - 일부만 취소 → 그 결제만 판정 대상에서 빼고 나머지로 계속
+  - 이미 판정 · 인계된 결제 → 판정 · 인계는 보존하고 화면에 "고객이 승인을 취소해 실행되지 않음"으로 표시. 인계를 `ACCEPTED`로 위장하지 않는다
+- 판정 차단: 반영된 이력 또는 P5 원본에 고객 취소가 있으면 `INV_016`(409). 이벤트가 아직 반영되기 전이어도 막는다.
+- 응답: Case 상세 결제마다 `customerCanceledAt`(P5 확정 시각, 없으면 `null`).
+- 설계 근거와 경합 분석은 [#382 설계 13 · 15절](../payment/382-held-cancellation.md), [ADR-0057](../decisions/0057-held-customer-void-contract.md).
 
 ## 6. API
 

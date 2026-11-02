@@ -487,9 +487,10 @@ class PaymentHttpMariaDbTests {
         assertThat(query.body()).contains("CANCELLATION_REQUEST_NOT_FOUND");
     }
 
-    // 정지 가맹점도 유효한 키로 기존 결제 요청·조회를 할 수 있고 실행 미연결은 503이다.
+    // 정지 가맹점도 유효한 키로 기존 결제의 고객 취소 · 조회를 할 수 있다. 새 결제 요청만 막는다.
+    // HELD 고객 승인 취소는 운영 발행 어댑터(#382)가 연결돼 실제로 실행된다(예전에는 503 CANCELLATION_NOT_READY)
     @Test
-    void cancellation_whenInactive_allowsExistingPaymentButDoesNotPretendExecution() throws Exception {
+    void cancellation_whenInactive_allowsCancelingExistingPayment() throws Exception {
         var payment = call(
                 "POST",
                 "/api/payments",
@@ -502,11 +503,11 @@ class PaymentHttpMariaDbTests {
             String key = UUID.randomUUID().toString();
             var result =
                     call("POST", "/api/payments/" + id + "/cancellations", "merchant-a", key, "{\"reason\":\"취소\"}");
-            assertThat(result.statusCode()).isEqualTo(503);
-            assertThat(result.body()).contains("CANCELLATION_NOT_READY").doesNotContain("requestStatus");
+            assertThat(result.statusCode()).isEqualTo(200);
+            assertThat(result.body()).contains("requestStatus").doesNotContain("CANCELLATION_NOT_READY");
             assertThat(call("GET", "/api/payment-cancellation-requests/" + key, "merchant-a", null, null)
                             .statusCode())
-                    .isEqualTo(404);
+                    .isEqualTo(200);
             assertThat(call(
                                     "POST",
                                     "/api/payments",
