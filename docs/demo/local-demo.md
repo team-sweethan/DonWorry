@@ -33,6 +33,31 @@ HELD Case는 [2절](#2-실제-결제부터-매입까지)의 결제 스크립트(
 케이크샵 대신 스크립트로 서명한 결제를 보내고, FDS 점수 → 보류 → Case → 판정 → 매입 · 정산까지 봅니다.
 이 절에서 AI 보고서는 고정 문장으로 나옵니다.
 
+### 2-3. FDS ERROR · 재평가 시연
+
+경보 화면에는 Mock 생성 버튼이 없습니다. 로컬에서만 ERROR와 재평가를 확인하려면
+`application-local.yml`에 아래 설정을 추가한 뒤 backend를 다시 시작합니다. 이 설정은 다음 FDS
+평가 **한 건만** `TRANSIENT_DEMO_FORCED` ERROR로 만들며, 운영 프로필에서는 동작하지 않습니다.
+
+```yaml
+fds:
+  demo-error:
+    enabled: true
+```
+
+저장소 루트에서 실행합니다. 두 스크립트 모두 `SECURITY_STAFF` 세션과 CSRF 토큰을 사용하므로
+직원 비밀번호를 입력해야 합니다.
+
+```powershell
+py scripts/demo/fds_error.py
+# 출력된 paymentId를 사용
+py scripts/demo/fds_reevaluate.py <paymentId>
+```
+
+첫 스크립트는 다음 FDS 평가를 무장한 뒤 실제 CakeShop 서명 결제를 보내 ERROR 복구 기록을 만듭니다.
+두 번째 스크립트는 실제 직원 재평가 API를 호출합니다. 시연이 끝나면 `enabled: false`로 바꾸고 backend를
+다시 시작합니다.
+
 ### 2-1. 처음 한 번만
 
 **① 케이크샵 서명 키 저장** — PowerShell 아무 창에서

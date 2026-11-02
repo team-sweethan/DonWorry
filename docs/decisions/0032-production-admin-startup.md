@@ -13,7 +13,7 @@
 
 - `prod` 프로필에서만 운영 관리자 초기화를 실행한다. 일반 `bootRun`과 명시적인 `local` 프로필은 기존 개인 설정을 읽는다. 기본 설정의 로컬 import를 `!prod` 문서로 옮긴다.
 - 개인 `application-local.yml`은 Gradle `Jar` 계열 작업(`bootJar`·`jar`)에서 제외해 배포 결과물에 개인 비밀값이 실리지 않게 한다.
-- 운영에서는 개인 설정을 자동 import하지 않는다. `prod,local` 혼용·운영 DB 환경변수 누락·관리자 비밀번호 누락·세션 Secure/HttpOnly/SameSite=Lax 약화·`fds.mock.seed-enabled=true`를 BeanFactoryPostProcessor에서 거절한다. 잘못된 설정으로 데이터소스와 Flyway가 시작되는 것을 막는다.
+- 운영에서는 개인 설정을 자동 import하지 않는다. `prod,local` 혼용·운영 DB 환경변수 누락·관리자 비밀번호 누락·세션 Secure/HttpOnly/SameSite=Lax 약화를 BeanFactoryPostProcessor에서 거절한다. 잘못된 설정으로 데이터소스와 Flyway가 시작되는 것을 막는다.
 - 운영 DB의 HOST·NAME·USER·PASSWORD는 명시적으로 제공한다. PORT 기본값은 3306이다. 검사는 `DONWORRY_DB_*` 이름을 직접 확인하므로 `SPRING_DATASOURCE_*` 표준 이름만으로는 기동하지 않는다. 최종 `spring.datasource.url`·`username`·`password`가 `DONWORRY_DB_*`로 만든 값과 다르면(예: 이전 배포의 `SPRING_DATASOURCE_*`가 남아 우선 적용) 다른 DB에 Flyway·비밀번호 변경이 실행되지 않도록 기동 실패한다. 오류 메시지에 값은 넣지 않는다. 설정은 Spring Environment로 읽어 테스트 설정과 배포 비밀값 주입을 지원한다. 운영에서는 환경변수로 공급하고 명령줄·저장소에 비밀값을 쓰지 않는다.
 - `DONWORRY_ADMIN_PASSWORD`는 기존 PasswordPolicy로 검증한다. 잘못된 값은 원문·해시를 담지 않는 기동 오류로 처리한다. 비밀번호는 trim·정규화하지 않는다.
 - `SmartInitializingSingleton`이 Flyway/JPA 초기화 뒤, 웹 서버 lifecycle 시작 전에 별도 Service의 트랜잭션 메서드를 호출한다. 서비스가 정상 반환하기 전에 실제 커밋이 완료되어야 한다. `@DependsOnDatabaseInitialization`으로 초기화 의존을 명시하고 초기화 Bean은 lazy 생성을 막는다.
@@ -24,7 +24,6 @@
 - 시연 계정은 기존 엔티티 상태 변경과 이력 서비스를 재사용해 INACTIVE로 전환한다. 수행자 세션이 필요한 관리자 HTTP 서비스는 호출하지 않는다. 정지 이력 유형은 `PRODUCTION_DEMO_ACCOUNT_INACTIVATED`, actor는 검증한 admin ID, target은 각 계정 ID이며 before/after에는 상태와 `PRODUCTION_STARTUP` 출처만 기록한다. 비밀번호 원문·해시는 넣지 않는다.
 - 어느 이력 INSERT나 커밋이 실패해도 시작 작업의 관리자 변경·시연 계정 변경·이력 전체를 롤백하고 기동 실패로 전파한다. Flyway DDL까지 롤백된다는 의미는 아니다.
 - 다른 계정·권한·가맹점·키·실패 횟수·로그인 잠금은 바꾸지 않는다. 잠금 중에는 올바른 운영 비밀번호도 기존 #127 정책대로 거절된다.
-- FDS 개발용 Mock 평가 API(`POST /api/fds/evaluations/mock`)는 인증 없이 운영 DB에 평가를 기록하므로 `application-prod.yml`에서 끄고, 외부 설정으로 다시 켜면 기동 실패한다. P2 소유 기능이지만 컨트롤러 주석의 "개발 환경에서만 켜는" 의도대로 운영 설정만 바꾼다.
 - 운영 세션 쿠키는 Secure=true, 기존 HttpOnly·SameSite=Lax를 유지하고 외부 설정으로 약화하면 기동 실패한다. XSRF-TOKEN은 세션 쿠키가 Secure인 환경(운영)에서 요청의 HTTPS 여부와 무관하게 Secure로 고정한다. 그 외(로컬)는 ADR-0025대로 요청의 HTTPS 여부를 따른다. 배포 프록시를 모르므로 Forwarded 헤더 신뢰 범위를 임의 설정하지 않는다. 그래서 TLS를 프록시에서 종료해도 두 쿠키 모두 Secure가 붙고, 접속 IP를 위해 Forwarded 헤더를 믿지 않는 #147(ADR-0033)과도 충돌하지 않는다. HTTPS 프록시 전달·동일 출처 배포·실제 쿠키는 배포 시 검증한다.
 - CSRF 검사 기본값 false, 전체 업무 인가·서버 간 인증 후속은 유지한다.
 

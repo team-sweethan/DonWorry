@@ -261,7 +261,7 @@ FRAMEWORK/NATIVE 전략이나 Tomcat remote-ip-header와의 혼용은 기동을 
 DB 접속은 위 `DONWORRY_DB_*` 이름만 지원한다. `SPRING_DATASOURCE_URL` 등 표준 이름만 넣으면 접속 정보가 있어도 기동 실패한다. 이전 배포의 `SPRING_DATASOURCE_*`가 남아 최종 접속 정보가 `DONWORRY_DB_*`와 다르면 역시 기동 실패한다(배포 담당 공지 대상).
 
 - 개인 `application-local.yml`은 `bootJar`·`jar` 결과물에서 제외한다. 개인 PC에서 빌드해도 배포 jar에 개인 DB 비밀번호가 들어가지 않는다. `bootRun`은 jar를 쓰지 않아 기존처럼 읽는다.
-- 운영에서는 개인 설정 파일을 자동 import하지 않는다. DB 변수·관리자 비밀번호 누락, `prod,local` 혼용, 세션 쿠키 Secure·HttpOnly 해제나 SameSite를 Lax 외 값으로 바꾸면, FDS 개발용 Mock 평가 API(`fds.mock.seed-enabled`)를 켜면 기동 실패한다. 운영 기본값에서 Mock API는 꺼져 있다.
+- 운영에서는 개인 설정 파일을 자동 import하지 않는다. DB 변수·관리자 비밀번호 누락, `prod,local` 혼용, 세션 쿠키 Secure·HttpOnly 해제나 SameSite를 Lax 외 값으로 바꾸면 기동 실패한다.
 - Flyway/JPA 뒤, 웹 서버 시작 전에 활성 ADMIN `admin`의 비밀번호를 BCrypt로 적용한다. 없거나 정지/다른 역할이면 기동 실패한다. 관리자 생성·재활성화는 하지 않는다.
 - 매 재시작마다 환경값을 기준으로 맞춘다. 화면에서 바꾼 값을 유지하려면 환경변수도 함께 변경한다. 같은 비밀번호·강제 변경 false이면 저장·이력을 반복하지 않는다.
 - 실제 변경과 `PRODUCTION_PASSWORD_APPLIED` 이력은 같은 트랜잭션이다. 실패하면 롤백·기동 실패한다. 이력 출처는 `PRODUCTION_STARTUP`이며 원문·해시는 저장하지 않는다.

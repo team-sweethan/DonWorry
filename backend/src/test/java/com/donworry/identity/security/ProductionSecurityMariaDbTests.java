@@ -155,9 +155,6 @@ class ProductionSecurityMariaDbTests {
                             .contains("Secure", "SameSite=Lax")
                             .doesNotContain("HttpOnly"));
             // 운영 기본값으로 인증 없는 시연용 API는 보안 설정에서 먼저 막힌다 (#392).
-            // FDS Mock 컨트롤러도 등록되지 않아 기록이 남지 않는다
-            assertThat(post(context, "/api/fds/evaluations/mock", "").statusCode())
-                    .isEqualTo(401);
             assertThat(post(context, "/api/demo/held-payments", "{}").statusCode())
                     .isEqualTo(401);
             assertThat(jdbc(context).queryForObject("SELECT COUNT(*) FROM fds_evaluations", Integer.class))

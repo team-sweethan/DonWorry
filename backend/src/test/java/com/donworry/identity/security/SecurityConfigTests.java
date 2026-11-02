@@ -176,12 +176,14 @@ class SecurityConfigTests {
     @Test
     void demoApi_whenEnabled_reachesHandlers() throws Exception {
         mockMvc.perform(post("/api/demo/held-payments").with(token())).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/fds/evaluations/mock").with(token())).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/fds/evaluations/mock/error").with(token())).andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/fds/evaluations/mock/error/reevaluate").with(token()))
-                .andExpect(status().isNotFound());
         mockMvc.perform(get("/api/demo/held-payments")).andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/demo/other").with(token())).andExpect(status().isUnauthorized());
+    }
+
+    // 기본 비활성인 FDS 오류 주입 경로는 로그인 전 요청을 통과시키지 않는다.
+    @Test
+    void demoFdsError_whenDisabled_rejectsAnonymousRequest() throws Exception {
+        mockMvc.perform(post("/api/demo/fds-errors/next").with(token())).andExpect(status().isUnauthorized());
     }
 
     // 운영처럼 시연용 API를 끄면 로그인 여부와 관계없이 막는다
@@ -191,7 +193,6 @@ class SecurityConfigTests {
         @Test
         void demoApi_isDenied() throws Exception {
             mockMvc.perform(post("/api/demo/held-payments").with(token())).andExpect(status().isUnauthorized());
-            mockMvc.perform(post("/api/fds/evaluations/mock").with(token())).andExpect(status().isUnauthorized());
             mockMvc.perform(post("/api/demo/held-payments").with(token()).session(authenticatedSession()))
                     .andExpect(status().isForbidden());
         }

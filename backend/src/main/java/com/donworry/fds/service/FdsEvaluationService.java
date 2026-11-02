@@ -6,6 +6,8 @@ import com.donworry.fds.api.FdsEvaluationResponse;
 import com.donworry.fds.api.FdsEvaluator;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
+import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +16,21 @@ public class FdsEvaluationService implements FdsEvaluator {
 
     private final FdsEvaluationRepository evaluationRepository;
     private final FdsEvaluationTransactionService transactionService;
+    private final Optional<FdsDemoErrorService> demoError;
 
+    @Autowired
     public FdsEvaluationService(
-            FdsEvaluationRepository evaluationRepository, FdsEvaluationTransactionService transactionService) {
+            FdsEvaluationRepository evaluationRepository,
+            FdsEvaluationTransactionService transactionService,
+            Optional<FdsDemoErrorService> demoError) {
         this.evaluationRepository = evaluationRepository;
         this.transactionService = transactionService;
+        this.demoError = demoError;
+    }
+
+    FdsEvaluationService(
+            FdsEvaluationRepository evaluationRepository, FdsEvaluationTransactionService transactionService) {
+        this(evaluationRepository, transactionService, Optional.empty());
     }
 
     @Override
@@ -32,6 +44,12 @@ public class FdsEvaluationService implements FdsEvaluator {
     }
 
     private FdsEvaluationResponse evaluateInternal(FdsEvaluationRequest request) {
+        if (demoError.isPresent()) {
+            var existing = evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId());
+            if (existing.isPresent()) return responseOf(requireSameRequest(existing.get(), request));
+            var forced = demoError.flatMap(service -> service.failNext(request));
+            if (forced.isPresent()) return forced.get();
+        }
         try {
             return transactionService.evaluate(request);
         } catch (DataIntegrityViolationException exception) {
