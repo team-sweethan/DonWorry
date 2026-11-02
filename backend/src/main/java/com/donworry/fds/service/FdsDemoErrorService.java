@@ -6,7 +6,7 @@ import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import java.time.Instant;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -18,23 +18,22 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(prefix = "fds.demo-error", name = "enabled", havingValue = "true")
 public class FdsDemoErrorService {
 
-    static final String ERROR_CODE = "TRANSIENT_DEMO_FORCED";
-
-    private final AtomicBoolean armed = new AtomicBoolean();
+    private final AtomicReference<FdsDemoErrorScenario> armedScenario = new AtomicReference<>();
     private final FdsEvaluationRepository evaluations;
 
     public FdsDemoErrorService(FdsEvaluationRepository evaluations) {
         this.evaluations = evaluations;
     }
 
-    public void armNextEvaluation() {
-        armed.set(true);
+    public void armNextEvaluation(FdsDemoErrorScenario scenario) {
+        armedScenario.set(scenario);
     }
 
     @Transactional
     public Optional<FdsEvaluationResponse> failNext(FdsEvaluationRequest request) {
-        if (!armed.compareAndSet(true, false)) return Optional.empty();
-        var evaluation = evaluations.saveAndFlush(FdsEvaluation.failed(request, ERROR_CODE, Instant.now()));
+        var scenario = armedScenario.getAndSet(null);
+        if (scenario == null) return Optional.empty();
+        var evaluation = evaluations.saveAndFlush(FdsEvaluation.failed(request, scenario.errorCode(), Instant.now()));
         return Optional.of(new FdsEvaluationResponse(
                 evaluation.getEvaluationRequestId(),
                 evaluation.getEvaluationId(),

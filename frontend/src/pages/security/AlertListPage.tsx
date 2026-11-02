@@ -2,7 +2,7 @@ import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Input, Select, Skeleton, Space, Table } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { type MouseEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
 import {
@@ -26,6 +26,31 @@ const filterOptions: Array<{ value: Filter; label: string }> = [
   { value: 'ALL', label: '전체 (ALLOW 포함)' },
 ]
 
+function alertListSearch({ filter, query, merchantId, page }: ListConditions) {
+  const params = new URLSearchParams()
+  if (filter !== 'NEEDS_ATTENTION') params.set('filter', filter)
+  if (query) params.set('query', query)
+  if (merchantId !== undefined) params.set('merchantId', String(merchantId))
+  if (page > 0) params.set('page', String(page + 1))
+  const search = params.toString()
+  return search ? `?${search}` : ''
+}
+
+function parseAlertListConditions(searchParams: URLSearchParams): ListConditions {
+  const filterValue = searchParams.get('filter')
+  const filter = filterOptions.some((option) => option.value === filterValue)
+    ? (filterValue as Filter)
+    : 'NEEDS_ATTENTION'
+  const merchantId = Number(searchParams.get('merchantId'))
+  const page = Number(searchParams.get('page'))
+  return {
+    filter,
+    query: searchParams.get('query') ?? '',
+    merchantId: Number.isSafeInteger(merchantId) && merchantId > 0 ? merchantId : undefined,
+    page: Number.isSafeInteger(page) && page > 1 ? page - 1 : 0,
+  }
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'medium' }).format(
     new Date(value),
@@ -42,9 +67,13 @@ function AlertListSkeleton() {
 
 export function AlertListPage() {
   const navigate = useNavigate()
-  const [filter, setFilter] = useState<Filter>('NEEDS_ATTENTION')
-  const [query, setQuery] = useState('')
-  const [merchantId, setMerchantId] = useState<number | undefined>()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const initialConditions = parseAlertListConditions(searchParams)
+  const initialMerchantId = useRef(initialConditions.merchantId)
+  const [filter, setFilter] = useState<Filter>(initialConditions.filter)
+  const [query, setQuery] = useState(initialConditions.query)
+  const [merchantId, setMerchantId] = useState<number | undefined>(initialConditions.merchantId)
   const [merchants, setMerchants] = useState<MerchantDirectoryEntry[]>([])
   const [evaluations, setEvaluations] = useState<FdsEvaluationSummary[]>([])
   const [evaluationPage, setEvaluationPage] = useState<FdsEvaluationPage | null>(null)
@@ -52,17 +81,12 @@ export function AlertListPage() {
   const [listLoading, setListLoading] = useState(true)
   const [summaryLoading, setSummaryLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
+  const [currentPage, setCurrentPage] = useState(initialConditions.page + 1)
   const [caseIdsByPaymentId, setCaseIdsByPaymentId] = useState<Map<string, string>>(new Map())
   const requestSequence = useRef(0)
   const resultCountsRef = useRef<FdsEvaluationPage['resultCounts'] | null>(null)
   const summaryRefreshPending = useRef(true)
-  const conditions = useRef<ListConditions>({
-    filter: 'NEEDS_ATTENTION',
-    query: '',
-    merchantId: undefined,
-    page: 0,
-  })
+  const conditions = useRef<ListConditions>(initialConditions)
   const successfulConditions = useRef<ListConditions | null>(null)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialListLoading = listLoading && evaluationPage === null
@@ -73,6 +97,17 @@ export function AlertListPage() {
     clearTimeout(searchTimer.current)
     searchTimer.current = null
   }
+
+  const persistConditions = useCallback(
+    (next: ListConditions) => {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${location.pathname}${alertListSearch(next)}`,
+      )
+    },
+    [location.pathname],
+  )
 
   const load = useCallback(
     (
@@ -152,6 +187,7 @@ export function AlertListPage() {
           setQuery(previous.query)
           setMerchantId(previous.merchantId)
           setCurrentPage(previous.page + 1)
+          persistConditions(previous)
         })
         .finally(() => {
           if (sequence === requestSequence.current) {
@@ -160,7 +196,7 @@ export function AlertListPage() {
           }
         })
     },
-    [],
+    [persistConditions],
   )
 
   const loadMerchantDirectory = useCallback(
@@ -184,14 +220,16 @@ export function AlertListPage() {
             return
           }
           const current = conditions.current
+          const page = current.merchantId === selectedMerchant.merchantId ? current.page : 0
           setMerchantId(selectedMerchant.merchantId)
           conditions.current = {
             filter: current.filter,
             query: current.query,
             merchantId: selectedMerchant.merchantId,
-            page: 0,
+            page,
           }
-          load(0, current.filter, current.query, selectedMerchant.merchantId, true)
+          persistConditions(conditions.current)
+          load(page, current.filter, current.query, selectedMerchant.merchantId, true)
         })
         .catch(() => {
           if (sequence !== requestSequence.current) return
@@ -200,13 +238,14 @@ export function AlertListPage() {
           setError('가맹점 목록을 불러오지 못했습니다.')
         })
     },
-    [load],
+    [load, persistConditions],
   )
 
   const selectFilter = (nextFilter: Filter) => {
     cancelScheduledSearch()
     setFilter(nextFilter)
     conditions.current = { filter: nextFilter, query, merchantId, page: 0 }
+    persistConditions(conditions.current)
     load(0, nextFilter, query, merchantId)
   }
 
@@ -214,11 +253,12 @@ export function AlertListPage() {
     cancelScheduledSearch()
     setMerchantId(nextMerchantId)
     conditions.current = { filter, query, merchantId: nextMerchantId, page: 0 }
+    persistConditions(conditions.current)
     load(0, filter, query, nextMerchantId, true)
   }
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => loadMerchantDirectory(), 0)
+    const initialLoad = window.setTimeout(() => loadMerchantDirectory(initialMerchantId.current), 0)
     return () => {
       window.clearTimeout(initialLoad)
       cancelScheduledSearch()
@@ -247,7 +287,11 @@ export function AlertListPage() {
           className="dw-alert-payment-link"
           onClick={(event: MouseEvent<HTMLElement>) => {
             event.stopPropagation()
-            navigate(`/security/alerts/${value}`)
+            navigate(`/security/alerts/${value}`, {
+              state: {
+                alertListReturnPath: location.pathname + alertListSearch(conditions.current),
+              },
+            })
           }}
         >
           {value}
@@ -379,6 +423,7 @@ export function AlertListPage() {
                 const nextQuery = event.target.value
                 setQuery(nextQuery)
                 conditions.current = { filter, query: nextQuery, merchantId, page: 0 }
+                persistConditions(conditions.current)
                 cancelScheduledSearch()
                 searchTimer.current = setTimeout(() => {
                   searchTimer.current = null
@@ -444,7 +489,12 @@ export function AlertListPage() {
             size="middle"
             scroll={{ x: 1250 }}
             onRow={(record) => ({
-              onClick: () => navigate(`/security/alerts/${record.evaluationId}`),
+              onClick: () =>
+                navigate(`/security/alerts/${record.evaluationId}`, {
+                  state: {
+                    alertListReturnPath: location.pathname + alertListSearch(conditions.current),
+                  },
+                }),
               style: { cursor: 'pointer' },
             })}
             pagination={{
@@ -459,6 +509,7 @@ export function AlertListPage() {
               total: Math.max(evaluationPage?.totalElements ?? 0, 1),
               onChange: (page) => {
                 conditions.current = { filter, query, merchantId, page: page - 1 }
+                persistConditions(conditions.current)
                 load(page - 1, filter, query, merchantId)
               },
             }}

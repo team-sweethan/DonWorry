@@ -1,4 +1,4 @@
-"""로컬에서 다음 FDS 평가 한 건을 ERROR로 만들고 실제 CakeShop 결제를 보낸다."""
+"""로컬에서 선택한 FDS 오류 시나리오 한 건을 만들고 실제 CakeShop 결제를 보낸다."""
 
 import argparse
 import base64
@@ -79,13 +79,23 @@ def main() -> int:
     parser.add_argument("--base-url", default=os.environ.get("DONWORRY_BASE_URL", "http://localhost:8081"))
     parser.add_argument("--staff-id", default="staff_test")
     parser.add_argument("--staff-password")
+    parser.add_argument(
+        "--scenario",
+        choices=(
+            "TRANSIENT_FDS_EVALUATION_TIMEOUT",
+            "TRANSIENT_FDS_RULE_DATA_UNAVAILABLE",
+            "FDS_EVALUATION_PROCESSING_FAILED",
+        ),
+        default="TRANSIENT_FDS_EVALUATION_TIMEOUT",
+        help="평가 시간 초과·룰 정보 일시 조회 실패·비일시 처리 실패 시나리오",
+    )
     args = parser.parse_args()
     key = merchant_key()
     password = args.staff_password or getpass.getpass("보안 직원 비밀번호 (입력 숨김): ")
     base_url = args.base_url.rstrip("/")
     try:
         request = staff_session(base_url, args.staff_id, password)
-        status, data = request("POST", "/api/demo/fds-errors/next", csrf=True)
+        status, data = request("POST", f"/api/demo/fds-errors/next?scenario={args.scenario}", csrf=True)
     except RuntimeError as error:
         sys.exit(str(error))
     if status != 204:
@@ -96,8 +106,11 @@ def main() -> int:
     if status >= 400:
         sys.exit(f"결제 실패: HTTP {status} {data.get('code', data)}\n다음 정상 FDS 평가가 대신 ERROR가 될 수 있으니 주의하세요.")
     payment_id = data.get("paymentId")
-    print(f"FDS ERROR 결제 생성: paymentId={payment_id}, status={data.get('paymentStatus')}")
-    print(f"재평가: py scripts/demo/fds_reevaluate.py {payment_id}")
+    print(f"FDS ERROR 결제 생성: paymentId={payment_id}, scenario={args.scenario}, status={data.get('paymentStatus')}")
+    if args.scenario.startswith("TRANSIENT_"):
+        print(f"재평가: py scripts/demo/fds_reevaluate.py {payment_id}")
+    else:
+        print("비일시 평가 처리 실패는 P2 분석 후 수동 검토 필요 상태가 됩니다.")
     return 0
 
 

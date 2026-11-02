@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsFailureDisposition;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.api.FdsRuleHitOutcome;
 import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.entity.FdsFailureAnalysis;
 import com.donworry.fds.repository.FdsEvaluationRepository;
+import com.donworry.fds.repository.FdsFailureAnalysisRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -28,11 +31,17 @@ class FdsEvaluationQueryServiceTests {
     @Mock
     private FdsEvaluationRepository evaluationRepository;
 
+    @Mock
+    private FdsFailureAnalysisRepository failureAnalysisRepository;
+
+    @Mock
+    private FdsFailureAnalysis failureAnalysis;
+
     // 판정을 지정하면 해당 평가 이력만 반환한다.
     @Test
     void list_resultFilter_returnsMatchingEvaluationPage() {
         var review = evaluation(101L, FdsResult.REVIEW);
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = queryService();
         given(evaluationRepository.findAll(
                         org.mockito.ArgumentMatchers.<Specification<FdsEvaluation>>any(),
                         org.mockito.ArgumentMatchers.any(Pageable.class)))
@@ -64,9 +73,14 @@ class FdsEvaluationQueryServiceTests {
                 "{\"amount\":150000}",
                 null,
                 null);
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = queryService();
         given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
         given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+        given(failureAnalysisRepository.findByEvaluationRequestId(evaluation.getEvaluationRequestId()))
+                .willReturn(Optional.of(failureAnalysis));
+        given(failureAnalysis.getDisposition()).willReturn(FdsFailureDisposition.REEVALUATION_AVAILABLE);
+        given(failureAnalysis.getReasonCode()).willReturn("TRANSIENT_ERROR_RECOVERED");
+        given(failureAnalysis.getAnalyzedAt()).willReturn(Instant.parse("2026-11-02T01:00:00Z"));
 
         var result = queryService.detail(1L);
 
@@ -81,12 +95,16 @@ class FdsEvaluationQueryServiceTests {
         assertThat(result.blocklistCandidates())
                 .extracting(candidate -> candidate.identifierType())
                 .containsExactly("CARD_TOKEN", "BUYER_REF", "DEVICE_ID", "IP_ADDRESS", "BUYER_EMAIL");
+        assertThat(result.failureAnalysis()).satisfies(analysis -> {
+            assertThat(analysis.disposition()).isEqualTo(FdsFailureDisposition.REEVALUATION_AVAILABLE);
+            assertThat(analysis.reasonCode()).isEqualTo("TRANSIENT_ERROR_RECOVERED");
+        });
     }
 
     // 없는 평가 ID는 조회 실패 예외를 반환한다.
     @Test
     void detail_missingEvaluation_throwsNotFoundException() {
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = queryService();
         given(evaluationRepository.findById(999L)).willReturn(Optional.empty());
 
         assertThatThrownBy(() -> queryService.detail(999L)).isInstanceOf(FdsEvaluationNotFoundException.class);
@@ -107,7 +125,7 @@ class FdsEvaluationQueryServiceTests {
                 null);
         given(evaluationRepository.findByEvaluatedAtGreaterThanEqual(org.mockito.ArgumentMatchers.any()))
                 .willReturn(List.of(evaluation));
-        var queryService = new FdsEvaluationQueryService(evaluationRepository);
+        var queryService = queryService();
 
         var result = queryService.ruleCatalog();
 
@@ -138,5 +156,9 @@ class FdsEvaluationQueryServiceTests {
                 "hong@example.test");
         return FdsEvaluation.completed(
                 request, result, result == FdsResult.REVIEW ? 60 : 0, requestedAt.plusSeconds(1));
+    }
+
+    private FdsEvaluationQueryService queryService() {
+        return new FdsEvaluationQueryService(evaluationRepository, failureAnalysisRepository);
     }
 }

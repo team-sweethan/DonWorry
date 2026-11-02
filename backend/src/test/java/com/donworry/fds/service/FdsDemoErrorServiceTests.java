@@ -27,9 +27,9 @@ class FdsDemoErrorServiceTests {
     @Captor
     ArgumentCaptor<FdsEvaluation> evaluationCaptor;
 
-    // 무장한 로컬 시연 오류는 다음 평가 한 건만 ERROR로 저장한다.
+    // 선택한 로컬 시연 오류는 다음 평가 한 건에만 저장한다.
     @Test
-    void failNext_whenArmed_persistsOneTransientError() {
+    void failNext_whenArmed_persistsSelectedScenarioOnce() {
         var service = new FdsDemoErrorService(evaluations);
         when(evaluations.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
             var evaluation = invocation.getArgument(0, FdsEvaluation.class);
@@ -37,15 +37,30 @@ class FdsDemoErrorServiceTests {
             return evaluation;
         });
 
-        service.armNextEvaluation();
+        service.armNextEvaluation(FdsDemoErrorScenario.TRANSIENT_FDS_EVALUATION_TIMEOUT);
 
         var response = service.failNext(request()).orElseThrow();
 
         assertThat(response.result()).isEqualTo(FdsResult.ERROR);
-        assertThat(response.errorCode()).isEqualTo(FdsDemoErrorService.ERROR_CODE);
+        assertThat(response.errorCode()).isEqualTo("TRANSIENT_FDS_EVALUATION_TIMEOUT");
         verify(evaluations).saveAndFlush(evaluationCaptor.capture());
         assertThat(evaluationCaptor.getValue().getResult()).isEqualTo(FdsResult.ERROR);
         assertThat(service.failNext(request())).isEmpty();
+    }
+
+    // 처리 실패 시나리오도 원문 코드로 저장해 P2 분석이 수동 검토로 분류한다.
+    @Test
+    void failNext_whenInternalErrorScenario_persistsInternalErrorCode() {
+        var service = new FdsDemoErrorService(evaluations);
+        when(evaluations.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 10L);
+            return evaluation;
+        });
+
+        service.armNextEvaluation(FdsDemoErrorScenario.FDS_EVALUATION_PROCESSING_FAILED);
+
+        assertThat(service.failNext(request()).orElseThrow().errorCode()).isEqualTo("FDS_EVALUATION_PROCESSING_FAILED");
     }
 
     private FdsEvaluationRequest request() {

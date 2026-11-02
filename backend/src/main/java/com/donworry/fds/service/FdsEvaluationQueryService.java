@@ -2,6 +2,7 @@ package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsEvaluationDetail;
 import com.donworry.fds.api.FdsEvaluationDetail.FdsBlocklistCandidate;
+import com.donworry.fds.api.FdsEvaluationDetail.FdsFailureAnalysisDetail;
 import com.donworry.fds.api.FdsEvaluationDetail.FdsRuleHitDetail;
 import com.donworry.fds.api.FdsEvaluationPage;
 import com.donworry.fds.api.FdsEvaluationSummary;
@@ -10,6 +11,7 @@ import com.donworry.fds.api.FdsRuleCatalogEntry;
 import com.donworry.fds.api.FdsRuleHitOutcome;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
+import com.donworry.fds.repository.FdsFailureAnalysisRepository;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -96,9 +98,12 @@ public class FdsEvaluationQueryService {
                     false));
 
     private final FdsEvaluationRepository evaluationRepository;
+    private final FdsFailureAnalysisRepository failureAnalysisRepository;
 
-    public FdsEvaluationQueryService(FdsEvaluationRepository evaluationRepository) {
+    public FdsEvaluationQueryService(
+            FdsEvaluationRepository evaluationRepository, FdsFailureAnalysisRepository failureAnalysisRepository) {
         this.evaluationRepository = evaluationRepository;
+        this.failureAnalysisRepository = failureAnalysisRepository;
     }
 
     public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, String search, int page, int size) {
@@ -200,8 +205,18 @@ public class FdsEvaluationQueryService {
         var cardIdentifier = evaluation.getCardToken() == null
                 ? null
                 : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+        var failureAnalysis = failureAnalysisRepository
+                .findByEvaluationRequestId(evaluation.getEvaluationRequestId())
+                .map(analysis -> new FdsFailureAnalysisDetail(
+                        analysis.getDisposition(), analysis.getReasonCode(), analysis.getAnalyzedAt()))
+                .orElse(null);
         return new FdsEvaluationDetail(
-                summary(evaluation), ruleHits, history, List.copyOf(blocklistCandidates), cardIdentifier);
+                summary(evaluation),
+                ruleHits,
+                history,
+                List.copyOf(blocklistCandidates),
+                cardIdentifier,
+                failureAnalysis);
     }
 
     private void addBlocklistCandidate(
