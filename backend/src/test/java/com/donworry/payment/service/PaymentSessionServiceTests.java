@@ -40,7 +40,14 @@ class PaymentSessionServiceTests {
     private final MerchantPaymentQueryService query = mock(MerchantPaymentQueryService.class);
     private final TenantReader tenants = mock(TenantReader.class);
     private final PaymentSessionService service = new PaymentSessionService(
-            sessions, requests, flow, query, tenants, mock(PlatformTransactionManager.class), "http://pay.test/");
+            sessions,
+            requests,
+            flow,
+            query,
+            tenants,
+            new PaymentWebhookTargetPolicy(false),
+            mock(PlatformTransactionManager.class),
+            "http://pay.test/");
 
     @Test
     void create_savesSessionAndReturnsHostedCheckoutUrl() {
@@ -169,6 +176,23 @@ class PaymentSessionServiceTests {
                     "ORD-1", "42", 52_000L, recent(), "딸기 케이크", email, SUCCESS, FAIL, null);
             assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
                     .as(email)
+                    .isInstanceOfSatisfying(
+                            PaymentHttpException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(400));
+        }
+        verify(sessions, never()).save(any());
+    }
+
+    // 운영에서는 웹훅 주소(notifyUrl)로 https · 공인 주소만 받는다 — 내부 주소로 요청을 보내게 하지 않는다 (#402 PR②)
+    @Test
+    void create_notifyUrlHttpOrInternalAddress_isBadRequest() {
+        for (String notifyUrl : new String[] {
+            "http://shop.test/hooks/donworry", "https://127.0.0.1/hook", "https://10.1.2.3/hook", "https://[::1]/hook"
+        }) {
+            var body = new PaymentSessionCreateRequest(
+                    "ORD-1", "42", 52_000L, recent(), "딸기 케이크", null, SUCCESS, FAIL, notifyUrl);
+            assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
+                    .as(notifyUrl)
                     .isInstanceOfSatisfying(
                             PaymentHttpException.class,
                             e -> assertThat(e.getStatus()).isEqualTo(400));

@@ -144,7 +144,8 @@ class PaymentHttpMariaDbTests {
                 + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
                 + "\",\"orderName\":\"딸기 케이크\",\"successUrl\":\"http://127.0.0.1:8080/orders/1/payment/donworry/return\""
                 + ",\"failUrl\":\"http://127.0.0.1:8080/orders/1/payment/fail\""
-                + ",\"notifyUrl\":\"http://127.0.0.1:8080/webhooks/donworry\"}";
+                // 운영 기본값에서는 웹훅 주소로 https · 공인 주소만 받는다(#402 PR②). 이 테스트는 웹훅을 보내지 않는다
+                + ",\"notifyUrl\":\"https://shop.example.test/webhooks/donworry\"}";
     }
 
     // 호스팅 결제창(ADR-0064): 가맹점 서명으로 세션을 만들고, 구매자는 로그인·쿠키·CSRF 토큰 없이 세션 키만으로 결제한다.

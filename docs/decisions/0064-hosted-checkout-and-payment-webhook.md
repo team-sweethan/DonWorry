@@ -145,8 +145,9 @@
 - [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가
 - [x] 돈워리 운영 프록시 확인(2026-11-02, PR #438(2026-11-02 기준 병합 전)의 `frontend/nginx.conf` 기준): `/api/`를 백엔드로 넘기며 `X-DonWorry-Client-IP: $remote_addr`를 붙이고, `/checkout/...`은 SPA 대체 경로(`try_files … /index.html`)로 열린다
 - [ ] 운영 환경변수(배포 VM, 저장소 밖): P1이 2026-11-03 배포 때 넣기로 함(PR #425 리뷰). 결제창 구매자 IP는 로그인 이력과 같은 설정을 쓴다. 기본값이 `DIRECT`라 `DONWORRY_LOGIN_HISTORY_IP_MODE=PROXY`와 nginx 컨테이너 주소의 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`가 없으면 nginx 주소가 구매자 IP로 기록된다
-- [ ] 운영 `notifyUrl`은 https만 허용하고 내부 주소(사설·루프백 IP)를 막는다. 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)도 정한다
-- [ ] 웹훅 재전송 한도(예: 24시간 뒤 중단, 조회 배치에 맡김)와 운영에서 실패를 보는 방법
+- [x] 운영 `notifyUrl`은 https만 허용하고 내부 주소(루프백 · 사설 · 링크 로컬 · 미지정 · 멀티캐스트 · IPv6 고유 로컬 · 100.64/10)를 막는다 — 세션 생성 때(IP로 적힌 주소)와 보내기 직전(이름 풀이 결과 전부) 두 번 본다. 로컬 개발은 `donworry.payment.webhook.allow-local-targets=true`(#402 PR②, `PaymentWebhookTargetPolicy`). 이름 풀이와 연결 사이에 주소가 바뀌는 경우(DNS rebinding)는 막지 않는다 — 한계
+- [ ] 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)
+- [ ] 웹훅 재전송 한도(예: 24시간 뒤 중단, 조회 배치에 맡김)와 운영에서 실패를 보는 방법 — #402 PR②는 한도 없이 최대 5분 간격으로 계속 보낸다(실패 횟수는 `payment_sessions.notify_attempts`)
 - [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다
 - [ ] 결제창 `Referrer-Policy`: 지금은 따로 설정하지 않는다. 브라우저 기본값(`strict-origin-when-cross-origin`)이라 다른 출처로는 출처만 나가고 세션 키가 든 경로는 나가지 않는다. `no-referrer`로 더 좁힐지는 선택
 - [ ] 결제 접수 기한(10분)이 지난 뒤 늦게 승인된 결제를 누가 취소하는지
