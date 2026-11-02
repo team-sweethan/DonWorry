@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Descriptions,
   Input,
   Select,
   Space,
@@ -57,7 +58,7 @@ const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((
 const help = {
   order: '가맹점이 손님 영수증에 찍은 번호예요. 가맹점에 문의할 때 이 번호로 찾아요.',
   customer:
-    '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 아래 줄은 일부를 가린 이메일이에요.',
+    '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 이메일은 줄을 펼치면 보여요.',
   device: '결제한 기기의 식별값 앞부분만 보여요. 개인정보 보호를 위해 나머지는 가렸어요.',
   ip: '결제한 나라와 IP 앞부분이에요. 별표(*)는 가린 부분이에요.',
   // 판정처럼 읽히지 않게 "높음 · 위험" 대신 기준 이상만 표시한다 (#441, ADR-0061)
@@ -204,64 +205,25 @@ export function TransactionListPage() {
   const openAlert = (evaluationId: string) => navigate(`/security/alerts/${evaluationId}`)
   const openCase = (caseId: string) => navigate(`/security/cases/${caseId}`)
 
+  // 목록을 훑을 때 보는 칸만 한 줄에 둔다 — "얼마 → 어떻게 됐나 → 왜(판정) → 사건 → 누구" 순서 (#445)
   const columns: ColumnsType<PaymentTransaction> = [
     {
       title: '결제 시각',
       dataIndex: 'createdAt',
-      width: 110,
+      width: 100,
       render: (value: string) => time(value),
-    },
-    {
-      title: '가맹점',
-      dataIndex: 'merchantId',
-      width: 140,
-      render: (value: number) => merchantNames.get(value) ?? `가맹점 #${value}`,
-    },
-    {
-      title: <HelpTitle label="구매자" text={help.customer} />,
-      key: 'buyer',
-      width: 190,
-      render: (_, t) => (
-        <div>
-          <div>
-            <Typography.Text copyable={copyable(t.customerRef)}>{t.customerRef}</Typography.Text>
-          </div>
-          <div>
-            <Typography.Text type="secondary">
-              {t.maskedBuyerEmail ?? '이메일 정보 없음'}
-            </Typography.Text>
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: <HelpTitle label="주문번호" text={help.order} />,
-      key: 'order',
-      width: 200,
-      render: (_, t) => (
-        <div>
-          <Typography.Text code copyable={copyable(t.orderRef)}>
-            {t.orderRef}
-          </Typography.Text>
-          {t.attemptNo !== null && t.attemptNo > 1 && (
-            <div>
-              <Typography.Text type="secondary">{t.attemptNo}번째 시도</Typography.Text>
-            </div>
-          )}
-        </div>
-      ),
     },
     {
       title: '금액',
       dataIndex: 'amount',
       align: 'right',
-      width: 120,
+      width: 110,
       render: (value: number) => `${value.toLocaleString('ko-KR')}원`,
     },
     {
       title: '결제 상태',
       dataIndex: 'paymentStatus',
-      width: 110,
+      width: 100,
       render: (value: PaymentStatus) => (
         <Tag color={paymentStatusLabel[value].color}>{paymentStatusLabel[value].label}</Tag>
       ),
@@ -269,7 +231,7 @@ export function TransactionListPage() {
     {
       title: 'FDS 판정',
       key: 'fds',
-      width: 110,
+      width: 100,
       render: (_, t) => {
         if (t.fdsResult === null) return <Typography.Text type="secondary">평가 전</Typography.Text>
         const text = fdsResultText[t.fdsResult]
@@ -279,27 +241,6 @@ export function TransactionListPage() {
         return (
           <Button type="link" size="small" onClick={() => openAlert(evaluationId)}>
             {tag}↗
-          </Button>
-        )
-      },
-    },
-    {
-      title: '사건',
-      key: 'case',
-      width: 110,
-      render: (_, t) => {
-        const cell = caseCell(t.paymentId, caseLinks)
-        if (cell.kind === 'loading') return <Typography.Text type="secondary">…</Typography.Text>
-        if (cell.kind === 'none') return '-'
-        if (cell.kind === 'unknown')
-          return (
-            <Tooltip title="사건 연결을 조회하지 못했습니다. 새로고침해 보세요.">
-              <Typography.Text type="secondary">확인 불가</Typography.Text>
-            </Tooltip>
-          )
-        return (
-          <Button type="link" size="small" onClick={() => openCase(cell.caseId)}>
-            Case {cell.caseId} ↗
           </Button>
         )
       },
@@ -348,27 +289,84 @@ export function TransactionListPage() {
       },
     },
     {
-      title: '카드',
-      dataIndex: 'cardDisplayLabel',
-      width: 130,
-      render: (value: string | null) => value ?? missing,
-    },
-    {
-      title: <HelpTitle label="접속" text={help.ip} />,
-      key: 'ip',
-      width: 150,
+      title: '사건',
+      key: 'case',
+      width: 110,
       render: (_, t) => {
-        const parts = [t.ipCountryCode, t.maskedIpAddress].filter((v) => v !== null)
-        return parts.length > 0 ? parts.join(' · ') : missing
+        const cell = caseCell(t.paymentId, caseLinks)
+        if (cell.kind === 'loading') return <Typography.Text type="secondary">…</Typography.Text>
+        if (cell.kind === 'none') return '-'
+        if (cell.kind === 'unknown')
+          return (
+            <Tooltip title="사건 연결을 조회하지 못했습니다. 새로고침해 보세요.">
+              <Typography.Text type="secondary">확인 불가</Typography.Text>
+            </Tooltip>
+          )
+        return (
+          <Button type="link" size="small" onClick={() => openCase(cell.caseId)}>
+            Case {cell.caseId} ↗
+          </Button>
+        )
       },
     },
     {
-      title: <HelpTitle label="기기" text={help.device} />,
-      dataIndex: 'maskedDeviceId',
-      width: 110,
-      render: (value: string | null) => (value ? <code>{value}</code> : missing),
+      title: <HelpTitle label="구매자" text={help.customer} />,
+      key: 'buyer',
+      width: 190,
+      render: (_, t) => (
+        <Typography.Text copyable={copyable(t.customerRef)}>{t.customerRef}</Typography.Text>
+      ),
     },
   ]
+
+  // 특정 결제를 깊게 볼 때만 필요한 값은 줄을 펼쳐 본다 (#445). 가맹점 문의용 주문번호 복사는 여기에 둔다
+  const renderDetail = (t: PaymentTransaction) => (
+    <Descriptions
+      size="small"
+      // 주문번호는 길어서(복사 버튼 · 몇 번째 시도 포함) 두 칸을 쓴다 — 1줄: 주문번호 · 가맹점 · 이메일 / 2줄: 카드 · 접속 · 기기
+      column={4}
+      items={[
+        {
+          key: 'order',
+          span: 2,
+          label: <HelpTitle label="주문번호" text={help.order} />,
+          children: (
+            <span>
+              <Typography.Text code copyable={copyable(t.orderRef)}>
+                {t.orderRef}
+              </Typography.Text>
+              {t.attemptNo !== null && t.attemptNo > 1 && (
+                <Typography.Text type="secondary"> {t.attemptNo}번째 시도</Typography.Text>
+              )}
+            </span>
+          ),
+        },
+        {
+          key: 'merchant',
+          label: '가맹점',
+          children: merchantNames.get(t.merchantId) ?? `가맹점 #${t.merchantId}`,
+        },
+        {
+          key: 'email',
+          label: '이메일',
+          children: t.maskedBuyerEmail ?? missing,
+        },
+        { key: 'card', label: '카드', children: t.cardDisplayLabel ?? missing },
+        {
+          key: 'ip',
+          label: <HelpTitle label="접속" text={help.ip} />,
+          children:
+            [t.ipCountryCode, t.maskedIpAddress].filter((v) => v !== null).join(' · ') || missing,
+        },
+        {
+          key: 'device',
+          span: 2,
+          label: <HelpTitle label="기기" text={help.device} />,
+          children: t.maskedDeviceId ? <code>{t.maskedDeviceId}</code> : missing,
+        },
+      ]}
+    />
+  )
 
   const periodText = query.from
     ? `${query.from} ~ ${query.to} (한국 시간)`
@@ -460,7 +458,9 @@ export function TransactionListPage() {
           dataSource={page?.items ?? []}
           loading={loading}
           size="middle"
-          scroll={{ x: 1630 }}
+          // 아이콘(▸)을 눌러야 펼친다 — 줄을 눌러 펼치면 경보 · 사건 링크를 누를 때도 같이 펼쳐진다
+          expandable={{ expandedRowRender: renderDetail, columnWidth: 48 }}
+          scroll={{ x: 920 }}
           pagination={{
             current: query.page,
             pageSize: TRANSACTION_PAGE_SIZE,
