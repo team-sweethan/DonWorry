@@ -64,6 +64,8 @@ public class FdsMlInputQueryService implements FdsMlInputReader {
                 .findByMerchantIdAndCustomerRefAndPaymentRequestedAtLessThanEqual(
                         target.getMerchantId(), target.getCustomerRef(), at)
                 .stream()
+                // DB 비교는 대소문자를 무시한다(utf8mb4_unicode_ci) — ai-server와 같게 원문이 정확히 같은 고객만 남긴다
+                .filter(row -> row.getCustomerRef().equals(target.getCustomerRef()))
                 .filter(row -> !row.getPaymentId().equals(target.getPaymentId()))
                 .toList());
         List<FdsEvaluation> sharedCardHistory = target.getCardToken() == null
@@ -73,6 +75,8 @@ public class FdsMlInputQueryService implements FdsMlInputReader {
                                 target.getMerchantId(), Set.of(target.getCardToken()), Instant.EPOCH)
                         .stream()
                         // 같은 가맹점 안에서만 — 학습 데이터의 도난 카드도 같은 가맹점 안에서만 만들어졌다
+                        // DB가 대소문자만 다른 토큰도 돌려주므로 원문이 정확히 같은 카드만 남긴다 (다르면 ai-server가 422)
+                        .filter(row -> target.getCardToken().equals(row.getCardToken()))
                         .filter(row -> !row.getPaymentRequestedAt().isAfter(at))
                         .filter(row -> !row.getCustomerRef().equals(target.getCustomerRef()))
                         .toList());

@@ -16,7 +16,7 @@
 1. **실행 방식** — P4(`investigation/report`) 스케줄러가 30초마다 커밋된 평가를 fds/api로 읽어 ai-server에 보내고 결과를 P4 테이블에 기록한다. 결제 · Rule 평가 코드는 바꾸지 않는다
 2. **fds/api 조회 계약** — `FdsMlInputReader` (읽기 전용)
    - `findNewTargets(afterEvaluationId, settledBefore, limit)`: 결제마다 처음 나온 비오류 평가만, 오래된 순. 재평가는 ERROR에서만 생기므로 이것이 최종 Rule 판정이다. 걸러내기는 SQL 안에서 한다 (Java에서 거르면 한 번에 읽은 행이 모두 걸러질 때 커서가 멈춘다)
-   - `findInput(evaluationId, historyLimit)`: 대상 + 고객 이력(같은 가맹점 · 같은 `customer_ref`) + 같은 카드 다른 고객 이력, 모두 대상 시각 이하 · 결제당 1행 · Rule 결과와 상관없이 모든 결제. 합계가 상한을 넘으면 자르지 않고 `historyOverLimit`
+   - `findInput(evaluationId, historyLimit)`: 대상 + 고객 이력(같은 가맹점 · 같은 `customer_ref`) + 같은 카드 다른 고객 이력, 모두 대상 시각 이하 · 결제당 1행 · Rule 결과와 상관없이 모든 결제. 합계가 상한을 넘으면 자르지 않고 `historyOverLimit`. 고객 · 카드 일치는 원문 정확 일치로 본다 (DB 비교는 대소문자를 무시하므로 Java에서 다시 거른다)
 3. **식별값 별칭** — 카드 · 기기 · 고객 번호는 응답 하나 안에서만 통하는 별칭(대상 고객 `T`, 다른 고객 `O1`…, 카드 `C1`…, 기기 `D1`…)으로 내보낸다. Feature는 같은지만 비교하므로 확률이 같다
 4. **같은 카드 범위** — 같은 가맹점 안에서만 찾는다. 학습 데이터의 도난 카드도 같은 가맹점 안에서만 만들어졌고, 기존 인덱스 · 쿼리로 된다
 5. **저장 · 실패 처리 (후속 PR)** — P4 소유 `ml_shadow_scores`에 `UNIQUE(payment_id, model_version)`로 결제당 한 행(SUCCEEDED · FAILED · SKIPPED)을 남긴다. 커서는 그 테이블의 가장 큰 `evaluation_id`. ai-server 연결 실패 · 503 · 모델 버전 불일치는 기록 없이 다음 주기에 다시 한다. 상세는 설계 문서 7~9절
@@ -39,7 +39,7 @@
 - DB: 이번 PR 없음 (P2 조회 쿼리 2개 추가, 기존 인덱스 사용). 후속 PR에서 P4 `ml_shadow_scores` 추가
 - 의존: 변경 없음 (investigation → `fds :: api` 기존 허용)
 - 화면: 없음
-- 테스트: P2 조회 단위 테스트 4개 · MariaDB 테스트 4개
+- 테스트: P2 조회 단위 테스트 6개(대소문자 재현 2개 포함) · MariaDB 테스트 4개
 
 ## 검증
 

@@ -125,6 +125,7 @@ public record FdsMlTransaction(
 - `sharedCardHistory`: 대상 카드가 있을 때만. **같은 가맹점**, 같은 `card_token`, 다른 `customer_ref`, 시각 ≤ 대상 (6절)
 - 두 이력 모두 **결제당 1행**이다. 재평가로 같은 `payment_id`의 평가가 여러 개면 하나만 넣는다. 금액 · 시각 · 카드 · 기기는 결제 입력이라 어느 평가 행이든 같다
 - Rule 결과와 상관없이 모든 결제를 이력에 넣는다 (ERROR · DENY도 결제 시도는 있었다). 학습 데이터도 결과와 상관없이 모든 거래를 이력으로 셌다
+- 고객 · 카드가 같은지는 **원문이 정확히 같은지**로 본다. DB 비교는 대소문자를 무시하므로(`utf8mb4_unicode_ci`) 조회 결과를 Java에서 한 번 더 거른다 (`TOK_A`와 `tok_a`는 다른 카드, `MEMBER-77`과 `member-77`은 다른 고객 — ai-server · 학습 코드와 같은 기준, Codex 리뷰 반영)
 - 이력 합계가 `historyLimit`(2,000, ai-server 상한과 같은 값)을 넘으면 `historyOverLimit = true`. 최근 2,000건으로 자르면 고객 건수 · 평균이 학습과 달라지므로 자르지 않는다
 
 ## 5. 결정 3 — 식별값은 응답 안에서만 통하는 별칭으로

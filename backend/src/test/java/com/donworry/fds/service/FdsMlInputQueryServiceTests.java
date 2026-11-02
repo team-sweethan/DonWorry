@@ -136,6 +136,42 @@ class FdsMlInputQueryServiceTests {
         assertThat(atLimit.sharedCardHistory()).hasSize(1);
     }
 
+    // DB는 대소문자를 구분하지 않아 TOK_A도 같은 카드로 돌려준다 — 원문이 정확히 같은 카드만 같은 카드 이력에 넣는다 (Codex 재현)
+    @Test
+    void findInput_caseOnlyDifferentCardToken_notShared() {
+        var target = row(10L, 100L, CUSTOMER, "tok_a", "dev_a", FdsResult.ALLOW, AT);
+        givenTarget(target);
+        givenCustomerHistory(target);
+        givenSameCard(
+                target,
+                row(21L, 201L, "1:other-upper", "TOK_A", "dev_o", FdsResult.ALLOW, AT.minusSeconds(60)),
+                row(22L, 202L, "1:other-same", "tok_a", "dev_p", FdsResult.ALLOW, AT.minusSeconds(120)));
+
+        var input = service().findInput(10L, 2_000).orElseThrow();
+
+        assertThat(input.sharedCardHistory())
+                .extracting(FdsMlTransaction::paymentId)
+                .containsExactly(202L);
+    }
+
+    // 고객 번호도 대소문자만 다르면 DB가 같은 고객으로 돌려준다 — 정확히 같은 고객만 고객 이력에 넣는다 (Codex 같은 원인)
+    @Test
+    void findInput_caseOnlyDifferentCustomerRef_notInCustomerHistory() {
+        var target = row(10L, 100L, CUSTOMER, "tok_a", "dev_a", FdsResult.ALLOW, AT);
+        givenTarget(target);
+        givenCustomerHistory(
+                target,
+                row(11L, 101L, "1:MEMBER-77", "tok_b", "dev_b", FdsResult.ALLOW, AT.minusSeconds(600)),
+                row(12L, 102L, CUSTOMER, "tok_c", "dev_c", FdsResult.ALLOW, AT.minusSeconds(300)));
+        givenSameCard(target);
+
+        var input = service().findInput(10L, 2_000).orElseThrow();
+
+        assertThat(input.customerHistory())
+                .extracting(FdsMlTransaction::paymentId)
+                .containsExactly(102L);
+    }
+
     private FdsMlInputQueryService service() {
         return new FdsMlInputQueryService(evaluationRepository);
     }
