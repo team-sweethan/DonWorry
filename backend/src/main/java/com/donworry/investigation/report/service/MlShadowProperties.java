@@ -16,4 +16,4 @@ public record MlShadowProperties(
         @DefaultValue("30s") Duration settleDelay,
         @DefaultValue("3") int maxAttempts,
         // ai-server가 실제로 쓰는 모델 이름과 같아야 한다 — 다르면 기록하지 않고 멈춘다
-        @DefaultValue("rf-v1") String modelVersion) {}
+        @DefaultValue("rf-v2") String modelVersion) {}

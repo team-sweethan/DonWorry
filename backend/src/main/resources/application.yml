@@ -93,7 +93,8 @@ ai:
     settle-delay: PT30S
     max-attempts: 3
     # ai-server AI_SERVER_ML_MODEL_PATH의 파일 이름과 같아야 한다 (다르면 기록하지 않고 멈춘다)
-    model-version: rf-v1
+    # 기본 rf-v2 (#450). rf-v1로 되돌릴 때는 양쪽을 함께 바꾼다
+    model-version: ${ML_SHADOW_MODEL_VERSION:rf-v2}
 
 ---
 spring:
