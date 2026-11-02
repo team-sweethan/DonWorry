@@ -2,7 +2,7 @@
 
 - **상태:** 제안 — #420 P1 결정, PR 리뷰 대상
 - **날짜:** 2026-11-02
-- **관련:** Issue #420, #68 (2·4·5단계), [ADR-0014](0014-session-authentication.md), [ADR-0020](0020-identity-public-read-contracts.md), [ADR-0059](0059-security-default-deny.md), [ADR-0065](0065-case-session-authorization.md)
+- **관련:** Issue #420, #68 (2·4·5단계), [ADR-0014](0014-session-authentication.md), [ADR-0020](0020-identity-public-read-contracts.md), [ADR-0059](0059-security-default-deny.md), [ADR-0065](0065-case-session-authorization.md), [ADR-0039](0039-owner-finance-session-authorization.md) ("정산 하위 경로 · 모든 메서드 통과" 부분을 대체)
 - **영향 받는 담당:** P1 주환 (SecurityConfig · 결정), P2 정후 (FDS), P3 수민 (Case), P5 시은 (결제 운영), P6 민정 (정산)
 
 ## 배경
@@ -46,14 +46,18 @@ CakeShop HMAC 경로(`MerchantSecurityConfiguration`)와 AI 서버 경로(`/inte
 | 관리자에게 Case 조회 허용 | 관리자는 운영 계정이고 조사 · 판정 주체가 아니다. P3 Guard와 ADR-0065를 바꿔야 하고 시연 흐름에 필요 없다 |
 | 다른 가맹점 요청에 403 | 그 ID의 데이터가 있다는 사실이 드러난다. 기존 사장님 API가 이미 404를 쓴다 |
 | 가맹점 거르기를 `SecurityConfig`에서 처리 | 필터는 요청 경로만 알고 데이터의 가맹점은 모른다. 데이터 소유 확인은 각 모듈 서비스가 세션 `merchantId`로 한다 |
-| 경로 접두사(`/**`)로 역할 묶기 | 같은 접두사에 새 API가 추가되면 의도하지 않은 역할이 열린다. 정확한 메서드 · 경로를 유지한다 (AGENTS.md 4절) |
+| 경로 접두사(`/**`)로 역할 묶기 (기존 6개 묶음 유지) | 같은 접두사에 새 API가 추가되면 규칙을 등록하지 않아도 그 역할에 열려 기본 거절을 우회한다. 정확한 메서드 · 경로로 좁힌다 (AGENTS.md 4절) |
 
 ## 영향
 
-- API: 동작 변경 없음. 현재 규칙을 표로 고정한다.
+- API: 기존 API의 허용 역할은 그대로다. 접두사(`/**`)로 열려 있던 6개 묶음(관리자 · 정산 · FDS 관리 · FDS 평가 · 사장님 연동 키 · 로그인 이력: `/api/admin/**` · `/api/v1/settlements/**` · `/api/fds/rules/**` · `rule-change-requests/**` · `blocklist/**` · `/api/fds/evaluations/**` · `/api/owner/integration/**` · `/api/auth/login-histories/**`)을 현재 컨트롤러의 정확한 메서드 · 경로로 좁혔다. 그 아래 등록하지 않은 경로 · 메서드는 이제 기본 거절(비로그인 401 · 로그인 403)이다. 예전에는 허용 역할에게 404 · 405가 났다.
 - DB: 없음.
 - 화면: 없음. 화면 가드는 편의이며 이 표가 서버 기준이다.
-- 테스트: `RoleApiMatrixTests`가 위 표의 직원 세션 경로 × 7가지 사용자(비로그인 · ADMIN · 보안 직원 · 권한 없는 사장님 · `FDS_VIEW` 사장님 · `FINANCE_VIEW` 사장님 · 가맹점 없는 사장님)를 검사한다. ADMIN · 보안 직원에게도 권한 목록을 줘서 권한이 아니라 역할로 막는지 확인한다.
+- 테스트: `RoleApiMatrixTests`가 위 표의 직원 세션 경로 73개 × 9가지 사용자(비로그인 · 권한 있는/없는 ADMIN · 권한 있는/없는 보안 직원 · 권한 없는 사장님 · `FDS_VIEW` 사장님 · `FINANCE_VIEW` 사장님 · 가맹점 없는 사장님)를 검사한다. 권한 목록이 있는 직원으로 사장님 경로가 역할로 막히는지, 권한 목록이 빈 직원(시드 `staff_test`와 같음)으로 직원 경로가 역할만으로 열리는지 본다. 예전 접두사 아래 등록하지 않은 경로가 허용 역할에게도 열리지 않는지 따로 검사한다.
+- 기존 테스트: 넓은 규칙을 전제로 한 4개를 새 정책에 맞췄다.
+  - `OwnerFinanceSecurityTests`: 사장님이 `/report`의 GET만 통과하고 나머지 메서드는 403인지 본다.
+  - `AuthApiTests.logoutAll_whenGet_preservesSession` · `PasswordChangeHttpTests`: GET 전체 로그아웃 · 비밀번호 변경이 405 대신 403 `AUTH_002`로 막히고 세션 · 비밀번호가 유지되는지 본다.
+  - `OwnerFinanceHttpMariaDbTests`: 정산 접두사 아래 테스트 전용 경로(`auth-probe`) 대신 실제 현금흐름 설정 API를 쓴다. 등록하지 않은 경로는 권한과 관계없이 403이라 거절 검사가 의미를 잃기 때문이다. 세션 가맹점으로 저장되고 요청의 다른 가맹점 번호는 쓰이지 않는지 DB로 확인한다. 통과시키려고 약하게 바꾼 것이 아니라 ADR-0039의 "모든 메서드 통과" 결정을 이 ADR로 바꿨기 때문이다. ADR-0039 당시에는 미등록 경로가 `permitAll`이라 접두사로 넓게 잡는 편이 안전했지만, ADR-0059 이후 미등록 경로는 기본 거절이다.
 - 다른 담당: 코드 수정 요청 없음. 새 API를 추가할 때 이 표의 줄을 정하고 `SecurityConfig` · `RoleApiMatrixTests`를 같은 PR에서 갱신한다.
 - 문서: ADR 색인. #68의 "합의 필요" 중 권한표 · 가맹점 거르기 · 다른 가맹점 응답 · 수수료율 항목을 이 ADR로 정리한다.
 

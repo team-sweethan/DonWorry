@@ -546,12 +546,14 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.code").value("AUTH_001"));
     }
 
-    // GET 요청으로 전체 로그아웃을 실행할 수 없다
+    // GET 요청으로 전체 로그아웃을 실행할 수 없다 — 등록한 메서드(POST)가 아니라 필터가 먼저 거절한다 (ADR-0066)
     @Test
     void logoutAll_whenGet_preservesSession() throws Exception {
         var current = (MockHttpSession)
                 login("admin", "test-password", null).getRequest().getSession(false);
-        mvc.perform(get("/api/auth/logout-all").session(current)).andExpect(status().isMethodNotAllowed());
+        mvc.perform(get("/api/auth/logout-all").session(current))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
         mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isOk());
     }
 

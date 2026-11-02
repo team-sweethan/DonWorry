@@ -4,7 +4,7 @@
 
 ## 적용 범위
 
-P1은 `/api/v1/settlements`와 그 하위 경로 전체에 세션 인가를 적용한다.
+P1은 `/api/v1/settlements` 아래 P6 API의 정확한 메서드·경로에 세션 인가를 적용한다. 등록하지 않은 하위 경로·메서드는 기본 거절이다 ([ADR-0066](../decisions/0066-role-api-matrix.md), 2026-11-02 변경). 새 API는 `SecurityConfig`·`RoleApiMatrixTests`에 같은 PR로 추가한다.
 정상 조건은 `OPERATOR` + `FINANCE_VIEW` + `merchantId` 존재다. 읽기·쓰기 조건은 같고 ADMIN·SECURITY_STAFF는 제외한다.
 이 정책은 P1 결정·사용자 구현 승인 기준이며 P6 동의까지 확인된 것은 아니다.
 

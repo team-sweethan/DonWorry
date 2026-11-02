@@ -33,11 +33,14 @@ import tools.jackson.databind.json.JsonMapper;
 })
 class RoleApiMatrixTests {
 
-    // ADMIN · 보안 직원에게도 권한 목록을 줘서 권한이 아니라 역할로 막는지 확인한다
+    // 권한 목록이 있는 ADMIN · 보안 직원은 사장님 경로가 권한이 아니라 역할로 막히는지,
+    // 권한 목록이 빈 ADMIN · 보안 직원(시드 staff_test와 같음)은 직원 경로가 역할만으로 열리는지 확인한다
     enum Persona {
         ANONYMOUS(null, null, List.of()),
         ADMIN(UserRole.ADMIN, null, List.of("FDS_VIEW", "FINANCE_VIEW")),
+        ADMIN_NO_PERMISSION(UserRole.ADMIN, null, List.of()),
         SECURITY_STAFF(UserRole.SECURITY_STAFF, null, List.of("FDS_VIEW", "FINANCE_VIEW")),
+        SECURITY_STAFF_NO_PERMISSION(UserRole.SECURITY_STAFF, null, List.of()),
         OWNER_NO_PERMISSION(UserRole.OPERATOR, 1L, List.of()),
         OWNER_FDS_VIEW(UserRole.OPERATOR, 1L, List.of("FDS_VIEW")),
         OWNER_FINANCE_VIEW(UserRole.OPERATOR, 1L, List.of("FINANCE_VIEW")),
@@ -57,9 +60,10 @@ class RoleApiMatrixTests {
     record Route(HttpMethod method, String path, Set<Persona> allowed) {}
 
     private static final Set<Persona> LOGGED_IN = EnumSet.complementOf(EnumSet.of(Persona.ANONYMOUS));
-    private static final Set<Persona> ADMIN = EnumSet.of(Persona.ADMIN);
-    private static final Set<Persona> STAFF_OR_ADMIN = EnumSet.of(Persona.SECURITY_STAFF, Persona.ADMIN);
-    private static final Set<Persona> STAFF = EnumSet.of(Persona.SECURITY_STAFF);
+    private static final Set<Persona> ADMIN = EnumSet.of(Persona.ADMIN, Persona.ADMIN_NO_PERMISSION);
+    private static final Set<Persona> STAFF = EnumSet.of(Persona.SECURITY_STAFF, Persona.SECURITY_STAFF_NO_PERMISSION);
+    private static final Set<Persona> STAFF_OR_ADMIN = EnumSet.of(
+            Persona.SECURITY_STAFF, Persona.SECURITY_STAFF_NO_PERMISSION, Persona.ADMIN, Persona.ADMIN_NO_PERMISSION);
     private static final Set<Persona> OWNER =
             EnumSet.of(Persona.OWNER_NO_PERMISSION, Persona.OWNER_FDS_VIEW, Persona.OWNER_FINANCE_VIEW);
     private static final Set<Persona> OWNER_FDS = EnumSet.of(Persona.OWNER_FDS_VIEW);
@@ -193,6 +197,34 @@ class RoleApiMatrixTests {
             }
         }
         assertThat(mismatches).isEmpty();
+    }
+
+    // 예전 접두사(/**) 규칙 아래라도 등록하지 않은 경로·메서드는 허용 역할에게도 열리지 않는다
+    @Test
+    void roleApiMatrix_unregisteredRouteUnderKnownPrefix_isDenied() throws Exception {
+        var unregistered = List.of(
+                new Route(HttpMethod.GET, "/api/admin/new-feature", ADMIN),
+                new Route(HttpMethod.DELETE, "/api/admin/users/1", ADMIN),
+                new Route(HttpMethod.GET, "/api/v1/settlements/new-feature", OWNER_FINANCE),
+                new Route(HttpMethod.PATCH, "/api/v1/settlements/report", OWNER_FINANCE),
+                new Route(HttpMethod.GET, "/api/fds/rules/R001/new-feature", STAFF_OR_ADMIN),
+                new Route(HttpMethod.DELETE, "/api/fds/blocklist/1", STAFF_OR_ADMIN),
+                new Route(HttpMethod.GET, "/api/fds/evaluations/1/new-feature", STAFF_OR_ADMIN),
+                new Route(HttpMethod.POST, "/api/owner/integration/new-feature", OWNER),
+                new Route(HttpMethod.GET, "/api/auth/login-histories/new-feature", LOGGED_IN));
+        List<String> opened = new ArrayList<>();
+        for (Route route : unregistered) {
+            for (Persona persona : route.allowed()) {
+                var response =
+                        mockMvc.perform(requestAs(persona, route)).andReturn().getResponse();
+                if (response.getStatus() != 403
+                        || !code(response.getContentAsString()).equals("AUTH_002")) {
+                    opened.add(
+                            "%s %s / %s: 실제 %d".formatted(route.method(), route.path(), persona, response.getStatus()));
+                }
+            }
+        }
+        assertThat(opened).isEmpty();
     }
 
     private MockHttpServletRequestBuilder requestAs(Persona persona, Route route) {
