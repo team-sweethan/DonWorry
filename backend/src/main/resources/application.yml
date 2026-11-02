@@ -84,6 +84,16 @@ ai:
     base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
     # ai-server의 AI_SERVER_INTERNAL_API_KEY와 같은 값. 저장소에 적지 않는다
     api-key: ${AI_SERVER_API_KEY:}
+  ml-shadow:
+    # true면 커밋된 FDS 평가를 ai-server RF로 따로 채점해 ml_shadow_scores에 기록한다. 결제 판정에는 쓰지 않는다. 기본 꺼짐
+    # ai.server.enabled(AI 조사)와 따로 켠다. 주소 · 서비스 키 · 응답 시간 초과는 ai.server 값을 같이 쓴다
+    enabled: ${ML_SHADOW_ENABLED:false}
+    interval: PT30S
+    batch-size: 50
+    settle-delay: PT30S
+    max-attempts: 3
+    # ai-server AI_SERVER_ML_MODEL_PATH의 파일 이름과 같아야 한다 (다르면 기록하지 않고 멈춘다)
+    model-version: rf-v1
 
 ---
 spring:

@@ -20,10 +20,15 @@ public interface MlShadowScoreRepository extends Repository<MlShadowScore, Long>
     @Query("SELECT MAX(s.evaluationId) FROM MlShadowScore s WHERE s.modelVersion = :modelVersion")
     Optional<Long> findMaxEvaluationId(@Param("modelVersion") String modelVersion);
 
+    // 재시도 때 행을 고치기 위해 다시 읽는다
+    Optional<MlShadowScore> findById(Long id);
+
     // 다시 시도할 실패 — 이 모델의 FAILED 중 시도 수가 최대보다 작은 것, 오래된 평가부터
+    // 422(ML_REQUEST_REJECTED)는 다시 보내도 같은 요청이라 빼고, 실패 기록으로만 남긴다 (#415)
     @Query("SELECT s FROM MlShadowScore s"
             + " WHERE s.modelVersion = :modelVersion"
             + " AND s.status = com.donworry.investigation.report.entity.MlShadowStatus.FAILED"
+            + " AND s.failureCode <> 'ML_REQUEST_REJECTED'"
             + " AND s.attemptCount < :maxAttempts"
             + " ORDER BY s.evaluationId ASC")
     List<MlShadowScore> findRetryTargets(

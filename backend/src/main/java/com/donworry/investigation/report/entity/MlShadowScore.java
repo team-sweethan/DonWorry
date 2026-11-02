@@ -111,12 +111,7 @@ public class MlShadowScore {
         this.createdAt = at;
         this.updatedAt = at;
         if (values != null) {
-            this.fraudProbability = toRate(values.fraudProbability());
-            this.threshold = toRate(values.threshold());
-            this.mlRiskLevel = Objects.requireNonNull(values.mlRiskLevel(), "mlRiskLevel");
-            this.features = new LinkedHashMap<>(Objects.requireNonNull(values.features(), "features"));
-            this.latencyMs = values.latencyMs();
-            this.scoredAt = at;
+            applyValues(values, at);
         }
     }
 
@@ -132,7 +127,7 @@ public class MlShadowScore {
                 .build();
     }
 
-    // 다시 시도할 수 있는 실패 — 시도 1회. 재시도 때 갱신하는 메서드는 실행 조각(Ⓔ-4)에서 추가한다
+    // 채점 실패 — 시도 1회. 다시 시도는 succeedOnRetry · failOnRetry · skipOnRetry로 이 행을 고친다
     public static MlShadowScore failed(FdsMlTarget target, String modelVersion, String failureCode, Instant now) {
         return MlShadowScore.builder()
                 .target(target)
@@ -154,6 +149,50 @@ public class MlShadowScore {
                 .attemptCount(0)
                 .now(now)
                 .build();
+    }
+
+    // 재시도 성공 — 시도 수를 하나 늘리고 채점 값을 채운다
+    public void succeedOnRetry(MlScoreValues values, Instant now) {
+        Instant at = startRetry(now);
+        this.status = MlShadowStatus.SUCCEEDED;
+        this.failureCode = null;
+        this.attemptCount++;
+        applyValues(Objects.requireNonNull(values, "values"), at);
+    }
+
+    // 재시도도 실패 — 시도 수를 하나 늘리고 마지막 실패 코드로 바꾼다
+    public void failOnRetry(String failureCode, Instant now) {
+        String code = requireCode(failureCode);
+        startRetry(now);
+        this.failureCode = code;
+        this.attemptCount++;
+    }
+
+    // 재시도 때 호출 없이 건너뜀 (예: 입력을 찾지 못함) — 시도 수는 그대로
+    public void skipOnRetry(String failureCode, Instant now) {
+        String code = requireCode(failureCode);
+        startRetry(now);
+        this.status = MlShadowStatus.SKIPPED;
+        this.failureCode = code;
+    }
+
+    // 끝난 기록(SUCCEEDED · SKIPPED)은 바꾸지 않는다 — 재시도는 FAILED에서만
+    private Instant startRetry(Instant now) {
+        if (status != MlShadowStatus.FAILED) {
+            throw new IllegalStateException("FAILED 기록만 다시 시도할 수 있습니다 status=" + status);
+        }
+        Instant at = Objects.requireNonNull(now, "now").truncatedTo(ChronoUnit.MICROS);
+        this.updatedAt = at;
+        return at;
+    }
+
+    private void applyValues(MlScoreValues values, Instant at) {
+        this.fraudProbability = toRate(values.fraudProbability());
+        this.threshold = toRate(values.threshold());
+        this.mlRiskLevel = Objects.requireNonNull(values.mlRiskLevel(), "mlRiskLevel");
+        this.features = new LinkedHashMap<>(Objects.requireNonNull(values.features(), "features"));
+        this.latencyMs = values.latencyMs();
+        this.scoredAt = at;
     }
 
     private static String requireCode(String failureCode) {
