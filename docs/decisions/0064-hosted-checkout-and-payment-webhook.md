@@ -34,6 +34,7 @@
 | `GET /api/checkout/{sessionKey}/result` | 처리 중이면 결제창이 다시 조회 |
 
 - **로그인·쿠키를 쓰지 않는다.** 권한은 추측할 수 없는 세션 키뿐이다. 응답에 가맹점 내부 값(`customerRef`·`notifyUrl`)을 넣지 않고 `Cache-Control: no-store`를 붙인다
+  - 결제창 화면도 직원 화면용 요청 함수(CSRF 준비 · 쿠키 전송 · 세션 활동 기록)를 쓰지 않고 `api/checkout.ts`의 전용 호출로 쿠키 없이(`credentials: omit`) 부른다(PR #425 P1 리뷰)
 - **CSRF 검사에서 제외한다.** CSRF는 쿠키로 인증하는 요청을 지키는 장치인데 이 경로는 쿠키 인증이 없다. 또 결제창은 다른 사이트(CakeShop) 안의 iframe으로 열리므로 돈워리의 `SameSite=Lax` 쿠키(`XSRF-TOKEN`)가 전송되지 않는다. 검사를 켜 두면 결제 버튼이 403이 된다. CSRF 검사는 #416(ADR-0063)에서 기본으로 켜졌으므로 결제창 구현 PR에서 이 세 경로를 반드시 제외한다
 - ADR-0059 기본 거절 아래에서 위 세 경로만 정확한 메서드·경로로 연다. ADR-0063이 직원 체인(`SecurityConfig`)에 새 CSRF 예외를 금지하므로, CakeShop 서명·AI 서버처럼 **결제창 전용 체인 `identity/security/CheckoutSecurityConfiguration`**(세션·쿠키 없음, CSRF 끔, 다른 메서드는 403)에 둔다(2026-11-02 구현 PR, P1 리뷰)
 - 결과: 카드 승인(`authorized`)이고 상태가 `PENDING`·`HELD`·`CAPTURED`면 `successUrl?paymentKey=&orderId=&amount=`, 그 밖에는 `failUrl?code=`, 구매자가 닫으면 `failUrl?code=USER_CANCELED`. 구매자 이메일(`buyerEmail`)은 세션 생성 때 FDS 입력과 같은 규칙으로 검사해 잘못된 값은 400으로 거절한다. 결과 이동 신호를 가맹점 화면이 받지 못하면(성공 주소와 다른 출처로 열린 경우 등) 4초 뒤 "결과 화면으로 이동" 버튼을 보인다
@@ -141,8 +142,8 @@
 - [ ] 4-1 남는 위험을 줄일 HELD 판정 기한(운영)
 - [ ] CakeShop 저장소: 이 연동은 Draft PR #22(서명 요청·조회 클라이언트) → #24(결제 수단 선택·결제창 모달) 위에 올린다. 두 PR을 먼저 정리한다
 - [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가
-- [x] 돈워리 운영 프록시 확인(2026-11-02, PR #438이 `dev`로 가져온 `frontend/nginx.conf` 기준): `/api/`를 백엔드로 넘기며 `X-DonWorry-Client-IP: $remote_addr`를 붙이고, `/checkout/...`은 SPA 대체 경로(`try_files … /index.html`)로 열린다
-- [ ] 운영 환경변수(배포 VM, 저장소 밖 — P1 확인): 결제창 구매자 IP는 로그인 이력과 같은 설정을 쓴다. 기본값이 `DIRECT`라 `DONWORRY_LOGIN_HISTORY_IP_MODE=PROXY`와 nginx 컨테이너 주소의 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`가 없으면 nginx 주소가 구매자 IP로 기록된다
+- [x] 돈워리 운영 프록시 확인(2026-11-02, PR #438(2026-11-02 기준 병합 전)의 `frontend/nginx.conf` 기준): `/api/`를 백엔드로 넘기며 `X-DonWorry-Client-IP: $remote_addr`를 붙이고, `/checkout/...`은 SPA 대체 경로(`try_files … /index.html`)로 열린다
+- [ ] 운영 환경변수(배포 VM, 저장소 밖): P1이 2026-11-03 배포 때 넣기로 함(PR #425 리뷰). 결제창 구매자 IP는 로그인 이력과 같은 설정을 쓴다. 기본값이 `DIRECT`라 `DONWORRY_LOGIN_HISTORY_IP_MODE=PROXY`와 nginx 컨테이너 주소의 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`가 없으면 nginx 주소가 구매자 IP로 기록된다
 - [ ] 운영 `notifyUrl`은 https만 허용하고 내부 주소(사설·루프백 IP)를 막는다. 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)도 정한다
 - [ ] 웹훅 재전송 한도(예: 24시간 뒤 중단, 조회 배치에 맡김)와 운영에서 실패를 보는 방법
 - [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다
