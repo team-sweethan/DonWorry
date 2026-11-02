@@ -122,6 +122,34 @@ class PaymentSessionServiceTests {
         assertThat(result.redirectUrl()).isEqualTo(FAIL + "?code=FDS_DENIED");
     }
 
+    // 가맹점 주소의 기존 인코딩(%2F)은 그대로 두고, 새로 붙이는 값만 인코딩한다 (#425 리뷰)
+    @Test
+    void result_registeredUrlWithEncodedQuery_keepsEncodingAndEncodesNewValues() {
+        String success = SUCCESS + "?next=%2Forders";
+        String fail = FAIL + "?next=%2Fcart";
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var ok = service.result(sessionWithPayment(session(recent(), success, fail, "ORD 1&x=2")));
+
+        assertThat(ok.redirectUrl()).isEqualTo(success + "&paymentKey=101&orderId=ORD%201%26x%3D2&amount=52000");
+
+        when(query.findPayment(MERCHANT_ID, 101L))
+                .thenReturn(Optional.of(payment(PaymentStatus.DENIED, false, "FDS_DENIED")));
+        var denied = service.result(sessionWithPayment(session(recent(), success, fail, "ORD-1")));
+
+        assertThat(denied.redirectUrl()).isEqualTo(fail + "&code=FDS_DENIED");
+    }
+
+    // 나중에 값을 붙일 수 없는 주소(쿼리의 [ ])는 결제 때 500이 되지 않도록 생성 때 400으로 막는다
+    @Test
+    void create_returnUrlThatCannotTakeQuery_isBadRequest() {
+        assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, request(recent(), SUCCESS + "?a=[1]")))
+                .isInstanceOfSatisfying(
+                        PaymentHttpException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(400));
+        verify(sessions, never()).save(any());
+    }
+
     @Test
     void open_unknownSessionKey_isNotFound() {
         assertThatThrownBy(() -> service.open("pss_bad"))
@@ -203,18 +231,22 @@ class PaymentSessionServiceTests {
     }
 
     private static PaymentSession session(Instant created) {
+        return session(created, SUCCESS, FAIL, "ORD-1");
+    }
+
+    private static PaymentSession session(Instant created, String successUrl, String failUrl, String orderRef) {
         return PaymentSession.builder()
                 .sessionKey("pss_" + "a".repeat(32))
                 .merchantId(MERCHANT_ID)
                 .requestKey(UUID.fromString(KEY))
                 .attemptKey(UUID.randomUUID())
-                .orderRef("ORD-1")
+                .orderRef(orderRef)
                 .customerRef("42")
                 .amount(52_000L)
                 .orderCreatedAt(created)
                 .orderName("딸기 케이크")
-                .successUrl(SUCCESS)
-                .failUrl(FAIL)
+                .successUrl(successUrl)
+                .failUrl(failUrl)
                 .expiresAt(created.plus(10, ChronoUnit.MINUTES))
                 .createdAt(created)
                 .build();

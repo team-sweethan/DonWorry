@@ -12,6 +12,7 @@ import com.donworry.payment.entity.PaymentSessionStatus;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentSessionRepository;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
 // 돈워리 호스팅 결제창: 가맹점 서버의 결제 준비 → 구매자 결제창 → 기존 결제 접수 흐름 연결.
 // 결제 접수·평가·승인은 기존 PaymentRequestFlowService를 그대로 쓴다. 이 서비스는 세션과 결제창 입출력만 맡는다.
@@ -198,22 +200,19 @@ public class PaymentSessionService {
                 && (status == PaymentStatus.PENDING
                         || status == PaymentStatus.HELD
                         || status == PaymentStatus.CAPTURED)) {
-            String url = UriComponentsBuilder.fromUriString(session.getSuccessUrl())
-                    .queryParam("paymentKey", payment.paymentId())
-                    .queryParam("orderId", session.getOrderRef())
-                    .queryParam("amount", session.getAmount())
-                    .encode()
-                    .build()
-                    .toUriString();
+            String url = withQuery(
+                    session.getSuccessUrl(),
+                    "paymentKey",
+                    String.valueOf(payment.paymentId()),
+                    "orderId",
+                    session.getOrderRef(),
+                    "amount",
+                    String.valueOf(session.getAmount()));
             return new CheckoutResponses.Result(status, true, false, url);
         }
         if (status == PaymentStatus.PENDING) return new CheckoutResponses.Result(status, false, true, null);
         String code = payment.declineCode() != null ? payment.declineCode() : status.name();
-        String url = UriComponentsBuilder.fromUriString(session.getFailUrl())
-                .queryParam("code", code)
-                .encode()
-                .build()
-                .toUriString();
+        String url = withQuery(session.getFailUrl(), "code", code);
         return new CheckoutResponses.Result(status, authorized, false, url);
     }
 
@@ -240,11 +239,23 @@ public class PaymentSessionService {
     }
 
     private String cancelUrl(PaymentSession session) {
-        return UriComponentsBuilder.fromUriString(session.getFailUrl())
-                .queryParam("code", "USER_CANCELED")
-                .encode()
-                .build()
-                .toUriString();
+        return withQuery(session.getFailUrl(), "code", "USER_CANCELED");
+    }
+
+    // 가맹점이 등록한 주소의 기존 인코딩(예: next=%2Forders)은 그대로 두고, 새로 붙이는 값만 인코딩한다
+    // 전체에 encode()를 걸면 기존 %까지 %25로 바뀐다. 주소는 세션 생성 때 requireUrl로 이미 검사했다
+    private static String withQuery(String registeredUrl, String... namesAndValues) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(asciiUrl(registeredUrl));
+        for (int i = 0; i < namesAndValues.length; i += 2) {
+            builder.queryParam(
+                    namesAndValues[i], UriUtils.encodeQueryParam(namesAndValues[i + 1], StandardCharsets.UTF_8));
+        }
+        return builder.build(true).toUriString();
+    }
+
+    // 한글 같은 비ASCII 문자는 퍼센트 인코딩하고, 이미 있는 %XX는 바꾸지 않는다
+    private static String asciiUrl(String url) {
+        return URI.create(url).toASCIIString();
     }
 
     private PaymentSession requireSession(String sessionKey) {
@@ -276,6 +287,8 @@ public class PaymentSessionService {
                     || uri.getHost() == null
                     || uri.getUserInfo() != null
                     || uri.getRawFragment() != null) throw invalid();
+            // 결제 뒤 이 주소에 값을 붙여 돌려보낸다(withQuery). 그때 실패하지 않도록 지금 같은 방식으로 읽어 본다
+            UriComponentsBuilder.fromUriString(asciiUrl(value)).build(true);
             return uri;
         } catch (IllegalArgumentException e) {
             throw invalid();
