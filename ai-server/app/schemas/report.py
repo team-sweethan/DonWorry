@@ -100,7 +100,7 @@ class TraceStep(BaseModel):
 
 # 조사 과정 기록 — provider는 실제로 쓴 LLM 제공자, FIXED는 Spring 고정 문장 보고서
 class InvestigationTrace(BaseModel):
-    provider: Literal["OLLAMA", "MOCK", "FIXED"]
+    provider: Literal["OLLAMA", "OPENAI", "MOCK", "FIXED"]
     model: str
     durationMs: int | None
     steps: list[TraceStep]

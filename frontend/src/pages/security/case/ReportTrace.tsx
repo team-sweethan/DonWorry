@@ -28,7 +28,9 @@ export function ReportTrace({ trace }: { trace: InvestigationTrace | undefined }
         <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap' }}>
           <Summary label="사용 모델">
             <Tag
-              color={trace.provider === 'OLLAMA' ? 'purple' : 'default'}
+              color={
+                trace.provider === 'OLLAMA' || trace.provider === 'OPENAI' ? 'purple' : 'default'
+              }
               style={{ marginInlineEnd: 0 }}
             >
               {traceProviderLabel(trace)}

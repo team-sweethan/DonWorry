@@ -19,6 +19,7 @@ from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
 # 예) 로컬 Spring으로 (Spring은 AI_SERVER_ENABLED=true, AI_SERVER_API_KEY는 여기 키와 같은 값)
 #     uv run python -m scripts.run_report --case-id 5
 # Qwen 사용: AI_SERVER_LLM_PROVIDER=ollama (기본 mock)
+# OpenAI 사용: AI_SERVER_LLM_PROVIDER=openai + AI_SERVER_LLM_API_KEY (#453)
 
 
 def main() -> int:

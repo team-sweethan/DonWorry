@@ -142,6 +142,8 @@ def retry_reason(errors: list[str]) -> str:
 def provider_and_model(settings: Settings) -> tuple[str, str]:
     if settings.llm_provider == "ollama":
         return "OLLAMA", settings.ollama_model
+    if settings.llm_provider == "openai":
+        return "OPENAI", settings.openai_model
     return "MOCK", "mock"
 
 
