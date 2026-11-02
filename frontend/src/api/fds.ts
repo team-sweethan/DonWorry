@@ -2,6 +2,12 @@ import { api } from './client.ts'
 
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
+export type FdsFailureDisposition =
+  | 'REEVALUATION_AVAILABLE'
+  | 'EXISTING_RESULT_AVAILABLE'
+  | 'PAYMENT_FOLLOW_UP_REQUIRED'
+  | 'MANUAL_REVIEW_REQUIRED'
+  | 'EVALUATION_NOT_FOUND'
 
 export type FdsEvaluationSummary = {
   evaluationId: number
@@ -35,6 +41,11 @@ export type FdsEvaluationDetail = {
   cardIdentifier: {
     cardToken: string
     cardDisplayLabel: string | null
+  } | null
+  failureAnalysis: {
+    disposition: FdsFailureDisposition
+    reasonCode: string
+    analyzedAt: string
   } | null
 }
 

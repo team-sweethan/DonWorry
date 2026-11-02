@@ -37,7 +37,7 @@ HELD Case는 [2절](#2-실제-결제부터-매입까지)의 결제 스크립트(
 
 경보 화면에는 Mock 생성 버튼이 없습니다. 로컬에서만 ERROR와 재평가를 확인하려면
 `application-local.yml`에 아래 설정을 추가한 뒤 backend를 다시 시작합니다. 이 설정은 다음 FDS
-평가 **한 건만** `TRANSIENT_DEMO_FORCED` ERROR로 만들며, 운영 프로필에서는 동작하지 않습니다.
+평가 **한 건만** 선택한 ERROR 시나리오로 만들며, 운영 프로필에서는 동작하지 않습니다.
 
 ```yaml
 fds:
@@ -50,6 +50,11 @@ fds:
 
 ```powershell
 py scripts/demo/fds_error.py
+# 기본: 평가 시간 초과 → P2 분석 후 재평가 가능
+# 룰 정보 일시 조회 실패 → P2 분석 후 재평가 가능
+py scripts/demo/fds_error.py --scenario TRANSIENT_FDS_RULE_DATA_UNAVAILABLE
+# 비일시 평가 처리 실패 → P2 분석 후 수동 검토 필요
+py scripts/demo/fds_error.py --scenario FDS_EVALUATION_PROCESSING_FAILED
 # 출력된 paymentId를 사용
 py scripts/demo/fds_reevaluate.py <paymentId>
 ```

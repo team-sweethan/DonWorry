@@ -60,6 +60,29 @@ class FdsFailureAnalysisServiceTests {
     }
 
     @Test
+    // 일시 장애가 아닌 내부 오류는 자동 재평가 대신 수동 검토 대상으로 P5에 알린다.
+    void report_whenStoredInternalError_publishesManualReviewRequired() {
+        var report = report();
+        var evaluation = FdsEvaluation.failed(
+                request(report), "FDS_EVALUATION_PROCESSING_FAILED", Instant.parse("2026-10-27T01:00:01Z"));
+        org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 99L);
+        when(analyses.findByFailureReportId(report.failureReportId())).thenReturn(Optional.empty());
+        when(evaluations.findByEvaluationRequestId(report.evaluationRequestId()))
+                .thenReturn(Optional.of(evaluation));
+        when(analyses.save(any(FdsFailureAnalysis.class))).thenAnswer(invocation -> {
+            var saved = invocation.getArgument(0, FdsFailureAnalysis.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(saved, "analysisId", 7L);
+            return saved;
+        });
+
+        new FdsFailureAnalysisService(analyses, evaluations, events).report(report);
+
+        verify(events).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().disposition()).isEqualTo(FdsFailureDisposition.MANUAL_REVIEW_REQUIRED);
+        assertThat(eventCaptor.getValue().reasonCode()).isEqualTo("ERROR_REQUIRES_MANUAL_REVIEW");
+    }
+
+    @Test
     // P2 내부 오류 보고인데 평가 이력이 없으면 ERROR 평가를 임의로 만들지 않는다.
     void report_whenEvaluationIsMissing_publishesNotFound() {
         var report = report();
