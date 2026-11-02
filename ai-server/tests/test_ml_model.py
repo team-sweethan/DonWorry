@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 
+import joblib
 import pytest
 
-from app.ml.model import FraudModel, load_model
+from app.ml.model import FraudModel, ModelLoadError, load_model
 
 ROOT = Path(__file__).parents[1]
 GOLDEN = json.loads((ROOT / "tests/fixtures/ml_golden.json").read_text(encoding="utf-8"))
@@ -35,3 +36,31 @@ def test_score_golden_rows_match_fds_ml_probability(model: FraudModel, case: dic
 
     assert probability == pytest.approx(case["expectedProbability"], abs=1e-9)
     assert model.threshold == pytest.approx(GOLDEN["threshold"])
+
+
+# predict_proba는 있지만 pipeline[-1]로 마지막 단계를 꺼낼 수 없는 객체
+class NotIndexablePipeline:
+    def predict_proba(self, rows: list) -> list:
+        return [[1.0, 0.0] for _ in rows]
+
+
+# 교체한 모델 내용이 잘못되면 서버 시작이 멈춰 AI 조사까지 못 쓴다 — ModelLoadError로 바꿔 503
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"threshold": None},
+        {"threshold": "abc"},
+        {"feature_columns": None},
+        {"pipeline": NotIndexablePipeline()},
+    ],
+    ids=["threshold_none", "threshold_text", "columns_none", "pipeline_not_indexable"],
+)
+def test_load_model_malformed_bundle_raises_model_load_error(
+    tmp_path: Path, override: dict
+) -> None:
+    bundle = {"pipeline": NotIndexablePipeline(), "threshold": 0.3, "feature_columns": ["amount"]}
+    path = tmp_path / "rf-broken.joblib"
+    joblib.dump({**bundle, **override}, path)
+
+    with pytest.raises(ModelLoadError):
+        load_model(path, "rf-broken")

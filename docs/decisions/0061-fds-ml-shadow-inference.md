@@ -26,10 +26,11 @@ Random Forest(v1)를 **Shadow Mode**로만 쓴다. 결제 판정은 지금처럼
 - 요청: `evaluationId`, `target`(대상 결제), `customerHistory`(같은 고객의 이전 결제), `sharedCardHistory`(같은 카드를 쓴 다른 고객의 이전 결제)
   - 거래 행: `paymentId` · `merchantId` · `customerRef` · `amount` · `paymentRequestedAt`(시간대 필수) · `deviceId` · `cardToken`
   - 카드 · 기기는 같은지만 비교하므로 Spring이 해시로 보내도 결과가 같다. IP · 이메일은 받지 않는다
+  - 고객은 `merchantId` + `customerRef` 조합으로 구분한다 (Rule Engine의 이력 조회와 같다). 가맹점이 다르면 회원번호가 같아도 다른 고객이다. ai-server는 `features.py`에 넘기기 전에 고객 키를 `가맹점번호:customerRef`로 바꾼다 (`features.py`는 그대로)
 - 응답: `evaluationId` · `modelVersion` · `fraudProbability` · `threshold` · `mlRiskLevel` · `features`(모델 입력 13개) · `latencyMs`
 - 오류
   - 422: 이력에 대상보다 뒤 시각 거래 · 같은 `paymentId` 중복 · `customerHistory`에 다른 고객 · `sharedCardHistory`가 같은 카드 다른 고객이 아님 · 이력 2,000건 초과
-  - 503 `ML_MODEL_UNAVAILABLE`, 500 `ML_INFERENCE_FAILED`
+  - 503 `ML_MODEL_UNAVAILABLE` (모델 파일이 없거나 내용이 잘못됨 — 서버는 뜬다), 500 `ML_INFERENCE_FAILED`
 
 ## 고려한 대안
 
@@ -60,11 +61,13 @@ Random Forest(v1)를 **Shadow Mode**로만 쓴다. 결제 판정은 지금처럼
 - Spring 연결 방식 — 결제 · Rule 경로를 고치지 않도록 커밋된 평가를 주기적으로 읽는 방식을 우선 검토 (이벤트 발행과 비교)
 - P2 `fds/api` 이력 조회 인터페이스, Shadow 결과 저장 테이블 (ERD 합의)
 - 가맹점 번호를 뺀 v2 모델 — v1은 합성 가맹점 1001~1003만 학습해 실제 가맹점은 항상 "처음 보는 가맹점"으로 들어간다
+- 같은 사람이 같은 카드로 두 가맹점에서 결제하면 가맹점별 고객이 달라 `cardUsedByOtherCustomer`가 1이 된다. PG는 가맹점 간 고객을 이을 수 없어 Rule과 같은 한계이고, 합성 데이터에는 이런 경우가 없다 — Shadow 기록으로 빈도를 본다
 - Rule 위험 등급 80점 경계 (코드 `score >= 80` DENY, 기획 80점 REVIEW) — P2에 따로 공유
 
 ## 검증
 
 - `cd ai-server && ruff format --check . && ruff check . && pytest -q` → 163 passed (커밋 `7eea46d`, Windows · Python 3.14.6 / Linux · Python 3.13)
+- Codex 리뷰 반영 후 (잘못된 모델 내용 503 · 고객 = 가맹점 + customerRef) → 재현 테스트 7개 수정 전 실패 확인, 수정 후 170 passed (Linux · Python 3.13). golden 60건은 고객 키 변경 후에도 그대로 통과
 - Windows `python -m uvicorn app.main:app` 실기동 → 카드 도용 golden 사례 200, 확률 `0.6590696767001114`(학습 환경과 동일), 첫 호출 107ms · 이후 25ms, 서비스 키 없이 401
 - 모델 경로를 없는 파일로 두고 기동 → `/health` 200, ML API 503 (Linux)
 - 미검증: 1코어 VM 지연 · 메모리, Docker 배포 (ai-server Dockerfile 없음), 실제 결제에서의 탐지 성능

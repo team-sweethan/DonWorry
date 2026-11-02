@@ -3,6 +3,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import joblib
 import pytest
 from fastapi.testclient import TestClient
 
@@ -28,10 +29,16 @@ def client() -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
-def tx(payment_id: int, at: str, customer: str = "1:42", card: str | None = "card-a") -> dict:
+def tx(
+    payment_id: int,
+    at: str,
+    customer: str = "1:42",
+    card: str | None = "card-a",
+    merchant: int = 1001,
+) -> dict:
     return {
         "paymentId": payment_id,
-        "merchantId": 1001,
+        "merchantId": merchant,
         "customerRef": customer,
         "amount": 30000,
         "paymentRequestedAt": at,
@@ -90,10 +97,15 @@ def test_score_without_service_key_401(client: TestClient) -> None:
 
 
 # 모델 파일 문제로 서버 전체가 죽으면 AI 조사까지 멈춘다 — 서버는 뜨고 ML API만 503
+# 파일이 없을 때와 내용이 잘못됐을 때(Codex 리뷰) 모두 확인한다
+@pytest.mark.parametrize("broken", ["missing", "malformed"])
 def test_score_model_not_loaded_503_investigations_still_work(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, broken: str
 ) -> None:
-    monkeypatch.setattr(settings, "ml_model_path", tmp_path / "missing.joblib")
+    path = tmp_path / "rf-broken.joblib"
+    if broken == "malformed":
+        joblib.dump({"pipeline": None, "threshold": "abc", "feature_columns": []}, path)
+    monkeypatch.setattr(settings, "ml_model_path", path)
     get_fraud_score_service.cache_clear()
     app.dependency_overrides[get_api_key] = lambda: KEY
     try:
@@ -209,3 +221,28 @@ def test_score_shared_card_history_mismatch_rejected_422(client: TestClient) -> 
 
     assert wrong_card.status_code == 422
     assert mine.status_code == 422
+
+
+# 가맹점이 다른 같은 번호 고객은 다른 사람이다 — 섞이면 거래 횟수 · 평균 금액이 합쳐진다
+def test_score_same_ref_other_merchant_in_customer_history_rejected_422(
+    client: TestClient,
+) -> None:
+    target = tx(2, "2026-11-02T05:00:00Z", customer="42", merchant=1001)
+    other_shop = tx(1, "2026-11-02T04:00:00Z", customer="42", merchant=1002)
+
+    res = client.post("/ml/fraud-score", json=body(target, [other_shop]), headers=HEADERS)
+
+    assert res.status_code == 422
+
+
+# 다른 가맹점의 같은 번호 고객이 같은 카드를 썼으면 "다른 고객이 쓴 카드"로 세야 한다
+def test_score_same_ref_other_merchant_same_card_counts_as_other_customer(
+    client: TestClient,
+) -> None:
+    target = tx(2, "2026-11-02T05:00:00Z", customer="42", merchant=1001)
+    other_shop = tx(1, "2026-11-02T04:00:00Z", customer="42", merchant=1002)
+
+    result = features(client, body(target, shared=[other_shop]))
+
+    assert result["cardUsedByOtherCustomer"] == 1
+    assert result["customerPastTxCount"] == 0

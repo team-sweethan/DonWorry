@@ -11,6 +11,12 @@ from app.ml.features import FEATURE_COLUMNS, build_features
 REQUIRED_KEYS = ("pipeline", "threshold", "feature_columns")
 
 
+# features.py는 customerRef로만 고객을 묶어 가맹점 번호를 붙여 넘긴다 (가맹점이 다르면 다른 고객)
+# 학습 데이터는 고객마다 가맹점이 하나라 이 키로 계산해도 Feature 값이 같다 (golden 테스트로 확인)
+def customer_keyed(row: Mapping[str, object]) -> dict[str, object]:
+    return {**row, "customerRef": f"{row['merchantId']}:{row['customerRef']}"}
+
+
 # 모델 파일이 없거나 모양이 다름 — 서버는 뜨고 ML API만 503으로 답한다
 class ModelLoadError(Exception):
     pass
@@ -27,15 +33,25 @@ class FraudModel:
     def features_for(
         self, target: Mapping[str, object], history: Sequence[Mapping[str, object]]
     ) -> dict[str, int | float | str]:
-        rows = build_features([*history, target])
+        rows = build_features([customer_keyed(row) for row in [*history, target]])
         return {name: rows[-1][name] for name in self.feature_columns}
 
     def probability(self, features: Mapping[str, int | float | str]) -> float:
         return float(self.pipeline.predict_proba([dict(features)])[0][1])
 
 
-# 저장소에 포함한 신뢰하는 로컬 파일만 읽는다 — joblib은 읽을 때 코드를 실행할 수 있다
+# 읽기 · 검사 · 설정 중 어떤 오류든 ModelLoadError로 바꾼다 — 서버는 뜨고 ML API만 503
 def load_model(path: Path, version: str) -> FraudModel:
+    try:
+        return _load_model(path, version)
+    except ModelLoadError:
+        raise
+    except Exception as exc:
+        raise ModelLoadError(f"모델 파일 내용을 쓸 수 없습니다: {path.name}") from exc
+
+
+# 저장소에 포함한 신뢰하는 로컬 파일만 읽는다 — joblib은 읽을 때 코드를 실행할 수 있다
+def _load_model(path: Path, version: str) -> FraudModel:
     try:
         bundle = joblib.load(path)
     except Exception as exc:

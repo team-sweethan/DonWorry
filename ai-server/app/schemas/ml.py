@@ -19,8 +19,13 @@ class MlTransaction(BaseModel):
     deviceId: str | None = Field(default=None, min_length=1, max_length=255)
     cardToken: str | None = Field(default=None, min_length=1, max_length=255)
 
+    # 고객은 가맹점 + customerRef로 구분한다 — 가맹점마다 회원번호가 겹칠 수 있다 (Rule과 같음)
+    def same_customer(self, other: "MlTransaction") -> bool:
+        return self.merchantId == other.merchantId and self.customerRef == other.customerRef
 
-# customerHistory: 대상 고객의 이전 거래 / sharedCardHistory: 같은 카드를 쓴 다른 고객의 이전 거래
+
+# customerHistory: 대상 고객(같은 가맹점 · 같은 customerRef)의 이전 거래
+# sharedCardHistory: 같은 카드를 쓴 다른 고객(가맹점이나 customerRef가 다름)의 이전 거래
 class FraudScoreRequest(BaseModel):
     evaluationId: int = Field(gt=0)
     target: MlTransaction
@@ -39,10 +44,10 @@ class FraudScoreRequest(BaseModel):
         payment_ids = [self.target.paymentId, *(row.paymentId for row in history)]
         if len(set(payment_ids)) != len(payment_ids):
             raise ValueError("같은 paymentId가 두 번 이상 있습니다")
-        if any(row.customerRef != self.target.customerRef for row in self.customerHistory):
+        if any(not row.same_customer(self.target) for row in self.customerHistory):
             raise ValueError("customerHistory에 다른 고객 거래가 있습니다")
         if any(
-            row.customerRef == self.target.customerRef or row.cardToken != self.target.cardToken
+            row.same_customer(self.target) or row.cardToken != self.target.cardToken
             for row in self.sharedCardHistory
         ):
             raise ValueError("sharedCardHistory는 같은 카드를 쓴 다른 고객 거래만 받습니다")
