@@ -140,10 +140,13 @@
 - [ ] P6: 4-1 사후 거절 시 돈워리 부담분의 정산 지급 방식, VOIDED 결제의 정산 행 생성 시점, CakeShop "이행됨" 신호를 받는 경로
 - [ ] 4-1 남는 위험을 줄일 HELD 판정 기한(운영)
 - [ ] CakeShop 저장소: 이 연동은 Draft PR #22(서명 요청·조회 클라이언트) → #24(결제 수단 선택·결제창 모달) 위에 올린다. 두 PR을 먼저 정리한다
-- [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가, 돈워리 운영 프록시 설정 확인(배포 설정이 이 저장소에 없음)
+- [ ] 운영: CakeShop `deploy/server.env.example`에 6절 값 추가
+- [x] 돈워리 운영 프록시 확인(2026-11-02, PR #438이 `dev`로 가져온 `frontend/nginx.conf` 기준): `/api/`를 백엔드로 넘기며 `X-DonWorry-Client-IP: $remote_addr`를 붙이고, `/checkout/...`은 SPA 대체 경로(`try_files … /index.html`)로 열린다
+- [ ] 운영 환경변수(배포 VM, 저장소 밖 — P1 확인): 결제창 구매자 IP는 로그인 이력과 같은 설정을 쓴다. 기본값이 `DIRECT`라 `DONWORRY_LOGIN_HISTORY_IP_MODE=PROXY`와 nginx 컨테이너 주소의 `DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES`가 없으면 nginx 주소가 구매자 IP로 기록된다
 - [ ] 운영 `notifyUrl`은 https만 허용하고 내부 주소(사설·루프백 IP)를 막는다. 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)도 정한다
 - [ ] 웹훅 재전송 한도(예: 24시간 뒤 중단, 조회 배치에 맡김)와 운영에서 실패를 보는 방법
-- [ ] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지(`X-Frame-Options`·`frame-ancestors`), 결제창의 `Referrer-Policy: no-referrer`
+- [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다
+- [ ] 결제창 `Referrer-Policy`: 지금은 따로 설정하지 않는다. 브라우저 기본값(`strict-origin-when-cross-origin`)이라 다른 출처로는 출처만 나가고 세션 키가 든 경로는 나가지 않는다. `no-referrer`로 더 좁힐지는 선택
 - [ ] 결제 접수 기한(10분)이 지난 뒤 늦게 승인된 결제를 누가 취소하는지
 - [ ] 고객 취소(환불) 연결은 ADR-0058(환불 후에도 `CAPTURED` 유지, 취소 작업으로 표현)에 맞춰 별도 결정. 그때 웹훅이 환불을 어떻게 알릴지 정한다
 - [ ] 결제창 결제는 IP 국가(`ipCountryCode`)를 아직 산출하지 않아 FDS R05(고위험 국가)가 적용되지 않는다(`null` 전달). 서버 GeoIP DB와 신뢰 프록시 국가 헤더 중 출처를 정하고 ADR로 남긴다 — #434 (PR #425 Codex 보안 리뷰)
