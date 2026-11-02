@@ -5,11 +5,18 @@ import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentWebhookPayload;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.repository.PaymentSessionRepository;
+import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
 // 1) 마지막으로 알린 (상태, 승인 여부)와 지금 결제가 달라진 세션을 예약하고(DB에서 바로 비교 — 상태가 어디서 바뀌었든 놓치지 않는다)
 // 2) 예약 시각이 지난 세션을 보낸다. 2xx면 보낸 값을 기록하고, 아니면 5초부터 두 배씩 최대 5분 간격으로 다시 보낸다
 // HTTP 호출은 업무 트랜잭션 밖에서 하고, 결과를 기록할 때만 세션 행을 잠근다. 가맹점은 조회 배치로도 상태를 맞춘다
+// 예약 작업 스레드는 앱 전체가 함께 쓰므로(기본 1개) 여기서는 보낼 차례만 찾고, HTTP 전송은 웹훅 전용 스레드 풀(동시 SENDERS개)로 넘긴다.
+// 응답 없는 가맹점이 쌓여도 다른 예약 작업(AI 보고서 시간 초과 확인 등)이 밀리지 않는다 (PR #451 리뷰)
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "payment.http.enabled", havingValue = "true")
@@ -33,6 +42,7 @@ public class PaymentSessionNotifier {
 
     private static final int BATCH = 50;
     private static final Duration TIMEOUT = Duration.ofSeconds(3);
+    private static final int SENDERS = 4;
 
     private final PaymentSessionRepository sessions;
     private final MerchantPaymentQueryService query;
@@ -41,6 +51,9 @@ public class PaymentSessionNotifier {
     private final TransactionTemplate transactions;
     private final JsonMapper json;
     private final RestClient rest;
+    private final ExecutorService senders;
+    // 전송 중인 세션 — 응답이 늦어 다음 주기가 와도 같은 세션을 또 보내지 않는다(앱 인스턴스 하나 기준)
+    private final Set<Long> inFlight = ConcurrentHashMap.newKeySet();
 
     public PaymentSessionNotifier(
             PaymentSessionRepository sessions,
@@ -64,6 +77,22 @@ public class PaymentSessionNotifier {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
         factory.setReadTimeout(TIMEOUT);
         this.rest = RestClient.builder().requestFactory(factory).build();
+        AtomicInteger threadNo = new AtomicInteger();
+        this.senders = Executors.newFixedThreadPool(SENDERS, task -> {
+            Thread thread = new Thread(task, "payment-webhook-" + threadNo.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    // 전송 중인 웹훅이 없으면 true — 테스트가 비동기 전송이 끝나기를 기다릴 때 쓴다
+    boolean idle() {
+        return inFlight.isEmpty();
+    }
+
+    @PreDestroy
+    void shutdown() {
+        senders.shutdownNow();
     }
 
     @Scheduled(fixedDelayString = "${donworry.payment.webhook.fixed-delay:5s}")
@@ -76,13 +105,23 @@ public class PaymentSessionNotifier {
                                     p.paymentStatus().name(), p.authorized(), now))));
         }
         for (Long sessionId : sessions.findDueNotifications(now, PageRequest.of(0, BATCH))) {
+            if (!inFlight.add(sessionId)) continue;
             try {
-                send(sessionId);
-            } catch (RuntimeException e) {
-                log.warn(
-                        "결제 웹훅 처리 실패 sessionId={} reason={}",
-                        sessionId,
-                        e.getClass().getSimpleName());
+                senders.execute(() -> {
+                    try {
+                        send(sessionId);
+                    } catch (RuntimeException e) {
+                        log.warn(
+                                "결제 웹훅 처리 실패 sessionId={} reason={}",
+                                sessionId,
+                                e.getClass().getSimpleName());
+                    } finally {
+                        inFlight.remove(sessionId);
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                // 종료 중이면 맡기지 않는다 — 예약은 남아 다음 기동 때 보낸다
+                inFlight.remove(sessionId);
             }
         }
     }

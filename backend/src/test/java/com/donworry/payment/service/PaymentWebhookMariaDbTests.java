@@ -1,6 +1,7 @@
 package com.donworry.payment.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
@@ -78,6 +80,7 @@ class PaymentWebhookMariaDbTests {
     HttpServer server;
     final List<Received> received = new CopyOnWriteArrayList<>();
     final AtomicInteger responseStatus = new AtomicInteger(200);
+    final AtomicInteger responseDelayMillis = new AtomicInteger(0);
 
     record Received(Map<String, String> headers, byte[] body) {}
 
@@ -101,6 +104,11 @@ class PaymentWebhookMariaDbTests {
                             "signature", header(exchange, "X-Signature"),
                             "contentType", header(exchange, "Content-Type")),
                     body));
+            try {
+                Thread.sleep(responseDelayMillis.get());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             int status = responseStatus.get();
             if (status == 302) exchange.getResponseHeaders().add("Location", "http://127.0.0.1:1/elsewhere");
             exchange.sendResponseHeaders(status, -1);
@@ -120,7 +128,7 @@ class PaymentWebhookMariaDbTests {
     void run_sendsSignedWebhookOncePerStatusChange() throws Exception {
         Ids ids = heldSessionWithNotifyUrl();
 
-        notifier.run();
+        runAndSettle();
 
         assertThat(received).singleElement().satisfies(r -> {
             assertThat(r.headers()).containsEntry("merchant", MERCHANT_CODE);
@@ -140,12 +148,12 @@ class PaymentWebhookMariaDbTests {
         assertThat(notified.getNotifiedStatus()).isEqualTo("HELD");
         assertThat(notified.getNextNotifyAt()).isNull();
 
-        notifier.run();
+        runAndSettle();
         assertThat(received).hasSize(1);
 
         tx().executeWithoutResult(s ->
                 payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeVoid());
-        notifier.run();
+        runAndSettle();
 
         assertThat(received).hasSize(2);
         assertThat(received.get(1).headers()).containsEntry("event", "evt_" + ids.paymentId() + "_VOIDED_A");
@@ -161,7 +169,7 @@ class PaymentWebhookMariaDbTests {
             responseStatus.set(status);
             Ids ids = heldSessionWithNotifyUrl();
 
-            notifier.run();
+            runAndSettle();
 
             assertThat(received).as("status " + status).hasSize(1);
             PaymentSession failed = sessions.findById(ids.sessionId()).orElseThrow();
@@ -170,7 +178,7 @@ class PaymentWebhookMariaDbTests {
             assertThat(failed.getNextNotifyAt()).isAfter(Instant.now().plusSeconds(5));
 
             // 다음 시각 전에는 다시 보내지 않는다
-            notifier.run();
+            runAndSettle();
             assertThat(received).as("status " + status).hasSize(1);
         }
     }
@@ -182,12 +190,35 @@ class PaymentWebhookMariaDbTests {
                 .thenThrow(new MerchantAuthenticationException(AuthErrorCode.MERCHANT_AUTHENTICATION_REQUIRED));
         Ids ids = heldSessionWithNotifyUrl();
 
-        notifier.run();
+        runAndSettle();
 
         assertThat(received).isEmpty();
         PaymentSession pending = sessions.findById(ids.sessionId()).orElseThrow();
         assertThat(pending.getNotifiedStatus()).isNull();
         assertThat(pending.getNotifyAttempts()).isEqualTo(1);
+    }
+
+    // 가맹점이 늦게 응답해도 예약 작업(run)은 기다리지 않고 바로 끝난다 — 전송은 웹훅 전용 스레드가 한다 (PR #451 리뷰)
+    @Test
+    void run_doesNotBlockSchedulerThreadOnSlowMerchant() {
+        responseDelayMillis.set(2_000);
+        Ids ids = heldSessionWithNotifyUrl();
+
+        long started = System.nanoTime();
+        notifier.run();
+        long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(elapsedMillis).isLessThan(1_500);
+        await().atMost(Duration.ofSeconds(15)).until(notifier::idle);
+        assertThat(received).hasSize(1);
+        assertThat(sessions.findById(ids.sessionId()).orElseThrow().getNotifiedStatus())
+                .isEqualTo("HELD");
+    }
+
+    // 실행한 뒤 비동기 전송이 모두 끝날 때까지 기다린다
+    private void runAndSettle() {
+        notifier.run();
+        await().atMost(Duration.ofSeconds(15)).until(notifier::idle);
     }
 
     record Ids(Long sessionId, Long paymentId) {}
