@@ -8,6 +8,7 @@ from pathlib import Path
 from app.agent.graph import run_investigation
 from app.agent.llm import build_llm_client
 from app.agent.tools import SpringToolBox, StaticToolBox, ToolBox
+from app.agent.trace import provider_and_model
 from app.client.spring import SpringToolClient
 from app.config import Settings
 from app.schemas.case_context import CaseContext
@@ -19,6 +20,7 @@ from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
 # 예) 로컬 Spring으로 (Spring은 AI_SERVER_ENABLED=true, AI_SERVER_API_KEY는 여기 키와 같은 값)
 #     uv run python -m scripts.run_report --case-id 5
 # Qwen 사용: AI_SERVER_LLM_PROVIDER=ollama (기본 mock)
+# OpenAI 사용: AI_SERVER_LLM_PROVIDER=openai + AI_SERVER_LLM_API_KEY (#453)
 
 
 def main() -> int:
@@ -61,7 +63,8 @@ def main() -> int:
         customer_ref=args.customer_ref,
         case_created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
-    model = settings.ollama_model if settings.llm_provider == "ollama" else "mock"
+    # 조사 과정 기록과 같은 함수로 모델 이름을 찍는다 (#453 — openai도 "mock"으로 찍혔다)
+    _, model = provider_and_model(settings)
     print(f"조사 시작 · Case {case_id} · LLM {settings.llm_provider} ({model})", file=sys.stderr)
     started = time.monotonic()
     outcome = run_investigation(context, build_llm_client(settings), toolbox, settings)

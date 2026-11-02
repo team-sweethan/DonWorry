@@ -209,6 +209,21 @@ AI_SERVER_INTERNAL_API_KEY=①에서 만든 값
 
 ✅ 보고서 한계 줄에 "mock 조사입니다"가 없고, 판단 문장이 결제 내용에 맞게 달라집니다. PC 성능에 따라 보고서 하나에 1~3분 걸립니다.
 
+### 4-1. OpenAI로 바꾸기 (배포 VM · Ollama를 설치할 수 없는 PC, #453)
+
+Ollama 대신 OpenAI가 보고서를 씁니다. 조사 순서 · 문장 검사 · 판정(직원)은 4절과 같습니다. 사건의 결제 · FDS 근거 요약이 OpenAI로 나가므로 합성 시연 데이터로만 씁니다 ([ADR-0009 결정 5](../decisions/0009-ai-investigation-call-structure.md)).
+
+1. `ai-server/.env`(VM이면 ai-server 환경 변수)를 바꿉니다. 키는 팀 공용 키이고, 저장소 · 문서 · 메신저에 붙여 넣지 않습니다.
+   ```dotenv
+   AI_SERVER_LLM_PROVIDER=openai
+   AI_SERVER_LLM_API_KEY=팀 공용 키
+   # 바꿀 때만: AI_SERVER_OPENAI_MODEL=gpt-4.1-mini
+   ```
+2. ai-server를 다시 켭니다. 키가 비어 있으면 `AI_SERVER_LLM_API_KEY가 비어 있어` 오류로 켜지지 않습니다.
+3. **새 결제**를 보냅니다.
+
+✅ 보고서 전문 "조사 과정" 탭의 사용 모델에 `gpt-4.1-mini`(보라색)가 보이고, 보고서 한계 줄에 "mock 조사입니다"가 없습니다.
+
 ## 5. 결과 확인
 
 ### 5-1. 화면에서
@@ -268,6 +283,7 @@ SELECT listener_id, event_type, publication_date FROM EVENT_PUBLICATION WHERE co
 - **4절인데 "mock 조사입니다"가 보임** → `ai-server/.env`가 아직 `mock`입니다. `ollama`로 바꾸고 ai-server를 다시 켠 뒤 새 결제를 보냅니다. 창에서 `$env:AI_SERVER_LLM_PROVIDER`를 넣었다면 그 값이 `.env`보다 우선합니다.
 - **4절에서 5분 넘게 걸려 실패** → PC가 느립니다. `application-local.yml`의 `ai.server`에 `result-timeout: 10m`을 넣어 기다리는 시간을 늘립니다.
 - **4절에서 `11434` 연결 오류** → Ollama가 꺼져 있습니다. Ollama를 실행하고 `ollama pull qwen2.5:7b`로 모델을 받습니다.
+- **4-1절인데 보고서가 "실패"** → ai-server 로그에 `401`이면 키가 틀렸고, 연결 오류면 그 PC · VM에서 `api.openai.com`으로 나갈 수 없습니다. 급하면 `AI_SERVER_LLM_PROVIDER=mock`으로 되돌려 시연합니다.
 - **Qwen 답에 중국어가 섞임** → Qwen 2.5의 버릇입니다. 한국어 지시와 `temperature=0`으로 줄이지만 검사 장치는 아직 없습니다. 섞이면 화면을 남겨 P4에 알려 줍니다.
 
 **ai-server가 안 켜짐**
@@ -325,6 +341,7 @@ PowerShell 명령 대신 아래를 씁니다.
 | 결제 API 켜기 `payment.http.enabled` | `backend/src/main/resources/application-local.yml` | Spring | 2절 |
 | AI 서버 켜기 · 키 `ai.server.enabled` · `ai.server.api-key` | 같은 `application-local.yml` | Spring | 3절 |
 | AI 서버 키 · AI 종류 `AI_SERVER_INTERNAL_API_KEY` · `AI_SERVER_LLM_PROVIDER` | `ai-server/.env` | ai-server | 3 · 4절 |
+| OpenAI 키 · 모델 `AI_SERVER_LLM_API_KEY` · `AI_SERVER_OPENAI_MODEL` | `ai-server/.env` (VM은 환경 변수) | ai-server | 4-1절 |
 
 포트: backend `8081` · frontend `5173` · ai-server `8000` · DB `3307` · Ollama `11434`
 

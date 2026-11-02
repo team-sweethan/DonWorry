@@ -8,8 +8,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="AI_SERVER_")
 
     # mock: Ollama 없이 정해진 순서로 조사 (CI · Ollama 없는 PC) / ollama: Qwen 사용
+    # openai: OpenAI 사용 — Ollama를 설치할 수 없는 배포 VM용 (#453)
     llm_provider: str = "mock"
+    # openai일 때 쓰는 API 키 — 환경 변수로만 넣는다 (저장소 · .env.example에 값 금지)
     llm_api_key: str = ""
+    # OpenAI 모델 — temperature 0을 받는 모델이어야 한다 (GPT-5 계열 추론 모델은 안 됨)
+    openai_model: str = "gpt-4.1-mini"
+    openai_timeout_seconds: float = 60.0
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen2.5:7b"
     # Ollama 입력 창 크기 (#355)

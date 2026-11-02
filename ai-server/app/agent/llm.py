@@ -2,8 +2,11 @@ import json
 import logging
 from typing import Any, Protocol
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from app.config import Settings
 
@@ -27,7 +30,7 @@ def _usage(message: AIMessage) -> dict[str, int] | None:
     return dict(usage) if usage else None
 
 
-# LLM 호출 경계 — 제공자(Ollama · mock · 이후 OpenAI)를 바꿔도 agent · service를 고치지 않는다
+# LLM 호출 경계 — 제공자(Ollama · OpenAI · mock)를 바꿔도 agent · service를 고치지 않는다
 # (AGENTS.md 6절)
 class LlmClient(Protocol):
     # 다음에 볼 도구를 고른다. 도구 호출이 없으면 조사 완료로 본다
@@ -70,6 +73,46 @@ class OllamaLlmClient:
         result = self._chat(format=schema).invoke(messages)
         usage = _usage(result) if isinstance(result, AIMessage) else None
         log.info("Ollama 판단 문장 쓰기 토큰 %s", usage)
+        return LlmText.of(str(result.content), usage)
+
+
+# OpenAI 구조화 출력(strict)은 모든 객체에 additionalProperties: false가 있어야 받는다 (#453)
+# 판단 문장 스키마는 Ollama와 같이 쓰므로 원본은 두고 복사본에만 붙인다
+def _strict_schema(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        copied = {key: _strict_schema(value) for key, value in schema.items()}
+        if copied.get("type") == "object":
+            copied["additionalProperties"] = False
+        return copied
+    if isinstance(schema, list):
+        return [_strict_schema(item) for item in schema]
+    return schema
+
+
+# OpenAI — 배포 VM은 사양 한계로 Ollama를 설치할 수 없어 쓰는 제공자 (#453, ADR-0009)
+# 조사 흐름 · 문장 검사 · 다시 쓰기는 그대로, 도구 고르기와 판단 문장 쓰기만 맡긴다
+class OpenAiLlmClient:
+    def __init__(self, chat: BaseChatModel) -> None:
+        self._chat = chat
+
+    def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
+        result = self._chat.bind_tools(tools).invoke(messages)
+        reply = result if isinstance(result, AIMessage) else AIMessage(content=str(result.content))
+        log.info("OpenAI 도구 고르기 토큰 %s", _usage(reply))
+        return reply
+
+    def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "investigation_narrative",
+                "schema": _strict_schema(schema),
+                "strict": True,
+            },
+        }
+        result = self._chat.bind(response_format=response_format).invoke(messages)
+        usage = _usage(result) if isinstance(result, AIMessage) else None
+        log.info("OpenAI 판단 문장 쓰기 토큰 %s", usage)
         return LlmText.of(str(result.content), usage)
 
 
@@ -125,6 +168,19 @@ def build_llm_client(settings: Settings) -> LlmClient:
             settings.ollama_num_ctx,
             settings.ollama_choose_max_tokens,
         )
+    if settings.llm_provider == "openai":
+        # 키 없이 켜지면 시연 중 보고서마다 실패한다 — 서버 시작 단계에서 멈추게 한다 (#453)
+        if not settings.llm_api_key:
+            raise ValueError("AI_SERVER_LLM_API_KEY가 비어 있어 OpenAI 제공자를 쓸 수 없다")
+        # temperature 0으로 같은 근거에 같은 답을 내게 한다 (Ollama와 같은 기준)
+        chat = ChatOpenAI(
+            model=settings.openai_model,
+            api_key=SecretStr(settings.llm_api_key),
+            temperature=0,
+            timeout=settings.openai_timeout_seconds,
+            max_retries=2,
+        )
+        return OpenAiLlmClient(chat)
     if settings.llm_provider == "mock":
         return MockLlmClient()
     raise ValueError(f"지원하지 않는 LLM 제공자: {settings.llm_provider}")

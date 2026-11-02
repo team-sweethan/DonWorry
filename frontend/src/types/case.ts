@@ -267,8 +267,9 @@ export type ReportProgress = {
 }
 
 // provider는 실제로 쓴 LLM 제공자, FIXED는 AI 서버를 끈 시연의 고정 문장 보고서
+// OPENAI는 Ollama를 설치할 수 없는 배포 VM용 (#453)
 export type InvestigationTrace = {
-  provider: 'OLLAMA' | 'MOCK' | 'FIXED'
+  provider: 'OLLAMA' | 'OPENAI' | 'MOCK' | 'FIXED'
   model: string
   durationMs: number | null
   steps: TraceStep[]
