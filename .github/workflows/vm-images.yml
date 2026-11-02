@@ -1,0 +1,137 @@
+name: DonWorry VM Images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 수동 검증은 자동 발행과 별도로 실행한다. 대기 실행은 교체하지 않아 오래된 실행의
+# 재시도가 최신 배포를 취소하지 않게 한다. 오래된 SHA의 marker 발행은 아래에서 막는다 (#435).
+# queue: max는 그룹당 최대 100개의 대기를 보존한다 (GitHub Actions concurrency).
+concurrency:
+  group: vm-images-${{ github.event_name }}-${{ github.ref }}
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  release-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_release_target.py' -v
+
+  backend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - run: ./gradlew check
+      # MariaDB 컨테이너에 Flyway 전체 적용 + JPA validate — 필수 검사 backend와 같은 기준
+      - run: ./gradlew mariaDbTest
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run test
+      - run: npm run build
+
+  ai-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install uv
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest
+
+  images:
+    needs: [release-checks, backend-test, frontend-test, ai-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
+          tags: ghcr.io/team-sweethan/donworry-backend:sha-${{ github.sha }}
+
+      - name: Build frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
+          tags: ghcr.io/team-sweethan/donworry-frontend:sha-${{ github.sha }}
+
+      - name: Build AI
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ai-server
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
+          tags: ghcr.io/team-sweethan/donworry-ai:sha-${{ github.sha }}
+
+      # marker 직전 확인: 이 실행의 SHA가 아직 main 최신이어야 prod로 가리킨다.
+      # 그 사이 main이 앞서 갔으면 이미지(sha-태그)만 남기고 marker는 다음 실행에 맡긴다
+      - name: Check release target is still main HEAD
+        id: target
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash .github/scripts/check-release-target.sh
+
+      - name: Publish release marker
+        if: steps.target.outputs.current == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/docker/release-marker.Dockerfile
+          push: true
+          tags: ghcr.io/team-sweethan/donworry-release:prod
+          labels: org.opencontainers.image.revision=${{ github.sha }}
