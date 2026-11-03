@@ -275,7 +275,7 @@ export function FinancePreview() {
                 incomes={result.projected.map((e) => ({
                   id: e.id,
                   date: e.date,
-                  title: e.status === 'sch' ? '픽업 완료 기준 정산 예정' : '픽업 전 예상 정산',
+                  title: e.status === 'sch' ? '매입일 기준 정산 예정' : '기존 예상 일정 정산',
                   amount: e.amount,
                   note: '정산 완료 시 입금으로 반영 · 예시 데이터',
                 }))}

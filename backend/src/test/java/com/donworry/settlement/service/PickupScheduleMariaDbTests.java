@@ -43,6 +43,17 @@ class PickupScheduleMariaDbTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    CaptureRepository captureRepository;
+
+    @Autowired
+    CaptureSettlementSchedule schedule;
+
+    private Instant due(long paymentId) {
+        return schedule.settlementAt(
+                captureRepository.findByPaymentId(paymentId).orElseThrow().getCapturedAt());
+    }
+
     @AfterEach
     void cleanUp() {
         jdbc.update("DELETE FROM settlements WHERE payment_id IN (?, ?)", PAYMENT, PAYMENT + 1);
@@ -53,7 +64,7 @@ class PickupScheduleMariaDbTests {
         jdbc.update("DELETE FROM order_fulfillments WHERE order_id = ?", ORDER);
     }
 
-    // 픽업 선도착 기록은 매입 후 연결되며 UTC 마이크로초와 정확한 72시간을 유지한다
+    // 픽업 선도착 기록은 매입 후 연결되며 픽업 시각은 보존하되 정산일은 매입일 기준을 유지한다
     @Test
     void process_whenPickupFirst_linksAfterCapture() {
         pickups.recordSchedule(1L, ORDER, AT, java.util.List.of(new PickupOrderItemRequest("케이크", 1)));
@@ -64,8 +75,8 @@ class PickupScheduleMariaDbTests {
         assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getMerchantId())
                 .isEqualTo(1L);
         var s = settlements.findByPaymentId(PAYMENT).orElseThrow();
-        assertThat(s.getExpectedSettlementAt()).isEqualTo(AT.plusSeconds(72 * 3600));
-        assertThat(s.getScheduledAt()).isEqualTo(AT.plusSeconds(72 * 3600 + 60));
+        assertThat(s.getExpectedSettlementAt()).isEqualTo(due(PAYMENT));
+        assertThat(s.getScheduledAt()).isEqualTo(due(PAYMENT));
         assertThat(s.getCompletedAt()).isNull();
     }
 
@@ -74,7 +85,7 @@ class PickupScheduleMariaDbTests {
     void process_whenCaptureFirst_updatesExistingSettlement() {
         captureService.processCapture(PAYMENT, 1L, ORDER, 10001L);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
-                .isNull();
+                .isEqualTo(due(PAYMENT));
         pickups.recordCompletion(1L, ORDER, AT);
         pickups.recordSchedule(1L, ORDER, AT.plusSeconds(60), java.util.List.of(new PickupOrderItemRequest("케이크", 1)));
         var before = orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getUpdatedAt();
@@ -82,7 +93,7 @@ class PickupScheduleMariaDbTests {
         assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getUpdatedAt())
                 .isEqualTo(before);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
-                .isEqualTo(AT.plusSeconds(72 * 3600));
+                .isEqualTo(due(PAYMENT));
     }
 
     // 충돌 시각과 다른 결제의 동일 주문 매입은 기존 기록을 덮어쓰지 않고 롤백한다
@@ -107,9 +118,9 @@ class PickupScheduleMariaDbTests {
         captureService.processCapture(PAYMENT + 1, 2L, ORDER, 20001L);
         pickups.recordCompletion(1L, ORDER, AT);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
-                .isEqualTo(AT.plusSeconds(72 * 3600));
+                .isEqualTo(due(PAYMENT));
         assertThat(settlements.findByPaymentId(PAYMENT + 1).orElseThrow().getScheduledAt())
-                .isEqualTo(AT.plusSeconds(72 * 3600 + 60));
+                .isEqualTo(due(PAYMENT + 1));
         assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getFulfillmentId())
                 .isNotEqualTo(orders.findByMerchantIdAndOrderId(2L, ORDER)
                         .orElseThrow()
@@ -136,7 +147,7 @@ class PickupScheduleMariaDbTests {
         assertThat(orders.findByMerchantIdAndOrderId(1L, ORDER).orElseThrow().getMerchantId())
                 .isEqualTo(1L);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getScheduledAt())
-                .isEqualTo(AT.plusSeconds(72 * 3600));
+                .isEqualTo(due(PAYMENT));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_fulfillments WHERE order_id = ?", Long.class, ORDER))
                 .isEqualTo(1);
     }

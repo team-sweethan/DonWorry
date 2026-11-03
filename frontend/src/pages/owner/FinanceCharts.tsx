@@ -148,8 +148,8 @@ export function SettlementLineChart({
         </Button>
       </div>
       <p className="finance-trend-note">
-        예정액 중 픽업 완료 기준 {won(active.scheduledAmount)} · 픽업 전 예상{' '}
-        {won(active.expectedAmount)}. 픽업 전 일정은 변경될 수 있습니다.
+        예정액 중 매입일 기준 {won(active.scheduledAmount)} · 기존 예상 일정{' '}
+        {won(active.expectedAmount)}. 신규 정산은 매입일 기준 영업일 D+3에 예정됩니다.
       </p>
       {overdue > 0 && (
         <p className="finance-trend-overdue">

@@ -45,6 +45,19 @@ class SettlementCompletionMariaDbTests {
     JdbcTemplate jdbc;
 
     @Autowired
+    CaptureSettlementSchedule schedule;
+
+    private void capturedAt(long payment, Instant at) {
+        jdbc.update(
+                "UPDATE captures SET captured_at=? WHERE payment_id=?",
+                com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp(at),
+                payment);
+        var due = com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp(schedule.settlementAt(at));
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=?,expected_settlement_at=? WHERE payment_id=?", due, due, payment);
+    }
+
+    @Autowired
     PlatformTransactionManager transactionManager;
 
     @org.junit.jupiter.api.BeforeEach
@@ -71,6 +84,7 @@ class SettlementCompletionMariaDbTests {
     private void seed(long payment, Instant pickup) {
         var order = "P6-BATCH-" + payment;
         captures.processCapture(payment, MERCHANT, order, 10000L);
+        capturedAt(payment, pickup == null ? Instant.now().minusSeconds(10 * 86400) : pickup);
         if (pickup != null) {
             pickups.recordSchedule(
                     MERCHANT,
@@ -80,12 +94,12 @@ class SettlementCompletionMariaDbTests {
             pickups.recordCompletion(MERCHANT, order, pickup);
         }
     }
-    // 예정만 있는 건과 아직 72시간 전인 건은 남기고, 누락된 과거 대상은 한 번만 완료한다
+    // 픽업이 없어도 기한이 지난 매입은 완료하며 미래 정산일은 유지한다
     @Test
     void run_whenOverdue_completesOnceAndPreservesAmounts() {
         var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
-        seed(PAYMENT, now.minusSeconds(73 * 3600));
-        seed(PAYMENT + 1, now.minusSeconds(71 * 3600));
+        seed(PAYMENT, now.minusSeconds(10 * 86400));
+        seed(PAYMENT + 1, now);
         seed(PAYMENT + 2, null);
         var before = settlements.findByPaymentId(PAYMENT).orElseThrow();
         batch.run(now);
@@ -100,17 +114,19 @@ class SettlementCompletionMariaDbTests {
         assertThat(settlements.findByPaymentId(PAYMENT + 1).orElseThrow().getStatus())
                 .isEqualTo(SettlementStatus.SCHEDULED);
         assertThat(settlements.findByPaymentId(PAYMENT + 2).orElseThrow().getStatus())
-                .isEqualTo(SettlementStatus.SCHEDULED);
+                .isEqualTo(SettlementStatus.COMPLETED);
     }
 
     @Test
-    void run_whenMerchantsShareOrderNumber_usesEachMerchantsPickup() {
+    void run_whenMerchantsShareOrderNumber_usesEachMerchantsCaptureDate() {
         var now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         var order = "P6-BATCH-SHARED";
-        var overdue = now.minusSeconds(73 * 3600);
-        var notDue = now.minusSeconds(71 * 3600);
+        var overdue = now.minusSeconds(10 * 86400);
+        var notDue = now;
         captures.processCapture(PAYMENT, MERCHANT, order, 10000L);
         captures.processCapture(PAYMENT + 1, MERCHANT + 1, order, 20000L);
+        capturedAt(PAYMENT, overdue);
+        capturedAt(PAYMENT + 1, notDue);
         pickups.recordCompletion(MERCHANT, order, overdue);
         pickups.recordCompletion(MERCHANT + 1, order, notDue);
         var id = settlements.findByPaymentId(PAYMENT).orElseThrow().getSettlementId();
@@ -124,15 +140,15 @@ class SettlementCompletionMariaDbTests {
         var first = settlements.findByPaymentId(PAYMENT).orElseThrow();
         var second = settlements.findByPaymentId(PAYMENT + 1).orElseThrow();
         assertThat(first.getStatus()).isEqualTo(SettlementStatus.COMPLETED);
-        assertThat(first.getScheduledAt()).isEqualTo(overdue.plusSeconds(72 * 3600));
+        assertThat(first.getScheduledAt()).isEqualTo(schedule.settlementAt(overdue));
         assertThat(second.getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
-        assertThat(second.getScheduledAt()).isEqualTo(notDue.plusSeconds(72 * 3600));
+        assertThat(second.getScheduledAt()).isEqualTo(schedule.settlementAt(notDue));
     }
 
     // 두 실행이 같은 대상을 읽어도 행 잠금 후 재판정으로 완료는 한 번만 반영한다
     @Test
     void complete_whenConcurrent_commitsOnce() throws Exception {
-        var at = Instant.now().minusSeconds(73 * 3600).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        var at = Instant.now().minusSeconds(10 * 86400).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         seed(PAYMENT, at);
         var id = settlements.findByPaymentId(PAYMENT).orElseThrow().getSettlementId();
         var barrier = new CyclicBarrier(2);
@@ -150,7 +166,7 @@ class SettlementCompletionMariaDbTests {
     // 저장 후 롤백되면 예정 상태를 유지하고 다음 실행에서 복구한다
     @Test
     void complete_whenRolledBack_nextRunRecovers() {
-        var at = Instant.now().minusSeconds(73 * 3600).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        var at = Instant.now().minusSeconds(10 * 86400).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         seed(PAYMENT, at);
         var id = settlements.findByPaymentId(PAYMENT).orElseThrow().getSettlementId();
         var tx = new TransactionTemplate(transactionManager);

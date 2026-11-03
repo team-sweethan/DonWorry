@@ -10,15 +10,6 @@ import org.junit.jupiter.api.Test;
 class OrderFulfillmentTests {
     private static final Instant AT = Instant.parse("2026-10-27T01:00:00.123456Z");
     private static final Instant LATER = AT.plusSeconds(10);
-    private final PickupScheduleCalculator calculator = new PickupScheduleCalculator();
-
-    // 예정일과 무관하게 실제 완료 시각에서 정확히 72시간을 계산한다
-    @Test
-    void settlementAt_whenPickupProvided_addsSeventyTwoHours() {
-        assertThat(calculator.settlementAt(AT)).isEqualTo(Instant.parse("2026-10-30T01:00:00.123456Z"));
-        assertThat(calculator.settlementAt(null)).isNull();
-    }
-
     // 완료 정보가 먼저 와도 예정 정보를 나중에 채우며 동일 재전송은 수정 시각을 바꾸지 않는다
     @Test
     void record_whenCompletionArrivesFirst_preservesBothTimes() {

@@ -23,11 +23,11 @@ class SettlementCompletionTests {
         var settlement = mock(Settlement.class);
         when(settlements.findForCompletion(1L)).thenReturn(Optional.of(settlement));
         when(settlement.getMerchantId()).thenReturn(2L);
-        var service = new SettlementCompletionTransactionService(settlements, captures, orders, policy);
+        var service = new SettlementCompletionTransactionService(settlements, captures, policy);
 
         assertThat(service.complete(1L, 3L, "SHARED-ORDER", Instant.now())).isEqualTo("MERCHANT_MISMATCH");
 
-        verify(orders).findForUpdate(3L, "SHARED-ORDER");
+        verifyNoInteractions(orders);
         verify(settlement, never()).complete(any());
         verifyNoInteractions(captures, policy);
     }
@@ -39,16 +39,15 @@ class SettlementCompletionTests {
         var capture = Capture.processing(1L, 2L, "ORDER", 10000L, at);
         capture.complete(at);
         ReflectionTestUtils.setField(capture, "captureId", 3L);
-        var f = OrderFulfillment.awaitingPickup("ORDER", at);
-        f.bindMerchant(2L, at);
-        f.recordCompletion(at, at);
         var s = Settlement.scheduled(
                 3L, 1L, 2L, 10000L, new BigDecimal("0.02"), new BigDecimal("0.01"), 200L, 100L, 9700L, at);
-        var due = at.plusSeconds(72 * 3600);
-        s.applyPickupSchedule(null, due, at);
-        var policy = new SettlementCompletionPolicy();
-        assertThat(policy.evaluate(s, capture, f, due.minusNanos(1))).isEqualTo("NOT_DUE");
-        assertThat(policy.evaluate(s, capture, f, due)).isEqualTo("ELIGIBLE");
+        var due = Instant.parse("2026-10-29T15:00:00Z");
+        s.applyCaptureSchedule(due, at);
+        var schedule = mock(CaptureSettlementSchedule.class);
+        when(schedule.settlementAt(at)).thenReturn(due);
+        var policy = new SettlementCompletionPolicy(schedule);
+        assertThat(policy.evaluate(s, capture, due.minusNanos(1))).isEqualTo("NOT_DUE");
+        assertThat(policy.evaluate(s, capture, due)).isEqualTo("ELIGIBLE");
         assertThat(s.getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
         s.complete(due);
         s.complete(due.plusSeconds(1));

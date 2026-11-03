@@ -19,7 +19,7 @@ const orderQuantity = (items: OrderProduct[]) =>
 const labels: Record<Status, string> = {
   done: '정산 완료',
   sch: '정산 예정',
-  exp: '예상 (픽업 전)',
+  exp: '예상 (기존 일정)',
   can: '정산 취소',
 }
 const weekdays = ['일', '월', '화', '수', '목', '금', '토']
@@ -339,7 +339,7 @@ export function SettlementPrototype({
                 {s === 'done'
                   ? '이번 달 누적 정산 완료액'
                   : s === 'exp'
-                    ? '기간 내 예상 정산 (픽업 전)'
+                    ? '기간 내 기존 예상 정산'
                     : `기간 내 ${labels[s]}`}
               </div>
               <strong className={`stl-value stl-text-${s}`}>
@@ -351,8 +351,8 @@ export function SettlementPrototype({
                 {s === 'done'
                   ? `이번 달 1일~현재 기준 · 조회 기간과 별개`
                   : s === 'sch'
-                    ? '픽업 완료, 확정 대기'
-                    : '정산일 미확정 · 픽업 예정일 기준 예측'}
+                    ? '매입일 기준, 배치 대기'
+                    : '기존 예상 일정 · 확인 필요'}
               </p>
             </section>
           ),
@@ -538,9 +538,7 @@ export function SettlementPrototype({
               <article key={`pickup-${e.id}`}>
                 <div className="stl-detail-title">
                   <b>{e.orderId ?? e.id}</b>
-                  <span className="stl-chip stl-pick">
-                    픽업 {e.status === 'exp' ? '예정' : '완료'}
-                  </span>
+                  <span className="stl-chip stl-pick">픽업 정보</span>
                 </div>
                 <p>매입 원금 {won(e.gross)}</p>
               </article>
@@ -706,7 +704,7 @@ export function SettlementPrototype({
                           {dateInput(e.date)}
                           <small>
                             {e.status === 'exp'
-                              ? '픽업 전 예상 일정'
+                              ? '기존 예상 일정 일정'
                               : (e.dateLabel ?? stamp(e.date)).split(' ').slice(-2).join(' ')}
                           </small>
                         </td>
@@ -830,7 +828,7 @@ export function SettlementPrototype({
               <dd>
                 <b>{won(net(detail))}</b>
               </dd>
-              <dt>픽업 {detail.status === 'exp' ? '예정' : '완료'}</dt>
+              <dt>픽업 정보</dt>
               <dd>{detail.pickupLabel ?? stamp(detail.pickup)}</dd>
               <dt>정산일{detail.status === 'exp' && ' (예상)'}</dt>
               <dd>{detail.dateLabel ?? stamp(detail.date)}</dd>

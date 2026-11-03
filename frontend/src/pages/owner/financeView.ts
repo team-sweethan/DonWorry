@@ -73,7 +73,7 @@ export function validateSettlementReport(report: SettlementReport) {
 export function settlementViewEntries(report: SettlementReport): PreviewOrderEntry[] {
   validateSettlementReport(report)
   return report.entries.map((e) => {
-    const pickup = e.classification === 'EXPECTED' ? e.scheduledPickupAt : e.pickedUpAt
+    const pickup = e.pickedUpAt ?? e.scheduledPickupAt
     return {
       id: `settlement:${e.settlementId}`,
       orderId: e.orderId,
@@ -166,7 +166,7 @@ export function forecastView(forecast: CashFlowForecast) {
     date: m.date,
     title: m.title,
     amount: safe(m.amount),
-    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '정산 완료' : m.classification === 'SCHEDULED' ? '픽업 완료 기준 · 배치 예정' : '픽업 전 예상 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}`,
+    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '정산 완료' : m.classification === 'SCHEDULED' ? '매입일 기준 · 배치 예정' : '기존 예상 일정 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}`,
   })
   return {
     days: forecast.days.map((d) => ({
@@ -186,8 +186,8 @@ export function forecastView(forecast: CashFlowForecast) {
 export const movementLabel = (value: CashFlowMovement['classification']) =>
   ({
     COMPLETED: '정산 완료',
-    SCHEDULED: '픽업 완료 기준 정산 예정',
-    EXPECTED: '픽업 전 예상 정산',
+    SCHEDULED: '매입일 기준 정산 예정',
+    EXPECTED: '기존 예상 일정 정산',
     PAID: '실제 지출 완료',
     PLANNED: '지출 예정',
   })[value]
