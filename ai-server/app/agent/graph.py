@@ -16,6 +16,7 @@ from app.agent.assemble import (
     facts_json,
     outside_rule_evidence,
 )
+from app.agent.evidence import decision_basis
 from app.agent.llm import LlmClient
 from app.agent.narrative import (
     Narrative,
@@ -320,7 +321,17 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         )
         outside = outside_rule_evidence(fds, history, linked)
         by_payment = {pid: outside_rule_evidence(fds, history, linked, pid) for pid in payment_ids}
-        narrative, errors = validate_narrative(raw, payment_ids, allowed, outside, by_payment)
+        # 결제별 기준표 판정 (#501) — 추가 확인이면 모르는 사실을 쓰게 한다
+        judged = {
+            p.paymentId: decision_basis(
+                p, fds[p.paymentId], case_payments, history, linked
+            ).recommendation
+            for p in case_payments.payments
+            if analyzable(p) and p.paymentId in fds
+        }
+        narrative, errors = validate_narrative(
+            raw, payment_ids, allowed, outside, by_payment, judged
+        )
         used_tokens = trace.tokens(getattr(raw, "usage", None))
         attempt = state["repairs"] + 1
 
@@ -340,7 +351,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             # 틀리거나 겹친 문장은 다시 쓰게 하지 않고 코드가 뺀다 (#355)
             narrative, removed = sanitize_narrative(narrative)
             # 빼고 나서 필수 목록이 비었으면 그때만 다시 쓰게 한다 (#355 리뷰)
-            errors = emptied_errors(narrative)
+            errors = emptied_errors(narrative, judged)
             if not errors:
                 passed = "형식 검사 통과" + (f" · 문장 {removed}개 뺌" if removed else "")
                 return {

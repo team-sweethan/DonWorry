@@ -117,15 +117,16 @@ def test_content_keeps_failing_ends_failed() -> None:
 # 확인 못 한 것은 코드가 항상 채우고, "미확인 사항 없음" 같은 문장은 걸러 낸다
 def test_unknowns_and_limitations_are_always_filled() -> None:
     body = json.loads(narrative(PAYMENTS, limitations=["확인되지 않은 정보가 없습니다."]))
-    # 모르는 사실 없는 추가 확인 필요는 다시 쓰게 하므로 결론을 낸 권고로 둔다 (권고 기준 조정)
+    # 기준표 판정이 추가 확인이라 모르는 사실 칸은 비우지 않는다 (#501)
+    # "확인되지 않은 정보가 없습니다"는 코드가 빼고 늘 모르는 사실을 넣는다
     for payment in body["payments"].values():
-        payment["unknowns"] = []
-        payment["recommendation"] = "ACCEPT_REVIEW"
+        payment["unknowns"] = ["확인되지 않은 정보가 없습니다."]
 
     _, outcome = _run(json.dumps(body, ensure_ascii=False))
 
     report = outcome.report
     assert all(ALWAYS_UNKNOWN in p.unknowns for p in report.paymentAnalyses)
+    assert all("확인되지 않은 정보가 없습니다." not in p.unknowns for p in report.paymentAnalyses)
     limitations = report.recommendation.limitations
     assert "확인되지 않은 정보가 없습니다." not in limitations
     assert all(item in limitations for item in ALWAYS_LIMITATIONS)
