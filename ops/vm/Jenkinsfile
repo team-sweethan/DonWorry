@@ -32,11 +32,13 @@ pipeline {
     }
     options {
         disableConcurrentBuilds()
-        timeout(time: 45, unit: 'MINUTES')
+        // 전체 timeout을 두지 않는다. 승인을 늦게 하면 배포 시간이 줄어 적용 도중 중단될 수 있어
+        // 준비·승인 대기·적용에 각각 제한을 둔다.
         skipDefaultCheckout()
     }
     stages {
         stage('Prepare Pinned Bundle') {
+            options { timeout(time: 20, unit: 'MINUTES') }
             steps {
                 script {
                     if (!(params.TARGET_SHA ==~ /[0-9a-f]{40}/)) {
@@ -60,19 +62,28 @@ pipeline {
             steps {
                 script {
                     // digest와 구성 해시만 있는 요약이다. 실제 환경값은 VM에서만 보관한다.
-                    def approver = input(
-                        message: "VM1 업데이트를 승인합니까?\n${readFile('release-bundle.json')}",
-                        ok: '이 묶음으로 업데이트 승인', submitter: 'jenkins-admin',
-                        submitterParameter: 'APPROVED_BY'
-                    )
+                    // 승인 대기에만 제한을 둔다. 시간이 지나면 VM에 승인 기록 없이 끝난다.
+                    def approver
+                    timeout(time: 30, unit: 'MINUTES') {
+                        approver = input(
+                            message: "VM1 업데이트를 승인합니까?\n${readFile('release-bundle.json')}",
+                            ok: '이 묶음으로 업데이트 승인', submitter: 'jenkins-admin',
+                            submitterParameter: 'APPROVED_BY'
+                        )
+                    }
                     if (!(approver instanceof String) || !(approver ==~ /[A-Za-z0-9_.@-]{1,120}/)) {
                         error('승인자 응답 오류')
                     }
-                    vmCommand("approve ${env.CD_BUNDLE} ${env.CD_EXECUTION} ${approver}")
+                    timeout(time: 10, unit: 'MINUTES') {
+                        vmCommand("approve ${env.CD_BUNDLE} ${env.CD_EXECUTION} ${approver}")
+                    }
                 }
             }
         }
         stage('Verify And Update VM1') {
+            // 승인 대기와 별개로 적용 시간을 보장한다. release.py는 명령마다 600초 제한이 있고
+            // 이미지 pull 3회·Compose 대기·헬스 재시도의 최대치 합(약 60분)보다 넉넉하게 둔다.
+            options { timeout(time: 90, unit: 'MINUTES') }
             steps {
                 script {
                     def result = vmCommand("apply ${env.CD_BUNDLE} ${env.CD_EXECUTION}")
