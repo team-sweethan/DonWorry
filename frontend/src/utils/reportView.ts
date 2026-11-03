@@ -279,12 +279,17 @@ export function markSignals(text: string, basis: DecisionBasis | null | undefine
 
 // ── 비슷한 사건 나란히 비교 (#501) ──
 
+// 해외 접속은 나라가 이름에 들어 있어 나라별로 따로 센다 (#501 리뷰)
+const OVERSEAS = 'OVERSEAS'
+const signalId = (s: BasisSignal) => (s.key === OVERSEAS ? `${s.key}:${s.label}` : s.key)
+
 // 사건 전체 징후 — 결제마다 같은 징후는 한 번만, 판정 근거가 하나도 없으면 null (예전 보고서)
 export function caseSignals(body: ReportBody): BasisSignal[] | null {
   const bases = body.paymentAnalyses.flatMap((p) => (p.basis ? [p.basis] : []))
   if (bases.length === 0) return null
   const seen = new Map<string, BasisSignal>()
-  for (const s of bases.flatMap((b) => b.signals)) if (!seen.has(s.key)) seen.set(s.key, s)
+  for (const s of bases.flatMap((b) => b.signals))
+    if (!seen.has(signalId(s))) seen.set(signalId(s), s)
   return [...seen.values()]
 }
 
@@ -302,17 +307,31 @@ export type CompareTag = 'SAME' | 'COUNTRY_DIFFERS' | 'ONLY'
 export type CompareRow = { past: BasisSignal | null; now: BasisSignal | null; tag: CompareTag }
 
 export function compareSignals(past: BasisSignal[], now: BasisSignal[]): CompareRow[] {
-  const rows: CompareRow[] = []
-  for (const n of now) {
-    const p = past.find((s) => s.key === n.key)
-    if (!p) continue
-    rows.push({ past: p, now: n, tag: p.label === n.label ? 'SAME' : 'COUNTRY_DIFFERS' })
+  const leftPast = [...past]
+  const take = (match: (s: BasisSignal) => boolean) => {
+    const i = leftPast.findIndex(match)
+    return i < 0 ? null : leftPast.splice(i, 1)[0]
   }
-  for (const n of now)
-    if (!past.some((s) => s.key === n.key)) rows.push({ past: null, now: n, tag: 'ONLY' })
-  for (const p of past)
-    if (!now.some((s) => s.key === p.key)) rows.push({ past: p, now: null, tag: 'ONLY' })
-  return rows
+  // 1) 이름까지 같은 징후 → 두 사건 공통
+  const paired = now.map((n) => ({ n, p: take((s) => signalId(s) === signalId(n)) }))
+  // 2) 남은 해외 접속끼리 한 번씩 → 나라만 다름, 3) 그래도 남으면 이 사건만
+  const rows: CompareRow[] = []
+  const only: CompareRow[] = []
+  for (const { n, p } of paired) {
+    if (p) {
+      rows.push({ past: p, now: n, tag: 'SAME' })
+      continue
+    }
+    const other = take((s) => s.key === n.key)
+    if (other) rows.push({ past: other, now: n, tag: 'COUNTRY_DIFFERS' })
+    else only.push({ past: null, now: n, tag: 'ONLY' })
+  }
+  return [...rows, ...only, ...leftPast.map((p) => ({ past: p, now: null, tag: 'ONLY' as const }))]
+}
+
+// 비교 한 줄의 React 키 — 해외 접속은 나라가 달라도 키가 같아 이름까지 쓴다
+export function compareRowKey(row: CompareRow): string {
+  return [row.past, row.now].map((s) => (s ? signalId(s) : '-')).join('|')
 }
 
 // 비교 화면에 쓸 보고서 — 가장 최근에 성공한 보고서 본문, 없으면 null

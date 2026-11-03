@@ -11,6 +11,7 @@ import {
   caseNormals,
   caseSignals,
   compareReport,
+  compareRowKey,
   compareSignals,
   decisionProgress,
   reportRecommendationSource,
@@ -230,7 +231,7 @@ function SignalRows({
       ) : (
         rows.map((r) => (
           <Pair
-            key={(r.now ?? r.past)?.key}
+            key={compareRowKey(r)}
             past={<CompareCell s={r.past} row={r} />}
             now={<CompareCell s={r.now} row={r} />}
           />

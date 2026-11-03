@@ -489,3 +489,47 @@ test('decisionProgress_partiallyDecided_isNotDoneAndSkipsCustomerCanceled', () =
   assert.deepEqual(decisionProgress(all), { decided: 1, remaining: 0, done: true })
   assert.equal(decisionProgress(caseDetail()).done, false)
 })
+
+// ── 해외 접속 나라별 비교 (#501 리뷰) ──
+
+const twoCountries = (): ReportBody =>
+  body({
+    paymentAnalyses: [
+      analysis('1', { ...basis1011, signals: [signal('OVERSEAS', '해외 접속 (TH)')] }),
+      analysis('2', { ...basis1011, signals: [signal('OVERSEAS', '해외 접속 (VN)')] }),
+    ],
+  })
+
+// 결제마다 접속 국가가 다르면 나라별로 따로 남긴다
+test('caseSignals_paymentsFromDifferentCountries_keepsEachCountry', () => {
+  assert.deepEqual(
+    caseSignals(twoCountries())?.map((s) => s.label),
+    ['해외 접속 (TH)', '해외 접속 (VN)'],
+  )
+})
+
+// 과거 TH vs 지금 TH · VN — TH끼리 공통, VN은 이 사건만
+test('compareSignals_pastThNowThVn_sharesThAndKeepsVnOnly', () => {
+  const now = caseSignals(twoCountries()) ?? []
+  const rows = compareSignals([signal('OVERSEAS', '해외 접속 (TH)')], now)
+  assert.deepEqual(
+    rows.map((r) => [r.past?.label ?? null, r.now?.label ?? null, r.tag]),
+    [
+      ['해외 접속 (TH)', '해외 접속 (TH)', 'SAME'],
+      [null, '해외 접속 (VN)', 'ONLY'],
+    ],
+  )
+})
+
+// 과거 JP vs 지금 TH · VN — 남은 해외 접속끼리 한 번만 나라만 다름, 나머지는 이 사건만
+test('compareSignals_pastJpNowThVn_pairsOneCountryDiffersOnce', () => {
+  const now = caseSignals(twoCountries()) ?? []
+  const rows = compareSignals([signal('OVERSEAS', '해외 접속 (JP)')], now)
+  assert.deepEqual(
+    rows.map((r) => [r.past?.label ?? null, r.now?.label ?? null, r.tag]),
+    [
+      ['해외 접속 (JP)', '해외 접속 (TH)', 'COUNTRY_DIFFERS'],
+      [null, '해외 접속 (VN)', 'ONLY'],
+    ],
+  )
+})
