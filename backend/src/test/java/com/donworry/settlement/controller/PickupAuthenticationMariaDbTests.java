@@ -54,6 +54,9 @@ class PickupAuthenticationMariaDbTests {
     @MockitoBean
     com.donworry.payment.service.PaymentCaptureService paymentCaptureService;
 
+    @Autowired
+    com.donworry.settlement.service.CaptureSettlementSchedule schedule;
+
     @BeforeEach
     void setUp() {
         code = "PICKUP" + UUID.randomUUID().toString().replace("-", "").toUpperCase(Locale.ROOT);
@@ -127,13 +130,22 @@ class PickupAuthenticationMariaDbTests {
                         code))
                 .isEqualTo(2);
         long payment = 9500000L + merchantId;
-        captures.processCapture(payment, merchantId, code, 10000L);
+        var capture = captures.processCapture(payment, merchantId, code, 10000L);
+        var expected = java.time.LocalDateTime.ofInstant(
+                schedule.settlementAt(capture.getCapturedAt()), java.time.ZoneOffset.UTC);
+        var stored = jdbc.queryForObject(
+                "SELECT scheduled_at FROM settlements WHERE payment_id=?", java.time.LocalDateTime.class, payment);
+        assertThat(stored).isEqualTo(expected);
+        // 매입 뒤 서명된 픽업 정보를 재전달해도 확정한 정산일은 변하지 않는다.
+        assertThat(send(signed(path)).statusCode()).isEqualTo(200);
+        assertThat(send(signed("/api/v1/order-fulfillments/" + code + "/completion"))
+                        .statusCode())
+                .isEqualTo(200);
         assertThat(jdbc.queryForObject(
-                                "SELECT scheduled_at FROM settlements WHERE payment_id=?",
-                                java.sql.Timestamp.class,
-                                payment)
-                        .toLocalDateTime())
-                .isEqualTo(java.time.LocalDateTime.parse("2026-10-30T06:00:00"));
+                        "SELECT scheduled_at FROM settlements WHERE payment_id=?",
+                        java.time.LocalDateTime.class,
+                        payment))
+                .isEqualTo(stored);
     }
 
     // 인증에 성공해도 다른 가맹점의 주문에는 픽업 정보를 쓰지 않는다.

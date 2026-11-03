@@ -11,10 +11,9 @@ import org.springframework.transaction.annotation.*;
 public class SettlementCompletionTransactionService {
     private final SettlementRepository settlements;
     private final CaptureRepository captures;
-    private final OrderFulfillmentRepository fulfillments;
     private final SettlementCompletionPolicy policy;
 
-    // 픽업 수신과 동일하게 주문 → 정산 순서로 잠가 역순 잠금에 의한 교착을 피한다.
+    // 정산 행을 잠근 뒤 상태를 다시 확인해 중복 배치의 완료 반영을 막는다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String complete(Long settlementId, Long merchantId, String orderId, Instant cutoff) {
         if (settlementId == null
@@ -24,12 +23,11 @@ public class SettlementCompletionTransactionService {
                 || orderId == null
                 || orderId.isBlank()
                 || cutoff == null) throw new IllegalArgumentException("정산 완료 대상과 기준 시각이 필요합니다.");
-        var fulfillment = fulfillments.findForUpdate(merchantId, orderId).orElse(null);
         var settlement = settlements.findForCompletion(settlementId).orElse(null);
         if (settlement == null) return "MISSING_SETTLEMENT";
         if (!merchantId.equals(settlement.getMerchantId())) return "MERCHANT_MISMATCH";
         var capture = captures.findById(settlement.getCaptureId()).orElse(null);
-        var reason = policy.evaluate(settlement, capture, fulfillment, cutoff);
+        var reason = policy.evaluate(settlement, capture, cutoff);
         if (!"ELIGIBLE".equals(reason)) return reason;
         settlement.complete(Instant.now());
         return "COMPLETED";

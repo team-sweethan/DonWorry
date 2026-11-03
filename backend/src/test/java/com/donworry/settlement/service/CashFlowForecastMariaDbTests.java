@@ -157,11 +157,16 @@ class CashFlowForecastMariaDbTests {
                 utcTimestamp(batch.minusSeconds(86400)),
                 PAYMENT);
         jdbc.update(
-                "UPDATE settlements SET expected_settlement_at=? WHERE payment_id=?", utcTimestamp(batch), PAYMENT + 1);
+                "UPDATE settlements SET scheduled_at=NULL,expected_settlement_at=? WHERE payment_id=?",
+                utcTimestamp(batch),
+                PAYMENT + 1);
         jdbc.update(
                 "UPDATE settlements SET scheduled_at=? WHERE payment_id=?",
                 utcTimestamp(at(today().minusDays(1))),
                 PAYMENT + 2);
+        // 신규 매입은 D+3 일정이 있으므로 과거 호환의 날짜 미정 자료를 명시적으로 만든다.
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=NULL,expected_settlement_at=NULL WHERE payment_id=?", PAYMENT + 3);
         jdbc.update("UPDATE settlements SET status='CANCELED' WHERE payment_id=?", PAYMENT + 4);
         var result = forecasts.forecast(MERCHANT, today(), today().plusDays(2));
         assertThat(result.days().get(1).expectedIncome()).isEqualTo(9700);

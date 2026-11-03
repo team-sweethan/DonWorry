@@ -40,6 +40,25 @@ const report: SettlementReport = {
     },
   ],
 }
+test('D+3 정산 예정은 픽업 완료 없이도 예정 상태와 별도 픽업 정보를 표시한다', () => {
+  const entry = {
+    ...report.entries[0],
+    status: 'SCHEDULED' as const,
+    classification: 'SCHEDULED' as const,
+    pickedUpAt: null,
+    scheduledPickupAt: '2026-11-03T01:00:00Z',
+  }
+  const row = settlementViewEntries({ ...report, entries: [entry] })[0]
+  assert.equal(row.status, 'sch')
+  assert.equal(row.pickup?.getDate(), 3)
+  assert.equal(row.date.getDate(), 2)
+  const missing = settlementViewEntries({
+    ...report,
+    entries: [{ ...entry, scheduledPickupAt: null }],
+  })[0]
+  assert.equal(missing.status, 'sch')
+  assert.equal(missing.pickup, null)
+})
 test('날짜·정산 표시·수수료·빈 상품은 한국 날짜와 서버 값 그대로 유지한다', () => {
   assert.equal(koreanToday(new Date('2026-11-01T15:00:00Z')), '2026-11-02')
   const rows = settlementViewEntries({

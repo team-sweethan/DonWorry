@@ -13,6 +13,8 @@
 
 ## 1. 범위와 정본
 
+P6 #465: [영업일 D+3 정책·ERD](../settlement/d3-policy-and-erd.md). 이번 PR은 P6 달력 테이블 추가와 미완료 일정 전환이며, 지급/환불 테이블은 후속 제안이다. Notion·운영 DB 적용 완료를 뜻하지 않는다.
+
 P6 정기 지출 확장: [규칙·회차 완료 기록 ERD](../settlement/recurring-expenses-api.md#erd).
 P6 소유 신규 테이블만 추가하며, 다른 모듈 테이블과 물리 FK를 만들지 않는다.
 

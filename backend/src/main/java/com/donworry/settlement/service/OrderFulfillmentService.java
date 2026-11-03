@@ -21,7 +21,6 @@ public class OrderFulfillmentService {
     private final OrderFulfillmentRepository fulfillments;
     private final CaptureRepository captures;
     private final SettlementRepository settlements;
-    private final PickupScheduleCalculator calculator;
     private final OrderFulfillmentItemRepository items;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -137,9 +136,6 @@ public class OrderFulfillmentService {
                 || !Objects.equals(s.getMerchantId(), c.getMerchantId()))
             throw new IllegalStateException("매입과 정산의 연결이 일치하지 않습니다.");
         f.bindMerchant(c.getMerchantId(), now);
-        s.applyPickupSchedule(
-                calculator.settlementAt(f.getScheduledFulfillmentAt()),
-                calculator.settlementAt(f.getFulfilledAt()),
-                now);
+        // 픽업은 주문 상세 정보이며 이미 확정한 정산일을 변경하지 않는다.
     }
 }

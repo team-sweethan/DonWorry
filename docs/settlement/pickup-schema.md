@@ -36,8 +36,8 @@ UNIQUE(fulfillment_id, item_sequence), 양수 순서·수량 CHECK, 빈 상품�
 
 | 컬럼 | 값 |
 | --- | --- |
-| expected_settlement_at | 예정 픽업 + 정확히 72시간 |
-| scheduled_at | 실제 픽업 + 정확히 72시간; 완료 확정 가능 시점 |
+| expected_settlement_at | 매입일 기준 영업일 D+3 (scheduled_at과 동일, 호환용) |
+| scheduled_at | 매입일 기준 영업일 D+3 한국 00:00의 UTC 시각 |
 | completed_at | 후속 배치용 예약 컬럼. 이번 기능에서는 NULL 유지 |
 
 기존 행의 시각은 추정해서 채우지 않는다. 기존 금액·수수료·상태는 유지한다.
@@ -56,9 +56,9 @@ order_fulfillments는 UNIQUE(merchant_id, order_id), captures는 비고유 인�
 
 모든 진입점은 주문 행을 INSERT ON DUPLICATE KEY UPDATE로 확보하고 PESSIMISTIC_WRITE로 잠근다.
 매입은 주문 잠금 → 결제 중복 확인 → 매입·정산 생성 → 일정 연결 → 기존 완료 이벤트 발행 순서다.
-픽업은 주문 잠금 → 시각·상품 반영 → 매입·가맹점 대조 → 일정 연결 순서다.
+픽업은 주문 잠금 → 시각·상품 반영 → 매입·가맹점 정합성 대조 순서다.
 잠금은 같은 트랜잭션의 종료까지 유지한다. 동일 요청은 재사용하고 상충 요청은 전체 롤백한다.
-픽업이 먼저 오면 저장한 뒤 매입이 연결하고, 매입이 먼저 오면 이후 픽업이 기존 정산 일정에 반영된다.
+픽업이 먼저 오면 저장한 뒤 매입과 연결한다. 매입이 먼저 와도 이후 픽업은 상세 정보만 저장하고 정산 일정에는 반영하지 않는다.
 실패한 요청에서 생성한 주문·상품·시각은 롤백하되 과거 커밋은 보존한다.
 
 ## SQL 범위
@@ -67,3 +67,5 @@ order_fulfillments는 UNIQUE(merchant_id, order_id), captures는 비고유 인�
 기존 3개 SQL을 수정하지 않고 후속 migration으로 키를 전환하고 인덱스를 추가한다.
 현재 dev에 있는 migration은 수정·삭제하지 않는다. 취소·현금흐름·지출 SQL은 포함하지 않는다.
 픽업을 받았다는 이유로 매입·정산을 새로 생성하거나 정산 상태를 COMPLETED로 바꾸지 않는다.
+
+정산일 정책과 미완료 전환은 [D+3 정책](d3-policy-and-erd.md)을 따른다.

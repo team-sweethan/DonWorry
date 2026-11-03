@@ -123,7 +123,7 @@ export function CashFlowOverview({
             '기간 내 정산 유입',
             summary?.totalIncome ??
               days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
-            '실제 완료 · 픽업 완료 기준 예정 · 픽업 전 예상 포함',
+            '실제 완료 · 매입일 기준 예정 · 기존 예상 일정 포함',
           ],
           [
             '기간 내 지출 (완료·예정)',
@@ -277,8 +277,8 @@ export function CashFlowOverview({
               </p>
             )}
             <p className="cashflow-muted">
-              완료 {money(active.completed)} · 픽업 완료 기준 예정 {money(active.scheduled)} · 픽업
-              전 예상 {money(active.expected)}
+              완료 {money(active.completed)} · 매입일 기준 예정 {money(active.scheduled)} · 픽업 전
+              예상 {money(active.expected)}
             </p>
           </div>
           <div>

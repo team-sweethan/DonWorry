@@ -78,11 +78,13 @@ public class Settlement {
         updatedAt = now;
     }
 
-    public void applyPickupSchedule(Instant expectedAt, Instant eligibleAt, Instant now) {
-        if (java.util.Objects.equals(expectedSettlementAt, expectedAt)
-                && java.util.Objects.equals(scheduledAt, eligibleAt)) return;
+    public void applyCaptureSchedule(Instant eligibleAt, Instant now) {
+        if (eligibleAt == null || now == null) throw new IllegalArgumentException("정산 일정과 처리 시각이 필요합니다.");
         if (status != SettlementStatus.SCHEDULED) throw new IllegalStateException("최종 정산의 일정은 변경할 수 없습니다.");
-        expectedSettlementAt = expectedAt;
+        if (scheduledAt != null && !scheduledAt.equals(eligibleAt))
+            throw new IllegalStateException("확정한 정산일은 변경할 수 없습니다.");
+        if (eligibleAt.equals(scheduledAt)) return;
+        expectedSettlementAt = eligibleAt;
         scheduledAt = eligibleAt;
         updatedAt = now;
     }
