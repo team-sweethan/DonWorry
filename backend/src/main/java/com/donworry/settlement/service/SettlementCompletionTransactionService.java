@@ -18,8 +18,8 @@ public class SettlementCompletionTransactionService {
     private final MerchantPayoutRepository payouts;
     private final MerchantPayoutItemRepository payoutItems;
 
-    // 지급 행 → 정산 행 순서로 잠가 같은 가맹점·날짜의 실행을 여러 서버에서도 직렬화한다.
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    // 현재 커밋 상태를 읽고 지급 행 → 정산 행 순서로 잠가 같은 가맹점·날짜의 실행을 여러 서버에서도 직렬화한다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
     public String completeMerchant(Long merchantId, Instant cutoff, long upperSettlementId) {
         var started = Instant.now();
         if (merchantId == null
