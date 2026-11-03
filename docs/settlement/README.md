@@ -41,3 +41,5 @@ MariaDB 테스트는 Docker 격리 DB에 Flyway 전체를 적용하고 JPA 매�
 - [영업일 D+3 정책·ERD 확장안 (#465)](d3-policy-and-erd.md) — 현재 정산일 계산 기준.
 
 [2단계 가맹점별 지급 원장·배치](daily-payouts.md) — #474. 기존 건별 완료 배치의 지급 단위·트랜잭션을 가맹점별로 전환한다.
+
+[3단계 환불 성공 수신·조정 원장](refund-receiving.md) — #478. 기본 비활성 수신·PENDING 기록까지만 제공하며 지급 차감·P5 활성화는 후속이다.

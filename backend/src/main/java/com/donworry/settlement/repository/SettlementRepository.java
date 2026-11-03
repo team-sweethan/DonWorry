@@ -17,6 +17,10 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
 
     Optional<Settlement> findByCaptureId(Long captureId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Settlement s WHERE s.paymentId=:payment")
+    Optional<Settlement> findForRefund(@Param("payment") Long paymentId);
+
     boolean existsByPaymentId(Long paymentId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
