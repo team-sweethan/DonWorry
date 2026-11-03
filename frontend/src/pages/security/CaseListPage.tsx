@@ -6,7 +6,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import type { CaseStatus, CaseSummary } from '../../types/case'
-import { mergeRemainingMin } from '../../utils/caseRules'
+import { customerPart, mergeRemainingMin } from '../../utils/caseRules'
 import {
   caseListSearch,
   caseListTab,
@@ -190,7 +190,8 @@ export function CaseListPage() {
       width: 110,
       render: (s: CaseStatus) => <CodeTag value={caseStatusLabel[s]} />,
     },
-    { title: '고객', dataIndex: 'customerRef', width: 120 },
+    // 저장값 "가맹점ID:고객"에서 고객 부분만 보인다 (#462)
+    { title: '고객', dataIndex: 'customerRef', width: 120, render: customerPart },
     {
       title: '위험도',
       key: 'risk',
