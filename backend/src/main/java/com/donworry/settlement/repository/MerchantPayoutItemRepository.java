@@ -5,5 +5,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MerchantPayoutItemRepository extends JpaRepository<MerchantPayoutItem, Long> {
+    boolean existsBySettlementId(Long settlementId);
+
     List<MerchantPayoutItem> findByPayoutIdOrderBySettlementId(Long payoutId);
 }

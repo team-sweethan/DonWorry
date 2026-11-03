@@ -132,6 +132,15 @@ class CashFlowForecastMariaDbTests {
                         .build());
         recurring.complete(MERCHANT, rule.recurringExpenseId(), today().plusDays(2));
         recurring.stop(MERCHANT, rule.recurringExpenseId());
+        // 같은 시스템 시각 tick의 완료가 조회 cutoff와 같아지는 실행 환경 차이를 제거한다.
+        jdbc.update(
+                "UPDATE planned_expenses SET paid_at=? WHERE merchant_id=? AND paid_at IS NOT NULL",
+                utcTimestamp(at(today())),
+                MERCHANT);
+        jdbc.update(
+                "UPDATE recurring_expense_payments SET paid_at=? WHERE merchant_id=?",
+                utcTimestamp(at(today())),
+                MERCHANT);
         var result = forecasts.forecast(MERCHANT, today(), today().plusDays(2));
         assertThat(result.currentBalance()).isEqualTo(9900);
         assertThat(result.periodOpeningBalance()).isEqualTo(10700);

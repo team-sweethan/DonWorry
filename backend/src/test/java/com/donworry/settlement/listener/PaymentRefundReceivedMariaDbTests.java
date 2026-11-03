@@ -86,6 +86,7 @@ class PaymentRefundReceivedMariaDbTests {
         jdbc.update("DELETE FROM settlement_refund_adjustments WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM settlements WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM captures WHERE merchant_id=?", MERCHANT);
+        jdbc.update("DELETE FROM merchant_settlement_locks WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM merchants WHERE merchant_id=?", MERCHANT);
     }
 
@@ -139,9 +140,9 @@ class PaymentRefundReceivedMariaDbTests {
         delivered(2);
         assertThat(jdbc.queryForObject(
                         "SELECT status FROM settlement_refund_adjustments WHERE payment_id=?", String.class, PAYMENT))
-                .isEqualTo("PENDING");
+                .isEqualTo("APPLIED");
         assertThat(jdbc.queryForObject("SELECT status FROM settlements WHERE payment_id=?", String.class, PAYMENT))
-                .isEqualTo("SCHEDULED");
+                .isEqualTo("CANCELED");
     }
 
     // 수신 저장 실패는 발행 기록을 미완료로 남겨 원래 이벤트만 다시 전달할 수 있게 한다.

@@ -128,4 +128,24 @@ public class SettlementRefundAdjustment {
                 && Objects.equals(refundAmount, event.cancellationAmount())
                 && Objects.equals(canceledAt, event.canceledAt());
     }
+
+    public void excludeBeforePayout(Settlement source, Instant now) {
+        if (now == null
+                || source == null
+                || status != RefundAdjustmentStatus.PENDING
+                || source.getStatus() != SettlementStatus.SCHEDULED
+                || !Objects.equals(settlementId, source.getSettlementId())
+                || !Objects.equals(paymentId, source.getPaymentId())
+                || !Objects.equals(captureId, source.getCaptureId())
+                || !Objects.equals(merchantId, source.getMerchantId())
+                || !Objects.equals(refundAmount, source.getGrossAmount())
+                || !Objects.equals(cardFeeReturn, source.getCardFeeAmount())
+                || !Objects.equals(pgFeeReturn, source.getPgFeeAmount())
+                || !Objects.equals(adjustmentAmount, source.getSettlementAmount()))
+            throw new IllegalStateException("환불 제외와 원 정산의 근거가 일치하지 않습니다.");
+        status = RefundAdjustmentStatus.APPLIED;
+        disposition = RefundAdjustmentDisposition.UNPAID_EXCLUSION;
+        remainingAmount = 0L;
+        updatedAt = now.truncatedTo(ChronoUnit.MICROS);
+    }
 }
