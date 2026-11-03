@@ -31,6 +31,7 @@ import {
   caseCell,
   customerNeedsMerchant,
   defaultTransactionListQuery,
+  merchantChange,
   mlCell,
   parseTransactionListQuery,
   periodDays,
@@ -319,12 +320,33 @@ export function TransactionListPage() {
       title: <HelpTitle label="구매자" text={help.customer} />,
       key: 'buyer',
       width: 190,
-      render: (_, t) => (
+      render: (_, t) => {
         // 저장값은 "가맹점ID:번호"라 직원이 검색창에 넣을 고객 번호만 보이고 복사된다 (#462)
-        <Typography.Text copyable={copyable(customerPart(t.customerRef))}>
-          {customerPart(t.customerRef)}
-        </Typography.Text>
-      ),
+        const customer = customerPart(t.customerRef)
+        // 번호를 누르면 그 줄의 가맹점 + 고객으로 거른다 (#487). 기간은 두고 상태 · 주문번호 조건은 푼다
+        return (
+          <Space size={2}>
+            <Tooltip title="이 고객 결제만 보기">
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0 }}
+                onClick={() =>
+                  setQuery({
+                    merchantId: t.merchantId,
+                    customerRef: customer,
+                    status: null,
+                    orderRef: '',
+                  })
+                }
+              >
+                {customer}
+              </Button>
+            </Tooltip>
+            <Typography.Text copyable={copyable(customer)} />
+          </Space>
+        )
+      },
     },
   ]
 
@@ -418,7 +440,7 @@ export function TransactionListPage() {
                 value: merchant.merchantId,
                 label: `${merchant.displayName}${merchant.status === 'INACTIVE' ? ' · 비활성' : ''}`,
               }))}
-              onChange={(value: number | undefined) => setQuery({ merchantId: value ?? null })}
+              onChange={(value: number | undefined) => setQuery(merchantChange(value ?? null))}
             />
             <Select
               aria-label="결제 상태"
@@ -443,7 +465,9 @@ export function TransactionListPage() {
               aria-label="고객 번호"
               allowClear
               style={{ width: 200 }}
-              placeholder="고객 번호 (정확히)"
+              // 고객 번호는 가맹점마다 따로라 가맹점을 고르기 전에는 잠근다 (#487)
+              disabled={query.merchantId === null}
+              placeholder={query.merchantId === null ? '가맹점 선택 후 입력' : '고객 번호 (정확히)'}
               defaultValue={query.customerRef}
               onSearch={(value) => setQuery({ customerRef: value.trim() })}
             />
