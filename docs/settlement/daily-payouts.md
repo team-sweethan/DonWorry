@@ -2,7 +2,7 @@
 
 - 담당 P6 민정 / #474 / 2026-11-03
 - 사용자 진행 승인에 따른 구현·PR 리뷰 대상. Notion 동기화·운영 배포 완료를 의미하지 않는다.
-- [D+3 정책](d3-policy-and-erd.md), [ADR-0069](../decisions/0069-p6-merchant-daily-payouts.md)
+- [D+3 정책](d3-policy-and-erd.md), [ADR-0070](../decisions/0070-p6-merchant-daily-payouts.md)
 
 ## 지급 단위와 시각
 

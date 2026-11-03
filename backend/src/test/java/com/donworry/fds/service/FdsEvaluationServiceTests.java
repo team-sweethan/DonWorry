@@ -448,6 +448,32 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // DB가 대소문자를 구분하지 않고 돌려준 다른 고객 이력은 점수 계산에 쓰지 않는다.
+    void evaluate_whenCustomerRefDiffersOnlyByCase_excludesOtherCustomerHistory() {
+        var requestedAt = Instant.parse("2026-10-22T01:09:00Z");
+        var request = request(3L, "cust-1", 50_000L, requestedAt, "card-current");
+        var otherCustomerHistory = List.of(
+                declinedEvaluation(1L, "Cust-1", "card-a", requestedAt.minusSeconds(60)),
+                declinedEvaluation(2L, "Cust-1", "card-b", requestedAt.minusSeconds(120)));
+        when(evaluationRepository.findByEvaluationRequestId(request.evaluationRequestId()))
+                .thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(otherCustomerHistory);
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(1L, "cust-1")).thenReturn(otherCustomerHistory);
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+
+        var result = transactionEvaluator.evaluate(request);
+
+        assertThat(result.result()).isEqualTo(FdsResult.ALLOW);
+        assertThat(result.riskScore()).isZero();
+    }
+
+    @Test
     // 제어 문자가 포함된 고객 식별자는 JSON 스냅샷에서도 유효한 문자열로 저장한다.
     void evaluate_customerRefWithControlCharacters_escapesRuleSnapshotJson() {
         var request = request(1L, "customer\n\tref", 1_000L, Instant.parse("2026-10-22T01:00:00Z"), null);
