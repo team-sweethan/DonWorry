@@ -85,6 +85,7 @@ class RefundAdjustmentMariaDbTests {
         jdbc.update("DELETE FROM merchant_payouts WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM settlements WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM captures WHERE merchant_id=?", MERCHANT);
+        jdbc.update("DELETE FROM merchant_settlement_locks WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM merchants WHERE merchant_id=?", MERCHANT);
     }
 
@@ -99,7 +100,7 @@ class RefundAdjustmentMariaDbTests {
     }
 
     @Test
-    void record_whenUnpaid_preservesSourcesAndStoresOnlyPendingNetAmount() {
+    void record_whenUnpaid_excludesAndPreservesFinancialAmounts() {
         var before = jdbc.queryForMap("SELECT * FROM settlements WHERE payment_id=?", PAYMENT);
         var captured = jdbc.queryForMap("SELECT * FROM captures WHERE payment_id=?", PAYMENT);
         var a = service.record(event);
@@ -107,12 +108,17 @@ class RefundAdjustmentMariaDbTests {
         assertThat(a.getCardFeeReturn()).isEqualTo(200);
         assertThat(a.getPgFeeReturn()).isEqualTo(100);
         assertThat(a.getAdjustmentAmount()).isEqualTo(9700);
-        assertThat(a.getRemainingAmount()).isEqualTo(9700);
-        assertThat(a.getStatus()).isEqualTo(RefundAdjustmentStatus.PENDING);
-        assertThat(a.getDisposition()).isNull();
+        assertThat(a.getRemainingAmount()).isZero();
+        assertThat(a.getStatus()).isEqualTo(RefundAdjustmentStatus.APPLIED);
+        assertThat(a.getDisposition()).isEqualTo(RefundAdjustmentDisposition.UNPAID_EXCLUSION);
         assertThat(a.getCanceledAt()).isEqualTo(event.canceledAt());
-        assertThat(jdbc.queryForMap("SELECT * FROM settlements WHERE payment_id=?", PAYMENT))
-                .isEqualTo(before);
+        var after = jdbc.queryForMap("SELECT * FROM settlements WHERE payment_id=?", PAYMENT);
+        assertThat(after.get("status")).isEqualTo("CANCELED");
+        before.remove("status");
+        before.remove("updated_at");
+        after.remove("status");
+        after.remove("updated_at");
+        assertThat(after).isEqualTo(before);
         assertThat(jdbc.queryForMap("SELECT * FROM captures WHERE payment_id=?", PAYMENT))
                 .isEqualTo(captured);
     }
@@ -143,6 +149,7 @@ class RefundAdjustmentMariaDbTests {
 
     @Test
     void record_whenAlreadyApplied_doesNotResetRemainingRecovery() {
+        payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE);
         var a = service.record(event);
         jdbc.update(
                 "UPDATE settlement_refund_adjustments SET status='APPLIED',disposition='RECOVERY',remaining_amount=4000 WHERE adjustment_id=?",
@@ -252,7 +259,7 @@ class RefundAdjustmentMariaDbTests {
                         a.getAdjustmentId()))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update(
-                        "UPDATE settlement_refund_adjustments SET status='APPLIED' WHERE adjustment_id=?",
+                        "UPDATE settlement_refund_adjustments SET status='APPLIED',disposition=NULL WHERE adjustment_id=?",
                         a.getAdjustmentId()))
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update(
@@ -282,5 +289,116 @@ class RefundAdjustmentMariaDbTests {
                 changed(CANCELLATION + 1, PAYMENT + 1, c.getCaptureId(), MERCHANT, 10000L, event.canceledAt()));
         assertThat(a.getAdjustmentAmount()).isZero();
         assertThat(a.getRemainingAmount()).isZero();
+    }
+
+    // 환불을 제외한 나머지 순정산액만 실제 지급 원장에 포함한다.
+    @Test
+    void complete_whenUnpaidRefundExists_paysOnlyOtherSettlement() {
+        create(PAYMENT + 1, 10000);
+        service.record(event);
+        assertThat(payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE))
+                .isEqualTo("COMPLETED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payout_amount FROM merchant_payouts WHERE merchant_id=?", Long.class, MERCHANT))
+                .isEqualTo(9700);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM merchant_payout_items i JOIN settlements s ON s.settlement_id=i.settlement_id WHERE s.payment_id=?",
+                        Long.class,
+                        PAYMENT))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM settlements WHERE payment_id=?", String.class, PAYMENT))
+                .isEqualTo("CANCELED");
+    }
+
+    // 이전 수신 버전의 PENDING은 대상 선정 전에 적용하고 빈 지급 원장을 남기지 않는다.
+    @Test
+    void complete_whenLegacyPendingIsOnlyTarget_excludesBeforeSelection() {
+        var original = settlements.findByPaymentId(PAYMENT).orElseThrow();
+        adjustments.save(SettlementRefundAdjustment.received(event, original, Instant.now()));
+        assertThat(payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE))
+                .isEqualTo("EMPTY");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM merchant_payouts WHERE merchant_id=?", Long.class, MERCHANT))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT status FROM settlements WHERE payment_id=?", String.class, PAYMENT))
+                .isEqualTo("CANCELED");
+        var a = adjustments.findByCancellationId(CANCELLATION).orElseThrow();
+        assertThat(a.getStatus()).isEqualTo(RefundAdjustmentStatus.APPLIED);
+        assertThat(a.getDisposition()).isEqualTo(RefundAdjustmentDisposition.UNPAID_EXCLUSION);
+        assertThat(a.getRemainingAmount()).isZero();
+        service.record(event);
+        assertThat(count()).isEqualTo(1);
+    }
+
+    // 상태 업데이트의 실제 DB 오류도 수신 INSERT와 정산 변경을 함께 되돌려야 한다.
+    @Test
+    void record_whenExclusionUpdateFails_rollsBackReceiptAndSettlement() {
+        jdbc.execute(
+                "CREATE TRIGGER p6_refund_exclusion_failure BEFORE UPDATE ON settlement_refund_adjustments FOR EACH ROW BEGIN IF NEW.merchant_id="
+                        + MERCHANT
+                        + " AND NEW.status='APPLIED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='simulated exclusion failure'; END IF; END");
+        try {
+            assertThatThrownBy(() -> service.record(event)).isInstanceOf(RuntimeException.class);
+            assertThat(count()).isZero();
+            assertThat(jdbc.queryForObject("SELECT status FROM settlements WHERE payment_id=?", String.class, PAYMENT))
+                    .isEqualTo("SCHEDULED");
+        } finally {
+            jdbc.execute("DROP TRIGGER p6_refund_exclusion_failure");
+        }
+        assertThat(service.record(event).getDisposition()).isEqualTo(RefundAdjustmentDisposition.UNPAID_EXCLUSION);
+    }
+
+    // 지급 상세가 존재하면 SCHEDULED 표시가 잘못돼 있어도 미지급 제외로 덮지 않는다.
+    @Test
+    void record_whenPayoutItemAlreadyExists_rejectsInconsistentUnpaidState() {
+        payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE);
+        jdbc.update("UPDATE settlements SET status='SCHEDULED',completed_at=NULL WHERE payment_id=?", PAYMENT);
+        assertThatThrownBy(() -> service.record(event)).isInstanceOf(IllegalStateException.class);
+        assertThat(count()).isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT payout_amount FROM merchant_payouts WHERE merchant_id=?", Long.class, MERCHANT))
+                .isEqualTo(9700);
+    }
+
+    // 키셋 페이지를 넘겨도 제외하면서 건너뛰거나 무한 반복하지 않는다.
+    @Test
+    void complete_whenLegacyPendingCrossesPageBoundary_excludesEveryRefund() {
+        adjustments.save(SettlementRefundAdjustment.received(
+                event, settlements.findByPaymentId(PAYMENT).orElseThrow(), Instant.now()));
+        for (int n = 1; n <= 200; n++) {
+            var c = create(PAYMENT + n, 10000);
+            var e = changed(CANCELLATION + n, PAYMENT + n, c.getCaptureId(), MERCHANT, 10000L, event.canceledAt());
+            adjustments.save(SettlementRefundAdjustment.received(
+                    e, settlements.findByPaymentId(PAYMENT + n).orElseThrow(), Instant.now()));
+        }
+        assertThat(payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE))
+                .isEqualTo("EMPTY");
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM settlement_refund_adjustments WHERE merchant_id=? AND status='APPLIED' AND disposition='UNPAID_EXCLUSION' AND remaining_amount=0",
+                        Long.class,
+                        MERCHANT))
+                .isEqualTo(201);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM settlements WHERE merchant_id=? AND status='SCHEDULED'",
+                        Long.class,
+                        MERCHANT))
+                .isZero();
+    }
+
+    // 준비 행은 금융 실패와 무관한 구조 정보이며 UTC 시각으로 한 번만 저장한다.
+    @Test
+    void record_whenGatePrepared_keepsOneRowWithUtcCreatedAt() {
+        var from = Instant.now().minusSeconds(1);
+        service.record(event);
+        service.record(event);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM merchant_settlement_locks WHERE merchant_id=?", Long.class, MERCHANT))
+                .isEqualTo(1);
+        var at = jdbc.queryForObject(
+                        "SELECT created_at FROM merchant_settlement_locks WHERE merchant_id=?",
+                        java.time.LocalDateTime.class,
+                        MERCHANT)
+                .toInstant(java.time.ZoneOffset.UTC);
+        assertThat(at).isBetween(from, Instant.now().plusSeconds(1));
     }
 }

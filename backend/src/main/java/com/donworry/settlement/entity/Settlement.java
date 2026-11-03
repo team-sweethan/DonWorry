@@ -89,6 +89,14 @@ public class Settlement {
         updatedAt = now;
     }
 
+    // 환불은 원 거래 금액을 지우지 않고 미지급 정산의 대상 상태만 변경한다.
+    public void excludeForRefund(Instant now) {
+        if (now == null || status != SettlementStatus.SCHEDULED || completedAt != null)
+            throw new IllegalStateException("미지급 정산만 환불로 제외할 수 있습니다.");
+        status = SettlementStatus.CANCELED;
+        updatedAt = now;
+    }
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

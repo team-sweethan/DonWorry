@@ -356,3 +356,5 @@ P1 사용자가 신규 테이블 2개를 포함한 설계·구현을 승인했�
 P6 2단계 #474: [가맹점 지급 원장·상세 ERD](../settlement/daily-payouts.md). P6 소유 테이블만 추가하며, 기존 완료 원본을 유지한 이력 전환을 포함한다.
 
 P6 3단계 #478: [환불 수신 조정 원장 ERD](../settlement/refund-receiving.md#erd-settlement_refund_adjustments). 전액 환불의 원 수수료·순정산액을 PENDING으로 보존한다. 실제 제외·회수·이월과 운영 활성화는 후속이다.
+
+P6 4단계 #488: [가맹점 공통 잠금 ERD·미지급 제외](../settlement/unpaid-refund-exclusion.md). 신규 P6 잠금 테이블만 추가하며 이미 지급한 환불의 회수·이월은 후속이다.

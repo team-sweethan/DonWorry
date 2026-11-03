@@ -17,9 +17,11 @@ public class SettlementCompletionTransactionService {
     private final SettlementCompletionPolicy policy;
     private final MerchantPayoutRepository payouts;
     private final MerchantPayoutItemRepository payoutItems;
+    private final SettlementMerchantLockService merchantLocks;
+    private final RefundAdjustmentService refunds;
 
-    // 현재 커밋 상태를 읽고 지급 행 → 정산 행 순서로 잠가 같은 가맹점·날짜의 실행을 여러 서버에서도 직렬화한다.
-    @Transactional(propagation = Propagation.REQUIRES_NEW, isolation = Isolation.READ_COMMITTED)
+    // 날짜와 무관한 가맹점 잠금을 먼저 잡아 환불과 여러 서버의 지급을 함께 직렬화한다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public String completeMerchant(Long merchantId, Instant cutoff, long upperSettlementId) {
         var started = Instant.now();
         if (merchantId == null
@@ -27,14 +29,23 @@ public class SettlementCompletionTransactionService {
                 || cutoff == null
                 || cutoff.isAfter(started)
                 || upperSettlementId <= 0) throw new IllegalArgumentException("가맹점과 현재 이하 기준 시각·후보 상한이 필요합니다.");
+        return merchantLocks.execute(merchantId, () -> completeLocked(merchantId, cutoff, upperSettlementId));
+    }
+
+    private String completeLocked(Long merchantId, Instant cutoff, long upperSettlementId) {
+        var started = Instant.now();
         var date = started.atZone(ZoneId.of("Asia/Seoul")).toLocalDate();
+        refunds.excludePendingForMerchant(merchantId);
         if (payouts.existsByMerchantIdAndPayoutDateAndStatus(merchantId, date, PayoutStatus.COMPLETED))
             return "ALREADY_COMPLETED";
         if (settlements.countForPayout(merchantId, cutoff, upperSettlementId) == 0) return "EMPTY";
         payouts.ensurePending(merchantId, date, LocalDateTime.ofInstant(started, ZoneOffset.UTC));
         var payout = payouts.findForUpdate(merchantId, date).orElseThrow();
         if (payout.getStatus() == PayoutStatus.COMPLETED) return "ALREADY_COMPLETED";
-        var targets = settlements.findForPayout(merchantId, cutoff, upperSettlementId);
+        // 넓은 FOR UPDATE 스캔은 다른 가맹점 행에서도 대기할 수 있어 ID 조회 뒤 PK로만 잠근다.
+        var targets = settlements.findPayoutTargetIds(merchantId, cutoff, upperSettlementId).stream()
+                .map(id -> settlements.findForCompletion(id).orElseThrow())
+                .toList();
         if (targets.isEmpty()) throw new IllegalStateException("잠금 후 지급 대상이 없어 지급을 확정하지 않습니다.");
         var source = captures
                 .findAllById(targets.stream().map(Settlement::getCaptureId).toList())

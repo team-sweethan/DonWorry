@@ -40,14 +40,13 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     List<Long> findCompletionMerchants(
             @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            SELECT s FROM Settlement s
+            SELECT s.settlementId FROM Settlement s
             WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
               AND s.scheduledAt<=:cutoff AND s.settlementId<=:upper
             ORDER BY s.settlementId
             """)
-    List<Settlement> findForPayout(
+    List<Long> findPayoutTargetIds(
             @Param("merchant") Long merchant, @Param("cutoff") Instant cutoff, @Param("upper") Long upper);
 
     @Query("""

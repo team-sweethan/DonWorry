@@ -17,13 +17,17 @@ class RefundAdjustmentServiceTests {
     private final SettlementRepository settlements = mock(SettlementRepository.class);
     private final CaptureRepository captures = mock(CaptureRepository.class);
     private final SettlementRefundAdjustmentRepository adjustments = mock(SettlementRefundAdjustmentRepository.class);
-    private final RefundAdjustmentService service = new RefundAdjustmentService(settlements, captures, adjustments);
+    private final SettlementMerchantLockService merchantLocks = mock(SettlementMerchantLockService.class);
+    private final RefundAdjustmentService service = new RefundAdjustmentService(
+            settlements, captures, adjustments, merchantLocks, mock(MerchantPayoutItemRepository.class));
     private Settlement source;
     private Capture capture;
     private PaymentRefundSucceeded event;
 
     @BeforeEach
     void setup() {
+        when(merchantLocks.execute(any(), any()))
+                .thenAnswer(call -> ((java.util.function.Supplier<?>) call.getArgument(1)).get());
         source = Settlement.scheduled(
                 3L, 1L, 2L, 10000L, new BigDecimal("0.02"), new BigDecimal("0.01"), 200L, 100L, 9700L, AT);
         ReflectionTestUtils.setField(source, "settlementId", 4L);
@@ -37,17 +41,17 @@ class RefundAdjustmentServiceTests {
     }
 
     @Test
-    void record_whenValid_storesPendingNetAdjustmentAndOriginalFees() {
+    void record_whenUnpaid_excludesAtomicallyAndPreservesOriginalFees() {
         var result = service.record(event);
         assertThat(result.getRefundAmount()).isEqualTo(10000);
         assertThat(result.getAdjustmentAmount()).isEqualTo(9700);
-        assertThat(result.getRemainingAmount()).isEqualTo(9700);
+        assertThat(result.getRemainingAmount()).isZero();
         assertThat(result.getCardFeeReturn()).isEqualTo(200);
         assertThat(result.getPgFeeReturn()).isEqualTo(100);
-        assertThat(result.getStatus()).isEqualTo(RefundAdjustmentStatus.PENDING);
-        assertThat(result.getDisposition()).isNull();
+        assertThat(result.getStatus()).isEqualTo(RefundAdjustmentStatus.APPLIED);
+        assertThat(result.getDisposition()).isEqualTo(RefundAdjustmentDisposition.UNPAID_EXCLUSION);
         assertThat(result.getCanceledAt()).isEqualTo(event.canceledAt());
-        assertThat(source.getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
+        assertThat(source.getStatus()).isEqualTo(SettlementStatus.CANCELED);
         verify(settlements, never()).save(any());
         verify(captures, never()).save(any());
     }

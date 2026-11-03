@@ -125,3 +125,5 @@ P1 #461 PR 리뷰 대상: [0069 릴리스 marker 사전 준비와 게시 직전 
 P6 #474 PR 리뷰 대상: [0070 가맹점별 일별 지급 원장](0070-p6-merchant-daily-payouts.md).
 
 P6 #478 PR 리뷰 대상: [0071 환불 성공 수신과 정산 적용 분리](0071-p6-refund-receiving-ledger.md).
+
+P6 #488 PR 리뷰 대상: [0072 지급 전 환불 제외와 가맹점 공통 잠금](0072-p6-unpaid-refund-exclusion.md).
