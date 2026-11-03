@@ -51,6 +51,8 @@ donworry-release apply <BUNDLE_ID> <JENKINS_EXECUTION_ID>
 2. Jenkins: VM 응답의 전체 묶음 ID·SHA·marker/index/child/config digest·구성 해시를
    artifact와 승인 화면에 제시한다. `input`의 `submitterParameter`로 실제 승인자를 받는다.
    실행 ID는 Jenkins 빌드 번호와 UUID로 구성한다. Job URL과 빌드 번호는 Jenkins 기록으로 연결된다.
+   시간 제한은 전체가 아닌 단계별로 둔다: 준비 20분, 승인 대기 30분(초과 시 승인 기록 없이 종료),
+   승인 기록 10분, 적용 90분. 늦은 승인이 적용 시간을 줄여 배포 도중 중단되지 않게 한다.
 3. `approve`: 묶음·저장 Compose·현재 구성이 같을 때 승인자·시각·실행 ID를 VM에 새로 기록한다.
    구성이나 대상이 바뀌면 새 `prepare`와 새 승인을 받는다. 승인을 덮어쓰지 않는다.
 4. `apply`: 승인과 실행 ID 확인 → 고정 marker·index·child·revision 재검증 → digest로 pull →
