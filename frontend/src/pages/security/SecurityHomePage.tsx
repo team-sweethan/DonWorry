@@ -7,7 +7,7 @@ import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import type { CaseStatus, CaseSummary } from '../../types/case'
 import { won } from '../../utils/format'
-import { SLA_HOURS } from '../../utils/caseRules'
+import { SLA_HOURS, customerPart } from '../../utils/caseRules'
 import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
 import { homeCounts, priorityCases, type PriorityReason } from '../../utils/securityHome'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
@@ -90,7 +90,8 @@ export function SecurityHomePage() {
       width: 120,
       render: (s: CaseStatus) => <CodeTag value={caseStatusLabel[s]} />,
     },
-    { title: '고객', dataIndex: 'customerRef', width: 120 },
+    // 저장값 "가맹점ID:고객"에서 고객 부분만 보인다 (#462)
+    { title: '고객', dataIndex: 'customerRef', width: 120, render: customerPart },
     {
       title: '위험도',
       key: 'risk',

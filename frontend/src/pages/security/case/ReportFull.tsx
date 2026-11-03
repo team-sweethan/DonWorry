@@ -8,6 +8,7 @@ import {
   topRiskScore,
   unknownItems,
 } from '../../../utils/reportView'
+import { customerPart } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
@@ -194,7 +195,7 @@ function MoreInfo({ body }: { body: ReportBody }) {
       <Descriptions size="small" column={2} colon={false} title="사건 개요">
         <Descriptions.Item label="Case">{overview.caseId}</Descriptions.Item>
         <Descriptions.Item label="가맹점">{overview.merchantId}</Descriptions.Item>
-        <Descriptions.Item label="고객">{overview.customerRef}</Descriptions.Item>
+        <Descriptions.Item label="고객">{customerPart(overview.customerRef)}</Descriptions.Item>
         <Descriptions.Item label="대상 거래">{overview.paymentCount}건</Descriptions.Item>
         <Descriptions.Item label="총액">{won(overview.totalAmount)}</Descriptions.Item>
         <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
