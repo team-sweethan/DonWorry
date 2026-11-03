@@ -68,6 +68,8 @@ class FdsEvaluationTransactionService {
                 .findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
                         request.merchantId(), request.customerRef(), windowStart, request.paymentRequestedAt())
                 .stream()
+                // DB 기본 collation은 customerRef 대소문자를 구분하지 않는다 — 원문이 같은 고객만 집계한다.
+                .filter(evaluation -> request.customerRef().equals(evaluation.getCustomerRef()))
                 .map(FdsEvaluation::getPaymentId)
                 .collect(java.util.stream.Collectors.toSet());
         priorPaymentIds.add(request.paymentId());
@@ -77,6 +79,10 @@ class FdsEvaluationTransactionService {
         var history = java.util.Optional.ofNullable(evaluationRepository.findByMerchantIdAndCustomerRef(
                         request.merchantId(), request.customerRef()))
                 .orElseGet(java.util.List::of);
+        history = history.stream()
+                // R02 · R03 · R06 · R08 이력도 대소문자만 다른 고객과 섞이지 않게 한다.
+                .filter(evaluation -> request.customerRef().equals(evaluation.getCustomerRef()))
+                .toList();
         var approvedHistory = history.stream()
                 .filter(e -> "APPROVED".equals(e.getAuthorizationResult()))
                 .toList();
