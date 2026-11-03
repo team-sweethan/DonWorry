@@ -13,18 +13,18 @@ class PaymentSessionNotifyTests {
     private static final String HELD_EVENT = "evt_7_HELD_A";
     private static final String VOIDED_EVENT = "evt_7_VOIDED_A";
 
-    // 실패할수록 5초부터 두 배씩 늘리고 5분을 넘기지 않는다
+    // 실패할수록 5초부터 두 배씩 늘리고 5분을 넘기지 않는다 (첫 재시도는 5초 뒤, #460)
     @Test
     void notifyFailed_beforeLimit_schedulesWithBackoff() {
         PaymentSession session = submittedSession();
 
-        assertThat(session.notifyFailed(HELD_EVENT, "HELD", true, TIME)).isFalse();
-        assertThat(session.getNextNotifyAt()).isEqualTo(TIME.plusSeconds(10));
-        for (int i = 2; i < 7; i++) session.notifyFailed(HELD_EVENT, "HELD", true, TIME);
+        for (long seconds : new long[] {5, 10, 20, 40, 80, 160, 300, 300}) {
+            assertThat(session.notifyFailed(HELD_EVENT, "HELD", true, TIME)).isFalse();
+            assertThat(session.getNextNotifyAt()).isEqualTo(TIME.plusSeconds(seconds));
+        }
 
-        assertThat(session.getNotifyAttempts()).isEqualTo(6);
+        assertThat(session.getNotifyAttempts()).isEqualTo(8);
         assertThat(session.getNotifyEventId()).isEqualTo(HELD_EVENT);
-        assertThat(session.getNextNotifyAt()).isEqualTo(TIME.plus(5, ChronoUnit.MINUTES));
         assertThat(session.getNotifiedStatus()).isNull();
     }
 
@@ -58,7 +58,7 @@ class PaymentSessionNotifyTests {
 
         assertThat(session.getNotifyAttempts()).isEqualTo(1);
         assertThat(session.getNotifyEventId()).isEqualTo(VOIDED_EVENT);
-        assertThat(session.getNextNotifyAt()).isEqualTo(TIME.plusSeconds(10));
+        assertThat(session.getNextNotifyAt()).isEqualTo(TIME.plusSeconds(5));
         assertThat(session.getNotifiedStatus()).isNull();
     }
 

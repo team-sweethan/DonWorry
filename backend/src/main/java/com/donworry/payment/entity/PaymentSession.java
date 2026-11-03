@@ -19,7 +19,7 @@ public class PaymentSession {
     // 웹훅 재전송 간격. 실패할수록 늘린다(최대 5분).
     private static final Duration NOTIFY_BASE_DELAY = Duration.ofSeconds(5);
     private static final Duration NOTIFY_MAX_DELAY = Duration.ofMinutes(5);
-    // 첫 시도부터 약 24시간(10·20·40·80·160초 뒤 5분 간격으로 293번째 시도)이면 그 상태의 알림을 그만둔다.
+    // 첫 시도부터 약 24시간(5·10·20·40·80·160초 뒤 5분 간격으로 293번째 시도)이면 그 상태의 알림을 그만둔다.
     // 가맹점은 조회 배치로도 상태를 맞추므로 웹훅은 빠른 알림일 뿐이다 (ADR-0064 3절, #455)
     public static final int NOTIFY_MAX_ATTEMPTS = 293;
 
@@ -226,7 +226,8 @@ public class PaymentSession {
             this.nextNotifyAt = null;
             return true;
         }
-        long factor = 1L << Math.min(notifyAttempts, 6);
+        // 첫 실패 뒤 5초, 그다음부터 두 배 (ADR-0064 3절, #460)
+        long factor = 1L << Math.min(notifyAttempts - 1, 6);
         Duration delay = NOTIFY_BASE_DELAY.multipliedBy(factor);
         if (delay.compareTo(NOTIFY_MAX_DELAY) > 0) delay = NOTIFY_MAX_DELAY;
         nextNotifyAt = PaymentStorageValues.micros(now.plus(delay));
