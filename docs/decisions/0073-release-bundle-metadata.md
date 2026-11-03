@@ -56,7 +56,8 @@ index와 플랫폼별 manifest의 관계·실행 플랫폼·revision 대조는 #
 ## 검증
 
 검사 명령은 `python3 -m unittest discover -s .github/scripts -p 'test_release_*.py' -v`,
-`bash -n .github/scripts/*.sh`, `python3 .github/scripts/check_md_links.py`다.
+`for script in .github/scripts/*.sh; do bash -n "$script"; done`,
+`python3 .github/scripts/check_md_links.py`다. `bash -n`은 여러 파일을 넘기면 첫 파일만 검사하므로 반복문으로 실행한다.
 검토 대상 커밋의 실행 결과는 PR에 남긴다. Git·Docker 게시 호출은 대역 검사다.
 실제 main push·GHCR manifest/config labels·서비스 플랫폼 revision과
 Jenkins·VM 소비 검증은 미검증이며 실행 링크 확보 전에는 완료로 표시하지 않는다.

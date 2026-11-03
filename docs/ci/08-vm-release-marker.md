@@ -76,7 +76,6 @@ main 변경과 GHCR 게시를 원자적으로 묶지는 않는다. 최종 조회
 
 ```bash
 python3 -m unittest discover -s .github/scripts -p 'test_release_*.py' -v
-bash -n .github/scripts/*.sh
 for script in .github/scripts/*.sh; do bash -n "$script"; done
 python3 .github/scripts/check_md_links.py
 ```
