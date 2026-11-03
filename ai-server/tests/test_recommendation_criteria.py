@@ -106,3 +106,10 @@ def test_investigation_rewrites_empty_unknowns_and_keeps_basis() -> None:
     assert llm.write_calls == 2
     # 샘플은 주의 징후뿐이라 기준표 판정은 추가 확인 — AI가 쓴 승인 취소 검토는 쓰지 않는다
     assert outcome.report.verdict.overallRecommendation == "NEEDS_CHECK"
+
+
+# 이유에 징후 이름을 그대로 써야 화면이 조사 요약에 그 징후 색 밑줄을 그을 수 있다 (#501 화면)
+def test_prompt_asks_signal_names_in_reason() -> None:
+    assert "reason의 징후는 판정 근거의 징후 이름 그대로 쓴다" in WRITE_SYSTEM
+    reasons = [p["reason"] for e in WRITE_EXAMPLES for p in e["payments"].values()]
+    assert any("처음 쓰는 기기" in r for r in reasons)
