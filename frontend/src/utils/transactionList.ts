@@ -1,5 +1,6 @@
 import type { PaymentStatus } from '../types/case.ts'
 import type { MlShadowScore } from '../types/mlShadowScore.ts'
+import { customerPart } from './caseRules.ts'
 
 // 거래 내역 조건 (#363). Case 목록(#243)처럼 주소 쿼리에 두어 경보 · 사건으로 갔다가 뒤로 와도 같은 조건으로 열린다
 // 기본값은 주소에 쓰지 않는다. 모르는 값은 무시하고 기본값을 쓴다
@@ -105,6 +106,29 @@ export function transactionListSearch(query: Partial<TransactionListQuery>) {
   if (q.page > 1) params.set('page', String(q.page))
   const search = params.toString()
   return search ? `?${search}` : ''
+}
+
+// 그 손님 결제만 보는 조건 (#487) — 저장값 "가맹점ID:고객"에서 고객 부분만 쓴다. 다른 조건은 처음부터
+export function customerOnlyQuery(
+  merchantId: number | string,
+  customerRef: string,
+): TransactionListQuery | null {
+  const id = positiveId(String(merchantId))
+  const customer = customerPart(customerRef).trim()
+  if (id === null || !customer) return null
+  return { ...defaultTransactionListQuery, merchantId: id, customerRef: customer }
+}
+
+// 경보 · 사건 상세의 "이 고객 거래 내역 보기" 주소 (#487). 가맹점이나 고객을 모르면 null
+export function customerTransactionsPath(merchantId: number | string, customerRef: string) {
+  const query = customerOnlyQuery(merchantId, customerRef)
+  return query && `/security/transactions${transactionListSearch(query)}`
+}
+
+// 가맹점을 바꾸거나 지우면 고객 번호 조건도 지운다 (#487)
+// 고객 번호는 가맹점마다 따로라, 남겨 두면 다른 가맹점의 다른 손님을 찾거나 조회가 막힌다
+export function merchantChange(merchantId: number | null): Partial<TransactionListQuery> {
+  return { merchantId, customerRef: '' }
 }
 
 // 고른 날짜 수 (양끝 포함). 기간 조건이 없으면 0
