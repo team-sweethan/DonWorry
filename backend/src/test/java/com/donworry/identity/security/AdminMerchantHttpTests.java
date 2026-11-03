@@ -364,7 +364,15 @@ class AdminMerchantHttpTests {
                 .establishAuthentication(any(), any(), any());
         var caller = client();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var loggingIn = executor.submit(() -> login(caller, "owner"));
+            // 마지막 검증은 GET이므로 로그인 뒤 CSRF 갱신이 필요 없다. 갱신 요청이 세션 만료를 먼저 관측하지 않게 한다.
+            var loginRequest = com.donworry.HttpCsrfTestSupport.withCsrf(
+                            caller,
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                                    .header("Content-Type", "application/json")
+                                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(
+                                            Map.of("loginId", prefix + "owner", "password", "MerchantPass123")))))
+                    .build();
+            var loggingIn = executor.submit(() -> caller.send(loginRequest, HttpResponse.BodyHandlers.ofString()));
             try {
                 assertThat(reached.await(10, TimeUnit.SECONDS)).isTrue();
                 var mutation = executor.submit(() -> status("INACTIVE"));
