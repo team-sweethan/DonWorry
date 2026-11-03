@@ -127,6 +127,9 @@ jobs:
           push: true
           tags: ghcr.io/team-sweethan/donworry-release:sha-${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
+          # marker는 revision label만 담는다. provenance를 붙이면 index로 발행되므로
+          # 단일 manifest로 유지해 게시 스크립트의 digest 그대로 승격 전제와 맞춘다.
+          provenance: false
 
       # 최신 확인과 digest 승격을 같은 스크립트에서 실행한다. main 병합을 잠그지는
       # 않으므로 확인 이후 변경에 대한 실제 배포 차단은 #448의 소비 측 검증이 필요하다.
