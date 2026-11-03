@@ -3,18 +3,24 @@
 
 import argparse
 import copy
+from contextlib import contextmanager
 import datetime
 import fcntl
+from functools import wraps
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 ROOT = Path('/srv/donworry')
+LOCK = Path('/run/lock/donworry-deploy.lock')
+LOCK_WAIT = 300
 MARKER = 'ghcr.io/team-sweethan/donworry-release'
 GIT = 'https://github.com/team-sweethan/DonWorry.git'
 REPOS = {s: f'ghcr.io/team-sweethan/donworry-{n}' for s, n in
@@ -59,17 +65,61 @@ def timestamp():
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def boot_id():
+    path = Path('/proc/sys/kernel/random/boot_id')
+    return path.read_text().strip() if path.exists() else 'unavailable'
+
+
 def platform_name(platform):
     return platform['os'] + '/' + platform['architecture']
 
 
-def run(*args):
+def command_timeout(args):
+    if args[:2] == ('docker', 'pull'):
+        return 600
+    if args[0] == 'git' or args[:2] == ('docker', 'buildx'):
+        return 120
+    if args[:2] == ('docker', 'compose') and 'up' in args:
+        return 360
+    if args[0] == 'curl' or (args[:2] == ('docker', 'compose') and 'exec' in args):
+        return 10
+    return 30
+
+
+def run(*args, pass_fds=()):
     # Compose 출력/오류에 환경값이 포함될 수 있어 명령 출력은 로그에 재전달하지 않는다.
     try:
-        return subprocess.run(args, check=True, stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE, timeout=600).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        # 부모가 강제 종료돼도 실행 중인 자식이 공통 잠금을 유지한다. SSH 프로세스 그룹과도 분리한다.
+        with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              start_new_session=True, pass_fds=pass_fds) as process:
+            try:
+                output, _ = process.communicate(timeout=command_timeout(args))
+            except BaseException:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.communicate()
+                raise
+            require(process.returncode == 0, f'외부 명령 실패: {args[0]} (출력 생략)')
+            return output
+    except (subprocess.TimeoutExpired, OSError) as exc:
         raise Rejected(f'외부 명령 실패: {args[0]} (상세 출력은 비밀값 보호를 위해 생략)') from exc
+
+
+def sync_directory(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def write_new(path, value):
@@ -77,14 +127,76 @@ def write_new(path, value):
         stream.write(encoded(value))
         stream.flush()
         os.fsync(stream.fileno())
+    sync_directory(path.parent)
+
+
+def write_atomic(path, value):
+    # fsync 후 같은 파일시스템에서 교체해 전원 중단 시에도 이전/새 JSON 중 하나를 읽는다.
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.state-', delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(encoded(value))
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+            sync_directory(path.parent)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def serialized(action):
+    def decorate(method):
+        @wraps(method)
+        def wrapped(self, *args, **kwargs):
+            with self.exclusive(action):
+                return method(self, *args, **kwargs)
+        return wrapped
+    return decorate
 
 
 class Release:
     def __init__(self, root=ROOT, command=run, sleep=time.sleep):
         self.root = root
-        self.command = command
+        self.lock_fd = None
+        self.lock_path = LOCK if root == ROOT else root / 'deploy.lock'
+        self.command = (lambda *args: run(*args, pass_fds=(() if self.lock_fd is None else
+                                                         (self.lock_fd,)))) if command is run else command
         self.sleep = sleep
         self.store = root / 'releases'
+
+    @contextmanager
+    def exclusive(self, action, wait=LOCK_WAIT):
+        # Jenkins 외 수동 실행과 #483 복구도 이 경계를 사용한다. 잠금 파일은 삭제하지 않는다.
+        with self.lock_path.open('a') as lock:
+            deadline = time.monotonic() + wait
+            while True:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    require(time.monotonic() < deadline, f'공통 잠금 대기 초과: {action}')
+                    time.sleep(0.1)
+            previous = self.lock_fd
+            self.lock_fd = lock.fileno()
+            try:
+                yield
+            finally:
+                # LOCK_UN을 호출하면 상속받은 자식의 잠금까지 풀리므로 fd만 닫는다.
+                self.lock_fd = previous
+
+    def unresolved(self, exclude=None):
+        pending = []
+        for path in self.store.glob('*/result.json'):
+            result = json.loads(path.read_bytes())
+            if path.parent.name == exclude or result.get('status') == 'success':
+                continue
+            resolution = path.with_name('resolution.json')
+            if resolution.exists():
+                record = json.loads(resolution.read_bytes())
+                require(record['result_digest'] == digest(path.read_bytes()), '상태 확인 기록 불일치')
+                continue
+            pending.append(path.parent.name)
+        return pending
 
     def json(self, *args):
         return json.loads(self.command(*args))
@@ -100,12 +212,10 @@ class Release:
                               'refs/heads/main').decode().rstrip('\n')
         require(actual == f'{sha}\trefs/heads/main', '승인 SHA와 현재 main HEAD 불일치')
 
-    def preflight(self):
+    def preflight(self, exclude=None):
         require(not (self.root / 'PAUSE_CD').exists() and
                 not (self.root / 'PAUSE_CD').is_symlink(), 'PAUSE_CD: 수동 확인 필요')
-        for path in self.store.glob('*/result.json'):
-            require(json.loads(path.read_bytes()).get('status') == 'success',
-                    '실패/미완료 업데이트 기록: 수동 확인 필요')
+        require(not self.unresolved(exclude), '실패/미완료 업데이트 기록: inspect/reconcile 필요')
         require((self.root / 'backups/deployed-image-tag').is_file(),
                 '기존 성공 배포 기록 없음: 최초 배포는 이 명령의 대상이 아님')
         previous = (self.root / 'backups/deployed-image-tag').read_text().strip()
@@ -195,6 +305,7 @@ class Release:
             require(image == self.image(service, indexes[service], sha, bundle['platform']),
                     '승인 이미지 묶음 불일치')
 
+    @serialized('prepare')
     def prepare(self, sha, execution):
         require(re.fullmatch(r'[0-9a-f]{40}', sha), 'TARGET_SHA 형식 오류')
         token(execution)
@@ -214,6 +325,8 @@ class Release:
         bundle_id = digest(encoded(bundle)).split(':')[1]
         folder = self.store / bundle_id
         folder.mkdir(parents=True, mode=0o700)
+        sync_directory(self.root)
+        sync_directory(self.store)
         resolved = copy.deepcopy(config)
         for s, image in images.items():
             resolved['services'][s]['image'] = f"{image['repository']}@{image['index']}"
@@ -226,19 +339,15 @@ class Release:
         final_id = digest(encoded(bundle)).split(':')[1]
         write_new(folder / 'bundle.json', bundle)
         folder.rename(self.store / final_id)
+        sync_directory(self.store)
         return {'bundle_id': final_id, **bundle}
 
     def load(self, bundle_id, execution):
-        require(re.fullmatch(r'[0-9a-f]{64}', bundle_id), '묶음 ID 형식 오류')
-        folder = self.store / bundle_id
-        bundle = json.loads((folder / 'bundle.json').read_bytes())
-        require(digest(encoded(bundle)) == 'sha256:' + bundle_id, '승인 묶음 변조')
-        require(bundle['execution'] == token(execution), 'Jenkins 실행 ID 불일치')
-        require(digest((folder / 'compose.json').read_bytes()) == bundle['compose_digest'],
-                '저장된 Compose 변경: 새 승인 필요')
+        folder, bundle = self.load_snapshot(bundle_id, execution)
         require(self.configuration()[1] == bundle['configuration'], '구성 변경: 새 준비·승인 필요')
         return folder, bundle
 
+    @serialized('approve')
     def approve(self, bundle_id, execution, approver):
         folder, bundle = self.load(bundle_id, execution)
         require(not (folder / 'result.json').exists(), '이미 적용을 시도한 승인')
@@ -269,6 +378,35 @@ class Release:
                     local['Config'].get('Labels', {}).get(REVISION) == bundle['sha'],
                     '로컬 이미지 digest/platform/revision 불일치')
 
+    @contextmanager
+    def operation(self, folder, bundle_id, execution, approval, kind='deploy'):
+        # 복구 구현도 exclusive + operation을 함께 사용해야 한다 (#483).
+        require(self.lock_fd is not None, '변경 작업은 공통 잠금 필요')
+        result = {'bundle_id': bundle_id, 'execution': execution, 'approval': approval,
+                  'operation': kind, 'pid': os.getpid(),
+                  'boot_id': boot_id(),
+                  'started_at': timestamp(), 'status': 'running', 'phase': 'validating',
+                  'history': []}
+        write_new(folder / 'result.json', result)
+        def stage(phase):
+            result['phase'] = phase
+            result['updated_at'] = timestamp()
+            result['history'].append({'phase': phase, 'at': result['updated_at']})
+            write_atomic(folder / 'result.json', result)
+        try:
+            stage('validating')
+            yield result, stage
+            result['status'] = 'success'
+        except BaseException:
+            result['status'] = 'failed'
+            (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
+            sync_directory(self.root)
+            raise
+        finally:
+            result['finished_at'] = timestamp()
+            write_atomic(folder / 'result.json', result)
+
+    @serialized('apply')
     def apply(self, bundle_id, execution):
         require((self.root / 'ENABLE_UPDATE_CD').is_file(), '실제 CD 활성화 전: 운영 검증·승인 필요')
         folder, bundle = self.load(bundle_id, execution)
@@ -276,37 +414,121 @@ class Release:
         require(approval['bundle_id'] == bundle_id and approval['execution'] == execution,
                 '승인 기록 불일치')
         require(not (folder / 'result.json').exists(), '이미 적용을 시도한 승인')
+        # 잠금 대기 후 검사한다. 중단 기록이 있으면 다운로드도 새로 시작하지 않는다.
         self.preflight()
-        self.verify(bundle)
-        self.local_images(bundle, pull=True)
-        # 다운로드 등 준비 작업 이후 구성/이미지/기존 서비스 상태를 다시 확인한다.
-        self.load(bundle_id, execution)
-        self.preflight()
-        self.local_images(bundle, pull=False)
-        self.compose('config', '--quiet', file=folder / 'compose.json')
-        self.main(bundle['sha'])
-        result = {'bundle_id': bundle_id, 'execution': execution, 'approval': approval,
-                  'started_at': timestamp(), 'status': 'applying'}
-        write_new(folder / 'result.json', result)
-        try:
-            # DB는 기존 healthy 인스턴스를 그대로 사용한다.
+        with self.operation(folder, bundle_id, execution, approval) as (result, stage):
+            self.verify(bundle)
+            stage('pulling')
+            self.local_images(bundle, pull=True)
+            stage('final_validation')
+            self.load(bundle_id, execution)
+            self.preflight(exclude=bundle_id)
+            self.verify(bundle)
+            self.local_images(bundle, pull=False)
+            self.compose('config', '--quiet', file=folder / 'compose.json')
+            self.main(bundle['sha'])
+            stage('applying')
+            # DB는 기존 healthy 인스턴스를 그대로 사용한다. 자동 재시도하지 않는다.
             self.compose('up', '-d', '--no-deps', '--no-build', '--pull', 'never',
                          '--wait', '--wait-timeout', '240', 'backend', 'ai', 'nginx',
                          file=folder / 'compose.json')
+            stage('checking')
             self.runtime(bundle, folder)
-            result['status'] = 'success'
-            current = self.root / 'releases/current.json'
-            temp = current.with_suffix('.tmp')
-            temp.write_bytes(encoded({'bundle_id': bundle_id, 'sha': bundle['sha']}))
-            temp.replace(current)
-        except BaseException:
-            result['status'] = 'failed'
-            (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
-            raise
-        finally:
-            result['finished_at'] = timestamp()
-            (folder / 'result.json').write_bytes(encoded(result))
+            stage('publishing')
+            write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': bundle['sha']})
+            stage('completed')
         return result
+
+    @serialized('inspect')
+    def inspect(self, bundle_id, execution):
+        folder, bundle = self.load_snapshot(bundle_id, execution)
+        result = json.loads((folder / 'result.json').read_bytes())
+        observed_boot = boot_id()
+        previous_boot = result.get('boot_id', 'unavailable')
+        # State 전체나 Config.Env를 출력하지 않는다. 컨테이너별 혼합 상태를 보여준다.
+        services = {}
+        for service in ['db', *REPOS]:
+            cid = self.compose('ps', '-a', '-q', service, file=folder / 'compose.json').decode().strip()
+            if not cid:
+                services[service] = {'present': False}
+                continue
+            container = self.json('docker', 'inspect', cid)[0]
+            services[service] = {'present': True, 'image_id': container.get('Image'),
+                                 'image_ref': container.get('Config', {}).get('Image'),
+                                 'running': container['State'].get('Running', False),
+                                 'health': container['State'].get('Health', {}).get('Status')}
+        return {'bundle_id': bundle_id, 'execution': execution, 'observed_at': timestamp(),
+                'observed_boot_id': observed_boot,
+                'boot_changed': (previous_boot != observed_boot if 'unavailable' not in
+                                 {previous_boot, observed_boot} else None),
+                'result': result,
+                'unresolved': self.unresolved(), 'services': services}
+
+    def load_snapshot(self, bundle_id, execution):
+        require(re.fullmatch(r'[0-9a-f]{64}', bundle_id), '묶음 ID 형식 오류')
+        folder = self.store / bundle_id
+        bundle = json.loads((folder / 'bundle.json').read_bytes())
+        require(digest(encoded(bundle)) == 'sha256:' + bundle_id, '승인 묶음 변조')
+        require(bundle['execution'] == token(execution), '실행 ID 불일치')
+        require(digest((folder / 'compose.json').read_bytes()) == bundle['compose_digest'],
+                '저장된 Compose 변경')
+        return folder, bundle
+
+    @serialized('reconcile')
+    def reconcile(self, bundle_id, execution, operator, against, evidence):
+        folder, bundle = self.load_snapshot(bundle_id, execution)
+        token(operator)
+        token(evidence)
+        result = json.loads((folder / 'result.json').read_bytes())
+        require(result['status'] != 'success', '성공 실행은 중단 확인 대상이 아님')
+        require(self.unresolved() in ([bundle_id], []), '다른 미완료 실행부터 확인 필요')
+        require(against in {'current', 'target'}, '확인 대상은 current/target만 허용')
+        # SIGKILL 기록에는 PAUSE_CD가 없을 수 있다. 해제 기록/포인터 저장 사이 중단도 차단한다.
+        (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
+        sync_directory(self.root)
+        expected = bundle_id
+        if against == 'current':
+            expected = json.loads((self.store / 'current.json').read_bytes())['bundle_id']
+            require(re.fullmatch(r'[0-9a-f]{64}', expected), '현재 묶음 ID 형식 오류')
+            require(expected != bundle_id, '미완료 대상은 target으로 명시해 확인 필요')
+            old = json.loads((self.store / expected / 'bundle.json').read_bytes())
+            folder_expected, bundle = self.load_snapshot(expected, old['execution'])
+            previous_result = folder_expected / 'result.json'
+            previous_resolution = folder_expected / 'resolution.json'
+            confirmed = json.loads(previous_result.read_bytes())['status'] == 'success'
+            if not confirmed and previous_resolution.exists():
+                resolved = json.loads(previous_resolution.read_bytes())
+                confirmed = (resolved['observed_bundle'] == expected and
+                             resolved['result_digest'] == digest(previous_result.read_bytes()))
+            require(confirmed, '이전 성공/확인 기록 없음: #483 운영자 복구 필요')
+        else:
+            folder_expected = folder
+        # 파일/환경 변경과 DB 비정상은 중단 상태 해제로 숨기지 않는다.
+        require(self.configuration()[1] == bundle['configuration'], '구성 변경: 운영자 확인 필요')
+        cid = self.compose('ps', '-q', 'db', file=folder_expected / 'compose.json').decode().strip()
+        require(bool(cid), '기존 DB 없음')
+        require(self.json('docker', 'inspect', cid)[0]['State'].get('Health', {}).get('Status') == 'healthy',
+                '기존 DB 비정상')
+        self.local_images(bundle, pull=False)
+        self.runtime(bundle, folder_expected)
+        record = {'bundle_id': bundle_id, 'execution': execution, 'operator': operator,
+                  'evidence': evidence,
+                  'against': against, 'observed_bundle': expected, 'checked_at': timestamp(),
+                  'result_digest': digest((folder / 'result.json').read_bytes()),
+                  'scope': 'runtime-images-and-health-only; DB/business correctness requires #483'}
+        # history는 보존하고 별도 해제 증거를 남긴다. 대상 승인 재사용은 여전히 금지한다.
+        resolution = folder / 'resolution.json'
+        if resolution.exists():
+            previous = json.loads(resolution.read_bytes())
+            require(all(previous[key] == value for key, value in record.items() if key != 'checked_at'),
+                    '기존 상태 확인과 불일치')
+            record = previous
+        else:
+            write_new(resolution, record)
+        write_atomic(self.store / 'current.json', {'bundle_id': expected, 'sha': bundle['sha']})
+        (self.root / 'PAUSE_CD').unlink(missing_ok=True)
+        sync_directory(self.root)
+        return record
 
     def runtime(self, bundle, folder):
         ids = self.image_ids(bundle)
@@ -318,12 +540,14 @@ class Release:
                     container['Config']['Image'] == f"{image['repository']}@{image['index']}",
                     '실행 컨테이너 이미지 불일치')
         # 현재 앱 이미지에 Docker healthcheck가 없어 Compose의 running만으로 준비를 판단할 수 없다.
+        deadline = time.monotonic() + 300
         for attempt in range(60):
+            require(time.monotonic() < deadline, '기동 검사 전체 제한 시간 초과')
             try:
                 self.health(folder)
                 return
             except Rejected:
-                if attempt == 59:
+                if attempt == 59 or time.monotonic() >= deadline:
                     raise
                 self.sleep(4)
 
@@ -340,24 +564,35 @@ class Release:
 
 def cli():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'approve', 'apply'])
+    parser.add_argument('action', choices=['prepare', 'approve', 'apply', 'inspect', 'reconcile'])
     parser.add_argument('target', help='prepare: TARGET_SHA, 그 외: bundle ID')
-    parser.add_argument('execution', help='Jenkins 실행 식별자')
+    parser.add_argument('execution', help='Jenkins 또는 수동 실행 식별자')
     parser.add_argument('approver', nargs='?')
+    parser.add_argument('--against', choices=['current', 'target'])
+    parser.add_argument('--evidence', help='작업 종료·DB/Flyway·업무 영향 확인 근거 식별자 (비밀값 금지)')
     args = parser.parse_args()
     require(os.geteuid() == 0, 'root 전용 명령')
     os.umask(0o077)
-    with open('/run/lock/donworry-deploy.lock', 'a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        release = Release()
-        if args.action == 'prepare':
-            result = release.prepare(args.target, args.execution)
-        elif args.action == 'approve':
-            require(args.approver is not None, '승인자 누락')
-            result = release.approve(args.target, args.execution, args.approver)
-        else:
-            result = release.apply(args.target, args.execution)
-        print(encoded(result).decode())
+    # SSH 단절은 취소 요청으로 취급하지 않는다. 결과는 VM 기록으로 확인한다.
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    def interrupted(signum, frame):
+        raise Rejected('실행 중단 신호: VM 상태 확인 필요')
+    signal.signal(signal.SIGTERM, interrupted)
+    release = Release()
+    if args.action == 'prepare':
+        result = release.prepare(args.target, args.execution)
+    elif args.action == 'approve':
+        require(args.approver is not None, '승인자 누락')
+        result = release.approve(args.target, args.execution, args.approver)
+    elif args.action == 'apply':
+        result = release.apply(args.target, args.execution)
+    elif args.action == 'inspect':
+        result = release.inspect(args.target, args.execution)
+    else:
+        require(args.approver is not None and args.against is not None and args.evidence is not None,
+                '운영자/확인 대상/수동 점검 근거 누락')
+        result = release.reconcile(args.target, args.execution, args.approver, args.against, args.evidence)
+    print(encoded(result).decode())
 
 
 if __name__ == '__main__':

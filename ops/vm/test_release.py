@@ -4,8 +4,12 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location('vm_release', Path(__file__).with_name('release.py'))
 release = importlib.util.module_from_spec(SPEC)
@@ -112,6 +116,8 @@ class Docker:
             if command == ('config', '--quiet'):
                 self.saved_compose = json.loads(file.read_bytes())
                 return b''
+            if command[:3] == ('ps', '-a', '-q'):
+                return (command[3] + '-container').encode()
             if command[:2] == ('ps', '-q'):
                 return (command[2] + '-container').encode()
             if command[:1] == ('up',):
@@ -266,6 +272,7 @@ class ReleaseTests(unittest.TestCase):
     def test_missing_image_and_remote_failure_block_apply(self):
         for selected in ['manifest', 'pull', 'image']:
             with self.subTest(selected=selected):
+                self.setUp()
                 bundle = self.approved()
                 self.docker.fail = lambda args: (
                     (selected == 'manifest' and args[:2] == ('docker', 'buildx')) or
@@ -308,6 +315,7 @@ class ReleaseTests(unittest.TestCase):
         # 저장 방식과 다른 종류의 ID가 나오면 서비스 변경 전에 거절한다.
         for containerd, use_index in [(True, False), (False, True)]:
             with self.subTest(containerd=containerd):
+                self.setUp()
                 bundle = self.approved()
                 saved = copy.deepcopy(self.docker.local)
                 self.docker.containerd = containerd
@@ -322,6 +330,7 @@ class ReleaseTests(unittest.TestCase):
         for key, value in [('Architecture', 'arm64'), ('Os', 'windows'),
                            ('Config', {'Labels': {release.REVISION: 'b' * 40}})]:
             with self.subTest(key=key):
+                self.setUp()
                 bundle = self.approved()
                 saved = copy.deepcopy(self.docker.local)
                 for image in self.docker.local.values():
@@ -391,6 +400,279 @@ class ReleaseTests(unittest.TestCase):
         self.cd.apply(bundle, EXECUTION)
         self.docker.calls.clear()
         self.blocked(bundle)
+
+    def test_pull_failure_is_durably_recorded_before_service_change(self):
+        bundle = self.approved()
+        self.docker.fail = lambda args: args[:2] == ('docker', 'pull')
+        self.blocked(bundle)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['phase'], 'pulling')
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['execution'], EXECUTION)
+        self.assertIn('boot_id', result)
+
+    def test_apply_holds_common_lock_even_when_called_without_cli(self):
+        bundle = self.approved()
+        def contender():
+            with self.assertRaisesRegex(release.Rejected, '잠금'):
+                with self.cd.exclusive('recovery', wait=0):
+                    self.fail('복구가 배포 잠금을 통과함')
+        self.docker.on_pull = contender
+        self.assertEqual(self.cd.apply(bundle, EXECUTION)['status'], 'success')
+
+    def test_caught_interruption_blocks_fresh_release_instance(self):
+        bundle = self.approved()
+        def killed():
+            result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+            self.assertEqual(result['phase'], 'pulling')
+            raise SystemExit('강제 중단 대역')
+        self.docker.on_pull = killed
+        with self.assertRaises(SystemExit):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.on_pull = lambda: None
+        with self.assertRaises(release.Rejected):
+            release.Release(self.root, self.docker).prepare(SHA, 'after-reboot')
+        self.assertEqual(self.docker.mutations(), [])
+
+    def test_partial_runtime_cannot_be_reconciled(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        with self.assertRaises(release.Rejected):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.assertFalse((self.cd.store / bundle / 'resolution.json').exists())
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+
+    def test_reconciliation_checks_runtime_and_preserves_failure_history(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.runtime_bad = False
+        result = self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.assertEqual(result['observed_bundle'], bundle)
+        self.assertEqual(result['operator'], 'operator')
+        self.assertEqual(json.loads((self.cd.store / bundle / 'result.json').read_bytes())['status'], 'failed')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        self.cd.preflight()
+        self.docker.calls.clear()
+        self.blocked(bundle)
+
+    def test_old_waiter_rechecks_main_after_newer_deployment_releases_lock(self):
+        bundle = self.approved()
+        waiting = threading.Event()
+        finished = threading.Event()
+        errors = []
+        actual_flock = release.fcntl.flock
+        def observed_flock(fd, flags):
+            try:
+                return actual_flock(fd, flags)
+            except BlockingIOError:
+                waiting.set()
+                raise
+        def apply():
+            try:
+                self.cd.apply(bundle, EXECUTION)
+            except BaseException as error:
+                errors.append(error)
+            finally:
+                finished.set()
+        with mock.patch.object(release.fcntl, 'flock', observed_flock):
+            with release.Release(self.root, self.docker).exclusive('newer-deploy'):
+                worker = threading.Thread(target=apply)
+                worker.start()
+                self.assertTrue(waiting.wait(3), '오래된 실행이 공통 잠금을 기다려야 함')
+                self.assertFalse(finished.is_set())
+                self.docker.main = 'b' * 40
+                release.write_atomic(self.cd.store / 'current.json', {'bundle_id': 'newer-success'})
+            worker.join(5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], release.Rejected)
+        self.assertIn('main HEAD', str(errors[0]))
+        self.assertEqual(self.docker.mutations(), [])
+        self.assertEqual(json.loads((self.cd.store / 'current.json').read_bytes())['bundle_id'],
+                         'newer-success')
+
+    def test_sigkill_leaves_durable_phase_and_blocks_next_process(self):
+        bundle = self.approved()
+        script = '''import os, signal, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from release import Release
+cd = Release(Path(sys.argv[2]))
+with cd.exclusive('deploy'):
+    folder = cd.store / sys.argv[3]
+    with cd.operation(folder, sys.argv[3], 'crashed', {'approver': 'operator'}) as (_, stage):
+        stage('applying')
+        os.kill(os.getpid(), signal.SIGKILL)
+'''
+        process = subprocess.run([sys.executable, '-c', script, str(Path(__file__).parent),
+                                  str(self.root), bundle], capture_output=True, timeout=5)
+        self.assertEqual(process.returncode, -9)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual((result['status'], result['phase']), ('running', 'applying'))
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        with self.assertRaisesRegex(release.Rejected, '미완료'):
+            release.Release(self.root, self.docker).prepare(SHA, 'next-process')
+
+    def test_inspection_reports_partial_images_without_environment_values(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with mock.patch.object(release, 'boot_id', return_value='boot-before'):
+            with self.assertRaises(release.Rejected):
+                self.cd.apply(bundle, EXECUTION)
+        with mock.patch.object(release, 'boot_id', return_value='boot-after'):
+            report = self.cd.inspect(bundle, EXECUTION)
+        self.assertTrue(report['boot_changed'])
+        self.assertEqual(report['observed_boot_id'], 'boot-after')
+        self.assertEqual(report['services']['backend']['image_id'], 'wrong')
+        self.assertIn(bundle, report['unresolved'])
+        self.assertNotIn('SECRET', json.dumps(report))
+        self.assertEqual(report['result']['phase'], 'checking')
+
+    def test_reconciliation_is_repeatable_after_pause_cleanup_interruption(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.runtime_bad = False
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        (self.root / 'PAUSE_CD').touch()
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+
+    def test_reconciliation_can_confirm_previous_success_without_redeploying(self):
+        previous = self.approved()
+        self.cd.apply(previous, EXECUTION)
+        running = copy.deepcopy(self.docker.saved_compose)
+        self.docker.make_release(salt='new-build')
+        target = self.approved()
+        self.docker.fail = lambda args: args[:2] == ('docker', 'pull')
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(target, EXECUTION)
+        self.docker.fail = None
+        self.docker.saved_compose = running
+        self.docker.calls.clear()
+        record = self.cd.reconcile(target, EXECUTION, 'operator', 'current', 'INC-482')
+        self.assertEqual(record['observed_bundle'], previous)
+        self.assertEqual(self.docker.mutations(), [])
+        self.assertEqual(json.loads((self.cd.store / 'current.json').read_bytes())['bundle_id'], previous)
+        self.cd.preflight()
+
+    def test_reconciliation_without_current_or_with_changed_config_stays_blocked(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.runtime_bad = False
+        with self.assertRaises(FileNotFoundError):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'current', 'INC-482')
+        (self.root / '.env').write_text('modified')
+        with self.assertRaisesRegex(release.Rejected, '구성 변경'):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.assertFalse((self.cd.store / bundle / 'resolution.json').exists())
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+
+    def test_recovery_operation_uses_same_durable_failure_record(self):
+        bundle = self.approved()
+        folder = self.cd.store / bundle
+        with self.assertRaisesRegex(release.Rejected, '복구 대역 중단'):
+            with self.cd.exclusive('recovery'):
+                with self.cd.operation(folder, bundle, EXECUTION, {'approver': 'operator'},
+                                       kind='recovery') as (_, stage):
+                    stage('restoring')
+                    with self.assertRaisesRegex(release.Rejected, '잠금'):
+                        with release.Release(self.root).exclusive('manual-deploy', wait=0):
+                            self.fail('복구와 수동 배포가 동시에 진입함')
+                    raise release.Rejected('복구 대역 중단')
+        result = json.loads((folder / 'result.json').read_bytes())
+        self.assertEqual((result['operation'], result['phase'], result['status']),
+                         ('recovery', 'restoring', 'failed'))
+
+    def test_corrupt_record_blocks_even_without_pause_file(self):
+        bundle = self.approved()
+        (self.cd.store / bundle / 'result.json').write_text('{')
+        with self.assertRaises(json.JSONDecodeError):
+            self.prepare()
+        self.assertEqual(self.docker.mutations(), [])
+
+    def test_reconciliation_crash_between_resolution_and_current_keeps_pause(self):
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.runtime_bad = False
+        # SIGKILL 뒤 PAUSE_CD 없이 running 기록만 남은 조건도 동일하게 보호해야 한다.
+        (self.root / 'PAUSE_CD').unlink()
+        with mock.patch.object(release, 'write_atomic', side_effect=OSError('디스크 오류 대역')):
+            with self.assertRaises(OSError):
+                self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.assertTrue((self.cd.store / bundle / 'resolution.json').exists())
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        with self.assertRaisesRegex(release.Rejected, 'PAUSE_CD'):
+            self.cd.preflight()
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-482')
+        self.cd.preflight()
+
+    def test_health_retry_stops_at_overall_deadline(self):
+        bundle_id = self.approved()
+        self.cd.apply(bundle_id, EXECUTION)
+        bundle = json.loads((self.cd.store / bundle_id / 'bundle.json').read_bytes())
+        self.docker.runtime_health_bad = True
+        with mock.patch.object(release.time, 'monotonic', side_effect=[0, 0, 300]):
+            with self.assertRaises(release.Rejected):
+                self.cd.runtime(bundle, self.cd.store / bundle_id)
+        self.assertEqual(self.sleeps, [])
+
+
+class ProcessBoundaryTests(unittest.TestCase):
+    def test_child_retains_lock_after_parent_is_killed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = r'''import subprocess, sys, time
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from release import Release
+root = Path(sys.argv[2])
+cd = Release(root)
+with cd.exclusive('deploy'):
+    cd.command(sys.executable, '-c',
+        "import os,pathlib,sys,time; p=pathlib.Path(sys.argv[1]); "
+        "p.with_name('ready').write_text(str(os.getpid())); p.with_name('child-ready').touch(); "
+        "exec('while not p.exists():\\n time.sleep(0.05)')", str(root / 'stop'))
+'''
+            parent = subprocess.Popen([sys.executable, '-c', script, str(Path(__file__).parent), tmp])
+            try:
+                deadline = time.monotonic() + 5
+                while not (root / 'child-ready').exists() and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertTrue((root / 'ready').exists())
+                self.assertTrue((root / 'child-ready').exists(), '자식이 실제로 기동돼야 함')
+                parent.kill()
+                parent.wait(timeout=5)
+                with self.assertRaisesRegex(release.Rejected, '잠금'):
+                    with release.Release(root).exclusive('recovery', wait=0):
+                        self.fail('실행 중인 자식의 잠금이 해제됨')
+                (root / 'stop').touch()
+                with release.Release(root).exclusive('recovery', wait=5):
+                    pass
+            finally:
+                (root / 'stop').touch()
+                if parent.poll() is None:
+                    parent.kill()
+                parent.wait(timeout=5)
+
+    def test_command_timeouts_and_no_mutation_retry(self):
+        self.assertEqual(release.command_timeout(('git', 'ls-remote')), 120)
+        self.assertEqual(release.command_timeout(('docker', 'pull', 'image')), 600)
+        self.assertEqual(release.command_timeout(('docker', 'compose', 'up')), 360)
+        self.assertEqual(release.command_timeout(('docker', 'compose', 'exec')), 10)
+        self.assertEqual(release.command_timeout(('docker', 'inspect')), 30)
+        with mock.patch.object(release, 'command_timeout', return_value=0.05):
+            with self.assertRaises(release.Rejected):
+                release.run(sys.executable, '-c', 'import time; time.sleep(30)')
 
 
 class ComposeRoundTripTests(unittest.TestCase):

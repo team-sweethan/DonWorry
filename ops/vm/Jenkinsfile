@@ -17,6 +17,7 @@ def vmCommand(String command) {
                   -o StrictHostKeyChecking=yes \
                   -o UserKnownHostsFile=/var/lib/jenkins/.ssh/known_hosts_donworry_vm1 \
                   -o ConnectTimeout=5 \
+                  -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
                   "$VM1_SSH_USER@192.168.0.212" \
                   "sudo -n /usr/local/sbin/donworry-release $CD_COMMAND"
             ''').trim()
@@ -38,7 +39,8 @@ pipeline {
     }
     stages {
         stage('Prepare Pinned Bundle') {
-            options { timeout(time: 20, unit: 'MINUTES') }
+            // VM 공통 잠금 대기 최대 5분도 포함한다.
+            options { timeout(time: 30, unit: 'MINUTES') }
             steps {
                 script {
                     if (!(params.TARGET_SHA ==~ /[0-9a-f]{40}/)) {
@@ -81,8 +83,8 @@ pipeline {
             }
         }
         stage('Verify And Update VM1') {
-            // 승인 대기와 별개로 적용 시간을 보장한다. release.py는 명령마다 600초 제한이 있고
-            // 이미지 pull 3회·Compose 대기·헬스 재시도의 최대치 합(약 60분)보다 넉넉하게 둔다.
+            // 잠금 5분·원격 재검증 2회·pull 3회·Compose/기동 검사의 VM 제한을 포함한다.
+            // SSH/이 stage의 중단이 VM 작업 종료를 의미하지 않는다. 자동 재시도하지 않는다.
             options { timeout(time: 90, unit: 'MINUTES') }
             steps {
                 script {
@@ -102,7 +104,7 @@ pipeline {
     post {
         success { echo 'CD_UPDATE_SUCCESS' }
         unsuccessful {
-            echo 'CD_UPDATE_NOT_SUCCESSFUL: VM releases/<bundle>/result.json 및 PAUSE_CD 확인. 자동 재시도·복구 없음.'
+            echo 'CD_UPDATE_NOT_SUCCESSFUL: SSH/Jenkins 중단만으로 VM 종료·잠금 해제를 판단하지 마세요. releases/<bundle>/result.json 및 PAUSE_CD를 확인하고 donworry-release inspect로 실제 상태를 점검하세요. 자동 재시도·복구 없음.'
         }
     }
 }
