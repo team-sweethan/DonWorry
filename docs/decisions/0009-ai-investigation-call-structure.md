@@ -225,7 +225,7 @@ sequenceDiagram
 - **출력 형식:** 판단 문장은 JSON Schema 구조화 출력(strict)으로 받는다. strict는 모든 객체에 `additionalProperties: false`가 있어야 하므로, OpenAI 클라이언트 안에서만 스키마 복사본에 붙인다 (Ollama 스키마는 그대로)
 - **조사 과정 기록:** `provider: OPENAI`, `model`은 설정한 모델 이름이다. 화면은 OLLAMA처럼 실제 LLM 색(보라)으로 보여 준다
 
-## 결정 6 — 권고 기준: 추가 확인 위주에서 판정 지원 위주로 (#482)
+## 결정 6 — 권고 기준: 추가 확인 위주에서 판정 지원 위주로 (#479)
 
 - **상황:** 보고서는 보안 직원이 매입 진행(ACCEPT) 또는 승인 취소(REJECT)로 판정하도록 돕는 것이 목적이다. 그런데 판단 문장 프롬프트(`WRITE_SYSTEM`)가 추가 확인 필요(`NEEDS_CHECK`) 쪽으로 기울어 있었다. 직원 입장에서는 "그래서 어느 쪽?"이 남았다
   - 권고 기준에 "대부분의 사건은 이 값이다"(`NEEDS_CHECK`)가 있었다
@@ -237,7 +237,8 @@ sequenceDiagram
   - 출력 예시에 `REJECT_REVIEW` 예시를 더해 권고 세 가지를 하나씩 둔다 (측정 · 시연 시나리오와 다른 가상 사건: 처음 보는 기기 · 카드 · 해외 접속 + 같은 기기를 쓴 다른 고객)
   - **코드 검사:** `NEEDS_CHECK`인 결제의 `unknowns`가 비어 있으면 다시 쓰게 한다(`needs_check_errors`). 예시의 모르는 사실을 그대로 써서 코드가 뺀 뒤 비어도 같다(`emptied_errors`). 직원은 추가 확인 필요를 받으면 무엇을 확인할지 알아야 한다
   - **정상 정황은 같은 종류의 위험 신호만 설명한다:** 평소 비슷한 금액 이력은 고액 신호를 설명하지만 처음 쓰는 기기 · 카드 · 해외 접속은 설명하지 못한다. 설명되지 않은 위험 신호가 남고 그 이유를 모르면 `NEEDS_CHECK`. 1차 실측에서 `measure_mixed`(해외 접속 + 새 기기 vs 평소 금액 이력)가 금액 이력만으로 `ACCEPT_REVIEW`가 나와 넣었다
-- **측정:** `run_report --sample tests/fixtures/measure_*.json`(OpenAI gpt-4.1-mini). 고치기 전에는 세 샘플 모두 `NEEDS_CHECK`, 1차 수정 후 `measure_reject` → `REJECT_REVIEW`, `measure_accept` → `ACCEPT_REVIEW`, `measure_mixed` → `ACCEPT_REVIEW`(기대 `NEEDS_CHECK`)
+  - **승인 취소 검토는 정상 고객에게 드문 정황이 하나 이상 있을 때만 (#490):** 드문 정황은 카드사 거절 직후 재시도 · 카드 테스팅 · 같은 카드나 기기를 다른 고객이 씀 · 같은 카드나 기기로 차단된 결제 이력. 해외 접속 · 처음 쓰는 기기 · 처음 쓰는 카드 · 고액 결제는 흔한 신호라 이것들만 겹치면 `NEEDS_CHECK`. 흔한 신호 2개만으로도 "위험 정황 여럿 + 설명할 정상 정황 없음"이 맞아 `REJECT_REVIEW`와 `NEEDS_CHECK` 기준을 동시에 채웠고, 모델이 실행마다 다른 쪽을 골랐다
+- **측정:** `run_report --sample tests/fixtures/measure_*.json`(OpenAI gpt-4.1-mini). 고치기 전에는 세 샘플 모두 `NEEDS_CHECK`, 1차 수정 후 `measure_reject` → `REJECT_REVIEW`, `measure_accept` → `ACCEPT_REVIEW`, `measure_mixed` → `ACCEPT_REVIEW`(기대 `NEEDS_CHECK`). 2차 수정(같은 종류만 설명) 후 2회: reject · accept는 기대대로, `measure_mixed`는 `REJECT_REVIEW` · `NEEDS_CHECK`로 갈림. 드문 정황 보강(#490) 후 2회: `measure_reject` → `REJECT_REVIEW` · `measure_accept` → `ACCEPT_REVIEW` · `measure_mixed` → `NEEDS_CHECK`로 2회 모두 기대대로
 - **그대로인 것:** 권고는 참고용이고 최종 판정은 직원이 한다. 보고서 형식 · 종합 권고 계산(결정 4) · Spring · 화면은 바꾸지 않는다
 - **영향:** AI가 결론을 더 분명히 내면, 직원이 AI와 반대로 판정할 때 사유를 더 써야 하는 경우가 늘어난다(화면의 권고 반대 판정 규칙, `caseDetailView.isOpposing`). 2차의 관리자 승인(권고 반대 매입 허용)과도 이어진다
 
