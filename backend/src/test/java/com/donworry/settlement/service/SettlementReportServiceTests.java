@@ -29,7 +29,7 @@ class SettlementReportServiceTests {
         var repository = mock(SettlementRepository.class);
         var items = mock(OrderFulfillmentItemRepository.class);
         when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(List.of());
-        when(repository.sumUndated(1L)).thenReturn(100L);
+        when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.valueOf(100));
         var from = LocalDate.of(2026, 11, 1);
         var result = new SettlementReportService(repository, items).report(1L, from, from.plusDays(1));
         assertThat(result.days()).hasSize(2);
@@ -51,5 +51,84 @@ class SettlementReportServiceTests {
         assertThatThrownBy(() -> new SettlementReportService(repository, items).report(1L, day, day))
                 .isInstanceOf(SettlementRequestException.class);
         verifyNoInteractions(items);
+    }
+
+    private SettlementReportProjection row(long amount, String classification, LocalDate date) {
+        var p = mock(SettlementReportProjection.class);
+        when(p.getOrderId()).thenReturn("P6-SAFE");
+        when(p.getStatus())
+                .thenReturn(
+                        classification.equals("COMPLETED")
+                                ? com.donworry.settlement.entity.SettlementStatus.COMPLETED
+                                : com.donworry.settlement.entity.SettlementStatus.SCHEDULED);
+        var at = date.atStartOfDay(SettlementReportService.ZONE).toInstant();
+        if (classification.equals("COMPLETED")) when(p.getCompletedAt()).thenReturn(at);
+        else if (classification.equals("SCHEDULED")) when(p.getScheduledAt()).thenReturn(at);
+        else when(p.getExpectedSettlementAt()).thenReturn(at);
+        when(p.getSettlementAmount()).thenReturn(amount);
+        return p;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "COMPLETED,1",
+        "SCHEDULED,1",
+        "EXPECTED,1",
+        "COMPLETED,-1",
+        "SCHEDULED,-1",
+        "EXPECTED,-1"
+    })
+    void report_whenPeriodSumExceedsBrowserPrecision_returns422(String classification, int sign) {
+        var repository = mock(SettlementRepository.class);
+        var day = LocalDate.of(2026, 11, 1);
+        var rows =
+                List.of(row(sign * 9007199254740991L, classification, day), row(sign, classification, day.plusDays(1)));
+        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        assertThatThrownBy(() -> new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class))
+                        .report(1L, day, day.plusDays(1)))
+                .isInstanceOfSatisfying(SettlementRequestException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(422);
+                    assertThat(e.getCode()).isEqualTo("SETTLEMENT_REPORT_AMOUNT_OVERFLOW");
+                });
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs = {9007199254740991L, -9007199254740991L})
+    void report_whenExactlySafeLimit_returnsExactAmount(long amount) {
+        var repository = mock(SettlementRepository.class);
+        var day = LocalDate.of(2026, 11, 1);
+        var rows = List.of(row(amount, "COMPLETED", day));
+        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.ZERO);
+        var result = new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class))
+                .report(1L, day, day);
+        assertThat(result.completedAmount()).isEqualTo(amount);
+        assertThat(result.days().getFirst().completedAmount()).isEqualTo(amount);
+    }
+
+    @Test
+    void report_whenUndatedSqlSumExceedsLong_returns422() {
+        var repository = mock(SettlementRepository.class);
+        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(List.of());
+        when(repository.sumUndated(1L)).thenReturn(new java.math.BigDecimal("18446744073709551614"));
+        var day = LocalDate.of(2026, 11, 1);
+        assertThatThrownBy(() -> new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class))
+                        .report(1L, day, day))
+                .isInstanceOfSatisfying(
+                        SettlementRequestException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(422));
+    }
+
+    @Test
+    void report_whenDailyTotalExceedsSafeLimit_returns422() {
+        var repository = mock(SettlementRepository.class);
+        var day = LocalDate.of(2026, 11, 1);
+        var rows = List.of(row(9007199254740991L, "SCHEDULED", day), row(1L, "SCHEDULED", day));
+        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        assertThatThrownBy(() -> new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class))
+                        .report(1L, day, day))
+                .isInstanceOfSatisfying(
+                        SettlementRequestException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(422));
     }
 }

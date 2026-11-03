@@ -2,6 +2,7 @@ package com.donworry.settlement.repository;
 
 import com.donworry.settlement.entity.Settlement;
 import com.donworry.settlement.entity.SettlementStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -66,10 +67,11 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             @Param("until") Instant until,
             Pageable pageable);
 
-    @Query("""
-            SELECT COALESCE(SUM(s.settlementAmount), 0) FROM Settlement s
-            WHERE s.merchantId = :merchant AND s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
-            AND s.scheduledAt IS NULL AND s.expectedSettlementAt IS NULL
-            """)
-    Long sumUndated(@Param("merchant") Long merchant);
+    // SUM을 Long으로 먼저 변환하면 범위 검사 전에 오버플로가 발생하므로 DECIMAL로 읽는다.
+    @Query(value = """
+            SELECT COALESCE(SUM(settlement_amount), 0) FROM settlements
+            WHERE merchant_id = :merchant AND status = 'SCHEDULED'
+            AND scheduled_at IS NULL AND expected_settlement_at IS NULL
+            """, nativeQuery = true)
+    BigDecimal sumUndated(@Param("merchant") Long merchant);
 }

@@ -4,6 +4,7 @@ import com.donworry.settlement.dto.SettlementReportResponse;
 import com.donworry.settlement.dto.SettlementReportResponse.*;
 import com.donworry.settlement.entity.SettlementStatus;
 import com.donworry.settlement.repository.*;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SettlementReportService {
     public static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
+    private static final long MAX_SAFE = 9007199254740991L;
     private final SettlementRepository repository;
     private final OrderFulfillmentItemRepository orderItems;
 
@@ -71,7 +73,7 @@ public class SettlementReportService {
                 .completedAmount(sum(entries, "COMPLETED"))
                 .scheduledAmount(sum(entries, "SCHEDULED"))
                 .expectedAmount(sum(entries, "EXPECTED"))
-                .undatedAmount(repository.sumUndated(merchant))
+                .undatedAmount(checkedAmount(repository.sumUndated(merchant)))
                 .days(days)
                 .entries(entries)
                 .build();
@@ -88,10 +90,10 @@ public class SettlementReportService {
                 .captureId(p.getCaptureId())
                 .paymentId(p.getPaymentId())
                 .orderId(p.getOrderId())
-                .grossAmount(p.getGrossAmount())
-                .cardFeeAmount(p.getCardFeeAmount())
-                .pgFeeAmount(p.getPgFeeAmount())
-                .settlementAmount(p.getSettlementAmount())
+                .grossAmount(checkedAmount(BigDecimal.valueOf(p.getGrossAmount())))
+                .cardFeeAmount(checkedAmount(BigDecimal.valueOf(p.getCardFeeAmount())))
+                .pgFeeAmount(checkedAmount(BigDecimal.valueOf(p.getPgFeeAmount())))
+                .settlementAmount(checkedAmount(BigDecimal.valueOf(p.getSettlementAmount())))
                 .status(p.getStatus().name())
                 .classification(completed ? "COMPLETED" : p.getScheduledAt() != null ? "SCHEDULED" : "EXPECTED")
                 .scheduledPickupAt(p.getScheduledPickupAt())
@@ -103,9 +105,19 @@ public class SettlementReportService {
     }
 
     private long sum(List<Entry> list, String classification) {
-        return list.stream()
+        return checkedAmount(list.stream()
                 .filter(e -> e.classification().equals(classification))
-                .mapToLong(Entry::settlementAmount)
-                .reduce(0, Math::addExact);
+                .map(e -> BigDecimal.valueOf(e.settlementAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    private long checkedAmount(BigDecimal value) {
+        try {
+            long result = value.longValueExact();
+            if (result < -MAX_SAFE || result > MAX_SAFE) throw new ArithmeticException();
+            return result;
+        } catch (ArithmeticException ex) {
+            throw new SettlementRequestException(422, "SETTLEMENT_REPORT_AMOUNT_OVERFLOW", "정산 금액이 지원 범위를 초과합니다.");
+        }
     }
 }

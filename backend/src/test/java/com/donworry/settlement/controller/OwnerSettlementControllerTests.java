@@ -99,4 +99,27 @@ class OwnerSettlementControllerTests {
                 .withUserConfiguration(OwnerSettlementController.class)
                 .run(c -> assertThat(c).doesNotHaveBean(OwnerSettlementController.class));
     }
+
+    @Test
+    void report_whenAmountOverflows_returns422ProblemDetail() throws Exception {
+        var staff = mock(CurrentStaff.class);
+        when(staff.findCurrent())
+                .thenReturn(Optional.of(StaffSummary.builder()
+                        .role("OPERATOR")
+                        .merchantId(2L)
+                        .permissions(List.of("FINANCE_VIEW"))
+                        .build()));
+        var reports = mock(SettlementReportService.class);
+        when(reports.report(anyLong(), any(), any()))
+                .thenThrow(new SettlementRequestException(
+                        422, "SETTLEMENT_REPORT_AMOUNT_OVERFLOW", "정산 금액이 지원 범위를 초과합니다."));
+        var mvc = MockMvcBuilders.standaloneSetup(
+                        new OwnerSettlementController(new SettlementOwnerAccessService(staff), reports))
+                .setControllerAdvice(new PickupExceptionHandler())
+                .build();
+        mvc.perform(get("/api/v1/settlements/report?from=2026-11-01&to=2026-11-02"))
+                .andExpect(status().is(422))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("SETTLEMENT_REPORT_AMOUNT_OVERFLOW"));
+    }
 }
