@@ -134,18 +134,44 @@ public class SettlementRefundAdjustment {
                 || source == null
                 || status != RefundAdjustmentStatus.PENDING
                 || source.getStatus() != SettlementStatus.SCHEDULED
-                || !Objects.equals(settlementId, source.getSettlementId())
-                || !Objects.equals(paymentId, source.getPaymentId())
-                || !Objects.equals(captureId, source.getCaptureId())
-                || !Objects.equals(merchantId, source.getMerchantId())
-                || !Objects.equals(refundAmount, source.getGrossAmount())
-                || !Objects.equals(cardFeeReturn, source.getCardFeeAmount())
-                || !Objects.equals(pgFeeReturn, source.getPgFeeAmount())
-                || !Objects.equals(adjustmentAmount, source.getSettlementAmount()))
-            throw new IllegalStateException("환불 제외와 원 정산의 근거가 일치하지 않습니다.");
+                || !matchesSource(source)) throw new IllegalStateException("환불 제외와 원 정산의 근거가 일치하지 않습니다.");
         status = RefundAdjustmentStatus.APPLIED;
         disposition = RefundAdjustmentDisposition.UNPAID_EXCLUSION;
         remainingAmount = 0L;
         updatedAt = now.truncatedTo(ChronoUnit.MICROS);
+    }
+
+    // APPLIED는 회수 방향의 등록이며, 실제 회수 완료 여부는 remaining_amount로 구분한다.
+    public void registerRecovery(Settlement source, Instant now) {
+        if (now == null
+                || source == null
+                || status != RefundAdjustmentStatus.PENDING
+                || source.getStatus() != SettlementStatus.COMPLETED
+                || source.getCompletedAt() == null
+                || !matchesSource(source)) throw new IllegalStateException("지급 완료된 원 정산과 일치하는 환불만 회수 대상으로 등록할 수 있습니다.");
+        status = RefundAdjustmentStatus.APPLIED;
+        disposition = RefundAdjustmentDisposition.RECOVERY;
+        updatedAt = now.truncatedTo(ChronoUnit.MICROS);
+    }
+
+    public void recover(long amount, Instant now) {
+        if (status != RefundAdjustmentStatus.APPLIED
+                || disposition != RefundAdjustmentDisposition.RECOVERY
+                || amount <= 0
+                || amount > remainingAmount
+                || now == null) throw new IllegalStateException("미회수 잔여액 이내의 양수 금액만 회수할 수 있습니다.");
+        remainingAmount -= amount;
+        updatedAt = now.truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private boolean matchesSource(Settlement source) {
+        return Objects.equals(settlementId, source.getSettlementId())
+                && Objects.equals(paymentId, source.getPaymentId())
+                && Objects.equals(captureId, source.getCaptureId())
+                && Objects.equals(merchantId, source.getMerchantId())
+                && Objects.equals(refundAmount, source.getGrossAmount())
+                && Objects.equals(cardFeeReturn, source.getCardFeeAmount())
+                && Objects.equals(pgFeeReturn, source.getPgFeeAmount())
+                && Objects.equals(adjustmentAmount, source.getSettlementAmount());
     }
 }

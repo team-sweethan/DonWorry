@@ -358,3 +358,5 @@ P6 2단계 #474: [가맹점 지급 원장·상세 ERD](../settlement/daily-payou
 P6 3단계 #478: [환불 수신 조정 원장 ERD](../settlement/refund-receiving.md#erd-settlement_refund_adjustments). 전액 환불의 원 수수료·순정산액을 PENDING으로 보존한다. 실제 제외·회수·이월과 운영 활성화는 후속이다.
 
 P6 4단계 #488: [가맹점 공통 잠금 ERD·미지급 제외](../settlement/unpaid-refund-exclusion.md). 신규 P6 잠금 테이블만 추가하며 이미 지급한 환불의 회수·이월은 후속이다.
+
+P6 5단계 #493: [회수 배분 원장 ERD](../settlement/refund-recovery.md#erd-payout_refund_allocations). payout_refund_allocations만 추가하고 별도 merchant_settlement_balances 캐시는 생성하지 않는다. 개별 remaining_amount를 잔액 기준으로 유지한다.

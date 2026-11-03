@@ -78,16 +78,17 @@ public class MerchantPayout {
         this.updatedAt = now;
     }
 
-    public void complete(long total, Instant now) {
+    public void complete(long total, long deduction, Instant now) {
         if (status != PayoutStatus.PENDING
                 || total < 0
+                || deduction < 0
+                || deduction > total
                 || now == null
                 || !payoutDate.equals(now.atZone(ZoneId.of("Asia/Seoul")).toLocalDate()))
             throw new IllegalStateException("같은 한국 날짜의 진행 중 지급만 확정할 수 있습니다.");
         settlementTotal = total;
-        // 환불 차감은 후속 단계에서 원장과 같은 트랜잭션으로 연결한다.
-        refundDeductionTotal = 0L;
-        payoutAmount = total;
+        refundDeductionTotal = deduction;
+        payoutAmount = total - deduction;
         status = PayoutStatus.COMPLETED;
         completedAt = now;
         updatedAt = now;

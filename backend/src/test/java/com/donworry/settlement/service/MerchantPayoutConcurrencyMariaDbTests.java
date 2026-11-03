@@ -64,6 +64,9 @@ class MerchantPayoutConcurrencyMariaDbTests {
     @AfterEach
     void clean() {
         for (long merchant : new long[] {MERCHANT, MERCHANT + 1}) {
+            jdbc.update(
+                    "DELETE x FROM payout_refund_allocations x JOIN settlement_refund_adjustments a ON a.adjustment_id=x.adjustment_id WHERE a.merchant_id=?",
+                    merchant);
             jdbc.update("DELETE FROM settlement_refund_adjustments WHERE merchant_id=?", merchant);
             jdbc.update(
                     "DELETE i FROM merchant_payout_items i JOIN merchant_payouts p ON p.payout_id=i.payout_id WHERE p.merchant_id=?",
@@ -145,7 +148,7 @@ class MerchantPayoutConcurrencyMariaDbTests {
     }
     // 지급이 먼저 잠금을 잡으면 완료 원장을 보존하고 환불을 후속 회수 대상으로 남긴다.
     @Test
-    void race_whenPayoutLocksFirst_preservesPayoutAndLeavesRecoveryPending() throws Exception {
+    void race_whenPayoutLocksFirst_preservesPayoutAndRegistersRecovery() throws Exception {
         race(true, false);
     }
     // 먼저 잠근 지급이 실패하면 롤백 뒤 기다리던 환불이 미지급 건을 제외할 수 있다.
@@ -224,7 +227,7 @@ class MerchantPayoutConcurrencyMariaDbTests {
                         "SELECT status FROM settlement_refund_adjustments WHERE cancellation_id=?",
                         String.class,
                         event.cancellationId()))
-                .isEqualTo(payoutFirst && !rollback ? "PENDING" : "APPLIED");
+                .isEqualTo("APPLIED");
         assertThat(jdbc.queryForObject(
                         "SELECT status FROM settlements WHERE payment_id=?", String.class, event.paymentId()))
                 .isEqualTo(payoutFirst && !rollback ? "COMPLETED" : "CANCELED");
@@ -271,5 +274,101 @@ class MerchantPayoutConcurrencyMariaDbTests {
         } finally {
             release.countDown();
         }
+    }
+
+    private PaymentRefundSucceeded prepareRecovery() {
+        completion.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE);
+        var date = LocalDate.now(ZoneId.of("Asia/Seoul")).minusDays(1);
+        var at = date.atTime(3, 0).atZone(ZoneId.of("Asia/Seoul")).toInstant();
+        jdbc.update(
+                "UPDATE merchant_payouts SET payout_date=?,completed_at=? WHERE merchant_id=?",
+                date,
+                com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp(at),
+                MERCHANT);
+        jdbc.update(
+                "UPDATE settlements SET completed_at=? WHERE merchant_id=?",
+                com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp(at),
+                MERCHANT);
+        var e = refund();
+        refunds.record(e);
+        var captured = Instant.now().minusSeconds(864000);
+        var income = Capture.processing(9337003L, MERCHANT, "RECOVERY-INCOME", 10000L, captured);
+        income.complete(captured);
+        creation.createSettlement(captures.save(income));
+        return e;
+    }
+    // 두 지급 실행이 경쟁해도 회수 배분과 잔액 감소는 한 번만 커밋한다.
+    @Test
+    void recover_whenTwoPayoutsRace_allocatesDebtOnce() throws Exception {
+        var e = prepareRecovery();
+        var barrier = new CyclicBarrier(2);
+        doAnswer(call -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    return real(merchantLockRows, call);
+                })
+                .when(merchantLockRows)
+                .ensurePresent(eq(MERCHANT), any());
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> completion.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE));
+            var second = pool.submit(() -> completion.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE));
+            assertThat(List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("COMPLETED", "ALREADY_COMPLETED");
+        }
+        assertRecoveryCollectedOnce(e);
+    }
+    // 차감 중 같은 환불이 재전달돼도 이미 줄인 잔액을 원금으로 초기화하지 않는다.
+    @Test
+    void recover_whenDuplicateArrivesDuringPayout_keepsReducedDebt() throws Exception {
+        var e = prepareRecovery();
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        doAnswer(call -> {
+                    var ids = real(settlements, call);
+                    awaitRelease(entered, release);
+                    return ids;
+                })
+                .when(settlements)
+                .findPayoutTargetIds(eq(MERCHANT), any(), anyLong());
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            var first = pool.submit(() -> completion.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE));
+            assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = pool.submit(() -> refunds.record(e));
+            try {
+                assertThatThrownBy(() -> second.get(200, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            } finally {
+                release.countDown();
+            }
+            assertThat(first.get(20, TimeUnit.SECONDS)).isEqualTo("COMPLETED");
+            assertThat(second.get(20, TimeUnit.SECONDS).getRemainingAmount()).isZero();
+        } finally {
+            release.countDown();
+        }
+        assertRecoveryCollectedOnce(e);
+    }
+
+    private void assertRecoveryCollectedOnce(PaymentRefundSucceeded e) {
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM payout_refund_allocations x JOIN settlement_refund_adjustments a ON a.adjustment_id=x.adjustment_id WHERE a.cancellation_id=?",
+                        Long.class,
+                        e.cancellationId()))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "SELECT remaining_amount FROM settlement_refund_adjustments WHERE cancellation_id=?",
+                        Long.class,
+                        e.cancellationId()))
+                .isZero();
+        var date = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        assertThat(jdbc.queryForObject(
+                        "SELECT payout_amount FROM merchant_payouts WHERE merchant_id=? AND payout_date=?",
+                        Long.class,
+                        MERCHANT,
+                        date))
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                        "SELECT refund_deduction_total FROM merchant_payouts WHERE merchant_id=? AND payout_date=?",
+                        Long.class,
+                        MERCHANT,
+                        date))
+                .isEqualTo(9700);
     }
 }

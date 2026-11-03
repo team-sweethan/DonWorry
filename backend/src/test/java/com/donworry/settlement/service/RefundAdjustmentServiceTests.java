@@ -19,7 +19,13 @@ class RefundAdjustmentServiceTests {
     private final SettlementRefundAdjustmentRepository adjustments = mock(SettlementRefundAdjustmentRepository.class);
     private final SettlementMerchantLockService merchantLocks = mock(SettlementMerchantLockService.class);
     private final RefundAdjustmentService service = new RefundAdjustmentService(
-            settlements, captures, adjustments, merchantLocks, mock(MerchantPayoutItemRepository.class));
+            settlements,
+            captures,
+            adjustments,
+            merchantLocks,
+            mock(MerchantPayoutItemRepository.class),
+            mock(MerchantPayoutRepository.class),
+            mock(PayoutRefundAllocationRepository.class));
     private Settlement source;
     private Capture capture;
     private PaymentRefundSucceeded event;

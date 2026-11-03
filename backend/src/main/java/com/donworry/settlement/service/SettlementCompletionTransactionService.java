@@ -35,7 +35,7 @@ public class SettlementCompletionTransactionService {
     private String completeLocked(Long merchantId, Instant cutoff, long upperSettlementId) {
         var started = Instant.now();
         var date = started.atZone(ZoneId.of("Asia/Seoul")).toLocalDate();
-        refunds.excludePendingForMerchant(merchantId);
+        refunds.applyPendingForMerchant(merchantId);
         if (payouts.existsByMerchantIdAndPayoutDateAndStatus(merchantId, date, PayoutStatus.COMPLETED))
             return "ALREADY_COMPLETED";
         if (settlements.countForPayout(merchantId, cutoff, upperSettlementId) == 0) return "EMPTY";
@@ -61,11 +61,13 @@ public class SettlementCompletionTransactionService {
             total = Math.addExact(total, settlement.getSettlementAmount());
             details.add(MerchantPayoutItem.snapshot(
                     payout.getPayoutId(), settlement.getSettlementId(), settlement.getSettlementAmount(), completedAt));
-            settlement.complete(completedAt);
         }
         payoutItems.saveAll(details);
+        long deduction = refunds.deductForPayout(payout, total, Instant.now());
+        completedAt = Instant.now();
+        for (var settlement : targets) settlement.complete(completedAt);
         // 완료일이 자정을 넘었다면 전체 롤백해 지급일과 실제 완료일을 다르게 기록하지 않는다.
-        payout.complete(total, completedAt);
+        payout.complete(total, deduction, completedAt);
         return "COMPLETED";
     }
 }
