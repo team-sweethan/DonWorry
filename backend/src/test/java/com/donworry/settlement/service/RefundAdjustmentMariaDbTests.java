@@ -18,11 +18,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @Tag("mariadb")
 @SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=2")
 @Import(MariaDbTestContainerConfig.class)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class RefundAdjustmentMariaDbTests {
     private static final long MERCHANT = 939301, PAYMENT = 9393001, CANCELLATION = 9393101;
 
