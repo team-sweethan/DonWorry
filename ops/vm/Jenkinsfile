@@ -1,0 +1,97 @@
+// 기존 donworry-cd-dryrun Job과 분리해 설치한다. webhook/pollSCM 트리거는 두지 않는다.
+def vmCommand(String command) {
+    if (!(command ==~ /[A-Za-z0-9_.@ -]+/)) {
+        error('VM 명령 인자 형식 오류')
+    }
+    def output
+    withCredentials([sshUserPrivateKey(
+        credentialsId: 'donworry-vm1-deploy-ssh',
+        keyFileVariable: 'VM1_SSH_KEY', usernameVariable: 'VM1_SSH_USER'
+    )]) {
+        withEnv(["CD_COMMAND=${command}"]) {
+            output = sh(returnStdout: true, script: '''
+                set +x
+                set -eu
+                ssh -i "$VM1_SSH_KEY" \
+                  -o IdentitiesOnly=yes -o BatchMode=yes \
+                  -o StrictHostKeyChecking=yes \
+                  -o UserKnownHostsFile=/var/lib/jenkins/.ssh/known_hosts_donworry_vm1 \
+                  -o ConnectTimeout=5 \
+                  "$VM1_SSH_USER@192.168.0.212" \
+                  "sudo -n /usr/local/sbin/donworry-release $CD_COMMAND"
+            ''').trim()
+        }
+    }
+    return output
+}
+
+pipeline {
+    agent any
+    parameters {
+        string(name: 'TARGET_SHA', defaultValue: '', description: '배포할 main SHA (소문자 hex 40자리)')
+    }
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 45, unit: 'MINUTES')
+        skipDefaultCheckout()
+    }
+    stages {
+        stage('Prepare Pinned Bundle') {
+            steps {
+                script {
+                    if (!(params.TARGET_SHA ==~ /[0-9a-f]{40}/)) {
+                        error('TARGET_SHA 형식 오류')
+                    }
+                    env.CD_EXECUTION = "${env.BUILD_NUMBER}-${java.util.UUID.randomUUID()}"
+                    def summary = vmCommand("prepare ${params.TARGET_SHA} ${env.CD_EXECUTION}")
+                    def bundle = new groovy.json.JsonSlurperClassic().parseText(summary)
+                    if (!(bundle.bundle_id ==~ /[0-9a-f]{64}/) ||
+                        bundle.sha != params.TARGET_SHA || bundle.execution != env.CD_EXECUTION) {
+                        error('VM 준비 응답 불일치')
+                    }
+                    env.CD_BUNDLE = bundle.bundle_id
+                    writeFile(file: 'release-bundle.json', text: summary)
+                    archiveArtifacts(artifacts: 'release-bundle.json', fingerprint: true)
+                    echo summary
+                }
+            }
+        }
+        stage('Approve Exact Bundle') {
+            steps {
+                script {
+                    // digest와 구성 해시만 있는 요약이다. 실제 환경값은 VM에서만 보관한다.
+                    def approver = input(
+                        message: "VM1 업데이트를 승인합니까?\n${readFile('release-bundle.json')}",
+                        ok: '이 묶음으로 업데이트 승인', submitter: 'jenkins-admin',
+                        submitterParameter: 'APPROVED_BY'
+                    )
+                    if (!(approver instanceof String) || !(approver ==~ /[A-Za-z0-9_.@-]{1,120}/)) {
+                        error('승인자 응답 오류')
+                    }
+                    vmCommand("approve ${env.CD_BUNDLE} ${env.CD_EXECUTION} ${approver}")
+                }
+            }
+        }
+        stage('Verify And Update VM1') {
+            steps {
+                script {
+                    def result = vmCommand("apply ${env.CD_BUNDLE} ${env.CD_EXECUTION}")
+                    def parsed = new groovy.json.JsonSlurperClassic().parseText(result)
+                    if (parsed.status != 'success' || parsed.bundle_id != env.CD_BUNDLE ||
+                        parsed.execution != env.CD_EXECUTION) {
+                        error('VM 적용 결과 불일치')
+                    }
+                    writeFile(file: 'release-result.json', text: result)
+                    archiveArtifacts(artifacts: 'release-result.json', fingerprint: true)
+                    echo result
+                }
+            }
+        }
+    }
+    post {
+        success { echo 'CD_UPDATE_SUCCESS' }
+        unsuccessful {
+            echo 'CD_UPDATE_NOT_SUCCESSFUL: VM releases/<bundle>/result.json 및 PAUSE_CD 확인. 자동 재시도·복구 없음.'
+        }
+    }
+}

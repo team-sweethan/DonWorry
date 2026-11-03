@@ -53,7 +53,8 @@ digest는 태그를 다시 조회하지 않고 같은 실행의 `build-push-acti
 marker digest로 고정하고 SHA·digest 3개를 승인 묶음으로 저장해야 한다.
 승인 후 태그를 다시 조회해 대상을 선택하지 않는다. 스키마 누락·알 수 없는 버전·
 필수 값 누락은 배포 전에 거절한다. 기존 SHA-only marker로의 자동 대체는 하지 않는다.
-고정된 index 안의 실행 플랫폼 선택·revision 대조는 #481 범위이며 아직 구현되지 않았다.
+고정된 index 안의 실행 플랫폼 선택·revision 대조는 #481 범위다.
+[소비 명령·Jenkinsfile 제안](../../ops/vm/README.md)을 별도로 관리하며 운영 설치·실검증 전이다.
 이 계약만으로 원격 이미지 존재·플랫폼·revision 일치를 검증했다고 간주하지 않는다.
 digest 고정은 원격 이미지의 보존 기간도 보장하지 않는다.
 
@@ -65,7 +66,8 @@ main 변경과 GHCR 게시를 원자적으로 묶지는 않는다. 최종 조회
 
 실제 배포 전 승인 SHA·main HEAD·marker revision·이미지 3개의 revision을 대조하고
 검증된 digest만 Compose에 적용하는 작업은 [#448](https://github.com/team-sweethan/DonWorry/issues/448)이다.
-현재 저장소에는 해당 Jenkins·VM 검증 코드가 없어 이 문서는 구현 완료를 뜻하지 않는다.
+현재 저장소에는 [Jenkins·VM 검증 코드 제안](../../ops/vm/README.md)이 있으며,
+운영 설치·Jenkins/VM 실검증 완료를 뜻하지 않는다.
 배포 시작 이후 main 변경에 대한 정책도 #448에서 확정한다.
 
 설계 근거와 버린 대안은 [ADR-0069](../decisions/0069-release-marker-publication.md)를 따른다.
