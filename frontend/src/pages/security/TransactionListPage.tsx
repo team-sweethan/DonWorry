@@ -198,7 +198,8 @@ export function TransactionListPage() {
     }
   }, [apiSearch, requestKey, blocked])
 
-  const current = loaded?.key === requestKey ? loaded : null
+  // 막힌 조건은 서버 요청이 "조건 없음"과 같아져서, 전에 받은 전체 목록을 검색 결과처럼 그리지 않게 버린다
+  const current = !blocked && loaded?.key === requestKey ? loaded : null
   const loading = !blocked && current === null
   const page = current?.page ?? null
   const caseLinks: CaseLinks = links?.key === requestKey ? links.links : { status: 'loading' }
