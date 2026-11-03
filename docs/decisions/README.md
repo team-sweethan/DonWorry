@@ -121,3 +121,5 @@ P6 5단계 PR 리뷰 대상: [0062 실제 기록과 배치 기준의 현금흐�
 P6 #465 PR 리뷰 대상: [0068 매입일 기준 영업일 D+3 정산](0068-p6-capture-business-day-settlement.md) — 픽업 상세 정보와 정산일 계산 분리.
 
 P1 #461 PR 리뷰 대상: [0069 릴리스 marker 사전 준비와 게시 직전 main 확인](0069-release-marker-publication.md) — 제안, 실제 배포 차단은 #448 후속.
+
+P6 #474 PR 리뷰 대상: [0070 가맹점별 일별 지급 원장](0070-p6-merchant-daily-payouts.md).

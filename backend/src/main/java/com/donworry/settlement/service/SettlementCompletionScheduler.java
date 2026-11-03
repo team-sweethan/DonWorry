@@ -19,7 +19,7 @@ public class SettlementCompletionScheduler {
     public void run() {
         var result = batch.run(Instant.now());
         log.info(
-                "settlement completion batch: cutoff={}, scanned={}, completed={}, skipped={}, failed={}",
+                "merchant payout batch: cutoff={}, scanned={}, completed={}, skipped={}, failed={}",
                 result.cutoff(),
                 result.scanned(),
                 result.completed(),
