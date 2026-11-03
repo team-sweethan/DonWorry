@@ -117,8 +117,10 @@ def test_content_keeps_failing_ends_failed() -> None:
 # 확인 못 한 것은 코드가 항상 채우고, "미확인 사항 없음" 같은 문장은 걸러 낸다
 def test_unknowns_and_limitations_are_always_filled() -> None:
     body = json.loads(narrative(PAYMENTS, limitations=["확인되지 않은 정보가 없습니다."]))
+    # 모르는 사실 없는 추가 확인 필요는 다시 쓰게 하므로 결론을 낸 권고로 둔다 (권고 기준 조정)
     for payment in body["payments"].values():
         payment["unknowns"] = []
+        payment["recommendation"] = "ACCEPT_REVIEW"
 
     _, outcome = _run(json.dumps(body, ensure_ascii=False))
 
@@ -153,7 +155,7 @@ def test_invented_tool_args_are_dropped() -> None:
 
 
 # 프롬프트 예시 문장도 내용 검사를 통과해야 한다 — 예시가 규칙을 어기면 Qwen이 따라 한다
-# 예시 2개(#355) 모두 본다
+# 예시 모두 본다 (#355 · 권고 기준 조정 — 승인 취소 검토 예시 포함)
 @pytest.mark.parametrize("example", WRITE_EXAMPLES)
 def test_prompt_example_passes_content_checks(example: dict) -> None:
     written = {**example, "payments": {"9201": example["payments"]["<결제 ID>"]}}
