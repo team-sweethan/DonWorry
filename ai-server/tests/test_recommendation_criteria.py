@@ -112,4 +112,4 @@ def test_investigation_rewrites_empty_unknowns_and_keeps_basis() -> None:
 def test_prompt_asks_signal_names_in_reason() -> None:
     assert "reason의 징후는 판정 근거의 징후 이름 그대로 쓴다" in WRITE_SYSTEM
     reasons = [p["reason"] for e in WRITE_EXAMPLES for p in e["payments"].values()]
-    assert any("처음 쓰는 기기" in r for r in reasons)
+    assert any("신규 단말기" in r for r in reasons)

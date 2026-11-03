@@ -21,15 +21,16 @@ HIGH_RISK = "HIGH_RISK"
 CAUTION = "CAUTION"
 
 # 규칙 코드 → (징후 이름, 등급). 예전 영문 코드도 같은 규칙으로 읽는다
+# 징후 이름은 FDS 규칙 이름 그대로 — Case 상세 적중 규칙 · 조사 요약 밑줄과 맞춘다 (#505)
 _RULES: dict[str, tuple[str, str]] = {
     "R01": ("고액 결제", CAUTION),
-    "R02": ("처음 쓰는 기기", CAUTION),
-    "R03": ("처음 쓰는 카드", CAUTION),
-    "R04": ("짧은 시간 반복 결제", CAUTION),
-    "R05": ("고위험 국가 접속", CAUTION),
+    "R02": ("신규 단말기", CAUTION),
+    "R03": ("신규 카드", CAUTION),
+    "R04": ("단시간 반복 결제", CAUTION),
+    "R05": ("고위험 국가 IP", CAUTION),
     "R06": ("카드 테스팅", HIGH_RISK),
-    "R07": ("차단 목록 일치", HIGH_RISK),
-    "R08": ("카드사 거절 직후 재시도", HIGH_RISK),
+    "R07": ("차단 목록", HIGH_RISK),
+    "R08": ("거절 후 재시도", HIGH_RISK),
 }
 _ALIASES = {
     "HIGH_AMOUNT": "R01",
@@ -60,7 +61,7 @@ _EXPLAINS = {SIMILAR_AMOUNT: ("R01",)}
 # 같은 카드 결제를 "한 명 / 여러 명"으로 주는 것(#352)과 같은 방식
 _AI_LABELS = {SIMILAR_AMOUNT: "사건 전 비슷한 금액의 매입 완료 결제 여러 건"}
 
-# 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 짧은 시간 반복 결제다
+# 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 단시간 반복 결제다
 _COUNTED_IN = {"R04": ("R08", "R06")}
 
 _RECOMMENDATION: dict[BasisRule, Recommendation] = {
