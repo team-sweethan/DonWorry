@@ -31,6 +31,21 @@ def test_prompt_limits_what_normal_evidence_explains() -> None:
     assert "설명되지 않은 위험 신호가 남아 있고 그 이유를 모르면" in WRITE_SYSTEM
 
 
+# 승인 취소 검토는 드문 정황이 있을 때만 — 흔한 신호(해외 접속 · 새 기기)만으로 고르지 않게 (#490)
+# (실측: measure_mixed가 승인 취소 검토 · 추가 확인 필요로 실행마다 갈렸다)
+def test_reject_needs_rare_circumstance() -> None:
+    assert "드문 정황이 하나 이상 있을 때만" in WRITE_SYSTEM
+    assert "이것들만 겹쳐서는 REJECT_REVIEW가 아니다" in WRITE_SYSTEM
+    # 예시가 기준과 어긋나면 모델은 예시를 따른다(#355) — 승인 취소 예시에 드문 정황이 있어야 한다
+    reject = [
+        p
+        for e in WRITE_EXAMPLES
+        for p in e["payments"].values()
+        if p["recommendation"] == "REJECT_REVIEW"
+    ]
+    assert all(any("다른 고객" in r for r in p["riskEvidence"]) for p in reject)
+
+
 # needsCheck_withoutUnknowns_isRewritten — 모르는 사실 없이 추가 확인 필요를 고르면 다시 쓰게 한다
 def test_needs_check_without_unknowns_is_rejected() -> None:
     parsed, errors = validate_narrative(_with("9001", unknowns=[]), PAYMENTS, None)
