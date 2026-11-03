@@ -36,7 +36,7 @@ const typePlaceholders: Record<FdsBlocklistEntry['identifierType'], string> = {
   CARD_TOKEN: '카드 식별값을 입력하세요.',
   DEVICE_ID: '기기 ID를 입력하세요.',
   BUYER_REF: '구매자 식별자를 입력하세요.',
-  IP_ADDRESS: 'IP 주소를 입력하세요.',
+  IP_ADDRESS: 'IPv4 또는 IPv6 주소를 입력하세요.',
   BUYER_EMAIL: '이메일을 입력하세요.',
 }
 
@@ -44,7 +44,7 @@ const identifierMaxLengths: Record<FdsBlocklistEntry['identifierType'], number> 
   CARD_TOKEN: 255,
   DEVICE_ID: 255,
   BUYER_REF: 255,
-  IP_ADDRESS: 15,
+  IP_ADDRESS: 45,
   BUYER_EMAIL: 255,
 }
 
