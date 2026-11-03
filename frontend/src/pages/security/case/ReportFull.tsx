@@ -9,6 +9,7 @@ import {
   signalTexts,
   topRiskScore,
   unknownItems,
+  verdictLines,
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
@@ -79,6 +80,7 @@ function VerdictCard({
 }) {
   const headline = reportHeadline(body)
   const source = reportRecommendationSource(body)
+  const lines = verdictLines(body)
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
   return (
     <section style={verdictStyle}>
@@ -104,14 +106,11 @@ function VerdictCard({
           </p>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          {body.verdict && (
-            <RecChip rec={body.verdict.overallRecommendation} text={source} strong />
-          )}
-          {/* 결제가 하나면 종합 칩과 같은 내용이라 다시 보여 주지 않는다 */}
-          {(body.paymentAnalyses.length > 1 || !body.verdict) &&
-            body.paymentAnalyses.map((p) => (
-              <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
-            ))}
+          {lines.overall && <RecChip rec={lines.overall} text={source} strong />}
+          {/* 결제가 하나면 종합 칩과 같은 내용이라 다시 보여 주지 않는다 (verdictLines) */}
+          {lines.payments.map((p) => (
+            <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
+          ))}
           {body.additionalChecks[0] && (
             <span style={{ ...chipStyle, background: '#1E3A8A', color: '#BFDBFE' }}>
               ☎ {body.additionalChecks[0]}

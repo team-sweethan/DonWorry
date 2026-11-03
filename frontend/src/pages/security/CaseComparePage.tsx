@@ -10,10 +10,13 @@ import { won } from '../../utils/format'
 import {
   caseNormals,
   caseSignals,
+  compareReport,
   compareSignals,
-  latestReadableBody,
+  decisionProgress,
   reportRecommendationSource,
   topRiskScore,
+  verdictLines,
+  type CompareReport,
   type CompareRow,
 } from '../../utils/reportView'
 import { Group, NormalRow, SignalRow } from './case/BasisCard'
@@ -23,7 +26,13 @@ import { CodeTag } from './case/CodeTag'
 // 비슷한 사건 나란히 보기 (#501) — 왼쪽 판정이 끝난 과거 사건, 오른쪽 지금 판정할 사건
 // 두 사건 모두 기존 Case 상세 조회를 그대로 쓴다 (보고서 · 판정 · 판정 사유가 들어 있음)
 
-type Side = { detail: CaseDetail; body: ReportBody | null }
+// report: 최근 성공 보고서와 증거 버전 불일치 여부 (#501 리뷰), body는 그 본문
+type Side = { detail: CaseDetail; report: CompareReport | null; body: ReportBody | null }
+
+const side = (detail: CaseDetail): Side => {
+  const report = compareReport(detail)
+  return { detail, report, body: report?.body ?? null }
+}
 
 export function CaseComparePage() {
   const { id = '', pastId = '' } = useParams()
@@ -41,13 +50,7 @@ export function CaseComparePage() {
     Promise.all([getCase(id), getCase(pastId)])
       .then(([now, past]) => {
         if (!alive) return
-        const result =
-          now && past
-            ? {
-                now: { detail: now, body: latestReadableBody(now.reports) },
-                past: { detail: past, body: latestReadableBody(past.reports) },
-              }
-            : null
+        const result = now && past ? { now: side(now), past: side(past) } : null
         setLoaded({ scope: `${id}:${pastId}`, result })
       })
       .catch(() => {
@@ -97,6 +100,9 @@ export function CaseComparePage() {
           past={<CaseHead side={past} title="과거 사건" />}
           now={<CaseHead side={now} title="지금 사건" current />}
         />
+        {(past.report?.evidenceMismatch || now.report?.evidenceMismatch) && (
+          <Pair past={<MismatchNote side={past} />} now={<MismatchNote side={now} />} />
+        )}
         {pastSignals === null || nowSignals === null ? (
           <Alert
             type="info"
@@ -128,17 +134,20 @@ export function CaseComparePage() {
         </Group>
         <Group title="보안 직원 최종 판정" note="판정 사유는 직원이 직접 적은 내용" color="#0F172A">
           <Pair
-            past={<Decisions detail={past.detail} />}
+            past={<Decisions side={past} />}
             now={
-              now.detail.decisions.length > 0 ? (
-                <Decisions detail={now.detail} />
-              ) : (
-                <Undecided
-                  checks={now.body?.additionalChecks ?? []}
-                  onGo={() => navigate(`/security/cases/${id}`, { state: listReturn })}
-                  caseId={id}
-                />
-              )
+              <Decisions
+                side={now}
+                current={
+                  <Undecided
+                    checks={now.body?.additionalChecks ?? []}
+                    onGo={() => navigate(`/security/cases/${id}`, { state: listReturn })}
+                    caseId={id}
+                    remaining={decisionProgress(now.detail).remaining}
+                    partial={now.detail.decisions.length > 0}
+                  />
+                }
+              />
             }
           />
         </Group>
@@ -171,11 +180,17 @@ function CaseHead({ side, title, current }: { side: Side; title: string; current
   const first = payments[0]
   const country = side.body?.paymentAnalyses[0]?.signals?.ipCountryCode
   const score = topRiskScore(payments.map((p) => p.riskScore))
-  const done = decisions.length > 0 || securityCase.status === 'CLOSED'
+  // 일부만 판정한 사건은 판정 끝이 아니다 (#501 리뷰)
+  const progress = decisionProgress(side.detail)
   return (
     <div style={{ ...headStyle, border: current ? '2px solid #1D4ED8' : '1px solid #CBD5E1' }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: current ? '#1D4ED8' : '#475569' }}>
-        {title} · {done ? '판정 끝' : '판정 대기'}
+        {title} ·{' '}
+        {progress.done
+          ? '판정 끝'
+          : decisions.length > 0
+            ? `일부 판정 · 남은 결제 ${progress.remaining}건`
+            : '판정 대기'}
       </div>
       <div style={{ fontSize: 18, fontWeight: 700 }}>
         사건 {securityCase.caseId} · {total === null ? '금액 모름' : won(total)}
@@ -184,6 +199,14 @@ function CaseHead({ side, title, current }: { side: Side; title: string; current
         결제 {payments.length}건{first?.requestedAt && ` · ${dateTime(first.requestedAt)} 결제`}
         {country && ` · 접속 국가 ${country}`}
         {` · FDS ${score ?? '-'}점`}
+      </div>
+      <div style={{ fontSize: 12, color: side.report?.evidenceMismatch ? '#B45309' : '#64748B' }}>
+        {side.report
+          ? `보고서 v${side.report.reportVersion} · 증거 v${side.report.evidenceVersion}` +
+            (side.report.evidenceMismatch
+              ? ` (지금 사건 증거 v${securityCase.evidenceVersion})`
+              : '')
+          : 'AI 보고서 없음'}
       </div>
     </div>
   )
@@ -249,28 +272,66 @@ function Normals({ body }: { body: ReportBody | null }) {
   return normals.map((n) => <NormalRow key={n.label} n={n} note={false} />)
 }
 
+// 결론이 없는 예전 단일 결제 보고서도 결제별 권고를 보여 준다 (verdictLines, #501 리뷰)
 function Verdict({ body }: { body: ReportBody | null }) {
   if (!body) return <div style={emptyCell}>AI 보고서 없음 (직접 조사)</div>
   const source = reportRecommendationSource(body)
+  const lines = verdictLines(body)
   return (
     <div style={{ ...headStyle, border: '1px solid #E2E8F0', gap: 6 }}>
-      {body.verdict && (
+      {lines.overall && (
         <span style={{ fontSize: 14, fontWeight: 700 }}>
-          {source} · {recommendationLabel[body.verdict.overallRecommendation].label}
+          {source} · {recommendationLabel[lines.overall].label}
         </span>
       )}
-      {body.paymentAnalyses.length > 1 &&
-        body.paymentAnalyses.map((p) => (
-          <span key={p.paymentId} style={{ fontSize: 13, color: '#475569' }}>
-            결제 {p.paymentId} · {recommendationLabel[p.recommendation].label}
-          </span>
-        ))}
+      {lines.payments.map((p) => (
+        <span
+          key={p.paymentId}
+          style={
+            lines.overall ? { fontSize: 13, color: '#475569' } : { fontSize: 14, fontWeight: 700 }
+          }
+        >
+          {lines.overall ? '' : `${source} · `}결제 {p.paymentId} ·{' '}
+          {recommendationLabel[p.recommendation].label}
+        </span>
+      ))}
     </div>
   )
 }
 
-function Decisions({ detail }: { detail: CaseDetail }) {
-  if (detail.decisions.length === 0) return <div style={emptyCell}>판정 기록 없음</div>
+// 보고서가 사건의 지금 증거보다 앞선 버전으로 만들어졌으면 알린다 (#501 리뷰)
+function MismatchNote({ side }: { side: Side }) {
+  if (!side.report?.evidenceMismatch) return null
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      message={`이 보고서는 증거 v${side.report.evidenceVersion} 기준입니다.`}
+      description={`사건은 지금 증거 v${side.detail.securityCase.evidenceVersion}이라, 나중에 합쳐진 결제는 이 보고서에서 조사하지 않았습니다. 징후 · 권고는 그 전 결제 기준으로 보세요.`}
+    />
+  )
+}
+
+// 이미 한 판정 + 남은 결제 — 지금 사건은 남은 결제가 있으면 판정 이동 칸(current)을 함께 보여 준다 (#501 리뷰)
+function Decisions({ side, current }: { side: Side; current?: ReactNode }) {
+  const { detail } = side
+  const progress = decisionProgress(detail)
+  const left = !progress.done && progress.remaining > 0
+  return (
+    <>
+      {detail.decisions.length === 0 && !(current && left) && (
+        <div style={emptyCell}>판정 기록 없음</div>
+      )}
+      <DecisionCards detail={detail} />
+      {left &&
+        (current ?? (
+          <div style={emptyCell}>판정 안 된 결제 {progress.remaining}건이 남아 있습니다.</div>
+        ))}
+    </>
+  )
+}
+
+function DecisionCards({ detail }: { detail: CaseDetail }) {
   return detail.decisions.map((d) => {
     const payment = detail.payments.find((p) => p.casePaymentId === d.casePaymentId)
     const reject = d.decision === 'REJECT'
@@ -298,14 +359,20 @@ function Undecided({
   checks,
   onGo,
   caseId,
+  remaining,
+  partial,
 }: {
   checks: string[]
   onGo: () => void
   caseId: string
+  remaining: number
+  partial: boolean
 }) {
   return (
     <div style={{ ...headStyle, border: '2px dashed #94A3B8', gap: 10 }}>
-      <span style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>아직 판정 전</span>
+      <span style={{ fontSize: 16, fontWeight: 700, color: '#475569' }}>
+        {partial ? `남은 결제 ${remaining}건 · 아직 판정 전` : '아직 판정 전'}
+      </span>
       {checks.length > 0 && (
         <>
           <Typography.Text style={{ fontSize: 13 }}>

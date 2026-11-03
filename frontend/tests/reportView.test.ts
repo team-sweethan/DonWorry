@@ -3,18 +3,24 @@ import { test } from 'node:test'
 import type {
   AiReport,
   BasisSignal,
+  CaseDetail,
+  CasePayment,
   DecisionBasis,
+  PaymentDecision,
   ReportBody,
   TraceStep,
 } from '../src/types/case.ts'
 import {
   caseSignals,
+  compareReport,
   compareSignals,
+  decisionProgress,
   latestReadableBody,
   markSignals,
   recommendationSource,
   reportRecommendationSource,
   signalTag,
+  verdictLines,
   elapsedText,
   hasReadableReport,
   liveCurrentTask,
@@ -386,4 +392,100 @@ test('latestReadableBody_skipsFailedLatest_returnsNewestSucceeded', () => {
   const failed = { ...report(2, 1), status: 'FAILED' as const, reportBody: null }
   assert.deepEqual(latestReadableBody([ok, failed])?.summary, ['v1'])
   assert.equal(latestReadableBody([failed]), null)
+})
+
+// ── 비교 화면 Codex 리뷰 (#501) ──
+
+const payment = (id: string, over: Partial<CasePayment> = {}): CasePayment => ({
+  casePaymentId: `cp-${id}`,
+  paymentId: id,
+  linkedAt: '2026-05-21T11:16:00Z',
+  amount: 10_000,
+  paymentStatus: 'HELD',
+  requestedAt: '2026-05-21T11:16:00Z',
+  riskScore: 50,
+  fdsResult: 'REVIEW',
+  ruleHits: [],
+  customerCanceledAt: null,
+  ...over,
+})
+
+const decided = (id: string): PaymentDecision => ({
+  decisionId: `d-${id}`,
+  casePaymentId: `cp-${id}`,
+  staffId: 'sec01',
+  reportId: '1',
+  decision: 'REJECT',
+  reason: '고객 확인 결과 본인 결제 아님',
+  decidedAt: '2026-05-22T01:00:00Z',
+})
+
+const caseDetail = (over: Partial<CaseDetail> = {}): CaseDetail => ({
+  securityCase: {
+    caseId: '1011',
+    merchantId: '1',
+    customerRef: '1:42',
+    caseType: 'PAYMENT_FRAUD',
+    status: 'DECISION_PENDING',
+    evidenceVersion: 1,
+    createdAt: '2026-05-21T11:16:00Z',
+    closedAt: null,
+  },
+  payments: [payment('1')],
+  reports: [report(1, 1)],
+  decisions: [],
+  handoffs: [],
+  history: [],
+  ...over,
+})
+
+// 결제가 합쳐져 증거 v2가 됐는데 성공한 보고서는 v1뿐이면 불일치로 알린다
+test('compareReport_evidenceAdvancedWhileNewReportRunning_flagsMismatch', () => {
+  const detail = caseDetail({
+    securityCase: { ...caseDetail().securityCase, evidenceVersion: 2 },
+    payments: [payment('1'), payment('2')],
+    reports: [report(1, 1), { ...report(2, 2), status: 'RUNNING', reportBody: null }],
+  })
+  const picked = compareReport(detail)
+  assert.equal(picked?.reportVersion, 1)
+  assert.equal(picked?.evidenceVersion, 1)
+  assert.equal(picked?.evidenceMismatch, true)
+  assert.equal(compareReport(caseDetail())?.evidenceMismatch, false)
+  assert.equal(compareReport(caseDetail({ reports: [] })), null)
+})
+
+// 결론(verdict)이 생기기 전 단일 결제 보고서도 결제별 권고를 보여 준다
+test('verdictLines_oldSinglePaymentWithoutVerdict_showsPaymentRecommendation', () => {
+  const old = body({ paymentAnalyses: [analysis('1')] })
+  assert.deepEqual(verdictLines(old), {
+    overall: null,
+    payments: [{ paymentId: '1', recommendation: 'NEEDS_CHECK' }],
+  })
+  // 결론이 있는 단일 결제는 종합 권고만 (같은 내용을 두 번 쓰지 않는다)
+  const single = body({
+    paymentAnalyses: [analysis('1', basis1011)],
+    verdict: { headline: '한 줄', overallRecommendation: 'REJECT_REVIEW' },
+  })
+  assert.deepEqual(verdictLines(single), { overall: 'REJECT_REVIEW', payments: [] })
+  const two = body({
+    paymentAnalyses: [analysis('1', basis1011), analysis('2')],
+    verdict: { headline: '한 줄', overallRecommendation: 'REJECT_REVIEW' },
+  })
+  assert.equal(verdictLines(two).payments.length, 2)
+})
+
+// 3건 중 1건만 판정했으면 판정 끝이 아니다. 고객이 취소한 결제는 남은 건수에서 뺀다
+test('decisionProgress_partiallyDecided_isNotDoneAndSkipsCustomerCanceled', () => {
+  const partial = caseDetail({
+    payments: [
+      payment('1'),
+      payment('2'),
+      payment('3', { customerCanceledAt: '2026-05-21T12:00:00Z' }),
+    ],
+    decisions: [decided('1')],
+  })
+  assert.deepEqual(decisionProgress(partial), { decided: 1, remaining: 1, done: false })
+  const all = caseDetail({ payments: [payment('1')], decisions: [decided('1')] })
+  assert.deepEqual(decisionProgress(all), { decided: 1, remaining: 0, done: true })
+  assert.equal(decisionProgress(caseDetail()).done, false)
 })

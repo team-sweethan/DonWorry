@@ -1,6 +1,8 @@
 import type {
+  AiRecommendation,
   AiReport,
   BasisRule,
+  CaseDetail,
   BasisSignal,
   DecisionBasis,
   InvestigationTrace,
@@ -315,7 +317,67 @@ export function compareSignals(past: BasisSignal[], now: BasisSignal[]): Compare
 
 // 비교 화면에 쓸 보고서 — 가장 최근에 성공한 보고서 본문, 없으면 null
 export function latestReadableBody(reports: AiReport[]): ReportBody | null {
+  return latestReadable(reports)?.reportBody ?? null
+}
+
+function latestReadable(reports: AiReport[]): AiReport | null {
   const done = reports.filter((r) => r.status === 'SUCCEEDED' && r.reportBody !== null)
   if (done.length === 0) return null
-  return done.reduce((a, b) => (b.reportVersion > a.reportVersion ? b : a)).reportBody
+  return done.reduce((a, b) => (b.reportVersion > a.reportVersion ? b : a))
+}
+
+export type CompareReport = {
+  body: ReportBody
+  reportVersion: number
+  evidenceVersion: number
+  // 사건 증거 버전과 다르면 나중에 합쳐진 결제는 이 보고서가 조사하지 않았다 (#501 리뷰)
+  evidenceMismatch: boolean
+}
+
+// 비교 화면 한쪽의 보고서 — 최근 성공 보고서와 버전 · 증거 버전 불일치 여부
+export function compareReport(
+  detail: Pick<CaseDetail, 'reports' | 'securityCase'>,
+): CompareReport | null {
+  const report = latestReadable(detail.reports)
+  if (!report?.reportBody) return null
+  return {
+    body: report.reportBody,
+    reportVersion: report.reportVersion,
+    evidenceVersion: report.evidenceVersion,
+    evidenceMismatch: report.evidenceVersion !== detail.securityCase.evidenceVersion,
+  }
+}
+
+export type VerdictLines = {
+  overall: AiRecommendation | null
+  payments: Array<{ paymentId: string; recommendation: AiRecommendation }>
+}
+
+// 종합 권고 · 결제별 권고 줄 — 결제가 2건 이상이거나 결론이 없는 예전 보고서면 결제별로 보여 준다
+// 보고서 전문 · 비교 화면이 같은 규칙을 쓴다 (#501 리뷰)
+export function verdictLines(body: ReportBody): VerdictLines {
+  const overall = body.verdict?.overallRecommendation ?? null
+  const perPayment = body.paymentAnalyses.length > 1 || overall === null
+  return {
+    overall,
+    payments: perPayment
+      ? body.paymentAnalyses.map((p) => ({
+          paymentId: String(p.paymentId),
+          recommendation: p.recommendation,
+        }))
+      : [],
+  }
+}
+
+// 판정 진행 — 고객이 직접 취소한 결제는 판정 대상이 아니라 남은 건수에서 뺀다 (#501 리뷰)
+// 일부만 판정한 사건은 판정 끝이 아니다 (CaseFlowTests.decidePartially_keepsWaiting…)
+export function decisionProgress(
+  detail: Pick<CaseDetail, 'payments' | 'decisions' | 'securityCase'>,
+): { decided: number; remaining: number; done: boolean } {
+  const decidedIds = new Set(detail.decisions.map((d) => d.casePaymentId))
+  const remaining = detail.payments.filter(
+    (p) => !decidedIds.has(p.casePaymentId) && !p.customerCanceledAt,
+  ).length
+  const done = detail.securityCase.status === 'CLOSED' || (remaining === 0 && decidedIds.size > 0)
+  return { decided: detail.decisions.length, remaining, done }
 }
