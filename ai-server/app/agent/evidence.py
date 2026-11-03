@@ -44,16 +44,19 @@ LINKED_DEVICE = "LINKED_DEVICE"
 LINKED_IP = "LINKED_IP"
 
 SIMILAR_AMOUNT = "SIMILAR_AMOUNT"
-OWN_CARD = "OWN_CARD"
 
 # 비슷한 금액: 이번 금액의 0.5 ~ 1.5배, 매입 완료 2건 이상
 SIMILAR_LOW, SIMILAR_HIGH, SIMILAR_MIN_COUNT = 0.5, 1.5, 2
 # 사건 결제 앞뒤 10분 안의 결제는 평소 결제가 아니다 (assemble.split_history와 같은 기준)
 BURST_WINDOW = timedelta(minutes=10)
-APPROVED_STATUSES = frozenset({"CAPTURED", "HELD"})
 
 # 정상 거래 근거가 설명할 수 있는 징후
-_EXPLAINS = {SIMILAR_AMOUNT: ("R01",), OWN_CARD: ("R04",)}
+# "전에 승인된 본인 카드"는 쓰지 않는다 — 카드별 승인 이력을 받지 못해 확인할 수 없다
+# (R03이 안 걸린 것은 규칙이 꺼져 있어도 같고, 고객 이력은 카드별이 아니다, #501 리뷰)
+_EXPLAINS = {SIMILAR_AMOUNT: ("R01",)}
+
+# 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 짧은 시간 반복 결제다
+_COUNTED_IN = {"R04": ("R08", "R06")}
 
 _RECOMMENDATION: dict[BasisRule, Recommendation] = {
     "HIGH_RISK_WITH_OTHERS": "REJECT_REVIEW",
@@ -129,7 +132,8 @@ def _at(value: str | None) -> datetime | None:
         return None
 
 
-# 사건 결제 앞뒤 10분 안의 결제를 뺀 이력 — 같은 연속 결제는 평소 결제가 아니다
+# 평소 결제 = 사건 전 결제 — assemble.split_history의 "그 전 결제"와 같은 기준
+# 사건 결제 앞뒤 10분 안(같은 연속 결제)과 사건 뒤 결제는 사건의 정상 근거가 아니다
 def _usual_history(
     case_payments: CasePaymentsTool, history: PaymentHistoryTool
 ) -> list[HistoryPayment]:
@@ -139,13 +143,14 @@ def _usual_history(
         at = _at(payment.requestedAt)
         if at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times):
             continue
+        if at is not None and case_times and at > max(case_times):
+            continue
         usual.append(payment)
     return usual
 
 
 def _normals(
     payment: CasePayment,
-    evidence: FdsPayment,
     case_payments: CasePaymentsTool,
     history: PaymentHistoryTool | None,
 ) -> list[tuple[str, str]]:
@@ -163,17 +168,6 @@ def _normals(
     ]
     if amount and len(similar) >= SIMILAR_MIN_COUNT:
         found.append((SIMILAR_AMOUNT, f"최근 30일 비슷한 금액의 결제 {len(similar)}건 매입 완료"))
-    # 본인 카드: 카드 정보가 있고, 새 카드 규칙이 안 걸렸고, 승인된 이력이 있다
-    # (Spring은 승인 이력이 없으면 새 카드 규칙을 걸지 않으므로 승인 이력까지 본다)
-    keys = {_rule_key(rule.code) for rule in evidence.ruleHits}
-    card_given = evidence.signals is not None and evidence.signals.cardProvided
-    approved = any(p.paymentStatus in APPROVED_STATUSES for p in history.payments)
-    if card_given and "R03" not in keys and approved:
-        device_given = evidence.signals is not None and evidence.signals.deviceProvided
-        label = "전에 승인된 적 있는 본인 카드"
-        if device_given and "R02" not in keys:
-            label += " · 기기"
-        found.append((OWN_CARD, label))
     return found
 
 
@@ -182,7 +176,7 @@ def _label_of(key: str) -> str:
 
 
 def _rule(signals: list[BasisSignal]) -> BasisRule:
-    open_signals = [s for s in signals if s.normalReason is None]
+    open_signals = [s for s in signals if s.normalReason is None and s.countedIn is None]
     if any(s.level == HIGH_RISK for s in open_signals):
         return "HIGH_RISK_WITH_OTHERS" if len(open_signals) >= 2 else "HIGH_RISK_ONLY"
     return "CAUTION_ONLY" if open_signals else "ALL_EXPLAINED"
@@ -196,11 +190,16 @@ def decision_basis(
     linked: LinkedPaymentsTool | None,
 ) -> DecisionBasis:
     raw_signals = _signals(evidence, linked)
-    normals = _normals(payment, evidence, case_payments, history)
+    normals = _normals(payment, case_payments, history)
     reason_for: dict[str, str] = {}
     for key, label in normals:
         for target in _EXPLAINS[key]:
             reason_for.setdefault(target, label)
+    labels = {s.key: s.label for s in raw_signals}
+
+    def counted_in(key: str) -> str | None:
+        return next((labels[k] for k in _COUNTED_IN.get(key, ()) if k in labels), None)
+
     signals = [
         BasisSignal(
             key=s.key,
@@ -209,6 +208,7 @@ def decision_basis(
             level=s.level,  # type: ignore[arg-type]
             # 고위험 징후는 자료만으로 정상 사유를 붙이지 않는다 — 직원 확인으로만 풀린다
             normalReason=reason_for.get(s.key) if s.level == CAUTION else None,
+            countedIn=counted_in(s.key),
         )
         for s in raw_signals
     ]
@@ -233,6 +233,8 @@ def decision_basis(
 # AI에게 보여 줄 판정 근거 — 숫자 없이 이름 · 정상 사유 · 기준표 칸만
 def basis_facts(basis: DecisionBasis) -> dict[str, object]:
     def signal(s: BasisSignal) -> dict[str, object]:
+        if s.countedIn:
+            return {"징후": s.label, "같은 행동이라 따로 세지 않음": s.countedIn}
         return {"징후": s.label, "정상 사유": s.normalReason or "없음"}
 
     return {

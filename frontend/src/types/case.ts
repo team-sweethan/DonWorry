@@ -126,12 +126,14 @@ export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
 
 // 판정 근거 (#501) — ai-server app/schemas/report.py의 DecisionBasis와 같게 둔다
 // level: 고위험 징후(HIGH_RISK) · 주의 징후(CAUTION), normalReason이 null이면 정상 사유 없음
+// countedIn: 같은 행동을 이미 센 징후 이름 — 판정에 따로 세지 않는다
 export type BasisSignal = {
   key: string
   label: string
   detail: string | null
   level: 'HIGH_RISK' | 'CAUTION'
   normalReason: string | null
+  countedIn?: string | null
 }
 
 export type NormalBasis = {

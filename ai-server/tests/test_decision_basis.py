@@ -120,8 +120,9 @@ def test_linked_card_with_new_card_and_overseas_is_reject() -> None:
 
 
 # 1066 — 카드 테스팅 모양: 거절 후 재시도(고위험) + 짧은 시간 반복(주의), 승인 이력 없음
-# 본인 카드라는 근거가 없어 반복 결제를 설명하지 못한다 → 승인 취소 검토
-def test_retry_with_repeat_and_no_approved_history_is_reject() -> None:
+# 짧은 시간 반복은 거절 후 재시도와 같은 행동이라 따로 세지 않는다 → 추가 확인 (#501 리뷰)
+# 지금 자료로는 카드 테스팅과 한도를 모르고 다시 누른 정상 고객을 가를 수 없다
+def test_retry_with_repeat_counts_once_without_approved_history() -> None:
     declined = [
         (7800, "DECLINED", "2026-05-20T03:51:47Z"),
         (29500, "DECLINED", "2026-04-20T10:17:36Z"),
@@ -133,14 +134,15 @@ def test_retry_with_repeat_and_no_approved_history_is_reject() -> None:
         _linked(),
     )
 
-    assert basis.rule == "HIGH_RISK_WITH_OTHERS"
-    assert basis.recommendation == "REJECT_REVIEW"
-    assert basis.normals == []
+    assert basis.rule == "HIGH_RISK_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+    repeat = next(s for s in basis.signals if s.key == "R04")
+    assert repeat.countedIn == "카드사 거절 직후 재시도"
 
 
-# 1015 — 같은 모양이지만 전에 승인된 본인 카드라 반복 결제에는 정상 사유가 있다
-# 거절 후 재시도만 남는다 → 추가 확인 (정상 고객을 승인 취소 검토로 보내지 않게)
-def test_retry_with_own_card_is_needs_check() -> None:
+# 1015 — 같은 모양의 정상 고객: 거절 후 재시도만 센다 → 추가 확인
+# (정상 고객을 승인 취소 검토로 보내지 않게)
+def test_retry_with_repeat_is_needs_check_for_usual_customer() -> None:
     rows = [
         (32000, "CAPTURED", "2026-06-30T10:28:20Z"),
         (22100, "CAPTURED", "2026-06-27T11:47:43Z"),
@@ -154,10 +156,18 @@ def test_retry_with_own_card_is_needs_check() -> None:
 
     assert basis.rule == "HIGH_RISK_ONLY"
     assert basis.recommendation == "NEEDS_CHECK"
-    repeat = next(s for s in basis.signals if s.key == "R04")
-    assert repeat.normalReason == "전에 승인된 적 있는 본인 카드 · 기기"
     retry = next(s for s in basis.signals if s.key == "R08")
-    assert retry.normalReason is None
+    assert retry.normalReason is None and retry.countedIn is None
+
+
+# 승인 이력이 있고 새 카드 규칙이 안 걸려도 "본인 카드"로 보지 않는다 (#501 리뷰)
+# R03이 꺼져 있어도 안 걸리고, 고객 이력은 카드별이 아니다 — 짧은 시간 반복만 남으면 추가 확인
+def test_no_own_card_reason_from_missing_new_card_rule() -> None:
+    approved = [(30000, "CAPTURED", "2026-05-01T10:00:00Z")]
+    basis = _basis(28000, [_rule("R04", "단시간 반복 결제")], _history(approved), _linked())
+
+    assert basis.rule == "CAUTION_ONLY"
+    assert basis.signals[0].normalReason is None
 
 
 # 1014 — 해외 여행 중인 정상 고객: 새 기기 · 새 카드 · 해외 접속(주의)만 → 추가 확인
@@ -197,6 +207,18 @@ def test_burst_payments_are_not_usual_history() -> None:
         (220000, "CAPTURED", "2026-05-21T11:12:00Z"),
     ]
     basis = _basis(220000, [_rule("R01", "고액 결제")], _history(burst), _linked())
+
+    assert basis.rule == "CAUTION_ONLY"
+
+
+# 사건 뒤 결제도 평소 결제가 아니다 (#501 리뷰)
+# 보고서를 늦게 만들어도 사건 뒤 결제로 고액을 설명하지 않는다
+def test_payments_after_case_are_not_usual_history() -> None:
+    later = [
+        (220000, "CAPTURED", "2026-05-22T10:00:00Z"),
+        (220000, "CAPTURED", "2026-05-23T10:00:00Z"),
+    ]
+    basis = _basis(220000, [_rule("R01", "고액 결제")], _history(later), _linked())
 
     assert basis.rule == "CAUTION_ONLY"
 

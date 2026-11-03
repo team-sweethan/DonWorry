@@ -46,12 +46,15 @@ class PaymentSignals(BaseModel):
 # 판정 근거 (#501) — 코드가 판정 기준표로 계산한다. AI는 이 값을 바꾸지 않는다
 # level: HIGH_RISK(고위험 징후, 정상 고객에게 거의 없음) / CAUTION(주의 징후, 정상 고객에게도 있음)
 # normalReason: 이 징후를 설명하는 정상 거래 근거 이름. None이면 "정상 사유 없음"
+# countedIn: 같은 행동을 이미 센 징후 이름 (예: 짧은 시간 반복 → 거절 후 재시도)
+# 판정에 따로 세지 않는다
 class BasisSignal(BaseModel):
     key: str
     label: str
     detail: str | None
     level: Literal["HIGH_RISK", "CAUTION"]
     normalReason: str | None
+    countedIn: str | None = None
 
 
 # 정상 거래 근거 — canExplain은 설명할 수 있는 징후, explains는 이 결제에서 실제로 설명한 징후
