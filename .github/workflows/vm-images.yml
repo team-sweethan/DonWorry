@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 -m unittest discover -s .github/scripts -p 'test_release_target.py' -v
+      - run: python3 -m unittest discover -s .github/scripts -p 'test_release_*.py' -v
 
   backend-test:
     runs-on: ubuntu-latest
@@ -116,22 +116,24 @@ jobs:
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
           tags: ghcr.io/team-sweethan/donworry-ai:sha-${{ github.sha }}
 
-      # marker 직전 확인: 이 실행의 SHA가 아직 main 최신이어야 prod로 가리킨다.
-      # 그 사이 main이 앞서 갔으면 이미지(sha-태그)만 남기고 marker는 다음 실행에 맡긴다
-      - name: Check release target is still main HEAD
-        id: target
+      # 느린 빌드·업로드는 최신 확인 전에 끝낸다. prod는 아직 변경하지 않는다 (#461).
+      - name: Prepare release marker
+        id: marker
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
-        shell: bash
-        env:
-          RELEASE_SHA: ${{ github.sha }}
-        run: bash .github/scripts/check-release-target.sh
-
-      - name: Publish release marker
-        if: steps.target.outputs.current == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: .github/docker/release-marker.Dockerfile
           push: true
-          tags: ghcr.io/team-sweethan/donworry-release:prod
+          tags: ghcr.io/team-sweethan/donworry-release:sha-${{ github.sha }}
           labels: org.opencontainers.image.revision=${{ github.sha }}
+
+      # 최신 확인과 digest 승격을 같은 스크립트에서 실행한다. main 병합을 잠그지는
+      # 않으므로 확인 이후 변경에 대한 실제 배포 차단은 #448의 소비 측 검증이 필요하다.
+      - name: Publish release marker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          MARKER_DIGEST: ${{ steps.marker.outputs.digest }}
+        run: bash .github/scripts/publish-release-marker.sh
