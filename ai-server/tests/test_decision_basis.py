@@ -249,3 +249,27 @@ def test_facts_include_basis_in_korean() -> None:
     assert basis["기준표 판정"].endswith("승인 취소 검토")
     assert basis["고위험 징후"] == [{"징후": "같은 카드를 다른 고객이 사용", "정상 사유": "없음"}]
     assert "REJECT_REVIEW" not in json.dumps(facts, ensure_ascii=False)
+
+
+# --- Codex 리뷰 재현 (#501) ---
+
+
+# AI 입력의 판정 근거에 든 숫자는 문장 검사가 허용하는 숫자여야 한다
+# 비슷한 금액 이력이 10건을 넘으면 "17건 매입 완료"가 AI 입력에 들어가는데 허용 숫자에는 없어
+# AI가 근거를 그대로 옮겨 쓰면 다시 쓰기를 거듭하다 보고서가 실패할 수 있었다 (10 이하 수량만 예외)
+def test_basis_facts_have_no_number_outside_allowed() -> None:
+    from app.agent.assemble import fact_numbers
+    from app.agent.narrative import _numbers
+
+    # 사건(5월 21일) 전 비슷한 금액 17건 — 날짜 · 시각 · 금액에 17이 우연히 들어가지 않게 둔다
+    days = [f"2026-04-0{d}" for d in range(1, 10)] + [f"2026-05-0{d}" for d in range(1, 9)]
+    similar = [(200000 + i * 1000, "CAPTURED", f"{day}T10:00:00Z") for i, day in enumerate(days)]
+    others = [(5000, "CAPTURED", f"2026-03-0{d}T10:00:00Z") for d in range(1, 4)]
+    history = _history(similar + others)
+    case = _case(205600)
+    fds = {"1": _fds([_rule("R01", "고액 결제")])}
+
+    facts = json.loads(facts_json(case, fds, None, history, _linked()))
+
+    basis_text = json.dumps(facts["결제"][0]["판정 근거"], ensure_ascii=False)
+    assert _numbers(basis_text) <= fact_numbers(case, fds, None, history)

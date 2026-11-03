@@ -55,6 +55,11 @@ BURST_WINDOW = timedelta(minutes=10)
 # (R03이 안 걸린 것은 규칙이 꺼져 있어도 같고, 고객 이력은 카드별이 아니다, #501 리뷰)
 _EXPLAINS = {SIMILAR_AMOUNT: ("R01",)}
 
+# AI 입력용 정상 거래 근거 이름 — 건수 없이 쓴다 (#501 리뷰)
+# 화면용 이름("9건 매입 완료")의 건수는 AI 문장의 허용 숫자에 없어 그대로 옮기면 다시 쓰기에 걸린다
+# 같은 카드 결제를 "한 명 / 여러 명"으로 주는 것(#352)과 같은 방식
+_AI_LABELS = {SIMILAR_AMOUNT: "사건 전 비슷한 금액의 매입 완료 결제 여러 건"}
+
 # 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 짧은 시간 반복 결제다
 _COUNTED_IN = {"R04": ("R08", "R06")}
 
@@ -232,17 +237,20 @@ def decision_basis(
 
 # AI에게 보여 줄 판정 근거 — 숫자 없이 이름 · 정상 사유 · 기준표 칸만
 def basis_facts(basis: DecisionBasis) -> dict[str, object]:
+    ai_label = {n.label: _AI_LABELS.get(n.key, n.label) for n in basis.normals}
+
     def signal(s: BasisSignal) -> dict[str, object]:
         if s.countedIn:
             return {"징후": s.label, "같은 행동이라 따로 세지 않음": s.countedIn}
-        return {"징후": s.label, "정상 사유": s.normalReason or "없음"}
+        reason = ai_label.get(s.normalReason, s.normalReason) if s.normalReason else "없음"
+        return {"징후": s.label, "정상 사유": reason}
 
     return {
         "고위험 징후": [signal(s) for s in basis.signals if s.level == HIGH_RISK],
         "주의 징후": [signal(s) for s in basis.signals if s.level == CAUTION],
         "정상 거래 근거": [
             {
-                "근거": n.label,
+                "근거": ai_label[n.label],
                 "설명할 수 있는 징후": n.canExplain,
                 "이번에 설명한 징후": n.explains or "없음",
             }
