@@ -2,32 +2,40 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
+  recommendationSource,
   reportHeadline,
+  reportRecommendationSource,
   ruleEvidenceRows,
   signalTexts,
   topRiskScore,
   unknownItems,
+  type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
-import { CodeTag } from './CodeTag'
+import { SummaryBox, WhyCard } from './BasisCard'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
 // AI 보고서 전문. 결론 → 결제별 근거 비교 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
+// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? → 위험/정상 비교 순서 (#501), 예전 보고서는 그대로
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
 export function ReportFull({ body, label }: { body: ReportBody; label: string }) {
+  // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
+  const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <VerdictCard body={body} label={label} />
+      <VerdictCard body={body} label={label} hideSummary={single} />
       {body.paymentAnalyses.map((p) => (
-        <PaymentEvidence key={p.paymentId} analysis={p} />
+        <PaymentEvidence key={p.paymentId} analysis={p} summary={single ? body.summary : []} />
       ))}
-      {body.similarCases !== undefined && <SimilarCasesCard similar={body.similarCases} />}
+      {body.similarCases !== undefined && (
+        <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
+      )}
       {body.paymentHistory !== undefined && <PaymentHistoryCard history={body.paymentHistory} />}
       {body.linkedPayments !== undefined && <LinkedPaymentsCard linked={body.linkedPayments} />}
       {body.overallAnalysis.length > 0 && (
@@ -60,8 +68,17 @@ export function ReportFull({ body, label }: { body: ReportBody; label: string })
 }
 
 // 결론 카드. 큰 숫자는 FDS 점수 최댓값 그대로이며 사기 확률이 아니다
-function VerdictCard({ body, label }: { body: ReportBody; label: string }) {
+function VerdictCard({
+  body,
+  label,
+  hideSummary,
+}: {
+  body: ReportBody
+  label: string
+  hideSummary: boolean
+}) {
   const headline = reportHeadline(body)
+  const source = reportRecommendationSource(body)
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
   return (
     <section style={verdictStyle}>
@@ -69,7 +86,9 @@ function VerdictCard({ body, label }: { body: ReportBody; label: string }) {
         <ScoreGauge score={score} dark />
       </div>
       <div>
-        <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>{label} · AI 결론</div>
+        <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>
+          {label} · AI 조사 요약
+        </div>
         {headline ? (
           <div style={{ fontSize: 22, fontWeight: 800, margin: '6px 0 8px', lineHeight: 1.4 }}>
             {headline}
@@ -79,16 +98,20 @@ function VerdictCard({ body, label }: { body: ReportBody; label: string }) {
             결론 항목이 생기기 전 보고서입니다. 아래 요약과 근거를 확인하세요.
           </div>
         )}
-        <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
-          {body.summary.join(' ')}
-        </p>
+        {!hideSummary && (
+          <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
+            {body.summary.join(' ')}
+          </p>
+        )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
           {body.verdict && (
-            <RecChip rec={body.verdict.overallRecommendation} text="종합 권고" strong />
+            <RecChip rec={body.verdict.overallRecommendation} text={source} strong />
           )}
-          {body.paymentAnalyses.map((p) => (
-            <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
-          ))}
+          {/* 결제가 하나면 종합 칩과 같은 내용이라 다시 보여 주지 않는다 */}
+          {(body.paymentAnalyses.length > 1 || !body.verdict) &&
+            body.paymentAnalyses.map((p) => (
+              <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
+            ))}
           {body.additionalChecks[0] && (
             <span style={{ ...chipStyle, background: '#1E3A8A', color: '#BFDBFE' }}>
               ☎ {body.additionalChecks[0]}
@@ -101,8 +124,15 @@ function VerdictCard({ body, label }: { body: ReportBody; label: string }) {
 }
 
 // 결제 하나의 권고 · 이유와 위험 근거 / 정상 정황 비교
-function PaymentEvidence({ analysis: p }: { analysis: PaymentAnalysis }) {
+function PaymentEvidence({
+  analysis: p,
+  summary,
+}: {
+  analysis: PaymentAnalysis
+  summary: string[]
+}) {
   const rules = ruleEvidenceRows(p)
+  const source = recommendationSource(p)
   return (
     <Card
       style={cardStyle}
@@ -115,13 +145,20 @@ function PaymentEvidence({ analysis: p }: { analysis: PaymentAnalysis }) {
           </span>
         </span>
       }
-      extra={<CodeTag value={recommendationLabel[p.recommendation]} />}
+      extra={<RecTag rec={p.recommendation} source={source} />}
     >
       {p.signals !== undefined && <SignalLine signals={p.signals} />}
-      {p.reason && (
-        <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
-          <AiTag /> {p.reason}
-        </p>
+      {p.basis ? (
+        <>
+          <SummaryBox lines={[...summary, ...(p.reason ? [p.reason] : [])]} basis={p.basis} />
+          <WhyCard basis={p.basis} />
+        </>
+      ) : (
+        p.reason && (
+          <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
+            <AiTag /> {p.reason}
+          </p>
+        )
       )}
       <div style={compareStyle}>
         <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
@@ -190,6 +227,7 @@ function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
 
 function MoreInfo({ body }: { body: ReportBody }) {
   const { overview } = body
+  const ruleTable = reportRecommendationSource(body) === '기준표 판정'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Descriptions size="small" column={2} colon={false} title="사건 개요">
@@ -201,11 +239,11 @@ function MoreInfo({ body }: { body: ReportBody }) {
         <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
       </Descriptions>
       <div>
-        <SubTitle>AI 권고 원문</SubTitle>
+        <SubTitle>{ruleTable ? 'AI 설명 원문' : 'AI 권고 원문'}</SubTitle>
         <p style={{ fontSize: 13, margin: '0 0 6px' }}>{body.recommendation.summary}</p>
         <Bullets items={body.recommendation.limitations} />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          AI 권고는 참고용이며 최종 판정은 직원이 결제별로 합니다.
+          {ruleTable ? '기준표 판정' : 'AI 권고'}는 참고용이며 최종 판정은 직원이 결제별로 합니다.
         </Typography.Text>
       </div>
       <div>
@@ -279,6 +317,12 @@ const recColor: Record<AiRecommendation, CSSProperties> = {
   NEEDS_CHECK: { background: '#78350F', color: '#FDE68A' },
 }
 
+const recLight: Record<AiRecommendation, CSSProperties> = {
+  REJECT_REVIEW: { background: '#FEE2E2', color: '#991B1B' },
+  ACCEPT_REVIEW: { background: '#DCFCE7', color: '#166534' },
+  NEEDS_CHECK: { background: '#FEF3C7', color: '#92400E' },
+}
+
 function RecChip({ rec, text, strong }: { rec: AiRecommendation; text: string; strong?: boolean }) {
   return (
     <span
@@ -289,6 +333,15 @@ function RecChip({ rec, text, strong }: { rec: AiRecommendation; text: string; s
       }}
     >
       {text} · {recommendationLabel[rec].label}
+    </span>
+  )
+}
+
+// 결제 카드 오른쪽 위 판정 꼬리표 — "기준표 판정 · 승인 취소 검토"
+function RecTag({ rec, source }: { rec: AiRecommendation; source: RecommendationSource }) {
+  return (
+    <span style={{ ...chipStyle, ...recLight[rec], border: '1px solid currentColor' }}>
+      {source} · {recommendationLabel[rec].label}
     </span>
   )
 }

@@ -1,7 +1,20 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { AiReport, ReportBody, TraceStep } from '../src/types/case.ts'
+import type {
+  AiReport,
+  BasisSignal,
+  DecisionBasis,
+  ReportBody,
+  TraceStep,
+} from '../src/types/case.ts'
 import {
+  caseSignals,
+  compareSignals,
+  latestReadableBody,
+  markSignals,
+  recommendationSource,
+  reportRecommendationSource,
+  signalTag,
   elapsedText,
   hasReadableReport,
   liveCurrentTask,
@@ -248,4 +261,129 @@ test('elapsedText_secondsThenMinutes_neverNegative', () => {
   assert.equal(elapsedText(created, at(104)), '1분 44초')
   // 기기 시계가 서버보다 조금 느려도 음수로 보이지 않는다
   assert.equal(elapsedText(created, at(-2)), '0초')
+})
+
+// ── 판정 근거 화면 (#501) ──
+
+const signal = (key: string, label: string, over: Partial<BasisSignal> = {}): BasisSignal => ({
+  key,
+  label,
+  detail: null,
+  level: 'CAUTION',
+  normalReason: null,
+  ...over,
+})
+
+// 1011번 사건과 같은 판정 근거
+const basis1011: DecisionBasis = {
+  signals: [
+    signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
+    signal('R02', '처음 쓰는 기기'),
+    signal('R03', '처음 쓰는 카드'),
+    signal('OVERSEAS', '해외 접속 (TH)'),
+  ],
+  normals: [
+    {
+      key: 'SIMILAR_AMOUNT',
+      label: '최근 30일 비슷한 금액의 결제 9건 매입 완료',
+      canExplain: ['고액 결제'],
+      explains: [],
+    },
+  ],
+  rule: 'HIGH_RISK_WITH_OTHERS',
+  recommendation: 'REJECT_REVIEW',
+}
+
+const analysis = (paymentId: string, basis?: DecisionBasis | null) => ({
+  paymentId,
+  amount: 205_600,
+  requestedAt: '2026-05-21T11:16:00Z',
+  riskScore: 50,
+  ruleHits: [],
+  riskEvidence: [],
+  normalEvidence: [],
+  unknowns: [],
+  recommendation: basis?.recommendation ?? ('NEEDS_CHECK' as const),
+  basis,
+})
+
+test('recommendationSource_withBasis_isRuleTableElseOldAiRecommendation', () => {
+  assert.equal(recommendationSource(analysis('1', basis1011)), '기준표 판정')
+  assert.equal(recommendationSource(analysis('1')), 'AI 권고')
+  assert.equal(recommendationSource(null), 'AI 권고')
+  // 결제 하나라도 예전 형식이면 종합 권고는 AI 권고로 둔다
+  const mixed = body({ paymentAnalyses: [analysis('1', basis1011), analysis('2')] })
+  assert.equal(reportRecommendationSource(mixed), 'AI 권고')
+  const all = body({ paymentAnalyses: [analysis('1', basis1011)] })
+  assert.equal(reportRecommendationSource(all), '기준표 판정')
+})
+
+test('signalTag_countedInOrNormalReason_isNotOpen', () => {
+  assert.deepEqual(signalTag(signal('R01', '고액 결제')), { text: '정상 사유 없음', open: true })
+  assert.equal(
+    signalTag(signal('R01', '고액 결제', { normalReason: '비슷한 금액 9건' })).open,
+    false,
+  )
+  assert.deepEqual(signalTag(signal('R04', '짧은 시간 반복 결제', { countedIn: '카드 테스팅' })), {
+    text: '카드 테스팅에 포함 · 따로 세지 않음',
+    open: false,
+  })
+})
+
+test('markSignals_exactNamesOnly_marksByLevel', () => {
+  const parts = markSignals(
+    '처음 쓰는 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
+    basis1011,
+  )
+  const marked = parts.filter((p) => p.mark).map((p) => [p.text, p.mark])
+  assert.deepEqual(marked, [
+    ['처음 쓰는 카드', 'CAUTION'],
+    ['해외 접속', 'CAUTION'],
+    ['같은 카드를 다른 고객이 사용', 'HIGH_RISK'],
+    ['비슷한 금액', 'NORMAL'],
+  ])
+  // 나눠도 원래 문장 그대로다
+  assert.equal(
+    parts.map((p) => p.text).join(''),
+    '처음 쓰는 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
+  )
+})
+
+test('markSignals_paraphrasedOrNoBasis_leavesPlain', () => {
+  assert.deepEqual(markSignals('새 카드로 결제했습니다.', basis1011), [
+    { text: '새 카드로 결제했습니다.', mark: null },
+  ])
+  assert.deepEqual(markSignals('처음 쓰는 카드', null), [{ text: '처음 쓰는 카드', mark: null }])
+})
+
+test('caseSignals_oldReport_returnsNullAndDedupesAcrossPayments', () => {
+  assert.equal(caseSignals(body({ paymentAnalyses: [analysis('1')] })), null)
+  const two = body({ paymentAnalyses: [analysis('1', basis1011), analysis('2', basis1011)] })
+  assert.equal(caseSignals(two)?.length, 4)
+})
+
+test('compareSignals_sameKeyAlignedCountryDiffersOnlyOneSide', () => {
+  const past = [
+    signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
+    signal('OVERSEAS', '해외 접속 (VN)'),
+    signal('R01', '고액 결제'),
+  ]
+  const rows = compareSignals(past, basis1011.signals)
+  assert.deepEqual(
+    rows.map((r) => [r.past?.label ?? null, r.now?.label ?? null, r.tag]),
+    [
+      ['같은 카드를 다른 고객이 사용', '같은 카드를 다른 고객이 사용', 'SAME'],
+      ['해외 접속 (VN)', '해외 접속 (TH)', 'COUNTRY_DIFFERS'],
+      [null, '처음 쓰는 기기', 'ONLY'],
+      [null, '처음 쓰는 카드', 'ONLY'],
+      ['고액 결제', null, 'ONLY'],
+    ],
+  )
+})
+
+test('latestReadableBody_skipsFailedLatest_returnsNewestSucceeded', () => {
+  const ok = { ...report(1, 1), reportBody: body({ summary: ['v1'] }) }
+  const failed = { ...report(2, 1), status: 'FAILED' as const, reportBody: null }
+  assert.deepEqual(latestReadableBody([ok, failed])?.summary, ['v1'])
+  assert.equal(latestReadableBody([failed]), null)
 })
