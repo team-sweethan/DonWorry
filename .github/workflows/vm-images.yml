@@ -24,6 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s .github/scripts -p 'test_release_*.py' -v
+      - run: for script in .github/scripts/*.sh; do bash -n "$script"; done
 
   backend-test:
     runs-on: ubuntu-latest
@@ -96,25 +97,45 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build backend
+        id: backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
           tags: ghcr.io/team-sweethan/donworry-backend:sha-${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          provenance: true
 
       - name: Build frontend
+        id: frontend
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
           tags: ghcr.io/team-sweethan/donworry-frontend:sha-${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          provenance: true
 
       - name: Build AI
+        id: ai
         uses: docker/build-push-action@v6
         with:
           context: ./ai-server
           push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true' }}
           tags: ghcr.io/team-sweethan/donworry-ai:sha-${{ github.sha }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          provenance: true
+
+      - name: Validate release metadata
+        id: release_metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DONWORRY_RELEASE_ENABLED == 'true'
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+          AI_DIGEST: ${{ steps.ai.outputs.digest }}
+        run: bash .github/scripts/prepare-release-metadata.sh
 
       # 느린 빌드·업로드는 최신 확인 전에 끝낸다. prod는 아직 변경하지 않는다 (#461).
       - name: Prepare release marker
@@ -126,8 +147,8 @@ jobs:
           file: .github/docker/release-marker.Dockerfile
           push: true
           tags: ghcr.io/team-sweethan/donworry-release:sha-${{ github.sha }}
-          labels: org.opencontainers.image.revision=${{ github.sha }}
-          # marker는 revision label만 담는다. provenance를 붙이면 index로 발행되므로
+          labels: ${{ steps.release_metadata.outputs.labels }}
+          # marker는 SHA와 이미지 index digest를 담는다. provenance를 붙이면 index로 발행되므로
           # 단일 manifest로 유지해 게시 스크립트의 digest 그대로 승격 전제와 맞춘다.
           provenance: false
 
