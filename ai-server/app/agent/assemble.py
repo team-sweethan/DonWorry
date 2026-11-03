@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime, timedelta
 
+from app.agent.evidence import basis_facts, decision_basis
 from app.agent.narrative import Narrative
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
@@ -276,6 +277,10 @@ def facts_json(
                 ],
             }
         )
+        # 판정 근거 · 기준표 판정 (#501) — 코드가 정한 값이라 AI는 바꾸지 않고 설명만 한다
+        if evidence is not None and analyzable(payment):
+            basis = decision_basis(payment, evidence, case_payments, history, linked)
+            payments[-1]["판정 근거"] = basis_facts(basis)
     facts: dict[str, object] = {"결제": payments}
     if similar is not None:
         facts["비슷한 과거 사건(참고)"] = [
@@ -434,6 +439,12 @@ def assemble_report(
             continue
         evidence = fds.get(payment.paymentId)
         written = narrative.payments[payment.paymentId]
+        # 권고는 AI가 아니라 판정 기준표가 정한다 (#501)
+        basis = (
+            decision_basis(payment, evidence, case_payments, history, linked)
+            if evidence is not None
+            else None
+        )
         unknowns = _drop_nothing_unknown(list(written.unknowns)) + [ALWAYS_UNKNOWN]
         if evidence is None or evidence.riskScore is None:
             unknowns.append("FDS 평가 결과 미확인")
@@ -447,7 +458,7 @@ def assemble_report(
                 riskEvidence=drop_rule_only(written.riskEvidence),
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
-                recommendation=written.recommendation,
+                recommendation=basis.recommendation if basis else "NEEDS_CHECK",
                 reason=written.reason,
                 ruleHitDetails=[
                     RuleHitDetail(
@@ -465,6 +476,7 @@ def assemble_report(
                 signals=PaymentSignals.model_validate(evidence.signals.model_dump())
                 if evidence and evidence.signals
                 else None,
+                basis=basis,
             )
         )
         timeline.append(payment_timeline_item(payment, evidence))

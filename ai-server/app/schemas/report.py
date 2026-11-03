@@ -43,6 +43,39 @@ class PaymentSignals(BaseModel):
     ipProvided: bool
 
 
+# 판정 근거 (#501) — 코드가 판정 기준표로 계산한다. AI는 이 값을 바꾸지 않는다
+# level: HIGH_RISK(고위험 징후, 정상 고객에게 거의 없음) / CAUTION(주의 징후, 정상 고객에게도 있음)
+# normalReason: 이 징후를 설명하는 정상 거래 근거 이름. None이면 "정상 사유 없음"
+class BasisSignal(BaseModel):
+    key: str
+    label: str
+    detail: str | None
+    level: Literal["HIGH_RISK", "CAUTION"]
+    normalReason: str | None
+
+
+# 정상 거래 근거 — canExplain은 설명할 수 있는 징후, explains는 이 결제에서 실제로 설명한 징후
+class NormalBasis(BaseModel):
+    key: str
+    label: str
+    canExplain: list[str]
+    explains: list[str]
+
+
+# rule: 판정 기준표에서 해당한 칸
+# HIGH_RISK_WITH_OTHERS(고위험 + 정상 사유 없는 다른 징후 → 승인 취소 검토)
+# HIGH_RISK_ONLY(고위험 하나만 → 추가 확인) · CAUTION_ONLY(주의만 → 추가 확인)
+# ALL_EXPLAINED(모든 징후에 정상 사유 → 매입 진행 검토)
+BasisRule = Literal["HIGH_RISK_WITH_OTHERS", "HIGH_RISK_ONLY", "CAUTION_ONLY", "ALL_EXPLAINED"]
+
+
+class DecisionBasis(BaseModel):
+    signals: list[BasisSignal]
+    normals: list[NormalBasis]
+    rule: BasisRule
+    recommendation: Recommendation
+
+
 class PaymentAnalysis(BaseModel):
     paymentId: str
     amount: int
@@ -52,11 +85,14 @@ class PaymentAnalysis(BaseModel):
     riskEvidence: list[str]
     normalEvidence: list[str]
     unknowns: list[str]
+    # 기준표 판정 (#501) — basis.recommendation과 같다. 예전 보고서는 AI가 고른 값
     recommendation: Recommendation
     reason: str
     ruleHitDetails: list[RuleHitDetail]
     # 없으면 None — 예전 Spring · FDS 평가 없음
     signals: PaymentSignals | None = None
+    # 없으면 None — #501 이전 보고서
+    basis: DecisionBasis | None = None
 
 
 # 사건 경위 한 줄 — kind는 화면 점 색 구분용 (결제 · 사건 생성)

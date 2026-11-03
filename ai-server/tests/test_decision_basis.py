@@ -1,0 +1,229 @@
+import json
+
+from app.agent.assemble import facts_json
+from app.agent.evidence import decision_basis
+from app.schemas.tools import (
+    CasePaymentsTool,
+    FdsPayment,
+    LinkedPaymentsTool,
+    PaymentHistoryTool,
+)
+
+# 판정 근거 · 판정 기준표 (#501)
+# 실측 사건 모양(v3 시험지 1011 · 1066 · 1015 · 1014)을 줄여 옮겼다 — 같은 근거면 언제나 같은 판정
+
+AT = "2026-05-21T11:16:43Z"
+HEAD = {"caseId": "1011", "evidenceVersion": 1, "source": "P2", "retrievedAt": AT}
+NONE = {
+    "provided": True,
+    "otherCustomerCount": 0,
+    "paymentCount": 0,
+    "resultCounts": [],
+    "declinedCount": 0,
+}
+
+
+def _rule(code: str, name: str) -> dict[str, object]:
+    return {"code": code, "name": name, "appliedScore": 25}
+
+
+def _case(amount: int) -> CasePaymentsTool:
+    return CasePaymentsTool.model_validate(
+        {
+            **HEAD,
+            "payments": [
+                {"paymentId": "1", "amount": amount, "paymentStatus": "HELD", "requestedAt": AT}
+            ],
+            "missingPaymentIds": [],
+        }
+    )
+
+
+def _fds(rules: list[dict[str, object]], country: str = "KR") -> FdsPayment:
+    return FdsPayment.model_validate(
+        {
+            "paymentId": "1",
+            "riskScore": 50,
+            "fdsResult": "REVIEW",
+            "ruleHits": rules,
+            "signals": {
+                "cardDisplayLabel": None,
+                "cardProvided": True,
+                "deviceProvided": True,
+                "ipCountryCode": country,
+                "ipProvided": True,
+            },
+        }
+    )
+
+
+# (금액, 상태, 시각) 목록으로 고객 최근 결제를 만든다
+def _history(rows: list[tuple[int, str, str]]) -> PaymentHistoryTool:
+    return PaymentHistoryTool.model_validate(
+        {
+            **HEAD,
+            "lookbackDays": 30,
+            "payments": [
+                {"paymentId": f"h{i}", "amount": a, "paymentStatus": s, "requestedAt": t}
+                for i, (a, s, t) in enumerate(rows)
+            ],
+            "statusCounts": [],
+            "truncated": False,
+        }
+    )
+
+
+def _linked(card_others: int = 0) -> LinkedPaymentsTool:
+    card = (
+        {**NONE, "otherCustomerCount": card_others, "paymentCount": 9, "declinedCount": 2}
+        if card_others
+        else NONE
+    )
+    return LinkedPaymentsTool.model_validate(
+        {
+            **HEAD,
+            "lookbackDays": 30,
+            "card": card,
+            "device": NONE,
+            "ip": {**NONE, "provided": False},
+        }
+    )
+
+
+def _basis(amount, rules, history, linked, country="KR"):
+    case = _case(amount)
+    return decision_basis(case.payments[0], _fds(rules, country), case, history, linked)
+
+
+USUAL = [(200000 + i * 10000, "CAPTURED", f"2026-05-1{i}T10:00:00Z") for i in range(5)]
+
+
+# 1011 — 같은 카드를 다른 고객이 씀(고위험) + 새 기기 · 새 카드 · 해외 접속(주의)
+# 매입 완료 이력이 있어도 고액 징후가 없어 아무것도 설명하지 못한다 → 승인 취소 검토
+def test_linked_card_with_new_card_and_overseas_is_reject() -> None:
+    basis = _basis(
+        205600,
+        [_rule("R02", "신규 단말기"), _rule("R03", "신규 카드")],
+        _history(USUAL),
+        _linked(card_others=1),
+        country="TH",
+    )
+
+    assert basis.rule == "HIGH_RISK_WITH_OTHERS"
+    assert basis.recommendation == "REJECT_REVIEW"
+    labels = {s.label: s for s in basis.signals}
+    assert labels["같은 카드를 다른 고객이 사용"].level == "HIGH_RISK"
+    assert "해외 접속 (TH)" in labels
+    assert all(s.normalReason is None for s in basis.signals)
+    similar = next(n for n in basis.normals if n.key == "SIMILAR_AMOUNT")
+    assert similar.canExplain == ["고액 결제"] and similar.explains == []
+
+
+# 1066 — 카드 테스팅 모양: 거절 후 재시도(고위험) + 짧은 시간 반복(주의), 승인 이력 없음
+# 본인 카드라는 근거가 없어 반복 결제를 설명하지 못한다 → 승인 취소 검토
+def test_retry_with_repeat_and_no_approved_history_is_reject() -> None:
+    declined = [
+        (7800, "DECLINED", "2026-05-20T03:51:47Z"),
+        (29500, "DECLINED", "2026-04-20T10:17:36Z"),
+    ]
+    basis = _basis(
+        4600,
+        [_rule("R04", "단시간 반복 결제"), _rule("R08", "거절 후 재시도")],
+        _history(declined),
+        _linked(),
+    )
+
+    assert basis.rule == "HIGH_RISK_WITH_OTHERS"
+    assert basis.recommendation == "REJECT_REVIEW"
+    assert basis.normals == []
+
+
+# 1015 — 같은 모양이지만 전에 승인된 본인 카드라 반복 결제에는 정상 사유가 있다
+# 거절 후 재시도만 남는다 → 추가 확인 (정상 고객을 승인 취소 검토로 보내지 않게)
+def test_retry_with_own_card_is_needs_check() -> None:
+    rows = [
+        (32000, "CAPTURED", "2026-06-30T10:28:20Z"),
+        (22100, "CAPTURED", "2026-06-27T11:47:43Z"),
+    ]
+    basis = _basis(
+        28100,
+        [_rule("R04", "단시간 반복 결제"), _rule("R08", "거절 후 재시도")],
+        _history(rows),
+        _linked(),
+    )
+
+    assert basis.rule == "HIGH_RISK_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+    repeat = next(s for s in basis.signals if s.key == "R04")
+    assert repeat.normalReason == "전에 승인된 적 있는 본인 카드 · 기기"
+    retry = next(s for s in basis.signals if s.key == "R08")
+    assert retry.normalReason is None
+
+
+# 1014 — 해외 여행 중인 정상 고객: 새 기기 · 새 카드 · 해외 접속(주의)만 → 추가 확인
+def test_common_signals_only_is_needs_check() -> None:
+    basis = _basis(
+        150000,
+        [_rule("R02", "신규 단말기"), _rule("R03", "신규 카드")],
+        _history([(140000, "CAPTURED", "2026-05-01T10:00:00Z")]),
+        _linked(),
+        country="VN",
+    )
+
+    assert basis.rule == "CAUTION_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+
+
+# 평소 금액의 고액 결제 — 비슷한 금액 매입 완료 2건 이상이 고액 징후를 설명한다 → 매입 진행 검토
+def test_high_amount_explained_by_usual_amount_is_accept() -> None:
+    basis = _basis(220000, [_rule("R01", "고액 결제")], _history(USUAL), _linked())
+
+    assert basis.rule == "ALL_EXPLAINED"
+    assert basis.recommendation == "ACCEPT_REVIEW"
+    assert basis.signals[0].normalReason == "최근 30일 비슷한 금액의 결제 5건 매입 완료"
+
+
+# 비슷한 금액 이력이 1건뿐이면 정상 사유로 보지 않는다
+def test_single_similar_payment_is_not_enough() -> None:
+    basis = _basis(220000, [_rule("R01", "고액 결제")], _history(USUAL[:1]), _linked())
+
+    assert basis.rule == "CAUTION_ONLY"
+
+
+# 사건 결제 앞뒤 10분 안의 결제는 평소 결제가 아니다 — 같은 연속 결제로 고액을 설명하지 않는다
+def test_burst_payments_are_not_usual_history() -> None:
+    burst = [
+        (220000, "CAPTURED", "2026-05-21T11:10:00Z"),
+        (220000, "CAPTURED", "2026-05-21T11:12:00Z"),
+    ]
+    basis = _basis(220000, [_rule("R01", "고액 결제")], _history(burst), _linked())
+
+    assert basis.rule == "CAUTION_ONLY"
+
+
+# 고위험 국가 규칙이 걸렸으면 해외 접속을 따로 세지 않는다 · 예전 영문 코드도 같은 징후로 읽는다
+def test_high_risk_country_and_legacy_codes() -> None:
+    basis = _basis(
+        100000,
+        [_rule("R05", "고위험 국가 IP"), _rule("NEW_CARD", "처음 쓰는 카드")],
+        None,
+        None,
+        country="NG",
+    )
+
+    keys = [s.key for s in basis.signals]
+    assert keys == ["R05", "R03"]
+    assert basis.rule == "CAUTION_ONLY"
+
+
+# AI에게 주는 근거에 판정 근거 · 기준표 판정이 들어가고 영문 판정 코드는 없다
+def test_facts_include_basis_in_korean() -> None:
+    case = _case(205600)
+    fds = {"1": _fds([_rule("R03", "신규 카드")], country="TH")}
+
+    facts = json.loads(facts_json(case, fds, None, _history(USUAL), _linked(card_others=1)))
+
+    basis = facts["결제"][0]["판정 근거"]
+    assert basis["기준표 판정"].endswith("승인 취소 검토")
+    assert basis["고위험 징후"] == [{"징후": "같은 카드를 다른 고객이 사용", "정상 사유": "없음"}]
+    assert "REJECT_REVIEW" not in json.dumps(facts, ensure_ascii=False)

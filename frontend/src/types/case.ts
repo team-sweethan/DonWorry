@@ -124,6 +124,33 @@ export type CaseHistory = {
 // ── AI 보고서 (기획 2.7 표준 구성) — report_body 키 표기는 P4와 확정 전 ──
 export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
 
+// 판정 근거 (#501) — ai-server app/schemas/report.py의 DecisionBasis와 같게 둔다
+// level: 고위험 징후(HIGH_RISK) · 주의 징후(CAUTION), normalReason이 null이면 정상 사유 없음
+export type BasisSignal = {
+  key: string
+  label: string
+  detail: string | null
+  level: 'HIGH_RISK' | 'CAUTION'
+  normalReason: string | null
+}
+
+export type NormalBasis = {
+  key: string
+  label: string
+  canExplain: string[]
+  explains: string[]
+}
+
+export type BasisRule =
+  'HIGH_RISK_WITH_OTHERS' | 'HIGH_RISK_ONLY' | 'CAUTION_ONLY' | 'ALL_EXPLAINED'
+
+export type DecisionBasis = {
+  signals: BasisSignal[]
+  normals: NormalBasis[]
+  rule: BasisRule
+  recommendation: AiRecommendation
+}
+
 // 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 evidence 목록의 같은 ID 줄
 export type ReportRuleHitDetail = {
   code: string
@@ -162,6 +189,8 @@ export type ReportBody = {
     ruleHitDetails?: ReportRuleHitDetail[]
     // 카드 · 기기 · 접속 국가 (#346) — 없으면(undefined) 예전 보고서, null이면 FDS 평가 없음
     signals?: PaymentSignals | null
+    // 판정 근거 · 기준표 판정 (#501) — 없으면 그 전 보고서
+    basis?: DecisionBasis | null
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
   timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
