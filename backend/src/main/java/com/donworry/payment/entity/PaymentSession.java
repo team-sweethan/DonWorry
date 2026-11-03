@@ -100,6 +100,10 @@ public class PaymentSession {
     @Column(nullable = false)
     private int notifyAttempts;
 
+    // 지금 재시도 중인 웹훅의 eventId. 보낼 eventId가 바뀌면(재시도 중 상태 변경) 횟수를 새로 센다 (#455)
+    @Column(length = 100)
+    private String notifyEventId;
+
     @Column(columnDefinition = "DATETIME(6)")
     private Instant nextNotifyAt;
 
@@ -202,13 +206,19 @@ public class PaymentSession {
         this.notifiedStatus = status;
         this.notifiedAuthorized = authorized;
         this.notifyAttempts = 0;
+        this.notifyEventId = null;
         this.nextNotifyAt = null;
     }
 
-    // 보내지 못한 상태를 받아, 한도에 닿으면 그 상태를 처리한 것으로 기록하고 그만둔다(true).
+    // 보내지 못한 웹훅(eventId · 상태)을 받아, 한도에 닿으면 그 상태를 처리한 것으로 기록하고 그만둔다(true).
+    // 재시도 중 상태가 바뀌어 eventId가 달라지면 앞 상태의 실패를 이어 세지 않고 횟수 · 간격을 처음부터 센다.
     // 처리한 것으로 기록해야 다음 주기에 같은 상태로 다시 예약되지 않고, 상태가 또 바뀌면 새로 알린다.
     // notifyAttempts는 남겨 두어 중단된 세션(notifyAttempts > 0, nextNotifyAt 없음)을 운영에서 찾을 수 있게 한다
-    public boolean notifyFailed(String status, boolean authorized, Instant now) {
+    public boolean notifyFailed(String eventId, String status, boolean authorized, Instant now) {
+        if (!Objects.equals(notifyEventId, eventId)) {
+            notifyEventId = Objects.requireNonNull(eventId, "eventId");
+            notifyAttempts = 0;
+        }
         notifyAttempts++;
         if (notifyAttempts >= NOTIFY_MAX_ATTEMPTS) {
             this.notifiedStatus = status;

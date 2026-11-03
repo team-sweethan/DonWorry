@@ -140,7 +140,7 @@ public class PaymentSessionNotifier {
                     // 보낸 값(보내기 직전 조회한 상태)을 기록한다. 그사이 상태가 또 바뀌었으면 다음 실행에서 다시 예약된다
                     String sentStatus = payment.paymentStatus().name();
                     if (delivered) locked.notified(sentStatus, payment.authorized());
-                    else if (locked.notifyFailed(sentStatus, payment.authorized(), Instant.now())) {
+                    else if (locked.notifyFailed(eventId, sentStatus, payment.authorized(), Instant.now())) {
                         // 한도(약 24시간)에 닿아 이 상태는 더 보내지 않는다 — 가맹점 조회 배치가 맞춘다 (#455)
                         log.warn(
                                 "결제 웹훅 재전송 중단 sessionId={} paymentId={} status={} attempts={}",

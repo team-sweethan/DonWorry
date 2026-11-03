@@ -195,10 +195,7 @@ class PaymentWebhookMariaDbTests {
     void run_whenRetryLimitReached_stopsUntilStatusChanges() {
         responseStatus.set(500);
         Ids ids = heldSessionWithNotifyUrl();
-        jdbc.update(
-                "UPDATE payment_sessions SET notify_attempts = ? WHERE session_id = ?",
-                PaymentSession.NOTIFY_MAX_ATTEMPTS - 1,
-                ids.sessionId());
+        retryingFor(ids, "evt_" + ids.paymentId() + "_HELD_A", PaymentSession.NOTIFY_MAX_ATTEMPTS - 1);
 
         runAndSettle();
 
@@ -223,6 +220,28 @@ class PaymentWebhookMariaDbTests {
         PaymentSession renotified = sessions.findById(ids.sessionId()).orElseThrow();
         assertThat(renotified.getNotifiedStatus()).isEqualTo("VOIDED");
         assertThat(renotified.getNotifyAttempts()).isZero();
+    }
+
+    // HELD 알림을 재시도하던 중 직원 거절로 VOIDED가 되면, VOIDED는 HELD의 실패 횟수를 이어받지 않고 1회부터 센다
+    // (PR #457 Codex 리뷰 — 이어 세면 VOIDED가 첫 실패만으로 한도에 닿아 중단된다)
+    @Test
+    void run_whenStatusChangesDuringRetry_restartsCountForNewEvent() {
+        responseStatus.set(500);
+        Ids ids = heldSessionWithNotifyUrl();
+        retryingFor(ids, "evt_" + ids.paymentId() + "_HELD_A", PaymentSession.NOTIFY_MAX_ATTEMPTS - 1);
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeVoid());
+
+        runAndSettle();
+
+        assertThat(received)
+                .singleElement()
+                .satisfies(r -> assertThat(r.headers()).containsEntry("event", "evt_" + ids.paymentId() + "_VOIDED_A"));
+        PaymentSession retrying = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(retrying.getNotifyAttempts()).isEqualTo(1);
+        assertThat(retrying.getNotifyEventId()).isEqualTo("evt_" + ids.paymentId() + "_VOIDED_A");
+        assertThat(retrying.getNextNotifyAt()).isNotNull();
+        assertThat(retrying.getNotifiedStatus()).isNull();
     }
 
     // 가맹점 키가 없으면 서명 없이 보내지 않고 다시 시도로 남긴다
@@ -264,6 +283,15 @@ class PaymentWebhookMariaDbTests {
     }
 
     record Ids(Long sessionId, Long paymentId) {}
+
+    // 그 eventId를 이미 attempts번 보내지 못한 세션으로 만든다(약 24시간 재시도를 기다리지 않으려고)
+    private void retryingFor(Ids ids, String eventId, int attempts) {
+        jdbc.update(
+                "UPDATE payment_sessions SET notify_event_id = ?, notify_attempts = ? WHERE session_id = ?",
+                eventId,
+                attempts,
+                ids.sessionId());
+    }
 
     // 결제창으로 접수돼 보류(HELD)된 결제와, 알림 주소가 있는 세션
     private Ids heldSessionWithNotifyUrl() {
