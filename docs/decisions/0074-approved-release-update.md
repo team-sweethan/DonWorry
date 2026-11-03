@@ -20,7 +20,8 @@ VM root 명령이 검증·업데이트를 자동 실행한다. main 병합 자�
 
 승인 대상은 SHA·marker digest·서비스 index/플랫폼 child/config digest·VM 플랫폼·실행 ID·
 생성 시각·구성 버전이다. index에서 attestation을 제외한 실행 플랫폼 manifest를 하나만
-선택하고 child config의 revision·플랫폼을 대조한다. 실제 pull 뒤 로컬 config ID도 대조한다.
+선택하고 child config의 revision·플랫폼을 대조한다. 실제 pull 뒤 로컬 이미지 ID도 대조한다
+(기존 저장소는 config digest, containerd 이미지 저장소는 index digest).
 원격 manifest 원문을 SHA256으로 대조하며, marker config는 Buildx `.Image`로 읽는다.
 동일 SHA 재빌드나 mutable 태그 변경에도 승인 이후 저장된 digest만 사용한다.
 

@@ -54,8 +54,11 @@ donworry-release apply <BUNDLE_ID> <JENKINS_EXECUTION_ID>
 3. `approve`: 묶음·저장 Compose·현재 구성이 같을 때 승인자·시각·실행 ID를 VM에 새로 기록한다.
    구성이나 대상이 바뀌면 새 `prepare`와 새 승인을 받는다. 승인을 덮어쓰지 않는다.
 4. `apply`: 승인과 실행 ID 확인 → 고정 marker·index·child·revision 재검증 → digest로 pull →
-   로컬 config ID·플랫폼·revision 확인 → 구성·DB·로컬 이미지 재검증 → 마지막 main 조회 →
+   로컬 이미지 ID·플랫폼·revision 확인 → 구성·DB·로컬 이미지 재검증 → 마지막 main 조회 →
    적용 시작 기록 → 저장된 Compose로 backend·ai·nginx만 `up --no-deps --no-build --pull never`.
+   이미지 ID는 Docker 이미지 저장 방식에 따라 다르다. 기존 저장소는 config digest,
+   containerd 이미지 저장소(`docker info`의 `driver-type io.containerd.snapshotter.*`)는
+   pull한 index digest와 비교한다. 실행 컨테이너의 `Image`도 같은 기준으로 대조한다.
    승인 뒤 태그로 이미지를 다시 선택하지 않는다.
 5. Compose 대기 → 실제 컨테이너 config ID와 실행 ref 비교 → Nginx `/healthz`,
    backend `/api/auth/me`의 200/401/403, AI `/health` 확인 → 성공 기록.
@@ -118,6 +121,9 @@ Docker daemon 없이 실제 Compose CLI로 `$` 포함 환경값과 bind 경로·
 - #480의 main push 이미지 발행·스키마 1 marker와 서비스 revision 실검증. 기존 SHA-only
   marker는 거절되며 최초 배포 SHA로 v1 승인을 자동 생성하지 않는다.
 - VM 원본/사본 비교, root 파일 소유·권한·Python/Compose/Buildx 버전, GHCR 읽기 인증.
+- 실제 pull 후 `docker image inspect`·`docker inspect`의 이미지 ID. VM1은 2026-11-03
+  `docker info`의 `DriverStatus`에 `driver-type`이 없는 기존 저장소(config digest 비교)임을 확인했다.
+  기존 저장소 경로는 대역 테스트, containerd 경로는 대역 테스트와 로컬 Docker로만 확인했다.
 - Jenkins 새 Job에서 이 Jenkinsfile의 Groovy 해석, `input` 승인자 반환과 SSH/sudo 계약.
   Jenkins 접근이 없어 이 부분은 로컬 테스트로 검증하지 못했다.
 - 격리 환경에서 실패 차단과 정상 실행 이미지를 재현한 뒤 실제 Jenkins 실행 링크와

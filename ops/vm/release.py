@@ -246,13 +246,24 @@ class Release:
                                            'approver': token(approver), 'approved_at': timestamp()})
         return {'bundle_id': bundle_id, 'approved': True}
 
+    def image_ids(self, bundle):
+        # 기존 저장소는 이미지 ID가 config digest지만, containerd 이미지 저장소는
+        # pull한 index digest를 이미지 ID로 쓴다. 저장 방식은 실행할 때마다 확인한다.
+        info = self.json('docker', 'info', '--format', '{{json .}}')
+        containerd = any(isinstance(item, list) and len(item) == 2 and item[0] == 'driver-type' and
+                         str(item[1]).startswith('io.containerd.snapshotter')
+                         for item in info.get('DriverStatus') or [])
+        return {s: image['index'] if containerd else image['config']
+                for s, image in bundle['images'].items()}
+
     def local_images(self, bundle, pull):
-        for image in bundle['images'].values():
+        ids = self.image_ids(bundle)
+        for service, image in bundle['images'].items():
             ref = f"{image['repository']}@{image['index']}"
             if pull:
                 self.command('docker', 'pull', '--platform', platform_name(bundle['platform']), ref)
             local = self.json('docker', 'image', 'inspect', ref)[0]
-            require(local['Id'] == image['config'] and
+            require(local['Id'] == ids[service] and
                     local['Os'] == bundle['platform']['os'] and
                     local['Architecture'] == bundle['platform']['architecture'] and
                     local['Config'].get('Labels', {}).get(REVISION) == bundle['sha'],
@@ -298,11 +309,12 @@ class Release:
         return result
 
     def runtime(self, bundle, folder):
+        ids = self.image_ids(bundle)
         for service, image in bundle['images'].items():
             cid = self.compose('ps', '-q', service, file=folder / 'compose.json').decode().strip()
             require(bool(cid), '실행 컨테이너 없음')
             container = self.json('docker', 'inspect', cid)[0]
-            require(container['Image'] == image['config'] and container['State']['Running'] and
+            require(container['Image'] == ids[service] and container['State']['Running'] and
                     container['Config']['Image'] == f"{image['repository']}@{image['index']}",
                     '실행 컨테이너 이미지 불일치')
         # 현재 앱 이미지에 Docker healthcheck가 없어 Compose의 running만으로 준비를 판단할 수 없다.

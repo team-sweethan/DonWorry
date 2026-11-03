@@ -28,6 +28,7 @@ class Docker:
         self.on_pull = lambda: None
         self.runtime_bad = False
         self.runtime_health_bad = False
+        self.containerd = False
         self.compose_config = {'name': 'donworry', 'services': {
             'db': {'image': 'mariadb:11.8'},
             **{s: {'image': repo + ':sha-old', 'environment': {'PASSWORD': 'test$$SECRET'}}
@@ -76,7 +77,13 @@ class Docker:
         if args[0] == 'git':
             return f'{self.main}\trefs/heads/main\n'.encode()
         if args[:2] == ('docker', 'info'):
-            return release.encoded({'OSType': 'linux', 'Architecture': 'x86_64'})
+            # 기존 저장소 값은 VM1의 실제 `docker info` 출력(2026-11-03)이다.
+            status = ([['driver-type', 'io.containerd.snapshotter.v1']] if self.containerd
+                      else [['Backing Filesystem', 'extfs'], ['Supports d_type', 'true'],
+                            ['Using metacopy', 'false'], ['Native Overlay Diff', 'true'],
+                            ['userxattr', 'false']])
+            return release.encoded({'OSType': 'linux', 'Architecture': 'x86_64',
+                                    'DriverStatus': status})
         if args[:4] == ('docker', 'buildx', 'imagetools', 'inspect'):
             ref = args[-1]
             if ref.endswith(':prod'):
@@ -116,6 +123,12 @@ class Docker:
         if args[0] == 'curl':
             return b'ok'
         raise AssertionError(args)
+
+    def use_containerd(self):
+        # containerd 이미지 저장소에서는 이미지 ID가 pull한 index digest다.
+        self.containerd = True
+        for ref, image in self.local.items():
+            image['Id'] = ref.split('@', 1)[1]
 
     def mutations(self):
         return [args for args in self.calls if args[:2] == ('docker', 'compose') and 'up' in args]
@@ -281,6 +294,29 @@ class ReleaseTests(unittest.TestCase):
         for image in self.docker.local.values():
             image['Id'] = release.digest(b'wrong image')
         self.blocked(bundle)
+
+    def test_containerd_store_checks_index_digest_as_image_id(self):
+        self.docker.use_containerd()
+        bundle = self.approved()
+        self.assertEqual(self.cd.apply(bundle, EXECUTION)['status'], 'success')
+        saved = json.loads((self.cd.store / bundle / 'bundle.json').read_bytes())
+        for image in saved['images'].values():
+            self.assertEqual(self.docker.local[image['repository'] + '@' + image['index']]['Id'],
+                             image['index'])
+
+    def test_image_id_kind_must_match_docker_image_store(self):
+        # 저장 방식과 다른 종류의 ID가 나오면 서비스 변경 전에 거절한다.
+        for containerd, use_index in [(True, False), (False, True)]:
+            with self.subTest(containerd=containerd):
+                bundle = self.approved()
+                saved = copy.deepcopy(self.docker.local)
+                self.docker.containerd = containerd
+                if use_index:
+                    for ref, image in self.docker.local.items():
+                        image['Id'] = ref.split('@', 1)[1]
+                self.blocked(bundle)
+                self.docker.local = saved
+                self.docker.containerd = False
 
     def test_local_revision_or_platform_mismatch_blocks_apply(self):
         for key, value in [('Architecture', 'arm64'), ('Os', 'windows'),
