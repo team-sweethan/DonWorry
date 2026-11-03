@@ -354,3 +354,5 @@ P1 사용자가 신규 테이블 2개를 포함한 설계·구현을 승인했�
 컬럼·타입·NULL·상태 조합은 [승인 설계](../identity/354-pr-b-key-design.md#3-p1-확인을-받을-저장-구조-제안), 실제 제약은 [현재 설정 SQL](../../backend/src/main/resources/db/migration/V20261031_151333__create_merchant_integrations.sql)·[키 이력 SQL](../../backend/src/main/resources/db/migration/V20261031_151342__create_merchant_key_histories.sql)을 따른다. [ADR-0052](../decisions/0052-merchant-key-management.md)에 저장·복구·이전·B/C 경계를 기록한다. 기존 secret_reference는 이전 대상 식별용으로 유지하되 런타임 키 fallback에 쓰지 않는다. Notion 선행 대조·동기화와 운영 DB 적용은 미수행이다.
 
 P6 2단계 #474: [가맹점 지급 원장·상세 ERD](../settlement/daily-payouts.md). P6 소유 테이블만 추가하며, 기존 완료 원본을 유지한 이력 전환을 포함한다.
+
+P6 3단계 #478: [환불 수신 조정 원장 ERD](../settlement/refund-receiving.md#erd-settlement_refund_adjustments). 전액 환불의 원 수수료·순정산액을 PENDING으로 보존한다. 실제 제외·회수·이월과 운영 활성화는 후속이다.
