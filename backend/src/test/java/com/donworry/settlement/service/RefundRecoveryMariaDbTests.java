@@ -3,7 +3,6 @@ package com.donworry.settlement.service;
 import static com.donworry.settlement.UtcJdbcTimestamp.utcTimestamp;
 import static org.assertj.core.api.Assertions.*;
 
-import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.settlement.api.PaymentRefundSucceeded;
 import com.donworry.settlement.entity.*;
 import com.donworry.settlement.repository.*;
@@ -14,17 +13,11 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.annotation.DirtiesContext;
 
-@Tag("mariadb")
-@SpringBootTest(properties = "spring.datasource.hikari.maximum-pool-size=2")
-@Import(MariaDbTestContainerConfig.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
-class RefundRecoveryMariaDbTests {
+// 기존 환불 통합 테스트의 Nested로만 실행해 전체 앱 컨텍스트를 추가로 만들지 않는다.
+abstract class RefundRecoveryMariaDbTests {
     private static final long MERCHANT = 940501, PAYMENT = 9405001, CANCELLATION = 9405101;
 
     @Autowired
