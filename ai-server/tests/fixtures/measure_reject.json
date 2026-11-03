@@ -1,0 +1,89 @@
+{
+  "_measure": "기대 권고: 승인 취소 검토 — 카드사 거절 직후 재시도 + 처음 쓰는 카드 + 같은 카드를 다른 고객 여럿이 씀 + 비슷한 과거 사건은 승인 취소",
+  "casePayments": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P3·P5",
+    "retrievedAt": "2026-10-27T12:10:00Z",
+    "payments": [
+      {"paymentId": "9301", "amount": 89000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T12:00:00Z"},
+      {"paymentId": "9302", "amount": 92000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T12:03:00Z"}
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T12:10:01Z",
+    "payments": [
+      {
+        "paymentId": "9301",
+        "riskScore": 70,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "R08", "name": "거절 후 재시도", "appliedScore": 35},
+          {"code": "R03", "name": "결제 이력 없는 카드", "appliedScore": 35}
+        ],
+        "signals": {"cardDisplayLabel": "신한 •••• 4821", "cardProvided": true, "deviceProvided": true, "ipCountryCode": "KR", "ipProvided": true}
+      },
+      {
+        "paymentId": "9302",
+        "riskScore": 75,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "R08", "name": "거절 후 재시도", "appliedScore": 35},
+          {"code": "R04", "name": "특정 횟수 이상 결제", "appliedScore": 40}
+        ],
+        "signals": {"cardDisplayLabel": "신한 •••• 4821", "cardProvided": true, "deviceProvided": true, "ipCountryCode": "KR", "ipProvided": true}
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "similar": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P3·P2",
+    "retrievedAt": "2026-10-27T12:10:02Z",
+    "cases": [
+      {
+        "caseId": "150",
+        "similarity": "SHARED_RULES",
+        "sharedRules": [{"code": "R08", "name": "거절 후 재시도"}, {"code": "R03", "name": "결제 이력 없는 카드"}],
+        "closedAt": "2026-10-20T09:00:00Z",
+        "acceptCount": 0,
+        "rejectCount": 2
+      }
+    ],
+    "totalMatched": 1
+  },
+  "history": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P5",
+    "retrievedAt": "2026-10-27T12:10:03Z",
+    "lookbackDays": 30,
+    "payments": [
+      {"paymentId": "9298", "amount": 89000, "paymentStatus": "DECLINED", "requestedAt": "2026-10-27T11:57:00Z"},
+      {"paymentId": "9299", "amount": 89000, "paymentStatus": "DECLINED", "requestedAt": "2026-10-27T11:58:00Z"}
+    ],
+    "statusCounts": [{"paymentStatus": "DECLINED", "count": 2}],
+    "truncated": false
+  },
+  "linked": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T12:10:04Z",
+    "lookbackDays": 30,
+    "card": {
+      "provided": true,
+      "otherCustomerCount": 3,
+      "paymentCount": 5,
+      "resultCounts": [{"result": "REVIEW", "count": 3}, {"result": "DENY", "count": 2}],
+      "declinedCount": 4
+    },
+    "device": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
+    "ip": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0}
+  }
+}

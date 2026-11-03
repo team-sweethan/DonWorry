@@ -192,6 +192,19 @@ class StaticToolBox:
             ip=not_provided,
         )
 
+    # 샘플 JSON 하나로 만든다 — similar · history · linked 키가 없으면 위의 "없음" 응답 (측정 샘플)
+    @classmethod
+    def from_sample(cls, data: dict[str, Any]) -> "StaticToolBox":
+        return cls(
+            CasePaymentsTool.model_validate(data["casePayments"]),
+            FdsEvidenceTool.model_validate(data["fdsEvidence"]),
+            similar=SimilarCasesTool.model_validate(data["similar"]) if "similar" in data else None,
+            history=PaymentHistoryTool.model_validate(data["history"])
+            if "history" in data
+            else None,
+            linked=LinkedPaymentsTool.model_validate(data["linked"]) if "linked" in data else None,
+        )
+
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._linked
 
