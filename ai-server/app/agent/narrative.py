@@ -240,6 +240,17 @@ def evidence_mismatch_errors(
     ]
 
 
+# 추가 확인 필요는 무엇을 모르는지가 있어야 직원이 확인할 수 있다 (권고 기준 조정)
+# 모르는 사실 없이 고르면 확신이 없다는 이유만으로 고른 것이라 다시 쓰게 한다
+def needs_check_errors(narrative: Narrative) -> list[str]:
+    return [
+        f"결제 {pid}: NEEDS_CHECK면 판정을 가를 모르는 사실을 unknowns에 써라. "
+        "모르는 사실이 없으면 근거를 따져 ACCEPT_REVIEW나 REJECT_REVIEW를 골라라"
+        for pid, payment in narrative.payments.items()
+        if payment.recommendation == "NEEDS_CHECK" and not payment.unknowns
+    ]
+
+
 # 형식 · 내용 검사 — 통과하면 Narrative, 아니면 Qwen에게 돌려줄 오류 문장 목록
 # outside_rule_evidence: 근거에 있는 규칙 밖 정황 이름 (#355). None이면 이유 어긋남은 보지 않는다
 # outside_by_payment: 결제별 이유를 검사할 그 결제의 정황 (#355 리뷰)
@@ -259,6 +270,7 @@ def validate_narrative(
         errors += content_errors(narrative, allowed_numbers)
     errors += style_errors(narrative)
     errors += evidence_mismatch_errors(narrative, outside_rule_evidence or [], outside_by_payment)
+    errors += needs_check_errors(narrative)
     for name, items in (
         ("summary", narrative.summary),
         ("overallAnalysis", narrative.overallAnalysis),
@@ -336,7 +348,7 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
 # 문장을 뺀 뒤 요약 · 종합 분석 · 확인할 것이 비면 다시 쓰게 한다 (#355 리뷰)
 # 예시 문장만으로 채운 경우다. 비운 채 조립하면 요약 최소 1줄 제약에 걸려 조사가 오류로 끝났다
 def emptied_errors(narrative: Narrative) -> list[str]:
-    return [
+    emptied = [
         f"{name}에 출력 예시 문장만 썼다. 예시는 다른 사건이다. 이번 [조사 근거]로 새로 써라"
         for name, items in (
             ("summary", narrative.summary),
@@ -345,3 +357,5 @@ def emptied_errors(narrative: Narrative) -> list[str]:
         )
         if not items
     ]
+    # 예시의 모르는 사실을 그대로 써서 빠졌으면 추가 확인 필요의 근거가 사라진다
+    return emptied + needs_check_errors(narrative)

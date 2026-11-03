@@ -1,0 +1,55 @@
+{
+  "_measure": "기대 권고: 추가 확인 필요 — 해외 접속 + 처음 쓰는 기기(위험) vs 평소와 비슷한 금액 매입 완료 이력 + 같은 카드 다른 고객 없음(정상), 고객이 해외에 있는지 모름",
+  "casePayments": {
+    "caseId": "203",
+    "evidenceVersion": 1,
+    "source": "P3·P5",
+    "retrievedAt": "2026-10-27T15:05:00Z",
+    "payments": [
+      {"paymentId": "9501", "amount": 120000, "paymentStatus": "HELD", "requestedAt": "2026-10-27T15:00:00Z"}
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "203",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T15:05:01Z",
+    "payments": [
+      {
+        "paymentId": "9501",
+        "riskScore": 60,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {"code": "R05", "name": "고위험 국가 IP", "appliedScore": 35},
+          {"code": "R02", "name": "기존 미사용 단말기", "appliedScore": 25}
+        ],
+        "signals": {"cardDisplayLabel": "현대 •••• 6610", "cardProvided": true, "deviceProvided": true, "ipCountryCode": "VN", "ipProvided": true}
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "history": {
+    "caseId": "203",
+    "evidenceVersion": 1,
+    "source": "P5",
+    "retrievedAt": "2026-10-27T15:05:03Z",
+    "lookbackDays": 30,
+    "payments": [
+      {"paymentId": "9490", "amount": 110000, "paymentStatus": "CAPTURED", "requestedAt": "2026-10-03T13:00:00Z"},
+      {"paymentId": "9491", "amount": 130000, "paymentStatus": "CAPTURED", "requestedAt": "2026-10-15T18:30:00Z"}
+    ],
+    "statusCounts": [{"paymentStatus": "CAPTURED", "count": 2}],
+    "truncated": false
+  },
+  "linked": {
+    "caseId": "203",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-10-27T15:05:04Z",
+    "lookbackDays": 30,
+    "card": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
+    "device": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
+    "ip": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0}
+  }
+}
