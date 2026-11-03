@@ -24,6 +24,13 @@ def test_prompt_does_not_default_to_needs_check() -> None:
     assert f"출력 예시 {len(WRITE_EXAMPLES)}개" in WRITE_SYSTEM
 
 
+# 정상 정황은 같은 종류의 위험 신호만 설명한다 — 금액 이력으로 해외 접속 · 새 기기를 덮지 않게
+# (실측: measure_mixed가 평소 금액 이력만으로 매입 진행 검토가 나왔다)
+def test_prompt_limits_what_normal_evidence_explains() -> None:
+    assert "같은 종류의 위험 신호만 설명한다" in WRITE_SYSTEM
+    assert "설명되지 않은 위험 신호가 남아 있고 그 이유를 모르면" in WRITE_SYSTEM
+
+
 # needsCheck_withoutUnknowns_isRewritten — 모르는 사실 없이 추가 확인 필요를 고르면 다시 쓰게 한다
 def test_needs_check_without_unknowns_is_rejected() -> None:
     parsed, errors = validate_narrative(_with("9001", unknowns=[]), PAYMENTS, None)

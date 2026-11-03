@@ -24,6 +24,9 @@ from app.schemas.tools import CasePaymentsTool
 
 
 def main() -> int:
+    # Windows 기본 출력(cp949)은 카드 표시값의 "•"를 못 써서 보고서를 찍다 멈춘다 → 항상 UTF-8
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     parser = argparse.ArgumentParser(description="조사 Agent 단독 실행")
     parser.add_argument("--case-id", help="Spring에서 조회할 Case ID (샘플을 쓰면 샘플 값)")
     parser.add_argument(
