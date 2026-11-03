@@ -127,3 +127,5 @@ P6 #474 PR 리뷰 대상: [0070 가맹점별 일별 지급 원장](0070-p6-merch
 P6 #478 PR 리뷰 대상: [0071 환불 성공 수신과 정산 적용 분리](0071-p6-refund-receiving-ledger.md).
 
 P6 #488 PR 리뷰 대상: [0072 지급 전 환불 제외와 가맹점 공통 잠금](0072-p6-unpaid-refund-exclusion.md).
+
+P1 #480 PR 리뷰 대상: [0073 Marker digest로 식별하는 릴리스 이미지 묶음](0073-release-bundle-metadata.md) — 제안, Jenkins·VM 소비는 #481 후속.
