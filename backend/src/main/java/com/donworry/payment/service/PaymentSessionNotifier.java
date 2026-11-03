@@ -31,7 +31,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 호스팅 결제창으로 만든 결제의 상태가 바뀌면 가맹점 notifyUrl로 알린다 (ADR-0064 3절, #402 PR②)
 // 1) 마지막으로 알린 (상태, 승인 여부)와 지금 결제가 달라진 세션을 예약하고(DB에서 바로 비교 — 상태가 어디서 바뀌었든 놓치지 않는다)
-// 2) 예약 시각이 지난 세션을 보낸다. 2xx면 보낸 값을 기록하고, 아니면 5초부터 두 배씩 최대 5분 간격으로 다시 보낸다
+// 2) 예약 시각이 지난 세션을 보낸다. 2xx면 보낸 값을 기록하고, 아니면 5초부터 두 배씩 최대 5분 간격으로 다시 보낸다.
+//    약 24시간(PaymentSession.NOTIFY_MAX_ATTEMPTS) 동안 못 보내면 그 상태는 그만둔다 (#455)
 // HTTP 호출은 업무 트랜잭션 밖에서 하고, 결과를 기록할 때만 세션 행을 잠근다. 가맹점은 조회 배치로도 상태를 맞춘다
 // 예약 작업 스레드는 앱 전체가 함께 쓰므로(기본 1개) 여기서는 보낼 차례만 찾고, HTTP 전송은 웹훅 전용 스레드 풀(동시 SENDERS개)로 넘긴다.
 // 응답 없는 가맹점이 쌓여도 다른 예약 작업(AI 보고서 시간 초과 확인 등)이 밀리지 않는다 (PR #451 리뷰)
@@ -137,8 +138,17 @@ public class PaymentSessionNotifier {
         transactions.executeWithoutResult(status -> sessions.findByIdForUpdate(sessionId)
                 .ifPresent(locked -> {
                     // 보낸 값(보내기 직전 조회한 상태)을 기록한다. 그사이 상태가 또 바뀌었으면 다음 실행에서 다시 예약된다
-                    if (delivered) locked.notified(payment.paymentStatus().name(), payment.authorized());
-                    else locked.notifyFailed(Instant.now());
+                    String sentStatus = payment.paymentStatus().name();
+                    if (delivered) locked.notified(sentStatus, payment.authorized());
+                    else if (locked.notifyFailed(sentStatus, payment.authorized(), Instant.now())) {
+                        // 한도(약 24시간)에 닿아 이 상태는 더 보내지 않는다 — 가맹점 조회 배치가 맞춘다 (#455)
+                        log.warn(
+                                "결제 웹훅 재전송 중단 sessionId={} paymentId={} status={} attempts={}",
+                                sessionId,
+                                payment.paymentId(),
+                                sentStatus,
+                                locked.getNotifyAttempts());
+                    }
                 }));
     }
 

@@ -46,8 +46,14 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 결제 상태 웹훅 발송 (ADR-0064 3절, #402 PR②) — 실제 HTTP 수신 서버(테스트 대역)로 보내 헤더 · 서명 · 재시도를 확인한다
 // 로컬 수신(127.0.0.1, http)이라 allow-local-targets를 켠다. 운영 주소 규칙은 PaymentWebhookTargetPolicyTests가 본다
+// 예약 실행(5초)이 테스트의 직접 run()과 겹치면 같은 세션을 두 번 처리해 횟수 · 예약 시각 확인이 흔들린다. 테스트에서는 끄고 run()만 쓴다
 @Tag("mariadb")
-@SpringBootTest(properties = {"payment.http.enabled=true", "donworry.payment.webhook.allow-local-targets=true"})
+@SpringBootTest(
+        properties = {
+            "payment.http.enabled=true",
+            "donworry.payment.webhook.allow-local-targets=true",
+            "donworry.scheduling.enabled=false"
+        })
 @Import(MariaDbTestContainerConfig.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PaymentWebhookMariaDbTests {
@@ -181,6 +187,42 @@ class PaymentWebhookMariaDbTests {
             runAndSettle();
             assertThat(received).as("status " + status).hasSize(1);
         }
+    }
+
+    // 재전송 한도(약 24시간)에 닿으면 그 상태는 더 보내지 않고 다음 주기에도 다시 예약하지 않는다.
+    // 상태가 바뀌면(직원 거절로 VOIDED) 새로 알린다 (#455)
+    @Test
+    void run_whenRetryLimitReached_stopsUntilStatusChanges() {
+        responseStatus.set(500);
+        Ids ids = heldSessionWithNotifyUrl();
+        jdbc.update(
+                "UPDATE payment_sessions SET notify_attempts = ? WHERE session_id = ?",
+                PaymentSession.NOTIFY_MAX_ATTEMPTS - 1,
+                ids.sessionId());
+
+        runAndSettle();
+
+        assertThat(received).hasSize(1);
+        PaymentSession stopped = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(stopped.getNextNotifyAt()).isNull();
+        assertThat(stopped.getNotifiedStatus()).isEqualTo("HELD");
+        assertThat(stopped.getNotifyAttempts()).isEqualTo(PaymentSession.NOTIFY_MAX_ATTEMPTS);
+
+        runAndSettle();
+        assertThat(received).hasSize(1);
+        assertThat(sessions.findById(ids.sessionId()).orElseThrow().getNextNotifyAt())
+                .isNull();
+
+        responseStatus.set(200);
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeVoid());
+        runAndSettle();
+
+        assertThat(received).hasSize(2);
+        assertThat(received.get(1).headers()).containsEntry("event", "evt_" + ids.paymentId() + "_VOIDED_A");
+        PaymentSession renotified = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(renotified.getNotifiedStatus()).isEqualTo("VOIDED");
+        assertThat(renotified.getNotifyAttempts()).isZero();
     }
 
     // 가맹점 키가 없으면 서명 없이 보내지 않고 다시 시도로 남긴다
