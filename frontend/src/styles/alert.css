@@ -1,0 +1,386 @@
+.dw-alert-card {
+  border-color: #e2e8f0;
+}
+
+/* 목록 첫 조회는 표 구조를 먼저 보여 주고, 상세는 본문 중앙에 표시한다. */
+.dw-alert-list-loading,
+.dw-alert-detail-loading {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+}
+
+.dw-alert-list-skeleton {
+  width: min(760px, calc(100% - 44px));
+}
+
+/* donworry-prototype_2.html의 경보 목록 서체·간격을 화면에 명시적으로 고정한다. */
+.dw-alert-list-page .dw-page-title {
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -0.7px;
+}
+
+.dw-alert-list-page .dw-page-description {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dw-alert-list-page .dw-stat-card {
+  padding: 20px 22px;
+}
+
+.dw-alert-list-page .dw-stat-label {
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.dw-alert-list-page .dw-stat-value {
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+
+.dw-alert-list-page .dw-stat-value small {
+  margin-left: 3px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dw-alert-list-page .dw-stat-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.dw-alert-list-page .dw-table-toolbar {
+  padding: 20px 22px 14px;
+}
+
+.dw-alert-list-page .dw-table-toolbar p {
+  color: #64748b;
+}
+
+.dw-alert-tabs {
+  display: flex;
+  gap: 28px;
+  padding: 0 22px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.dw-alert-tab {
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 12px 0;
+  background: none;
+  color: #475569;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.dw-alert-tab:hover {
+  color: #2563eb;
+}
+
+.dw-alert-tab--active {
+  border-color: #2563eb;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.dw-alert-tab > span {
+  margin-left: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dw-alert-payment-link {
+  padding: 0;
+  font-weight: 700;
+}
+
+.dw-alert-search {
+  width: 260px;
+}
+
+.dw-alert-search .ant-input-prefix {
+  color: #94a3b8;
+}
+
+.dw-alert-stat-value-unit {
+  margin-left: 3px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dw-alert-stat-value--review {
+  color: #b45309;
+}
+
+.dw-alert-stat-value--deny {
+  color: #dc2626;
+}
+
+.dw-alert-stat-value--error {
+  color: #475569;
+}
+
+.dw-alert-detail-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dw-alert-meta-text {
+  font-size: 12px;
+}
+
+.dw-alert-score-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dw-alert-score-row > strong {
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -1.5px;
+}
+
+.dw-alert-score-row > span {
+  color: #64748b;
+}
+
+.dw-alert-score-scale {
+  position: relative;
+  display: flex;
+  flex: 1;
+  height: 12px;
+  overflow: visible;
+  border-radius: 6px;
+}
+
+.dw-alert-score-scale > div {
+  height: 12px;
+}
+
+.dw-alert-score-allow {
+  width: 50%;
+  background: #bbf7d0;
+  border-radius: 6px 0 0 6px;
+}
+
+.dw-alert-score-review {
+  width: 30%;
+  background: #fde68a;
+}
+
+.dw-alert-score-deny {
+  width: 20%;
+  background: #fecaca;
+  border-radius: 0 6px 6px 0;
+}
+
+.dw-alert-score-marker {
+  position: absolute;
+  top: -4px;
+  left: var(--dw-alert-score-position);
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: #0f172a;
+}
+
+.dw-alert-score-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 0 79px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.dw-alert-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dw-alert-flow > div {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dw-alert-flow > div::before {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  background: #fff;
+  content: '';
+}
+
+.dw-alert-flow > div:not(:last-child)::after {
+  position: absolute;
+  top: 16px;
+  left: 5px;
+  width: 2px;
+  height: 19px;
+  background: #e2e8f0;
+  content: '';
+}
+
+.dw-alert-flow span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dw-alert-flow-item--received::before,
+.dw-alert-flow-item--received:not(:last-child)::after {
+  border-color: #94a3b8;
+  background: #94a3b8;
+}
+
+.dw-alert-flow-item--evaluated::before {
+  border-color: #d97706;
+  background: #fef3c7;
+}
+
+.dw-alert-flow-item--returned::before {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.dw-alert-source-label {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border-radius: 4px;
+  padding: 0 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dw-alert-detail .ant-descriptions-item-label {
+  width: 112px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.dw-alert-detail .ant-descriptions-item-content {
+  min-width: 0;
+  word-break: break-word;
+  font-weight: 600;
+}
+
+.dw-alert-detail .ant-table-cell {
+  overflow-wrap: anywhere;
+}
+
+.dw-alert-blocklist-observed {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dw-alert-blocklist-match-label {
+  align-self: flex-start;
+  border-radius: 99px;
+  padding: 1px 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dw-alert-blocklist-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dw-alert-blocklist-candidate {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid #dbe4f0;
+  border-radius: 5px;
+  padding: 2px 5px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dw-alert-blocklist-candidate > strong {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.dw-alert-blocklist-candidate > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dw-alert-blocklist-candidate--matched {
+  border-color: #f6c453;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.dw-alert-result-tag,
+.dw-alert-payment-status-tag {
+  margin: 0;
+  border: 0;
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.dw-alert-result-tag--allow,
+.dw-alert-payment-status-tag--captured {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.dw-alert-result-tag--review,
+.dw-alert-payment-status-tag--held {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.dw-alert-result-tag--deny,
+.dw-alert-payment-status-tag--denied,
+.dw-alert-payment-status-tag--declined {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.dw-alert-result-tag--error,
+.dw-alert-payment-status-tag--voided,
+.dw-alert-payment-status-tag--expired {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.dw-alert-payment-status-tag--pending {
+  background: #dbeafe;
+  color: #1e40af;
+}

@@ -1,0 +1,80 @@
+# #131 PR A 상태 전환 운영 안내
+
+[ADR-0060](../decisions/0060-identity-status-names.md), [Issue #131](https://github.com/team-sweethan/DonWorry/issues/131).
+
+## 적용 범위
+
+계정 DISABLED → INACTIVE, 신청 EMAIL_PENDING → EMAIL_VERIFICATION_PENDING. 데이터 삭제·개발 DB 초기화 없이 전환한다. 신청 CHECK와 생성 컬럼 3개를 함께 바꾸며 UNIQUE 인덱스는 계속 유지한다. 시드 계정 ACTIVE와 과거 감사 이력의 USER_DISABLED·JSON은 보존한다. 새 수동 정지 이력은 USER_INACTIVATED다. 가맹점·권한·금융·메일 발송 PENDING은 유지한다.
+
+PR A 자체는 `prod` 시연 계정 정지를 포함하지 않는다. 정지는 PR B(#395)에서 구현했으므로 운영 배포 아티팩트는 PR B가 포함된 커밋이어야 한다 ([identity README #131](README.md#131-운영-설정)). 2026-11-02 운영은 빈 DB로 시작하는 사용자 결정을 따르되, 기존 연습 DB 삭제는 이 작업에서 실행하지 않는다. 담당자가 대상 VM1·DB를 확인한다. 팀 로컬·공용 개발 DB는 보존 업그레이드한다.
+
+## 점검 배포 순서
+
+1. 공용 개발 DB를 쓰는 팀원과 전환 시간을 조율한다. 현재 DB 호스트·포트·이름 및 앱 커밋, Flyway 이력을 기록하고 이전/신규 backend·frontend 배포물을 확보한다. 운영과 개발 DB는 분리한다.
+2. 같은 DB를 쓰는 **모든 이전 backend 프로세스**를 종료한다. 요청 유입 차단만으로는 부족하며 예약 정리·메일 복구·수동 실행 등 DB 접근도 중단해야 한다. 자동 재시작·별도 worker가 있다면 멈춘다. 이번 전환 중 구/신 앱 공존은 지원하지 않는다.
+3. DB 담당자가 전체 DB를 백업한다. MariaDB 11.8 도구로 데이터·스키마·Flyway 이력을 함께 저장한다. 비밀번호는 명령행에 적지 않고 프롬프트/보호된 설정을 쓴다. 예: `mariadb-dump -h <host> -P <port> -u <user> -p --single-transaction --routines --events --triggers --hex-blob <database> > <backup.sql>`. 백업에는 개인정보·해시가 있으므로 접근을 제한하고 저장소에 넣지 않는다. 별도 일회용 DB에 복원해 테이블·건수·상태 분포·Flyway 이력을 비교한 뒤 진행한다.
+4. 새 backend의 Flyway로 두 migration을 적용한다. 계정 파일은 정지 행만 UPDATE한다. 신청 파일은 임시 구/신 조건 ALTER → UPDATE → 새 조건 ALTER 순이다. DDL은 자동 커밋되므로 파일 단위 원자적 롤백으로 보지 않는다. `flyway_schema_history`의 성공과 남은 migration, 구 상태값 잔여 0, `SHOW CREATE TABLE merchant_applications`의 CHECK·생성 컬럼·UNIQUE 3개를 확인한다.
+5. 신규 backend·frontend를 같은 점검 배포로 올린다. 이전 화면 탭 새로고침을 안내한다. 신규 계정/조회·정지/복구·기존 세션 종료, 신청→이메일 확인→검토 대기·메일 복구·중복 신청/아이디 예약을 점검한 뒤 서비스를 연다. 정지된 계정을 로컬 시작으로 복구하지 않는다.
+
+## 실패 복구와 롤백
+
+- 전환이 실패하면 앱과 자동 재시작을 계속 중단한 채 DB 로그·실패 SQL·Flyway 이력을 기록한다. 계정 파일 적용 여부와 신청 상태별 건수, CHECK/생성 컬럼/인덱스는 실제 DB에서 확인한다. 임시 상태에서는 구/신 이름이 함께 허용될 수 있다. 두 파일의 성공 여부를 각각 확인한다.
+- 부분 실패한 DB에 구버전 앱을 바로 켜거나 SQL 파일을 고쳐 재실행하지 않는다. `flyway repair`로 이력만 지우거나 성공으로 처리하지 않는다. DDL은 이미 반영되었을 수 있으며 앱 상태만 되돌리면 읽기/예약 오류가 난다.
+- 기본 복구 경로는 **전환 직전 검증한 백업 전체 복원**이다. DB 담당자가 정확한 대상과 백업을 재확인한 뒤, 모든 앱이 멈춘 상태에서 대상 스키마를 백업 시점으로 재생성/복원한다. 잔여 테이블 위에 부분 덮어쓰지 않는다. `mariadb -h <host> -P <port> -u <user> -p <database> < <backup.sql>`로 데이터·스키마·Flyway 이력을 함께 복원하고 백업 시점과 상태·건수·생성 컬럼·UNIQUE를 대조한다. 이전 backend·frontend를 함께 복구한 후 점검한다. 운영/공용 DB에서 이 절차는 담당자 조율 없이 실행하지 않는다.
+- 백업 이후 새 업무 데이터가 생겼으면 전체 복원이 그 변경을 잃을 수 있다. 서비스 재개 후 롤백은 다시 중단·현재 DB 추가 백업·영향 검토 후 진행한다. 임의 역방향 UPDATE나 미검증 역전환 스크립트는 제공하지 않는다.
+- 실패 SQL/원인을 해결한 신규 배포물로 다시 진행할 때도 복원된 이전 DB와 앱을 확인하고 같은 중단·백업 절차부터 수행한다. 팀원 개발 DB 초기화를 해결책으로 요구하지 않는다.
+
+## 검증 기록
+
+2026-11-01, 기준 dev `b3ac3e4`, 브랜치 `feature/131-status-transition`, 구현 커밋 `9df15f4`와 동일한 코드 작업 트리에서 실행했다. 이후 변경은 이 검증 기록 문서만 해당한다. 기존 이슈/README의 과거 결과와 구분한다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: BUILD SUCCESSFUL(4분 19초), 일반 1,259개 중 1,258 통과·기존 1개 skip, MariaDB 674개 모두 통과. 실패/오류 0. 전체 Flyway·JPA validate·ModularityTests·ArchitectureTests 포함.
+- `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0. 기존 router Fast Refresh lint 경고 1개와 번들 크기 경고 유지.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과. 기존 migration 수정 없음.
+
+신규 일회용 MariaDB 업그레이드 검사 2개는 이전 스키마에 정지 계정·진행/종료 신청·과거 감사 JSON·토큰/메일을 넣고 실제 Flyway 전환 후 보존과 예약을 확인한다. 별도 검사로 신청 SQL의 ALTER/UPDATE/ALTER 각 단계에서 구/신 이름 모두 이메일·사업자번호·아이디 중복을 거절하는지 확인했다. 최종 구 상태 CHECK 거절·재실행 무변경·반려 후 예약 해제도 확인했다.
+
+전체 HTTP 회귀에서 계정 생성/조회·INACTIVE 저장/필터·새 감사 유형·옛 이름 400·정지 로그인 거절/기존 세션 종료/복구 후 로그인, 신청→확인→검토 대기·재발송·복구·자동 정리·중복 신청/아이디 예약을 확인했다. 프론트는 새 상태 payload·필터 왕복·구 주소 제외·신청 새 필터/‘이메일 미확인’ 표시를 자동 검사했다. 브라우저 화면 실행과는 구분한다.
+
+최초 선택 실행에서 신규 HTTP 검사 추가 위치가 중복되어 로컬 변수 컴파일 오류가 발생했고, 중복 블록을 제거한 뒤 선택 검사와 위 전체 검사를 통과했다. 프론트 첫 포맷 검사에서 긴 타입 줄을 지적해 Prettier를 적용한 뒤 전체 검사를 통과했다. 테스트 단언을 제거하거나 skip을 추가하지 않았다. 검사는 실제 개발 DB 대신 Testcontainers에서만 수행했다.
+
+
+미검증: 실제 공용/운영 DB 전환·백업 복원 리허설, 실제 브라우저 관리 화면/기존 탭, HTTPS/프록시·배포 비밀값 주입·Notion 동기화. 운영 시연 계정 제한은 PR A 범위 밖이며 PR B(#395)에서 구현·검증했다.
+
+## Codex 리뷰 반영 — 이전 신청 URL (2026-11-01)
+
+[리뷰 지적](https://github.com/team-sweethan/DonWorry/pull/394#discussion_r4434745955)을 반영했다. `231f3c6`에서 이전 `?status=EMAIL_PENDING`은 선택기에 옛 값이 남은 채 실제 요청에서는 필터가 빠져 전체 신청을 조회했다. 자체 재리뷰에서도 놓친 문제다.
+
+수정 커밋 `f3a2c0b`는 첫 렌더부터 새 `EMAIL_VERIFICATION_PENDING`을 선택기·API에 함께 사용하고 URL을 replace로 바꾼다. 검색어·페이지·메일 필터·다른 파라미터를 보존하며 정규화가 브라우저 이력 항목을 늘리지 않는다. 알 수 없는 값은 기존 기본 조건(메일 확인 필요 true는 ALL, 나머지는 REVIEW_PENDING)으로 정리한다. 서버의 구 API 상태값 400 계약은 유지한다.
+
+- 기존 URL 해석 로직을 추출한 재현 검사에서 3개 중 이전 주소·알 수 없는 상태 2개 실패를 확인했다. 수정 후 테스트를 약화하지 않고 통과했다.
+- `f3a2c0b`와 동일한 최종 코드에서 `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0, 262개 모두 통과. 기존 router lint 경고 1개·번들 크기 경고 유지.
+- 회귀 3개는 이전 주소의 이메일 미확인 유지·조건 보존·반복 정규화 무변경, 유효 상태/기본 상태 유지, 잘못된 상태의 기본 조건을 검사한다.
+- `git diff --check`, `python3 .github/scripts/check_md_links.py`: 통과. 이후 변경은 검증 기록 문서만 해당한다.
+- 백엔드·DB 변경이 없어 이번 수정에서 백엔드 검사는 재실행하지 않았다. 직전 자체 재리뷰 `231f3c6`에서는 관련 MariaDB 검사 80개·프론트 259개가 통과했으며 이번 URL 결함을 잡지 못했다.
+
+미검증: 실제 브라우저의 이전 탭·북마크·뒤로가기 동작. CI 상태는 사용자 요청에 따라 조회하지 않았다. 실제 운영·DB 적용·Notion 동기화의 앞선 미검증도 유지한다.
+
+## Codex 재리뷰 반영 — 이전 계정 URL (2026-11-01)
+
+[두 번째 P2 지적](https://github.com/team-sweethan/DonWorry/pull/394#discussion_r4434769590)을 반영했다. 이전 `status=DISABLED` 주소를 전체 계정 필터로 처리하던 동작은 정지 목록의 의미를 잃게 했다. 앞선 신청 URL 수정 때 같은 계정 URL 문제까지 확인하지 못했다.
+
+수정 커밋 `d5ecbb7`은 첫 조회·선택기에서 INACTIVE를 사용하고, 주소도 replace로 정규화한다. 검색어·역할·페이지·강제 변경 필터와 다른 파라미터는 보존한다. 기존 테스트의 ‘옛 값을 보내지 않음’만으로는 필터 의미 보존을 검증하지 못하므로 전체 조회를 기대하던 단언을 정지 조건 보존 단언으로 바꿨다. 수정 전 실제 테스트 실패(status undefined)를 확인하고 코드를 고쳤다.
+
+- `d5ecbb7`와 동일한 최종 코드에서 `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0, 264개 모두 통과. 기존 router lint 경고 1개·번들 크기 경고 유지.
+- 기존/신규 신청 URL 회귀 3개와 계정 URL 회귀를 함께 실행했다. 계정은 최초 파싱·URL 왕복·조건 보존·원본 불변·반복 정규화·정상/미지정/잘못된 값의 기존 처리 유지까지 검사했다.
+- `git diff --check`, `python3 .github/scripts/check_md_links.py`: 통과. 이후 변경은 문서 검증 기록만 해당한다.
+- backend·DB 변경이 없어 해당 검사는 재실행하지 않았다. API의 옛 상태 입력 400은 유지하며 브라우저 주소에서만 변환한다.
+
+미검증: 실제 브라우저의 이전 계정 탭·북마크·뒤로가기. CI는 요청대로 조회하지 않았다. 실제 DB/운영 배포·Notion 동기화의 미검증도 유지한다.
+
+## Codex 재리뷰 반영 — 이메일 미확인 CSS (2026-11-01)
+
+[세 번째 P3 지적](https://github.com/team-sweethan/DonWorry/pull/394#discussion_r4434781986)을 반영했다. 상세 화면의 동적 클래스는 상태 이름을 소문자로 변환하므로 `ar-state-email_verification_pending`인데 CSS에는 옛 선택자만 남아 있었다. 선택자 한 곳을 새 이름에 맞춰 이메일 미확인 안내의 기존 회색 배경(#f7f8fa)·테두리(#e1e5eb)가 적용되도록 했다. 앞선 검토의 대문자 위주 검색에서 소문자 CSS 참조를 놓쳤다.
+
+검사 대상은 `6d0632c` 위 이 절과 함께 커밋한 CSS 수정 작업 트리이며 검사 뒤 CSS/앱/테스트 코드는 바꾸지 않았다.
+
+- `cd frontend && npm run lint && npm run format:check && npm test && npm run build`: 종료 코드 0, 기존 테스트 264개 모두 통과. 기존 router lint 경고 1개·번들 크기 경고 유지.
+- 소문자까지 포함해 frontend/src·backend/src/main/java의 옛 상태 참조를 재검색했다. 옛 이름 문자열은 이전 URL을 새 이름으로 옮기는 호환 처리 두 곳에만 남는다. CSS 선택자와 상세의 상태 소문자 클래스 생성 규칙을 대조했다.
+- `git diff --check`, `python3 .github/scripts/check_md_links.py`: 통과.
+- backend·DB 변경은 없어서 해당 검사를 재실행하지 않았다. 실제 브라우저의 색상 렌더링은 미검증이며 CI 상태는 조회하지 않았다. 앞선 운영/DB/Notion 미검증도 유지한다.

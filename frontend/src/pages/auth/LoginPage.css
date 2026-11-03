@@ -1,0 +1,224 @@
+@import '../../styles/public.css';
+
+.dw-signin {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #faf7f0;
+}
+/* 오른쪽 위에만 브랜드색 빛을 번지게 둔다 */
+.dw-signin-glow {
+  position: absolute;
+  top: -240px;
+  right: -260px;
+  width: 900px;
+  height: 1200px;
+  background:
+    radial-gradient(closest-side at 60% 30%, rgba(29, 50, 112, 0.18), transparent),
+    radial-gradient(closest-side at 40% 60%, rgba(233, 196, 110, 0.4), transparent),
+    radial-gradient(closest-side at 70% 75%, rgba(246, 166, 162, 0.18), transparent);
+  filter: blur(40px);
+  opacity: 0.55;
+  transform: rotate(-18deg);
+  pointer-events: none;
+}
+.dw-signin-top {
+  position: relative;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 48px;
+}
+.dw-signin-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #333d4b;
+  font-size: 14px;
+  font-weight: 600;
+}
+.dw-signin-back:hover {
+  color: #1d4ed8;
+}
+.dw-signin-main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 72px 20px 48px;
+}
+/* 카드 뒤에서 빼꼼 — 몸 아래쪽만 카드에 가려진다 */
+.dw-signin-mascot {
+  position: absolute;
+  z-index: 1;
+  top: -8px;
+  left: calc(50% + 96px);
+}
+.dw-signin-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 440px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.06),
+    0 2px 4px rgba(15, 23, 42, 0.04),
+    0 24px 60px rgba(23, 37, 84, 0.14);
+}
+.dw-signin-body {
+  padding: 40px 40px 32px;
+}
+.dw-signin h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+}
+.dw-signin-description {
+  margin: 0 0 28px;
+  color: #4e5968;
+  font-size: 15px;
+}
+.dw-signin-notice {
+  display: grid;
+  gap: 8px;
+  margin: -12px 0 20px;
+}
+.dw-signin .ant-form-item {
+  margin-bottom: 18px;
+}
+.dw-signin .ant-form-item-label {
+  padding-bottom: 6px;
+}
+.dw-signin .ant-form-item-label > label {
+  width: 100%;
+  height: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333d4b;
+}
+/* Caps Lock 안내 영역은 비어 있을 때 자리를 차지하지 않게 둔다 */
+.dw-signin .ant-form-item-extra {
+  min-height: 0;
+  font-size: 12px;
+}
+.dw-signin .ant-form-item-extra:has(span:empty) {
+  height: 0;
+  overflow: hidden;
+}
+.dw-signin-label {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 12px;
+}
+.dw-signin-label small {
+  color: #6b7684;
+  font-size: 12px;
+  font-weight: 500;
+}
+.dw-signin .ant-input-affix-wrapper {
+  height: 46px;
+  border-radius: 8px;
+}
+.dw-signin .ant-input-affix-wrapper-focused,
+.dw-signin .ant-input-affix-wrapper:focus-within {
+  border-color: #1d3270;
+  box-shadow: 0 0 0 3px rgba(29, 50, 112, 0.14);
+}
+.dw-signin .ant-input-prefix {
+  margin-right: 10px;
+  color: #8b95a1;
+}
+.dw-signin .ant-btn-primary {
+  height: 48px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f1d68e, #d4a548);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: #13204a;
+  font-size: 15px;
+}
+.dw-signin .ant-btn-primary:not(:disabled):hover {
+  background: linear-gradient(180deg, #f5df9f, #dcb057);
+  color: #13204a;
+}
+.dw-signin-error {
+  margin-bottom: 16px;
+}
+.dw-signin-top .dw-mark {
+  view-transition-name: dw-brand-mark;
+}
+.dw-signin-foot {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 18px 24px;
+  border-top: 1px solid #f2f4f6;
+  background: #f8fafc;
+  color: #4e5968;
+  font-size: 14px;
+}
+.dw-signin-foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1d3270;
+  font-weight: 700;
+}
+.dw-signin-foot a .anticon {
+  font-size: 12px;
+  transition: transform 0.15s;
+}
+.dw-signin-foot a:hover .anticon {
+  transform: translateX(3px);
+}
+.dw-signin-footer {
+  position: relative;
+  padding: 0 48px 28px;
+  color: #6b7684;
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dw-signin-card {
+    animation: dw-signin-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+@keyframes dw-signin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 560px) {
+  .dw-signin-top {
+    height: 60px;
+    padding: 0 20px;
+  }
+  .dw-signin-main {
+    padding: 72px 16px 32px;
+  }
+  .dw-signin-mascot {
+    left: auto;
+    right: 28px;
+    top: -6px;
+  }
+  .dw-signin-body {
+    padding: 32px 24px 24px;
+  }
+  .dw-signin-footer {
+    padding: 0 20px 20px;
+  }
+}

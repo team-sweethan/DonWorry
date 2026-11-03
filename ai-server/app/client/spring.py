@@ -1,0 +1,74 @@
+import httpx
+
+from app.schemas.investigation import InvestigationResult
+from app.schemas.tools import (
+    CasePaymentsTool,
+    FdsEvidenceTool,
+    LinkedPaymentsTool,
+    PaymentHistoryTool,
+    SimilarCasesTool,
+)
+
+# 서비스 키 헤더 이름 — Spring 쪽 확인(#253)과 같게 둔다
+API_KEY_HEADER = "X-Internal-Api-Key"
+
+
+# Spring 내부 API 호출 — Tool 읽기와 조사 결과 전송만 한다
+# 결제 · 판정을 바꾸는 호출은 없다 (AGENTS.md 6절)
+class SpringToolClient:
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str = "",
+        timeout_seconds: float = 10.0,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
+        headers = {API_KEY_HEADER: api_key} if api_key else {}
+        self._http = httpx.Client(
+            base_url=base_url, headers=headers, timeout=timeout_seconds, transport=transport
+        )
+
+    def get_case_payments(self, case_id: str) -> CasePaymentsTool:
+        res = self._http.get("/internal/ai/tools/get_case_payments", params={"caseId": case_id})
+        res.raise_for_status()
+        return CasePaymentsTool.model_validate(res.json())
+
+    # payment_ids를 비우면 Case에 묶인 결제 전체를 본다
+    def get_fds_evidence(
+        self, case_id: str, payment_ids: list[str] | None = None
+    ) -> FdsEvidenceTool:
+        params: list[tuple[str, str]] = [("caseId", case_id)]
+        params += [("paymentIds", payment_id) for payment_id in payment_ids or []]
+        res = self._http.get("/internal/ai/tools/get_fds_evidence", params=params)
+        res.raise_for_status()
+        return FdsEvidenceTool.model_validate(res.json())
+
+    # 이 Case와 비슷한 종료 사건 (#296)
+    def find_similar_cases(self, case_id: str) -> SimilarCasesTool:
+        res = self._http.get("/internal/ai/tools/find_similar_cases", params={"caseId": case_id})
+        res.raise_for_status()
+        return SimilarCasesTool.model_validate(res.json())
+
+    # 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제 제외 (#338)
+    def get_payment_history(self, case_id: str) -> PaymentHistoryTool:
+        res = self._http.get("/internal/ai/tools/get_payment_history", params={"caseId": case_id})
+        res.raise_for_status()
+        return PaymentHistoryTool.model_validate(res.json())
+
+    # 같은 가맹점 · 최근 30일에 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 집계 (#352)
+    def find_linked_payments(self, case_id: str) -> LinkedPaymentsTool:
+        res = self._http.get("/internal/ai/tools/find_linked_payments", params={"caseId": case_id})
+        res.raise_for_status()
+        return LinkedPaymentsTool.model_validate(res.json())
+
+    # 조사가 끝나면 결과를 돌려준다 (ADR-0009 결정 1 결과 수신)
+    # 전송이 실패해도 Spring이 상태 조회로 복구한다
+    def send_result(self, result: InvestigationResult) -> None:
+        res = self._http.post(
+            f"/internal/ai/reports/{result.reportId}/result",
+            json=result.model_dump(mode="json"),
+        )
+        res.raise_for_status()
+
+    def close(self) -> None:
+        self._http.close()

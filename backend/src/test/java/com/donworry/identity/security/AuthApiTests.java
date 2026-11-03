@@ -1,0 +1,616 @@
+package com.donworry.identity.security;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+import com.donworry.identity.controller.AuthController;
+import com.donworry.identity.controller.AuthExceptionHandler;
+import com.donworry.identity.entity.PlatformUser;
+import com.donworry.identity.entity.UserRole;
+import com.donworry.identity.entity.UserStatus;
+import com.donworry.identity.repository.PlatformUserRepository;
+import com.donworry.identity.repository.UserPermissionRepository;
+import com.donworry.identity.service.AccountLockService;
+import com.donworry.identity.service.AuthService;
+import com.donworry.identity.service.CurrentStaffService;
+import com.donworry.identity.service.PasswordChangeService;
+import com.donworry.identity.service.UserSessionService;
+import java.io.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import tools.jackson.databind.json.JsonMapper;
+
+@WebMvcTest(controllers = AuthController.class)
+@Import({
+    SecurityConfig.class,
+    JsonAuthenticationEntryPoint.class,
+    JsonAccessDeniedHandler.class,
+    SecurityProblemResponseWriter.class,
+    PlatformUserDetailsService.class,
+    AuthService.class,
+    AccountLockService.class,
+    com.donworry.identity.service.MerchantLockService.class,
+    UserSessionService.class,
+    AuthExceptionHandler.class
+})
+class AuthApiTests {
+    @MockitoBean
+    com.donworry.identity.service.LoginHistoryService loginHistories;
+
+    @MockitoBean
+    com.donworry.identity.service.LoginAttemptService loginAttempts;
+
+    @MockitoBean
+    PasswordChangeService passwordChangeService;
+
+    @Autowired
+    MockMvc mvc;
+
+    @MockitoSpyBean
+    PasswordEncoder encoder;
+
+    @Autowired
+    JsonMapper mapper;
+
+    @MockitoBean
+    PlatformUserRepository repository;
+
+    @MockitoBean
+    UserPermissionRepository permissionRepository;
+
+    @MockitoBean
+    com.donworry.identity.repository.MerchantRepository merchants;
+
+    @Autowired
+    SessionRegistry sessionRegistry;
+
+    @Autowired
+    UserSessionService userSessionService;
+
+    @Autowired
+    AuthService authService;
+
+    private PlatformUser user;
+
+    @BeforeEach
+    void setUp() {
+        // MockHttpSession은 서블릿 컨테이너의 종료 이벤트를 발행하지 않으므로 테스트 사이에 정리한다.
+        for (var principal : sessionRegistry.getAllPrincipals()) {
+            for (var session : sessionRegistry.getAllSessions(principal, true)) {
+                sessionRegistry.removeSessionInformation(session.getSessionId());
+            }
+        }
+        user = mock(PlatformUser.class);
+        given(user.getUserId()).willReturn(1L);
+        given(user.getMerchantId()).willReturn(null);
+        given(user.getLoginId()).willReturn("admin");
+        given(user.getDisplayName()).willReturn("관리자");
+        given(user.getRole()).willReturn(UserRole.ADMIN);
+        given(user.getStatus()).willReturn(UserStatus.ACTIVE);
+        doReturn(encoder.encode("test-password")).when(user).getPasswordHash();
+        given(repository.findByLoginId("admin")).willReturn(Optional.of(user));
+    }
+
+    private MvcResult login(String loginId, String password, MockHttpSession session) throws Exception {
+        var request = post("/api/auth/login")
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(Map.of("loginId", loginId, "password", password)));
+        if (session != null) request.session(session);
+        return mvc.perform(request).andReturn();
+    }
+
+    // 첫 로그인은 세션을 생성하고 내 정보와 동일한 관리자 응답을 반환한다
+    @Test
+    void login_whenValid_returnsAdminAndCreatesSession() throws Exception {
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var session = (MockHttpSession) result.getRequest().getSession(false);
+        assertThat(session).isNotNull();
+        verify(repository, times(2)).findByLoginId("admin");
+        clearInvocations(repository);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(1))
+                .andExpect(jsonPath("$.loginId").value("admin"))
+                .andExpect(jsonPath("$.displayName").value("관리자"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.merchantId").isEmpty())
+                .andExpect(jsonPath("$.tenantScope").value("ALL"))
+                .andExpect(jsonPath("$.permissions[0]").value("FDS_VIEW"))
+                .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"))
+                .andExpect(content().json(result.getResponse().getContentAsString()));
+        verifyNoInteractions(repository);
+    }
+
+    // OPERATOR는 소속 가맹점과 user_permissions에 저장된 권한을 받는다
+    @Test
+    void login_whenOperator_returnsStoredPermissions() throws Exception {
+        var operator = mock(PlatformUser.class);
+        given(operator.getUserId()).willReturn(2L);
+        given(operator.getMerchantId()).willReturn(10L);
+        given(operator.getLoginId()).willReturn("boss");
+        given(operator.getDisplayName()).willReturn("사장님");
+        given(operator.getRole()).willReturn(UserRole.OPERATOR);
+        given(operator.getStatus()).willReturn(UserStatus.ACTIVE);
+        doReturn(encoder.encode("test-password")).when(operator).getPasswordHash();
+        given(repository.findByLoginId("boss")).willReturn(Optional.of(operator));
+        var merchant = mock(com.donworry.identity.entity.Merchant.class);
+        given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.ACTIVE);
+        given(merchants.findById(10L)).willReturn(Optional.of(merchant));
+        given(permissionRepository.findPermissionCodesByUserId(2L)).willReturn(List.of("FDS_VIEW", "FINANCE_VIEW"));
+
+        var session = (MockHttpSession)
+                login("boss", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("OPERATOR"))
+                .andExpect(jsonPath("$.merchantId").value(10))
+                .andExpect(jsonPath("$.tenantScope").value("MERCHANT"))
+                .andExpect(jsonPath("$.permissions[0]").value("FDS_VIEW"))
+                .andExpect(jsonPath("$.permissions[1]").value("FINANCE_VIEW"));
+    }
+
+    // 보안 직원은 전체 가맹점 범위를 받지만 기능 권한이 자동 추가되지는 않는다
+    @Test
+    void login_whenSecurityStaff_returnsAllScopeWithoutExtraPermissions() throws Exception {
+        given(user.getRole()).willReturn(UserRole.SECURITY_STAFF);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        var session = (MockHttpSession) result.getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantScope").value("ALL"))
+                .andExpect(jsonPath("$.permissions").isEmpty())
+                .andExpect(content().json(result.getResponse().getContentAsString()));
+        var context = (SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+        try {
+            SecurityContextHolder.setContext(context);
+            var summary = new CurrentStaffService().findCurrent().orElseThrow();
+            assertThat(summary.userId()).isEqualTo(1L);
+            assertThat(summary.role()).isEqualTo("SECURITY_STAFF");
+            assertThat(summary.permissions()).isEmpty();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    // 비밀번호가 틀리면 권한을 조회하지 않아 있는 아이디와 없는 아이디의 처리 차이를 만들지 않는다
+    @Test
+    void login_whenPasswordWrong_doesNotReadPermissions() throws Exception {
+        assertThat(login("admin", "wrong-password", null).getResponse().getStatus())
+                .isEqualTo(401);
+        verify(permissionRepository, never()).findPermissionCodesByUserId(any());
+    }
+
+    // 기존 세션은 인증 성공 후 ID가 변경된다
+    @Test
+    void login_whenSessionExists_changesSessionId() throws Exception {
+        var session = new MockHttpSession();
+        var before = session.getId();
+        assertThat(login("admin", "test-password", session).getResponse().getStatus())
+                .isEqualTo(200);
+        assertThat(session.getId()).isNotEqualTo(before);
+    }
+
+    // 아이디의 공백과 대문자는 조회 전에 정규화한다
+    @Test
+    void login_whenLoginIdNeedsNormalization_succeeds() throws Exception {
+        assertThat(login("  ADMIN  ", "test-password", null).getResponse().getStatus())
+                .isEqualTo(200);
+        // 잠금 키 조회 뒤 잠금 안에서 인증용 계정을 새로 읽는다.
+        verify(repository, times(2)).findByLoginId("admin");
+    }
+
+    // 없는 아이디와 비밀번호 오류 및 비활성 계정은 같은 오류를 반환한다
+    @ParameterizedTest
+    @ValueSource(strings = {"wrongPassword", "missingUser", "disabledUser"})
+    void login_whenInvalid_returnsSameUnauthorizedProblem(String reason) throws Exception {
+        if (reason.equals("missingUser"))
+            given(repository.findByLoginId("admin")).willReturn(Optional.empty());
+        if (reason.equals("disabledUser")) given(user.getStatus()).willReturn(UserStatus.INACTIVE);
+        var result = login("admin", reason.equals("wrongPassword") ? "wrong" : "test-password", null);
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(result.getResponse().getContentType()).startsWith("application/problem+json");
+        var body = mapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.path("code").asString()).isEqualTo("AUTH_004");
+        assertThat(body.path("detail").asString()).isEqualTo("아이디 또는 비밀번호가 올바르지 않습니다.");
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("test-password", "Exception");
+    }
+
+    // 잠긴 계정도 실제 BCrypt 비교를 마친 뒤 같은 인증 실패를 반환한다
+    @Test
+    void login_whenLocked_comparesPasswordWithoutReadingPermissionsOrCreatingSession() throws Exception {
+        var until = java.time.LocalDateTime.parse("2026-10-25T03:15:00");
+        given(user.getLoginLockedUntil()).willReturn(until);
+        given(loginAttempts.isLocked(until)).willReturn(true);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo("AUTH_004");
+        verify(encoder).matches("test-password", user.getPasswordHash());
+        verifyNoInteractions(permissionRepository);
+        verify(loginAttempts, never()).clearFailures(any());
+        verify(loginAttempts, never()).recordFailure(anyString());
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // 정지된 계정도 BCrypt를 수행해 잠긴 계정과 같은 오류를 반환한다
+    @Test
+    void login_whenDisabled_stillComparesPassword() throws Exception {
+        given(user.getStatus()).willReturn(UserStatus.INACTIVE);
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        verify(encoder).matches("test-password", user.getPasswordHash());
+        verifyNoInteractions(loginAttempts, permissionRepository);
+    }
+
+    // 비밀번호 오류만 실패 저장으로 연결하며 401 전에 저장 호출을 마친다
+    @Test
+    void login_whenPasswordWrong_recordsFailureBeforeReturningUnauthorized() throws Exception {
+        assertThat(login("  ADMIN  ", "wrong", null).getResponse().getStatus()).isEqualTo(401);
+        verify(loginAttempts).recordFailure("admin");
+        verify(loginAttempts, never()).clearFailures(any());
+    }
+
+    // 실패 증가와 성공 초기화의 DB 장애는 새 세션 없이 AUTH_005로 응답한다
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void login_whenAttemptPersistenceFails_returnsAuthenticationUnavailable(boolean wrongPassword) throws Exception {
+        var cause = new org.springframework.security.authentication.InternalAuthenticationServiceException("db down");
+        if (wrongPassword) doThrow(cause).when(loginAttempts).recordFailure(anyString());
+        else doThrow(cause).when(loginAttempts).clearFailures(any());
+        var result = login("admin", wrongPassword ? "wrong" : "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo("AUTH_005");
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+    }
+
+    // 첫 조회 뒤 생성된 계정의 DB 별칭은 실제 계정 잠금을 얻는 다음 요청부터 로그인한다
+    @Test
+    void login_whenAliasAccountAppearsAfterInitialLookup_doesNotResetFailuresWithoutActualAccountLock()
+            throws Exception {
+        given(repository.findByLoginId("ádmin")).willReturn(Optional.empty(), Optional.of(user));
+        var result = login("ádmin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(401);
+        assertThat(result.getRequest().getSession(false)).isNull();
+        verifyNoInteractions(loginAttempts, permissionRepository);
+    }
+
+    // 계정 조회 중 서버 오류는 로그인 필요 401이 아니라 500 AUTH_005로 응답한다
+    @Test
+    void login_whenUserLookupFails_returnsServerError() throws Exception {
+        given(repository.findByLoginId("admin")).willThrow(new IllegalStateException("db down"));
+        var result = login("admin", "test-password", null);
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        assertThat(result.getResponse().getContentType()).startsWith("application/problem+json");
+        var body = mapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.path("code").asString()).isEqualTo("AUTH_005");
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("db down", "Exception");
+    }
+
+    // 비밀번호 검증 뒤 권한 조회 DB 오류도 공통 AUTH_007이 아닌 로그인 AUTH_005다
+    @Test
+    void login_whenPermissionLookupFails_returnsAuthenticationUnavailable() throws Exception {
+        given(permissionRepository.findPermissionCodesByUserId(any()))
+                .willThrow(new DataAccessResourceFailureException("db down"));
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(500);
+        var body = mapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.path("code").asString()).isEqualTo("AUTH_005");
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("db down", "Exception");
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+    }
+
+    // 필수 입력이 누락되거나 공백이면 인증을 시도하지 않는다
+    @ParameterizedTest
+    @ValueSource(strings = {"loginId", "password"})
+    void login_whenInputMissing_returnsBadRequest(String field) throws Exception {
+        var data = new java.util.HashMap<>(Map.of("loginId", "admin", "password", "secret"));
+        data.remove(field);
+        mvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(data)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+        data.put(field, " ");
+        mvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(data)))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(repository);
+    }
+
+    // 아이디가 DB 컬럼 길이(100자)를 넘으면 조회하지 않고 400으로 응답한다
+    @Test
+    void login_whenLoginIdTooLong_returnsBadRequest() throws Exception {
+        mvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("loginId", "a".repeat(101), "password", "secret"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("아이디와 비밀번호를 확인해 주세요."));
+        verifyNoInteractions(repository);
+    }
+
+    // 잘못된 JSON도 400 ProblemDetail로 응답한다
+    @Test
+    void login_whenMalformedJson_returnsBadRequest() throws Exception {
+        mvc.perform(post("/api/auth/login")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    // 비로그인 내 정보 요청은 기존 인증 오류 계약을 따른다
+    @Test
+    void me_whenAnonymous_returnsUnauthorized() throws Exception {
+        mvc.perform(get("/api/auth/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+    }
+
+    // 로그아웃은 세션을 무효화하고 반복 요청도 성공한다
+    @Test
+    void logout_whenAuthenticated_invalidatesSession() throws Exception {
+        var session = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(post("/api/auth/logout").with(csrf()).session(session))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+        assertThat(session.isInvalid()).isTrue();
+        mvc.perform(post("/api/auth/logout").with(csrf())).andExpect(status().isNoContent());
+    }
+
+    // 비로그인 로그아웃은 세션을 만들지 않는다
+    @Test
+    void logout_whenAnonymous_returnsNoContent() throws Exception {
+        var result = mvc.perform(post("/api/auth/logout").with(csrf()))
+                .andExpect(status().isNoContent())
+                .andReturn();
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // GET 요청은 로그아웃하지 않고 로그인 상태를 유지한다
+    @Test
+    void logout_whenGet_preservesAuthentication() throws Exception {
+        var session = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        // GET 로그아웃은 등록하지 않은 경로라 기본 거절(403)된다 (#392)
+        mvc.perform(get("/api/auth/logout").session(session)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isOk());
+    }
+
+    // 세션 인증은 직렬화할 수 있고 비밀번호 원문과 해시를 포함하지 않는다
+    @Test
+    void login_whenSaved_containsOnlySerializableUserInformation() throws Exception {
+        var session = login("admin", "test-password", null).getRequest().getSession(false);
+        var context = (SecurityContext)
+                session.getAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY);
+        assertThat(context.getAuthentication().getPrincipal()).isInstanceOf(SessionUser.class);
+        assertThat(context.getAuthentication().getCredentials()).isNull();
+        var bytes = new ByteArrayOutputStream();
+        try (var output = new ObjectOutputStream(bytes)) {
+            output.writeObject(context);
+        }
+        assertThat(bytes.toString(java.nio.charset.StandardCharsets.ISO_8859_1))
+                .doesNotContain("test-password", user.getPasswordHash());
+        try (var input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            var restored = (SecurityContext) input.readObject();
+            assertThat(restored.getAuthentication().getPrincipal())
+                    .isEqualTo(context.getAuthentication().getPrincipal());
+        }
+    }
+
+    // 다른 기기의 새 로그인은 기존 세션을 401로 종료하고 새 세션을 유지한다
+    @Test
+    void login_whenAnotherDeviceAuthenticates_expiresFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var second = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        assertThat(first.isInvalid()).isTrue();
+        mvc.perform(get("/api/auth/me").session(second)).andExpect(status().isOk());
+    }
+
+    // 표시 이름과 권한이 달라져도 userId가 같으면 이전 로그인은 종료된다
+    @Test
+    void login_whenUserDetailsChange_stillExpiresFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        given(user.getDisplayName()).willReturn("변경된 이름");
+        given(permissionRepository.findPermissionCodesByUserId(1L)).willReturn(List.of("FDS_VIEW"));
+        var second = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/me").session(first)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").session(second))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("변경된 이름"));
+        assertThat(sessionRegistry.getAllSessions(1L, false)).hasSize(1);
+    }
+
+    // 인증 실패는 이미 로그인한 세션을 끊지 않는다
+    @Test
+    void login_whenAnotherDeviceUsesWrongPassword_preservesFirstSession() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        assertThat(login("admin", "wrong-password", null).getResponse().getStatus())
+                .isEqualTo(401);
+        mvc.perform(get("/api/auth/me").session(first)).andExpect(status().isOk());
+    }
+
+    // 전체 로그아웃은 현재 세션과 이전 세션 모두 종료하고 쿠키를 지운다
+    @ParameterizedTest
+    @EnumSource(UserRole.class)
+    void logoutAll_whenAuthenticated_invalidatesCurrentAndPreviousSessions(UserRole role) throws Exception {
+        given(user.getRole()).willReturn(role);
+        if (role == UserRole.OPERATOR) {
+            given(user.getMerchantId()).willReturn(10L);
+            var merchant = mock(com.donworry.identity.entity.Merchant.class);
+            given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.ACTIVE);
+            given(merchants.findById(10L)).willReturn(Optional.of(merchant));
+        }
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var current = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(post("/api/auth/logout-all").with(csrf()).session(current).content("{\"userId\":999}"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""))
+                .andExpect(cookie().maxAge("JSESSIONID", 0));
+        assertThat(current.isInvalid()).isTrue();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+        mvc.perform(get("/api/auth/me").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/auth/logout-all").with(csrf())).andExpect(status().isUnauthorized());
+    }
+
+    // 비로그인 전체 로그아웃은 새 세션을 만들지 않고 401을 반환한다
+    @Test
+    void logoutAll_whenAnonymous_returnsUnauthorizedWithoutSession() throws Exception {
+        var result = mvc.perform(post("/api/auth/logout-all").with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"))
+                .andReturn();
+        assertThat(result.getRequest().getSession(false)).isNull();
+    }
+
+    // 인가 통과 뒤 동시 로그아웃이 인증을 비워도 전체 로그아웃은 500이 아니라 401(AUTH_001)로 끝난다
+    @Test
+    void logoutAll_whenAuthenticationClearedConcurrently_rejectsAsUnauthenticated() {
+        assertThatThrownBy(() -> authService.logoutAll(
+                        null,
+                        new org.springframework.mock.web.MockHttpServletRequest(),
+                        new org.springframework.mock.web.MockHttpServletResponse()))
+                .isInstanceOfSatisfying(
+                        AccountManagementException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.AUTHENTICATION_REQUIRED));
+        verifyNoInteractions(loginHistories);
+    }
+
+    // 이전 세션은 공개된 업무 경로를 호출해도 만료 응답을 먼저 받는다
+    @Test
+    void api_whenSessionExpired_returnsUnauthorizedBeforePublicEndpoint() throws Exception {
+        var first = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        login("admin", "test-password", null);
+        mvc.perform(get("/api/security-test-missing").session(first))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+    }
+
+    // GET 요청으로 전체 로그아웃을 실행할 수 없다 — 등록한 메서드(POST)가 아니라 필터가 먼저 거절한다 (ADR-0067)
+    @Test
+    void logoutAll_whenGet_preservesSession() throws Exception {
+        var current = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        mvc.perform(get("/api/auth/logout-all").session(current))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        mvc.perform(get("/api/auth/me").session(current)).andExpect(status().isOk());
+    }
+
+    // 동시에 로그인해도 검사와 등록 사이에 서로 끼어들어 두 세션이 살아남지 않는다
+    @Test
+    void login_whenConcurrent_keepsOnlyOneActiveSession() throws Exception {
+        var sessions = new java.util.ArrayList<MockHttpSession>();
+        try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            var attempts = new java.util.ArrayList<java.util.concurrent.Future<MvcResult>>();
+            for (int i = 0; i < 4; i++) {
+                attempts.add(executor.submit(() -> {
+                    start.await();
+                    return login("admin", "test-password", null);
+                }));
+            }
+            start.countDown();
+            for (var attempt : attempts) {
+                var result = attempt.get(15, java.util.concurrent.TimeUnit.SECONDS);
+                assertThat(result.getResponse().getStatus()).isEqualTo(200);
+                sessions.add((MockHttpSession) result.getRequest().getSession(false));
+            }
+        }
+        assertThat(sessionRegistry.getAllSessions(1L, false)).hasSize(1);
+        int active = 0;
+        for (var session : sessions) {
+            int status = mvc.perform(get("/api/auth/me").session(session))
+                    .andReturn()
+                    .getResponse()
+                    .getStatus();
+            assertThat(status).isIn(200, 401);
+            if (status == 200) active++;
+        }
+        assertThat(active).isEqualTo(1);
+    }
+    // 정지·누락·연결 없는 가맹점과 최초 조회 뒤 생성된 계정도 로그인 세션을 만들지 않는다
+    @ParameterizedTest
+    @ValueSource(strings = {"INACTIVE", "MISSING", "NULL", "CREATED_LATER", "DB_FAILURE"})
+    void login_whenMerchantUnavailable_rejectsWithoutSession(String condition) throws Exception {
+        given(user.getRole()).willReturn(UserRole.OPERATOR);
+        given(user.getMerchantId()).willReturn(condition.equals("NULL") ? null : 10L);
+        var merchant = mock(com.donworry.identity.entity.Merchant.class);
+        given(merchant.getStatus()).willReturn(com.donworry.identity.entity.MerchantStatus.INACTIVE);
+        given(merchants.findById(10L))
+                .willReturn(condition.equals("MISSING") ? Optional.empty() : Optional.of(merchant));
+        if (condition.equals("CREATED_LATER"))
+            given(repository.findByLoginId("admin")).willReturn(Optional.empty(), Optional.of(user));
+        if (condition.equals("DB_FAILURE"))
+            given(merchants.findById(10L)).willThrow(new DataAccessResourceFailureException("merchant db down"));
+        var result = login("admin", "test-password", null);
+        assertThat(result.getResponse().getStatus()).isEqualTo(condition.equals("DB_FAILURE") ? 500 : 401);
+        assertThat(mapper.readTree(result.getResponse().getContentAsString())
+                        .path("code")
+                        .asString())
+                .isEqualTo(condition.equals("DB_FAILURE") ? "AUTH_005" : "AUTH_004");
+        assertThat(result.getRequest().getSession(false)).isNull();
+        assertThat(sessionRegistry.getAllSessions(1L, false)).isEmpty();
+        verifyNoInteractions(permissionRepository);
+    }
+}

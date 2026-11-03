@@ -1,0 +1,22 @@
+package com.donworry.investigation.dto;
+
+import java.time.Instant;
+
+// 조치 내역 한 줄 — 화면 HandoffListItem과 같은 모양 (#314)
+public record HandoffListItemResponse(
+        Long handoffId,
+        Long caseId,
+        Long paymentId,
+        // 결제 정보를 찾지 못하면 null — P5 · P2 어디에도 없는 결제
+        Long amount,
+        String decision,
+        String actionType,
+        String status,
+        String lastErrorCode,
+        Long staffId,
+        Instant decidedAt,
+        Instant requestedAt,
+        // P3가 완료를 반영한 시각 (ADR-0019 acceptedAt). 실제 완료 시각 completedAt은 Case 이력에 있다
+        Instant acceptedAt,
+        // 판정한 결제를 고객이 직접 승인 취소한 시각(P5 확정, #382 · #439). 있으면 이 조치는 실행되지 않았다 — 직원 실패가 아니다
+        Instant customerCanceledAt) {}

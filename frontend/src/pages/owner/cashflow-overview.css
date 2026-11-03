@@ -1,0 +1,323 @@
+.cashflow-overview {
+  display: grid;
+  gap: 20px;
+  color: #17243b;
+  margin: 12px 0;
+}
+.cashflow-overview-toolbar,
+.cashflow-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cashflow-overview-toolbar p,
+.cashflow-section-head p {
+  margin: 6px 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.cashflow-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.4px;
+}
+.cashflow-verdict {
+  padding: 28px 30px;
+  border-radius: 16px;
+  border: 1px solid;
+}
+.cashflow-verdict-warning {
+  background: #fffbf5;
+  border-color: #fed7aa;
+}
+.cashflow-verdict-safe {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.cashflow-verdict > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #92400e;
+}
+.cashflow-verdict-safe > span {
+  color: #166534;
+}
+.cashflow-verdict h2 {
+  margin: 12px 0 24px;
+  font-size: clamp(21px, 2.5vw, 30px);
+  line-height: 1.6;
+  letter-spacing: -0.7px;
+  font-weight: 600;
+}
+.cashflow-verdict em {
+  color: #c2410c;
+  font-style: normal;
+  font-weight: 800;
+}
+.cashflow-verdict-facts {
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+.cashflow-verdict-facts > div {
+  display: grid;
+  gap: 7px;
+}
+.cashflow-verdict-facts small {
+  color: #64748b;
+  font-size: 12px;
+}
+.cashflow-verdict-facts b {
+  font-size: 17px;
+}
+.cashflow-reason-link {
+  padding: 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #c2410c;
+  color: #9a3412;
+  margin-top: 24px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+.cashflow-surface {
+  background: white;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  min-width: 0;
+}
+.cashflow-section-head h2 {
+  margin: 6px 0;
+  font-size: 19px;
+}
+.cashflow-section-head > strong {
+  font-size: 24px;
+}
+.cashflow-equation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 18px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+.cashflow-equation > div {
+  display: grid;
+  gap: 8px;
+}
+.cashflow-equation small {
+  color: #64748b;
+  font-size: 11px;
+}
+.cashflow-equation b {
+  font-size: 16px;
+}
+.cashflow-equation > span {
+  color: #94a3b8;
+}
+.cashflow-negative {
+  color: #c2410c;
+}
+.cashflow-explanation {
+  line-height: 1.9;
+  font-size: 13px;
+}
+.cashflow-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  margin-top: 24px;
+}
+.cashflow-evidence h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 14px;
+}
+.cashflow-evidence h3 span {
+  color: #475569;
+  font-size: 13px;
+}
+.cashflow-sources {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.cashflow-sources li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.cashflow-sources li div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cashflow-sources b {
+  font-weight: 500;
+}
+.cashflow-sources small {
+  display: block;
+  color: #64748b;
+  margin-top: 6px;
+  font-size: 11px;
+}
+.cashflow-sources strong {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.cashflow-muted,
+.cashflow-footnote {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.8;
+}
+@media (max-width: 700px) {
+  .cashflow-evidence {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .cashflow-surface {
+    padding: 18px;
+  }
+  .cashflow-verdict {
+    padding: 24px;
+  }
+  .cashflow-verdict-facts {
+    gap: 20px;
+  }
+  .cashflow-equation {
+    justify-content: flex-start;
+  }
+}
+
+.cashflow-manage-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+}
+.cashflow-manage-action .ant-btn {
+  min-height: 48px;
+  padding-inline: 24px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px #2563eb26;
+}
+.cashflow-manage-action small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 600px) {
+  .cashflow-manage-action {
+    width: 100%;
+    align-items: stretch;
+  }
+  .cashflow-manage-action small {
+    text-align: center;
+  }
+}
+
+.cashflow-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.cashflow-summary-grid .cashflow-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 3px solid #2563eb;
+}
+.cashflow-summary-grid strong {
+  font-size: 25px;
+  letter-spacing: -0.7px;
+}
+.cashflow-summary-grid small {
+  color: #64748b;
+  line-height: 1.6;
+}
+@media (max-width: 1000px) {
+  .cashflow-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .cashflow-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cashflow-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  margin: 16px 0;
+  color: #64748b;
+}
+
+.cashflow-summary-grid .cashflow-surface {
+  border-top: 1px solid #e2e8f0;
+  border-left: 4px solid var(--stat-color);
+  border-radius: 8px;
+  padding: 18px 20px;
+}
+.cashflow-summary-grid strong {
+  color: var(--stat-color);
+}
+.cashflow-stat-0 {
+  --stat-color: #0f172a;
+}
+.cashflow-stat-1 {
+  --stat-color: #15803d;
+}
+.cashflow-stat-2 {
+  --stat-color: #dc2626;
+}
+.cashflow-stat-3 {
+  --stat-color: #b45309;
+}
+.cashflow-loan-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border-radius: 8px;
+  background: #172554;
+  color: white;
+}
+.cashflow-loan-card h2 {
+  font-size: 28px;
+  margin: 8px 0;
+  color: white;
+}
+.cashflow-loan-card small,
+.cashflow-loan-card p {
+  color: #c8d5ee;
+  line-height: 1.7;
+}
+.cashflow-loan-card .ant-btn {
+  flex-shrink: 0;
+}
+@media (max-width: 700px) {
+  .cashflow-loan-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

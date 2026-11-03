@@ -1,0 +1,7 @@
+production-profile-test:
+  local-imported: true
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false

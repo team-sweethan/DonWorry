@@ -1,0 +1,185 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { loginDestination } from '../src/auth/loginRedirect.ts'
+import type { AuthUser } from '../src/types/auth.ts'
+
+const staff: AuthUser = {
+  userId: 1,
+  loginId: 'staff',
+  displayName: '보안 직원',
+  role: 'SECURITY_STAFF',
+  merchantId: null,
+  tenantScope: 'ALL',
+  permissions: [],
+  passwordChangeRequired: false,
+}
+const owner: AuthUser = {
+  ...staff,
+  role: 'OPERATOR',
+  merchantId: 10,
+  tenantScope: 'MERCHANT',
+  permissions: ['FINANCE_VIEW'],
+}
+
+test('관리자는 이전 방문 경로와 관계없이 로그인하면 홈에서 시작한다', () => {
+  const admin: AuthUser = { ...staff, role: 'ADMIN' }
+  assert.equal(loginDestination(admin, null), '/admin/home')
+  for (const returnTo of ['/admin/fds/rules', '/admin/users/7', '/account/login-history']) {
+    assert.equal(loginDestination(admin, { returnTo }), '/admin/home')
+  }
+  assert.equal(
+    loginDestination({ ...admin, passwordChangeRequired: true }, null),
+    '/account/password',
+  )
+})
+
+test('관리자도 세션 만료 후 같은 계정으로 다시 로그인하면 보던 화면으로 돌아간다', () => {
+  const admin: AuthUser = { ...staff, role: 'ADMIN' }
+  const returnTo = '/admin/fds/rule-change-requests'
+  assert.equal(loginDestination(admin, { returnTo, previousUserId: admin.userId }), returnTo)
+  assert.equal(
+    loginDestination(admin, { returnTo, previousUserId: admin.userId + 1 }),
+    '/admin/home',
+  )
+})
+
+// 같은 계정으로 재로그인하면 상세 경로와 쿼리를 그대로 복원한다.
+test('loginDestination_whenSameAccount_preservesPathAndQuery', () => {
+  const returnTo = '/security/cases/3?page=2&keyword=%ED%99%95%EC%9D%B8&next=https://example.com'
+  assert.equal(loginDestination(staff, { returnTo, previousUserId: 1 }), returnTo)
+})
+
+// 처음 접근하거나 새로고침해 이전 계정을 모르면 현재 계정의 권한을 사용한다.
+test('loginDestination_whenPreviousAccountUnknown_checksCurrentPermissions', () => {
+  for (const previousUserId of [null, undefined]) {
+    assert.equal(
+      loginDestination(staff, { returnTo: '/security/alerts/7?tab=detail', previousUserId }),
+      '/security/alerts/7?tab=detail',
+    )
+  }
+  assert.equal(
+    loginDestination(staff, { returnTo: '/security/alerts/7?tab=detail' }),
+    '/security/alerts/7?tab=detail',
+  )
+})
+
+// 다른 역할뿐 아니라 같은 역할의 다른 사용자도 이전 계정 화면으로 보내지 않는다.
+test('loginDestination_whenAccountOrRoleChanges_usesLanding', () => {
+  assert.equal(
+    loginDestination({ ...staff, userId: 2 }, { returnTo: '/security/cases/3', previousUserId: 1 }),
+    '/security/home',
+  )
+  assert.equal(loginDestination(owner, { returnTo: '/security/cases/3' }), '/owner')
+})
+
+// 사장님은 재로그인한 시점의 메뉴 권한으로 복귀 여부를 판단한다.
+test('loginDestination_whenPermissionRemoved_usesAvailableLanding', () => {
+  assert.equal(loginDestination(owner, { returnTo: '/owner/actions?page=2' }), '/owner')
+  assert.equal(
+    loginDestination(owner, { returnTo: '/owner/settlements?page=2' }),
+    '/owner/settlements?page=2',
+  )
+})
+
+// 임시 비밀번호 변경은 어떤 복귀 주소보다 먼저 처리한다.
+test('loginDestination_whenPasswordChangeRequired_usesPasswordPage', () => {
+  assert.equal(
+    loginDestination({ ...staff, passwordChangeRequired: true }, { returnTo: '/security/cases/3' }),
+    '/account/password',
+  )
+})
+
+// 업무 권한이 없어도 본인 계정 화면은 복원하고, 권한 메뉴 대신 시크릿 키 발급 화면으로 보낸다 (#354).
+test('loginDestination_whenNoBusinessPermissions_allowsAccountPages', () => {
+  const noPermissions = { ...owner, permissions: [] }
+  for (const returnTo of ['/account/login-history?page=2', '/account/password/']) {
+    assert.equal(loginDestination(noPermissions, { returnTo }), returnTo)
+  }
+  assert.equal(loginDestination(noPermissions, { returnTo: '/owner/actions' }), '/owner')
+  assert.equal(loginDestination(noPermissions, null), '/owner')
+})
+
+// 잘못된 Router state와 현재 계정 ID와 일치하지 않는 이전 사용자 ID는 예외 없이 버린다.
+test('loginDestination_whenStateMalformed_usesLanding', () => {
+  for (const state of [null, undefined, '', 1, [], {}, { returnTo: 3 }, { returnTo: null }]) {
+    assert.equal(loginDestination(staff, state), '/security/home')
+  }
+  for (const previousUserId of ['1', false, {}, 0, -1, 1.5, NaN, Infinity]) {
+    assert.equal(
+      loginDestination(staff, { returnTo: '/security/cases/3', previousUserId }),
+      '/security/home',
+    )
+  }
+})
+
+// 외부 이동·로그인 반복·정규화나 디코딩으로 권한 검사를 우회하는 경로는 복원하지 않는다.
+test('loginDestination_whenPathUnsafe_usesLanding', () => {
+  for (const returnTo of [
+    'https://example.com',
+    '//example.com',
+    '/\\example.com',
+    'security/cases/3',
+    '',
+    '/login',
+    '/login/?next=/security/cases',
+    '/security/../login',
+    '/security/cases/../../owner/actions',
+    '/security/./cases/3',
+    '/security/%2e%2e/owner/actions',
+    '/security/%252e%252e/cases',
+    '/security/cases%2f..%2f..%2fowner/actions',
+    '/security/cases\\..\\..\\owner/actions',
+    '/security/cases\n/3',
+    '/security/cases\t/3',
+    '/security/cases\u0000/3',
+    '/security//cases/3',
+    ' /security/cases/3',
+    '/security/cases/3#detail',
+    '/api/auth/logout',
+  ]) {
+    assert.equal(loginDestination(staff, { returnTo }), '/security/home', returnTo)
+  }
+  assert.equal(loginDestination(owner, { returnTo: '/owner/settlements/../actions' }), '/owner')
+})
+
+// 재로그인 표식은 명시적 boolean만 받고 복귀 경로 검증은 그대로 적용한다.
+test('requiresLogin_whenStateMalformed_acceptsOnlyExplicitFlag', async () => {
+  const { requiresLogin } = await import('../src/auth/loginRedirect.ts')
+  for (const value of [
+    null,
+    undefined,
+    {},
+    'true',
+    { requireLogin: 'true' },
+    { requireLogin: false },
+  ]) {
+    assert.equal(requiresLogin(value), false)
+  }
+  assert.equal(requiresLogin({ requireLogin: true }), true)
+  assert.equal(
+    loginDestination(staff, { requireLogin: true, returnTo: '//evil.example' }),
+    '/security/home',
+  )
+})
+
+// 사장님은 연동 상태와 상관없이 홈에서 시작하고, 같은 계정 재로그인만 보던 화면으로 돌아간다 (#354).
+test('loginDestination_whenOwnerLogsIn_usesHomeOrSameAccountReturn', () => {
+  for (const permissions of [[], ['FDS_VIEW'], ['FINANCE_VIEW'], ['FDS_VIEW', 'FINANCE_VIEW']]) {
+    const user = { ...owner, permissions }
+    assert.equal(loginDestination(user, null), '/owner')
+    assert.equal(
+      loginDestination(user, { returnTo: '/owner/integration', previousUserId: user.userId }),
+      '/owner/integration',
+    )
+    const state = { returnTo: '/owner/settlements?page=2', previousUserId: user.userId }
+    assert.equal(
+      loginDestination(user, state),
+      permissions.includes('FINANCE_VIEW') ? state.returnTo : '/owner',
+    )
+    assert.equal(loginDestination(user, { ...state, previousUserId: user.userId + 1 }), '/owner')
+    assert.equal(
+      loginDestination({ ...user, passwordChangeRequired: true }, state),
+      '/account/password',
+    )
+  }
+})

@@ -1,0 +1,313 @@
+/**
+ * P3 Investigation 화면 타입. 이름·상태값은 Notion fds 정본(설계 3.3·3.9)을 camelCase로 옮긴 것.
+ * API DTO 확정 전이므로 필드 구성은 백엔드 계약에 맞춰 바뀔 수 있다.
+ */
+
+// ── 상태값 (설계 3.3) ──
+export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
+export type PaymentStatus =
+  'PENDING' | 'DENIED' | 'DECLINED' | 'HELD' | 'CAPTURED' | 'VOIDED' | 'EXPIRED'
+export type CaseStatus =
+  'OPEN' | 'INVESTIGATING' | 'DECISION_PENDING' | 'ACTION_PENDING' | 'ACTION_FAILED' | 'CLOSED'
+export type ReportStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+export type Decision = 'ACCEPT' | 'REJECT'
+export type ActionType = 'CAPTURE' | 'VOID'
+export type HandoffStatus = 'REQUESTED' | 'ACCEPTED' | 'FAILED'
+export type CaseHistoryEventType =
+  | 'CASE_CREATED'
+  | 'PAYMENT_LINKED'
+  | 'DECISION_CONFIRMED'
+  | 'HANDOFF_REQUESTED'
+  | 'HANDOFF_ACCEPTED'
+  | 'HANDOFF_FAILED'
+  /** 직원의 "인계 상태 다시 확인". eventData에 handoffId · result (#161) */
+  | 'HANDOFF_RECHECKED'
+  /** 다시 확인으로 먼저 반영된 인계에 늦게 온 결과 이벤트의 실제 완료 시각. eventData에 handoffId · completedAt */
+  | 'HANDOFF_COMPLETION_RECORDED'
+  /** CASE_CREATED · CASE_CLOSED 외의 상태 전이. eventData에 from · to (설계 3.9 ⑧) */
+  | 'CASE_STATUS_CHANGED'
+  /** 고객이 HELD 결제 승인을 직접 취소함(P5 확인 뒤 반영, #382). eventData에 paymentId · casePaymentId · cancellationId · completedAt */
+  | 'PAYMENT_CANCELED_BY_CUSTOMER'
+  | 'CASE_CLOSED'
+
+// ── 엔터티 (설계 3.9) ──
+export type SecurityCase = {
+  caseId: string
+  merchantId: string
+  customerRef: string
+  caseType: 'PAYMENT_FRAUD'
+  status: CaseStatus
+  evidenceVersion: number
+  createdAt: string
+  closedAt: string | null
+}
+
+/**
+ * P2 MATCH 적중 룰. name은 평가 당시 이름, appliedScore는 이 룰이 점수에 더한 값 (#163).
+ * 시연 결제의 이름·점수는 시연용 값이다.
+ */
+export type RuleHit = {
+  code: string
+  name: string
+  appliedScore: number | null
+}
+
+/**
+ * case_payment + 조회로 합친 P5 결제 정보·P2 FDS 평가.
+ * P5·P2에서 조회하지 못하면 백엔드가 null로 보낸다 (추정값을 채우지 않는다). 화면은 '-'로 표시한다.
+ */
+export type CasePayment = {
+  casePaymentId: string
+  paymentId: string
+  linkedAt: string
+  amount: number | null
+  paymentStatus: PaymentStatus | null
+  requestedAt: string | null
+  riskScore: number | null
+  fdsResult: FdsResult | null
+  ruleHits: RuleHit[]
+  /** 고객이 승인을 직접 취소한 시각(#382). 있으면 판정 대상이 아니다 */
+  customerCanceledAt: string | null
+}
+
+export type PaymentDecision = {
+  decisionId: string
+  casePaymentId: string
+  staffId: string
+  /** AI 보고서 3회 실패 후 수동 판정이면 null. */
+  reportId: string | null
+  decision: Decision
+  reason: string
+  decidedAt: string
+}
+
+export type ActionHandoff = {
+  handoffId: string
+  decisionId: string
+  actionType: ActionType
+  status: HandoffStatus
+  targetOperationId: string | null
+  requestedAt: string
+  acceptedAt: string | null
+  lastErrorCode: string | null
+}
+
+/** 조치 내역 한 줄 (#314) — 인계 하나와 그 판정 · 결제 · Case. acceptedAt은 P3가 완료를 반영한 시각이다. */
+export type HandoffListItem = {
+  handoffId: string
+  caseId: string
+  paymentId: string
+  /** 결제 정보를 찾지 못하면 null */
+  amount: number | null
+  decision: Decision
+  actionType: ActionType
+  status: HandoffStatus
+  lastErrorCode: string | null
+  staffId: string | null
+  decidedAt: string
+  requestedAt: string
+  acceptedAt: string | null
+  /** 판정한 결제를 고객이 직접 승인 취소한 시각(#439). 있으면 이 조치는 실행되지 않았다 — 직원 실패가 아니다 */
+  customerCanceledAt: string | null
+}
+
+export type CaseHistory = {
+  historyId: string
+  caseId: string
+  eventType: CaseHistoryEventType
+  actorType: 'STAFF' | 'SYSTEM'
+  actorId: string | null
+  eventData: Record<string, string>
+  createdAt: string
+}
+
+// ── AI 보고서 (기획 2.7 표준 구성) — report_body 키 표기는 P4와 확정 전 ──
+export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
+
+// 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 evidence 목록의 같은 ID 줄
+export type ReportRuleHitDetail = {
+  code: string
+  name: string
+  appliedScore: number | null
+  evidenceId: string
+  // 기준 · 실제 문장 (#326) — 코드가 FDS 기준값 · 실제값으로 만든다. 그 전 보고서 · 정리할 수 없는 규칙은 없음
+  criterion?: string | null
+  observed?: string | null
+}
+
+// verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
+export type ReportBody = {
+  overview: {
+    caseId: string
+    merchantId: string
+    customerRef: string
+    paymentCount: number
+    totalAmount: number
+    caseCreatedAt: string
+    investigatedAt: string
+    reportVersion: number
+  }
+  summary: string[]
+  paymentAnalyses: Array<{
+    paymentId: string
+    amount: number
+    requestedAt: string
+    riskScore: number | null
+    ruleHits: string[]
+    riskEvidence: string[]
+    normalEvidence: string[]
+    unknowns: string[]
+    recommendation: AiRecommendation
+    reason?: string
+    ruleHitDetails?: ReportRuleHitDetail[]
+    // 카드 · 기기 · 접속 국가 (#346) — 없으면(undefined) 예전 보고서, null이면 FDS 평가 없음
+    signals?: PaymentSignals | null
+  }>
+  // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
+  timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
+  overallAnalysis: string[]
+  additionalChecks: string[]
+  recommendation: { summary: string; limitations: string[] }
+  evidence: Array<{
+    toolName: string
+    source: string
+    evidenceId: string
+    retrievedAt: string
+    dataVersion: string
+  }>
+  // headline은 AI 결론 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
+  verdict?: { headline: string; overallRecommendation: AiRecommendation }
+  // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
+  investigationTrace?: InvestigationTrace
+  // 비슷한 과거 사건 (#296) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  similarCases?: SimilarCases | null
+  // 고객 최근 결제 (#338) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  paymentHistory?: PaymentHistory | null
+  // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  linkedPayments?: LinkedPayments | null
+}
+
+// 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 (#352) — 건수 · 고객 수 · 판정만 온다
+// provided=false면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻 ("정보 없음")
+// result는 FDS 판정 코드값 그대로라 모르는 값이 올 수 있어 string으로 받는다
+export type LinkedMatch = {
+  provided: boolean
+  otherCustomerCount: number
+  paymentCount: number
+  resultCounts: Array<{ result: string; count: number }>
+  declinedCount: number
+}
+
+export type LinkedPayments = {
+  lookbackDays: number
+  card: LinkedMatch
+  device: LinkedMatch
+  ip: LinkedMatch
+}
+
+// 결제별 카드 · 기기 · 접속 국가 (#346) — 카드는 마스킹 표시값, IP는 국가 코드만 온다
+// *Provided는 가맹점이 그 값을 보냈는지 여부
+export type PaymentSignals = {
+  cardDisplayLabel: string | null
+  cardProvided: boolean
+  deviceProvided: boolean
+  ipCountryCode: string | null
+  ipProvided: boolean
+}
+
+// 고객 최근 결제 (#338) — 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제는 빠져 있다
+// 상태는 P5 코드값 그대로라 모르는 값이 올 수 있어 string으로 받는다
+export type PaymentHistoryItem = {
+  paymentId: string
+  amount: number | null
+  paymentStatus: string | null
+  requestedAt: string | null
+}
+
+// payments는 최근 순 최대 20건, statusCounts는 그 안에서 코드가 센 값. 기간 안에 더 있으면 truncated
+export type PaymentHistory = {
+  lookbackDays: number
+  payments: PaymentHistoryItem[]
+  statusCounts: Array<{ paymentStatus: string; count: number }>
+  truncated: boolean
+}
+
+// 비슷한 과거 사건 (#296) — 결과는 결제별 직원 판정 건수 그대로 (해석하지 않는다)
+export type SimilarCaseItem = {
+  caseId: string
+  similarity: 'SAME_CUSTOMER' | 'SHARED_RULES'
+  sharedRules: Array<{ code: string; name: string }>
+  closedAt: string | null
+  acceptCount: number
+  rejectCount: number
+}
+
+// cases는 최대 5건, totalMatched는 5건을 넘는 것까지 센 전체 건수
+export type SimilarCases = {
+  cases: SimilarCaseItem[]
+  totalMatched: number
+}
+
+// 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 온다 (#294)
+export type TraceStep = {
+  kind: 'DECIDE' | 'TOOL' | 'NUDGE' | 'WRITE' | 'ASSEMBLE'
+  actor: 'AI' | 'SYSTEM'
+  title: string
+  durationMs: number | null
+  asked: string | null
+  received: string | null
+  retryReason: string | null
+}
+
+// 생성 중인 보고서의 끝난 단계 (#322) — RUNNING이 아니거나 AI 서버를 끄면 steps는 빈 목록
+export type ReportProgress = {
+  reportId: string
+  status: ReportStatus
+  steps: TraceStep[]
+}
+
+// provider는 실제로 쓴 LLM 제공자, FIXED는 AI 서버를 끈 시연의 고정 문장 보고서
+// OPENAI는 Ollama를 설치할 수 없는 배포 VM용 (#453)
+export type InvestigationTrace = {
+  provider: 'OLLAMA' | 'OPENAI' | 'MOCK' | 'FIXED'
+  model: string
+  durationMs: number | null
+  steps: TraceStep[]
+}
+
+export type AiReport = {
+  reportId: string
+  caseId: string
+  reportVersion: number
+  evidenceVersion: number
+  status: ReportStatus
+  reportBody: ReportBody | null
+  createdAt: string
+  completedAt: string | null
+}
+
+// ── 화면 조회·요청 모델 ──
+export type CaseSummary = SecurityCase & {
+  paymentCount: number
+  /** 결제 정보를 하나라도 조회하지 못하면 null (일부 합계를 내보내지 않는다). */
+  totalAmount: number | null
+  maxRiskScore: number | null
+  latestReportStatus: ReportStatus | null
+  decidedCount: number
+}
+
+export type CaseDetail = {
+  securityCase: SecurityCase
+  payments: CasePayment[]
+  reports: AiReport[]
+  decisions: PaymentDecision[]
+  handoffs: ActionHandoff[]
+  history: CaseHistory[]
+}
+
+export type SubmitDecisionsRequest = {
+  /** 직원이 화면에서 확인한 Case 증거 버전. 현재 버전과 다르면 거부된다 (설계 3.5). */
+  evidenceVersion: number
+  reportId: string | null
+  decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
+}

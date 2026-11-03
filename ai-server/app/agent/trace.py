@@ -1,0 +1,152 @@
+import re
+import time
+from typing import Any
+
+from app.config import Settings
+from app.schemas.report import InvestigationTrace, TraceStep
+from app.schemas.tools import (
+    CasePaymentsTool,
+    LinkedMatch,
+    LinkedPaymentsTool,
+    PaymentHistoryTool,
+    SimilarCasesTool,
+    ToolResult,
+)
+
+# 조사 과정 기록(investigationTrace, #294) — 화면 "조사 과정" 탭이 그대로 보여 준다
+# 원본 값(금액 · 시각 · 점수)과 프롬프트는 넣지 않고, 코드가 만든 짧은 요약만 남긴다
+
+TOOL_TITLES = {
+    "get_case_payments": "결제 목록 조회",
+    "get_fds_evidence": "FDS 근거 조회",
+    "find_similar_cases": "비슷한 과거 사건 조회",
+    "get_payment_history": "고객 최근 결제 조회",
+    "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
+}
+
+# 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
+_QUOTED_SENTENCE = re.compile(r':\s*".*"\s*$', flags=re.DOTALL)
+MAX_RETRY_REASONS = 3
+
+
+def elapsed_ms(started: float) -> int:
+    return round((time.perf_counter() - started) * 1000)
+
+
+def tool_title(name: str) -> str:
+    return TOOL_TITLES.get(name, f"허용 목록 밖 도구({name[:30]})")
+
+
+def step(
+    kind: str,
+    actor: str,
+    title: str,
+    *,
+    duration_ms: int | None = None,
+    asked: str | None = None,
+    received: str | None = None,
+    retry_reason: str | None = None,
+) -> TraceStep:
+    return TraceStep(
+        kind=kind,
+        actor=actor,
+        title=title,
+        durationMs=duration_ms,
+        asked=asked,
+        received=received,
+        retryReason=retry_reason,
+    )
+
+
+# AI가 다음에 무엇을 하기로 했는지 — 도구 이름만 옮긴다
+def decided(tool_calls: list[dict[str, Any]]) -> str:
+    if not tool_calls:
+        return "조사 완료라고 답함"
+    return " · ".join(tool_title(call["name"]) for call in tool_calls) + " 선택"
+
+
+def tool_asked(name: str, args: dict[str, Any]) -> str:
+    if name == "get_case_payments":
+        return "이 사건의 결제 전체"
+    if name == "find_similar_cases":
+        return "이 사건과 비슷한 종료 사건"
+    if name == "get_payment_history":
+        return "같은 고객의 최근 결제 (이 사건 제외)"
+    if name == "find_linked_payments":
+        return "같은 가맹점 최근 30일, 다른 고객 결제"
+    payment_ids = args.get("payment_ids") or []
+    # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
+    if not isinstance(payment_ids, list):
+        payment_ids = [payment_ids]
+    if payment_ids:
+        return f"결제 {' · '.join(str(p) for p in payment_ids)}의 FDS 근거"
+    return "이 사건 모든 결제의 FDS 근거"
+
+
+# 받은 것 요약 — 건수만 쓴다. 금액 · 점수 같은 원본 값은 보고서 본문에 이미 있다
+def tool_received(result: ToolResult) -> str:
+    if isinstance(result, LinkedPaymentsTool):
+        return linked_summary(result)
+    if isinstance(result, PaymentHistoryTool):
+        head = f"최근 {result.lookbackDays}일 결제 {len(result.payments)}건"
+        return head + (" (더 있음, 최근 것만)" if result.truncated else "")
+    if isinstance(result, SimilarCasesTool):
+        same = sum(1 for c in result.cases if c.similarity == "SAME_CUSTOMER")
+        rules = len(result.cases) - same
+        # "7건 중 5건 표시 · 같은 고객 2 · 같은 규칙 3" — 0건인 종류는 뺀다
+        head = f"비슷한 사건 {result.totalMatched}건"
+        if len(result.cases) < result.totalMatched:
+            head += f" 중 {len(result.cases)}건 표시"
+        kinds = [f"같은 고객 {same}"] if same else []
+        kinds += [f"같은 규칙 {rules}"] if rules else []
+        return " · ".join([head, *kinds])
+    missing = (
+        f" · 못 찾은 결제 {len(result.missingPaymentIds)}건" if result.missingPaymentIds else ""
+    )
+    if isinstance(result, CasePaymentsTool):
+        return f"결제 {len(result.payments)}건{missing}"
+    rules = sum(len(p.ruleHits) for p in result.payments)
+    return f"FDS 평가 {len(result.payments)}건 · 적중 규칙 {rules}개{missing}"
+
+
+# "카드 결제 3건 · 기기 없음 · IP 정보 없음" — Spring 고정 보고서 조사 과정과 같은 말 (#352)
+def linked_summary(result: LinkedPaymentsTool) -> str:
+    return " · ".join(
+        f"{label} {_match_summary(match)}"
+        for label, match in (("카드", result.card), ("기기", result.device), ("IP", result.ip))
+    )
+
+
+def _match_summary(match: LinkedMatch) -> str:
+    if not match.provided:
+        return "정보 없음"
+    return "없음" if match.paymentCount == 0 else f"결제 {match.paymentCount}건"
+
+
+# " · 입력 3,512 · 출력 640 토큰" — Ollama가 알려 줄 때만 붙인다 (mock은 없음, #355)
+# 시간이 긴 입력 때문인지 긴 출력 때문인지 조사 과정 탭에서 바로 보이게
+def tokens(usage: dict[str, int] | None) -> str:
+    if not usage or usage.get("input_tokens") is None or usage.get("output_tokens") is None:
+        return ""
+    return f" · 입력 {usage['input_tokens']:,} · 출력 {usage['output_tokens']:,} 토큰"
+
+
+def retry_reason(errors: list[str]) -> str:
+    rules = [_QUOTED_SENTENCE.sub("", error).strip() for error in errors]
+    unique = list(dict.fromkeys(rule for rule in rules if rule))
+    shown = unique[:MAX_RETRY_REASONS]
+    more = f" 외 {len(unique) - len(shown)}건" if len(unique) > len(shown) else ""
+    return " / ".join(shown) + more
+
+
+def provider_and_model(settings: Settings) -> tuple[str, str]:
+    if settings.llm_provider == "ollama":
+        return "OLLAMA", settings.ollama_model
+    if settings.llm_provider == "openai":
+        return "OPENAI", settings.openai_model
+    return "MOCK", "mock"
+
+
+def build_trace(settings: Settings, steps: list[TraceStep], duration_ms: int) -> InvestigationTrace:
+    provider, model = provider_and_model(settings)
+    return InvestigationTrace(provider=provider, model=model, durationMs=duration_ms, steps=steps)

@@ -1,0 +1,95 @@
+package com.donworry.identity.service;
+
+import com.donworry.identity.security.AuthErrorCode;
+import com.donworry.identity.security.PasswordChangeException;
+import com.donworry.identity.security.SessionUser;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
+
+@Service
+@RequiredArgsConstructor
+public class UserSessionService {
+    private final SessionRegistry sessionRegistry;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
+    private final SecurityContextRepository securityContextRepository;
+    private final LogoutHandler sessionLogoutHandler;
+
+    // 단일 서버의 짧은 메모리 작업만 직렬화한다. 비밀번호 검증과 DB 조회는 호출 전에 끝낸다.
+    public synchronized void establishAuthentication(
+            Authentication authentication, HttpServletRequest request, HttpServletResponse response) {
+        try {
+            sessionAuthenticationStrategy.onAuthentication(authentication, request, response);
+            var context = SecurityContextHolder.createEmptyContext();
+            context.setAuthentication(authentication);
+            SecurityContextHolder.setContext(context);
+            securityContextRepository.saveContext(context, request, response);
+        } catch (RuntimeException exception) {
+            // 세션 전략이 이미 이전 인증을 만료했을 수 있다. 새 인증만 정리하며 이전 인증은 복구하지 않는다.
+            SecurityContextHolder.clearContext();
+            try {
+                var session = request.getSession(false);
+                if (session != null) {
+                    sessionRegistry.removeSessionInformation(session.getId());
+                    sessionLogoutHandler.logout(request, response, authentication);
+                }
+            } catch (RuntimeException cleanup) {
+                exception.addSuppressed(cleanup);
+            }
+            throw new InternalAuthenticationServiceException("세션 인증을 수립하지 못했습니다.", exception);
+        }
+    }
+
+    public synchronized void expireAll(Long userId) {
+        expireSessions(userId, null);
+    }
+
+    public synchronized void requireActive(Long userId, String sessionId) {
+        var session = sessionRegistry.getSessionInformation(sessionId);
+        if (session == null || session.isExpired() || !userId.equals(session.getPrincipal()))
+            throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+    }
+
+    public synchronized void clearPasswordChangeRequired(
+            SessionUser user, HttpServletRequest request, HttpServletResponse response) {
+        var session = request.getSession(false);
+        if (session == null) throw new PasswordChangeException(AuthErrorCode.AUTHENTICATION_REQUIRED);
+        requireActive(user.userId(), session.getId());
+        var current = SecurityContextHolder.getContext().getAuthentication();
+        var updated = user.toBuilder().passwordChangeRequired(false).build();
+        var context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(updated, null, current.getAuthorities()));
+        SecurityContextHolder.setContext(context);
+        // 쿠키와 세션 ID를 바꾸지 않고 현재 세션의 인증만 명시적으로 저장한다.
+        securityContextRepository.saveContext(context, request, response);
+    }
+
+    public synchronized void expireAllExcept(Long userId, String retainedSessionId) {
+        Assert.hasText(retainedSessionId, "retainedSessionId must not be blank");
+        expireSessions(userId, retainedSessionId);
+    }
+
+    public synchronized void logoutAll(Long userId, HttpServletRequest request, HttpServletResponse response) {
+        expireSessions(userId, null);
+        sessionLogoutHandler.logout(
+                request, response, SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    private void expireSessions(Long userId, String retainedSessionId) {
+        Assert.isTrue(userId != null && userId > 0, "userId must be positive");
+        for (var session : sessionRegistry.getAllSessions(userId, false)) {
+            if (!session.getSessionId().equals(retainedSessionId)) session.expireNow();
+        }
+    }
+}

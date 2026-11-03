@@ -1,5 +1,166 @@
-import { createBrowserRouter } from 'react-router-dom'
-import { HomePage } from './HomePage'
+import {
+  AdminApplicationsPage,
+  AdminApplicationDetailPage,
+} from '../pages/admin/AdminApplicationsPage'
+import { ApplicationGate } from '../pages/public/ApplicationGate'
+import { InitialPasswordPage } from '../pages/public/InitialPasswordPage'
+import { ApplicationPage, VerifyEmailPage } from '../pages/public/ApplicationPage'
+import { takeVerificationToken } from '../pages/public/applicationFeedback'
+import { CheckoutPage } from '../pages/public/CheckoutPage'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { ScreenResult } from '../components/common/ScreenResult'
+import { LandingRoute, LoginRoute, NotFoundRoute, ServerSession } from '../auth/AuthRoutes'
+import { EmptyPage } from '../pages/EmptyPage'
+import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
+import { CaseDetailPage } from '../pages/security/CaseDetailPage'
+import { CaseListPage } from '../pages/security/CaseListPage'
+import { CaseReportPage } from '../pages/security/CaseReportPage'
+import { SecurityHomePage } from '../pages/security/SecurityHomePage'
+import { AlertDetailPage } from '../pages/security/AlertDetailPage'
+import { AlertListPage } from '../pages/security/AlertListPage'
+import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
+import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { TransactionListPage } from '../pages/security/TransactionListPage'
+import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
+import { AdminHomePage } from '../pages/admin/AdminHomePage'
+import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
+import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
+import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
+import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
+import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
+import { LoginHistoryScreen } from '../pages/auth/LoginHistoryPage'
+import {
+  AdminUsersPage,
+  AdminCreateUserPage,
+  AdminUserDetailPage,
+} from '../pages/admin/AdminUsersPage'
 
-// URL ↔ 화면 연결 — 화면이 생기면 여기에 추가
-export const router = createBrowserRouter([{ path: '/', element: <HomePage /> }])
+import {
+  AdminMerchantsPage,
+  AdminCreateMerchantPage,
+  AdminMerchantDetailPage,
+} from '../pages/admin/AdminMerchantsPage'
+import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
+
+// 업무·계정 화면은 서버 세션으로 보호하고 정산 시연 화면은 개발 환경에서만 제공한다.
+export const router = createBrowserRouter([
+  // 실제 로그인·금액 조회 없이 로컬 개발 서버에서만 정산 시연 화면을 확인한다.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/:financePage',
+          element: (
+            <main style={{ padding: 24 }}>
+              <SettlementRoute />
+            </main>
+          ),
+        },
+      ]
+    : []),
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/funds/loans',
+          element: (
+            <main style={{ padding: 24 }}>
+              <LoanProductsRoute />
+            </main>
+          ),
+        },
+      ]
+    : []),
+  { path: '/', element: <LandingRoute /> },
+  {
+    path: '/apply',
+    element: (
+      <ApplicationGate>
+        <ApplicationPage />
+      </ApplicationGate>
+    ),
+  },
+  {
+    path: '/apply/verify',
+    loader: () => ({ token: takeVerificationToken(window.location, window.history) }),
+    element: (
+      <ApplicationGate>
+        <VerifyEmailPage />
+      </ApplicationGate>
+    ),
+  },
+  {
+    path: '/apply/password',
+    loader: () => ({ token: takeVerificationToken(window.location, window.history) }),
+    element: (
+      <ApplicationGate>
+        <InitialPasswordPage />
+      </ApplicationGate>
+    ),
+  },
+  { path: '/login', element: <LoginRoute /> },
+  // 돈워리 호스팅 결제창(ADR-0064). 로그인 없이 세션 키로 열리고, 가맹점 결제 화면의 레이어(iframe)로도 쓰인다
+  { path: '/checkout/:sessionKey', element: <CheckoutPage /> },
+  // 가드보다 먼저 이동해 /me 확인을 한 번만 한다. 사장님 첫 화면은 권한에 따라 달라 가드에서 정한다.
+  { path: '/admin', element: <Navigate to="/admin/home" replace /> },
+  { path: '/security', element: <Navigate to="/security/home" replace /> },
+  {
+    element: <ServerSession />,
+    children: [
+      { path: '/account/password', element: <ChangePasswordPage /> },
+      { path: '/account/login-history', element: <LoginHistoryScreen /> },
+      {
+        path: '/admin',
+        children: [
+          { path: 'home', element: <AdminHomePage /> },
+          { path: 'applications', element: <AdminApplicationsPage /> },
+          {
+            path: 'applications/:id',
+            element: <AdminApplicationDetailPage />,
+          },
+          { path: 'fds/rules', element: <RuleCatalogPage /> },
+          { path: 'fds/rule-change-requests', element: <RuleChangeRequestsPage /> },
+          { path: 'finance', element: <EmptyPage title="자금관리" /> },
+          { path: 'merchants', element: <AdminMerchantsPage /> },
+          { path: 'merchants/new', element: <AdminCreateMerchantPage /> },
+          { path: 'merchants/:id', element: <AdminMerchantDetailPage /> },
+          { path: 'users', element: <AdminUsersPage /> },
+          { path: 'users/new', element: <AdminCreateUserPage /> },
+          { path: 'users/:id', element: <AdminUserDetailPage /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/admin" /> },
+        ],
+      },
+      {
+        path: '/security',
+        children: [
+          { path: 'home', element: <SecurityHomePage /> },
+          { path: 'cases', element: <CaseListPage /> },
+          { path: 'cases/:id', element: <CaseDetailPage /> },
+          { path: 'cases/:id/report', element: <CaseReportPage /> },
+          { path: 'actions', element: <ActionHistoryPage /> },
+          { path: 'alerts', element: <AlertListPage /> },
+          { path: 'alerts/:id', element: <AlertDetailPage /> },
+          { path: 'rules', element: <RuleCatalogPage /> },
+          { path: 'blocklist', element: <BlocklistPage /> },
+          { path: 'transactions', element: <TransactionListPage /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
+        ],
+      },
+      {
+        path: '/owner',
+        children: [
+          { index: true, element: <OwnerHomePage /> },
+          { path: 'actions', element: <MerchantCaseListPage /> },
+          { path: 'actions/:id', element: <MerchantCaseDetailPage /> },
+          // 정산 상세 API 연동 전에는 HTML 프로토타입의 예시 화면을 제공한다.
+          { path: 'settlements', element: <SettlementRoute /> },
+          { path: 'funds', element: <SettlementRoute /> },
+          { path: 'loans', element: <LoanProductsRoute /> },
+          { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
+          // 권한 코드와 무관하게 자기 가맹점의 시크릿 키를 관리한다.
+          { path: 'integration', element: <IntegrationPreviewPage /> },
+          { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
+        ],
+      },
+    ],
+  },
+  { path: '*', element: <NotFoundRoute /> },
+])

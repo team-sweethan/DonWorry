@@ -1,0 +1,46 @@
+/* P6 세 화면은 제목·설명·오른쪽 액션의 간격을 공유한다. */
+.finance-preview,
+.loan-products {
+  max-width: 1400px;
+  margin: 12px auto;
+}
+.finance-preview .dw-page-header,
+.loan-products .dw-page-header {
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+  min-height: unset;
+}
+.finance-preview .dw-page-header .dw-page-title,
+.loan-products .dw-page-header .dw-page-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.7px;
+  margin: 0 0 8px;
+}
+.finance-preview .dw-page-header .dw-page-description,
+.loan-products .dw-page-header .dw-page-description {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #475569;
+  margin: 0;
+}
+.finance-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.finance-preview .dw-page-actions .finance-refresh-bar {
+  margin: 0;
+  min-height: 32px;
+  gap: 8px;
+}
+@media (max-width: 1000px) {
+  .finance-preview .dw-page-header,
+  .loan-products .dw-page-header {
+    flex-wrap: wrap;
+  }
+}

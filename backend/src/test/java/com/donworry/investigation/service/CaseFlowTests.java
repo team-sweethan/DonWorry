@@ -1,0 +1,766 @@
+package com.donworry.investigation.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.SessionUserTestSupport;
+import com.donworry.identity.api.CurrentStaff;
+import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.dto.CaseDetailResponse;
+import com.donworry.investigation.dto.DecisionSubmitRequest;
+import com.donworry.investigation.entity.CasePayment;
+import com.donworry.investigation.entity.CaseType;
+import com.donworry.investigation.entity.Decision;
+import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.repository.CasePaymentRepository;
+import com.donworry.investigation.repository.SecurityCaseRepository;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.json.JsonMapper;
+
+// HELD 결제 → Case 생성 · 병합 → 보고서(P4 고정 결과) → 판정 → 금융 처리 대기 → 다시 확인 → Case CLOSED 를 HTTP로 확인한다
+// 결제 정보 · 금융 조치는 테스트 대역(TestPaymentInfoStore · TestFinancialActionGateway)을 쓴다. 실제 P5 · P2 연결은
+// PaymentActionFlowTests · PaymentFdsInfoReaderTests가 본다
+// 커밋 뒤 리스너가 돌아야 하므로 롤백 테스트가 아니다. 테스트마다 고객 참조를 새로 만들어 서로 섞이지 않게 한다
+// 이 테스트만 쓰는 설정이라 컨텍스트가 따로 뜬다 — 끝나면 닫아 공유 MariaDB의 연결 한도를 넘지 않는다
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
+@Tag("mariadb")
+@SpringBootTest
+@AutoConfigureMockMvc
+@Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
+class CaseFlowTests {
+
+    @Autowired
+    MockMvc mvc;
+
+    @Autowired
+    JsonMapper mapper;
+
+    @Autowired
+    CaseIntakeService caseIntakeService;
+
+    @Autowired
+    CaseDecisionService caseDecisionService;
+
+    @Autowired
+    CaseQueryService caseQueryService;
+
+    @Autowired
+    CasePaymentRepository casePaymentRepository;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
+
+    @Autowired
+    ReportGateway reportGateway;
+
+    @Autowired
+    TestPaymentInfoStore payments;
+
+    // 로그인 세션은 P1 공개 계약으로만 본다 — 기본은 보안 직원 7번, 권한 테스트에서만 바꾼다
+    @MockitoBean
+    CurrentStaff currentStaff;
+
+    static final Long STAFF_ID = 7L;
+
+    @BeforeEach
+    void loginAsSecurityStaff() {
+        loginAs(STAFF_ID, "SECURITY_STAFF");
+    }
+
+    // 같은 결제가 동시에 처음 두 번 와도 둘 다 같은 Case를 돌려받고 연결은 한 번만 된다
+    @Test
+    void receive_samePaymentConcurrently_bothSucceedWithOneLink() throws Exception {
+        HeldPayment heldPayment =
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now());
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Callable<Long> receive = () -> {
+                start.await();
+                return caseIntakeService.receive(heldPayment);
+            };
+            Future<Long> first = executor.submit(receive);
+            Future<Long> second = executor.submit(receive);
+            start.countDown();
+
+            Long firstCaseId = first.get(30, TimeUnit.SECONDS);
+            assertThat(second.get(30, TimeUnit.SECONDS)).isEqualTo(firstCaseId);
+            assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(firstCaseId))
+                    .hasSize(1);
+        }
+    }
+
+    // 같은 고객의 서로 다른 결제가 동시에 처음 와도 Case는 하나로 모인다 (fds 정본 03 §3.4 생성 경쟁)
+    @Test
+    void receive_differentPaymentsSameCustomerConcurrently_shareOneCase() throws Exception {
+        String customer = customer();
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Callable<Long> first = () -> {
+                start.await();
+                return caseIntakeService.receive(
+                        new HeldPayment(System.nanoTime(), 1L, customer, 100_000L, "AUTH", null, Instant.now()));
+            };
+            Callable<Long> second = () -> {
+                start.await();
+                return caseIntakeService.receive(
+                        new HeldPayment(System.nanoTime() + 1, 1L, customer, 200_000L, "AUTH", null, Instant.now()));
+            };
+            Future<Long> firstCase = executor.submit(first);
+            Future<Long> secondCase = executor.submit(second);
+            start.countDown();
+
+            Long caseId = firstCase.get(30, TimeUnit.SECONDS);
+            assertThat(secondCase.get(30, TimeUnit.SECONDS)).isEqualTo(caseId);
+            assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId))
+                    .hasSize(2);
+        }
+    }
+
+    // 보고서 요청이 늦게 도착해 Case 증거 버전이 이미 앞섰으면 낡은 버전 보고서를 만들지 않는다
+    @Test
+    void report_staleRequest_isSkipped() {
+        SecurityCase securityCase =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        securityCase.increaseEvidenceVersion();
+        securityCaseRepository.save(securityCase);
+
+        reportGateway.request(securityCase.getId(), 1);
+        assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
+
+        reportGateway.request(securityCase.getId(), 2);
+        assertThat(reportGateway.findByCase(securityCase.getId()))
+                .singleElement()
+                .extracting(ReportGateway.ReportSnapshot::evidenceVersion)
+                .isEqualTo(2);
+    }
+
+    // 현재 증거 버전 보고서가 없으면(예: 커밋 뒤 보고서 요청이 실패했을 때) 다시 요청해 판정을 이어 갈 수 있다
+    // 이미 있으면 두 번 요청해도 보고서는 하나다
+    @Test
+    void requestReport_missingReport_createsCurrentVersionOnce() throws Exception {
+        SecurityCase securityCase =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
+
+        perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reports.length()").value(1))
+                .andExpect(jsonPath("$.reports[0].evidenceVersion").value(1))
+                // 연결 결제 정보를 찾지 못하면 성공 보고서를 만들지 않고 FAILED로 남긴다 (수동 판정 경로)
+                .andExpect(jsonPath("$.reports[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.reports[0].reportBody").isEmpty());
+        perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reports.length()").value(1));
+    }
+
+    // 판정 항목에 null이 있으면 500이 아니라 400으로 거부한다
+    @Test
+    void decide_withNullItem_returnsBadRequest() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        List<Map<String, Object>> items = new ArrayList<>();
+        items.add(null);
+
+        perform(decide(held.caseId(), 1, 1L, items)).andExpect(status().isBadRequest());
+    }
+
+    // 가맹점을 고르면 그 가맹점 Case만 목록에 나온다
+    @Test
+    void list_withMerchantId_returnsOnlyThatMerchant() throws Exception {
+        long merchantId = 1_000_000L + System.nanoTime() % 1_000_000L;
+        Held mine = createHeld(merchantId, customer(), 300_000L, 65);
+        createHeld(customer(), 300_000L, 65);
+
+        perform(get("/api/security-cases").param("merchantId", String.valueOf(merchantId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].caseId").value(mine.caseId()));
+    }
+
+    // HELD 결제 1건이면 Case가 생기고 보고서 v1이 나와 판정 대기가 된다
+    @Test
+    void heldPayment_createsCaseWithReportAndWaitsDecision() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+
+        assertThat(detail.securityCase().status()).isEqualTo("DECISION_PENDING");
+        assertThat(detail.securityCase().evidenceVersion()).isEqualTo(1);
+        assertThat(detail.payments()).singleElement().satisfies(payment -> {
+            assertThat(payment.paymentId()).isEqualTo(held.paymentId());
+            assertThat(payment.riskScore()).isEqualTo(65);
+            assertThat(payment.paymentStatus()).isEqualTo("HELD");
+            // 룰 이름 · 점수는 결제 정보 조회(P2 근거) 값이 그대로 나온다
+            assertThat(payment.ruleHits())
+                    .containsExactly(
+                            new CaseDetailResponse.RuleHitResponse("NEW_CARD", "첫 사용 카드", 30),
+                            new CaseDetailResponse.RuleHitResponse("HIGH_AMOUNT", "고액 (50만 원 이상)", 35));
+        });
+        assertThat(detail.reports()).singleElement().satisfies(report -> {
+            assertThat(report.status()).isEqualTo("SUCCEEDED");
+            assertThat(report.evidenceVersion()).isEqualTo(1);
+            assertThat(report.reportBody()).containsKeys("overview", "summary", "paymentAnalyses", "evidence");
+        });
+        assertThat(detail.history())
+                .extracting(CaseDetailResponse.HistoryResponse::eventType)
+                .containsExactly("CASE_CREATED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
+    }
+
+    // 같은 고객의 두 번째 HELD 결제는 같은 Case에 병합되고 증거 버전 · 보고서 버전이 오른다
+    @Test
+    void secondHeldPayment_sameCustomer_mergesIntoCase() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 500_000L, 72);
+
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+
+        assertThat(second.caseId()).isEqualTo(first.caseId());
+        assertThat(detail.securityCase().evidenceVersion()).isEqualTo(2);
+        assertThat(detail.payments()).hasSize(2);
+        assertThat(detail.reports())
+                .extracting(CaseDetailResponse.AiReportResponse::reportVersion)
+                .containsExactly(1, 2);
+        assertThat(detail.securityCase().status()).isEqualTo("DECISION_PENDING");
+    }
+
+    // 같은 결제가 두 번 와도 Case 연결은 한 번만 한다
+    @Test
+    void receive_samePaymentTwice_linksOnce() {
+        HeldPayment heldPayment =
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now());
+
+        Long firstCaseId = caseIntakeService.receive(heldPayment);
+        Long secondCaseId = caseIntakeService.receive(heldPayment);
+
+        assertThat(secondCaseId).isEqualTo(firstCaseId);
+        assertThat(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(firstCaseId))
+                .hasSize(1);
+    }
+
+    // 모든 결제를 판정하면 먼저 금융 처리 대기가 되고, 다시 확인으로 실제 완료가 확인되면 Case가 종료된다 (#212)
+    // 테스트 대역도 실제 P5와 같은 순서 — 판정 직후 PENDING, 완료되면 결제 상태가 CAPTURED · VOIDED로 바뀐다
+    @Test
+    void decideAllPayments_pendingThenRecheck_closesCaseWithCompletedPayments() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        List<CaseDetailResponse.CasePaymentResponse> payments = detail.payments();
+
+        perform(decide(
+                        first.caseId(),
+                        detail.securityCase().evidenceVersion(),
+                        latestReportId(detail),
+                        List.of(
+                                item(payments.get(0).casePaymentId(), "ACCEPT"),
+                                item(payments.get(1).casePaymentId(), "REJECT"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.securityCase.status").value("ACTION_PENDING"))
+                .andExpect(jsonPath("$.decisions.length()").value(2));
+
+        CaseDetailResponse waiting = caseQueryService.detail(first.caseId());
+        assertThat(waiting.handoffs())
+                .extracting(CaseDetailResponse.HandoffResponse::status)
+                .containsExactly("REQUESTED", "REQUESTED");
+        assertThat(waiting.payments())
+                .extracting(CaseDetailResponse.CasePaymentResponse::paymentStatus)
+                .containsExactly("HELD", "HELD");
+
+        recheckAll(first.caseId());
+
+        CaseDetailResponse closed = caseQueryService.detail(first.caseId());
+        assertThat(closed.securityCase().status()).isEqualTo("CLOSED");
+        assertThat(closed.payments())
+                .extracting(CaseDetailResponse.CasePaymentResponse::paymentStatus)
+                .containsExactly("CAPTURED", "VOIDED");
+        assertThat(closed.handoffs())
+                .extracting(CaseDetailResponse.HandoffResponse::status)
+                .containsExactly("ACCEPTED", "ACCEPTED");
+        assertThat(closed.handoffs())
+                .extracting(CaseDetailResponse.HandoffResponse::actionType)
+                .containsExactlyInAnyOrder("CAPTURE", "VOID");
+        assertThat(closed.securityCase().closedAt()).isNotNull();
+        assertThat(closed.history())
+                .extracting(CaseDetailResponse.HistoryResponse::eventType)
+                .contains(
+                        "DECISION_CONFIRMED",
+                        "HANDOFF_REQUESTED",
+                        "HANDOFF_RECHECKED",
+                        "HANDOFF_ACCEPTED",
+                        "CASE_CLOSED");
+    }
+
+    // 판정 직원은 요청 본문이 아니라 로그인 세션 사용자로 저장된다 — 본문의 staffId는 무시한다
+    @Test
+    void decide_savesSessionStaffAndIgnoresBodyStaffId() throws Exception {
+        loginAs(42L, "SECURITY_STAFF");
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isOk());
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions())
+                .extracting(CaseDetailResponse.DecisionResponse::staffId)
+                .containsExactly(42L);
+    }
+
+    // 이미 완료된 인계는 다시 확인할 수 없다(409), 로그인하지 않았으면 401이다
+    @Test
+    void recheckHandoff_completedOrWithoutLogin_isRefused() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isOk());
+        Long handoffId =
+                caseQueryService.detail(held.caseId()).handoffs().getFirst().handoffId();
+        recheckAll(held.caseId());
+
+        perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+                        .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_012"));
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+        perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", held.caseId(), handoffId)
+                        .with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+    }
+
+    // 로그인하지 않았으면 401이고 판정은 저장되지 않는다
+    @Test
+    void decide_withoutLogin_returnsUnauthorized() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
+    }
+
+    // 보안 직원이 아닌 역할(사장님 · 관리자)은 403이고 판정은 저장되지 않는다
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATOR", "ADMIN"})
+    void decide_byNonSecurityStaff_returnsForbidden(String role) throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().getFirst().casePaymentId();
+        loginAs(99L, role);
+
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+
+        assertThat(caseQueryService.detail(held.caseId()).decisions()).isEmpty();
+    }
+
+    // Case 목록 · 건수 · 상세 · 보고서 재요청도 로그인하지 않았으면 401이다 — 실제 결제 · FDS 근거를 내보내기 때문이다
+    @Test
+    void readApis_withoutLogin_returnUnauthorized() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        given(currentStaff.findCurrent()).willReturn(Optional.empty());
+
+        perform(get("/api/security-cases"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/counts"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/handoffs"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+        perform(post("/api/security-cases/{caseId}/reports", held.caseId()).with(csrf()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_001"));
+    }
+
+    // 보안 직원이 아닌 역할(사장님 · 관리자)은 Case 목록 · 건수 · 상세를 볼 수 없다 (403)
+    @ParameterizedTest
+    @ValueSource(strings = {"OPERATOR", "ADMIN"})
+    void readApis_byNonSecurityStaff_returnForbidden(String role) throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        loginAs(99L, role);
+
+        perform(get("/api/security-cases"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/counts"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(held.paymentId())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/handoffs"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+        perform(get("/api/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_002"));
+    }
+
+    // 일부만 판정하면 판정 대기로 남고, 같은 결제를 다시 판정하면 거부한다
+    @Test
+    void decidePartially_keepsWaitingAndRejectsSecondDecision() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        Long casePaymentId = detail.payments().get(0).casePaymentId();
+
+        perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.securityCase.status").value("DECISION_PENDING"));
+        perform(decide(first.caseId(), 2, latestReportId(detail), List.of(item(casePaymentId, "REJECT"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_007"));
+    }
+
+    // 직원이 본 증거 버전이 현재와 다르면 판정을 저장하지 않는다
+    @Test
+    void decide_withStaleEvidenceVersion_returnsConflict() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+
+        perform(decide(
+                        first.caseId(),
+                        1,
+                        latestReportId(detail),
+                        List.of(item(detail.payments().get(0).casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_003"));
+        assertThat(caseQueryService.detail(first.caseId()).decisions()).isEmpty();
+    }
+
+    // 최신이 아닌 보고서로는 판정할 수 없다
+    @Test
+    void decide_withOldReport_returnsConflict() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        Long oldReportId = detail.reports().get(0).reportId();
+
+        perform(decide(
+                        first.caseId(),
+                        2,
+                        oldReportId,
+                        List.of(item(detail.payments().get(0).casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_004"));
+    }
+
+    // 보고서가 성공했는데 보고서 없이(수동) 판정하면 거부한다
+    @Test
+    void decide_manualWhileReportSucceeded_returnsBadRequest() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+
+        perform(decide(
+                        held.caseId(),
+                        1,
+                        null,
+                        List.of(item(detail.payments().get(0).casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INV_005"));
+    }
+
+    // 종료된 Case에는 더 판정할 수 없다
+    @Test
+    void decide_onClosedCase_returnsConflict() throws Exception {
+        Held held = createHeld(customer(), 300_000L, 65);
+        CaseDetailResponse detail = caseQueryService.detail(held.caseId());
+        Long casePaymentId = detail.payments().get(0).casePaymentId();
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(jsonPath("$.securityCase.status").value("ACTION_PENDING"));
+        recheckAll(held.caseId());
+
+        perform(decide(held.caseId(), 1, latestReportId(detail), List.of(item(casePaymentId, "ACCEPT"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INV_002"));
+    }
+
+    // 없는 Case는 404와 코드로 응답한다
+    @Test
+    void detail_unknownCase_returnsNotFound() throws Exception {
+        perform(get("/api/security-cases/{caseId}", Long.MAX_VALUE))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("INV_001"));
+    }
+
+    // 상태별 건수 — 모든 상태가 키로 오고, 새 Case가 판정 대기 건수에 바로 더해진다 (#224)
+    // 다른 테스트와 DB를 같이 쓰므로 절대값이 아니라 전후 차이로 본다
+    @Test
+    void counts_includesEveryStatusAndNewDecisionPendingCase() throws Exception {
+        Map<String, Long> before = caseQueryService.counts().statusCounts();
+        createHeld(customer(), 300_000L, 65);
+
+        assertThat(before)
+                .containsOnlyKeys(
+                        "OPEN", "INVESTIGATING", "DECISION_PENDING", "ACTION_PENDING", "ACTION_FAILED", "CLOSED");
+        perform(get("/api/security-cases/counts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
+                .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
+    }
+
+    // 결제 ID → 연결된 Case (#309) — 연결된 결제만 결제 ID 순으로 오고, Case가 없는 결제는 빠진다
+    @Test
+    void paymentLinks_returnsOnlyLinkedPayments() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 200_000L, 60);
+        long unlinked = System.nanoTime();
+
+        perform(get("/api/security-cases/payment-links")
+                        .param("paymentIds", unlinked + "," + second.paymentId() + "," + first.paymentId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].paymentId").value(Math.min(first.paymentId(), second.paymentId())))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", first.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", second.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseStatus", first.paymentId())
+                        .value("DECISION_PENDING"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", String.valueOf(unlinked)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    // 결제 ID가 없거나 100개를 넘으면 400 INV_015 (#309)
+    @Test
+    void paymentLinks_withoutIdsOrTooMany_returnsBadRequest() throws Exception {
+        String tooMany =
+                LongStream.rangeClosed(1, 101).mapToObj(String::valueOf).collect(Collectors.joining(","));
+
+        perform(get("/api/security-cases/payment-links"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INV_015"));
+        perform(get("/api/security-cases/payment-links").param("paymentIds", tooMany))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INV_015"));
+    }
+
+    // 조치 내역 (#314) — 판정한 결제마다 한 줄. 판정 · 조치 · 금액 · 판정 직원이 오고, 다시 확인으로 완료되면 상태 · 완료 시각이 바뀐다
+    @Test
+    void handoffs_listsEachDecidedPaymentAndFollowsCompletion() throws Exception {
+        loginAs(42L, "SECURITY_STAFF");
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        Held second = createHeld(customer, 500_000L, 72);
+        CaseDetailResponse detail = caseQueryService.detail(first.caseId());
+        Map<Long, Long> casePaymentIds = new HashMap<>();
+        detail.payments().forEach(p -> casePaymentIds.put(p.paymentId(), p.casePaymentId()));
+
+        perform(decide(
+                        first.caseId(),
+                        detail.securityCase().evidenceVersion(),
+                        latestReportId(detail),
+                        List.of(
+                                item(casePaymentIds.get(first.paymentId()), "ACCEPT"),
+                                item(casePaymentIds.get(second.paymentId()), "REJECT"))))
+                .andExpect(status().isOk());
+
+        perform(get("/api/security-cases/handoffs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].caseId", first.paymentId())
+                        .value(first.caseId().intValue()))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].decision", first.paymentId())
+                        .value("ACCEPT"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].actionType", first.paymentId())
+                        .value("CAPTURE"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].amount", first.paymentId())
+                        .value(300_000))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].staffId", first.paymentId())
+                        .value(42))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].status", first.paymentId())
+                        .value("REQUESTED"))
+                .andExpect(jsonPath("$[?(@.paymentId == %d)].actionType", second.paymentId())
+                        .value("VOID"));
+
+        recheckAll(first.caseId());
+
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(h -> h.caseId().equals(first.caseId()))
+                .hasSize(2)
+                .allSatisfy(h -> {
+                    assertThat(h.status()).isEqualTo("ACCEPTED");
+                    assertThat(h.acceptedAt()).isNotNull();
+                });
+    }
+
+    // 결제 정보를 찾지 못한 결제(P5 · P2 어디에도 없음)의 조치도 빠지지 않고 금액만 null이다 (#314)
+    @Test
+    void handoffs_missingPaymentInfo_keepsRowWithNullAmount() {
+        Long paymentId = System.nanoTime();
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(paymentId, 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseDetailResponse detail = caseQueryService.detail(caseId);
+        caseDecisionService.decide(
+                caseId,
+                new DecisionSubmitRequest(
+                        detail.securityCase().evidenceVersion(),
+                        null,
+                        List.of(new DecisionSubmitRequest.Item(
+                                detail.payments().getFirst().casePaymentId(), Decision.REJECT, "결제 정보 없음"))));
+
+        assertThat(caseQueryService.handoffs())
+                .filteredOn(h -> h.paymentId().equals(paymentId))
+                .singleElement()
+                .satisfies(h -> {
+                    assertThat(h.amount()).isNull();
+                    assertThat(h.status()).isEqualTo("FAILED");
+                    assertThat(h.lastErrorCode()).isEqualTo("PAYMENT_NOT_FOUND");
+                });
+    }
+
+    // 목록에 방금 만든 Case가 결제 수 · 금액 · 최고 점수와 함께 나온다
+    @Test
+    void list_includesCaseSummary() throws Exception {
+        String customer = customer();
+        Held first = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+
+        perform(get("/api/security-cases"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.caseId == %d)].paymentCount", first.caseId())
+                        .value(2))
+                .andExpect(jsonPath("$[?(@.caseId == %d)].totalAmount", first.caseId())
+                        .value(800_000))
+                .andExpect(jsonPath("$[?(@.caseId == %d)].maxRiskScore", first.caseId())
+                        .value(72));
+    }
+
+    // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다
+    @Test
+    void list_missingPaymentInfo_returnsNullTotalAmount() {
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(System.nanoTime(), 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(caseId))
+                .singleElement()
+                .satisfies(summary -> {
+                    assertThat(summary.paymentCount()).isEqualTo(1);
+                    assertThat(summary.totalAmount()).isNull();
+                    assertThat(summary.maxRiskScore()).isNull();
+                });
+    }
+
+    private Held createHeld(String customerRef, long amount, int riskScore) {
+        return createHeld(1L, customerRef, amount, riskScore);
+    }
+
+    // P5 HELD 이벤트 대신 테스트 결제를 만들어 Case 접수로 넘긴다 — 리스너처럼 트랜잭션 밖에서 불러 커밋 뒤 보고서 요청이 돈다
+    private Held createHeld(long merchantId, String customerRef, long amount, int riskScore) {
+        Instant now = Instant.now();
+        Long paymentId = payments.registerHeld(amount, riskScore, TestPaymentInfoStore.DEFAULT_RULES, now)
+                .paymentId();
+        Long caseId = caseIntakeService.receive(
+                new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        return new Held(paymentId, caseId);
+    }
+
+    record Held(Long paymentId, Long caseId) {}
+
+    // 금융 처리 대기 중인 인계를 모두 다시 확인한다 — 테스트 대역은 다시 확인에서 완료된다 (#212)
+    private void recheckAll(Long caseId) throws Exception {
+        for (CaseDetailResponse.HandoffResponse handoff :
+                caseQueryService.detail(caseId).handoffs()) {
+            perform(post("/api/security-cases/{caseId}/handoffs/{handoffId}/recheck", caseId, handoff.handoffId())
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    private MockHttpServletRequestBuilder decide(
+            Long caseId, int evidenceVersion, Long reportId, List<Map<String, Object>> items) {
+        Map<String, Object> body = new HashMap<>();
+        // 예전 화면이 보내던 값 — 서버는 무시하고 로그인 세션 사용자로 저장해야 한다
+        body.put("staffId", 7);
+        body.put("evidenceVersion", evidenceVersion);
+        body.put("reportId", reportId);
+        body.put("decisions", items);
+        return post("/api/security-cases/{caseId}/decisions", caseId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(body));
+    }
+
+    private void loginAs(Long userId, String role) {
+        given(currentStaff.findCurrent())
+                .willReturn(Optional.of(
+                        StaffSummary.builder().userId(userId).role(role).build()));
+    }
+
+    private static Map<String, Object> item(Long casePaymentId, String decision) {
+        return Map.of("casePaymentId", casePaymentId, "decision", decision, "reason", "판정 사유");
+    }
+
+    private static Long latestReportId(CaseDetailResponse detail) {
+        return detail.reports().getLast().reportId();
+    }
+
+    private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+        return mvc.perform(SessionUserTestSupport.asCurrentStaff(request, currentStaff));
+    }
+
+    private static String customer() {
+        return "customer-" + UUID.randomUUID();
+    }
+}

@@ -1,0 +1,47 @@
+name: notion-sync
+# GitHub → Notion 단방향 미러. 설명: docs/ci/07-notion-sync.md
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned, unassigned]
+  # pull_request_target: 기본 브랜치(dev)의 스크립트로 실행한다. PR 브랜치에서 고친 스크립트가 NOTION_TOKEN을 쓰지 못하게 하려는 것
+  # 이 워크플로는 PR 코드를 체크아웃하거나 실행하지 않고, 이벤트 payload(번호 · 제목 · 상태)만 읽는다
+  pull_request_target:
+    types: [opened, edited, closed, reopened, ready_for_review, converted_to_draft, labeled, unlabeled, assigned, unassigned]
+  push:
+    branches: [dev]
+    paths: ['docs/decisions/**', '.github/notion-sync.json', '.github/scripts/notion_sync.py']
+  schedule:
+    - cron: '0 18 * * *'   # 매일 03:00 KST — 놓친 이벤트 보정
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Notion에 쓰지 않고 바뀔 내용만 출력'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: notion-sync   # 같은 행을 동시에 쓰지 않도록 한 줄로 실행
+  cancel-in-progress: false
+
+jobs:
+  notion-sync:
+    name: notion-sync   # 필수 검사 아님
+    # 수동 실행은 dev에서만 — 다른 브랜치의 스크립트 · ADR 파일로 비밀값을 쓰거나 dev의 ADR 행을 보관하지 않게 한다
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4   # pull_request_target에서도 기본 브랜치를 받는다 (PR head를 받지 않음)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python .github/scripts/notion_sync.py
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}

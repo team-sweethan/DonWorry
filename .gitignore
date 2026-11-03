@@ -22,3 +22,4 @@ ai-server/__pycache__/
 **/__pycache__/
 ai-server/.pytest_cache/
 ai-server/.ruff_cache/
+*.egg-info/

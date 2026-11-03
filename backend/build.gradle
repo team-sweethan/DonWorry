@@ -1,7 +1,8 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.16'
+    id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '8.10.2'
 }
 
 group = 'com.donworry'
@@ -11,6 +12,13 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
+// 코드 모양 자동 정리 — check가 spotlessCheck를 포함한다, 고치기: ./gradlew spotlessApply (ADR-0013)
+spotless {
+    java {
+        palantirJavaFormat('2.102.0')
+    }
+}
+
 configurations {
     compileOnly { extendsFrom annotationProcessor }
 }
@@ -18,24 +26,30 @@ configurations {
 repositories { mavenCentral() }
 
 dependencyManagement {
-    imports { mavenBom 'org.springframework.modulith:spring-modulith-bom:1.4.13' }
+    imports { mavenBom 'org.springframework.modulith:spring-modulith-bom:2.1.1' }
 }
 
 dependencies {
     // 웹·검증·보안
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    // 브라우저와 같은 UTS #46 국제화 도메인 처리 (ADR-0049)
+    implementation 'com.ibm.icu:icu4j:79.1'
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
-    // DB — 스키마는 Flyway만 바꾼다
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // DB — 스키마는 Flyway migration으로만 바꾼다 (ddl-auto: validate)
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'   // Boot 4: Flyway 자동 설정이 별도 모듈
     implementation 'org.flywaydb:flyway-mysql'          // MariaDB 지원
     runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
 
     // Modulith — 모듈 경계 + 이벤트 저장(JDBC)
     implementation 'org.springframework.modulith:spring-modulith-starter-core'
     implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
+    // #275: publication 수신자 식별·조회 경계 (2.1.1 BOM)
+    implementation 'org.springframework.modulith:spring-modulith-events-core'
 
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -45,9 +59,105 @@ dependencies {
 
     // 테스트
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
     testImplementation 'org.springframework.modulith:spring-modulith-starter-test'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.1'   // 모듈 안 계층 규칙 검사
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-mariadb'      // 실제 MariaDB로 Flyway 검사
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-tasks.named('test') { useJUnitPlatform() }
+// 한글 주석·SQL이 Windows 기본 인코딩(MS949)으로 깨지지 않게 한다
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(Test).configureEach {
+    defaultCharacterEncoding = 'UTF-8'
+    // 예약 작업이 테스트 데이터와 동시에 돌지 않게 한다. 테스트는 작업을 직접 호출한다
+    systemProperty 'donworry.scheduling.enabled', 'false'
+}
+
+// 개인 PC 설정(DB 비밀번호 등)이 배포 jar에 들어가지 않게 한다. bootRun은 jar를 쓰지 않아 영향 없음
+tasks.withType(Jar).configureEach { exclude '**/application-local.yml' }
+
+// check는 DB 없이 돈다. Docker가 필요한 테스트는 mariaDbTest로 분리
+tasks.named('test') {
+    useJUnitPlatform { excludeTags 'mariadb' }
+}
+
+tasks.register('mariaDbTest', Test) {
+    group = 'verification'
+    description = 'MariaDB 컨테이너로 Flyway 적용과 JPA validate를 검사한다 (Docker 필요).'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'mariadb' }
+    systemProperty 'user.timezone', 'UTC'
+    dependsOn 'settlementSeoulMariaDbTest'
+}
+
+// #424: the existing CI mariaDbTest entry point also verifies P6 in a separate Korean-time JVM.
+tasks.register('settlementSeoulMariaDbTest', Test) {
+    group = 'verification'
+    description = 'P6 JDBC fixtures and JPA persistence under Asia/Seoul (Docker required).'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'mariadb' }
+    systemProperty 'user.timezone', 'Asia/Seoul'
+    filter {
+        includeTestsMatching '*CashFlowForecastMariaDbTests'
+        includeTestsMatching '*SettlementReportMariaDbTests'
+        includeTestsMatching '*OrderFulfillmentItemMariaDbTests'
+    }
+}
+
+// 버전을 사람이 정하면 브랜치끼리 겹친다. 생성 시각으로 찍고 설명만 받는다
+//   ./gradlew newMigration -Pdesc=add_ai_report_table
+tasks.register('newMigration') {
+    group = 'donworry'
+    description = '타임스탬프 규칙의 빈 Flyway migration 파일을 만든다. 예: -Pdesc=add_ai_report_table'
+
+    // configuration cache 대응: 설정 시점 값만 잡고 doLast에서 project를 참조하지 않는다
+    def migrationDir = layout.projectDirectory.dir('src/main/resources/db/migration').asFile
+    def projectDir = layout.projectDirectory.asFile
+    def descProvider = providers.gradleProperty('desc')
+
+    doLast {
+        def desc = descProvider.getOrNull()
+        // Windows 콘솔에서 한글이 깨질 수 있어 안내 문구는 ASCII로 쓴다
+        if (!desc?.trim()) {
+            throw new GradleException(
+                    'usage: gradlew newMigration -Pdesc=<snake_case_description>\n' +
+                    '  e.g. gradlew newMigration -Pdesc=add_ai_report_table'
+            )
+        }
+        if (!(desc ==~ /[a-z0-9]+(_[a-z0-9]+)*/)) {
+            throw new GradleException(
+                    "-Pdesc must be lower snake_case, but was '${desc}'\n" +
+                    '  e.g. add_ai_report_table, add_case_payment_unique'
+            )
+        }
+
+        // 팀이 파일 이름을 바로 읽을 수 있게 한국 시간으로 찍는다. PC·CI 시간대와 상관없이 Asia/Seoul 고정
+        def formatter = java.time.format.DateTimeFormatter.ofPattern('yyyyMMdd_HHmmss')
+        def existing = (migrationDir.listFiles() ?: new File[0])*.name
+        def stamp = java.time.LocalDateTime.now(java.time.ZoneId.of('Asia/Seoul'))
+        // 같은 초의 버전이 있으면 설명이 달라도 충돌하므로 버전 접두어로 비교한다
+        while (existing.any { it.startsWith('V' + stamp.format(formatter) + '__') }) {
+            stamp = stamp.plusSeconds(1)
+        }
+
+        def target = new File(migrationDir, "V${stamp.format(formatter)}__${desc}.sql")
+        migrationDir.mkdirs()
+        target.setText("""\
+-- ${desc}
+-- 생성: ${stamp.format(java.time.format.DateTimeFormatter.ofPattern('yyyy-MM-dd HH:mm:ss'))} KST
+--
+-- 규칙
+-- * dev에 병합된 뒤에는 이 파일을 고치지 않는다. 바꿀 것이 있으면 새 migration을 만든다
+-- * 다른 담당 테이블로 물리 FK를 걸지 않는다 (AGENTS.md 4절)
+-- * 한 migration은 하나의 배포 가능한 스키마 전환만 담는다
+
+""", 'UTF-8')
+
+        println "created: ${projectDir.toPath().relativize(target.toPath()).toString().replace('\\', '/')}"
+    }
+}

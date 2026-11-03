@@ -1,0 +1,1470 @@
+[
+  {
+    "url": "https://ẞ.de",
+    "valid": true
+  },
+  {
+    "url": "https://ß.de",
+    "valid": true
+  },
+  {
+    "url": "https://xn--zca.de",
+    "valid": true
+  },
+  {
+    "url": "https://ẞ.de:8443/Products?item=ABC",
+    "valid": true
+  },
+  {
+    "url": "https://faß.de",
+    "valid": true
+  },
+  {
+    "url": "https://ς.gr",
+    "valid": true
+  },
+  {
+    "url": "https://σ.gr",
+    "valid": true
+  },
+  {
+    "url": "https://☕.example",
+    "valid": true
+  },
+  {
+    "url": "https://😀.example",
+    "valid": true
+  },
+  {
+    "url": "https://쇼핑몰.한국",
+    "valid": true
+  },
+  {
+    "url": "https://ショッピング.日本/商品",
+    "valid": true
+  },
+  {
+    "url": "https://例子.中国",
+    "valid": true
+  },
+  {
+    "url": "https://é.example",
+    "valid": true
+  },
+  {
+    "url": "https://é.example",
+    "valid": true
+  },
+  {
+    "url": "https://ＦＯＯ。example",
+    "valid": true
+  },
+  {
+    "url": "https://مثال.إختبار",
+    "valid": true
+  },
+  {
+    "url": "https://example.com",
+    "valid": true
+  },
+  {
+    "url": "http://localhost:8080",
+    "valid": true
+  },
+  {
+    "url": "https://my-shop.example.com.",
+    "valid": true
+  },
+  {
+    "url": "https://ab--cd.example",
+    "valid": true
+  },
+  {
+    "url": "https://[::1]:8443/Products",
+    "valid": true
+  },
+  {
+    "url": "https://shop.example.com?contact=a@b.example",
+    "valid": true
+  },
+  {
+    "url": "https://exa_mple.com",
+    "valid": false
+  },
+  {
+    "url": "https://-shop.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop-.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop..example",
+    "valid": false
+  },
+  {
+    "url": "https://user:pass@ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://@ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://exa%5fmple.com",
+    "valid": false
+  },
+  {
+    "url": "https://ex%61mple.com",
+    "valid": false
+  },
+  {
+    "url": "https://ẞ.de:abc",
+    "valid": false
+  },
+  {
+    "url": "https:///ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "ftp://ẞ.de",
+    "valid": false
+  },
+  {
+    "url": "https://a‍b.example",
+    "valid": false
+  },
+  {
+    "url": "https://a‌b.example",
+    "valid": false
+  },
+  {
+    "url": "https://́a.example",
+    "valid": false
+  },
+  {
+    "url": "https://aא.example",
+    "valid": false
+  },
+  {
+    "url": "https://xn--.example",
+    "valid": false
+  },
+  {
+    "url": "https://xn--0.example",
+    "valid": false
+  },
+  {
+    "url": "https://�.example",
+    "valid": false
+  },
+  {
+    "url": "https://shop.example/a b",
+    "valid": false
+  },
+  {
+    "url": "https://shop.example\\path",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:0",
+    "valid": true
+  },
+  {
+    "url": "https://example.com:65535",
+    "valid": true
+  },
+  {
+    "url": "https://example.com:",
+    "valid": true
+  },
+  {
+    "url": "https://ẞ.de:65535",
+    "valid": true
+  },
+  {
+    "url": "https://[::1]:65535",
+    "valid": true
+  },
+  {
+    "url": "https://example.com:65536",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:99999",
+    "valid": false
+  },
+  {
+    "url": "https://ẞ.de:99999",
+    "valid": false
+  },
+  {
+    "url": "https://[::1]:99999",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:9999999999999999999999",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:-1",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:+80",
+    "valid": false
+  },
+  {
+    "url": "https://example.com:1.5",
+    "valid": false
+  },
+  {
+    "url": "https://127.0.0.1",
+    "valid": true
+  },
+  {
+    "url": "https://0.0.0.0",
+    "valid": true
+  },
+  {
+    "url": "https://255.255.255.255:65535",
+    "valid": true
+  },
+  {
+    "url": "https://127.1",
+    "valid": false
+  },
+  {
+    "url": "https://127.0.0.1.",
+    "valid": false
+  },
+  {
+    "url": "https://127.000.000.001",
+    "valid": false
+  },
+  {
+    "url": "https://0177.0.0.1",
+    "valid": false
+  },
+  {
+    "url": "https://2130706433",
+    "valid": false
+  },
+  {
+    "url": "https://0x7f000001",
+    "valid": false
+  },
+  {
+    "url": "https://0x7f.0.0.1",
+    "valid": false
+  },
+  {
+    "url": "https://256.1.1.1",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a{b}",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?q=a|b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a`b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a%ZZ",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a%",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a%7Bb%7D?q=a%7Cb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/path?x=1&y=2#anchor",
+    "valid": true
+  },
+  {
+    "url": "https://[fe80::1%25eth0]/shop",
+    "valid": false
+  },
+  {
+    "url": "https://[fe80::1%eth0]/shop",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/products/[123]",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/products/]123",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/products/%5B123%5D",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?filter[status]=OPEN",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#[section]",
+    "valid": true
+  },
+  {
+    "url": "https://[::1]/products/[123]",
+    "valid": false
+  },
+  {
+    "url": "https://쇼핑몰.한국/products/%5B123%5D",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a!b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a!b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a!b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a\"b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a\"b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a\"b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a#b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a#b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a#b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a$b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a$b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a$b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a%b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a%b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a%b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a&b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a&b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a&b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a'b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a'b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a'b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a(b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a(b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a(b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a)b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a)b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a)b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a*b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a*b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a*b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a+b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a+b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a+b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a,b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a,b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a,b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a-b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a-b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a-b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a.b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a.b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a.b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a/b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a/b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a/b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a0b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a0b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a0b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a1b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a1b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a1b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a2b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a2b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a2b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a3b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a3b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a3b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a4b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a4b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a4b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a5b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a5b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a5b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a6b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a6b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a6b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a7b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a7b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a7b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a8b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a8b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a8b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a9b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a9b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a9b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a:b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a:b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a:b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a;b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a;b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a;b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a<b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a<b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a<b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a=b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a=b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a=b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a>b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a>b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a>b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a?b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a?b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a?b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a@b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a@b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a@b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aAb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aAb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aAb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aBb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aBb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aBb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aCb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aCb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aCb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aDb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aDb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aDb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aEb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aEb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aEb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aFb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aFb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aFb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aGb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aGb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aGb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aHb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aHb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aHb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aIb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aIb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aIb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aJb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aJb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aJb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aKb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aKb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aKb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aLb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aLb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aLb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aMb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aMb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aMb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aNb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aNb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aNb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aOb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aOb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aOb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aPb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aPb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aPb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aQb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aQb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aQb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aRb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aRb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aRb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aSb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aSb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aSb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aTb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aTb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aTb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aUb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aUb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aUb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aVb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aVb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aVb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aWb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aWb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aWb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aXb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aXb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aXb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aYb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aYb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aYb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aZb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aZb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aZb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a[b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a[b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a[b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a\\b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a\\b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a\\b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a]b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a]b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a]b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a^b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a^b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a^b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a_b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a_b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a_b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a`b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a`b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a`b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/aab",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aab",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aab",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/abb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?abb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#abb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/acb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?acb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#acb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/adb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?adb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#adb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aeb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aeb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aeb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/afb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?afb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#afb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/agb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?agb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#agb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/ahb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?ahb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#ahb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aib",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aib",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aib",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/ajb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?ajb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#ajb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/akb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?akb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#akb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/alb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?alb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#alb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/amb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?amb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#amb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/anb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?anb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#anb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aob",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aob",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aob",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/apb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?apb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#apb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aqb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aqb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aqb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/arb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?arb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#arb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/asb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?asb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#asb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/atb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?atb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#atb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/aub",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?aub",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#aub",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/avb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?avb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#avb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/awb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?awb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#awb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/axb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?axb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#axb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/ayb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?ayb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#ayb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/azb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?azb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#azb",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/a{b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a{b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a{b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a|b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a|b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a|b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a}b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/?a}b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/#a}b",
+    "valid": false
+  },
+  {
+    "url": "https://example.com/a~b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/?a~b",
+    "valid": true
+  },
+  {
+    "url": "https://example.com/#a~b",
+    "valid": true
+  }
+]

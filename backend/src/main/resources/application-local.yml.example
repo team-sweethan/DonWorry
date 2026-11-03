@@ -1,7 +1,33 @@
-# 내 PC가 기본값(3307 / donworry / donworry)과 다를 때만 채운다
+# 내 PC의 DB가 기본값(3307 / donworry / donworry)과 다르거나 개발용 키·API를 설정할 때 쓴다
 # 이 파일을 복사해 application-local.yml 로 이름을 바꾼다 (git 제외)
+# CakeShop HMAC 키는 YAML에 넣지 않는다. 실행 프로세스 환경변수
+# DONWORRY_MERCHANT_HMAC_CAKESHOP으로 주입한다 (docs/identity/246-cakeshop-provisioning.md).
+# 개발용 암호화 마스터 키는 아래 로컬 설정에 보관할 수 있다. 실제 키는 이 예제에 넣지 않는다.
+# 환경변수가 우선이며 prod에서는 local-master-keys를 읽지 않는다.
 spring:
   datasource:
     url: jdbc:mariadb://localhost:3306/donworry
     username: donworry
     password: 내비밀번호
+
+# 한 번 생성한 32바이트 Base64 값을 넣고 같은 개발 DB를 쓰는 동안 유지한다.
+# 생성: openssl rand -base64 32 (출력값은 Git·로그·메신저에 남기지 않는다)
+# donworry:
+#   integration:
+#     local-master-keys:
+#       V1: "개발용_마스터_키_Base64"
+
+# 로컬 시연용 (docs/demo/local-demo.md 2 · 3절) — 필요할 때 주석을 풀어 쓴다
+# payment:
+#   http:
+#     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)
+# 결제 상태 웹훅을 http · 127.0.0.1(로컬 CakeShop)로도 보낸다. 운영은 false(https · 공인 주소만, #402)
+# 위 donworry: 블록과 겹치지 않게 한 줄(점 표기)로 둔다
+# donworry.payment.webhook.allow-local-targets: true
+# fds:
+#   demo-error:
+#     enabled: true            # scripts/demo/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.
+# ai:
+#   server:
+#     enabled: true            # 고정 보고서 대신 ai-server에 조사를 맡김 (기본 꺼짐)
+#     api-key: "내AI서버키"       # ai-server/.env의 AI_SERVER_INTERNAL_API_KEY와 같은 값

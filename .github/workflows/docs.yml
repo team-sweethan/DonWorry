@@ -1,0 +1,18 @@
+name: docs
+on:
+  push:
+    branches: [main, dev]
+    paths: ['**/*.md', '.github/workflows/docs.yml', '.github/scripts/check_md_links.py']
+  pull_request:
+    paths: ['**/*.md', '.github/workflows/docs.yml', '.github/scripts/check_md_links.py']
+
+jobs:
+  docs:
+    name: docs   # 문서만 검사 — 필수 검사 아님
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python .github/scripts/check_md_links.py   # 저장소 안 상대 링크 검사

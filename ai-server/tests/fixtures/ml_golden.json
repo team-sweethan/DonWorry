@@ -1,0 +1,3525 @@
+{
+ "source": "fds-ml/features.py + models/random_forest_baseline.joblib (n_jobs=1)",
+ "threshold": 0.30000000000000004,
+ "featureColumns": [
+  "amount",
+  "merchantId",
+  "hourOfDay",
+  "customerPastTxCount",
+  "customerAvgAmount",
+  "amountRatio",
+  "txCount5m",
+  "txCount30m",
+  "txCount24h",
+  "minutesSinceLastTx",
+  "deviceSeenBefore",
+  "cardSeenBefore",
+  "cardUsedByOtherCustomer"
+ ],
+ "cases": [
+  {
+   "name": "new_customer",
+   "target": {
+    "paymentId": 5641,
+    "merchantId": 1001,
+    "customerRef": "100000000876",
+    "amount": 109100,
+    "paymentRequestedAt": "2026-05-15T14:21:39Z",
+    "deviceId": "SIM-DEVICE-34F1784C8D2C503BBC630023B681A8A1",
+    "cardToken": "SIM-CARD-C234184154BD56A9B281CB4170AE0E74"
+   },
+   "customerHistory": [],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 109100.0,
+    "merchantId": "1001",
+    "hourOfDay": 23,
+    "customerPastTxCount": 0,
+    "customerAvgAmount": 0.0,
+    "amountRatio": 0.0,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": -1.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.0014123483487503627
+  },
+  {
+   "name": "new_customer",
+   "target": {
+    "paymentId": 280,
+    "merchantId": 1003,
+    "customerRef": "100000000930",
+    "amount": 144000,
+    "paymentRequestedAt": "2026-04-02T22:55:45Z",
+    "deviceId": "SIM-DEVICE-2E1B47A966C95C5CBC0D3CEABD3F4DAB",
+    "cardToken": "SIM-CARD-82DBB9ED3417517A81BE49B437953D36"
+   },
+   "customerHistory": [],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 144000.0,
+    "merchantId": "1003",
+    "hourOfDay": 7,
+    "customerPastTxCount": 0,
+    "customerAvgAmount": 0.0,
+    "amountRatio": 0.0,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": -1.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.2524105932580822
+  },
+  {
+   "name": "new_customer",
+   "target": {
+    "paymentId": 61,
+    "merchantId": 1001,
+    "customerRef": "100000001289",
+    "amount": 48100,
+    "paymentRequestedAt": "2026-04-01T04:46:39Z",
+    "deviceId": "SIM-DEVICE-2F908B7C499852FE87D745D9CA091087",
+    "cardToken": "SIM-CARD-0CAF5ADFBF775CB1A061B0596A9ED3B3"
+   },
+   "customerHistory": [],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 48100.0,
+    "merchantId": "1001",
+    "hourOfDay": 13,
+    "customerPastTxCount": 0,
+    "customerAvgAmount": 0.0,
+    "amountRatio": 0.0,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": -1.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.029266451863981885
+  },
+  {
+   "name": "new_customer",
+   "target": {
+    "paymentId": 844,
+    "merchantId": 1002,
+    "customerRef": "100000001233",
+    "amount": 65300,
+    "paymentRequestedAt": "2026-04-07T09:58:50Z",
+    "deviceId": "SIM-DEVICE-DE1F53902D7F5EA1B0BD56BD2DAFC7ED",
+    "cardToken": "SIM-CARD-3D26329D50115961B8483DA9C62163C4"
+   },
+   "customerHistory": [],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 65300.0,
+    "merchantId": "1002",
+    "hourOfDay": 18,
+    "customerPastTxCount": 0,
+    "customerAvgAmount": 0.0,
+    "amountRatio": 0.0,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": -1.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.0006704567492423579
+  },
+  {
+   "name": "fraud_ACCOUNT_TAKEOVER",
+   "target": {
+    "paymentId": 11859,
+    "merchantId": 1001,
+    "customerRef": "100000000950",
+    "amount": 375800,
+    "paymentRequestedAt": "2026-07-03T01:44:35Z",
+    "deviceId": "SIM-DEVICE-110AE853326E50709E615D02454075CC",
+    "cardToken": "SIM-CARD-1EE46E649E71582889B39CD9DF35BAFF"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 639,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 129600,
+     "paymentRequestedAt": "2026-04-05T23:08:48Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 895,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 138300,
+     "paymentRequestedAt": "2026-04-08T00:12:49Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 1472,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 120600,
+     "paymentRequestedAt": "2026-04-12T22:54:24Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 1840,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 131400,
+     "paymentRequestedAt": "2026-04-16T00:49:17Z",
+     "deviceId": "SIM-DEVICE-110AE853326E50709E615D02454075CC",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 1850,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 174700,
+     "paymentRequestedAt": "2026-04-16T01:57:58Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 2101,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 97700,
+     "paymentRequestedAt": "2026-04-18T00:56:24Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 2102,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 124000,
+     "paymentRequestedAt": "2026-04-18T01:03:53Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 5765,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 102200,
+     "paymentRequestedAt": "2026-05-16T20:53:33Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 7222,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 8300,
+     "paymentRequestedAt": "2026-05-27T23:04:26Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 8064,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 120700,
+     "paymentRequestedAt": "2026-06-04T00:32:49Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 8981,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 246200,
+     "paymentRequestedAt": "2026-06-11T01:05:20Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9244,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 100700,
+     "paymentRequestedAt": "2026-06-12T23:53:33Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9358,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 284000,
+     "paymentRequestedAt": "2026-06-13T22:15:38Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9621,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 168600,
+     "paymentRequestedAt": "2026-06-16T00:21:59Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9625,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 99400,
+     "paymentRequestedAt": "2026-06-16T00:44:30Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9633,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 172600,
+     "paymentRequestedAt": "2026-06-16T01:47:58Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 9893,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 184800,
+     "paymentRequestedAt": "2026-06-18T02:58:19Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-1EE46E649E71582889B39CD9DF35BAFF"
+    },
+    {
+     "paymentId": 10661,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 133400,
+     "paymentRequestedAt": "2026-06-23T23:19:08Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 10786,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 94500,
+     "paymentRequestedAt": "2026-06-25T00:29:36Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 11030,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 112200,
+     "paymentRequestedAt": "2026-06-26T22:16:03Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 11031,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 98200,
+     "paymentRequestedAt": "2026-06-26T22:18:34Z",
+     "deviceId": "SIM-DEVICE-B40C767A09DE51D0941D3FF6DEA26FF0",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 11712,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 225800,
+     "paymentRequestedAt": "2026-07-02T00:56:44Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 11718,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 127700,
+     "paymentRequestedAt": "2026-07-02T01:37:35Z",
+     "deviceId": "SIM-DEVICE-888504038CC35646A4AA04288B1A9895",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    },
+    {
+     "paymentId": 11858,
+     "merchantId": 1001,
+     "customerRef": "100000000950",
+     "amount": 450300,
+     "paymentRequestedAt": "2026-07-03T01:38:35Z",
+     "deviceId": "SIM-DEVICE-110AE853326E50709E615D02454075CC",
+     "cardToken": "SIM-CARD-B6E5A237E0535588BB0371C791353C2F"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 375800.0,
+    "merchantId": "1001",
+    "hourOfDay": 10,
+    "customerPastTxCount": 24,
+    "customerAvgAmount": 151912.5,
+    "amountRatio": 2.473792479223237,
+    "txCount5m": 0,
+    "txCount30m": 1,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 6.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.7660943395684776
+  },
+  {
+   "name": "fraud_ACCOUNT_TAKEOVER",
+   "target": {
+    "paymentId": 11221,
+    "merchantId": 1003,
+    "customerRef": "100000000572",
+    "amount": 119600,
+    "paymentRequestedAt": "2026-06-28T05:26:30Z",
+    "deviceId": "SIM-DEVICE-B093A4D229B05B08BB9CE0E73C2799C6",
+    "cardToken": "SIM-CARD-FB0641DE8FD354E992ED778BEF61FDFD"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 1271,
+     "merchantId": 1003,
+     "customerRef": "100000000572",
+     "amount": 61000,
+     "paymentRequestedAt": "2026-04-11T04:39:29Z",
+     "deviceId": "SIM-DEVICE-ABEC5D43B97F5B1490879ECD1ECAC1B9",
+     "cardToken": "SIM-CARD-FB0641DE8FD354E992ED778BEF61FDFD"
+    },
+    {
+     "paymentId": 3036,
+     "merchantId": 1003,
+     "customerRef": "100000000572",
+     "amount": 56100,
+     "paymentRequestedAt": "2026-04-25T05:03:01Z",
+     "deviceId": "SIM-DEVICE-ABEC5D43B97F5B1490879ECD1ECAC1B9",
+     "cardToken": "SIM-CARD-FB0641DE8FD354E992ED778BEF61FDFD"
+    },
+    {
+     "paymentId": 7113,
+     "merchantId": 1003,
+     "customerRef": "100000000572",
+     "amount": 48200,
+     "paymentRequestedAt": "2026-05-27T01:40:58Z",
+     "deviceId": "SIM-DEVICE-ABEC5D43B97F5B1490879ECD1ECAC1B9",
+     "cardToken": "SIM-CARD-FB0641DE8FD354E992ED778BEF61FDFD"
+    },
+    {
+     "paymentId": 10947,
+     "merchantId": 1003,
+     "customerRef": "100000000572",
+     "amount": 32600,
+     "paymentRequestedAt": "2026-06-26T05:13:30Z",
+     "deviceId": "SIM-DEVICE-ABEC5D43B97F5B1490879ECD1ECAC1B9",
+     "cardToken": "SIM-CARD-FB0641DE8FD354E992ED778BEF61FDFD"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 119600.0,
+    "merchantId": "1003",
+    "hourOfDay": 14,
+    "customerPastTxCount": 4,
+    "customerAvgAmount": 49475.0,
+    "amountRatio": 2.4173825164224354,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 2893.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.8869773844329575
+  },
+  {
+   "name": "fraud_BEHAVIORAL_ANOMALY",
+   "target": {
+    "paymentId": 8406,
+    "merchantId": 1003,
+    "customerRef": "100000000149",
+    "amount": 243300,
+    "paymentRequestedAt": "2026-06-06T07:09:34Z",
+    "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+    "cardToken": "SIM-CARD-3B4A4496A8695C2F8D31713E83B98C80"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 199,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 111100,
+     "paymentRequestedAt": "2026-04-02T04:53:29Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-3B4A4496A8695C2F8D31713E83B98C80"
+    },
+    {
+     "paymentId": 3386,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 118500,
+     "paymentRequestedAt": "2026-04-27T23:57:06Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-65996DD04A7B5623AA8EB850F93F9555"
+    },
+    {
+     "paymentId": 3390,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 71600,
+     "paymentRequestedAt": "2026-04-28T00:25:26Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-65996DD04A7B5623AA8EB850F93F9555"
+    },
+    {
+     "paymentId": 4867,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 128600,
+     "paymentRequestedAt": "2026-05-09T04:27:38Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-65996DD04A7B5623AA8EB850F93F9555"
+    },
+    {
+     "paymentId": 5218,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 266900,
+     "paymentRequestedAt": "2026-05-12T06:59:38Z",
+     "deviceId": "SIM-DEVICE-90C39991C4BD52549BE6260E21F97B02",
+     "cardToken": "SIM-CARD-65996DD04A7B5623AA8EB850F93F9555"
+    },
+    {
+     "paymentId": 7736,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 102700,
+     "paymentRequestedAt": "2026-06-01T03:46:58Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-3B4A4496A8695C2F8D31713E83B98C80"
+    },
+    {
+     "paymentId": 7835,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 156800,
+     "paymentRequestedAt": "2026-06-02T01:01:13Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-3B4A4496A8695C2F8D31713E83B98C80"
+    },
+    {
+     "paymentId": 8219,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 92700,
+     "paymentRequestedAt": "2026-06-05T00:48:34Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-3B4A4496A8695C2F8D31713E83B98C80"
+    },
+    {
+     "paymentId": 8359,
+     "merchantId": 1003,
+     "customerRef": "100000000149",
+     "amount": 141400,
+     "paymentRequestedAt": "2026-06-06T02:18:01Z",
+     "deviceId": "SIM-DEVICE-889574F141745721839427FBDF2AF5B7",
+     "cardToken": "SIM-CARD-65996DD04A7B5623AA8EB850F93F9555"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 243300.0,
+    "merchantId": "1003",
+    "hourOfDay": 16,
+    "customerPastTxCount": 9,
+    "customerAvgAmount": 132255.55555555556,
+    "amountRatio": 1.8396202637990422,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 291.55,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.3873408936180271
+  },
+  {
+   "name": "fraud_BEHAVIORAL_ANOMALY",
+   "target": {
+    "paymentId": 6660,
+    "merchantId": 1002,
+    "customerRef": "100000000083",
+    "amount": 20600,
+    "paymentRequestedAt": "2026-05-23T15:03:18Z",
+    "deviceId": "SIM-DEVICE-CADC4C5737D45F4DB7D4F93B7CC28E9D",
+    "cardToken": "SIM-CARD-C6E811F9167D55D183FF1A930C68AD93"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 137,
+     "merchantId": 1002,
+     "customerRef": "100000000083",
+     "amount": 18300,
+     "paymentRequestedAt": "2026-04-01T14:42:52Z",
+     "deviceId": "SIM-DEVICE-8F627752E361560FAA55D628BA95330C",
+     "cardToken": "SIM-CARD-2D099C64C02D5C5BAD270003ECD89B3F"
+    },
+    {
+     "paymentId": 5270,
+     "merchantId": 1002,
+     "customerRef": "100000000083",
+     "amount": 11200,
+     "paymentRequestedAt": "2026-05-12T16:01:45Z",
+     "deviceId": "SIM-DEVICE-8F627752E361560FAA55D628BA95330C",
+     "cardToken": "SIM-CARD-2D099C64C02D5C5BAD270003ECD89B3F"
+    },
+    {
+     "paymentId": 6489,
+     "merchantId": 1002,
+     "customerRef": "100000000083",
+     "amount": 35800,
+     "paymentRequestedAt": "2026-05-22T09:32:18Z",
+     "deviceId": "SIM-DEVICE-8F627752E361560FAA55D628BA95330C",
+     "cardToken": "SIM-CARD-C6E811F9167D55D183FF1A930C68AD93"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 20600.0,
+    "merchantId": "1002",
+    "hourOfDay": 0,
+    "customerPastTxCount": 3,
+    "customerAvgAmount": 21766.666666666668,
+    "amountRatio": 0.9464012251148545,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 1771.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.8048187264451769
+  },
+  {
+   "name": "fraud_CARD_DEVICE_CHANGE",
+   "target": {
+    "paymentId": 19686,
+    "merchantId": 1003,
+    "customerRef": "100000001494",
+    "amount": 44400,
+    "paymentRequestedAt": "2026-08-29T09:22:46Z",
+    "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+    "cardToken": "SIM-CARD-1D0919F392BF510DB65D849ADD0E73AD"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 1456,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 36000,
+     "paymentRequestedAt": "2026-04-12T13:37:50Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 2679,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 51500,
+     "paymentRequestedAt": "2026-04-22T11:44:01Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 3634,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 43100,
+     "paymentRequestedAt": "2026-04-29T22:14:02Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 3707,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 54300,
+     "paymentRequestedAt": "2026-04-30T10:07:37Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 6137,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 6700,
+     "paymentRequestedAt": "2026-05-19T11:52:47Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 8929,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 43500,
+     "paymentRequestedAt": "2026-06-10T09:38:39Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 14752,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 49300,
+     "paymentRequestedAt": "2026-07-24T09:03:54Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 14886,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 45100,
+     "paymentRequestedAt": "2026-07-25T10:25:18Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 15354,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 35600,
+     "paymentRequestedAt": "2026-07-28T12:59:59Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 16178,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 46300,
+     "paymentRequestedAt": "2026-08-03T10:09:59Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 16894,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 41500,
+     "paymentRequestedAt": "2026-08-08T12:13:12Z",
+     "deviceId": "SIM-DEVICE-CC03CD60188F5126A20875995502ADAC",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 19386,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 46200,
+     "paymentRequestedAt": "2026-08-27T08:54:46Z",
+     "deviceId": "SIM-DEVICE-35A8CF82AD4D5A47B6ED836A5D549918",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    },
+    {
+     "paymentId": 19684,
+     "merchantId": 1003,
+     "customerRef": "100000001494",
+     "amount": 42100,
+     "paymentRequestedAt": "2026-08-29T09:15:46Z",
+     "deviceId": "SIM-DEVICE-35A8CF82AD4D5A47B6ED836A5D549918",
+     "cardToken": "SIM-CARD-067E80C3632F57E181DD69AE427E1881"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 44400.0,
+    "merchantId": "1003",
+    "hourOfDay": 18,
+    "customerPastTxCount": 13,
+    "customerAvgAmount": 41630.769230769234,
+    "amountRatio": 1.0665188470066518,
+    "txCount5m": 0,
+    "txCount30m": 1,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 7.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.9422449283233617
+  },
+  {
+   "name": "fraud_CARD_DEVICE_CHANGE",
+   "target": {
+    "paymentId": 4857,
+    "merchantId": 1002,
+    "customerRef": "100000000776",
+    "amount": 49900,
+    "paymentRequestedAt": "2026-05-09T03:00:43Z",
+    "deviceId": "SIM-DEVICE-C7D73FDC82035C7EAE6F451ADB0B2EEE",
+    "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 175,
+     "merchantId": 1002,
+     "customerRef": "100000000776",
+     "amount": 6100,
+     "paymentRequestedAt": "2026-04-02T02:27:40Z",
+     "deviceId": "SIM-DEVICE-F83F9B6B88E9588E9F3B09E62F2DCFF3",
+     "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+    },
+    {
+     "paymentId": 439,
+     "merchantId": 1002,
+     "customerRef": "100000000776",
+     "amount": 113100,
+     "paymentRequestedAt": "2026-04-04T05:00:11Z",
+     "deviceId": "SIM-DEVICE-F83F9B6B88E9588E9F3B09E62F2DCFF3",
+     "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+    },
+    {
+     "paymentId": 1260,
+     "merchantId": 1002,
+     "customerRef": "100000000776",
+     "amount": 129000,
+     "paymentRequestedAt": "2026-04-11T03:42:25Z",
+     "deviceId": "SIM-DEVICE-F83F9B6B88E9588E9F3B09E62F2DCFF3",
+     "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+    },
+    {
+     "paymentId": 1984,
+     "merchantId": 1002,
+     "customerRef": "100000000776",
+     "amount": 65900,
+     "paymentRequestedAt": "2026-04-17T03:22:01Z",
+     "deviceId": "SIM-DEVICE-F83F9B6B88E9588E9F3B09E62F2DCFF3",
+     "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+    },
+    {
+     "paymentId": 4439,
+     "merchantId": 1002,
+     "customerRef": "100000000776",
+     "amount": 61600,
+     "paymentRequestedAt": "2026-05-06T02:27:43Z",
+     "deviceId": "SIM-DEVICE-F83F9B6B88E9588E9F3B09E62F2DCFF3",
+     "cardToken": "SIM-CARD-550200F1AF7C537FAFB57F78C1D6F152"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 49900.0,
+    "merchantId": "1002",
+    "hourOfDay": 12,
+    "customerPastTxCount": 5,
+    "customerAvgAmount": 75140.0,
+    "amountRatio": 0.6640936917753527,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 4353.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.7855554591866337
+  },
+  {
+   "name": "fraud_CARD_TESTING",
+   "target": {
+    "paymentId": 15445,
+    "merchantId": 1003,
+    "customerRef": "100000000922",
+    "amount": 5000,
+    "paymentRequestedAt": "2026-07-29T05:04:17Z",
+    "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+    "cardToken": "SIM-CARD-6E1A14BD8B745DC0B38F6FF86672F16A"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 4324,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 26200,
+     "paymentRequestedAt": "2026-05-05T04:42:00Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-79DEAC6CF84A597D8C2C3800DD3F4373"
+    },
+    {
+     "paymentId": 4708,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 36300,
+     "paymentRequestedAt": "2026-05-08T03:53:01Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-79DEAC6CF84A597D8C2C3800DD3F4373"
+    },
+    {
+     "paymentId": 4709,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 57900,
+     "paymentRequestedAt": "2026-05-08T03:55:09Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-79DEAC6CF84A597D8C2C3800DD3F4373"
+    },
+    {
+     "paymentId": 6433,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 35800,
+     "paymentRequestedAt": "2026-05-22T01:45:32Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-79DEAC6CF84A597D8C2C3800DD3F4373"
+    },
+    {
+     "paymentId": 15140,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 29100,
+     "paymentRequestedAt": "2026-07-27T04:42:31Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-79DEAC6CF84A597D8C2C3800DD3F4373"
+    },
+    {
+     "paymentId": 15444,
+     "merchantId": 1003,
+     "customerRef": "100000000922",
+     "amount": 6900,
+     "paymentRequestedAt": "2026-07-29T05:03:31Z",
+     "deviceId": "SIM-DEVICE-040A9844E9E35FD195FD0C5386743F2A",
+     "cardToken": "SIM-CARD-4456BC041BA359ABAF8C09DFABA570B0"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 5000.0,
+    "merchantId": "1003",
+    "hourOfDay": 14,
+    "customerPastTxCount": 6,
+    "customerAvgAmount": 32033.333333333332,
+    "amountRatio": 0.15608740894901146,
+    "txCount5m": 1,
+    "txCount30m": 1,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 0.7666666666666667,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.9849964451356203
+  },
+  {
+   "name": "fraud_CARD_TESTING",
+   "target": {
+    "paymentId": 3615,
+    "merchantId": 1002,
+    "customerRef": "100000000129",
+    "amount": 7700,
+    "paymentRequestedAt": "2026-04-29T14:12:13Z",
+    "deviceId": "SIM-DEVICE-05AEC85B38745FCDBB17E92337142285",
+    "cardToken": "SIM-CARD-4B1E60E23A03511EA8800CCCC70557A3"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 510,
+     "merchantId": 1002,
+     "customerRef": "100000000129",
+     "amount": 45900,
+     "paymentRequestedAt": "2026-04-04T17:45:51Z",
+     "deviceId": "SIM-DEVICE-05AEC85B38745FCDBB17E92337142285",
+     "cardToken": "SIM-CARD-221B03939B9F5A0F8E2E5B873DB4E40C"
+    },
+    {
+     "paymentId": 740,
+     "merchantId": 1002,
+     "customerRef": "100000000129",
+     "amount": 84400,
+     "paymentRequestedAt": "2026-04-06T13:15:21Z",
+     "deviceId": "SIM-DEVICE-05AEC85B38745FCDBB17E92337142285",
+     "cardToken": "SIM-CARD-221B03939B9F5A0F8E2E5B873DB4E40C"
+    },
+    {
+     "paymentId": 3504,
+     "merchantId": 1002,
+     "customerRef": "100000000129",
+     "amount": 76100,
+     "paymentRequestedAt": "2026-04-28T14:02:46Z",
+     "deviceId": "SIM-DEVICE-05AEC85B38745FCDBB17E92337142285",
+     "cardToken": "SIM-CARD-221B03939B9F5A0F8E2E5B873DB4E40C"
+    },
+    {
+     "paymentId": 3614,
+     "merchantId": 1002,
+     "customerRef": "100000000129",
+     "amount": 6400,
+     "paymentRequestedAt": "2026-04-29T14:11:46Z",
+     "deviceId": "SIM-DEVICE-05AEC85B38745FCDBB17E92337142285",
+     "cardToken": "SIM-CARD-0AE3341BB3835CEAACE41A00F94471EE"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 7700.0,
+    "merchantId": "1002",
+    "hourOfDay": 23,
+    "customerPastTxCount": 4,
+    "customerAvgAmount": 53200.0,
+    "amountRatio": 0.14473684210526316,
+    "txCount5m": 1,
+    "txCount30m": 1,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 0.45,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.9633341074732826
+  },
+  {
+   "name": "fraud_LOW_AND_SLOW",
+   "target": {
+    "paymentId": 3566,
+    "merchantId": 1001,
+    "customerRef": "100000000610",
+    "amount": 53000,
+    "paymentRequestedAt": "2026-04-29T06:08:03Z",
+    "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+    "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 32,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 60100,
+     "paymentRequestedAt": "2026-04-01T01:41:34Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    },
+    {
+     "paymentId": 2461,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 52000,
+     "paymentRequestedAt": "2026-04-21T02:58:37Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    },
+    {
+     "paymentId": 3145,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 47600,
+     "paymentRequestedAt": "2026-04-26T03:20:03Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    },
+    {
+     "paymentId": 3542,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 87300,
+     "paymentRequestedAt": "2026-04-29T04:05:03Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    },
+    {
+     "paymentId": 3554,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 52900,
+     "paymentRequestedAt": "2026-04-29T04:53:03Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    },
+    {
+     "paymentId": 3559,
+     "merchantId": 1001,
+     "customerRef": "100000000610",
+     "amount": 93200,
+     "paymentRequestedAt": "2026-04-29T05:30:03Z",
+     "deviceId": "SIM-DEVICE-6A91921792C951C894A37B1EFBD85FE3",
+     "cardToken": "SIM-CARD-693656FB01975C83B5EACFB0094D168C"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 53000.0,
+    "merchantId": "1001",
+    "hourOfDay": 15,
+    "customerPastTxCount": 6,
+    "customerAvgAmount": 65516.666666666664,
+    "amountRatio": 0.8089544645128466,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 3,
+    "minutesSinceLastTx": 38.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.9210324527071103
+  },
+  {
+   "name": "fraud_LOW_AND_SLOW",
+   "target": {
+    "paymentId": 5271,
+    "merchantId": 1002,
+    "customerRef": "100000000384",
+    "amount": 35900,
+    "paymentRequestedAt": "2026-05-12T16:15:08Z",
+    "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+    "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 461,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 8900,
+     "paymentRequestedAt": "2026-04-04T08:00:34Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 541,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 37900,
+     "paymentRequestedAt": "2026-04-05T04:06:32Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 4616,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 55400,
+     "paymentRequestedAt": "2026-05-07T07:57:14Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5147,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 52400,
+     "paymentRequestedAt": "2026-05-11T13:40:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5260,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 39200,
+     "paymentRequestedAt": "2026-05-12T14:03:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5265,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 48500,
+     "paymentRequestedAt": "2026-05-12T14:49:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5267,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 52700,
+     "paymentRequestedAt": "2026-05-12T15:32:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 35900.0,
+    "merchantId": "1002",
+    "hourOfDay": 1,
+    "customerPastTxCount": 7,
+    "customerAvgAmount": 42142.857142857145,
+    "amountRatio": 0.851864406779661,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 3,
+    "minutesSinceLastTx": 43.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.912605209578315
+  },
+  {
+   "name": "fraud_SPLIT_PAYMENT",
+   "target": {
+    "paymentId": 10088,
+    "merchantId": 1002,
+    "customerRef": "100000000504",
+    "amount": 234900,
+    "paymentRequestedAt": "2026-06-19T10:10:03Z",
+    "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+    "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 242,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 52400,
+     "paymentRequestedAt": "2026-04-02T11:01:06Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 1427,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 42400,
+     "paymentRequestedAt": "2026-04-12T09:41:29Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 5870,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 63100,
+     "paymentRequestedAt": "2026-05-17T11:50:00Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 6616,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 53100,
+     "paymentRequestedAt": "2026-05-23T08:45:50Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 6903,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 39800,
+     "paymentRequestedAt": "2026-05-25T11:21:20Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 7408,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 34400,
+     "paymentRequestedAt": "2026-05-29T09:53:49Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 7490,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 64800,
+     "paymentRequestedAt": "2026-05-30T05:53:32Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 7491,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 53600,
+     "paymentRequestedAt": "2026-05-30T06:05:55Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    },
+    {
+     "paymentId": 9948,
+     "merchantId": 1002,
+     "customerRef": "100000000504",
+     "amount": 41000,
+     "paymentRequestedAt": "2026-06-18T09:31:03Z",
+     "deviceId": "SIM-DEVICE-C54DA5BC13755A7EA48FF4017D30E314",
+     "cardToken": "SIM-CARD-E744ED4E0B0F53FD932630933A74BE05"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 234900.0,
+    "merchantId": "1002",
+    "hourOfDay": 19,
+    "customerPastTxCount": 9,
+    "customerAvgAmount": 49400.0,
+    "amountRatio": 4.755060728744939,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 1479.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.7152455648926238
+  },
+  {
+   "name": "fraud_SPLIT_PAYMENT",
+   "target": {
+    "paymentId": 10367,
+    "merchantId": 1003,
+    "customerRef": "100000001431",
+    "amount": 184500,
+    "paymentRequestedAt": "2026-06-21T09:55:22Z",
+    "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+    "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 3795,
+     "merchantId": 1003,
+     "customerRef": "100000001431",
+     "amount": 25300,
+     "paymentRequestedAt": "2026-05-01T03:52:42Z",
+     "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+     "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+    },
+    {
+     "paymentId": 7739,
+     "merchantId": 1003,
+     "customerRef": "100000001431",
+     "amount": 17300,
+     "paymentRequestedAt": "2026-06-01T03:58:14Z",
+     "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+     "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+    },
+    {
+     "paymentId": 10076,
+     "merchantId": 1003,
+     "customerRef": "100000001431",
+     "amount": 20000,
+     "paymentRequestedAt": "2026-06-19T08:35:22Z",
+     "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+     "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+    },
+    {
+     "paymentId": 10362,
+     "merchantId": 1003,
+     "customerRef": "100000001431",
+     "amount": 120100,
+     "paymentRequestedAt": "2026-06-21T09:25:22Z",
+     "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+     "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+    },
+    {
+     "paymentId": 10366,
+     "merchantId": 1003,
+     "customerRef": "100000001431",
+     "amount": 442500,
+     "paymentRequestedAt": "2026-06-21T09:38:22Z",
+     "deviceId": "SIM-DEVICE-CE95AA9D4528589BA525244919009E3F",
+     "cardToken": "SIM-CARD-1742C41F01DF581CAA442D4F2AE81E73"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 184500.0,
+    "merchantId": "1003",
+    "hourOfDay": 18,
+    "customerPastTxCount": 5,
+    "customerAvgAmount": 125040.0,
+    "amountRatio": 1.4755278310940498,
+    "txCount5m": 0,
+    "txCount30m": 2,
+    "txCount24h": 2,
+    "minutesSinceLastTx": 17.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.913153784872535
+  },
+  {
+   "name": "fraud_STOLEN_CARD",
+   "target": {
+    "paymentId": 18860,
+    "merchantId": 1003,
+    "customerRef": "100000001087",
+    "amount": 83100,
+    "paymentRequestedAt": "2026-08-23T06:47:32Z",
+    "deviceId": "SIM-DEVICE-026ACA73CE1A5E5DB0E520558AC8169E",
+    "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 2500,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 114400,
+     "paymentRequestedAt": "2026-04-21T06:54:19Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 3288,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 67700,
+     "paymentRequestedAt": "2026-04-27T05:02:52Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 3683,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 73100,
+     "paymentRequestedAt": "2026-04-30T06:48:18Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 6753,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 103300,
+     "paymentRequestedAt": "2026-05-24T08:57:02Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 7639,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 126100,
+     "paymentRequestedAt": "2026-05-31T08:49:52Z",
+     "deviceId": "SIM-DEVICE-026ACA73CE1A5E5DB0E520558AC8169E",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 7657,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 96000,
+     "paymentRequestedAt": "2026-05-31T09:52:14Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 7658,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 176200,
+     "paymentRequestedAt": "2026-05-31T09:56:47Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 7790,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 211500,
+     "paymentRequestedAt": "2026-06-01T10:54:52Z",
+     "deviceId": "SIM-DEVICE-026ACA73CE1A5E5DB0E520558AC8169E",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 8005,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 113100,
+     "paymentRequestedAt": "2026-06-03T09:11:28Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 8250,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 164100,
+     "paymentRequestedAt": "2026-06-05T04:25:13Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 8769,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 51000,
+     "paymentRequestedAt": "2026-06-09T06:08:21Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 8770,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 133500,
+     "paymentRequestedAt": "2026-06-09T06:10:11Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 9040,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 226000,
+     "paymentRequestedAt": "2026-06-11T08:50:11Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 9656,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 114400,
+     "paymentRequestedAt": "2026-06-16T04:27:54Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 11597,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 97800,
+     "paymentRequestedAt": "2026-07-01T04:41:29Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 12587,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 142600,
+     "paymentRequestedAt": "2026-07-08T08:56:04Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 13162,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 123700,
+     "paymentRequestedAt": "2026-07-13T02:48:03Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 13690,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 121100,
+     "paymentRequestedAt": "2026-07-16T18:09:05Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 15579,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 190000,
+     "paymentRequestedAt": "2026-07-30T05:56:07Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 15977,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 124300,
+     "paymentRequestedAt": "2026-08-02T05:11:00Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    },
+    {
+     "paymentId": 16260,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 144000,
+     "paymentRequestedAt": "2026-08-04T05:42:05Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 18215,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 106900,
+     "paymentRequestedAt": "2026-08-18T07:43:27Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-CC150E1B7B9E530C838B8D3A2A147B54"
+    },
+    {
+     "paymentId": 18585,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 212000,
+     "paymentRequestedAt": "2026-08-21T06:08:32Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-C7459880AD1B5E95A87377C341E6BD83"
+    },
+    {
+     "paymentId": 18835,
+     "merchantId": 1003,
+     "customerRef": "100000001087",
+     "amount": 179900,
+     "paymentRequestedAt": "2026-08-23T03:19:57Z",
+     "deviceId": "SIM-DEVICE-AB8065499A6A59ECBA7B8DC95411F50B",
+     "cardToken": "SIM-CARD-8B83C375BC1A525DAA679AC71A61F5D2"
+    }
+   ],
+   "sharedCardHistory": [
+    {
+     "paymentId": 1893,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 49500,
+     "paymentRequestedAt": "2026-04-16T08:44:11Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 3342,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 57600,
+     "paymentRequestedAt": "2026-04-27T10:45:20Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 6491,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 66500,
+     "paymentRequestedAt": "2026-05-22T09:36:23Z",
+     "deviceId": "SIM-DEVICE-1BE7ED7383375D0E8DC0D0A26AFC9854",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 6555,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 60800,
+     "paymentRequestedAt": "2026-05-23T01:42:23Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 8798,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 40100,
+     "paymentRequestedAt": "2026-06-09T09:31:43Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 10618,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 21800,
+     "paymentRequestedAt": "2026-06-23T10:11:36Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 10881,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 101800,
+     "paymentRequestedAt": "2026-06-25T11:53:40Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 12352,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 40200,
+     "paymentRequestedAt": "2026-07-06T10:12:54Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    },
+    {
+     "paymentId": 14735,
+     "merchantId": 1003,
+     "customerRef": "100000000882",
+     "amount": 53900,
+     "paymentRequestedAt": "2026-07-24T07:16:42Z",
+     "deviceId": "SIM-DEVICE-926E6858E0B35ADBAD553CDE6C009EBE",
+     "cardToken": "SIM-CARD-9CA1D348CE175180AC0DABC5E6C11AD7"
+    }
+   ],
+   "expectedFeatures": {
+    "amount": 83100.0,
+    "merchantId": "1003",
+    "hourOfDay": 15,
+    "customerPastTxCount": 24,
+    "customerAvgAmount": 133862.5,
+    "amountRatio": 0.6207862545522458,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 207.58333333333334,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 1
+   },
+   "expectedProbability": 0.6590696767001114
+  },
+  {
+   "name": "fraud_STOLEN_CARD",
+   "target": {
+    "paymentId": 3502,
+    "merchantId": 1002,
+    "customerRef": "100000001098",
+    "amount": 116600,
+    "paymentRequestedAt": "2026-04-28T13:50:38Z",
+    "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+    "cardToken": "SIM-CARD-A1BF7DECDC075CB48E63F56F9B1C8606"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 233,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 176400,
+     "paymentRequestedAt": "2026-04-02T10:04:01Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 249,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 118500,
+     "paymentRequestedAt": "2026-04-02T11:38:26Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 269,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 7600,
+     "paymentRequestedAt": "2026-04-02T14:33:58Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 998,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 231300,
+     "paymentRequestedAt": "2026-04-08T12:32:16Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 999,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 316100,
+     "paymentRequestedAt": "2026-04-08T12:34:23Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 1203,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 154300,
+     "paymentRequestedAt": "2026-04-10T08:30:56Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 1443,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 126300,
+     "paymentRequestedAt": "2026-04-12T11:39:21Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 1530,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 153400,
+     "paymentRequestedAt": "2026-04-13T08:35:58Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 3217,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 159300,
+     "paymentRequestedAt": "2026-04-26T12:38:38Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 3228,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 93000,
+     "paymentRequestedAt": "2026-04-26T14:30:45Z",
+     "deviceId": "SIM-DEVICE-6C691F3EF944560998827C26217FB91E",
+     "cardToken": "SIM-CARD-0B941C04B4745BEF90ED68BD1161CC91"
+    },
+    {
+     "paymentId": 3497,
+     "merchantId": 1002,
+     "customerRef": "100000001098",
+     "amount": 246600,
+     "paymentRequestedAt": "2026-04-28T13:33:38Z",
+     "deviceId": "SIM-DEVICE-42EEB539CBEE5ACAB77712107D143F1D",
+     "cardToken": "SIM-CARD-A1BF7DECDC075CB48E63F56F9B1C8606"
+    }
+   ],
+   "sharedCardHistory": [
+    {
+     "paymentId": 2602,
+     "merchantId": 1002,
+     "customerRef": "100000000519",
+     "amount": 19100,
+     "paymentRequestedAt": "2026-04-22T03:01:20Z",
+     "deviceId": "SIM-DEVICE-BD8AC85D9B2B55E893EB52DDE1E0F45C",
+     "cardToken": "SIM-CARD-A1BF7DECDC075CB48E63F56F9B1C8606"
+    },
+    {
+     "paymentId": 2608,
+     "merchantId": 1002,
+     "customerRef": "100000000519",
+     "amount": 3100,
+     "paymentRequestedAt": "2026-04-22T03:18:23Z",
+     "deviceId": "SIM-DEVICE-BD8AC85D9B2B55E893EB52DDE1E0F45C",
+     "cardToken": "SIM-CARD-A1BF7DECDC075CB48E63F56F9B1C8606"
+    }
+   ],
+   "expectedFeatures": {
+    "amount": 116600.0,
+    "merchantId": "1002",
+    "hourOfDay": 22,
+    "customerPastTxCount": 11,
+    "customerAvgAmount": 162072.72727272726,
+    "amountRatio": 0.7194301099394211,
+    "txCount5m": 0,
+    "txCount30m": 1,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 17.0,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 1
+   },
+   "expectedProbability": 0.8951197833065815
+  },
+  {
+   "name": "shared_card",
+   "target": {
+    "paymentId": 16825,
+    "merchantId": 1002,
+    "customerRef": "100000000384",
+    "amount": 28700,
+    "paymentRequestedAt": "2026-08-08T04:15:51Z",
+    "deviceId": "SIM-DEVICE-74A17B28FEE856AE8D6CD59024617038",
+    "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 461,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 8900,
+     "paymentRequestedAt": "2026-04-04T08:00:34Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 541,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 37900,
+     "paymentRequestedAt": "2026-04-05T04:06:32Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 4616,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 55400,
+     "paymentRequestedAt": "2026-05-07T07:57:14Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5147,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 52400,
+     "paymentRequestedAt": "2026-05-11T13:40:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5260,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 39200,
+     "paymentRequestedAt": "2026-05-12T14:03:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5265,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 48500,
+     "paymentRequestedAt": "2026-05-12T14:49:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5267,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 52700,
+     "paymentRequestedAt": "2026-05-12T15:32:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5271,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 35900,
+     "paymentRequestedAt": "2026-05-12T16:15:08Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 5540,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 60600,
+     "paymentRequestedAt": "2026-05-15T00:48:53Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 6297,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 73500,
+     "paymentRequestedAt": "2026-05-21T02:49:16Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 6298,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 49900,
+     "paymentRequestedAt": "2026-05-21T02:53:56Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 7257,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 36900,
+     "paymentRequestedAt": "2026-05-28T04:34:19Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 11711,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 58500,
+     "paymentRequestedAt": "2026-07-02T00:56:01Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 15826,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 45400,
+     "paymentRequestedAt": "2026-08-01T02:24:09Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 16111,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 26700,
+     "paymentRequestedAt": "2026-08-03T02:40:09Z",
+     "deviceId": "SIM-DEVICE-74A17B28FEE856AE8D6CD59024617038",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 16113,
+     "merchantId": 1002,
+     "customerRef": "100000000384",
+     "amount": 39000,
+     "paymentRequestedAt": "2026-08-03T02:56:09Z",
+     "deviceId": "SIM-DEVICE-5E52C8D01C6B5E97B173F1FA2972952E",
+     "cardToken": "SIM-CARD-F563B8BA242255AAADA93E3481C6A237"
+    }
+   ],
+   "sharedCardHistory": [
+    {
+     "paymentId": 7777,
+     "merchantId": 1002,
+     "customerRef": "100000000201",
+     "amount": 47100,
+     "paymentRequestedAt": "2026-06-01T08:50:04Z",
+     "deviceId": "SIM-DEVICE-6E8E19C8941354ACBA7DA7913607A9AB",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    },
+    {
+     "paymentId": 7778,
+     "merchantId": 1002,
+     "customerRef": "100000000201",
+     "amount": 59800,
+     "paymentRequestedAt": "2026-06-01T08:59:04Z",
+     "deviceId": "SIM-DEVICE-6E8E19C8941354ACBA7DA7913607A9AB",
+     "cardToken": "SIM-CARD-FDC0F6B5A4085B7D87D249E3BA639ABB"
+    }
+   ],
+   "expectedFeatures": {
+    "amount": 28700.0,
+    "merchantId": "1002",
+    "hourOfDay": 13,
+    "customerPastTxCount": 16,
+    "customerAvgAmount": 45087.5,
+    "amountRatio": 0.6365400609925146,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 7279.7,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 1
+   },
+   "expectedProbability": 0.021370002546473133
+  },
+  {
+   "name": "shared_card",
+   "target": {
+    "paymentId": 10036,
+    "merchantId": 1002,
+    "customerRef": "100000000573",
+    "amount": 79100,
+    "paymentRequestedAt": "2026-06-19T03:40:46Z",
+    "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+    "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 39,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 88300,
+     "paymentRequestedAt": "2026-04-01T02:15:08Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 176,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 104300,
+     "paymentRequestedAt": "2026-04-02T02:33:13Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 304,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 76300,
+     "paymentRequestedAt": "2026-04-03T02:41:13Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 786,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 69300,
+     "paymentRequestedAt": "2026-04-07T02:38:54Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 927,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 60700,
+     "paymentRequestedAt": "2026-04-08T04:57:47Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1058,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 53600,
+     "paymentRequestedAt": "2026-04-09T04:31:02Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1705,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 93500,
+     "paymentRequestedAt": "2026-04-14T16:09:45Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1860,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 91400,
+     "paymentRequestedAt": "2026-04-16T03:43:58Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1988,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 171200,
+     "paymentRequestedAt": "2026-04-17T03:32:25Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 3394,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 93300,
+     "paymentRequestedAt": "2026-04-28T00:46:14Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 3427,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 81300,
+     "paymentRequestedAt": "2026-04-28T04:26:49Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 5463,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 77000,
+     "paymentRequestedAt": "2026-05-14T05:33:15Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 5570,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 126200,
+     "paymentRequestedAt": "2026-05-15T04:43:35Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 5673,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 55900,
+     "paymentRequestedAt": "2026-05-16T01:51:17Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 7570,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 99500,
+     "paymentRequestedAt": "2026-05-31T01:29:21Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 7589,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 115800,
+     "paymentRequestedAt": "2026-05-31T03:12:26Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 7699,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 7000,
+     "paymentRequestedAt": "2026-05-31T22:59:23Z",
+     "deviceId": "SIM-DEVICE-8BEDDA41A7BC58A4B18DA454C819FECD",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 8072,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 91100,
+     "paymentRequestedAt": "2026-06-04T01:59:49Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 8373,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 96000,
+     "paymentRequestedAt": "2026-06-06T03:57:30Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 8891,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 65600,
+     "paymentRequestedAt": "2026-06-10T05:36:22Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 9526,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 63600,
+     "paymentRequestedAt": "2026-06-15T05:46:02Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 10000,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 48400,
+     "paymentRequestedAt": "2026-06-18T20:14:41Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    }
+   ],
+   "sharedCardHistory": [
+    {
+     "paymentId": 6849,
+     "merchantId": 1002,
+     "customerRef": "100000001267",
+     "amount": 11000,
+     "paymentRequestedAt": "2026-05-25T05:24:13Z",
+     "deviceId": "SIM-DEVICE-9C21C555BA245891ACBEC9E0CBF7EE3D",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 6853,
+     "merchantId": 1002,
+     "customerRef": "100000001267",
+     "amount": 24800,
+     "paymentRequestedAt": "2026-05-25T05:38:13Z",
+     "deviceId": "SIM-DEVICE-9C21C555BA245891ACBEC9E0CBF7EE3D",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    }
+   ],
+   "expectedFeatures": {
+    "amount": 79100.0,
+    "merchantId": "1002",
+    "hourOfDay": 12,
+    "customerPastTxCount": 22,
+    "customerAvgAmount": 83150.0,
+    "amountRatio": 0.9512928442573662,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 446.0833333333333,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 1
+   },
+   "expectedProbability": 0.020102783048703353
+  },
+  {
+   "name": "shared_card",
+   "target": {
+    "paymentId": 19111,
+    "merchantId": 1001,
+    "customerRef": "100000001132",
+    "amount": 109100,
+    "paymentRequestedAt": "2026-08-25T06:23:19Z",
+    "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+    "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 2346,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 8500,
+     "paymentRequestedAt": "2026-04-20T01:31:22Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 2656,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 91100,
+     "paymentRequestedAt": "2026-04-22T09:33:19Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 2797,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 115800,
+     "paymentRequestedAt": "2026-04-23T08:40:57Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 2942,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 114800,
+     "paymentRequestedAt": "2026-04-24T10:50:30Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 4751,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 105700,
+     "paymentRequestedAt": "2026-05-08T08:39:49Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 4924,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 99200,
+     "paymentRequestedAt": "2026-05-09T10:55:43Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 6761,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 84000,
+     "paymentRequestedAt": "2026-05-24T10:01:56Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 6885,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 155300,
+     "paymentRequestedAt": "2026-05-25T09:35:58Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 7398,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 120900,
+     "paymentRequestedAt": "2026-05-29T08:22:58Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 8392,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 100100,
+     "paymentRequestedAt": "2026-06-06T05:10:49Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 10929,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 76400,
+     "paymentRequestedAt": "2026-06-26T03:04:31Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 11514,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 107300,
+     "paymentRequestedAt": "2026-06-30T09:26:54Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 11517,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 160400,
+     "paymentRequestedAt": "2026-06-30T09:49:07Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 11817,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 153000,
+     "paymentRequestedAt": "2026-07-02T11:27:27Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 15998,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 84100,
+     "paymentRequestedAt": "2026-08-02T06:50:13Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 16587,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 54200,
+     "paymentRequestedAt": "2026-08-06T08:36:51Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 16624,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 149400,
+     "paymentRequestedAt": "2026-08-06T13:39:13Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 18082,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 69400,
+     "paymentRequestedAt": "2026-08-17T07:55:31Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 18739,
+     "merchantId": 1001,
+     "customerRef": "100000001132",
+     "amount": 243700,
+     "paymentRequestedAt": "2026-08-22T08:44:48Z",
+     "deviceId": "SIM-DEVICE-973CB7EA94F458BEBC593F76A2B304F5",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    }
+   ],
+   "sharedCardHistory": [
+    {
+     "paymentId": 5898,
+     "merchantId": 1001,
+     "customerRef": "100000001379",
+     "amount": 42400,
+     "paymentRequestedAt": "2026-05-17T19:21:12Z",
+     "deviceId": "SIM-DEVICE-52E8EE421FCC55BEAC5288D47E766F7C",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    },
+    {
+     "paymentId": 5899,
+     "merchantId": 1001,
+     "customerRef": "100000001379",
+     "amount": 95200,
+     "paymentRequestedAt": "2026-05-17T19:32:12Z",
+     "deviceId": "SIM-DEVICE-52E8EE421FCC55BEAC5288D47E766F7C",
+     "cardToken": "SIM-CARD-E3CB85DE2DCB56D189F5A5685EDDC26B"
+    }
+   ],
+   "expectedFeatures": {
+    "amount": 109100.0,
+    "merchantId": "1001",
+    "hourOfDay": 15,
+    "customerPastTxCount": 19,
+    "customerAvgAmount": 110173.68421052632,
+    "amountRatio": 0.9902546218888836,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 4178.516666666666,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 1
+   },
+   "expectedProbability": 0.07566666666666666
+  },
+  {
+   "name": "burst_5m",
+   "target": {
+    "paymentId": 19401,
+    "merchantId": 1003,
+    "customerRef": "100000000628",
+    "amount": 250600,
+    "paymentRequestedAt": "2026-08-27T10:44:15Z",
+    "deviceId": "SIM-DEVICE-02C45E89A70D5681BBBAF56FDD84473C",
+    "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 1317,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 132100,
+     "paymentRequestedAt": "2026-04-11T11:50:43Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 1805,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 421600,
+     "paymentRequestedAt": "2026-04-15T11:43:21Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-65FC8EF048D95ED7A8455B471385C281"
+    },
+    {
+     "paymentId": 2301,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 182900,
+     "paymentRequestedAt": "2026-04-19T11:46:12Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 2946,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 454900,
+     "paymentRequestedAt": "2026-04-24T11:07:07Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 4774,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 138300,
+     "paymentRequestedAt": "2026-05-08T10:59:12Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 11496,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 117400,
+     "paymentRequestedAt": "2026-06-30T08:14:11Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 11675,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 451000,
+     "paymentRequestedAt": "2026-07-01T13:49:11Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 13769,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 433200,
+     "paymentRequestedAt": "2026-07-17T09:15:39Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 13781,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 522800,
+     "paymentRequestedAt": "2026-07-17T10:33:31Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 14052,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 350300,
+     "paymentRequestedAt": "2026-07-19T11:14:07Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 17285,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 252500,
+     "paymentRequestedAt": "2026-08-11T11:43:40Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 17995,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 226600,
+     "paymentRequestedAt": "2026-08-16T13:45:13Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 18242,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 281100,
+     "paymentRequestedAt": "2026-08-18T12:07:11Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 18495,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 219800,
+     "paymentRequestedAt": "2026-08-20T11:48:55Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 18643,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 268200,
+     "paymentRequestedAt": "2026-08-21T17:16:54Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 18772,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 344600,
+     "paymentRequestedAt": "2026-08-22T12:40:04Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 19281,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 270500,
+     "paymentRequestedAt": "2026-08-26T10:02:17Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 19399,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 237900,
+     "paymentRequestedAt": "2026-08-27T10:40:38Z",
+     "deviceId": "SIM-DEVICE-F71150878BDC52048555A37737F64E75",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    },
+    {
+     "paymentId": 19400,
+     "merchantId": 1003,
+     "customerRef": "100000000628",
+     "amount": 7600,
+     "paymentRequestedAt": "2026-08-27T10:41:19Z",
+     "deviceId": "SIM-DEVICE-02C45E89A70D5681BBBAF56FDD84473C",
+     "cardToken": "SIM-CARD-FB331D1D1BDD5B65ACAB7BFCB7AD1D7C"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 250600.0,
+    "merchantId": "1003",
+    "hourOfDay": 19,
+    "customerPastTxCount": 19,
+    "customerAvgAmount": 279647.36842105264,
+    "amountRatio": 0.8961285829898556,
+    "txCount5m": 2,
+    "txCount30m": 2,
+    "txCount24h": 2,
+    "minutesSinceLastTx": 2.933333333333333,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.47026190476190494
+  },
+  {
+   "name": "burst_5m",
+   "target": {
+    "paymentId": 15944,
+    "merchantId": 1003,
+    "customerRef": "100000000716",
+    "amount": 2600,
+    "paymentRequestedAt": "2026-08-02T00:45:42Z",
+    "deviceId": "SIM-DEVICE-94F9CA1CFAB550AC958DAF2C2BEC5858",
+    "cardToken": "SIM-CARD-D86B8E809BCE52A3AAB0265930E13E9B"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 4658,
+     "merchantId": 1003,
+     "customerRef": "100000000716",
+     "amount": 47100,
+     "paymentRequestedAt": "2026-05-07T12:42:27Z",
+     "deviceId": "SIM-DEVICE-94F9CA1CFAB550AC958DAF2C2BEC5858",
+     "cardToken": "SIM-CARD-D89878A9F42E5C7B840119A959B86F83"
+    },
+    {
+     "paymentId": 8579,
+     "merchantId": 1003,
+     "customerRef": "100000000716",
+     "amount": 35100,
+     "paymentRequestedAt": "2026-06-07T15:29:01Z",
+     "deviceId": "SIM-DEVICE-94F9CA1CFAB550AC958DAF2C2BEC5858",
+     "cardToken": "SIM-CARD-D89878A9F42E5C7B840119A959B86F83"
+    },
+    {
+     "paymentId": 15942,
+     "merchantId": 1003,
+     "customerRef": "100000000716",
+     "amount": 6600,
+     "paymentRequestedAt": "2026-08-02T00:44:02Z",
+     "deviceId": "SIM-DEVICE-94F9CA1CFAB550AC958DAF2C2BEC5858",
+     "cardToken": "SIM-CARD-B896BC90737D5B44B5FC9F92222829BE"
+    },
+    {
+     "paymentId": 15943,
+     "merchantId": 1003,
+     "customerRef": "100000000716",
+     "amount": 7700,
+     "paymentRequestedAt": "2026-08-02T00:44:41Z",
+     "deviceId": "SIM-DEVICE-94F9CA1CFAB550AC958DAF2C2BEC5858",
+     "cardToken": "SIM-CARD-65AA0ADD5D4657E792F09D90FD1253C8"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 2600.0,
+    "merchantId": "1003",
+    "hourOfDay": 9,
+    "customerPastTxCount": 4,
+    "customerAvgAmount": 24125.0,
+    "amountRatio": 0.1077720207253886,
+    "txCount5m": 2,
+    "txCount30m": 2,
+    "txCount24h": 2,
+    "minutesSinceLastTx": 1.0166666666666666,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.99984375
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 15124,
+    "merchantId": 1002,
+    "customerRef": "100000000220",
+    "amount": 19000,
+    "paymentRequestedAt": "2026-07-27T02:47:56Z",
+    "deviceId": "SIM-DEVICE-9D9B3567F3805DFBA7D3BB89EBDC0D97",
+    "cardToken": "SIM-CARD-16074DF5698E5645AD947BC776235EC2"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 2450,
+     "merchantId": 1002,
+     "customerRef": "100000000220",
+     "amount": 37300,
+     "paymentRequestedAt": "2026-04-21T01:32:44Z",
+     "deviceId": "SIM-DEVICE-9D9B3567F3805DFBA7D3BB89EBDC0D97",
+     "cardToken": "SIM-CARD-16074DF5698E5645AD947BC776235EC2"
+    },
+    {
+     "paymentId": 13412,
+     "merchantId": 1002,
+     "customerRef": "100000000220",
+     "amount": 61700,
+     "paymentRequestedAt": "2026-07-14T19:34:34Z",
+     "deviceId": "SIM-DEVICE-9D9B3567F3805DFBA7D3BB89EBDC0D97",
+     "cardToken": "SIM-CARD-16074DF5698E5645AD947BC776235EC2"
+    },
+    {
+     "paymentId": 15091,
+     "merchantId": 1002,
+     "customerRef": "100000000220",
+     "amount": 49900,
+     "paymentRequestedAt": "2026-07-26T18:30:41Z",
+     "deviceId": "SIM-DEVICE-9D9B3567F3805DFBA7D3BB89EBDC0D97",
+     "cardToken": "SIM-CARD-16074DF5698E5645AD947BC776235EC2"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 19000.0,
+    "merchantId": "1002",
+    "hourOfDay": 11,
+    "customerPastTxCount": 3,
+    "customerAvgAmount": 49633.333333333336,
+    "amountRatio": 0.3828072531900604,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 497.25,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.07653995157384987
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 7784,
+    "merchantId": 1001,
+    "customerRef": "100000000891",
+    "amount": 81300,
+    "paymentRequestedAt": "2026-06-01T09:42:54Z",
+    "deviceId": "SIM-DEVICE-26A80594C2115EDAAB0FD7D1E70A4868",
+    "cardToken": "SIM-CARD-E29FAA5E128750DCB5B8F47E78010F07"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 554,
+     "merchantId": 1001,
+     "customerRef": "100000000891",
+     "amount": 43800,
+     "paymentRequestedAt": "2026-04-05T05:21:44Z",
+     "deviceId": "SIM-DEVICE-26A80594C2115EDAAB0FD7D1E70A4868",
+     "cardToken": "SIM-CARD-E29FAA5E128750DCB5B8F47E78010F07"
+    },
+    {
+     "paymentId": 709,
+     "merchantId": 1001,
+     "customerRef": "100000000891",
+     "amount": 20800,
+     "paymentRequestedAt": "2026-04-06T09:29:32Z",
+     "deviceId": "SIM-DEVICE-26A80594C2115EDAAB0FD7D1E70A4868",
+     "cardToken": "SIM-CARD-E29FAA5E128750DCB5B8F47E78010F07"
+    },
+    {
+     "paymentId": 1535,
+     "merchantId": 1001,
+     "customerRef": "100000000891",
+     "amount": 33800,
+     "paymentRequestedAt": "2026-04-13T08:56:18Z",
+     "deviceId": "SIM-DEVICE-26A80594C2115EDAAB0FD7D1E70A4868",
+     "cardToken": "SIM-CARD-E29FAA5E128750DCB5B8F47E78010F07"
+    },
+    {
+     "paymentId": 3810,
+     "merchantId": 1001,
+     "customerRef": "100000000891",
+     "amount": 30400,
+     "paymentRequestedAt": "2026-05-01T06:25:10Z",
+     "deviceId": "SIM-DEVICE-26A80594C2115EDAAB0FD7D1E70A4868",
+     "cardToken": "SIM-CARD-E29FAA5E128750DCB5B8F47E78010F07"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 81300.0,
+    "merchantId": "1001",
+    "hourOfDay": 18,
+    "customerPastTxCount": 4,
+    "customerAvgAmount": 32200.0,
+    "amountRatio": 2.5248447204968945,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 44837.73333333333,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.0031426974664679587
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 16270,
+    "merchantId": 1001,
+    "customerRef": "100000001481",
+    "amount": 60300,
+    "paymentRequestedAt": "2026-08-04T06:35:23Z",
+    "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+    "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 1514,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 107700,
+     "paymentRequestedAt": "2026-04-13T06:20:59Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 3166,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 55600,
+     "paymentRequestedAt": "2026-04-26T06:42:51Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 6458,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 79100,
+     "paymentRequestedAt": "2026-05-22T04:43:10Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 7271,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 123500,
+     "paymentRequestedAt": "2026-05-28T06:44:22Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 7738,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 103600,
+     "paymentRequestedAt": "2026-06-01T03:53:11Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 9904,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 96400,
+     "paymentRequestedAt": "2026-06-18T04:20:42Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 10320,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 50900,
+     "paymentRequestedAt": "2026-06-21T05:03:27Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 10346,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 89900,
+     "paymentRequestedAt": "2026-06-21T07:48:12Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 11359,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 147200,
+     "paymentRequestedAt": "2026-06-29T05:11:48Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    },
+    {
+     "paymentId": 12454,
+     "merchantId": 1001,
+     "customerRef": "100000001481",
+     "amount": 127600,
+     "paymentRequestedAt": "2026-07-07T07:59:20Z",
+     "deviceId": "SIM-DEVICE-C1FB780CEB0851B3892FCE2899BE59C0",
+     "cardToken": "SIM-CARD-9B964B925C825B87AC93280D55E1027E"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 60300.0,
+    "merchantId": "1001",
+    "hourOfDay": 15,
+    "customerPastTxCount": 10,
+    "customerAvgAmount": 98150.0,
+    "amountRatio": 0.6143657666836475,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": 40236.05,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.0
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 9882,
+    "merchantId": 1002,
+    "customerRef": "100000000954",
+    "amount": 52500,
+    "paymentRequestedAt": "2026-06-18T02:09:41Z",
+    "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+    "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 593,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 75200,
+     "paymentRequestedAt": "2026-04-05T09:11:45Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 1419,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 38800,
+     "paymentRequestedAt": "2026-04-12T08:42:03Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 1778,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 50000,
+     "paymentRequestedAt": "2026-04-15T08:23:48Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 2357,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 81000,
+     "paymentRequestedAt": "2026-04-20T04:08:15Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 2802,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 87800,
+     "paymentRequestedAt": "2026-04-23T08:57:38Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 2895,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 53200,
+     "paymentRequestedAt": "2026-04-24T05:14:13Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 5094,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 67300,
+     "paymentRequestedAt": "2026-05-11T06:24:17Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 5953,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 38200,
+     "paymentRequestedAt": "2026-05-18T07:04:18Z",
+     "deviceId": "SIM-DEVICE-7583808F35C057009D01724CA50A69FE",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 7507,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 84700,
+     "paymentRequestedAt": "2026-05-30T09:25:05Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 8087,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 149200,
+     "paymentRequestedAt": "2026-06-04T03:32:41Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 9262,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 83500,
+     "paymentRequestedAt": "2026-06-13T03:04:42Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 9524,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 74700,
+     "paymentRequestedAt": "2026-06-15T05:19:58Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    },
+    {
+     "paymentId": 9850,
+     "merchantId": 1002,
+     "customerRef": "100000000954",
+     "amount": 237800,
+     "paymentRequestedAt": "2026-06-17T16:47:46Z",
+     "deviceId": "SIM-DEVICE-CC2358BB915254B2994BA1EC36239EA2",
+     "cardToken": "SIM-CARD-4468662901A8540A89BF4EE28A06554E"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 52500.0,
+    "merchantId": "1002",
+    "hourOfDay": 11,
+    "customerPastTxCount": 13,
+    "customerAvgAmount": 86261.53846153847,
+    "amountRatio": 0.6086142322097378,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 561.9166666666666,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.007073891625615765
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 219,
+    "merchantId": 1002,
+    "customerRef": "100000000192",
+    "amount": 33900,
+    "paymentRequestedAt": "2026-04-02T08:26:25Z",
+    "deviceId": "SIM-DEVICE-2EA468E1D5F45212AFAB9C427319FBFA",
+    "cardToken": "SIM-CARD-82B8CDBFA5195DFB877F3B65D455207C"
+   },
+   "customerHistory": [],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 33900.0,
+    "merchantId": "1002",
+    "hourOfDay": 17,
+    "customerPastTxCount": 0,
+    "customerAvgAmount": 0.0,
+    "amountRatio": 0.0,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 0,
+    "minutesSinceLastTx": -1.0,
+    "deviceSeenBefore": 0,
+    "cardSeenBefore": 0,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.0006704567492423579
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 5570,
+    "merchantId": 1002,
+    "customerRef": "100000000573",
+    "amount": 126200,
+    "paymentRequestedAt": "2026-05-15T04:43:35Z",
+    "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+    "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 39,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 88300,
+     "paymentRequestedAt": "2026-04-01T02:15:08Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 176,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 104300,
+     "paymentRequestedAt": "2026-04-02T02:33:13Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 304,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 76300,
+     "paymentRequestedAt": "2026-04-03T02:41:13Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 786,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 69300,
+     "paymentRequestedAt": "2026-04-07T02:38:54Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 927,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 60700,
+     "paymentRequestedAt": "2026-04-08T04:57:47Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1058,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 53600,
+     "paymentRequestedAt": "2026-04-09T04:31:02Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1705,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 93500,
+     "paymentRequestedAt": "2026-04-14T16:09:45Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1860,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 91400,
+     "paymentRequestedAt": "2026-04-16T03:43:58Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 1988,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 171200,
+     "paymentRequestedAt": "2026-04-17T03:32:25Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 3394,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 93300,
+     "paymentRequestedAt": "2026-04-28T00:46:14Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 3427,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 81300,
+     "paymentRequestedAt": "2026-04-28T04:26:49Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    },
+    {
+     "paymentId": 5463,
+     "merchantId": 1002,
+     "customerRef": "100000000573",
+     "amount": 77000,
+     "paymentRequestedAt": "2026-05-14T05:33:15Z",
+     "deviceId": "SIM-DEVICE-D39A973F846652659666E4998A5EBC2F",
+     "cardToken": "SIM-CARD-424FBDAA27DA5A4597D1BE078FCF2191"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 126200.0,
+    "merchantId": "1002",
+    "hourOfDay": 13,
+    "customerPastTxCount": 12,
+    "customerAvgAmount": 88350.0,
+    "amountRatio": 1.4284097340124504,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 1390.3333333333333,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.01178221288515406
+  },
+  {
+   "name": "normal",
+   "target": {
+    "paymentId": 15238,
+    "merchantId": 1003,
+    "customerRef": "100000000356",
+    "amount": 88800,
+    "paymentRequestedAt": "2026-07-28T02:04:44Z",
+    "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+    "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+   },
+   "customerHistory": [
+    {
+     "paymentId": 645,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 86700,
+     "paymentRequestedAt": "2026-04-06T00:52:01Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 2120,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 78300,
+     "paymentRequestedAt": "2026-04-18T03:13:28Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 3268,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 71800,
+     "paymentRequestedAt": "2026-04-27T03:22:20Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 5175,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 67900,
+     "paymentRequestedAt": "2026-05-12T00:20:05Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 5682,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 55100,
+     "paymentRequestedAt": "2026-05-16T03:56:43Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 5770,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 72100,
+     "paymentRequestedAt": "2026-05-16T21:46:01Z",
+     "deviceId": "SIM-DEVICE-BC710AC1F939559CBE7F8ADF28C52DFA",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 5772,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 101900,
+     "paymentRequestedAt": "2026-05-16T22:00:19Z",
+     "deviceId": "SIM-DEVICE-BC710AC1F939559CBE7F8ADF28C52DFA",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 8852,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 112300,
+     "paymentRequestedAt": "2026-06-09T23:27:38Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-9E93DC5DB915503BADD7EAA5A87CAF14"
+    },
+    {
+     "paymentId": 9123,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 224400,
+     "paymentRequestedAt": "2026-06-12T01:36:25Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 10215,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 48200,
+     "paymentRequestedAt": "2026-06-20T08:14:14Z",
+     "deviceId": "SIM-DEVICE-BC710AC1F939559CBE7F8ADF28C52DFA",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 11566,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 74000,
+     "paymentRequestedAt": "2026-06-30T23:09:30Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 11709,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 72800,
+     "paymentRequestedAt": "2026-07-02T00:47:27Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 13821,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 52900,
+     "paymentRequestedAt": "2026-07-17T21:09:36Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 13846,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 123400,
+     "paymentRequestedAt": "2026-07-18T02:47:37Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 14415,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 76300,
+     "paymentRequestedAt": "2026-07-22T01:29:35Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 14552,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 103200,
+     "paymentRequestedAt": "2026-07-22T23:30:14Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    },
+    {
+     "paymentId": 15125,
+     "merchantId": 1003,
+     "customerRef": "100000000356",
+     "amount": 45600,
+     "paymentRequestedAt": "2026-07-27T02:55:47Z",
+     "deviceId": "SIM-DEVICE-8DC302C4D2815EC6A4AA09428343A3D1",
+     "cardToken": "SIM-CARD-A64B686199AF580A97769E730AA7E9A2"
+    }
+   ],
+   "sharedCardHistory": [],
+   "expectedFeatures": {
+    "amount": 88800.0,
+    "merchantId": "1003",
+    "hourOfDay": 11,
+    "customerPastTxCount": 17,
+    "customerAvgAmount": 86288.23529411765,
+    "amountRatio": 1.0291090053855068,
+    "txCount5m": 0,
+    "txCount30m": 0,
+    "txCount24h": 1,
+    "minutesSinceLastTx": 1388.95,
+    "deviceSeenBefore": 1,
+    "cardSeenBefore": 1,
+    "cardUsedByOtherCustomer": 0
+   },
+   "expectedProbability": 0.03877081711906957
+  }
+ ]
+}

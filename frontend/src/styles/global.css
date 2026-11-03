@@ -1,0 +1,929 @@
+:root {
+  font-family:
+    'Pretendard Variable',
+    Pretendard,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #0f172a;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --dw-primary: #2563eb;
+  --dw-accent: #3b82f6;
+  --dw-sidebar: #172554;
+  --dw-canvas: #f5f7fb;
+  --dw-border: #e2e8f0;
+  --dw-header-height: 56px;
+  --dw-sidebar-width: 220px;
+  --dw-content-padding: 32px;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+/* 스크롤바가 생기고 사라질 때 본문 폭이 바뀌어 화면이 흔들리지 않게 자리를 비워 둔다 (#312) */
+html {
+  scrollbar-gutter: stable;
+}
+body {
+  min-width: 320px;
+}
+a {
+  color: inherit;
+}
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.dw-implementation-area {
+  display: grid;
+  place-items: center;
+  min-height: max(
+    360px,
+    calc(100vh - var(--dw-header-height) - 2 * var(--dw-content-padding) - 88px)
+  );
+  padding: 48px 32px;
+  border: 2px dashed #93c5fd;
+  border-radius: 8px;
+  background: #eff6ff;
+  text-align: center;
+}
+.dw-implementation-area h2 {
+  margin: 0 0 10px;
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 650;
+}
+.dw-implementation-area p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤.
+   헤더·사이드바는 fixed가 아닌 sticky — fixed면 가로 스크롤 시 헤더 오른쪽(로그아웃)이 잘린 채 남는다. */
+.admin-viewport {
+  display: grid;
+  grid-template-columns: var(--dw-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: var(--dw-header-height) 1fr;
+  min-width: 1280px;
+  min-height: 100vh;
+}
+.dw-header {
+  position: sticky;
+  z-index: 100;
+  top: 0;
+  grid-column: 1 / -1;
+  height: var(--dw-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--dw-border);
+  background: white;
+}
+.dw-brand {
+  width: var(--dw-sidebar-width);
+  flex: 0 0 var(--dw-sidebar-width);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 28px;
+  color: #13204a;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  text-decoration: none;
+}
+.dw-header-center {
+  flex: 1;
+  text-align: center;
+  min-width: 90px;
+}
+.dw-header-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 13px;
+  padding: 0 24px 0 12px;
+}
+.dw-user-name {
+  font-weight: 650;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.dw-role-pill {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dw-header .ant-btn {
+  box-shadow: none;
+}
+.dw-last-login {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dw-header .dw-account-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+.dw-account-menu .dw-user-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dw-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #eff6ff;
+  color: #2563eb;
+}
+.dw-account-chevron {
+  color: #64748b;
+  font-size: 10px;
+}
+.dw-login-history-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  margin-bottom: 20px;
+}
+.dw-login-history-intro > :first-child {
+  color: #334155;
+  font-weight: 600;
+}
+.dw-login-history-intro > :last-child {
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-login-history-table .ant-table-cell {
+  vertical-align: middle;
+}
+.dw-login-history-ip {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.dw-sidebar {
+  position: sticky;
+  top: var(--dw-header-height);
+  height: calc(100vh - var(--dw-header-height));
+  background: var(--dw-sidebar);
+  display: flex;
+  flex-direction: column;
+  color: #e2e8f0;
+  overflow-y: auto;
+  z-index: 90;
+  padding: 22px 12px 16px;
+}
+.dw-nav-group {
+  margin-bottom: 21px;
+}
+.dw-nav-heading {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #95a5ca;
+  margin: 0 12px 8px;
+}
+.dw-nav-link {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 13px;
+  border-radius: 5px;
+  color: #c8d5ee;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 550;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.dw-nav-link:hover {
+  color: white;
+  background: #20366b;
+}
+.dw-nav-link.active {
+  color: white;
+  background: #24387a;
+  box-shadow: inset 3px 0 0 #e2bc66;
+  font-weight: 650;
+}
+.dw-nav-badge {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 10px;
+  background: #fbbf24;
+  color: #1e293b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.dw-main {
+  min-width: 0;
+  padding: var(--dw-content-padding);
+  background: var(--dw-canvas);
+}
+.dw-container {
+  max-width: 1720px;
+  margin: 0 auto;
+}
+.dw-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  min-height: 51px;
+}
+.dw-page-title {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 750;
+  letter-spacing: -0.7px;
+  line-height: 1.35;
+  color: #0f172a;
+}
+.dw-page-description {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.dw-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dw-section-title {
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.3px;
+}
+.dw-panel {
+  border: 1px solid var(--dw-border);
+  background: white;
+  border-radius: 8px;
+}
+.dw-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.dw-alert-tabs {
+  padding: 0 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.dw-score-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dw-score-row > strong {
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -1.5px;
+}
+.dw-score-row > span {
+  color: #64748b;
+}
+.dw-score-scale {
+  position: relative;
+  display: flex;
+  flex: 1;
+  height: 12px;
+  overflow: visible;
+  border-radius: 6px;
+}
+.dw-score-scale > div {
+  height: 12px;
+}
+.dw-score-allow {
+  width: 50%;
+  background: #bbf7d0;
+  border-radius: 6px 0 0 6px;
+}
+.dw-score-review {
+  width: 30%;
+  background: #fde68a;
+}
+.dw-score-deny {
+  width: 20%;
+  background: #fecaca;
+  border-radius: 0 6px 6px 0;
+}
+.dw-score-scale i {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: #0f172a;
+}
+.dw-score-labels {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 0 79px;
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-flow > div {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dw-flow > div::before {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  background: #fff;
+  content: '';
+}
+.dw-flow > div:not(:last-child)::after {
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  width: 2px;
+  height: 19px;
+  background: #e2e8f0;
+  content: '';
+}
+.dw-flow span {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+.dw-stat-card {
+  padding: 20px 22px;
+}
+.dw-stat-card-button {
+  width: 100%;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dw-stat-card-button:hover {
+  border-color: #93c5fd;
+}
+.dw-stat-card-button.selected {
+  border-color: #2563eb;
+  box-shadow: inset 0 0 0 1px #2563eb;
+}
+.dw-stat-label {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+.dw-stat-value {
+  font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.2;
+}
+.dw-stat-foot {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+.dw-table-card .ant-card-body {
+  padding: 0;
+}
+.dw-table-toolbar {
+  padding: 20px 22px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dw-table-toolbar h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+}
+.dw-table-toolbar p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.dw-table-card .ant-table-wrapper {
+  padding: 0 2px;
+}
+.dw-table-card .ant-pagination {
+  padding: 0 19px 18px;
+}
+.dw-section-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 20px;
+}
+.dw-info-list {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 13px 12px;
+  font-size: 13px;
+}
+.dw-info-list .k {
+  color: #64748b;
+}
+.dw-info-list .v {
+  color: #0f172a;
+  font-weight: 600;
+}
+.dw-api-note {
+  color: #64748b;
+  padding: 11px 14px;
+  font-size: 12px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+.dw-error-view {
+  background: white;
+  border: 1px solid var(--dw-border);
+  border-radius: 8px;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+}
+/* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
+.dw-login-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  background: #f5f7fb;
+}
+.dw-login-layout {
+  width: 100%;
+  max-width: 1040px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: white;
+  border: 1px solid var(--dw-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(23, 37, 84, 0.08);
+}
+.dw-login-intro {
+  display: flex;
+  flex-direction: column;
+  padding: 44px;
+  color: white;
+  background: radial-gradient(ellipse at top right, #284d91, transparent 65%), #172554;
+}
+.dw-login-brand {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -1px;
+}
+.dw-login-brand span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  font-weight: 500;
+  color: #b5c5eb;
+}
+.dw-login-intro-body {
+  margin: auto 0;
+  padding: 48px 0;
+}
+.dw-login-symbol {
+  width: 60px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  background: #ffffff14;
+  border: 1px solid #ffffff26;
+  border-radius: 16px;
+  font-size: 30px;
+  color: #bfdbfe;
+  margin-bottom: 28px;
+}
+.dw-login-eyebrow {
+  font-size: 12px;
+  color: #bfdbfe;
+  letter-spacing: 1px;
+}
+.dw-login-intro h1 {
+  font-size: 29px;
+  line-height: 1.6;
+  letter-spacing: -1px;
+  margin: 14px 0;
+}
+.dw-login-copy {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #c8d5ee;
+}
+.dw-login-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+}
+.dw-login-features span {
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #ffffff0d;
+  border: 1px solid #ffffff26;
+  color: #dbeafe;
+}
+.dw-login-intro-footer {
+  font-size: 12px;
+  color: #b5c5eb;
+  margin: 0;
+}
+.dw-login-box {
+  min-width: 0;
+  padding: 48px 44px;
+}
+.dw-login-box h2 {
+  margin: 16px 0 8px;
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+.dw-login-description {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0 0 30px;
+  line-height: 1.7;
+}
+.dw-login-box .ant-input-prefix {
+  color: #94a3b8;
+  margin-right: 10px;
+}
+.dw-login-error {
+  margin-bottom: 20px;
+}
+@media (max-width: 760px) {
+  .dw-login-shell {
+    padding: 20px 16px;
+  }
+  .dw-login-layout {
+    max-width: 460px;
+    grid-template-columns: 1fr;
+  }
+  .dw-login-intro {
+    padding: 24px 28px;
+  }
+  .dw-login-intro-body,
+  .dw-login-intro-footer {
+    display: none;
+  }
+  .dw-login-brand span {
+    display: inline;
+    margin-left: 12px;
+  }
+  .dw-login-box {
+    padding: 28px;
+  }
+}
+.dw-code-snippet {
+  margin-top: 9px;
+  font-size: 12px;
+  padding: 12px;
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 6px;
+  font-family: ui-monospace, monospace;
+}
+@media (max-width: 1390px) {
+  .dw-header-tools {
+    gap: 8px;
+    padding-right: 16px;
+  }
+  .dw-stat-grid {
+    gap: 12px;
+  }
+}
+
+.dw-login-brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+.dw-login-public-intro {
+  display: grid;
+  gap: 6px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+.dw-login-public-intro a {
+  width: fit-content;
+  color: #2563eb;
+}
+.dw-login-public-intro p {
+  margin: 0;
+  color: #64748b;
+}
+
+/* ── 역할별 바깥 틀 (#399) ──────────────────────────────────────────
+   헤더 · 사이드바 · 메뉴 강조만 역할마다 다르게 한다.
+   업무 화면 본문, 대표 색(--dw-primary), 버튼은 건드리지 않는다.
+   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 금색 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
+.admin-viewport[data-role] {
+  --dw-header-height: 64px;
+  --dw-sidebar-width: 236px;
+  --shell-sidebar: #172554;
+  --shell-text: #c9d6f0;
+  --shell-muted: #a1b3d7;
+  --shell-line: #ffffff1f;
+  --shell-hover: #ffffff12;
+  --shell-active: #244681;
+  --shell-active-text: #fff;
+  --shell-accent: #80b7ff;
+  --shell-tint: #eaf2ff;
+  --shell-ink: #1e4f94;
+  --shell-header: #f8faff;
+  --shell-header-line: #dce5f4;
+}
+.admin-viewport[data-role='admin'] {
+  --shell-sidebar: #24272e;
+  --shell-text: #d6d8df;
+  --shell-muted: #a7abb6;
+  --shell-active: #3a372f;
+  --shell-active-text: #ffe2a1;
+  --shell-accent: #e9bd65;
+  --shell-tint: #f8f1e2;
+  --shell-ink: #6f4c12;
+  --shell-header: #fffdfa;
+  --shell-header-line: #e8e1d5;
+}
+.admin-viewport[data-role='owner'] {
+  --shell-sidebar: #fffcf5;
+  --shell-text: #4f4a3f;
+  /* 크림 배경 위 작은 글자도 4.5:1 이상 */
+  --shell-muted: #6b6454;
+  --shell-line: #ebe3d2;
+  --shell-hover: #f6efdf;
+  --shell-active: #f6e8c6;
+  --shell-active-text: #5c4012;
+  --shell-accent: #a8740f;
+  --shell-tint: #f8edcf;
+  --shell-ink: #6f4c0f;
+  --shell-header: #fffefa;
+  --shell-header-line: #ebe3d2;
+}
+
+/* 헤더 */
+.admin-viewport[data-role] .dw-header {
+  background: var(--shell-header);
+  border-color: var(--shell-header-line);
+}
+.admin-viewport[data-role] .dw-brand {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0 20px 0 24px;
+  gap: 10px;
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+}
+.dw-brand > svg {
+  flex-shrink: 0;
+}
+.dw-brand-wordmark {
+  font-size: 21px;
+  font-weight: 800;
+}
+.dw-brand-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 999px;
+  background: var(--shell-tint);
+  color: var(--shell-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.dw-brand-context-icon {
+  display: inline-flex;
+  font-size: 14px;
+}
+.admin-viewport[data-role] .dw-role-pill,
+.admin-viewport[data-role] .dw-account-avatar {
+  background: var(--shell-tint);
+  color: var(--shell-ink);
+}
+
+/* 사이드바 */
+.admin-viewport[data-role] .dw-sidebar {
+  background: var(--shell-sidebar);
+  color: var(--shell-text);
+  border-right: 1px solid var(--shell-line);
+  padding: 20px 12px 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-line) transparent;
+}
+.admin-viewport[data-role] .dw-nav-group {
+  margin-bottom: 20px;
+}
+.admin-viewport[data-role] .dw-nav-heading {
+  margin: 0 12px 6px;
+  color: var(--shell-muted);
+}
+.admin-viewport[data-role] .dw-nav-link {
+  height: auto;
+  min-height: 40px;
+  padding: 9px 12px;
+  margin: 2px 0;
+  border-radius: 8px;
+  color: var(--shell-text);
+  line-height: 1.4;
+  gap: 11px;
+}
+.admin-viewport[data-role] .dw-nav-link:hover {
+  color: var(--shell-active-text);
+  background: var(--shell-hover);
+}
+.admin-viewport[data-role] .dw-nav-link.active {
+  background: var(--shell-active);
+  color: var(--shell-active-text);
+  box-shadow: inset 3px 0 0 var(--shell-accent);
+  font-weight: 700;
+}
+.admin-viewport[data-role] .dw-nav-link:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: -2px;
+}
+.dw-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 16px;
+  opacity: 0.8;
+}
+.dw-nav-link:hover .dw-nav-icon,
+.dw-nav-link.active .dw-nav-icon {
+  opacity: 1;
+}
+.dw-nav-link.active .dw-nav-icon {
+  color: var(--shell-accent);
+}
+.admin-viewport[data-role='owner'] .dw-nav-link.active .dw-nav-icon {
+  color: var(--shell-ink);
+}
+
+/* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
+.dw-owner-note {
+  display: none;
+}
+.admin-viewport[data-role='owner'] .dw-owner-note {
+  display: block;
+  margin: auto 4px 0;
+  padding: 16px 14px;
+  border-radius: 12px;
+  background: #fbf3df;
+  text-align: center;
+}
+.dw-owner-note-mascot {
+  display: block;
+  margin: 0 auto 8px;
+}
+.dw-owner-note strong {
+  display: block;
+  color: #463b29;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dw-owner-note p {
+  margin: 4px 0 0;
+  color: var(--shell-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+/* 키보드 사용자: 첫 Tab에 본문 바로가기 */
+.dw-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  transform: translateY(-200%);
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--shell-ink, #172554);
+  font-weight: 700;
+  text-decoration: none;
+}
+.dw-skip-link:focus {
+  transform: translateY(0);
+}
+.dw-main:focus {
+  outline: none;
+}
+
+/* 휴대폰 폭: 기존에 휴대폰 배치를 지원하는 화면(이용 신청 · 사장님 홈)에서만 메뉴를 가로로 접는다 */
+@media (max-width: 760px) {
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand {
+    padding: 0;
+    gap: 8px;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-context {
+    margin-left: 0;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-header-tools {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar {
+    padding: 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--shell-line);
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note {
+    display: none;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-group {
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link {
+    width: auto;
+    margin: 0;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link.active {
+    box-shadow: inset 0 -3px 0 var(--shell-accent);
+  }
+}
+@media (max-width: 400px) {
+  /* 아주 좁은 폭에서는 로고 글자를 빼고 화면 이름을 남긴다 */
+  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-wordmark {
+    display: none;
+  }
+}
+@media (max-height: 820px) {
+  /* 노트북 화면처럼 세로가 짧으면 메뉴가 먼저 보이게 마스코트를 뺀다 */
+  .dw-owner-note-mascot {
+    display: none;
+  }
+}

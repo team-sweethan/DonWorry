@@ -2,9 +2,18 @@ spring:
   application:
     name: donworry
 
-  # 개인 PC 설정 파일이 있으면 자동으로 덮어쓴다 (없어도 됨)
-  config:
-    import: optional:classpath:application-local.yml
+  mail:
+    host: ${DONWORRY_SMTP_HOST:localhost}
+    port: ${DONWORRY_SMTP_PORT:1025}
+    username: ${DONWORRY_SMTP_USERNAME:}
+    password: ${DONWORRY_SMTP_PASSWORD:}
+    properties:
+      "[mail.smtp.auth]": ${DONWORRY_SMTP_AUTH:false}
+      "[mail.smtp.starttls.enable]": ${DONWORRY_SMTP_STARTTLS:false}
+      "[mail.smtp.starttls.required]": ${DONWORRY_SMTP_STARTTLS:false}
+      "[mail.smtp.connectiontimeout]": 3000
+      "[mail.smtp.timeout]": 3000
+      "[mail.smtp.writetimeout]": 3000
 
   datasource:
     url: jdbc:mariadb://${DONWORRY_DB_HOST:localhost}:${DONWORRY_DB_PORT:3307}/${DONWORRY_DB_NAME:donworry}
@@ -14,7 +23,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: validate            # 테이블은 Flyway만 만든다. 엔티티는 검사만
+      ddl-auto: validate            # 테이블은 Flyway만 만든다. Entity와 스키마가 어긋나면 기동 실패
     properties:
       hibernate:
         jdbc:
@@ -23,12 +32,74 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    validate-on-migrate: true       # 이미 적용된 파일이 바뀌면 기동 실패
+    clean-disabled: true            # flyway clean으로 DB가 통째로 지워지는 것을 막는다
+    # 파일명 타임스탬프는 '만든 시각'이라 병합 순서와 다를 수 있다
+    # 늦게 병합된 낮은 버전도 적용되게 허용한다 (의존 순서까지 보장하지는 않음)
+    out-of-order: true
 
   modulith:
     events:
       jdbc:
         schema-initialization:
-          enabled: false            # 이벤트 테이블은 Modulith가 아니라 Flyway V1이 만든다
+          enabled: false            # EVENT_PUBLICATION 테이블은 Flyway migration이 만든다
 
 server:
   port: ${DONWORRY_PORT:8081}       # CakeShop 8080과 겹치지 않게
+  # 로그인 이력 IP는 원 접속 주소만 쓴다 (ADR-0033). 값을 비워 두면 클라우드 환경 감지로
+  # NATIVE가 켜질 수 있어 명시한다. 프록시 사용자 IP는 security.login-history.ip-mode=PROXY로 받는다.
+  forward-headers-strategy: none
+  servlet:
+    session:
+      timeout: 30m                 # 비활동 만료 (ADR-0014)
+      cookie:
+        http-only: true
+        same-site: lax
+
+donworry:
+  applications:
+    enabled: ${DONWORRY_APPLICATIONS_ENABLED:true}
+    public-base-url: ${DONWORRY_PUBLIC_BASE_URL:http://localhost:5173}
+    mail-from: ${DONWORRY_MAIL_FROM:donworry@localhost}
+  scheduling:
+    # 로그인 이력 90일 삭제 등 예약 작업. 테스트는 build.gradle에서 끄고 작업을 직접 호출한다.
+    enabled: ${DONWORRY_SCHEDULING_ENABLED:true}
+
+security:
+  login-history:
+    # PROXY는 관리 프록시가 X-DonWorry-Client-IP를 덮어쓰는 배포에서만 설정한다.
+    ip-mode: ${DONWORRY_LOGIN_HISTORY_IP_MODE:DIRECT}
+    trusted-proxies: ${DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES:}
+  csrf:
+    # 브라우저 변경 요청은 기본 보호한다 (#408, ADR-0063).
+    enabled: ${DONWORRY_CSRF_ENABLED:true}
+  demo-api:
+    # 인증 없는 시연용 API(/api/demo/held-payments)를 연다. 운영에서는 끈다 (#392)
+    enabled: true
+
+ai:
+  server:
+    # true면 고정 문장 보고서 대신 ai-server(Qwen)에 조사를 맡긴다. 기본은 꺼짐 — ai-server를 켜는 사람만 켠다
+    enabled: ${AI_SERVER_ENABLED:false}
+    base-url: ${AI_SERVER_BASE_URL:http://localhost:8000}
+    # ai-server의 AI_SERVER_INTERNAL_API_KEY와 같은 값. 저장소에 적지 않는다
+    api-key: ${AI_SERVER_API_KEY:}
+  ml-shadow:
+    # true면 커밋된 FDS 평가를 ai-server RF로 따로 채점해 ml_shadow_scores에 기록한다. 결제 판정에는 쓰지 않는다. 기본 꺼짐
+    # ai.server.enabled(AI 조사)와 따로 켠다. 주소 · 서비스 키 · 응답 시간 초과는 ai.server 값을 같이 쓴다
+    enabled: ${ML_SHADOW_ENABLED:false}
+    interval: PT30S
+    batch-size: 50
+    settle-delay: PT30S
+    max-attempts: 3
+    # ai-server AI_SERVER_ML_MODEL_PATH의 파일 이름과 같아야 한다 (다르면 기록하지 않고 멈춘다)
+    # 기본 rf-v2 (#450). rf-v1로 되돌릴 때는 양쪽을 함께 바꾼다
+    model-version: ${ML_SHADOW_MODEL_VERSION:rf-v2}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!prod"
+    # 운영에서는 개인 PC의 DB·쿠키 설정을 가져오지 않는다.
+    import: optional:classpath:application-local.yml

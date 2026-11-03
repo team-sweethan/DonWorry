@@ -1,0 +1,69 @@
+.finance-trend {
+  width: 100%;
+  margin-inline: auto;
+}
+.finance-trend-scroll {
+  overflow-x: auto;
+}
+.finance-trend svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 900 / 280;
+}
+.finance-trend-legend,
+.finance-trend-detail {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.finance-trend-legend {
+  margin: 8px 0;
+}
+.finance-trend-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.finance-trend-legend i {
+  display: inline-block;
+  width: 22px;
+  height: 3px;
+}
+.finance-trend-legend small,
+.finance-trend-note {
+  color: #64748b;
+  font-size: 12px;
+}
+.finance-trend-detail {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.finance-trend-detail select {
+  padding: 5px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: white;
+}
+.finance-trend-overdue {
+  color: #b45309;
+  font-size: 13px;
+}
+.finance-summary-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.finance-manage {
+  margin: 20px 0;
+}
+.finance-manage .finance-nav {
+  margin-top: 16px;
+}
