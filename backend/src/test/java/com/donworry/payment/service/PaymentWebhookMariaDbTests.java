@@ -175,13 +175,16 @@ class PaymentWebhookMariaDbTests {
             responseStatus.set(status);
             Ids ids = heldSessionWithNotifyUrl();
 
+            Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
             runAndSettle();
+            Instant after = Instant.now();
 
             assertThat(received).as("status " + status).hasSize(1);
             PaymentSession failed = sessions.findById(ids.sessionId()).orElseThrow();
             assertThat(failed.getNotifiedStatus()).as("status " + status).isNull();
             assertThat(failed.getNotifyAttempts()).isEqualTo(1);
-            assertThat(failed.getNextNotifyAt()).isAfter(Instant.now().plusSeconds(5));
+            // 첫 재시도는 실패한 시각에서 5초 뒤 (ADR-0064 3절, #460)
+            assertThat(failed.getNextNotifyAt()).isBetween(before.plusSeconds(5), after.plusSeconds(5));
 
             // 다음 시각 전에는 다시 보내지 않는다
             runAndSettle();
