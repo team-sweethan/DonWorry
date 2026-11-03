@@ -119,3 +119,5 @@ Notion에 남은 이전 설명과 미결 계약은 [문서 대조 현황](../REA
 P6 5단계 PR 리뷰 대상: [0062 실제 기록과 배치 기준의 현금흐름 예측](0062-p6-cash-flow-forecast.md) — #230·#231.
 
 P6 #465 PR 리뷰 대상: [0068 매입일 기준 영업일 D+3 정산](0068-p6-capture-business-day-settlement.md) — 픽업 상세 정보와 정산일 계산 분리.
+
+P6 #474 PR 리뷰 대상: [0069 가맹점별 일별 지급 원장](0069-p6-merchant-daily-payouts.md).

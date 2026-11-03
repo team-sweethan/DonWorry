@@ -28,14 +28,30 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     Long completionUpperBound(@Param("cutoff") Instant cutoff);
 
     @Query("""
-            SELECT s.settlementId AS settlementId, s.merchantId AS merchantId, c.orderId AS orderId
-            FROM Settlement s JOIN Capture c ON s.captureId = c.captureId
+            SELECT DISTINCT s.merchantId FROM Settlement s
             WHERE s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
-              AND s.scheduledAt <= :cutoff AND s.settlementId > :after AND s.settlementId <= :upper
+              AND s.scheduledAt <= :cutoff AND s.settlementId <= :upper AND s.merchantId > :after
+            ORDER BY s.merchantId
+            """)
+    List<Long> findCompletionMerchants(
+            @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT s FROM Settlement s
+            WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+              AND s.scheduledAt<=:cutoff AND s.settlementId<=:upper
             ORDER BY s.settlementId
             """)
-    List<SettlementCompletionCandidate> findCompletionCandidates(
-            @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
+    List<Settlement> findForPayout(
+            @Param("merchant") Long merchant, @Param("cutoff") Instant cutoff, @Param("upper") Long upper);
+
+    @Query("""
+            SELECT COUNT(s) FROM Settlement s
+            WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+              AND s.scheduledAt<=:cutoff AND s.settlementId<=:upper
+            """)
+    long countForPayout(@Param("merchant") Long merchant, @Param("cutoff") Instant cutoff, @Param("upper") Long upper);
 
     @Query("""
             SELECT COALESCE(SUM(s.settlementAmount), 0)

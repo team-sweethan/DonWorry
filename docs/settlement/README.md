@@ -39,3 +39,5 @@ MariaDB 테스트는 Docker 격리 DB에 Flyway 전체를 적용하고 JPA 매�
 - [정산·자금관리 화면 실제 API 연결 (6단계)](frontend-connection.md)
 
 - [영업일 D+3 정책·ERD 확장안 (#465)](d3-policy-and-erd.md) — 현재 정산일 계산 기준.
+
+[2단계 가맹점별 지급 원장·배치](daily-payouts.md) — #474. 기존 건별 완료 배치의 지급 단위·트랜잭션을 가맹점별로 전환한다.

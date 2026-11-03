@@ -84,7 +84,9 @@
 - 배치와 환불은 동일 가맹점 조정 잔액/지급 대상을 같은 순서로 잠근 뒤 판단한다. 미리 조회한 상태만으로 지급 전·후를 결정하지 않는다.
 - 고객 환불 재실행과 P6 차감 재처리는 구분한다. P6 실패가 고객 환불을 취소하지 않는다.
 
-## 5. 후속 ERD 제안 (SQL 미생성)
+## 5. 단계별 ERD 확장
+
+2단계 #474에서 merchant_payouts/merchant_payout_items를 구현한다. [상세 ERD](daily-payouts.md)의 origin 출처 필드를 포함한다. 나머지 환불/배분/잔액 테이블은 후속 제안이며 아직 SQL을 생성하지 않는다.
 
 모든 ID는 BIGINT AUTO_INCREMENT, 금액 BIGINT(KRW), 시각 UTC DATETIME(6), 상태 VARCHAR.
 다른 담당 테이블은 논리 참조만 하며 아래 P6 내부 관계만 물리 FK 후보이다.
