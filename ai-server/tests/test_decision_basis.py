@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from app.agent.assemble import facts_json
 from app.agent.evidence import decision_basis
 from app.schemas.tools import (
@@ -119,8 +121,8 @@ def test_linked_card_with_new_card_and_overseas_is_reject() -> None:
     assert similar.canExplain == ["고액 결제"] and similar.explains == []
 
 
-# 1066 — 카드 테스팅 모양: 거절 후 재시도(고위험) + 짧은 시간 반복(주의), 승인 이력 없음
-# 짧은 시간 반복은 거절 후 재시도와 같은 행동이라 따로 세지 않는다 → 추가 확인 (#501 리뷰)
+# 1066 — 카드 테스팅 모양: 거절 후 재시도(고위험) + 단시간 반복(주의), 승인 이력 없음
+# 단시간 반복은 거절 후 재시도와 같은 행동이라 따로 세지 않는다 → 추가 확인 (#501 리뷰)
 # 지금 자료로는 카드 테스팅과 한도를 모르고 다시 누른 정상 고객을 가를 수 없다
 def test_retry_with_repeat_counts_once_without_approved_history() -> None:
     declined = [
@@ -137,7 +139,7 @@ def test_retry_with_repeat_counts_once_without_approved_history() -> None:
     assert basis.rule == "HIGH_RISK_ONLY"
     assert basis.recommendation == "NEEDS_CHECK"
     repeat = next(s for s in basis.signals if s.key == "R04")
-    assert repeat.countedIn == "카드사 거절 직후 재시도"
+    assert repeat.countedIn == "거절 후 재시도"
 
 
 # 1015 — 같은 모양의 정상 고객: 거절 후 재시도만 센다 → 추가 확인
@@ -161,7 +163,7 @@ def test_retry_with_repeat_is_needs_check_for_usual_customer() -> None:
 
 
 # 승인 이력이 있고 새 카드 규칙이 안 걸려도 "본인 카드"로 보지 않는다 (#501 리뷰)
-# R03이 꺼져 있어도 안 걸리고, 고객 이력은 카드별이 아니다 — 짧은 시간 반복만 남으면 추가 확인
+# R03이 꺼져 있어도 안 걸리고, 고객 이력은 카드별이 아니다 — 단시간 반복만 남으면 추가 확인
 def test_no_own_card_reason_from_missing_new_card_rule() -> None:
     approved = [(30000, "CAPTURED", "2026-05-01T10:00:00Z")]
     basis = _basis(28000, [_rule("R04", "단시간 반복 결제")], _history(approved), _linked())
@@ -236,6 +238,26 @@ def test_high_risk_country_and_legacy_codes() -> None:
     keys = [s.key for s in basis.signals]
     assert keys == ["R05", "R03"]
     assert basis.rule == "CAUTION_ONLY"
+
+
+# 징후 이름은 FDS 규칙 이름 그대로 — Case 상세 적중 규칙 · 조사 요약 밑줄과 같은 이름 (#505)
+FDS_RULE_NAMES = [
+    ("R01", "고액 결제"),
+    ("R02", "신규 단말기"),
+    ("R03", "신규 카드"),
+    ("R04", "단시간 반복 결제"),
+    ("R05", "고위험 국가 IP"),
+    ("R06", "카드 테스팅"),
+    ("R07", "차단 목록"),
+    ("R08", "거절 후 재시도"),
+]
+
+
+@pytest.mark.parametrize(("code", "name"), FDS_RULE_NAMES)
+def test_rule_signal_label_is_fds_rule_name(code: str, name: str) -> None:
+    basis = _basis(100000, [_rule(code, name)], None, None)
+
+    assert [s.label for s in basis.signals] == [name]
 
 
 # AI에게 주는 근거에 판정 근거 · 기준표 판정이 들어가고 영문 판정 코드는 없다

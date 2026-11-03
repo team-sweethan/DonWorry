@@ -284,8 +284,8 @@ const signal = (key: string, label: string, over: Partial<BasisSignal> = {}): Ba
 const basis1011: DecisionBasis = {
   signals: [
     signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
-    signal('R02', '처음 쓰는 기기'),
-    signal('R03', '처음 쓰는 카드'),
+    signal('R02', '신규 단말기'),
+    signal('R03', '신규 카드'),
     signal('OVERSEAS', '해외 접속 (TH)'),
   ],
   normals: [
@@ -330,7 +330,7 @@ test('signalTag_countedInOrNormalReason_isNotOpen', () => {
     signalTag(signal('R01', '고액 결제', { normalReason: '비슷한 금액 9건' })).open,
     false,
   )
-  assert.deepEqual(signalTag(signal('R04', '짧은 시간 반복 결제', { countedIn: '카드 테스팅' })), {
+  assert.deepEqual(signalTag(signal('R04', '단시간 반복 결제', { countedIn: '카드 테스팅' })), {
     text: '카드 테스팅에 포함 · 따로 세지 않음',
     open: false,
   })
@@ -338,12 +338,12 @@ test('signalTag_countedInOrNormalReason_isNotOpen', () => {
 
 test('markSignals_exactNamesOnly_marksByLevel', () => {
   const parts = markSignals(
-    '처음 쓰는 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
+    '신규 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
     basis1011,
   )
   const marked = parts.filter((p) => p.mark).map((p) => [p.text, p.mark])
   assert.deepEqual(marked, [
-    ['처음 쓰는 카드', 'CAUTION'],
+    ['신규 카드', 'CAUTION'],
     ['해외 접속', 'CAUTION'],
     ['같은 카드를 다른 고객이 사용', 'HIGH_RISK'],
     ['비슷한 금액', 'NORMAL'],
@@ -351,7 +351,7 @@ test('markSignals_exactNamesOnly_marksByLevel', () => {
   // 나눠도 원래 문장 그대로다
   assert.equal(
     parts.map((p) => p.text).join(''),
-    '처음 쓰는 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
+    '신규 카드로 해외 접속해 결제했고, 같은 카드를 다른 고객이 사용했습니다. 비슷한 금액 이력은 이를 설명하지 못합니다.',
   )
 })
 
@@ -359,7 +359,7 @@ test('markSignals_paraphrasedOrNoBasis_leavesPlain', () => {
   assert.deepEqual(markSignals('새 카드로 결제했습니다.', basis1011), [
     { text: '새 카드로 결제했습니다.', mark: null },
   ])
-  assert.deepEqual(markSignals('처음 쓰는 카드', null), [{ text: '처음 쓰는 카드', mark: null }])
+  assert.deepEqual(markSignals('신규 카드', null), [{ text: '신규 카드', mark: null }])
 })
 
 test('caseSignals_oldReport_returnsNullAndDedupesAcrossPayments', () => {
@@ -380,8 +380,8 @@ test('compareSignals_sameKeyAlignedCountryDiffersOnlyOneSide', () => {
     [
       ['같은 카드를 다른 고객이 사용', '같은 카드를 다른 고객이 사용', 'SAME'],
       ['해외 접속 (VN)', '해외 접속 (TH)', 'COUNTRY_DIFFERS'],
-      [null, '처음 쓰는 기기', 'ONLY'],
-      [null, '처음 쓰는 카드', 'ONLY'],
+      [null, '신규 단말기', 'ONLY'],
+      [null, '신규 카드', 'ONLY'],
       ['고액 결제', null, 'ONLY'],
     ],
   )
