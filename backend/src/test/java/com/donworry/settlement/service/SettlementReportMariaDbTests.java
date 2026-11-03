@@ -126,4 +126,20 @@ class SettlementReportMariaDbTests {
         assertThat(result.days().getFirst().completedAmount()).isEqualTo(9700);
         assertThat(result.days().getFirst().scheduledAmount()).isEqualTo(19400);
     }
+
+    @Test
+    void report_whenUndatedSqlSumExceedsLong_returnsExplicit422() {
+        captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-OVERFLOW-A", 10000L);
+        captures.processCapture(PAYMENT + 1, MERCHANT, "P6-REPORT-OVERFLOW-B", 10000L);
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=NULL,expected_settlement_at=NULL,settlement_amount=9223372036854775807 WHERE payment_id IN (?,?)",
+                PAYMENT,
+                PAYMENT + 1);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2)))
+                .isInstanceOfSatisfying(SettlementRequestException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(422);
+                    assertThat(e.getCode()).isEqualTo("SETTLEMENT_REPORT_AMOUNT_OVERFLOW");
+                });
+    }
 }
