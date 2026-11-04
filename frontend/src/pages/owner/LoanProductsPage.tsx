@@ -77,7 +77,7 @@ function isSnapshot(value: unknown): value is Snapshot {
   )
 }
 export function LoanProductsPage() {
-  const { pathname, state } = useLocation()
+  const { pathname, state, search } = useLocation()
   const input: unknown = state
   const [defaultSnapshot] = useState(() => defaultPreviewLoan())
   const { user } = useAuth()
@@ -88,7 +88,9 @@ export function LoanProductsPage() {
   const snapshot =
     fromForecast && validSnapshot ? input : pathname.startsWith('/dev/') ? defaultSnapshot : null
   const [selected, setSelected] = useState<(typeof products)[number] | null>(null)
-  const back = pathname.startsWith('/dev/') ? '/dev/funds' : '/owner/funds'
+  const back = pathname.startsWith('/dev/')
+    ? `/dev/funds${new URLSearchParams(search).get('sample') === '1' ? '?sample=1' : ''}`
+    : '/owner/funds'
   return (
     <div className="loan-products">
       <PageHeader
@@ -103,7 +105,7 @@ export function LoanProductsPage() {
         description="은행 이름·금리·한도·추천 표시는 팀원 프로토타입의 예시입니다. 실제 상품 조회나 대출 신청·심사는 수행하지 않습니다."
       />
       <div className="loan-evidence-grid">
-        <section className="loan-surface">
+        <section className="loan-surface loan-required-funds">
           <small>필요 자금 (예상)</small>
           <h2 className={snapshot && snapshot.required > 0 ? 'loan-negative' : ''}>
             {snapshot
@@ -171,7 +173,7 @@ export function LoanProductsPage() {
           >
             <div className="loan-bank">
               <span>{product.bank}</span>
-              {product.best && <Tag color="blue">정산 연계 추천 · 예시</Tag>}
+              {product.best && <Tag color="gold">정산 연계 추천 · 예시</Tag>}
             </div>
             <h2>{product.name}</h2>
             <dl>

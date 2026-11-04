@@ -1,6 +1,6 @@
 import { previewPayoutReport } from './settlementPreviewData'
-import { koreanToday } from './financeView'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { koreanToday, formatWonInput, parseWonInput } from './financeView'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { App, Alert, Button, Drawer, Input, InputNumber, Modal, Select, Tabs, Tag } from 'antd'
@@ -28,17 +28,32 @@ import './finance-page-header.css'
 const money = (value: number) => `${value.toLocaleString('ko-KR')}원`
 export function FinancePreview() {
   const { modal } = App.useApp()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { user } = useAuth()
   const today = koreanToday()
   const normalized = normalizeFinancePath(pathname)
   const isFunds = normalized.endsWith('/funds')
-  const scope = normalized.startsWith('/dev/') ? 'dev' : `owner:${user?.userId}:${user?.merchantId}`
+  const sample = normalized.startsWith('/dev/') && new URLSearchParams(search).get('sample') === '1'
+  const scope = normalized.startsWith('/dev/')
+    ? sample
+      ? 'dev:sample'
+      : 'dev'
+    : `owner:${user?.userId}:${user?.merchantId}`
   const store = useMemo(() => getPreviewStore(scope, today), [scope, today])
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useEffect(() => {
+    if (sample)
+      store.update((previous) =>
+        previous.opening === null ? setInitialBalance(previous, 500000) : previous,
+      )
+  }, [sample, store])
   const [refreshedAt, setRefreshedAt] = useState(() => new Date())
   const [start, setStart] = useState(today)
-  const [end, setEnd] = useState(dayjs(today).add(6, 'day').format('YYYY-MM-DD'))
+  const [end, setEnd] = useState(
+    dayjs(today)
+      .add(sample ? 29 : 6, 'day')
+      .format('YYYY-MM-DD'),
+  )
   const [openingInput, setOpeningInput] = useState<number | null>(500000)
   const [panel, setPanel] = useState<'manage' | 'daily' | null>(null)
   const [manageTab, setManageTab] = useState('balance')
@@ -113,7 +128,7 @@ export function FinancePreview() {
       draft.amount <= 0 ||
       draft.amount > MAX_PREVIEW_EXPENSE
     ) {
-      setError('항목명·기준일 이후 날짜·1원~10억 원의 정수 금액을 확인해 주세요.')
+      setError('지출명·기준일 이후 날짜·1원~10억 원의 정수 금액을 확인해 주세요.')
       return
     }
     store.update((previous) => ({
@@ -131,10 +146,16 @@ export function FinancePreview() {
     <div className="finance-preview">
       {normalized.startsWith('/dev/') && (
         <nav className="finance-nav" aria-label="자금 화면 이동">
-          <Link to="/dev/settlements" aria-current={!isFunds ? 'page' : undefined}>
+          <Link
+            to={`/dev/settlements${sample ? '?sample=1' : ''}`}
+            aria-current={!isFunds ? 'page' : undefined}
+          >
             정산 내역
           </Link>
-          <Link to="/dev/funds" aria-current={isFunds ? 'page' : undefined}>
+          <Link
+            to={`/dev/funds${sample ? '?sample=1' : ''}`}
+            aria-current={isFunds ? 'page' : undefined}
+          >
             자금 현황
           </Link>
         </nav>
@@ -203,6 +224,10 @@ export function FinancePreview() {
                 시작 잔액 (원)
                 <InputNumber
                   aria-label="최초 시작 잔액"
+                  className="finance-money-input"
+                  formatter={formatWonInput}
+                  parser={parseWonInput}
+                  suffix="원"
                   min={0}
                   max={1000000000000}
                   precision={0}
@@ -288,6 +313,11 @@ export function FinancePreview() {
                     onChange={(e) => setEnd(e.target.value)}
                   />
                 </label>
+                <div className="finance-period-actions">
+                  <Button type="primary" onClick={() => manage()}>
+                    잔액·지출 설정
+                  </Button>
+                </div>
               </div>
               {!result.valid && (
                 <Alert
@@ -316,7 +346,6 @@ export function FinancePreview() {
                   amount: e.amount,
                   note: e.kind === 'RECURRING' ? '정기 지출 예정' : '일회성 지출 예정',
                 }))}
-                onManage={() => manage()}
                 onDetails={(date) => {
                   setSelected(date)
                   setPanel('daily')
@@ -331,6 +360,7 @@ export function FinancePreview() {
         유지합니다.
       </p>
       <Drawer
+        className="finance-drawer"
         title={panel === 'manage' ? '잔액·지출 설정' : '날짜별 예상 잔액 계산'}
         open={panel !== null}
         onClose={() => setPanel(null)}
@@ -567,6 +597,7 @@ export function FinancePreview() {
         )}
       </Drawer>
       <Modal
+        className="finance-dialog"
         title={
           draft && state.expenses.some((e) => e.id === draft.id)
             ? '예정 지출 수정'
@@ -582,7 +613,7 @@ export function FinancePreview() {
           <>
             {error && <Alert type="error" message={error} />}
             <label className="finance-field">
-              항목명
+              지출명
               <Input
                 value={draft.title}
                 maxLength={100}
@@ -601,6 +632,10 @@ export function FinancePreview() {
             <label className="finance-field">
               금액 (원)
               <InputNumber
+                className="finance-money-input"
+                formatter={formatWonInput}
+                parser={parseWonInput}
+                suffix="원"
                 min={1}
                 max={MAX_PREVIEW_EXPENSE}
                 precision={0}
@@ -623,6 +658,7 @@ export function FinancePreview() {
             <label className="finance-field">
               메모
               <Input.TextArea
+                autoSize={{ minRows: 4, maxRows: 8 }}
                 value={draft.memo}
                 maxLength={500}
                 onChange={(e) => setDraft({ ...draft, memo: e.target.value })}

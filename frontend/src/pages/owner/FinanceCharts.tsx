@@ -1,10 +1,14 @@
-import { useState } from 'react'
-import { Button, Empty } from 'antd'
+import { useEffect, useRef, useState } from 'react'
+import { Button, DatePicker, Empty } from 'antd'
 import dayjs from 'dayjs'
+import 'dayjs/locale/ko'
 import { settlementSeries } from './settlementChart'
 import type { SettlementDay } from './settlementChart'
+import { koreanToday } from './financeView'
 import './finance-charts.css'
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
+const axisWon = (value: number) =>
+  `${new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)}원`
 export function SettlementLineChart({
   todayValue,
   payoutMode = false,
@@ -19,16 +23,25 @@ export function SettlementLineChart({
   const [selected, setSelected] = useState('')
   const today = todayValue ?? dayjs().format('YYYY-MM-DD')
   const data = settlementSeries(days, today)
-  if (!data.length) return <Empty description="조회할 날짜를 선택해 주세요." />
   const active =
-    data.find((d) => d.date === selected) ??
-    data.find((d) => d.hasPayout || d.completedAmount + d.scheduledAmount + d.expectedAmount > 0) ??
-    data[0]
-  const width = 900,
+    data.find((d) => d.date === selected) ?? data.find((d) => d.date === today) ?? data[0]
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const width = Math.max(900, data.length * 48 + 80),
     left = 64,
     right = width - 16,
     top = 16,
     bottom = 246
+  const activeIndex = data.findIndex((d) => d.date === active?.date)
+  useEffect(() => {
+    const viewport = scrollRef.current
+    if (!viewport || activeIndex < 0) return
+    const position = left + ((right - left) * activeIndex) / Math.max(1, data.length - 1)
+    viewport.scrollTo({
+      left: Math.max(0, position - viewport.clientWidth / 2),
+      behavior: 'smooth',
+    })
+  }, [active?.date, activeIndex, data.length, left, right])
+  if (!data.length) return <Empty description="조회할 날짜를 선택해 주세요." />
   const max = Math.max(1, ...data.map((d) => Math.max(d.completed ?? 0, d.scheduled ?? 0)))
   const ceiling = Math.max(10000, Math.ceil(max / 10000) * 10000)
   const x = (i: number) => left + ((right - left) * i) / Math.max(1, data.length - 1)
@@ -52,9 +65,30 @@ export function SettlementLineChart({
         </span>
         <small>날짜별 금액 · 누적액 아님</small>
       </div>
-      <div className="finance-trend-scroll">
+      <p className="finance-chart-focus">
+        선택 기준일 <strong>{active.date}</strong>
+        <span>좌우로 스크롤해 조회 기간의 다른 날짜를 볼 수 있어요.</span>
+      </p>
+      <div
+        className="finance-trend-scroll"
+        ref={scrollRef}
+        tabIndex={0}
+        role="region"
+        aria-label="좌우로 스크롤하는 정산 그래프"
+      >
+        <div className="finance-chart-fixed-axis" aria-hidden="true">
+          {[0, 1, 2, 3, 4].map((step) => {
+            const value = (ceiling * step) / 4
+            return (
+              <span key={step} style={{ top: y(value) - 8 }}>
+                {axisWon(value)}
+              </span>
+            )
+          })}
+        </div>
         <svg
           viewBox={`0 0 ${width} 280`}
+          style={{ width, height: 280 }}
           role="img"
           aria-label={
             payoutMode
@@ -66,10 +100,7 @@ export function SettlementLineChart({
             const value = (ceiling * t) / 4
             return (
               <g key={t}>
-                <line x1={left} x2={right} y1={y(value)} y2={y(value)} stroke="#e2e8f0" />
-                <text x={left - 10} y={y(value) + 4} textAnchor="end" fontSize="12" fill="#64748b">
-                  {value === 0 ? '0원' : `${(value / 10000).toLocaleString('ko-KR')}만 원`}
-                </text>
+                <line x1={left} x2={right} y1={y(value)} y2={y(value)} stroke="#e7e1d5" />
               </g>
             )
           })}
@@ -83,8 +114,23 @@ export function SettlementLineChart({
                 stroke="#94a3b8"
                 strokeDasharray="4 4"
               />
-              <text x={x(todayIndex)} y="18" textAnchor="middle" fill="#64748b" fontSize="12">
+              <text x={x(todayIndex)} y="18" textAnchor="middle" fill="#756b5b" fontSize="12">
                 오늘
+              </text>
+            </g>
+          )}
+          {active.date !== today && (
+            <g>
+              <line
+                x1={x(activeIndex)}
+                x2={x(activeIndex)}
+                y1={top}
+                y2={bottom}
+                stroke="#6c4b0b"
+                strokeWidth="2"
+              />
+              <text x={x(activeIndex)} y="18" textAnchor="middle" fill="#6c4b0b" fontSize="12">
+                선택 기준일
               </text>
             </g>
           )}
@@ -104,7 +150,6 @@ export function SettlementLineChart({
                       role="button"
                       tabIndex={0}
                       aria-label={`${d.date} ${field === 'completed' ? (payoutMode ? '실제 지급' : '완료') : '예정'} ${won(d[field]!)}`}
-                      onMouseEnter={() => setSelected(d.date)}
                       onFocus={() => setSelected(d.date)}
                       onClick={() => setSelected(d.date)}
                       onKeyDown={(e) => {
@@ -119,7 +164,7 @@ export function SettlementLineChart({
                   ),
               )}
               {(i % Math.max(1, Math.ceil(data.length / 10)) === 0 || i === data.length - 1) && (
-                <text x={x(i)} y="267" textAnchor="middle" fontSize="12" fill="#64748b">
+                <text x={x(i)} y="267" textAnchor="middle" fontSize="12" fill="#756b5b">
                   {d.date.slice(5).replace('-', '/')}
                 </text>
               )}
@@ -130,17 +175,16 @@ export function SettlementLineChart({
       <div className="finance-trend-detail">
         <label>
           날짜{' '}
-          <select
+          <DatePicker
             aria-label="그래프 날짜 선택"
-            value={active.date}
-            onChange={(e) => setSelected(e.target.value)}
-          >
-            {data.map((d) => (
-              <option key={d.date} value={d.date}>
-                {d.date}
-              </option>
-            ))}
-          </select>
+            value={dayjs(active.date).locale('ko')}
+            minDate={dayjs(data[0].date)}
+            maxDate={dayjs(data.at(-1)!.date)}
+            allowClear={false}
+            onChange={(date) => {
+              if (date) setSelected(date.format('YYYY-MM-DD'))
+            }}
+          />
         </label>
         <span>
           {payoutMode ? '실제 지급' : '완료'}{' '}
@@ -153,7 +197,15 @@ export function SettlementLineChart({
         <Button size="small" onClick={() => onSelect(active.date)}>
           이날 정산 내역 보기
         </Button>
+        <Button size="small" disabled={todayIndex < 0} onClick={() => setSelected(today)}>
+          오늘로
+        </Button>
       </div>
+      <p className="finance-trend-note">
+        날짜를 선택하면 해당일의 기준선을 강조하고 화면을 이동합니다. 금액 계산 기준은 바뀌지
+        않습니다. 조회 기간 밖의 날짜는 위에서 기간을 변경해 확인하세요. 최대 366일까지 조회할 수
+        있습니다.
+      </p>
       <p className="finance-trend-note">
         예정액 중 매입일 기준 {won(active.scheduledAmount)} · 기존 예상 일정{' '}
         {won(active.expectedAmount)}. 신규 정산은 매입일 기준 영업일 D+3에 예정됩니다. 예정액은 환불
@@ -179,29 +231,59 @@ export function CashBalanceChart({
   onSelect: (date: string) => void
 }) {
   const [selected, setSelected] = useState('')
+  const today = koreanToday()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const active = points.find((p) => p.date === (selectedDate ?? selected)) ?? points[0]
+  const width = Math.max(900, points.length * 48 + 80)
+  const band = (width - 80) / Math.max(1, points.length)
+  const activeIndex = points.findIndex((p) => p.date === active?.date)
+  useEffect(() => {
+    const viewport = scrollRef.current
+    if (!viewport || activeIndex < 0) return
+    viewport.scrollTo({
+      left: Math.max(0, 64 + band * (activeIndex + 0.5) - viewport.clientWidth / 2),
+      behavior: 'smooth',
+    })
+  }, [active?.date, activeIndex, band])
   if (!points.length) return <Empty description="조회 내역이 없습니다." />
   const low = Math.min(0, ...points.map((p) => Math.min(p.balance, -(p.expense ?? 0)))),
     high = Math.max(1, ...points.map((p) => Math.max(p.balance, p.income ?? 0))),
-    span = high - low || 1,
-    width = 900
-  const band = (width - 80) / points.length
+    span = high - low || 1
   const x = (i: number) => 64 + band * (i + 0.5),
     y = (v: number) => 16 + ((high - v) * 230) / span
-  const active = points.find((p) => p.date === (selectedDate ?? selected)) ?? points[0]
+  const selectDate = (date: string) => {
+    setSelected(date)
+    onSelect(date)
+  }
   return (
     <div className="finance-trend">
-      <div className="finance-trend-scroll">
+      <p className="finance-chart-focus">
+        선택 기준일 <strong>{active.date}</strong>
+        <span>좌우로 스크롤해 다른 날짜의 잔액을 확인하세요.</span>
+      </p>
+      <div
+        className="finance-trend-scroll"
+        ref={scrollRef}
+        tabIndex={0}
+        role="region"
+        aria-label="좌우로 스크롤하는 예상 잔액 그래프"
+      >
+        <div className="finance-chart-fixed-axis" aria-hidden="true">
+          {[...new Set([low, 0, high])].map((value) => (
+            <span key={value} style={{ top: y(value) - 8 }}>
+              {axisWon(value)}
+            </span>
+          ))}
+        </div>
         <svg
           viewBox={`0 0 ${width} 280`}
+          style={{ width, height: 280 }}
           role="img"
           aria-label="일별 정산 유입·지출과 예상 잔액 그래프"
         >
           {[...new Set([low, 0, high])].map((v, i) => (
             <g key={i}>
-              <line x1="64" x2={width - 16} y1={y(v)} y2={y(v)} stroke="#e2e8f0" />
-              <text x="56" y={y(v) + 4} textAnchor="end" fontSize="12" fill="#64748b">
-                {Math.round(v / 10000).toLocaleString('ko-KR')}만 원
-              </text>
+              <line x1="64" x2={width - 16} y1={y(v)} y2={y(v)} stroke="#e7e1d5" />
             </g>
           ))}
           <line
@@ -250,8 +332,17 @@ export function CashBalanceChart({
           <polyline
             points={points.map((p, i) => `${x(i)},${y(p.balance)}`).join(' ')}
             fill="none"
-            stroke="#172554"
+            stroke="#614b2e"
             strokeWidth="3"
+          />
+          <line
+            x1={x(activeIndex)}
+            x2={x(activeIndex)}
+            y1="16"
+            y2="246"
+            stroke="#ad7c18"
+            strokeWidth="2"
+            strokeDasharray="4 4"
           />
           {points.map((p, i) => (
             <g key={p.date}>
@@ -259,16 +350,15 @@ export function CashBalanceChart({
                 cx={x(i)}
                 cy={y(p.balance)}
                 r={p.date === active.date ? 6 : 4}
-                fill={p.balance < 0 ? '#ea580c' : '#172554'}
-                onMouseEnter={() => setSelected(p.date)}
-                onClick={() => onSelect(p.date)}
+                fill={p.balance < 0 ? '#ea580c' : '#614b2e'}
+                onClick={() => selectDate(p.date)}
                 role="button"
                 tabIndex={0}
                 aria-label={`${p.date} 예상 잔액 ${won(p.balance)}`}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    onSelect(p.date)
+                    selectDate(p.date)
                   }
                 }}
               >
@@ -277,7 +367,7 @@ export function CashBalanceChart({
                 </title>
               </circle>
               {i % Math.max(1, Math.ceil(points.length / 8)) === 0 && (
-                <text x={x(i)} y="267" textAnchor="middle" fontSize="12" fill="#64748b">
+                <text x={x(i)} y="267" textAnchor="middle" fontSize="12" fill="#756b5b">
                   {p.date.slice(5)}
                 </text>
               )}
@@ -288,23 +378,28 @@ export function CashBalanceChart({
       <div className="finance-trend-detail">
         <label>
           날짜{' '}
-          <select
+          <DatePicker
             aria-label="예상 잔액 날짜 선택"
-            value={active.date}
-            onChange={(e) => {
-              setSelected(e.target.value)
-              onSelect(e.target.value)
+            value={dayjs(active.date).locale('ko')}
+            minDate={dayjs(points[0].date)}
+            maxDate={dayjs(points.at(-1)!.date)}
+            allowClear={false}
+            onChange={(date) => {
+              if (date) selectDate(date.format('YYYY-MM-DD'))
             }}
-          >
-            {points.map((p) => (
-              <option key={p.date}>{p.date}</option>
-            ))}
-          </select>
+          />
         </label>
         <span>
           정산 유입 <b>{won(active.income ?? 0)}</b> · 지출 <b>{won(active.expense ?? 0)}</b> · 예상
           잔액 <b>{won(active.balance)}</b>
         </span>
+        <Button
+          size="small"
+          disabled={!points.some((point) => point.date === today)}
+          onClick={() => selectDate(today)}
+        >
+          오늘로
+        </Button>
       </div>
     </div>
   )

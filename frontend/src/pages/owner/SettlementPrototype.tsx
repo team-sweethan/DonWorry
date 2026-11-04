@@ -19,7 +19,7 @@ const orderSummary = (items: OrderProduct[]) =>
 const orderQuantity = (items: OrderProduct[]) =>
   items.reduce((total, item) => total + item.quantity, 0)
 const labels: Record<Status, string> = {
-  done: '정산 반영 완료',
+  done: '정산 완료',
   sch: '정산 예정',
   exp: '예상 (기존 일정)',
   can: '정산 취소',
@@ -212,21 +212,29 @@ export function SettlementPrototype({
     { length: 42 },
     (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
   )
-  const daily = inPeriod.filter((e) => key(e.date) === key(selectedDate))
+  const daily = inPeriod
+    .filter((e) => key(e.date) === key(selectedDate))
+    .toSorted(
+      (a, b) =>
+        b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id, 'en', { numeric: true }),
+    )
   const dailyPayouts = scopedPayouts.filter((p) => p.payoutDate === dateInput(selectedDate))
   const payoutRows = scopedPayouts.filter(
     (p) =>
       (!dateOnly || p.payoutDate === dateInput(selectedDate)) &&
       matchesFinanceQuery('payout', reportType, String(p.payoutId), query),
   )
-  const dailyExpenses = scopedExpenses.filter((e) => e.date === dateInput(selectedDate))
+  const dailyExpenses = scopedExpenses
+    .filter((e) => e.date === dateInput(selectedDate))
+    .toSorted((a, b) => b.id.localeCompare(a.id, 'en', { numeric: true }))
   const expenseRows = scopedExpenses
     .filter((e) =>
       dateOnly ? e.date === dateInput(selectedDate) : e.date >= rangeStart && e.date <= rangeEnd,
     )
     .filter((e) => matchesFinanceQuery('expense', reportType, e.title, query))
-    .toSorted((a, b) => b.date.localeCompare(a.date))
-  const pickups = inPeriod.filter((e) => e.pickup !== null && key(e.pickup) === key(selectedDate))
+    .toSorted(
+      (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id, 'en', { numeric: true }),
+    )
   const scope = dateOnly ? daily : inPeriod
   const rows = scope
     .filter((e) => reportType !== 'settlement' || filter === 'all' || e.status === filter)
@@ -238,7 +246,8 @@ export function SettlementPrototype({
           ? net(a) - net(b)
           : sort === 'order'
             ? (a.orderId ?? a.id).localeCompare(b.orderId ?? b.id)
-            : b.date.getTime() - a.date.getTime(),
+            : b.date.getTime() - a.date.getTime() ||
+              b.id.localeCompare(a.id, 'en', { numeric: true }),
     )
   const settlementPage = Math.min(page, Math.max(1, Math.ceil(rows.length / 20)))
   const currentExpensePage = Math.min(expensePage, Math.max(1, Math.ceil(expenseRows.length / 20)))
@@ -425,10 +434,6 @@ export function SettlementPrototype({
                     </span>
                   ))}
                 <span>
-                  <i className="stl-pick" />
-                  {preview ? '픽업' : '조회 정산의 픽업'}
-                </span>
-                <span>
                   <i className="stl-expense" />
                   지출
                 </span>
@@ -479,13 +484,6 @@ export function SettlementPrototype({
                         .toLocaleString('ko-KR')}
                     </span>
                   )}
-                  {inPeriod.some((e) => e.pickup !== null && key(e.pickup) === key(d)) && (
-                    <span className="stl-chip stl-pick">
-                      픽업{' '}
-                      {inPeriod.filter((e) => e.pickup !== null && key(e.pickup) === key(d)).length}
-                      건
-                    </span>
-                  )}
                 </button>
               ))}
             </div>
@@ -495,28 +493,13 @@ export function SettlementPrototype({
               {selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 (
               {weekdays[selectedDate.getDay()]})<small>주문 {daily.length}건</small>
             </h2>
-            {dailyPayouts.map((p) => (
-              <div key={p.payoutId} className="payout-daily" aria-label="선택 날짜 지급 요약">
-                <p>
-                  <span>지급 대상 정산금</span>
-                  <b>{won(p.settlementAmount)}</b>
-                </p>
-                <p>
-                  <span>환불 회수 차감</span>
-                  <b>−{won(p.refundDeductionAmount)}</b>
-                </p>
-                <p>
-                  <span>실제 지급액</span>
-                  <b>{won(p.payoutAmount)}</b>
-                </p>
-              </div>
-            ))}
-            {daily.length > 0 && !payoutData && (
-              <div className="stl-total">
-                <span>이날 정산금 합계</span>
-                <b>{won(sum(daily.filter((e) => e.status !== 'can')))}</b>
-              </div>
-            )}
+            <div
+              className="stl-total"
+              title="수수료 차감 후 주문별 정산금 합계입니다. 환불 회수 차감 후 실제 지급액은 지급 내역에서 확인하세요."
+            >
+              <span>이날 정산금 합계</span>
+              <b>{won(sum(daily.filter((e) => e.status !== 'can')))}</b>
+            </div>
             <div className="stl-summary-actions">
               <Button type="primary" block onClick={openList}>
                 주문·지급·지출 전체 보기 ·{' '}
@@ -524,8 +507,23 @@ export function SettlementPrototype({
               </Button>
               <p>주문번호 검색 · 상태별 조회 · 20건씩 보기</p>
             </div>
-            <h3>주문별 정산 · {daily.length}건</h3>
-            {daily.slice(0, 3).map((e) => (
+            <div className="stl-preview-heading">
+              <h3>주문별 정산 · {daily.length}건</h3>
+              <Button
+                size="small"
+                type="text"
+                className="stl-more-button"
+                aria-label="주문별 정산 전체 내역"
+                onClick={() => {
+                  openList()
+                  setReportType('settlement')
+                }}
+              >
+                더보기
+              </Button>
+            </div>
+            {daily.length > 0 && <p className="stl-preview-note">최신순 · 최대 2건</p>}
+            {daily.slice(0, 2).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
                   <b>{e.orderId ?? e.id}</b>
@@ -551,13 +549,28 @@ export function SettlementPrototype({
                 </div>
               </article>
             ))}
-            {daily.length > 3 && (
+            {daily.length > 2 && (
               <p className="stl-preview-note">
-                외 {daily.length - 3}건은 전체 보기에서 확인하세요.
+                외 {daily.length - 2}건은 전체 보기에서 확인하세요.
               </p>
             )}
-            <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
-            {dailyExpenses.slice(0, 3).map((e) => (
+            <div className="stl-preview-heading">
+              <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
+              <Button
+                size="small"
+                type="text"
+                className="stl-more-button"
+                aria-label="지출 전체 내역"
+                onClick={() => {
+                  openList()
+                  setReportType('expense')
+                }}
+              >
+                더보기
+              </Button>
+            </div>
+            {dailyExpenses.length > 0 && <p className="stl-preview-note">최신순 · 최대 2건</p>}
+            {dailyExpenses.slice(0, 2).map((e) => (
               <article key={e.id}>
                 <div className="stl-detail-title">
                   <b>{e.title}</b>
@@ -567,25 +580,12 @@ export function SettlementPrototype({
                 <strong className="stl-expense-heading">−{won(e.amount)}</strong>
               </article>
             ))}
-            {dailyExpenses.length > 3 && (
-              <p>외 {dailyExpenses.length - 3}건은 전체 보기에서 확인하세요.</p>
+            {dailyExpenses.length > 2 && (
+              <p>외 {dailyExpenses.length - 2}건은 전체 보기에서 확인하세요.</p>
             )}
             {!dailyExpenses.length && <p className="stl-preview-note">등록한 지출이 없습니다.</p>}
-            {pickups.length > 0 && <h3>{preview ? '픽업 일정' : '조회한 정산의 픽업 일정'}</h3>}
-            {pickups.slice(0, 3).map((e) => (
-              <article key={`pickup-${e.id}`}>
-                <div className="stl-detail-title">
-                  <b>{e.orderId ?? e.id}</b>
-                  <span className="stl-chip stl-pick">픽업 정보</span>
-                </div>
-                <p>매입 원금 {won(e.gross)}</p>
-              </article>
-            ))}
-            {pickups.length > 3 && (
-              <p className="stl-preview-note">픽업 일정 총 {pickups.length}건 · 일부만 표시</p>
-            )}
-            {!daily.length && !dailyPayouts.length && !pickups.length && !dailyExpenses.length && (
-              <div className="stl-empty">이날은 정산·픽업 일정이 없습니다.</div>
+            {!daily.length && !dailyPayouts.length && !dailyExpenses.length && (
+              <div className="stl-empty">이날은 정산·지출 내역이 없습니다.</div>
             )}
           </section>
         </div>

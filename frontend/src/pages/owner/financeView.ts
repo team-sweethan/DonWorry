@@ -10,6 +10,10 @@ import type {
 import type { PreviewOrderEntry } from './settlementPreviewData.ts'
 
 export const MAX_FINANCE_AMOUNT = Number.MAX_SAFE_INTEGER
+export const formatWonInput = (value: number | string | undefined) =>
+  String(value ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+export const parseWonInput = (value: string | undefined) =>
+  value?.trim() ? Number(value.replace(/,/g, '')) : Number.NaN
 export type FinancePeriod = { from: string; to: string }
 export function matchesFinanceQuery(
   kind: 'payout' | 'settlement' | 'expense',

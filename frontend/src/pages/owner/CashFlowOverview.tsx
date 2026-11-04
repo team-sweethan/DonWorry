@@ -1,11 +1,11 @@
-import { financeTotal } from './financeView'
+import { financeTotal, koreanToday } from './financeView'
 import './payout-ledger.css'
 import { loanRequirement } from './loanForecast'
 import type { CashFlowForecast } from '../../api/finance'
 import { useRef, useState } from 'react'
 import { Button, Empty } from 'antd'
+import { InfoCircleFilled, WarningFilled } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { SettingOutlined, RightOutlined } from '@ant-design/icons'
 import { CashBalanceChart } from './FinanceCharts'
 import './cashflow-overview.css'
 export type ForecastDayView = {
@@ -62,7 +62,6 @@ export function CashFlowOverview({
   days,
   incomes,
   costs,
-  onManage,
   onDetails,
   preview = false,
   currentBalance,
@@ -80,12 +79,11 @@ export function CashFlowOverview({
   capturedAt?: string
   ownerScope?: string
   recovery?: { outstanding: number; projected: number; remaining: number }
-  onManage: () => void
   onDetails: (date: string) => void
 }) {
   const [selected, setSelected] = useState('')
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const evidenceRef = useRef<HTMLElement>(null)
   if (!days.length) return <Empty description="올바른 조회 기간을 선택해 주세요." />
   const firstShortage = summary
@@ -93,7 +91,8 @@ export function CashFlowOverview({
     : days.find((d) => d.closing < 0)
   const requirement = loanRequirement(days)!
   const maximumShortage = summary?.maximumShortage ?? requirement.required
-  const active = days.find((d) => d.date === selected) ?? firstShortage ?? days[0]
+  const active =
+    days.find((d) => d.date === selected) ?? days.find((d) => d.date === koreanToday()) ?? days[0]
   const dayIncome = incomes.filter((e) => e.date === active.date)
   const dayCosts = costs.filter((e) => e.date === active.date)
   const largest = [...dayCosts].sort((a, b) => b.amount - a.amount)[0]
@@ -117,18 +116,6 @@ export function CashFlowOverview({
           <p>
             {days[0].date} ~ {days.at(-1)!.date} · 일 마감 기준
           </p>
-        </div>
-        <div className="cashflow-manage-action">
-          <Button
-            type="primary"
-            size="large"
-            icon={<SettingOutlined />}
-            onClick={onManage}
-            aria-describedby="cashflow-manage-hint"
-          >
-            잔액·지출 설정 <RightOutlined />
-          </Button>
-          <small id="cashflow-manage-hint">시작 잔액 · 일회성 지출 · 정기 지출 관리</small>
         </div>
       </div>
       <div className="cashflow-summary-grid">
@@ -166,7 +153,10 @@ export function CashFlowOverview({
       </div>
       {recoveryInfo && (recoveryInfo.outstanding > 0 || recoveryInfo.projected > 0) && (
         <section className="recovery-notice" aria-label="환불 회수와 이월 안내">
-          <h3>환불 회수가 앞으로의 지급액에 반영돼요</h3>
+          <h3>
+            <InfoCircleFilled aria-hidden />
+            환불 회수가 앞으로의 지급액에 반영돼요
+          </h3>
           <p>
             이미 지급한 주문의 환불은 다음 정산에서 회수합니다. 현재 잔액에서 다시 빼지 않고, 아래
             예측에는 차감 후 들어올 금액만 반영했습니다.
@@ -195,6 +185,7 @@ export function CashFlowOverview({
         className={`cashflow-verdict ${firstShortage ? 'cashflow-verdict-warning' : 'cashflow-verdict-safe'}`}
       >
         <span>
+          {firstShortage && <WarningFilled aria-hidden />}
           {firstShortage ? '자금 준비가 필요해요' : '선택 기간에는 자금 부족이 예상되지 않아요'}
         </span>
         <h2>
@@ -242,7 +233,7 @@ export function CashFlowOverview({
           <div>
             <h2>잔액이 어떻게 달라질까요?</h2>
             <p>
-              초록 막대는 정산 유입, 빨간 막대는 지출, 남색 선은 예상 잔액입니다. 날짜를 선택하면
+              초록 막대는 정산 유입, 빨간 막대는 지출, 갈색 선은 예상 잔액입니다. 날짜를 선택하면
               계산 근거를 확인할 수 있습니다.
             </p>
           </div>
@@ -361,22 +352,27 @@ export function CashFlowOverview({
         <Button
           size="large"
           onClick={() =>
-            navigate(pathname.startsWith('/dev/') ? '/dev/funds/loans' : '/owner/loans', {
-              state: {
-                required: maximumShortage,
-                minimum: summary?.lowestBalance ?? Math.min(...days.map((d) => d.closing)),
-                totalIn:
-                  summary?.totalIncome ??
-                  days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
-                firstShortage: firstShortage?.date ?? null,
-                minimumDate: requirement.minimumDate,
-                from: days[0].date,
-                to: days.at(-1)!.date,
-                capturedAt: capturedAt ?? new Date().toISOString(),
-                ownerScope,
-                preview,
+            navigate(
+              pathname.startsWith('/dev/')
+                ? `/dev/funds/loans${new URLSearchParams(search).get('sample') === '1' ? '?sample=1' : ''}`
+                : '/owner/loans',
+              {
+                state: {
+                  required: maximumShortage,
+                  minimum: summary?.lowestBalance ?? Math.min(...days.map((d) => d.closing)),
+                  totalIn:
+                    summary?.totalIncome ??
+                    days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
+                  firstShortage: firstShortage?.date ?? null,
+                  minimumDate: requirement.minimumDate,
+                  from: days[0].date,
+                  to: days.at(-1)!.date,
+                  capturedAt: capturedAt ?? new Date().toISOString(),
+                  ownerScope,
+                  preview,
+                },
               },
-            })
+            )
           }
         >
           연계 대출 상품 보기 →

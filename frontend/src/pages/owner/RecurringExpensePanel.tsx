@@ -16,6 +16,7 @@ import {
 import dayjs from 'dayjs'
 import type { RecurringExpense, RecurringExpenseInput } from './financePreviewTypes'
 import { MAX_PREVIEW_EXPENSE } from './recurringExpenses'
+import { formatWonInput, parseWonInput } from './financeView'
 
 export function RecurringExpensePanel({
   rules,
@@ -124,6 +125,7 @@ export function RecurringExpensePanel({
         ]}
       />
       <Modal
+        className="finance-dialog"
         title="정기 지출 등록"
         okText="등록"
         cancelText="취소"
@@ -151,12 +153,12 @@ export function RecurringExpensePanel({
         >
           <Form.Item
             name="title"
-            label="항목명"
+            label="지출명"
             rules={[{ required: true, whitespace: true, max: 100 }]}
           >
             <Input maxLength={100} />
           </Form.Item>
-          <Space>
+          <Space wrap className="finance-recurring-amount-row">
             <Form.Item name="frequency" label="주기" rules={[{ required: true }]}>
               <Select
                 style={{ width: 120 }}
@@ -172,7 +174,15 @@ export function RecurringExpensePanel({
               label="금액 (원)"
               rules={[{ required: true }, { type: 'integer', min: 1, max: maxAmount }]}
             >
-              <InputNumber min={1} max={maxAmount} precision={0} />
+              <InputNumber
+                className="finance-money-input"
+                formatter={formatWonInput}
+                parser={parseWonInput}
+                suffix="원"
+                min={1}
+                max={maxAmount}
+                precision={0}
+              />
             </Form.Item>
           </Space>
           <Form.Item
@@ -192,7 +202,8 @@ export function RecurringExpensePanel({
           </Form.Item>
           <Form.Item
             name="endDate"
-            label="마지막 적용일 (선택, 이 날짜 포함)"
+            label="마지막 적용일"
+            extra="지정한 날까지 지출을 계산합니다. 비워 두면 종료 없이 반복합니다."
             dependencies={['startDate']}
             rules={[
               {
@@ -217,7 +228,7 @@ export function RecurringExpensePanel({
             />
           </Form.Item>
           <Form.Item name="memo" label="메모">
-            <Input.TextArea maxLength={500} />
+            <Input.TextArea maxLength={500} autoSize={{ minRows: 4, maxRows: 8 }} />
           </Form.Item>
         </Form>
       </Modal>
