@@ -84,7 +84,7 @@ donworry-release reconcile <BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --against curre
 | `bundle.json` | SHA·marker·index·child·config digest·플랫폼·실행 ID·시각·구성 버전 |
 | `compose.json` | 승인한 구성과 digest 3개로 고정된 실행 Compose. 환경 비밀값 포함 |
 | `approval.json` | 묶음 ID·실행 ID·승인자·승인 시각 |
-| `result.json` | 실행 ID·묶음·작업 종류·승인·PID/boot ID·시각·단계/이력·결과 (`running`, `success`, `failed`)·배포 기록 갱신 전후 태그/파일별 상태·성공 후 구성 해시 |
+| `result.json` | 실행 ID·묶음·작업 종류·승인·PID/boot ID·시각·단계/이력·결과 (`running`, `success`, `failed`)·배포 기록 갱신 전후 태그/파일별 상태·예상/성공 후 구성 해시 |
 | `resolution.json` | 운영자·점검 근거 ID·실제 확인 묶음·원래 결과 해시·확인 시각 (명시적 상태 확인 때만) |
 
 묶음 ID는 전체 `bundle.json`의 SHA256이다. 저장 Compose 해시도 묶음에 포함한다.
@@ -112,9 +112,14 @@ Jenkins에는 digest·해시·식별자만 있는 요약을 보관한다. 같은
 파일별 `unchanged`/`updated`/`unknown`을 남긴다. 쓰기 전 지속 기록은 `writing`이며, 강제 종료로
 이 상태가 남으면 실제 파일을 점검해야 한다. `updated`는 읽어 확인한 내용이며, 실패 실행에서
 전원 중단 내구성까지 보장하는 뜻은 아니다. 다른 `.env` 값은 기록하지 않는다.
+같은 SHA로 내용이 같을 때도 태그 지정 실패로 쓰기를 시작하지 않은 파일은 `unchanged`다.
+내용이 같은 파일의 교체는 rename 직후 확인한 진행 상태로 판별한다. 쓰기를 시작했으나
+교체 여부를 확정할 수 없으면 `unknown`으로 남긴다.
 부분 갱신·로컬 태그 지정/검증·구성 해시 저장 실패도 `failed`·`PAUSE_CD`를 남긴다.
 컨테이너는 이미 새 버전일 수 있으므로 자동 되돌리기나 재실행을 하지 않는다.
-기존 승인 snapshot은 보존하며 `published_configuration`에 성공 후 구성 해시를 저장한다.
+기존 승인 snapshot은 보존한다. root 전용 임시 환경파일로 `IMAGE_TAG`만 변경한 Compose 구성을
+계산하고 `planned_configuration`을 두 파일 교체 전에 지속 기록한다. 다른 원본/bind 해시는
+승인 구성과 같아야 한다. 실제 갱신 후 구성은 이 예상값과 대조하고 `published_configuration`에 저장한다.
 다음 `prepare`는 갱신된 두 기록을 검사하고 변경된 `.env`를 새 승인 구성에 포함한다.
 
 원본 Compose를 수동 실행할 때 옛 버전으로 돌아가지 않도록, 두 파일 교체 직전에 이미 pull한
@@ -182,13 +187,18 @@ CLI 종료 뒤에도 변경할 수 있으므로 잠금이 풀렸다는 이유만
    ```
 
    evidence에는 비밀값 없는 기록 식별자만 넣는다. 명령은 근거의 내용을 자동 판정하지 않는다.
-   구성·DB health·전체 이미지·기동 검사와 두 배포 기록의 대상 SHA 일치 검사를 통과해야 resolution.json과 current.json을
+   구성·DB health·전체 이미지·기동 검사와 두 배포 기록의 대상 SHA 일치 검사,
+   세 서비스의 로컬 SHA 태그 이미지 ID 대조를 통과해야 resolution.json과 current.json을
    저장하고 PAUSE_CD를 해제한다. 원래 실패/중단 결과는 보존하며 배포 성공으로 고치지 않는다.
    쓰기 중 끊기면 같은 인자로 다시 검사할 수 있다. 다음 배포는 새 준비·승인이 필요하다.
+   `current`·`target` 모두 로컬 SHA 태그를 대조한다. 같은 SHA 재빌드도 다른 digest일 수 있으므로
+   태그 누락·일부 불일치가 있으면 PAUSE_CD를 유지한다. reconcile은 태그를 다시 붙이지 않는다.
 
-성공 후 변경된 `.env`는 `published_configuration`으로 대조한다. 기록 갱신 중 일부만 바뀌었거나
-성공 후 구성 해시를 저장하기 전에 중단되면 `reconcile`이 임의로 기록을 완성하지 않는다.
-원래 승인 구성/두 기록과 실제 실행 이미지의 불일치는 #483 운영자 복구 대상으로 남긴다.
+성공 후 변경된 `.env`는 `published_configuration`으로 대조한다. 두 파일 교체 직후 중단되어
+이 값이 없으면 교체 전 저장한 `planned_configuration`으로도 대조할 수 있다. 임의의 현재 구성을
+새 기준으로 받아들이지 않는다. 구성·두 기록·실행 이미지·로컬 SHA 태그가 모두 맞을 때만
+확인을 허용하며 `reconcile`은 파일이나 태그를 바꾸지 않는다. 일부만 바뀐 기록이나 승인/예상
+구성과 맞지 않는 상태는 #483 운영자 복구 대상으로 남긴다.
 
 result 단계는 `validating → pulling → final_validation → applying → checking → publishing_records → publishing → completed`다.
 result/current 변경은 파일 fsync·rename·디렉터리 fsync로 저장한다.
