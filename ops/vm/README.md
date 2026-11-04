@@ -333,6 +333,10 @@ SQL은 배포 묶음 폴더에 보관하므로 저장 공간·보관 기간·접
    approval은 실패 결과 해시와 이전 묶음을 고정한다. 다른 임의의 태그/묶음으로 바꾸지 못한다.
    recover는 승인된 이전 snapshot으로 앱 3개만 바꾼다. DB 서비스·SQL·볼륨을 복원하지 않는다.
    복구도 기동·핵심 기능·DB 지문 검사를 거친다. 원래 실패 결과와 복구 결과는 별개다.
+   복구도 배포와 같은 `functional_check.py`를 실행한다. 배포 실패 원인이 그 검사 스크립트 자체라면
+   복구도 실패해 `PAUSE_CD`가 남으므로, 이때는 검사 파일을 수정(구성 해시가 바뀜)하지 말고 운영자 판단으로 넘긴다.
+   배포 전 백업 전에 실패한 기록(`backup` 없음)은 서비스를 바꾸지 않았으므로 `approve-recovery` 대상이 아니다.
+   `inspect`/`reconcile`로 확인한다.
 4. 복구 반환의 bundle_id/execution으로 inspect하고 두 배포 기록·current·resolution·PAUSE_CD를 확인한다.
    성공 결과 후 current 게시만 끊겼다면 같은 recover가 상태를 재검사하고 게시만 마무리한다.
    실패/running 복구는 같은 승인으로 Compose를 다시 적용하지 않는다. 잠금/기록 삭제로 우회하지 않는다.

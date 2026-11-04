@@ -207,6 +207,17 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.docker.mutations(), [])
         self.assertEqual(self.result(bundle)['backup']['status'], 'success')
 
+    def test_recovery_approval_without_backup_record_rejects_clearly(self):
+        bundle = self.candidate()
+        self.cd.apply(bundle, 'update-1')
+        result_path = self.cd.store / bundle / 'result.json'
+        result = json.loads(result_path.read_bytes())
+        result['status'] = 'failed'
+        result.pop('backup')
+        result_path.write_bytes(release.encoded(result))
+        with self.assertRaisesRegex(release.Rejected, '성공한 배포 전 백업 없음'):
+            self.cd.approve_recovery(bundle, 'update-1', 'operator', 'INC-2')
+
     def test_missing_functional_policy_rejects_clearly_without_pause(self):
         (self.root / 'functional-check.json').unlink()
         self.cd.register_current(fixtures.SHA, 'refresh', 'operator', 'INC-2')

@@ -791,8 +791,9 @@ SELECT JSON_ARRAY('unsupported',
         failed = json.loads((folder / 'result.json').read_bytes())
         require(failed['status'] != 'success', '성공 배포는 복구 대상이 아님')
         require(self.unresolved() == [bundle_id], '다른 미완료 실행 확인 필요')
-        backup = failed['backup']
-        require(backup['status'] == 'success', '성공한 배포 전 백업 없음')
+        backup = failed.get('backup')
+        require(backup is not None and backup.get('status') == 'success',
+                '성공한 배포 전 백업 없음: 백업 전 실패는 서비스 변경 없음, inspect/reconcile로 확인')
         previous = backup['previous_bundle']
         require(previous != bundle_id, '복구 대상 오류')
         old = json.loads((self.store / previous / 'bundle.json').read_bytes())
