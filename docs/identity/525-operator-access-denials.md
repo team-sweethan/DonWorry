@@ -99,7 +99,15 @@ OperatorAccessRoutes에 사장님 전용 경로를 모으고 SecurityConfig와 �
 
 ### 저장·발행 최종 실행 기록
 
-실행 결과를 확인한 뒤 추가한다.
+2026-11-04, 구현 커밋 `7032765`와 동일한 코드·테스트·설정 작업본에서 실행했다. 실행 도중 해당 작업본을 커밋했고, 이후 backend 변경은 없다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain --max-workers=2`: **BUILD SUCCESSFUL**, 6분 5초.
+- 일반 1,440건 중 1,439 통과·기존 1건 skip. MariaDB 817건·별도 Asia/Seoul 정산 JVM 20건 모두 통과. XML failures/errors 모두 0.
+- 신규 경로 18건·핸들러 6건·MariaDB 13건 전부 통과. 위 계획의 원본·이벤트 일치, INSERT/커밋 장애, 독립 커밋, 제외 대상, 세션/DB 차이, Unicode·긴 HTTP 경로·쿼리 제외·IP·UTC·DB FK/CHECK를 확인했다.
+- 전체 Flyway 적용·JPA validate·ModularityTests·ArchitectureTests·기존 인가 HTTP 회귀를 포함한다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+- [PR #527](https://github.com/team-sweethan/DonWorry/pull/527), base dev. PR 생성 당시 최신 dev `c72c161`은 P6 프론트·문서 변경이며 `27063d6` 이후 backend 변경은 없다.
+- 원격 CI는 별도 확인 대상이다. 프론트·AI는 변경이 없어 로컬 검사를 실행하지 않았다.
 
 미검증: P2 실제 수신·룰·정지 연결, 반복 탐지 → 정지 → 해제 후 재정지 방지 전체 흐름,
 자동 삭제·90일 실시간 경과·운영 DB·배포·Notion 동기화.
