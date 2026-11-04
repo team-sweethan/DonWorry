@@ -70,4 +70,7 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 이 페이지는 `npm test`에 자동 포함되지 않는다. Chrome 확장 연결 오류 후 기본 조작을 시도했으나 자동 승인 검토에서 Google Chrome 사용이 거절되어 실제 실행은 미검증이다. 검증용 Vite 서버는 종료한다.
 코드 점검상 기존 가드가 페이지 마운트를 막으므로 제품 화면 코드는 변경하지 않았다. #515에 공유할 결과는 브라우저 검증 미수행 사실을 포함해야 하며, 이번 세션에서 외부 댓글은 게시하지 않는다.
 
+전체 검사 보완: 기본 512 MiB 테스트 JVM이 후반 Spring 컨텍스트 로딩 중 `OutOfMemoryError`로 진행하지 못했다. `jcmd GC.heap_info`에서 524288 KiB 중 523469 KiB 사용을 확인했다. #517 통합 테스트는 클래스 종료 시 컨텍스트를 닫고, `mariaDbTest`만 최대 힙 2 GiB로 설정했다. 일반 check·앱 실행 설정은 바꾸지 않는다.
+중간 실행에서는 새 결제 테스트의 정상 접수 응답(202)·VARBINARY 내용 비교를 수정했다. 기존 `LoginHistoryHttpTests.logout_whenConcurrentAcrossRoutes_recordsAtMostOnce`에서도 Spring Security의 세션 조회 중 `Session already invalidated`로 500이 한 번 발생했다. 변경 전 dev `86a5441`의 같은 테스트는 별도 임시 복사본에서 두 번 통과했으며 기존 문제라고 단정하지 않는다. 최종 실행 결과와 구분한다.
+
 최종 자동 검사 결과는 실행 완료 후 추가한다. 운영 DB 적용·실제 P2 탐지 연결·해제 직후 과거 이벤트 재정지 방지는 이번 검증에 포함하지 않는다.
