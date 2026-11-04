@@ -34,23 +34,23 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 
 체크는 실행 결과를 확인한 뒤에만 표시한다. 최종 결과는 아래 실행 기록에 남긴다.
 
-- [ ] OPERATOR 정지: INACTIVE, 모든 세션 만료, SYSTEM 감사 1건·전후 상태
-- [ ] 순차·동시 재호출: 추가 감사·세션 변경 없음
-- [ ] ACTIVE/INACTIVE ADMIN·SECURITY_STAFF 모두 거절·변경 없음
-- [ ] NULL·0·음수·없는 ID 실패 계약
-- [ ] 감사 저장 실패: 상태 롤백, 세션 유지, 재시도 성공
-- [ ] 호출자 트랜잭션 롤백에도 정지·감사·세션 만료 유지
-- [ ] 관리자 해제와 경합: 두 선행 순서 검증, 커밋·세션 만료까지 잠금 유지
-- [ ] 정지 전 세션 요청 거절·정지 후 로그인 기존 응답·관리자 해제 후 로그인 성공
-- [ ] 같은 가맹점의 서명된 결제 요청 정지 전후 통과
-- [ ] 기존 계정·가맹점·신청 관리 감사 STAFF 저장 회귀
-- [ ] 변경 전 DB 기존 감사 행 → migration → STAFF, 기존 값·FK·대상 CHECK 보존
-- [ ] SYSTEM+NULL 허용, STAFF+NULL·SYSTEM+ID·알 수 없는 유형·NULL 유형 거절
-- [ ] 전체 Flyway 적용·JPA validate·ModularityTests·ArchitectureTests
+- [x] OPERATOR 정지: INACTIVE, 모든 세션 만료, SYSTEM 감사 1건·전후 상태
+- [x] 순차·동시 재호출: 추가 감사·세션 변경 없음
+- [x] ACTIVE/INACTIVE ADMIN·SECURITY_STAFF 모두 거절·변경 없음
+- [x] NULL·0·음수·없는 ID 실패 계약
+- [x] 감사 저장 실패: 상태 롤백, 세션 유지, 재시도 성공
+- [x] 호출자 트랜잭션 롤백에도 정지·감사·세션 만료 유지
+- [x] 관리자 해제와 경합: 두 선행 순서 검증, 커밋·세션 만료까지 잠금 유지
+- [x] 정지 전 세션 요청 거절·정지 후 로그인 기존 응답·관리자 해제 후 로그인 성공
+- [x] 같은 가맹점의 서명된 결제 요청 정지 전후 통과
+- [x] 기존 계정·가맹점·신청 관리 감사 STAFF 저장 회귀
+- [x] 변경 전 DB 기존 감사 행 → migration → STAFF, 기존 값·FK·대상 CHECK 보존
+- [x] SYSTEM+NULL 허용, STAFF+NULL·SYSTEM+ID·알 수 없는 유형·NULL 유형 거절
+- [x] 전체 Flyway 적용·JPA validate·ModularityTests·ArchitectureTests
 - [ ] 실제 라우터의 무권한 정산·자금·조치 목록/상세 직접 진입: 업무 API 호출 0회
 - [ ] 무권한 홈: 연동 조회 허용, 정산·조치 API 자동 호출 없음
-- [ ] backend spotlessApply·check·mariaDbTest
-- [ ] frontend lint·format:check·build·관련 테스트
+- [x] backend spotlessApply·check·mariaDbTest
+- [x] frontend lint·format:check·build·관련 테스트
 
 ## 실행 기록과 미검증
 
@@ -73,4 +73,16 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 전체 검사 보완: 기본 512 MiB 테스트 JVM이 후반 Spring 컨텍스트 로딩 중 `OutOfMemoryError`로 진행하지 못했다. `jcmd GC.heap_info`에서 524288 KiB 중 523469 KiB 사용을 확인했다. #517 통합 테스트는 클래스 종료 시 컨텍스트를 닫고, `mariaDbTest`만 최대 힙 2 GiB로 설정했다. 일반 check·앱 실행 설정은 바꾸지 않는다.
 중간 실행에서는 새 결제 테스트의 정상 접수 응답(202)·VARBINARY 내용 비교를 수정했다. 기존 `LoginHistoryHttpTests.logout_whenConcurrentAcrossRoutes_recordsAtMostOnce`에서도 Spring Security의 세션 조회 중 `Session already invalidated`로 500이 한 번 발생했다. 변경 전 dev `86a5441`의 같은 테스트는 별도 임시 복사본에서 두 번 통과했으며 기존 문제라고 단정하지 않는다. 최종 실행 결과와 구분한다.
 
-최종 자동 검사 결과는 실행 완료 후 추가한다. 운영 DB 적용·실제 P2 탐지 연결·해제 직후 과거 이벤트 재정지 방지는 이번 검증에 포함하지 않는다.
+### 최종 자동 검사 (2026-11-04)
+
+구현·테스트·migration 최종 상태 `2dcf4af`에서 실행했다. 이후에는 이 실행 기록만 갱신한다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`: **BUILD SUCCESSFUL**, 5분 42초. 일반 1,404건 중 1,403 통과·기존 1건 skip, MariaDB 795건 모두 통과, 별도 Asia/Seoul JVM 20건 모두 통과. failures/errors 0을 XML 합계로 확인했다. ModularityTests·ArchitectureTests·전체 Flyway·JPA validate 포함.
+- 신규 일반 4건·MariaDB 12건이 통과했다. 정지 서비스 MariaDB 9건·수행자 migration 2건·HMAC/공개 결제창 회귀 1건이다. 기존 STAFF 저장 경로 검증도 함께 통과했다.
+- 최종 실행에서 기존 동시 로그아웃 22건·웹훅 7건도 전부 통과했다. 웹훅 중간 실행의 횟수 실패 이후 새 결제 회귀에서 선택 항목 notifyUrl을 생략해 이 검사가 불필요한 웹훅 예약을 남기지 않게 했다. 기존 테스트의 기대값·제품 코드는 완화하지 않았다. 변경 전 dev 웹훅 7건도 별도 실행에서 통과했다. 기존 검사들의 간헐 실패 원인이 완전히 규명됐다는 뜻은 아니다.
+- `cd frontend && npm run lint && npm run format:check && npm run build && npm test`: 종료 코드 0, 테스트 324건 모두 통과. 기존 `scripts/export-p6-preview.mjs`의 `no-unsafe-finally` 경고와 번들 크기 경고 유지. 실제 브라우저 시나리오 6건의 통과를 의미하지 않는다.
+- `node --check frontend/tests/browser/owner-access.mjs`, `git diff --check 86a5441`, 신규 설계 문서의 상대 링크 존재 검사: 통과.
+
+보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`, `backend/build/reports/tests/settlementSeoulMariaDbTest/index.html`.
+
+미검증: 실제 브라우저 무권한 진입·홈 6건, 운영 DB 적용, 실제 P2 탐지 연결, 해제 직후 과거 이벤트 재정지 방지. 외부 #515 댓글은 게시하지 않았으며 코드 점검 결과와 미검증 범위를 이 문서·PR에 남긴다.
