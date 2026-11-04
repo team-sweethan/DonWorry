@@ -239,14 +239,29 @@ def linked_facts(match: LinkedMatch) -> dict[str, object] | str:
 # "고액 결제와 단시간 반복 결제 규칙에 걸렸습니다"처럼 규칙만 되풀이한 위험 근거 (#355, Case 10)
 # 규칙 카드에 이미 있는 내용이라 코드가 뺀다 — 프롬프트로는 안 막혔고, 다시 쓰기보다 싸다
 # "규칙에 적중하여 의심 신호가 있습니다"도 같은 내용이다 (#542, 로컬 시연 Case 2)
-_RULE_ONLY = re.compile(
-    r"^[^,，]*규칙(?:에|이|을)?\s*"
+# 앞부분이 이 사건의 규칙 이름(와 · 과 · 및 · 쉼표로 이은 것)뿐일 때만 뺀다
+# 다른 정황이 붙으면 남긴다 (#542 리뷰)
+_RULE_TAIL = (
+    r"\s*규칙(?:에|이|을)?\s*"
     r"(?:(?:걸렸|적중했|적중되었)습니다|(?:걸려|적중하여|적중해)\s*의심\s*신호가\s*있습니다)\.?$"
 )
+_RULE_JOIN = r"\s*(?:와|과|및|·|,|，)\s*"
 
 
-def drop_rule_only(items: list[str]) -> list[str]:
-    return [item for item in items if not _RULE_ONLY.match(item.strip())]
+def _rule_only(rule_names: set[str]) -> re.Pattern[str] | None:
+    # 띄어쓰기가 달라도 같은 이름으로 본다 ("고액결제")
+    names = [r"\s*".join(map(re.escape, name.split())) for name in rule_names if name.strip()]
+    if not names:
+        return None
+    name = "(?:" + "|".join(sorted(names, key=len, reverse=True)) + ")"
+    return re.compile("^" + name + "(?:" + _RULE_JOIN + name + ")*" + _RULE_TAIL)
+
+
+def drop_rule_only(items: list[str], rule_names: set[str]) -> list[str]:
+    pattern = _rule_only(rule_names)
+    if pattern is None:
+        return items
+    return [item for item in items if not pattern.match(item.strip())]
 
 
 def similar_outcome(accept: int, reject: int) -> str:
@@ -454,6 +469,8 @@ def assemble_report(
     )
     checks = list(narrative.additionalChecks)
     fds_evidence_ids = _fds_evidence_ids(context, records)
+    # 위험 근거가 규칙 이름만 되풀이했는지 볼 때 쓴다 — 사건 전체 규칙 이름 (#542 리뷰)
+    rule_names = {rule.name for e in fds.values() if e is not None for rule in e.ruleHits}
     for payment in case_payments.payments:
         if not analyzable(payment):
             limitations.append(
@@ -479,7 +496,7 @@ def assemble_report(
                 requestedAt=payment.requestedAt,
                 riskScore=evidence.riskScore if evidence else None,
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
-                riskEvidence=drop_rule_only(written.riskEvidence),
+                riskEvidence=drop_rule_only(written.riskEvidence, rule_names),
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
                 recommendation=basis.recommendation if basis else "NEEDS_CHECK",

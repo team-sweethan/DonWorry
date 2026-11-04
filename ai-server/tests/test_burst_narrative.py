@@ -55,16 +55,18 @@ def _history(times: list[str]) -> PaymentHistoryTool:
     )
 
 
-def _written() -> str:
+def _written(summary: list[str] | None = None, risk: list[str] | None = None) -> str:
     body = json.loads(narrative(PAYMENTS))
-    body["summary"] = ["결제 2건 모두 처음 쓰는 카드로 결제됐습니다.", BURST_SUMMARY]
+    body["summary"] = summary or ["결제 2건 모두 처음 쓰는 카드로 결제됐습니다.", BURST_SUMMARY]
     body["overallAnalysis"] = ["짧은 간격의 반복 결제입니다.", BURST_OVERALL]
     body["payments"]["9001"]["normalEvidence"] = [CLEAN_NORMAL, BURST_NORMAL]
+    if risk is not None:
+        body["payments"]["9001"]["riskEvidence"] = risk
     return json.dumps(body, ensure_ascii=False)
 
 
-def _run(history: PaymentHistoryTool):
-    llm = ScriptedLlm(turns=[], outputs=[_written()])
+def _run(history: PaymentHistoryTool, written: str | None = None):
+    llm = ScriptedLlm(turns=[], outputs=[written or _written()])
     toolbox = StaticToolBox(
         CasePaymentsTool.model_validate(FIXTURE["casePayments"]),
         FdsEvidenceTool.model_validate(FIXTURE["fdsEvidence"]),
@@ -112,4 +114,37 @@ def test_burst_sentences_kept_when_case_has_no_burst() -> None:
 def test_rule_only_risk_variant_is_dropped() -> None:
     with_context = "고액 결제 규칙에 적중했고 처음 쓰는 카드라 카드 주인 확인이 필요합니다."
 
-    assert drop_rule_only([RULE_ONLY, with_context]) == [with_context]
+    assert drop_rule_only([RULE_ONLY, with_context], {"고액 결제", "단시간 반복 결제"}) == [
+        with_context
+    ]
+
+
+# 연속 결제를 정상 근거로 "볼 수 없다"고 부정한 문장은 맞는 문장이라 남긴다 (#542 Codex 리뷰)
+# 요약이 이 문장뿐일 때 지우면 요약이 비어 다시 쓰기를 요청했다
+NEGATED_BURST = [
+    "같은 연속 결제는 평소 결제가 아닙니다.",
+    "연속 결제가 매입 완료되었다고 정상 거래의 근거로 볼 수 없습니다.",
+]
+
+
+def test_burst_negated_sentences_kept_without_rewrite() -> None:
+    llm, outcome = _run(_history(BURST_TIMES), _written(summary=NEGATED_BURST))
+
+    assert llm.write_calls == 1
+    assert outcome.status == "SUCCEEDED"
+    assert all(text in outcome.report.summary for text in NEGATED_BURST)
+
+
+# 규칙 이름 앞에 다른 정황이 붙은 위험 근거는 규칙 되풀이가 아니라 남긴다 (#542 Codex 리뷰)
+# 규칙 이름만 있는 문장은 지금처럼 뺀다
+WITH_CONTEXT_RISK = [
+    "다른 고객이 같은 카드를 사용한 기록이 있고 고액 결제 규칙에 적중하여 의심 신호가 있습니다.",
+    "다른 고객이 같은 카드를 쓴 기록이 있고 고액 결제 규칙에 걸렸습니다.",
+]
+
+
+def test_risk_sentence_with_other_context_kept() -> None:
+    _, outcome = _run(_history(EARLIER_TIMES), _written(risk=[*WITH_CONTEXT_RISK, RULE_ONLY]))
+
+    first = next(a for a in outcome.report.paymentAnalyses if a.paymentId == "9001")
+    assert first.riskEvidence == WITH_CONTEXT_RISK

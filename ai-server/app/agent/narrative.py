@@ -111,6 +111,11 @@ _JUDGEMENT = re.compile(
 # ("반복 결제는 정상 고객에게도 나타난다"는 맞는 문장이다)
 _BURST = re.compile(r"연속\s*결제|연달아|잇따라")
 _AS_NORMAL = re.compile(r"매입\s*완료|정상|평소")
+# "평소 결제가 아닙니다" · "정상 근거로 볼 수 없습니다"처럼
+# 정상 근거를 부정한 문장은 맞는 문장이라 남긴다 (#542 리뷰)
+_NOT_NORMAL = re.compile(
+    r"아닙니다|아니며|아니라|볼\s*수\s*없|근거가\s*(?:되지\s*않|될\s*수\s*없)|근거로\s*(?:쓰지|삼지|보지)\s*않"
+)
 
 # 반복 비교용 — 띄어쓰기 · 문장부호를 빼고 같은 문장인지 본다
 _SPACING = re.compile(r"[\s.,·!?~\"'()\[\]]")
@@ -295,10 +300,15 @@ def sanitize_narrative(narrative: Narrative, burst_in_case: bool = False) -> tup
         return _key(text) in examples or bool(_JUDGEMENT.search(text))
 
     # 3) 같은 연속 결제를 정상 쪽으로 쓴 문장 (#542)
-    #    요약 · 종합 분석: 정상으로 읽히는 말이 함께 있을 때 뺀다
+    #    요약 · 종합 분석: 정상으로 읽히는 말이 함께 있을 때 뺀다 (정상 근거를 부정한 문장은 남긴다)
     #    정상 정황: 연속 결제를 말하기만 해도 뺀다 (정상 근거가 될 수 없다)
     def burst_as_normal(text: str) -> bool:
-        return burst_in_case and bool(_BURST.search(text)) and bool(_AS_NORMAL.search(text))
+        return (
+            burst_in_case
+            and bool(_BURST.search(text))
+            and bool(_AS_NORMAL.search(text))
+            and not _NOT_NORMAL.search(text)
+        )
 
     def burst_mentioned(text: str) -> bool:
         return burst_in_case and bool(_BURST.search(text))
