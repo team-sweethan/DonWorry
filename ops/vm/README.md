@@ -1,4 +1,4 @@
-# VM1 업데이트 CD (#481 B · #482 C)
+# VM1 업데이트 CD (#481 B · #482 C · #499)
 
 **구현 제안·로컬 검증 단계다. 현재 VM1 또는 Jenkins에 설치·적용하지 않았다.**
 기존 `donworry-cd-dryrun` Job은 유지한다. 새 Job은 사람이 `TARGET_SHA`를 지정해
@@ -67,7 +67,8 @@ donworry-release reconcile <BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --against curre
    pull한 index digest와 비교한다. 실행 컨테이너의 `Image`도 같은 기준으로 대조한다.
    승인 뒤 태그로 이미지를 다시 선택하지 않는다.
 5. Compose 대기 → 실제 컨테이너 config ID와 실행 ref 비교 → Nginx `/healthz`,
-   backend `/api/auth/me`의 200/401/403, AI `/health` 확인 → 성공 기록.
+   backend `/api/auth/me`의 200/401/403, AI `/health` 확인 → 승인 digest의 로컬 SHA 태그 지정·대조 →
+   `.env`·`backups/deployed-image-tag` 갱신 → 성공 기록.
 
 `apply`는 root 소유 `/srv/donworry/ENABLE_UPDATE_CD` 활성화 파일이 없으면 차단한다.
 **이 파일 생성·서버 설치·Jenkins Job 전환은 실제 VM 검증과 별도 사용자 승인 후 수행한다.**
@@ -83,7 +84,7 @@ donworry-release reconcile <BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --against curre
 | `bundle.json` | SHA·marker·index·child·config digest·플랫폼·실행 ID·시각·구성 버전 |
 | `compose.json` | 승인한 구성과 digest 3개로 고정된 실행 Compose. 환경 비밀값 포함 |
 | `approval.json` | 묶음 ID·실행 ID·승인자·승인 시각 |
-| `result.json` | 실행 ID·묶음·작업 종류·승인·PID/boot ID·시각·단계/이력·결과 (`running`, `success`, `failed`) |
+| `result.json` | 실행 ID·묶음·작업 종류·승인·PID/boot ID·시각·단계/이력·결과 (`running`, `success`, `failed`)·배포 기록 갱신 전후 태그/파일별 상태·예상/성공 후 구성 해시 |
 | `resolution.json` | 운영자·점검 근거 ID·실제 확인 묶음·원래 결과 해시·확인 시각 (명시적 상태 확인 때만) |
 
 묶음 ID는 전체 `bundle.json`의 SHA256이다. 저장 Compose 해시도 묶음에 포함한다.
@@ -100,10 +101,37 @@ Jenkins에는 digest·해시·식별자만 있는 요약을 보관한다. 같은
 승인자 값은 Jenkins의 인증된 `input` 결과를 신뢰하므로 Job 설정·credential·sudo 경계는
 #484에서 확인해야 한다. 광범위한 shell/python/sudo 권한은 부여하지 않는다.
 
-성공 시 `releases/current.json`은 마지막 성공 묶음을 가리킨다. 원래 `.env`의 `IMAGE_TAG`,
-최초 성공 기록, 기존 최초 배포 스크립트는 변경하지 않는다. 업데이트 이후 운영 Compose
-명령은 해당 성공 묶음의 `compose.json`을 명시해야 한다. 원본 Compose를 그대로 `up`하면
-구 SHA 태그를 다시 선택한다. 수동 업데이트도 위 `prepare`/`approve`/`apply` 경로를 사용한다.
+성공 시 `.env`의 `IMAGE_TAG`와 `backups/deployed-image-tag`를 `sha-<승인 SHA>`로 갱신한 뒤
+`releases/current.json`에 마지막 성공 묶음을 기록한다. Compose·실행 이미지·health가 모두
+통과하기 전에는 두 파일을 바꾸지 않는다. `IMAGE_TAG=` 줄은 정확히 하나여야 하며 그 값만
+바이트 단위로 교체한다. `$`, CRLF, 마지막 줄바꿈 유무 등 다른 바이트는 보존한다.
+각 파일은 같은 폴더의 root:root 0600 임시 파일에 쓰고 fsync → rename → 폴더 fsync로 교체한다.
+두 파일을 함께 교체하는 원자적 트랜잭션은 아니다.
+
+`result.json`의 `deployment_records`에는 `before`·`intended`·실제 관측 `after` 태그와
+파일별 `unchanged`/`updated`/`unknown`을 남긴다. 쓰기 전 지속 기록은 `writing`이며, 강제 종료로
+이 상태가 남으면 실제 파일을 점검해야 한다. `updated`는 읽어 확인한 내용이며, 실패 실행에서
+전원 중단 내구성까지 보장하는 뜻은 아니다. 다른 `.env` 값은 기록하지 않는다.
+같은 SHA로 내용이 같을 때도 태그 지정 실패로 쓰기를 시작하지 않은 파일은 `unchanged`다.
+내용이 같은 파일의 교체는 rename 직후 확인한 진행 상태로 판별한다. 쓰기를 시작했으나
+교체 여부를 확정할 수 없으면 `unknown`으로 남긴다.
+부분 갱신·로컬 태그 지정/검증·구성 해시 저장 실패도 `failed`·`PAUSE_CD`를 남긴다.
+컨테이너는 이미 새 버전일 수 있으므로 자동 되돌리기나 재실행을 하지 않는다.
+기존 승인 snapshot은 보존한다. root 전용 임시 환경파일로 `IMAGE_TAG`만 변경한 Compose 구성을
+계산하고 `planned_configuration`을 두 파일 교체 전에 지속 기록한다. 다른 원본/bind 해시는
+승인 구성과 같아야 한다. 실제 갱신 후 구성은 이 예상값과 대조하고 `published_configuration`에 저장한다.
+다음 `prepare`는 갱신된 두 기록을 검사하고 변경된 `.env`를 새 승인 구성에 포함한다.
+
+원본 Compose를 수동 실행할 때 옛 버전으로 돌아가지 않도록, 두 파일 교체 직전에 이미 pull한
+승인 digest에 로컬 `sha-<SHA>` 태그를 붙이고 이미지 ID를 다시 대조한다. 원격 SHA 태그는
+재조회하지 않는다. 이 로컬 태그는 이후 원격 pull·다른 태그 명령으로 바뀔 수 있다.
+승인 digest를 계속 보장하려면 성공 묶음의 `compose.json`을 사용한다. 수동 업데이트도
+위 `prepare`/`approve`/`apply` 경로를 사용한다.
+
+기존 `deploy-donworry`는 수정하지 않는다. 2026-11-03 09:55 버전으로 제공된 Mac 사본의
+`check_deployment_state`·`set_image_tag`·성공 기록 함수가 `sha-<40자리 SHA>`와 두 값의 일치를
+사용하므로 파일 형식은 호환된다. 이 작업에서 확인한 것은 사본 코드이며 현재 VM 원본의
+동일성·실제 실행 호환은 미검증이다. 사본의 CLI는 기존 기록이 있으면 최초 배포를 거절한다.
 
 다운로드·재검증 중 실패도 `PAUSE_CD`와 실패 기록을 남긴다. 자동 재시도/rollback하지 않는다.
 미해결 `running`/`failed` 또는 이전 버전의 `applying`, 손상된 결과는 다음 배포를 차단한다.
@@ -159,11 +187,20 @@ CLI 종료 뒤에도 변경할 수 있으므로 잠금이 풀렸다는 이유만
    ```
 
    evidence에는 비밀값 없는 기록 식별자만 넣는다. 명령은 근거의 내용을 자동 판정하지 않는다.
-   구성·DB health·전체 이미지·기동 검사를 다시 통과해야 resolution.json과 current.json을
+   구성·DB health·전체 이미지·기동 검사와 두 배포 기록의 대상 SHA 일치 검사,
+   세 서비스의 로컬 SHA 태그 이미지 ID 대조를 통과해야 resolution.json과 current.json을
    저장하고 PAUSE_CD를 해제한다. 원래 실패/중단 결과는 보존하며 배포 성공으로 고치지 않는다.
    쓰기 중 끊기면 같은 인자로 다시 검사할 수 있다. 다음 배포는 새 준비·승인이 필요하다.
+   `current`·`target` 모두 로컬 SHA 태그를 대조한다. 같은 SHA 재빌드도 다른 digest일 수 있으므로
+   태그 누락·일부 불일치가 있으면 PAUSE_CD를 유지한다. reconcile은 태그를 다시 붙이지 않는다.
 
-result 단계는 `validating → pulling → final_validation → applying → checking → publishing → completed`다.
+성공 후 변경된 `.env`는 `published_configuration`으로 대조한다. 두 파일 교체 직후 중단되어
+이 값이 없으면 교체 전 저장한 `planned_configuration`으로도 대조할 수 있다. 임의의 현재 구성을
+새 기준으로 받아들이지 않는다. 구성·두 기록·실행 이미지·로컬 SHA 태그가 모두 맞을 때만
+확인을 허용하며 `reconcile`은 파일이나 태그를 바꾸지 않는다. 일부만 바뀐 기록이나 승인/예상
+구성과 맞지 않는 상태는 #483 운영자 복구 대상으로 남긴다.
+
+result 단계는 `validating → pulling → final_validation → applying → checking → publishing_records → publishing → completed`다.
 result/current 변경은 파일 fsync·rename·디렉터리 fsync로 저장한다.
 `publishing`에서 중단돼 current가 새 묶음을 가리켜도 미완료 result가 다음 배포를 막는다.
 
@@ -183,6 +220,11 @@ Docker daemon 없이 실제 Compose CLI로 `$` 포함 환경값과 bind 경로·
 pull 실패 기록, 부분 이미지 확인 거절, 운영자 근거를 남긴 해제/재실행을 대역으로 검사한다.
 실제 로컬 자식 프로세스로 SIGKILL 후 지속 기록과 다음 실행 차단, 부모 종료 뒤 자식의
 잠금 유지, subprocess timeout도 재현한다. 이는 Linux VM reboot/실제 SSH 단절 검증이 아니다.
+
+#499 대역 테스트는 다른 SHA로 두 기록 갱신, 비밀값·임의 바이트 보존, 0600과 root chown 요청,
+Compose/이미지/health 실패 시 기록 보존, 태그 줄 0개/중복 거절, 파일별 쓰기/rename 후 fsync 실패,
+로컬 태그 실패, 갱신 후 다음 prepare를 검사한다. chown syscall은 대체하므로 실제 root 소유권은
+VM 검증이 필요하다. 실제 VM 갱신·기존 스크립트 실행·운영 활성화는 수행하지 않는다.
 
 
 실제 적용 전 검증·승인이 필요한 항목:

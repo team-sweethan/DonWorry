@@ -144,6 +144,34 @@ def write_atomic(path, value):
             temporary.unlink(missing_ok=True)
 
 
+def write_deployment_file(path, data, on_replace=None):
+    # 배포 호환 파일은 root:root 0600. 환경값은 파싱/재출력하지 않는다.
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.deploy-', delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            os.fchown(stream.fileno(), 0, 0)
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+            if on_replace is not None:
+                on_replace()
+            sync_directory(path.parent)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def image_tag(data):
+    require(len(re.findall(rb'^IMAGE_TAG=', data, re.MULTILINE)) == 1,
+            'IMAGE_TAG 설정이 정확히 하나여야 함')
+    matches = list(re.finditer(rb'^IMAGE_TAG=([^\r\n]*)(?=\r?$)', data, re.MULTILINE))
+    require(len(matches) == 1, 'IMAGE_TAG 설정이 정확히 하나여야 함')
+    tag = matches[0].group(1)
+    require(re.fullmatch(rb'sha-[0-9a-f]{40}', tag), 'IMAGE_TAG 형식 오류')
+    return tag.decode('ascii'), matches[0].span(1)
+
+
 def serialized(action):
     def decorate(method):
         @wraps(method)
@@ -201,10 +229,10 @@ class Release:
     def json(self, *args):
         return json.loads(self.command(*args))
 
-    def compose(self, *args, file=None):
+    def compose(self, *args, file=None, env_file=None):
         return self.command('docker', 'compose', '--project-name', 'donworry',
                             '--project-directory', str(self.root), '--env-file',
-                            str(self.root / '.env'), '-f', str(file or self.root / 'compose.yaml'),
+                            str(env_file or self.root / '.env'), '-f', str(file or self.root / 'compose.yaml'),
                             *args)
 
     def main(self, sha):
@@ -220,8 +248,8 @@ class Release:
                 '기존 성공 배포 기록 없음: 최초 배포는 이 명령의 대상이 아님')
         previous = (self.root / 'backups/deployed-image-tag').read_text().strip()
         require(re.fullmatch(r'sha-[0-9a-f]{40}', previous), '기존 성공 배포 기록 오류')
-        tags = re.findall(r'^IMAGE_TAG=(.*)$', (self.root / '.env').read_text(), re.MULTILINE)
-        require(tags == [previous], '기존 IMAGE_TAG와 최초 성공 배포 기록 불일치')
+        tag, _ = image_tag((self.root / '.env').read_bytes())
+        require(tag == previous, '기존 IMAGE_TAG와 성공 배포 기록 불일치')
         cid = self.compose('ps', '-q', 'db').decode().strip()
         require(bool(cid), '기존 DB 없음')
         db = self.json('docker', 'inspect', cid)[0]
@@ -233,10 +261,11 @@ class Release:
         require(info['OSType'] == 'linux' and arch in {'amd64', 'arm64'}, '미지원 VM 플랫폼')
         return {'os': 'linux', 'architecture': arch}
 
-    def configuration(self):
-        config = json.loads(self.compose('config', '--format', 'json'))
+    def configuration(self, env_file=None):
+        config = json.loads(self.compose('config', '--format', 'json', env_file=env_file))
         require(set(config['services']) == {'db', *REPOS}, '예상하지 않은 Compose 서비스')
-        inputs = {name: digest((self.root / name).read_bytes()) for name in ['.env', 'compose.yaml']}
+        inputs = {'.env': digest((env_file or self.root / '.env').read_bytes()),
+                  'compose.yaml': digest((self.root / 'compose.yaml').read_bytes())}
         inputs['release.py'] = digest(Path(__file__).read_bytes())
         # 읽기 전용 bind 파일도 승인 구성에 포함한다. DB named volume 내용은 읽지 않는다.
         for service in config['services'].values():
@@ -378,6 +407,77 @@ class Release:
                     local['Config'].get('Labels', {}).get(REVISION) == bundle['sha'],
                     '로컬 이미지 digest/platform/revision 불일치')
 
+    def local_sha_tags(self, bundle, assign=False):
+        ids = self.image_ids(bundle)
+        for service, image in bundle['images'].items():
+            target = image['repository'] + ':sha-' + bundle['sha']
+            if assign:
+                self.command('docker', 'image', 'tag', image['repository'] + '@' + image['index'], target)
+            require(self.json('docker', 'image', 'inspect', target)[0]['Id'] == ids[service],
+                    '로컬 SHA 태그 이미지 불일치')
+
+    def planned_configuration(self, env_data, bundle):
+        # 실제 파일 교체 전에 변경 후 해시를 계산한다. Compose가 읽을 때만 비밀 임시 파일을 둔다.
+        with tempfile.NamedTemporaryFile(dir=self.root, prefix='.planned-env-') as stream:
+            stream.write(env_data)
+            stream.flush()
+            configuration = self.configuration(env_file=Path(stream.name))[1]
+        require({k: v for k, v in configuration['inputs'].items() if k != '.env'} ==
+                {k: v for k, v in bundle['configuration']['inputs'].items() if k != '.env'},
+                '구성 변경: 기록 갱신 계획 중단')
+        return configuration
+
+    def publish_deployment(self, bundle, result, stage):
+        require(self.configuration()[1] == bundle['configuration'], '구성 변경: 기록 갱신 중단')
+        env = self.root / '.env'
+        deployed = self.root / 'backups/deployed-image-tag'
+        original = env.read_bytes()
+        before, (start, end) = image_tag(original)
+        desired = 'sha-' + bundle['sha']
+        updates = {'.env': (env, original, original[:start] + desired.encode() + original[end:]),
+                   'backups/deployed-image-tag': (deployed, deployed.read_bytes(), (desired + '\n').encode())}
+        record = {'before': before, 'intended': desired, 'after': before,
+                  'files': {name: 'pending' for name in updates}}
+        result['deployment_records'] = record
+        result['planned_configuration'] = self.planned_configuration(updates['.env'][2], bundle)
+        # 두 파일 중 하나라도 바뀌기 전에 계획을 디스크에 남긴다.
+        stage('publishing_records')
+        try:
+            # SHA 태그를 원격에서 다시 고르지 않는다. 승인 digest로 이미 받은 이미지에 붙인다.
+            self.local_sha_tags(bundle, assign=True)
+            for name, (path, _, data) in updates.items():
+                record['files'][name] = 'writing'
+                stage('publishing_records')
+                def replaced():
+                    record['files'][name] = 'updated'
+                write_deployment_file(path, data, on_replace=replaced)
+                record['files'][name] = 'updated'
+                stage('publishing_records')
+            # IMAGE_TAG 변경은 다음 승인의 구성에 포함한다. 이전 snapshot은 고치지 않는다.
+            published = self.configuration()[1]
+            require(published == result['planned_configuration'],
+                    '기록 갱신 후 구성 불일치')
+            result['published_configuration'] = published
+        finally:
+            # rename 후 fsync 실패도 실제 교체 여부를 구분한다. 비밀 환경값은 기록하지 않는다.
+            for name, (path, old, new) in updates.items():
+                try:
+                    actual = path.read_bytes()
+                    if old == new == actual:
+                        # 같은 SHA면 내용만으로 rename 여부를 알 수 없다.
+                        state = record['files'][name]
+                        record['files'][name] = ('updated' if state == 'updated' else
+                                                 'unchanged' if state == 'pending' else 'unknown')
+                    else:
+                        record['files'][name] = ('updated' if actual == new else
+                                                 'unchanged' if actual == old else 'unknown')
+                except OSError:
+                    record['files'][name] = 'unknown'
+            try:
+                record['after'] = image_tag(env.read_bytes())[0]
+            except (OSError, Rejected):
+                record['after'] = None
+
     @contextmanager
     def operation(self, folder, bundle_id, execution, approval, kind='deploy'):
         # 복구 구현도 exclusive + operation을 함께 사용해야 한다 (#483).
@@ -417,6 +517,11 @@ class Release:
         # 잠금 대기 후 검사한다. 중단 기록이 있으면 다운로드도 새로 시작하지 않는다.
         self.preflight()
         with self.operation(folder, bundle_id, execution, approval) as (result, stage):
+            before = image_tag((self.root / '.env').read_bytes())[0]
+            result['deployment_records'] = {
+                'before': before, 'intended': 'sha-' + bundle['sha'], 'after': before,
+                'files': {'.env': 'unchanged', 'backups/deployed-image-tag': 'unchanged'}}
+            stage('validating')
             self.verify(bundle)
             stage('pulling')
             self.local_images(bundle, pull=True)
@@ -434,6 +539,7 @@ class Release:
                          file=folder / 'compose.json')
             stage('checking')
             self.runtime(bundle, folder)
+            self.publish_deployment(bundle, result, stage)
             stage('publishing')
             write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': bundle['sha']})
             stage('completed')
@@ -504,13 +610,25 @@ class Release:
         else:
             folder_expected = folder
         # 파일/환경 변경과 DB 비정상은 중단 상태 해제로 숨기지 않는다.
-        require(self.configuration()[1] == bundle['configuration'], '구성 변경: 운영자 확인 필요')
+        expected_result = json.loads((folder_expected / 'result.json').read_bytes())
+        expected_configurations = [bundle['configuration']]
+        for key in ['planned_configuration', 'published_configuration']:
+            if key in expected_result:
+                expected_configurations.append(expected_result[key])
+        require(self.configuration()[1] in expected_configurations, '구성 변경: 운영자 확인 필요')
+        # 부분 기록 갱신은 자동 복구하지 않는다. 두 기록과 확인한 이미지가 맞아야 해제한다.
+        tag, _ = image_tag((self.root / '.env').read_bytes())
+        require(tag == 'sha-' + bundle['sha'] and
+                (self.root / 'backups/deployed-image-tag').read_text().strip() == tag,
+                '배포 기록 불일치: #483 운영자 복구 필요')
         cid = self.compose('ps', '-q', 'db', file=folder_expected / 'compose.json').decode().strip()
         require(bool(cid), '기존 DB 없음')
         require(self.json('docker', 'inspect', cid)[0]['State'].get('Health', {}).get('Status') == 'healthy',
                 '기존 DB 비정상')
         self.local_images(bundle, pull=False)
         self.runtime(bundle, folder_expected)
+        # 같은 SHA 재빌드도 digest는 다르다. 태그를 고치지 않고 불일치 시 차단을 유지한다.
+        self.local_sha_tags(bundle)
         record = {'bundle_id': bundle_id, 'execution': execution, 'operator': operator,
                   'evidence': evidence,
                   'against': against, 'observed_bundle': expected, 'checked_at': timestamp(),

@@ -50,17 +50,17 @@ class Docker:
         images = {}
         for service, repo in release.REPOS.items():
             config_id = release.digest((repo + image_revision + salt).encode())
-            child = self.manifest(repo, {'schemaVersion': 2, 'mediaType': next(iter(release.MANIFESTS)),
+            child = self.manifest(repo, {'schemaVersion': 2, 'mediaType': min(release.MANIFESTS),
                                         'config': {'digest': config_id}})
             config = {**platform, 'config': {'Labels': {release.REVISION: image_revision}}}
             self.configs[f'{repo}@{child}'] = config
-            descriptor = {'mediaType': next(iter(release.MANIFESTS)), 'digest': child, 'platform': platform}
+            descriptor = {'mediaType': min(release.MANIFESTS), 'digest': child, 'platform': platform}
             manifests = [descriptor, {'digest': release.digest(b'attestation'),
                                      'platform': {'os': 'unknown', 'architecture': 'unknown'},
                                      'annotations': {'vnd.docker.reference.type': 'attestation-manifest'}}]
             if duplicate:
                 manifests.append(copy.deepcopy(descriptor))
-            index = self.manifest(repo, {'schemaVersion': 2, 'mediaType': next(iter(release.INDEXES)),
+            index = self.manifest(repo, {'schemaVersion': 2, 'mediaType': min(release.INDEXES),
                                         'manifests': manifests})
             self.local[f'{repo}@{index}'] = {'Id': config_id, 'Os': platform['os'],
                                             'Architecture': platform['architecture'],
@@ -70,7 +70,7 @@ class Docker:
         for s, n in [('backend', 'backend'), ('nginx', 'frontend'), ('ai', 'ai')]:
             labels[release.PREFIX + n + '.digest'] = images[s]
         self.prod = self.manifest(release.MARKER, {'schemaVersion': 2,
-                                                 'mediaType': next(iter(release.MANIFESTS)),
+                                                 'mediaType': min(release.MANIFESTS),
                                                  'config': {'digest': release.digest(release.encoded(labels))}})
         self.configs[f'{release.MARKER}@{self.prod}'] = {'config': {'Labels': labels}}
 
@@ -99,7 +99,12 @@ class Docker:
             self.on_pull()
             return b''
         if args[:3] == ('docker', 'image', 'inspect'):
+            if args[-1] not in self.local:
+                raise release.Rejected('외부 명령 실패: docker (출력 생략)')
             return release.encoded([self.local[args[-1]]])
+        if args[:3] == ('docker', 'image', 'tag'):
+            self.local[args[-1]] = copy.deepcopy(self.local[args[-2]])
+            return b''
         if args[:2] == ('docker', 'inspect'):
             cid = args[-1]
             if cid == 'db-container':
@@ -112,7 +117,14 @@ class Docker:
             file = Path(args[args.index('-f') + 1])
             command = args[args.index('-f') + 2:]
             if command == ('config', '--format', 'json'):
-                return release.encoded(self.compose_config)
+                config = copy.deepcopy(self.compose_config)
+                try:
+                    tag = release.image_tag(Path(args[args.index('--env-file') + 1]).read_bytes())[0]
+                except release.Rejected:
+                    tag = ''
+                for service, repo in release.REPOS.items():
+                    config['services'][service]['image'] = repo + ':' + tag
+                return release.encoded(config)
             if command == ('config', '--quiet'):
                 self.saved_compose = json.loads(file.read_bytes())
                 return b''
@@ -134,7 +146,8 @@ class Docker:
         # containerd 이미지 저장소에서는 이미지 ID가 pull한 index digest다.
         self.containerd = True
         for ref, image in self.local.items():
-            image['Id'] = ref.split('@', 1)[1]
+            if '@' in ref:
+                image['Id'] = ref.split('@', 1)[1]
 
     def mutations(self):
         return [args for args in self.calls if args[:2] == ('docker', 'compose') and 'up' in args]
@@ -142,6 +155,10 @@ class Docker:
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
+        # 운영 CLI는 root 전용이다. 로컬 테스트는 chown syscall만 대체한다.
+        chown = mock.patch.object(release.os, 'fchown')
+        self.chown = chown.start()
+        self.addCleanup(chown.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -151,6 +168,9 @@ class ReleaseTests(unittest.TestCase):
         (self.root / 'backups/deployed-image-tag').write_text('sha-' + SHA)
         (self.root / 'ENABLE_UPDATE_CD').touch()
         self.docker = Docker()
+        # 최초 상태의 두 기록과 로컬 SHA 태그는 이미 배포된 같은 이미지를 가리킨다.
+        for ref, image in list(self.docker.local.items()):
+            self.docker.local[ref.split('@', 1)[0] + ':sha-' + SHA] = image
         self.sleeps = []
         self.cd = release.Release(self.root, self.docker, self.sleeps.append)
 
@@ -188,6 +208,322 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual((self.root / '.env').read_text().splitlines()[0], 'IMAGE_TAG=sha-' + SHA)
         self.assertEqual(json.loads((self.cd.store / 'current.json').read_bytes())['bundle_id'], bundle)
 
+    def old_records(self):
+        old = 'sha-' + 'b' * 40
+        data = (b'# comment\r\nPASSWORD=literal$VALUE$$and${VARIABLE}\nIMAGE_TAG=' + old.encode() +
+                b'\r\nBINARY=\xff\nNO_FINAL_NEWLINE=$unchanged')
+        (self.root / '.env').write_bytes(data)
+        (self.root / 'backups/deployed-image-tag').write_text(old + '\n')
+        return old, data
+
+    def test_success_updates_only_tag_bytes_and_next_prepare_accepts_new_records(self):
+        old, original = self.old_records()
+        bundle = self.approved()
+        result = self.cd.apply(bundle, EXECUTION)
+        desired = 'sha-' + SHA
+        self.assertEqual((self.root / '.env').read_bytes(), original.replace(old.encode(), desired.encode()))
+        self.assertEqual((self.root / 'backups/deployed-image-tag').read_bytes(), (desired + '\n').encode())
+        for name in ['.env', 'backups/deployed-image-tag']:
+            self.assertEqual((self.root / name).stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.chown.call_count, 2)
+        self.assertTrue(all(call.args[1:] == (0, 0) for call in self.chown.call_args_list))
+        self.assertEqual(result['deployment_records'], {
+            'before': old, 'intended': desired, 'after': desired,
+            'files': {'.env': 'updated', 'backups/deployed-image-tag': 'updated'}})
+        self.assertNotIn('literal', json.dumps(result))
+        self.assertEqual(self.cd.prepare(SHA, 'next-prepare')['sha'], SHA)
+        saved = json.loads((self.cd.store / bundle / 'bundle.json').read_bytes())
+        for service, image in saved['images'].items():
+            tag = image['repository'] + ':' + desired
+            self.assertEqual(self.docker.local[tag]['Id'], image['config'])
+
+    def test_compose_runtime_and_health_failures_leave_old_records(self):
+        for failure in ['compose', 'runtime', 'health']:
+            with self.subTest(failure=failure):
+                self.setUp()
+                _, original = self.old_records()
+                previous = (self.root / 'backups/deployed-image-tag').read_bytes()
+                bundle = self.approved()
+                self.docker.fail = lambda args: (failure == 'compose' and
+                                                args[:2] == ('docker', 'compose') and 'up' in args)
+                self.docker.runtime_bad = failure == 'runtime'
+                self.docker.runtime_health_bad = failure == 'health'
+                with self.assertRaises(release.Rejected):
+                    self.cd.apply(bundle, EXECUTION)
+                self.assertEqual((self.root / '.env').read_bytes(), original)
+                self.assertEqual((self.root / 'backups/deployed-image-tag').read_bytes(), previous)
+                self.assertFalse(any(args[:3] == ('docker', 'image', 'tag') for args in self.docker.calls))
+
+    def test_missing_or_duplicate_image_tag_never_updates_records(self):
+        for data in [b'PASSWORD=$secret\n', ('IMAGE_TAG=sha-' + SHA + '\n').encode() * 2,
+                     ('IMAGE_TAG=sha-' + SHA + '\nIMAGE_TAG=invalid\rvalue\n').encode()]:
+            with self.subTest(data=data):
+                (self.root / '.env').write_bytes(data)
+                with self.assertRaisesRegex(release.Rejected, '정확히 하나'):
+                    self.prepare()
+                self.assertEqual((self.root / '.env').read_bytes(), data)
+                self.assertEqual(self.docker.mutations(), [])
+
+    def test_record_write_failures_report_partial_update_and_pause(self):
+        for failing_name in ['.env', 'backups/deployed-image-tag']:
+            with self.subTest(failing_name=failing_name):
+                self.setUp()
+                old, original = self.old_records()
+                bundle = self.approved()
+                write = release.write_deployment_file
+                def fail(path, data, **kwargs):
+                    if path == self.root / failing_name:
+                        raise OSError('injected write error')
+                    return write(path, data, **kwargs)
+                with mock.patch.object(release, 'write_deployment_file', side_effect=fail):
+                    with self.assertRaises(OSError):
+                        self.cd.apply(bundle, EXECUTION)
+                result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+                self.assertEqual(result['status'], 'failed')
+                self.assertTrue((self.root / 'PAUSE_CD').exists())
+                self.assertFalse((self.cd.store / 'current.json').exists())
+                env_changed = failing_name != '.env'
+                self.assertEqual(result['deployment_records']['after'], 'sha-' + SHA if env_changed else old)
+                self.assertEqual(result['deployment_records']['files'], {
+                    '.env': 'updated' if env_changed else 'unchanged',
+                    'backups/deployed-image-tag': 'unchanged'})
+                with self.assertRaises(release.Rejected):
+                    self.cd.prepare(SHA, 'blocked-next')
+
+    def test_local_tag_failure_pauses_without_touching_deployment_records(self):
+        _, original = self.old_records()
+        bundle = self.approved()
+        self.docker.fail = lambda args: args[:3] == ('docker', 'image', 'tag')
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.assertEqual((self.root / '.env').read_bytes(), original)
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+
+    def test_same_sha_tag_failure_reports_unwritten_records_as_unchanged(self):
+        (self.root / 'backups/deployed-image-tag').write_text('sha-' + SHA + '\n')
+        bundle = self.approved()
+        self.docker.fail = lambda args: args[:3] == ('docker', 'image', 'tag')
+        with mock.patch.object(release, 'write_deployment_file', wraps=release.write_deployment_file) as write:
+            with self.assertRaises(release.Rejected):
+                self.cd.apply(bundle, EXECUTION)
+        write.assert_not_called()
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['deployment_records']['files'], {
+            '.env': 'unchanged', 'backups/deployed-image-tag': 'unchanged'})
+
+    def test_same_sha_rebuild_tag_failure_cannot_be_reconciled(self):
+        for service, repo in release.REPOS.items():
+            old = next(image for ref, image in self.docker.local.items() if ref.startswith(repo + '@'))
+            self.docker.local[repo + ':sha-' + SHA] = copy.deepcopy(old)
+        self.docker.make_release(salt='same-sha-rebuild')
+        bundle = self.approved()
+        self.docker.fail = lambda args: args[:3] == ('docker', 'image', 'tag')
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.fail = None
+        with self.assertRaisesRegex(release.Rejected, '로컬 SHA 태그'):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        self.assertFalse((self.cd.store / bundle / 'resolution.json').exists())
+        self.assertFalse((self.cd.store / 'current.json').exists())
+
+    def test_reconcile_rejects_each_stale_or_missing_tag_without_changing_tags(self):
+        bundle = self.approved()
+        self.cd.apply(bundle, EXECUTION)
+        snapshot = json.loads((self.cd.store / bundle / 'bundle.json').read_bytes())
+        for service, image in snapshot['images'].items():
+            tag = image['repository'] + ':sha-' + SHA
+            approved = self.docker.local[tag]
+            for missing in [False, True]:
+                with self.subTest(service=service, missing=missing):
+                    if missing:
+                        del self.docker.local[tag]
+                    else:
+                        self.docker.local[tag] = {**approved, 'Id': release.digest(b'old build')}
+                    target = self.approved()
+                    self.docker.fail = lambda args: args[:2] == ('docker', 'pull')
+                    with self.assertRaises(release.Rejected):
+                        self.cd.apply(target, EXECUTION)
+                    self.docker.fail = None
+                    before = copy.deepcopy(self.docker.local)
+                    self.docker.calls.clear()
+                    with self.assertRaises(release.Rejected):
+                        self.cd.reconcile(target, EXECUTION, 'operator', 'current', 'INC-499')
+                    self.assertEqual(self.docker.local, before)
+                    self.assertFalse(any(args[:3] == ('docker', 'image', 'tag') for args in self.docker.calls))
+                    self.assertTrue((self.root / 'PAUSE_CD').exists())
+                    self.assertFalse((self.cd.store / target / 'resolution.json').exists())
+                    self.assertEqual(json.loads((self.cd.store / 'current.json').read_bytes())['bundle_id'], bundle)
+                    self.docker.local[tag] = approved
+                    self.cd.reconcile(target, EXECUTION, 'operator', 'current', 'INC-499')
+
+    def test_same_sha_success_reports_completed_file_replacements(self):
+        (self.root / 'backups/deployed-image-tag').write_text('sha-' + SHA + '\n')
+        bundle = self.approved()
+        with mock.patch.object(release, 'write_deployment_file', wraps=release.write_deployment_file) as write:
+            result = self.cd.apply(bundle, EXECUTION)
+        self.assertEqual(write.call_count, 2)
+        self.assertEqual(result['deployment_records']['files'], {
+            '.env': 'updated', 'backups/deployed-image-tag': 'updated'})
+
+    def test_same_sha_write_without_rename_confirmation_reports_unknown(self):
+        (self.root / 'backups/deployed-image-tag').write_text('sha-' + SHA + '\n')
+        bundle = self.approved()
+        with mock.patch.object(release, 'write_deployment_file', side_effect=OSError('write interrupted')):
+            with self.assertRaises(OSError):
+                self.cd.apply(bundle, EXECUTION)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['deployment_records']['files'], {
+            '.env': 'unknown', 'backups/deployed-image-tag': 'unchanged'})
+
+    def test_containerd_reconciliation_checks_index_ids_of_sha_tags(self):
+        self.docker.use_containerd()
+        bundle = self.approved()
+        self.docker.runtime_bad = True
+        with self.assertRaises(release.Rejected):
+            self.cd.apply(bundle, EXECUTION)
+        self.docker.runtime_bad = False
+        snapshot = json.loads((self.cd.store / bundle / 'bundle.json').read_bytes())
+        image = snapshot['images']['backend']
+        tag = image['repository'] + ':sha-' + SHA
+        approved = self.docker.local[tag]
+        self.docker.local[tag] = {**approved, 'Id': image['config']}
+        with self.assertRaisesRegex(release.Rejected, '로컬 SHA 태그'):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        self.docker.local[tag] = approved
+        self.assertEqual(approved['Id'], image['index'])
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+
+    def test_same_sha_rename_followed_by_fsync_failure_reports_replacement(self):
+        (self.root / 'backups/deployed-image-tag').write_text('sha-' + SHA + '\n')
+        bundle = self.approved()
+        sync = release.sync_directory
+        def fail(path):
+            if path == self.root:
+                raise OSError('directory fsync failed')
+            return sync(path)
+        with mock.patch.object(release, 'sync_directory', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.cd.apply(bundle, EXECUTION)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['deployment_records']['files'], {
+            '.env': 'updated', 'backups/deployed-image-tag': 'unchanged'})
+
+    def test_directory_fsync_failure_after_rename_reports_replacement(self):
+        self.old_records()
+        bundle = self.approved()
+        sync = release.sync_directory
+        def fail(path):
+            if path == self.root and release.image_tag((self.root / '.env').read_bytes())[0] == 'sha-' + SHA:
+                raise OSError('directory fsync failed')
+            return sync(path)
+        with mock.patch.object(release, 'sync_directory', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.cd.apply(bundle, EXECUTION)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['status'], 'failed')
+        self.assertEqual(result['deployment_records']['files']['.env'], 'updated')
+        self.assertEqual(result['deployment_records']['files']['backups/deployed-image-tag'], 'unchanged')
+
+    def test_file_fsync_failure_preserves_original_and_cleans_temporary(self):
+        _, original = self.old_records()
+        with mock.patch.object(release.os, 'fsync', side_effect=OSError('fsync failed')):
+            with self.assertRaises(OSError):
+                release.write_deployment_file(self.root / '.env', b'new contents')
+        self.assertEqual((self.root / '.env').read_bytes(), original)
+        self.assertEqual(list(self.root.glob('.deploy-*')), [])
+
+    def test_current_publication_failure_can_reconcile_changed_env_configuration(self):
+        self.old_records()
+        bundle = self.approved()
+        write = release.write_atomic
+        def fail(path, value):
+            if path == self.cd.store / 'current.json':
+                raise OSError('current publication failed')
+            return write(path, value)
+        with mock.patch.object(release, 'write_atomic', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.cd.apply(bundle, EXECUTION)
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        self.cd.prepare(SHA, 'after-reconcile')
+
+    def test_sigkill_after_record_replacement_reconciles_only_planned_configuration(self):
+        self.old_records()
+        bundle = self.approved()
+        script = '''import os, signal, sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from test_release import Docker, release
+root = Path(sys.argv[2])
+release.os.fchown = lambda *args: None
+sync = release.sync_directory
+def killed(path):
+    sync(path)
+    if path == root / 'backups':
+        os.kill(os.getpid(), signal.SIGKILL)
+release.sync_directory = killed
+release.Release(root, Docker(), lambda _: None).apply(sys.argv[3], sys.argv[4])
+'''
+        process = subprocess.run([sys.executable, '-c', script, str(Path(__file__).parent),
+                                  str(self.root), bundle, EXECUTION], capture_output=True, timeout=5)
+        self.assertEqual(process.returncode, -9, process.stderr.decode())
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertEqual(result['status'], 'running')
+        self.assertIn('planned_configuration', result)
+        self.assertNotIn('published_configuration', result)
+        self.assertEqual((self.root / 'backups/deployed-image-tag').read_text().strip(), 'sha-' + SHA)
+        self.assertEqual(release.image_tag((self.root / '.env').read_bytes())[0], 'sha-' + SHA)
+        with self.assertRaisesRegex(release.Rejected, '미완료'):
+            self.cd.prepare(SHA, 'after-crash')
+        self.docker.saved_compose = json.loads((self.cd.store / bundle / 'compose.json').read_bytes())
+        env = (self.root / '.env').read_bytes()
+        (self.root / '.env').write_bytes(env + b'\nUNAPPROVED=value\n')
+        with self.assertRaisesRegex(release.Rejected, '구성 변경'):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        (self.root / '.env').write_bytes(env)
+        self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        self.cd.prepare(SHA, 'after-reconcile')
+
+    def test_unplanned_post_write_configuration_is_not_accepted_by_reconcile(self):
+        self.old_records()
+        bundle = self.approved()
+        configuration = self.cd.configuration
+        def changed(env_file=None):
+            if env_file is None and release.image_tag((self.root / '.env').read_bytes())[0] == 'sha-' + SHA:
+                with (self.root / '.env').open('ab') as stream:
+                    stream.write(b'\nUNAPPROVED=value\n')
+            return configuration(env_file=env_file)
+        with mock.patch.object(self.cd, 'configuration', side_effect=changed):
+            with self.assertRaisesRegex(release.Rejected, '기록 갱신 후 구성 불일치'):
+                self.cd.apply(bundle, EXECUTION)
+        result = json.loads((self.cd.store / bundle / 'result.json').read_bytes())
+        self.assertNotIn('published_configuration', result)
+        with self.assertRaisesRegex(release.Rejected, '구성 변경'):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+
+    def test_partial_record_update_cannot_be_cleared_by_reconcile(self):
+        self.old_records()
+        bundle = self.approved()
+        write = release.write_deployment_file
+        def fail(path, data, **kwargs):
+            if path.name == 'deployed-image-tag':
+                raise OSError('record failed')
+            return write(path, data, **kwargs)
+        with mock.patch.object(release, 'write_deployment_file', side_effect=fail):
+            with self.assertRaises(OSError):
+                self.cd.apply(bundle, EXECUTION)
+        with self.assertRaises(release.Rejected):
+            self.cd.reconcile(bundle, EXECUTION, 'operator', 'target', 'INC-499')
+        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        self.assertFalse((self.cd.store / bundle / 'resolution.json').exists())
+
     def test_stale_marker_is_rejected_before_approval(self):
         self.docker.make_release(revision='b' * 40)
         with self.assertRaisesRegex(release.Rejected, 'stale marker'):
@@ -209,7 +545,9 @@ class ReleaseTests(unittest.TestCase):
         self.docker.make_release(revision='b' * 40, image_revision='b' * 40)
         self.docker.calls.clear()
         self.cd.apply(bundle, EXECUTION)
-        self.assertFalse(any(':prod' in arg or ':sha-' in arg for args in self.docker.calls for arg in args))
+        remote = [args for args in self.docker.calls if args[:2] in
+                  [('docker', 'buildx'), ('docker', 'pull')]]
+        self.assertFalse(any(':prod' in arg or ':sha-' in arg for args in remote for arg in args))
 
     def test_same_sha_rebuild_does_not_replace_approved_bundle(self):
         bundle = self.approved()
@@ -321,7 +659,8 @@ class ReleaseTests(unittest.TestCase):
                 self.docker.containerd = containerd
                 if use_index:
                     for ref, image in self.docker.local.items():
-                        image['Id'] = ref.split('@', 1)[1]
+                        if '@' in ref:
+                            image['Id'] = ref.split('@', 1)[1]
                 self.blocked(bundle)
                 self.docker.local = saved
                 self.docker.containerd = False
@@ -676,6 +1015,28 @@ with cd.exclusive('deploy'):
 
 
 class ComposeRoundTripTests(unittest.TestCase):
+    def test_planned_configuration_matches_real_compose_after_env_replacement(self):
+        if not shutil.which('docker'):
+            self.skipTest('Docker CLI 없음: Compose 해석 실검증 생략')
+        if subprocess.run(['docker', 'compose', 'version'], capture_output=True).returncode:
+            self.skipTest('Docker Compose 없음: Compose 해석 실검증 생략')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            before = ("IMAGE_TAG=sha-" + 'b' * 40 + "\nPASSWORD='test$SECRET${UNSET}'\n").encode()
+            after = before.replace(('sha-' + 'b' * 40).encode(), ('sha-' + SHA).encode())
+            (root / '.env').write_bytes(before)
+            source = {'services': {'db': {'image': 'mariadb:11.8'},
+                      **{service: {'image': repo + ':${IMAGE_TAG}', 'environment': {'PASSWORD': '${PASSWORD}'}}
+                         for service, repo in release.REPOS.items()}}}
+            (root / 'compose.yaml').write_bytes(release.encoded(source))
+            cd = release.Release(root)
+            bundle = {'configuration': cd.configuration()[1]}
+            expected = cd.planned_configuration(after, bundle)
+            self.assertEqual((root / '.env').read_bytes(), before)
+            self.assertEqual(list(root.glob('.planned-env-*')), [])
+            (root / '.env').write_bytes(after)
+            self.assertEqual(cd.configuration()[1], expected)
+
     def test_rendered_config_preserves_dollar_values_and_bind_paths(self):
         if not shutil.which('docker'):
             self.skipTest('Docker CLI 없음: Compose 해석 실검증 생략')
