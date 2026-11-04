@@ -70,9 +70,12 @@ public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader {
         // 사건 결제 순서를 지키고 같은 결제는 한 번만 — 평가가 없는 결제는 모두 "정보 없음"
         List<PaymentMatch> payments = new LinkedHashSet<>(casePaymentIds)
                 .stream()
-                .map(paymentId -> new PaymentMatch(
-                        paymentId, card.forPayment(paymentId), device.forPayment(paymentId), ip.forPayment(paymentId)))
-                .toList();
+                        .map(paymentId -> new PaymentMatch(
+                                paymentId,
+                                card.forPayment(paymentId),
+                                device.forPayment(paymentId),
+                                ip.forPayment(paymentId)))
+                        .toList();
         return new FdsLinkedPayments(card.all(), device.all(), ip.all(), payments);
     }
 
@@ -143,8 +146,10 @@ public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader {
                     .filter(evaluations -> evaluations.stream()
                             .anyMatch(e -> AuthorizationResult.DECLINED.name().equals(e.getAuthorizationResult())))
                     .count();
-            int customers = (int)
-                    latest.stream().map(FdsEvaluation::getCustomerRef).distinct().count();
+            int customers = (int) latest.stream()
+                    .map(FdsEvaluation::getCustomerRef)
+                    .distinct()
+                    .count();
             return Match.builder()
                     .provided(true)
                     .otherCustomerCount(customers)
