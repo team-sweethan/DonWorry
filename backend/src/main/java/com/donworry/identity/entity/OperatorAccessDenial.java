@@ -1,5 +1,6 @@
 package com.donworry.identity.entity;
 
+import com.donworry.identity.api.OperatorAccessDenied;
 import com.donworry.identity.api.OperatorAccessDeniedType;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -25,7 +26,7 @@ public class OperatorAccessDenial {
     @Column(name = "merchant_id", nullable = false)
     private Long merchantId;
 
-    @Column(name = "http_method", nullable = false, length = 10)
+    @Column(name = "http_method", nullable = false, length = OperatorAccessDenied.MAX_HTTP_METHOD_LENGTH)
     private String httpMethod;
 
     @Column(name = "path", nullable = false, length = 512)

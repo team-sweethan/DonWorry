@@ -49,7 +49,7 @@ Entity는 Immutable이고 Repository에는 saveAndFlush만 공개한다. 기록 
 - path: request.getServletPath(). 쿼리스트링·컨텍스트 경로 제외. 최대 512 Unicode 문자로 자르며 surrogate pair를 자르지 않는다.
 - occurredAt: identityClock UTC Instant를 마이크로초로 자른다. 원본 DATETIME(6)은 UTC LocalDateTime으로 명시 변환하고 이벤트는 같은 Instant다.
 - clientIp: 공통 ClientIpResolver 사용. 신뢰되지 않은 프록시 헤더를 직접 읽지 않는다. 확인 불가는 null이다.
-- httpMethod: 원래 요청 메서드.
+- httpMethod: HTTP token의 앞 최대 10자(MAX_HTTP_METHOD_LENGTH)를 원본·이벤트에 동일하게 기록한다. 10자 이하는 보존한다. 인가·deniedType 판정은 자르기 전 요청 메서드로 한다.
 - loginId: 원본 테이블에는 저장하지 않고 DB 계정에서 읽은 값으로 이벤트에만 전달한다.
 
 ### deniedType과 인가
@@ -99,7 +99,7 @@ OperatorAccessRoutes에 사장님 전용 경로를 모으고 SecurityConfig와 �
 
 ### 저장·발행 최종 실행 기록
 
-2026-11-04, 구현 커밋 `7032765`와 동일한 코드·테스트·설정 작업본에서 실행했다. 실행 도중 해당 작업본을 커밋했고, 이후 backend 변경은 없다.
+2026-11-04, 구현 커밋 `7032765`와 동일한 코드·테스트·설정 작업본에서 실행했다. 실행 도중 해당 작업본을 커밋했고, 검증 기록 커밋 ce66131까지 backend 변경은 없었다. 이후 리뷰 보완 검증은 아래 별도 기록을 따른다.
 
 - `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain --max-workers=2`: **BUILD SUCCESSFUL**, 6분 5초.
 - 일반 1,440건 중 1,439 통과·기존 1건 skip. MariaDB 817건·별도 Asia/Seoul 정산 JVM 20건 모두 통과. XML failures/errors 모두 0.
@@ -111,3 +111,20 @@ OperatorAccessRoutes에 사장님 전용 경로를 모으고 SecurityConfig와 �
 
 미검증: P2 실제 수신·룰·정지 연결, 반복 탐지 → 정지 → 해제 후 재정지 방지 전체 흐름,
 자동 삭제·90일 실시간 경과·운영 DB·배포·Notion 동기화.
+
+
+### PR #527 Codex 리뷰 — 긴 HTTP 메서드 보완
+
+리뷰는 http_method VARCHAR(10)을 넘는 사용자 정의 메서드가 INSERT를 실패시켜 수집이 누락될 수 있음을 지적했다.
+수정 전 서비스→MariaDB 재현에서 LONGMETHOD1·26자 메서드가 DataIntegrityViolationException으로 실패하고 10자 경계는 통과했다.
+실제 HTTP+유효 CSRF에서는 현재 기본 방화벽이 LONGMETHOD1을 400으로 거절해 핸들러까지 도달하지 않는 것도 확인했다.
+
+저장 경계를 보완해 원본·이벤트 모두 HTTP token의 앞 10자로 제한한다. 요청 자체를 변경하지 않으며 인가/분류에는 원문 메서드를 쓴다.
+기존 migration·DB 컬럼은 유지한다. Entity와 발행자가 공개 길이 상수를 공유하고 #521 계약·ADR-0080에 기록했다.
+2026-11-04, `ce66131` 위 리뷰 보완 작업본에서 다음을 실행했다.
+
+- 수정 전 신규 4건 중 10자 경계·실제 HTTP 방화벽 거절은 통과, 11자·26자 저장 2건은 MariaDBDataTruncation으로 실패했다.
+- 수정 후 `cd backend && ./gradlew spotlessApply check mariaDbTest --tests '*OperatorAccessDenialMariaDbTests' -x settlementSeoulMariaDbTest --console=plain --max-workers=2`: BUILD SUCCESSFUL, 48초.
+- 일반 1,440건 중 기존 1건 skip, 관련 MariaDB 17건 전부 통과. XML failures/errors 0. 모듈·계층·포맷 검사 포함.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check`: 통과.
+- 이번 보완에서는 MariaDB 전체 817건·별도 Asia/Seoul 정산 검사를 재실행하지 않았다. 위 전체 검사 결과는 보완 전 `7032765` 코드 기준이다. 신규 원격 CI는 별도 확인 대상이다.

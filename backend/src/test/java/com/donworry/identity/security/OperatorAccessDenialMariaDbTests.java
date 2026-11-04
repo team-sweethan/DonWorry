@@ -273,6 +273,34 @@ class OperatorAccessDenialMariaDbTests {
         assertStored(event);
     }
 
+    // 사용자 정의 메서드 길이로 원본 수집이 누락되지 않고 이벤트도 같은 값을 전달한다
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "MKCALENDAR,MKCALENDAR",
+        "LONGMETHOD1,LONGMETHOD",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ,ABCDEFGHIJ"
+    })
+    void record_whenMethodExceedsColumn_preservesSourceAndBoundedEvent(String method, String expected) {
+        var request = new MockHttpServletRequest(method, "/api/admin/users");
+        request.setServletPath("/api/admin/users");
+        service.record(ownerId, OperatorAccessDeniedType.OUT_OF_ROLE, request);
+        assertThat(count()).isEqualTo(1);
+        assertThat(onlyEvent().httpMethod()).isEqualTo(expected);
+        assertStored(onlyEvent());
+    }
+
+    // 현재 기본 방화벽은 사용자 정의 메서드를 권한 핸들러 전에 차단한다
+    @Test
+    void request_whenCustomMethod_rejectedBeforeAuthorizationHandler() throws Exception {
+        var response = HttpCsrfTestSupport.send(
+                owner,
+                HttpRequest.newBuilder(uri("/api/admin/users"))
+                        .method("LONGMETHOD1", HttpRequest.BodyPublishers.noBody()));
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(count()).isZero();
+        assertThat(probe.committedEvents()).isEmpty();
+    }
+
     // 실제 HTTP의 긴 미등록 경로도 403을 유지하고 저장 전에 길이를 제한한다
     @Test
     void request_whenLongPath_recordsTruncatedPath() throws Exception {

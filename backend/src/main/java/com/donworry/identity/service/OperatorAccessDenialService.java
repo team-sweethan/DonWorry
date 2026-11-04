@@ -53,10 +53,15 @@ public class OperatorAccessDenialService {
         if (length > OperatorAccessDenied.MAX_PATH_LENGTH) {
             path = path.substring(0, path.offsetByCodePoints(0, OperatorAccessDenied.MAX_PATH_LENGTH));
         }
+        // 방화벽 허용 메서드가 확장돼도 저장 길이로 감사 수집이 누락되지 않게 한다.
+        var httpMethod = request.getMethod();
+        if (httpMethod.length() > OperatorAccessDenied.MAX_HTTP_METHOD_LENGTH) {
+            httpMethod = httpMethod.substring(0, OperatorAccessDenied.MAX_HTTP_METHOD_LENGTH);
+        }
         var denial = denials.saveAndFlush(OperatorAccessDenial.record(
                 userId,
                 user.getMerchantId(),
-                request.getMethod(),
+                httpMethod,
                 path,
                 deniedType,
                 clientIps.clientIp(request),

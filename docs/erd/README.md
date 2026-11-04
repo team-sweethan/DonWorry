@@ -382,7 +382,7 @@ P1 사용자가 #525 초안의 저장 구조와 저장소 ERD·ADR 선행 구현
 | denial_id | BIGINT AUTO_INCREMENT PK | OperatorAccessDenied.eventId |
 | user_id | BIGINT NOT NULL FK platform_users | 사장님 계정 |
 | merchant_id | BIGINT NOT NULL FK merchants | 세션이 아닌 DB 계정의 가맹점 |
-| http_method | VARCHAR(10) NOT NULL | 거절된 요청 메서드 |
+| http_method | VARCHAR(10) NOT NULL | 거절된 요청 HTTP token의 앞 최대 10자, 원본·이벤트 동일 |
 | path | VARCHAR(512) NOT NULL | servletPath, 쿼리·컨텍스트 경로 제외, 최대 512자 |
 | denied_type | VARCHAR(30) NOT NULL | OUT_OF_ROLE / PERMISSION_MISSING |
 | client_ip | VARCHAR(45) NULL | 공통 ClientIpResolver 결과 |

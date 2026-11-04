@@ -21,7 +21,7 @@
 | `userId` | `Long` | 거절된 OPERATOR 계정 ID |
 | `loginId` | `String` | 거절 당시 로그인 ID |
 | `merchantId` | `Long` | 거절 당시 소속 가맹점 ID |
-| `httpMethod` | `String` | 실제 요청 메서드 |
+| `httpMethod` | `String` | 요청 HTTP token의 앞 최대 10자 (`MAX_HTTP_METHOD_LENGTH`), 인가는 자르기 전 메서드 사용 (#525) |
 | `path` | `String` | 쿼리스트링을 제외한 요청 경로. 발행자가 저장·발행 전에 최대 512자로 잘라 같은 값을 양쪽에 사용한다 |
 | `deniedType` | `OperatorAccessDeniedType` | `OUT_OF_ROLE` 또는 `PERMISSION_MISSING` |
 | `occurredAt` | `Instant` | 실제 거절 발생 시각(UTC). P2 수신·재전달 시각으로 바꾸지 않는다 |
