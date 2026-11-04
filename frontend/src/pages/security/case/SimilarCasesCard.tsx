@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { Card, Empty, Tag, Typography } from 'antd'
+import { Button, Card, Empty, Tag, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { SimilarCases } from '../../../types/case'
 import { similarOutcomeTags } from '../../../utils/reportView'
@@ -7,10 +7,17 @@ import { dateTime } from './caseLabels'
 
 // 비슷한 과거 사건 (#296) — 참고용이며 자동 판정에 쓰지 않는다. 항목을 누르면 그 Case 상세로 간다
 // similarCases가 없으면(예전 보고서) 카드를 그리지 않고, null이면 "조회하지 못함"을 보여 준다
+// "나란히 비교"는 지금 사건과 과거 사건 보고서를 한 화면에 놓는다 (#501)
 
 const toneColor = { accept: 'green', reject: 'red', none: 'default' } as const
 
-export function SimilarCasesCard({ similar }: { similar: SimilarCases | null }) {
+export function SimilarCasesCard({
+  similar,
+  caseId,
+}: {
+  similar: SimilarCases | null
+  caseId: string
+}) {
   const navigate = useNavigate()
   // 목록 복귀 조건(#243)을 다른 Case로 갈 때도 그대로 넘긴다
   const listReturn = useLocation().state
@@ -66,7 +73,15 @@ export function SimilarCasesCard({ similar }: { similar: SimilarCases | null }) 
                 {c.sharedRules.length > 0 && ` · ${c.sharedRules.map((r) => r.name).join(' · ')}`}
               </div>
             </div>
-            <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <span
+              style={{
+                display: 'flex',
+                gap: 4,
+                flexWrap: 'wrap',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+              }}
+            >
               {similarOutcomeTags(c).map((t) => (
                 <Tag
                   key={t.label}
@@ -76,6 +91,20 @@ export function SimilarCasesCard({ similar }: { similar: SimilarCases | null }) 
                   {t.label}
                 </Tag>
               ))}
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                style={{ marginLeft: 6 }}
+                onClick={(e) => {
+                  // 줄 클릭(사건 상세로 이동)과 겹치지 않게 막는다
+                  e.stopPropagation()
+                  navigate(`/security/cases/${caseId}/compare/${c.caseId}`, { state: listReturn })
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                나란히 비교 →
+              </Button>
             </span>
           </div>
         ))

@@ -23,6 +23,7 @@
 | [06-troubleshooting.md](06-troubleshooting.md) | 문제 해결 — 증상별 원인과 해결 단계 |
 | [07-notion-sync.md](07-notion-sync.md) | Notion 자동 동기화 — 무엇을 쓰고 안 쓰는지, 처음 설정, 문제 해결 |
 | [08-vm-release-marker.md](08-vm-release-marker.md) | VM 이미지·marker 발행 순서, 최신 확인의 한계, 실제 배포 전 검증 |
+| [VM 업데이트 CD](../../ops/vm/README.md) | Jenkins 수동 시작·묶음 승인·digest 검증·업데이트 제안, 운영 적용 전 확인 |
 
 ## 관련 파일
 

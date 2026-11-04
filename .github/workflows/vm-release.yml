@@ -1,0 +1,22 @@
+name: VM Release Consumer
+
+on:
+  pull_request:
+    paths: ['ops/vm/**', '.github/workflows/vm-release.yml']
+  push:
+    branches: [dev, main]
+    paths: ['ops/vm/**', '.github/workflows/vm-release.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  consumer-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: docker compose version
+      - run: python3 -m unittest discover -s ops/vm -p 'test_*.py' -v

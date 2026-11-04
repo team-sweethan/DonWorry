@@ -11,6 +11,7 @@ import {
   hasReadableReport,
   liveCurrentTask,
   reportHeadline,
+  reportRecommendationSource,
   topRiskScore,
 } from '../../../utils/reportView'
 import { dateTime, recommendationLabel, reportStatusLabel } from './caseLabels'
@@ -112,7 +113,7 @@ export function ReportCard({
                 {body.verdict && (
                   <Space size={6}>
                     <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                      종합 권고
+                      {reportRecommendationSource(body)}
                     </Typography.Text>
                     <CodeTag value={recommendationLabel[body.verdict.overallRecommendation]} />
                   </Space>

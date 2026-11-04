@@ -110,7 +110,8 @@ export function MerchantCaseDetailPage() {
       ),
     },
     {
-      title: 'AI 결론',
+      // 보안 검토 권고 (#501) — 기준표 판정 · 예전 AI 권고 모두 같은 이름으로 보여 준다
+      title: '검토 권고',
       dataIndex: 'aiRecommendation',
       width: 130,
       render: (v: MerchantPaymentResult['aiRecommendation']) =>
