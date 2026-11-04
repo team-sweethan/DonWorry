@@ -86,7 +86,7 @@
 
 ## 5. 단계별 ERD 확장
 
-2단계 #474에서 merchant_payouts/merchant_payout_items를 구현한다. [상세 ERD](daily-payouts.md)의 origin 출처 필드를 포함한다. 나머지 환불/배분/잔액 테이블은 후속 제안이며 아직 SQL을 생성하지 않는다.
+2단계 #474에서 merchant_payouts/merchant_payout_items를 구현했다. [상세 ERD](daily-payouts.md)의 origin 출처 필드를 포함한다. 3~4단계에서 환불 수신·미지급 제외를 연결했고, 5단계 #493에서 [회수 배분 원장](refund-recovery.md)을 추가한다. 별도 잔액 캐시 제안은 ADR-0073에 따라 생성하지 않는다.
 
 모든 ID는 BIGINT AUTO_INCREMENT, 금액 BIGINT(KRW), 시각 UTC DATETIME(6), 상태 VARCHAR.
 다른 담당 테이블은 논리 참조만 하며 아래 P6 내부 관계만 물리 FK 후보이다.
@@ -97,9 +97,8 @@
 | merchant_payout_items | payout_item_id, payout_id, settlement_id, settlement_amount, created_at | payout_id·settlement_id 내부 FK, UNIQUE(settlement_id). 원 정산의 지급 포함 근거 |
 | settlement_refund_adjustments | adjustment_id, cancellation_id, payment_id, capture_id, settlement_id, merchant_id, refund_amount, card_fee_return, pg_fee_return, adjustment_amount, remaining_amount, disposition, canceled_at, created_at, updated_at | UNIQUE(cancellation_id), settlement_id 내부 FK. 고객 환불액과 순정산 회수액을 구분. disposition=UNPAID_EXCLUSION/RECOVERY |
 | payout_refund_allocations | allocation_id, payout_id, adjustment_id, applied_amount, created_at | 두 내부 FK, UNIQUE(payout_id,adjustment_id). 어떤 환불을 어느 지급에서 얼마나 차감했는지 추적 |
-| merchant_settlement_balances | balance_id, merchant_id, outstanding_refund_amount, updated_at | UNIQUE(merchant_id). 가맹점별 회수 대기 잔액 및 직렬화 잠금 기준. 조정·배분 원장과 같은 트랜잭션에서 갱신 |
 
-잔여 회수액 = 조정 원금 - 지급 전 제외/후속 지급의 배분 합계. 잔액 캐시는 원장으로 대조 가능해야 한다.
+지급 후 잔여 회수액 = 조정 원금 - 후속 지급 배분 합계. 미지급 제외는 배분 없이 잔여 0이다. 별도 잔액 캐시는 없으며 가맹점 잠금은 4단계 테이블을 유지한다.
 정산 완료 후 환불돼도 과거 완료 정산금·completed_at을 덮어쓰지 않는다. 실제 잔액은 향후 지급의 차감 후 금액으로 계산하도록 후속 조회/예측 PR에서 전환한다.
 P5 기존 이벤트 필드는 cancellationId/paymentId/captureId/merchantId/cancellationAmount/canceledAt이며 변경을 요구하지 않는다.
 P5 활성화·이벤트 재전달·회수불가 종료 정책은 후속 연동 검증 범위다.
@@ -120,6 +119,8 @@ P5 활성화·이벤트 재전달·회수불가 종료 정책은 후속 연동 �
 3단계 #478의 구현 범위는 [환불 성공 수신·조정 원장](refund-receiving.md)이다. PENDING 수신 기록만 추가하며 지급 제외·회수·운영 활성화 완료를 뜻하지 않는다. 이후 단계의 설계안과 현재 구현을 구분한다.
 
 4단계 #488에서 [지급 전 환불 제외와 배치 경합 보호](unpaid-refund-exclusion.md)를 추가한다. 지급 후 회수·이월, 조회·화면 개편, 운영 환불 활성화는 후속이다.
+
+5단계 #493에서 [지급 후 회수·차감·이월](refund-recovery.md)을 추가한다. 실제 유입 조회/현금흐름·화면 전환과 운영 환불 활성화는 후속이다.
 
 ## 7. 달력 근거
 

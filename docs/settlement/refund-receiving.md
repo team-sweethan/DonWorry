@@ -1,5 +1,7 @@
 # 3단계 환불 성공 수신·조정 원장 (#478)
 
+현재 회수 정책은 [5단계 #493](refund-recovery.md)을 따른다. APPLIED/RECOVERY의 잔여액 0이 실제 회수 완료이며 이벤트 수신 완료와 구분한다.
+
 현재 후속 변경: [4단계 #488](unpaid-refund-exclusion.md)에서 공통 가맹점 잠금과 미지급 제외를 연결했다. 미지급은 수신과 함께 APPLIED/UNPAID_EXCLUSION으로 확정하고 지급 후 환불만 PENDING으로 유지한다. 아래는 3단계 도입 기록이며 운영 활성화는 여전히 후속이다.
 
 ## 범위

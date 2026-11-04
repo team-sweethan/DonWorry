@@ -14,12 +14,21 @@ public interface SettlementRefundAdjustmentRepository extends JpaRepository<Sett
     Optional<SettlementRefundAdjustment> findBySettlementId(Long settlementId);
 
     @Query("""
-            SELECT a FROM SettlementRefundAdjustment a JOIN Settlement s ON s.settlementId=a.settlementId
-            WHERE a.merchantId=:merchant AND s.merchantId=:merchant AND a.adjustmentId>:after
+            SELECT a FROM SettlementRefundAdjustment a
+            WHERE a.merchantId=:merchant AND a.adjustmentId>:after
               AND a.status=com.donworry.settlement.entity.RefundAdjustmentStatus.PENDING
-              AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
             ORDER BY a.adjustmentId
             """)
-    List<SettlementRefundAdjustment> findPendingUnpaid(
+    List<SettlementRefundAdjustment> findPendingForMerchant(
+            @Param("merchant") Long merchantId, @Param("after") Long after, Pageable pageable);
+
+    @Query("""
+            SELECT a FROM SettlementRefundAdjustment a
+            WHERE a.merchantId=:merchant AND a.adjustmentId>:after AND a.remainingAmount>0
+              AND a.status=com.donworry.settlement.entity.RefundAdjustmentStatus.APPLIED
+              AND a.disposition=com.donworry.settlement.entity.RefundAdjustmentDisposition.RECOVERY
+            ORDER BY a.adjustmentId
+            """)
+    List<SettlementRefundAdjustment> findRecoverable(
             @Param("merchant") Long merchantId, @Param("after") Long after, Pageable pageable);
 }

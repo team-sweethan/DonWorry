@@ -124,12 +124,13 @@ class RefundAdjustmentMariaDbTests {
     }
 
     @Test
-    void record_whenAlreadyPaid_doesNotChangePayoutOrChooseRecoveryYet() {
+    void record_whenAlreadyPaid_registersRecoveryWithoutChangingPayout() {
         payout.completeMerchant(MERCHANT, Instant.now(), Long.MAX_VALUE);
         var before = jdbc.queryForList("SELECT * FROM merchant_payouts WHERE merchant_id=?", MERCHANT);
         var a = service.record(event);
-        assertThat(a.getStatus()).isEqualTo(RefundAdjustmentStatus.PENDING);
-        assertThat(a.getDisposition()).isNull();
+        assertThat(a.getStatus()).isEqualTo(RefundAdjustmentStatus.APPLIED);
+        assertThat(a.getDisposition()).isEqualTo(RefundAdjustmentDisposition.RECOVERY);
+        assertThat(a.getRemainingAmount()).isEqualTo(9700);
         assertThat(jdbc.queryForList("SELECT * FROM merchant_payouts WHERE merchant_id=?", MERCHANT))
                 .isEqualTo(before);
         assertThat(settlements.findByPaymentId(PAYMENT).orElseThrow().getStatus())
@@ -401,4 +402,7 @@ class RefundAdjustmentMariaDbTests {
                 .toInstant(java.time.ZoneOffset.UTC);
         assertThat(at).isBetween(from, Instant.now().plusSeconds(1));
     }
+    // 회수 시나리오도 같은 Spring 컨텍스트를 공유해 전체 CI의 메모리 사용을 제한한다.
+    @Nested
+    class Recovery extends RefundRecoveryMariaDbTests {}
 }

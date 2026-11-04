@@ -128,6 +128,8 @@ P6 #478 PR 리뷰 대상: [0071 환불 성공 수신과 정산 적용 분리](00
 
 P6 #488 PR 리뷰 대상: [0072 지급 전 환불 제외와 가맹점 공통 잠금](0072-p6-unpaid-refund-exclusion.md).
 
+P6 #493 PR 리뷰 대상: [0073 환불 회수 배분과 개별 잔여액](0073-p6-refund-recovery-allocations.md).
+
 P1 #480 PR 리뷰 대상: [0073 Marker digest로 식별하는 릴리스 이미지 묶음](0073-release-bundle-metadata.md) — 제안, Jenkins·VM 소비는 #481 후속.
 
 P1 #481 PR 리뷰 대상: [0074 Jenkins가 승인한 릴리스 묶음으로 VM 업데이트](0074-approved-release-update.md) — 제안, 운영 설치·실검증 전.
