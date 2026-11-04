@@ -6,7 +6,12 @@ import {
   subscribeUnauthorized,
   subscribePasswordChangeRequired,
 } from '../src/api/client.ts'
-import { emptyLoginMessage, loginDevice, loginTime } from '../src/utils/loginHistory.ts'
+import {
+  emptyLatestLoginMessage,
+  emptyLoginMessage,
+  loginDevice,
+  loginTime,
+} from '../src/utils/loginHistory.ts'
 
 const originalFetch = globalThis.fetch
 afterEach(() => {
@@ -45,6 +50,7 @@ test('최근 성공 없음과 조회 실패를 구별한다', async () => {
   globalThis.fetch = async () => Response.json({ code: 'AUTH_007' }, { status: 500 })
   await assert.rejects(getLatestLogin())
   assert.equal(emptyLoginMessage, '최근 90일 내 로그인 기록 없음')
+  assert.equal(emptyLatestLoginMessage, '최근 1년 내 로그인 기록 없음')
 })
 
 test('본인 이력 401은 세션 만료, 강제 변경은 기존 공통 처리로 전달하고 이전 세션의 응답은 무시한다', async () => {

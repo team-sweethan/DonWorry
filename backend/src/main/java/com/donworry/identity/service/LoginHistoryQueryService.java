@@ -50,7 +50,10 @@ public class LoginHistoryQueryService {
         var now = now();
         return new LatestLoginResponse(histories
                 .findFirstByUserIdAndEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqualOrderByOccurredAtDescHistoryIdDesc(
-                        user.userId(), LoginEventType.LOGIN_SUCCESS, now.minusDays(90), now)
+                        user.userId(),
+                        LoginEventType.LOGIN_SUCCESS,
+                        now.minus(AccessRecordRetentionPolicy.RETENTION_PERIOD),
+                        now)
                 .map(LoginHistoryResponse::from)
                 .orElse(null));
     }
@@ -61,7 +64,7 @@ public class LoginHistoryQueryService {
         var now = now();
         var result = histories.findByUserIdAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
                 userId,
-                now.minusDays(90),
+                now.minus(AccessRecordRetentionPolicy.LOGIN_LIST_PERIOD),
                 now,
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("occurredAt"), Sort.Order.desc("historyId"))));
         return new LoginHistoryPageResponse(

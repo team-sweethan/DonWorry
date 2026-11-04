@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from 'antd'
 import { getLatestLogin } from '../api/loginHistories'
 import type { LoginHistory } from '../api/loginHistories'
-import { emptyLoginMessage, loginTime } from '../utils/loginHistory'
+import { emptyLatestLoginMessage, loginTime } from '../utils/loginHistory'
 
 export function LatestLogin() {
   const [revision, setRevision] = useState(0)
@@ -43,7 +43,7 @@ export function LatestLogin() {
       ) : current.value ? (
         `마지막 로그인: ${loginTime(current.value.occurredAt, true)} (${current.value.clientIp ?? '확인 불가'})`
       ) : (
-        emptyLoginMessage
+        emptyLatestLoginMessage
       )}
     </span>
   )
