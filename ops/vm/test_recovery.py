@@ -142,6 +142,42 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(len(self.docker.mutations()), mutations)
         self.assertFalse((self.root / 'PAUSE_CD').exists())
 
+    def test_interruption_before_attempt_pointer_can_be_retried(self):
+        bundle = self.failed()
+        self.cd.approve_recovery(bundle, 'update-1', 'operator', 'INC-2')
+        mutations = len(self.docker.mutations())
+        with mock.patch.object(release, 'publish_new', side_effect=OSError('pointer interrupted')):
+            with self.assertRaises(OSError):
+                self.cd.recover(bundle, 'update-1')
+        # 포인터가 없으므로 서비스는 바뀌지 않았고 같은 승인으로 다시 실행할 수 있다.
+        self.assertFalse((self.cd.store / bundle / 'recovery-attempt.json').exists())
+        self.assertEqual(len(self.docker.mutations()), mutations)
+        result = self.cd.recover(bundle, 'update-1')
+        self.assertEqual(result['status'], 'success')
+        self.assertGreater(len(self.docker.mutations()), mutations)
+        self.assertEqual(self.cd.unresolved(), [])
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+
+    def test_interruption_after_pointer_before_operation_resumes_same_bundle(self):
+        bundle = self.failed()
+        self.cd.approve_recovery(bundle, 'update-1', 'operator', 'INC-2')
+        mutations = len(self.docker.mutations())
+        with mock.patch.object(release.Release, 'operation', side_effect=OSError('before result')):
+            with self.assertRaises(OSError):
+                self.cd.recover(bundle, 'update-1')
+        pointer = json.loads((self.cd.store / bundle / 'recovery-attempt.json').read_bytes())
+        self.assertEqual(len(self.docker.mutations()), mutations)
+        self.assertFalse((self.cd.store / pointer['bundle_id'] / 'result.json').exists())
+        result = self.cd.recover(bundle, 'update-1')
+        self.assertEqual(result['bundle_id'], pointer['bundle_id'])
+        self.assertEqual(result['status'], 'success')
+        self.assertGreater(len(self.docker.mutations()), mutations)
+        self.assertEqual(self.result(result['bundle_id'])['operation'], 'recovery')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        applied = len(self.docker.mutations())
+        self.cd.recover(bundle, 'update-1')
+        self.assertEqual(len(self.docker.mutations()), applied)
+
     def test_database_change_after_approval_blocks_recovery_before_up(self):
         bundle = self.failed()
         self.cd.approve_recovery(bundle, 'update-1', 'operator', 'INC-2')

@@ -137,6 +137,21 @@ def write_new(path, value):
     sync_directory(path.parent)
 
 
+def publish_new(path, value):
+    # 임시 파일을 완성·fsync한 뒤 hard link로 공개한다. 중단돼도 반쯤 쓴 파일이 이 이름으로 보이지
+    # 않고, 이미 있으면 실패한다 (write_new와 달리 정확히 한 번만 공개).
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.state-', delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            stream.write(encoded(value))
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.link(temporary, path)
+            sync_directory(path.parent)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
 def write_atomic(path, value):
     # fsync 후 같은 파일시스템에서 교체해 전원 중단 시에도 이전/새 JSON 중 하나를 읽는다.
     with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.state-', delete=False) as stream:
@@ -835,32 +850,41 @@ SELECT JSON_ARRAY('unsupported',
             recovered = json.loads((self.store / recovery_id / 'bundle.json').read_bytes())
             destination, recovered = self.load_snapshot(recovery_id, recovered['execution'])
             require(recovered['recovery_approval'] == digest(encoded(approval)), '다른 복구 승인')
-            self.finish_recovery(folder, approval, recovered, recovery_id, destination, failed)
-            return {'bundle_id': recovery_id, 'execution': recovered['execution'], 'status': 'success',
-                    'database_restored': False}
-        configuration = self.configuration()[1]
-        require({k: v for k, v in configuration['inputs'].items() if k != '.env'} ==
-                {k: v for k, v in old['configuration']['inputs'].items() if k != '.env'},
-                '기존 Compose/bind/명령 변경: 복구 금지')
-        env = (self.root / '.env').read_bytes()
-        _, (start, end) = image_tag(env)
-        intended_env = env[:start] + ('sha-' + old['sha']).encode() + env[end:]
-        expected = self.planned_configuration(intended_env, old)
-        old_result = json.loads((old_folder / 'result.json').read_bytes())
-        require(expected in [old['configuration'], old_result.get('published_configuration')],
-                '기존 환경/설정과 불일치: 복구 금지')
-        recovery = {**old, 'configuration': configuration,
-                    'execution': 'recovery-' + digest(encoded(approval)).split(':')[1][:32],
-                    'created_at': timestamp(),
-                    'recovery_of': bundle_id, 'recovery_approval': digest(encoded(approval))}
-        recovery_id = digest(encoded(recovery)).split(':')[1]
-        # 승인 1회당 복구도 1회만 시도한다. 새 시각으로 다른 실행을 만들 수 없다.
-        write_new(folder / 'recovery-attempt.json', {'bundle_id': recovery_id})
-        destination = self.store / recovery_id
-        destination.mkdir(mode=0o700)
-        write_new(destination / 'bundle.json', recovery)
-        write_new(destination / 'compose.json', json.loads((old_folder / 'compose.json').read_bytes()))
-        write_new(destination / 'approval.json', approval)
+            if (destination / 'result.json').exists():
+                self.finish_recovery(folder, approval, recovered, recovery_id, destination, failed)
+                return {'bundle_id': recovery_id, 'execution': recovered['execution'], 'status': 'success',
+                        'database_restored': False}
+            # 실행 기록(result.json)을 만들기 전에 중단됐다. 서비스를 바꾸지 않았으므로 같은 묶음으로
+            # 이어서 진행한다. 구성이 그 사이 바뀌었으면 아래 적용 직전 검사가 거절한다.
+            recovery = recovered
+            configuration = recovered['configuration']
+        else:
+            configuration = self.configuration()[1]
+            require({k: v for k, v in configuration['inputs'].items() if k != '.env'} ==
+                    {k: v for k, v in old['configuration']['inputs'].items() if k != '.env'},
+                    '기존 Compose/bind/명령 변경: 복구 금지')
+            env = (self.root / '.env').read_bytes()
+            _, (start, end) = image_tag(env)
+            intended_env = env[:start] + ('sha-' + old['sha']).encode() + env[end:]
+            expected = self.planned_configuration(intended_env, old)
+            old_result = json.loads((old_folder / 'result.json').read_bytes())
+            require(expected in [old['configuration'], old_result.get('published_configuration')],
+                    '기존 환경/설정과 불일치: 복구 금지')
+            recovery = {**old, 'configuration': configuration,
+                        'execution': 'recovery-' + digest(encoded(approval)).split(':')[1][:32],
+                        'created_at': timestamp(),
+                        'recovery_of': bundle_id, 'recovery_approval': digest(encoded(approval))}
+            recovery_id = digest(encoded(recovery)).split(':')[1]
+            destination = self.store / recovery_id
+            destination.mkdir(mode=0o700)
+            write_new(destination / 'bundle.json', recovery)
+            write_new(destination / 'compose.json', json.loads((old_folder / 'compose.json').read_bytes()))
+            write_new(destination / 'approval.json', approval)
+            sync_directory(self.store)
+            # 승인 1회당 복구도 1회만 시도한다. 대상 묶음이 완성된 뒤에만 시도 포인터를 공개한다.
+            # 그 전에 중단되면 포인터가 없으므로 다시 실행해 새 묶음을 만들 수 있다 (미완성 폴더는
+            # result.json이 없어 미완료 실행으로 세지 않는다).
+            publish_new(attempt, {'bundle_id': recovery_id})
         (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
         sync_directory(self.root)
         with self.operation(destination, recovery_id, recovery['execution'], approval,

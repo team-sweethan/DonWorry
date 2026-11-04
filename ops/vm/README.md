@@ -153,8 +153,10 @@ Jenkins와 수동 명령은 동일한 root 명령을 사용한다. `Release` 메
 그 안의 복원 helper는 업데이트/복구 명령으로 연결돼 있지 않다. 현재 VM 원본과의 일치 및
 다른 수동/cron 실행 경로 부재는 설치 전 확인이 필요하다. 원본 Compose 직접 up,
 helper 직접 호출, 별도 복구 shell을 업데이트 경로로 사용하지 않는다.
-#483에서 복구를 구현할 때는 `exclusive` + `operation(kind='recovery')`로 이 잠금·기록
-경계를 재사용해야 한다. 복구 대상 선정·DB 백업/복원 코드는 이번 작업에 추가하지 않는다.
+#483의 `register-current`·`approve-recovery`·`recover`는 `exclusive` +
+`operation(kind='recovery')`로 이 잠금·기록 경계를 재사용한다(아래 "#483" 절). DB 복원 명령은
+제공하지 않는다. 복구 시도 포인터(`recovery-attempt.json`)는 대상 묶음이 완성된 뒤에만 공개하며,
+실행 기록 생성 전에 중단됐다면 서비스를 바꾸지 않았으므로 같은 `recover`가 이어서 진행한다.
 
 명령 제한은 main/registry 조회 120초, 서비스별 pull 600초, 로컬 inspect/config/ps 30초,
 Compose up 360초(내부 wait 240초), health curl/exec 각 10초다. 변경 명령·pull·원격 조회는
