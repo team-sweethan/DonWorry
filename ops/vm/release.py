@@ -144,6 +144,30 @@ def write_atomic(path, value):
             temporary.unlink(missing_ok=True)
 
 
+def write_deployment_file(path, data):
+    # 배포 호환 파일은 root:root 0600. 환경값은 파싱/재출력하지 않는다.
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.deploy-', delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            os.fchown(stream.fileno(), 0, 0)
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+            sync_directory(path.parent)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def image_tag(data):
+    matches = list(re.finditer(rb'^IMAGE_TAG=([^\r\n]*)(?=\r?$)', data, re.MULTILINE))
+    require(len(matches) == 1, 'IMAGE_TAG 설정이 정확히 하나여야 함')
+    tag = matches[0].group(1)
+    require(re.fullmatch(rb'sha-[0-9a-f]{40}', tag), 'IMAGE_TAG 형식 오류')
+    return tag.decode('ascii'), matches[0].span(1)
+
+
 def serialized(action):
     def decorate(method):
         @wraps(method)
@@ -220,8 +244,8 @@ class Release:
                 '기존 성공 배포 기록 없음: 최초 배포는 이 명령의 대상이 아님')
         previous = (self.root / 'backups/deployed-image-tag').read_text().strip()
         require(re.fullmatch(r'sha-[0-9a-f]{40}', previous), '기존 성공 배포 기록 오류')
-        tags = re.findall(r'^IMAGE_TAG=(.*)$', (self.root / '.env').read_text(), re.MULTILINE)
-        require(tags == [previous], '기존 IMAGE_TAG와 최초 성공 배포 기록 불일치')
+        tag, _ = image_tag((self.root / '.env').read_bytes())
+        require(tag == previous, '기존 IMAGE_TAG와 성공 배포 기록 불일치')
         cid = self.compose('ps', '-q', 'db').decode().strip()
         require(bool(cid), '기존 DB 없음')
         db = self.json('docker', 'inspect', cid)[0]
@@ -378,6 +402,49 @@ class Release:
                     local['Config'].get('Labels', {}).get(REVISION) == bundle['sha'],
                     '로컬 이미지 digest/platform/revision 불일치')
 
+    def publish_deployment(self, bundle, result, stage):
+        require(self.configuration()[1] == bundle['configuration'], '구성 변경: 기록 갱신 중단')
+        env = self.root / '.env'
+        deployed = self.root / 'backups/deployed-image-tag'
+        original = env.read_bytes()
+        before, (start, end) = image_tag(original)
+        desired = 'sha-' + bundle['sha']
+        updates = {'.env': (env, original, original[:start] + desired.encode() + original[end:]),
+                   'backups/deployed-image-tag': (deployed, deployed.read_bytes(), (desired + '\n').encode())}
+        record = {'before': before, 'intended': desired, 'after': before,
+                  'files': {name: 'pending' for name in updates}}
+        result['deployment_records'] = record
+        stage('publishing_records')
+        try:
+            # SHA 태그를 원격에서 다시 고르지 않는다. 승인 digest로 이미 받은 이미지에 붙인다.
+            ids = self.image_ids(bundle)
+            for service, image in bundle['images'].items():
+                target = image['repository'] + ':' + desired
+                self.command('docker', 'image', 'tag', image['repository'] + '@' + image['index'], target)
+                require(self.json('docker', 'image', 'inspect', target)[0]['Id'] == ids[service],
+                        '로컬 SHA 태그 이미지 불일치')
+            for name, (path, _, data) in updates.items():
+                record['files'][name] = 'writing'
+                stage('publishing_records')
+                write_deployment_file(path, data)
+                record['files'][name] = 'updated'
+                stage('publishing_records')
+            # IMAGE_TAG 변경은 다음 승인의 구성에 포함한다. 이전 snapshot은 고치지 않는다.
+            result['published_configuration'] = self.configuration()[1]
+        finally:
+            # rename 후 fsync 실패도 실제 교체 여부를 구분한다. 비밀 환경값은 기록하지 않는다.
+            for name, (path, old, new) in updates.items():
+                try:
+                    actual = path.read_bytes()
+                    record['files'][name] = ('updated' if actual == new else
+                                             'unchanged' if actual == old else 'unknown')
+                except OSError:
+                    record['files'][name] = 'unknown'
+            try:
+                record['after'] = image_tag(env.read_bytes())[0]
+            except (OSError, Rejected):
+                record['after'] = None
+
     @contextmanager
     def operation(self, folder, bundle_id, execution, approval, kind='deploy'):
         # 복구 구현도 exclusive + operation을 함께 사용해야 한다 (#483).
@@ -417,6 +484,11 @@ class Release:
         # 잠금 대기 후 검사한다. 중단 기록이 있으면 다운로드도 새로 시작하지 않는다.
         self.preflight()
         with self.operation(folder, bundle_id, execution, approval) as (result, stage):
+            before = image_tag((self.root / '.env').read_bytes())[0]
+            result['deployment_records'] = {
+                'before': before, 'intended': 'sha-' + bundle['sha'], 'after': before,
+                'files': {'.env': 'unchanged', 'backups/deployed-image-tag': 'unchanged'}}
+            stage('validating')
             self.verify(bundle)
             stage('pulling')
             self.local_images(bundle, pull=True)
@@ -434,6 +506,7 @@ class Release:
                          file=folder / 'compose.json')
             stage('checking')
             self.runtime(bundle, folder)
+            self.publish_deployment(bundle, result, stage)
             stage('publishing')
             write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': bundle['sha']})
             stage('completed')
@@ -504,7 +577,14 @@ class Release:
         else:
             folder_expected = folder
         # 파일/환경 변경과 DB 비정상은 중단 상태 해제로 숨기지 않는다.
-        require(self.configuration()[1] == bundle['configuration'], '구성 변경: 운영자 확인 필요')
+        expected_result = json.loads((folder_expected / 'result.json').read_bytes())
+        expected_configuration = expected_result.get('published_configuration', bundle['configuration'])
+        require(self.configuration()[1] == expected_configuration, '구성 변경: 운영자 확인 필요')
+        # 부분 기록 갱신은 자동 복구하지 않는다. 두 기록과 확인한 이미지가 맞아야 해제한다.
+        tag, _ = image_tag((self.root / '.env').read_bytes())
+        require(tag == 'sha-' + bundle['sha'] and
+                (self.root / 'backups/deployed-image-tag').read_text().strip() == tag,
+                '배포 기록 불일치: #483 운영자 복구 필요')
         cid = self.compose('ps', '-q', 'db', file=folder_expected / 'compose.json').decode().strip()
         require(bool(cid), '기존 DB 없음')
         require(self.json('docker', 'inspect', cid)[0]['State'].get('Health', {}).get('Status') == 'healthy',
