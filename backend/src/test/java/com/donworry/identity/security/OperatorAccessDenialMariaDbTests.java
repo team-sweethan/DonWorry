@@ -347,11 +347,15 @@ class OperatorAccessDenialMariaDbTests {
         assertThat(probe.committedEvents()).isEmpty();
     }
 
-    // 만료 행이 없어도 전체 원본을 읽지 않고 실제 IP 정리 SQL이 발생 시각 인덱스로 범위를 좁힌다
+    // IP를 이미 비운 만료 행이 많아도 IP가 남은 행만 인덱스로 찾는다
     @Test
-    void retention_whenNoExpiredRows_usesTimeRangeWithoutFilesort() throws Exception {
+    void retention_whenManyClearedRows_scansOnlyRowsWithIp() throws Exception {
         jdbc.update(
-                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) SELECT ?,?,'GET','/plan','203.0.113.8','OUT_OF_ROLE','2026-11-01 00:00:00' FROM seq_1_to_10000",
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) SELECT ?,?,'GET','/cleared',NULL,'OUT_OF_ROLE','2020-01-01 00:00:00' FROM seq_1_to_10000",
+                ownerId,
+                merchantId);
+        jdbc.update(
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) SELECT ?,?,'GET','/recent','203.0.113.8','OUT_OF_ROLE','2026-11-01 00:00:00' FROM seq_1_to_100",
                 ownerId,
                 merchantId);
         jdbc.execute("ANALYZE TABLE operator_access_denials");
@@ -359,14 +363,14 @@ class OperatorAccessDenialMariaDbTests {
                 .getMethod("clearExpiredIpsBatch", String.class)
                 .getAnnotation(org.springframework.data.jpa.repository.Query.class)
                 .value();
-        var plan = jdbc.queryForMap("EXPLAIN " + query.replace(":cutoff", "?"), "2000-01-01 00:00:00.000000");
+        var plan = jdbc.queryForMap("EXPLAIN " + query.replace(":cutoff", "?"), "2025-01-01 00:00:00.000000");
         assertThat(plan.get("key")).isEqualTo("idx_operator_access_denials_retention");
         assertThat(plan.get("type")).isEqualTo("range");
-        assertThat(String.valueOf(plan.get("Extra"))).doesNotContain("Using filesort");
+        assertThat(Long.parseLong(String.valueOf(plan.get("rows")))).isLessThan(1000);
         var columns = jdbc.queryForList(
                 "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='operator_access_denials' AND INDEX_NAME='idx_operator_access_denials_retention' ORDER BY SEQ_IN_INDEX",
                 String.class);
-        assertThat(columns).containsExactly("occurred_at", "denial_id");
+        assertThat(columns).containsExactly("client_ip", "occurred_at");
     }
 
     // 1년 경과한 IP만 비우고 경계 직전·NULL과 행의 다른 칸은 재실행해도 유지한다

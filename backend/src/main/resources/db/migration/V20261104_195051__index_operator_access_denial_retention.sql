@@ -6,6 +6,7 @@
 -- * 다른 담당 테이블로 물리 FK를 걸지 않는다 (AGENTS.md 4절)
 -- * 한 migration은 하나의 배포 가능한 스키마 전환만 담는다
 
--- 사용자 조건 없는 보관 배치가 만료 시각 범위와 처리 순서를 인덱스로 찾는다.
+-- 사용자 조건 없는 IP 정리 배치가 아직 IP가 남은 행만 찾는다.
+-- 원본 행은 삭제하지 않으므로 IP를 비운 만료 행이 계속 쌓여도 검색 범위에 들어오지 않는다.
 CREATE INDEX idx_operator_access_denials_retention
-    ON operator_access_denials (occurred_at, denial_id);
+    ON operator_access_denials (client_ip, occurred_at);
