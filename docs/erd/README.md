@@ -89,7 +89,7 @@ erDiagram
     merchants |o--o{ platform_users : "merchant_id"
     platform_users ||--o{ user_permissions : "user_id"
     platform_users |o--o{ login_histories : "user_id"
-    platform_users ||--o{ admin_change_histories : "actor_user_id"
+    platform_users |o--o{ admin_change_histories : "actor_user_id"
     platform_users |o--o{ admin_change_histories : "target_user_id"
     merchants |o--o{ admin_change_histories : "target_merchant_id"
 
@@ -152,6 +152,13 @@ erDiagram
 
 기존 P1 `merchants`·`platform_users`·`user_permissions`에 [새 시드](../../backend/src/main/resources/db/migration/V20261027_221311__seed_cakeshop_merchant_and_owner.sql)로 `CAKESHOP`과 사장님 계정을 등록한다.
 테이블·컬럼·타입·관계 변경은 없다. 수수료율 2%는 P6 확인 전 임시값이며, 키는 환경변수 이름만 저장한다. [결정과 실행 절차](../identity/246-cakeshop-provisioning.md)를 따른다.
+
+### #517 P1 시스템 수행자 (2026-11-04)
+
+사용자가 P1 Notion ERD 기록 완료와 구현 진행을 확인했다. [설계·검증](../identity/517-operator-suspension.md), [ADR-0078](../decisions/0078-operator-account-suspension.md)을 따른다.
+새 migration은 `admin_change_histories.actor_type VARCHAR(20) NOT NULL DEFAULT 'STAFF'`를 추가해 기존 행을 STAFF로 채우고 `actor_user_id BIGINT NULL`로 전환한다. 기존 FK는 유지한다.
+`ck_admin_change_histories_actor`는 STAFF+ID 있음 또는 SYSTEM+ID 없음만 허용한다. 기존 대상 CHECK·FK·인덱스·JSON·보존 정책은 유지한다.
+기존 계정·가맹점·신청 경로는 STAFF를 명시하고, FDS 정지는 SYSTEM/NULL과 `USER_SUSPENDED_BY_FDS`로 구분한다. 운영 DB 적용 완료를 뜻하지 않는다.
 
 ### #129 P1 변경 계약 (2026-10-25)
 

@@ -1,5 +1,10 @@
 # Identity — 로그인 MVP
 
+## #517 시스템 감사 기록·사장님 정지
+
+[설계·검증 체크리스트](517-operator-suspension.md), [ADR-0078](../decisions/0078-operator-account-suspension.md).
+감사 수행자 STAFF/SYSTEM을 구분하고 `OperatorAccountSuspender.suspend(userId)`로 OPERATOR만 독립 커밋·세션 만료한다. 403 수집·P2 탐지 연결·해제 후 재정지 방지는 #515 후속이다. 검사 실행 결과와 미검증은 체크리스트의 실행 기록을 따른다.
+
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
 ## #131 PR A 계정·신청 상태 전환

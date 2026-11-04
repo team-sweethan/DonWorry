@@ -134,6 +134,11 @@ class AdminAccountHttpTests {
     }
 
     private int historyCount(long id) {
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT actor_type FROM admin_change_histories WHERE target_user_id=?",
+                        String.class,
+                        id))
+                .allMatch("STAFF"::equals);
         return jdbc.queryForObject(
                 "SELECT COUNT(*) FROM admin_change_histories WHERE target_user_id=?", Integer.class, id);
     }

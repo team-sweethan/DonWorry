@@ -132,6 +132,20 @@ Method <com.donworry...SomeController.list()> calls method <com.donworry...SomeR
 
 로컬에서 똑같이: Docker Desktop을 켜고 `backend/`에서 `./gradlew mariaDbTest`
 
+#### 예약 작업을 껐는데 nonce·웹훅 검사가 간헐 실패하는 경우
+
+`spring-modulith-starter-test`가 가져오는 Moments는 자체 `@EnableScheduling`을 선언한다. 따라서 `donworry.scheduling.enabled=false`만으로는 테스트의 `@Scheduled` 실행을 막을 수 없다.
+같은 MariaDB를 쓰는 다른 테스트 컨텍스트가 현재 시각으로 nonce를 정리하면, 고정된 과거 시각으로 만든 행이 삭제되어 재사용 거절 검사가 실패할 수 있다. 웹훅 예약 작업도 수동 실행 검사와 겹칠 수 있다.
+
+`build.gradle`의 모든 `Test` 작업은 두 설정을 함께 적용한다.
+
+```groovy
+systemProperty 'donworry.scheduling.enabled', 'false'
+systemProperty 'spring.modulith.moments.enabled', 'false'
+```
+
+`SchedulingDisabledTests`는 이 JVM 설정에서 예약 작업 처리기가 없는지 검사하고, Moments를 다시 켜면 앱 설정만으로 예약을 막지 못하는 상황도 재현한다. 기대값을 완화하거나 nonce 검사를 삭제하지 않는다. 작업의 실제 동작은 테스트가 메서드를 직접 호출해 검증한다. 앱 실행 설정은 변경하지 않는다.
+
 ### B6. spotlessCheck 실패
 
 **증상**

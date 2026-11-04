@@ -41,6 +41,9 @@ class PaymentHttpMariaDbTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    OperatorAccountSuspender accountSuspender;
+
     private final byte[] signingKey = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8);
 
     @MockitoBean
@@ -140,12 +143,76 @@ class PaymentHttpMariaDbTests {
     }
 
     private String sessionBody(String order) {
+        return sessionBody(order, true);
+    }
+
+    private String sessionBody(String order, boolean notify) {
         return "{\"orderRef\":\"" + order + "\",\"customerRef\":\"42\",\"amount\":1000,\"orderCreatedAt\":\""
                 + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
                 + "\",\"orderName\":\"딸기 케이크\",\"successUrl\":\"http://127.0.0.1:8080/orders/1/payment/donworry/return\""
                 + ",\"failUrl\":\"http://127.0.0.1:8080/orders/1/payment/fail\""
                 // 운영 기본값에서는 웹훅 주소로 https · 공인 주소만 받는다(#402 PR②). 이 테스트는 웹훅을 보내지 않는다
-                + ",\"notifyUrl\":\"https://shop.example.test/webhooks/donworry\"}";
+                + (notify ? ",\"notifyUrl\":\"https://shop.example.test/webhooks/donworry\"" : "") + "}";
+    }
+
+    // 사장님 계정 정지 이후에도 같은 가맹점의 HMAC 결제와 공개 결제창은 유지한다
+    @Test
+    void payment_whenOperatorSuspended_keepsSignedPaymentAndHostedCheckoutAvailable() throws Exception {
+        String loginId = "s517_" + UUID.randomUUID().toString().substring(0, 12);
+        jdbc.update(
+                "INSERT INTO platform_users(login_id,password_hash,display_name,status,role,merchant_id,created_at) VALUES (?,'unused','정지 결제 테스트','ACTIVE','OPERATOR',997,UTC_TIMESTAMP(6))",
+                loginId);
+        long userId = jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, loginId);
+        try {
+            var merchantBefore = jdbc.queryForMap("SELECT * FROM merchants WHERE merchant_id=997");
+            var keyBefore = jdbc.queryForMap("SELECT * FROM merchant_integrations WHERE merchant_id=997");
+            assertThat(call(
+                                    "POST",
+                                    "/api/payments",
+                                    "merchant-a",
+                                    UUID.randomUUID().toString(),
+                                    body(UUID.randomUUID().toString(), 1000))
+                            .statusCode())
+                    .isEqualTo(202);
+            accountSuspender.suspend(userId);
+            assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, userId))
+                    .isEqualTo("INACTIVE");
+            assertThat(call(
+                                    "POST",
+                                    "/api/payments",
+                                    "merchant-a",
+                                    UUID.randomUUID().toString(),
+                                    body(UUID.randomUUID().toString(), 1000))
+                            .statusCode())
+                    .isEqualTo(202);
+            var session = call(
+                    "POST",
+                    "/api/payment-sessions",
+                    "merchant-a",
+                    UUID.randomUUID().toString(),
+                    // 이 검사는 웹훅이 아닌 로그인 정지의 결제 영향을 검증한다. 공용 DB에 전송 예약을 남기지 않는다.
+                    sessionBody(UUID.randomUUID().toString(), false));
+            assertThat(session.statusCode()).isEqualTo(200);
+            String sessionKey =
+                    mapper.readTree(session.body()).path("sessionKey").asText();
+            assertThat(anonymous("GET", "/api/checkout/" + sessionKey, null).statusCode())
+                    .isEqualTo(200);
+            var paid = anonymous(
+                    "POST",
+                    "/api/checkout/" + sessionKey + "/payments",
+                    "{\"card\":\"A\",\"deviceId\":\"abcdef12-3456\"}");
+            assertThat(paid.statusCode()).isEqualTo(200);
+            assertThat(mapper.readTree(paid.body()).path("authorized").asBoolean())
+                    .isTrue();
+            assertThat(jdbc.queryForMap("SELECT * FROM merchants WHERE merchant_id=997"))
+                    .isEqualTo(merchantBefore);
+            assertThat(jdbc.queryForMap("SELECT * FROM merchant_integrations WHERE merchant_id=997"))
+                    .usingRecursiveComparison()
+                    .isEqualTo(keyBefore);
+        } finally {
+            jdbc.update("DELETE FROM admin_change_histories WHERE target_user_id=?", userId);
+            jdbc.update("DELETE FROM platform_users WHERE user_id=?", userId);
+        }
     }
 
     // 호스팅 결제창(ADR-0064): 가맹점 서명으로 세션을 만들고, 구매자는 로그인·쿠키·CSRF 토큰 없이 세션 키만으로 결제한다.

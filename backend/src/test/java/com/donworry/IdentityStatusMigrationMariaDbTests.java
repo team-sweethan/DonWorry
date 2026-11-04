@@ -101,6 +101,8 @@ class IdentityStatusMigrationMariaDbTests {
         var accountsBefore =
                 jdbc.queryForList("SELECT * FROM platform_users WHERE login_id<>'staff_test' ORDER BY user_id");
         var auditBefore = jdbc.queryForList("SELECT * FROM admin_change_histories ORDER BY history_id");
+        // 후속 #517은 기존 감사 값은 보존하고 수행자 유형만 STAFF로 채운다.
+        auditBefore.forEach(row -> row.put("actor_type", "STAFF"));
         var tokensBefore = jdbc.queryForList("SELECT * FROM application_tokens");
         var mailBefore = jdbc.queryForList("SELECT * FROM application_mail_deliveries");
         var pendingBefore =
