@@ -3,7 +3,10 @@
   margin-inline: auto;
 }
 .finance-trend-scroll {
-  overflow-x: auto;
+  overflow-x: scroll;
+  min-width: 0;
+  scrollbar-color: #b9a77d #f5f1e7;
+  scrollbar-width: auto;
 }
 .finance-chart-fixed-axis {
   position: sticky;
@@ -108,4 +111,30 @@
 .finance-trend-scroll:focus-visible {
   outline: 2px solid #ad7c18;
   outline-offset: 4px;
+}
+
+.finance-chart-cursor {
+  position: sticky;
+  left: calc(50% + 32px);
+  width: 0;
+  height: 280px;
+  margin-bottom: -280px;
+  z-index: 1;
+  pointer-events: none;
+}
+.finance-chart-cursor::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  bottom: 34px;
+  border-left: 2px dashed #ad7c18;
+}
+.finance-chart-cursor > span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6c4b0b;
 }

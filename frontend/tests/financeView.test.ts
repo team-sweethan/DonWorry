@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import type { CashFlowForecast, SettlementReport } from '../src/api/finance.ts'
 import {
   financeErrorMessage,
+  chartMonthPeriod,
   forecastView,
   koreanToday,
   managementRows,
@@ -311,4 +312,17 @@ test('financeQuery_whenPayoutNumberEntered_keepsOtherLedgersUnfiltered', () => {
   assert.equal(matchesFinanceQuery('expense', 'payout', '임대료', '8001'), true)
   assert.equal(matchesFinanceQuery('payout', 'settlement', '8001', 'CS-0001'), true)
   assert.equal(matchesFinanceQuery('settlement', 'settlement', 'CS-0001', 'cs-0001'), true)
+})
+
+test('chart month navigation crosses years and preserves leap days and forecast boundaries', () => {
+  assert.deepEqual(chartMonthPeriod('2025-12-15'), { from: '2025-12-01', to: '2025-12-31' })
+  assert.deepEqual(chartMonthPeriod('2028-02-29'), { from: '2028-02-01', to: '2028-02-29' })
+  assert.deepEqual(chartMonthPeriod('2026-11-20', '2026-11-04', '2027-11-04'), {
+    from: '2026-11-04',
+    to: '2026-11-30',
+  })
+  assert.deepEqual(chartMonthPeriod('2027-11-04', '2026-11-04', '2027-11-04'), {
+    from: '2027-11-01',
+    to: '2027-11-04',
+  })
 })

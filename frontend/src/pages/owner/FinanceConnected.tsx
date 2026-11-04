@@ -24,12 +24,12 @@ import {
 } from './FinanceControls'
 import {
   MAX_FINANCE_AMOUNT,
+  chartMonthPeriod,
   formatWonInput,
   parseWonInput,
   financeErrorMessage,
   financeWriteErrorMessage,
   forecastView,
-  koreanTime,
   managementRows,
   money,
   movementLabel,
@@ -120,6 +120,7 @@ function InitialBalance({
 }
 function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
   const today = useKoreanToday()
+  const [graphDate, setGraphDate] = useState('')
   const [period, setPeriod] = useState<FinancePeriod>(() => ({
     from: today,
     to: dayjs(today).add(6, 'day').format('YYYY-MM-DD'),
@@ -232,18 +233,6 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       {forecast.status === 'loading' && <FinanceLoading />}
       {result && view && (
         <>
-          <div className="finance-current-balance">
-            <div>
-              <small>{today} 현재 계산 잔액</small>
-              <strong>{money(result.currentBalance)}</strong>
-              <p>
-                시작 잔액 {money(result.openingBalance)} ＋ 실제 지급{' '}
-                {money(result.completedIncomeSinceBase)} − 실제 지출{' '}
-                {money(result.paidExpensesSinceBase)}
-              </p>
-              <small>계산 기준: {koreanTime(result.asOf)}</small>
-            </div>
-          </div>
           {!result.batchEnabled && (
             <Alert
               type="warning"
@@ -258,6 +247,20 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           />
           <CashFlowOverview
             {...view}
+            graphDate={graphDate}
+            minGraphDate={setting?.baseDate}
+            maxGraphDate={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
+            onGraphDateChange={(date) => {
+              setGraphDate(date)
+              if (date < period.from || date > period.to)
+                setPeriod(
+                  chartMonthPeriod(
+                    date,
+                    setting?.baseDate,
+                    dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
+                  ),
+                )
+            }}
             currentBalance={result.currentBalance}
             summary={result}
             capturedAt={result.asOf}
@@ -321,6 +324,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
 }
 function ConnectedSettlements() {
   const today = useKoreanToday()
+  const [graphDate, setGraphDate] = useState('')
   const [period, setPeriod] = useState<FinancePeriod>(() => ({
     from: dayjs(today).startOf('month').format('YYYY-MM-DD'),
     to: dayjs(today).endOf('month').format('YYYY-MM-DD'),
@@ -392,6 +396,8 @@ function ConnectedSettlements() {
             todayValue={today}
             period={period}
             onPeriodChange={setPeriod}
+            graphDate={graphDate}
+            onGraphDateChange={setGraphDate}
             headerActions={actions}
             actualEntries={resource.data.entries}
             payoutReport={resource.data.report}

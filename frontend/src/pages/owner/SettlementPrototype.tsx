@@ -1,4 +1,4 @@
-import { financeTotal, matchesFinanceQuery } from './financeView'
+import { financeTotal, matchesFinanceQuery, chartMonthPeriod } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
 import type { PayoutSummaryData } from './PayoutLedger'
 import { previewSettlements, mockOrderItems, previewPayoutReport } from './settlementPreviewData'
@@ -51,6 +51,8 @@ export function SettlementPrototype({
   periodControls,
   notice,
   onPeriodChange,
+  graphDate,
+  onGraphDateChange,
 }: {
   todayValue?: string
   expenses?: CalendarExpense[]
@@ -61,6 +63,8 @@ export function SettlementPrototype({
   headerActions?: React.ReactNode
   periodControls?: React.ReactNode
   notice?: React.ReactNode
+  graphDate?: string
+  onGraphDateChange?: (date: string) => void
   onPeriodChange?: (period: { from: string; to: string }) => void
 }) {
   const [previewToday] = useState(() => new Date())
@@ -70,6 +74,7 @@ export function SettlementPrototype({
     period
       ? new Date(period.from + 'T00:00:00')
       : new Date(today.getFullYear(), today.getMonth(), 1)
+  const [localGraphDate, setLocalGraphDate] = useState('')
   const [view, setView] = useState<'cal' | 'list'>('cal')
   const [filter, setFilter] = useState<Status | 'all'>('all')
   const [dateOnly, setDateOnly] = useState(false)
@@ -380,6 +385,15 @@ export function SettlementPrototype({
           payoutMode={!!payoutData}
           todayValue={dateInput(today)}
           days={chartDays}
+          selectedDate={graphDate ?? localGraphDate}
+          onDateChange={(date) => {
+            setLocalGraphDate(date)
+            onGraphDateChange?.(date)
+            if (date < rangeStart || date > rangeEnd) {
+              const next = chartMonthPeriod(date)
+              changePeriod(next.from, next.to)
+            }
+          }}
           onSelect={(date) => {
             setSelected(new Date(date + 'T00:00:00'))
             setDateOnly(true)

@@ -323,3 +323,18 @@
 .cashflow-overview .recovery-values b {
   color: #886211;
 }
+
+.cashflow-balance-basis {
+  color: #756b5b;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.cashflow-balance-basis > summary {
+  cursor: pointer;
+  color: #625027;
+  font-weight: 600;
+}
+.cashflow-balance-basis p {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
