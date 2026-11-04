@@ -26,6 +26,8 @@
 
 ## 목록
 
+P1 #521: [0079 사장님 403 이벤트 타입과 계정 상태 조회 계약](0079-operator-security-contracts.md) — 제안, #515 경계 유지. 실제 발행·P2 연결은 후속.
+
 P1 #517: [0078 시스템 수행자 감사 기록과 사장님 계정 정지](0078-operator-account-suspension.md) — 제안, 사용자 설계·구현 승인. #515 전체 경계 합의와 구분한다.
 
 P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6-recurring-expense-occurrences.md).

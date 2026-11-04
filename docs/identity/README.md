@@ -1,5 +1,10 @@
 # Identity — 로그인 MVP
 
+## #521 사장님 403 이벤트·계정 상태 조회 계약
+
+[공개 계약·검증 명세](521-operator-security-contracts.md), [ADR-0079](../decisions/0079-operator-security-contracts.md).
+`OperatorAccessDenied` 타입과 `OperatorAccountStatusReader` 조회 빈을 제공한다. 마지막 해제 시각은 기존 `USER_ENABLED` 감사에서 읽으며 UTC Instant·api 전용 상태 enum으로 반환한다. 실제 403 수집·발행과 P2 연결은 후속이며 실행 결과·미검증은 명세를 따른다.
+
 ## #517 시스템 감사 기록·사장님 정지
 
 [설계·검증 체크리스트](517-operator-suspension.md), [ADR-0078](../decisions/0078-operator-account-suspension.md).
