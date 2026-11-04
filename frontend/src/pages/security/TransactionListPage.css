@@ -1,0 +1,58 @@
+/* 거래 내역 목록 (#539) */
+
+/* 금액(오른쪽 정렬)과 결제 상태가 붙지 않게 띄운다 */
+.dw-tx-table .tx-gap {
+  margin-left: 12px;
+}
+
+/* 판정 배지 링크: 버튼 여백을 없애 배지만 보이게 한다 */
+.dw-tx-table .tx-tag-link.ant-btn {
+  height: auto;
+  padding: 0;
+}
+.dw-tx-table .tx-tag-link .ant-tag {
+  margin: 0;
+  cursor: pointer;
+}
+
+/* 구매자 번호: 평소엔 기본 글자색, 마우스를 올리면 링크처럼 보인다 */
+.dw-tx-table .tx-customer-link.ant-btn {
+  height: auto;
+  padding: 0;
+  color: inherit;
+  /* 버튼 기본 굵기(600, styles/theme.ts)를 따르면 금액보다 진해 보여서 보통 굵기로 둔다 */
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.dw-tx-table .tx-customer-link.ant-btn:hover {
+  text-decoration: underline;
+}
+
+/* 펼친 상세: 두 묶음, 라벨 폭 고정 */
+.tx-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 40px;
+  padding: 4px 0;
+}
+.tx-detail-title {
+  margin: 0 0 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tx-detail-list {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+.tx-detail-list dt {
+  color: #64748b;
+}
+.tx-detail-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}

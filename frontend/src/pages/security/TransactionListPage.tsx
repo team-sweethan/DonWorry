@@ -1,10 +1,10 @@
-import { InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DownOutlined, InfoCircleOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
 import {
   Alert,
+  Badge,
   Button,
   Card,
   DatePicker,
-  Descriptions,
   Input,
   Select,
   Space,
@@ -43,6 +43,7 @@ import {
 } from '../../utils/transactionList'
 import { customerPart } from '../../utils/caseRules'
 import { paymentStatusLabel } from './case/caseLabels'
+import './TransactionListPage.css'
 
 // 경보 화면과 같은 판정이지만, 처음 보는 직원도 읽게 한국어로 쓴다
 const fdsResultText: Record<FdsResult, { label: string; color: string }> = {
@@ -84,6 +85,9 @@ const copyable = (text: string) => ({ text, tooltips: ['복사', '복사됨'] })
 
 const missing = <Typography.Text type="secondary">정보 없음</Typography.Text>
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
+
+// IPv6는 가린 값(예: 0:0:*)만 보면 고장처럼 보여서 화면에서만 종류를 앞에 붙인다 (#539)
+const ipText = (masked: string | null) => (masked?.includes(':') ? `IPv6 · ${masked}` : masked)
 
 type Loaded = { key: string; page: PaymentTransactionPage | null; error: string | null }
 
@@ -228,12 +232,20 @@ export function TransactionListPage() {
       render: (value: number) => `${value.toLocaleString('ko-KR')}원`,
     },
     {
-      title: '결제 상태',
+      // 결제 상태는 "점 + 글자", FDS 판정은 배지 — 같은 색이어도 생김새로 다른 정보임을 구분한다 (#539)
+      title: <span className="tx-gap">결제 상태</span>,
       dataIndex: 'paymentStatus',
-      width: 100,
-      render: (value: PaymentStatus) => (
-        <Tag color={paymentStatusLabel[value].color}>{paymentStatusLabel[value].label}</Tag>
-      ),
+      width: 112,
+      render: (value: PaymentStatus) => {
+        const { label, color } = paymentStatusLabel[value]
+        return (
+          <Badge
+            className="tx-gap"
+            {...(color === 'default' ? { status: 'default' as const } : { color })}
+            text={label}
+          />
+        )
+      },
     },
     {
       title: 'FDS 판정',
@@ -242,12 +254,18 @@ export function TransactionListPage() {
       render: (_, t) => {
         if (t.fdsResult === null) return <Typography.Text type="secondary">평가 전</Typography.Text>
         const text = fdsResultText[t.fdsResult]
-        const tag = <Tag color={text.color}>{text.label}</Tag>
-        if (t.evaluationId === null) return tag
+        if (t.evaluationId === null) return <Tag color={text.color}>{text.label}</Tag>
         const evaluationId = t.evaluationId
+        // ↗를 배지 안에 넣어 "누르면 경보 상세로 간다"를 한 덩어리로 보여 준다
         return (
-          <Button type="link" size="small" onClick={() => openAlert(evaluationId)}>
-            {tag}↗
+          <Button
+            type="link"
+            size="small"
+            className="tx-tag-link"
+            aria-label={`FDS 판정 ${text.label} — 경보 상세 보기`}
+            onClick={() => openAlert(evaluationId)}
+          >
+            <Tag color={text.color}>{text.label} ↗</Tag>
           </Button>
         )
       },
@@ -255,7 +273,7 @@ export function TransactionListPage() {
     {
       title: <HelpTitle label="ML 참고" text={help.ml} />,
       key: 'ml',
-      width: 150,
+      width: 130,
       render: (_, t) => {
         const cell = mlCell(t.paymentId, mlScores)
         if (cell.kind === 'loading') return <Typography.Text type="secondary">…</Typography.Text>
@@ -330,7 +348,8 @@ export function TransactionListPage() {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0 }}
+                // 금액 · 판정보다 먼저 눈에 띄지 않게 기본 글자색으로 두고, 마우스를 올리면 링크 색이 된다
+                className="tx-customer-link"
                 onClick={() =>
                   setQuery({
                     merchantId: t.merchantId,
@@ -351,52 +370,48 @@ export function TransactionListPage() {
   ]
 
   // 특정 결제를 깊게 볼 때만 필요한 값은 줄을 펼쳐 본다 (#445). 가맹점 문의용 주문번호 복사는 여기에 둔다
+  // 주문 정보 / 결제 환경 두 묶음으로 나누고 라벨 폭을 맞춘다 (#539)
   const renderDetail = (t: PaymentTransaction) => (
-    <Descriptions
-      size="small"
-      // 주문번호는 길어서(복사 버튼 · 몇 번째 시도 포함) 두 칸을 쓴다 — 1줄: 주문번호 · 가맹점 · 이메일 / 2줄: 카드 · 접속 · 기기
-      column={4}
-      items={[
-        {
-          key: 'order',
-          span: 2,
-          label: <HelpTitle label="주문번호" text={help.order} />,
-          children: (
-            <span>
-              <Typography.Text code copyable={copyable(t.orderRef)}>
-                {t.orderRef}
-              </Typography.Text>
-              {t.attemptNo !== null && t.attemptNo > 1 && (
-                <Typography.Text type="secondary"> {t.attemptNo}번째 시도</Typography.Text>
-              )}
-            </span>
-          ),
-        },
-        {
-          key: 'merchant',
-          label: '가맹점',
-          children: merchantNames.get(t.merchantId) ?? `가맹점 #${t.merchantId}`,
-        },
-        {
-          key: 'email',
-          label: '이메일',
-          children: t.maskedBuyerEmail ?? missing,
-        },
-        { key: 'card', label: '카드', children: t.cardDisplayLabel ?? missing },
-        {
-          key: 'ip',
-          label: <HelpTitle label="접속" text={help.ip} />,
-          children:
-            [t.ipCountryCode, t.maskedIpAddress].filter((v) => v !== null).join(' · ') || missing,
-        },
-        {
-          key: 'device',
-          span: 2,
-          label: <HelpTitle label="기기" text={help.device} />,
-          children: t.maskedDeviceId ? <code>{t.maskedDeviceId}</code> : missing,
-        },
-      ]}
-    />
+    <div className="tx-detail">
+      <section aria-label="주문 정보">
+        <p className="tx-detail-title">주문 정보</p>
+        <dl className="tx-detail-list">
+          <dt>
+            <HelpTitle label="주문번호" text={help.order} />
+          </dt>
+          <dd>
+            <Typography.Text code copyable={copyable(t.orderRef)}>
+              {t.orderRef}
+            </Typography.Text>
+            {t.attemptNo !== null && t.attemptNo > 1 && (
+              <Typography.Text type="secondary"> {t.attemptNo}번째 시도</Typography.Text>
+            )}
+          </dd>
+          <dt>가맹점</dt>
+          <dd>{merchantNames.get(t.merchantId) ?? `가맹점 #${t.merchantId}`}</dd>
+          <dt>이메일</dt>
+          <dd>{t.maskedBuyerEmail ?? missing}</dd>
+        </dl>
+      </section>
+      <section aria-label="결제 환경">
+        <p className="tx-detail-title">결제 환경</p>
+        <dl className="tx-detail-list">
+          <dt>카드</dt>
+          <dd>{t.cardDisplayLabel ?? missing}</dd>
+          <dt>
+            <HelpTitle label="접속" text={help.ip} />
+          </dt>
+          <dd>
+            {[t.ipCountryCode, ipText(t.maskedIpAddress)].filter((v) => v !== null).join(' · ') ||
+              missing}
+          </dd>
+          <dt>
+            <HelpTitle label="기기" text={help.device} />
+          </dt>
+          <dd>{t.maskedDeviceId ? <code>{t.maskedDeviceId}</code> : missing}</dd>
+        </dl>
+      </section>
+    </div>
   )
 
   const periodText = query.from
@@ -494,12 +509,27 @@ export function TransactionListPage() {
         {current?.error && <Alert type="error" showIcon message={current.error} />}
         <Table
           rowKey="paymentId"
+          className="dw-tx-table"
           columns={columns}
           dataSource={page?.items ?? []}
           loading={loading}
           size="middle"
           // 아이콘(▸)을 눌러야 펼친다 — 줄을 눌러 펼치면 경보 · 사건 링크를 누를 때도 같이 펼쳐진다
-          expandable={{ expandedRowRender: renderDetail, columnWidth: 48 }}
+          expandable={{
+            expandedRowRender: renderDetail,
+            columnWidth: 48,
+            // ⊕/⊖는 더하기 · 빼기처럼 보여서 꺾쇠(▸ 닫힘 · ▾ 열림)로 바꾼다 (#539)
+            expandIcon: ({ expanded, onExpand, record }) => (
+              <Button
+                type="text"
+                size="small"
+                aria-label={expanded ? '상세 접기' : '상세 펼치기'}
+                aria-expanded={expanded}
+                icon={expanded ? <DownOutlined /> : <RightOutlined />}
+                onClick={(event) => onExpand(record, event)}
+              />
+            ),
+          }}
           scroll={{ x: 920 }}
           pagination={{
             current: query.page,
