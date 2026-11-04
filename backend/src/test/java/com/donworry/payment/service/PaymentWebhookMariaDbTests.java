@@ -167,6 +167,30 @@ class PaymentWebhookMariaDbTests {
                 .isEqualTo("VOIDED");
     }
 
+    // 직원 승인으로 매입되면(HELD → CAPTURED) 새 eventId로 알린다.
+    // 가맹점은 이 웹훅으로 "결제 확인 중"을 결제 완료로 바꾼다 (ADR-0064 4절, #492)
+    @Test
+    void run_whenHeldIsCaptured_sendsCapturedWebhook() throws Exception {
+        Ids ids = heldSessionWithNotifyUrl();
+        runAndSettle();
+        assertThat(received)
+                .singleElement()
+                .satisfies(r -> assertThat(r.headers()).containsEntry("event", "evt_" + ids.paymentId() + "_HELD_A"));
+
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeHeldCapture());
+        runAndSettle();
+
+        assertThat(received).hasSize(2);
+        assertThat(received.get(1).headers()).containsEntry("event", "evt_" + ids.paymentId() + "_CAPTURED_A");
+        JsonNode body = json.readTree(received.get(1).body());
+        assertThat(body.get("paymentStatus").asString()).isEqualTo("CAPTURED");
+        assertThat(body.get("authorized").asBoolean()).isTrue();
+        PaymentSession captured = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(captured.getNotifiedStatus()).isEqualTo("CAPTURED");
+        assertThat(captured.getNextNotifyAt()).isNull();
+    }
+
     // 2xx가 아니면(5xx · 리다이렉트) 보낸 것으로 기록하지 않고 5초부터 늘어나는 간격 뒤에 다시 보낸다
     @Test
     void run_whenNot2xx_retriesLaterWithoutMarkingNotified() {
