@@ -44,6 +44,9 @@ import org.springframework.web.bind.annotation.*;
 })
 class MerchantHmacSecurityTests {
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     UserDetailsService userDetailsService;
 
     @MockitoBean

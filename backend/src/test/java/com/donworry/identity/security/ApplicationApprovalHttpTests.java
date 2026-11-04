@@ -94,6 +94,8 @@ class ApplicationApprovalHttpTests {
         jdbc.update(
                 "DELETE FROM admin_change_histories WHERE target_user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'approval_%') OR actor_user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'approval_%') OR target_merchant_id IN (SELECT merchant_id FROM merchants WHERE merchant_code LIKE 'APPR%')");
         jdbc.update(
+                "DELETE FROM operator_access_denials WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'approval_%')");
+        jdbc.update(
                 "DELETE FROM login_histories WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'approval_%')");
         jdbc.update(
                 "DELETE FROM user_permissions WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'approval_%')");

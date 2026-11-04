@@ -68,6 +68,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `identity` (#127) | P1 주환 | `platform_users` 연속 로그인 실패 횟수·잠금 종료 시각 | [로그인 잠금](../../backend/src/main/resources/db/migration/V20261025_165712__add_login_attempt_lock.sql) |
 | `identity` (#219) | P1 주환 | `merchant_request_nonces` | [HMAC nonce](../../backend/src/main/resources/db/migration/V20261027_144924__create_merchant_request_nonces.sql) |
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
+| `identity` (#525) | P1 주환 | `operator_access_denials` | [403 원본](../../backend/src/main/resources/db/migration/V20261104_153346__create_operator_access_denials.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
 | `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
@@ -85,6 +86,8 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 
 ```mermaid
 erDiagram
+    merchants ||--o{ operator_access_denials : "merchant_id"
+    platform_users ||--o{ operator_access_denials : "user_id"
     merchants ||--o{ merchant_request_nonces : "merchant_id"
     merchants |o--o{ platform_users : "merchant_id"
     platform_users ||--o{ user_permissions : "user_id"
@@ -367,3 +370,27 @@ P6 3단계 #478: [환불 수신 조정 원장 ERD](../settlement/refund-receivin
 P6 4단계 #488: [가맹점 공통 잠금 ERD·미지급 제외](../settlement/unpaid-refund-exclusion.md). 신규 P6 잠금 테이블만 추가하며 이미 지급한 환불의 회수·이월은 후속이다.
 
 P6 5단계 #493: [회수 배분 원장 ERD](../settlement/refund-recovery.md#erd-payout_refund_allocations). payout_refund_allocations만 추가하고 별도 merchant_settlement_balances 캐시는 생성하지 않는다. 개별 remaining_amount를 잔액 기준으로 유지한다.
+
+
+### #525 P1 사장님 403 원본 기록 (2026-11-04)
+
+P1 사용자가 #525 초안의 저장 구조와 저장소 ERD·ADR 선행 구현을 승인했다. Notion 반영은 후속이다.
+신규 `operator_access_denials`는 P1 소유이며 사용자·가맹점 모두 같은 P1 FK로 연결하고 삭제 연쇄는 두지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| denial_id | BIGINT AUTO_INCREMENT PK | OperatorAccessDenied.eventId |
+| user_id | BIGINT NOT NULL FK platform_users | 사장님 계정 |
+| merchant_id | BIGINT NOT NULL FK merchants | 세션이 아닌 DB 계정의 가맹점 |
+| http_method | VARCHAR(10) NOT NULL | 거절된 요청 HTTP token의 앞 최대 10자, 원본·이벤트 동일 |
+| path | VARCHAR(512) NOT NULL | servletPath, 쿼리·컨텍스트 경로 제외, 최대 512자 |
+| denied_type | VARCHAR(30) NOT NULL | OUT_OF_ROLE / PERMISSION_MISSING |
+| client_ip | VARCHAR(45) NULL | 공통 ClientIpResolver 결과 |
+| occurred_at | DATETIME(6) NOT NULL | UTC, 이벤트와 동일한 마이크로초 |
+
+`idx_operator_access_denials_user_time(user_id, occurred_at)`와 거절 유형 CHECK를 둔다.
+login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계정 값으로 이벤트에만 전달한다.
+`client_ip`는 발생 후 1년 보관하고 NULL 처리한다. 원본 행은 조사 근거이므로 IP 정리 작업에서 삭제하지 않는다.
+행 보관 기간은 조사 기록 정책으로 따로 정하며, 기존 90일 행 삭제 제안은 사용자 결정으로 대체했다.
+제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. IP 정리·파기 검증은 후속 이슈이며 현재 #525는 INSERT 전용이다.
+[ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.

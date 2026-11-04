@@ -119,6 +119,7 @@ class MerchantIntegrationHttpMariaDbTests {
         for (var id : jdbc.queryForList(
                 "SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%")) {
             sessions.expireAll(id);
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM platform_users WHERE user_id=?", id);
         }
@@ -796,6 +797,7 @@ class MerchantIntegrationHttpMariaDbTests {
                         "DELETE FROM admin_change_histories WHERE target_user_id=? OR target_merchant_id=?",
                         newUserId,
                         newMerchantId);
+                jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", newUserId);
                 jdbc.update("DELETE FROM login_histories WHERE user_id=?", newUserId);
                 jdbc.update("DELETE FROM platform_users WHERE user_id=?", newUserId);
             }

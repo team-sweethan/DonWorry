@@ -515,6 +515,7 @@ class MerchantApplicationHttpTests {
             assertThat(send("GET", "/api/admin/users", null, false).body()).contains("AUTH_008");
         } finally {
             Long userId = jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, id);
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", userId);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", userId);
             jdbc.update("DELETE FROM platform_users WHERE user_id=?", userId);
         }

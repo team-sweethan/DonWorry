@@ -98,6 +98,7 @@ class PaymentOperationsHttpMariaDbTests {
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
             sessions.expireAll(id);
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
             jdbc.update("DELETE FROM platform_users WHERE user_id=?", id);

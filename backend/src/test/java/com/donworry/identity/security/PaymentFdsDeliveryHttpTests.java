@@ -40,6 +40,9 @@ class PaymentFdsDeliveryHttpTests {
     MockMvc mvc;
 
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     UserDetailsService users;
 
     @MockitoBean
