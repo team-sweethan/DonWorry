@@ -24,19 +24,24 @@ public class SettlementReportService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SettlementReportResponse report(Long merchant, LocalDate from, LocalDate to) {
+        return reportAt(merchant, from, to, Instant.now());
+    }
+
+    SettlementReportResponse reportAt(Long merchant, LocalDate from, LocalDate to, Instant asOf) {
         if (merchant == null
                 || merchant <= 0
                 || from == null
                 || to == null
+                || asOf == null
                 || from.isAfter(to)
                 || java.time.temporal.ChronoUnit.DAYS.between(from, to) > 365) {
             throw new IllegalArgumentException("가맹점과 366일 이내의 조회 기간이 필요합니다.");
         }
-        var asOf = Instant.now();
         var stored = repository.findReport(
                 merchant,
                 from.atStartOfDay(ZONE).toInstant(),
                 to.plusDays(1).atStartOfDay(ZONE).toInstant(),
+                asOf,
                 PageRequest.of(0, 10001));
         // 과다 조회를 일부 결과로 조용히 잘라 합계를 틀리게 표시하지 않는다.
         if (stored.size() > 10000)
@@ -55,7 +60,7 @@ public class SettlementReportService {
                                         i -> new OrderItem(i.getProductName(), i.getQuantity()),
                                         java.util.stream.Collectors.toList())));
         var entries = stored.stream()
-                .map(p -> entry(p, items.getOrDefault(p.getOrderId(), List.of())))
+                .map(p -> entry(p, items.getOrDefault(p.getOrderId(), List.of()), asOf))
                 .toList();
         var until = to.plusDays(1).atStartOfDay(ZONE).toInstant();
         var cutoff = until.isBefore(asOf) ? until : asOf;
@@ -106,8 +111,10 @@ public class SettlementReportService {
                 .build();
     }
 
-    private Entry entry(SettlementReportProjection p, List<OrderItem> items) {
-        boolean completed = p.getStatus() == SettlementStatus.COMPLETED;
+    private Entry entry(SettlementReportProjection p, List<OrderItem> items, Instant asOf) {
+        // 기준 시각 이후 완료가 스냅샷에 보여도 지급 조회와 동일하게 예정 상태로 해석한다.
+        boolean completed = p.getStatus() == SettlementStatus.COMPLETED
+                && p.getCompletedAt().isBefore(asOf);
         var at = completed
                 ? p.getCompletedAt()
                 : p.getScheduledAt() != null ? p.getScheduledAt() : p.getExpectedSettlementAt();
@@ -121,7 +128,7 @@ public class SettlementReportService {
                 .cardFeeAmount(checkedAmount(BigDecimal.valueOf(p.getCardFeeAmount())))
                 .pgFeeAmount(checkedAmount(BigDecimal.valueOf(p.getPgFeeAmount())))
                 .settlementAmount(checkedAmount(BigDecimal.valueOf(p.getSettlementAmount())))
-                .status(p.getStatus().name())
+                .status(completed ? "COMPLETED" : "SCHEDULED")
                 .classification(completed ? "COMPLETED" : p.getScheduledAt() != null ? "SCHEDULED" : "EXPECTED")
                 .scheduledPickupAt(p.getScheduledPickupAt())
                 .pickedUpAt(p.getPickedUpAt())

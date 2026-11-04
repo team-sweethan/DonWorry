@@ -34,7 +34,7 @@ class SettlementReportServiceTests {
     void report_whenEmpty_returnsZeroDaysWithoutItemQuery() {
         var repository = mock(SettlementRepository.class);
         var items = mock(OrderFulfillmentItemRepository.class);
-        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(List.of());
+        when(repository.findReport(anyLong(), any(), any(), any(), any())).thenReturn(List.of());
         when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.valueOf(100));
         var from = LocalDate.of(2026, 11, 1);
         var result = new SettlementReportService(repository, items, cashFlows()).report(1L, from, from.plusDays(1));
@@ -51,7 +51,7 @@ class SettlementReportServiceTests {
     void report_whenTooManyEntries_rejectsPartialTotals() {
         var repository = mock(SettlementRepository.class);
         var items = mock(OrderFulfillmentItemRepository.class);
-        when(repository.findReport(anyLong(), any(), any(), any()))
+        when(repository.findReport(anyLong(), any(), any(), any(), any()))
                 .thenReturn(Collections.nCopies(10001, mock(SettlementReportProjection.class)));
         var day = LocalDate.of(2026, 11, 1);
         assertThatThrownBy(() -> new SettlementReportService(repository, items, cashFlows()).report(1L, day, day))
@@ -89,7 +89,7 @@ class SettlementReportServiceTests {
         var day = LocalDate.of(2026, 11, 1);
         var rows =
                 List.of(row(sign * 9007199254740991L, classification, day), row(sign, classification, day.plusDays(1)));
-        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        when(repository.findReport(anyLong(), any(), any(), any(), any())).thenReturn(rows);
         assertThatThrownBy(() -> new SettlementReportService(
                                 repository, mock(OrderFulfillmentItemRepository.class), cashFlows())
                         .report(1L, day, day.plusDays(1)))
@@ -105,7 +105,7 @@ class SettlementReportServiceTests {
         var repository = mock(SettlementRepository.class);
         var day = LocalDate.of(2026, 11, 1);
         var rows = List.of(row(amount, "COMPLETED", day));
-        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        when(repository.findReport(anyLong(), any(), any(), any(), any())).thenReturn(rows);
         when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.ZERO);
         var result = new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class), cashFlows())
                 .report(1L, day, day);
@@ -116,7 +116,7 @@ class SettlementReportServiceTests {
     @Test
     void report_whenUndatedSqlSumExceedsLong_returns422() {
         var repository = mock(SettlementRepository.class);
-        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(List.of());
+        when(repository.findReport(anyLong(), any(), any(), any(), any())).thenReturn(List.of());
         when(repository.sumUndated(1L)).thenReturn(new java.math.BigDecimal("18446744073709551614"));
         var day = LocalDate.of(2026, 11, 1);
         assertThatThrownBy(() -> new SettlementReportService(
@@ -132,7 +132,7 @@ class SettlementReportServiceTests {
         var repository = mock(SettlementRepository.class);
         var day = LocalDate.of(2026, 11, 1);
         var rows = List.of(row(9007199254740991L, "SCHEDULED", day), row(1L, "SCHEDULED", day));
-        when(repository.findReport(anyLong(), any(), any(), any())).thenReturn(rows);
+        when(repository.findReport(anyLong(), any(), any(), any(), any())).thenReturn(rows);
         assertThatThrownBy(() -> new SettlementReportService(
                                 repository, mock(OrderFulfillmentItemRepository.class), cashFlows())
                         .report(1L, day, day))
@@ -153,7 +153,7 @@ class SettlementReportServiceTests {
         when(cash.findPaidOut(eq(1L), any(), any(), any())).thenReturn(List.of(p));
         when(cash.outstandingRecovery(eq(1L), any())).thenReturn(java.math.BigDecimal.valueOf(200));
         var originalRow = row(1000, "COMPLETED", day);
-        when(repository.findReport(eq(1L), any(), any(), any())).thenReturn(List.of(originalRow));
+        when(repository.findReport(eq(1L), any(), any(), any(), any())).thenReturn(List.of(originalRow));
         when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.ZERO);
         var result = new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class), cash)
                 .report(1L, day, day);
@@ -182,5 +182,28 @@ class SettlementReportServiceTests {
                         () -> new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class), cash)
                                 .report(1L, day, day))
                 .isInstanceOf(SettlementRequestException.class);
+    }
+    // cutoff와 같거나 이후에 완료된 건은 지급 합계와 함께 완료에서 제외하고 예정으로 반환한다.
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(longs = {0, 1})
+    void report_whenSettlementCompletedAtOrAfterCutoff_keepsScheduled(long seconds) {
+        var repository = mock(SettlementRepository.class);
+        var day = LocalDate.of(2026, 11, 4);
+        var cutoff = day.atTime(12, 0).atZone(SettlementReportService.ZONE).toInstant();
+        var original = row(1000, "COMPLETED", day);
+        when(original.getCompletedAt()).thenReturn(cutoff.plusSeconds(seconds));
+        when(original.getScheduledAt())
+                .thenReturn(day.atStartOfDay(SettlementReportService.ZONE).toInstant());
+        when(repository.findReport(eq(1L), any(), any(), eq(cutoff), any())).thenReturn(List.of(original));
+        when(repository.sumUndated(1L)).thenReturn(java.math.BigDecimal.ZERO);
+        var result = new SettlementReportService(repository, mock(OrderFulfillmentItemRepository.class), cashFlows())
+                .reportAt(1L, day, day, cutoff);
+        assertThat(result.completedAmount()).isZero();
+        assertThat(result.paidAmount()).isZero();
+        assertThat(result.scheduledAmount()).isEqualTo(1000);
+        assertThat(result.entries()).singleElement().satisfies(e -> {
+            assertThat(e.status()).isEqualTo("SCHEDULED");
+            assertThat(e.classification()).isEqualTo("SCHEDULED");
+        });
     }
 }

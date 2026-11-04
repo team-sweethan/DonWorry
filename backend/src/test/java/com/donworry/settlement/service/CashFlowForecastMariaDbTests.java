@@ -462,4 +462,30 @@ class CashFlowForecastMariaDbTests {
         assertThat(result.remainingRecoveryAmount()).isEqualTo(9700);
         assertThat(result.closingBalance()).isEqualTo(10700);
     }
+    // 스냅샷에 이미 완료가 보여도 cutoff를 사이에 둔 원 거래·지급 합계는 같은 경계로 분류한다.
+    @Test
+    void report_whenPayoutCompletedAtCutoff_keepsOriginalAndPayoutBoundaryConsistent() {
+        var cutoff = at(today()).plusSeconds(12 * 3600);
+        capture(PAYMENT, MERCHANT);
+        schedule(PAYMENT, today().minusDays(1));
+        complete(PAYMENT, cutoff);
+        var before = reports.reportAt(MERCHANT, today(), today(), cutoff);
+        assertThat(before.completedAmount()).isZero();
+        assertThat(before.paidSettlementAmount()).isZero();
+        assertThat(before.paidAmount()).isZero();
+        assertThat(before.entries()).isEmpty();
+        var scheduled = reports.reportAt(MERCHANT, today().minusDays(1), today().minusDays(1), cutoff);
+        assertThat(scheduled.scheduledAmount()).isEqualTo(9700);
+        assertThat(scheduled.completedAmount()).isZero();
+        assertThat(scheduled.entries())
+                .singleElement()
+                .satisfies(e -> assertThat(e.status()).isEqualTo("SCHEDULED"));
+        var after = reports.reportAt(MERCHANT, today(), today(), cutoff.plusNanos(1000));
+        assertThat(after.completedAmount()).isEqualTo(9700);
+        assertThat(after.paidSettlementAmount()).isEqualTo(9700);
+        assertThat(after.paidAmount()).isEqualTo(9700);
+        assertThat(after.entries())
+                .singleElement()
+                .satisfies(e -> assertThat(e.status()).isEqualTo("COMPLETED"));
+    }
 }
