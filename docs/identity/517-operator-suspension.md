@@ -99,3 +99,11 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 이 결과는 API 대역을 사용한 실제 라우터·화면 검증이며 실제 서버 인가·자동 정지 전체 E2E를 뜻하지 않는다. 앞서 기록한 브라우저 미검증은 이 사용자 확인으로 기존 6건에 한해 해소됐다.
 
 검증 도구가 모든 화면을 막아도 통과하는 오류를 잡기 위해 같은 `/owner/actions`에 FDS_VIEW를 부여하는 대조 1건을 추가했다. 이 경우 실제 조치 목록 본문과 `/api/merchant/security-cases` 호출이 반드시 있어야 통과한다. API 대역은 권한과 무관하게 같은 성공 데이터를 반환하므로 대역 자체가 권한 검사를 흉내 내지 않는다. 기존 무권한 0회 기준은 유지했다. 문법·포맷·lint 검사는 통과했다(기존 lint 경고 1건 유지). 사용자가 `993044e` 페이지를 새로고침한 뒤 추가 대조까지 통과했다고 확인했다. 기존 6건과 권한 허용 대조 1건, 총 7건을 사용자 실행 근거로 검증 완료 처리한다. API 대역을 사용하므로 실제 백엔드까지 연결한 전체 E2E 완료로 해석하지 않는다.
+
+### CI 예약 작업 경합 수정
+
+`fee52ac` 대상 [CI 41781720423](https://github.com/team-sweethan/DonWorry/actions/runs/41781720423)은 MariaDB 795건 중 `MerchantNonceMariaDbTests.deleteExpired_whenDeleteFails_retainsProtectionAndRetries` 한 건이 실패했다. OOM이 아니라 재사용 거절 기대 false에 실제 true가 나온 실패다. 실패 보고서에는 테스트에서 끄려던 예약 작업이 실제 실행된 기록도 있다.
+로컬 의존성의 `spring-modulith-moments` 2.1.1 소스에서 MomentsAutoConfiguration의 자체 `@EnableScheduling`과 기본 활성 조건을 확인했다. 테스트 공통 `donworry.scheduling.enabled=false`만으로는 이 자동 설정을 막지 못했다. 같은 DB를 쓰는 다른 컨텍스트의 현재 시각 nonce 정리가 고정된 과거 시각 행에 간섭할 수 있다.
+`SchedulingDisabledTests`로 예약 작업 처리기 등록을 재현했다(수정 전 2건 중 1건 실패). 모든 Test 작업에 `spring.modulith.moments.enabled=false`를 추가한 뒤 같은 2건이 통과했다. Moments를 명시적으로 켜면 다시 예약 작업 처리기가 등록된다는 대조 검사도 유지한다. 기존 nonce·웹훅 기대값과 앱 예약 실행 정책은 변경하지 않는다. [CI 문제 해결](../ci/06-troubleshooting.md#예약-작업을-껐는데-nonce웹훅-검사가-간헐-실패하는-경우)에 원인·재현·설정을 기록했다.
+
+전체 로컬·원격 CI 결과는 이번 수정 검증 후 기록한다.
