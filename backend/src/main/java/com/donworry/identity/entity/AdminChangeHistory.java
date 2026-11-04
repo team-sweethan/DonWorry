@@ -22,7 +22,11 @@ public class AdminChangeHistory {
     @Column(name = "history_id")
     private Long historyId;
 
-    @Column(name = "actor_user_id", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actor_type", nullable = false, length = 20)
+    private AdminChangeActorType actorType;
+
+    @Column(name = "actor_user_id")
     private Long actorUserId;
 
     @Column(name = "target_user_id")
@@ -48,6 +52,7 @@ public class AdminChangeHistory {
 
     public static AdminChangeHistory forUser(Long actorId, Long targetId, String type, String before, String after) {
         return AdminChangeHistory.builder()
+                .actorType(AdminChangeActorType.STAFF)
                 .actorUserId(actorId)
                 .targetUserId(targetId)
                 .changeType(type)
@@ -59,6 +64,7 @@ public class AdminChangeHistory {
     public static AdminChangeHistory forMerchant(
             Long actorId, Long targetId, String type, String before, String after) {
         return AdminChangeHistory.builder()
+                .actorType(AdminChangeActorType.STAFF)
                 .actorUserId(actorId)
                 .targetMerchantId(targetId)
                 .changeType(type)
@@ -67,14 +73,26 @@ public class AdminChangeHistory {
                 .build();
     }
 
+    public static AdminChangeHistory forSystemUser(Long targetId, String type, String before, String after) {
+        return AdminChangeHistory.builder()
+                .actorType(AdminChangeActorType.SYSTEM)
+                .targetUserId(targetId)
+                .changeType(type)
+                .beforeData(before)
+                .afterData(after)
+                .build();
+    }
+
     @Builder(access = AccessLevel.PRIVATE)
     private AdminChangeHistory(
+            AdminChangeActorType actorType,
             Long actorUserId,
             Long targetUserId,
             Long targetMerchantId,
             String changeType,
             String beforeData,
             String afterData) {
+        this.actorType = actorType;
         this.actorUserId = actorUserId;
         this.targetUserId = targetUserId;
         this.targetMerchantId = targetMerchantId;

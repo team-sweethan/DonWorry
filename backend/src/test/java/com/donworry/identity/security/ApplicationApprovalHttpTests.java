@@ -196,6 +196,11 @@ class ApplicationApprovalHttpTests {
                         Integer.class,
                         a.getUserId()))
                 .isEqualTo(2);
+        assertThat(jdbc.queryForList(
+                        "SELECT actor_type FROM admin_change_histories WHERE target_user_id=?",
+                        String.class,
+                        a.getUserId()))
+                .containsExactly("STAFF", "STAFF");
         verify(mail).sendApproval(eq("approval@example.com"), eq("approval_owner"), contains("/apply/password#token="));
     }
     // 이메일 미확인 신청은 승인·반려할 수 없다.
