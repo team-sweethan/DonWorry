@@ -1,15 +1,20 @@
 import dayjs from 'dayjs'
+const amount = (n: number) => {
+  if (!Number.isSafeInteger(n)) throw new RangeError('정산 그래프 금액이 지원 범위를 초과합니다.')
+  return n
+}
 export type SettlementDay = {
   date: string
+  hasPayout?: boolean
   completedAmount: number
   scheduledAmount: number
   expectedAmount: number
 }
 export function settlementSeries(days: SettlementDay[], today: string) {
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date))
-  const completed = sorted.filter((d) => d.completedAmount > 0)
+  const completed = sorted.filter((d) => d.hasPayout || d.completedAmount > 0)
   const scheduled = sorted.filter(
-    (d) => d.date >= today && d.scheduledAmount + d.expectedAmount > 0,
+    (d) => d.date >= today && amount(d.scheduledAmount + d.expectedAmount) > 0,
   )
   return sorted.map((d) => ({
     ...d,
@@ -19,7 +24,7 @@ export function settlementSeries(days: SettlementDay[], today: string) {
         : null,
     scheduled:
       scheduled.length && d.date >= scheduled[0].date && d.date <= scheduled.at(-1)!.date
-        ? d.scheduledAmount + d.expectedAmount
+        ? amount(d.scheduledAmount + d.expectedAmount)
         : null,
   }))
 }
@@ -43,11 +48,14 @@ export function settlementDays(
     grouped.set(date, { date, completedAmount: 0, scheduledAmount: 0, expectedAmount: 0 })
   }
   for (const e of entries) {
+    amount(e.amount)
     const d = grouped.get(e.date)
     if (d) {
-      if (e.kind === 'COMPLETED') d.completedAmount += e.amount
-      else if (e.kind === 'SCHEDULED') d.scheduledAmount += e.amount
-      else d.expectedAmount += e.amount
+      if (e.kind === 'COMPLETED') {
+        d.completedAmount = amount(d.completedAmount + e.amount)
+        d.hasPayout = true
+      } else if (e.kind === 'SCHEDULED') d.scheduledAmount = amount(d.scheduledAmount + e.amount)
+      else d.expectedAmount = amount(d.expectedAmount + e.amount)
     }
   }
   return [...grouped.values()]

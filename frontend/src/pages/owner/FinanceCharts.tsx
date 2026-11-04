@@ -7,10 +7,12 @@ import './finance-charts.css'
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 export function SettlementLineChart({
   todayValue,
+  payoutMode = false,
   days,
   onSelect,
 }: {
   todayValue?: string
+  payoutMode?: boolean
   days: SettlementDay[]
   onSelect: (date: string) => void
 }) {
@@ -20,7 +22,7 @@ export function SettlementLineChart({
   if (!data.length) return <Empty description="조회할 날짜를 선택해 주세요." />
   const active =
     data.find((d) => d.date === selected) ??
-    data.find((d) => d.completedAmount + d.scheduledAmount + d.expectedAmount > 0) ??
+    data.find((d) => d.hasPayout || d.completedAmount + d.scheduledAmount + d.expectedAmount > 0) ??
     data[0]
   const width = 900,
     left = 64,
@@ -42,11 +44,11 @@ export function SettlementLineChart({
       <div className="finance-trend-legend">
         <span>
           <i style={{ background: '#16a34a' }} />
-          정산 완료 · 실선
+          {payoutMode ? '실제 지급액' : '정산 완료'} · 실선
         </span>
         <span>
           <i style={{ background: '#2563eb' }} />
-          정산 예정 · 실선
+          정산 예정{payoutMode ? ' (회수 전)' : ''} · 실선
         </span>
         <small>날짜별 금액 · 누적액 아님</small>
       </div>
@@ -54,7 +56,11 @@ export function SettlementLineChart({
         <svg
           viewBox={`0 0 ${width} 280`}
           role="img"
-          aria-label="날짜별 정산 완료액과 정산 예정액 선그래프"
+          aria-label={
+            payoutMode
+              ? '날짜별 실제 지급액과 차감 전 정산 예정액 선그래프'
+              : '날짜별 정산 완료액과 정산 예정액 선그래프'
+          }
         >
           {[0, 1, 2, 3, 4].map((t) => {
             const value = (ceiling * t) / 4
@@ -97,7 +103,7 @@ export function SettlementLineChart({
                       fill={field === 'completed' ? '#16a34a' : '#2563eb'}
                       role="button"
                       tabIndex={0}
-                      aria-label={`${d.date} ${field === 'completed' ? '완료' : '예정'} ${won(d[field]!)}`}
+                      aria-label={`${d.date} ${field === 'completed' ? (payoutMode ? '실제 지급' : '완료') : '예정'} ${won(d[field]!)}`}
                       onMouseEnter={() => setSelected(d.date)}
                       onFocus={() => setSelected(d.date)}
                       onClick={() => setSelected(d.date)}
@@ -137,7 +143,8 @@ export function SettlementLineChart({
           </select>
         </label>
         <span>
-          완료 <b style={{ color: '#15803d' }}>{won(active.completedAmount)}</b>
+          {payoutMode ? '실제 지급' : '완료'}{' '}
+          <b style={{ color: '#15803d' }}>{won(active.completedAmount)}</b>
         </span>
         <span>
           {active.date < today ? '예정일 경과' : '예정'}{' '}
@@ -149,7 +156,8 @@ export function SettlementLineChart({
       </div>
       <p className="finance-trend-note">
         예정액 중 매입일 기준 {won(active.scheduledAmount)} · 기존 예상 일정{' '}
-        {won(active.expectedAmount)}. 신규 정산은 매입일 기준 영업일 D+3에 예정됩니다.
+        {won(active.expectedAmount)}. 신규 정산은 매입일 기준 영업일 D+3에 예정됩니다. 예정액은 환불
+        회수 차감 전이며, 차감 후 예상 유입은 자금 현황에서 확인하세요.
       </p>
       {overdue > 0 && (
         <p className="finance-trend-overdue">

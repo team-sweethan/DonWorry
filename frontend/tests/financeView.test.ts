@@ -8,6 +8,8 @@ import {
   managementRows,
   matchesFinanceSnapshot,
   monthlyReportMismatch,
+  validateSettlementReport,
+  financeTotal,
   settlementViewEntries,
   validFinancePeriod,
 } from '../src/pages/owner/financeView.ts'
@@ -23,7 +25,17 @@ const report: SettlementReport = {
   refundDeductionAmount: 0,
   paidAmount: 70,
   outstandingRecoveryAmount: 0,
-  payouts: [],
+  payouts: [
+    {
+      payoutId: 1,
+      payoutDate: '2026-11-02',
+      completedAt: '2026-11-01T18:00:00Z',
+      settlementAmount: 70,
+      refundDeductionAmount: 0,
+      payoutAmount: 70,
+      origin: 'BATCH',
+    },
+  ],
   days: [],
   entries: [
     {
@@ -211,6 +223,23 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
   const view = forecastView(forecast)
   assert.equal(view.days[0].expenses, 20)
   assert.equal(view.incomes[0].amount, 30)
+  assert.equal(view.incomes[0].settlementAmount, 50)
+  assert.equal(view.incomes[0].refundDeductionAmount, 20)
+  assert.throws(() => forecastView({ ...forecast, outstandingRecoveryAmount: 1 }), /환불 회수/)
+  assert.throws(
+    () =>
+      forecastView({
+        ...forecast,
+        days: [
+          {
+            ...forecast.days[0],
+            movements: [{ ...forecast.days[0].movements[0], refundDeductionAmount: 19 }],
+          },
+        ],
+      }),
+    /환불 차감 근거/,
+  )
+
   const payoutView = forecastView({
     ...forecast,
     days: [
@@ -239,4 +268,36 @@ test('오류는 실제 조회 실패로 알리고 0원이나 예시 금액으로
   assert.match(financeErrorMessage(new ApiError(403)), /권한/)
   assert.match(financeErrorMessage(new TypeError('offline')), /연결/)
   assert.throws(() => settlementViewEntries({ ...report, completedAmount: NaN }))
+})
+
+// 원 거래 금액과 실제 지급액은 다를 수 있다. 지급 원장 내부의 합계·차감만 검증한다.
+test('report_whenRefundFullyOffsetsPayout_acceptsZeroCashWithoutChangingOriginalEntries', () => {
+  const value = {
+    ...report,
+    paidAmount: 0,
+    refundDeductionAmount: 70,
+    payouts: [{ ...report.payouts[0], refundDeductionAmount: 70, payoutAmount: 0 }],
+  }
+  assert.equal(validateSettlementReport(value).completedAmount, 70)
+  assert.equal(validateSettlementReport(value).paidAmount, 0)
+  assert.equal(settlementViewEntries(value)[0].settlementAmount, 70)
+  assert.ok(monthlyReportMismatch(value, report, '2026-11-30'))
+})
+
+test('report_whenPayoutTotalsMismatchOrUnsafe_rejectsMisleadingCashSummary', () => {
+  assert.throws(() => validateSettlementReport({ ...report, paidAmount: 71 }), /지급 금액/)
+  assert.throws(() => validateSettlementReport({ ...report, payouts: [] }), /지급 요약/)
+  assert.throws(
+    () => validateSettlementReport({ ...report, payouts: [report.payouts[0], report.payouts[0]] }),
+    /중복 지급/,
+  )
+  assert.throws(
+    () =>
+      validateSettlementReport({
+        ...report,
+        outstandingRecoveryAmount: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    /지원 범위/,
+  )
+  assert.throws(() => financeTotal([Number.MAX_SAFE_INTEGER, 1]), /지원 범위/)
 })
