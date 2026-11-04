@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from app.agent.assemble import (
     BURST_KEY,
     EARLIER_KEY,
+    LATER_KEY,
     drop_rule_only,
     facts_json,
     outside_rule_evidence,
@@ -56,12 +57,11 @@ def test_example_sentence_copied_is_dropped() -> None:
     assert removed == 1
 
 
-# 같은 카드를 쓴 다른 고객이 있는데 이유가 "다른 근거가 없다"면 다시 쓰게 한다 (Case 8 · 9)
-def test_reason_no_other_evidence_with_linked_payments_is_repaired() -> None:
+# 같은 카드를 쓴 다른 고객이 있는데 결제 문장이 "다른 근거가 없다"면 다시 쓰게 한다 (Case 8 · 9)
+# 이유는 코드가 쓰므로(#532) AI가 쓰는 결제별 근거 문장으로 본다
+def test_payment_sentence_no_other_evidence_with_linked_payments_is_repaired() -> None:
     written = json.loads(narrative(PAYMENTS))
-    written["payments"]["9001"]["reason"] = (
-        "규칙 적중 외에 다른 근거가 없어 추가 확인이 필요합니다."
-    )
+    written["payments"]["9001"]["normalEvidence"] = ["규칙 적중 외에 다른 근거가 없습니다."]
     outside = outside_rule_evidence({}, None, LinkedPaymentsTool.model_validate(LINKED))
 
     _, errors = validate_narrative(json.dumps(written, ensure_ascii=False), PAYMENTS, None, outside)
@@ -71,11 +71,9 @@ def test_reason_no_other_evidence_with_linked_payments_is_repaired() -> None:
 
 # 근거가 정말 규칙뿐이면 "다른 근거가 없다"는 맞는 말이라 통과한다
 # 매번 다시 쓰다 조사 실패하지 않게
-def test_reason_no_other_evidence_when_only_rules_passes() -> None:
+def test_payment_sentence_no_other_evidence_when_only_rules_passes() -> None:
     written = json.loads(narrative(PAYMENTS))
-    written["payments"]["9001"]["reason"] = (
-        "규칙 적중 외에 다른 근거가 없어 추가 확인이 필요합니다."
-    )
+    written["payments"]["9001"]["normalEvidence"] = ["규칙 적중 외에 다른 근거가 없습니다."]
     no_match = {"provided": True, "otherCustomerCount": 0, "paymentCount": 0}
     none = {**LINKED, "card": {**LINKED["card"], **no_match}, "device": LINKED["device"]}
     outside = outside_rule_evidence({}, None, LinkedPaymentsTool.model_validate(none))
@@ -142,13 +140,11 @@ def test_summary_overall_checks_need_two_items() -> None:
 
 
 # 요약 문장을 결제별 근거에 그대로 복사하면 결제별 근거 쪽만 코드가 뺀다 (Case 10)
-# 이유 = 권고 요약은 결제가 하나일 때 원래 같은 내용이라 건드리지 않는다
 def test_sentence_copied_between_summary_and_payment_is_dropped_from_payment() -> None:
     written = json.loads(narrative(PAYMENTS))
     copied = "다른 고객이 같은 카드를 사용한 결제가 있었습니다."
     written["summary"] = [written["summary"][0], copied]
     written["payments"]["9001"]["riskEvidence"] = [copied, "처음 쓰는 카드로 결제했습니다."]
-    written["recommendationSummary"] = written["payments"]["9001"]["reason"]
     parsed, errors = validate_narrative(json.dumps(written, ensure_ascii=False), PAYMENTS, None)
 
     cleaned, _ = sanitize_narrative(parsed)
@@ -156,7 +152,6 @@ def test_sentence_copied_between_summary_and_payment_is_dropped_from_payment() -
     assert errors == []
     assert copied in cleaned.summary
     assert cleaned.payments["9001"].riskEvidence == ["처음 쓰는 카드로 결제했습니다."]
-    assert cleaned.recommendationSummary == cleaned.payments["9001"].reason
 
 
 # "○○ 규칙에 걸렸습니다"로만 된 위험 근거는 규칙 카드와 같은 내용이라 코드가 뺀다 (Case 10)
@@ -170,24 +165,22 @@ def test_rule_only_risk_sentence_is_dropped() -> None:
     ) == ["고액 결제 규칙에 걸렸고 처음 쓰는 카드라 카드 주인 확인이 필요합니다."]
 
 
-# 3차 실측 실패 재현 — Case 10 모양의 출력(요약 문장을 위험 근거에 복사, 이유 = 권고 요약)을 Qwen이
+# 3차 실측 실패 재현 — Case 10 모양의 출력(요약 문장을 위험 근거에 복사)을 Qwen이
 # 3번 똑같이 내면 칸끼리 복사 검사 때문에 NARRATIVE_INVALID가 됐다. 다시 쓰기 없이 성공해야 한다
 def test_case10_like_output_succeeds_without_rewrite() -> None:
     from app.agent.graph import run_investigation
+    from app.agent.verdict_text import payment_reason
     from app.config import Settings
     from tests.fakes import ScriptedLlm, call, context
 
     written = json.loads(narrative(PAYMENTS))
     shared = "다른 고객이 같은 카드를 사용한 결제가 있었습니다."
-    reason = "규칙에 걸렸고 다른 고객 결제가 있어 추가 확인이 필요합니다."
     written["summary"] = ["고액 결제와 단시간 반복 결제 규칙에 걸렸습니다.", shared]
     for pid in PAYMENTS:
         written["payments"][pid]["riskEvidence"] = [
             "고액 결제와 단시간 반복 결제 규칙에 걸렸습니다.",
             shared,
         ]
-        written["payments"][pid]["reason"] = reason
-    written["recommendationSummary"] = reason
     llm = ScriptedLlm(
         turns=[[call("get_case_payments")]], outputs=[json.dumps(written, ensure_ascii=False)]
     )
@@ -199,8 +192,8 @@ def test_case10_like_output_succeeds_without_rewrite() -> None:
     first = outcome.report.paymentAnalyses[0]
     # 위험 근거가 요약 복사 문장뿐이라 남기고(Case 13), 규칙만 말한 문장은 뺀다
     assert first.riskEvidence == [shared]
-    assert first.reason == reason
-    assert outcome.report.recommendation.summary == reason
+    # 이유는 AI 문장이 아니라 판정 근거로 코드가 쓴다 (#532)
+    assert first.reason == payment_reason(first.basis)
 
 
 def _toolbox_with_linked():
@@ -290,15 +283,13 @@ def test_history_after_case_is_not_earlier() -> None:
     )
 
     facts = json.loads(facts_json(cases, {}, None, history, None))["고객 최근 결제(이 사건 밖)"]
-    after = [v for k, v in facts.items() if k.startswith("사건 뒤 결제")]
-
     assert [p["금액(원)"] for p in facts[EARLIER_KEY]] == [580000]
-    assert [[p["금액(원)"] for p in group] for group in after] == [[590000]]
+    assert [p["금액(원)"] for p in facts[LATER_KEY]] == [590000]
 
 
 # 결제 A만 해외 접속이면 B의 "규칙 말고 다른 근거가 없다"는 사실이라 통과한다
 # A의 같은 문장은 해외 접속을 빠뜨렸으니 다시 쓰게 한다
-def test_payment_reason_checked_with_its_own_evidence() -> None:
+def test_payment_sentence_checked_with_its_own_evidence() -> None:
     from app.schemas.tools import FdsPayment
 
     def fds(pid: str, country: str) -> FdsPayment:
@@ -315,7 +306,7 @@ def test_payment_reason_checked_with_its_own_evidence() -> None:
     written = json.loads(narrative(PAYMENTS))
     only_rules = "규칙 적중 외에 다른 근거가 없어 추가 확인이 필요합니다."
     for pid in PAYMENTS:
-        written["payments"][pid]["reason"] = only_rules
+        written["payments"][pid]["normalEvidence"] = [only_rules]
     by_payment = {pid: outside_rule_evidence(evidence, None, None, pid) for pid in PAYMENTS}
 
     _, errors = validate_narrative(

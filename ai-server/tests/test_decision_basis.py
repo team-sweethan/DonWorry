@@ -295,3 +295,91 @@ def test_basis_facts_have_no_number_outside_allowed() -> None:
 
     basis_text = json.dumps(facts["결제"][0]["판정 근거"], ensure_ascii=False)
     assert _numbers(basis_text) <= fact_numbers(case, fds, None, history)
+
+
+# --- 사건 도중 결제 재현 (#532) ---
+# 사건은 30분 안의 보류 결제를 계속 합친다 — 10:00 보류 → 10:14 정상 결제 2건 → 10:28 보류
+# 10:14 결제는 두 사건 결제와 10분 넘게 떨어져 있지만 사건이 시작된 뒤의 결제라 평소 결제가 아니다
+STRETCHED = [("1", "2026-05-21T10:00:00Z"), ("2", "2026-05-21T10:28:00Z")]
+DURING = [
+    (220000, "CAPTURED", "2026-05-21T10:14:00Z"),
+    (230000, "CAPTURED", "2026-05-21T10:14:30Z"),
+]
+
+
+def _stretched_case() -> CasePaymentsTool:
+    return CasePaymentsTool.model_validate(
+        {
+            **HEAD,
+            "payments": [
+                {"paymentId": pid, "amount": 220000, "paymentStatus": "HELD", "requestedAt": at}
+                for pid, at in STRETCHED
+            ],
+            "missingPaymentIds": [],
+        }
+    )
+
+
+# 사건 도중 결제로 고액 징후를 설명하지 않는다 — 두 사건 결제 모두 추가 확인
+def test_payments_during_stretched_case_are_not_usual_history() -> None:
+    case = _stretched_case()
+
+    for payment in case.payments:
+        basis = decision_basis(
+            payment, _fds([_rule("R01", "고액 결제")]), case, _history(DURING), _linked()
+        )
+        assert basis.normals == []
+        assert basis.recommendation == "NEEDS_CHECK"
+
+
+# AI에게도 사건 도중 결제를 "그 전 결제"(평소 결제)로 보여 주지 않는다 — 판정과 같은 기준
+def test_facts_do_not_show_payments_during_case_as_earlier() -> None:
+    from app.agent.assemble import EARLIER_KEY
+
+    case = _stretched_case()
+    facts = json.loads(facts_json(case, {}, None, _history(DURING), None))
+
+    assert facts["고객 최근 결제(이 사건 밖)"][EARLIER_KEY] == []
+
+
+# --- FDS 점수 없음 재현 (#532) ---
+# 평가 오류(점수 없음 · 적중 규칙 없음)를 "징후 없음"으로 읽어 매입 진행 검토가 나왔다
+# 지금은 보고서 생성 전 검사(graph._ready_to_write)가 막지만, 판정 코드도 스스로 막는다
+# 점수 없음은 판정을 올리지도 내리지도 않는다
+
+
+def _error_fds() -> FdsPayment:
+    return _fds([]).model_copy(update={"riskScore": None, "fdsResult": "ERROR"})
+
+
+def _linked_card_and_device() -> LinkedPaymentsTool:
+    linked = _linked(card_others=1)
+    return linked.model_copy(update={"device": linked.card})
+
+
+def _error_basis(linked: LinkedPaymentsTool):
+    case = _case(220000)
+    return decision_basis(case.payments[0], _error_fds(), case, _history(USUAL), linked)
+
+
+# 점수 없음만 있으면 추가 확인 — 매입 진행 검토로 가지 않는다
+def test_fds_error_alone_is_needs_check() -> None:
+    basis = _error_basis(_linked())
+
+    assert basis.recommendation == "NEEDS_CHECK"
+    assert "FDS 평가 결과 미확인" in [s.label for s in basis.signals]
+
+
+# 점수 없음 + 고위험 징후 하나 — 점수 없음을 "다른 징후"로 세어 승인 취소 검토로 올리지 않는다
+def test_fds_error_does_not_raise_single_high_risk() -> None:
+    basis = _error_basis(_linked(card_others=1))
+
+    assert basis.rule == "HIGH_RISK_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+
+
+# 점수 없음 + 고위험 · 다른 징후가 겹치면 승인 취소 검토를 유지한다 — 내리지도 않는다
+def test_fds_error_keeps_reject_from_other_signals() -> None:
+    basis = _error_basis(_linked_card_and_device())
+
+    assert basis.recommendation == "REJECT_REVIEW"

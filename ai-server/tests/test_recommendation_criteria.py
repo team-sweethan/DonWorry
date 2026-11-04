@@ -108,8 +108,14 @@ def test_investigation_rewrites_empty_unknowns_and_keeps_basis() -> None:
     assert outcome.report.verdict.overallRecommendation == "NEEDS_CHECK"
 
 
-# 이유에 징후 이름을 그대로 써야 화면이 조사 요약에 그 징후 색 밑줄을 그을 수 있다 (#501 화면)
-def test_prompt_asks_signal_names_in_reason() -> None:
-    assert "reason의 징후는 판정 근거의 징후 이름 그대로 쓴다" in WRITE_SYSTEM
-    reasons = [p["reason"] for e in WRITE_EXAMPLES for p in e["payments"].values()]
-    assert any("신규 단말기" in r for r in reasons)
+# 징후 이름을 그대로 써야 화면이 조사 요약에 그 징후 색 밑줄을 그을 수 있다 (#501 화면)
+# 이유는 코드가 징후 이름으로 쓰고(#532, test_verdict_text) AI 문장도 같은 이름을 쓰게 한다
+def test_prompt_asks_signal_names() -> None:
+    assert "징후를 가리킬 때는 판정 근거의 징후 이름 그대로 쓴다" in WRITE_SYSTEM
+
+
+# 출력 예시에 판단 칸(결론 한 줄 · 권고 요약 · 이유)이 없다 — AI가 판단 문장을 따라 쓰지 않게 (#532)
+def test_examples_have_no_judgement_fields() -> None:
+    for example in WRITE_EXAMPLES:
+        assert "headline" not in example and "recommendationSummary" not in example
+        assert all("reason" not in p for p in example["payments"].values())
