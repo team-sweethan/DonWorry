@@ -43,6 +43,15 @@ class CashFlowForecastMariaDbTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    RefundAdjustmentService refunds;
+
+    @Autowired
+    SettlementCompletionTransactionService completion;
+
+    @Autowired
+    SettlementReportService reports;
+
     private LocalDate today() {
         return LocalDate.now(SettlementReportService.ZONE);
     }
@@ -72,8 +81,19 @@ class CashFlowForecastMariaDbTests {
         jdbc.update("DELETE FROM recurring_expenses WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM planned_expenses WHERE merchant_id=?", MERCHANT);
         jdbc.update("DELETE FROM cash_flow_settings WHERE merchant_id=?", MERCHANT);
+        jdbc.update(
+                "DELETE x FROM payout_refund_allocations x JOIN merchant_payouts p ON p.payout_id=x.payout_id WHERE p.merchant_id IN (?,?)",
+                MERCHANT,
+                MERCHANT + 1);
+        jdbc.update("DELETE FROM settlement_refund_adjustments WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
+        jdbc.update(
+                "DELETE i FROM merchant_payout_items i JOIN merchant_payouts p ON p.payout_id=i.payout_id WHERE p.merchant_id IN (?,?)",
+                MERCHANT,
+                MERCHANT + 1);
+        jdbc.update("DELETE FROM merchant_payouts WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
         jdbc.update("DELETE FROM settlements WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
         jdbc.update("DELETE FROM captures WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
+        jdbc.update("DELETE FROM merchant_settlement_locks WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
         jdbc.update("DELETE FROM merchants WHERE merchant_id IN (?,?)", MERCHANT, MERCHANT + 1);
     }
 
@@ -86,6 +106,25 @@ class CashFlowForecastMariaDbTests {
                 "UPDATE settlements SET status='COMPLETED',completed_at=? WHERE payment_id=?",
                 utcTimestamp(at),
                 payment);
+        long merchant =
+                jdbc.queryForObject("SELECT merchant_id FROM settlements WHERE payment_id=?", Long.class, payment);
+        jdbc.update(
+                """
+                INSERT INTO merchant_payouts(merchant_id,payout_date,status,origin,settlement_total,refund_deduction_total,payout_amount,completed_at,created_at,updated_at)
+                VALUES (?,?,'COMPLETED','BATCH',9700,0,9700,?,?,?)
+                ON DUPLICATE KEY UPDATE settlement_total=settlement_total+9700,payout_amount=payout_amount+9700
+                """,
+                merchant,
+                at.atZone(SettlementReportService.ZONE).toLocalDate(),
+                utcTimestamp(at),
+                utcTimestamp(at),
+                utcTimestamp(at));
+        jdbc.update(
+                """
+                INSERT INTO merchant_payout_items(payout_id,settlement_id,settlement_amount,created_at)
+                SELECT p.payout_id,s.settlement_id,9700,? FROM settlements s JOIN merchant_payouts p
+                ON p.merchant_id=s.merchant_id AND p.payout_date=? WHERE s.payment_id=?
+                """, utcTimestamp(at), at.atZone(SettlementReportService.ZONE).toLocalDate(), payment);
     }
 
     private ExpenseRequest expense(String title, LocalDate date, long amount) {
@@ -197,12 +236,15 @@ class CashFlowForecastMariaDbTests {
         capture(PAYMENT, MERCHANT);
         capture(PAYMENT + 1, MERCHANT);
         complete(PAYMENT, at(today().minusDays(1)));
-        complete(PAYMENT + 1, at(today().minusDays(1)));
+        complete(PAYMENT + 1, at(today().minusDays(2)));
         jdbc.update(
                 "UPDATE settlements SET settlement_amount=9223372036854775807 WHERE payment_id IN (?,?)",
                 PAYMENT,
                 PAYMENT + 1);
-        assertThat(repository.sumCompleted(MERCHANT, at(today().minusYears(2)), Instant.now()))
+        jdbc.update(
+                "UPDATE merchant_payouts SET settlement_total=9223372036854775807,payout_amount=9223372036854775807 WHERE merchant_id=?",
+                MERCHANT);
+        assertThat(repository.sumPaidOut(MERCHANT, at(today().minusYears(2)), Instant.now()))
                 .isEqualByComparingTo(new BigDecimal("18446744073709551614"));
         assertThatThrownBy(() -> forecasts.forecast(MERCHANT, today(), today()))
                 .isInstanceOfSatisfying(
@@ -263,5 +305,161 @@ class CashFlowForecastMariaDbTests {
                 .containsOnly(0L);
         assertThat(result.totalIncome()).isEqualTo(9700);
         assertThat(result.closingBalance()).isEqualTo(9900);
+    }
+
+    private com.donworry.settlement.entity.SettlementRefundAdjustment refund(long payment) {
+        long capture = jdbc.queryForObject("SELECT capture_id FROM captures WHERE payment_id=?", Long.class, payment);
+        return refunds.record(com.donworry.settlement.api.PaymentRefundSucceeded.builder()
+                .cancellationId(payment)
+                .paymentId(payment)
+                .captureId(capture)
+                .merchantId(MERCHANT)
+                .cancellationAmount(10000L)
+                .canceledAt(Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS))
+                .build());
+    }
+
+    private void schedule(long payment, LocalDate date) {
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=?,expected_settlement_at=? WHERE payment_id=?",
+                utcTimestamp(at(date)),
+                utcTimestamp(at(date)),
+                payment);
+    }
+
+    // 회수 중인 환불은 과거 실제 입금을 취소하지 않고 미래 순유입만 줄인다.
+    @Test
+    void forecast_whenPaidRefundAndFutureIncomeExist_deductsAcrossDatesAndPreservesHistory() {
+        capture(PAYMENT, MERCHANT);
+        complete(PAYMENT, at(today().minusDays(1)));
+        refund(PAYMENT);
+        capture(PAYMENT + 1, MERCHANT);
+        schedule(PAYMENT + 1, today().plusDays(1));
+        capture(PAYMENT + 2, MERCHANT);
+        schedule(PAYMENT + 2, today().plusDays(2));
+        var before = jdbc.queryForList("SELECT * FROM merchant_payouts WHERE merchant_id=?", MERCHANT);
+        var result = forecasts.forecast(MERCHANT, today().plusDays(2), today().plusDays(2));
+        assertThat(result.currentBalance()).isEqualTo(10700);
+        assertThat(result.periodOpeningBalance()).isEqualTo(10700);
+        assertThat(result.totalIncome()).isEqualTo(9700);
+        assertThat(result.closingBalance()).isEqualTo(20400);
+        assertThat(result.outstandingRecoveryAmount()).isEqualTo(9700);
+        assertThat(result.projectedRefundDeduction()).isEqualTo(9700);
+        assertThat(result.remainingRecoveryAmount()).isZero();
+        assertThat(result.carryForwardMovements()).singleElement().satisfies(m -> {
+            assertThat(m.amount()).isZero();
+            assertThat(m.settlementAmount()).isEqualTo(9700);
+            assertThat(m.refundDeductionAmount()).isEqualTo(9700);
+        });
+        assertThat(jdbc.queryForList("SELECT * FROM merchant_payouts WHERE merchant_id=?", MERCHANT))
+                .isEqualTo(before);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM payout_refund_allocations x JOIN merchant_payouts p ON p.payout_id=x.payout_id WHERE p.merchant_id=?",
+                        Long.class,
+                        MERCHANT))
+                .isZero();
+        assertThat(repository.outstandingRecovery(MERCHANT + 1, Instant.now())).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // 실제 배치 차감액과 조회·잔액이 일치하고 원 정산금을 다시 입금으로 합산하지 않는다.
+    @Test
+    void forecast_whenBatchPayoutFullyOffsetsDebt_returnsZeroActualCashWithEvidence() {
+        capture(PAYMENT, MERCHANT);
+        complete(PAYMENT, at(today().minusDays(1)));
+        refund(PAYMENT);
+        capture(PAYMENT + 1, MERCHANT);
+        jdbc.update(
+                "UPDATE captures SET captured_at=? WHERE payment_id=?",
+                utcTimestamp(at(today().minusDays(7))),
+                PAYMENT + 1);
+        schedule(PAYMENT + 1, today().minusDays(1));
+        long upper = jdbc.queryForObject(
+                "SELECT MAX(settlement_id) FROM settlements WHERE merchant_id=?", Long.class, MERCHANT);
+        assertThat(completion.completeMerchant(MERCHANT, Instant.now(), upper)).isEqualTo("COMPLETED");
+        // 완료와 조회가 같은 clock tick이면 cutoff 경계로 제외되므로 완료를 명확히 이전에 둔다.
+        var done = Instant.now().minusSeconds(1);
+        jdbc.update(
+                "UPDATE merchant_payouts SET completed_at=? WHERE merchant_id=? AND payout_date=?",
+                utcTimestamp(done),
+                MERCHANT,
+                today());
+        jdbc.update("UPDATE settlements SET completed_at=? WHERE payment_id=?", utcTimestamp(done), PAYMENT + 1);
+        var result = forecasts.forecast(MERCHANT, today(), today());
+        assertThat(result.currentBalance()).isEqualTo(10700);
+        assertThat(result.totalIncome()).isZero();
+        assertThat(result.days().getFirst().movements()).singleElement().satisfies(m -> {
+            assertThat(m.source()).isEqualTo("PAYOUT");
+            assertThat(m.amount()).isZero();
+            assertThat(m.refundDeductionAmount()).isEqualTo(9700);
+        });
+        assertThat(result.outstandingRecoveryAmount()).isZero();
+        var report = reports.report(MERCHANT, today(), today());
+        assertThat(report.completedAmount()).isEqualTo(9700);
+        assertThat(report.paidSettlementAmount()).isEqualTo(9700);
+        assertThat(report.refundDeductionAmount()).isEqualTo(9700);
+        assertThat(report.paidAmount()).isZero();
+        assertThat(report.days().getFirst().paidAmount()).isZero();
+        assertThat(report.payouts())
+                .singleElement()
+                .satisfies(p -> assertThat(p.payoutAmount()).isZero());
+        var history = reports.report(MERCHANT, today().minusDays(1), today().minusDays(1));
+        assertThat(history.paidAmount()).isEqualTo(9700);
+        assertThat(history.refundDeductionAmount()).isZero();
+    }
+
+    // 기준 시각 후 회수가 보이는 스냅샷에서도 기준 시각 전의 미회수액을 복원한다.
+    @Test
+    void outstandingRecovery_whenAllocationAfterCutoff_restoresEarlierDebt() {
+        capture(PAYMENT, MERCHANT);
+        complete(PAYMENT, at(today().minusDays(2)));
+        var adjustment = refund(PAYMENT);
+        var cutoff = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        jdbc.update(
+                "UPDATE settlement_refund_adjustments SET created_at=? WHERE adjustment_id=?",
+                utcTimestamp(cutoff.minusSeconds(1)),
+                adjustment.getAdjustmentId());
+        capture(PAYMENT + 1, MERCHANT);
+        complete(PAYMENT + 1, cutoff.plusSeconds(1));
+        long payout = jdbc.queryForObject(
+                "SELECT payout_id FROM merchant_payouts WHERE merchant_id=? AND payout_date=?",
+                Long.class,
+                MERCHANT,
+                today());
+        jdbc.update(
+                "UPDATE merchant_payouts SET refund_deduction_total=9700,payout_amount=0 WHERE payout_id=?", payout);
+        jdbc.update(
+                "INSERT INTO payout_refund_allocations(payout_id,adjustment_id,applied_amount,created_at) VALUES (?,?,9700,?)",
+                payout,
+                adjustment.getAdjustmentId(),
+                utcTimestamp(cutoff.plusSeconds(1)));
+        jdbc.update(
+                "UPDATE settlement_refund_adjustments SET remaining_amount=0 WHERE adjustment_id=?",
+                adjustment.getAdjustmentId());
+        assertThat(repository.outstandingRecovery(MERCHANT, cutoff)).isEqualByComparingTo("9700");
+        assertThat(repository.outstandingRecovery(MERCHANT, cutoff.plusSeconds(1)))
+                .isEqualByComparingTo("9700");
+        assertThat(repository.outstandingRecovery(MERCHANT, cutoff.plusSeconds(2)))
+                .isEqualByComparingTo("0");
+        assertThat(repository.sumPaidOut(MERCHANT, at(today()), cutoff)).isEqualByComparingTo("0");
+    }
+
+    // 이전 버전의 미적용 미지급 환불은 유입 예측에서 제외하고 지급 후 미적용 환불은 채무로 잡는다.
+    @Test
+    void forecast_whenPendingRefundsExist_excludesUnpaidAndCountsPaidDebt() {
+        capture(PAYMENT, MERCHANT);
+        complete(PAYMENT, at(today().minusDays(1)));
+        refund(PAYMENT);
+        capture(PAYMENT + 1, MERCHANT);
+        schedule(PAYMENT + 1, today().plusDays(1));
+        refund(PAYMENT + 1);
+        jdbc.update(
+                "UPDATE settlement_refund_adjustments SET status='PENDING',disposition=NULL,remaining_amount=adjustment_amount WHERE merchant_id=?",
+                MERCHANT);
+        jdbc.update("UPDATE settlements SET status='SCHEDULED' WHERE payment_id=?", PAYMENT + 1);
+        var result = forecasts.forecast(MERCHANT, today(), today().plusDays(2));
+        assertThat(result.totalIncome()).isZero();
+        assertThat(result.outstandingRecoveryAmount()).isEqualTo(9700);
+        assertThat(result.remainingRecoveryAmount()).isEqualTo(9700);
+        assertThat(result.closingBalance()).isEqualTo(10700);
     }
 }

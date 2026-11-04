@@ -27,7 +27,7 @@ export type RecurringOccurrence = ExpenseInput & {
   paidDate: string | null
 }
 export type CashFlowMovement = {
-  source: 'SETTLEMENT' | 'EXPENSE' | 'RECURRING_EXPENSE'
+  source: 'PAYOUT' | 'SETTLEMENT' | 'EXPENSE' | 'RECURRING_EXPENSE'
   referenceId: number
   occurrenceDate: string | null
   date: string
@@ -36,6 +36,8 @@ export type CashFlowMovement = {
   classification: 'COMPLETED' | 'SCHEDULED' | 'EXPECTED' | 'PAID' | 'PLANNED'
   eligibleAt: string | null
   reflectedAt: string | null
+  settlementAmount: number
+  refundDeductionAmount: number
 }
 export type CashFlowDay = {
   date: string
@@ -65,6 +67,9 @@ export type CashFlowForecast = CashFlowSettings & {
   undatedIncome: number
   overdueIncome: number
   canceledIncome: number
+  outstandingRecoveryAmount: number
+  projectedRefundDeduction: number
+  remainingRecoveryAmount: number
   batchCron: string
   batchEnabled: boolean
   carryForwardMovements: CashFlowMovement[]
@@ -95,7 +100,28 @@ export type SettlementReport = {
   scheduledAmount: number
   expectedAmount: number
   undatedAmount: number
-  days: { date: string; completedAmount: number; scheduledAmount: number; expectedAmount: number }[]
+  paidSettlementAmount: number
+  refundDeductionAmount: number
+  paidAmount: number
+  outstandingRecoveryAmount: number
+  payouts: {
+    payoutId: number
+    payoutDate: string
+    completedAt: string
+    settlementAmount: number
+    refundDeductionAmount: number
+    payoutAmount: number
+    origin: 'BATCH' | 'LEGACY_BACKFILL'
+  }[]
+  days: {
+    date: string
+    completedAmount: number
+    scheduledAmount: number
+    expectedAmount: number
+    paidSettlementAmount: number
+    refundDeductionAmount: number
+    paidAmount: number
+  }[]
   entries: SettlementEntry[]
 }
 const root = '/v1/settlements'

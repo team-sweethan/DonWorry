@@ -11,7 +11,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.*;
 
 @Service
 @RequiredArgsConstructor
@@ -20,8 +20,9 @@ public class SettlementReportService {
     private static final long MAX_SAFE = 9007199254740991L;
     private final SettlementRepository repository;
     private final OrderFulfillmentItemRepository orderItems;
+    private final CashFlowForecastRepository cashFlows;
 
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SettlementReportResponse report(Long merchant, LocalDate from, LocalDate to) {
         if (merchant == null
                 || merchant <= 0
@@ -31,6 +32,7 @@ public class SettlementReportService {
                 || java.time.temporal.ChronoUnit.DAYS.between(from, to) > 365) {
             throw new IllegalArgumentException("가맹점과 366일 이내의 조회 기간이 필요합니다.");
         }
+        var asOf = Instant.now();
         var stored = repository.findReport(
                 merchant,
                 from.atStartOfDay(ZONE).toInstant(),
@@ -55,6 +57,23 @@ public class SettlementReportService {
         var entries = stored.stream()
                 .map(p -> entry(p, items.getOrDefault(p.getOrderId(), List.of())))
                 .toList();
+        var until = to.plusDays(1).atStartOfDay(ZONE).toInstant();
+        var cutoff = until.isBefore(asOf) ? until : asOf;
+        var paid =
+                cashFlows.findPaidOut(merchant, from.atStartOfDay(ZONE).toInstant(), cutoff, PageRequest.of(0, 10001));
+        if (paid.size() > 10000)
+            throw new SettlementRequestException(422, "SETTLEMENT_PERIOD_TOO_LARGE", "지급 조회 기간을 줄여 주세요.");
+        var payouts = paid.stream()
+                .map(p -> Payout.builder()
+                        .payoutId(p.getPayoutId())
+                        .payoutDate(p.getPayoutDate())
+                        .completedAt(p.getCompletedAt())
+                        .settlementAmount(checkedAmount(BigDecimal.valueOf(p.getSettlementTotal())))
+                        .refundDeductionAmount(checkedAmount(BigDecimal.valueOf(p.getRefundDeductionTotal())))
+                        .payoutAmount(checkedAmount(BigDecimal.valueOf(p.getPayoutAmount())))
+                        .origin(p.getOrigin().name())
+                        .build())
+                .toList();
         var days = new ArrayList<Day>();
         for (var date = from; !date.isAfter(to); date = date.plusDays(1)) {
             var d = date;
@@ -65,6 +84,9 @@ public class SettlementReportService {
                     .completedAmount(sum(list, "COMPLETED"))
                     .scheduledAmount(sum(list, "SCHEDULED"))
                     .expectedAmount(sum(list, "EXPECTED"))
+                    .paidSettlementAmount(sumPayouts(payouts, date, Payout::settlementAmount))
+                    .refundDeductionAmount(sumPayouts(payouts, date, Payout::refundDeductionAmount))
+                    .paidAmount(sumPayouts(payouts, date, Payout::payoutAmount))
                     .build());
         }
         return SettlementReportResponse.builder()
@@ -74,6 +96,11 @@ public class SettlementReportService {
                 .scheduledAmount(sum(entries, "SCHEDULED"))
                 .expectedAmount(sum(entries, "EXPECTED"))
                 .undatedAmount(checkedAmount(repository.sumUndated(merchant)))
+                .paidSettlementAmount(sumPayouts(payouts, null, Payout::settlementAmount))
+                .refundDeductionAmount(sumPayouts(payouts, null, Payout::refundDeductionAmount))
+                .paidAmount(sumPayouts(payouts, null, Payout::payoutAmount))
+                .outstandingRecoveryAmount(checkedAmount(cashFlows.outstandingRecovery(merchant, asOf)))
+                .payouts(payouts)
                 .days(days)
                 .entries(entries)
                 .build();
@@ -108,6 +135,13 @@ public class SettlementReportService {
         return checkedAmount(list.stream()
                 .filter(e -> e.classification().equals(classification))
                 .map(e -> BigDecimal.valueOf(e.settlementAmount()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add));
+    }
+
+    private long sumPayouts(List<Payout> payouts, LocalDate date, java.util.function.ToLongFunction<Payout> value) {
+        return checkedAmount(payouts.stream()
+                .filter(p -> date == null || date.equals(p.payoutDate()))
+                .map(p -> BigDecimal.valueOf(value.applyAsLong(p)))
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 

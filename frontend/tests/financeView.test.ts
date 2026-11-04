@@ -19,6 +19,11 @@ const report: SettlementReport = {
   scheduledAmount: 0,
   expectedAmount: 0,
   undatedAmount: 0,
+  paidSettlementAmount: 70,
+  refundDeductionAmount: 0,
+  paidAmount: 70,
+  outstandingRecoveryAmount: 0,
+  payouts: [],
   days: [],
   entries: [
     {
@@ -155,6 +160,9 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
     undatedIncome: 0,
     overdueIncome: 0,
     canceledIncome: 0,
+    outstandingRecoveryAmount: 0,
+    projectedRefundDeduction: 0,
+    remainingRecoveryAmount: 0,
     batchCron: '0 0 3 * * *',
     batchEnabled: false,
     carryForwardMovements: [],
@@ -180,6 +188,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
             classification: 'SCHEDULED',
             eligibleAt: null,
             reflectedAt: '2026-11-01T18:00:00Z',
+            settlementAmount: 50,
+            refundDeductionAmount: 20,
           },
           {
             source: 'RECURRING_EXPENSE',
@@ -191,6 +201,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
             classification: 'PAID',
             eligibleAt: null,
             reflectedAt: '2026-11-02T00:00:00Z',
+            settlementAmount: 0,
+            refundDeductionAmount: 0,
           },
         ],
       },
@@ -199,6 +211,25 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
   const view = forecastView(forecast)
   assert.equal(view.days[0].expenses, 20)
   assert.equal(view.incomes[0].amount, 30)
+  const payoutView = forecastView({
+    ...forecast,
+    days: [
+      {
+        ...forecast.days[0],
+        movements: [
+          {
+            ...forecast.days[0].movements[0],
+            source: 'PAYOUT',
+            classification: 'COMPLETED',
+            amount: 0,
+            refundDeductionAmount: 50,
+          },
+        ],
+      },
+    ],
+  })
+  assert.equal(payoutView.incomes[0].id, 'PAYOUT:1:')
+  assert.equal(payoutView.incomes[0].amount, 0)
   assert.equal(view.costs[0].date, '2026-11-02')
   assert.match(view.costs[0].note, /2026-12-31/)
   assert.throws(() => forecastView({ ...forecast, currentBalance: Number.MAX_SAFE_INTEGER + 1 }))

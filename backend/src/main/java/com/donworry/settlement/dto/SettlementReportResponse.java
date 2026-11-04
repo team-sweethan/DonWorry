@@ -13,9 +13,15 @@ public record SettlementReportResponse(
         long scheduledAmount,
         long expectedAmount,
         long undatedAmount,
+        long paidSettlementAmount,
+        long refundDeductionAmount,
+        long paidAmount,
+        long outstandingRecoveryAmount,
+        List<Payout> payouts,
         List<Day> days,
         List<Entry> entries) {
     public SettlementReportResponse {
+        payouts = List.copyOf(payouts == null ? List.of() : payouts);
         days = List.copyOf(days);
         entries = List.copyOf(entries);
     }
@@ -45,5 +51,22 @@ public record SettlementReportResponse(
     public record OrderItem(String productName, int quantity) {}
 
     @Builder
-    public record Day(LocalDate date, long completedAmount, long scheduledAmount, long expectedAmount) {}
+    public record Day(
+            LocalDate date,
+            long completedAmount,
+            long scheduledAmount,
+            long expectedAmount,
+            long paidSettlementAmount,
+            long refundDeductionAmount,
+            long paidAmount) {}
+
+    @Builder
+    public record Payout(
+            Long payoutId,
+            LocalDate payoutDate,
+            Instant completedAt,
+            long settlementAmount,
+            long refundDeductionAmount,
+            long payoutAmount,
+            String origin) {}
 }

@@ -32,11 +32,12 @@ class CashFlowForecastServiceTests {
 
     @BeforeEach
     void sums() {
-        when(repository.sumCompleted(anyLong(), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(repository.sumPaidOut(anyLong(), any(), any())).thenReturn(BigDecimal.ZERO);
         when(repository.sumPaidExpenses(anyLong(), any(), any())).thenReturn(BigDecimal.ZERO);
         when(repository.sumPaidRecurring(anyLong(), any(), any())).thenReturn(BigDecimal.ZERO);
         when(repository.sumUndated(anyLong())).thenReturn(BigDecimal.ZERO);
         when(repository.sumCanceled(anyLong())).thenReturn(BigDecimal.ZERO);
+        when(repository.outstandingRecovery(anyLong(), any())).thenReturn(BigDecimal.ZERO);
     }
 
     private Settlement settlement(long id, long amount, Instant scheduled, Instant expected, Instant completed) {
@@ -48,17 +49,25 @@ class CashFlowForecastServiceTests {
         return s;
     }
 
+    private MerchantPayout payout(long id, long amount, Instant completed) {
+        var p = MerchantPayout.pending(
+                2L, completed.atZone(SettlementReportService.ZONE).toLocalDate(), completed);
+        p.complete(amount, 0L, completed);
+        org.springframework.test.util.ReflectionTestUtils.setField(p, "payoutId", id);
+        return p;
+    }
+
     // 과거 누적 실제 거래와 오늘 실제·예정 지출을 분리하고 미래 선지출 회차를 재차감하지 않는다.
     @Test
     void forecast_whenActualAndProjectedMixed_keepsCurrentBalanceSeparate() {
         var base = at(setting.baseDate());
-        when(repository.sumCompleted(2L, base, now)).thenReturn(BigDecimal.valueOf(1000));
+        when(repository.sumPaidOut(2L, base, now)).thenReturn(BigDecimal.valueOf(1000));
         when(repository.sumPaidExpenses(2L, base, now)).thenReturn(BigDecimal.valueOf(150));
         when(repository.sumPaidRecurring(2L, base, now)).thenReturn(BigDecimal.valueOf(50));
-        when(repository.sumCompleted(2L, base, at(today))).thenReturn(BigDecimal.valueOf(500));
+        when(repository.sumPaidOut(2L, base, at(today))).thenReturn(BigDecimal.valueOf(500));
         when(repository.sumPaidExpenses(2L, base, at(today))).thenReturn(BigDecimal.valueOf(100));
-        when(repository.findCompleted(eq(2L), eq(at(today)), eq(now), any()))
-                .thenReturn(List.of(settlement(1, 500, null, null, now.minusSeconds(1))));
+        when(repository.findPaidOut(eq(2L), eq(at(today)), eq(now), any()))
+                .thenReturn(List.of(payout(1, 500, now.minusSeconds(1))));
         var expense = mock(PlannedExpense.class);
         when(expense.getExpenseId()).thenReturn(1L);
         when(expense.getTitle()).thenReturn("일회성 실제");
@@ -92,7 +101,7 @@ class CashFlowForecastServiceTests {
         assertThat(result.days().getLast().closingBalance()).isEqualTo(1600);
         assertThat(result.totalExpenses()).isEqualTo(300);
         assertThat(result.days().getFirst().movements()).hasSize(4);
-        verify(repository).sumCompleted(2L, base, at(today));
+        verify(repository).sumPaidOut(2L, base, at(today));
         verify(recurring).pendingOccurrencesAsOf(2L, today, today.plusDays(3), now);
     }
 
@@ -145,7 +154,7 @@ class CashFlowForecastServiceTests {
         var result = service.forecastAt(2L, today.minusDays(2), today.minusDays(1), setting, now);
         assertThat(result.days()).hasSize(2);
         verifyNoInteractions(recurring);
-        verify(repository).findCompleted(eq(2L), eq(at(today.minusDays(2))), eq(at(today)), any());
+        verify(repository).findPaidOut(eq(2L), eq(at(today.minusDays(2))), eq(at(today)), any());
     }
 
     // 기준일 이전·너무 먼 미래·367일·역전 기간·가맹점 조작은 조회 전에 거절한다.
@@ -177,8 +186,8 @@ class CashFlowForecastServiceTests {
     // 대상 행이 한도를 넘으면 일부 결과만으로 합계를 만들지 않는다.
     @Test
     void forecast_whenRowsExceedLimit_returns422() {
-        when(repository.findCompleted(eq(2L), any(), any(), any()))
-                .thenReturn(Collections.nCopies(10001, settlement(1, 1, null, null, now)));
+        when(repository.findPaidOut(eq(2L), any(), any(), any()))
+                .thenReturn(Collections.nCopies(10001, payout(1, 1, now)));
         assertThatThrownBy(() -> service.forecastAt(2L, today, today, setting, now))
                 .isInstanceOfSatisfying(
                         SettlementRequestException.class,
@@ -196,7 +205,7 @@ class CashFlowForecastServiceTests {
         var day = LocalDate.now(SettlementReportService.ZONE);
         var result = service.forecast(2L, day, day);
         assertThat(result.asOf()).isBeforeOrEqualTo(firstRead.get());
-        verify(repository).sumCompleted(2L, at(setting.baseDate()), result.asOf());
+        verify(repository).sumPaidOut(2L, at(setting.baseDate()), result.asOf());
     }
 
     // cutoff 이후 완료가 스냅샷에 보여도 현재 잔액에서 제외한 지출을 예정에서 누락하지 않는다.
@@ -219,7 +228,7 @@ class CashFlowForecastServiceTests {
     // 현재 잔액도 유입과 지출을 모두 반영한 식의 최종 값으로 범위를 검사한다.
     @Test
     void forecast_whenActualAmountsOffsetAtSafeLimit_returnsSafeCurrentBalance() {
-        when(repository.sumCompleted(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
+        when(repository.sumPaidOut(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
         when(repository.sumPaidExpenses(eq(2L), eq(at(setting.baseDate())), any()))
                 .thenReturn(BigDecimal.ONE);
         var result = service.forecastAt(
@@ -230,7 +239,7 @@ class CashFlowForecastServiceTests {
     // 미래 조회 전날 실제 잔액의 미반환 중간 값이 상한을 넘어도 이월 후 시작 잔액을 안전하게 반환한다.
     @Test
     void forecast_whenUnreturnedInitialBalanceExceedsLimit_offsetsCarryBeforeValidation() {
-        when(repository.sumCompleted(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
+        when(repository.sumPaidOut(eq(2L), eq(at(setting.baseDate())), any())).thenReturn(BigDecimal.ONE);
         when(repository.sumPaidExpenses(2L, at(setting.baseDate()), now)).thenReturn(BigDecimal.ONE);
         var expense = mock(PlannedExpense.class);
         when(expense.getExpenseId()).thenReturn(1L);
@@ -249,5 +258,106 @@ class CashFlowForecastServiceTests {
         assertThat(result.periodOpeningBalance()).isEqualTo(9007199254740991L);
         assertThat(result.closingBalance()).isEqualTo(9007199254740991L);
         assertThat(result.carryForwardMovements()).hasSize(1);
+    }
+    // 실제 지급은 원 정산금이 아닌 차감 후 금액만 유입되고 차감 근거를 함께 제공한다.
+    @Test
+    void forecast_whenPayoutDeducted_countsOnlyActualCash() {
+        var p = MerchantPayout.pending(2L, today, now);
+        p.complete(1000, 700, now.minusSeconds(1));
+        org.springframework.test.util.ReflectionTestUtils.setField(p, "payoutId", 9L);
+        when(repository.sumPaidOut(2L, at(setting.baseDate()), now)).thenReturn(BigDecimal.valueOf(300));
+        when(repository.findPaidOut(eq(2L), eq(at(today)), eq(now), any())).thenReturn(List.of(p));
+        var result = service.forecastAt(2L, today, today, setting, now);
+        assertThat(result.currentBalance()).isEqualTo(1300);
+        assertThat(result.totalIncome()).isEqualTo(300);
+        var movement = result.days().getFirst().movements().getFirst();
+        assertThat(movement.source()).isEqualTo("PAYOUT");
+        assertThat(movement.referenceId()).isEqualTo(9L);
+        assertThat(movement.settlementAmount()).isEqualTo(1000);
+        assertThat(movement.refundDeductionAmount()).isEqualTo(700);
+    }
+
+    // 조회 구간 전 지급에서 먼저 회수한 뒤 남은 회수액만 다음 지급에 이월한다.
+    @Test
+    void forecast_whenRecoverySpansDates_carriesDeductionsBeforeRequestedWindow() {
+        when(repository.outstandingRecovery(2L, now)).thenReturn(BigDecimal.valueOf(1500));
+        when(repository.findScheduled(eq(2L), any(), eq(now), any()))
+                .thenReturn(List.of(
+                        settlement(2, 1000, at(today.plusDays(2)), null, null),
+                        settlement(1, 1000, at(today.plusDays(1)), null, null)));
+        var result = service.forecastAt(2L, today.plusDays(2), today.plusDays(2), setting, now);
+        assertThat(result.periodOpeningBalance()).isEqualTo(1000);
+        assertThat(result.totalIncome()).isEqualTo(500);
+        assertThat(result.closingBalance()).isEqualTo(1500);
+        assertThat(result.outstandingRecoveryAmount()).isEqualTo(1500);
+        assertThat(result.projectedRefundDeduction()).isEqualTo(1500);
+        assertThat(result.remainingRecoveryAmount()).isZero();
+        assertThat(result.carryForwardMovements()).singleElement().satisfies(m -> {
+            assertThat(m.amount()).isZero();
+            assertThat(m.refundDeductionAmount()).isEqualTo(1000);
+        });
+        assertThat(result.days().getFirst().movements())
+                .singleElement()
+                .satisfies(m -> assertThat(m.refundDeductionAmount()).isEqualTo(500));
+    }
+
+    // 유입이 없으면 현재 잔액에서 환불을 다시 빼지 않고 향후 회수액으로 유지한다.
+    @Test
+    void forecast_whenNoIncome_preservesDebtWithoutNegativeCash() {
+        when(repository.outstandingRecovery(2L, now)).thenReturn(BigDecimal.valueOf(1500));
+        var result = service.forecastAt(2L, today, today, setting, now);
+        assertThat(result.currentBalance()).isEqualTo(1000);
+        assertThat(result.closingBalance()).isEqualTo(1000);
+        assertThat(result.projectedRefundDeduction()).isZero();
+        assertThat(result.remainingRecoveryAmount()).isEqualTo(1500);
+    }
+
+    // 마감한 당일 지급에 늦게 온 정산은 당일 재지급 대신 다음 배치로 예측한다.
+    @Test
+    void forecast_whenTodayAlreadySealed_defersLateSettlement() {
+        when(repository.findPaidOut(eq(2L), eq(at(today)), eq(now), any()))
+                .thenReturn(List.of(payout(1, 0, now.minusSeconds(1))));
+        when(repository.findScheduled(eq(2L), any(), eq(now), any()))
+                .thenReturn(List.of(settlement(3, 500, at(today), null, null)));
+        var result = service.forecastAt(2L, today, today.plusDays(1), setting, now);
+        assertThat(result.overdueIncome()).isZero();
+        assertThat(result.days().getFirst().scheduledIncome()).isZero();
+        assertThat(result.days().getLast().scheduledIncome()).isEqualTo(500);
+    }
+
+    // 총 채무가 JavaScript 정밀도 범위를 넘으면 잘못된 금액을 반환하지 않는다.
+    @Test
+    void forecast_whenDebtExceedsSafeInteger_returns422() {
+        when(repository.outstandingRecovery(2L, now)).thenReturn(new BigDecimal("18446744073709551614"));
+        assertThatThrownBy(() -> service.forecastAt(2L, today, today, setting, now))
+                .isInstanceOfSatisfying(
+                        SettlementRequestException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(422));
+    }
+    // 회수로 입금이 0원이 되면 그 사실이 부족 잔액과 원인 항목에 그대로 드러난다.
+    @Test
+    void forecast_whenRefundConsumesIncome_explainsShortageWithoutDoubleExpense() {
+        when(repository.outstandingRecovery(2L, now)).thenReturn(BigDecimal.valueOf(1500));
+        when(repository.findScheduled(eq(2L), any(), eq(now), any()))
+                .thenReturn(List.of(settlement(1, 1000, at(today.plusDays(1)), null, null)));
+        var expense = mock(PlannedExpense.class);
+        when(expense.getExpenseId()).thenReturn(3L);
+        when(expense.getTitle()).thenReturn("임대료");
+        when(expense.getExpenseDate()).thenReturn(today.plusDays(1));
+        when(expense.getAmount()).thenReturn(1200L);
+        when(repository.findExpenses(eq(2L), any(), any(), eq(today), any(), any()))
+                .thenReturn(List.of(expense));
+        var result = service.forecastAt(2L, today, today.plusDays(1), setting, now);
+        assertThat(result.totalIncome()).isZero();
+        assertThat(result.totalExpenses()).isEqualTo(1200);
+        assertThat(result.maximumShortage()).isEqualTo(200);
+        assertThat(result.firstShortageDate()).isEqualTo(today.plusDays(1));
+        assertThat(result.remainingRecoveryAmount()).isEqualTo(500);
+        assertThat(result.days().getLast().movements()).anySatisfy(m -> {
+            assertThat(m.source()).isEqualTo("SETTLEMENT");
+            assertThat(m.amount()).isZero();
+            assertThat(m.settlementAmount()).isEqualTo(1000);
+            assertThat(m.refundDeductionAmount()).isEqualTo(1000);
+        });
     }
 }
