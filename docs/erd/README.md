@@ -389,6 +389,7 @@ P1 사용자가 #525 초안의 저장 구조와 저장소 ERD·ADR 선행 구현
 | occurred_at | DATETIME(6) NOT NULL | UTC, 이벤트와 동일한 마이크로초 |
 
 `idx_operator_access_denials_user_time(user_id, occurred_at)`와 거절 유형 CHECK를 둔다.
+#528은 [새 인덱스 migration](../../backend/src/main/resources/db/migration/V20261104_195051__index_operator_access_denial_retention.sql)으로 `idx_operator_access_denials_retention(occurred_at, denial_id)`를 추가한다. 사용자 조건 없이 만료 시각 범위·처리 순서로 검색하는 IP 정리 배치를 지원한다. 기존 테이블 생성 migration·컬럼·행 데이터는 변경하지 않는다.
 login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계정 값으로 이벤트에만 전달한다.
 `client_ip`는 발생 후 1년 보관하고 NULL 처리한다. 원본 행은 조사 근거이므로 IP 정리 작업에서 삭제하지 않는다.
 행 보관 기간은 조사 기록 정책으로 따로 정하며, 기존 90일 행 삭제 제안은 사용자 결정으로 대체했다.
