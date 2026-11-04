@@ -249,7 +249,8 @@ class ReleaseTests(unittest.TestCase):
                 self.assertFalse(any(args[:3] == ('docker', 'image', 'tag') for args in self.docker.calls))
 
     def test_missing_or_duplicate_image_tag_never_updates_records(self):
-        for data in [b'PASSWORD=$secret\n', ('IMAGE_TAG=sha-' + SHA + '\n').encode() * 2]:
+        for data in [b'PASSWORD=$secret\n', ('IMAGE_TAG=sha-' + SHA + '\n').encode() * 2,
+                     ('IMAGE_TAG=sha-' + SHA + '\nIMAGE_TAG=invalid\rvalue\n').encode()]:
             with self.subTest(data=data):
                 (self.root / '.env').write_bytes(data)
                 with self.assertRaisesRegex(release.Rejected, '정확히 하나'):

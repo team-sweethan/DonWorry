@@ -161,6 +161,8 @@ def write_deployment_file(path, data):
 
 
 def image_tag(data):
+    require(len(re.findall(rb'^IMAGE_TAG=', data, re.MULTILINE)) == 1,
+            'IMAGE_TAG 설정이 정확히 하나여야 함')
     matches = list(re.finditer(rb'^IMAGE_TAG=([^\r\n]*)(?=\r?$)', data, re.MULTILINE))
     require(len(matches) == 1, 'IMAGE_TAG 설정이 정확히 하나여야 함')
     tag = matches[0].group(1)
