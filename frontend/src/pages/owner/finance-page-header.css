@@ -141,10 +141,6 @@
   font-size: 28px;
   color: #211d16;
 }
-.finance-surface .finance-current-balance strong {
-  font-weight: 800;
-  color: #211d16;
-}
 
 .finance-period .finance-period-actions .ant-btn {
   height: 46px;

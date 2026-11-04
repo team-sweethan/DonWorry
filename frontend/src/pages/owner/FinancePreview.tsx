@@ -261,17 +261,6 @@ export function FinancePreview() {
             />
           ) : (
             <>
-              <div className="finance-current-balance">
-                <div>
-                  <small>{today} 오늘 계산 잔액</small>
-                  <strong>{money(result.currentBalance)}</strong>
-                  <p>
-                    시작 잔액 {money(state.opening)} ＋ 실제 지급 {money(result.completedIncome)} −
-                    지출 완료 {money(result.paidExpenses)}
-                  </p>
-                </div>
-                <Button onClick={() => manage('balance')}>최초 설정 확인</Button>
-              </div>
               {result.overdue.length > 0 && (
                 <Alert
                   type="warning"
@@ -345,6 +334,11 @@ export function FinancePreview() {
                 }}
                 recovery={result.recovery}
                 currentBalance={result.currentBalance}
+                balanceBasis={{
+                  opening: state.opening!,
+                  income: result.completedIncome,
+                  expenses: result.paidExpenses,
+                }}
                 days={result.days}
                 incomes={result.projected.map((e) => ({
                   id: e.id,

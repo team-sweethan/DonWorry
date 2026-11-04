@@ -30,7 +30,6 @@ import {
   financeErrorMessage,
   financeWriteErrorMessage,
   forecastView,
-  koreanTime,
   managementRows,
   money,
   movementLabel,
@@ -234,18 +233,6 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       {forecast.status === 'loading' && <FinanceLoading />}
       {result && view && (
         <>
-          <div className="finance-current-balance">
-            <div>
-              <small>{today} 현재 계산 잔액</small>
-              <strong>{money(result.currentBalance)}</strong>
-              <p>
-                시작 잔액 {money(result.openingBalance)} ＋ 실제 지급{' '}
-                {money(result.completedIncomeSinceBase)} − 실제 지출{' '}
-                {money(result.paidExpensesSinceBase)}
-              </p>
-              <small>계산 기준: {koreanTime(result.asOf)}</small>
-            </div>
-          </div>
           {!result.batchEnabled && (
             <Alert
               type="warning"

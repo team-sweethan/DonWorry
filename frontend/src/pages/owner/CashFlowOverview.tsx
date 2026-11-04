@@ -1,4 +1,4 @@
-import { financeTotal, koreanToday } from './financeView'
+import { financeTotal, koreanToday, koreanTime } from './financeView'
 import './payout-ledger.css'
 import { loanRequirement } from './loanForecast'
 import type { CashFlowForecast } from '../../api/finance'
@@ -65,6 +65,7 @@ export function CashFlowOverview({
   onDetails,
   preview = false,
   currentBalance,
+  balanceBasis,
   summary,
   capturedAt,
   ownerScope,
@@ -83,6 +84,7 @@ export function CashFlowOverview({
   costs: ForecastSource[]
   preview?: boolean
   currentBalance?: number
+  balanceBasis?: { opening: number; income: number; expenses: number }
   summary?: CashFlowForecast
   capturedAt?: string
   ownerScope?: string
@@ -90,6 +92,10 @@ export function CashFlowOverview({
   onDetails: (date: string) => void
 }) {
   const [selected, setSelected] = useState(graphDate ?? '')
+  const selectDate = (date: string) => {
+    setSelected(date)
+    onGraphDateChange?.(date)
+  }
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
   const evidenceRef = useRef<HTMLElement>(null)
@@ -115,6 +121,13 @@ export function CashFlowOverview({
         remaining: summary.remainingRecoveryAmount,
       }
     : recovery
+  const balanceCalculation = summary
+    ? {
+        opening: summary.openingBalance,
+        income: summary.completedIncomeSinceBase,
+        expenses: summary.paidExpensesSinceBase,
+      }
+    : balanceBasis
   const deduction = financeTotal(dayIncome.map((e) => e.refundDeductionAmount ?? 0))
   const originalIncome = financeTotal(dayIncome.map((e) => e.settlementAmount ?? e.amount))
   const incomeMatches = dayIncome.reduce((sum, e) => sum + e.amount, 0) === incoming
@@ -159,6 +172,17 @@ export function CashFlowOverview({
             <span>{label}</span>
             <strong>{money(Number(amount))}</strong>
             <small>{note}</small>
+            {index === 0 && balanceCalculation && (
+              <details className="cashflow-balance-basis">
+                <summary>계산 근거</summary>
+                <p>
+                  시작 잔액 {money(balanceCalculation.opening)} ＋ 실제 지급{' '}
+                  {money(balanceCalculation.income)} − 실제 지출 완료{' '}
+                  {money(balanceCalculation.expenses)}
+                </p>
+                {summary && <small>계산 기준: {koreanTime(summary.asOf)}</small>}
+              </details>
+            )}
           </section>
         ))}
       </div>
@@ -231,7 +255,7 @@ export function CashFlowOverview({
           <button
             className="cashflow-reason-link"
             onClick={() => {
-              setSelected(firstShortage.date)
+              selectDate(firstShortage.date)
               evidenceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }}
           >
@@ -268,10 +292,7 @@ export function CashFlowOverview({
           selectedDate={active.date}
           minSelectableDate={minGraphDate}
           maxSelectableDate={maxGraphDate}
-          onSelect={(date) => {
-            setSelected(date)
-            onGraphDateChange?.(date)
-          }}
+          onSelect={selectDate}
         />
       </section>
       <section
