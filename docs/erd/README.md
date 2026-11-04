@@ -190,7 +190,7 @@ Notion P1 ERD를 후속 반영하도록 승인했다. Notion 최신 내용 확�
 정확한 컬럼·NULL·제약·인덱스는 [승인한 스키마](../identity/147-login-history-design.md#2-p1-스키마-계약)를 따른다.
 P1 `login_histories`만 추가하고 같은 P1 `platform_users.user_id`를 물리 FK로 참조한다.
 기존 계정·관리자 변경 이력·다른 담당 테이블은 바꾸지 않는다.
-이력은 90일 후 물리 삭제하며 금융·조사 기록의 삭제 금지와는 별개다.
+이력은 #528 개정에 따라 1년 후 물리 삭제하며 금융·조사 기록의 삭제 금지와는 별개다. 목록은 최근 90일을 유지한다.
 상세 정책·대안·영향은 [ADR-0033](../decisions/0033-login-history.md)에 기록한다.
 
 ### 일반 절차
@@ -389,8 +389,9 @@ P1 사용자가 #525 초안의 저장 구조와 저장소 ERD·ADR 선행 구현
 | occurred_at | DATETIME(6) NOT NULL | UTC, 이벤트와 동일한 마이크로초 |
 
 `idx_operator_access_denials_user_time(user_id, occurred_at)`와 거절 유형 CHECK를 둔다.
+#528은 [새 인덱스 migration](../../backend/src/main/resources/db/migration/V20261104_195051__index_operator_access_denial_retention.sql)으로 `idx_operator_access_denials_retention(client_ip, occurred_at)`를 추가한다. 사용자 조건 없이 IP가 남은 만료 행만 찾는 IP 정리 배치를 지원한다. 기존 테이블 생성 migration·컬럼·행 데이터는 변경하지 않는다.
 login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계정 값으로 이벤트에만 전달한다.
 `client_ip`는 발생 후 1년 보관하고 NULL 처리한다. 원본 행은 조사 근거이므로 IP 정리 작업에서 삭제하지 않는다.
 행 보관 기간은 조사 기록 정책으로 따로 정하며, 기존 90일 행 삭제 제안은 사용자 결정으로 대체했다.
-제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. IP 정리·파기 검증은 후속 이슈이며 현재 #525는 INSERT 전용이다.
+제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. #525의 수집·발행에 더해 #528에서 원본 IP 정리를 구현한다. [실행 근거·미검증](../identity/528-access-record-retention.md)을 따른다.
 [ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.

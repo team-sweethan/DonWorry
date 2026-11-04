@@ -355,14 +355,23 @@ class LoginHistoryHttpTests {
         assertThat(count("LOGOUT")).isEqualTo(2);
     }
 
-    // 계정별 조회와 최근 성공은 정확한 90일 경계·미래 기록을 제외하고 삭제 실패 다음 실행도 복구한다
+    // 보관·최근 성공은 1년 경계와 미래를 제외하고 삭제 장애 다음 실행에서 복구한다
     @Test
     void retention_whenAtBoundary_filtersAndDeletesWithRetry() throws Exception {
-        seed(userId, "LOGIN_SUCCESS", start.minus(Duration.ofDays(90)));
-        seed(userId, "LOGIN_FAILURE", start.minus(Duration.ofDays(90)).minusNanos(1000));
-        seed(userId, "LOGIN_FAILURE", start.minus(Duration.ofDays(90)).plusNanos(1000));
+        seed(
+                userId,
+                "LOGIN_SUCCESS",
+                start.atOffset(ZoneOffset.UTC).minusYears(1).toInstant());
+        seed(
+                userId,
+                "LOGIN_FAILURE",
+                start.atOffset(ZoneOffset.UTC).minusYears(1).toInstant().minusNanos(1000));
+        seed(
+                userId,
+                "LOGIN_FAILURE",
+                start.atOffset(ZoneOffset.UTC).minusYears(1).toInstant().plusNanos(1000));
         seed(userId, "LOGIN_SUCCESS", start.plusSeconds(1));
-        assertThat(queries.own(user(), 0, 20).totalElements()).isEqualTo(1);
+        assertThat(queries.own(user(), 0, 20).totalElements()).isZero();
         assertThat(queries.latest(user()).latestSuccess()).isNull();
         var failedOnce = new java.util.concurrent.atomic.AtomicBoolean();
         var faultyTransactions = new PlatformTransactionManager() {
@@ -390,6 +399,30 @@ class LoginHistoryHttpTests {
         assertThat(count("LOGIN_SUCCESS")).isEqualTo(1);
         time.set(start.plusSeconds(1));
         assertThat(queries.latest(user()).latestSuccess()).isNotNull();
+    }
+
+    // 100일 전 성공은 보관·최근 성공에 남지만 본인과 관리자 목록에서는 제외한다
+    @Test
+    void latest_whenSuccessOlderThanListWindow_returnsRetainedSuccess() {
+        var occurredAt = start.minus(Duration.ofDays(100));
+        seed(userId, "LOGIN_SUCCESS", occurredAt);
+        assertThat(queries.latest(user()).latestSuccess().occurredAt()).isEqualTo(occurredAt);
+        assertThat(queries.own(user(), 0, 20).totalElements()).isZero();
+        assertThat(queries.account(user(), userId, 0, 20).totalElements()).isZero();
+        retention.deleteExpired();
+        assertThat(count("LOGIN_SUCCESS")).isEqualTo(1);
+    }
+
+    // 목록만 정확한 90일 경계를 제외하며 보관 작업은 이 기록들을 남긴다
+    @Test
+    void list_whenAtNinetyDayBoundary_keepsRetentionIndependent() {
+        seed(userId, "LOGIN_SUCCESS", start.minus(Duration.ofDays(90)));
+        seed(userId, "LOGIN_FAILURE", start.minus(Duration.ofDays(90)).plusNanos(1000));
+        assertThat(queries.own(user(), 0, 20).totalElements()).isEqualTo(1);
+        assertThat(queries.latest(user()).latestSuccess()).isNotNull();
+        retention.deleteExpired();
+        assertThat(count("LOGIN_SUCCESS")).isEqualTo(1);
+        assertThat(count("LOGIN_FAILURE")).isEqualTo(1);
     }
 
     // 최신순 페이지는 같은 시각에도 PK 역순으로 안정적으로 정렬되고 잘못된 조건은 거절한다
@@ -494,7 +527,8 @@ class LoginHistoryHttpTests {
     // 최근 성공을 보존하지 않는다
     @Test
     void retention_whenOverBatchSize_deletesEveryExpiredKindAndClearsLatest() {
-        var expired = LocalDateTime.ofInstant(start.minus(Duration.ofDays(90)), ZoneOffset.UTC);
+        var expired = LocalDateTime.ofInstant(
+                start.atOffset(ZoneOffset.UTC).minusYears(1).toInstant(), ZoneOffset.UTC);
         jdbc.batchUpdate(
                 "INSERT INTO login_histories(user_id,event_type,occurred_at) VALUES (?, 'LOGIN_FAILURE', ?)",
                 new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
@@ -510,7 +544,10 @@ class LoginHistoryHttpTests {
                         statement.setObject(2, expired);
                     }
                 });
-        seed(userId, "LOGIN_SUCCESS", start.minus(Duration.ofDays(90)));
+        seed(
+                userId,
+                "LOGIN_SUCCESS",
+                start.atOffset(ZoneOffset.UTC).minusYears(1).toInstant());
         jdbc.update(
                 "INSERT INTO login_histories(user_id,event_type,occurred_at,login_reference,logout_scope) VALUES (?, 'LOGOUT', ?, ?, 'ALL')",
                 userId,

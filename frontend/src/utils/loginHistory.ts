@@ -1,3 +1,4 @@
+export const emptyLatestLoginMessage = '최근 1년 내 로그인 기록 없음'
 export const emptyLoginMessage = '최근 90일 내 로그인 기록 없음'
 
 export function loginTime(value: string, compact = false) {
