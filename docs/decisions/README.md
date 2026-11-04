@@ -137,3 +137,5 @@ P1 #481 PR 리뷰 대상: [0074 Jenkins가 승인한 릴리스 묶음으로 VM �
 P1 #482 PR 리뷰 대상: [0075 VM 공통 잠금과 지속 실행 기록으로 배포 중단 확인](0075-deployment-serialization-and-interruption.md) — 제안, 운영 설치·실검증 전.
 
 P6 #507 PR 리뷰 대상: [0076 실제 지급 원장을 잔액 유입의 기준으로 사용](0076-p6-payout-based-cash-flow.md).
+
+P1 #483 PR 리뷰 대상: [0077 배포 전 DB 백업과 승인된 이전 이미지 복구](0077-release-backup-and-image-recovery.md) — 제안, 핵심 기능 합의·운영 검증 전.

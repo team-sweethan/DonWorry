@@ -1,4 +1,4 @@
-# VM1 업데이트 CD (#481 B · #482 C · #499)
+# VM1 업데이트 CD (#481 B · #482 C · #483 D · #499)
 
 **구현 제안·로컬 검증 단계다. 현재 VM1 또는 Jenkins에 설치·적용하지 않았다.**
 기존 `donworry-cd-dryrun` Job은 유지한다. 새 Job은 사람이 `TARGET_SHA`를 지정해
@@ -31,6 +31,7 @@ webhook·SCM polling·main 병합에 따른 운영 배포 자동 시작은 설�
 - [test_release.py](test_release.py): 명령 대역 테스트와 Docker Compose CLI의 구성 왕복 검사.
 - [ADR-0074](../../docs/decisions/0074-approved-release-update.md): 승인 대상·최신성 시점·버린 대안.
 - [ADR-0075](../../docs/decisions/0075-deployment-serialization-and-interruption.md): 공통 잠금·중단 기록·시간 제한·버린 대안.
+- [ADR-0077](../../docs/decisions/0077-release-backup-and-image-recovery.md): 최초 후보·DB 백업·별도 승인 이미지 복구·DB 복원 제한.
 
 운영 스크립트 설치 경로는 `/usr/local/sbin/donworry-release`로 제안한다.
 내용은 `release.py`이며 Python 3.10 이상, Linux `fcntl`, Git, Docker Engine·Compose·Buildx,
@@ -55,19 +56,19 @@ donworry-release reconcile <BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --against curre
    artifact와 승인 화면에 제시한다. `input`의 `submitterParameter`로 실제 승인자를 받는다.
    실행 ID는 Jenkins 빌드 번호와 UUID로 구성한다. Job URL과 빌드 번호는 Jenkins 기록으로 연결된다.
    시간 제한은 전체가 아닌 단계별로 둔다: 준비 30분(공통 잠금 최대 5분 포함), 승인 대기 30분(초과 시 승인 기록 없이 종료),
-   승인 기록 10분, 적용 90분. 늦은 승인이 적용 시간을 줄여 배포 도중 중단되지 않게 한다.
+   승인 기록 10분, 적용 150분. 늦은 승인이 적용 시간을 줄여 배포 도중 중단되지 않게 한다.
 3. `approve`: 묶음·저장 Compose·현재 구성이 같을 때 승인자·시각·실행 ID를 VM에 새로 기록한다.
    구성이나 대상이 바뀌면 새 `prepare`와 새 승인을 받는다. 승인을 덮어쓰지 않는다.
 4. `apply`: 공통 잠금 획득 → 승인·실행 ID·미완료 기록 확인 → 지속 실행 기록 생성 →
    고정 marker·index·child·revision 재검증 → digest로 pull → 구성·DB·marker·이미지·플랫폼·
-   로컬 이미지 재검증 → 마지막 main 조회 → 적용 단계 기록 → 저장된 Compose로
+   로컬 이미지 재검증 → 이전 배포 확인·DB 백업·DB 지문/최종 검증 → 마지막 main 조회 → 적용 단계 기록 → 저장된 Compose로
    backend·ai·nginx만 `up --no-deps --no-build --pull never`.
    이미지 ID는 Docker 이미지 저장 방식에 따라 다르다. 기존 저장소는 config digest,
    containerd 이미지 저장소(`docker info`의 `driver-type io.containerd.snapshotter.*`)는
    pull한 index digest와 비교한다. 실행 컨테이너의 `Image`도 같은 기준으로 대조한다.
    승인 뒤 태그로 이미지를 다시 선택하지 않는다.
 5. Compose 대기 → 실제 컨테이너 config ID와 실행 ref 비교 → Nginx `/healthz`,
-   backend `/api/auth/me`의 200/401/403, AI `/health` 확인 → 승인 digest의 로컬 SHA 태그 지정·대조 →
+   backend `/api/auth/me`의 200/401/403, AI `/health` 확인 → 승인된 핵심 기능 검사 → 승인 digest의 로컬 SHA 태그 지정·대조 →
    `.env`·`backups/deployed-image-tag` 갱신 → 성공 기록.
 
 `apply`는 root 소유 `/srv/donworry/ENABLE_UPDATE_CD` 활성화 파일이 없으면 차단한다.
@@ -86,6 +87,9 @@ donworry-release reconcile <BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --against curre
 | `approval.json` | 묶음 ID·실행 ID·승인자·승인 시각 |
 | `result.json` | 실행 ID·묶음·작업 종류·승인·PID/boot ID·시각·단계/이력·결과 (`running`, `success`, `failed`)·배포 기록 갱신 전후 태그/파일별 상태·예상/성공 후 구성 해시 |
 | `resolution.json` | 운영자·점검 근거 ID·실제 확인 묶음·원래 결과 해시·확인 시각 (명시적 상태 확인 때만) |
+| `database.sql` | 배포 전 DB 덤프. root 전용·Jenkins artifact 업로드 금지. 존재만으로 복원 검증이 아님 |
+| `recovery-approval.json` | 실패 결과 해시·직전 묶음·운영자·근거·복구 승인 시각 |
+| `recovery-attempt.json` | 복구 승인에 연결된 별도 복구 묶음 ID. 승인당 서비스 적용 1회 |
 
 묶음 ID는 전체 `bundle.json`의 SHA256이다. 저장 Compose 해시도 묶음에 포함한다.
 구성 버전은 원본 `.env`·`compose.yaml`·명령 구현 파일·해석된 Compose·읽기 전용 bind 파일의
@@ -156,7 +160,8 @@ helper 직접 호출, 별도 복구 shell을 업데이트 경로로 사용하지
 Compose up 360초(내부 wait 240초), health curl/exec 각 10초다. 변경 명령·pull·원격 조회는
 자동 재시도하지 않는다. 읽기 전용 health만 4초 간격 최대 60회, 전체 300초 예산으로
 재시도한다(마지막 시도 최대 30초 추가). timeout 시 자식 그룹 TERM → 5초 → KILL/회수다.
-백업·복원·업무 기능 검사의 시간/재시도 정책은 #483에서 구현 전 결정한다.
+백업은 900초, 승인된 기능 검사는 60초이며 둘 다 재시도하지 않는다.
+DB 복원 명령은 제공하지 않는다. 세부 정책은 ADR-0077을 따른다.
 
 명령 자식이 잠금 fd를 상속하고 별도 세션에서 실행된다. SSH SIGHUP은 무시한다.
 Jenkins 취소·SSH keepalive 실패(15초 간격 3회)는 VM 작업 종료를 의미하지 않는다.
@@ -210,6 +215,8 @@ result/current 변경은 파일 fsync·rename·디렉터리 fsync로 저장한�
 python3 -m unittest discover -s ops/vm -p 'test_*.py' -v
 python3 -m unittest discover -s .github/scripts -p 'test_release_*.py' -v
 python3 .github/scripts/check_md_links.py
+# 선택: 새 로컬 MariaDB 컨테이너의 fixture만 덤프/복원하고 컨테이너를 정리한다.
+DONWORRY_DB_TEST=1 python3 -m unittest discover -s ops/vm -p 'test_database_integration.py' -v
 ```
 
 첫 명령은 Docker/Git/Compose 서비스 변경을 대체한다. 별도의 Compose 왕복 테스트는
@@ -244,3 +251,93 @@ VM 검증이 필요하다. 실제 VM 갱신·기존 스크립트 실행·운영 
   root 기록 권한을 확인하고 실행 링크·대상 SHA·근거를 남긴다. 로컬 대역 통과로 체크하지 않는다.
 - 마지막 HEAD 조회와 서비스 변경은 원자적이지 않다. 조회 성공 후 적용을 시작하며,
   그 이후 main 변경은 다음 실행에서 처리한다. #461 게시 시점 최신성 보장은 별개다.
+
+## #483 최초 등록·백업·이미지 복구
+
+다음 명령은 서버에서 운영자가 실행할 절차다. 이 문서를 읽거나 로컬 테스트를 실행하는 것으로
+서버에 설치/활성화되지 않는다. 모든 명령은 같은 공통 잠금을 사용한다.
+
+### 적용 전 준비
+
+1. VM 원본·파일 소유/권한·도구 버전·GHCR 인증을 확인하고 새 명령을 설치한다.
+   `.env`, Compose, 읽기 전용 bind, 명령, 다음 기능 검사 파일은 root 소유이며 배포 계정이
+   쓸 수 없어야 한다. 파일 내용을 Jenkins 로그에 붙이지 않는다. #484의 Job/sudo 검토도 필요하다.
+2. 승인된 테스트 환경·데이터와 핵심 기능 시나리오를 합의한다. root 전용
+   `/srv/donworry/functional_check.py`에 그 검사를 구현하고 성공일 때만 종료 코드 0을 반환한다.
+   `/srv/donworry/functional-check.json`에는 아래 계약을 저장한다. 이는 아직 합의되지 않은
+   실제 로그인/결제 시나리오를 대신 승인하는 예제가 아니다. 검사 파일·정책이 없거나 변경되면
+   기존 승인으로 배포할 수 없다. 정책은 배포 적용 전, 실제 검사는 health 후에 확인한다.
+
+   ```json
+   {"environment":"approved-test","test_data":"TEST-DATA-ID","evidence":"APPROVAL-ID"}
+   ```
+
+   테스트 데이터의 범위·검사의 추가 파일/외부 자원도 승인 근거에서 통제한다. 실제 운영
+   결제를 임의로 수행하지 않는다. 이 hook은 합의한 테스트 환경을 위한 것으로, 합의 없이
+   정책값만 넣어 운영 배포를 활성화하지 않는다.
+3. 현재 운영 컨테이너·SHA 기록·DB/Flyway·업무 상태를 확인하고 근거를 남긴 뒤 최초 후보를 등록한다.
+   이 명령은 현재 컨테이너의 이미지 ID/RepoDigest와 registry revision을 대조하고 구성 snapshot을 만든다.
+   main/prod marker를 현재 배포라고 추정하지 않으므로 구버전 SHA도 검증 가능하다.
+
+   ```text
+   donworry-release register-current <CURRENT_SHA> <REGISTRATION_ID> <OPERATOR> --evidence <INCIDENT_ID>
+   ```
+
+   RepoDigest가 없거나 단일 manifest/플랫폼을 확정할 수 없으면 멈춘다. 현재 SHA 태그를 다시
+   pull해서 후보를 만들지 않는다. 실제 이미지 추적과 별도 운영자 판단이 필요하다.
+   등록 결과는 restore_verified=false이며, 서비스 교체나 과거 배포 성공 증명은 아니다.
+   명령/설정 변경 후에는 미해결 실행이 없는 상태에서 같은 절차로 현재 구성을 재등록할 수 있다.
+   기존 `reconcile`로 target을 확인한 묶음도 DB/업무 점검 근거를 남겨 다시 등록한 후 다음 배포를 진행한다.
+4. `ENABLE_UPDATE_CD` 생성/운영 활성화는 별도 승인 대상이다. 활성화 전에 테스트 VM의 정상/실패
+   경로와 실제 백업 파일을 별도 DB에 복원하는 검증을 수행한다. fixture 복원 통과만으로 대신하지 않는다.
+
+### 배포 전 백업
+
+새 prepare/approve/apply 경로는 현재 성공/등록 묶음의 구성·실행 이미지를 먼저 확인한다.
+pull 후 서비스 변경 전에 DB health, Flyway 성공 이력, 지원 DB 객체를 점검하고 백업한다.
+백업 전후/최종 적용 전 DB 지문이 바뀌면 차단한다. 백업 중 DDL·다른 변경 경로를 실행하지 않는다.
+비 InnoDB·뷰·루틴·이벤트는 별도 백업 정책 합의 전 차단한다.
+
+`result.json.backup`의 `status`, `previous_bundle`, `database`, `digest`, `bytes`, 시각을 확인한다.
+running은 강제 중단 가능성, failed는 명령/검증 실패다. 둘 다 복원 가능한 백업으로 취급하지 않는다.
+원래 실패/부분 파일은 보존하며 데이터가 포함된 SQL은 이슈나 Jenkins에 올리지 않는다.
+SQL은 배포 묶음 폴더에 보관하므로 저장 공간·보관 기간·접근 권한·별도 매체 보관을 운영자가 관리한다.
+
+### 실패 후 이미지 복구
+
+1. 기존 중단 확인 절차의 inspect, VM/daemon 작업 종료, Flyway·DB·업무 영향 확인을 수행한다.
+   health/핵심 기능 실패는 자동 rollback 대신 failed/PAUSE_CD로 남는다.
+2. 배포 전 백업 성공과 연결된 직전 묶음을 확인한다. DB 지문이 바뀌거나 migration 실패/부분 적용,
+   호환성 불명, 이전 묶음 없음이면 자동 진행하지 않는다. 별도 운영자 판단으로 넘긴다.
+3. **업무 데이터 호환성·기존 작업 종료·복귀 영향을 점검한 근거**를 남기고 이미지 복구를 별도 승인한다.
+
+   ```text
+   donworry-release approve-recovery <FAILED_BUNDLE_ID> <EXECUTION_ID> <OPERATOR> --evidence <INCIDENT_ID>
+   donworry-release recover <FAILED_BUNDLE_ID> <EXECUTION_ID>
+   ```
+
+   approval은 실패 결과 해시와 이전 묶음을 고정한다. 다른 임의의 태그/묶음으로 바꾸지 못한다.
+   recover는 승인된 이전 snapshot으로 앱 3개만 바꾼다. DB 서비스·SQL·볼륨을 복원하지 않는다.
+   복구도 기동·핵심 기능·DB 지문 검사를 거친다. 원래 실패 결과와 복구 결과는 별개다.
+4. 복구 반환의 bundle_id/execution으로 inspect하고 두 배포 기록·current·resolution·PAUSE_CD를 확인한다.
+   성공 결과 후 current 게시만 끊겼다면 같은 recover가 상태를 재검사하고 게시만 마무리한다.
+   실패/running 복구는 같은 승인으로 Compose를 다시 적용하지 않는다. 잠금/기록 삭제로 우회하지 않는다.
+   원래 묶음에 해결되지 않은 복구 실행이 더 있으면 운영자가 모든 실행을 함께 확인해야 한다.
+
+### DB 복원은 별도 판단
+
+DB 복원 명령은 구현하지 않는다. 이미지 복구 승인으로 DB를 복원하면 안 된다.
+복원이 필요하면 백업 시점 이후 데이터 손실 구간·영향 업무·업무 담당 승인·쓰기 중지 계획·
+복원 파일 해시·별도 DB 복원 검증·전환/검사 계획을 먼저 기록한다.
+Flyway repair/clean, DB 초기화, 볼륨 삭제를 이 절차의 대안으로 사용하지 않는다.
+
+### 검증 범위
+
+`test_recovery.py`는 registry/Docker/업무 검사 대역으로 등록·백업 실패·DB 지문 변경 차단·
+별도 승인 복구·잠금 경합·복구 실패·게시 재개를 검사한다. 기존 배포 단위 검사는 추가 백업/기능
+검사 경계만 대체하며 해당 연결은 이 별도 통합 대역 검사에서 검증한다.
+`test_database_integration.py`는 새 로컬 MariaDB 컨테이너에 fixture DB만 만들고 실제 SQL
+조회·덤프·별도 DB 복원·스키마 변경 탐지를 검사한다. 컨테이너에는 호스트 볼륨/포트/외부 네트워크를
+연결하지 않으며 종료 시 제거한다. 실제 운영 백업 복원·업무 기능·Jenkins/VM 검증은 아니다.
+실제 VM에서는 최초 후보·백업 권한/용량·별도 복원·health/합의한 기능 실패·복구 경합/실패와
+#482의 중단 실험을 검증하고 Jenkins 링크·SHA·근거를 남긴다. 이 전까지 #483을 완료로 닫지 않는다.

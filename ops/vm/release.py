@@ -75,6 +75,12 @@ def platform_name(platform):
 
 
 def command_timeout(args):
+    if args[0] == 'python3' and Path(args[-1]).name == 'functional_check.py':
+        return 60
+    if args[:2] == ('docker', 'compose') and any('exec mariadb-dump ' in a for a in args):
+        return 900
+    if args[:2] == ('docker', 'compose') and 'db-state' in args:
+        return 30
     if args[:2] == ('docker', 'pull'):
         return 600
     if args[0] == 'git' or args[:2] == ('docker', 'buildx'):
@@ -86,11 +92,12 @@ def command_timeout(args):
     return 30
 
 
-def run(*args, pass_fds=()):
+def run(*args, pass_fds=(), output_path=None):
     # Compose 출력/오류에 환경값이 포함될 수 있어 명령 출력은 로그에 재전달하지 않는다.
     try:
         # 부모가 강제 종료돼도 실행 중인 자식이 공통 잠금을 유지한다. SSH 프로세스 그룹과도 분리한다.
-        with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        with subprocess.Popen(args, stdout=subprocess.PIPE if output_path is None else output_path,
+                              stderr=subprocess.PIPE,
                               start_new_session=True, pass_fds=pass_fds) as process:
             try:
                 output, _ = process.communicate(timeout=command_timeout(args))
@@ -187,8 +194,8 @@ class Release:
         self.root = root
         self.lock_fd = None
         self.lock_path = LOCK if root == ROOT else root / 'deploy.lock'
-        self.command = (lambda *args: run(*args, pass_fds=(() if self.lock_fd is None else
-                                                         (self.lock_fd,)))) if command is run else command
+        self.command = (lambda *args, **kwargs: run(*args, pass_fds=(() if self.lock_fd is None else
+                                                         (self.lock_fd,)), **kwargs)) if command is run else command
         self.sleep = sleep
         self.store = root / 'releases'
 
@@ -267,6 +274,11 @@ class Release:
         inputs = {'.env': digest((env_file or self.root / '.env').read_bytes()),
                   'compose.yaml': digest((self.root / 'compose.yaml').read_bytes())}
         inputs['release.py'] = digest(Path(__file__).read_bytes())
+        for name in ['functional-check.json', 'functional_check.py']:
+            path = self.root / name
+            if path.exists():
+                require(path.is_file() and not path.is_symlink(), '기능 검사 파일 형식 오류')
+                inputs[name] = digest(path.read_bytes())
         # 읽기 전용 bind 파일도 승인 구성에 포함한다. DB named volume 내용은 읽지 않는다.
         for service in config['services'].values():
             require('build' not in service and 'env_file' not in service, '미해석 Compose 설정')
@@ -327,12 +339,210 @@ class Release:
                 'config': valid_digest(child['config']['digest'])}
 
     def verify(self, bundle):
-        sha, indexes = self.marker(bundle['marker'])
-        require(sha == bundle['sha'], '승인 SHA와 marker revision 불일치')
+        if bundle.get('origin') == 'observed':
+            sha = bundle['sha']
+            indexes = {s: image['index'] for s, image in bundle['images'].items()}
+        else:
+            sha, indexes = self.marker(bundle['marker'])
+            require(sha == bundle['sha'], '승인 SHA와 marker revision 불일치')
         require(self.platform() == bundle['platform'], '승인 후 VM 플랫폼 변경')
         for service, image in bundle['images'].items():
             require(image == self.image(service, indexes[service], sha, bundle['platform']),
                     '승인 이미지 묶음 불일치')
+
+    def database_state(self):
+        # 출력은 스키마와 Flyway 메타데이터뿐이다. 업무 행/접속 비밀값은 반환하지 않는다.
+        cid = self.compose('ps', '-q', 'db').decode().strip()
+        require(bool(cid), '기존 DB 없음')
+        require(self.json('docker', 'inspect', cid)[0]['State'].get('Health', {}).get('Status') == 'healthy',
+                'DB 비정상: 운영자 판단 필요')
+        sql = """
+SELECT JSON_ARRAY('flyway', installed_rank, version, type, script, checksum, success)
+FROM flyway_schema_history ORDER BY installed_rank;
+SELECT JSON_ARRAY('column', TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_TYPE,
+ IS_NULLABLE, COLUMN_DEFAULT, EXTRA, COLLATION_NAME, GENERATION_EXPRESSION)
+FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, ORDINAL_POSITION;
+SELECT JSON_ARRAY('index', TABLE_NAME, INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME,
+ SUB_PART, INDEX_TYPE) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX;
+SELECT JSON_ARRAY('constraint', TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME,
+ REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME, ORDINAL_POSITION)
+FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION;
+SELECT JSON_ARRAY('table', TABLE_NAME, ENGINE, ROW_FORMAT, TABLE_COLLATION, CREATE_OPTIONS)
+FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME;
+SELECT JSON_ARRAY('trigger', TRIGGER_NAME, EVENT_MANIPULATION, EVENT_OBJECT_TABLE,
+ ACTION_TIMING, ACTION_STATEMENT, ACTION_ORDER, SQL_MODE, DEFINER,
+ CHARACTER_SET_CLIENT, COLLATION_CONNECTION, DATABASE_COLLATION) FROM information_schema.TRIGGERS
+WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME;
+SELECT JSON_ARRAY('partition', TABLE_NAME, PARTITION_NAME, SUBPARTITION_NAME,
+ PARTITION_METHOD, SUBPARTITION_METHOD, PARTITION_EXPRESSION, SUBPARTITION_EXPRESSION,
+ PARTITION_DESCRIPTION) FROM information_schema.PARTITIONS WHERE TABLE_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, PARTITION_ORDINAL_POSITION, SUBPARTITION_ORDINAL_POSITION;
+SELECT JSON_ARRAY('reference', TABLE_NAME, CONSTRAINT_NAME, UPDATE_RULE, DELETE_RULE)
+FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, CONSTRAINT_NAME;
+SELECT JSON_ARRAY('server', VERSION(), DATABASE(), @@lower_case_table_names);
+SELECT JSON_ARRAY('check', TABLE_NAME, CONSTRAINT_NAME, CHECK_CLAUSE)
+FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+ORDER BY TABLE_NAME, CONSTRAINT_NAME;
+SELECT JSON_ARRAY('unsupported',
+ (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()
+  AND (TABLE_TYPE <> 'BASE TABLE' OR ENGINE <> 'InnoDB')),
+ (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE()),
+ (SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()));
+"""
+        raw = self.compose('exec', '-T', 'db', 'sh', '-c',
+                           'export MYSQL_PWD="$DB_MIGRATE_PASSWORD"; '
+                           'exec mariadb -udw_migrate --batch --raw --skip-column-names '
+                           '--database="$MARIADB_DATABASE" -e "$1"', 'db-state', sql)
+        rows = [json.loads(line) for line in raw.decode().splitlines()]
+        history = [row for row in rows if row[0] == 'flyway']
+        require(history and all(row[-1] == 1 for row in history),
+                'Flyway 이력 없음/실패: 운영자 판단 필요')
+        require([r for r in rows if r[0] == 'unsupported'] == [['unsupported', 0, 0, 0]],
+                '비 InnoDB/뷰/루틴/이벤트는 백업 정책 검토 필요')
+        require(any(row[0] == 'column' for row in rows), 'DB 스키마 조회 불완전')
+        return {'fingerprint': digest(encoded(rows)), 'flyway': history, 'checked_at': timestamp()}
+
+    def confirmed_current(self):
+        current = json.loads((self.store / 'current.json').read_bytes())['bundle_id']
+        saved = json.loads((self.store / current / 'bundle.json').read_bytes())
+        folder, bundle = self.load_snapshot(current, saved['execution'])
+        result = json.loads((folder / 'result.json').read_bytes())
+        require(result['status'] == 'success', '복구 후보는 성공 기록 필요')
+        configurations = [bundle['configuration'], result.get('published_configuration')]
+        require(self.configuration()[1] in configurations, '기존 성공 구성과 현재 구성 불일치')
+        self.local_images(bundle, pull=False)
+        self.observed_runtime(bundle, folder)
+        return current, folder, bundle
+
+    @serialized('register-current')
+    def register_current(self, sha, execution, operator, evidence):
+        require(re.fullmatch(r'[0-9a-f]{40}', sha), '현재 SHA 형식 오류')
+        token(execution)
+        token(operator)
+        token(evidence)
+        self.preflight()
+        require(image_tag((self.root / '.env').read_bytes())[0] == 'sha-' + sha, '현재 SHA 기록 불일치')
+        config, version = self.configuration()
+        if (self.store / 'current.json').exists():
+            current = json.loads((self.store / 'current.json').read_bytes())['bundle_id']
+            saved = json.loads((self.store / current / 'bundle.json').read_bytes())
+            previous_folder, previous = self.load_snapshot(current, saved['execution'])
+            previous_result = json.loads((previous_folder / 'result.json').read_bytes())
+            resolved = previous_folder / 'resolution.json'
+            confirmation = json.loads(resolved.read_bytes()) if resolved.exists() else {}
+            require(previous_result['status'] == 'success' or
+                    (confirmation.get('observed_bundle') == current and
+                     confirmation.get('result_digest') == digest((previous_folder / 'result.json').read_bytes())),
+                    '기존 성공/상태 확인 기록 필요')
+            require(previous_result['status'] != 'success' or
+                    version not in [previous['configuration'], previous_result.get('published_configuration')],
+                    '동일한 현재 구성은 이미 등록됨')
+        platform = self.platform()
+        images = {}
+        for service, repo in REPOS.items():
+            cid = self.compose('ps', '-q', service).decode().strip()
+            require(bool(cid), '기존 서비스 없음')
+            container = self.json('docker', 'inspect', cid)[0]
+            local = self.json('docker', 'image', 'inspect', container['Image'])[0]
+            refs = [ref for ref in local.get('RepoDigests', []) if ref.startswith(repo + '@')]
+            require(len(refs) == 1, '기존 이미지 registry digest 없음/중복')
+            images[service] = self.image(service, valid_digest(refs[0].split('@')[1]), sha, platform)
+        bundle = {'schema': 1, 'origin': 'observed', 'sha': sha, 'platform': platform,
+                  'images': images, 'configuration': version, 'execution': execution,
+                  'created_at': timestamp()}
+        resolved = copy.deepcopy(config)
+        for service, image in images.items():
+            resolved['services'][service].update(image=image['repository'] + '@' + image['index'],
+                                                 platform=platform_name(platform), pull_policy='never')
+        bundle['compose_digest'] = digest(encoded(resolved))
+        # write_new는 encoded와 같은 직렬화를 사용한다.
+        bundle_id = digest(encoded(bundle)).split(':')[1]
+        folder = self.store / bundle_id
+        folder.mkdir(parents=True, mode=0o700)
+        sync_directory(self.root)
+        write_new(folder / 'compose.json', resolved)
+        # 저장 직렬화 계약을 ID에 묶는다.
+        require(digest((folder / 'compose.json').read_bytes()) == bundle['compose_digest'],
+                'Compose 직렬화 불일치')
+        write_new(folder / 'bundle.json', bundle)
+        sync_directory(self.store)
+        with self.operation(folder, bundle_id, execution,
+                            {'approver': operator, 'evidence': evidence}, kind='registration') as (result, stage):
+            self.local_images(bundle, pull=False)
+            self.observed_runtime(bundle, folder)
+            result['database'] = self.database_state()
+            result['scope'] = 'observed-images-and-health; restore-not-verified'
+            stage('completed')
+        write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': sha})
+        return {'bundle_id': bundle_id, 'execution': execution, 'status': 'registered',
+                'restore_verified': False}
+
+    def observed_runtime(self, bundle, folder):
+        # 최초 등록 전에는 실행 ref가 SHA 태그일 수 있다. 실행 이미지 ID는 반드시 맞아야 한다.
+        ids = self.image_ids(bundle)
+        for service in REPOS:
+            cid = self.compose('ps', '-q', service, file=folder / 'compose.json').decode().strip()
+            require(bool(cid), '실행 컨테이너 없음')
+            value = self.json('docker', 'inspect', cid)[0]
+            require(value['Image'] == ids[service] and value['State']['Running'], '실행 이미지 불일치')
+        self.health(folder)
+
+    def backup_database(self, folder, result, stage):
+        current, _, _ = self.confirmed_current()
+        before = self.database_state()
+        record = {'status': 'running', 'previous_bundle': current, 'database': before,
+                  'started_at': timestamp(), 'restore_verified': False}
+        result['backup'] = record
+        stage('backing_up')
+        destination = folder / 'database.sql'
+        # SQL은 메모리/로그로 반환하지 않고 root 전용 파일에 직접 쓴다.
+        with destination.open('xb') as output:
+            os.fchmod(output.fileno(), 0o600)
+            args = ('docker', 'compose', '--project-name', 'donworry', '--project-directory',
+                    str(self.root), '--env-file', str(self.root / '.env'), '-f',
+                    str(self.root / 'compose.yaml'), 'exec', '-T', 'db', 'sh', '-c',
+                    'export MYSQL_PWD="$DB_MIGRATE_PASSWORD"; exec mariadb-dump -udw_migrate '
+                    '--single-transaction --quick --triggers --hex-blob "$MARIADB_DATABASE"')
+            self.command(*args, output_path=output)
+            output.flush()
+            os.fsync(output.fileno())
+        require(destination.stat().st_size > 0, '빈 백업: 배포 중단')
+        require(self.database_state()['fingerprint'] == before['fingerprint'],
+                '백업 중 DB 스키마/Flyway 변경: 배포 중단')
+        hasher = hashlib.sha256()
+        with destination.open('rb') as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b''):
+                hasher.update(block)
+        sync_directory(folder)
+        record.update(status='success', file='database.sql', bytes=destination.stat().st_size,
+                      digest='sha256:' + hasher.hexdigest(), finished_at=timestamp())
+        stage('backed_up')
+
+    def functional_policy(self):
+        # 검사 내용·데이터는 운영자가 승인한다. 저장소는 임의 결제 시나리오를 만들지 않는다.
+        policy = json.loads((self.root / 'functional-check.json').read_bytes())
+        require(policy['environment'] == 'approved-test', '승인된 테스트 환경에서만 기능 검사 허용')
+        token(policy['evidence'])
+        token(policy['test_data'])
+        require((self.root / 'functional_check.py').is_file(), '승인된 기능 검사 구현 없음')
+        return policy
+
+    def verify_backup(self, result):
+        require(result['backup']['status'] == 'success' and
+                self.database_state()['fingerprint'] == result['backup']['database']['fingerprint'],
+                '백업 후 DB 변경: 새 배포 금지')
+
+    def functional_check(self, bundle, result, stage):
+        policy = self.functional_policy()
+        require(self.configuration()[1] == bundle['configuration'], '기능 검사 승인 구성 변경')
+        stage('functional_check')
+        self.command('python3', str(self.root / 'functional_check.py'))
+        result['functional_check'] = {'status': 'success', 'evidence': policy['evidence'],
+                                      'test_data': policy['test_data'], 'checked_at': timestamp()}
 
     @serialized('prepare')
     def prepare(self, sha, execution):
@@ -499,6 +709,8 @@ class Release:
             result['status'] = 'success'
         except BaseException:
             result['status'] = 'failed'
+            if result.get('backup', {}).get('status') == 'running':
+                result['backup'].update(status='failed', finished_at=timestamp())
             (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
             sync_directory(self.root)
             raise
@@ -522,15 +734,19 @@ class Release:
                 'before': before, 'intended': 'sha-' + bundle['sha'], 'after': before,
                 'files': {'.env': 'unchanged', 'backups/deployed-image-tag': 'unchanged'}}
             stage('validating')
+            self.functional_policy()
             self.verify(bundle)
             stage('pulling')
             self.local_images(bundle, pull=True)
+            stage('final_validation')
+            self.backup_database(folder, result, stage)
             stage('final_validation')
             self.load(bundle_id, execution)
             self.preflight(exclude=bundle_id)
             self.verify(bundle)
             self.local_images(bundle, pull=False)
             self.compose('config', '--quiet', file=folder / 'compose.json')
+            self.verify_backup(result)
             self.main(bundle['sha'])
             stage('applying')
             # DB는 기존 healthy 인스턴스를 그대로 사용한다. 자동 재시도하지 않는다.
@@ -539,11 +755,139 @@ class Release:
                          file=folder / 'compose.json')
             stage('checking')
             self.runtime(bundle, folder)
+            self.functional_check(bundle, result, stage)
             self.publish_deployment(bundle, result, stage)
             stage('publishing')
             write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': bundle['sha']})
             stage('completed')
         return result
+
+    @serialized('approve-recovery')
+    def approve_recovery(self, bundle_id, execution, operator, evidence):
+        folder, bundle = self.load_snapshot(bundle_id, execution)
+        failed = json.loads((folder / 'result.json').read_bytes())
+        require(failed['status'] != 'success', '성공 배포는 복구 대상이 아님')
+        require(self.unresolved() == [bundle_id], '다른 미완료 실행 확인 필요')
+        backup = failed['backup']
+        require(backup['status'] == 'success', '성공한 배포 전 백업 없음')
+        previous = backup['previous_bundle']
+        require(previous != bundle_id, '복구 대상 오류')
+        old = json.loads((self.store / previous / 'bundle.json').read_bytes())
+        old_folder, old = self.load_snapshot(previous, old['execution'])
+        require(json.loads((old_folder / 'result.json').read_bytes())['status'] == 'success',
+                '이전 성공 기록 없음')
+        require(self.database_state()['fingerprint'] == backup['database']['fingerprint'],
+                'DB 변경/호환성 불명: 이미지 복구 금지, 운영자 판단 필요')
+        record = {'failed_bundle': bundle_id, 'execution': execution, 'previous_bundle': previous,
+                  'result_digest': digest((folder / 'result.json').read_bytes()),
+                  'operator': token(operator), 'evidence': token(evidence),
+                  'approved_at': timestamp(), 'scope': 'images-only; no-database-restore'}
+        write_new(folder / 'recovery-approval.json', record)
+        return record
+
+    @serialized('recover')
+    def recover(self, bundle_id, execution):
+        require((self.root / 'ENABLE_UPDATE_CD').is_file(), '실제 CD 활성화 전')
+        folder, failed_bundle = self.load_snapshot(bundle_id, execution)
+        failed = json.loads((folder / 'result.json').read_bytes())
+        approval = json.loads((folder / 'recovery-approval.json').read_bytes())
+        require(approval['failed_bundle'] == bundle_id and approval['execution'] == execution and
+                approval['result_digest'] == digest((folder / 'result.json').read_bytes()),
+                '복구 승인과 중단 기록 불일치')
+        require(self.unresolved() in ([bundle_id], []), '다른 미완료 실행 확인 필요')
+        previous = approval['previous_bundle']
+        require(previous == failed['backup']['previous_bundle'], '승인 복구 대상 불일치')
+        old = json.loads((self.store / previous / 'bundle.json').read_bytes())
+        old_folder, old = self.load_snapshot(previous, old['execution'])
+        require(json.loads((old_folder / 'result.json').read_bytes())['status'] == 'success',
+                '이전 성공 기록 없음')
+        attempt = folder / 'recovery-attempt.json'
+        current = json.loads((self.store / 'current.json').read_bytes())['bundle_id']
+        recovery_attempt = json.loads(attempt.read_bytes())['bundle_id'] if attempt.exists() else None
+        require(current in {previous, bundle_id, recovery_attempt}, '현재 배포 변경: 오래된 복구 실행 거절')
+        if attempt.exists():
+            recovery_id = recovery_attempt
+            recovered = json.loads((self.store / recovery_id / 'bundle.json').read_bytes())
+            destination, recovered = self.load_snapshot(recovery_id, recovered['execution'])
+            require(recovered['recovery_approval'] == digest(encoded(approval)), '다른 복구 승인')
+            self.finish_recovery(folder, approval, recovered, recovery_id, destination, failed)
+            return {'bundle_id': recovery_id, 'execution': recovered['execution'], 'status': 'success',
+                    'database_restored': False}
+        configuration = self.configuration()[1]
+        require({k: v for k, v in configuration['inputs'].items() if k != '.env'} ==
+                {k: v for k, v in old['configuration']['inputs'].items() if k != '.env'},
+                '기존 Compose/bind/명령 변경: 복구 금지')
+        env = (self.root / '.env').read_bytes()
+        _, (start, end) = image_tag(env)
+        intended_env = env[:start] + ('sha-' + old['sha']).encode() + env[end:]
+        expected = self.planned_configuration(intended_env, old)
+        old_result = json.loads((old_folder / 'result.json').read_bytes())
+        require(expected in [old['configuration'], old_result.get('published_configuration')],
+                '기존 환경/설정과 불일치: 복구 금지')
+        recovery = {**old, 'configuration': configuration,
+                    'execution': 'recovery-' + digest(encoded(approval)).split(':')[1][:32],
+                    'created_at': timestamp(),
+                    'recovery_of': bundle_id, 'recovery_approval': digest(encoded(approval))}
+        recovery_id = digest(encoded(recovery)).split(':')[1]
+        # 승인 1회당 복구도 1회만 시도한다. 새 시각으로 다른 실행을 만들 수 없다.
+        write_new(folder / 'recovery-attempt.json', {'bundle_id': recovery_id})
+        destination = self.store / recovery_id
+        destination.mkdir(mode=0o700)
+        write_new(destination / 'bundle.json', recovery)
+        write_new(destination / 'compose.json', json.loads((old_folder / 'compose.json').read_bytes()))
+        write_new(destination / 'approval.json', approval)
+        (self.root / 'PAUSE_CD').touch(mode=0o600, exist_ok=True)
+        sync_directory(self.root)
+        with self.operation(destination, recovery_id, recovery['execution'], approval,
+                            kind='recovery') as (result, stage):
+            self.verify(old)
+            stage('pulling')
+            self.local_images(old, pull=True)
+            require(self.database_state()['fingerprint'] == failed['backup']['database']['fingerprint'],
+                    'DB 변경/호환성 불명: 복구 중단')
+            require(self.configuration()[1] == configuration, '복구 승인 후 구성 변경')
+            self.local_images(old, pull=False)
+            self.compose('config', '--quiet', file=destination / 'compose.json')
+            stage('applying')
+            self.compose('up', '-d', '--no-deps', '--no-build', '--pull', 'never',
+                         '--wait', '--wait-timeout', '240', 'backend', 'ai', 'nginx',
+                         file=destination / 'compose.json')
+            stage('checking')
+            self.runtime(recovery, destination)
+            self.functional_check(recovery, result, stage)
+            require(self.database_state()['fingerprint'] == failed['backup']['database']['fingerprint'],
+                    '복구 기동 후 DB 변경: 운영자 판단 필요')
+            self.publish_deployment(recovery, result, stage)
+            stage('completed')
+        # 원래 실패 결과를 보존한다. 모든 게시가 끝나기 전에는 PAUSE_CD를 지우지 않는다.
+        self.finish_recovery(folder, approval, recovery, recovery_id, destination, failed)
+        return {'bundle_id': recovery_id, 'execution': recovery['execution'], 'status': 'success',
+                'database_restored': False}
+
+    def finish_recovery(self, folder, approval, recovery, recovery_id, destination, failed):
+        result = json.loads((destination / 'result.json').read_bytes())
+        require(result['status'] == 'success', '복구 미완료/실패: 운영자 판단 필요, 재적용 금지')
+        require(self.unresolved() in ([approval['failed_bundle']], []), '다른 미완료 실행 확인 필요')
+        require(self.configuration()[1] == result['published_configuration'], '복구 후 구성 변경')
+        require(self.database_state()['fingerprint'] == failed['backup']['database']['fingerprint'],
+                '복구 후 DB 변경: 운영자 판단 필요')
+        self.runtime(recovery, destination)
+        self.local_sha_tags(recovery)
+        require(image_tag((self.root / '.env').read_bytes())[0] == 'sha-' + recovery['sha'] and
+                (self.root / 'backups/deployed-image-tag').read_text().strip() == 'sha-' + recovery['sha'],
+                '복구 후 배포 기록 불일치')
+        resolution = {'result_digest': approval['result_digest'],
+                  'observed_bundle': recovery_id, 'operator': approval['operator'],
+                  'evidence': approval['evidence'], 'checked_at': timestamp(), 'kind': 'recovery'}
+        if (folder / 'resolution.json').exists():
+            existing = json.loads((folder / 'resolution.json').read_bytes())
+            require(all(existing[k] == v for k, v in resolution.items() if k != 'checked_at'),
+                    '기존 복구 해제 기록 불일치')
+        else:
+            write_new(folder / 'resolution.json', resolution)
+        write_atomic(self.store / 'current.json', {'bundle_id': recovery_id, 'sha': recovery['sha']})
+        (self.root / 'PAUSE_CD').unlink(missing_ok=True)
+        sync_directory(self.root)
 
     @serialized('inspect')
     def inspect(self, bundle_id, execution):
@@ -626,7 +970,10 @@ class Release:
         require(self.json('docker', 'inspect', cid)[0]['State'].get('Health', {}).get('Status') == 'healthy',
                 '기존 DB 비정상')
         self.local_images(bundle, pull=False)
-        self.runtime(bundle, folder_expected)
+        if bundle.get('origin') == 'observed':
+            self.observed_runtime(bundle, folder_expected)
+        else:
+            self.runtime(bundle, folder_expected)
         # 같은 SHA 재빌드도 digest는 다르다. 태그를 고치지 않고 불일치 시 차단을 유지한다.
         self.local_sha_tags(bundle)
         record = {'bundle_id': bundle_id, 'execution': execution, 'operator': operator,
@@ -682,8 +1029,9 @@ class Release:
 
 def cli():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'approve', 'apply', 'inspect', 'reconcile'])
-    parser.add_argument('target', help='prepare: TARGET_SHA, 그 외: bundle ID')
+    parser.add_argument('action', choices=['prepare', 'approve', 'apply', 'inspect', 'reconcile',
+                                         'register-current', 'approve-recovery', 'recover'])
+    parser.add_argument('target', help='prepare/register-current: SHA, 그 외: bundle ID')
     parser.add_argument('execution', help='Jenkins 또는 수동 실행 식별자')
     parser.add_argument('approver', nargs='?')
     parser.add_argument('--against', choices=['current', 'target'])
@@ -706,6 +1054,12 @@ def cli():
         result = release.apply(args.target, args.execution)
     elif args.action == 'inspect':
         result = release.inspect(args.target, args.execution)
+    elif args.action in {'register-current', 'approve-recovery'}:
+        require(args.approver is not None and args.evidence is not None, '운영자/근거 누락')
+        method = release.register_current if args.action == 'register-current' else release.approve_recovery
+        result = method(args.target, args.execution, args.approver, args.evidence)
+    elif args.action == 'recover':
+        result = release.recover(args.target, args.execution)
     else:
         require(args.approver is not None and args.against is not None and args.evidence is not None,
                 '운영자/확인 대상/수동 점검 근거 누락')

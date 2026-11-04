@@ -85,7 +85,8 @@ pipeline {
         stage('Verify And Update VM1') {
             // 잠금 5분·원격 재검증 2회·pull 3회·Compose/기동 검사의 VM 제한을 포함한다.
             // SSH/이 stage의 중단이 VM 작업 종료를 의미하지 않는다. 자동 재시도하지 않는다.
-            options { timeout(time: 90, unit: 'MINUTES') }
+            // #483: 이전 배포 확인·DB 백업 15분·기능 검사 예산도 포함한다.
+            options { timeout(time: 150, unit: 'MINUTES') }
             steps {
                 script {
                     def result = vmCommand("apply ${env.CD_BUNDLE} ${env.CD_EXECUTION}")
@@ -104,7 +105,7 @@ pipeline {
     post {
         success { echo 'CD_UPDATE_SUCCESS' }
         unsuccessful {
-            echo 'CD_UPDATE_NOT_SUCCESSFUL: SSH/Jenkins 중단만으로 VM 종료·잠금 해제를 판단하지 마세요. releases/<bundle>/result.json 및 PAUSE_CD를 확인하고 donworry-release inspect로 실제 상태를 점검하세요. 자동 재시도·복구 없음.'
+            echo 'CD_UPDATE_NOT_SUCCESSFUL: SSH/Jenkins 중단만으로 VM 종료·잠금 해제를 판단하지 마세요. releases/<bundle>/result.json 및 PAUSE_CD를 확인하고 donworry-release inspect로 실제 상태를 점검하세요. 이미지 복구는 운영자 확인 후 approve-recovery/recover로 별도 승인합니다. DB 복원·자동 재시도·자동 복구 없음.'
         }
     }
 }
