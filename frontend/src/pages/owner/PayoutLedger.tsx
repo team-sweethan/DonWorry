@@ -32,7 +32,7 @@ export function PayoutSummary({ data }: { data: PayoutSummaryData }) {
         [
           '앞으로 회수할 금액',
           data.outstandingRecoveryAmount,
-          '현재 미회수 잔액 · 조회 기간과 별개',
+          '환불로 다음 정산에서 차감될 잔액 · 현재 기준',
           'remaining',
         ],
       ].map(([label, value, note, variant]) => (

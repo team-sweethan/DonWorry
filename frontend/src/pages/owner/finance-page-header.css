@@ -44,3 +44,113 @@
     flex-wrap: wrap;
   }
 }
+.finance-money-input {
+  width: min(100%, 380px);
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.finance-money-input .ant-input-number {
+  width: 100%;
+  min-width: 0;
+}
+.finance-money-input .ant-input-number-input {
+  height: 42px;
+  font-size: 18px;
+}
+.finance-recurring-amount-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  width: 100%;
+  align-items: start;
+}
+.finance-recurring-amount-row .finance-money-input {
+  width: 100%;
+}
+.finance-surface {
+  color: #30291f;
+  background: #faf8f2;
+}
+.dw-main:has(.finance-surface) {
+  background: #faf8f2;
+}
+.stl-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding: 0 24px 0 20px;
+}
+.stl-detail .stl-preview-heading h3 {
+  margin: 0;
+  line-height: 28px;
+}
+.stl-preview-heading .stl-expense-heading {
+  margin-top: 0;
+}
+.finance-period-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.finance-trend-detail label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.finance-dialog .ant-input:focus,
+.finance-dialog .ant-input:hover,
+.finance-drawer .ant-input:focus,
+.finance-drawer .ant-input:hover {
+  border-color: #ad7c18;
+  box-shadow: 0 0 0 2px #ad7c181a;
+}
+.stl-more-button.ant-btn {
+  height: 28px;
+  padding: 0 6px;
+  margin-left: auto;
+  border-radius: 4px;
+  color: #514b40;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #d5d0c7;
+  background: white;
+  box-shadow: 0 1px 3px #00000012;
+}
+.stl-more-button.ant-btn:hover {
+  background: #f4f2ee;
+  color: #30291f;
+  text-decoration: underline;
+}
+.finance-surface h1,
+.finance-surface h2 {
+  color: #211d16;
+}
+.finance-surface h2 {
+  font-weight: 750;
+}
+.finance-surface .cashflow-summary-grid strong {
+  font-weight: 800;
+  font-size: 30px;
+}
+.finance-surface .cashflow-loan-card h2 {
+  color: white;
+}
+.finance-surface .cashflow-section-head > strong {
+  font-size: 28px;
+  color: #211d16;
+}
+.finance-surface .finance-current-balance strong {
+  font-weight: 800;
+  color: #211d16;
+}
+
+.finance-period .finance-period-actions .ant-btn {
+  height: 46px;
+  min-width: 180px;
+  padding: 0 24px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 8px;
+}

@@ -1,4 +1,5 @@
 import { Alert, Button, Skeleton } from 'antd'
+import type { ReactNode } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import type { FinancePeriod } from './financeView'
 import { financeErrorMessage, koreanTime } from './financeView'
@@ -44,11 +45,13 @@ export function FinancePeriodControl({
   onChange,
   min,
   max,
+  actions,
 }: {
   value: FinancePeriod
   onChange: (value: FinancePeriod) => void
   min?: string
   max?: string
+  actions?: ReactNode
 }) {
   return (
     <div className="finance-period">
@@ -75,6 +78,7 @@ export function FinancePeriodControl({
           onChange={(e) => onChange({ ...value, to: e.target.value })}
         />
       </label>
+      {actions && <div className="finance-period-actions">{actions}</div>}
     </div>
   )
 }

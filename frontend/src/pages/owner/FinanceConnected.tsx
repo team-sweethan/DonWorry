@@ -24,6 +24,8 @@ import {
 } from './FinanceControls'
 import {
   MAX_FINANCE_AMOUNT,
+  formatWonInput,
+  parseWonInput,
   financeErrorMessage,
   financeWriteErrorMessage,
   forecastView,
@@ -99,6 +101,10 @@ function InitialBalance({
         >
           <InputNumber
             aria-label="최초 시작 잔액"
+            className="finance-money-input"
+            formatter={formatWonInput}
+            parser={parseWonInput}
+            suffix="원"
             min={0}
             max={MAX_FINANCE_AMOUNT}
             precision={0}
@@ -185,15 +191,17 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         >
           다음 달 예측
         </Button>
-        <Button disabled={!setting} onClick={() => setManage(true)}>
-          잔액·지출 설정
-        </Button>
       </div>
       <FinancePeriodControl
         value={period}
         onChange={setPeriod}
         min={setting?.baseDate}
         max={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
+        actions={
+          <Button type="primary" disabled={!setting} onClick={() => setManage(true)}>
+            잔액·지출 설정
+          </Button>
+        }
       />
       {!valid && (
         <Alert
@@ -254,7 +262,6 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
             summary={result}
             capturedAt={result.asOf}
             ownerScope={ownerScope}
-            onManage={() => setManage(true)}
             onDetails={setDetails}
           />
           {result.carryForwardMovements.length > 0 && (
