@@ -44,6 +44,9 @@ class AiServerSecurityTests {
     static final String HEADER = AiServerKeyFilter.API_KEY_HEADER;
 
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     UserDetailsService userDetailsService;
 
     @MockitoBean

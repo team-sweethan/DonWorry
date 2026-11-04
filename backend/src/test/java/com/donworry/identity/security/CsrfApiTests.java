@@ -48,6 +48,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 })
 class CsrfApiTests {
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     com.donworry.identity.service.LoginHistoryService loginHistories;
 
     @MockitoBean

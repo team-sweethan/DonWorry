@@ -185,11 +185,7 @@ public class SecurityConfig {
                         // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
                         .ignoringRequestMatchers("/internal/**"))
                 // 권한 규칙은 정확한 메서드·경로로만 적는다. 같은 접두사로 새 API를 만들어도 저절로 열리지 않는다 (ADR-0067)
-                .authorizeHttpRequests(auth -> auth.requestMatchers(
-                                paths.matcher(HttpMethod.GET, "/api/owner/integration"),
-                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys"),
-                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys/reveal"),
-                                paths.matcher(HttpMethod.POST, "/api/owner/integration/keys/reissue"))
+                .authorizeHttpRequests(auth -> auth.requestMatchers(OperatorAccessRoutes.integration())
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -250,10 +246,7 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/v1/settlements/cash-flow/forecast",
-                                "/api/v1/settlements/cash-flow/shortages")
+                        .requestMatchers(HttpMethod.GET, OperatorAccessRoutes.forecastPaths())
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -264,27 +257,9 @@ public class SecurityConfig {
                                     && user.permissions() != null
                                     && user.permissions().contains("FINANCE_VIEW"));
                         })
-                        .requestMatchers(
-                                "/api/v1/settlements/cash-flow/forecast", "/api/v1/settlements/cash-flow/shortages")
+                        .requestMatchers(OperatorAccessRoutes.forecastPaths())
                         .denyAll()
-                        .requestMatchers(
-                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/report"),
-                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/settings"),
-                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/settings"),
-                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/expenses"),
-                                paths.matcher(HttpMethod.POST, "/api/v1/settlements/cash-flow/expenses"),
-                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/expenses/{id}"),
-                                paths.matcher(HttpMethod.DELETE, "/api/v1/settlements/cash-flow/expenses/{id}"),
-                                paths.matcher(HttpMethod.PUT, "/api/v1/settlements/cash-flow/expenses/{id}/completion"),
-                                paths.matcher(HttpMethod.GET, "/api/v1/settlements/cash-flow/recurring-expenses"),
-                                paths.matcher(HttpMethod.POST, "/api/v1/settlements/cash-flow/recurring-expenses"),
-                                paths.matcher(
-                                        HttpMethod.GET, "/api/v1/settlements/cash-flow/recurring-expenses/occurrences"),
-                                paths.matcher(
-                                        HttpMethod.DELETE, "/api/v1/settlements/cash-flow/recurring-expenses/{id}"),
-                                paths.matcher(
-                                        HttpMethod.PUT,
-                                        "/api/v1/settlements/cash-flow/recurring-expenses/{id}/occurrences/{date}/completion"))
+                        .requestMatchers(OperatorAccessRoutes.finance())
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             // FINANCE_VIEW는 사장님의 읽기·쓰기 공통 권한이다 (#240).
@@ -382,9 +357,7 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && user.role() == UserRole.SECURITY_STAFF);
                         })
-                        .requestMatchers(
-                                paths.matcher(HttpMethod.GET, "/api/merchant/security-cases"),
-                                paths.matcher(HttpMethod.GET, "/api/merchant/security-cases/{caseId}"))
+                        .requestMatchers(OperatorAccessRoutes.cases())
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

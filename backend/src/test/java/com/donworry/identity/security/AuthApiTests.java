@@ -61,6 +61,9 @@ import tools.jackson.databind.json.JsonMapper;
 })
 class AuthApiTests {
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     com.donworry.identity.service.LoginHistoryService loginHistories;
 
     @MockitoBean

@@ -38,6 +38,9 @@ import org.springframework.web.bind.annotation.RestController;
 })
 class OwnerFinanceSecurityTests {
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     UserDetailsService userDetailsService;
 
     @MockitoBean

@@ -33,6 +33,9 @@ class FdsEvaluationHttpSecurityTests {
     MockMvc mvc;
 
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     UserDetailsService users;
 
     @MockitoBean
