@@ -20,3 +20,10 @@ jobs:
           python-version: '3.13'
       - run: docker compose version
       - run: python3 -m unittest discover -s ops/vm -p 'test_*.py' -v
+      - run: docker pull mariadb:11.8
+        timeout-minutes: 5
+      - name: Isolated MariaDB fixture backup and restore
+        env:
+          DONWORRY_DB_TEST: '1'
+        run: python3 -m unittest discover -s ops/vm -p 'test_database_integration.py' -v
+        timeout-minutes: 5

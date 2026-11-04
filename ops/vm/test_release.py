@@ -74,10 +74,15 @@ class Docker:
                                                  'config': {'digest': release.digest(release.encoded(labels))}})
         self.configs[f'{release.MARKER}@{self.prod}'] = {'config': {'Labels': labels}}
 
-    def __call__(self, *args):
+    def __call__(self, *args, output_path=None):
         self.calls.append(args)
         if self.fail and self.fail(args):
             raise release.Rejected('원격 호출 실패')
+        if output_path is not None:
+            output_path.write(b'-- test-only database dump\n')
+            return None
+        if args[0] == 'python3':
+            return b''
         if args[0] == 'git':
             return f'{self.main}\trefs/heads/main\n'.encode()
         if args[:2] == ('docker', 'info'):
@@ -99,6 +104,10 @@ class Docker:
             self.on_pull()
             return b''
         if args[:3] == ('docker', 'image', 'inspect'):
+            if args[-1].startswith('sha256:'):
+                for ref, item in self.local.items():
+                    if '@' in ref and item['Id'] == args[-1]:
+                        return release.encoded([{**item, 'RepoDigests': [ref]}])
             if args[-1] not in self.local:
                 raise release.Rejected('외부 명령 실패: docker (출력 생략)')
             return release.encoded([self.local[args[-1]]])
@@ -110,10 +119,15 @@ class Docker:
             if cid == 'db-container':
                 return release.encoded([{'State': {'Health': {'Status': 'healthy'}}}])
             service = cid.removesuffix('-container')
-            selected = self.saved_compose['services'][service]['image']
+            selected = (self.saved_compose['services'][service]['image'] if hasattr(self, 'saved_compose')
+                        else release.REPOS[service] + ':sha-' + SHA)
             return release.encoded([{'Image': 'wrong' if self.runtime_bad else self.local[selected]['Id'],
                                      'State': {'Running': True}, 'Config': {'Image': selected}}])
         if args[:2] == ('docker', 'compose'):
+            if 'db-state' in args:
+                return b'\n'.join(release.encoded(row) for row in getattr(self, 'database_rows', [
+                    ['flyway', 1, '1', 'SQL', 'V1__test.sql', 123, 1],
+                    ['column', 'test', 'id', 1, 'bigint'], ['unsupported', 0, 0, 0]]))
             file = Path(args[args.index('-f') + 1])
             command = args[args.index('-f') + 2:]
             if command == ('config', '--format', 'json'):
@@ -133,6 +147,7 @@ class Docker:
             if command[:2] == ('ps', '-q'):
                 return (command[2] + '-container').encode()
             if command[:1] == ('up',):
+                getattr(self, 'on_up', lambda: None)()
                 return b''
             if command[:4] == ('exec', '-T', 'nginx', 'sh'):
                 return b'HTTP/1.1 500 Error' if self.runtime_health_bad else b'HTTP/1.1 401 Unauthorized\n'
@@ -173,6 +188,14 @@ class ReleaseTests(unittest.TestCase):
             self.docker.local[ref.split('@', 1)[0] + ':sha-' + SHA] = image
         self.sleeps = []
         self.cd = release.Release(self.root, self.docker, self.sleeps.append)
+        # #481/#482/#499의 단위 검사는 백업/업무 검사 경계를 대체한다.
+        # 실제 연결은 test_recovery.py의 별도 통합 대역 검사에서 확인한다.
+        self.recovery_patches = [mock.patch.object(self.cd, name) for name in
+                                 ['backup_database', 'verify_backup', 'functional_check', 'functional_policy',
+                                  'confirmed_current']]
+        for patch in self.recovery_patches:
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def prepare(self):
         return self.cd.prepare(SHA, EXECUTION)['bundle_id']
@@ -460,6 +483,11 @@ sys.path.insert(0, sys.argv[1])
 from test_release import Docker, release
 root = Path(sys.argv[2])
 release.os.fchown = lambda *args: None
+release.Release.backup_database = lambda *args: None
+release.Release.functional_check = lambda *args: None
+release.Release.functional_policy = lambda *args: None
+release.Release.confirmed_current = lambda *args: None
+release.Release.verify_backup = lambda *args: None
 sync = release.sync_directory
 def killed(path):
     sync(path)
