@@ -150,15 +150,23 @@ def split_history(
     return burst[:shown], earlier[:shown], later[:shown]
 
 
-def _history_items(payments: list[HistoryPayment]) -> list[dict[str, object]]:
-    return [
-        {
-            "금액(원)": p.amount,
-            "결제 상태": PAYMENT_STATUS_KO.get(p.paymentStatus or "", None),
-            "요청 시각": p.requestedAt,
-        }
-        for p in payments
-    ]
+# with_status=False: 같은 연속 결제는 결제 상태를 주지 않는다 (#542)
+# "모두 매입 완료"를 보고 AI가 평소 결제처럼 정상 근거로 썼다 — 판정 코드는 평소 결제로 치지 않는다
+def _history_items(
+    payments: list[HistoryPayment], with_status: bool = True
+) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for p in payments:
+        item: dict[str, object] = {"금액(원)": p.amount, "요청 시각": p.requestedAt}
+        if with_status:
+            item["결제 상태"] = PAYMENT_STATUS_KO.get(p.paymentStatus or "", None)
+        items.append(item)
+    return items
+
+
+# 사건에 같은 연속 결제(사건 결제 앞뒤 10분 안의 다른 결제)가 있는지 — AI 문장 거르기에 쓴다 (#542)
+def has_burst(case_payments: CasePaymentsTool, history: PaymentHistoryTool | None) -> bool:
+    return history is not None and bool(split_history(case_payments, history)[0])
 
 
 # 근거에 있는 규칙 밖 정황 — 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
@@ -230,7 +238,11 @@ def linked_facts(match: LinkedMatch) -> dict[str, object] | str:
 
 # "고액 결제와 단시간 반복 결제 규칙에 걸렸습니다"처럼 규칙만 되풀이한 위험 근거 (#355, Case 10)
 # 규칙 카드에 이미 있는 내용이라 코드가 뺀다 — 프롬프트로는 안 막혔고, 다시 쓰기보다 싸다
-_RULE_ONLY = re.compile(r"^[^,，]*규칙(?:에|이|을)?\s*(?:걸렸|적중했|적중되었)습니다\.?$")
+# "규칙에 적중하여 의심 신호가 있습니다"도 같은 내용이다 (#542, 로컬 시연 Case 2)
+_RULE_ONLY = re.compile(
+    r"^[^,，]*규칙(?:에|이|을)?\s*"
+    r"(?:(?:걸렸|적중했|적중되었)습니다|(?:걸려|적중하여|적중해)\s*의심\s*신호가\s*있습니다)\.?$"
+)
 
 
 def drop_rule_only(items: list[str]) -> list[str]:
@@ -313,7 +325,7 @@ def facts_json(
             "건수": len(history.payments),
             "더 있음": history.truncated,
             "상태별 건수": history_counts(history),
-            BURST_KEY: _history_items(burst),
+            BURST_KEY: _history_items(burst, with_status=False),
             EARLIER_KEY: _history_items(earlier),
             LATER_KEY: _history_items(later),
         }

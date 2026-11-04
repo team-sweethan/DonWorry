@@ -104,6 +104,14 @@ _JUDGEMENT = re.compile(
     r"(?:검토|해야|하세요|하십시오|하는\s*것이|할\s*(?:것|만하|수\s*있))"
 )
 
+# 같은 연속 결제를 가리키는 말 · 정상 쪽으로 읽히는 말 (#542)
+# 같은 연속 결제는 평소 결제가 아니다
+# 판정 코드는 정상 근거에서 뺐는데 AI 문장만 정상으로 썼다
+# "단시간 반복 결제"는 규칙 이름이라 넣지 않는다
+# ("반복 결제는 정상 고객에게도 나타난다"는 맞는 문장이다)
+_BURST = re.compile(r"연속\s*결제|연달아|잇따라")
+_AS_NORMAL = re.compile(r"매입\s*완료|정상|평소")
+
 # 반복 비교용 — 띄어쓰기 · 문장부호를 빼고 같은 문장인지 본다
 _SPACING = re.compile(r"[\s.,·!?~\"'()\[\]]")
 
@@ -270,7 +278,8 @@ def _key(text: str) -> str:
     return _SPACING.sub("", text)
 
 
-def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
+# burst_in_case: 사건에 같은 연속 결제가 있는지 (#542)
+def sanitize_narrative(narrative: Narrative, burst_in_case: bool = False) -> tuple[Narrative, int]:
     examples = {_key(text) for text in EXAMPLE_SENTENCES}
     removed = 0
 
@@ -285,8 +294,17 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
     def unwanted(text: str) -> bool:
         return _key(text) in examples or bool(_JUDGEMENT.search(text))
 
-    summary = keep(narrative.summary, unwanted)
-    overall = keep(narrative.overallAnalysis, unwanted)
+    # 3) 같은 연속 결제를 정상 쪽으로 쓴 문장 (#542)
+    #    요약 · 종합 분석: 정상으로 읽히는 말이 함께 있을 때 뺀다
+    #    정상 정황: 연속 결제를 말하기만 해도 뺀다 (정상 근거가 될 수 없다)
+    def burst_as_normal(text: str) -> bool:
+        return burst_in_case and bool(_BURST.search(text)) and bool(_AS_NORMAL.search(text))
+
+    def burst_mentioned(text: str) -> bool:
+        return burst_in_case and bool(_BURST.search(text))
+
+    summary = keep(narrative.summary, lambda t: unwanted(t) or burst_as_normal(t))
+    overall = keep(narrative.overallAnalysis, lambda t: unwanted(t) or burst_as_normal(t))
     checks = keep(narrative.additionalChecks, unwanted)
     # 2) 요약 · 종합 분석 문장을 결제별 근거에 그대로 복사한 문장 — 화면에 두 번 나온다 (Case 10)
     # 그 문장뿐이면 남긴다 — 빼면 이유는 "정황이 있다"는데 목록이 비어 보였다 (Case 13)
@@ -302,7 +320,7 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
         payment_id: payment.model_copy(
             update={
                 "riskEvidence": evidence(payment.riskEvidence),
-                "normalEvidence": evidence(payment.normalEvidence),
+                "normalEvidence": evidence(keep(payment.normalEvidence, burst_mentioned)),
                 "unknowns": keep(payment.unknowns, unwanted),
             }
         )
@@ -326,8 +344,9 @@ def emptied_errors(
     narrative: Narrative, recommendations: dict[str, Recommendation] | None = None
 ) -> list[str]:
     emptied = [
-        f"{name}에 남은 문장이 없다. 예시 문장을 베끼거나 판단 문구(승인 취소 · 매입 진행 권고)를 "
-        f"쓰지 말고 이번 [조사 근거]의 사실로 새로 써라"
+        f"{name}에 남은 문장이 없다. 예시 문장을 베끼거나 "
+        f"판단 문구(승인 취소 · 매입 진행 권고)를 쓰거나 같은 연속 결제를 정상으로 쓰지 말고 "
+        f"이번 [조사 근거]의 사실로 새로 써라"
         for name, items in (
             ("summary", narrative.summary),
             ("overallAnalysis", narrative.overallAnalysis),

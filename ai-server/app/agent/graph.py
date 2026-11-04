@@ -14,6 +14,7 @@ from app.agent.assemble import (
     assemble_report,
     fact_numbers,
     facts_json,
+    has_burst,
     outside_rule_evidence,
 )
 from app.agent.evidence import decision_basis
@@ -349,7 +350,8 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
 
         if narrative is not None:
             # 틀리거나 겹친 문장은 다시 쓰게 하지 않고 코드가 뺀다 (#355)
-            narrative, removed = sanitize_narrative(narrative)
+            # 같은 연속 결제를 정상으로 쓴 문장도 뺀다 (#542)
+            narrative, removed = sanitize_narrative(narrative, has_burst(case_payments, history))
             # 빼고 나서 필수 목록이 비었으면 그때만 다시 쓰게 한다 (#355 리뷰)
             errors = emptied_errors(narrative, judged)
             if not errors:
