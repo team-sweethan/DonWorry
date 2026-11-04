@@ -1,3 +1,5 @@
+import { previewPayoutReport } from './settlementPreviewData'
+import { koreanToday } from './financeView'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -28,7 +30,7 @@ export function FinancePreview() {
   const { modal } = App.useApp()
   const { pathname } = useLocation()
   const { user } = useAuth()
-  const today = dayjs().format('YYYY-MM-DD')
+  const today = koreanToday()
   const normalized = normalizeFinancePath(pathname)
   const isFunds = normalized.endsWith('/funds')
   const scope = normalized.startsWith('/dev/') ? 'dev' : `owner:${user?.userId}:${user?.merchantId}`
@@ -139,6 +141,31 @@ export function FinancePreview() {
       )}
       {!isFunds ? (
         <SettlementPrototype
+          todayValue={today}
+          payoutReport={previewPayoutReport(
+            new Date(today + 'T12:00:00'),
+            calendarPeriod.from,
+            calendarPeriod.to,
+            state.todayRefundDeduction,
+            state.recoveryAmount,
+          )}
+          monthSummary={
+            <span>
+              이번 달 누적 실제 지급액{' '}
+              <strong>
+                {money(
+                  previewPayoutReport(
+                    new Date(today + 'T12:00:00'),
+                    dayjs(today).startOf('month').format('YYYY-MM-DD'),
+                    today,
+                    state.todayRefundDeduction,
+                    state.recoveryAmount,
+                  ).paidAmount,
+                )}
+              </strong>{' '}
+              · 1일~오늘, 조회 기간과 별도
+            </span>
+          }
           expenses={calendarExpenses}
           headerActions={headerActions}
           period={calendarPeriod}
@@ -154,7 +181,7 @@ export function FinancePreview() {
           <Alert
             type="info"
             showIcon
-            message="목 데이터 시연 · 정산 완료는 입금된 것으로 간주합니다."
+            message="목 데이터 시연 · 환불 차감 후 지급액만 입금으로 간주합니다."
             description="최초 잔액과 입력은 메뉴 이동 시 유지되며 브라우저 재로드 시 초기화됩니다. 실제 은행 잔액을 조회하지 않습니다."
           />
           {state.opening === null ? (
@@ -165,8 +192,8 @@ export function FinancePreview() {
                 수 없습니다.
               </p>
               <p>
-                시연 데이터에는 오늘 완료된 정산과 재료비 지출 1건이 있습니다. 이 금액들은 시작
-                잔액에 중복 포함하지 마세요.
+                시연 데이터에는 오늘 환불 회수로 지급액이 0원이 된 정산과 재료비 지출 1건이
+                있습니다. 이 금액들은 시작 잔액에 중복 포함하지 마세요.
               </p>
               <label className="finance-field">
                 최초 기준일
@@ -213,7 +240,7 @@ export function FinancePreview() {
                   <small>{today} 오늘 계산 잔액</small>
                   <strong>{money(result.currentBalance)}</strong>
                   <p>
-                    시작 잔액 {money(state.opening)} ＋ 정산 완료 {money(result.completedIncome)} −
+                    시작 잔액 {money(state.opening)} ＋ 실제 지급 {money(result.completedIncome)} −
                     지출 완료 {money(result.paidExpenses)}
                   </p>
                 </div>
@@ -270,14 +297,17 @@ export function FinancePreview() {
               )}
               <CashFlowOverview
                 preview
+                recovery={result.recovery}
                 currentBalance={result.currentBalance}
                 days={result.days}
                 incomes={result.projected.map((e) => ({
                   id: e.id,
                   date: e.date,
-                  title: e.status === 'sch' ? '매입일 기준 정산 예정' : '기존 예상 일정 정산',
+                  title: e.status === 'sch' ? '매입일 기준 예상 지급' : '기존 예상 일정 지급',
+                  settlementAmount: e.settlementAmount,
+                  refundDeductionAmount: e.refundDeductionAmount,
                   amount: e.amount,
-                  note: '정산 완료 시 입금으로 반영 · 예시 데이터',
+                  note: '환불 회수 차감 후 예상 유입 · 예상 배분, 확정 전',
                 }))}
                 costs={result.pending.map((e) => ({
                   id: e.key,
@@ -323,8 +353,8 @@ export function FinancePreview() {
                 <p>기준일: {state.base} 하루 시작 시점</p>
                 <Tag>최초 설정 완료 · 수정 불가</Tag>
                 <p>
-                  오늘 계산 잔액은 정산 완료와 실제 지출 완료만 반영합니다. 예정 금액은 미래
-                  예측에만 반영합니다.
+                  오늘 계산 잔액은 환불 차감 후 실제 지급과 실제 지출 완료만 반영합니다. 예정 금액은
+                  미래 예측에만 반영합니다.
                 </p>
                 <p>시연에서 다시 설정하려면 브라우저 페이지를 다시 불러오세요.</p>
               </section>

@@ -1,3 +1,5 @@
+import { financeTotal } from './financeView'
+import './payout-ledger.css'
 import { loanRequirement } from './loanForecast'
 import type { CashFlowForecast } from '../../api/finance'
 import { useRef, useState } from 'react'
@@ -21,6 +23,8 @@ export type ForecastSource = {
   title: string
   amount: number
   note: string
+  settlementAmount?: number
+  refundDeductionAmount?: number
 }
 const money = (value: number) => `${value.toLocaleString('ko-KR')}원`
 function Sources({ items, empty }: { items: ForecastSource[]; empty: string }) {
@@ -30,6 +34,12 @@ function Sources({ items, empty }: { items: ForecastSource[]; empty: string }) {
       <div>
         <b>{item.title}</b>
         <small>{item.note}</small>
+        {(item.refundDeductionAmount ?? 0) > 0 && (
+          <small className="cashflow-refund-note">
+            원 정산금 {money(item.settlementAmount ?? item.amount)} − 환불 회수{' '}
+            {money(item.refundDeductionAmount!)} = 유입 {money(item.amount)}
+          </small>
+        )}
       </div>
       <strong>{money(item.amount)}</strong>
     </li>
@@ -59,6 +69,7 @@ export function CashFlowOverview({
   summary,
   capturedAt,
   ownerScope,
+  recovery,
 }: {
   days: ForecastDayView[]
   incomes: ForecastSource[]
@@ -68,6 +79,7 @@ export function CashFlowOverview({
   summary?: CashFlowForecast
   capturedAt?: string
   ownerScope?: string
+  recovery?: { outstanding: number; projected: number; remaining: number }
   onManage: () => void
   onDetails: (date: string) => void
 }) {
@@ -85,7 +97,16 @@ export function CashFlowOverview({
   const dayIncome = incomes.filter((e) => e.date === active.date)
   const dayCosts = costs.filter((e) => e.date === active.date)
   const largest = [...dayCosts].sort((a, b) => b.amount - a.amount)[0]
-  const incoming = active.completed + active.scheduled + active.expected
+  const incoming = financeTotal([active.completed, active.scheduled, active.expected])
+  const recoveryInfo = summary
+    ? {
+        outstanding: summary.outstandingRecoveryAmount,
+        projected: summary.projectedRefundDeduction,
+        remaining: summary.remainingRecoveryAmount,
+      }
+    : recovery
+  const deduction = financeTotal(dayIncome.map((e) => e.refundDeductionAmount ?? 0))
+  const originalIncome = financeTotal(dayIncome.map((e) => e.settlementAmount ?? e.amount))
   const incomeMatches = dayIncome.reduce((sum, e) => sum + e.amount, 0) === incoming
   const costsMatch = dayCosts.reduce((sum, e) => sum + e.amount, 0) === active.expenses
   return (
@@ -117,13 +138,13 @@ export function CashFlowOverview({
             currentBalance ?? days[0].opening,
             currentBalance === undefined
               ? '직접 설정한 잔액을 기준으로 계산'
-              : '시작 잔액 + 입금 간주 정산 완료 − 실제 지출 완료',
+              : '시작 잔액 + 환불 차감 후 지급액 − 실제 지출 완료',
           ],
           [
             '기간 내 정산 유입',
             summary?.totalIncome ??
               days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
-            '실제 완료 · 매입일 기준 예정 · 기존 예상 일정 포함',
+            '실제 지급 + 환불 회수 차감 후 예상 지급',
           ],
           [
             '기간 내 지출 (완료·예정)',
@@ -143,6 +164,33 @@ export function CashFlowOverview({
           </section>
         ))}
       </div>
+      {recoveryInfo && (recoveryInfo.outstanding > 0 || recoveryInfo.projected > 0) && (
+        <section className="recovery-notice" aria-label="환불 회수와 이월 안내">
+          <h3>환불 회수가 앞으로의 지급액에 반영돼요</h3>
+          <p>
+            이미 지급한 주문의 환불은 다음 정산에서 회수합니다. 현재 잔액에서 다시 빼지 않고, 아래
+            예측에는 차감 후 들어올 금액만 반영했습니다.
+          </p>
+          <div className="recovery-values">
+            <div>
+              <span>현재 미회수액</span>
+              <b>{money(recoveryInfo.outstanding)}</b>
+            </div>
+            <div>
+              <span>조회 종료일까지 예상 회수</span>
+              <b>{money(recoveryInfo.projected)}</b>
+            </div>
+            <div>
+              <span>이후로 이월할 회수액</span>
+              <b>{money(recoveryInfo.remaining)}</b>
+            </div>
+          </div>
+          <p>
+            예상 회수에는 조회 시작 전 이월 구간도 포함됩니다. 새로운 매출과 추가 환불은 예측하지
+            않습니다.
+          </p>
+        </section>
+      )}
       <section
         className={`cashflow-verdict ${firstShortage ? 'cashflow-verdict-warning' : 'cashflow-verdict-safe'}`}
       >
@@ -254,6 +302,12 @@ export function CashFlowOverview({
             <b className={active.closing < 0 ? 'cashflow-negative' : ''}>{money(active.closing)}</b>
           </div>
         </div>
+        {deduction > 0 && incomeMatches && (
+          <p className="cashflow-deduction-equation">
+            이날 원 정산금 <b>{money(originalIncome)}</b> − 환불 회수 <b>{money(deduction)}</b> =
+            실제·예상 유입 <b>{money(incoming)}</b>. 회수액을 지출에서 다시 차감하지 않습니다.
+          </p>
+        )}
         <p className="cashflow-explanation">
           {active.closing < 0
             ? active.opening < 0
@@ -277,8 +331,8 @@ export function CashFlowOverview({
               </p>
             )}
             <p className="cashflow-muted">
-              완료 {money(active.completed)} · 매입일 기준 예정 {money(active.scheduled)} · 픽업 전
-              예상 {money(active.expected)}
+              실제 지급 {money(active.completed)} · 매입일 기준 예상 지급 {money(active.scheduled)}{' '}
+              · 기존 일정 예상 {money(active.expected)}
             </p>
           </div>
           <div>

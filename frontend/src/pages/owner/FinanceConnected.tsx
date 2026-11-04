@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
-import { Alert, Button, Form, InputNumber, Tag } from 'antd'
+import { Alert, Button, Form, InputNumber } from 'antd'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import {
@@ -66,7 +66,7 @@ function InitialBalance({
       <h2>최초 시작 잔액 설정</h2>
       <p>
         {today} 하루 시작 시점의 금액을 한 번 입력하세요. 저장한 기준일과 잔액은 변경할 수 없습니다.
-        오늘 완료된 정산·지출을 시작 잔액에 중복 포함하지 마세요.
+        오늘 지급된 정산·완료 지출을 시작 잔액에 중복 포함하지 마세요.
       </p>
       {error !== null && <Alert type="error" message={financeErrorMessage(error)} />}
       <Form<{ openingBalance: number }>
@@ -168,8 +168,8 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       <Alert
         type="info"
         showIcon
-        message="실제 API 연결 · 기록 기준 계산 잔액"
-        description="은행 계좌를 조회하는 기능이 아닙니다. 완료 정산은 입금된 것으로 간주하고 실제 지출 완료 기록만 현재 잔액에 차감합니다."
+        message="지급·지출 기록으로 계산한 잔액"
+        description="은행 계좌를 조회하는 기능이 아닙니다. 환불 회수를 차감한 실제 지급액만 입금으로 간주하고, 실제 지출 완료 기록을 현재 잔액에서 차감합니다."
       />
       <div className="finance-period">
         <Button onClick={() => preset(7)}>앞으로 7일</Button>
@@ -229,7 +229,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               <small>{today} 현재 계산 잔액</small>
               <strong>{money(result.currentBalance)}</strong>
               <p>
-                시작 잔액 {money(result.openingBalance)} ＋ 완료 정산{' '}
+                시작 잔액 {money(result.openingBalance)} ＋ 실제 지급{' '}
                 {money(result.completedIncomeSinceBase)} − 실제 지출{' '}
                 {money(result.paidExpensesSinceBase)}
               </p>
@@ -268,6 +268,8 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
                   <li key={`${m.source}:${m.referenceId}:${m.occurrenceDate ?? ''}`}>
                     {m.date} · {m.title} · {money(m.amount)} · {movementLabel(m.classification)} #
                     {m.referenceId}
+                    {m.refundDeductionAmount > 0 &&
+                      ` · 원 정산금 ${money(m.settlementAmount)} − 환불 회수 ${money(m.refundDeductionAmount)}`}
                   </li>
                 ))}
               </ul>
@@ -295,6 +297,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               <li key={`${m.source}:${m.referenceId}:${m.occurrenceDate ?? ''}`}>
                 {m.title} · {money(m.amount)} · {movementLabel(m.classification)} · #{m.referenceId}
                 {m.occurrenceDate && ` · 원래 예정일 ${m.occurrenceDate}`}
+                {m.refundDeductionAmount > 0 && (
+                  <small className="payout-deduction">
+                    {' '}
+                    · 원 정산금 {money(m.settlementAmount)} − 환불 회수{' '}
+                    {money(m.refundDeductionAmount)} = 유입 {money(m.amount)}
+                  </small>
+                )}
               </li>
             ))}
           </ul>
@@ -350,41 +359,45 @@ function ConnectedSettlements() {
       onRefresh={refresh}
     />
   )
+  const periodControls = <FinancePeriodControl value={period} onChange={setPeriod} />
   return (
     <div className="finance-preview finance-connected">
-      <Tag color="blue">실제 API 연결</Tag>
-      <p>정산 가능일 기준 내역입니다. 다음 배치 기준 현금 유입 예측은 자금 현황에서 확인하세요.</p>
-      <FinancePeriodControl value={period} onChange={setPeriod} />
+      {resource.status !== 'success' && (
+        <>
+          <PageHeader
+            title="정산 현황"
+            description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            actions={actions}
+          />
+          {periodControls}
+        </>
+      )}
       {!valid && (
         <>
           <Alert type="warning" message="올바른 날짜로 최대 366일을 선택해 주세요." />
         </>
       )}
-      {resource.status === 'loading' && (
-        <>
-          {actions}
-          <FinanceLoading />
-        </>
-      )}
-      {resource.status === 'error' && (
-        <>
-          {actions}
-          <FinanceFailure error={resource.error} onRetry={refresh} />
-        </>
-      )}
+      {resource.status === 'loading' && <FinanceLoading />}
+      {resource.status === 'error' && <FinanceFailure error={resource.error} onRetry={refresh} />}
       {resource.status === 'success' && (
         <>
-          <Alert
-            type="info"
-            message={`일정이 없는 예정 정산 ${money(resource.data.report.undatedAmount)}`}
-            description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
-          />
           <SettlementPrototype
             todayValue={today}
             period={period}
             onPeriodChange={setPeriod}
             headerActions={actions}
             actualEntries={resource.data.entries}
+            payoutReport={resource.data.report}
+            periodControls={periodControls}
+            notice={
+              resource.data.report.undatedAmount > 0 ? (
+                <Alert
+                  type="info"
+                  message={`일정이 없는 예정 정산 ${money(resource.data.report.undatedAmount)}`}
+                  description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
+                />
+              ) : undefined
+            }
             expenses={resource.data.expenses.map((e) => ({
               id: e.key,
               date: e.date,
@@ -394,20 +407,20 @@ function ConnectedSettlements() {
             }))}
             monthSummary={
               <>
-                <div>이번 달 누적 정산 완료액</div>
+                <div>이번 달 누적 실제 지급액</div>
                 {mismatch ? (
-                  <span>내역 조회와 이번 달 완료액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
+                  <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
                   <>
-                    <strong className="stl-value">{money(month.data.completedAmount)}</strong>
+                    <strong className="stl-value">{money(month.data.paidAmount)}</strong>
                     <p>
                       {monthFrom}~{today} · 별도 조회
                     </p>
                   </>
                 ) : month.status === 'error' ? (
-                  <span>이번 달 완료액 조회 실패 · 새로고침해 주세요.</span>
+                  <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>
                 ) : (
-                  <span>이번 달 완료액 조회 중</span>
+                  <span>이번 달 지급액 조회 중</span>
                 )}
               </>
             }
