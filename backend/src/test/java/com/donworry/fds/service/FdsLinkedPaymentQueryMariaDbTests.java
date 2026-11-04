@@ -55,7 +55,25 @@ class FdsLinkedPaymentQueryMariaDbTests {
         assertThat(result.card().otherCustomerCount()).isEqualTo(1);
     }
 
+    // 사건 결제마다 그 결제의 카드로 센다 — 공유 카드를 쓴 결제에만 다른 고객 결제가 잡힌다 (#533)
+    @Test
+    void findLinked_twoCasePayments_countsPerPayment() {
+        save(9100L, 1L, "case-customer", NOW.minusSeconds(3600));
+        save(9101L, 1L, "case-customer", NOW.minusSeconds(1800), "tok_own_card");
+        save(9201L, 1L, "other-customer", NOW.minusSeconds(7200));
+
+        var result = linkedPaymentReader.findLinked(
+                1L, "case-customer", List.of(9100L, 9101L), NOW.minusSeconds(30L * 24 * 3600));
+
+        assertThat(result.card().paymentCount()).isEqualTo(1);
+        assertThat(result.payments()).extracting(p -> p.card().paymentCount()).containsExactly(1, 0);
+    }
+
     private void save(Long paymentId, Long merchantId, String customerRef, Instant requestedAt) {
+        save(paymentId, merchantId, customerRef, requestedAt, "tok_linked_test");
+    }
+
+    private void save(Long paymentId, Long merchantId, String customerRef, Instant requestedAt, String cardToken) {
         var request = FdsEvaluationRequest.builder()
                 .evaluationRequestId(UUID.randomUUID())
                 .paymentId(paymentId)
@@ -64,7 +82,7 @@ class FdsLinkedPaymentQueryMariaDbTests {
                 .amount(50_000L)
                 .paymentRequestedAt(requestedAt)
                 .deviceId("device-linked-test")
-                .cardToken("tok_linked_test")
+                .cardToken(cardToken)
                 .cardDisplayLabel("VISA **** 1234")
                 .ipCountryCode("KR")
                 .ipAddress("203.0.113.10")
