@@ -1,4 +1,6 @@
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { previewPayoutReport } from './settlementPreviewData'
+import { koreanToday, formatWonInput, parseWonInput, chartMonthPeriod } from './financeView'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { App, Alert, Button, Drawer, Input, InputNumber, Modal, Select, Tabs, Tag } from 'antd'
@@ -26,17 +28,33 @@ import './finance-page-header.css'
 const money = (value: number) => `${value.toLocaleString('ko-KR')}원`
 export function FinancePreview() {
   const { modal } = App.useApp()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { user } = useAuth()
-  const today = dayjs().format('YYYY-MM-DD')
+  const today = koreanToday()
   const normalized = normalizeFinancePath(pathname)
   const isFunds = normalized.endsWith('/funds')
-  const scope = normalized.startsWith('/dev/') ? 'dev' : `owner:${user?.userId}:${user?.merchantId}`
+  const sample = normalized.startsWith('/dev/') && new URLSearchParams(search).get('sample') === '1'
+  const scope = normalized.startsWith('/dev/')
+    ? sample
+      ? 'dev:sample'
+      : 'dev'
+    : `owner:${user?.userId}:${user?.merchantId}`
   const store = useMemo(() => getPreviewStore(scope, today), [scope, today])
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  useEffect(() => {
+    if (sample)
+      store.update((previous) =>
+        previous.opening === null ? setInitialBalance(previous, 500000) : previous,
+      )
+  }, [sample, store])
   const [refreshedAt, setRefreshedAt] = useState(() => new Date())
+  const [graphDate, setGraphDate] = useState('')
   const [start, setStart] = useState(today)
-  const [end, setEnd] = useState(dayjs(today).add(6, 'day').format('YYYY-MM-DD'))
+  const [end, setEnd] = useState(
+    dayjs(today)
+      .add(sample ? 29 : 6, 'day')
+      .format('YYYY-MM-DD'),
+  )
   const [openingInput, setOpeningInput] = useState<number | null>(500000)
   const [panel, setPanel] = useState<'manage' | 'daily' | null>(null)
   const [manageTab, setManageTab] = useState('balance')
@@ -111,7 +129,7 @@ export function FinancePreview() {
       draft.amount <= 0 ||
       draft.amount > MAX_PREVIEW_EXPENSE
     ) {
-      setError('항목명·기준일 이후 날짜·1원~10억 원의 정수 금액을 확인해 주세요.')
+      setError('지출명·기준일 이후 날짜·1원~10억 원의 정수 금액을 확인해 주세요.')
       return
     }
     store.update((previous) => ({
@@ -129,16 +147,47 @@ export function FinancePreview() {
     <div className="finance-preview">
       {normalized.startsWith('/dev/') && (
         <nav className="finance-nav" aria-label="자금 화면 이동">
-          <Link to="/dev/settlements" aria-current={!isFunds ? 'page' : undefined}>
+          <Link
+            to={`/dev/settlements${sample ? '?sample=1' : ''}`}
+            aria-current={!isFunds ? 'page' : undefined}
+          >
             정산 내역
           </Link>
-          <Link to="/dev/funds" aria-current={isFunds ? 'page' : undefined}>
+          <Link
+            to={`/dev/funds${sample ? '?sample=1' : ''}`}
+            aria-current={isFunds ? 'page' : undefined}
+          >
             자금 현황
           </Link>
         </nav>
       )}
       {!isFunds ? (
         <SettlementPrototype
+          todayValue={today}
+          payoutReport={previewPayoutReport(
+            new Date(today + 'T12:00:00'),
+            calendarPeriod.from,
+            calendarPeriod.to,
+            state.todayRefundDeduction,
+            state.recoveryAmount,
+          )}
+          monthSummary={
+            <span>
+              이번 달 누적 실제 지급액{' '}
+              <strong>
+                {money(
+                  previewPayoutReport(
+                    new Date(today + 'T12:00:00'),
+                    dayjs(today).startOf('month').format('YYYY-MM-DD'),
+                    today,
+                    state.todayRefundDeduction,
+                    state.recoveryAmount,
+                  ).paidAmount,
+                )}
+              </strong>{' '}
+              · 1일~오늘, 조회 기간과 별도
+            </span>
+          }
           expenses={calendarExpenses}
           headerActions={headerActions}
           period={calendarPeriod}
@@ -154,7 +203,7 @@ export function FinancePreview() {
           <Alert
             type="info"
             showIcon
-            message="목 데이터 시연 · 정산 완료는 입금된 것으로 간주합니다."
+            message="목 데이터 시연 · 환불 차감 후 지급액만 입금으로 간주합니다."
             description="최초 잔액과 입력은 메뉴 이동 시 유지되며 브라우저 재로드 시 초기화됩니다. 실제 은행 잔액을 조회하지 않습니다."
           />
           {state.opening === null ? (
@@ -165,8 +214,8 @@ export function FinancePreview() {
                 수 없습니다.
               </p>
               <p>
-                시연 데이터에는 오늘 완료된 정산과 재료비 지출 1건이 있습니다. 이 금액들은 시작
-                잔액에 중복 포함하지 마세요.
+                시연 데이터에는 오늘 환불 회수로 지급액이 0원이 된 정산과 재료비 지출 1건이
+                있습니다. 이 금액들은 시작 잔액에 중복 포함하지 마세요.
               </p>
               <label className="finance-field">
                 최초 기준일
@@ -176,6 +225,10 @@ export function FinancePreview() {
                 시작 잔액 (원)
                 <InputNumber
                   aria-label="최초 시작 잔액"
+                  className="finance-money-input"
+                  formatter={formatWonInput}
+                  parser={parseWonInput}
+                  suffix="원"
                   min={0}
                   max={1000000000000}
                   precision={0}
@@ -208,17 +261,6 @@ export function FinancePreview() {
             />
           ) : (
             <>
-              <div className="finance-current-balance">
-                <div>
-                  <small>{today} 오늘 계산 잔액</small>
-                  <strong>{money(result.currentBalance)}</strong>
-                  <p>
-                    시작 잔액 {money(state.opening)} ＋ 정산 완료 {money(result.completedIncome)} −
-                    지출 완료 {money(result.paidExpenses)}
-                  </p>
-                </div>
-                <Button onClick={() => manage('balance')}>최초 설정 확인</Button>
-              </div>
               {result.overdue.length > 0 && (
                 <Alert
                   type="warning"
@@ -261,6 +303,11 @@ export function FinancePreview() {
                     onChange={(e) => setEnd(e.target.value)}
                   />
                 </label>
+                <div className="finance-period-actions">
+                  <Button type="primary" onClick={() => manage()}>
+                    잔액·지출 설정
+                  </Button>
+                </div>
               </div>
               {!result.valid && (
                 <Alert
@@ -270,14 +317,37 @@ export function FinancePreview() {
               )}
               <CashFlowOverview
                 preview
+                graphDate={graphDate}
+                minGraphDate={today}
+                maxGraphDate={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
+                onGraphDateChange={(date) => {
+                  setGraphDate(date)
+                  if (date < start || date > end) {
+                    const next = chartMonthPeriod(
+                      date,
+                      today,
+                      dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
+                    )
+                    setStart(next.from)
+                    setEnd(next.to)
+                  }
+                }}
+                recovery={result.recovery}
                 currentBalance={result.currentBalance}
+                balanceBasis={{
+                  opening: state.opening!,
+                  income: result.completedIncome,
+                  expenses: result.paidExpenses,
+                }}
                 days={result.days}
                 incomes={result.projected.map((e) => ({
                   id: e.id,
                   date: e.date,
-                  title: e.status === 'sch' ? '픽업 완료 기준 정산 예정' : '픽업 전 예상 정산',
+                  title: e.status === 'sch' ? '매입일 기준 예상 지급' : '기존 예상 일정 지급',
+                  settlementAmount: e.settlementAmount,
+                  refundDeductionAmount: e.refundDeductionAmount,
                   amount: e.amount,
-                  note: '정산 완료 시 입금으로 반영 · 예시 데이터',
+                  note: '환불 회수 차감 후 예상 유입 · 예상 배분, 확정 전',
                 }))}
                 costs={result.pending.map((e) => ({
                   id: e.key,
@@ -286,7 +356,6 @@ export function FinancePreview() {
                   amount: e.amount,
                   note: e.kind === 'RECURRING' ? '정기 지출 예정' : '일회성 지출 예정',
                 }))}
-                onManage={() => manage()}
                 onDetails={(date) => {
                   setSelected(date)
                   setPanel('daily')
@@ -301,6 +370,7 @@ export function FinancePreview() {
         유지합니다.
       </p>
       <Drawer
+        className="finance-drawer"
         title={panel === 'manage' ? '잔액·지출 설정' : '날짜별 예상 잔액 계산'}
         open={panel !== null}
         onClose={() => setPanel(null)}
@@ -323,8 +393,8 @@ export function FinancePreview() {
                 <p>기준일: {state.base} 하루 시작 시점</p>
                 <Tag>최초 설정 완료 · 수정 불가</Tag>
                 <p>
-                  오늘 계산 잔액은 정산 완료와 실제 지출 완료만 반영합니다. 예정 금액은 미래
-                  예측에만 반영합니다.
+                  오늘 계산 잔액은 환불 차감 후 실제 지급과 실제 지출 완료만 반영합니다. 예정 금액은
+                  미래 예측에만 반영합니다.
                 </p>
                 <p>시연에서 다시 설정하려면 브라우저 페이지를 다시 불러오세요.</p>
               </section>
@@ -537,6 +607,7 @@ export function FinancePreview() {
         )}
       </Drawer>
       <Modal
+        className="finance-dialog"
         title={
           draft && state.expenses.some((e) => e.id === draft.id)
             ? '예정 지출 수정'
@@ -552,7 +623,7 @@ export function FinancePreview() {
           <>
             {error && <Alert type="error" message={error} />}
             <label className="finance-field">
-              항목명
+              지출명
               <Input
                 value={draft.title}
                 maxLength={100}
@@ -571,6 +642,10 @@ export function FinancePreview() {
             <label className="finance-field">
               금액 (원)
               <InputNumber
+                className="finance-money-input"
+                formatter={formatWonInput}
+                parser={parseWonInput}
+                suffix="원"
                 min={1}
                 max={MAX_PREVIEW_EXPENSE}
                 precision={0}
@@ -593,6 +668,7 @@ export function FinancePreview() {
             <label className="finance-field">
               메모
               <Input.TextArea
+                autoSize={{ minRows: 4, maxRows: 8 }}
                 value={draft.memo}
                 maxLength={500}
                 onChange={(e) => setDraft({ ...draft, memo: e.target.value })}

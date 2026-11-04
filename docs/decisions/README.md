@@ -26,6 +26,12 @@
 
 ## 목록
 
+P1 #525: [0080 사장님 403 원본 저장과 트랜잭션 이벤트 발행](0080-operator-access-denials.md) — 제안, 사용자 저장·보관 정책 승인. IP 1년 후 NULL·조사 행 보존, IP 정리 구현은 후속.
+
+P1 #521: [0079 사장님 403 이벤트 타입과 계정 상태 조회 계약](0079-operator-security-contracts.md) — 제안, #515 경계 유지. 실제 발행·P2 연결은 후속.
+
+P1 #517: [0078 시스템 수행자 감사 기록과 사장님 계정 정지](0078-operator-account-suspension.md) — 제안, 사용자 설계·구현 승인. #515 전체 경계 합의와 구분한다.
+
 P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6-recurring-expense-occurrences.md).
 
 | 번호 | 제목 | 상태 |
@@ -89,7 +95,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0061](0061-fds-ml-shadow-inference.md) | FDS ML Shadow 평가 — RF 추론을 ai-server에 두고 결제 판정과 분리 | 제안 — #375 PR ① 구현, PR 리뷰 대상 |
 | [0062](0062-fds-ml-shadow-spring-connection.md) | FDS ML Shadow Spring 연결 — P4가 커밋된 평가를 주기적으로 읽어 채점 · 기록 | 제안 — #409 P2 조회 구현, PR 리뷰 대상 |
 | [0063](0063-csrf-default-enabled.md) | 브라우저 변경 요청의 CSRF 검사 기본 활성화 | 제안 — #408 PR B 사용자 구현 승인, PR 리뷰 대상 |
-| [0064](0064-hosted-checkout-and-payment-webhook.md) | 돈워리 호스팅 결제창과 결제 상태 웹훅 | 제안 — #402 샌드박스 확인, P1 확인 완료, P6 정산 보장 확인·저장소 구현 전 |
+| [0064](0064-hosted-checkout-and-payment-webhook.md) | 돈워리 호스팅 결제창과 결제 상태 웹훅 | 채택 — 구현 완료(#425 · #449 · #451 · #455), P1 확인 완료. 4절 · 4-1 개정(#492): `HELD`는 가맹점에 "결제 확인 중", 진행은 가맹점 선택, 사후 거절 손실은 가맹점 부담 |
 
 | [0065](0065-case-session-authorization.md) | Case HTTP 경로의 세션 역할 인가 | 제안 — #408 PR C 사용자 구현 승인, PR 리뷰 대상 |
 | [0066](0066-fds-error-analysis-detail-contract.md) | FDS 경보 상세의 오류 원인·분석 결과 공개 계약 | 제안 — 사용자 구현 승인, PR 리뷰 대상 |
@@ -117,3 +123,25 @@ Notion에 남은 이전 설명과 미결 계약은 [문서 대조 현황](../REA
 0003~0008은 미채택 P5 초안으로, 1차 시연 문서 재작성 시 삭제했다. 이전 내용은 Git 이력(`2d84406`)에서 확인할 수 있으며 번호를 재사용하지 않는다.
 
 P6 5단계 PR 리뷰 대상: [0062 실제 기록과 배치 기준의 현금흐름 예측](0062-p6-cash-flow-forecast.md) — #230·#231.
+
+P6 #465 PR 리뷰 대상: [0068 매입일 기준 영업일 D+3 정산](0068-p6-capture-business-day-settlement.md) — 픽업 상세 정보와 정산일 계산 분리.
+
+P1 #461 PR 리뷰 대상: [0069 릴리스 marker 사전 준비와 게시 직전 main 확인](0069-release-marker-publication.md) — 제안, 실제 배포 차단은 #448 후속.
+
+P6 #474 PR 리뷰 대상: [0070 가맹점별 일별 지급 원장](0070-p6-merchant-daily-payouts.md).
+
+P6 #478 PR 리뷰 대상: [0071 환불 성공 수신과 정산 적용 분리](0071-p6-refund-receiving-ledger.md).
+
+P6 #488 PR 리뷰 대상: [0072 지급 전 환불 제외와 가맹점 공통 잠금](0072-p6-unpaid-refund-exclusion.md).
+
+P6 #493 PR 리뷰 대상: [0073 환불 회수 배분과 개별 잔여액](0073-p6-refund-recovery-allocations.md).
+
+P1 #480 PR 리뷰 대상: [0073 Marker digest로 식별하는 릴리스 이미지 묶음](0073-release-bundle-metadata.md) — 제안, Jenkins·VM 소비는 #481 후속.
+
+P1 #481 PR 리뷰 대상: [0074 Jenkins가 승인한 릴리스 묶음으로 VM 업데이트](0074-approved-release-update.md) — 제안, 운영 설치·실검증 전.
+
+P1 #482 PR 리뷰 대상: [0075 VM 공통 잠금과 지속 실행 기록으로 배포 중단 확인](0075-deployment-serialization-and-interruption.md) — 제안, 운영 설치·실검증 전.
+
+P6 #507 PR 리뷰 대상: [0076 실제 지급 원장을 잔액 유입의 기준으로 사용](0076-p6-payout-based-cash-flow.md).
+
+P1 #483 PR 리뷰 대상: [0077 배포 전 DB 백업과 승인된 이전 이미지 복구](0077-release-backup-and-image-recovery.md) — 제안, 핵심 기능 합의·운영 검증 전.

@@ -25,7 +25,7 @@ import {
 import { PageHeader } from '../../components/common/PageHeader'
 
 const typeLabels: Record<FdsBlocklistEntry['identifierType'], string> = {
-  CARD_TOKEN: '카드 토큰',
+  CARD_TOKEN: '카드 식별값',
   DEVICE_ID: '기기 ID',
   BUYER_REF: '구매자 식별자',
   IP_ADDRESS: 'IP 주소',
@@ -33,11 +33,19 @@ const typeLabels: Record<FdsBlocklistEntry['identifierType'], string> = {
 }
 
 const typePlaceholders: Record<FdsBlocklistEntry['identifierType'], string> = {
-  CARD_TOKEN: 'cardToken을 입력하세요.',
-  DEVICE_ID: 'deviceId를 입력하세요.',
-  BUYER_REF: 'buyerRef를 입력하세요.',
-  IP_ADDRESS: 'IP 주소를 입력하세요.',
-  BUYER_EMAIL: '구매자 이메일을 입력하세요.',
+  CARD_TOKEN: '카드 식별값을 입력하세요.',
+  DEVICE_ID: '기기 ID를 입력하세요.',
+  BUYER_REF: '구매자 식별자를 입력하세요.',
+  IP_ADDRESS: 'IPv4 또는 IPv6 주소를 입력하세요.',
+  BUYER_EMAIL: '이메일을 입력하세요.',
+}
+
+const identifierMaxLengths: Record<FdsBlocklistEntry['identifierType'], number> = {
+  CARD_TOKEN: 255,
+  DEVICE_ID: 255,
+  BUYER_REF: 255,
+  IP_ADDRESS: 45,
+  BUYER_EMAIL: 255,
 }
 
 function formatDate(value: string) {
@@ -66,6 +74,7 @@ export function BlocklistPage() {
     useState<FdsBlocklistEntry['identifierType']>('CARD_TOKEN')
   const [form] = Form.useForm<{ identifierValue: string; displayLabel?: string; reason: string }>()
   const [deactivationForm] = Form.useForm<{ reason: string }>()
+  const identifierValue = Form.useWatch('identifierValue', form) ?? ''
   const requestSequence = useRef(0)
 
   const reload = () => setRefreshSequence((current) => current + 1)
@@ -140,10 +149,10 @@ export function BlocklistPage() {
     <>
       <PageHeader
         title="차단 목록"
-        description="등록된 카드 토큰·기기 ID·IP 주소·이메일·구매자 식별자와 일치하면 R07이 점수 계산 없이 즉시 DENY를 반환합니다."
+        description="등록된 카드 식별값·기기 ID·IP 주소·이메일·구매자 식별자와 일치하면 R07이 점수 계산 없이 즉시 DENY를 반환합니다."
         actions={
           <Button type="primary" onClick={() => setModalOpen(true)}>
-            차단 값 등록
+            차단 항목 등록
           </Button>
         }
       />
@@ -233,20 +242,22 @@ export function BlocklistPage() {
             style: { cursor: 'pointer' },
           })}
         />
-        <Pagination
-          current={page + 1}
-          pageSize={10}
-          // Keep the first-page control visible when this tab has no entries.
-          // With a single effective item Ant Design also disables both arrows.
-          total={Math.max(result?.totalElements ?? 0, 1)}
-          showSizeChanger={false}
-          hideOnSinglePage={false}
-          style={{ marginTop: 16, textAlign: 'right' }}
-          onChange={(next) => setPage(next - 1)}
-        />
+        <div className="dw-pagination-footer">
+          <Pagination
+            current={page + 1}
+            pageSize={10}
+            // Keep the first-page control visible when this tab has no entries.
+            // With a single effective item Ant Design also disables both arrows.
+            total={Math.max(result?.totalElements ?? 0, 1)}
+            showSizeChanger={false}
+            hideOnSinglePage={false}
+            showTotal={() => `총 ${result?.totalElements ?? 0}건`}
+            onChange={(next) => setPage(next - 1)}
+          />
+        </div>
       </Card>
       <Modal
-        title="차단 값 등록"
+        title="차단 항목 등록"
         open={modalOpen}
         okText="등록"
         cancelText="취소"
@@ -258,19 +269,35 @@ export function BlocklistPage() {
           <Form.Item label="종류">
             <Select
               value={identifierType}
-              onChange={(value: FdsBlocklistEntry['identifierType']) => setIdentifierType(value)}
+              onChange={(value: FdsBlocklistEntry['identifierType']) => {
+                setIdentifierType(value)
+                form.resetFields(['identifierValue'])
+              }}
               options={Object.entries(typeLabels).map(([value, label]) => ({ value, label }))}
             />
           </Form.Item>
           <Form.Item
-            label="식별값"
+            label={typeLabels[identifierType]}
             name="identifierValue"
+            style={{ marginBottom: 6 }}
+            extra={
+              <div style={{ textAlign: 'right' }}>
+                {identifierValue.length} / {identifierMaxLengths[identifierType]}
+              </div>
+            }
             rules={[
-              { required: true, whitespace: true, message: '차단할 식별값을 입력해주세요.' },
+              {
+                required: true,
+                whitespace: true,
+                message: `차단할 ${typeLabels[identifierType]}을 입력해주세요.`,
+              },
               { max: 255 },
             ]}
           >
-            <Input maxLength={255} placeholder={typePlaceholders[identifierType]} />
+            <Input
+              maxLength={identifierMaxLengths[identifierType]}
+              placeholder={typePlaceholders[identifierType]}
+            />
           </Form.Item>
           {identifierType === 'CARD_TOKEN' && (
             <Form.Item label="표시 카드" name="displayLabel" rules={[{ max: 50 }]}>

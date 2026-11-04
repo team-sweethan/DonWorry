@@ -1,7 +1,10 @@
 package com.donworry.settlement.service;
 
+import com.donworry.settlement.entity.*;
 import com.donworry.settlement.repository.*;
-import java.time.Instant;
+import java.time.*;
+import java.util.*;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
@@ -11,27 +14,60 @@ import org.springframework.transaction.annotation.*;
 public class SettlementCompletionTransactionService {
     private final SettlementRepository settlements;
     private final CaptureRepository captures;
-    private final OrderFulfillmentRepository fulfillments;
     private final SettlementCompletionPolicy policy;
+    private final MerchantPayoutRepository payouts;
+    private final MerchantPayoutItemRepository payoutItems;
+    private final SettlementMerchantLockService merchantLocks;
+    private final RefundAdjustmentService refunds;
 
-    // 픽업 수신과 동일하게 주문 → 정산 순서로 잠가 역순 잠금에 의한 교착을 피한다.
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public String complete(Long settlementId, Long merchantId, String orderId, Instant cutoff) {
-        if (settlementId == null
-                || settlementId <= 0
-                || merchantId == null
+    // 날짜와 무관한 가맹점 잠금을 먼저 잡아 환불과 여러 서버의 지급을 함께 직렬화한다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public String completeMerchant(Long merchantId, Instant cutoff, long upperSettlementId) {
+        var started = Instant.now();
+        if (merchantId == null
                 || merchantId <= 0
-                || orderId == null
-                || orderId.isBlank()
-                || cutoff == null) throw new IllegalArgumentException("정산 완료 대상과 기준 시각이 필요합니다.");
-        var fulfillment = fulfillments.findForUpdate(merchantId, orderId).orElse(null);
-        var settlement = settlements.findForCompletion(settlementId).orElse(null);
-        if (settlement == null) return "MISSING_SETTLEMENT";
-        if (!merchantId.equals(settlement.getMerchantId())) return "MERCHANT_MISMATCH";
-        var capture = captures.findById(settlement.getCaptureId()).orElse(null);
-        var reason = policy.evaluate(settlement, capture, fulfillment, cutoff);
-        if (!"ELIGIBLE".equals(reason)) return reason;
-        settlement.complete(Instant.now());
+                || cutoff == null
+                || cutoff.isAfter(started)
+                || upperSettlementId <= 0) throw new IllegalArgumentException("가맹점과 현재 이하 기준 시각·후보 상한이 필요합니다.");
+        return merchantLocks.execute(merchantId, () -> completeLocked(merchantId, cutoff, upperSettlementId));
+    }
+
+    private String completeLocked(Long merchantId, Instant cutoff, long upperSettlementId) {
+        var started = Instant.now();
+        var date = started.atZone(ZoneId.of("Asia/Seoul")).toLocalDate();
+        refunds.applyPendingForMerchant(merchantId);
+        if (payouts.existsByMerchantIdAndPayoutDateAndStatus(merchantId, date, PayoutStatus.COMPLETED))
+            return "ALREADY_COMPLETED";
+        if (settlements.countForPayout(merchantId, cutoff, upperSettlementId) == 0) return "EMPTY";
+        payouts.ensurePending(merchantId, date, LocalDateTime.ofInstant(started, ZoneOffset.UTC));
+        var payout = payouts.findForUpdate(merchantId, date).orElseThrow();
+        if (payout.getStatus() == PayoutStatus.COMPLETED) return "ALREADY_COMPLETED";
+        // 넓은 FOR UPDATE 스캔은 다른 가맹점 행에서도 대기할 수 있어 ID 조회 뒤 PK로만 잠근다.
+        var targets = settlements.findPayoutTargetIds(merchantId, cutoff, upperSettlementId).stream()
+                .map(id -> settlements.findForCompletion(id).orElseThrow())
+                .toList();
+        if (targets.isEmpty()) throw new IllegalStateException("잠금 후 지급 대상이 없어 지급을 확정하지 않습니다.");
+        var source = captures
+                .findAllById(targets.stream().map(Settlement::getCaptureId).toList())
+                .stream()
+                .collect(Collectors.toMap(Capture::getCaptureId, c -> c));
+        var completedAt = Instant.now();
+        long total = 0;
+        var details = new ArrayList<MerchantPayoutItem>();
+        for (var settlement : targets) {
+            var reason = policy.evaluate(settlement, source.get(settlement.getCaptureId()), cutoff);
+            if (!"ELIGIBLE".equals(reason))
+                throw new IllegalStateException("지급 대상 정합성 오류: " + settlement.getSettlementId() + " / " + reason);
+            total = Math.addExact(total, settlement.getSettlementAmount());
+            details.add(MerchantPayoutItem.snapshot(
+                    payout.getPayoutId(), settlement.getSettlementId(), settlement.getSettlementAmount(), completedAt));
+        }
+        payoutItems.saveAll(details);
+        long deduction = refunds.deductForPayout(payout, total, Instant.now());
+        completedAt = Instant.now();
+        for (var settlement : targets) settlement.complete(completedAt);
+        // 완료일이 자정을 넘었다면 전체 롤백해 지급일과 실제 완료일을 다르게 기록하지 않는다.
+        payout.complete(total, deduction, completedAt);
         return "COMPLETED";
     }
 }

@@ -41,6 +41,8 @@ import {
 import { RecurringExpensePanel } from './RecurringExpensePanel'
 import {
   MAX_FINANCE_AMOUNT,
+  formatWonInput,
+  parseWonInput,
   financeErrorMessage,
   financeWriteErrorMessage,
   managementRows,
@@ -148,6 +150,7 @@ export function FinanceExpenseManager({
       : []
   return (
     <Drawer
+      className="finance-drawer"
       title="잔액·지출 설정"
       open={open}
       onClose={onClose}
@@ -310,6 +313,7 @@ export function FinanceExpenseManager({
         </>
       )}
       <Modal
+        className="finance-dialog"
         title={draft === 'new' ? '일회성 지출 등록' : '일회성 지출 수정'}
         open={draft !== null}
         onCancel={() => setDraft(null)}
@@ -345,14 +349,14 @@ export function FinanceExpenseManager({
         >
           <Form.Item
             name="title"
-            label="항목명"
+            label="지출명"
             rules={[{ required: true, whitespace: true, max: 100 }]}
           >
             <Input maxLength={100} />
           </Form.Item>
           <Form.Item
             name="expenseDate"
-            label="원래 지출 예정일"
+            label="지출 예정일"
             rules={[
               { required: true },
               {
@@ -370,13 +374,21 @@ export function FinanceExpenseManager({
             label="금액 (원)"
             rules={[{ required: true }, { type: 'integer', min: 1, max: MAX_FINANCE_AMOUNT }]}
           >
-            <InputNumber min={1} max={MAX_FINANCE_AMOUNT} precision={0} />
+            <InputNumber
+              className="finance-money-input"
+              formatter={formatWonInput}
+              parser={parseWonInput}
+              suffix="원"
+              min={1}
+              max={MAX_FINANCE_AMOUNT}
+              precision={0}
+            />
           </Form.Item>
           <Form.Item name="category" label="유형" rules={[{ required: true }]}>
             <Select options={categories} />
           </Form.Item>
           <Form.Item name="memo" label="메모" rules={[{ max: 500 }]}>
-            <Input.TextArea maxLength={500} />
+            <Input.TextArea maxLength={500} autoSize={{ minRows: 4, maxRows: 8 }} />
           </Form.Item>
         </Form>
       </Modal>

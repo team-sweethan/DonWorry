@@ -12,7 +12,7 @@ from app.agent.trace import provider_and_model
 from app.client.spring import SpringToolClient
 from app.config import Settings
 from app.schemas.case_context import CaseContext
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
+from app.schemas.tools import CasePaymentsTool
 
 # Case 하나를 조사해 보고서 JSON을 출력한다 — Spring 접수 · 콜백(#253) 없이 Agent만 확인할 때 쓴다
 # 예) Spring 없이 샘플로
@@ -24,10 +24,15 @@ from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
 
 
 def main() -> int:
+    # Windows 기본 출력(cp949)은 카드 표시값의 "•"를 못 써서 보고서를 찍다 멈춘다 → 항상 UTF-8
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     parser = argparse.ArgumentParser(description="조사 Agent 단독 실행")
     parser.add_argument("--case-id", help="Spring에서 조회할 Case ID (샘플을 쓰면 샘플 값)")
     parser.add_argument(
-        "--sample", type=Path, help="Tool 응답 샘플 JSON (casePayments · fdsEvidence)"
+        "--sample",
+        type=Path,
+        help="Tool 응답 샘플 JSON (casePayments · fdsEvidence, 있으면 similar · history · linked)",
     )
     parser.add_argument("--evidence-version", type=int, default=None)
     parser.add_argument("--report-version", type=int, default=1)
@@ -40,7 +45,8 @@ def main() -> int:
     if args.sample:
         data = json.loads(args.sample.read_text(encoding="utf-8"))
         case_payments = CasePaymentsTool.model_validate(data["casePayments"])
-        toolbox = StaticToolBox(case_payments, FdsEvidenceTool.model_validate(data["fdsEvidence"]))
+        # 샘플에 고객 이력 · 같은 카드 결제 · 비슷한 사건이 있으면 같이 쓴다 (measure_*.json)
+        toolbox = StaticToolBox.from_sample(data)
         case_id = case_payments.caseId
         evidence_version = args.evidence_version or case_payments.evidenceVersion
     elif args.case_id:

@@ -470,6 +470,11 @@ textarea {
 .dw-table-card .ant-pagination {
   padding: 0 19px 18px;
 }
+.dw-pagination-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1px;
+}
 .dw-section-grid {
   display: grid;
   grid-template-columns: 1.25fr 1fr;

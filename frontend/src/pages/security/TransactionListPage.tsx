@@ -29,7 +29,9 @@ import {
   MAX_PERIOD_DAYS,
   TRANSACTION_PAGE_SIZE,
   caseCell,
+  customerNeedsMerchant,
   defaultTransactionListQuery,
+  merchantChange,
   mlCell,
   parseTransactionListQuery,
   periodDays,
@@ -39,6 +41,7 @@ import {
   type MlScores,
   type TransactionListQuery,
 } from '../../utils/transactionList'
+import { customerPart } from '../../utils/caseRules'
 import { paymentStatusLabel } from './case/caseLabels'
 
 // 경보 화면과 같은 판정이지만, 처음 보는 직원도 읽게 한국어로 쓴다
@@ -116,6 +119,9 @@ export function TransactionListPage() {
   const [ml, setMl] = useState<{ key: string; scores: MlScores } | null>(null)
 
   const tooLong = periodDays(query) > MAX_PERIOD_DAYS
+  // 가맹점 없이 고객 번호만 넣으면 다른 가맹점의 같은 번호와 섞여서 조회하지 않고 안내한다 (#462)
+  const needsMerchant = customerNeedsMerchant(query)
+  const blocked = tooLong || needsMerchant
   const apiSearch = transactionApiParams(query).toString()
   // 어떤 요청에 대한 응답인지 함께 저장해 늦게 온 응답이 새 조건의 화면을 덮지 않게 한다
   const requestKey = `${apiSearch}#${refreshKey}`
@@ -135,7 +141,7 @@ export function TransactionListPage() {
   }, [])
 
   useEffect(() => {
-    if (tooLong) return
+    if (blocked) return
     let alive = true
     getPaymentTransactions(new URLSearchParams(apiSearch))
       .then((page) => {
@@ -191,10 +197,11 @@ export function TransactionListPage() {
     return () => {
       alive = false
     }
-  }, [apiSearch, requestKey, tooLong])
+  }, [apiSearch, requestKey, blocked])
 
-  const current = loaded?.key === requestKey ? loaded : null
-  const loading = !tooLong && current === null
+  // 막힌 조건은 서버 요청이 "조건 없음"과 같아져서, 전에 받은 전체 목록을 검색 결과처럼 그리지 않게 버린다
+  const current = !blocked && loaded?.key === requestKey ? loaded : null
+  const loading = !blocked && current === null
   const page = current?.page ?? null
   const caseLinks: CaseLinks = links?.key === requestKey ? links.links : { status: 'loading' }
   const mlScores: MlScores = ml?.key === requestKey ? ml.scores : { status: 'loading' }
@@ -313,9 +320,33 @@ export function TransactionListPage() {
       title: <HelpTitle label="구매자" text={help.customer} />,
       key: 'buyer',
       width: 190,
-      render: (_, t) => (
-        <Typography.Text copyable={copyable(t.customerRef)}>{t.customerRef}</Typography.Text>
-      ),
+      render: (_, t) => {
+        // 저장값은 "가맹점ID:번호"라 직원이 검색창에 넣을 고객 번호만 보이고 복사된다 (#462)
+        const customer = customerPart(t.customerRef)
+        // 번호를 누르면 그 줄의 가맹점 + 고객으로 거른다 (#487). 기간은 두고 상태 · 주문번호 조건은 푼다
+        return (
+          <Space size={2}>
+            <Tooltip title="이 고객 결제만 보기">
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0 }}
+                onClick={() =>
+                  setQuery({
+                    merchantId: t.merchantId,
+                    customerRef: customer,
+                    status: null,
+                    orderRef: '',
+                  })
+                }
+              >
+                {customer}
+              </Button>
+            </Tooltip>
+            <Typography.Text copyable={copyable(customer)} />
+          </Space>
+        )
+      },
     },
   ]
 
@@ -409,7 +440,7 @@ export function TransactionListPage() {
                 value: merchant.merchantId,
                 label: `${merchant.displayName}${merchant.status === 'INACTIVE' ? ' · 비활성' : ''}`,
               }))}
-              onChange={(value: number | undefined) => setQuery({ merchantId: value ?? null })}
+              onChange={(value: number | undefined) => setQuery(merchantChange(value ?? null))}
             />
             <Select
               aria-label="결제 상태"
@@ -434,7 +465,9 @@ export function TransactionListPage() {
               aria-label="고객 번호"
               allowClear
               style={{ width: 200 }}
-              placeholder="고객 번호 (정확히)"
+              // 고객 번호는 가맹점마다 따로라 가맹점을 고르기 전에는 잠근다 (#487)
+              disabled={query.merchantId === null}
+              placeholder={query.merchantId === null ? '가맹점 선택 후 입력' : '고객 번호 (정확히)'}
               defaultValue={query.customerRef}
               onSearch={(value) => setQuery({ customerRef: value.trim() })}
             />
@@ -449,6 +482,13 @@ export function TransactionListPage() {
             type="warning"
             showIcon
             message={`기간은 최대 ${MAX_PERIOD_DAYS}일까지 볼 수 있습니다. 기간을 줄여 주세요.`}
+          />
+        )}
+        {needsMerchant && (
+          <Alert
+            type="info"
+            showIcon
+            message="고객 번호로 찾으려면 가맹점을 먼저 골라 주세요. 고객 번호는 가맹점마다 따로 매겨져요."
           />
         )}
         {current?.error && <Alert type="error" showIcon message={current.error} />}
@@ -474,7 +514,9 @@ export function TransactionListPage() {
               ? '조회하지 못했습니다.'
               : tooLong
                 ? '기간을 줄이면 결제가 보입니다.'
-                : '조건에 맞는 결제가 없습니다.',
+                : needsMerchant
+                  ? '가맹점을 고르면 이 고객의 결제가 보입니다.'
+                  : '조건에 맞는 결제가 없습니다.',
           }}
         />
       </Card>

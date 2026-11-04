@@ -13,6 +13,7 @@ import {
 } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
+import { customerPart } from '../../utils/caseRules'
 import { ResultTag } from './alert/AlertTags'
 
 type Filter = 'NEEDS_ATTENTION' | FdsResult | 'ALL'
@@ -305,7 +306,8 @@ export function AlertListPage() {
       width: 150,
       render: (value: number) => merchantNames.get(value) ?? `ID ${value}`,
     },
-    { title: '고객 식별자', dataIndex: 'customerRef', width: 180 },
+    // 저장값 "가맹점ID:고객"에서 고객 부분만 보인다 (#462)
+    { title: '고객 식별자', dataIndex: 'customerRef', width: 180, render: customerPart },
     {
       title: '위험 점수',
       dataIndex: 'riskScore',

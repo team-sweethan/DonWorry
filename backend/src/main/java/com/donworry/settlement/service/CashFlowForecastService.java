@@ -48,48 +48,79 @@ public class CashFlowForecastService {
         var startAt = at(start);
         var endAt = at(to.plusDays(1));
         var actualUntil = endAt.isBefore(now) ? endAt : now;
-        long completed = CashFlowCalculator.money(repository.sumCompleted(merchant, baseAt, now));
+        long completed = CashFlowCalculator.money(repository.sumPaidOut(merchant, baseAt, now));
         long paid = CashFlowCalculator.add(
                 CashFlowCalculator.money(repository.sumPaidExpenses(merchant, baseAt, now)),
                 CashFlowCalculator.money(repository.sumPaidRecurring(merchant, baseAt, now)));
         long current = CashFlowCalculator.netBalance(setting.openingBalance(), completed, paid);
         // 기준일부터 조회 시작 전까지는 합계 쿼리로 누적한다. 계정 사용 기간을 366일로 제한하지 않는다.
         var initial = BigDecimal.valueOf(setting.openingBalance())
-                .add(repository.sumCompleted(merchant, baseAt, startAt))
+                .add(repository.sumPaidOut(merchant, baseAt, startAt))
                 .subtract(repository.sumPaidExpenses(merchant, baseAt, startAt))
                 .subtract(repository.sumPaidRecurring(merchant, baseAt, startAt));
         var page = PageRequest.of(0, LIMIT + 1);
         var rows = new ArrayList<Movement>();
-        for (var s : bounded(repository.findCompleted(merchant, startAt, actualUntil, page))) {
+        for (var s : bounded(repository.findPaidOut(merchant, startAt, actualUntil, page))) {
             rows.add(Movement.builder()
-                    .source("SETTLEMENT")
-                    .referenceId(s.getSettlementId())
+                    .source("PAYOUT")
+                    .referenceId(s.getPayoutId())
                     .date(date(s.getCompletedAt()))
-                    .title("완료 정산")
-                    .amount(s.getSettlementAmount())
+                    .title("실제 정산 지급")
+                    .amount(s.getPayoutAmount())
+                    .settlementAmount(CashFlowCalculator.money(BigDecimal.valueOf(s.getSettlementTotal())))
+                    .refundDeductionAmount(CashFlowCalculator.money(BigDecimal.valueOf(s.getRefundDeductionTotal())))
                     .classification("COMPLETED")
-                    .eligibleAt(s.getScheduledAt())
                     .reflectedAt(s.getCompletedAt())
                     .build());
         }
+        var outstanding = repository.outstandingRecovery(merchant, now);
+        if (outstanding.signum() < 0) throw new IllegalStateException("환불 회수 잔여액이 음수입니다.");
+        var debt = outstanding;
         long overdue = 0;
+        var projected = new ArrayList<Movement>();
+        var sealedDates = bounded(repository.findPaidOut(merchant, at(today), now, page)).stream()
+                .filter(p -> p.getCompletedAt().isBefore(now))
+                .map(p -> p.getPayoutDate())
+                .collect(java.util.stream.Collectors.toSet());
         for (var s : bounded(repository.findScheduled(merchant, endAt.isAfter(now) ? endAt : now, now, page))) {
             var eligible = s.getScheduledAt() == null ? s.getExpectedSettlementAt() : s.getScheduledAt();
             var batch = schedule.projectedAt(eligible);
+            if (sealedDates.contains(date(batch)))
+                batch = schedule.projectedAt(at(date(batch).plusDays(1)));
             if (batch.isBefore(now)) {
                 overdue = CashFlowCalculator.add(overdue, s.getSettlementAmount());
                 continue;
             }
             if (date(batch).isAfter(to)) continue;
-            rows.add(Movement.builder()
+            projected.add(Movement.builder()
                     .source("SETTLEMENT")
                     .referenceId(s.getSettlementId())
                     .date(date(batch))
-                    .title("예정 정산")
-                    .amount(s.getSettlementAmount())
+                    .title("예정 정산 지급")
+                    .amount(CashFlowCalculator.money(BigDecimal.valueOf(s.getSettlementAmount())))
+                    .settlementAmount(s.getSettlementAmount())
                     .classification(s.getScheduledAt() == null ? "EXPECTED" : "SCHEDULED")
                     .eligibleAt(eligible)
                     .reflectedAt(batch)
+                    .build());
+        }
+        // 조회 시작 전의 예정 지급도 먼저 차감해야 미래 기간만 조회해도 회수액을 두 번 빼지 않는다.
+        projected.sort(Comparator.comparing(Movement::date).thenComparing(Movement::referenceId));
+        for (var m : projected) {
+            var deduction = debt.min(BigDecimal.valueOf(m.amount()));
+            long deducted = CashFlowCalculator.money(deduction);
+            debt = debt.subtract(deduction);
+            rows.add(Movement.builder()
+                    .source(m.source())
+                    .referenceId(m.referenceId())
+                    .date(m.date())
+                    .title(m.title())
+                    .amount(m.amount() - deducted)
+                    .classification(m.classification())
+                    .eligibleAt(m.eligibleAt())
+                    .reflectedAt(m.reflectedAt())
+                    .settlementAmount(m.amount())
+                    .refundDeductionAmount(deducted)
                     .build());
         }
         for (var e : bounded(repository.findExpenses(merchant, startAt, actualUntil, today, to, page))) {
@@ -153,6 +184,9 @@ public class CashFlowForecastService {
                 .undatedIncome(CashFlowCalculator.money(repository.sumUndated(merchant)))
                 .overdueIncome(overdue)
                 .canceledIncome(CashFlowCalculator.money(repository.sumCanceled(merchant)))
+                .outstandingRecoveryAmount(CashFlowCalculator.money(outstanding))
+                .projectedRefundDeduction(CashFlowCalculator.money(outstanding.subtract(debt)))
+                .remainingRecoveryAmount(CashFlowCalculator.money(debt))
                 .batchCron(schedule.expression())
                 .batchEnabled(schedule.enabled())
                 .carryForwardMovements(result.carryForwardMovements())

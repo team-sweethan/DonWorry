@@ -1,5 +1,6 @@
 import type { PaymentStatus } from '../types/case.ts'
 import type { MlShadowScore } from '../types/mlShadowScore.ts'
+import { customerPart } from './caseRules.ts'
 
 // 거래 내역 조건 (#363). Case 목록(#243)처럼 주소 쿼리에 두어 경보 · 사건으로 갔다가 뒤로 와도 같은 조건으로 열린다
 // 기본값은 주소에 쓰지 않는다. 모르는 값은 무시하고 기본값을 쓴다
@@ -48,21 +49,46 @@ function isDate(value: string) {
 const nextDay = (date: string) =>
   new Date(Date.parse(`${date}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10)
 
+const positiveId = (value: string | null) => {
+  const id = Number(value)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+// 예전 주소는 고객을 "가맹점ID:번호"(7:42)로 담았다 (#462) → 가맹점 7 · 고객 42로 나눠 같은 화면을 연다
+// 가맹점 부분이 이상하거나 주소의 가맹점과 다르면 어느 손님인지 모르니 고객 조건만 버린다
+function splitLegacyCustomer(raw: string, merchantId: number | null) {
+  const at = raw.indexOf(':')
+  if (at < 0) return { merchantId, customerRef: raw }
+  const prefix = positiveId(raw.slice(0, at))
+  if (prefix === null || (merchantId !== null && merchantId !== prefix)) {
+    return { merchantId, customerRef: '' }
+  }
+  return { merchantId: prefix, customerRef: raw.slice(at + 1).trim() }
+}
+
 export function parseTransactionListQuery(params: URLSearchParams): TransactionListQuery {
   const from = params.get('from') ?? ''
   const to = params.get('to') ?? ''
   // 한쪽만 있거나 거꾸로면 기간 조건 전체를 버린다 — 반쪽 기간을 추측하지 않는다
   const period = isDate(from) && isDate(to) && from <= to ? { from, to } : { from: '', to: '' }
-  const merchantId = Number(params.get('merchantId'))
   const page = Number(params.get('page'))
+  const customer = splitLegacyCustomer(
+    (params.get('customerRef') ?? '').trim(),
+    positiveId(params.get('merchantId')),
+  )
   return {
     ...period,
-    merchantId: Number.isInteger(merchantId) && merchantId > 0 ? merchantId : null,
+    merchantId: customer.merchantId,
     status: statuses.find((s) => s === params.get('status')) ?? null,
     orderRef: (params.get('orderRef') ?? '').trim(),
-    customerRef: (params.get('customerRef') ?? '').trim(),
+    customerRef: customer.customerRef,
     page: Number.isInteger(page) && page > 1 ? page : 1,
   }
+}
+
+// 고객 번호는 가맹점마다 따로 매겨서(42번 손님이 가맹점마다 있다) 가맹점 없이는 찾지 않는다 (#462)
+export function customerNeedsMerchant(query: TransactionListQuery) {
+  return query.customerRef !== '' && query.merchantId === null
 }
 
 // 기본값을 뺀 쿼리 문자열. 조건이 모두 기본값이면 빈 문자열이다
@@ -82,6 +108,29 @@ export function transactionListSearch(query: Partial<TransactionListQuery>) {
   return search ? `?${search}` : ''
 }
 
+// 그 손님 결제만 보는 조건 (#487) — 저장값 "가맹점ID:고객"에서 고객 부분만 쓴다. 다른 조건은 처음부터
+export function customerOnlyQuery(
+  merchantId: number | string,
+  customerRef: string,
+): TransactionListQuery | null {
+  const id = positiveId(String(merchantId))
+  const customer = customerPart(customerRef).trim()
+  if (id === null || !customer) return null
+  return { ...defaultTransactionListQuery, merchantId: id, customerRef: customer }
+}
+
+// 경보 · 사건 상세의 "이 고객 거래 내역 보기" 주소 (#487). 가맹점이나 고객을 모르면 null
+export function customerTransactionsPath(merchantId: number | string, customerRef: string) {
+  const query = customerOnlyQuery(merchantId, customerRef)
+  return query && `/security/transactions${transactionListSearch(query)}`
+}
+
+// 가맹점을 바꾸거나 지우면 고객 번호 조건도 지운다 (#487)
+// 고객 번호는 가맹점마다 따로라, 남겨 두면 다른 가맹점의 다른 손님을 찾거나 조회가 막힌다
+export function merchantChange(merchantId: number | null): Partial<TransactionListQuery> {
+  return { merchantId, customerRef: '' }
+}
+
 // 고른 날짜 수 (양끝 포함). 기간 조건이 없으면 0
 export function periodDays(query: TransactionListQuery) {
   if (!query.from || !query.to) return 0
@@ -99,7 +148,10 @@ export function transactionApiParams(query: TransactionListQuery) {
   if (query.merchantId !== null) params.set('merchantId', String(query.merchantId))
   if (query.status) params.set('status', query.status)
   if (query.orderRef) params.set('orderRef', query.orderRef)
-  if (query.customerRef) params.set('customerRef', query.customerRef)
+  // 결제 쪽이 고객을 "가맹점ID:번호"로 저장해서 합쳐 보낸다. 가맹점이 없으면 화면이 조회를 막는다
+  if (query.customerRef && query.merchantId !== null) {
+    params.set('customerRef', `${query.merchantId}:${query.customerRef}`)
+  }
   params.set('page', String(query.page - 1))
   params.set('size', String(TRANSACTION_PAGE_SIZE))
   return params

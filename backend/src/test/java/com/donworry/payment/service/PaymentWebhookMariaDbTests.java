@@ -46,8 +46,14 @@ import tools.jackson.databind.json.JsonMapper;
 
 // 결제 상태 웹훅 발송 (ADR-0064 3절, #402 PR②) — 실제 HTTP 수신 서버(테스트 대역)로 보내 헤더 · 서명 · 재시도를 확인한다
 // 로컬 수신(127.0.0.1, http)이라 allow-local-targets를 켠다. 운영 주소 규칙은 PaymentWebhookTargetPolicyTests가 본다
+// 예약 실행(5초)이 테스트의 직접 run()과 겹치면 같은 세션을 두 번 처리해 횟수 · 예약 시각 확인이 흔들린다. 테스트에서는 끄고 run()만 쓴다
 @Tag("mariadb")
-@SpringBootTest(properties = {"payment.http.enabled=true", "donworry.payment.webhook.allow-local-targets=true"})
+@SpringBootTest(
+        properties = {
+            "payment.http.enabled=true",
+            "donworry.payment.webhook.allow-local-targets=true",
+            "donworry.scheduling.enabled=false"
+        })
 @Import(MariaDbTestContainerConfig.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class PaymentWebhookMariaDbTests {
@@ -161,6 +167,30 @@ class PaymentWebhookMariaDbTests {
                 .isEqualTo("VOIDED");
     }
 
+    // 직원 승인으로 매입되면(HELD → CAPTURED) 새 eventId로 알린다.
+    // 가맹점은 이 웹훅으로 "결제 확인 중"을 결제 완료로 바꾼다 (ADR-0064 4절, #492)
+    @Test
+    void run_whenHeldIsCaptured_sendsCapturedWebhook() throws Exception {
+        Ids ids = heldSessionWithNotifyUrl();
+        runAndSettle();
+        assertThat(received)
+                .singleElement()
+                .satisfies(r -> assertThat(r.headers()).containsEntry("event", "evt_" + ids.paymentId() + "_HELD_A"));
+
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeHeldCapture());
+        runAndSettle();
+
+        assertThat(received).hasSize(2);
+        assertThat(received.get(1).headers()).containsEntry("event", "evt_" + ids.paymentId() + "_CAPTURED_A");
+        JsonNode body = json.readTree(received.get(1).body());
+        assertThat(body.get("paymentStatus").asString()).isEqualTo("CAPTURED");
+        assertThat(body.get("authorized").asBoolean()).isTrue();
+        PaymentSession captured = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(captured.getNotifiedStatus()).isEqualTo("CAPTURED");
+        assertThat(captured.getNextNotifyAt()).isNull();
+    }
+
     // 2xx가 아니면(5xx · 리다이렉트) 보낸 것으로 기록하지 않고 5초부터 늘어나는 간격 뒤에 다시 보낸다
     @Test
     void run_whenNot2xx_retriesLaterWithoutMarkingNotified() {
@@ -169,18 +199,76 @@ class PaymentWebhookMariaDbTests {
             responseStatus.set(status);
             Ids ids = heldSessionWithNotifyUrl();
 
+            Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
             runAndSettle();
+            Instant after = Instant.now();
 
             assertThat(received).as("status " + status).hasSize(1);
             PaymentSession failed = sessions.findById(ids.sessionId()).orElseThrow();
             assertThat(failed.getNotifiedStatus()).as("status " + status).isNull();
             assertThat(failed.getNotifyAttempts()).isEqualTo(1);
-            assertThat(failed.getNextNotifyAt()).isAfter(Instant.now().plusSeconds(5));
+            // 첫 재시도는 실패한 시각에서 5초 뒤 (ADR-0064 3절, #460)
+            assertThat(failed.getNextNotifyAt()).isBetween(before.plusSeconds(5), after.plusSeconds(5));
 
             // 다음 시각 전에는 다시 보내지 않는다
             runAndSettle();
             assertThat(received).as("status " + status).hasSize(1);
         }
+    }
+
+    // 재전송 한도(약 24시간)에 닿으면 그 상태는 더 보내지 않고 다음 주기에도 다시 예약하지 않는다.
+    // 상태가 바뀌면(직원 거절로 VOIDED) 새로 알린다 (#455)
+    @Test
+    void run_whenRetryLimitReached_stopsUntilStatusChanges() {
+        responseStatus.set(500);
+        Ids ids = heldSessionWithNotifyUrl();
+        retryingFor(ids, "evt_" + ids.paymentId() + "_HELD_A", PaymentSession.NOTIFY_MAX_ATTEMPTS - 1);
+
+        runAndSettle();
+
+        assertThat(received).hasSize(1);
+        PaymentSession stopped = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(stopped.getNextNotifyAt()).isNull();
+        assertThat(stopped.getNotifiedStatus()).isEqualTo("HELD");
+        assertThat(stopped.getNotifyAttempts()).isEqualTo(PaymentSession.NOTIFY_MAX_ATTEMPTS);
+
+        runAndSettle();
+        assertThat(received).hasSize(1);
+        assertThat(sessions.findById(ids.sessionId()).orElseThrow().getNextNotifyAt())
+                .isNull();
+
+        responseStatus.set(200);
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeVoid());
+        runAndSettle();
+
+        assertThat(received).hasSize(2);
+        assertThat(received.get(1).headers()).containsEntry("event", "evt_" + ids.paymentId() + "_VOIDED_A");
+        PaymentSession renotified = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(renotified.getNotifiedStatus()).isEqualTo("VOIDED");
+        assertThat(renotified.getNotifyAttempts()).isZero();
+    }
+
+    // HELD 알림을 재시도하던 중 직원 거절로 VOIDED가 되면, VOIDED는 HELD의 실패 횟수를 이어받지 않고 1회부터 센다
+    // (PR #457 Codex 리뷰 — 이어 세면 VOIDED가 첫 실패만으로 한도에 닿아 중단된다)
+    @Test
+    void run_whenStatusChangesDuringRetry_restartsCountForNewEvent() {
+        responseStatus.set(500);
+        Ids ids = heldSessionWithNotifyUrl();
+        retryingFor(ids, "evt_" + ids.paymentId() + "_HELD_A", PaymentSession.NOTIFY_MAX_ATTEMPTS - 1);
+        tx().executeWithoutResult(s ->
+                payments.findByIdForUpdate(ids.paymentId()).orElseThrow().completeVoid());
+
+        runAndSettle();
+
+        assertThat(received)
+                .singleElement()
+                .satisfies(r -> assertThat(r.headers()).containsEntry("event", "evt_" + ids.paymentId() + "_VOIDED_A"));
+        PaymentSession retrying = sessions.findById(ids.sessionId()).orElseThrow();
+        assertThat(retrying.getNotifyAttempts()).isEqualTo(1);
+        assertThat(retrying.getNotifyEventId()).isEqualTo("evt_" + ids.paymentId() + "_VOIDED_A");
+        assertThat(retrying.getNextNotifyAt()).isNotNull();
+        assertThat(retrying.getNotifiedStatus()).isNull();
     }
 
     // 가맹점 키가 없으면 서명 없이 보내지 않고 다시 시도로 남긴다
@@ -222,6 +310,15 @@ class PaymentWebhookMariaDbTests {
     }
 
     record Ids(Long sessionId, Long paymentId) {}
+
+    // 그 eventId를 이미 attempts번 보내지 못한 세션으로 만든다(약 24시간 재시도를 기다리지 않으려고)
+    private void retryingFor(Ids ids, String eventId, int attempts) {
+        jdbc.update(
+                "UPDATE payment_sessions SET notify_event_id = ?, notify_attempts = ? WHERE session_id = ?",
+                eventId,
+                attempts,
+                ids.sessionId());
+    }
 
     // 결제창으로 접수돼 보류(HELD)된 결제와, 알림 주소가 있는 세션
     private Ids heldSessionWithNotifyUrl() {

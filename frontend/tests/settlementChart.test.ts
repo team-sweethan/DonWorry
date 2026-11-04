@@ -43,3 +43,41 @@ test('settlementChart_whenOverdue_doesNotInventCompletionOrExtendFutureLine', ()
   assert.equal(data[1].scheduledAmount, 200)
   assert.equal(data[4].expectedAmount, 400)
 })
+
+// 기록이 있는 0원 지급을 빈 날짜로 지워 버리지 않는다.
+test('settlementChart_whenPayoutIsZero_keepsActualPaymentPoint', () => {
+  const days = settlementDays('2026-11-01', '2026-11-03', [
+    { date: '2026-11-02', amount: 0, kind: 'COMPLETED' },
+  ])
+  const result = settlementSeries(days, '2026-11-02')
+  assert.equal(result[0].completed, null)
+  assert.equal(result[1].completed, 0)
+  assert.equal(result[1].hasPayout, true)
+  assert.equal(result[2].completed, null)
+})
+
+test('settlementChart_whenDailyMoneyExceedsSafeInteger_rejectsRoundedGraph', () => {
+  assert.throws(
+    () =>
+      settlementDays('2026-11-01', '2026-11-01', [
+        { date: '2026-11-01', amount: Number.MAX_SAFE_INTEGER, kind: 'COMPLETED' },
+        { date: '2026-11-01', amount: 1, kind: 'COMPLETED' },
+      ]),
+    /지원 범위/,
+  )
+  assert.throws(
+    () =>
+      settlementSeries(
+        [
+          {
+            date: '2026-11-01',
+            completedAmount: 0,
+            scheduledAmount: Number.MAX_SAFE_INTEGER,
+            expectedAmount: 1,
+          },
+        ],
+        '2026-11-01',
+      ),
+    /지원 범위/,
+  )
+})

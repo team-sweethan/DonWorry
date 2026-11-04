@@ -86,6 +86,7 @@ class AdminAccountHttpTests {
         var ids =
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM admin_change_histories WHERE actor_user_id=? OR target_user_id=?", id, id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
@@ -134,6 +135,11 @@ class AdminAccountHttpTests {
     }
 
     private int historyCount(long id) {
+        assertThat(jdbc.queryForList(
+                        "SELECT DISTINCT actor_type FROM admin_change_histories WHERE target_user_id=?",
+                        String.class,
+                        id))
+                .allMatch("STAFF"::equals);
         return jdbc.queryForObject(
                 "SELECT COUNT(*) FROM admin_change_histories WHERE target_user_id=?", Integer.class, id);
     }
@@ -616,8 +622,18 @@ class AdminAccountHttpTests {
                 .establishAuthentication(any(), any(), any());
         var caller = client();
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            var loggingIn = executor.submit(() -> login(
-                    caller, prefix + "_first", created.path("temporaryPassword").asString()));
+            // 마지막 검증은 GET이므로 로그인 뒤 CSRF 갱신이 필요 없다. 갱신 요청이 세션 만료를 먼저 관측하지 않게 한다.
+            var loginRequest = com.donworry.HttpCsrfTestSupport.withCsrf(
+                            caller,
+                            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/auth/login"))
+                                    .header("Content-Type", "application/json")
+                                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(Map.of(
+                                            "loginId",
+                                            prefix + "_first",
+                                            "password",
+                                            created.path("temporaryPassword").asString())))))
+                    .build();
+            var loggingIn = executor.submit(() -> caller.send(loginRequest, HttpResponse.BodyHandlers.ofString()));
             try {
                 assertThat(verified.await(10, TimeUnit.SECONDS)).isTrue();
                 Object body = switch (operation) {

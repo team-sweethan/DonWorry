@@ -169,6 +169,8 @@ class ApplicationRecoverySmtpMariaDbTests {
         jdbc.update(
                 "DELETE FROM user_permissions WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'smtp_recovery_%')");
         jdbc.update(
+                "DELETE FROM operator_access_denials WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'smtp_recovery_%')");
+        jdbc.update(
                 "DELETE FROM login_histories WHERE user_id IN (SELECT user_id FROM platform_users WHERE login_id LIKE 'smtp_recovery_%')");
         jdbc.update("DELETE FROM platform_users WHERE login_id LIKE 'smtp_recovery_%'");
         jdbc.update("DELETE FROM merchants WHERE merchant_code='SMTPREC001'");

@@ -24,10 +24,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+// 이 컨텍스트는 캐시에 남아 다른 테스트 중에도 살아 있다. 예약 실행을 켜 두면 결제 웹훅 발송기가 같은 MariaDB의
+// 다른 테스트 세션까지 처리해 PaymentWebhookMariaDbTests가 흔들린다 (#455). 이 클래스는 예약 실행에 기대지 않는다
 @Tag("mariadb")
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"security.csrf.enabled=false", "payment.http.enabled=true"})
+        properties = {"security.csrf.enabled=false", "payment.http.enabled=true", "donworry.scheduling.enabled=false"})
 @Import({MariaDbTestContainerConfig.class, MerchantIntegrationHttpMariaDbTests.Keys.class})
 class MerchantIntegrationHttpMariaDbTests {
     @TestConfiguration
@@ -117,6 +119,7 @@ class MerchantIntegrationHttpMariaDbTests {
         for (var id : jdbc.queryForList(
                 "SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%")) {
             sessions.expireAll(id);
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM platform_users WHERE user_id=?", id);
         }
@@ -794,6 +797,7 @@ class MerchantIntegrationHttpMariaDbTests {
                         "DELETE FROM admin_change_histories WHERE target_user_id=? OR target_merchant_id=?",
                         newUserId,
                         newMerchantId);
+                jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", newUserId);
                 jdbc.update("DELETE FROM login_histories WHERE user_id=?", newUserId);
                 jdbc.update("DELETE FROM platform_users WHERE user_id=?", newUserId);
             }

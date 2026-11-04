@@ -158,6 +158,9 @@ class RoleApiMatrixTests {
                     OWNER_FINANCE));
 
     @MockitoBean
+    com.donworry.identity.service.OperatorAccessDenialService accessDenials;
+
+    @MockitoBean
     com.donworry.identity.service.LoginHistoryService loginHistories;
 
     @MockitoBean

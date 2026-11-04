@@ -138,7 +138,6 @@ class MockLlmClient:
             "riskEvidence": ["FDS 규칙 적중 내역을 확인했습니다."],
             "normalEvidence": ["추가로 확인된 정상 정황은 없습니다."],
             "unknowns": ["고객 본인의 결제 의사"],
-            "recommendation": "NEEDS_CHECK",
             "reason": "FDS 근거와 함께 조회한 정황을 비교해 추가 확인이 필요합니다.",
         }
         return json.dumps(

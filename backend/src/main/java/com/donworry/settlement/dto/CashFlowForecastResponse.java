@@ -24,6 +24,9 @@ public record CashFlowForecastResponse(
         long undatedIncome,
         long overdueIncome,
         long canceledIncome,
+        long outstandingRecoveryAmount,
+        long projectedRefundDeduction,
+        long remainingRecoveryAmount,
         String batchCron,
         boolean batchEnabled,
         List<Movement> carryForwardMovements,
@@ -45,7 +48,9 @@ public record CashFlowForecastResponse(
             long amount,
             String classification,
             Instant eligibleAt,
-            Instant reflectedAt) {}
+            Instant reflectedAt,
+            long settlementAmount,
+            long refundDeductionAmount) {}
 
     @Builder
     public record Day(

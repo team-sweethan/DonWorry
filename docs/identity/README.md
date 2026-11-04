@@ -1,5 +1,22 @@
 # Identity — 로그인 MVP
 
+## #525 사장님 403 원본 저장·발행
+
+[구현·검증과 보관 정책](525-operator-access-denials.md), [ADR-0080](../decisions/0080-operator-access-denials.md).
+OPERATOR의 핸들러 권한 거절을 P1 원본과 같은 트랜잭션 이벤트로 남긴다. 인가·거절 분류는 동일 경로 목록을 사용하며 저장 실패 시에도 기존 403을 유지한다.
+IP는 1년 후 NULL 처리하고 원본 행은 조사 근거로 유지한다. 행 보관 기간은 조사 기록 정책에서 별도로 정하며 IP 정리 구현은 후속이다. 실행 결과·미검증은 위 명세를 따른다.
+
+
+## #521 사장님 403 이벤트·계정 상태 조회 계약
+
+[공개 계약·검증 명세](521-operator-security-contracts.md), [ADR-0079](../decisions/0079-operator-security-contracts.md).
+`OperatorAccessDenied` 타입과 `OperatorAccountStatusReader` 조회 빈을 제공한다. 마지막 해제 시각은 기존 `USER_ENABLED` 감사에서 읽으며 UTC Instant·api 전용 상태 enum으로 반환한다. 실제 403 수집·발행은 #525에서 연결하며 P2 연결은 후속이다. 실행 결과·미검증은 각 명세를 따른다.
+
+## #517 시스템 감사 기록·사장님 정지
+
+[설계·검증 체크리스트](517-operator-suspension.md), [ADR-0078](../decisions/0078-operator-account-suspension.md).
+감사 수행자 STAFF/SYSTEM을 구분하고 `OperatorAccountSuspender.suspend(userId)`로 OPERATOR만 독립 커밋·세션 만료한다. 403 수집·P2 탐지 연결·해제 후 재정지 방지는 #515 후속이다. 검사 실행 결과와 미검증은 체크리스트의 실행 기록을 따른다.
+
 관련: Issue #68 · #69 · #76, [ADR-0014](../decisions/0014-session-authentication.md).
 
 ## #131 PR A 계정·신청 상태 전환

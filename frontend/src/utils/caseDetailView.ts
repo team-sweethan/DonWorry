@@ -74,10 +74,19 @@ export function decidedOpposition(
   paymentId: string,
   reports: AiReport[],
 ): AiRecommendation | null {
+  const recommendation = decidedAnalysis(decision, paymentId, reports)?.recommendation ?? null
+  return isOpposing(recommendation, decision.decision) ? recommendation : null
+}
+
+// 확정된 판정의 기준 보고서가 이 결제에 준 분석 — "기준표 판정과 다름" · "AI 권고와 다름" 앞말에 쓴다 (#501)
+export function decidedAnalysis(
+  decision: PaymentDecision,
+  paymentId: string,
+  reports: AiReport[],
+): PaymentAnalysis | null {
   if (decision.reportId === null) return null
   const report = reports.find((r) => sameId(r.reportId, decision.reportId))
-  const recommendation = recommendationFor(report, paymentId)
-  return isOpposing(recommendation, decision.decision) ? recommendation : null
+  return analysisFor(report, paymentId)
 }
 
 // ── 진행 단계 ──

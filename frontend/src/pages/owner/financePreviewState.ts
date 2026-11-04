@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 import type { RecurringExpense } from './financePreviewTypes.ts'
 import { expandRecurring, recurringTotal } from './recurringExpenses.ts'
-import { previewSettlements } from './settlementPreviewData.ts'
+import { previewSettlements, previewPayouts } from './settlementPreviewData.ts'
 
 export type PreviewExpense = {
   id: number
@@ -27,6 +27,8 @@ export type ExpenseRow = {
 export type PreviewState = {
   base: string
   opening: number | null
+  todayRefundDeduction: number
+  recoveryAmount: number
   expenses: PreviewExpense[]
   recurring: RecurringExpense[]
   paidRecurring: Record<string, ExpenseRow>
@@ -62,6 +64,8 @@ export function createPreviewState(today: string): PreviewState {
   return {
     base: today,
     opening: null,
+    todayRefundDeduction: 97000,
+    recoveryAmount: 150000,
     recurring: [],
     paidRecurring: {},
     expenses: [
@@ -178,12 +182,12 @@ function calculateCashFlow(state: PreviewState, today: string, from: string, to:
       id: e.id,
       date: dayjs(e.date).format('YYYY-MM-DD'),
       status: e.status,
-      amount: e.gross - Math.floor(e.gross * 0.015) * 2,
+      amount: e.settlementAmount!,
     }))
   const completedIncome = moneyTotal(
-    inflows
-      .filter((e) => e.status === 'done' && e.date >= state.base && e.date <= today)
-      .map((e) => e.amount),
+    previewPayouts(new Date(today + 'T12:00:00'), state.todayRefundDeduction)
+      .filter((p) => p.payoutDate >= state.base && p.payoutDate <= today)
+      .map((p) => p.payoutAmount),
   )
   const paidExpenses = moneyTotal(
     rows
@@ -193,7 +197,25 @@ function calculateCashFlow(state: PreviewState, today: string, from: string, to:
   const currentBalance = moneyTotal([state.opening ?? 0, completedIncome, -paidExpenses])
   const overdue = history.filter((e) => !e.paidAt && e.plannedDate < today)
   const pending = rows.filter((e) => !e.paidAt && e.plannedDate >= today)
-  const projected = inflows.filter((e) => e.status !== 'done' && e.date >= today)
+  let recovery = BigInt(state.recoveryAmount)
+  const projected = inflows
+    .filter((e) => e.status !== 'done' && e.date >= today)
+    .map((e) => ({
+      ...e,
+      date: e.date === today ? dayjs(today).add(1, 'day').format('YYYY-MM-DD') : e.date,
+    }))
+    .filter((e) => e.date <= to)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+    .map((e) => {
+      const deduction = BigInt(e.amount) < recovery ? BigInt(e.amount) : recovery
+      recovery -= deduction
+      return {
+        ...e,
+        settlementAmount: e.amount,
+        refundDeductionAmount: safeMoney(deduction),
+        amount: e.amount - safeMoney(deduction),
+      }
+    })
   let balance = currentBalance
   const days = []
   if (valid) {
@@ -249,6 +271,11 @@ function calculateCashFlow(state: PreviewState, today: string, from: string, to:
     overdue,
     currentBalance,
     completedIncome,
+    recovery: {
+      outstanding: state.recoveryAmount,
+      projected: state.recoveryAmount - safeMoney(recovery),
+      remaining: safeMoney(recovery),
+    },
     paidExpenses,
     valid,
   }

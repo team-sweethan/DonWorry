@@ -11,6 +11,7 @@ import type {
 import {
   OPPOSE_MIN_REASON,
   analysisFor,
+  decidedAnalysis,
   decidedOpposition,
   decisionBlocker,
   isOpposing,
@@ -18,6 +19,7 @@ import {
 } from '../../../utils/caseDetailView'
 import type { DecisionMode } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
+import { recommendationSource, sourceWith } from '../../../utils/reportView'
 import { dateTime, decisionLabel, recommendationLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
 
@@ -37,7 +39,7 @@ export function DecisionPanel({
 }: {
   payments: CasePayment[]
   decisions: PaymentDecision[]
-  // 확정된 판정의 "AI 권고와 다름"을 그 판정의 기준 보고서로 계산한다
+  // 확정된 판정의 "기준표 판정과 다름"을 그 판정의 기준 보고서로 계산한다
   reports: AiReport[]
   mode: DecisionMode
   evidenceVersion: number
@@ -60,7 +62,7 @@ export function DecisionPanel({
       return next
     })
 
-  // 판정할 결제의 AI 권고는 판정 기준 보고서에서 가져온다 (수동 판정이면 없음)
+  // 판정할 결제의 권고(기준표 판정 · 예전 AI 권고)는 판정 기준 보고서에서 가져온다 (수동 판정이면 없음)
   const baseReport = mode.kind === 'normal' ? mode.report : null
   const analysisOf = (p: CasePayment) => analysisFor(baseReport, p.paymentId)
   const opposingOf = (p: CasePayment) =>
@@ -79,7 +81,7 @@ export function DecisionPanel({
     const opposing = selected.filter(opposingOf).length
     confirmDanger({
       title: `결제 ${selected.length}건의 판정을 확정할까요?`,
-      content: `ACCEPT ${accept}건(매입 요청) · REJECT ${selected.length - accept}건(승인 취소 요청)${opposing ? ` · 그중 AI 권고와 반대 ${opposing}건` : ''}. 확정한 판정은 변경할 수 없습니다.`,
+      content: `ACCEPT ${accept}건(매입 요청) · REJECT ${selected.length - accept}건(승인 취소 요청)${opposing ? ` · 그중 권고와 반대 ${opposing}건` : ''}. 확정한 판정은 변경할 수 없습니다.`,
       onConfirm: async () => {
         const saved = await onSubmit({
           evidenceVersion,
@@ -135,6 +137,10 @@ export function DecisionPanel({
           const analysis = decided ? null : analysisOf(p)
           const opposing = !decided && opposingOf(p)
           const decidedAgainst = decided ? decidedOpposition(decided, p.paymentId, reports) : null
+          // 판정 전은 지금 기준 보고서, 판정 후는 그 판정의 기준 보고서로 앞말을 고른다 (#501)
+          const source = recommendationSource(
+            decided ? decidedAnalysis(decided, p.paymentId, reports) : analysis,
+          )
           return (
             <div key={p.casePaymentId} style={rowBox}>
               <Space size={8} wrap style={{ marginBottom: 8 }}>
@@ -143,7 +149,7 @@ export function DecisionPanel({
                 <span style={{ color: '#64748b' }}>FDS {p.riskScore ?? '-'}점</span>
                 {analysis && (
                   <span style={{ color: '#64748b' }}>
-                    AI 권고 <CodeTag value={recommendationLabel[analysis.recommendation]} />
+                    {source} <CodeTag value={recommendationLabel[analysis.recommendation]} />
                   </span>
                 )}
               </Space>
@@ -170,7 +176,7 @@ export function DecisionPanel({
                     <CodeTag value={decisionLabel[decided.decision]} />
                     {decidedAgainst && (
                       <Tag color="orange">
-                        AI 권고와 다름 ({recommendationLabel[decidedAgainst].label})
+                        {sourceWith[source]} 다름 ({recommendationLabel[decidedAgainst].label})
                       </Tag>
                     )}
                   </Space>
@@ -216,7 +222,7 @@ export function DecisionPanel({
                       type="warning"
                       showIcon
                       style={{ marginTop: 8, fontSize: 12, padding: '6px 10px' }}
-                      message={`AI 권고(${recommendationLabel[analysis.recommendation].label})와 반대되는 판정입니다. 직접 확인한 근거를 ${OPPOSE_MIN_REASON}자 이상 적어 주세요 — 지금 ${reasonLength(draft.reason)} / ${OPPOSE_MIN_REASON}자 (공백 제외)`}
+                      message={`${sourceWith[source]} 반대되는 판정입니다 (${recommendationLabel[analysis.recommendation].label}). 직접 확인한 근거를 ${OPPOSE_MIN_REASON}자 이상 적어 주세요 — 지금 ${reasonLength(draft.reason)} / ${OPPOSE_MIN_REASON}자 (공백 제외)`}
                     />
                   )}
                 </>
@@ -236,7 +242,7 @@ export function DecisionPanel({
             )}
             {blocker === 'SHORT_OPPOSING_REASON' && (
               <Typography.Text type="danger" style={{ fontSize: 12 }}>
-                AI 권고와 반대인 판정은 사유를 {OPPOSE_MIN_REASON}자 이상(공백 제외) 입력하세요.
+                권고와 반대인 판정은 사유를 {OPPOSE_MIN_REASON}자 이상(공백 제외) 입력하세요.
               </Typography.Text>
             )}
           </div>

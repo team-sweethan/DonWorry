@@ -265,12 +265,28 @@ def test_assemble_fills_verdict_from_narrative_and_rule_hits_from_tool_records()
 
 # 결제 하나라도 승인 취소 검토면 종합 권고도 승인 취소 검토다
 def test_overall_recommendation_is_reject_when_any_payment_is_reject() -> None:
+    from app.agent.assemble import overall_recommendation
+
+    assert overall_recommendation(["ACCEPT_REVIEW", "REJECT_REVIEW"]) == "REJECT_REVIEW"
+    assert overall_recommendation(["ACCEPT_REVIEW", "ACCEPT_REVIEW"]) == "ACCEPT_REVIEW"
+    assert overall_recommendation(["ACCEPT_REVIEW", "NEEDS_CHECK"]) == "NEEDS_CHECK"
+
+
+# 결제별 권고는 판정 기준표가 정한다 (#501) — 같은 카드를 다른 고객이 썼고 새 카드 징후도 있으면
+# AI가 매입 진행 검토라고 써도 승인 취소 검토
+def test_recommendation_comes_from_basis_not_ai() -> None:
+    from tests.test_narrative_quality import _toolbox_with_linked
+
     written = json.loads(narrative(["9001", "9002"]))
-    written["payments"]["9001"]["recommendation"] = "ACCEPT_REVIEW"
-    written["payments"]["9002"]["recommendation"] = "REJECT_REVIEW"
+    for payment in written["payments"].values():
+        payment["recommendation"] = "ACCEPT_REVIEW"
     llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
 
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
+    outcome = run_investigation(context(), llm, _toolbox_with_linked(), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
+    for analysis in outcome.report.paymentAnalyses:
+        assert analysis.basis is not None
+        assert analysis.basis.rule == "HIGH_RISK_WITH_OTHERS"
+        assert analysis.recommendation == analysis.basis.recommendation == "REJECT_REVIEW"
     assert outcome.report.verdict.overallRecommendation == "REJECT_REVIEW"

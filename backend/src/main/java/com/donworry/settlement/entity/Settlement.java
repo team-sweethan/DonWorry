@@ -78,12 +78,22 @@ public class Settlement {
         updatedAt = now;
     }
 
-    public void applyPickupSchedule(Instant expectedAt, Instant eligibleAt, Instant now) {
-        if (java.util.Objects.equals(expectedSettlementAt, expectedAt)
-                && java.util.Objects.equals(scheduledAt, eligibleAt)) return;
+    public void applyCaptureSchedule(Instant eligibleAt, Instant now) {
+        if (eligibleAt == null || now == null) throw new IllegalArgumentException("정산 일정과 처리 시각이 필요합니다.");
         if (status != SettlementStatus.SCHEDULED) throw new IllegalStateException("최종 정산의 일정은 변경할 수 없습니다.");
-        expectedSettlementAt = expectedAt;
+        if (scheduledAt != null && !scheduledAt.equals(eligibleAt))
+            throw new IllegalStateException("확정한 정산일은 변경할 수 없습니다.");
+        if (eligibleAt.equals(scheduledAt)) return;
+        expectedSettlementAt = eligibleAt;
         scheduledAt = eligibleAt;
+        updatedAt = now;
+    }
+
+    // 환불은 원 거래 금액을 지우지 않고 미지급 정산의 대상 상태만 변경한다.
+    public void excludeForRefund(Instant now) {
+        if (now == null || status != SettlementStatus.SCHEDULED || completedAt != null)
+            throw new IllegalStateException("미지급 정산만 환불로 제외할 수 있습니다.");
+        status = SettlementStatus.CANCELED;
         updatedAt = now;
     }
 

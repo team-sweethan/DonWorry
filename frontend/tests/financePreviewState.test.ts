@@ -1,3 +1,4 @@
+import { demoSettlementDate, previewSettlements } from '../src/pages/owner/settlementPreviewData.ts'
 import assert from 'node:assert/strict'
 import dayjs from 'dayjs'
 import { test } from 'node:test'
@@ -23,7 +24,10 @@ test('calendarToday_whenOutsideSelectedPeriod_isNotAnAllowedTarget', () => {
   assert.equal(dateInPeriod(today, '2026-09-01', '2026-09-30'), false)
 })
 const initialized = (): PreviewState =>
-  setInitialBalance({ ...createPreviewState(today), expenses: [] }, 500000)
+  setInitialBalance(
+    { ...createPreviewState(today), expenses: [], todayRefundDeduction: 0, recoveryAmount: 0 },
+    500000,
+  )
 
 test('calendar_whenPeriodChanges_movesMonthAndSelectionTogether', () => {
   const before = new Date('2026-10-29T12:00:00')
@@ -284,4 +288,48 @@ test('calendarPeriod_whenOutsideInvalidOrOverLimit_excludesDatesConsistently', (
   assert.equal(dateInPeriod('2026-10-29', '2026-10-30', '2026-10-31'), false)
   assert.equal(dateInPeriod('2026-10-30', '2026-10-30', '2026-10-31'), true)
   assert.equal(dateInPeriod('2026-10-29', '2026-10-30', '2026-10-01'), false)
+})
+
+// 전액 상계된 지급은 0원 유입이며 과거 지급을 취소하거나 환불을 현재 잔액에서 재차감하지 않는다.
+test('preview_whenPayoutOffsetByRefund_countsZeroActualIncome', () => {
+  const state = setInitialBalance({ ...createPreviewState(today), expenses: [] }, 500000)
+  const result = calculatePreviewCashFlow(state, today, today, '2026-11-30')
+  assert.equal(result.completedIncome, 0)
+  assert.equal(result.currentBalance, 500000)
+  assert.equal(result.recovery.outstanding, 150000)
+  assert.equal(result.recovery.projected + result.recovery.remaining, 150000)
+  assert.ok(result.projected.some((p) => p.refundDeductionAmount > 0))
+  for (const p of result.projected)
+    assert.equal(p.settlementAmount - p.refundDeductionAmount, p.amount)
+})
+
+test('preview_whenRecoveryExceedsFutureIncome_keepsRemainingDebtWithoutNegativePayout', () => {
+  const state = { ...initialized(), recoveryAmount: 9000000 }
+  const result = calculatePreviewCashFlow(state, today, today, '2026-11-30')
+  assert.ok(result.projected.length > 0)
+  assert.ok(result.projected.every((p) => p.amount === 0))
+  assert.ok(result.recovery.remaining > 0)
+  assert.equal(result.recovery.projected + result.recovery.remaining, 9000000)
+  assert.equal(result.currentBalance, 597000)
+})
+
+// 목요일·금요일·주말 매입과 공휴일을 포함해 D를 제외한 세 영업일을 센다.
+test('demoSettlementDate_whenWeekendOrHolidayIntervenes_countsThreeBusinessDays', () => {
+  assert.equal(demoSettlementDate('2026-10-29'), '2026-11-03')
+  assert.equal(demoSettlementDate('2026-10-30'), '2026-11-04')
+  assert.equal(demoSettlementDate('2026-11-01'), '2026-11-04')
+  assert.equal(demoSettlementDate('2026-11-26', ['2026-11-27']), '2026-12-02')
+})
+
+test('previewSettlement_whenLegacyExpected_preservesClassificationAndBusinessDateEvidence', () => {
+  const rows = previewSettlements(new Date('2026-11-04T12:00:00'))
+  assert.equal(rows.filter((row) => row.status === 'exp').length, 4)
+  const thursday = rows.find((row) => row.gross === 45000)!
+  assert.equal(thursday.capturedDate, '2026-11-05')
+  assert.equal(thursday.eligibleDate, '2026-11-10')
+  assert.equal(thursday.status, 'exp')
+  assert.equal(dayjs(thursday.date).format('YYYY-MM-DD'), '2026-11-10')
+  for (const row of rows) assert.equal(demoSettlementDate(row.capturedDate!), row.eligibleDate)
+  for (const row of rows.filter((row) => row.status === 'done'))
+    assert.ok(row.eligibleDate! <= dayjs(row.date).format('YYYY-MM-DD'))
 })

@@ -38,6 +38,18 @@ class SettlementReportMariaDbTests {
     @Autowired
     JdbcTemplate jdbc;
 
+    private void setFixtureSchedule(long payment) {
+        jdbc.update(
+                "UPDATE captures SET captured_at=? WHERE payment_id=?",
+                utcTimestamp(Instant.parse("2026-10-28T00:00:00Z")),
+                payment);
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=?,expected_settlement_at=? WHERE payment_id=?",
+                utcTimestamp(START),
+                utcTimestamp(START),
+                payment);
+    }
+
     @BeforeEach
     void seedMerchants() {
         for (long id : new long[] {MERCHANT, MERCHANT + 1}) {
@@ -62,15 +74,16 @@ class SettlementReportMariaDbTests {
     }
 
     @Test
-    void productionPickup_whenScheduledAtKoreanBoundary_storesUtcAndReportsSameDay() {
+    void report_whenCaptureScheduleAtKoreanBoundary_pickupDoesNotMoveDate() {
         var eligibleAt = Instant.parse("2026-11-01T18:00:00.123456Z");
         captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-UTC", 10000L);
+        setFixtureSchedule(PAYMENT);
         pickups.recordCompletion(MERCHANT, "P6-REPORT-UTC", eligibleAt.minusSeconds(72 * 3600));
         assertThat(jdbc.queryForObject(
                         "SELECT scheduled_at FROM settlements WHERE payment_id=?",
                         java.time.LocalDateTime.class,
                         PAYMENT))
-                .isEqualTo(java.time.LocalDateTime.of(2026, 11, 1, 18, 0, 0, 123456000));
+                .isEqualTo(java.time.LocalDateTime.of(2026, 11, 1, 15, 0));
         var result = reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2));
         assertThat(result.scheduledAmount()).isEqualTo(9700);
         assertThat(result.entries()).hasSize(1);
@@ -80,7 +93,9 @@ class SettlementReportMariaDbTests {
     @Test
     void report_whenOrderShared_returnsOwnOrderedItemsAndKoreanDay() {
         captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-SHARED", 10000L);
+        setFixtureSchedule(PAYMENT);
         captures.processCapture(PAYMENT + 1, MERCHANT + 1, "P6-REPORT-SHARED", 20000L);
+        setFixtureSchedule(PAYMENT + 1);
         pickups.recordSchedule(
                 MERCHANT,
                 "P6-REPORT-SHARED",
@@ -92,7 +107,7 @@ class SettlementReportMariaDbTests {
                 START.minusSeconds(72 * 3600),
                 List.of(new PickupOrderItemRequest("다른 가맹점 상품", 3)));
         var result = reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2));
-        assertThat(result.expectedAmount()).isEqualTo(9700);
+        assertThat(result.scheduledAmount()).isEqualTo(9700);
         assertThat(result.entries()).hasSize(1);
         var entry = result.entries().getFirst();
         assertThat(entry.settlementDate()).isEqualTo(LocalDate.of(2026, 11, 2));
@@ -107,14 +122,18 @@ class SettlementReportMariaDbTests {
     @Test
     void report_whenStatesMixed_aggregatesWithoutInventingDatesOrItems() {
         captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-DONE", 10000L);
+        setFixtureSchedule(PAYMENT);
         pickups.recordCompletion(MERCHANT, "P6-REPORT-DONE", START.minusSeconds(72 * 3600));
         jdbc.update(
                 "UPDATE settlements SET status='COMPLETED',completed_at=? WHERE payment_id=?",
                 utcTimestamp(START.plusSeconds(3600)),
                 PAYMENT);
         captures.processCapture(PAYMENT + 1, MERCHANT, "P6-REPORT-SCHEDULED", 20000L);
+        setFixtureSchedule(PAYMENT + 1);
         pickups.recordCompletion(MERCHANT, "P6-REPORT-SCHEDULED", START.minusSeconds(72 * 3600));
         captures.processCapture(PAYMENT + 2, MERCHANT, "P6-REPORT-UNDATED", 10000L);
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=NULL,expected_settlement_at=NULL WHERE payment_id=?", PAYMENT + 2);
         var result = reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2));
         assertThat(result.completedAmount()).isEqualTo(9700);
         assertThat(result.scheduledAmount()).isEqualTo(19400);
@@ -125,5 +144,21 @@ class SettlementReportMariaDbTests {
                 .allSatisfy(e -> assertThat(e.items()).isEmpty());
         assertThat(result.days().getFirst().completedAmount()).isEqualTo(9700);
         assertThat(result.days().getFirst().scheduledAmount()).isEqualTo(19400);
+    }
+
+    @Test
+    void report_whenUndatedSqlSumExceedsLong_returnsExplicit422() {
+        captures.processCapture(PAYMENT, MERCHANT, "P6-REPORT-OVERFLOW-A", 10000L);
+        captures.processCapture(PAYMENT + 1, MERCHANT, "P6-REPORT-OVERFLOW-B", 10000L);
+        jdbc.update(
+                "UPDATE settlements SET scheduled_at=NULL,expected_settlement_at=NULL,settlement_amount=9223372036854775807 WHERE payment_id IN (?,?)",
+                PAYMENT,
+                PAYMENT + 1);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> reports.report(MERCHANT, LocalDate.of(2026, 11, 2), LocalDate.of(2026, 11, 2)))
+                .isInstanceOfSatisfying(SettlementRequestException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(422);
+                    assertThat(e.getCode()).isEqualTo("SETTLEMENT_REPORT_AMOUNT_OVERFLOW");
+                });
     }
 }

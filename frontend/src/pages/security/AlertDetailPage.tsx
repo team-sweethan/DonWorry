@@ -37,6 +37,8 @@ import {
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
+import { customerPart } from '../../utils/caseRules'
+import { customerTransactionsPath } from '../../utils/transactionList'
 import { ResultTag } from './alert/AlertTags'
 import { failureAnalysisResultLabel, failureCauseLabel } from './alert/failureAnalysis'
 
@@ -313,6 +315,8 @@ export function AlertDetailPage() {
 
   const evaluation = detail.evaluation
   const merchantLabel = merchantName ?? `ID ${evaluation.merchantId}`
+  // 이 손님의 다른 결제를 거래 내역에서 바로 본다 (#487)
+  const customerPath = customerTransactionsPath(evaluation.merchantId, evaluation.customerRef)
   const policyByRuleCode = new Map(policies.map((policy) => [policy.ruleCode, policy]))
   const score = evaluation.riskScore
   const isSecurityStaff = user?.role === 'SECURITY_STAFF'
@@ -415,7 +419,7 @@ export function AlertDetailPage() {
     <>
       <PageHeader
         title="경보 상세"
-        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${merchantLabel} · 고객 ${evaluation.customerRef}`}
+        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${merchantLabel} · 고객 ${customerPart(evaluation.customerRef)}`}
         actions={
           <>
             {caseId && (
@@ -726,7 +730,14 @@ export function AlertDetailPage() {
             <Descriptions column={2} colon={false}>
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
               <Descriptions.Item label="가맹점">{merchantLabel}</Descriptions.Item>
-              <Descriptions.Item label="고객 식별자">{evaluation.customerRef}</Descriptions.Item>
+              <Descriptions.Item label="고객 식별자">
+                {customerPart(evaluation.customerRef)}
+                {customerPath && (
+                  <Button type="link" size="small" onClick={() => navigate(customerPath)}>
+                    이 고객 거래 내역 보기 ↗
+                  </Button>
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="마스킹 카드">
                 {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
               </Descriptions.Item>

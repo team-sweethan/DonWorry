@@ -6,6 +6,7 @@ import { getCase } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { AiReport, CaseDetail } from '../../types/case'
+import { customerPart } from '../../utils/caseRules'
 import { pickReport } from '../../utils/reportView'
 import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
@@ -139,7 +140,7 @@ export function CaseReportPage() {
           ) : (
             <ReportState
               report={picked.report}
-              label={`Case ${securityCase.caseId} · ${securityCase.customerRef} · 보고서 v${picked.report.reportVersion}`}
+              label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
             />
           )}
         </Space>

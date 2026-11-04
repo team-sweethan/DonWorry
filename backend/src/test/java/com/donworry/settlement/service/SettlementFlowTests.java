@@ -37,6 +37,12 @@ class SettlementFlowTests {
                 .isThrownBy(() -> new SettlementFeeCalculator().calculate(35500L, new BigDecimal("0.99")));
     }
 
+    private CaptureSettlementSchedule mockSchedule() {
+        var schedule = mock(CaptureSettlementSchedule.class);
+        when(schedule.settlementAt(any())).thenReturn(Instant.parse("2026-11-09T15:00:00Z"));
+        return schedule;
+    }
+
     private TenantSummary merchant(String rate) {
         return TenantSummary.builder()
                 .merchantId(2L)
@@ -126,7 +132,7 @@ class SettlementFlowTests {
         settlements = mock(SettlementRepository.class);
         calculator = new SettlementFeeCalculator();
         tenants = mock(TenantReader.class);
-        settlementService = new SettlementService(settlements, calculator, tenants);
+        settlementService = new SettlementService(settlements, calculator, tenants, mockSchedule());
         events = mock(ApplicationEventPublisher.class);
         captureService = new CaptureService(new CaptureTransactionService(
                 captures, settlementService, events, mock(OrderFulfillmentService.class)));

@@ -18,8 +18,7 @@ class OrderFulfillmentServiceTests {
     private final CaptureRepository captures = mock(CaptureRepository.class);
     private final SettlementRepository settlements = mock(SettlementRepository.class);
     private final OrderFulfillmentItemRepository items = mock(OrderFulfillmentItemRepository.class);
-    private final OrderFulfillmentService service =
-            new OrderFulfillmentService(orders, captures, settlements, new PickupScheduleCalculator(), items);
+    private final OrderFulfillmentService service = new OrderFulfillmentService(orders, captures, settlements, items);
 
     private OrderFulfillment order() {
         var order = OrderFulfillment.awaitingPickup("ORDER", AT);
@@ -39,7 +38,7 @@ class OrderFulfillmentServiceTests {
         verifyNoInteractions(settlements);
     }
 
-    // 기존 매입의 가맹점을 연결하고 실제 픽업 기준 정산 시각을 반영한다
+    // 기존 매입의 가맹점을 연결하고 정산 시각을 변경하지 않는다
     @Test
     void recordCompletion_whenCaptureExists_linksMerchantAndSchedule() {
         var f = order();
@@ -54,7 +53,7 @@ class OrderFulfillmentServiceTests {
         when(settlements.findByCaptureId(3L)).thenReturn(Optional.of(s));
         service.recordCompletion(2L, "ORDER", AT);
         assertThat(f.getMerchantId()).isEqualTo(2L);
-        verify(s).applyPickupSchedule(isNull(), eq(AT.plusSeconds(72 * 3600)), any());
+        verify(s, never()).applyCaptureSchedule(any(), any());
         verifyNoInteractions(items);
     }
 

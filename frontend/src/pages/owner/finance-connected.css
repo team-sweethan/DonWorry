@@ -11,7 +11,7 @@
   border-radius: 6px;
   padding: 7px 10px;
   background: white;
-  color: #17243b;
+  color: #30291f;
 }
 .finance-connected .finance-period label {
   display: flex;
@@ -21,7 +21,4 @@
 .finance-connected details > summary {
   cursor: pointer;
   font-weight: 600;
-}
-.finance-connected .finance-current-balance {
-  margin-top: 20px;
 }

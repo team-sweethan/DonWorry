@@ -12,6 +12,7 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { LandingRoute, LoginRoute, NotFoundRoute, ServerSession } from '../auth/AuthRoutes'
 import { EmptyPage } from '../pages/EmptyPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
+import { CaseComparePage } from '../pages/security/CaseComparePage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
 import { CaseListPage } from '../pages/security/CaseListPage'
 import { CaseReportPage } from '../pages/security/CaseReportPage'
@@ -135,6 +136,8 @@ export const router = createBrowserRouter([
           { path: 'cases', element: <CaseListPage /> },
           { path: 'cases/:id', element: <CaseDetailPage /> },
           { path: 'cases/:id/report', element: <CaseReportPage /> },
+          // 비슷한 과거 사건 나란히 보기 (#501)
+          { path: 'cases/:id/compare/:pastId', element: <CaseComparePage /> },
           { path: 'actions', element: <ActionHistoryPage /> },
           { path: 'alerts', element: <AlertListPage /> },
           { path: 'alerts/:id', element: <AlertDetailPage /> },

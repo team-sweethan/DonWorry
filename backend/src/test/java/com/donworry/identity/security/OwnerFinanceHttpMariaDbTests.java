@@ -76,6 +76,7 @@ class OwnerFinanceHttpMariaDbTests {
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
             sessions.expireAll(id);
+            jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM admin_change_histories WHERE actor_user_id=? OR target_user_id=?", id, id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);

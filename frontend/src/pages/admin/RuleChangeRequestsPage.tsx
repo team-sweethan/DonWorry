@@ -158,17 +158,19 @@ export function RuleChangeRequestsPage() {
             style: { cursor: 'pointer' },
           })}
         />
-        <Pagination
-          current={page + 1}
-          pageSize={10}
-          // Preserve the first-page pagination UI for an empty request tab.
-          // A single effective item keeps previous/next disabled.
-          total={Math.max(result?.totalElements ?? 0, 1)}
-          showSizeChanger={false}
-          hideOnSinglePage={false}
-          style={{ marginTop: 16, textAlign: 'right' }}
-          onChange={(next) => setPage(next - 1)}
-        />
+        <div className="dw-pagination-footer">
+          <Pagination
+            current={page + 1}
+            pageSize={10}
+            // Preserve the first-page pagination UI for an empty request tab.
+            // A single effective item keeps previous/next disabled.
+            total={Math.max(result?.totalElements ?? 0, 1)}
+            showSizeChanger={false}
+            hideOnSinglePage={false}
+            showTotal={() => `총 ${result?.totalElements ?? 0}건`}
+            onChange={(next) => setPage(next - 1)}
+          />
+        </div>
       </Card>
       <Modal
         title="룰 끄기 요청 상세"

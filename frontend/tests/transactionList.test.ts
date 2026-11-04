@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { MlShadowScore } from '../src/types/mlShadowScore.ts'
+import { customerPart } from '../src/utils/caseRules.ts'
 import {
   caseCell,
+  customerNeedsMerchant,
+  customerTransactionsPath,
   defaultTransactionListQuery,
+  merchantChange,
   mlCell,
   parseTransactionListQuery,
   transactionApiParams,
@@ -43,6 +47,74 @@ test('transactionListQuery: 기본값은 주소에 안 쓰고 · 모르는 값�
     transactionApiParams(parse('?from=2026-10-01&to=2026-10-31')).get('to'),
     '2026-11-01T00:00:00+09:00',
   )
+})
+
+// customerSearch_joinsMerchant — 결제 쪽 저장값이 "가맹점ID:번호"라 직원이 넣은 번호에 가맹점을 붙여 보낸다 (#462)
+test('customerSearch_joinsMerchant: 가맹점 7 + 고객 42는 서버에 "7:42"로, 주소에는 42로 둔다', () => {
+  const query = parse('?merchantId=7&customerRef=42')
+  assert.equal(transactionApiParams(query).get('customerRef'), '7:42')
+  assert.equal(transactionApiParams(query).get('merchantId'), '7')
+  // 주소에는 직원이 넣은 번호 그대로 — 뒤로 가기 해도 검색창에 42가 남는다
+  assert.equal(transactionListSearch(query), '?merchantId=7&customerRef=42')
+  assert.equal(customerNeedsMerchant(query), false)
+  // 화면 표시 · 복사도 같은 42 — 복사한 값을 검색창에 넣으면 같은 손님이 찾아진다
+  assert.equal(customerPart('7:42'), '42')
+})
+
+// customerSearch_withoutMerchant_isBlocked — 42번 손님은 가맹점마다 있어서 가맹점 없이는 서버에 보내지 않는다
+test('customerSearch_withoutMerchant_isBlocked: 가맹점 없이 고객 번호만 있으면 조회를 막는다', () => {
+  const query = parse('?customerRef=42')
+  assert.equal(customerNeedsMerchant(query), true)
+  assert.equal(transactionApiParams(query).has('customerRef'), false)
+  // 고객 번호가 없으면 가맹점 없이도 그대로 조회한다
+  assert.equal(customerNeedsMerchant(parse('')), false)
+})
+
+// customerTransactionsPath_usesCustomerPart — 경보 · 사건 상세 링크는 저장값 "7:42"를 가맹점 7 · 고객 42로 연다 (#487)
+test('customerTransactionsPath_usesCustomerPart: 7:42는 merchantId=7&customerRef=42 주소로', () => {
+  const path = customerTransactionsPath(7, '7:42')
+  assert.equal(path, '/security/transactions?merchantId=7&customerRef=42')
+  // 사건 상세처럼 가맹점 ID가 문자열이어도 같다
+  assert.equal(customerTransactionsPath('7', '7:42'), path)
+  // 링크로 연 화면도 같은 손님을 서버에 "7:42"로 찾는다
+  const opened = parse(path!.split('?')[1])
+  assert.equal(transactionApiParams(opened).get('customerRef'), '7:42')
+  // 가맹점이나 고객을 모르면 링크를 만들지 않는다
+  assert.equal(customerTransactionsPath(0, '7:42'), null)
+  assert.equal(customerTransactionsPath(7, ''), null)
+  assert.equal(customerTransactionsPath(7, '7:'), null)
+})
+
+// merchantChange_clearsCustomer — 가맹점을 바꾸거나 지우면 고객 번호 조건도 지운다 (#487)
+test('merchantChange_clearsCustomer: 다른 가맹점의 42번은 다른 손님이라 고객 조건을 남기지 않는다', () => {
+  const before = parse('?merchantId=7&customerRef=42&from=2026-11-01&to=2026-11-03')
+
+  const cleared = { ...before, ...merchantChange(null) }
+  const switched = { ...before, ...merchantChange(3) }
+
+  // 화면 조작으로는 "가맹점 없이 고객만"이 생기지 않는다
+  assert.equal(customerNeedsMerchant(cleared), false)
+  assert.equal(cleared.customerRef, '')
+  assert.equal(switched.merchantId, 3)
+  assert.equal(switched.customerRef, '')
+  // 기간 같은 다른 조건은 그대로
+  assert.equal(switched.from, '2026-11-01')
+})
+
+// legacyCustomerUrl_isSplit — 예전에 저장해 둔 주소(?customerRef=7:42)로 들어와도 같은 손님을 연다
+test('legacyCustomerUrl_isSplit: 예전 주소 7:42는 가맹점 7 · 고객 42로 나눈다', () => {
+  const legacy = parse('?customerRef=7:42')
+  assert.equal(legacy.merchantId, 7)
+  assert.equal(legacy.customerRef, '42')
+  assert.equal(transactionApiParams(legacy).get('customerRef'), '7:42')
+  // 주소의 가맹점과 같으면 그대로 쓴다
+  assert.equal(parse('?merchantId=7&customerRef=7:42').customerRef, '42')
+  // 가맹점이 다르거나 가맹점 부분이 이상하면 어느 손님인지 몰라 고객 조건만 버린다
+  const conflict = parse('?merchantId=3&customerRef=7:42')
+  assert.equal(conflict.merchantId, 3)
+  assert.equal(conflict.customerRef, '')
+  assert.equal(parse('?customerRef=abc:42').customerRef, '')
+  assert.equal(parse('?customerRef=:42').merchantId, null)
 })
 
 // caseCell_whenLinksFailed_showsUnknown — 사건 링크 조회 실패를 "사건 없음(-)"으로 그리지 않는다

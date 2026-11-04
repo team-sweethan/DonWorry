@@ -3,11 +3,15 @@ import { test } from 'node:test'
 import type { CashFlowForecast, SettlementReport } from '../src/api/finance.ts'
 import {
   financeErrorMessage,
+  chartMonthPeriod,
   forecastView,
   koreanToday,
   managementRows,
   matchesFinanceSnapshot,
   monthlyReportMismatch,
+  validateSettlementReport,
+  financeTotal,
+  matchesFinanceQuery,
   settlementViewEntries,
   validFinancePeriod,
 } from '../src/pages/owner/financeView.ts'
@@ -19,6 +23,21 @@ const report: SettlementReport = {
   scheduledAmount: 0,
   expectedAmount: 0,
   undatedAmount: 0,
+  paidSettlementAmount: 70,
+  refundDeductionAmount: 0,
+  paidAmount: 70,
+  outstandingRecoveryAmount: 0,
+  payouts: [
+    {
+      payoutId: 1,
+      payoutDate: '2026-11-02',
+      completedAt: '2026-11-01T18:00:00Z',
+      settlementAmount: 70,
+      refundDeductionAmount: 0,
+      payoutAmount: 70,
+      origin: 'BATCH',
+    },
+  ],
   days: [],
   entries: [
     {
@@ -40,6 +59,25 @@ const report: SettlementReport = {
     },
   ],
 }
+test('D+3 정산 예정은 픽업 완료 없이도 예정 상태와 별도 픽업 정보를 표시한다', () => {
+  const entry = {
+    ...report.entries[0],
+    status: 'SCHEDULED' as const,
+    classification: 'SCHEDULED' as const,
+    pickedUpAt: null,
+    scheduledPickupAt: '2026-11-03T01:00:00Z',
+  }
+  const row = settlementViewEntries({ ...report, entries: [entry] })[0]
+  assert.equal(row.status, 'sch')
+  assert.equal(row.pickup?.getDate(), 3)
+  assert.equal(row.date.getDate(), 2)
+  const missing = settlementViewEntries({
+    ...report,
+    entries: [{ ...entry, scheduledPickupAt: null }],
+  })[0]
+  assert.equal(missing.status, 'sch')
+  assert.equal(missing.pickup, null)
+})
 test('날짜·정산 표시·수수료·빈 상품은 한국 날짜와 서버 값 그대로 유지한다', () => {
   assert.equal(koreanToday(new Date('2026-11-01T15:00:00Z')), '2026-11-02')
   const rows = settlementViewEntries({
@@ -136,6 +174,9 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
     undatedIncome: 0,
     overdueIncome: 0,
     canceledIncome: 0,
+    outstandingRecoveryAmount: 0,
+    projectedRefundDeduction: 0,
+    remainingRecoveryAmount: 0,
     batchCron: '0 0 3 * * *',
     batchEnabled: false,
     carryForwardMovements: [],
@@ -161,6 +202,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
             classification: 'SCHEDULED',
             eligibleAt: null,
             reflectedAt: '2026-11-01T18:00:00Z',
+            settlementAmount: 50,
+            refundDeductionAmount: 20,
           },
           {
             source: 'RECURRING_EXPENSE',
@@ -172,6 +215,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
             classification: 'PAID',
             eligibleAt: null,
             reflectedAt: '2026-11-02T00:00:00Z',
+            settlementAmount: 0,
+            refundDeductionAmount: 0,
           },
         ],
       },
@@ -180,6 +225,42 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
   const view = forecastView(forecast)
   assert.equal(view.days[0].expenses, 20)
   assert.equal(view.incomes[0].amount, 30)
+  assert.equal(view.incomes[0].settlementAmount, 50)
+  assert.equal(view.incomes[0].refundDeductionAmount, 20)
+  assert.throws(() => forecastView({ ...forecast, outstandingRecoveryAmount: 1 }), /환불 회수/)
+  assert.throws(
+    () =>
+      forecastView({
+        ...forecast,
+        days: [
+          {
+            ...forecast.days[0],
+            movements: [{ ...forecast.days[0].movements[0], refundDeductionAmount: 19 }],
+          },
+        ],
+      }),
+    /환불 차감 근거/,
+  )
+
+  const payoutView = forecastView({
+    ...forecast,
+    days: [
+      {
+        ...forecast.days[0],
+        movements: [
+          {
+            ...forecast.days[0].movements[0],
+            source: 'PAYOUT',
+            classification: 'COMPLETED',
+            amount: 0,
+            refundDeductionAmount: 50,
+          },
+        ],
+      },
+    ],
+  })
+  assert.equal(payoutView.incomes[0].id, 'PAYOUT:1:')
+  assert.equal(payoutView.incomes[0].amount, 0)
   assert.equal(view.costs[0].date, '2026-11-02')
   assert.match(view.costs[0].note, /2026-12-31/)
   assert.throws(() => forecastView({ ...forecast, currentBalance: Number.MAX_SAFE_INTEGER + 1 }))
@@ -189,4 +270,59 @@ test('오류는 실제 조회 실패로 알리고 0원이나 예시 금액으로
   assert.match(financeErrorMessage(new ApiError(403)), /권한/)
   assert.match(financeErrorMessage(new TypeError('offline')), /연결/)
   assert.throws(() => settlementViewEntries({ ...report, completedAmount: NaN }))
+})
+
+// 원 거래 금액과 실제 지급액은 다를 수 있다. 지급 원장 내부의 합계·차감만 검증한다.
+test('report_whenRefundFullyOffsetsPayout_acceptsZeroCashWithoutChangingOriginalEntries', () => {
+  const value = {
+    ...report,
+    paidAmount: 0,
+    refundDeductionAmount: 70,
+    payouts: [{ ...report.payouts[0], refundDeductionAmount: 70, payoutAmount: 0 }],
+  }
+  assert.equal(validateSettlementReport(value).completedAmount, 70)
+  assert.equal(validateSettlementReport(value).paidAmount, 0)
+  assert.equal(settlementViewEntries(value)[0].settlementAmount, 70)
+  assert.ok(monthlyReportMismatch(value, report, '2026-11-30'))
+})
+
+test('report_whenPayoutTotalsMismatchOrUnsafe_rejectsMisleadingCashSummary', () => {
+  assert.throws(() => validateSettlementReport({ ...report, paidAmount: 71 }), /지급 금액/)
+  assert.throws(() => validateSettlementReport({ ...report, payouts: [] }), /지급 요약/)
+  assert.throws(
+    () => validateSettlementReport({ ...report, payouts: [report.payouts[0], report.payouts[0]] }),
+    /중복 지급/,
+  )
+  assert.throws(
+    () =>
+      validateSettlementReport({
+        ...report,
+        outstandingRecoveryAmount: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    /지원 범위/,
+  )
+  assert.throws(() => financeTotal([Number.MAX_SAFE_INTEGER, 1]), /지원 범위/)
+})
+
+// 지급번호 검색은 지급 목록에만 적용해 주문·지출 합계나 다른 탭 건수를 줄이지 않는다.
+test('financeQuery_whenPayoutNumberEntered_keepsOtherLedgersUnfiltered', () => {
+  assert.equal(matchesFinanceQuery('payout', 'payout', '8001', '8001'), true)
+  assert.equal(matchesFinanceQuery('payout', 'payout', '8002', '8001'), false)
+  assert.equal(matchesFinanceQuery('settlement', 'payout', 'CS-0001', '8001'), true)
+  assert.equal(matchesFinanceQuery('expense', 'payout', '임대료', '8001'), true)
+  assert.equal(matchesFinanceQuery('payout', 'settlement', '8001', 'CS-0001'), true)
+  assert.equal(matchesFinanceQuery('settlement', 'settlement', 'CS-0001', 'cs-0001'), true)
+})
+
+test('chart month navigation crosses years and preserves leap days and forecast boundaries', () => {
+  assert.deepEqual(chartMonthPeriod('2025-12-15'), { from: '2025-12-01', to: '2025-12-31' })
+  assert.deepEqual(chartMonthPeriod('2028-02-29'), { from: '2028-02-01', to: '2028-02-29' })
+  assert.deepEqual(chartMonthPeriod('2026-11-20', '2026-11-04', '2027-11-04'), {
+    from: '2026-11-04',
+    to: '2026-11-30',
+  })
+  assert.deepEqual(chartMonthPeriod('2027-11-04', '2026-11-04', '2027-11-04'), {
+    from: '2027-11-01',
+    to: '2027-11-04',
+  })
 })

@@ -25,6 +25,7 @@ import {
 } from '../../utils/caseRules'
 import { customerCanceledClosure, customerClosureNote } from '../../utils/caseHistoryText'
 import { caseListReturnPath } from '../../utils/caseListQuery'
+import { customerTransactionsPath } from '../../utils/transactionList'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
@@ -223,6 +224,8 @@ export function CaseDetailPage() {
   const reportMissing =
     securityCase.status !== 'CLOSED' &&
     (!latest || latest.evidenceVersion < securityCase.evidenceVersion)
+  // 사건 밖의 이 손님 결제까지 거래 내역에서 바로 본다 (#487)
+  const customerPath = customerTransactionsPath(securityCase.merchantId, securityCase.customerRef)
 
   return (
     <>
@@ -232,6 +235,9 @@ export function CaseDetailPage() {
         actions={
           <Space>
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
+            {customerPath && (
+              <Button onClick={() => navigate(customerPath)}>이 고객 거래 내역 보기</Button>
+            )}
             <Button icon={<ReloadOutlined />} onClick={load}>
               새로고침
             </Button>

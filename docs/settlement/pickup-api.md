@@ -50,7 +50,7 @@ P1은 INACTIVE 가맹점에도 픽업 PUT 인증을 허용한다. P6는 인증�
 { "orderId": "ORD-001", "result": "STORED", "linkStatus": "PENDING_CAPTURE" }
 ```
 
-`PENDING_CAPTURE`는 픽업 저장 성공·매입 연결 대기, `LINKED`는 기존 매입/정산과 일정 연결까지 완료다.
+`PENDING_CAPTURE`는 픽업 저장 성공·매입 연결 대기, `LINKED`는 같은 가맹점·주문의 기존 매입/정산 정합성 확인 완료 (정산일 변경 없음)다.
 둘 다 정산금 지급 완료를 뜻하지 않는다.
 
 | 상황 | 결과 |

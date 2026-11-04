@@ -18,6 +18,7 @@ public class SettlementService {
     private final SettlementRepository settlementRepository;
     private final SettlementFeeCalculator feeCalculator;
     private final TenantReader tenants;
+    private final CaptureSettlementSchedule schedule;
 
     @Transactional
     public Settlement createSettlement(Capture capture) {
@@ -54,6 +55,7 @@ public class SettlementService {
                 fees.settlementAmount(),
                 Instant.now());
 
+        settlement.applyCaptureSchedule(schedule.settlementAt(capture.getCapturedAt()), Instant.now());
         return settlementRepository.save(settlement);
     }
 }

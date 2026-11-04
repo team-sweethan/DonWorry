@@ -2,6 +2,7 @@ package com.donworry.settlement.repository;
 
 import com.donworry.settlement.entity.Settlement;
 import com.donworry.settlement.entity.SettlementStatus;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +17,10 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
 
     Optional<Settlement> findByCaptureId(Long captureId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Settlement s WHERE s.paymentId=:payment")
+    Optional<Settlement> findForRefund(@Param("payment") Long paymentId);
+
     boolean existsByPaymentId(Long paymentId);
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
@@ -27,14 +32,29 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     Long completionUpperBound(@Param("cutoff") Instant cutoff);
 
     @Query("""
-            SELECT s.settlementId AS settlementId, s.merchantId AS merchantId, c.orderId AS orderId
-            FROM Settlement s JOIN Capture c ON s.captureId = c.captureId
+            SELECT DISTINCT s.merchantId FROM Settlement s
             WHERE s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
-              AND s.scheduledAt <= :cutoff AND s.settlementId > :after AND s.settlementId <= :upper
+              AND s.scheduledAt <= :cutoff AND s.settlementId <= :upper AND s.merchantId > :after
+            ORDER BY s.merchantId
+            """)
+    List<Long> findCompletionMerchants(
+            @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
+
+    @Query("""
+            SELECT s.settlementId FROM Settlement s
+            WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+              AND s.scheduledAt<=:cutoff AND s.settlementId<=:upper
             ORDER BY s.settlementId
             """)
-    List<SettlementCompletionCandidate> findCompletionCandidates(
-            @Param("cutoff") Instant cutoff, @Param("after") Long after, @Param("upper") Long upper, Pageable pageable);
+    List<Long> findPayoutTargetIds(
+            @Param("merchant") Long merchant, @Param("cutoff") Instant cutoff, @Param("upper") Long upper);
+
+    @Query("""
+            SELECT COUNT(s) FROM Settlement s
+            WHERE s.merchantId=:merchant AND s.status=com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+              AND s.scheduledAt<=:cutoff AND s.settlementId<=:upper
+            """)
+    long countForPayout(@Param("merchant") Long merchant, @Param("cutoff") Instant cutoff, @Param("upper") Long upper);
 
     @Query("""
             SELECT COALESCE(SUM(s.settlementAmount), 0)
@@ -54,8 +74,9 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             WHERE s.merchantId = :merchant
               AND c.merchantId = :merchant
               AND ((s.status = com.donworry.settlement.entity.SettlementStatus.COMPLETED
-                    AND s.completedAt >= :from AND s.completedAt < :until)
-                OR (s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+                    AND s.completedAt >= :from AND s.completedAt < :until AND s.completedAt < :asOf)
+                OR ((s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+                    OR (s.status = com.donworry.settlement.entity.SettlementStatus.COMPLETED AND s.completedAt >= :asOf))
                     AND COALESCE(s.scheduledAt, s.expectedSettlementAt) >= :from
                     AND COALESCE(s.scheduledAt, s.expectedSettlementAt) < :until))
             ORDER BY s.settlementId
@@ -64,12 +85,14 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             @Param("merchant") Long merchant,
             @Param("from") Instant from,
             @Param("until") Instant until,
+            @Param("asOf") Instant asOf,
             Pageable pageable);
 
-    @Query("""
-            SELECT COALESCE(SUM(s.settlementAmount), 0) FROM Settlement s
-            WHERE s.merchantId = :merchant AND s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
-            AND s.scheduledAt IS NULL AND s.expectedSettlementAt IS NULL
-            """)
-    Long sumUndated(@Param("merchant") Long merchant);
+    // SUM을 Long으로 먼저 변환하면 범위 검사 전에 오버플로가 발생하므로 DECIMAL로 읽는다.
+    @Query(value = """
+            SELECT COALESCE(SUM(settlement_amount), 0) FROM settlements
+            WHERE merchant_id = :merchant AND status = 'SCHEDULED'
+            AND scheduled_at IS NULL AND expected_settlement_at IS NULL
+            """, nativeQuery = true)
+    BigDecimal sumUndated(@Param("merchant") Long merchant);
 }

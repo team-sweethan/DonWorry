@@ -10,7 +10,19 @@ import type {
 import type { PreviewOrderEntry } from './settlementPreviewData.ts'
 
 export const MAX_FINANCE_AMOUNT = Number.MAX_SAFE_INTEGER
+export const formatWonInput = (value: number | string | undefined) =>
+  String(value ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+export const parseWonInput = (value: string | undefined) =>
+  value?.trim() ? Number(value.replace(/,/g, '')) : Number.NaN
 export type FinancePeriod = { from: string; to: string }
+export function matchesFinanceQuery(
+  kind: 'payout' | 'settlement' | 'expense',
+  active: 'payout' | 'settlement' | 'expense',
+  value: string,
+  query: string,
+) {
+  return kind !== active || value.toLowerCase().includes(query.trim().toLowerCase())
+}
 export const money = (value: number) => `${value.toLocaleString('ko-KR')}원`
 export function koreanToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en', {
@@ -60,20 +72,59 @@ const safe = (value: number) => {
     throw new Error('서버 금액이 지원 범위를 벗어났습니다. 다시 조회해 주세요.')
   return value
 }
+export function financeTotal(values: number[]) {
+  return safe(Number(values.reduce((n, value) => n + BigInt(safe(value)), 0n)))
+}
 export function validateSettlementReport(report: SettlementReport) {
   for (const value of [
     report.completedAmount,
     report.scheduledAmount,
     report.expectedAmount,
     report.undatedAmount,
+    report.paidSettlementAmount,
+    report.refundDeductionAmount,
+    report.paidAmount,
+    report.outstandingRecoveryAmount,
   ])
-    safe(value)
+    if (safe(value) < 0) throw new Error('정산 금액은 음수일 수 없습니다.')
+  financeTotal([report.completedAmount, report.scheduledAmount, report.expectedAmount])
+  if (
+    BigInt(report.paidSettlementAmount) - BigInt(report.refundDeductionAmount) !==
+    BigInt(report.paidAmount)
+  )
+    throw new Error('지급 금액과 환불 차감 근거가 다릅니다. 다시 조회해 주세요.')
+  const seen = new Set<number>()
+  for (const p of report.payouts) {
+    if (seen.has(p.payoutId)) throw new Error('중복 지급 내역입니다. 다시 조회해 주세요.')
+    seen.add(p.payoutId)
+    for (const amount of [p.settlementAmount, p.refundDeductionAmount, p.payoutAmount])
+      if (safe(amount) < 0) throw new Error('지급 금액은 음수일 수 없습니다.')
+    if (BigInt(p.settlementAmount) - BigInt(p.refundDeductionAmount) !== BigInt(p.payoutAmount))
+      throw new Error('지급 상세의 금액이 일치하지 않습니다. 다시 조회해 주세요.')
+  }
+  for (const [field, total] of [
+    ['settlementAmount', report.paidSettlementAmount],
+    ['refundDeductionAmount', report.refundDeductionAmount],
+    ['payoutAmount', report.paidAmount],
+  ] as const)
+    if (financeTotal(report.payouts.map((p) => p[field])) !== total)
+      throw new Error('지급 요약과 내역이 일치하지 않습니다. 다시 조회해 주세요.')
+  for (const d of report.days)
+    for (const amount of [
+      d.completedAmount,
+      d.scheduledAmount,
+      d.expectedAmount,
+      d.paidSettlementAmount,
+      d.refundDeductionAmount,
+      d.paidAmount,
+    ])
+      safe(amount)
   return report
 }
 export function settlementViewEntries(report: SettlementReport): PreviewOrderEntry[] {
   validateSettlementReport(report)
   return report.entries.map((e) => {
-    const pickup = e.classification === 'EXPECTED' ? e.scheduledPickupAt : e.pickedUpAt
+    const pickup = e.pickedUpAt ?? e.scheduledPickupAt
     return {
       id: `settlement:${e.settlementId}`,
       orderId: e.orderId,
@@ -158,15 +209,37 @@ export function forecastView(forecast: CashFlowForecast) {
     forecast.undatedIncome,
     forecast.overdueIncome,
     forecast.canceledIncome,
+    forecast.outstandingRecoveryAmount,
+    forecast.projectedRefundDeduction,
+    forecast.remainingRecoveryAmount,
   ])
     safe(value)
+  if (
+    forecast.outstandingRecoveryAmount < 0 ||
+    forecast.projectedRefundDeduction < 0 ||
+    forecast.remainingRecoveryAmount < 0 ||
+    BigInt(forecast.outstandingRecoveryAmount) - BigInt(forecast.projectedRefundDeduction) !==
+      BigInt(forecast.remainingRecoveryAmount)
+  )
+    throw new Error('환불 회수 잔액이 일치하지 않습니다. 다시 조회해 주세요.')
   const rows = forecast.days.flatMap((d) => d.movements)
+  for (const m of [...rows, ...forecast.carryForwardMovements]) {
+    for (const value of [m.amount, m.settlementAmount, m.refundDeductionAmount])
+      if (safe(value) < 0) throw new Error('현금흐름 금액이 올바르지 않습니다.')
+    if (
+      incoming(m) &&
+      BigInt(m.settlementAmount) - BigInt(m.refundDeductionAmount) !== BigInt(m.amount)
+    )
+      throw new Error('예상 유입과 환불 차감 근거가 다릅니다. 다시 조회해 주세요.')
+  }
   const source = (m: CashFlowMovement) => ({
     id: `${m.source}:${m.referenceId}:${m.occurrenceDate ?? ''}`,
     date: m.date,
     title: m.title,
     amount: safe(m.amount),
-    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '정산 완료' : m.classification === 'SCHEDULED' ? '픽업 완료 기준 · 배치 예정' : '픽업 전 예상 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}`,
+    settlementAmount: m.settlementAmount,
+    refundDeductionAmount: m.refundDeductionAmount,
+    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '실제 지급 완료' : m.classification === 'SCHEDULED' ? '매입일 기준 · 배치 예정' : '기존 예상 일정 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : m.source === 'PAYOUT' ? '일별 지급' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}${m.source === 'SETTLEMENT' && m.refundDeductionAmount > 0 ? ' · 예상 회수 배분 (확정 전)' : ''}`,
   })
   return {
     days: forecast.days.map((d) => ({
@@ -185,9 +258,9 @@ export function forecastView(forecast: CashFlowForecast) {
 
 export const movementLabel = (value: CashFlowMovement['classification']) =>
   ({
-    COMPLETED: '정산 완료',
-    SCHEDULED: '픽업 완료 기준 정산 예정',
-    EXPECTED: '픽업 전 예상 정산',
+    COMPLETED: '실제 지급 완료',
+    SCHEDULED: '매입일 기준 정산 예정',
+    EXPECTED: '기존 예상 일정 정산',
     PAID: '실제 지출 완료',
     PLANNED: '지출 예정',
   })[value]
@@ -208,6 +281,20 @@ export function monthlyReportMismatch(
     report.from === month.from &&
     report.to >= today &&
     month.to === today &&
-    report.completedAmount !== month.completedAmount
+    (report.completedAmount !== month.completedAmount ||
+      report.paidAmount !== month.paidAmount ||
+      report.refundDeductionAmount !== month.refundDeductionAmount ||
+      report.paidSettlementAmount !== month.paidSettlementAmount)
   )
+}
+
+export function chartMonthPeriod(date: string, minimum?: string, maximum?: string): FinancePeriod {
+  const from = date.slice(0, 7) + '-01'
+  const end = new Date(from + 'T00:00:00Z')
+  end.setUTCMonth(end.getUTCMonth() + 1, 0)
+  const to = end.toISOString().slice(0, 10)
+  return {
+    from: minimum && from < minimum ? minimum : from,
+    to: maximum && to > maximum ? maximum : to,
+  }
 }
