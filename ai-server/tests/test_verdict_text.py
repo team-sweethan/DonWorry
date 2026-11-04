@@ -2,7 +2,9 @@ import json
 
 from app.agent.graph import run_investigation
 from app.agent.narrative import narrative_schema
+from app.agent.verdict_text import headline, recommendation_summary
 from app.config import Settings
+from app.schemas.report import PaymentAnalysis
 from tests.fakes import ScriptedLlm, context, narrative, toolbox
 
 # 판단 문장은 코드가 쓰고 AI는 사실만 쓴다 (#532)
@@ -91,3 +93,56 @@ def test_narrativeSchema_doesNotAskJudgementFields() -> None:
     assert "recommendationSummary" not in schema["properties"]
     payment = schema["properties"]["payments"]["properties"]["9001"]
     assert "reason" not in payment["properties"]
+
+
+def _analysis(pid: str, recommendation: str, basis: dict | None) -> PaymentAnalysis:
+    return PaymentAnalysis.model_validate(
+        {
+            "paymentId": pid,
+            "amount": 220000,
+            "requestedAt": "2026-05-21T10:00:00Z",
+            "riskScore": 50,
+            "ruleHits": [],
+            "riskEvidence": [],
+            "normalEvidence": [],
+            "unknowns": [],
+            "recommendation": recommendation,
+            "reason": "",
+            "ruleHitDetails": [],
+            "basis": basis,
+        }
+    )
+
+
+EXPLAINED = {
+    "signals": [
+        {
+            "key": "R01",
+            "label": "고액 결제",
+            "detail": None,
+            "level": "CAUTION",
+            "normalReason": "최근 30일 비슷한 금액의 결제 5건 매입 완료",
+        }
+    ],
+    "normals": [],
+    "rule": "ALL_EXPLAINED",
+    "recommendation": "ACCEPT_REVIEW",
+}
+
+
+# 매입 진행 검토면 결론에 판정만 덩그러니 두지 않고 왜인지(정상 사유)를 붙인다
+def test_headline_accept_says_all_explained() -> None:
+    line = headline([_analysis("1", "ACCEPT_REVIEW", EXPLAINED)])
+
+    assert line == "매입 진행 검토 — 모든 징후에 정상 사유 있음"
+
+
+# 결제별 판정이 섞이면 결론은 판정별 건수, 권고 요약은 결제별 판정을 나열한다
+def test_mixed_recommendations_listed_by_payment() -> None:
+    analyses = [
+        _analysis("1", "ACCEPT_REVIEW", EXPLAINED),
+        _analysis("2", "REJECT_REVIEW", None),
+    ]
+
+    assert headline(analyses) == "결제 2건 중 승인 취소 검토 1건 · 매입 진행 검토 1건"
+    assert "결제 2 승인 취소 검토, 결제 1 매입 진행 검토" in recommendation_summary(analyses)

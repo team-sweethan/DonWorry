@@ -70,7 +70,7 @@ def headline(analyses: list[PaymentAnalysis]) -> str:
             if name not in names:
                 names.append(name)
     if not names:
-        return prefix
+        return f"{prefix} — 모든 징후에 정상 사유 있음" if only == "ACCEPT_REVIEW" else prefix
     shown = " · ".join(names[:_SIGNALS_SHOWN]) + (" 등" if len(names) > _SIGNALS_SHOWN else "")
     return f"{prefix} — 정상 사유 없는 징후: {shown}"
 
