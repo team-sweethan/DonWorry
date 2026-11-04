@@ -91,6 +91,8 @@ Optional<OperatorAccountStatusSnapshot> findById(Long userId);
 
 선행 #518 `c74a03a` 위 구현 커밋 `599b450`과 동일한 최종 코드·테스트에서 실행했다. 검사 중 해당 상태를 커밋했으며, 이후 변경은 이 실행 기록뿐이다. 원래 #518 작업 폴더는 수정하지 않았다.
 
+검사 후 #518의 squash 병합을 확인하고 실제 `origin/dev` `3de31be` 위로 #521 두 커밋만 재배치했다. 재배치된 구현 커밋은 `751918e`다. `git diff 599b450 HEAD -- backend`가 비어 있어 검사한 백엔드 코드·테스트·빌드 설정과 동일함을 확인했다. 새 dev에 함께 들어온 #520 변경은 프론트·정산 문서뿐이며 이번 PR의 변경은 아니다.
+
 - `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain --max-workers=2`: **BUILD SUCCESSFUL**, 6분 26초. 일반 1,416건 중 1,415 통과·기존 1건 skip, MariaDB 804건 모두 통과, 별도 Asia/Seoul 정산 JVM 20건 모두 통과. 각 XML의 failures/errors는 0이다. 컴파일·포맷·ModularityTests·ArchitectureTests·전체 Flyway/JPA validate를 포함한다.
 - 신규 일반 10건·MariaDB 9건 모두 통과. 기본 상태·실제 정지/관리자 해제·여러 차례 해제 후 재정지·다른 계정과 이력 제외·시각 정밀도·ACTIVE 재지정·이전 스냅샷 분리·공개 내부 의존 금지·이벤트 JSON 왕복을 확인했다.
 - MariaDB `EXPLAIN`에서 `target_user_id`·`USER_ENABLED` 필터와 `created_at DESC LIMIT 1` 조회의 `key`가 기존 `idx_admin_change_histories_user_created`임을 확인했다. 운영 데이터 규모의 성능 측정을 뜻하지 않는다.
