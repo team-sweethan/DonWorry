@@ -74,8 +74,9 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             WHERE s.merchantId = :merchant
               AND c.merchantId = :merchant
               AND ((s.status = com.donworry.settlement.entity.SettlementStatus.COMPLETED
-                    AND s.completedAt >= :from AND s.completedAt < :until)
-                OR (s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+                    AND s.completedAt >= :from AND s.completedAt < :until AND s.completedAt < :asOf)
+                OR ((s.status = com.donworry.settlement.entity.SettlementStatus.SCHEDULED
+                    OR (s.status = com.donworry.settlement.entity.SettlementStatus.COMPLETED AND s.completedAt >= :asOf))
                     AND COALESCE(s.scheduledAt, s.expectedSettlementAt) >= :from
                     AND COALESCE(s.scheduledAt, s.expectedSettlementAt) < :until))
             ORDER BY s.settlementId
@@ -84,6 +85,7 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
             @Param("merchant") Long merchant,
             @Param("from") Instant from,
             @Param("until") Instant until,
+            @Param("asOf") Instant asOf,
             Pageable pageable);
 
     // SUM을 Long으로 먼저 변환하면 범위 검사 전에 오버플로가 발생하므로 DECIMAL로 읽는다.

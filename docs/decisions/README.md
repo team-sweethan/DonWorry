@@ -135,3 +135,5 @@ P1 #480 PR 리뷰 대상: [0073 Marker digest로 식별하는 릴리스 이미�
 P1 #481 PR 리뷰 대상: [0074 Jenkins가 승인한 릴리스 묶음으로 VM 업데이트](0074-approved-release-update.md) — 제안, 운영 설치·실검증 전.
 
 P1 #482 PR 리뷰 대상: [0075 VM 공통 잠금과 지속 실행 기록으로 배포 중단 확인](0075-deployment-serialization-and-interruption.md) — 제안, 운영 설치·실검증 전.
+
+P6 #507 PR 리뷰 대상: [0076 실제 지급 원장을 잔액 유입의 기준으로 사용](0076-p6-payout-based-cash-flow.md).
