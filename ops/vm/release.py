@@ -169,6 +169,13 @@ def write_deployment_file(path, data, on_replace=None):
             temporary.unlink(missing_ok=True)
 
 
+def revision_ok(labels, sha, verified=True):
+    # #480 이전 이미지는 revision label이 없다. 운영자가 명시한 관측 등록에서만 label 부재를 허용하고,
+    # 다른 SHA를 가리키는 label은 어떤 경우에도 거절한다.
+    value = (labels or {}).get(REVISION)
+    return value == sha or (not verified and value is None)
+
+
 def image_tag(data):
     require(len(re.findall(rb'^IMAGE_TAG=', data, re.MULTILINE)) == 1,
             'IMAGE_TAG 설정이 정확히 하나여야 함')
@@ -319,7 +326,7 @@ class Release:
                   for s, n in [('backend', 'backend'), ('nginx', 'frontend'), ('ai', 'ai')]}
         return sha, images
 
-    def image(self, service, index_digest, sha, platform):
+    def image(self, service, index_digest, sha, platform, verified=True):
         repo = REPOS[service]
         index = self.manifest(f'{repo}@{index_digest}', index_digest, INDEXES)
         matches = [m for m in index['manifests']
@@ -334,7 +341,7 @@ class Release:
         config = self.config(child_ref)
         require(config.get('os') == platform['os'] and
                 config.get('architecture') == platform['architecture'], '이미지 플랫폼 불일치')
-        require(config['config'].get('Labels', {}).get(REVISION) == sha, '이미지 revision 불일치')
+        require(revision_ok(config['config'].get('Labels'), sha, verified), '이미지 revision 불일치')
         return {'repository': repo, 'index': index_digest, 'manifest': child_digest,
                 'config': valid_digest(child['config']['digest'])}
 
@@ -346,8 +353,9 @@ class Release:
             sha, indexes = self.marker(bundle['marker'])
             require(sha == bundle['sha'], '승인 SHA와 marker revision 불일치')
         require(self.platform() == bundle['platform'], '승인 후 VM 플랫폼 변경')
+        verified = bundle.get('revision_verified', True)
         for service, image in bundle['images'].items():
-            require(image == self.image(service, indexes[service], sha, bundle['platform']),
+            require(image == self.image(service, indexes[service], sha, bundle['platform'], verified),
                     '승인 이미지 묶음 불일치')
 
     def database_state(self):
@@ -407,6 +415,7 @@ SELECT JSON_ARRAY('unsupported',
         return {'fingerprint': digest(encoded(rows)), 'flyway': history, 'checked_at': timestamp()}
 
     def confirmed_current(self):
+        require((self.store / 'current.json').is_file(), '등록된 현재 묶음 없음: register-current 필요')
         current = json.loads((self.store / 'current.json').read_bytes())['bundle_id']
         saved = json.loads((self.store / current / 'bundle.json').read_bytes())
         folder, bundle = self.load_snapshot(current, saved['execution'])
@@ -419,7 +428,7 @@ SELECT JSON_ARRAY('unsupported',
         return current, folder, bundle
 
     @serialized('register-current')
-    def register_current(self, sha, execution, operator, evidence):
+    def register_current(self, sha, execution, operator, evidence, without_revision=False):
         require(re.fullmatch(r'[0-9a-f]{40}', sha), '현재 SHA 형식 오류')
         token(execution)
         token(operator)
@@ -450,10 +459,14 @@ SELECT JSON_ARRAY('unsupported',
             local = self.json('docker', 'image', 'inspect', container['Image'])[0]
             refs = [ref for ref in local.get('RepoDigests', []) if ref.startswith(repo + '@')]
             require(len(refs) == 1, '기존 이미지 registry digest 없음/중복')
-            images[service] = self.image(service, valid_digest(refs[0].split('@')[1]), sha, platform)
+            images[service] = self.image(service, valid_digest(refs[0].split('@')[1]), sha, platform,
+                                         verified=not without_revision)
         bundle = {'schema': 1, 'origin': 'observed', 'sha': sha, 'platform': platform,
                   'images': images, 'configuration': version, 'execution': execution,
                   'created_at': timestamp()}
+        if without_revision:
+            # SHA는 운영자 근거(.env·배포 기록)로만 확인했다. digest·이미지 ID·플랫폼은 그대로 대조했다.
+            bundle['revision_verified'] = False
         resolved = copy.deepcopy(config)
         for service, image in images.items():
             resolved['services'][service].update(image=image['repository'] + '@' + image['index'],
@@ -479,7 +492,7 @@ SELECT JSON_ARRAY('unsupported',
             stage('completed')
         write_atomic(self.store / 'current.json', {'bundle_id': bundle_id, 'sha': sha})
         return {'bundle_id': bundle_id, 'execution': execution, 'status': 'registered',
-                'restore_verified': False}
+                'restore_verified': False, 'revision_verified': not without_revision}
 
     def observed_runtime(self, bundle, folder):
         # 최초 등록 전에는 실행 ref가 SHA 태그일 수 있다. 실행 이미지 ID는 반드시 맞아야 한다.
@@ -524,12 +537,19 @@ SELECT JSON_ARRAY('unsupported',
 
     def functional_policy(self):
         # 검사 내용·데이터는 운영자가 승인한다. 저장소는 임의 결제 시나리오를 만들지 않는다.
+        require((self.root / 'functional-check.json').is_file(), '승인된 기능 검사 정책 없음')
         policy = json.loads((self.root / 'functional-check.json').read_bytes())
         require(policy['environment'] == 'approved-test', '승인된 테스트 환경에서만 기능 검사 허용')
         token(policy['evidence'])
         token(policy['test_data'])
         require((self.root / 'functional_check.py').is_file(), '승인된 기능 검사 구현 없음')
         return policy
+
+    def deploy_prerequisites(self):
+        # 실행 기록(operation)을 만들기 전에 확인한다. 서비스를 바꾸지 않은 사전 조건 누락이
+        # failed·PAUSE_CD로 남으면 reconcile/register-current로도 풀 수 없다.
+        self.functional_policy()
+        self.confirmed_current()
 
     def verify_backup(self, result):
         require(result['backup']['status'] == 'success' and
@@ -549,6 +569,7 @@ SELECT JSON_ARRAY('unsupported',
         require(re.fullmatch(r'[0-9a-f]{40}', sha), 'TARGET_SHA 형식 오류')
         token(execution)
         self.preflight()
+        self.deploy_prerequisites()
         self.main(sha)
         descriptor = self.json('docker', 'buildx', 'imagetools', 'inspect', '--format',
                                '{{json .Manifest}}', MARKER + ':prod')
@@ -614,7 +635,8 @@ SELECT JSON_ARRAY('unsupported',
             require(local['Id'] == ids[service] and
                     local['Os'] == bundle['platform']['os'] and
                     local['Architecture'] == bundle['platform']['architecture'] and
-                    local['Config'].get('Labels', {}).get(REVISION) == bundle['sha'],
+                    revision_ok(local['Config'].get('Labels'), bundle['sha'],
+                                bundle.get('revision_verified', True)),
                     '로컬 이미지 digest/platform/revision 불일치')
 
     def local_sha_tags(self, bundle, assign=False):
@@ -728,6 +750,7 @@ SELECT JSON_ARRAY('unsupported',
         require(not (folder / 'result.json').exists(), '이미 적용을 시도한 승인')
         # 잠금 대기 후 검사한다. 중단 기록이 있으면 다운로드도 새로 시작하지 않는다.
         self.preflight()
+        self.deploy_prerequisites()
         with self.operation(folder, bundle_id, execution, approval) as (result, stage):
             before = image_tag((self.root / '.env').read_bytes())[0]
             result['deployment_records'] = {
@@ -781,7 +804,8 @@ SELECT JSON_ARRAY('unsupported',
         record = {'failed_bundle': bundle_id, 'execution': execution, 'previous_bundle': previous,
                   'result_digest': digest((folder / 'result.json').read_bytes()),
                   'operator': token(operator), 'evidence': token(evidence),
-                  'approved_at': timestamp(), 'scope': 'images-only; no-database-restore'}
+                  'approved_at': timestamp(), 'scope': 'images-only; no-database-restore',
+                  'previous_revision_verified': old.get('revision_verified', True)}
         write_new(folder / 'recovery-approval.json', record)
         return record
 
@@ -1035,8 +1059,12 @@ def cli():
     parser.add_argument('execution', help='Jenkins 또는 수동 실행 식별자')
     parser.add_argument('approver', nargs='?')
     parser.add_argument('--against', choices=['current', 'target'])
+    parser.add_argument('--without-revision', action='store_true',
+                        help='register-current 전용: #480 이전(revision label 없는) 이미지 등록')
     parser.add_argument('--evidence', help='작업 종료·DB/Flyway·업무 영향 확인 근거 식별자 (비밀값 금지)')
     args = parser.parse_args()
+    require(not args.without_revision or args.action == 'register-current',
+            '--without-revision은 register-current 전용')
     require(os.geteuid() == 0, 'root 전용 명령')
     os.umask(0o077)
     # SSH 단절은 취소 요청으로 취급하지 않는다. 결과는 VM 기록으로 확인한다.
@@ -1054,10 +1082,13 @@ def cli():
         result = release.apply(args.target, args.execution)
     elif args.action == 'inspect':
         result = release.inspect(args.target, args.execution)
-    elif args.action in {'register-current', 'approve-recovery'}:
+    elif args.action == 'register-current':
         require(args.approver is not None and args.evidence is not None, '운영자/근거 누락')
-        method = release.register_current if args.action == 'register-current' else release.approve_recovery
-        result = method(args.target, args.execution, args.approver, args.evidence)
+        result = release.register_current(args.target, args.execution, args.approver, args.evidence,
+                                          without_revision=args.without_revision)
+    elif args.action == 'approve-recovery':
+        require(args.approver is not None and args.evidence is not None, '운영자/근거 누락')
+        result = release.approve_recovery(args.target, args.execution, args.approver, args.evidence)
     elif args.action == 'recover':
         result = release.recover(args.target, args.execution)
     else:

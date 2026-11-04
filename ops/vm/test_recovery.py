@@ -63,13 +63,27 @@ class RecoveryTests(unittest.TestCase):
         self.assertLess(phases.index('backed_up'), phases.index('applying'))
         self.assertEqual(result['functional_check']['status'], 'success')
 
+    def assertNotStuck(self):
+        # 서비스를 바꾸지 않은 사전 조건 거절은 실행 기록·PAUSE_CD를 남기지 않는다.
+        self.assertEqual(self.docker.mutations(), [])
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+        self.assertEqual(self.cd.unresolved(), [])
+
     def test_no_previous_record_blocks_deploy_before_compose(self):
         (self.cd.store / 'current.json').unlink()
+        with self.assertRaisesRegex(release.Rejected, 'register-current'):
+            self.candidate()
+        self.assertNotStuck()
+
+    def test_prerequisite_lost_after_approval_rejects_without_pause(self):
         bundle = self.candidate()
-        with self.assertRaises(OSError):
+        (self.cd.store / 'current.json').unlink()
+        with self.assertRaisesRegex(release.Rejected, 'register-current'):
             self.cd.apply(bundle, 'update-1')
-        self.assertEqual(self.docker.mutations(), [])
-        self.assertTrue((self.root / 'PAUSE_CD').exists())
+        self.assertNotStuck()
+        self.assertFalse((self.cd.store / bundle / 'result.json').exists())
+        # 멈춤이 남지 않아 운영자가 바로 현재 상태를 다시 등록할 수 있다.
+        self.cd.register_current(fixtures.SHA, 'refresh', 'operator', 'INC-2')
 
     def test_dump_failure_leaves_durable_failure_and_never_replaces_services(self):
         bundle = self.candidate()
@@ -193,13 +207,64 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.docker.mutations(), [])
         self.assertEqual(self.result(bundle)['backup']['status'], 'success')
 
+    def test_missing_functional_policy_rejects_clearly_without_pause(self):
+        (self.root / 'functional-check.json').unlink()
+        self.cd.register_current(fixtures.SHA, 'refresh', 'operator', 'INC-2')
+        with self.assertRaisesRegex(release.Rejected, '기능 검사 정책 없음'):
+            self.candidate()
+        self.assertNotStuck()
+
     def test_missing_functional_implementation_blocks_before_service_change(self):
         (self.root / 'functional_check.py').unlink()
         self.cd.register_current(fixtures.SHA, 'refresh', 'operator', 'INC-2')
+        with self.assertRaisesRegex(release.Rejected, '기능 검사 구현 없음'):
+            self.candidate()
+        self.assertNotStuck()
+
+    def strip_current_revision(self):
+        # #480 이전 빌드처럼 현재 이미지에 revision label이 없는 상태를 만든다. marker는 그대로 둔다.
+        for ref, config in self.docker.configs.items():
+            if not ref.startswith(release.MARKER):
+                config['config'].get('Labels', {}).pop(release.REVISION, None)
+        for image in self.docker.local.values():
+            image['Config'].get('Labels', {}).pop(release.REVISION, None)
+        (self.cd.store / 'current.json').unlink()
+
+    def test_unlabeled_current_requires_explicit_exception(self):
+        self.strip_current_revision()
+        with self.assertRaisesRegex(release.Rejected, 'revision'):
+            self.cd.register_current(fixtures.SHA, 'legacy', 'operator', 'INC-480')
+        self.assertFalse((self.root / 'PAUSE_CD').exists())
+
+    def test_unlabeled_current_registers_with_exception_and_next_deploy_works(self):
+        self.strip_current_revision()
+        registered = self.cd.register_current(fixtures.SHA, 'legacy', 'operator', 'INC-480',
+                                              without_revision=True)
+        self.assertFalse(registered['revision_verified'])
+        saved = json.loads((self.cd.store / registered['bundle_id'] / 'bundle.json').read_bytes())
+        self.assertIs(saved['revision_verified'], False)
+        # 예외 등록한 현재 묶음을 백업 기준으로 삼아 새 배포가 진행된다. 새 이미지는 label이 필요하다.
         bundle = self.candidate()
-        with self.assertRaises(release.Rejected):
-            self.cd.apply(bundle, 'update-1')
-        self.assertEqual(self.docker.mutations(), [])
+        result = self.cd.apply(bundle, 'update-1')
+        self.assertEqual(result['backup']['previous_bundle'], registered['bundle_id'])
+        self.assertEqual(result['status'], 'success')
+
+    def test_exception_never_accepts_label_for_another_sha(self):
+        for ref, config in self.docker.configs.items():
+            if not ref.startswith(release.MARKER):
+                config['config'].setdefault('Labels', {})[release.REVISION] = 'c' * 40
+        (self.cd.store / 'current.json').unlink()
+        with self.assertRaisesRegex(release.Rejected, 'revision'):
+            self.cd.register_current(fixtures.SHA, 'legacy', 'operator', 'INC-480', without_revision=True)
+
+    def test_recovery_to_unlabeled_registration_records_verification_level(self):
+        self.strip_current_revision()
+        self.cd.register_current(fixtures.SHA, 'legacy', 'operator', 'INC-480', without_revision=True)
+        bundle = self.failed()
+        approval = self.cd.approve_recovery(bundle, 'update-1', 'operator', 'INC-2')
+        self.assertIs(approval['previous_revision_verified'], False)
+        recovered = self.cd.recover(bundle, 'update-1')
+        self.assertEqual(recovered['status'], 'success')
 
     def test_backup_and_functional_timeouts_are_bounded(self):
         self.assertEqual(release.command_timeout(('docker', 'compose', 'exec', 'db',
@@ -219,11 +284,10 @@ class RecoveryTests(unittest.TestCase):
     def test_functional_policy_requires_approved_environment(self):
         policy = self.root / 'functional-check.json'
         release.write_atomic(policy, {'environment': 'production', 'evidence': 'INC-2', 'test_data': 'X'})
-        # 이미 등록한 구성의 변경은 새 현재 상태 확인 없이는 배포할 수 없다.
-        bundle = self.candidate()
-        with self.assertRaises(release.Rejected):
-            self.cd.apply(bundle, 'update-1')
-        self.assertEqual(self.docker.mutations(), [])
+        # 승인되지 않은 환경 정책은 준비 단계에서 거절하고 멈춤을 남기지 않는다.
+        with self.assertRaisesRegex(release.Rejected, '승인된 테스트 환경'):
+            self.candidate()
+        self.assertNotStuck()
 
     def test_recovery_and_manual_commands_share_lock(self):
         bundle = self.failed()

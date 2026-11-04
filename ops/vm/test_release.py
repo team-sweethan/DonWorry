@@ -191,7 +191,8 @@ class ReleaseTests(unittest.TestCase):
         # #481/#482/#499의 단위 검사는 백업/업무 검사 경계를 대체한다.
         # 실제 연결은 test_recovery.py의 별도 통합 대역 검사에서 확인한다.
         self.recovery_patches = [mock.patch.object(self.cd, name) for name in
-                                 ['backup_database', 'verify_backup', 'functional_check', 'functional_policy']]
+                                 ['backup_database', 'verify_backup', 'functional_check', 'functional_policy',
+                                  'confirmed_current']]
         for patch in self.recovery_patches:
             patch.start()
             self.addCleanup(patch.stop)
@@ -485,6 +486,7 @@ release.os.fchown = lambda *args: None
 release.Release.backup_database = lambda *args: None
 release.Release.functional_check = lambda *args: None
 release.Release.functional_policy = lambda *args: None
+release.Release.confirmed_current = lambda *args: None
 release.Release.verify_backup = lambda *args: None
 sync = release.sync_directory
 def killed(path):

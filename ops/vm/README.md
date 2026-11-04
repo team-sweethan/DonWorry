@@ -283,6 +283,18 @@ VM 검증이 필요하다. 실제 VM 갱신·기존 스크립트 실행·운영 
    donworry-release register-current <CURRENT_SHA> <REGISTRATION_ID> <OPERATOR> --evidence <INCIDENT_ID>
    ```
 
+   **#480 이전에 빌드된 이미지**(예: 2026-11-03 운영 `sha-1514b3d`)에는 `org.opencontainers.image.revision`
+   label이 없어 위 명령이 거절된다. 이때만 운영자가 `--without-revision`을 붙여 등록한다.
+
+   ```text
+   donworry-release register-current <CURRENT_SHA> <REGISTRATION_ID> <OPERATOR> --evidence <INCIDENT_ID> --without-revision
+   ```
+
+   label이 **없을 때만** 건너뛰며, 다른 SHA를 가리키는 label은 거절한다. 실행 이미지 ID·RepoDigest·
+   원격 index/플랫폼 digest 대조는 그대로 한다. SHA는 `.env`·배포 기록과 운영자 근거로만 확인한 것이므로
+   묶음에 `revision_verified: false`를 남기고, 이 묶음으로의 복구 승인에도 같은 값을 기록한다.
+   새로 배포하는 이미지(#480 이후 빌드)는 항상 label을 검사한다.
+
    RepoDigest가 없거나 단일 manifest/플랫폼을 확정할 수 없으면 멈춘다. 현재 SHA 태그를 다시
    pull해서 후보를 만들지 않는다. 실제 이미지 추적과 별도 운영자 판단이 필요하다.
    등록 결과는 restore_verified=false이며, 서비스 교체나 과거 배포 성공 증명은 아니다.
@@ -294,6 +306,8 @@ VM 검증이 필요하다. 실제 VM 갱신·기존 스크립트 실행·운영 
 ### 배포 전 백업
 
 새 prepare/approve/apply 경로는 현재 성공/등록 묶음의 구성·실행 이미지를 먼저 확인한다.
+기능 검사 정책·구현이나 등록된 현재 묶음이 없으면 `prepare`·`apply`가 실행 기록을 만들기 전에
+거절한다 (`failed`·`PAUSE_CD`를 남기지 않음).
 pull 후 서비스 변경 전에 DB health, Flyway 성공 이력, 지원 DB 객체를 점검하고 백업한다.
 백업 전후/최종 적용 전 DB 지문이 바뀌면 차단한다. 백업 중 DDL·다른 변경 경로를 실행하지 않는다.
 비 InnoDB·뷰·루틴·이벤트는 별도 백업 정책 합의 전 차단한다.
