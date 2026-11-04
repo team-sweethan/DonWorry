@@ -1,4 +1,4 @@
-import { financeTotal } from './financeView'
+import { financeTotal, matchesFinanceQuery } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
 import type { PayoutSummaryData } from './PayoutLedger'
 import { previewSettlements, mockOrderItems, previewPayoutReport } from './settlementPreviewData'
@@ -217,20 +217,20 @@ export function SettlementPrototype({
   const payoutRows = scopedPayouts.filter(
     (p) =>
       (!dateOnly || p.payoutDate === dateInput(selectedDate)) &&
-      String(p.payoutId).includes(query.trim()),
+      matchesFinanceQuery('payout', reportType, String(p.payoutId), query),
   )
   const dailyExpenses = scopedExpenses.filter((e) => e.date === dateInput(selectedDate))
   const expenseRows = scopedExpenses
     .filter((e) =>
       dateOnly ? e.date === dateInput(selectedDate) : e.date >= rangeStart && e.date <= rangeEnd,
     )
-    .filter((e) => e.title.toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((e) => matchesFinanceQuery('expense', reportType, e.title, query))
     .toSorted((a, b) => b.date.localeCompare(a.date))
   const pickups = inPeriod.filter((e) => e.pickup !== null && key(e.pickup) === key(selectedDate))
   const scope = dateOnly ? daily : inPeriod
   const rows = scope
-    .filter((e) => filter === 'all' || e.status === filter)
-    .filter((e) => (e.orderId ?? e.id).toLowerCase().includes(query.trim().toLowerCase()))
+    .filter((e) => reportType !== 'settlement' || filter === 'all' || e.status === filter)
+    .filter((e) => matchesFinanceQuery('settlement', reportType, e.orderId ?? e.id, query))
     .toSorted((a, b) =>
       sort === 'high'
         ? net(b) - net(a)

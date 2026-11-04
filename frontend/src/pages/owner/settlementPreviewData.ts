@@ -1,7 +1,6 @@
 import type { SettlementReport } from '../../api/finance.ts'
 import dayjs from 'dayjs'
 import type { SettlementPreviewEntry } from './financePreviewTypes.ts'
-type Status = 'done' | 'sch' | 'exp' | 'can'
 export type OrderProduct = { productName: string; quantity: number }
 // 목업도 실제 주문 상품 응답과 같은 이름·수량 구조를 사용한다.
 export type PreviewOrderEntry = SettlementPreviewEntry & { orderItems?: OrderProduct[] }
@@ -24,46 +23,73 @@ export const mockOrderItems: OrderProduct[][] = [
     { productName: '레터링 케이크', quantity: 1 },
   ],
 ]
-// 시연 일정만 생성한다. 실제 정산일·공휴일 판단은 서버의 영업일 달력이 담당한다.
-const demoBusinessDay = (date: Date) => {
-  const result = new Date(date)
-  while (result.getDay() === 0 || result.getDay() === 6) result.setDate(result.getDate() + 1)
-  return result
+// 실제 공휴일 정본은 서버가 담당하며, 목업도 D를 제외하고 평일 세 개를 센다.
+export function demoSettlementDate(capturedDate: string, holidays: string[] = []) {
+  let date = dayjs(capturedDate),
+    counted = 0
+  while (counted < 3) {
+    date = date.add(1, 'day')
+    if (date.day() !== 0 && date.day() !== 6 && !holidays.includes(date.format('YYYY-MM-DD')))
+      counted++
+  }
+  return date.format('YYYY-MM-DD')
 }
+function captureBeforePayout(paidDate: string) {
+  let date = dayjs(paidDate)
+  while (date.day() === 0 || date.day() === 6) date = date.subtract(1, 'day')
+  let counted = 0
+  while (counted < 3) {
+    date = date.subtract(1, 'day')
+    if (date.day() !== 0 && date.day() !== 6) counted++
+  }
+  return date.format('YYYY-MM-DD')
+}
+// 완료 건은 실제 지급일, 미완료 건은 매입일을 별도로 설정해 두 시각을 혼동하지 않는다.
 export function previewSettlements(now: Date): PreviewOrderEntry[] {
-  const items: [number, number, Status][] = [
-    [32000, -14, 'done'],
-    [64000, -11, 'done'],
-    [280000, -8, 'done'],
-    [38000, -6, 'done'],
-    [32000, -5, 'done'],
-    [120000, -4, 'sch'],
-    [32000, -3, 'sch'],
-    [250000, -2, 'sch'],
-    [29000, -1, 'sch'],
-    [45000, 1, 'exp'],
-    [250000, 3, 'exp'],
-    [58000, 5, 'exp'],
-    [120000, 9, 'exp'],
-    [100000, -3, 'done'],
+  type Example =
+    | { gross: number; status: 'done'; paidOffset: number }
+    | { gross: number; status: 'sch' | 'exp'; captureOffset: number }
+  const items: Example[] = [
+    { gross: 32000, paidOffset: -11, status: 'done' },
+    { gross: 64000, paidOffset: -8, status: 'done' },
+    { gross: 280000, paidOffset: -5, status: 'done' },
+    { gross: 38000, paidOffset: -3, status: 'done' },
+    { gross: 32000, paidOffset: -2, status: 'done' },
+    { gross: 120000, captureOffset: -4, status: 'sch' },
+    { gross: 32000, captureOffset: -3, status: 'sch' },
+    { gross: 250000, captureOffset: -2, status: 'sch' },
+    { gross: 29000, captureOffset: -1, status: 'sch' },
+    { gross: 45000, captureOffset: 1, status: 'exp' },
+    { gross: 250000, captureOffset: 3, status: 'exp' },
+    { gross: 58000, captureOffset: 5, status: 'exp' },
+    { gross: 120000, captureOffset: 9, status: 'exp' },
+    { gross: 100000, paidOffset: 0, status: 'done' },
   ]
-  return items.map(([gross, offset, status], i) => ({
-    id: `CS-${now.getFullYear()}-${String(i + 1).padStart(4, '0')}`,
-    item: '주문번호 기준 정산',
-    orderItems: mockOrderItems[i % mockOrderItems.length],
-    gross,
-    cardFeeAmount: Math.floor(gross * 0.02),
-    pgFeeAmount: Math.floor(gross * 0.01),
-    settlementAmount: gross - Math.floor(gross * 0.02) - Math.floor(gross * 0.01),
-    status: status === 'exp' ? 'sch' : status,
-    pickup: new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 15, 20),
-    date:
-      status === 'done'
-        ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset + 3, 3, 0)
-        : demoBusinessDay(
-            new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset + 3, 3, 0),
-          ),
-  }))
+  return items.map((example, i) => {
+    const { gross, status } = example
+    const paidDate =
+      status === 'done' ? dayjs(now).add(example.paidOffset, 'day').format('YYYY-MM-DD') : null
+    const capturedDate = paidDate
+      ? captureBeforePayout(paidDate)
+      : dayjs(now)
+          .add('captureOffset' in example ? example.captureOffset : 0, 'day')
+          .format('YYYY-MM-DD')
+    const eligibleDate = demoSettlementDate(capturedDate)
+    return {
+      id: `CS-${now.getFullYear()}-${String(i + 1).padStart(4, '0')}`,
+      item: '주문번호 기준 정산',
+      orderItems: mockOrderItems[i % mockOrderItems.length],
+      gross,
+      cardFeeAmount: Math.floor(gross * 0.02),
+      pgFeeAmount: Math.floor(gross * 0.01),
+      settlementAmount: gross - Math.floor(gross * 0.02) - Math.floor(gross * 0.01),
+      status,
+      capturedDate,
+      eligibleDate,
+      pickup: new Date(capturedDate + 'T15:20:00'),
+      date: new Date((paidDate ?? eligibleDate) + 'T03:00:00'),
+    }
+  })
 }
 
 export function previewPayouts(now: Date, todayDeduction = 97000): SettlementReport['payouts'] {

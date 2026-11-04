@@ -10,6 +10,7 @@ import {
   monthlyReportMismatch,
   validateSettlementReport,
   financeTotal,
+  matchesFinanceQuery,
   settlementViewEntries,
   validFinancePeriod,
 } from '../src/pages/owner/financeView.ts'
@@ -300,4 +301,14 @@ test('report_whenPayoutTotalsMismatchOrUnsafe_rejectsMisleadingCashSummary', () 
     /지원 범위/,
   )
   assert.throws(() => financeTotal([Number.MAX_SAFE_INTEGER, 1]), /지원 범위/)
+})
+
+// 지급번호 검색은 지급 목록에만 적용해 주문·지출 합계나 다른 탭 건수를 줄이지 않는다.
+test('financeQuery_whenPayoutNumberEntered_keepsOtherLedgersUnfiltered', () => {
+  assert.equal(matchesFinanceQuery('payout', 'payout', '8001', '8001'), true)
+  assert.equal(matchesFinanceQuery('payout', 'payout', '8002', '8001'), false)
+  assert.equal(matchesFinanceQuery('settlement', 'payout', 'CS-0001', '8001'), true)
+  assert.equal(matchesFinanceQuery('expense', 'payout', '임대료', '8001'), true)
+  assert.equal(matchesFinanceQuery('payout', 'settlement', '8001', 'CS-0001'), true)
+  assert.equal(matchesFinanceQuery('settlement', 'settlement', 'CS-0001', 'cs-0001'), true)
 })

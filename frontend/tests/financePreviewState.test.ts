@@ -1,3 +1,4 @@
+import { demoSettlementDate, previewSettlements } from '../src/pages/owner/settlementPreviewData.ts'
 import assert from 'node:assert/strict'
 import dayjs from 'dayjs'
 import { test } from 'node:test'
@@ -310,4 +311,25 @@ test('preview_whenRecoveryExceedsFutureIncome_keepsRemainingDebtWithoutNegativeP
   assert.ok(result.recovery.remaining > 0)
   assert.equal(result.recovery.projected + result.recovery.remaining, 9000000)
   assert.equal(result.currentBalance, 597000)
+})
+
+// 목요일·금요일·주말 매입과 공휴일을 포함해 D를 제외한 세 영업일을 센다.
+test('demoSettlementDate_whenWeekendOrHolidayIntervenes_countsThreeBusinessDays', () => {
+  assert.equal(demoSettlementDate('2026-10-29'), '2026-11-03')
+  assert.equal(demoSettlementDate('2026-10-30'), '2026-11-04')
+  assert.equal(demoSettlementDate('2026-11-01'), '2026-11-04')
+  assert.equal(demoSettlementDate('2026-11-26', ['2026-11-27']), '2026-12-02')
+})
+
+test('previewSettlement_whenLegacyExpected_preservesClassificationAndBusinessDateEvidence', () => {
+  const rows = previewSettlements(new Date('2026-11-04T12:00:00'))
+  assert.equal(rows.filter((row) => row.status === 'exp').length, 4)
+  const thursday = rows.find((row) => row.gross === 45000)!
+  assert.equal(thursday.capturedDate, '2026-11-05')
+  assert.equal(thursday.eligibleDate, '2026-11-10')
+  assert.equal(thursday.status, 'exp')
+  assert.equal(dayjs(thursday.date).format('YYYY-MM-DD'), '2026-11-10')
+  for (const row of rows) assert.equal(demoSettlementDate(row.capturedDate!), row.eligibleDate)
+  for (const row of rows.filter((row) => row.status === 'done'))
+    assert.ok(row.eligibleDate! <= dayjs(row.date).format('YYYY-MM-DD'))
 })

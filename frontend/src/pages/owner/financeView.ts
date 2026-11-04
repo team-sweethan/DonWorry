@@ -11,6 +11,14 @@ import type { PreviewOrderEntry } from './settlementPreviewData.ts'
 
 export const MAX_FINANCE_AMOUNT = Number.MAX_SAFE_INTEGER
 export type FinancePeriod = { from: string; to: string }
+export function matchesFinanceQuery(
+  kind: 'payout' | 'settlement' | 'expense',
+  active: 'payout' | 'settlement' | 'expense',
+  value: string,
+  query: string,
+) {
+  return kind !== active || value.toLowerCase().includes(query.trim().toLowerCase())
+}
 export const money = (value: number) => `${value.toLocaleString('ko-KR')}원`
 export function koreanToday(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en', {
