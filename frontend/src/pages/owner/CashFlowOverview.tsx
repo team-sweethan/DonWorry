@@ -69,7 +69,15 @@ export function CashFlowOverview({
   capturedAt,
   ownerScope,
   recovery,
+  graphDate,
+  onGraphDateChange,
+  minGraphDate,
+  maxGraphDate,
 }: {
+  graphDate?: string
+  onGraphDateChange?: (date: string) => void
+  minGraphDate?: string
+  maxGraphDate?: string
   days: ForecastDayView[]
   incomes: ForecastSource[]
   costs: ForecastSource[]
@@ -81,7 +89,7 @@ export function CashFlowOverview({
   recovery?: { outstanding: number; projected: number; remaining: number }
   onDetails: (date: string) => void
 }) {
-  const [selected, setSelected] = useState('')
+  const [selected, setSelected] = useState(graphDate ?? '')
   const navigate = useNavigate()
   const { pathname, search } = useLocation()
   const evidenceRef = useRef<HTMLElement>(null)
@@ -92,7 +100,10 @@ export function CashFlowOverview({
   const requirement = loanRequirement(days)!
   const maximumShortage = summary?.maximumShortage ?? requirement.required
   const active =
-    days.find((d) => d.date === selected) ?? days.find((d) => d.date === koreanToday()) ?? days[0]
+    days.find((d) => d.date === selected) ??
+    days.find((d) => d.date === graphDate) ??
+    days.find((d) => d.date === koreanToday()) ??
+    days[0]
   const dayIncome = incomes.filter((e) => e.date === active.date)
   const dayCosts = costs.filter((e) => e.date === active.date)
   const largest = [...dayCosts].sort((a, b) => b.amount - a.amount)[0]
@@ -255,7 +266,12 @@ export function CashFlowOverview({
             expense: d.expenses,
           }))}
           selectedDate={active.date}
-          onSelect={setSelected}
+          minSelectableDate={minGraphDate}
+          maxSelectableDate={maxGraphDate}
+          onSelect={(date) => {
+            setSelected(date)
+            onGraphDateChange?.(date)
+          }}
         />
       </section>
       <section

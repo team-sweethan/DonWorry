@@ -287,3 +287,14 @@ export function monthlyReportMismatch(
       report.paidSettlementAmount !== month.paidSettlementAmount)
   )
 }
+
+export function chartMonthPeriod(date: string, minimum?: string, maximum?: string): FinancePeriod {
+  const from = date.slice(0, 7) + '-01'
+  const end = new Date(from + 'T00:00:00Z')
+  end.setUTCMonth(end.getUTCMonth() + 1, 0)
+  const to = end.toISOString().slice(0, 10)
+  return {
+    from: minimum && from < minimum ? minimum : from,
+    to: maximum && to > maximum ? maximum : to,
+  }
+}

@@ -1,5 +1,5 @@
 import { previewPayoutReport } from './settlementPreviewData'
-import { koreanToday, formatWonInput, parseWonInput } from './financeView'
+import { koreanToday, formatWonInput, parseWonInput, chartMonthPeriod } from './financeView'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -48,6 +48,7 @@ export function FinancePreview() {
       )
   }, [sample, store])
   const [refreshedAt, setRefreshedAt] = useState(() => new Date())
+  const [graphDate, setGraphDate] = useState('')
   const [start, setStart] = useState(today)
   const [end, setEnd] = useState(
     dayjs(today)
@@ -327,6 +328,21 @@ export function FinancePreview() {
               )}
               <CashFlowOverview
                 preview
+                graphDate={graphDate}
+                minGraphDate={today}
+                maxGraphDate={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
+                onGraphDateChange={(date) => {
+                  setGraphDate(date)
+                  if (date < start || date > end) {
+                    const next = chartMonthPeriod(
+                      date,
+                      today,
+                      dayjs(today).add(365, 'day').format('YYYY-MM-DD'),
+                    )
+                    setStart(next.from)
+                    setEnd(next.to)
+                  }
+                }}
                 recovery={result.recovery}
                 currentBalance={result.currentBalance}
                 days={result.days}

@@ -42,7 +42,7 @@ test('settlement calendar selects and highlights Korean today across the UTC dat
     assert.doesNotMatch(html, /aria-label="2026-11-01 예정/)
     assert.match(html, /aria-label="2026-11-02 예정 200원"/)
     assert.match(html, /aria-label="2026-11-03 예정 300원"/)
-    assert.match(html, /<text x="474" y="18"[^>]*>오늘<\/text>/)
+    assert.match(html, /class="finance-chart-cursor" aria-hidden="true"><span>선택 기준일<\/span>/)
     assert.match(html, /선택 기간 내 예정일이 지난 미완료 금액 100원/)
     assert.match(html, /선택 기준일\s*<strong>2026-11-02<\/strong>/)
     assert.match(html, /aria-label="그래프 날짜 선택"[^>]*value="2026-11-02"/)
