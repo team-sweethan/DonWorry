@@ -38,6 +38,12 @@ window.fetch = async (input) => {
   if (path === '/api/auth/login-histories/latest-success')
     return Response.json({ latestSuccess: null })
   if (path.startsWith('/api/owner/integration')) return Response.json(integration)
+  // 권한 판정은 실제 라우터가 한다. 대역 API는 권한과 무관하게 같은 응답을 준다.
+  if (path === '/api/merchant/security-cases')
+    return Response.json({
+      overview: { investigatingCount: 0, acceptDecisionCount: 0, rejectDecisionCount: 0 },
+      cases: [],
+    })
   // 예상하지 않은 API는 기록한 뒤 거절한다.
   return Response.json({ code: 'AUTH_002' }, { status: 403 })
 }
@@ -64,6 +70,11 @@ try {
     { path: '/owner/actions', permissions: ['FINANCE_VIEW'] },
     { path: '/owner/actions/123', permissions: [] },
     { path: '/owner', permissions: [], home: true },
+    {
+      path: '/owner/actions',
+      permissions: ['FDS_VIEW'],
+      expectedApi: '/api/merchant/security-cases',
+    },
   ]
   for (const scenario of scenarios) {
     user.permissions = scenario.permissions
@@ -86,16 +97,32 @@ try {
       await settleUntil(() =>
         scenario.home
           ? fixture.textContent.includes('쇼핑몰 연동이 완료되었습니다')
-          : // Ant Design의 403 숫자는 SVG여서 textContent에 포함되지 않는다.
-            fixture.textContent.includes('접근 권한이 없습니다'),
+          : scenario.expectedApi
+            ? fixture.textContent.includes('이상 거래 Case')
+            : // Ant Design의 403 숫자는 SVG여서 textContent에 포함되지 않는다.
+              fixture.textContent.includes('접근 권한이 없습니다'),
       )
-      const allowed = calls.filter(
+      const businessCalls = calls.filter(
         (path) =>
           path !== '/api/auth/me' &&
           path !== '/api/auth/login-histories/latest-success' &&
           !(scenario.home && path.startsWith('/api/owner/integration')),
       )
-      assert(allowed.length === 0, `${scenario.path}: 허용하지 않은 API 호출 ${allowed.join(', ')}`)
+      if (scenario.expectedApi) {
+        assert(
+          businessCalls.includes(scenario.expectedApi),
+          '권한을 부여해도 업무 API가 호출되지 않음',
+        )
+        assert(
+          businessCalls.every((path) => path === scenario.expectedApi),
+          `예상하지 않은 업무 API 호출: ${businessCalls.join(', ')}`,
+        )
+      } else {
+        assert(
+          businessCalls.length === 0,
+          `${scenario.path}: 허용하지 않은 API 호출 ${businessCalls.join(', ')}`,
+        )
+      }
       assert(calls.includes('/api/auth/me'), '실제 세션 확인을 거치지 않음')
       if (scenario.home) {
         assert(
@@ -105,7 +132,10 @@ try {
         for (const label of ['정산 내역', '조치 결과', '자금 현황'])
           assert(!fixture.textContent.includes(label), `무권한 메뉴 노출: ${label}`)
       }
-      output.push(`PASS ${scenario.path}: 업무 API 0회; ${JSON.stringify(calls)}`)
+      const control = scenario.expectedApi ? ' [권한 있음 대조 검사]' : ''
+      output.push(
+        `PASS ${scenario.path}${control}: 업무 API ${businessCalls.length}회; ${JSON.stringify(calls)}`,
+      )
     } catch (error) {
       throw new Error(
         `${scenario.path}: ${error.message}\nAPI: ${JSON.stringify(calls)}\n화면: ${fixture.textContent.slice(0, 1500)}`,
@@ -116,8 +146,8 @@ try {
       memoryRouter.dispose()
     }
   }
-  results.textContent = `PASS 6/6\n${output.join('\n')}`
-  document.title = '#517 PASS 6/6'
+  results.textContent = `PASS ${scenarios.length}/${scenarios.length}\n${output.join('\n')}`
+  document.title = `#517 PASS ${scenarios.length}/${scenarios.length}`
 } catch (error) {
   results.textContent = `FAIL\n${output.join('\n')}\n${error.stack ?? error}`
   document.title = '#517 FAIL'
