@@ -10,14 +10,14 @@ from tests.fakes import ScriptedLlm, call, context, narrative, toolbox
 
 SETTINGS = Settings(_env_file=None)
 FIXTURE = json.loads(open("tests/fixtures/sample_case.json", encoding="utf-8").read())
-ENGLISH_HEADLINE = "risk가 높은 결제라 본인 확인이 필요합니다."
+ENGLISH_SENTENCE = "risk가 높은 결제라 본인 확인이 필요합니다."
 
 
 def _repaired_run():
     llm = ScriptedLlm(
         turns=[],
         outputs=[
-            narrative(["9001", "9002"], headline=ENGLISH_HEADLINE),
+            narrative(["9001", "9002"], summary=[ENGLISH_SENTENCE, "짧은 간격의 결제입니다."]),
             narrative(["9001", "9002"]),
         ],
     )
@@ -86,7 +86,7 @@ def test_trace_excludes_raw_tool_values_and_ai_sentences() -> None:
         assert str(payment["amount"]) not in saved
         assert f"{payment['amount']:,}" not in saved
         assert payment["requestedAt"] not in saved
-    assert ENGLISH_HEADLINE not in saved
+    assert ENGLISH_SENTENCE not in saved
     assert "risk가 높은" not in saved
 
 

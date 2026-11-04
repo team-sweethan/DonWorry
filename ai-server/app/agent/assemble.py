@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from app.agent.evidence import basis_facts, decision_basis
 from app.agent.narrative import Narrative
 from app.agent.tools import ToolRecord
+from app.agent.verdict_text import headline, payment_reason, recommendation_summary
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
@@ -459,7 +460,7 @@ def assemble_report(
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
                 recommendation=basis.recommendation if basis else "NEEDS_CHECK",
-                reason=written.reason,
+                reason=payment_reason(basis),
                 ruleHitDetails=[
                     RuleHitDetail(
                         code=rule.code,
@@ -501,7 +502,7 @@ def assemble_report(
         overallAnalysis=narrative.overallAnalysis,
         additionalChecks=_unique(checks),
         recommendation=ReportRecommendation(
-            summary=narrative.recommendationSummary,
+            summary=recommendation_summary(analyses),
             limitations=_unique(limitations + list(ALWAYS_LIMITATIONS)),
         ),
         evidence=[
@@ -515,7 +516,7 @@ def assemble_report(
             for seq, record in enumerate(records, start=1)
         ],
         verdict=Verdict(
-            headline=narrative.headline.strip(),
+            headline=headline(analyses),
             overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
         ),
         investigationTrace=trace,

@@ -17,37 +17,25 @@ def _no_blank(items: list[str]) -> list[str]:
     return items
 
 
-def _not_blank(text: str) -> str:
-    if not text.strip():
-        raise ValueError("빈 문장이다")
-    return text
-
-
 class PaymentNarrative(BaseModel):
     riskEvidence: list[str]
     normalEvidence: list[str]
     unknowns: list[str]
-    # 권고는 AI가 고르지 않는다 — 판정 기준표가 정한다 (#501)
-    # 기준표 판정이 나온 이유 한 문장 — 화면 결제별 판정 옆에 붙는다
-    reason: str
+    # 권고 · 이유는 AI가 쓰지 않는다 — 기준표 판정으로 코드가 쓴다 (#501, #532)
 
     check_lists = field_validator("riskEvidence", "normalEvidence", "unknowns")(_no_blank)
-    check_reason = field_validator("reason")(_not_blank)
 
 
+# 결론 한 줄 · 권고 요약은 AI가 쓰지 않는다 — 판단 문장은 코드가 쓴다 (#532)
 class Narrative(BaseModel):
-    # 직원이 가장 먼저 읽는 결론 한 줄 — 보고서 verdict.headline이 된다
-    headline: str
     summary: list[str]
     payments: dict[str, PaymentNarrative]
     overallAnalysis: list[str]
     additionalChecks: list[str]
-    recommendationSummary: str
     # 한계 줄(무엇을 조회했나 · 못 했나)은 AI가 쓰지 않는다 (#355, Case 10 · 12)
     # 코드가 조회 기록으로 쓴다
 
     check_lists = field_validator("summary", "overallAnalysis", "additionalChecks")(_no_blank)
-    check_headline = field_validator("headline")(_not_blank)
 
 
 _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
@@ -64,14 +52,12 @@ def narrative_schema(payment_ids: list[str]) -> dict[str, Any]:
             "riskEvidence": _TEXT_LIST,
             "normalEvidence": _TEXT_LIST,
             "unknowns": _TEXT_LIST,
-            "reason": {"type": "string"},
         },
-        "required": ["riskEvidence", "normalEvidence", "unknowns", "reason"],
+        "required": ["riskEvidence", "normalEvidence", "unknowns"],
     }
     return {
         "type": "object",
         "properties": {
-            "headline": {"type": "string"},
             "summary": _TEXT_LIST_2,
             "payments": {
                 "type": "object",
@@ -80,16 +66,8 @@ def narrative_schema(payment_ids: list[str]) -> dict[str, Any]:
             },
             "overallAnalysis": _TEXT_LIST_2,
             "additionalChecks": _TEXT_LIST_2,
-            "recommendationSummary": {"type": "string"},
         },
-        "required": [
-            "headline",
-            "summary",
-            "payments",
-            "overallAnalysis",
-            "additionalChecks",
-            "recommendationSummary",
-        ],
+        "required": ["summary", "payments", "overallAnalysis", "additionalChecks"],
     }
 
 
@@ -119,9 +97,12 @@ _HANJA = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿]+")
 _ENGLISH = re.compile(r"(?<![A-Za-z])[A-Za-z]{2,}(?![A-Za-z])")
 ALLOWED_WORDS = frozenset({"FDS", "IP", "OTP", "VPN", "ID", "AI", "mock", "Qwen"})
 
-# 결론 한 줄 — 화면 결론 카드에 한 줄로 들어가는 길이
-HEADLINE_MAX = 60
-_SENTENCE_BREAK = re.compile(r"[.!?。]\s*\S")
+# 판단 문구 — 판정은 코드가 쓰고 AI는 사실만 쓴다 (#532)
+# "승인 취소된 결제"처럼 지난 결제의 상태는 사실이라 걸리지 않는다
+_JUDGEMENT = re.compile(
+    r"권고|권장|(?:승인\s*취소|매입\s*진행|매입|취소)(?:을|를)?\s*(?:먼저\s*)?"
+    r"(?:검토|해야|하세요|하십시오|하는\s*것이|할\s*(?:것|만하|수\s*있))"
+)
 
 # 반복 비교용 — 띄어쓰기 · 문장부호를 빼고 같은 문장인지 본다
 _SPACING = re.compile(r"[\s.,·!?~\"'()\[\]]")
@@ -138,16 +119,15 @@ def _top_level(narrative: Narrative) -> list[str]:
         *narrative.summary,
         *narrative.overallAnalysis,
         *narrative.additionalChecks,
-        narrative.recommendationSummary,
     ]
 
 
 def _payment_texts(payment: PaymentNarrative) -> list[str]:
-    return [*payment.riskEvidence, *payment.normalEvidence, *payment.unknowns, payment.reason]
+    return [*payment.riskEvidence, *payment.normalEvidence, *payment.unknowns]
 
 
 def _sentences(narrative: Narrative) -> list[str]:
-    texts = [narrative.headline, *_top_level(narrative)]
+    texts = _top_level(narrative)
     for payment in narrative.payments.values():
         texts += _payment_texts(payment)
     return texts
@@ -205,29 +185,24 @@ def style_errors(narrative: Narrative) -> list[str]:
     groups = [_top_level(narrative)] + [_payment_texts(p) for p in narrative.payments.values()]
     for texts in groups:
         errors += [f'같은 문장을 반복하지 마라: "{text}"' for text in _repeats(texts)]
-    headline = narrative.headline.strip()
-    if len(headline) > HEADLINE_MAX:
-        errors.append(f'headline은 {HEADLINE_MAX}자 이내로 줄여라: "{headline}"')
-    if _SENTENCE_BREAK.search(headline):
-        errors.append(f'headline은 한 문장으로 써라: "{headline}"')
     return errors
 
 
-# 규칙 밖 정황이 근거에 있는데 이유 · 결론 문장이 "다른 근거가 없다"고 쓴 곳 (#355, Case 8 · 9)
+# 규칙 밖 정황이 근거에 있는데 AI 문장이 "다른 근거가 없다"고 쓴 곳 (#355, Case 8 · 9)
 # 근거가 정말 규칙뿐이면(outside 비어 있음) 검사하지 않는다 — 맞는 문장까지 막지 않게
-# 요약 · 종합 분석 · 권고 요약은 사건 전체 정황으로,
-# 결제별 이유는 그 결제의 정황으로 검사한다 (#355 리뷰)
-# by_payment가 없으면 결제별 이유도 사건 전체 정황으로 본다
+# 요약 · 종합 분석은 사건 전체 정황으로,
+# 결제별 문장은 그 결제의 정황으로 검사한다 (#355 리뷰)
+# by_payment가 없으면 결제별 문장도 사건 전체 정황으로 본다
 def evidence_mismatch_errors(
     narrative: Narrative,
     outside: list[str],
     by_payment: dict[str, list[str]] | None = None,
 ) -> list[str]:
-    case_texts = [*narrative.summary, *narrative.overallAnalysis, narrative.recommendationSummary]
+    case_texts = [*narrative.summary, *narrative.overallAnalysis]
     checks = [(outside, text) for text in case_texts]
     for pid, payment in narrative.payments.items():
         found = outside if by_payment is None else by_payment.get(pid, [])
-        checks.append((found, f"결제 {pid} reason: {payment.reason}"))
+        checks += [(found, f"결제 {pid}: {text}") for text in _payment_texts(payment)]
     return [
         f"근거에 규칙 밖 정황({' · '.join(found)})이 있다. "
         f'"다른 근거가 없다/부족하다"고 쓰지 말고 그 정황을 이유에 넣어라: "{text}"'
@@ -278,8 +253,6 @@ def validate_narrative(
     ):
         if len(items) < MIN_SENTENCES:
             errors.append(f"{name}는 {MIN_SENTENCES}개 이상 써라 (지금 {len(items)}개)")
-    if not narrative.recommendationSummary.strip():
-        errors.append("recommendationSummary가 비어 있다")
     expected = set(payment_ids)
     written = set(narrative.payments)
     if expected - written:
@@ -307,19 +280,20 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
         removed += len(items) - len(kept)
         return kept
 
-    def copied(text: str) -> bool:
-        return _key(text) in examples
-
     # 1) 샘플 문장을 그대로 쓴 문장 — 이번 사건과 상관없는 사실 (Case 8 "카드사 거절 사유 확인")
-    summary = keep(narrative.summary, copied)
-    overall = keep(narrative.overallAnalysis, copied)
-    checks = keep(narrative.additionalChecks, copied)
+    #    판단 문구가 든 문장 — 판정과 어긋날 수 있다. 다시 쓰게 하지 않고 뺀다 (#532)
+    def unwanted(text: str) -> bool:
+        return _key(text) in examples or bool(_JUDGEMENT.search(text))
+
+    summary = keep(narrative.summary, unwanted)
+    overall = keep(narrative.overallAnalysis, unwanted)
+    checks = keep(narrative.additionalChecks, unwanted)
     # 2) 요약 · 종합 분석 문장을 결제별 근거에 그대로 복사한 문장 — 화면에 두 번 나온다 (Case 10)
     # 그 문장뿐이면 남긴다 — 빼면 이유는 "정황이 있다"는데 목록이 비어 보였다 (Case 13)
     top = {_key(text) for text in [*summary, *overall]}
 
     def evidence(items: list[str]) -> list[str]:
-        items = keep(items, copied)
+        items = keep(items, unwanted)
         if all(_key(t) in top for t in items):
             return items
         return keep(items, lambda t: _key(t) in top)
@@ -329,7 +303,7 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
             update={
                 "riskEvidence": evidence(payment.riskEvidence),
                 "normalEvidence": evidence(payment.normalEvidence),
-                "unknowns": keep(payment.unknowns, copied),
+                "unknowns": keep(payment.unknowns, unwanted),
             }
         )
         for payment_id, payment in narrative.payments.items()
@@ -346,12 +320,14 @@ def sanitize_narrative(narrative: Narrative) -> tuple[Narrative, int]:
 
 
 # 문장을 뺀 뒤 요약 · 종합 분석 · 확인할 것이 비면 다시 쓰게 한다 (#355 리뷰)
-# 예시 문장만으로 채운 경우다. 비운 채 조립하면 요약 최소 1줄 제약에 걸려 조사가 오류로 끝났다
+# 예시 문장 · 판단 문구만으로 채운 경우다
+# 비운 채 조립하면 요약 최소 1줄 제약에 걸려 조사가 오류로 끝났다
 def emptied_errors(
     narrative: Narrative, recommendations: dict[str, Recommendation] | None = None
 ) -> list[str]:
     emptied = [
-        f"{name}에 출력 예시 문장만 썼다. 예시는 다른 사건이다. 이번 [조사 근거]로 새로 써라"
+        f"{name}에 남은 문장이 없다. 예시 문장을 베끼거나 판단 문구(승인 취소 · 매입 진행 권고)를 "
+        f"쓰지 말고 이번 [조사 근거]의 사실로 새로 써라"
         for name, items in (
             ("summary", narrative.summary),
             ("overallAnalysis", narrative.overallAnalysis),

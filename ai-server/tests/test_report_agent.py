@@ -234,10 +234,10 @@ def test_fixture_matches_spring_tool_shape() -> None:
     assert set(FIXTURE) == {"casePayments", "fdsEvidence"}
 
 
-# 결론 · 이유는 AI 문장에서, 규칙 근거는 FDS 조회 기록에서 채운다 — 증거 ID는 그 결제를 받은 조회 줄
-def test_assemble_fills_verdict_from_narrative_and_rule_hits_from_tool_records() -> None:
+# 결론 · 이유는 판정 근거로 코드가, 규칙 근거는 FDS 조회 기록에서 채운다 (#532)
+# 증거 ID는 그 결제를 받은 조회 줄
+def test_assemble_fills_verdict_from_basis_and_rule_hits_from_tool_records() -> None:
     written = json.loads(narrative(["9001", "9002"]))
-    written["payments"]["9002"]["reason"] = "두 번째 결제는 짧은 간격의 반복 결제입니다."
     llm = ScriptedLlm(
         turns=[
             [call("get_case_payments")],
@@ -252,9 +252,11 @@ def test_assemble_fills_verdict_from_narrative_and_rule_hits_from_tool_records()
 
     assert outcome.status == "SUCCEEDED"
     report = outcome.report
-    assert report.verdict.headline == written["headline"]
+    assert report.verdict.headline == (
+        "결제 2건 모두 추가 확인 — 정상 사유 없는 징후: 고액 결제 · 신규 카드 · 단시간 반복 결제"
+    )
     first, second = report.paymentAnalyses
-    assert second.reason == "두 번째 결제는 짧은 간격의 반복 결제입니다."
+    assert second.reason == "정상 사유가 없는 주의 징후가 있습니다: 단시간 반복 결제 · 신규 카드"
     assert [(r.code, r.name, r.appliedScore, r.evidenceId) for r in first.ruleHitDetails] == [
         ("HIGH_AMOUNT", "고액 결제", 35, "E-101-v1-02"),
         ("NEW_CARD", "처음 쓰는 카드", 30, "E-101-v1-02"),

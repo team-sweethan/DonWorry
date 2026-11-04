@@ -138,11 +138,9 @@ class MockLlmClient:
             "riskEvidence": ["FDS 규칙 적중 내역을 확인했습니다."],
             "normalEvidence": ["추가로 확인된 정상 정황은 없습니다."],
             "unknowns": ["고객 본인의 결제 의사"],
-            "reason": "FDS 근거와 함께 조회한 정황을 비교해 추가 확인이 필요합니다.",
         }
         return json.dumps(
             {
-                "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
                 "summary": [
                     f"조사 대상 결제 {len(payment_ids)}건의 FDS 근거를 확인했습니다.",
                     "직원은 결제별 위험 근거와 정상 정황을 비교한 뒤 판정해 주세요.",
@@ -153,7 +151,6 @@ class MockLlmClient:
                     "mock 조사라 근거 사이의 관계는 해석하지 않았습니다.",
                 ],
                 "additionalChecks": ["고객 본인 확인 필요 여부", "결제별 FDS 근거 확인"],
-                "recommendationSummary": "추가 확인 후 결제별로 판정할 것을 권고합니다.",
             },
             ensure_ascii=False,
         )
