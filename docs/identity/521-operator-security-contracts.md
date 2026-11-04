@@ -87,6 +87,16 @@ Optional<OperatorAccountStatusSnapshot> findById(Long userId);
 - MariaDB: 실제 정지 → 관리자 해제, 반복 해제·재정지, 다른 계정·변경 종류·삽입 순서 제외, ACTIVE 재지정 시각 유지, 마이크로초 보존, 호출자의 오래된 스냅샷과 분리, 기존 인덱스 실행 계획.
 - 전체: `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain`.
 
-실행 결과는 아직 기록하지 않았다. 구현 변경 후 검사를 실행하고 결과·실행 기준을 여기에 남긴다.
+### 최종 실행 기록 (2026-11-04)
+
+선행 #518 `c74a03a` 위 구현 커밋 `599b450`과 동일한 최종 코드·테스트에서 실행했다. 검사 중 해당 상태를 커밋했으며, 이후 변경은 이 실행 기록뿐이다. 원래 #518 작업 폴더는 수정하지 않았다.
+
+- `cd backend && ./gradlew spotlessApply check mariaDbTest --console=plain --max-workers=2`: **BUILD SUCCESSFUL**, 6분 26초. 일반 1,416건 중 1,415 통과·기존 1건 skip, MariaDB 804건 모두 통과, 별도 Asia/Seoul 정산 JVM 20건 모두 통과. 각 XML의 failures/errors는 0이다. 컴파일·포맷·ModularityTests·ArchitectureTests·전체 Flyway/JPA validate를 포함한다.
+- 신규 일반 10건·MariaDB 9건 모두 통과. 기본 상태·실제 정지/관리자 해제·여러 차례 해제 후 재정지·다른 계정과 이력 제외·시각 정밀도·ACTIVE 재지정·이전 스냅샷 분리·공개 내부 의존 금지·이벤트 JSON 왕복을 확인했다.
+- MariaDB `EXPLAIN`에서 `target_user_id`·`USER_ENABLED` 필터와 `created_at DESC LIMIT 1` 조회의 `key`가 기존 `idx_admin_change_histories_user_created`임을 확인했다. 운영 데이터 규모의 성능 측정을 뜻하지 않는다.
+- `cd backend && ./gradlew -I /private/tmp/donworry-521-seoul-tests.init.gradle operatorStatusSeoulMariaDbTest --console=plain --max-workers=2`: **BUILD SUCCESSFUL**, 17초. 임시 init script로 새 조회 MariaDB 9건만 별도 `Asia/Seoul` JVM에서 실행했고 모두 통과했다. 스크립트는 기존 test 소스·클래스패스를 사용하고 테스트 예약 작업 2개 설정을 false로 유지한다. 저장소의 Gradle 설정은 바꾸지 않았다.
+- `python3 .github/scripts/check_md_links.py`, `git diff --check c74a03a HEAD`: 통과.
+
+보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`, `backend/build/reports/tests/settlementSeoulMariaDbTest/index.html`, `backend/build/reports/tests/operatorStatusSeoulMariaDbTest/index.html`.
 
 미검증: 실제 403 수집·발행, P2 연결·동시성·전체 재정지 방지, 운영 DB·배포. 이번 PR의 타입 제공을 #515 전체 완료로 취급하지 않는다. 병합 후 #515에 P2 연결 가능 여부를 알리는 댓글은 별도 외부 작업이다.
