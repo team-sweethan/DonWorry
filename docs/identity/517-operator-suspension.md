@@ -49,6 +49,7 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 - [x] 전체 Flyway 적용·JPA validate·ModularityTests·ArchitectureTests
 - [x] 실제 라우터의 무권한 정산·자금·조치 목록/상세 직접 진입: 업무 API 호출 0회
 - [x] 무권한 홈: 연동 조회 허용, 정산·조치 API 자동 호출 없음
+- [x] FDS_VIEW 부여 대조: 조치 목록 본문 표시·업무 API 호출 확인 (사용자 실행)
 - [x] backend spotlessApply·check·mariaDbTest
 - [x] frontend lint·format:check·build·관련 테스트
 
@@ -85,7 +86,7 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 
 보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`, `backend/build/reports/tests/settlementSeoulMariaDbTest/index.html`.
 
-미검증: 실제 브라우저 무권한 진입·홈 6건, 운영 DB 적용, 실제 P2 탐지 연결, 해제 직후 과거 이벤트 재정지 방지. 외부 #515 댓글은 게시하지 않았으며 코드 점검 결과와 미검증 범위를 이 문서·PR에 남긴다.
+자동 검사 당시 미검증이던 브라우저 항목은 아래 사용자 실행 확인으로 해소했다. 현재 미검증: 운영 DB 적용, 실제 P2 탐지 연결, 해제 직후 과거 이벤트 재정지 방지. 외부 #515 댓글은 게시하지 않았으며 코드 점검 결과와 미검증 범위를 이 문서·PR에 남긴다.
 
 ### 사용자 브라우저 실행 후 검증 페이지 보완
 
@@ -97,4 +98,4 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 사용자가 `69335c8` 검증 페이지를 새로고침한 뒤 PASS 6/6과 경로별 API 내역을 제공했다. 권한 없는 정산·자금·대출·조치 목록/상세는 인증 확인·최근 로그인 조회만 발생했고 업무 API는 0회였다. 무권한 홈은 여기에 `/api/owner/integration?page=0`만 추가됐다. 위 두 화면 체크를 사용자 실행 근거로 완료 표시한다. 에이전트가 직접 브라우저를 실행한 결과는 아니다.
 이 결과는 API 대역을 사용한 실제 라우터·화면 검증이며 실제 서버 인가·자동 정지 전체 E2E를 뜻하지 않는다. 앞서 기록한 브라우저 미검증은 이 사용자 확인으로 기존 6건에 한해 해소됐다.
 
-검증 도구가 모든 화면을 막아도 통과하는 오류를 잡기 위해 같은 `/owner/actions`에 FDS_VIEW를 부여하는 대조 1건을 추가했다. 이 경우 실제 조치 목록 본문과 `/api/merchant/security-cases` 호출이 반드시 있어야 통과한다. API 대역은 권한과 무관하게 같은 성공 데이터를 반환하므로 대역 자체가 권한 검사를 흉내 내지 않는다. 기존 무권한 0회 기준은 유지했다. 추가 대조 시나리오의 브라우저 실행은 아직 미검증이다. 문법·포맷·lint 검사는 통과했다(기존 lint 경고 1건 유지).
+검증 도구가 모든 화면을 막아도 통과하는 오류를 잡기 위해 같은 `/owner/actions`에 FDS_VIEW를 부여하는 대조 1건을 추가했다. 이 경우 실제 조치 목록 본문과 `/api/merchant/security-cases` 호출이 반드시 있어야 통과한다. API 대역은 권한과 무관하게 같은 성공 데이터를 반환하므로 대역 자체가 권한 검사를 흉내 내지 않는다. 기존 무권한 0회 기준은 유지했다. 문법·포맷·lint 검사는 통과했다(기존 lint 경고 1건 유지). 사용자가 `993044e` 페이지를 새로고침한 뒤 추가 대조까지 통과했다고 확인했다. 기존 6건과 권한 허용 대조 1건, 총 7건을 사용자 실행 근거로 검증 완료 처리한다. API 대역을 사용하므로 실제 백엔드까지 연결한 전체 E2E 완료로 해석하지 않는다.
