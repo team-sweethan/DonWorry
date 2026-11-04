@@ -14,6 +14,7 @@ import type {
   TraceStep,
 } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
+import type { MlCell } from './transactionList.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
 
@@ -473,4 +474,25 @@ export function signalRuleRecord(
 export function signalRecordText(record: SignalRuleRecord): string {
   const score = record.appliedScore === null ? null : `+${record.appliedScore}점`
   return [score, `증거 ${record.evidenceId}`].filter(Boolean).join(' · ')
+}
+
+// ── ML 참고 위험도 (#544) ──
+// 판정(기준표)에 쓰지 않는 참고 점수 (ADR-0061) — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
+export function mlReportLine(cell: MlCell): string {
+  switch (cell.kind) {
+    case 'scored':
+      return `ML 참고 위험도 ${cell.percent}% · 기준 ${cell.thresholdPercent}% ${
+        cell.aboveThreshold ? '이상' : '미만'
+      } (${cell.modelVersion} · 판정에 쓰지 않음)`
+    case 'none':
+      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요'
+    case 'failed':
+      return 'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)'
+    case 'skipped':
+      return 'ML 참고 위험도 · 채점하지 않았어요'
+    case 'unknown':
+      return 'ML 참고 위험도를 불러오지 못했어요'
+    case 'loading':
+      return 'ML 참고 위험도 불러오는 중…'
+  }
 }
