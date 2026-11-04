@@ -120,14 +120,16 @@ BURST_KEY = "같은 연속 결제(사건 결제 앞뒤 10분 안, 평소 결제 
 EARLIER_KEY = "그 전 결제"
 # 나중에 다시 조사하면 조회 시각 기준 30일에 사건 뒤 결제가 섞인다
 # 평소 구매 근거로 쓰지 않게 따로 묶는다 (#355 리뷰)
-LATER_KEY = "사건 뒤 결제(사건 결제 10분 뒤부터, 평소 결제 아님)"
+# 길어진 사건의 도중 결제도 여기에 묶는다 — 첫 사건 결제 뒤라 평소 결제가 아니다 (#532)
+LATER_KEY = "사건 도중 · 뒤 결제(첫 사건 결제 뒤, 평소 결제 아님)"
 
 
 def _at(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
 
 
-# 고객 최근 결제를 "같은 연속 결제" · "그 전 결제" · "사건 뒤 결제"로 나눈다 (#355, Case 8 · 9)
+# 고객 최근 결제를 "같은 연속 결제" · "그 전 결제" · "사건 도중 · 뒤 결제"로 나눈다
+# (#355 Case 8 · 9, #532)
 # 사건 결제 몇 초 전의 결제가 "평소 결제 · 매입 완료"로 정상 정황에 쓰였다
 def split_history(
     case_payments: CasePaymentsTool, history: PaymentHistoryTool
@@ -140,7 +142,7 @@ def split_history(
         at = _at(payment.requestedAt)
         if at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times):
             burst.append(payment)
-        elif at is not None and case_times and at > max(case_times):
+        elif at is not None and case_times and at > min(case_times):
             later.append(payment)
         else:
             earlier.append(payment)

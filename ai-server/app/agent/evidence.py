@@ -139,7 +139,9 @@ def _at(value: str | None) -> datetime | None:
 
 
 # 평소 결제 = 사건 전 결제 — assemble.split_history의 "그 전 결제"와 같은 기준
-# 사건 결제 앞뒤 10분 안(같은 연속 결제)과 사건 뒤 결제는 사건의 정상 근거가 아니다
+# 사건 결제 앞뒤 10분 안(같은 연속 결제)과 첫 사건 결제 뒤 결제는 사건의 정상 근거가 아니다
+# 사건은 30분 안의 보류 결제를 계속 합쳐 길어진다
+# 마지막 사건 결제를 기준으로 하면 사건 도중 결제가 섞였다 (#532)
 def _usual_history(
     case_payments: CasePaymentsTool, history: PaymentHistoryTool
 ) -> list[HistoryPayment]:
@@ -149,7 +151,7 @@ def _usual_history(
         at = _at(payment.requestedAt)
         if at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times):
             continue
-        if at is not None and case_times and at > max(case_times):
+        if at is not None and case_times and at > min(case_times):
             continue
         usual.append(payment)
     return usual

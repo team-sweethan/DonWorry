@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from app.agent.assemble import (
     BURST_KEY,
     EARLIER_KEY,
+    LATER_KEY,
     drop_rule_only,
     facts_json,
     outside_rule_evidence,
@@ -282,10 +283,8 @@ def test_history_after_case_is_not_earlier() -> None:
     )
 
     facts = json.loads(facts_json(cases, {}, None, history, None))["고객 최근 결제(이 사건 밖)"]
-    after = [v for k, v in facts.items() if k.startswith("사건 뒤 결제")]
-
     assert [p["금액(원)"] for p in facts[EARLIER_KEY]] == [580000]
-    assert [[p["금액(원)"] for p in group] for group in after] == [[590000]]
+    assert [p["금액(원)"] for p in facts[LATER_KEY]] == [590000]
 
 
 # 결제 A만 해외 접속이면 B의 "규칙 말고 다른 근거가 없다"는 사실이라 통과한다

@@ -295,3 +295,48 @@ def test_basis_facts_have_no_number_outside_allowed() -> None:
 
     basis_text = json.dumps(facts["결제"][0]["판정 근거"], ensure_ascii=False)
     assert _numbers(basis_text) <= fact_numbers(case, fds, None, history)
+
+
+# --- 사건 도중 결제 재현 (#532) ---
+# 사건은 30분 안의 보류 결제를 계속 합친다 — 10:00 보류 → 10:14 정상 결제 2건 → 10:28 보류
+# 10:14 결제는 두 사건 결제와 10분 넘게 떨어져 있지만 사건이 시작된 뒤의 결제라 평소 결제가 아니다
+STRETCHED = [("1", "2026-05-21T10:00:00Z"), ("2", "2026-05-21T10:28:00Z")]
+DURING = [
+    (220000, "CAPTURED", "2026-05-21T10:14:00Z"),
+    (230000, "CAPTURED", "2026-05-21T10:14:30Z"),
+]
+
+
+def _stretched_case() -> CasePaymentsTool:
+    return CasePaymentsTool.model_validate(
+        {
+            **HEAD,
+            "payments": [
+                {"paymentId": pid, "amount": 220000, "paymentStatus": "HELD", "requestedAt": at}
+                for pid, at in STRETCHED
+            ],
+            "missingPaymentIds": [],
+        }
+    )
+
+
+# 사건 도중 결제로 고액 징후를 설명하지 않는다 — 두 사건 결제 모두 추가 확인
+def test_payments_during_stretched_case_are_not_usual_history() -> None:
+    case = _stretched_case()
+
+    for payment in case.payments:
+        basis = decision_basis(
+            payment, _fds([_rule("R01", "고액 결제")]), case, _history(DURING), _linked()
+        )
+        assert basis.normals == []
+        assert basis.recommendation == "NEEDS_CHECK"
+
+
+# AI에게도 사건 도중 결제를 "그 전 결제"(평소 결제)로 보여 주지 않는다 — 판정과 같은 기준
+def test_facts_do_not_show_payments_during_case_as_earlier() -> None:
+    from app.agent.assemble import EARLIER_KEY
+
+    case = _stretched_case()
+    facts = json.loads(facts_json(case, {}, None, _history(DURING), None))
+
+    assert facts["고객 최근 결제(이 사건 밖)"][EARLIER_KEY] == []
