@@ -9,6 +9,7 @@ import type {
   NormalBasis,
   PaymentSignals,
   ReportBody,
+  ReportRuleHitDetail,
   SimilarCaseItem,
   TraceStep,
 } from '../types/case.ts'
@@ -399,4 +400,68 @@ export function decisionProgress(
   ).length
   const done = detail.securityCase.status === 'CLOSED' || (remaining === 0 && decidedIds.size > 0)
   return { decided: detail.decisions.length, remaining, done }
+}
+
+// ── 코드 문장과 AI 문장 구분 (#543) ──
+// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓰고 AI는 사실 설명만 쓴다
+
+// 결론 카드 작은 제목 — 기준표 보고서면 "기준표 판정", 예전 보고서는 AI가 쓴 결론이라 그대로
+export function verdictCardTitle(body: ReportBody): '기준표 판정' | 'AI 조사 요약' {
+  return reportRecommendationSource(body) === '기준표 판정' ? '기준표 판정' : 'AI 조사 요약'
+}
+
+// 상세 정보의 권고 요약 제목
+export function recommendationSummaryTitle(
+  body: ReportBody,
+): '권고 요약 (기준표)' | 'AI 권고 원문' {
+  return reportRecommendationSource(body) === '기준표 판정' ? '권고 요약 (기준표)' : 'AI 권고 원문'
+}
+
+// 코드가 쓴 결제별 이유의 시작 말 — ai-server app/agent/verdict_text.py payment_reason과 같은 문장
+const CODE_REASON_STARTS = [
+  '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다',
+  '정상 사유가 없는 고위험 징후가 있습니다',
+  '정상 사유가 없는 주의 징후가 있습니다',
+  '모든 징후에 정상 사유가 있습니다',
+  '적중한 징후가 없습니다',
+  'FDS 평가 결과를 확인하지 못했습니다',
+]
+
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 시작 말로 코드 이유만 골라낸다
+export function isCodeReason(reason: string | undefined): boolean {
+  return !!reason && CODE_REASON_STARTS.some((start) => reason.startsWith(start))
+}
+
+// 조사 요약 박스(AI 해석)에 넣을 문장 — 코드 이유는 "왜 이 판정인가요?"로 옮기고 AI 이유만 남긴다
+export function summaryBoxLines(
+  summary: string[],
+  analysis: Pick<PaymentAnalysis, 'reason'>,
+): string[] {
+  const reason = analysis.reason
+  return reason && !isCodeReason(reason) ? [...summary, reason] : summary
+}
+
+// 예전 영문 규칙 코드 → R 코드 — ai-server evidence._ALIASES와 같은 표
+const RULE_ALIASES: Record<string, string> = {
+  HIGH_AMOUNT: 'R01',
+  NEW_DEVICE: 'R02',
+  NEW_CARD: 'R03',
+  RAPID_REPEAT_PAYMENT: 'R04',
+}
+
+export type SignalRuleRecord = Pick<ReportRuleHitDetail, 'appliedScore' | 'evidenceId'>
+
+// 규칙 징후에 붙일 FDS 기록(점수 · 증거 번호) — 규칙이 아닌 징후(같은 IP · 해외 접속 등)는 null
+export function signalRuleRecord(
+  signal: Pick<BasisSignal, 'key'>,
+  details: Array<Pick<ReportRuleHitDetail, 'code' | 'appliedScore' | 'evidenceId'>> | undefined,
+): SignalRuleRecord | null {
+  const hit = details?.find((d) => (RULE_ALIASES[d.code] ?? d.code) === signal.key)
+  return hit ? { appliedScore: hit.appliedScore, evidenceId: hit.evidenceId } : null
+}
+
+// "+30점 · 증거 E-2-v1-02" — 점수가 없는 예전 기록은 증거 번호만
+export function signalRecordText(record: SignalRuleRecord): string {
+  const score = record.appliedScore === null ? null : `+${record.appliedScore}점`
+  return [score, `증거 ${record.evidenceId}`].filter(Boolean).join(' · ')
 }

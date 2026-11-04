@@ -1,16 +1,24 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Tag } from 'antd'
-import type { BasisSignal, DecisionBasis, NormalBasis } from '../../../types/case'
+import type {
+  BasisSignal,
+  DecisionBasis,
+  NormalBasis,
+  ReportRuleHitDetail,
+} from '../../../types/case'
 import {
   BASIS_RULE_ROWS,
   basisGroups,
   markSignals,
   normalNote,
+  signalRecordText,
+  signalRuleRecord,
   signalTag,
   type MarkKind,
 } from '../../../utils/reportView'
 
 // 판정 근거 화면 (#501) — 조사 요약(AI 해석)과 "왜 이 판정인가요?"(기준표 판정 근거)
+// 코드가 쓴 판정 이유는 조사 요약이 아니라 "왜 이 판정인가요?"에 둔다 (#543)
 
 // 고위험 빨강 · 주의 노랑 · 정상 초록 — 밑줄과 근거 칸이 같은 색을 쓴다
 const levelTone: Record<MarkKind, { bg: string; border: string; text: string; line: string }> = {
@@ -53,9 +61,22 @@ export function SummaryBox({ lines, basis }: { lines: string[]; basis: DecisionB
   )
 }
 
-// 왜 이 판정인가요? — 고위험 징후 · 주의 징후 · 정상 거래 근거 · 판정 기준표
-export function WhyCard({ basis }: { basis: DecisionBasis }) {
+// 왜 이 판정인가요? — 판정 이유 · 고위험 징후 · 주의 징후 · 정상 거래 근거 · 판정 기준표
+// reason: 코드가 쓴 판정 이유 (#532), details: FDS 규칙 기록 — 규칙 징후 줄에 점수 · 증거 번호를 붙인다 (#543)
+export function WhyCard({
+  basis,
+  reason,
+  details,
+}: {
+  basis: DecisionBasis
+  reason?: string
+  details?: ReportRuleHitDetail[]
+}) {
   const { highRisk, caution } = basisGroups(basis)
+  const row = (s: BasisSignal) => {
+    const record = signalRuleRecord(s, details)
+    return <SignalRow key={s.key} s={s} record={record ? signalRecordText(record) : undefined} />
+  }
   return (
     <div style={whyStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
@@ -66,11 +87,16 @@ export function WhyCard({ basis }: { basis: DecisionBasis }) {
           돈워리 판정 기준표로 정리했습니다. 같은 근거면 언제나 같은 판정이 나옵니다.
         </span>
       </div>
+      {reason && (
+        <div style={{ fontSize: 14, color: '#1E3A8A' }}>
+          <b>판정 이유</b> · {reason}
+        </div>
+      )}
       <Group title="고위험 징후" note="정상 고객에게는 거의 나타나지 않는 신호" color="#991B1B">
-        {highRisk.length === 0 ? <None /> : highRisk.map((s) => <SignalRow key={s.key} s={s} />)}
+        {highRisk.length === 0 ? <None /> : highRisk.map(row)}
       </Group>
       <Group title="주의 징후" note="정상 고객에게도 나타날 수 있는 신호" color="#92400E">
-        {caution.length === 0 ? <None /> : caution.map((s) => <SignalRow key={s.key} s={s} />)}
+        {caution.length === 0 ? <None /> : caution.map(row)}
       </Group>
       <Group title="정상 거래 근거" note="이 고객의 평소 거래와 맞는 점" color="#166534">
         {basis.normals.length === 0 ? (
@@ -102,15 +128,27 @@ export function WhyCard({ basis }: { basis: DecisionBasis }) {
   )
 }
 
-// 징후 한 줄 — 비교 화면도 같은 모양을 쓴다
-export function SignalRow({ s, tag }: { s: BasisSignal; tag?: ReactNode }) {
+// 징후 한 줄 — 비교 화면도 같은 모양을 쓴다. record: "+30점 · 증거 E-…" (FDS 규칙 징후만)
+export function SignalRow({
+  s,
+  tag,
+  record,
+}: {
+  s: BasisSignal
+  tag?: ReactNode
+  record?: string
+}) {
   const tone = levelTone[s.level]
   const own = signalTag(s)
   return (
     <div style={{ ...rowStyle, background: tone.bg, border: `1px solid ${tone.border}` }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: tone.text }}>{s.label}</span>
-        {s.detail && <span style={{ fontSize: 12, color: tone.text }}>{s.detail}</span>}
+        {(s.detail || record) && (
+          <span style={{ fontSize: 12, color: tone.text }}>
+            {[s.detail, record].filter(Boolean).join(' · ')}
+          </span>
+        )}
       </div>
       {tag ?? (
         <span

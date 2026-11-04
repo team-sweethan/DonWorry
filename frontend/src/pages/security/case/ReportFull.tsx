@@ -2,13 +2,17 @@ import type { CSSProperties, ReactNode } from 'react'
 import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
+  isCodeReason,
   recommendationSource,
+  recommendationSummaryTitle,
   reportHeadline,
   reportRecommendationSource,
   ruleEvidenceRows,
   signalTexts,
+  summaryBoxLines,
   topRiskScore,
   unknownItems,
+  verdictCardTitle,
   verdictLines,
   type RecommendationSource,
 } from '../../../utils/reportView'
@@ -21,7 +25,8 @@ import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
 // AI 보고서 전문. 결론 → 결제별 근거 비교 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
-// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? → 위험/정상 비교 순서 (#501), 예전 보고서는 그대로
+// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? → AI 참고 설명 순서 (#501, #543), 예전 보고서는 그대로
+// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543)
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
@@ -80,6 +85,7 @@ function VerdictCard({
 }) {
   const headline = reportHeadline(body)
   const source = reportRecommendationSource(body)
+  const title = verdictCardTitle(body)
   const lines = verdictLines(body)
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
   return (
@@ -89,7 +95,7 @@ function VerdictCard({
       </div>
       <div>
         <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>
-          {label} · AI 조사 요약
+          {label} · {title}
         </div>
         {headline ? (
           <div style={{ fontSize: 22, fontWeight: 800, margin: '6px 0 8px', lineHeight: 1.4 }}>
@@ -102,6 +108,10 @@ function VerdictCard({
         )}
         {!hideSummary && (
           <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
+            {/* 결론은 기준표, 아래 요약은 AI 문장이라 앞에 표시한다 (#543) */}
+            {title === '기준표 판정' && (
+              <span style={{ color: '#D8B4FE', fontWeight: 700 }}>AI 해석 · </span>
+            )}
             {body.summary.join(' ')}
           </p>
         )}
@@ -122,7 +132,7 @@ function VerdictCard({
   )
 }
 
-// 결제 하나의 권고 · 이유와 위험 근거 / 정상 정황 비교
+// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요? · AI 참고 설명
 function PaymentEvidence({
   analysis: p,
   summary,
@@ -130,7 +140,6 @@ function PaymentEvidence({
   analysis: PaymentAnalysis
   summary: string[]
 }) {
-  const rules = ruleEvidenceRows(p)
   const source = recommendationSource(p)
   return (
     <Card
@@ -149,58 +158,107 @@ function PaymentEvidence({
       {p.signals !== undefined && <SignalLine signals={p.signals} />}
       {p.basis ? (
         <>
-          <SummaryBox lines={[...summary, ...(p.reason ? [p.reason] : [])]} basis={p.basis} />
-          <WhyCard basis={p.basis} />
+          <SummaryBox lines={summaryBoxLines(summary, p)} basis={p.basis} />
+          <WhyCard
+            basis={p.basis}
+            reason={isCodeReason(p.reason) ? p.reason : undefined}
+            details={p.ruleHitDetails}
+          />
+          <AiNotes risk={p.riskEvidence} normal={p.normalEvidence} />
         </>
       ) : (
-        p.reason && (
-          <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
-            <AiTag /> {p.reason}
-          </p>
-        )
+        <>
+          {p.reason && (
+            <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
+              <AiTag /> {p.reason}
+            </p>
+          )}
+          <RuleCompare analysis={p} />
+        </>
       )}
-      <div style={compareStyle}>
-        <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
-          <SideTitle
-            color="#991B1B"
-            title="⚠ 위험 근거"
-            count={rules.length + p.riskEvidence.length}
-          />
-          {rules.map((r, i) => (
-            <Item
-              key={`rule-${i}`}
-              title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
-            >
-              {r.criterion && r.observed && (
-                <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
-                  기준 {r.criterion} · 이번 {r.observed}
-                </span>
-              )}
-              FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
-            </Item>
-          ))}
-          {p.riskEvidence.map((text, i) => (
-            <Item key={`risk-${i}`} title={text}>
+    </Card>
+  )
+}
+
+// 예전 보고서(판정 근거 없음)의 위험 근거 / 정상 정황 비교 — 규칙 줄과 AI 문장을 나란히
+function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
+  const rules = ruleEvidenceRows(p)
+  return (
+    <div style={compareStyle}>
+      <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+        <SideTitle
+          color="#991B1B"
+          title="⚠ 위험 근거"
+          count={rules.length + p.riskEvidence.length}
+        />
+        {rules.map((r, i) => (
+          <Item
+            key={`rule-${i}`}
+            title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
+          >
+            {r.criterion && r.observed && (
+              <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
+                기준 {r.criterion} · 이번 {r.observed}
+              </span>
+            )}
+            FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
+          </Item>
+        ))}
+        {p.riskEvidence.map((text, i) => (
+          <Item key={`risk-${i}`} title={text}>
+            <AiTag />
+          </Item>
+        ))}
+      </div>
+      <div style={{ ...sideStyle, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+        <SideTitle color="#166534" title="✓ 정상 정황" count={p.normalEvidence.length} />
+        {p.normalEvidence.length === 0 ? (
+          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            확인된 정상 정황이 없습니다.
+          </Typography.Text>
+        ) : (
+          p.normalEvidence.map((text, i) => (
+            <Item key={i} title={text}>
               <AiTag />
             </Item>
-          ))}
-        </div>
-        <div style={{ ...sideStyle, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-          <SideTitle color="#166534" title="✓ 정상 정황" count={p.normalEvidence.length} />
-          {p.normalEvidence.length === 0 ? (
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              확인된 정상 정황이 없습니다.
-            </Typography.Text>
-          ) : (
-            p.normalEvidence.map((text, i) => (
-              <Item key={i} title={text}>
-                <AiTag />
-              </Item>
-            ))
-          )}
-        </div>
+          ))
+        )}
       </div>
-    </Card>
+    </div>
+  )
+}
+
+// AI 참고 설명 — AI가 근거를 읽고 쓴 위험 쪽 · 정상 쪽 문장 (#543)
+// 규칙 이름 · 기준 · 점수 · 증거 번호는 "왜 이 판정인가요?"에 있어 여기서는 다시 보여 주지 않는다
+function AiNotes({ risk, normal }: { risk: string[]; normal: string[] }) {
+  return (
+    <div style={aiNotesStyle}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#581C87' }}>AI 참고 설명</span>
+        <Tag color="purple" style={{ marginInlineEnd: 0 }}>
+          판정에 쓰지 않음
+        </Tag>
+      </div>
+      <div style={compareStyle}>
+        <NoteSide title="위험 쪽" color="#991B1B" items={risk} />
+        <NoteSide title="정상 쪽" color="#166534" items={normal} />
+      </div>
+    </div>
+  )
+}
+
+function NoteSide({ title, color, items }: { title: string; color: string; items: string[] }) {
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4 }}>{title}</div>
+      {items.length === 0 ? (
+        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+          없음
+        </Typography.Text>
+      ) : (
+        <Bullets items={items} />
+      )}
+    </div>
   )
 }
 
@@ -238,11 +296,11 @@ function MoreInfo({ body }: { body: ReportBody }) {
         <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
       </Descriptions>
       <div>
-        <SubTitle>{ruleTable ? 'AI 설명 원문' : 'AI 권고 원문'}</SubTitle>
+        <SubTitle>{recommendationSummaryTitle(body)}</SubTitle>
         <p style={{ fontSize: 13, margin: '0 0 6px' }}>{body.recommendation.summary}</p>
         <Bullets items={body.recommendation.limitations} />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {ruleTable ? '기준표 판정' : 'AI 권고'}는 참고용이며 최종 판정은 직원이 결제별로 합니다.
+          {ruleTable ? '기준표 판정은' : 'AI 권고는'} 참고용이며 최종 판정은 직원이 결제별로 합니다.
         </Typography.Text>
       </div>
       <div>
@@ -491,6 +549,15 @@ const compareStyle: CSSProperties = {
   gap: 16,
 }
 const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
+const aiNotesStyle: CSSProperties = {
+  background: '#FAF5FF',
+  border: '1px solid #E9D5FF',
+  borderRadius: 12,
+  padding: '14px 18px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 10,
+}
 const itemStyle: CSSProperties = {
   background: '#fff',
   borderRadius: 8,
