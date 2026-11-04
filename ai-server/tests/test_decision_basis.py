@@ -340,3 +340,46 @@ def test_facts_do_not_show_payments_during_case_as_earlier() -> None:
     facts = json.loads(facts_json(case, {}, None, _history(DURING), None))
 
     assert facts["고객 최근 결제(이 사건 밖)"][EARLIER_KEY] == []
+
+
+# --- FDS 점수 없음 재현 (#532) ---
+# 평가 오류(점수 없음 · 적중 규칙 없음)를 "징후 없음"으로 읽어 매입 진행 검토가 나왔다
+# 지금은 보고서 생성 전 검사(graph._ready_to_write)가 막지만, 판정 코드도 스스로 막는다
+# 점수 없음은 판정을 올리지도 내리지도 않는다
+
+
+def _error_fds() -> FdsPayment:
+    return _fds([]).model_copy(update={"riskScore": None, "fdsResult": "ERROR"})
+
+
+def _linked_card_and_device() -> LinkedPaymentsTool:
+    linked = _linked(card_others=1)
+    return linked.model_copy(update={"device": linked.card})
+
+
+def _error_basis(linked: LinkedPaymentsTool):
+    case = _case(220000)
+    return decision_basis(case.payments[0], _error_fds(), case, _history(USUAL), linked)
+
+
+# 점수 없음만 있으면 추가 확인 — 매입 진행 검토로 가지 않는다
+def test_fds_error_alone_is_needs_check() -> None:
+    basis = _error_basis(_linked())
+
+    assert basis.recommendation == "NEEDS_CHECK"
+    assert "FDS 평가 결과 미확인" in [s.label for s in basis.signals]
+
+
+# 점수 없음 + 고위험 징후 하나 — 점수 없음을 "다른 징후"로 세어 승인 취소 검토로 올리지 않는다
+def test_fds_error_does_not_raise_single_high_risk() -> None:
+    basis = _error_basis(_linked(card_others=1))
+
+    assert basis.rule == "HIGH_RISK_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+
+
+# 점수 없음 + 고위험 · 다른 징후가 겹치면 승인 취소 검토를 유지한다 — 내리지도 않는다
+def test_fds_error_keeps_reject_from_other_signals() -> None:
+    basis = _error_basis(_linked_card_and_device())
+
+    assert basis.recommendation == "REJECT_REVIEW"

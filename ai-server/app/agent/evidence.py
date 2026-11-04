@@ -43,6 +43,9 @@ OVERSEAS = "OVERSEAS"
 LINKED_CARD = "LINKED_CARD"
 LINKED_DEVICE = "LINKED_DEVICE"
 LINKED_IP = "LINKED_IP"
+# 점수 없음(평가 오류 · 평가 없음) — "징후 없음"으로 읽지 않게 주의 징후로 둔다 (#532)
+FDS_UNCONFIRMED = "FDS_UNCONFIRMED"
+FDS_UNCONFIRMED_LABEL = "FDS 평가 결과 미확인"
 
 SIMILAR_AMOUNT = "SIMILAR_AMOUNT"
 
@@ -111,6 +114,8 @@ def _linked_signal(key: str, label: str, level: str, match: LinkedMatch) -> _Sig
 
 def _signals(evidence: FdsPayment, linked: LinkedPaymentsTool | None) -> list[_Signal]:
     found = [_rule_signal(rule) for rule in evidence.ruleHits]
+    if evidence.riskScore is None or evidence.fdsResult == "ERROR":
+        found.append(_Signal(FDS_UNCONFIRMED, FDS_UNCONFIRMED_LABEL, None, CAUTION))
     keys = {s.key for s in found}
     country = evidence.signals.ipCountryCode if evidence.signals else None
     # 고위험 국가 규칙이 걸렸으면 해외 접속을 따로 세지 않는다
@@ -186,7 +191,9 @@ def _label_of(key: str) -> str:
 def _rule(signals: list[BasisSignal]) -> BasisRule:
     open_signals = [s for s in signals if s.normalReason is None and s.countedIn is None]
     if any(s.level == HIGH_RISK for s in open_signals):
-        return "HIGH_RISK_WITH_OTHERS" if len(open_signals) >= 2 else "HIGH_RISK_ONLY"
+        # 점수 없음은 판정을 올리지 않는다 — 고위험과 겹치는 "다른 징후"로 세지 않는다 (#532)
+        others = [s for s in open_signals if s.key != FDS_UNCONFIRMED]
+        return "HIGH_RISK_WITH_OTHERS" if len(others) >= 2 else "HIGH_RISK_ONLY"
     return "CAUTION_ONLY" if open_signals else "ALL_EXPLAINED"
 
 
