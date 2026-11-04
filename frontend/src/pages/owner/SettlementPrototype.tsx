@@ -569,7 +569,7 @@ export function SettlementPrototype({
                 더보기
               </Button>
             </div>
-            {dailyExpenses.length > 0 && <p className="stl-preview-note">최신순 · 최대 2건</p>}
+            {dailyExpenses.length > 0 && <p className="stl-preview-note">최대 2건 미리보기</p>}
             {dailyExpenses.slice(0, 2).map((e) => (
               <article key={e.id}>
                 <div className="stl-detail-title">
