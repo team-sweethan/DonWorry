@@ -86,3 +86,8 @@ FDS 정지는 `USER_SUSPENDED_BY_FDS`, 전후 JSON은 ACTIVE/INACTIVE 상태만 
 보고서: `backend/build/reports/tests/test/index.html`, `backend/build/reports/tests/mariaDbTest/index.html`, `backend/build/reports/tests/settlementSeoulMariaDbTest/index.html`.
 
 미검증: 실제 브라우저 무권한 진입·홈 6건, 운영 DB 적용, 실제 P2 탐지 연결, 해제 직후 과거 이벤트 재정지 방지. 외부 #515 댓글은 게시하지 않았으며 코드 점검 결과와 미검증 범위를 이 문서·PR에 남긴다.
+
+### 사용자 브라우저 실행 후 검증 페이지 보완
+
+사용자 실행에서 첫 시나리오가 `화면 준비 시간 초과`로 실패했다. 검증 코드가 `textContent.includes('403')`를 기다렸으나 Ant Design Result의 403 숫자는 SVG여서 텍스트에 없다. 실제 화면 문구인 `접근 권한이 없습니다`를 기다리도록 수정하고, 실패 메시지에 시나리오 경로·API 호출 목록·화면 텍스트를 추가했다.
+설치된 Ant Design Result를 React로 렌더링해 이전 숫자 조건은 false, 수정한 문구 조건은 true임을 확인했다. JS 문법·Prettier·lint 검사도 실행했다. 이는 전체 브라우저 6개 시나리오 통과를 뜻하지 않으며 사용자 새로고침 후 확인이 남아 있다. 백엔드는 여전히 필요하지 않다.

@@ -86,7 +86,8 @@ try {
       await settleUntil(() =>
         scenario.home
           ? fixture.textContent.includes('쇼핑몰 연동이 완료되었습니다')
-          : fixture.textContent.includes('403'),
+          : // Ant Design의 403 숫자는 SVG여서 textContent에 포함되지 않는다.
+            fixture.textContent.includes('접근 권한이 없습니다'),
       )
       const allowed = calls.filter(
         (path) =>
@@ -105,6 +106,11 @@ try {
           assert(!fixture.textContent.includes(label), `무권한 메뉴 노출: ${label}`)
       }
       output.push(`PASS ${scenario.path}: 업무 API 0회; ${JSON.stringify(calls)}`)
+    } catch (error) {
+      throw new Error(
+        `${scenario.path}: ${error.message}\nAPI: ${JSON.stringify(calls)}\n화면: ${fixture.textContent.slice(0, 1500)}`,
+        { cause: error },
+      )
     } finally {
       root.unmount()
       memoryRouter.dispose()
