@@ -10,6 +10,8 @@ import {
   FundOutlined,
   HomeOutlined,
   KeyOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   PoweroffOutlined,
   SafetyOutlined,
   SecurityScanOutlined,
@@ -18,8 +20,9 @@ import {
   TeamOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import { BrandMark, Mascot } from '../components/brand/BrandMark'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import type { NavBadge, NavGroup } from '../config/navigation'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
@@ -77,37 +80,87 @@ const menuIcons: Record<string, ReactNode> = {
 
 type NavBadges = Partial<Record<NavBadge, number | null>>
 
-function Sidebar({ groups, badges = {} }: { groups: NavGroup[]; badges?: NavBadges }) {
+// 사이드바 접힘 상태는 브라우저별로 기억한다 (#537)
+const SIDEBAR_COLLAPSED_KEY = 'donworry.ui.sidebarCollapsed'
+
+// 저장 공간을 못 쓰는 환경이면 펼친 상태로 시작한다
+function readSidebarCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveSidebarCollapsed(collapsed: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0')
+  } catch {
+    // 저장에 실패해도 지금 화면에서는 접힘 상태가 유지된다
+  }
+}
+
+function Sidebar({
+  groups,
+  badges = {},
+  collapsed,
+  onToggle,
+}: {
+  groups: NavGroup[]
+  badges?: NavBadges
+  collapsed: boolean
+  onToggle: () => void
+}) {
   const location = useLocation()
+  const toggleLabel = collapsed ? '메뉴 펼치기' : '메뉴 접기'
 
   return (
     <aside className="dw-sidebar" aria-label="주 메뉴">
-      <nav>
+      <div className="dw-sidebar-top">
+        <Tooltip title={toggleLabel} placement="right">
+          <button
+            type="button"
+            className="dw-sidebar-toggle"
+            aria-label={toggleLabel}
+            aria-expanded={!collapsed}
+            aria-controls="dw-main-nav"
+            onClick={onToggle}
+          >
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </button>
+        </Tooltip>
+      </div>
+      <nav id="dw-main-nav">
         {groups.map((group) => (
           <div className="dw-nav-group" key={group.title}>
             <div className="dw-nav-heading">{group.title}</div>
             {group.items.map((item) => {
               // 0건 · 아직 모름(null)이면 숨긴다
               const count = item.badge ? badges[item.badge] : null
+              // 접힌 상태에서만 아이콘 옆 말풍선으로 메뉴 이름(과 처리 필요 건수)을 보여 준다
+              const tip = collapsed
+                ? `${item.label}${count ? ` · 처리 필요 ${count}건` : ''}`
+                : undefined
               return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end
-                  className={({ isActive }) =>
-                    `dw-nav-link${isActive || (item.path !== '/owner' && location.pathname.startsWith(item.path + '/')) ? ' active' : ''}`
-                  }
-                >
-                  <span className="dw-nav-icon" aria-hidden="true">
-                    {menuIcons[item.path] ?? <AppstoreOutlined />}
-                  </span>
-                  {item.label}
-                  {count ? (
-                    <span className="dw-nav-badge" aria-label={`처리 필요 ${count}건`}>
-                      {count > 99 ? '99+' : count}
+                <Tooltip key={item.path} title={tip} placement="right">
+                  <NavLink
+                    to={item.path}
+                    end
+                    className={({ isActive }) =>
+                      `dw-nav-link${isActive || (item.path !== '/owner' && location.pathname.startsWith(item.path + '/')) ? ' active' : ''}`
+                    }
+                  >
+                    <span className="dw-nav-icon" aria-hidden="true">
+                      {menuIcons[item.path] ?? <AppstoreOutlined />}
                     </span>
-                  ) : null}
-                </NavLink>
+                    <span className="dw-nav-label">{item.label}</span>
+                    {count ? (
+                      <span className="dw-nav-badge" aria-label={`처리 필요 ${count}건`}>
+                        {count > 99 ? '99+' : count}
+                      </span>
+                    ) : null}
+                  </NavLink>
+                </Tooltip>
               )
             })}
           </div>
@@ -139,16 +192,27 @@ export function ManagementLayout({
   children?: ReactNode
 }) {
   const location = useLocation()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const toggleSidebar = () => {
+    const next = !sidebarCollapsed
+    setSidebarCollapsed(next)
+    saveSidebarCollapsed(next)
+  }
   return (
     <div
-      className={`admin-viewport${responsive ? ' application-review-viewport' : ''}`}
+      className={`admin-viewport${responsive ? ' application-review-viewport' : ''}${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
       data-role={role}
     >
       <a href="#main" className="dw-skip-link">
         본문으로 바로 가기
       </a>
       {header}
-      <Sidebar groups={groups} badges={badges} />
+      <Sidebar
+        groups={groups}
+        badges={badges}
+        collapsed={sidebarCollapsed}
+        onToggle={toggleSidebar}
+      />
       <main className="dw-main" id="main" tabIndex={-1}>
         <div className="dw-container">
           {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
