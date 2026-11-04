@@ -28,6 +28,10 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 - **#352에서 더한 창구 — 추가만 한다 (P2 허락).** `fds.api.FdsLinkedPaymentReader.findLinked(merchantId, customerRef, casePaymentIds, since)` → `FdsLinkedPayments`(`card` · `device` · `ip` 각각 `Match`: `provided` · `otherCustomerCount` · `paymentCount` · `resultCounts`(판정별 건수) · `declinedCount`)
   - 사건 결제의 평가에서 카드 토큰 · 기기 ID · IP 주소를 모아, 같은 가맹점 · `since` 이후 평가와 원문으로 맞춘다. 같은 `customerRef` · 사건 결제는 세지 않는다. 이메일은 비교하지 않는다
   - 결과에는 숫자와 판정 코드만 있다 — 원문 식별자 · 다른 고객 번호 · 다른 결제 ID를 실을 칸이 없다. 사건 결제가 그 값을 보내지 않았으면 `provided = false`(비교하지 않음)
+- **#533에서 더한 칸 — 추가만 한다.** `FdsLinkedPayments.payments`: 사건 결제마다 `PaymentMatch`(`paymentId` · `card` · `device` · `ip`)
+  - 그 결제의 평가에 남은 값으로만 센다. 결제 1의 카드만 다른 고객과 겹쳤는데 결제 2에도 같은 징후가 붙던 문제 (PR #529 Codex 리뷰)
+  - 조회는 종류마다 한 번 그대로이고, 그 결과를 결제별로 다시 센다. `paymentId`는 이 사건의 결제다 — 다른 고객 결제 ID는 여전히 싣지 않는다
+  - 사건 결제 순서를 지키고, 평가가 없는 결제는 모두 `provided = false`
   - 결제마다 하나로 세고, 판정은 위와 같은 "최신 비오류 평가" 규칙을 쓴다. 카드사 거절은 평가의 `authorization_result = DECLINED`(P5가 기록)로 센다
   - DB 정렬 규칙이 대소문자를 무시해도 원문이 정확히 같은 값만 센다 (조회 뒤 다시 대조)
 
@@ -54,6 +58,7 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 - (#346) API: `FdsPaymentEvidence.signals` 추가. 사용처 P4 `PaymentSignalReader`(AI 보고서 결제별 카드 · 기기 · 접속 국가). P3 `PaymentFdsInfoReader`는 이 필드를 쓰지 않아 그대로다. DB 변경 없음
 - (#352) API: `FdsLinkedPaymentReader` · `FdsLinkedPayments` 추가, 구현 `FdsLinkedPaymentQueryService`. 저장소 조회 메서드 3개(가맹점 + 기간 + 카드 토큰 / 기기 ID / IP 주소 목록) 추가. `FdsEvidenceQueryService`의 최신 평가 고르기를 같은 패키지에서 같이 쓰도록 `static`으로 바꿨다(동작 그대로). 사용처 P4 `LinkedPaymentFinder`. DB 변경 없음
 - (#352) 테스트: 다른 고객 수 · 결제 수 · 판정 · 카드사 거절 집계와 원문 미노출, 같은 고객 · 사건 결제 제외, 보내지 않은 값 = 비교 안 함, 재평가 결제 한 번만, 다른 가맹점 · 기간 밖 제외(MariaDB)
+- (#533) API: `FdsLinkedPayments`에 `payments` 칸 추가 (기존 사건 합계 그대로). 사용처 P4 `LinkedPaymentFinder`. DB 변경 · 조회 추가 없음. 테스트: 결제별 집계(단위 · MariaDB)
 - 화면: P3 #163에서 Mock FDS 정보를 실제 공개 조회 결과로 교체할 수 있다.
 - 테스트: 최신 유효 판정 선택, 전체 ERROR 처리, 적중 룰 필터링, 입력 검증을 단위 테스트로 확인한다.
 - 문서: ADR 목록에 계약을 기록한다. Notion 정본에는 구현 확정 뒤 동기화 여부를 P2·P3가 확인한다.

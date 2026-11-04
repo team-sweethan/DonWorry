@@ -131,15 +131,26 @@ class LinkedMatch(BaseModel):
     declinedCount: int
 
 
+# 사건 결제 하나의 연결 결제 — 그 결제의 카드 · 기기 · IP로 센 값 (#533)
+class PaymentLinks(BaseModel):
+    paymentId: str
+    card: LinkedMatch
+    device: LinkedMatch
+    ip: LinkedMatch
+
+
 class LinkedPaymentsTool(BaseModel):
     caseId: str
     evidenceVersion: int
     source: str
     retrievedAt: str
     lookbackDays: int
+    # card · device · ip는 사건 전체 — 화면 카드 · 고정 보고서가 쓴다
     card: LinkedMatch
     device: LinkedMatch
     ip: LinkedMatch
+    # 결제별 집계 (#533). 예전 Spring 응답에는 없다
+    payments: list[PaymentLinks] | None = None
 
 
 # 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다

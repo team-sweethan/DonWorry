@@ -16,7 +16,12 @@ public record LinkedPaymentsToolResponse(
         int lookbackDays,
         Match card,
         Match device,
-        Match ip) {
+        Match ip,
+        List<PaymentLinks> payments) {
+
+    // 사건 결제 하나의 집계 — card · device · ip는 사건 전체, 이 칸은 그 결제의 카드 · 기기 · IP로 센 값 (#533)
+    // paymentId는 이 사건의 결제다. ai-server가 결제마다 그 결제의 징후만 붙인다
+    public record PaymentLinks(String paymentId, Match card, Match device, Match ip) {}
 
     // provided=false면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻이다 ("정보 없음")
     // resultCounts는 FDS 판정 순서(허용 · 검토 · 차단 · 평가 오류), declinedCount는 카드사 거절 결제 수

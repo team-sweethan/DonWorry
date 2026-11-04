@@ -75,20 +75,20 @@ def _history(rows: list[tuple[int, str, str]]) -> PaymentHistoryTool:
     )
 
 
-def _linked(card_others: int = 0) -> LinkedPaymentsTool:
-    card = (
-        {**NONE, "otherCustomerCount": card_others, "paymentCount": 9, "declinedCount": 2}
-        if card_others
-        else NONE
-    )
+# Spring 응답 모양 — 사건 결제가 "1" 하나라 결제별 칸(#533)은 사건 합계와 같다
+def _linked(card_others: int = 0, device_others: int = 0) -> LinkedPaymentsTool:
+    def match(others: int) -> dict[str, object]:
+        if not others:
+            return NONE
+        return {**NONE, "otherCustomerCount": others, "paymentCount": 9, "declinedCount": 2}
+
+    links = {
+        "card": match(card_others),
+        "device": match(device_others),
+        "ip": {**NONE, "provided": False},
+    }
     return LinkedPaymentsTool.model_validate(
-        {
-            **HEAD,
-            "lookbackDays": 30,
-            "card": card,
-            "device": NONE,
-            "ip": {**NONE, "provided": False},
-        }
+        {**HEAD, "lookbackDays": 30, **links, "payments": [{"paymentId": "1", **links}]}
     )
 
 
@@ -353,8 +353,7 @@ def _error_fds() -> FdsPayment:
 
 
 def _linked_card_and_device() -> LinkedPaymentsTool:
-    linked = _linked(card_others=1)
-    return linked.model_copy(update={"device": linked.card})
+    return _linked(card_others=1, device_others=1)
 
 
 def _error_basis(linked: LinkedPaymentsTool):

@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime, timedelta
 
-from app.agent.evidence import basis_facts, decision_basis
+from app.agent.evidence import basis_facts, decision_basis, payment_links
 from app.agent.narrative import Narrative
 from app.agent.tools import ToolRecord
 from app.agent.verdict_text import headline, payment_reason, recommendation_summary
@@ -169,8 +169,8 @@ OUTSIDE_RULE_LABELS = {
 }
 
 
-# payment_id를 주면 그 결제의 이유를 검사할 정황만 — 해외 접속은 그 결제가 해외일 때만 (#355 리뷰)
-# 연관 결제 · 고객 최근 결제는 사건 전체 정보라 모든 결제에 해당한다
+# payment_id를 주면 그 결제의 문장을 검사할 정황만 — 해외 접속은 그 결제가 해외일 때만 (#355 리뷰)
+# 연관 결제는 결제별 칸이 있으면 그 결제 것만 (#533), 고객 최근 결제는 사건 전체 정보다
 def outside_rule_evidence(
     fds: dict[str, FdsPayment],
     history: PaymentHistoryTool | None = None,
@@ -178,10 +178,11 @@ def outside_rule_evidence(
     payment_id: str | None = None,
 ) -> list[str]:
     found: list[str] = []
-    if linked is not None and any(
-        m.provided and m.paymentCount > 0 for m in (linked.card, linked.device, linked.ip)
-    ):
-        found.append(OUTSIDE_RULE_LABELS["linked"])
+    if linked is not None:
+        own = payment_links(linked, payment_id) if payment_id is not None else None
+        matches = own or (linked.card, linked.device, linked.ip)
+        if any(m.provided and m.paymentCount > 0 for m in matches):
+            found.append(OUTSIDE_RULE_LABELS["linked"])
     if history is not None and any(
         c.paymentStatus in {"VOIDED", "DECLINED", "DENIED"} for c in history.statusCounts
     ):
@@ -280,6 +281,14 @@ def facts_json(
                 ],
             }
         )
+        # 이 결제의 연결 결제 (#533) — 사건 전체 칸만 보면 다른 결제의 카드를 이 결제 것으로 썼다
+        own = payment_links(linked, payment.paymentId) if linked is not None else None
+        if own is not None:
+            payments[-1]["같은 카드 · 기기 · IP(이 결제)"] = {
+                "같은 카드": linked_facts(own[0]),
+                "같은 기기": linked_facts(own[1]),
+                "같은 IP": linked_facts(own[2]),
+            }
         # 판정 근거 · 기준표 판정 (#501) — 코드가 정한 값이라 AI는 바꾸지 않고 설명만 한다
         if evidence is not None and analyzable(payment):
             basis = decision_basis(payment, evidence, case_payments, history, linked)

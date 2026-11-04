@@ -112,6 +112,20 @@ def _linked_signal(key: str, label: str, level: str, match: LinkedMatch) -> _Sig
     return _Signal(key, label, f"최근 30일 다른 고객 {people}{declined}", level)
 
 
+# 이 결제의 연결 결제(카드 · 기기 · IP) — 결제별 칸이 없으면(예전 Spring 응답) None (#533)
+def payment_links(
+    linked: LinkedPaymentsTool, payment_id: str
+) -> tuple[LinkedMatch, LinkedMatch, LinkedMatch] | None:
+    for links in linked.payments or []:
+        if links.paymentId == payment_id:
+            return links.card, links.device, links.ip
+    return None
+
+
+# 결제별 칸이 없을 때 붙이는 징후 이름 앞말 — 어느 결제의 값인지 모르니 사실대로 쓴다 (#533)
+CASE_LEVEL_PREFIX = "이 사건 결제 중 "
+
+
 def _signals(evidence: FdsPayment, linked: LinkedPaymentsTool | None) -> list[_Signal]:
     found = [_rule_signal(rule) for rule in evidence.ruleHits]
     if evidence.riskScore is None or evidence.fdsResult == "ERROR":
@@ -121,13 +135,19 @@ def _signals(evidence: FdsPayment, linked: LinkedPaymentsTool | None) -> list[_S
     # 고위험 국가 규칙이 걸렸으면 해외 접속을 따로 세지 않는다
     if country and country != "KR" and "R05" not in keys:
         found.append(_Signal(OVERSEAS, f"해외 접속 ({country})", None, CAUTION))
-    # 같은 카드 · 기기 · IP 결제는 사건 전체 정보라 사건의 모든 결제에 붙인다
+    # 같은 카드 · 기기 · IP 결제는 그 결제의 것만 붙인다 (#533)
+    # 결제 1의 카드만 겹쳤는데 깨끗한 결제 2까지 고위험이 되던 문제
     if linked is not None:
+        own = payment_links(linked, evidence.paymentId)
+        card, device, ip = own or (linked.card, linked.device, linked.ip)
+        prefix = "" if own else CASE_LEVEL_PREFIX
         for signal in (
-            _linked_signal(LINKED_CARD, "같은 카드를 다른 고객이 사용", HIGH_RISK, linked.card),
-            _linked_signal(LINKED_DEVICE, "같은 기기를 다른 고객이 사용", HIGH_RISK, linked.device),
+            _linked_signal(LINKED_CARD, f"{prefix}같은 카드를 다른 고객이 사용", HIGH_RISK, card),
+            _linked_signal(
+                LINKED_DEVICE, f"{prefix}같은 기기를 다른 고객이 사용", HIGH_RISK, device
+            ),
             # 같은 IP는 공유기 · 회사 망에서도 흔해 주의 징후로 둔다
-            _linked_signal(LINKED_IP, "같은 IP를 다른 고객이 사용", CAUTION, linked.ip),
+            _linked_signal(LINKED_IP, f"{prefix}같은 IP를 다른 고객이 사용", CAUTION, ip),
         ):
             if signal is not None:
                 found.append(signal)
