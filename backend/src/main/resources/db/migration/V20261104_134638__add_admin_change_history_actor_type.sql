@@ -13,4 +13,3 @@ ALTER TABLE admin_change_histories
         (actor_type = 'STAFF' AND actor_user_id IS NOT NULL)
         OR (actor_type = 'SYSTEM' AND actor_user_id IS NULL)
     );
-

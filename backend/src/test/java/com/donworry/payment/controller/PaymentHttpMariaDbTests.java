@@ -143,12 +143,16 @@ class PaymentHttpMariaDbTests {
     }
 
     private String sessionBody(String order) {
+        return sessionBody(order, true);
+    }
+
+    private String sessionBody(String order, boolean notify) {
         return "{\"orderRef\":\"" + order + "\",\"customerRef\":\"42\",\"amount\":1000,\"orderCreatedAt\":\""
                 + Instant.now().minusSeconds(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS)
                 + "\",\"orderName\":\"딸기 케이크\",\"successUrl\":\"http://127.0.0.1:8080/orders/1/payment/donworry/return\""
                 + ",\"failUrl\":\"http://127.0.0.1:8080/orders/1/payment/fail\""
                 // 운영 기본값에서는 웹훅 주소로 https · 공인 주소만 받는다(#402 PR②). 이 테스트는 웹훅을 보내지 않는다
-                + ",\"notifyUrl\":\"https://shop.example.test/webhooks/donworry\"}";
+                + (notify ? ",\"notifyUrl\":\"https://shop.example.test/webhooks/donworry\"" : "") + "}";
     }
 
     // 사장님 계정 정지 이후에도 같은 가맹점의 HMAC 결제와 공개 결제창은 유지한다
@@ -186,7 +190,8 @@ class PaymentHttpMariaDbTests {
                     "/api/payment-sessions",
                     "merchant-a",
                     UUID.randomUUID().toString(),
-                    sessionBody(UUID.randomUUID().toString()));
+                    // 이 검사는 웹훅이 아닌 로그인 정지의 결제 영향을 검증한다. 공용 DB에 전송 예약을 남기지 않는다.
+                    sessionBody(UUID.randomUUID().toString(), false));
             assertThat(session.statusCode()).isEqualTo(200);
             String sessionKey =
                     mapper.readTree(session.body()).path("sessionKey").asText();
