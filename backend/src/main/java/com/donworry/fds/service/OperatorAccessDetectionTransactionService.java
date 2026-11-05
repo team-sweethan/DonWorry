@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -51,7 +52,8 @@ public class OperatorAccessDetectionTransactionService {
         this.clock = clock;
     }
 
-    @Transactional
+    /** 호출자 트랜잭션에 합류하면 계정 잠금이 풀린 뒤 커밋되므로 항상 독립 트랜잭션으로 끝낸다. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void receive(OperatorAccessDenied input) {
         if (events.findByIdentityEventId(input.eventId()).isPresent()) return;
         var now = clock.instant();

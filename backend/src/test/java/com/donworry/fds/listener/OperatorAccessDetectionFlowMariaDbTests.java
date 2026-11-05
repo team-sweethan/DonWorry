@@ -1,6 +1,7 @@
 package com.donworry.fds.listener;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
@@ -8,13 +9,14 @@ import com.donworry.HttpCsrfTestSupport;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.fds.service.OperatorAccessDetectionService;
 import com.donworry.identity.api.OperatorAccessDenied;
-import com.donworry.identity.service.UserSessionService;
+import com.donworry.identity.api.OperatorAccessDeniedType;
 import java.net.CookieManager;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +25,14 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
-import java.util.function.BooleanSupplier;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -36,7 +41,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 // #515 전체 흐름을 실제 HTTP 403부터 P1 원본, 이벤트, P2 탐지, 계정 정지까지 검증한다.
@@ -63,7 +70,7 @@ class OperatorAccessDetectionFlowMariaDbTests {
     JsonMapper mapper;
 
     @Autowired
-    UserSessionService sessions;
+    PlatformTransactionManager transactionManager;
 
     @MockitoSpyBean
     OperatorAccessDetectionService detectionService;
@@ -89,14 +96,10 @@ class OperatorAccessDetectionFlowMariaDbTests {
     void cleanUp() throws Exception {
         for (var account : accounts) {
             awaitProcessed(account);
-            sessions.expireAll(account.id());
-            var eventIds = jdbc.queryForList(
-                    "SELECT denial_id FROM operator_access_denials WHERE user_id=?", Long.class, account.id());
-            for (long eventId : eventIds)
-                jdbc.update(
-                        "DELETE FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND SERIALIZED_EVENT LIKE ?",
-                        OperatorAccessDenied.class.getName(),
-                        "%\"eventId\":" + eventId + ",%");
+            jdbc.update(
+                    "DELETE FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND SERIALIZED_EVENT LIKE ?",
+                    OperatorAccessDenied.class.getName(),
+                    publicationPattern(account));
             jdbc.update(
                     "DELETE e FROM fds_operator_access_detection_evidences e JOIN fds_operator_access_detections d ON e.detection_id=d.operator_access_detection_id WHERE d.user_id=?",
                     account.id());
@@ -125,7 +128,7 @@ class OperatorAccessDetectionFlowMariaDbTests {
 
         awaitStatus(owner, "INACTIVE");
         assertThat(detections(owner)).isEqualTo(1);
-        await(() -> "SUCCEEDED".equals(lastActionStatus(owner)));
+        await().atMost(WAIT).until(() -> "SUCCEEDED".equals(lastActionStatus(owner)));
         assertThat(get(client, OUT_OF_ROLE_PATH).statusCode()).isEqualTo(401);
         assertThat(loginResponse(owner).statusCode()).isEqualTo(401);
     }
@@ -154,7 +157,8 @@ class OperatorAccessDetectionFlowMariaDbTests {
         var client = login(owner);
         callAndAwait(client, owner, OUT_OF_ROLE_PATH, 5, 0);
         awaitStatus(owner, "INACTIVE");
-        await(() -> lastActionStatus(owner) != null && !"REQUESTED".equals(lastActionStatus(owner)));
+        await().atMost(WAIT)
+                .until(() -> lastActionStatus(owner) != null && !"REQUESTED".equals(lastActionStatus(owner)));
 
         var released = HttpCsrfTestSupport.send(
                 login(admin()),
@@ -173,20 +177,50 @@ class OperatorAccessDetectionFlowMariaDbTests {
         assertThat(detections(owner)).isEqualTo(2);
     }
 
-    // 기준을 넘는 호출이 동시에 와도 탐지 기록은 한 건만 남는다
-    @Test
-    void outOfRole_whenConcurrentRequestsExceedThreshold_recordsOneDetection() throws Exception {
+    // 기준 횟수 이상의 호출이 동시에 와도 계정을 정지하고 탐지 기록은 한 건만 남긴다
+    @ParameterizedTest
+    @ValueSource(ints = {5, 10})
+    void outOfRole_whenConcurrentRequestsReachThreshold_recordsOneDetection(int calls) throws Exception {
         for (int round = 0; round < 5; round++) {
             var owner = operator();
             var client = login(owner);
 
-            callConcurrently(client, 10);
-            await(() -> denials(owner) == 10);
-            awaitProcessed(owner);
+            int forbidden = callConcurrently(client, calls);
 
+            // 정지가 먼저 끝나면 늦은 요청은 세션이 끊겨 401을 받고 403 원본을 남기지 않는다.
+            assertThat(forbidden).isGreaterThanOrEqualTo(5);
+            await().atMost(WAIT).until(() -> denials(owner) == forbidden);
+            awaitProcessed(owner);
             awaitStatus(owner, "INACTIVE");
             assertThat(detections(owner)).isEqualTo(1);
         }
+    }
+
+    // 트랜잭션 안에서 호출해도 수신 결과는 계정 잠금 안에서 먼저 커밋된다
+    @Test
+    void receive_whenCalledInsideTransaction_commitsBeforeReturning() throws Exception {
+        var owner = operator();
+        var event = new OperatorAccessDenied(
+                ThreadLocalRandom.current().nextLong(1_000_000_000L, Long.MAX_VALUE),
+                owner.id(),
+                owner.loginId(),
+                merchantIds.getLast(),
+                "GET",
+                OUT_OF_ROLE_PATH,
+                OperatorAccessDeniedType.OUT_OF_ROLE,
+                Instant.now(),
+                "127.0.0.1");
+
+        int visible = new TransactionTemplate(transactionManager).execute(status -> {
+            detectionService.receive(event);
+            try (var reader = Executors.newSingleThreadExecutor()) {
+                return reader.submit(() -> events(owner)).get();
+            } catch (Exception exception) {
+                throw new IllegalStateException(exception);
+            }
+        });
+
+        assertThat(visible).isEqualTo(1);
     }
 
     // 계정 잠금이 커밋까지 유지되도록 리스너는 바깥 트랜잭션 없이 탐지를 호출한다
@@ -197,6 +231,7 @@ class OperatorAccessDetectionFlowMariaDbTests {
         callAndAwait(login(owner), owner, OUT_OF_ROLE_PATH, 1, 0);
 
         assertThat(outerTransactions).isNotEmpty().containsOnly(false);
+        assertThat(publications(owner)).isPositive();
     }
 
     private void callAndAwait(HttpClient client, Account owner, String path, int count, int alreadyStored)
@@ -204,41 +239,38 @@ class OperatorAccessDetectionFlowMariaDbTests {
         for (int i = 1; i <= count; i++) {
             assertThat(get(client, path).statusCode()).isEqualTo(403);
             int expected = alreadyStored + i;
-            await(() -> events(owner) >= expected);
+            await().atMost(WAIT).until(() -> events(owner) >= expected);
         }
         awaitProcessed(owner);
     }
 
-    private void callConcurrently(HttpClient client, int count) throws Exception {
+    private int callConcurrently(HttpClient client, int count) throws Exception {
         try (var pool = Executors.newFixedThreadPool(count)) {
             var start = new CountDownLatch(1);
-            var results = new ArrayList<java.util.concurrent.Future<Integer>>();
+            var results = new ArrayList<Future<Integer>>();
             Callable<Integer> call = () -> {
                 start.await();
                 return get(client, OUT_OF_ROLE_PATH).statusCode();
             };
             for (int i = 0; i < count; i++) results.add(pool.submit(call));
             start.countDown();
-            for (var result : results) assertThat(result.get()).isEqualTo(403);
+            int forbidden = 0;
+            for (var result : results) {
+                int status = result.get();
+                assertThat(status).isIn(401, 403);
+                if (status == 403) forbidden++;
+            }
+            return forbidden;
         }
     }
 
     // 모든 P1 원본의 이벤트 발행이 끝나야 탐지 건수와 정리 결과가 안정된다.
     private void awaitProcessed(Account account) throws Exception {
-        await(() -> events(account) == denials(account) && incompletePublications(account) == 0);
+        await().atMost(WAIT).until(() -> events(account) >= denials(account) && incompletePublications(account) == 0);
     }
 
     private void awaitStatus(Account account, String expected) throws Exception {
-        await(() -> expected.equals(status(account)));
-    }
-
-    private void await(BooleanSupplier condition) throws Exception {
-        long deadline = System.nanoTime() + WAIT.toNanos();
-        while (System.nanoTime() < deadline) {
-            if (condition.getAsBoolean()) return;
-            Thread.sleep(20);
-        }
-        assertThat(condition.getAsBoolean()).as("제한 시간 안에 처리 완료").isTrue();
+        await().atMost(WAIT).until(() -> expected.equals(status(account)));
     }
 
     private Account operator() {
@@ -339,6 +371,18 @@ class OperatorAccessDetectionFlowMariaDbTests {
                 "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND COMPLETION_DATE IS NULL AND SERIALIZED_EVENT LIKE ?",
                 Integer.class,
                 OperatorAccessDenied.class.getName(),
-                "%\"userId\":" + account.id() + ",%");
+                publicationPattern(account));
+    }
+
+    private int publications(Account account) {
+        return jdbc.queryForObject(
+                "SELECT COUNT(*) FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND SERIALIZED_EVENT LIKE ?",
+                Integer.class,
+                OperatorAccessDenied.class.getName(),
+                publicationPattern(account));
+    }
+
+    private static String publicationPattern(Account account) {
+        return "%\"userId\":" + account.id() + ",%";
     }
 }
