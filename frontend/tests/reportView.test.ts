@@ -684,3 +684,23 @@ test('summaryLinks_mapsFactsToCards_once: 근거 번호의 주제로 표 카드�
     { text: '요약입니다.', links: [] },
   ])
 })
+
+// summaryLines_fixedReportEmptySummaryFacts_keepsSummary — AI를 끈 고정 보고서는 summaryFacts · facts가 빈 목록이라 결론 카드 요약이 통째로 사라졌다 (#559 Codex 리뷰)
+test('summaryLines_fixedReportEmptySummaryFacts_keepsSummary: 근거 번호 목록이 비어 있으면 요약 문장을 링크 없이 그대로 보여 준다', () => {
+  const fixed = body({
+    summary: [
+      '조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.',
+      '직원은 판정 근거를 확인하세요.',
+    ],
+    summaryFacts: [],
+    facts: [],
+  })
+
+  assert.deepEqual(
+    summaryLines(fixed).map((l) => [l.text, l.links.length]),
+    [
+      ['조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.', 0],
+      ['직원은 판정 근거를 확인하세요.', 0],
+    ],
+  )
+})

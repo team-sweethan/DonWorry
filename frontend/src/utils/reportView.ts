@@ -465,10 +465,14 @@ export function paymentCardId(paymentId: string): string {
 }
 
 // 링크 정보가 없는 보고서(#559 전)는 문장만, 같은 카드는 문장마다 한 번만
+// 고정 보고서는 summaryFacts가 빈 목록이다 — 요약 문장 수와 다르면 요약을 그대로 보여 준다 (#559 Codex 리뷰)
 export function summaryLines(body: ReportBody): SummaryLine[] {
-  if (!body.summaryFacts || !body.facts) return body.summary.map((text) => ({ text, links: [] }))
+  const linked = body.summaryFacts
+  if (!linked || !body.facts || linked.length !== body.summary.length) {
+    return body.summary.map((text) => ({ text, links: [] }))
+  }
   const facts = new Map(body.facts.map((f) => [f.id, f]))
-  return body.summaryFacts.map((sentence) => {
+  return linked.map((sentence) => {
     const links: SummaryLink[] = []
     for (const id of sentence.factIds) {
       const fact = facts.get(id)
