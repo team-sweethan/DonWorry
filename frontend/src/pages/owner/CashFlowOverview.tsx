@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { financeTotal, koreanToday, koreanTime } from './financeView'
 import './payout-ledger.css'
 import { loanRequirement } from './loanForecast'
@@ -13,7 +14,6 @@ export type ForecastDayView = {
   opening: number
   completed: number
   scheduled: number
-  expected: number
   expenses: number
   closing: number
 }
@@ -36,12 +36,15 @@ function Sources({ items, empty }: { items: ForecastSource[]; empty: string }) {
         <small>{item.note}</small>
         {(item.refundDeductionAmount ?? 0) > 0 && (
           <small className="cashflow-refund-note">
-            원 정산금 {money(item.settlementAmount ?? item.amount)} − 환불 회수{' '}
-            {money(item.refundDeductionAmount!)} = 유입 {money(item.amount)}
+            원 정산금 <FinanceMoney value={item.settlementAmount ?? item.amount} /> − 환불 회수{' '}
+            <FinanceMoney value={item.refundDeductionAmount!} /> = 유입{' '}
+            <FinanceMoney value={item.amount} />
           </small>
         )}
       </div>
-      <strong>{money(item.amount)}</strong>
+      <strong>
+        <FinanceMoney value={item.amount} />
+      </strong>
     </li>
   )
   return sorted.length ? (
@@ -113,7 +116,7 @@ export function CashFlowOverview({
   const dayIncome = incomes.filter((e) => e.date === active.date)
   const dayCosts = costs.filter((e) => e.date === active.date)
   const largest = [...dayCosts].sort((a, b) => b.amount - a.amount)[0]
-  const incoming = financeTotal([active.completed, active.scheduled, active.expected])
+  const incoming = financeTotal([active.completed, active.scheduled])
   const recoveryInfo = summary
     ? {
         outstanding: summary.outstandingRecoveryAmount,
@@ -153,8 +156,7 @@ export function CashFlowOverview({
           ],
           [
             '기간 내 정산 유입',
-            summary?.totalIncome ??
-              days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
+            summary?.totalIncome ?? days.reduce((n, d) => n + d.completed + d.scheduled, 0),
             '실제 지급 + 환불 회수 차감 후 예상 지급',
           ],
           [
@@ -170,15 +172,17 @@ export function CashFlowOverview({
         ].map(([label, amount, note], index) => (
           <section className={`cashflow-surface cashflow-stat-${index}`} key={label}>
             <span>{label}</span>
-            <strong>{money(Number(amount))}</strong>
+            <strong>
+              <FinanceMoney value={Number(amount)} />
+            </strong>
             <small>{note}</small>
             {index === 0 && balanceCalculation && (
               <details className="cashflow-balance-basis">
                 <summary>계산 근거</summary>
                 <p>
-                  시작 잔액 {money(balanceCalculation.opening)} ＋ 실제 지급{' '}
-                  {money(balanceCalculation.income)} − 실제 지출 완료{' '}
-                  {money(balanceCalculation.expenses)}
+                  시작 잔액 <FinanceMoney value={balanceCalculation.opening} /> ＋ 실제 지급{' '}
+                  <FinanceMoney value={balanceCalculation.income} /> − 실제 지출 완료{' '}
+                  <FinanceMoney value={balanceCalculation.expenses} />
                 </p>
                 {summary && <small>계산 기준: {koreanTime(summary.asOf)}</small>}
               </details>
@@ -199,15 +203,21 @@ export function CashFlowOverview({
           <div className="recovery-values">
             <div>
               <span>현재 미회수액</span>
-              <b>{money(recoveryInfo.outstanding)}</b>
+              <b>
+                <FinanceMoney value={recoveryInfo.outstanding} />
+              </b>
             </div>
             <div>
               <span>조회 종료일까지 예상 회수</span>
-              <b>{money(recoveryInfo.projected)}</b>
+              <b>
+                <FinanceMoney value={recoveryInfo.projected} />
+              </b>
             </div>
             <div>
               <span>이후로 이월할 회수액</span>
-              <b>{money(recoveryInfo.remaining)}</b>
+              <b>
+                <FinanceMoney value={recoveryInfo.remaining} />
+              </b>
             </div>
           </div>
           <p>
@@ -227,7 +237,10 @@ export function CashFlowOverview({
           {firstShortage ? (
             <>
               {firstShortage.date}에<br />
-              <em>{money(-firstShortage.closing)}</em>이 부족할 것으로 예상돼요.
+              <em>
+                <FinanceMoney value={-firstShortage.closing} />
+              </em>
+              이 부족할 것으로 예상돼요.
             </>
           ) : (
             <>
@@ -240,15 +253,21 @@ export function CashFlowOverview({
         <div className="cashflow-verdict-facts">
           <div>
             <small>기간 내 최대 부족액</small>
-            <b>{money(maximumShortage)}</b>
+            <b>
+              <FinanceMoney value={maximumShortage} />
+            </b>
           </div>
           <div>
             <small>기간 말 예상 잔액</small>
-            <b>{money(days.at(-1)!.closing)}</b>
+            <b>
+              <FinanceMoney value={days.at(-1)!.closing} />
+            </b>
           </div>
           <div>
             <small>기간 시작 잔액</small>
-            <b>{money(days[0].opening)}</b>
+            <b>
+              <FinanceMoney value={days[0].opening} />
+            </b>
           </div>
         </div>
         {firstShortage && (
@@ -286,7 +305,7 @@ export function CashFlowOverview({
           points={days.map((d) => ({
             date: d.date,
             balance: d.closing,
-            income: d.completed + d.scheduled + d.expected,
+            income: d.completed + d.scheduled,
             expense: d.expenses,
           }))}
           selectedDate={active.date}
@@ -306,34 +325,53 @@ export function CashFlowOverview({
             <h2>{active.closing < 0 ? '왜 자금이 부족할까요?' : '이날 잔액은 이렇게 계산돼요'}</h2>
           </div>
           <strong className={active.closing < 0 ? 'cashflow-negative' : ''}>
-            {money(active.closing)}
+            <FinanceMoney value={active.closing} />
           </strong>
         </div>
         <div className="cashflow-equation">
           <div>
             <small>전날에서 이어진 잔액</small>
-            <b>{money(active.opening)}</b>
+            <b>
+              <FinanceMoney value={active.opening} />
+            </b>
           </div>
           <span>＋</span>
           <div>
             <small>이날 정산 유입</small>
-            <b>{money(incoming)}</b>
+            <b>
+              <FinanceMoney value={incoming} />
+            </b>
           </div>
           <span>−</span>
           <div>
             <small>이날 지출 (완료·예정)</small>
-            <b>{money(active.expenses)}</b>
+            <b>
+              <FinanceMoney value={active.expenses} />
+            </b>
           </div>
           <span>＝</span>
           <div>
             <small>예상 마감 잔액</small>
-            <b className={active.closing < 0 ? 'cashflow-negative' : ''}>{money(active.closing)}</b>
+            <b className={active.closing < 0 ? 'cashflow-negative' : ''}>
+              <FinanceMoney value={active.closing} />
+            </b>
           </div>
         </div>
         {deduction > 0 && incomeMatches && (
           <p className="cashflow-deduction-equation">
-            이날 원 정산금 <b>{money(originalIncome)}</b> − 환불 회수 <b>{money(deduction)}</b> =
-            실제·예상 유입 <b>{money(incoming)}</b>. 회수액을 지출에서 다시 차감하지 않습니다.
+            이날 원 정산금{' '}
+            <b>
+              <FinanceMoney value={originalIncome} />
+            </b>{' '}
+            − 환불 회수{' '}
+            <b>
+              <FinanceMoney value={deduction} />
+            </b>{' '}
+            = 실제·예상 유입{' '}
+            <b>
+              <FinanceMoney value={incoming} />
+            </b>
+            . 회수액을 지출에서 다시 차감하지 않습니다.
           </p>
         )}
         <p className="cashflow-explanation">
@@ -349,7 +387,10 @@ export function CashFlowOverview({
         <div className="cashflow-evidence">
           <div>
             <h3>
-              들어올 돈 <span>{money(incoming)}</span>
+              들어올 돈{' '}
+              <span>
+                <FinanceMoney value={incoming} />
+              </span>
             </h3>
             {incomeMatches ? (
               <Sources items={dayIncome} empty="이날 반영할 정산 유입이 없습니다." />
@@ -359,13 +400,16 @@ export function CashFlowOverview({
               </p>
             )}
             <p className="cashflow-muted">
-              실제 지급 {money(active.completed)} · 매입일 기준 예상 지급 {money(active.scheduled)}{' '}
-              · 기존 일정 예상 {money(active.expected)}
+              실제 지급 <FinanceMoney value={active.completed} /> · 매입일 기준 예상 지급{' '}
+              <FinanceMoney value={active.scheduled} />
             </p>
           </div>
           <div>
             <h3>
-              나갈 돈 <span>{money(active.expenses)}</span>
+              나갈 돈{' '}
+              <span>
+                <FinanceMoney value={active.expenses} />
+              </span>
             </h3>
             {costsMatch ? (
               <Sources items={dayCosts} empty="이날 등록한 지출이 없습니다." />
@@ -380,7 +424,9 @@ export function CashFlowOverview({
       <section className="cashflow-loan-card">
         <div>
           <small>필요 자금 (예상)</small>
-          <h2>{maximumShortage ? money(maximumShortage) : '추가 필요 자금 없음'}</h2>
+          <h2>
+            {maximumShortage ? <FinanceMoney value={maximumShortage} /> : '추가 필요 자금 없음'}
+          </h2>
           <p>선택 기간의 최저 예상 잔액을 0원 이상으로 유지하는 데 필요한 금액입니다.</p>
           <small>
             등록된 정산·지출 기준의 단순 계산이며 실제 대출 필요액이나 승인 금액이 아닙니다.
@@ -398,8 +444,7 @@ export function CashFlowOverview({
                   required: maximumShortage,
                   minimum: summary?.lowestBalance ?? Math.min(...days.map((d) => d.closing)),
                   totalIn:
-                    summary?.totalIncome ??
-                    days.reduce((n, d) => n + d.completed + d.scheduled + d.expected, 0),
+                    summary?.totalIncome ?? days.reduce((n, d) => n + d.completed + d.scheduled, 0),
                   firstShortage: firstShortage?.date ?? null,
                   minimumDate: requirement.minimumDate,
                   from: days[0].date,

@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { previewPayoutReport } from './settlementPreviewData'
 import { koreanToday, formatWonInput, parseWonInput, chartMonthPeriod } from './financeView'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
@@ -34,6 +35,8 @@ export function FinancePreview() {
   const normalized = normalizeFinancePath(pathname)
   const isFunds = normalized.endsWith('/funds')
   const sample = normalized.startsWith('/dev/') && new URLSearchParams(search).get('sample') === '1'
+  const previewAmountScale =
+    normalized.startsWith('/dev/') && new URLSearchParams(search).get('large') === '1' ? 10000 : 1
   const scope = normalized.startsWith('/dev/')
     ? sample
       ? 'dev:sample'
@@ -164,26 +167,31 @@ export function FinancePreview() {
       {!isFunds ? (
         <SettlementPrototype
           todayValue={today}
+          previewAmountScale={previewAmountScale}
           payoutReport={previewPayoutReport(
             new Date(today + 'T12:00:00'),
             calendarPeriod.from,
             calendarPeriod.to,
             state.todayRefundDeduction,
             state.recoveryAmount,
+            previewAmountScale,
           )}
           monthSummary={
             <span>
               이번 달 누적 실제 지급액{' '}
               <strong>
-                {money(
-                  previewPayoutReport(
-                    new Date(today + 'T12:00:00'),
-                    dayjs(today).startOf('month').format('YYYY-MM-DD'),
-                    today,
-                    state.todayRefundDeduction,
-                    state.recoveryAmount,
-                  ).paidAmount,
-                )}
+                <FinanceMoney
+                  value={
+                    previewPayoutReport(
+                      new Date(today + 'T12:00:00'),
+                      dayjs(today).startOf('month').format('YYYY-MM-DD'),
+                      today,
+                      state.todayRefundDeduction,
+                      state.recoveryAmount,
+                      previewAmountScale,
+                    ).paidAmount
+                  }
+                />
               </strong>{' '}
               · 1일~오늘, 조회 기간과 별도
             </span>
@@ -343,7 +351,7 @@ export function FinancePreview() {
                 incomes={result.projected.map((e) => ({
                   id: e.id,
                   date: e.date,
-                  title: e.status === 'sch' ? '매입일 기준 예상 지급' : '기존 예상 일정 지급',
+                  title: '매입일 기준 예상 지급',
                   settlementAmount: e.settlementAmount,
                   refundDeductionAmount: e.refundDeductionAmount,
                   amount: e.amount,
@@ -389,7 +397,9 @@ export function FinancePreview() {
             />
             {manageTab === 'balance' ? (
               <section className="finance-card">
-                <h2>최초 시작 잔액 {money(state.opening ?? 0)}</h2>
+                <h2>
+                  최초 시작 잔액 <FinanceMoney value={state.opening ?? 0} />
+                </h2>
                 <p>기준일: {state.base} 하루 시작 시점</p>
                 <Tag>최초 설정 완료 · 수정 불가</Tag>
                 <p>
@@ -497,7 +507,9 @@ export function FinancePreview() {
                             {row.title}
                             <small>{row.kind === 'RECURRING' ? '정기 지출' : '일회성 지출'}</small>
                           </td>
-                          <td>{money(row.amount)}</td>
+                          <td>
+                            <FinanceMoney value={row.amount} />
+                          </td>
                           <td>
                             <Tag color={row.paidAt ? 'green' : 'orange'}>
                               {row.paidAt
@@ -594,10 +606,18 @@ export function FinancePreview() {
                       onClick={() => setSelected(d.date)}
                     >
                       <td>{d.date}</td>
-                      <td>{money(d.opening)}</td>
-                      <td>{money(d.scheduled + d.expected)}</td>
-                      <td>{money(d.expenses)}</td>
-                      <td>{money(d.closing)}</td>
+                      <td>
+                        <FinanceMoney value={d.opening} />
+                      </td>
+                      <td>
+                        <FinanceMoney value={d.scheduled} />
+                      </td>
+                      <td>
+                        <FinanceMoney value={d.expenses} />
+                      </td>
+                      <td>
+                        <FinanceMoney value={d.closing} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

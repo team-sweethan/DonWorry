@@ -133,12 +133,7 @@ export function settlementViewEntries(report: SettlementReport): PreviewOrderEnt
       cardFeeAmount: safe(e.cardFeeAmount),
       pgFeeAmount: safe(e.pgFeeAmount),
       settlementAmount: safe(e.settlementAmount),
-      status:
-        e.classification === 'COMPLETED'
-          ? 'done'
-          : e.classification === 'SCHEDULED'
-            ? 'sch'
-            : 'exp',
+      status: e.classification === 'COMPLETED' ? 'done' : 'sch',
       date: new Date(e.settlementDate + 'T12:00:00'),
       dateLabel: koreanTime(e.settlementAt),
       pickup: pickup ? new Date(koreanToday(new Date(pickup)) + 'T12:00:00') : null,
@@ -239,15 +234,14 @@ export function forecastView(forecast: CashFlowForecast) {
     amount: safe(m.amount),
     settlementAmount: m.settlementAmount,
     refundDeductionAmount: m.refundDeductionAmount,
-    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '실제 지급 완료' : m.classification === 'SCHEDULED' ? '매입일 기준 · 배치 예정' : '기존 예상 일정 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : m.source === 'PAYOUT' ? '일별 지급' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}${m.source === 'SETTLEMENT' && m.refundDeductionAmount > 0 ? ' · 예상 회수 배분 (확정 전)' : ''}`,
+    note: `${m.classification === 'PAID' ? '실제 지출 완료' : m.classification === 'PLANNED' ? '지출 예정' : m.classification === 'COMPLETED' ? '실제 지급 완료' : '매입일 기준 · 배치 예정'} · ${m.source === 'RECURRING_EXPENSE' ? '정기 지출' : m.source === 'EXPENSE' ? '일회성 지출' : m.source === 'PAYOUT' ? '일별 지급' : '정산'} #${m.referenceId}${m.occurrenceDate ? ` · 원래 예정일 ${m.occurrenceDate}` : ''}${m.source === 'SETTLEMENT' && m.refundDeductionAmount > 0 ? ' · 예상 회수 배분 (확정 전)' : ''}`,
   })
   return {
     days: forecast.days.map((d) => ({
       date: d.date,
       opening: safe(d.openingBalance),
       completed: safe(d.completedIncome),
-      scheduled: safe(d.scheduledIncome),
-      expected: safe(d.expectedIncome),
+      scheduled: financeTotal([d.scheduledIncome, d.expectedIncome]),
       expenses: safe(d.paidExpenses + d.plannedExpenses),
       closing: safe(d.closingBalance),
     })),
@@ -260,7 +254,7 @@ export const movementLabel = (value: CashFlowMovement['classification']) =>
   ({
     COMPLETED: '실제 지급 완료',
     SCHEDULED: '매입일 기준 정산 예정',
-    EXPECTED: '기존 예상 일정 정산',
+    EXPECTED: '정산 예정',
     PAID: '실제 지출 완료',
     PLANNED: '지출 예정',
   })[value]

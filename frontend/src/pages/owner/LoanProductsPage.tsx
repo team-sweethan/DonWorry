@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { defaultPreviewLoan } from './loanForecast'
 import { useAuth } from '../../auth/useAuth'
 import { matchesFinanceSnapshot } from './financeView'
@@ -108,11 +109,17 @@ export function LoanProductsPage() {
         <section className="loan-surface loan-required-funds">
           <small>필요 자금 (예상)</small>
           <h2 className={snapshot && snapshot.required > 0 ? 'loan-negative' : ''}>
-            {snapshot
-              ? snapshot.required > 0
-                ? `최소 ${money(snapshot.required)} 이상`
-                : '부족 없음'
-              : '확인 필요'}
+            {snapshot ? (
+              snapshot.required > 0 ? (
+                <>
+                  최소 <FinanceMoney value={snapshot.required} /> 이상
+                </>
+              ) : (
+                '부족 없음'
+              )
+            ) : (
+              '확인 필요'
+            )}
           </h2>
           <p>
             {snapshot
@@ -132,7 +139,7 @@ export function LoanProductsPage() {
             <dt>계산 기간</dt>
             <dd>{snapshot ? `${snapshot.from} ~ ${snapshot.to}` : '미확인'}</dd>
             <dt>기간 내 정산 유입</dt>
-            <dd>{snapshot ? money(snapshot.totalIn) : '미확인'}</dd>
+            <dd>{snapshot ? <FinanceMoney value={snapshot.totalIn} /> : '미확인'}</dd>
             <dt>보안 확인 중</dt>
             <dd>P5 연동 전 · 확인 불가</dd>
             <dt>기준 시각</dt>
@@ -179,7 +186,9 @@ export function LoanProductsPage() {
             <dl>
               <dt>한도</dt>
               <dd>
-                <b>최대 {money(product.limit)}</b>
+                <b>
+                  최대 <FinanceMoney value={product.limit} />
+                </b>
               </dd>
               <dt>금리</dt>
               <dd>{product.rate}</dd>
@@ -199,7 +208,11 @@ export function LoanProductsPage() {
                 </div>
                 <p>
                   필요 자금을 빌리면 월 이자 약{' '}
-                  <b>{money(Math.round((snapshot.required * product.low) / 100 / 12))}</b>{' '}
+                  <b>
+                    <FinanceMoney
+                      value={Math.round((snapshot.required * product.low) / 100 / 12)}
+                    />
+                  </b>{' '}
                   <small>(예시 최저 금리 · 단순 이자 계산)</small>
                 </p>
               </>

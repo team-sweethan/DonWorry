@@ -96,7 +96,7 @@
 .payout-policy-note {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: 16px;
   flex-wrap: wrap;
   color: #756b5b;
@@ -105,6 +105,12 @@
 }
 .payout-policy-note strong {
   color: #886211;
+}
+.payout-policy-note .payout-scheduled-highlight {
+  color: #1d4ed8;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 .recovery-notice {
   background: #fff;

@@ -321,14 +321,15 @@ test('demoSettlementDate_whenWeekendOrHolidayIntervenes_countsThreeBusinessDays'
   assert.equal(demoSettlementDate('2026-11-26', ['2026-11-27']), '2026-12-02')
 })
 
-test('previewSettlement_whenLegacyExpected_preservesClassificationAndBusinessDateEvidence', () => {
+test('previewSettlement_whenUnpaid_usesOnlyScheduledAndCaptureBusinessDate', () => {
   const rows = previewSettlements(new Date('2026-11-04T12:00:00'))
-  assert.equal(rows.filter((row) => row.status === 'exp').length, 4)
-  const thursday = rows.find((row) => row.gross === 45000)!
-  assert.equal(thursday.capturedDate, '2026-11-05')
-  assert.equal(thursday.eligibleDate, '2026-11-10')
-  assert.equal(thursday.status, 'exp')
-  assert.equal(dayjs(thursday.date).format('YYYY-MM-DD'), '2026-11-10')
+  assert.equal(rows.filter((row) => row.status === 'sch').length, 8)
+  const example = rows.find((row) => row.gross === 45000)!
+  assert.equal(example.capturedDate, '2026-11-03')
+  assert.equal(example.eligibleDate, '2026-11-06')
+  assert.equal(example.status, 'sch')
+  assert.equal(dayjs(example.date).format('YYYY-MM-DD'), '2026-11-06')
+  assert.ok(rows.every((row) => row.capturedDate! <= '2026-11-04'))
   for (const row of rows) assert.equal(demoSettlementDate(row.capturedDate!), row.eligibleDate)
   for (const row of rows.filter((row) => row.status === 'done'))
     assert.ok(row.eligibleDate! <= dayjs(row.date).format('YYYY-MM-DD'))

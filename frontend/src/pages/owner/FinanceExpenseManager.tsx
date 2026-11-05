@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { useCallback, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -173,7 +174,9 @@ export function FinanceExpenseManager({
         <FinanceLoading />
       ) : tab === 'balance' ? (
         <section className="finance-card">
-          <h2>최초 시작 잔액 {money(settings.openingBalance)}</h2>
+          <h2>
+            최초 시작 잔액 <FinanceMoney value={settings.openingBalance} />
+          </h2>
           <p>기준일: {settings.baseDate} 하루 시작 시점</p>
           <Tag>서버 저장 완료 · 수정 불가</Tag>
           <p>
@@ -249,7 +252,7 @@ export function FinanceExpenseManager({
                       title: '종류',
                       render: (_, row) => (row.kind === 'ONEOFF' ? '일회성' : '정기'),
                     },
-                    { title: '금액', render: (_, row) => money(row.amount) },
+                    { title: '금액', render: (_, row) => <FinanceMoney value={row.amount} /> },
                     {
                       title: '상태',
                       render: (_, row) => (

@@ -198,19 +198,10 @@
   background: #dbeafe;
   color: #1d4ed8;
 }
-.stl-exp {
-  background: white;
-  color: #775509;
-  border: 1px dashed #93c5fd;
-}
 .stl-can {
   background: #fee2e2;
   color: #991b1b;
   text-decoration: line-through;
-}
-.stl-pick {
-  background: #f5f1e7;
-  color: #625949;
 }
 .stl-detail h2 {
   margin: 0;

@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { useCallback, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -271,13 +272,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
             <details className="finance-card">
               <summary>
                 기간 시작 전 이월 근거 {result.carryForwardMovements.length}건 · 시작 잔액{' '}
-                {money(result.periodOpeningBalance)}
+                <FinanceMoney value={result.periodOpeningBalance} />
               </summary>
               <ul>
                 {result.carryForwardMovements.map((m) => (
                   <li key={`${m.source}:${m.referenceId}:${m.occurrenceDate ?? ''}`}>
-                    {m.date} · {m.title} · {money(m.amount)} · {movementLabel(m.classification)} #
-                    {m.referenceId}
+                    {m.date} · {m.title} · <FinanceMoney value={m.amount} /> ·{' '}
+                    {movementLabel(m.classification)} #{m.referenceId}
                     {m.refundDeductionAmount > 0 &&
                       ` · 원 정산금 ${money(m.settlementAmount)} − 환불 회수 ${money(m.refundDeductionAmount)}`}
                   </li>
@@ -300,18 +301,21 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           <Button onClick={() => setDetails(null)}>계산 내역 닫기</Button>
           <h2>{active.date} 전체 계산 내역</h2>
           <p>
-            전날 잔액 {money(active.openingBalance)} · 마감 잔액 {money(active.closingBalance)}
+            전날 잔액 <FinanceMoney value={active.openingBalance} /> · 마감 잔액{' '}
+            <FinanceMoney value={active.closingBalance} />
           </p>
           <ul>
             {active.movements.map((m) => (
               <li key={`${m.source}:${m.referenceId}:${m.occurrenceDate ?? ''}`}>
-                {m.title} · {money(m.amount)} · {movementLabel(m.classification)} · #{m.referenceId}
+                {m.title} · <FinanceMoney value={m.amount} /> · {movementLabel(m.classification)} ·
+                #{m.referenceId}
                 {m.occurrenceDate && ` · 원래 예정일 ${m.occurrenceDate}`}
                 {m.refundDeductionAmount > 0 && (
                   <small className="payout-deduction">
                     {' '}
-                    · 원 정산금 {money(m.settlementAmount)} − 환불 회수{' '}
-                    {money(m.refundDeductionAmount)} = 유입 {money(m.amount)}
+                    · 원 정산금 <FinanceMoney value={m.settlementAmount} /> − 환불 회수{' '}
+                    <FinanceMoney value={m.refundDeductionAmount} /> = 유입{' '}
+                    <FinanceMoney value={m.amount} />
                   </small>
                 )}
               </li>
@@ -425,7 +429,9 @@ function ConnectedSettlements() {
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
                   <>
-                    <strong className="stl-value">{money(month.data.paidAmount)}</strong>
+                    <strong className="stl-value">
+                      <FinanceMoney value={month.data.paidAmount} />
+                    </strong>
                     <p>
                       {monthFrom}~{today} · 별도 조회
                     </p>

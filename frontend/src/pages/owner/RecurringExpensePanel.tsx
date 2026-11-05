@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { useState } from 'react'
 import {
   Alert,
@@ -100,7 +101,7 @@ export function RecurringExpensePanel({
           {
             title: '금액',
             dataIndex: 'amount',
-            render: (v: number) => `${v.toLocaleString('ko-KR')}원`,
+            render: (v: number) => <FinanceMoney value={v} />,
           },
           { title: '적용 기간', render: (_, r) => `${r.startDate} ~ ${r.endDate ?? '종료 없음'}` },
           {
