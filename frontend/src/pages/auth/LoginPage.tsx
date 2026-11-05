@@ -1,11 +1,12 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Alert, Button, Checkbox, Form, Input } from 'antd'
+import { Alert, Button, Form, Input, Switch } from 'antd'
 import { ArrowLeftOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
 import './LoginPage.css'
+import { LoginOuterScreen } from './LoginOuterScreen'
 import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from '../public/ApplicationEntry'
@@ -26,6 +27,9 @@ const feedbackMessages: Record<Feedback, string> = {
   network: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
 }
 
+// LoginPage.css의 펼침 연출 미디어 쿼리와 같은 조건이다.
+const OPEN_MOTION_QUERY = '(prefers-reduced-motion: no-preference) and (min-width: 801px)'
+
 export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
@@ -33,6 +37,10 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const [initialValues] = useState(readLoginPreferences)
   const [capsLock, setCapsLock] = useState(false)
   const [findHelp, setFindHelp] = useState(false)
+  // 화면을 열 때 한 번만 정해서, 창을 넓혀도 연출이 뒤늦게 재생되지 않게 한다.
+  const [deviceOpening, setDeviceOpening] = useState(
+    () => window.matchMedia(OPEN_MOTION_QUERY).matches,
+  )
   const apply = useApplicationConfig()
 
   const submit = async (values: LoginValues) => {
@@ -62,7 +70,6 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
 
   return (
     <div className="dw-signin">
-      <div className="dw-signin-glow" aria-hidden="true" />
       <header className="dw-signin-top">
         <Link className="dw-public-brand" to="/" aria-label="돈워리 서비스 소개" viewTransition>
           <BrandMark className="dw-mark" />
@@ -74,11 +81,15 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
         </Link>
       </header>
       <main className="dw-signin-main">
-        <Mascot size={104} className="dw-signin-mascot dw-mascot-float" />
-        <section className="dw-signin-card" aria-labelledby="login-title">
-          <div className="dw-signin-body">
+        <div
+          className={`dw-signin-device${deviceOpening ? ' is-opening' : ''}`}
+          onFocusCapture={() => setDeviceOpening(false)}
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget) setDeviceOpening(false)
+          }}
+        >
+          <section className="dw-signin-pane dw-signin-form" aria-labelledby="login-title">
             <h1 id="login-title">로그인</h1>
-            <p className="dw-signin-description">관리자에게 발급받은 아이디로 로그인해 주세요.</p>
             {notice && <div className="dw-signin-notice">{notice}</div>}
             <Form<LoginValues>
               initialValues={initialValues}
@@ -130,9 +141,12 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
                   onBlur={() => setCapsLock(false)}
                 />
               </Form.Item>
-              <Form.Item name="rememberLoginId" valuePropName="checked">
-                <Checkbox>아이디 저장</Checkbox>
-              </Form.Item>
+              <div className="dw-signin-save">
+                <span id="remember-login-id">아이디 저장</span>
+                <Form.Item name="rememberLoginId" valuePropName="checked" noStyle>
+                  <Switch aria-labelledby="remember-login-id" />
+                </Form.Item>
+              </div>
               {feedback && (
                 <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-signin-error">
                   <Alert
@@ -147,25 +161,42 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
               </Button>
             </Form>
             {/* 찾기 기능은 만들지 않는다 (#144). 눌러도 반응 없는 버튼이 되지 않게 실제 경로를 안내한다. */}
-            <Button
-              type="link"
-              className="dw-signin-find"
-              aria-expanded={findHelp}
-              onClick={() => setFindHelp((open) => !open)}
-            >
-              아이디/비밀번호 찾기
-            </Button>
+            <div className="dw-signin-links">
+              <Button
+                type="link"
+                className="dw-signin-find"
+                aria-expanded={findHelp}
+                onClick={() => setFindHelp((open) => !open)}
+              >
+                아이디/비밀번호 찾기
+              </Button>
+              <ApplicationEntry config={apply} variant="link" />
+            </div>
             {findHelp && (
               <p className="dw-signin-help">
                 아이디나 비밀번호를 잊었다면 관리자에게 문의해 주세요.
               </p>
             )}
-          </div>
-          <div className="dw-signin-foot">
-            돈워리가 처음이신가요?
-            <ApplicationEntry config={apply} variant="link" />
-          </div>
-        </section>
+          </section>
+          <aside className="dw-signin-pane dw-signin-hero" aria-labelledby="welcome-title">
+            <h2 id="welcome-title">
+              오늘 매출,
+              <br />
+              <em>별일 없었나요?</em>
+            </h2>
+            <div className="dw-signin-illustration" aria-hidden="true">
+              <Mascot size={230} className="dw-mascot-float" />
+            </div>
+          </aside>
+          {deviceOpening && (
+            <div className="dw-signin-outer" aria-hidden="true">
+              <div className="dw-signin-outer-front">
+                <LoginOuterScreen />
+              </div>
+              <div className="dw-signin-outer-back" />
+            </div>
+          )}
+        </div>
       </main>
       <footer className="dw-signin-footer">© 2026 DonWorry</footer>
     </div>
