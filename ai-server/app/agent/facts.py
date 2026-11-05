@@ -106,11 +106,18 @@ def _name(names: dict[str, str], payment_id: str) -> str:
 
 # 이력 첫 줄의 괄호 — 같은 결제를 코드가 나눠 잇는다, AI 추론에 맡기지 않음 (#568)
 # 예: "모두 이번 결제 앞뒤 10분 안 · 그 전 결제 없음"
-def _split_note(subject: str, single: bool, burst: list, earlier: list, later: list) -> str:
+# 이력이 잘렸으면(최근 것만 조회) 못 본 결제가 있으니 "없음" 대신 "조회 못 함" (#568 Codex 리뷰)
+def _split_note(
+    subject: str, single: bool, burst: list, earlier: list, later: list, truncated: bool
+) -> str:
+    unseen = "조회 못 함" if truncated else "없음"
+    no_earlier = "그 전 결제는 조회 못 함" if truncated else "그 전 결제 없음"
     if burst and not earlier and not later:
-        return f"모두 {subject} 앞뒤 10분 안 · 그 전 결제 없음"
-    parts = [f"{subject} 앞뒤 10분 안 {len(burst)}건" if burst else f"{subject} 앞뒤 10분 안 없음"]
-    parts.append(f"그 전 {len(earlier)}건" if earlier else "그 전 결제 없음")
+        return f"모두 {subject} 앞뒤 10분 안 · {no_earlier}"
+    parts = [
+        f"{subject} 앞뒤 10분 안 {len(burst)}건" if burst else f"{subject} 앞뒤 10분 안 {unseen}"
+    ]
+    parts.append(f"그 전 {len(earlier)}건" if earlier else no_earlier)
     if later:
         parts.append(f"{'뒤' if single else '도중 · 뒤'} {len(later)}건")
     return " · ".join(parts)
@@ -143,7 +150,7 @@ def _history(records: list[ToolRecord]) -> list[Line]:
     single = len(cases[0].payments) == 1
     subject = "이번 결제" if single else "사건 결제"
     burst, earlier, later = split_history(cases[0], history)
-    note = _split_note(subject, single, burst, earlier, later)
+    note = _split_note(subject, single, burst, earlier, later, history.truncated)
     lines = [(f"{head} ({note}): {counts}", seq, None, NOTABLE if burst else PLAIN)]
     for label, group, rank in (
         (f"{subject} 앞뒤 10분 안의 다른 결제", burst, NOTABLE),

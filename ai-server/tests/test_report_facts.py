@@ -172,3 +172,18 @@ def test_validate_summary_notableFactMissing_requestsRewrite() -> None:
 
     assert any("눈여겨볼 사실 ['연결-1']" in e for e in skipped)
     assert cited == []
+
+
+# 이력이 잘렸으면(최근 것만 조회) 조회한 결제가 모두 연속 결제여도
+# "그 전 결제 없음"이라고 단정하지 않는다
+# 더 오래된 평소 결제가 있는 고객을 "처음 온 손님"으로 읽게 된다 (#568 Codex 리뷰)
+def test_fact_catalog_truncatedHistory_doesNotSayNoEarlier() -> None:
+    at = datetime.fromisoformat(ONE.payments[0].requestedAt)
+    history = _history(
+        ("8102", 600000, at - timedelta(minutes=3)), ("8103", 600000, at - timedelta(minutes=1))
+    ).model_copy(update={"truncated": True})
+
+    first = next(f.text for f in catalog(ONE, history) if f.topic == "history")
+
+    assert "없음" not in first
+    assert "그 전 결제는 조회 못 함" in first
