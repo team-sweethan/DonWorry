@@ -19,6 +19,43 @@ export function watchStep(from: number, now: number) {
   return { poll: now - from < WATCH_LIMIT_MS }
 }
 
+/**
+ * baseline: 화면 목록에 반영된 것으로 확정한 건수. null이면 다음 조회 결과를 기준으로만 삼는다.
+ * pending: 변화를 알리고 화면의 목록 조회 결과를 기다리는 건수.
+ */
+export type WatchState = { baseline: CaseCounts | null; pending: CaseCounts | null }
+
+export const initialWatchState: WatchState = { baseline: null, pending: null }
+
+/**
+ * 건수를 받았을 때 다음 상태를 정한다. notify가 null이 아니면 화면이 목록을 다시 불러와야 한다(값은 새 Case 수).
+ * 기준은 여기서 옮기지 않는다 — 목록 조회가 실패했는데 기준만 새 건수가 되면, 이후 건수가 그대로인 동안
+ * 다시 알리지 않아 새 Case가 계속 빠진다(#555 Codex 리뷰). 확정은 onListLoaded가 한다.
+ */
+export function onCountsReceived(
+  state: WatchState,
+  counts: CaseCounts,
+): { state: WatchState; notify: number | null } {
+  if (!state.baseline) return { state: { baseline: counts, pending: null }, notify: null }
+  if (!countsChanged(state.baseline, counts)) {
+    return { state: { baseline: state.baseline, pending: null }, notify: null }
+  }
+  // 이미 알린 변화다. 화면의 목록 조회 결과를 기다린다
+  if (state.pending && !countsChanged(state.pending, counts)) return { state, notify: null }
+  return {
+    state: { baseline: state.baseline, pending: counts },
+    notify: addedCaseCount(state.baseline, counts),
+  }
+}
+
+/** 화면이 목록 조회를 마쳤을 때. 성공하면 기다리던 건수를 기준으로 확정하고, 실패하면 버려 다음 조회에서 다시 알린다. */
+export function onListLoaded(state: WatchState, ok: boolean): WatchState {
+  if (!state.pending) return state
+  return ok
+    ? { baseline: state.pending, pending: null }
+    : { baseline: state.baseline, pending: null }
+}
+
 /** 상태별 건수가 하나라도 다르면 목록이 바뀐 것으로 본다. 새 Case · 판정 · 종료가 모두 여기에 걸린다. */
 export function countsChanged(prev: CaseCounts, next: CaseCounts) {
   const statuses = new Set([...Object.keys(prev), ...Object.keys(next)]) as Set<keyof CaseCounts>

@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCaseCounts } from '../api/cases'
-import type { CaseCounts } from '../utils/caseBadge'
-import { WATCH_MS, addedCaseCount, countsChanged, watchStep } from '../utils/caseListWatch'
+import {
+  WATCH_MS,
+  initialWatchState,
+  onCountsReceived,
+  onListLoaded,
+  watchStep,
+  type WatchState,
+} from '../utils/caseListWatch'
 import { applyCaseBadgeCounts } from './useSecurityCaseBadge'
 
 /**
  * 보안 홈 · Case 목록에서 Case 변화를 감지한다 (#553). 규칙은 utils/caseListWatch.ts.
  *
  * - 화면 진입 때 기준 건수를 받고, WATCH_MS마다 다시 받아 바뀌면 onChange(새로 생긴 Case 수)를 부른다.
+ *   화면은 목록을 다시 불러온 뒤 listLoaded(성공 여부)를 알려야 한다. 성공해야 기준 건수가 확정되고,
+ *   실패하면 다음 조회에서 다시 알린다.
  * - 마지막 사용자 동작부터 WATCH_LIMIT_MS가 지나면 멈춘다(stopped). restart()로 다시 시작한다.
  * - 탭이 보이지 않으면 조회하지 않는다. 돌아오면 바로 한 번 조회하고 제한 시간을 다시 센다.
  *   숨어 있던 사이의 변화도 기준 건수와 비교해 반영한다.
@@ -20,8 +28,7 @@ export function useCaseListWatch(onChange: (added: number) => void) {
   useEffect(() => {
     onChangeRef.current = onChange
   })
-  // 화면이 마지막으로 반영한 건수. null이면 다음 조회 결과를 기준으로만 삼는다
-  const baseline = useRef<CaseCounts | null>(null)
+  const state = useRef<WatchState>(initialWatchState)
   // 사용자 동작마다 1씩 올라 조회를 처음부터 다시 시작하고 제한 시간을 다시 센다
   const [generation, setGeneration] = useState(0)
   const [stoppedGeneration, setStoppedGeneration] = useState<number | null>(null)
@@ -29,8 +36,13 @@ export function useCaseListWatch(onChange: (added: number) => void) {
 
   /** 새로고침처럼 화면이 목록을 직접 다시 불러올 때 부른다. 기준 건수도 새로 받는다. */
   const restart = useCallback(() => {
-    baseline.current = null
+    state.current = initialWatchState
     setGeneration((g) => g + 1)
+  }, [])
+
+  /** 화면의 목록 조회가 끝나면 부른다. 변화를 알린 뒤의 조회일 때만 의미가 있다. */
+  const listLoaded = useCallback((ok: boolean) => {
+    state.current = onListLoaded(state.current, ok)
   }, [])
 
   useEffect(() => {
@@ -55,9 +67,9 @@ export function useCaseListWatch(onChange: (added: number) => void) {
         const counts = await getCaseCounts()
         if (!alive) return
         applyCaseBadgeCounts(counts)
-        const prev = baseline.current
-        baseline.current = counts
-        if (prev && countsChanged(prev, counts)) onChangeRef.current(addedCaseCount(prev, counts))
+        const next = onCountsReceived(state.current, counts)
+        state.current = next.state
+        if (next.notify !== null) onChangeRef.current(next.notify)
       } catch {
         // 건수 조회는 보조 기능이다. 실패하면 다음 차례에 다시 본다. 오류 안내는 목록 조회가 맡는다
       }
@@ -83,5 +95,5 @@ export function useCaseListWatch(onChange: (added: number) => void) {
     }
   }, [visible, generation])
 
-  return { stopped: stoppedGeneration === generation, restart }
+  return { stopped: stoppedGeneration === generation, restart, listLoaded }
 }

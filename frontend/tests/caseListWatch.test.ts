@@ -6,6 +6,9 @@ import {
   WATCH_MS,
   addedCaseCount,
   countsChanged,
+  initialWatchState,
+  onCountsReceived,
+  onListLoaded,
   watchStep,
 } from '../src/utils/caseListWatch.ts'
 
@@ -64,4 +67,44 @@ test('한 Case가 생기고 다른 Case가 종료되어 열린 Case 수가 같�
 test('응답에 없는 상태는 0으로 본다', () => {
   const partial = { OPEN: 1 } as CaseCounts
   assert.equal(countsChanged(partial, counts({ OPEN: 1 })), false)
+})
+
+test('처음 받은 건수는 기준으로만 삼고 알리지 않는다', () => {
+  const next = onCountsReceived(initialWatchState, counts({ OPEN: 1 }))
+  assert.equal(next.notify, null)
+  assert.deepEqual(next.state, { baseline: counts({ OPEN: 1 }), pending: null })
+})
+
+test('바뀌면 알리고, 목록을 받은 뒤에야 기준을 옮긴다', () => {
+  const start = { baseline: counts({ OPEN: 1 }), pending: null }
+  const changed = onCountsReceived(start, counts({ OPEN: 2 }))
+  assert.equal(changed.notify, 1)
+  assert.deepEqual(changed.state.baseline, counts({ OPEN: 1 }))
+  // 목록 조회를 기다리는 동안 같은 건수가 또 오면 다시 알리지 않는다
+  assert.equal(onCountsReceived(changed.state, counts({ OPEN: 2 })).notify, null)
+  const loaded = onListLoaded(changed.state, true)
+  assert.deepEqual(loaded, { baseline: counts({ OPEN: 2 }), pending: null })
+  assert.equal(onCountsReceived(loaded, counts({ OPEN: 2 })).notify, null)
+})
+
+test('목록 조회가 실패하면 기준을 옮기지 않아 다음 조회에서 다시 알린다 (#555 Codex 리뷰)', () => {
+  const start = { baseline: counts({ OPEN: 1 }), pending: null }
+  const changed = onCountsReceived(start, counts({ OPEN: 2 }))
+  const failed = onListLoaded(changed.state, false)
+  assert.deepEqual(failed, { baseline: counts({ OPEN: 1 }), pending: null })
+  assert.equal(onCountsReceived(failed, counts({ OPEN: 2 })).notify, 1)
+})
+
+test('기다리는 사이 또 바뀌면 다시 알린다', () => {
+  const start = { baseline: counts({ OPEN: 1 }), pending: null }
+  const first = onCountsReceived(start, counts({ OPEN: 2 }))
+  const second = onCountsReceived(first.state, counts({ OPEN: 3 }))
+  assert.equal(second.notify, 2)
+  assert.deepEqual(second.state.pending, counts({ OPEN: 3 }))
+})
+
+test('변화를 알리지 않은 상태의 목록 조회 결과는 기준을 바꾸지 않는다', () => {
+  const state = { baseline: counts({ OPEN: 1 }), pending: null }
+  assert.equal(onListLoaded(state, true), state)
+  assert.equal(onListLoaded(state, false), state)
 })

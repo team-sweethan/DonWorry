@@ -91,11 +91,26 @@ export function CaseListPage() {
     failed: boolean
   } | null>(null)
 
+  // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553).
+  // 조건(탭 · 검색 · 페이지)은 주소에 있어 다시 조회해도 그대로다
+  const watch = useCaseListWatch((added) => {
+    setRefreshKey((k) => k + 1)
+    if (added > 0) message.info(`새 Case ${added}건이 들어왔습니다. 목록을 다시 불러옵니다.`)
+  })
+  const { listLoaded } = watch
+  const refresh = () => {
+    setRefreshKey((k) => k + 1)
+    watch.restart()
+  }
+
   useEffect(() => {
     let alive = true
     getCases()
       .then((cases) => {
-        if (alive) setResult({ refreshKey, cases, failed: false })
+        if (!alive) return
+        setResult({ refreshKey, cases, failed: false })
+        // 감지 기준 건수는 목록을 받은 뒤에만 확정한다 (#555 Codex 리뷰)
+        listLoaded(true)
       })
       .catch(() => {
         if (!alive) return
@@ -105,22 +120,12 @@ export function CaseListPage() {
           cases: prev?.cases ?? [],
           failed: true,
         }))
+        listLoaded(false)
       })
     return () => {
       alive = false
     }
-  }, [refreshKey, message])
-
-  // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553).
-  // 조건(탭 · 검색 · 페이지)은 주소에 있어 다시 조회해도 그대로다
-  const watch = useCaseListWatch((added) => {
-    setRefreshKey((k) => k + 1)
-    if (added > 0) message.info(`새 Case ${added}건이 들어와 목록을 갱신했습니다.`)
-  })
-  const refresh = () => {
-    setRefreshKey((k) => k + 1)
-    watch.restart()
-  }
+  }, [refreshKey, message, listLoaded])
 
   const loading = result?.refreshKey !== refreshKey
   // 새로고침 중에는 기존 목록을 유지한다.
