@@ -15,7 +15,6 @@ P1은 INACTIVE 가맹점에도 픽업 PUT 인증을 허용한다. P6는 인증�
 
 ```json
 {
-  "scheduledPickupAt": "2026-11-01T06:00:00Z",
   "items": [
     { "productName": "딸기 케이크", "quantity": 2 },
     { "productName": "초코 케이크", "quantity": 1 }
@@ -24,7 +23,7 @@ P1은 INACTIVE 가맹점에도 픽업 PUT 인증을 허용한다. P6는 인증�
 ```
 
 - `orderId`: CakeShop `orders.order_number`와 P5 `order_ref`에 해당하는 같은 문자열. 공백 불가, 최대 100자.
-- `scheduledPickupAt`: 필수 Instant. DB에 맞춰 최대 마이크로초 정밀도를 받는다.
+- `scheduledPickupAt`: 기존 호출 호환용 선택 필드. 새 CakeShop 송신부는 상품 목록만 보낸다.
 - `items`: 필수이며 비어 있거나 null 항목을 포함할 수 없다.
 - `productName`: 필수·공백만 불가·최대 150자. CakeShop 주문 상품의 이름 스냅샷을 보낸다.
 - `quantity`: 필수 Integer, 1 이상. 항목 배열 순서를 보존하고 같은 이름을 임의로 합치지 않는다.

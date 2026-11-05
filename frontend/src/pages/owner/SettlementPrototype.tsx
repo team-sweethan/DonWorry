@@ -157,7 +157,6 @@ export function SettlementPrototype({
     item: '주문번호 기준 정산',
     orderItems: mockOrderItems[i % mockOrderItems.length],
     gross: (32000 + i * 1000) * previewAmountScale,
-    pickup: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 3, 15, 20),
     date: today,
     status: 'sch',
   }))
@@ -363,7 +362,7 @@ export function SettlementPrototype({
               ? '억 단위 금액 표시 시연 · 실제 DB와 무관한 목 데이터입니다.'
               : '프로토타입 미리보기 · 모든 금액과 일정은 예시입니다.'
           }
-          description="영업일 D+3·하루 한 번 지급을 가정한 목 데이터입니다. 픽업은 주문 상세로만 표시하며 실제 정산일은 서버에서 계산합니다."
+          description="영업일 D+3·하루 한 번 지급을 가정한 목 데이터입니다. 실제 정산일은 서버에서 계산합니다."
         />
       )}
       {payoutData && (
@@ -760,7 +759,7 @@ export function SettlementPrototype({
               </div>
               <div className="stl-report-caption">
                 <b>정산 내역 {rows.length}건</b>
-                <span>금액은 수수료 차감 후 기준 · 원금·수수료·픽업 시각은 상세 보기</span>
+                <span>금액은 수수료 차감 후 기준 · 원금·수수료는 상세 보기</span>
               </div>
               <div className="stl-table-scroll">
                 <table className="stl-readable-table">
@@ -927,8 +926,6 @@ export function SettlementPrototype({
                   <FinanceMoney value={net(detail)} />
                 </b>
               </dd>
-              <dt>픽업 정보 (정산일과 무관)</dt>
-              <dd>{detail.pickupLabel ?? stamp(detail.pickup)}</dd>
               <dt>정산일</dt>
               <dd>{detail.dateLabel ?? stamp(detail.date)}</dd>
             </dl>

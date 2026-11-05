@@ -7,4 +7,4 @@ import java.time.Instant;
 import java.util.List;
 
 public record PickupScheduleRequest(
-        @NotNull Instant scheduledPickupAt, @NotEmpty List<@NotNull @Valid PickupOrderItemRequest> items) {}
+        Instant scheduledPickupAt, @NotEmpty List<@NotNull @Valid PickupOrderItemRequest> items) {}

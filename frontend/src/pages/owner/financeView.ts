@@ -124,7 +124,6 @@ export function validateSettlementReport(report: SettlementReport) {
 export function settlementViewEntries(report: SettlementReport): PreviewOrderEntry[] {
   validateSettlementReport(report)
   return report.entries.map((e) => {
-    const pickup = e.pickedUpAt ?? e.scheduledPickupAt
     return {
       id: `settlement:${e.settlementId}`,
       orderId: e.orderId,
@@ -136,8 +135,6 @@ export function settlementViewEntries(report: SettlementReport): PreviewOrderEnt
       status: e.classification === 'COMPLETED' ? 'done' : 'sch',
       date: new Date(e.settlementDate + 'T12:00:00'),
       dateLabel: koreanTime(e.settlementAt),
-      pickup: pickup ? new Date(koreanToday(new Date(pickup)) + 'T12:00:00') : null,
-      pickupLabel: pickup ? koreanTime(pickup) : '정보 없음',
       orderItems: e.items,
     }
   })

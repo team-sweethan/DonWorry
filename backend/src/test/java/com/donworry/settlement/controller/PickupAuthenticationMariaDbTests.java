@@ -85,8 +85,7 @@ class PickupAuthenticationMariaDbTests {
 
     private HttpRequest signed(String path) {
         String body = path.endsWith("schedule") ? """
-                  {"scheduledPickupAt":"2026-10-27T06:00:00Z",
-                   "items":[{"productName":"딸기 케이크","quantity":2}]}
+                  {"items":[{"productName":"딸기 케이크","quantity":2}]}
                   """ : "{\"pickedUpAt\":\"2026-10-27T06:00:00Z\"}";
         String timestamp = Long.toString(Instant.now().getEpochSecond());
         String nonce = UUID.randomUUID().toString();
