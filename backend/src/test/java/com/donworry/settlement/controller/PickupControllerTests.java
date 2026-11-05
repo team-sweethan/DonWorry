@@ -57,7 +57,7 @@ class PickupControllerTests {
         mvc.perform(put("/api/v1/order-fulfillments/ORDER/schedule")
                         .contentType("application/json")
                         .content("""
-                                {"scheduledPickupAt":"2026-11-01T06:00:00Z","merchantId":999,
+                                {"merchantId":999,
                                  "items":[{"productName":"딸기 케이크","quantity":2},{"productName":"초코 케이크","quantity":1}]}
                                 """))
                 .andExpect(status().isOk())
@@ -67,7 +67,7 @@ class PickupControllerTests {
                 .recordSchedule(
                         7L,
                         "ORDER",
-                        Instant.parse("2026-11-01T06:00:00Z"),
+                        null,
                         List.of(new PickupOrderItemRequest("딸기 케이크", 2), new PickupOrderItemRequest("초코 케이크", 1)));
     }
 

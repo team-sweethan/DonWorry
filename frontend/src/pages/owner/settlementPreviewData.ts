@@ -87,7 +87,6 @@ export function previewSettlements(now: Date, amountScale = 1): PreviewOrderEntr
       status,
       capturedDate,
       eligibleDate,
-      pickup: new Date(capturedDate + 'T15:20:00'),
       date: new Date((paidDate ?? eligibleDate) + 'T03:00:00'),
     }
   })

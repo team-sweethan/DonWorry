@@ -42,13 +42,12 @@ class PickupScheduleRequestTests {
         assertThat(request.items()).containsExactlyElementsOf(items);
     }
 
-    // 상품이 있어도 픽업 예정 시각이 없으면 정산 일정을 계산할 수 없다.
+    // 상품 목록은 픽업 시각 없이도 전달할 수 있다.
     @Test
-    void validate_whenPickupTimeMissing_rejectsScheduledPickupAt() {
+    void validate_whenPickupTimeMissing_acceptsItems() {
         var request = new PickupScheduleRequest(null, List.of(new PickupOrderItemRequest("케이크", 1)));
 
-        assertThat(validator.validate(request))
-                .anySatisfy(v -> assertThat(v.getPropertyPath().toString()).isEqualTo("scheduledPickupAt"));
+        assertThat(validator.validate(request)).isEmpty();
     }
 
     // 주문 상품 목록은 누락되거나 비어 있을 수 없다.
