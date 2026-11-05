@@ -14,7 +14,7 @@ from app.agent.assemble import (
 from app.agent.evidence import payment_links
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
-from app.schemas.report import FactItem, FactSentenceItem, FactTopicSection
+from app.schemas.report import FactItem
 from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
@@ -38,10 +38,12 @@ class Fact:
     topic: str
     text: str
     evidence_id: str
+    # 접속 정보처럼 결제 하나의 사실이면 그 결제 ID — 화면 링크가 그 결제 카드로 간다 (#559)
+    payment_id: str | None = None
 
 
 # 조회 도구(Tool) 하나 = 주제 하나. Tool이 늘면 FACT_TOPICS에 한 줄 + collect 함수만 추가한다
-# collect: Tool 기록 → (사실 한 줄, 그 사실을 가져온 기록 순번) 목록
+# collect: Tool 기록 → (사실 한 줄, 그 사실을 가져온 기록 순번, 결제 ID 또는 None) 목록
 # 기록이 없으면(조회 실패 · 안 부름) 빈 목록 → 그 주제는 빠진다
 @dataclass(frozen=True)
 class FactTopic:
@@ -49,7 +51,7 @@ class FactTopic:
     title: str
     prefix: str
     tool: str
-    collect: Callable[[list[ToolRecord]], list[tuple[str, int]]]
+    collect: Callable[[list[ToolRecord]], list[tuple[str, int, str | None]]]
 
 
 def _latest(records: list[ToolRecord], kind: type) -> tuple[object, int] | None:
@@ -75,7 +77,7 @@ def _payment_line(p: HistoryPayment) -> str:
     return f"{_kst(p.requestedAt)} {_won(p.amount)} {status}"
 
 
-def _history(records: list[ToolRecord]) -> list[tuple[str, int]]:
+def _history(records: list[ToolRecord]) -> list[tuple[str, int, str | None]]:
     found = _latest(records, PaymentHistoryTool)
     cases = _latest(records, CasePaymentsTool)
     if found is None:
@@ -84,7 +86,7 @@ def _history(records: list[ToolRecord]) -> list[tuple[str, int]]:
     assert isinstance(history, PaymentHistoryTool)
     days = history.lookbackDays
     if not history.payments:
-        return [(f"최근 {days}일 이 고객의 다른 결제 없음", seq)]
+        return [(f"최근 {days}일 이 고객의 다른 결제 없음", seq, None)]
     more = " (더 있음, 최근 것만 조회)" if history.truncated else ""
     counts = " · ".join(
         f"{PAYMENT_STATUS_KO.get(c.paymentStatus, c.paymentStatus)} {c.count}건"
@@ -108,7 +110,7 @@ def _history(records: list[ToolRecord]) -> list[tuple[str, int]]:
                 more = f"(최근 {len(shown)}건만 표시)" if rest else ""
                 tail = f" 외 {rest}건" if rest else ""
                 lines.append(f"{label} {len(group)}건{more}: {items}{tail}")
-    return [(line, seq) for line in lines]
+    return [(line, seq, None) for line in lines]
 
 
 _KINDS = (("카드", "card"), ("기기", "device"), ("IP", "ip"))
@@ -132,7 +134,7 @@ def _linked_line(owner: str, kind: str, match: LinkedMatch, days: int) -> str:
 
 
 # 결제별 칸이 있으면 결제마다, 없으면(예전 Spring) 사건 전체 값으로 쓴다 (#533)
-def _linked(records: list[ToolRecord]) -> list[tuple[str, int]]:
+def _linked(records: list[ToolRecord]) -> list[tuple[str, int, str | None]]:
     found = _latest(records, LinkedPaymentsTool)
     if found is None:
         return []
@@ -150,7 +152,7 @@ def _linked(records: list[ToolRecord]) -> list[tuple[str, int]]:
         owner = "사건 결제 전체"
         for kind, attr in _KINDS:
             lines.append(_linked_line(owner, kind, getattr(linked, attr), days))
-    return [(line, seq) for line in lines]
+    return [(line, seq, None) for line in lines]
 
 
 _NOT_SENT = "정보 없음(가맹점이 보내지 않음)"
@@ -170,23 +172,23 @@ def _signal_line(payment_id: str, signals: Signals | None) -> str:
 
 
 # 결제마다 마지막으로 본 FDS 기록 — 보고서에 쓴 값과 같다
-def _signals(records: list[ToolRecord]) -> list[tuple[str, int]]:
+def _signals(records: list[ToolRecord]) -> list[tuple[str, int, str | None]]:
     latest: dict[str, tuple[Signals | None, int]] = {}
     for seq, record in enumerate(records, start=1):
         if isinstance(record.result, FdsEvidenceTool):
             for payment in record.result.payments:
                 latest[payment.paymentId] = (payment.signals, seq)
-    return [(_signal_line(pid, signals), seq) for pid, (signals, seq) in latest.items()]
+    return [(_signal_line(pid, signals), seq, pid) for pid, (signals, seq) in latest.items()]
 
 
-def _similar(records: list[ToolRecord]) -> list[tuple[str, int]]:
+def _similar(records: list[ToolRecord]) -> list[tuple[str, int, str | None]]:
     found = _latest(records, SimilarCasesTool)
     if found is None:
         return []
     similar, seq = found
     assert isinstance(similar, SimilarCasesTool)
     if not similar.cases:
-        return [("비슷한 과거 사건 없음", seq)]
+        return [("비슷한 과거 사건 없음", seq, None)]
     lines = []
     if similar.totalMatched > len(similar.cases):
         lines.append(f"비슷한 과거 사건 {similar.totalMatched}건 중 {len(similar.cases)}건만 조회")
@@ -196,7 +198,7 @@ def _similar(records: list[ToolRecord]) -> list[tuple[str, int]]:
             f"{SIMILARITY_KO[c.similarity]} 사건: 겹친 규칙 {rules}, "
             f"직원 판정 {similar_outcome(c.acceptCount, c.rejectCount)}"
         )
-    return [(line, seq) for line in lines]
+    return [(line, seq, None) for line in lines]
 
 
 FACT_TOPICS: tuple[FactTopic, ...] = (
@@ -213,8 +215,9 @@ TOPIC_BY_KEY = {topic.key: topic for topic in FACT_TOPICS}
 def fact_catalog(context: CaseContext, records: list[ToolRecord]) -> list[Fact]:
     facts: list[Fact] = []
     for topic in FACT_TOPICS:
-        for n, (text, seq) in enumerate(topic.collect(records), start=1):
-            facts.append(Fact(f"{topic.prefix}-{n}", topic.key, text, evidence_id(context, seq)))
+        for n, (text, seq, pid) in enumerate(topic.collect(records), start=1):
+            fid = f"{topic.prefix}-{n}"
+            facts.append(Fact(fid, topic.key, text, evidence_id(context, seq), pid))
     return facts
 
 
@@ -228,24 +231,16 @@ def prompt_facts(facts: list[Fact], payment_ids: list[str]) -> str:
     lines = [f"사건 결제 ID: {', '.join(payment_ids)}"]
     for key in topic_keys(facts):
         topic = TOPIC_BY_KEY[key]
-        lines.append(f"\n[{topic.title}] (topics.{key})")
+        lines.append(f"\n[{topic.title}]")
         lines += [f"{fact.id}: {fact.text}" for fact in facts if fact.topic == key]
     return "\n".join(lines)
 
 
-# 보고서에 저장할 주제별 문장 · 번호별 사실
-def report_sections(
-    facts: list[Fact], topics: dict[str, list[tuple[str, list[str]]]]
-) -> tuple[list[FactTopicSection], list[FactItem]]:
-    sections = [
-        FactTopicSection(
-            topic=key,
-            title=TOPIC_BY_KEY[key].title,
-            sentences=[
-                FactSentenceItem(text=text, factIds=ids) for text, ids in topics.get(key, [])
-            ],
+# 보고서에 저장할 번호별 사실 — 화면은 번호의 주제로 링크할 표 카드를 찾는다 (#559)
+def report_facts(facts: list[Fact]) -> list[FactItem]:
+    return [
+        FactItem(
+            id=f.id, topic=f.topic, text=f.text, evidenceId=f.evidence_id, paymentId=f.payment_id
         )
-        for key in topic_keys(facts)
+        for f in facts
     ]
-    items = [FactItem(id=f.id, topic=f.topic, text=f.text, evidenceId=f.evidence_id) for f in facts]
-    return sections, items

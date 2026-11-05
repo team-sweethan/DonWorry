@@ -15,6 +15,7 @@ import {
   signalRuleRecord,
   signalTag,
   type MarkKind,
+  type SummaryLink,
 } from '../../../utils/reportView'
 
 // 판정 근거 화면 (#501) — 조사 요약(AI 해석)과 "왜 이 판정인가요?"(기준표 판정 근거)
@@ -28,7 +29,16 @@ const levelTone: Record<MarkKind, { bg: string; border: string; text: string; li
 }
 
 // 조사 요약 — AI가 근거를 이어 설명한 문장. 징후 이름이 그대로 나오면 같은 색 밑줄
-export function SummaryBox({ lines, basis }: { lines: string[]; basis: DecisionBasis }) {
+// links: 문장 끝 표 링크 (#559) — 밑줄과 뜻이 겹치지 않게 글자 링크로 둔다
+export function SummaryBox({
+  lines,
+  basis,
+  links = [],
+}: {
+  lines: string[]
+  basis: DecisionBasis
+  links?: SummaryLink[][]
+}) {
   if (lines.length === 0) return null
   return (
     <div style={summaryStyle}>
@@ -51,6 +61,7 @@ export function SummaryBox({ lines, basis }: { lines: string[]; basis: DecisionB
                 <span key={j}>{part.text}</span>
               ),
             )}
+            <SummaryLinks links={links[i] ?? []} color="#6D28D9" />
           </span>
         ))}
       </p>
@@ -59,6 +70,29 @@ export function SummaryBox({ lines, basis }: { lines: string[]; basis: DecisionB
       </div>
     </div>
   )
+}
+
+// 요약 문장 끝 "› 고객 최근 결제" 링크 — 누르면 그 카드로 이동해 잠깐 강조한다 (#559)
+export function SummaryLinks({ links, color }: { links: SummaryLink[]; color: string }) {
+  return links.map((link) => (
+    <button
+      key={link.target}
+      type="button"
+      onClick={() => goToCard(link.target)}
+      style={{ ...linkStyle, color }}
+    >
+      › {link.label}
+    </button>
+  ))
+}
+
+function goToCard(target: string) {
+  const card = document.getElementById(target)
+  if (!card) return
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  card.animate([{ boxShadow: '0 0 0 3px #A78BFA' }, { boxShadow: '0 0 0 0 transparent' }], {
+    duration: 1600,
+  })
 }
 
 // 왜 이 판정인가요? — 판정 이유 · 고위험 징후 · 주의 징후 · 정상 거래 근거 · 판정 기준표
@@ -219,6 +253,15 @@ function ruleHitStyle(basis: DecisionBasis): CSSProperties {
   return { ...ruleStyle, background: tone.bg, border: `2px solid ${tone.border}`, color: tone.text }
 }
 
+const linkStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  padding: '0 0 0 6px',
+  fontSize: 12.5,
+  fontWeight: 600,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
 const summaryStyle: CSSProperties = {
   background: '#FAF5FF',
   border: '1px solid #E9D5FF',

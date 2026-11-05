@@ -7,7 +7,7 @@ from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
     FactItem,
-    FactTopicSection,
+    FactSentenceItem,
     InvestigationTrace,
     LinkedPayments,
     Overview,
@@ -193,9 +193,8 @@ def assemble_report(
     context: CaseContext,
     case_payments: CasePaymentsTool,
     fds: dict[str, FdsPayment],
-    summary: list[str],
+    summary_facts: list[FactSentenceItem],
     additional_checks: list[str],
-    fact_topics: list[FactTopicSection],
     facts: list[FactItem],
     records: list[ToolRecord],
     investigated_at: str,
@@ -284,10 +283,11 @@ def assemble_report(
             investigatedAt=investigated_at,
             reportVersion=context.report_version,
         ),
-        summary=summary,
+        # 사장님 화면이 읽는 문장 목록은 그대로, 근거 번호는 summaryFacts에 (#559)
+        summary=[s.text for s in summary_facts],
+        summaryFacts=summary_facts,
         paymentAnalyses=analyses,
         timeline=timeline,
-        factTopics=fact_topics,
         facts=facts,
         additionalChecks=_unique(checks),
         recommendation=ReportRecommendation(

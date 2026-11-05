@@ -35,6 +35,7 @@ import {
   signalRecordText,
   signalRuleRecord,
   summaryBoxLines,
+  summaryLines,
   verdictCardTitle,
   mlReportLine,
 } from '../src/utils/reportView.ts'
@@ -637,4 +638,69 @@ test('mlReportLine_eachState_saysScoreOrWhyMissing', () => {
   assert.equal(mlReportLine({ kind: 'skipped' }), 'ML 참고 위험도 · 채점하지 않았어요')
   assert.equal(mlReportLine({ kind: 'unknown' }), 'ML 참고 위험도를 불러오지 못했어요')
   assert.equal(mlReportLine({ kind: 'loading' }), 'ML 참고 위험도 불러오는 중…')
+})
+
+// summaryLinks_mapsFactsToCards_once — 요약 문장 끝 링크가 엉뚱한 표로 가거나 같은 링크가 두 번 붙으면 직원이 헤맨다 (#559)
+test('summaryLinks_mapsFactsToCards_once: 근거 번호의 주제로 표 카드를 찾고, 문장마다 한 번만 붙인다', () => {
+  const fact = (id: string, topic: string, paymentId: string | null = null) => ({
+    id,
+    topic,
+    text: `${id} 사실`,
+    evidenceId: 'E-4-v2-04',
+    paymentId,
+  })
+  const withLinks = body({
+    summary: [
+      '최근 결제 2건은 모두 사건 직전 결제입니다.',
+      '같은 IP로 다른 고객 3명이 결제했습니다.',
+    ],
+    summaryFacts: [
+      {
+        text: '최근 결제 2건은 모두 사건 직전 결제입니다.',
+        factIds: ['이력-1', '이력-2', '접속-1'],
+      },
+      { text: '같은 IP로 다른 고객 3명이 결제했습니다.', factIds: ['연결-3', '없는-9'] },
+    ],
+    facts: [
+      fact('이력-1', 'history'),
+      fact('이력-2', 'history'),
+      fact('접속-1', 'signals', '12'),
+      fact('연결-3', 'linked'),
+    ],
+  })
+
+  assert.deepEqual(
+    summaryLines(withLinks).map((l) => l.links.map((link) => [link.target, link.label])),
+    [
+      [
+        ['report-history', '고객 최근 결제'],
+        ['report-payment-12', '결제 12 접속 정보'],
+      ],
+      [['report-linked', '같은 카드 · 기기 · IP']],
+    ],
+  )
+  // #559 전 보고서는 링크 없이 문장만
+  assert.deepEqual(summaryLines(body({ summary: ['요약입니다.'] })), [
+    { text: '요약입니다.', links: [] },
+  ])
+})
+
+// summaryLines_fixedReportEmptySummaryFacts_keepsSummary — AI를 끈 고정 보고서는 summaryFacts · facts가 빈 목록이라 결론 카드 요약이 통째로 사라졌다 (#559 Codex 리뷰)
+test('summaryLines_fixedReportEmptySummaryFacts_keepsSummary: 근거 번호 목록이 비어 있으면 요약 문장을 링크 없이 그대로 보여 준다', () => {
+  const fixed = body({
+    summary: [
+      '조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.',
+      '직원은 판정 근거를 확인하세요.',
+    ],
+    summaryFacts: [],
+    facts: [],
+  })
+
+  assert.deepEqual(
+    summaryLines(fixed).map((l) => [l.text, l.links.length]),
+    [
+      ['조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.', 0],
+      ['직원은 판정 근거를 확인하세요.', 0],
+    ],
+  )
 })

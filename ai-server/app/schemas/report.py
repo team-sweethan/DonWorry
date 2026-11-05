@@ -215,6 +215,8 @@ class FactItem(BaseModel):
     text: str
     # 이 사실을 가져온 조회 기록 — evidence의 evidenceId
     evidenceId: str
+    # 결제 하나의 사실(접속 정보)이면 그 결제 ID — 화면 링크가 결제 카드로 간다 (#559)
+    paymentId: str | None = None
 
 
 class FactSentenceItem(BaseModel):
@@ -222,20 +224,15 @@ class FactSentenceItem(BaseModel):
     factIds: list[str] = Field(min_length=1)
 
 
-# 조회 도구 하나 = 주제 하나 (결제 이력 · 같은 카드 · 기기 · IP · 접속 정보 · 비슷한 과거 사건)
-class FactTopicSection(BaseModel):
-    topic: str
-    title: str
-    sentences: list[FactSentenceItem]
-
-
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
+    # 요약 문장마다 근거 사실 번호 (#559) — summary와 같은 문장 · 같은 순서
+    # 화면이 번호의 주제로 표 카드 링크를 붙인다
+    summaryFacts: list[FactSentenceItem]
     paymentAnalyses: list[PaymentAnalysis]
     timeline: list[TimelineItem]
-    # 종합 분석 칸은 없앴다 — 판단 문장이었다 (#548)
-    factTopics: list[FactTopicSection]
+    # 종합 분석 칸은 없앴다 — 판단 문장이었다 (#548). 주제별 문장 칸도 없앴다 (#559)
     facts: list[FactItem]
     additionalChecks: list[str]
     recommendation: ReportRecommendation

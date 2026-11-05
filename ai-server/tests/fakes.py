@@ -56,46 +56,17 @@ def call(name: str, **args: Any) -> dict[str, Any]:
     return {"name": name, "args": args, "id": f"call-{name}-{len(args)}", "type": "tool_call"}
 
 
-# 가짜 AI 출력 (#548) — 주제는 그때 조회한 Tool에 따라 달라서 자리 표시만 해 둔다
-# ScriptedLlm이 JSON Schema를 보고 ALL_TOPICS를 실제 주제마다, FIRST_FACT를 그 주제 첫 번호로 바꾼다
-# 접속 정보(접속-1)는 FDS 근거가 있으면 늘 있어 요약 근거로 쓴다
-ALL_TOPICS = "__all_topics__"
-FIRST_FACT = "__first_fact__"
-
-
+# 가짜 AI 출력 (#548, #559) — 요약 문장마다 근거 사실 번호
+# 접속 정보(접속-1)는 FDS 근거가 있으면 늘 있어 근거로 쓴다
 def narrative(payment_ids: list[str] | None = None, **overrides: Any) -> str:
     body: dict[str, Any] = {
         "summary": [
             {"text": "결제마다 카드 · 기기 · 접속 정보를 모았습니다.", "facts": ["접속-1"]},
-            {"text": "조회한 기록을 주제별로 아래에 정리했습니다.", "facts": ["접속-1"]},
+            {"text": "조회한 기록은 아래 표에 있습니다.", "facts": ["접속-1"]},
         ],
-        "topics": {
-            ALL_TOPICS: [{"text": "이 주제의 조회 결과를 정리했습니다.", "facts": [FIRST_FACT]}]
-        },
         "additionalChecks": ["고객 본인 확인", "카드 명의 확인"],
     }
     body.update(overrides)
-    return json.dumps(body, ensure_ascii=False)
-
-
-# 자리 표시를 이번 Schema의 주제 · 첫 사실 번호로 바꾼다
-def fill_topics(raw: str, schema: dict[str, Any]) -> str:
-    try:
-        body = json.loads(raw)
-    except json.JSONDecodeError:
-        return raw
-    topics = body.get("topics") if isinstance(body, dict) else None
-    if not isinstance(topics, dict) or ALL_TOPICS not in topics:
-        return raw
-    template = topics.pop(ALL_TOPICS)
-    # 테스트가 직접 쓴 주제는 그대로 둔다
-    for key, spec in schema["properties"]["topics"]["properties"].items():
-        if key in topics:
-            continue
-        first = spec["items"]["properties"]["facts"]["items"]["enum"][0]
-        topics[key] = [
-            {**s, "facts": [first if f == FIRST_FACT else f for f in s["facts"]]} for s in template
-        ]
     return json.dumps(body, ensure_ascii=False)
 
 
@@ -130,8 +101,7 @@ class ScriptedLlm:
         self.write_calls += 1
         self.write_messages.append(list(messages))
         self.write_schemas.append(schema)
-        raw = self._outputs.pop(0) if len(self._outputs) > 1 else self._outputs[0]
-        return fill_topics(raw, schema)
+        return self._outputs.pop(0) if len(self._outputs) > 1 else self._outputs[0]
 
 
 class BrokenLlm:
