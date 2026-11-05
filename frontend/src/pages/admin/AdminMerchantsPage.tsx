@@ -34,7 +34,12 @@ import {
   parseAdminMerchantListQuery,
   type AdminMerchantListQuery,
 } from '../../utils/adminMerchantListQuery'
-import { LIST_PAGE_SIZE, lastListPage, sameListCondition, withQuery } from '../../utils/listQuery'
+import {
+  LIST_PAGE_SIZE,
+  lastListPage,
+  listResultForDisplay,
+  withQuery,
+} from '../../utils/listQuery'
 
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
 // 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
@@ -80,12 +85,7 @@ export function AdminMerchantsPage() {
   const current = result?.filter === filter && result.revision === revision ? result : null
   // 같은 조건의 재조회·페이지 이동은 기존 행을 유지해 표 높이가 줄며 스크롤이 당겨지지 않게 한다.
   // 조건이 바뀌면 이전 결과를 새 조건의 결과처럼 보여 주지 않는다.
-  const visible =
-    current ??
-    (result &&
-    sameListCondition(adminMerchantListParams(result.filter), adminMerchantListParams(filter))
-      ? result
-      : null)
+  const visible = listResultForDisplay(result, filter, adminMerchantListParams)
   const lastPage = current?.data ? lastListPage(current.data.totalElements) : null
   useEffect(() => {
     // 마지막 행이 사라진 페이지로 돌아오면 빈 목록에 갇히지 않게 있는 페이지로 옮긴다.
@@ -150,11 +150,14 @@ export function AdminMerchantsPage() {
             {
               title: '코드',
               dataIndex: 'merchantCode',
-              render: (value: string, merchant) => (
-                <Link to={withQuery(`/admin/merchants/${merchant.merchantId}`, listQuery)}>
-                  {value}
-                </Link>
-              ),
+              render: (value: string, merchant) =>
+                visible ? (
+                  <Link to={withQuery(`/admin/merchants/${merchant.merchantId}`, visible.query)}>
+                    {value}
+                  </Link>
+                ) : (
+                  value
+                ),
             },
             { title: '가맹점 이름', dataIndex: 'displayName' },
             { title: '상태', dataIndex: 'status', render: statusTag },

@@ -6,6 +6,7 @@ import {
   parseListPage,
   sameListCondition,
   withQuery,
+  listResultForDisplay,
 } from '../src/utils/listQuery.ts'
 
 // 잘못된 페이지를 API에 보내지 않고 검색어 길이도 제한한다.
@@ -15,6 +16,26 @@ test('listQuery_whenInvalid_usesDefaults', () => {
   assert.equal(parseListPage('3'), 3)
   assert.equal(parseListKeyword(null), '')
   assert.equal(parseListKeyword('a'.repeat(101)).length, 100)
+})
+
+// 다음 페이지를 기다리는 동안 행과 복귀 쿼리는 이전 응답의 같은 스냅샷을 쓴다.
+test('listResultForDisplay_whenNextPagePending_preservesRowReturnPage', () => {
+  const params = (filter: { page: number; keyword: string }) =>
+    new URLSearchParams({ keyword: filter.keyword, page: String(filter.page) })
+  const previous = { filter: { page: 2, keyword: '가게' }, data: { items: [7] } }
+  const nextFilter = { page: 3, keyword: '가게' }
+  const pending = listResultForDisplay(previous, nextFilter, params)
+  assert.deepEqual(pending?.data.items, [7])
+  assert.equal(
+    withQuery('/admin/merchants/7', pending!.query),
+    '/admin/merchants/7?keyword=%EA%B0%80%EA%B2%8C&page=2',
+  )
+  const next = { filter: nextFilter, data: { items: [8] } }
+  const loaded = listResultForDisplay(next, nextFilter, params)
+  assert.deepEqual(loaded?.data.items, [8])
+  assert.equal(new URLSearchParams(loaded!.query).get('page'), '3')
+  assert.equal(listResultForDisplay(previous, { page: 1, keyword: '다른 가게' }, params), null)
+  assert.equal(listResultForDisplay(null, nextFilter, params), null)
 })
 
 // 조건이 없으면 물음표 없는 주소로 돌아간다.

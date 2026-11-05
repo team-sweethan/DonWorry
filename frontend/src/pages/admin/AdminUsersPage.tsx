@@ -44,7 +44,12 @@ import {
   normalizeAdminUserListStatusQuery,
   type AdminUserListQuery,
 } from '../../utils/adminUserListQuery'
-import { LIST_PAGE_SIZE, lastListPage, sameListCondition, withQuery } from '../../utils/listQuery'
+import {
+  LIST_PAGE_SIZE,
+  lastListPage,
+  listResultForDisplay,
+  withQuery,
+} from '../../utils/listQuery'
 
 const roleLabels = { ADMIN: '관리자', OPERATOR: '사장님', SECURITY_STAFF: '보안 직원' }
 const permissionOptions = [
@@ -147,11 +152,7 @@ export function AdminUsersPage() {
   const current = result?.filter === filter && result.revision === revision ? result : null
   // 같은 조건의 재조회·페이지 이동은 기존 행을 유지해 표 높이가 줄며 스크롤이 당겨지지 않게 한다.
   // 조건이 바뀌면 이전 결과를 새 조건의 결과처럼 보여 주지 않는다.
-  const visible =
-    current ??
-    (result && sameListCondition(adminUserListParams(result.filter), adminUserListParams(filter))
-      ? result
-      : null)
+  const visible = listResultForDisplay(result, filter, adminUserListParams)
   const lastPage = current?.data ? lastListPage(current.data.totalElements) : null
   useEffect(() => {
     // 마지막 행이 사라진 페이지로 돌아오면 빈 목록에 갇히지 않게 있는 페이지로 옮긴다.
@@ -228,9 +229,14 @@ export function AdminUsersPage() {
               {
                 title: '아이디',
                 dataIndex: 'loginId',
-                render: (value: string, user) => (
-                  <Link to={withQuery(`/admin/users/${user.userId}`, listQuery)}>{value}</Link>
-                ),
+                render: (value: string, user) =>
+                  visible ? (
+                    <Link to={withQuery(`/admin/users/${user.userId}`, visible.query)}>
+                      {value}
+                    </Link>
+                  ) : (
+                    value
+                  ),
               },
               { title: '이름', dataIndex: 'displayName' },
               {

@@ -24,6 +24,19 @@ export function sameListCondition(left: URLSearchParams, right: URLSearchParams)
   return withoutPage(left) === withoutPage(right)
 }
 
+/** 남겨 둔 행의 복귀 주소도 그 행을 받은 필터로 만든다. 대기 중인 페이지를 섞지 않는다. */
+export function listResultForDisplay<Filter, Result extends { filter: Filter }>(
+  result: Result | null,
+  filter: Filter,
+  params: (filter: Filter) => URLSearchParams,
+): (Result & { query: string }) | null {
+  if (!result) return null
+  const resultParams = params(result.filter)
+  return sameListCondition(resultParams, params(filter))
+    ? { ...result, query: resultParams.toString() }
+    : null
+}
+
 function withoutPage(params: URLSearchParams): string {
   const copy = new URLSearchParams(params)
   copy.delete('page')
