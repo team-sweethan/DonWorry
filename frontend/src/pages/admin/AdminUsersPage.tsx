@@ -34,12 +34,14 @@ import type {
   UserPage,
 } from '../../api/adminAccounts'
 import { ApiError } from '../../api/client'
+import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListSearch } from '../../components/common/ListSearch'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
 import { LoginHistoryTable } from '../auth/LoginHistoryPage'
 import {
   adminUserListParams,
+  isAdminUserListFiltered,
   parseAdminUserListQuery,
   normalizeAdminUserListStatusQuery,
   type AdminUserListQuery,
@@ -225,6 +227,24 @@ export function AdminUsersPage() {
             loading={!current}
             dataSource={visible?.data?.items ?? []}
             scroll={{ scrollToFirstRowOnChange: false, x: 750 }}
+            locale={{
+              emptyText:
+                !current || (lastPage !== null && filter.page > lastPage) ? (
+                  <span aria-hidden="true" />
+                ) : isAdminUserListFiltered(filter) ? (
+                  <ListEmpty
+                    title="검색 조건에 맞는 계정이 없어요"
+                    description="검색어나 필터를 바꿔 보세요."
+                    action={<Button onClick={() => setSearchParams({})}>조건 지우기</Button>}
+                  />
+                ) : (
+                  <ListEmpty
+                    mascot
+                    title="아직 등록된 계정이 없어요"
+                    description="계정을 만들면 여기에 표시돼요."
+                  />
+                ),
+            }}
             columns={[
               {
                 title: '아이디',

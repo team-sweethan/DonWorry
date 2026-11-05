@@ -22,6 +22,11 @@ export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQ
   }
 }
 
+/** 페이지를 뺀 검색 조건이 있으면 빈 목록을 "결과 없음"으로 안내한다. */
+export function isAdminUserListFiltered(query: AdminUserListQuery) {
+  return Boolean(query.keyword || query.role || query.status || query.passwordChangeRequired)
+}
+
 /** 전체 조건과 첫 페이지는 생략한다. 해제한 필터가 새로고침 때 다시 적용되지 않게 한다. */
 export function adminUserListParams(query: AdminUserListQuery): URLSearchParams {
   const params = new URLSearchParams()

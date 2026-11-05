@@ -12,6 +12,11 @@ export function parseAdminMerchantListQuery(params: URLSearchParams): AdminMerch
   }
 }
 
+/** 페이지를 뺀 검색 조건이 있으면 빈 목록을 "결과 없음"으로 안내한다. */
+export function isAdminMerchantListFiltered(query: AdminMerchantListQuery) {
+  return Boolean(query.keyword || query.status)
+}
+
 export function adminMerchantListParams(query: AdminMerchantListQuery): URLSearchParams {
   const params = new URLSearchParams()
   if (query.keyword) params.set('keyword', query.keyword)
