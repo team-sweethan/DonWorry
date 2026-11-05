@@ -18,6 +18,7 @@ import com.donworry.settlement.service.SettlementService;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -74,6 +75,35 @@ class PaymentSettlementRefundMariaDbTests {
     @MockitoSpyBean
     SettlementRefundAdjustmentRepository adjustments;
 
+    private Long testMerchant;
+
+    @AfterEach
+    void clean() {
+        if (testMerchant == null) return;
+        jdbc.update(
+                "DELETE e FROM EVENT_PUBLICATION e JOIN payments p ON JSON_VALUE(e.SERIALIZED_EVENT,'$.paymentId')=p.payment_id WHERE e.EVENT_TYPE=? AND e.LISTENER_ID=? AND p.merchant_id=?",
+                PaymentRefundSucceeded.class.getName(),
+                PaymentRefundSucceededListener.LISTENER_ID,
+                testMerchant);
+        jdbc.update(
+                "DELETE a FROM payout_refund_allocations a JOIN merchant_payouts p ON a.payout_id=p.payout_id WHERE p.merchant_id=?",
+                testMerchant);
+        jdbc.update(
+                "DELETE i FROM merchant_payout_items i JOIN merchant_payouts p ON i.payout_id=p.payout_id WHERE p.merchant_id=?",
+                testMerchant);
+        jdbc.update("DELETE FROM settlement_refund_adjustments WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM merchant_payouts WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM settlements WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM captures WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM merchant_settlement_locks WHERE merchant_id=?", testMerchant);
+        jdbc.update(
+                "DELETE c FROM payment_cancellations c JOIN payments p ON c.payment_id=p.payment_id WHERE p.merchant_id=?",
+                testMerchant);
+        jdbc.update("DELETE FROM payment_cancellation_requests WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM payments WHERE merchant_id=?", testMerchant);
+        jdbc.update("DELETE FROM merchants WHERE merchant_id=?", testMerchant);
+    }
+
     @TestConfiguration(proxyBeanMethods = false)
     static class DeliveryConfig {
         @Bean
@@ -124,12 +154,13 @@ class PaymentSettlementRefundMariaDbTests {
     @ParameterizedTest
     @CsvSource({"false,false", "true,false", "false,true", "true,true"})
     void refund_whenConnectedToSettlement_appliesOnceAndRecoversDelivery(boolean paidBefore, boolean failReceipt) {
-        var code = "p6-refund-" + UUID.randomUUID();
+        var code = "p6-" + UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO merchants(merchant_code,display_name,status,pg_fee_rate,created_at) VALUES (?,'refund integration','ACTIVE',0.01,UTC_TIMESTAMP(6))",
                 code);
         long merchant =
                 jdbc.queryForObject("SELECT merchant_id FROM merchants WHERE merchant_code=?", Long.class, code);
+        testMerchant = merchant;
         var payment = captured(merchant, 10000);
         var originalCapture = jdbc.queryForMap("SELECT * FROM captures WHERE payment_id=?", payment.getPaymentId());
         if (paidBefore) assertThat(pay(merchant)).isEqualTo("COMPLETED");
