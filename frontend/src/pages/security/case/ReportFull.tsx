@@ -14,7 +14,6 @@ import {
   signalTexts,
   summaryBoxLines,
   topRiskScore,
-  unknownItems,
   verdictCardTitle,
   verdictLines,
   type FactRef,
@@ -78,10 +77,9 @@ export function ReportFull({
         <Card title={<CardTitle title="사건 경위" note="시간순" />} style={cardStyle}>
           <Timeline items={body.timeline} />
         </Card>
+        {/* "AI가 아직 모르는 것"은 판정 근거의 징후와 겹쳐 보여 주지 않는다 (#548) */}
         <Card title={<CardTitle title="판정 전에 확인할 것" />} style={cardStyle}>
-          <SubTitle>AI가 아직 모르는 것</SubTitle>
-          <Checklist items={unknownItems(body)} color="#F59E0B" />
-          <SubTitle top>먼저 해 볼 것</SubTitle>
+          <SubTitle>먼저 해 볼 것</SubTitle>
           <Checklist items={body.additionalChecks} color="#94A3B8" />
         </Card>
       </div>

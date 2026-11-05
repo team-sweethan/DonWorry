@@ -89,11 +89,6 @@ export function ruleEvidenceRows(analysis: PaymentAnalysis): RuleEvidenceRow[] {
   }))
 }
 
-// 결제별 "미확인"을 한 목록으로 모은다 (같은 문장은 한 번만)
-export function unknownItems(body: ReportBody): string[] {
-  return [...new Set(body.paymentAnalyses.flatMap((p) => p.unknowns))]
-}
-
 // 조사 과정 탭의 "사용 모델" 문구 — 고정 문장 · mock을 AI 모델 이름처럼 보이지 않게 한다 (#294)
 export function traceProviderLabel(trace: Pick<InvestigationTrace, 'provider' | 'model'>): string {
   if (trace.provider === 'FIXED') return '고정 문장 (AI 서버 꺼짐)'
