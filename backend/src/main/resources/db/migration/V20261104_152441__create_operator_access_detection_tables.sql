@@ -18,7 +18,6 @@ CREATE TABLE fds_operator_access_events
     denied_type              VARCHAR(50)  NOT NULL,
     occurred_at              DATETIME(6)  NOT NULL,
     client_ip                VARCHAR(45)  NULL,
-    suspension_eligible      BOOLEAN      NOT NULL,
     received_at              DATETIME(6)  NOT NULL,
     created_at               DATETIME(6)  NOT NULL,
     PRIMARY KEY (operator_access_event_id),

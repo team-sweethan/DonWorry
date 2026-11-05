@@ -16,8 +16,7 @@ public record OperatorAccessDenied(
         String path,
         OperatorAccessDeniedType deniedType,
         Instant occurredAt,
-        String clientIp,
-        boolean suspensionEligible) {
+        String clientIp) {
     public static final int MAX_PATH_LENGTH = 512;
     public static final int MAX_HTTP_METHOD_LENGTH = 10;
 }

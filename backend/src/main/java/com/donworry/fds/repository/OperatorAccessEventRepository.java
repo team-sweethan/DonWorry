@@ -15,10 +15,6 @@ public interface OperatorAccessEventRepository extends JpaRepository<OperatorAcc
     List<OperatorAccessEvent> findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
             Long userId, OperatorAccessDeniedType deniedType, Instant from, Instant to);
 
-    List<OperatorAccessEvent>
-            findByUserIdAndDeniedTypeAndSuspensionEligibleTrueAndOccurredAtBetweenOrderByOccurredAtAsc(
-                    Long userId, OperatorAccessDeniedType deniedType, Instant from, Instant to);
-
     @Query(value = """
             SELECT candidate.operator_access_event_id AS sourceEventId,
                    candidate.login_id AS loginId,

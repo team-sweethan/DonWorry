@@ -45,7 +45,6 @@ class OperatorSecurityContractTests {
                 .deniedType(deniedType)
                 .occurredAt(Instant.parse("2026-11-04T05:00:00.123456Z"))
                 .clientIp("2001:db8::1")
-                .suspensionEligible(true)
                 .build();
         var mapper = JsonMapper.builder().build();
         var json = mapper.writeValueAsString(event);

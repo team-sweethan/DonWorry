@@ -3,7 +3,6 @@ package com.donworry.fds.service;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.donworry.fds.entity.OperatorAccessDeniedType;
 import com.donworry.fds.entity.OperatorAccessDetection;
@@ -48,6 +47,7 @@ class OperatorAccessDetectionTransactionServiceTests {
     @Mock
     private OperatorAccessDetectionActionService actions;
 
+    // 인증된 사장님 거절 이벤트는 브라우저 전용 헤더와 무관하게 같은 탐지 창에 포함한다
     @Test
     void receive_whenEarlierEventArrivesLate_reevaluatesLaterWindow() {
         var firstAt = Instant.parse("2026-11-05T01:00:00Z");
@@ -57,7 +57,6 @@ class OperatorAccessDetectionTransactionServiceTests {
         given(received.getUserId()).willReturn(10L);
         given(received.getDeniedType()).willReturn(OperatorAccessDeniedType.OUT_OF_ROLE);
         given(received.getOccurredAt()).willReturn(firstAt);
-        given(received.isSuspensionEligible()).willReturn(true);
         given(latest.getUserId()).willReturn(10L);
         given(latest.getDeniedType()).willReturn(OperatorAccessDeniedType.OUT_OF_ROLE);
         given(latest.getLoginId()).willReturn("boss");
@@ -73,10 +72,10 @@ class OperatorAccessDetectionTransactionServiceTests {
         given(rulePolicies.findByRuleCode("SEC_OPERATOR_OUT_OF_ROLE_REPEAT")).willReturn(Optional.empty());
         given(statusReader.findById(10L))
                 .willReturn(Optional.of(new OperatorAccountStatusSnapshot(OperatorAccountStatus.ACTIVE, null)));
-        given(events.findByUserIdAndDeniedTypeAndSuspensionEligibleTrueAndOccurredAtBetweenOrderByOccurredAtAsc(
+        given(events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
                         10L, OperatorAccessDeniedType.OUT_OF_ROLE, firstAt, firstAt.plusSeconds(300)))
                 .willReturn(List.of(latest));
-        given(events.findByUserIdAndDeniedTypeAndSuspensionEligibleTrueAndOccurredAtBetweenOrderByOccurredAtAsc(
+        given(events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
                         10L, OperatorAccessDeniedType.OUT_OF_ROLE, latestAt.minusSeconds(300), latestAt))
                 .willReturn(inWindow);
         given(detections.saveAndFlush(any())).willAnswer(invocation -> invocation.getArgument(0));
@@ -100,8 +99,7 @@ class OperatorAccessDetectionTransactionServiceTests {
                     "/security/transactions",
                     com.donworry.identity.api.OperatorAccessDeniedType.OUT_OF_ROLE,
                     firstAt,
-                    "127.0.0.1",
-                    true));
+                    "127.0.0.1"));
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
@@ -110,38 +108,6 @@ class OperatorAccessDetectionTransactionServiceTests {
         verify(detections).saveAndFlush(detection.capture());
         org.assertj.core.api.Assertions.assertThat(detection.getValue().getWindowEndedAt())
                 .isEqualTo(latestAt);
-    }
-
-    @Test
-    void receive_whenCrossSiteGet_isStoredButDoesNotTriggerSuspensionDetection() {
-        var occurredAt = Instant.parse("2026-11-05T01:00:00Z");
-        var received = org.mockito.Mockito.mock(OperatorAccessEvent.class);
-        given(events.findByIdentityEventId(1L)).willReturn(Optional.empty());
-        given(events.save(any())).willReturn(received);
-        given(received.isSuspensionEligible()).willReturn(false);
-        var service = new OperatorAccessDetectionTransactionService(
-                events,
-                detections,
-                evidences,
-                rulePolicies,
-                statusReader,
-                actions,
-                Clock.fixed(occurredAt, ZoneOffset.UTC));
-
-        service.receive(new OperatorAccessDenied(
-                1L,
-                10L,
-                "boss",
-                20L,
-                "GET",
-                "/api/admin/users",
-                com.donworry.identity.api.OperatorAccessDeniedType.OUT_OF_ROLE,
-                occurredAt,
-                "127.0.0.1",
-                false));
-
-        verify(events).save(any(OperatorAccessEvent.class));
-        verifyNoInteractions(detections, evidences, rulePolicies, statusReader, actions);
     }
 
     private OperatorAccessEvent event(Long identityEventId, Instant occurredAt) {
