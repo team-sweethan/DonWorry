@@ -14,6 +14,7 @@ import {
   Tag,
 } from 'antd'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ListSearch } from '../../components/common/ListSearch'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ApiError } from '../../api/client'
 import {
@@ -33,6 +34,7 @@ import {
   parseAdminMerchantListQuery,
   type AdminMerchantListQuery,
 } from '../../utils/adminMerchantListQuery'
+import { LIST_PAGE_SIZE, lastListPage, sameListCondition, withQuery } from '../../utils/listQuery'
 
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
 // 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
@@ -50,8 +52,12 @@ export function AdminMerchantsPage() {
   const filter = useMemo(() => parseAdminMerchantListQuery(query), [query])
   const listQuery = adminMerchantListParams(filter).toString()
   const [revision, setRevision] = useState(0)
-  const updateFilter = (changes: Partial<AdminMerchantListQuery>) =>
-    setQuery(adminMerchantListParams({ ...filter, ...changes }))
+  const updateFilter = (changes: Partial<AdminMerchantListQuery>) => {
+    const next = adminMerchantListParams({ ...filter, ...changes })
+    // 같은 조건을 다시 검색하면 방문 기록을 늘리지 않고 최신 목록만 읽는다.
+    if (next.toString() === listQuery) setRevision((value) => value + 1)
+    else setQuery(next)
+  }
   const [result, setResult] = useState<{
     filter: typeof filter
     revision: number
@@ -72,6 +78,20 @@ export function AdminMerchantsPage() {
     }
   }, [filter, revision])
   const current = result?.filter === filter && result.revision === revision ? result : null
+  // 같은 조건의 재조회·페이지 이동은 기존 행을 유지해 표 높이가 줄며 스크롤이 당겨지지 않게 한다.
+  // 조건이 바뀌면 이전 결과를 새 조건의 결과처럼 보여 주지 않는다.
+  const visible =
+    current ??
+    (result &&
+    sameListCondition(adminMerchantListParams(result.filter), adminMerchantListParams(filter))
+      ? result
+      : null)
+  const lastPage = current?.data ? lastListPage(current.data.totalElements) : null
+  useEffect(() => {
+    // 마지막 행이 사라진 페이지로 돌아오면 빈 목록에 갇히지 않게 있는 페이지로 옮긴다.
+    if (lastPage !== null && filter.page > lastPage)
+      setQuery(adminMerchantListParams({ ...filter, page: lastPage }), { replace: true })
+  }, [filter, lastPage, setQuery])
   return (
     <>
       <PageHeader
@@ -80,7 +100,7 @@ export function AdminMerchantsPage() {
         actions={
           <Space>
             <Button onClick={() => setRevision((value) => value + 1)}>새로고침</Button>
-            <Link to="/admin/merchants/new">
+            <Link to={withQuery('/admin/merchants/new', listQuery)}>
               <Button type="primary">가맹점 만들기</Button>
             </Link>
           </Space>
@@ -88,14 +108,11 @@ export function AdminMerchantsPage() {
       />
       <Card>
         <Space wrap style={{ marginBottom: 20 }}>
-          <Input.Search
-            aria-label="가맹점 검색"
+          <ListSearch
+            label="가맹점 검색"
             placeholder="코드 또는 이름"
-            key={filter.keyword}
-            defaultValue={filter.keyword}
-            maxLength={100}
-            allowClear
-            onSearch={(value) => updateFilter({ page: 1, keyword: value })}
+            keyword={filter.keyword}
+            onSearch={(keyword) => updateFilter({ page: 1, keyword })}
           />
           <Select
             aria-label="가맹점 상태"
@@ -113,16 +130,19 @@ export function AdminMerchantsPage() {
         <Table<AdminMerchant>
           rowKey="merchantId"
           loading={!current}
-          // 재조회 중 기존 행을 유지해 표 높이가 잠깐 줄며 스크롤이 당겨지지 않게 한다.
-          dataSource={(current ?? result)?.data?.items ?? []}
+          dataSource={visible?.data?.items ?? []}
           scroll={{ x: 650, scrollToFirstRowOnChange: false }}
-          pagination={{
-            current: filter.page,
-            pageSize: 20,
-            total: (current ?? result)?.data?.totalElements ?? 0,
-            showSizeChanger: false,
-            onChange: (page) => updateFilter({ page }),
-          }}
+          pagination={
+            visible?.data
+              ? {
+                  current: filter.page,
+                  pageSize: LIST_PAGE_SIZE,
+                  total: visible.data.totalElements,
+                  showSizeChanger: false,
+                  onChange: (page) => updateFilter({ page }),
+                }
+              : false
+          }
           locale={{
             emptyText: current?.error ? '목록을 불러오지 못했습니다.' : '등록된 가맹점이 없습니다.',
           }}
@@ -131,9 +151,7 @@ export function AdminMerchantsPage() {
               title: '코드',
               dataIndex: 'merchantCode',
               render: (value: string, merchant) => (
-                <Link
-                  to={`/admin/merchants/${merchant.merchantId}${listQuery ? `?${listQuery}` : ''}`}
-                >
+                <Link to={withQuery(`/admin/merchants/${merchant.merchantId}`, listQuery)}>
                   {value}
                 </Link>
               ),
@@ -150,6 +168,8 @@ export function AdminMerchantsPage() {
 
 type MerchantForm = { merchantCode: string; displayName: string; feePercent: string }
 export function AdminCreateMerchantPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminMerchantListParams(parseAdminMerchantListQuery(query)).toString()
   const [form] = Form.useForm<MerchantForm>()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -168,7 +188,7 @@ export function AdminCreateMerchantPage() {
         displayName: values.displayName.trim(),
         pgFeeRate: rate,
       })
-      navigate(`/admin/merchants/${merchant.merchantId}`, { replace: true })
+      navigate(withQuery(`/admin/merchants/${merchant.merchantId}`, listQuery), { replace: true })
     } catch (error) {
       setError(errorMessage(error))
     } finally {
@@ -181,7 +201,7 @@ export function AdminCreateMerchantPage() {
       <PageHeader
         title="가맹점 만들기"
         description="가맹점을 만든 뒤 사장님 계정을 연결할 수 있습니다."
-        actions={<Link to="/admin/merchants">목록으로</Link>}
+        actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
       <Card style={{ maxWidth: 640 }}>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
@@ -307,9 +327,7 @@ export function AdminMerchantDetailPage() {
             <Button disabled={busy} onClick={() => setRevision((value) => value + 1)}>
               새로고침
             </Button>
-            <Link to={listQuery ? `/admin/merchants?${listQuery}` : '/admin/merchants'}>
-              목록으로
-            </Link>
+            <Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>
           </Space>
         }
       />

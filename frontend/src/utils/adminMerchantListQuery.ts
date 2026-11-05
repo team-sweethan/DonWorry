@@ -1,13 +1,13 @@
 import type { MerchantStatus } from '../api/adminMerchants.ts'
+import { parseListKeyword, parseListPage } from './listQuery.ts'
 
 export type AdminMerchantListQuery = { page: number; keyword: string; status?: MerchantStatus }
 
 export function parseAdminMerchantListQuery(params: URLSearchParams): AdminMerchantListQuery {
-  const page = Number(params.get('page'))
   const status = params.get('status')
   return {
-    page: Number.isSafeInteger(page) && page >= 1 && page <= 2_147_483_647 ? page : 1,
-    keyword: (params.get('keyword') ?? '').slice(0, 100),
+    page: parseListPage(params.get('page')),
+    keyword: parseListKeyword(params.get('keyword')),
     status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
   }
 }

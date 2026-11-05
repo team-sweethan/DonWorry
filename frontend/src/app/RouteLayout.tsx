@@ -1,22 +1,17 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Button, Space } from 'antd'
 import { Link, Outlet, useLocation, useMatches, useNavigationType } from 'react-router-dom'
 import { ScreenResult } from '../components/common/ScreenResult'
-import { shouldResetScroll, showRouteErrorHome } from '../utils/routeEffects.ts'
+import { routeTitle, shouldResetScroll, showRouteErrorHome } from '../utils/routeEffects.ts'
+import { RouteTitleOverrideContext } from './routeTitleContext'
 
 export function RouteLayout() {
   const { pathname } = useLocation()
   const navigationType = useNavigationType()
   const previousPath = useRef<string | null>(null)
   const matches = useMatches()
-  const handle = matches.at(-1)?.handle
-  const title =
-    typeof handle === 'object' &&
-    handle !== null &&
-    'title' in handle &&
-    typeof handle.title === 'string'
-      ? handle.title
-      : null
+  const [titleOverride, setTitleOverride] = useState<string | null>(null)
+  const title = titleOverride ?? routeTitle(matches.at(-1)?.handle)
   useLayoutEffect(() => {
     document.title = title ? `${title} | 돈워리` : '돈워리'
   }, [title])
@@ -25,11 +20,15 @@ export function RouteLayout() {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
     previousPath.current = pathname
   }, [pathname, navigationType])
-  return <Outlet />
+  return (
+    <RouteTitleOverrideContext.Provider value={setTitleOverride}>
+      <Outlet />
+    </RouteTitleOverrideContext.Provider>
+  )
 }
 
 export function RouteErrorPage() {
-  const { pathname } = useLocation()
+  const handle = useMatches().at(-1)?.handle
   useLayoutEffect(() => {
     document.title = '오류 | 돈워리'
   }, [])
@@ -41,7 +40,7 @@ export function RouteErrorPage() {
           <Button type="primary" onClick={() => window.location.reload()}>
             새로고침
           </Button>
-          {showRouteErrorHome(pathname) && <Link to="/">홈으로</Link>}
+          {showRouteErrorHome(handle) && <Link to="/">홈으로</Link>}
         </Space>
       }
     />
