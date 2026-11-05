@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCases } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
+import { useCaseListWatch } from '../../hooks/useCaseListWatch'
 import type { CaseStatus, CaseSummary } from '../../types/case'
 import { customerPart, mergeRemainingMin } from '../../utils/caseRules'
 import {
@@ -21,6 +22,7 @@ import {
 } from '../../utils/caseListQuery'
 import { won } from '../../utils/format'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
+import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
 import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import { StatButton } from './case/StatButton'
@@ -89,11 +91,26 @@ export function CaseListPage() {
     failed: boolean
   } | null>(null)
 
+  // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553).
+  // 조건(탭 · 검색 · 페이지)은 주소에 있어 다시 조회해도 그대로다
+  const watch = useCaseListWatch((added) => {
+    setRefreshKey((k) => k + 1)
+    if (added > 0) message.info(`새 Case ${added}건이 들어왔습니다. 목록을 다시 불러옵니다.`)
+  })
+  const { listLoaded } = watch
+  const refresh = () => {
+    setRefreshKey((k) => k + 1)
+    watch.restart()
+  }
+
   useEffect(() => {
     let alive = true
     getCases()
       .then((cases) => {
-        if (alive) setResult({ refreshKey, cases, failed: false })
+        if (!alive) return
+        setResult({ refreshKey, cases, failed: false })
+        // 감지 기준 건수는 목록을 받은 뒤에만 확정한다 (#555 Codex 리뷰)
+        listLoaded(true)
       })
       .catch(() => {
         if (!alive) return
@@ -103,11 +120,12 @@ export function CaseListPage() {
           cases: prev?.cases ?? [],
           failed: true,
         }))
+        listLoaded(false)
       })
     return () => {
       alive = false
     }
-  }, [refreshKey, message])
+  }, [refreshKey, message, listLoaded])
 
   const loading = result?.refreshKey !== refreshKey
   // 새로고침 중에는 기존 목록을 유지한다.
@@ -264,11 +282,12 @@ export function CaseListPage() {
         title="Case 목록"
         description="HELD 결제로 생성된 조사 Case를 확인하고 판정할 Case를 고릅니다."
         actions={
-          <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((k) => k + 1)}>
+          <Button icon={<ReloadOutlined />} onClick={refresh}>
             새로고침
           </Button>
         }
       />
+      {watch.stopped && <CaseWatchStoppedNotice onRefresh={refresh} />}
       {result?.failed && (
         <Alert
           type="error"
@@ -276,7 +295,7 @@ export function CaseListPage() {
           style={{ marginBottom: 16 }}
           message="Case 목록을 불러오지 못했습니다. 아래 건수와 목록은 실제와 다를 수 있습니다."
           action={
-            <Button size="small" onClick={() => setRefreshKey((k) => k + 1)}>
+            <Button size="small" onClick={refresh}>
               다시 시도
             </Button>
           }
