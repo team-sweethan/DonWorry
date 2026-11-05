@@ -116,8 +116,8 @@ def split_history(
             later.append(payment)
         else:
             earlier.append(payment)
-    shown = HISTORY_SHOWN_TO_AI
-    return burst[:shown], earlier[:shown], later[:shown]
+    # 자르지 않고 전체를 돌려준다 — 건수는 전체로 세고 목록만 줄인다 (#548 Codex 리뷰)
+    return burst, earlier, later
 
 
 # 코드가 센 상태별 건수를 한국어 이름으로 — "매입 완료 3건 · 승인 취소 1건"

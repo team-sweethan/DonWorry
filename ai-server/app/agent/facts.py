@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.agent.assemble import (
     FDS_RESULT_KO,
+    HISTORY_SHOWN_TO_AI,
     PAYMENT_STATUS_KO,
     SIMILARITY_KO,
     evidence_id,
@@ -99,8 +100,14 @@ def _history(records: list[ToolRecord]) -> list[tuple[str, int]]:
             ("사건 도중 · 뒤 결제", later),
         ):
             if group:
-                items = " · ".join(_payment_line(p) for p in group)
-                lines.append(f"{label} {len(group)}건: {items}")
+                # 건수는 전체, 목록은 최근 몇 건만 (#548 Codex 리뷰)
+                # 잘린 목록 개수를 건수로 쓰면 연속 결제 규모가 줄어 보인다
+                shown = group[:HISTORY_SHOWN_TO_AI]
+                items = " · ".join(_payment_line(p) for p in shown)
+                rest = len(group) - len(shown)
+                more = f"(최근 {len(shown)}건만 표시)" if rest else ""
+                tail = f" 외 {rest}건" if rest else ""
+                lines.append(f"{label} {len(group)}건{more}: {items}{tail}")
     return [(line, seq) for line in lines]
 
 

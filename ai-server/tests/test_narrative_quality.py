@@ -141,3 +141,17 @@ def test_limitations_come_only_from_tool_records() -> None:
     assert not any("알 수 없었습니다" in line for line in limitations)
     assert LINKED_PRIVACY in limitations
     assert "limitations" not in narrative_schema(catalog(CASES, FDS))["properties"]
+
+
+# 이력 묶음이 5건을 넘으면 건수는 전체로 세고 목록만 줄인다 (#548 Codex 리뷰)
+# 잘린 목록 개수를 건수로 쓰면 연속 결제 8건이 "5건"으로 줄어 AI 문장 · 숫자 검사까지 틀어진다
+def test_fact_catalog_historyOver5_countsAllPayments() -> None:
+    first = datetime.fromisoformat(min(p.requestedAt for p in CASES.payments))
+
+    texts = _history_texts(
+        _history(*[(f"81{i}", 650000, first - timedelta(seconds=10 + i)) for i in range(8)])
+    )
+
+    burst = next(t for t in texts if t.startswith("사건 결제 앞뒤 10분 안의 다른 결제"))
+    assert burst.startswith("사건 결제 앞뒤 10분 안의 다른 결제 8건")
+    assert burst.count("650,000원") == 5 and burst.endswith("외 3건")
