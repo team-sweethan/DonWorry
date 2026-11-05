@@ -146,28 +146,29 @@ export function AdminMerchantsPage() {
               : false
           }
           locale={{
-            emptyText: !current ? (
-              <span aria-hidden="true" />
-            ) : current.error ? (
-              '목록을 불러오지 못했습니다.'
-            ) : isAdminMerchantListFiltered(filter) ? (
-              <ListEmpty
-                title="검색 조건에 맞는 가맹점이 없어요"
-                description="검색어나 필터를 바꿔 보세요."
-                action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
-              />
-            ) : (
-              <ListEmpty
-                mascot
-                title="아직 등록된 가맹점이 없어요"
-                description="이용 신청을 승인하거나 직접 만들면 여기에 표시돼요."
-                action={
-                  <Link to="/admin/applications">
-                    <Button>이용 신청 보기</Button>
-                  </Link>
-                }
-              />
-            ),
+            emptyText:
+              !current || (lastPage !== null && filter.page > lastPage) ? (
+                <span aria-hidden="true" />
+              ) : current.error ? (
+                '목록을 불러오지 못했습니다.'
+              ) : isAdminMerchantListFiltered(filter) ? (
+                <ListEmpty
+                  title="검색 조건에 맞는 가맹점이 없어요"
+                  description="검색어나 필터를 바꿔 보세요."
+                  action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
+                />
+              ) : (
+                <ListEmpty
+                  mascot
+                  title="아직 등록된 가맹점이 없어요"
+                  description="이용 신청을 승인하거나 직접 만들면 여기에 표시돼요."
+                  action={
+                    <Link to="/admin/applications">
+                      <Button>이용 신청 보기</Button>
+                    </Link>
+                  }
+                />
+              ),
           }}
           columns={[
             {

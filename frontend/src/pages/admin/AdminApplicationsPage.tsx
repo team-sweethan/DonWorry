@@ -29,6 +29,7 @@ import {
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { PageHeader } from '../../components/common/PageHeader'
+import { lastListPage } from '../../utils/listQuery'
 import { ApiError } from '../../api/client'
 import {
   applicationLabels,
@@ -101,6 +102,16 @@ export function AdminApplicationsPage() {
   }, [page, keyword, status, mailAttention, revision, key])
   const current = result?.key === key ? result : null
   const emptyKind = applicationEmptyKind(statusValue, keyword, mailAttention)
+  // 이 화면의 page는 0부터 시작한다.
+  const lastPage = current?.data ? lastListPage(current.data.totalElements) - 1 : null
+  const pageOutOfRange = lastPage !== null && page > lastPage
+  useEffect(() => {
+    // 마지막 행을 처리하고 돌아오면 빈 페이지에 갇히지 않게 있는 페이지로 옮긴다.
+    if (lastPage === null || page <= lastPage) return
+    const next = new URLSearchParams(query)
+    next.set('page', String(lastPage))
+    setQuery(next, { replace: true })
+  }, [lastPage, page, query, setQuery])
   const change = (next: {
     page?: number
     keyword?: string
@@ -178,23 +189,24 @@ export function AdminApplicationsPage() {
             dataSource={current?.data?.items ?? []}
             scroll={{ x: 800 }}
             locale={{
-              emptyText: !current ? (
-                <span aria-hidden="true" />
-              ) : emptyKind === 'no-result' ? (
-                <ListEmpty
-                  title="검색 조건에 맞는 신청이 없어요"
-                  description="검색어나 필터를 바꿔 보세요."
-                  action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
-                />
-              ) : (
-                <ListEmpty
-                  mascot
-                  title={
-                    emptyKind === 'all-done' ? '검토할 신청이 없어요' : '아직 이용 신청이 없어요'
-                  }
-                  description="새 신청이 들어오면 여기에 표시돼요."
-                />
-              ),
+              emptyText:
+                !current || pageOutOfRange ? (
+                  <span aria-hidden="true" />
+                ) : emptyKind === 'no-result' ? (
+                  <ListEmpty
+                    title="검색 조건에 맞는 신청이 없어요"
+                    description="검색어나 필터를 바꿔 보세요."
+                    action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
+                  />
+                ) : (
+                  <ListEmpty
+                    mascot
+                    title={
+                      emptyKind === 'all-done' ? '검토할 신청이 없어요' : '아직 이용 신청이 없어요'
+                    }
+                    description="새 신청이 들어오면 여기에 표시돼요."
+                  />
+                ),
             }}
             columns={[
               {
