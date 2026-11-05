@@ -19,7 +19,13 @@ import {
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
-import { mlCell, type MlScores } from '../../../utils/transactionList'
+import {
+  mlCell,
+  mlScoresRequestKey,
+  mlScoresView,
+  type LoadedMlScores,
+  type MlScores,
+} from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
 import { SummaryBox, WhyCard } from './BasisCard'
@@ -33,10 +39,22 @@ import { SimilarCasesCard } from './SimilarCasesCard'
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
-export function ReportFull({ body, label }: { body: ReportBody; label: string }) {
+// refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
+export function ReportFull({
+  body,
+  label,
+  refreshKey,
+}: {
+  body: ReportBody
+  label: string
+  refreshKey: number
+}) {
   // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
   const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
-  const ml = useMlScores(body.paymentAnalyses.map((p) => p.paymentId))
+  const ml = useMlScores(
+    body.paymentAnalyses.map((p) => p.paymentId),
+    refreshKey,
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <VerdictCard body={body} label={label} hideSummary={single} />
@@ -243,16 +261,15 @@ function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
 
 // ML 참고 위험도 (#544) — 보고서에 넣지 않고 화면을 열 때 읽는다
 // ML 채점은 평가가 저장된 뒤 주기적으로(기본 30초) 돌아 보고서보다 늦을 수 있다
-const NO_PAYMENTS: MlScores = { status: 'loaded', scoreByPaymentId: new Map() }
-
-function useMlScores(paymentIds: string[]): MlScores {
-  const key = paymentIds.join(',')
-  const [loaded, setLoaded] = useState<{ key: string; scores: MlScores } | null>(null)
+function useMlScores(paymentIds: string[], refreshKey: number): MlScores {
+  const ids = paymentIds.join(',')
+  const key = mlScoresRequestKey(paymentIds, refreshKey)
+  const [loaded, setLoaded] = useState<LoadedMlScores | null>(null)
   useEffect(() => {
-    if (!key) return
+    if (!ids) return
     let alive = true
     // 실패해도 보고서 다른 칸은 그대로 보이고 이 줄만 "불러오지 못했어요"
-    getMlShadowScores(key.split(','))
+    getMlShadowScores(ids.split(','))
       .then((found) => {
         if (!alive) return
         const scoreByPaymentId = new Map(found.map((score) => [score.paymentId, score]))
@@ -264,9 +281,8 @@ function useMlScores(paymentIds: string[]): MlScores {
     return () => {
       alive = false
     }
-  }, [key])
-  if (!key) return NO_PAYMENTS
-  return loaded?.key === key ? loaded.scores : { status: 'loading' }
+  }, [ids, key])
+  return mlScoresView(loaded, paymentIds, refreshKey)
 }
 
 // ML 참고 위험도 한 줄 — 판정(기준표)과 섞이지 않게 회색 점선 칸

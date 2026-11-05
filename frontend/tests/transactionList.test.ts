@@ -9,6 +9,8 @@ import {
   defaultTransactionListQuery,
   merchantChange,
   mlCell,
+  mlScoresRequestKey,
+  mlScoresView,
   parseTransactionListQuery,
   transactionApiParams,
   transactionListSearch,
@@ -183,4 +185,14 @@ test('mlCell_scored_floorsPercentAndUsesServerLevel: 29.96%는 29%, 0.29는 29%,
   // 화면이 기준을 따로 계산하지 않는다 — 서버가 HIGH라고 했으면 기준 이상
   const serverHigh = mlCell('15', loadedMl(mlScore({ fraudProbability: 0.3, mlRiskLevel: 'HIGH' })))
   assert.equal(serverHigh.kind === 'scored' && serverHigh.aboveThreshold, true)
+})
+
+// mlScoresView_sameCaseRefreshed_dropsOldFailedResult — [새로고침]을 눌러도 이전 조회 실패가 남으면 채점이 끝나도 계속 "불러오지 못했어요" (#547 Codex 리뷰)
+test('mlScoresView_sameCaseRefreshed_dropsOldFailedResult: 결제 번호가 같아도 새로고침하면 이전 결과를 버리고 다시 불러온다', () => {
+  const paymentIds = ['101', '102']
+  // 처음 열었을 때(새로고침 0번) ML 조회가 실패한 상태
+  const before = { key: mlScoresRequestKey(paymentIds, 0), scores: { status: 'failed' } as const }
+
+  assert.deepEqual(mlScoresView(before, paymentIds, 0), { status: 'failed' })
+  assert.deepEqual(mlScoresView(before, paymentIds, 1), { status: 'loading' })
 })
