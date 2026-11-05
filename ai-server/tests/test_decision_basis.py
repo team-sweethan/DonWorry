@@ -1,9 +1,9 @@
-import json
-
 import pytest
 
-from app.agent.assemble import facts_json
 from app.agent.evidence import decision_basis
+from app.agent.facts import fact_catalog
+from app.agent.tools import ToolRecord
+from app.schemas.case_context import CaseContext
 from app.schemas.tools import (
     CasePaymentsTool,
     FdsPayment,
@@ -260,43 +260,6 @@ def test_rule_signal_label_is_fds_rule_name(code: str, name: str) -> None:
     assert [s.label for s in basis.signals] == [name]
 
 
-# AI에게 주는 근거에 판정 근거 · 기준표 판정이 들어가고 영문 판정 코드는 없다
-def test_facts_include_basis_in_korean() -> None:
-    case = _case(205600)
-    fds = {"1": _fds([_rule("R03", "신규 카드")], country="TH")}
-
-    facts = json.loads(facts_json(case, fds, None, _history(USUAL), _linked(card_others=1)))
-
-    basis = facts["결제"][0]["판정 근거"]
-    assert basis["기준표 판정"].endswith("승인 취소 검토")
-    assert basis["고위험 징후"] == [{"징후": "같은 카드를 다른 고객이 사용", "정상 사유": "없음"}]
-    assert "REJECT_REVIEW" not in json.dumps(facts, ensure_ascii=False)
-
-
-# --- Codex 리뷰 재현 (#501) ---
-
-
-# AI 입력의 판정 근거에 든 숫자는 문장 검사가 허용하는 숫자여야 한다
-# 비슷한 금액 이력이 10건을 넘으면 "17건 매입 완료"가 AI 입력에 들어가는데 허용 숫자에는 없어
-# AI가 근거를 그대로 옮겨 쓰면 다시 쓰기를 거듭하다 보고서가 실패할 수 있었다 (10 이하 수량만 예외)
-def test_basis_facts_have_no_number_outside_allowed() -> None:
-    from app.agent.assemble import fact_numbers
-    from app.agent.narrative import _numbers
-
-    # 사건(5월 21일) 전 비슷한 금액 17건 — 날짜 · 시각 · 금액에 17이 우연히 들어가지 않게 둔다
-    days = [f"2026-04-0{d}" for d in range(1, 10)] + [f"2026-05-0{d}" for d in range(1, 9)]
-    similar = [(200000 + i * 1000, "CAPTURED", f"{day}T10:00:00Z") for i, day in enumerate(days)]
-    others = [(5000, "CAPTURED", f"2026-03-0{d}T10:00:00Z") for d in range(1, 4)]
-    history = _history(similar + others)
-    case = _case(205600)
-    fds = {"1": _fds([_rule("R01", "고액 결제")])}
-
-    facts = json.loads(facts_json(case, fds, None, history, _linked()))
-
-    basis_text = json.dumps(facts["결제"][0]["판정 근거"], ensure_ascii=False)
-    assert _numbers(basis_text) <= fact_numbers(case, fds, None, history)
-
-
 # --- 사건 도중 결제 재현 (#532) ---
 # 사건은 30분 안의 보류 결제를 계속 합친다 — 10:00 보류 → 10:14 정상 결제 2건 → 10:28 보류
 # 10:14 결제는 두 사건 결제와 10분 넘게 떨어져 있지만 사건이 시작된 뒤의 결제라 평소 결제가 아니다
@@ -332,14 +295,25 @@ def test_payments_during_stretched_case_are_not_usual_history() -> None:
         assert basis.recommendation == "NEEDS_CHECK"
 
 
-# AI에게도 사건 도중 결제를 "그 전 결제"(평소 결제)로 보여 주지 않는다 — 판정과 같은 기준
+# AI에게도 사건 도중 결제를 "사건 전 결제"(평소 결제)로 보여 주지 않는다 — 판정과 같은 기준
 def test_facts_do_not_show_payments_during_case_as_earlier() -> None:
-    from app.agent.assemble import EARLIER_KEY
+    context = CaseContext(
+        case_id="1011",
+        evidence_version=1,
+        report_version=1,
+        merchant_id="m1",
+        customer_ref="c1",
+        case_created_at=AT,
+    )
+    records = [
+        ToolRecord("get_case_payments", {}, _stretched_case()),
+        ToolRecord("get_payment_history", {}, _history(DURING)),
+    ]
 
-    case = _stretched_case()
-    facts = json.loads(facts_json(case, {}, None, _history(DURING), None))
+    texts = [fact.text for fact in fact_catalog(context, records) if fact.topic == "history"]
 
-    assert facts["고객 최근 결제(이 사건 밖)"][EARLIER_KEY] == []
+    assert not any(text.startswith("사건 전 결제") for text in texts)
+    assert any(text.startswith("사건 도중 · 뒤 결제 2건") for text in texts)
 
 
 # --- FDS 점수 없음 재현 (#532) ---

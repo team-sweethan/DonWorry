@@ -165,6 +165,16 @@ export type ReportRuleHitDetail = {
 }
 
 // verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
+// AI가 조사한 사실 (#548) — 문장마다 근거 사실 번호(factIds)가 있고, 번호는 facts의 id
+export type ReportFactTopic = {
+  topic: string
+  title: string
+  sentences: Array<{ text: string; factIds: string[] }>
+}
+
+// 사실 번호별 원래 사실 — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
+export type ReportFact = { id: string; topic: string; text: string; evidenceId: string }
+
 export type ReportBody = {
   overview: {
     caseId: string
@@ -183,8 +193,7 @@ export type ReportBody = {
     requestedAt: string
     riskScore: number | null
     ruleHits: string[]
-    riskEvidence: string[]
-    normalEvidence: string[]
+    // 위험 근거 · 정상 정황(AI 문장)은 #548에서 없앴다 — 예전 보고서에 남아 있어도 보여 주지 않는다
     unknowns: string[]
     recommendation: AiRecommendation
     reason?: string
@@ -196,7 +205,9 @@ export type ReportBody = {
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
   timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
-  overallAnalysis: string[]
+  // AI가 조사한 사실 (#548) — 없으면(undefined) 예전 형식 보고서. 종합 분석(AI 문장)은 없앴다
+  factTopics?: ReportFactTopic[]
+  facts?: ReportFact[]
   additionalChecks: string[]
   recommendation: { summary: string; limitations: string[] }
   evidence: Array<{

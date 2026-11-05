@@ -3,13 +3,13 @@ import json
 
 from langchain_core.messages import ToolMessage
 
-from app.agent.assemble import MISSING_SIGNAL_LIMITATIONS, facts_json
+from app.agent.assemble import MISSING_SIGNAL_LIMITATIONS
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
-from tests.fakes import ScriptedLlm, call, context, narrative
+from tests.fakes import ScriptedLlm, call, catalog, context, narrative
 
 # 결제별 카드 · 기기 · 접속 국가 (#346) — 사실 값은 Tool 기록에서 코드가 채우고,
 # AI에는 있음/없음과 국가만 보여 준다. 가맹점이 안 보낸 값은 한계 줄로 남긴다
@@ -55,18 +55,16 @@ def test_payment_signals_filled_from_tool_record_not_ai() -> None:
 # AI 입력에는 카드 표시값(끝자리 숫자)이 들어가지 않는다 — 있음/없음 · 국가만
 def test_card_label_not_in_ai_facts() -> None:
     case_payments = CasePaymentsTool.model_validate(FIXTURE["casePayments"])
-    fds = {p.paymentId: p for p in _fds([CARD_ONLY, FULL]).payments}
 
-    facts = facts_json(case_payments, fds)
+    facts = catalog(case_payments, _fds([CARD_ONLY, FULL]))
 
+    texts = [f.text for f in facts]
     for label in ("신한", "1234", "국민", "5678"):
-        assert label not in facts
-    first = json.loads(facts)["결제"][0]["카드 · 기기 · 접속"]
-    assert first == {
-        "카드 정보": "있음",
-        "기기 정보": "있음",
-        "접속 국가": "정보 없음 (가맹점이 보내지 않음)",
-    }
+        assert not any(label in text for text in texts)
+    first = next(f.text for f in facts if f.topic == "signals")
+    assert first.endswith(
+        "카드 정보 있음 · 기기 정보 있음 · 접속 국가 정보 없음(가맹점이 보내지 않음)"
+    )
 
 
 # 가맹점이 IP를 보내지 않은 결제가 있으면 한계 줄에 남는다 — 직원이 "해외 접속 아님"으로 읽지 않게
