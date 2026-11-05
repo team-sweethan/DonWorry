@@ -84,7 +84,9 @@ class FixedReportGeneratorTests {
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
-        assertThat((List<?>) analysis.get("normalEvidence")).isEmpty();
+        assertThat(analysis.containsKey("riskEvidence") || analysis.containsKey("normalEvidence"))
+                .isFalse();
+        assertThat((List<?>) body.get("factTopics")).isEmpty();
         assertThat(analysis.get("reason")).isInstanceOf(String.class);
         // 기준값 · 실제값이 없는 규칙은 criterion · observed가 null — AI 보고서와 같은 모양 (#326)
         Map<String, Object> expectedRule =

@@ -10,7 +10,8 @@ from app.config import Settings, settings
 from app.controller.investigation_controller import get_service
 from app.main import app
 from app.schemas.report import ReportBody
-from tests.fakes import context, narrative, toolbox
+from tests.fakes import catalog, context, narrative, toolbox
+from tests.test_narrative_quality import CASES, FDS
 
 # OpenAI 제공자 (#453) — 배포 VM은 사양 한계로 Ollama를 설치할 수 없어 OpenAI로 보고서를 쓴다
 # 실제 OpenAI 호출은 넣지 않는다 (키 · 비용). 키 있는 환경에서 scripts/run_report.py로 따로 확인
@@ -55,7 +56,7 @@ def test_openai_write_json_returnsRawTextWithUsage() -> None:
     chat = GenericFakeChatModel(messages=iter([AIMessage(content=raw, usage_metadata=usage)]))
 
     result = OpenAiLlmClient(chat).write_json(
-        [HumanMessage(content="근거")], narrative_schema(["9001"])
+        [HumanMessage(content="근거")], narrative_schema(catalog(CASES, FDS))
     )
 
     assert result == raw

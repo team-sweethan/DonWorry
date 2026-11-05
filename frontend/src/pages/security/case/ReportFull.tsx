@@ -1,8 +1,9 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
+import { Card, Collapse, Descriptions, Popover, Table, Tag, Typography } from 'antd'
 import { getMlShadowScores } from '../../../api/mlShadowScores'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
+  aiFactsView,
   isCodeReason,
   mlReportLine,
   recommendationSource,
@@ -16,6 +17,7 @@ import {
   unknownItems,
   verdictCardTitle,
   verdictLines,
+  type FactRef,
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
@@ -33,9 +35,9 @@ import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
-// AI 보고서 전문. 결론 → 결제별 근거 비교 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
-// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? → AI 참고 설명 순서 (#501, #543), 예전 보고서는 그대로
-// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543)
+// AI 보고서 전문. 결론 → 결제별 판정 근거 → AI가 조사한 사실 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 경위 · 확인할 것 → 상세 정보 순서
+// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? 순서 (#501)
+// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
@@ -66,16 +68,12 @@ export function ReportFull({
           ml={mlReportLine(mlCell(p.paymentId, ml))}
         />
       ))}
+      <AiFactsCard body={body} />
       {body.similarCases !== undefined && (
         <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
       )}
       {body.paymentHistory !== undefined && <PaymentHistoryCard history={body.paymentHistory} />}
       {body.linkedPayments !== undefined && <LinkedPaymentsCard linked={body.linkedPayments} />}
-      {body.overallAnalysis.length > 0 && (
-        <Card title={<CardTitle title="종합 분석" ai />} style={cardStyle}>
-          <Bullets items={body.overallAnalysis} />
-        </Card>
-      )}
       <div className="dw-section-grid">
         <Card title={<CardTitle title="사건 경위" note="시간순" />} style={cardStyle}>
           <Timeline items={body.timeline} />
@@ -159,7 +157,7 @@ function VerdictCard({
   )
 }
 
-// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요? · AI 참고 설명
+// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요?
 function PaymentEvidence({
   analysis: p,
   summary,
@@ -194,7 +192,6 @@ function PaymentEvidence({
             details={p.ruleHitDetails}
           />
           <MlLine text={ml} />
-          <AiNotes risk={p.riskEvidence} normal={p.normalEvidence} />
         </>
       ) : (
         <>
@@ -211,50 +208,25 @@ function PaymentEvidence({
   )
 }
 
-// 예전 보고서(판정 근거 없음)의 위험 근거 / 정상 정황 비교 — 규칙 줄과 AI 문장을 나란히
+// 예전 보고서(판정 근거 없음)의 적중 규칙 — 예전 AI 문장(위험 근거 · 정상 정황)은 보여 주지 않는다 (#548)
 function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
   const rules = ruleEvidenceRows(p)
   return (
-    <div style={compareStyle}>
-      <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
-        <SideTitle
-          color="#991B1B"
-          title="⚠ 위험 근거"
-          count={rules.length + p.riskEvidence.length}
-        />
-        {rules.map((r, i) => (
-          <Item
-            key={`rule-${i}`}
-            title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
-          >
-            {r.criterion && r.observed && (
-              <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
-                기준 {r.criterion} · 이번 {r.observed}
-              </span>
-            )}
-            FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
-          </Item>
-        ))}
-        {p.riskEvidence.map((text, i) => (
-          <Item key={`risk-${i}`} title={text}>
-            <AiTag />
-          </Item>
-        ))}
-      </div>
-      <div style={{ ...sideStyle, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-        <SideTitle color="#166534" title="✓ 정상 정황" count={p.normalEvidence.length} />
-        {p.normalEvidence.length === 0 ? (
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            확인된 정상 정황이 없습니다.
-          </Typography.Text>
-        ) : (
-          p.normalEvidence.map((text, i) => (
-            <Item key={i} title={text}>
-              <AiTag />
-            </Item>
-          ))
-        )}
-      </div>
+    <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+      <SideTitle color="#991B1B" title="⚠ 적중 규칙" count={rules.length} />
+      {rules.map((r, i) => (
+        <Item
+          key={`rule-${i}`}
+          title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
+        >
+          {r.criterion && r.observed && (
+            <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
+              기준 {r.criterion} · 이번 {r.observed}
+            </span>
+          )}
+          FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
+        </Item>
+      ))}
     </div>
   )
 }
@@ -290,41 +262,69 @@ function MlLine({ text }: { text: string }) {
   return <div style={mlLineStyle}>{text}</div>
 }
 
-// AI 참고 설명 — AI가 근거를 읽고 쓴 위험 쪽 · 정상 쪽 문장 (#543)
-// 규칙 이름 · 기준 · 점수 · 증거 번호는 "왜 이 판정인가요?"에 있어 여기서는 다시 보여 주지 않는다
-function AiNotes({ risk, normal }: { risk: string[]; normal: string[] }) {
+// AI가 조사한 사실 (#548) — AI가 조회 결과를 주제별로 전달한 문장. 판정에 쓰지 않는다
+// 문장 끝 번호를 누르면 원래 사실과 그 사실을 가져온 조회 기록이 보인다
+function AiFactsCard({ body }: { body: ReportBody }) {
+  const view = aiFactsView(body)
   return (
-    <div style={aiNotesStyle}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, color: '#581C87' }}>AI 참고 설명</span>
-        <Tag color="purple" style={{ marginInlineEnd: 0 }}>
-          판정에 쓰지 않음
-        </Tag>
-      </div>
-      <div style={compareStyle}>
-        <NoteSide title="위험 쪽" color="#991B1B" items={risk} />
-        <NoteSide title="정상 쪽" color="#166534" items={normal} />
-      </div>
-    </div>
-  )
-}
-
-function NoteSide({ title, color, items }: { title: string; color: string; items: string[] }) {
-  return (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4 }}>{title}</div>
-      {items.length === 0 ? (
-        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-          없음
+    <Card
+      title={
+        <CardTitle title="AI가 조사한 사실" note="판정에 쓰지 않음 · 번호를 누르면 원래 기록" ai />
+      }
+      style={cardStyle}
+    >
+      {view.kind === 'legacy' && (
+        <Typography.Text type="secondary">
+          예전 형식 보고서라 AI 조사 사실이 없어요.
         </Typography.Text>
-      ) : (
-        <Bullets items={items} />
       )}
-    </div>
+      {view.kind === 'none' && (
+        <Typography.Text type="secondary">AI가 조사한 사실이 없어요.</Typography.Text>
+      )}
+      {view.kind === 'topics' &&
+        view.topics.map((topic, t) => (
+          <div key={topic.title} style={{ marginTop: t === 0 ? 0 : 16 }}>
+            <SubTitle>{topic.title}</SubTitle>
+            <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
+              {topic.sentences.map((sentence, i) => (
+                <li key={i} style={{ fontSize: 14 }}>
+                  {sentence.text}{' '}
+                  {sentence.refs.map((r) => (
+                    <FactChip key={r.id} fact={r} />
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+    </Card>
   )
 }
 
-// 카드 · 기기 · 접속 국가 한 줄 (#346). 가맹점이 안 보낸 값은 숨기지 않고 "정보 없음"으로 보여 준다
+function FactChip({ fact }: { fact: FactRef }) {
+  const e = fact.evidence
+  return (
+    <Popover
+      trigger="click"
+      title={`사실 ${fact.id}`}
+      content={
+        <div style={{ maxWidth: 360, fontSize: 13, lineHeight: 1.7 }}>
+          <div>{fact.text}</div>
+          <div style={{ color: '#64748b', marginTop: 6 }}>
+            {e
+              ? `조회 기록 ${e.evidenceId} · ${e.toolName} · ${e.source} · ${dateTime(e.retrievedAt)}`
+              : '조회 기록을 찾지 못했어요'}
+          </div>
+        </div>
+      }
+    >
+      <Tag color="purple" style={{ cursor: 'pointer', marginInlineEnd: 4 }}>
+        {fact.id}
+      </Tag>
+    </Popover>
+  )
+}
+
 function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
   return (
     <div style={signalLineStyle}>
@@ -605,11 +605,6 @@ const chipStyle: CSSProperties = {
   fontSize: 12.5,
   fontWeight: 700,
 }
-const compareStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-  gap: 16,
-}
 const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
 const mlLineStyle: CSSProperties = {
   fontSize: 13,
@@ -619,15 +614,6 @@ const mlLineStyle: CSSProperties = {
   borderRadius: 8,
   padding: '8px 12px',
   marginBottom: 16,
-}
-const aiNotesStyle: CSSProperties = {
-  background: '#FAF5FF',
-  border: '1px solid #E9D5FF',
-  borderRadius: 12,
-  padding: '14px 18px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
 }
 const itemStyle: CSSProperties = {
   background: '#fff',

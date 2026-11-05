@@ -23,8 +23,7 @@ def _contradicting() -> str:
     body = json.loads(narrative(PAYMENTS))
     body["headline"] = "두 결제 모두 " + REJECT_TEXT
     body["recommendationSummary"] = REJECT_TEXT
-    for payment in body["payments"].values():
-        payment["reason"] = "처음 쓰는 카드라 " + REJECT_TEXT
+    body["reason"] = "처음 쓰는 카드라 " + REJECT_TEXT
     return json.dumps(body, ensure_ascii=False)
 
 
@@ -54,45 +53,47 @@ def test_report_reason_listsOpenSignalNames() -> None:
     assert "단시간 반복 결제" in reasons["9002"] and "신규 카드" in reasons["9002"]
 
 
-# AI 사실 문장에 섞인 판단 문구는 코드가 뺀다 — 다시 쓰게 하지 않는다
-def test_narrative_judgementSentence_isRemovedWithoutRewrite() -> None:
+# AI 사실 문장에 섞인 판단 문구는 지우지 않고 다시 쓰게 한다 (#548 — 예전엔 코드가 몰래 뺐다)
+def test_narrative_judgementSentence_isRewritten() -> None:
     written = narrative(
-        PAYMENTS,
         summary=[
-            "결제 2건 모두 처음 쓰는 카드로 결제됐습니다.",
-            "짧은 간격으로 이어진 결제입니다.",
-            "두 결제 모두 매입 진행을 검토할 수 있습니다.",
+            {"text": "결제마다 카드 · 기기 · 접속 정보가 없습니다.", "facts": ["접속-1"]},
+            {"text": "두 결제 모두 매입 진행을 검토할 수 있습니다.", "facts": ["접속-1"]},
+        ],
+    )
+
+    llm, outcome = _run(written, narrative())
+
+    assert llm.write_calls == 2
+    assert outcome.status == "SUCCEEDED"
+    assert not [s for s in outcome.report.summary if "매입 진행" in s]
+
+
+# 지난 결제의 상태("승인 취소된 결제")는 사실이라 걸리지 않는다
+def test_narrative_pastStatusFact_isKept() -> None:
+    fact = "결제 9001은 승인 취소된 기록이 아니라 카드 정보가 없는 결제입니다."
+    written = narrative(
+        summary=[
+            {"text": "결제마다 카드 · 기기 · 접속 정보가 없습니다.", "facts": ["접속-1"]},
+            {"text": fact, "facts": ["접속-1"]},
         ],
     )
 
     llm, outcome = _run(written)
 
     assert llm.write_calls == 1
-    assert outcome.status == "SUCCEEDED"
-    assert not [s for s in outcome.report.summary if "매입 진행" in s]
-
-
-# 지난 결제의 상태("승인 취소된 결제")는 사실이라 빼지 않는다
-def test_narrative_pastStatusFact_isKept() -> None:
-    fact = "지난달 결제 중 한 건이 승인 취소된 기록이 있습니다."
-    written = narrative(
-        PAYMENTS,
-        summary=["결제 2건 모두 처음 쓰는 카드로 결제됐습니다.", fact],
-    )
-
-    _, outcome = _run(written)
-
     assert fact in outcome.report.summary
 
 
-# AI에게 판단 칸(결론 한 줄 · 권고 요약 · 이유)을 쓰라고 하지 않는다
+# AI에게 판단 칸(결론 한 줄 · 권고 요약 · 이유 · 위험/정상 근거)을 쓰라고 하지 않는다
 def test_narrativeSchema_doesNotAskJudgementFields() -> None:
-    schema = narrative_schema(PAYMENTS)
+    from tests.fakes import catalog
+    from tests.test_narrative_quality import CASES, FDS
 
-    assert "headline" not in schema["properties"]
-    assert "recommendationSummary" not in schema["properties"]
-    payment = schema["properties"]["payments"]["properties"]["9001"]
-    assert "reason" not in payment["properties"]
+    schema = json.dumps(narrative_schema(catalog(CASES, FDS)))
+
+    for field in ("headline", "recommendationSummary", "reason", "riskEvidence", "normalEvidence"):
+        assert field not in schema
 
 
 def _analysis(pid: str, recommendation: str, basis: dict | None) -> PaymentAnalysis:
@@ -103,8 +104,6 @@ def _analysis(pid: str, recommendation: str, basis: dict | None) -> PaymentAnaly
             "requestedAt": "2026-05-21T10:00:00Z",
             "riskScore": 50,
             "ruleHits": [],
-            "riskEvidence": [],
-            "normalEvidence": [],
             "unknowns": [],
             "recommendation": recommendation,
             "reason": "",
