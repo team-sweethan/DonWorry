@@ -297,7 +297,7 @@ def assemble_report(
         evidence=[
             EvidenceItem(
                 toolName=record.tool_name,
-                source=record.result.source + (" (자동 보충)" if record.filled_by_system else ""),
+                source=record.result.source,
                 evidenceId=evidence_id(context, seq),
                 retrievedAt=record.result.retrievedAt,
                 dataVersion=f"evidence v{record.result.evidenceVersion}",

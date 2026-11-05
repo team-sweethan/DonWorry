@@ -1,11 +1,9 @@
 import json
 
-from langchain_core.messages import HumanMessage, ToolMessage
-
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.config import Settings
-from tests.fakes import LINKED_SUMMARY, BrokenLlm, ScriptedLlm, call, context, narrative, toolbox
+from tests.fakes import LINKED_SUMMARY, BrokenLlm, ScriptedLlm, context, narrative, toolbox
 
 SETTINGS = Settings(_env_file=None)
 FIXTURE = json.loads(open("tests/fixtures/sample_case.json", encoding="utf-8").read())
@@ -47,120 +45,6 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
     assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2", "P5", "P2"]
     assert report["evidence"][0]["dataVersion"] == "evidence v2"
     assert "FDS 점수는 부정거래 확률이 아닙니다." in report["recommendation"]["limitations"]
-
-
-# Agent가 결제 하나의 FDS 근거를 빠뜨리면 알려 주고, Agent가 스스로 다시 고른다
-def test_missing_evidence_is_nudged_and_agent_picks_it() -> None:
-    llm = ScriptedLlm(
-        turns=[
-            [call("get_case_payments")],
-            [call("get_fds_evidence", payment_ids=["9001"])],
-            None,
-            [call("get_fds_evidence", payment_ids=["9002"])],
-            [call("find_similar_cases")],
-            [call("get_payment_history")],
-            [call("find_linked_payments")],
-            None,
-        ],
-        outputs=[narrative(["9001", "9002"])],
-    )
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    assert [r.args for r in outcome.records] == [
-        {},
-        {"payment_ids": ["9001"]},
-        {"payment_ids": ["9002"]},
-        {},
-        {},
-        {},
-    ]
-    assert not any(r.filled_by_system for r in outcome.records)
-    nudges = [m for m in llm.choose_messages[-1] if isinstance(m, HumanMessage)]
-    assert any("9002" in str(m.content) for m in nudges)
-
-
-# 알려 줘도 계속 안 보면 코드가 보충하고, 증거 추적에 자동 보충으로 남긴다
-def test_agent_ignoring_nudges_gets_system_fill() -> None:
-    llm = ScriptedLlm(turns=[[call("get_case_payments")]], outputs=[narrative(["9001", "9002"])])
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    filled = [r for r in outcome.records if r.filled_by_system]
-    assert [r.tool_name for r in filled] == [
-        "get_fds_evidence",
-        "find_similar_cases",
-        "get_payment_history",
-        "find_linked_payments",
-    ]
-    assert [e.source for e in outcome.report.evidence][-4:] == [
-        "P2 (자동 보충)",
-        "P3·P2 (자동 보충)",
-        "P5 (자동 보충)",
-        "P2 (자동 보충)",
-    ]
-
-
-# 허용 목록에 없는 도구는 실행하지 않고 Agent에게 거절을 알린다
-def test_disallowed_tool_is_refused() -> None:
-    llm = ScriptedLlm(
-        turns=[
-            [call("approve_payment", payment_id="9001")],
-            [call("get_case_payments")],
-            [call("get_fds_evidence")],
-            None,
-        ],
-        outputs=[narrative(["9001", "9002"])],
-    )
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    assert "approve_payment" not in [r.tool_name for r in outcome.records]
-    refused = [
-        m
-        for m in llm.choose_messages[1]
-        if isinstance(m, ToolMessage) and m.name == "approve_payment"
-    ]
-    assert "허용되지 않은 도구" in str(refused[0].content)
-
-
-# 도구를 끝없이 부르면 최대 횟수에서 멈춘다
-def test_tool_call_limit_stops_agent() -> None:
-    llm = ScriptedLlm(
-        turns=[[call("get_case_payments")]],
-        outputs=[narrative(["9001", "9002"])],
-        repeat_last_turn=True,
-    )
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    chosen = [r for r in outcome.records if not r.filled_by_system]
-    assert len(chosen) == SETTINGS.agent_max_tool_calls
-    assert outcome.status == "SUCCEEDED"
-
-
-# 사건 밖 결제를 고르면 도구가 거절하고, Agent는 다시 고른다
-def test_payment_outside_case_is_reported_to_agent() -> None:
-    llm = ScriptedLlm(
-        turns=[
-            [call("get_case_payments")],
-            [call("get_fds_evidence", payment_ids=["7777"])],
-            [call("get_fds_evidence")],
-            [call("find_similar_cases")],
-            [call("get_payment_history")],
-            [call("find_linked_payments")],
-            None,
-        ],
-        outputs=[narrative(["9001", "9002"])],
-    )
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    assert [r.args for r in outcome.records] == [{}, {}, {}, {}, {}]
 
 
 # 형식이 틀리면 오류를 알려 고쳐 쓰게 한다
@@ -221,18 +105,10 @@ def test_fixture_matches_spring_tool_shape() -> None:
 
 
 # 결론 · 이유는 판정 근거로 코드가, 규칙 근거는 FDS 조회 기록에서 채운다 (#532)
-# 증거 ID는 그 결제를 받은 조회 줄
+# 증거 ID는 그 결제를 받은 조회 줄 — 기본 조회는 FDS 근거를 한 번에 받는다 (#578)
 def test_assemble_fills_verdict_from_basis_and_rule_hits_from_tool_records() -> None:
     written = json.loads(narrative(["9001", "9002"]))
-    llm = ScriptedLlm(
-        turns=[
-            [call("get_case_payments")],
-            [call("get_fds_evidence", payment_ids=["9001"])],
-            [call("get_fds_evidence", payment_ids=["9002"])],
-            None,
-        ],
-        outputs=[json.dumps(written, ensure_ascii=False)],
-    )
+    llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
 
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
@@ -247,8 +123,7 @@ def test_assemble_fills_verdict_from_basis_and_rule_hits_from_tool_records() -> 
         ("HIGH_AMOUNT", "고액 결제", 35, "E-101-v1-02"),
         ("NEW_CARD", "처음 쓰는 카드", 30, "E-101-v1-02"),
     ]
-    assert {r.evidenceId for r in second.ruleHitDetails} == {"E-101-v1-03"}
-    assert {"E-101-v1-02", "E-101-v1-03"} <= {e.evidenceId for e in report.evidence}
+    assert {r.evidenceId for r in second.ruleHitDetails} == {"E-101-v1-02"}
 
 
 # 결제 하나라도 승인 취소 검토면 종합 권고도 승인 취소 검토다

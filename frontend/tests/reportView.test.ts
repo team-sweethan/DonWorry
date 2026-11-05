@@ -219,9 +219,9 @@ test('liveCurrentTask_pending_waitsForStart', () => {
   assert.equal(liveCurrentTask('PENDING', []).title, '조사 시작을 기다리는 중')
 })
 
-// 첫 단계(조회 고르기)가 15초 걸려도 빈 화면이 아니게
-test('liveCurrentTask_noStepsYet_choosingFirstTool', () => {
-  assert.equal(liveCurrentTask('RUNNING', []).title, '사건 근거를 보고 첫 조회를 고르는 중')
+// 아직 끝난 단계가 없으면 코드가 기본 조회를 하는 중이다 — AI가 고르지 않는다 (#578)
+test('liveCurrentTask_noStepsYet_runsBaseLookups', () => {
+  assert.equal(liveCurrentTask('RUNNING', []).title, '기본 조회 실행 중')
 })
 
 test('liveCurrentTask_afterChooseOrTool_runsThenChoosesNext', () => {
