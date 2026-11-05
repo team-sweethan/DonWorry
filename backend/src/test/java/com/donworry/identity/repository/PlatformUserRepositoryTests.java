@@ -58,7 +58,7 @@ class PlatformUserRepositoryTests {
         assertThat(countByRole("ADMIN")).isOne();
         assertThat(user.getUserId()).isPositive();
         assertThat(user.getLoginId()).isEqualTo("admin");
-        assertThat(user.getDisplayName()).isEqualTo("demo_shop");
+        assertThat(user.getDisplayName()).isEqualTo("관리자");
         assertThat(user.getRole()).isEqualTo(UserRole.ADMIN);
         assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(user.getMerchantId()).isNull();
