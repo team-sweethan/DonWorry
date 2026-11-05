@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Alert, Button, Checkbox, Form, Input } from 'antd'
+import { Alert, Button, Form, Input, Switch } from 'antd'
 import { ArrowLeftOutlined, LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../../api/client'
@@ -26,6 +26,20 @@ const feedbackMessages: Record<Feedback, string> = {
   network: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
 }
 
+// LoginPage.css의 펼침 연출 미디어 쿼리와 같은 조건이다.
+const OPEN_MOTION_QUERY = '(prefers-reduced-motion: no-preference) and (min-width: 801px)'
+
+const outerDate = new Intl.DateTimeFormat('ko-KR', {
+  month: 'long',
+  day: 'numeric',
+  weekday: 'long',
+})
+const outerTime = new Intl.DateTimeFormat('ko-KR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
 export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
@@ -33,7 +47,10 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const [initialValues] = useState(readLoginPreferences)
   const [capsLock, setCapsLock] = useState(false)
   const [findHelp, setFindHelp] = useState(false)
-  const [bookOpened, setBookOpened] = useState(false)
+  // 화면을 열 때 한 번만 정해서, 창을 넓혀도 연출이 뒤늦게 재생되지 않게 한다.
+  const [deviceOpening, setDeviceOpening] = useState(
+    () => window.matchMedia(OPEN_MOTION_QUERY).matches,
+  )
   const apply = useApplicationConfig()
 
   const submit = async (values: LoginValues) => {
@@ -63,7 +80,6 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
 
   return (
     <div className="dw-signin">
-      <div className="dw-signin-glow" aria-hidden="true" />
       <header className="dw-signin-top">
         <Link className="dw-public-brand" to="/" aria-label="돈워리 서비스 소개" viewTransition>
           <BrandMark className="dw-mark" />
@@ -76,118 +92,86 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
       </header>
       <main className="dw-signin-main">
         <div
-          className={`dw-signin-book${bookOpened ? ' is-open' : ''}`}
-          onFocusCapture={() => setBookOpened(true)}
+          className={`dw-signin-device${deviceOpening ? ' is-opening' : ''}`}
+          onFocusCapture={() => setDeviceOpening(false)}
           onAnimationEnd={(event) => {
-            if (event.target === event.currentTarget) setBookOpened(true)
+            if (event.target === event.currentTarget) setDeviceOpening(false)
           }}
         >
-          <aside className="dw-signin-page dw-signin-welcome" aria-labelledby="welcome-title">
-            <div className="dw-signin-edition">
-              <span>돈워리 업무 노트</span>
-              <span>01</span>
-            </div>
-            <div className="dw-signin-welcome-copy">
-              <p className="dw-signin-eyebrow">가게 운영의 다음 장</p>
-              <h2 id="welcome-title">
-                오늘의 장사도,
-                <br />
-                돈워리와 함께.
-              </h2>
-              <p>
-                매일의 결제와 정산을
-                <br />
-                한곳에서 차근차근.
-              </p>
-            </div>
-            <div className="dw-signin-illustration" aria-hidden="true">
-              <span className="dw-signin-orbit" />
-              <Mascot size={220} />
-              <span className="dw-signin-illustration-note">걱정은 덜고, 장사에 더 가까이.</span>
-            </div>
-            <div className="dw-signin-page-note">
-              <span>당신의 가게 곁에, 돈워리</span>
-              <span>시작하는 페이지</span>
-            </div>
-          </aside>
-          <section className="dw-signin-page dw-signin-card" aria-labelledby="login-title">
-            <div className="dw-signin-body">
-              <div className="dw-signin-edition">
-                <span>나의 업무 공간</span>
-                <span>02</span>
-              </div>
-              <h1 id="login-title">로그인</h1>
-              <p className="dw-signin-description">관리자에게 발급받은 아이디로 로그인해 주세요.</p>
-              {notice && <div className="dw-signin-notice">{notice}</div>}
-              <Form<LoginValues>
-                initialValues={initialValues}
-                layout="vertical"
-                onFinish={submit}
-                onValuesChange={() => setFeedback(null)}
-                requiredMark={false}
-                size="large"
-                disabled={submitting}
+          <section className="dw-signin-pane dw-signin-form" aria-labelledby="login-title">
+            <h1 id="login-title">로그인</h1>
+            {notice && <div className="dw-signin-notice">{notice}</div>}
+            <Form<LoginValues>
+              initialValues={initialValues}
+              layout="vertical"
+              onFinish={submit}
+              onValuesChange={() => setFeedback(null)}
+              requiredMark={false}
+              size="large"
+              disabled={submitting}
+            >
+              <Form.Item
+                label="아이디"
+                name="loginId"
+                rules={[
+                  { required: true, whitespace: true, message: '아이디를 입력해 주세요.' },
+                  {
+                    max: 100,
+                    transform: (value: string) => value?.trim(),
+                    message: '아이디는 100자 이하로 입력해 주세요.',
+                  },
+                ]}
               >
-                <Form.Item
-                  label="아이디"
-                  name="loginId"
-                  rules={[
-                    { required: true, whitespace: true, message: '아이디를 입력해 주세요.' },
-                    {
-                      max: 100,
-                      transform: (value: string) => value?.trim(),
-                      message: '아이디는 100자 이하로 입력해 주세요.',
-                    },
-                  ]}
-                >
-                  <Input
-                    prefix={<UserOutlined />}
-                    placeholder="아이디를 입력하세요"
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    spellCheck={false}
+                <Input
+                  prefix={<UserOutlined />}
+                  placeholder="아이디를 입력하세요"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                />
+              </Form.Item>
+              <Form.Item
+                label={
+                  <span className="dw-signin-label">
+                    비밀번호
+                    <small>5번 틀리면 15분 동안 잠겨요</small>
+                  </span>
+                }
+                name="password"
+                rules={[{ required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' }]}
+                // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
+                extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
+              >
+                <Input.Password
+                  prefix={<LockOutlined />}
+                  placeholder="비밀번호를 입력하세요"
+                  autoComplete="current-password"
+                  onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                  onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
+                  onBlur={() => setCapsLock(false)}
+                />
+              </Form.Item>
+              <div className="dw-signin-save">
+                <span id="remember-login-id">아이디 저장</span>
+                <Form.Item name="rememberLoginId" valuePropName="checked" noStyle>
+                  <Switch aria-labelledby="remember-login-id" />
+                </Form.Item>
+              </div>
+              {feedback && (
+                <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-signin-error">
+                  <Alert
+                    type={feedback === 'ready' ? 'info' : 'error'}
+                    showIcon
+                    message={feedbackMessages[feedback]}
                   />
-                </Form.Item>
-                <Form.Item
-                  label={
-                    <span className="dw-signin-label">
-                      비밀번호
-                      <small>5번 틀리면 15분 동안 잠겨요</small>
-                    </span>
-                  }
-                  name="password"
-                  rules={[
-                    { required: true, whitespace: true, message: '비밀번호를 입력해 주세요.' },
-                  ]}
-                  // 상태 영역을 미리 두어야 스크린 리더가 문구 변경을 읽는다.
-                  extra={<span role="status">{capsLock ? 'Caps Lock이 켜져 있습니다.' : ''}</span>}
-                >
-                  <Input.Password
-                    prefix={<LockOutlined />}
-                    placeholder="비밀번호를 입력하세요"
-                    autoComplete="current-password"
-                    onKeyDown={(event) => setCapsLock(event.getModifierState('CapsLock'))}
-                    onKeyUp={(event) => setCapsLock(event.getModifierState('CapsLock'))}
-                    onBlur={() => setCapsLock(false)}
-                  />
-                </Form.Item>
-                <Form.Item name="rememberLoginId" valuePropName="checked">
-                  <Checkbox>아이디 저장</Checkbox>
-                </Form.Item>
-                {feedback && (
-                  <div role={feedback === 'ready' ? 'status' : 'alert'} className="dw-signin-error">
-                    <Alert
-                      type={feedback === 'ready' ? 'info' : 'error'}
-                      showIcon
-                      message={feedbackMessages[feedback]}
-                    />
-                  </div>
-                )}
-                <Button type="primary" htmlType="submit" loading={submitting} block>
-                  로그인
-                </Button>
-              </Form>
-              {/* 찾기 기능은 만들지 않는다 (#144). 눌러도 반응 없는 버튼이 되지 않게 실제 경로를 안내한다. */}
+                </div>
+              )}
+              <Button type="primary" htmlType="submit" loading={submitting} block>
+                로그인
+              </Button>
+            </Form>
+            {/* 찾기 기능은 만들지 않는다 (#144). 눌러도 반응 없는 버튼이 되지 않게 실제 경로를 안내한다. */}
+            <div className="dw-signin-links">
               <Button
                 type="link"
                 className="dw-signin-find"
@@ -196,28 +180,38 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
               >
                 아이디/비밀번호 찾기
               </Button>
-              {findHelp && (
-                <p className="dw-signin-help">
-                  아이디나 비밀번호를 잊었다면 관리자에게 문의해 주세요.
-                </p>
-              )}
-            </div>
-            <div className="dw-signin-foot">
-              돈워리가 처음이신가요?
               <ApplicationEntry config={apply} variant="link" />
             </div>
+            {findHelp && (
+              <p className="dw-signin-help">
+                아이디나 비밀번호를 잊었다면 관리자에게 문의해 주세요.
+              </p>
+            )}
           </section>
-          <div className="dw-signin-cover" aria-hidden="true">
-            <div className="dw-signin-cover-front">
-              <span className="dw-signin-cover-edition">가게 운영을 위한 한 권</span>
-              <BrandMark size={64} />
-              <strong>돈워리</strong>
-              <span className="dw-signin-cover-line" />
-              <span>오늘의 장사도, 함께.</span>
-              <span className="dw-signin-cover-bottom">DONWORRY</span>
+          <aside className="dw-signin-pane dw-signin-hero" aria-labelledby="welcome-title">
+            <h2 id="welcome-title">
+              오늘 매출,
+              <br />
+              <em>별일 없었나요?</em>
+            </h2>
+            <div className="dw-signin-illustration" aria-hidden="true">
+              <Mascot size={230} className="dw-mascot-float" />
             </div>
-            <div className="dw-signin-cover-back" />
-          </div>
+          </aside>
+          {deviceOpening && (
+            <div className="dw-signin-outer" aria-hidden="true">
+              <div className="dw-signin-outer-front">
+                <span className="dw-signin-outer-date">{outerDate.format(new Date())}</span>
+                <span className="dw-signin-outer-time">{outerTime.format(new Date())}</span>
+                <span className="dw-signin-outer-brand">
+                  <BrandMark size={28} />
+                  돈워리
+                </span>
+                <i className="dw-signin-outer-button" />
+              </div>
+              <div className="dw-signin-outer-back" />
+            </div>
+          )}
         </div>
       </main>
       <footer className="dw-signin-footer">© 2026 DonWorry</footer>
