@@ -32,6 +32,7 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [initialValues] = useState(readLoginPreferences)
   const [capsLock, setCapsLock] = useState(false)
+  const [findHelp, setFindHelp] = useState(false)
   const apply = useApplicationConfig()
 
   const submit = async (values: LoginValues) => {
@@ -145,7 +146,20 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
                 로그인
               </Button>
             </Form>
-            <p className="dw-signin-help">비밀번호를 잊었다면 관리자에게 초기화를 요청해 주세요.</p>
+            {/* 찾기 기능은 만들지 않는다 (#144). 눌러도 반응 없는 버튼이 되지 않게 실제 경로를 안내한다. */}
+            <Button
+              type="link"
+              className="dw-signin-find"
+              aria-expanded={findHelp}
+              onClick={() => setFindHelp((open) => !open)}
+            >
+              아이디/비밀번호 찾기
+            </Button>
+            {findHelp && (
+              <p className="dw-signin-help">
+                아이디나 비밀번호를 잊었다면 관리자에게 문의해 주세요.
+              </p>
+            )}
           </div>
           <div className="dw-signin-foot">
             돈워리가 처음이신가요?

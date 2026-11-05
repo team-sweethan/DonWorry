@@ -85,8 +85,12 @@
   color: #4e5968;
   font-size: 15px;
 }
+.dw-signin-find {
+  display: block;
+  margin: 10px auto 0;
+}
 .dw-signin-help {
-  margin: 14px 0 0;
+  margin: 4px 0 0;
   color: #4e5968;
   font-size: 13px;
   text-align: center;
