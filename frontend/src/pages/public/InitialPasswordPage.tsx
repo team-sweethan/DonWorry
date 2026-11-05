@@ -6,11 +6,14 @@ import { PublicShell } from './ApplicationPage'
 import { Mascot } from '../../components/brand/BrandMark'
 import { setupInitialPassword } from '../../api/merchantApplications'
 import { ApiError } from '../../api/client'
+import { InputChecks } from './ApplicationInputFeedback'
+import { passwordChecks } from './applicationFormat.ts'
 import './InitialPasswordPage.css'
 export function InitialPasswordPage() {
   const { token } = useLoaderData() as { token: string | null }
   const busy = useRef(false)
   const [form] = Form.useForm<{ newPassword: string; confirmation: string }>()
+  const password = Form.useWatch('newPassword', form) ?? ''
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<{ message: string; terminal: boolean; used: boolean } | null>(
@@ -106,7 +109,15 @@ export function InitialPasswordPage() {
               <Form.Item
                 name="newPassword"
                 label="새 비밀번호"
-                extra="영문과 숫자를 포함한 8~64자. 로그인 아이디와 다르게 입력해 주세요. 한글·특수문자도 사용할 수 있으며 UTF-8 기준 72바이트까지입니다."
+                extra={
+                  <>
+                    <InputChecks id="initial-password-checks" checks={passwordChecks(password)} />
+                    <span>
+                      로그인 아이디와 다르게 입력해 주세요. 한글·특수문자도 사용할 수 있으며 UTF-8
+                      기준 72바이트까지입니다.
+                    </span>
+                  </>
+                }
                 rules={[
                   { required: true, message: '새 비밀번호를 입력해 주세요.' },
                   {
@@ -126,7 +137,11 @@ export function InitialPasswordPage() {
                   },
                 ]}
               >
-                <Input.Password autoComplete="new-password" size="large" />
+                <Input.Password
+                  autoComplete="new-password"
+                  size="large"
+                  aria-describedby="initial-password-checks"
+                />
               </Form.Item>
               <Form.Item
                 name="confirmation"
