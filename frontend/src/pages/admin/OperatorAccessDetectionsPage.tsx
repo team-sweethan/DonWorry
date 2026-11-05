@@ -7,15 +7,33 @@ import { PageHeader } from '../../components/common/PageHeader'
 export function OperatorAccessDetectionsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [page, setPage] = useState(0)
-  const [risk, setRisk] = useState<'ALL' | 'HIGH' | 'LOW'>('HIGH')
-  const [search, setSearch] = useState('')
+  const listQuery = new URLSearchParams(location.search)
+  const initialPage = Number(listQuery.get('page'))
+  const initialRisk = listQuery.get('risk')
+  const [page, setPage] = useState(
+    Number.isSafeInteger(initialPage) && initialPage >= 0 ? initialPage : 0,
+  )
+  const [risk, setRisk] = useState<'ALL' | 'HIGH' | 'LOW'>(
+    initialRisk === 'ALL' || initialRisk === 'LOW' ? initialRisk : 'HIGH',
+  )
+  const [search, setSearch] = useState(listQuery.get('search') ?? '')
   const [result, setResult] = useState<OperatorAccessDetectionPage | null>(null)
   const [error, setError] = useState(false)
   useEffect(() => {
+    let active = true
     getOperatorAccessDetections(page, risk, search)
-      .then(setResult)
-      .catch(() => setError(true))
+      .then((value) => {
+        if (active) {
+          setResult(value)
+          setError(false)
+        }
+      })
+      .catch(() => {
+        if (active) setError(true)
+      })
+    return () => {
+      active = false
+    }
   }, [page, risk, search])
   const count = (value: 'ALL' | 'HIGH' | 'LOW') =>
     value === 'ALL'
@@ -23,6 +41,11 @@ export function OperatorAccessDetectionsPage() {
       : value === 'HIGH'
         ? (result?.highRiskCount ?? 0)
         : (result?.lowRiskCount ?? 0)
+  const listReturnPath = `${location.pathname}?${new URLSearchParams({
+    page: String(page),
+    risk,
+    search,
+  }).toString()}`
   return (
     <>
       <PageHeader
@@ -114,7 +137,7 @@ export function OperatorAccessDetectionsPage() {
                 value.detectionId
                   ? `/admin/fds/operator-access-detections/${value.detectionId}`
                   : `/admin/fds/operator-access-detections/low/${value.sourceEventId}`,
-                { state: { operatorAccessDetectionListReturnPath: location.pathname } },
+                { state: { operatorAccessDetectionListReturnPath: listReturnPath } },
               ),
             style: { cursor: 'pointer' },
           })}

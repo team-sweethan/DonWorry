@@ -52,23 +52,11 @@ public class OperatorAccessDetectionQueryService {
     public OperatorAccessDetectionResponses.Page list(String risk, String search, int page, int size) {
         var merchantNames = merchants.findAll().stream()
                 .collect(Collectors.toMap(value -> value.merchantId(), value -> value.displayName()));
-        var high = detections.findAll().stream()
-                .collect(Collectors.groupingBy(value -> value.getUserId() + ":" + value.getRuleCode()))
-                .values()
-                .stream()
-                .map(values -> values.stream()
-                        .max(java.util.Comparator.comparing(value -> value.getDetectedAt()))
-                        .orElseThrow())
+        var high = detections.findLatestSignals().stream()
                 .map(value -> highSignal(value, merchantNames))
                 .toList();
-        Set<Long> highEvidenceIds = Set.copyOf(evidences.findAllIdentityEventIds());
-        var low = events.findAll().stream()
-                .filter(value -> !highEvidenceIds.contains(value.getIdentityEventId()))
-                .collect(Collectors.groupingBy(value -> value.getUserId() + ":" + value.getDeniedType()))
-                .values()
-                .stream()
-                .map(values -> lowSignal(values, merchantNames))
-                .filter(java.util.Objects::nonNull)
+        var low = events.findLatestLowRiskSignals().stream()
+                .map(value -> lowSignal(value, merchantNames))
                 .toList();
         var all = new ArrayList<OperatorAccessDetectionResponses.Signal>();
         if (!"LOW".equals(risk)) all.addAll(high);
@@ -95,44 +83,34 @@ public class OperatorAccessDetectionQueryService {
     }
 
     private OperatorAccessDetectionResponses.Signal highSignal(
-            com.donworry.fds.entity.OperatorAccessDetection value, Map<Long, String> merchantNames) {
+            com.donworry.fds.repository.OperatorAccessHighRiskSignalProjection value, Map<Long, String> merchantNames) {
         return new OperatorAccessDetectionResponses.Signal(
-                value.getId(),
+                value.getDetectionId(),
                 null,
                 value.getLoginId(),
                 affiliation(value.getMerchantId(), merchantNames),
                 ruleName(value.getRuleCode()),
                 "HIGH",
                 value.getEventCount(),
-                value.getActionStatus().name(),
-                value.getDetectedAt());
+                value.getActionStatus(),
+                value.getOccurredAt());
     }
 
     private OperatorAccessDetectionResponses.Signal lowSignal(
-            List<com.donworry.fds.entity.OperatorAccessEvent> values, Map<Long, String> merchantNames) {
-        var latest = values.stream()
-                .max(java.util.Comparator.comparing(value -> value.getOccurredAt()))
-                .orElseThrow();
-        var threshold = latest.getDeniedType().name().equals("OUT_OF_ROLE") ? 5 : 30;
-        var seconds = latest.getDeniedType().name().equals("OUT_OF_ROLE") ? 300 : 60;
-        var count = values.stream()
-                .filter(value ->
-                        !value.getOccurredAt().isBefore(latest.getOccurredAt().minusSeconds(seconds)))
-                .count();
-        if (count >= threshold) return null;
-        var code = latest.getDeniedType().name().equals("OUT_OF_ROLE")
+            com.donworry.fds.repository.OperatorAccessLowRiskSignalProjection value, Map<Long, String> merchantNames) {
+        var code = value.getDeniedType().equals("OUT_OF_ROLE")
                 ? "SEC_OPERATOR_OUT_OF_ROLE_REPEAT"
                 : "SEC_OPERATOR_PERMISSION_MISSING_REPEAT";
         return new OperatorAccessDetectionResponses.Signal(
                 null,
-                latest.getId(),
-                latest.getLoginId(),
-                affiliation(latest.getMerchantId(), merchantNames),
+                value.getSourceEventId(),
+                value.getLoginId(),
+                affiliation(value.getMerchantId(), merchantNames),
                 ruleName(code),
                 "LOW",
-                (int) count,
+                value.getEventCount(),
                 "NONE",
-                latest.getOccurredAt());
+                value.getOccurredAt());
     }
 
     private String affiliation(Long merchantId, Map<Long, String> merchantNames) {
@@ -160,7 +138,8 @@ public class OperatorAccessDetectionQueryService {
     public OperatorAccessDetectionResponses.Detail lowRiskDetail(Long eventId) {
         var event = events.findById(eventId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "저위험 접근 기록을 찾을 수 없습니다."));
-        if (evidences.findAllIdentityEventIds().contains(event.getIdentityEventId())) {
+        Set<Long> highEvidenceIds = Set.copyOf(evidences.findAllIdentityEventIds());
+        if (highEvidenceIds.contains(event.getIdentityEventId())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "저위험 접근 기록을 찾을 수 없습니다.");
         }
         var windowSeconds =
@@ -169,10 +148,10 @@ public class OperatorAccessDetectionQueryService {
                 event.getDeniedType() == com.donworry.fds.entity.OperatorAccessDeniedType.OUT_OF_ROLE ? 5 : 30;
         var windowStart = event.getOccurredAt().minusSeconds(windowSeconds);
         var matching = events
-                .findByUserIdAndDeniedTypeAndOccurredAtGreaterThanEqualOrderByOccurredAtAsc(
-                        event.getUserId(), event.getDeniedType(), windowStart)
+                .findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
+                        event.getUserId(), event.getDeniedType(), windowStart, event.getOccurredAt())
                 .stream()
-                .filter(value -> !value.getOccurredAt().isAfter(event.getOccurredAt()))
+                .filter(value -> !highEvidenceIds.contains(value.getIdentityEventId()))
                 .toList();
         if (matching.size() >= thresholdCount) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "저위험 접근 기록을 찾을 수 없습니다.");

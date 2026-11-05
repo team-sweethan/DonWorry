@@ -71,8 +71,8 @@ class OperatorAccessDetectionQueryServiceTests {
         given(event.getPath()).willReturn("/api/admin/users");
         given(evidences.findAllIdentityEventIds()).willReturn(List.of());
         given(events.findById(7L)).willReturn(java.util.Optional.of(event));
-        given(events.findByUserIdAndDeniedTypeAndOccurredAtGreaterThanEqualOrderByOccurredAtAsc(
-                        1L, OperatorAccessDeniedType.OUT_OF_ROLE, occurredAt.minusSeconds(300)))
+        given(events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
+                        1L, OperatorAccessDeniedType.OUT_OF_ROLE, occurredAt.minusSeconds(300), occurredAt))
                 .willReturn(List.of(event));
 
         var result = queryService().lowRiskDetail(7L);
@@ -85,6 +85,38 @@ class OperatorAccessDetectionQueryServiceTests {
                     .extracting(value -> value.identityEventId())
                     .containsExactly(70L);
         });
+    }
+
+    @Test
+    void lowRiskDetail_excludesEventsAlreadyUsedAsHighRiskEvidence() {
+        var occurredAt = Instant.parse("2026-11-05T01:00:00Z");
+        var lowRiskEvent = event(70L, occurredAt);
+        var highRiskEvidence = org.mockito.Mockito.mock(OperatorAccessEvent.class);
+        given(highRiskEvidence.getIdentityEventId()).willReturn(71L);
+        given(evidences.findAllIdentityEventIds()).willReturn(List.of(71L));
+        given(events.findById(7L)).willReturn(java.util.Optional.of(lowRiskEvent));
+        given(events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
+                        1L, OperatorAccessDeniedType.OUT_OF_ROLE, occurredAt.minusSeconds(300), occurredAt))
+                .willReturn(List.of(highRiskEvidence, lowRiskEvent));
+
+        var result = queryService().lowRiskDetail(7L);
+
+        assertThat(result.evidences())
+                .extracting(value -> value.identityEventId())
+                .containsExactly(70L);
+    }
+
+    private OperatorAccessEvent event(Long identityEventId, Instant occurredAt) {
+        var event = org.mockito.Mockito.mock(OperatorAccessEvent.class);
+        given(event.getIdentityEventId()).willReturn(identityEventId);
+        given(event.getUserId()).willReturn(1L);
+        given(event.getLoginId()).willReturn("boss");
+        given(event.getMerchantId()).willReturn(2L);
+        given(event.getDeniedType()).willReturn(OperatorAccessDeniedType.OUT_OF_ROLE);
+        given(event.getOccurredAt()).willReturn(occurredAt);
+        given(event.getHttpMethod()).willReturn("GET");
+        given(event.getPath()).willReturn("/api/admin/users");
+        return event;
     }
 
     private OperatorAccessDetectionQueryService queryService() {
