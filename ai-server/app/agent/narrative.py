@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError, field_validator
 
-from app.agent.facts import Fact
+from app.agent.facts import NOTABLE, Fact
 from app.agent.prompts import EXAMPLE_SENTENCES
 
 # AI가 쓰는 부분 — 조회한 사실을 주제별로 전달하는 문장 (#548)
@@ -201,6 +201,13 @@ def validate_narrative(
     by_id = {fact.id: fact for fact in facts}
     base = {len(payment_ids)} | {n for pid in payment_ids for n in _numbers(pid)}
     errors = [e for sent in narrative.summary for e in _sentence_errors(sent, by_id, base)]
+    # 눈여겨볼 사실(다른 고객과 겹침 · 연속 결제)은 요약에서 빠지면 다시 쓰게 한다 (#568)
+    # 무엇이 눈여겨볼 사실인지는 코드가 정했다 — AI가 고르지 않는다
+    cited = {fid for sent in narrative.summary for fid in sent.facts}
+    if missing := [f.id for f in facts if f.rank == NOTABLE and f.id not in cited]:
+        errors.append(
+            f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라"
+        )
     # 확인할 것은 사실 번호를 붙이지 않는다 — 숫자는 준 사실 전체 안에서만
     all_numbers = base | {n for fact in facts for n in _numbers(fact.text)}
     all_words = set(ALLOWED_WORDS) | {w for fact in facts for w in _ENGLISH.findall(fact.text)}

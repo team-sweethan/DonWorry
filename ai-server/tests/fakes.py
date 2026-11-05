@@ -70,6 +70,13 @@ def narrative(payment_ids: list[str] | None = None, **overrides: Any) -> str:
     return json.dumps(body, ensure_ascii=False)
 
 
+# 같은 카드가 겹친 LINKED 데이터로 조사할 때의 요약 — 눈여겨볼 사실(연결-1)까지 인용해야
+# 형식 검사를 통과한다 (#568)
+LINKED_SUMMARY = [
+    {"text": "같은 카드를 다른 고객이 쓴 결제가 있습니다.", "facts": ["연결-1", "접속-1"]}
+]
+
+
 # 정해진 순서로 답하는 가짜 LLM — 각 차례는 도구 호출 목록, None이면 "조사 완료"
 class ScriptedLlm:
     def __init__(

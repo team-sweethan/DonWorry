@@ -43,10 +43,11 @@ def test_linked_signal_without_per_payment_says_case_level() -> None:
     assert "이 사건 결제 중 같은 카드를 다른 고객이 사용" in _labels("9002", LINKED)
 
 
-# AI에게도 결제마다 그 결제의 연결 결제를 보여 준다 — 9002에 "다른 고객 결제 없음"
+# AI에게도 결제마다 그 결제의 연결 결제를 보여 준다 — 9002(두 번째 결제)에 "다른 고객 결제 없음"
+# 사실 문장은 결제 번호 대신 순서로 부른다 (#568)
 def test_facts_show_links_per_payment() -> None:
     facts = catalog(CASE, LinkedPaymentsTool.model_validate(PER_PAYMENT))
 
     texts = [f.text for f in facts if f.topic == "linked"]
-    assert texts[0].startswith("결제 9001 · 같은 카드: 최근 30일 다른 고객 2명 · 결제 3건")
-    assert "결제 9002 · 같은 카드: 최근 30일 다른 고객 결제 없음" in texts
+    assert texts[0].startswith("첫 번째 결제 · 같은 카드: 최근 30일 다른 고객 2명 · 결제 3건")
+    assert "두 번째 결제 · 같은 카드: 최근 30일 다른 고객 결제 없음" in texts
