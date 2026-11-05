@@ -1,8 +1,12 @@
+import { useContext, useLayoutEffect } from 'react'
 import { Button, Result } from 'antd'
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { RouteTitleOverrideContext } from '../../app/routeTitleContext'
 import { useAuth } from '../../auth/useAuth'
 import { screenResultHome, screenResultHomeLabel } from '../../auth/screenResultHome'
+
+const tabTitles = { '403': '접근 권한 없음', '404': '페이지를 찾을 수 없음', '500': '오류' }
 
 export function ScreenResult({
   kind,
@@ -16,6 +20,11 @@ export function ScreenResult({
 }) {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const setTitleOverride = useContext(RouteTitleOverrideContext)
+  useLayoutEffect(() => {
+    setTitleOverride(tabTitles[kind])
+    return () => setTitleOverride(null)
+  }, [kind, setTitleOverride])
   const home = screenResultHome(user, homePath)
   const heading =
     kind === '403'

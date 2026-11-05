@@ -1,0 +1,48 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+import { Button, Space } from 'antd'
+import { Link, Outlet, useLocation, useMatches, useNavigationType } from 'react-router-dom'
+import { ScreenResult } from '../components/common/ScreenResult'
+import { routeTitle, shouldResetScroll, showRouteErrorHome } from '../utils/routeEffects.ts'
+import { RouteTitleOverrideContext } from './routeTitleContext'
+
+export function RouteLayout() {
+  const { pathname } = useLocation()
+  const navigationType = useNavigationType()
+  const previousPath = useRef<string | null>(null)
+  const matches = useMatches()
+  const [titleOverride, setTitleOverride] = useState<string | null>(null)
+  const title = titleOverride ?? routeTitle(matches.at(-1)?.handle)
+  useLayoutEffect(() => {
+    document.title = title ? `${title} | 돈워리` : '돈워리'
+  }, [title])
+  useLayoutEffect(() => {
+    if (shouldResetScroll(previousPath.current, pathname, navigationType))
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+    previousPath.current = pathname
+  }, [pathname, navigationType])
+  return (
+    <RouteTitleOverrideContext.Provider value={setTitleOverride}>
+      <Outlet />
+    </RouteTitleOverrideContext.Provider>
+  )
+}
+
+export function RouteErrorPage() {
+  const handle = useMatches().at(-1)?.handle
+  useLayoutEffect(() => {
+    document.title = '오류 | 돈워리'
+  }, [])
+  return (
+    <ScreenResult
+      kind="500"
+      action={
+        <Space>
+          <Button type="primary" onClick={() => window.location.reload()}>
+            새로고침
+          </Button>
+          {showRouteErrorHome(handle) && <Link to="/">홈으로</Link>}
+        </Space>
+      }
+    />
+  )
+}

@@ -1,4 +1,5 @@
 import type { AdminUser } from '../api/adminAccounts.ts'
+import { parseListKeyword, parseListPage } from './listQuery.ts'
 
 export type AdminUserListQuery = {
   page: number
@@ -12,10 +13,9 @@ export type AdminUserListQuery = {
 export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQuery {
   const role = params.get('role')
   const status = normalizeAdminUserListStatusQuery(params).get('status')
-  const page = Number(params.get('page'))
   return {
-    page: Number.isSafeInteger(page) && page >= 1 && page <= 2_147_483_647 ? page : 1,
-    keyword: (params.get('keyword') ?? '').slice(0, 100),
+    page: parseListPage(params.get('page')),
+    keyword: parseListKeyword(params.get('keyword')),
     role: role === 'ADMIN' || role === 'OPERATOR' || role === 'SECURITY_STAFF' ? role : undefined,
     status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
     passwordChangeRequired: params.get('passwordChangeRequired') === 'true' ? true : undefined,

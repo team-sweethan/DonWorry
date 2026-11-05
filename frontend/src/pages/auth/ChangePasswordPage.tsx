@@ -7,12 +7,16 @@ import { useAuth } from '../../auth/useAuth'
 import { useNavigate } from 'react-router-dom'
 import { sessionNavigation } from '../../config/navigation'
 
+import { InputChecks } from '../public/ApplicationInputFeedback'
+import { passwordChecks } from '../public/applicationFormat.ts'
+
 type PasswordValues = { currentPassword: string; newPassword: string; confirmation: string }
 
 export function ChangePasswordPage() {
   const { store, user } = useAuth()
   const navigate = useNavigate()
   const [form] = Form.useForm<PasswordValues>()
+  const password = Form.useWatch('newPassword', form) ?? ''
   const pending = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<{ success: boolean; message: string } | null>(null)
@@ -68,10 +72,6 @@ export function ChangePasswordPage() {
             style={{ marginBottom: 16 }}
           />
         )}
-        <p>
-          8~64자로 영문과 숫자를 모두 포함하고, 아이디와 다르게 입력해 주세요. 한글·특수문자를
-          사용할 수 있으며 UTF-8 기준 72바이트까지 가능합니다.
-        </p>
         <p>변경 후에도 현재 로그인은 유지됩니다.</p>
         <Form<PasswordValues>
           form={form}
@@ -93,7 +93,24 @@ export function ChangePasswordPage() {
           <Form.Item
             name="newPassword"
             label="새 비밀번호"
-            rules={[{ required: true, whitespace: true, message: '새 비밀번호를 입력해 주세요.' }]}
+            extra={
+              <>
+                <InputChecks checks={passwordChecks(password, user?.loginId)} />
+                <span>
+                  한글·특수문자도 사용할 수 있어요. 한글은 약 23자까지 가능하며 이모지나 문자 조합에
+                  따라 달라져요.
+                </span>
+              </>
+            }
+            rules={[
+              { required: true, whitespace: true, message: '새 비밀번호를 입력해 주세요.' },
+              {
+                validator: (_, value: string) =>
+                  !value || passwordChecks(value, user?.loginId).every(({ met }) => met)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('새 비밀번호의 미충족 항목을 확인해 주세요.')),
+              },
+            ]}
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>
