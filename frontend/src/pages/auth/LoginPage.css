@@ -85,6 +85,12 @@
   color: #4e5968;
   font-size: 15px;
 }
+.dw-signin-help {
+  margin: 14px 0 0;
+  color: #4e5968;
+  font-size: 13px;
+  text-align: center;
+}
 .dw-signin-notice {
   display: grid;
   gap: 8px;

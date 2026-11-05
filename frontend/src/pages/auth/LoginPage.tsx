@@ -145,6 +145,7 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
                 로그인
               </Button>
             </Form>
+            <p className="dw-signin-help">비밀번호를 잊었다면 관리자에게 초기화를 요청해 주세요.</p>
           </div>
           <div className="dw-signin-foot">
             돈워리가 처음이신가요?
