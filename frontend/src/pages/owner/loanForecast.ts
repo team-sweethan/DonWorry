@@ -39,8 +39,7 @@ export function previewExpenses(base: string) {
 export function previewInflows(base: string) {
   return Array.from({ length: 30 }, (_, i) => ({
     date: dayjs(base).add(i, 'day').format('YYYY-MM-DD'),
-    scheduled: i === 1 ? 150000 : i === 3 ? 300000 : 0,
-    expected: i > 3 && i % 3 === 0 ? 180000 : 0,
+    scheduled: i === 1 ? 150000 : i === 3 ? 300000 : i > 3 && i % 3 === 0 ? 180000 : 0,
   }))
 }
 export function loanRequirement(days: { date: string; closing: number }[]) {
@@ -64,10 +63,8 @@ export function defaultPreviewLoan(now = new Date()) {
     const date = dayjs(from).add(i, 'day').format('YYYY-MM-DD'),
       flow = inflows.find((x) => x.date === date)!
     balance +=
-      flow.scheduled +
-      flow.expected -
-      expenses.filter((x) => x.date === date).reduce((n, e) => n + e.amount, 0)
-    return { date, closing: balance, income: flow.scheduled + flow.expected }
+      flow.scheduled - expenses.filter((x) => x.date === date).reduce((n, e) => n + e.amount, 0)
+    return { date, closing: balance, income: flow.scheduled }
   })
   return {
     ...loanRequirement(days)!,

@@ -1,7 +1,8 @@
+import { FinanceMoney } from './FinanceMoney'
 import { useState } from 'react'
 import { Button, Empty, Modal, Pagination, Tag } from 'antd'
 import type { SettlementReport } from '../../api/finance'
-import { koreanTime, money } from './financeView'
+import { koreanTime } from './financeView'
 import './payout-ledger.css'
 
 export type PayoutSummaryData = Pick<
@@ -18,7 +19,7 @@ export function PayoutSummary({ data }: { data: PayoutSummaryData }) {
       {[
         ['실제 지급액', data.paidAmount, '환불 회수를 차감한 입금 간주 금액', 'paid'],
         [
-          '지급 대상 정산금',
+          '환불 차감 전 지급액',
           data.paidSettlementAmount,
           '수수료를 뺀 금액 · 환불 회수 전',
           'original',
@@ -38,7 +39,9 @@ export function PayoutSummary({ data }: { data: PayoutSummaryData }) {
       ].map(([label, value, note, variant]) => (
         <section key={String(label)} className={`payout-stat payout-stat-${variant}`}>
           <span>{label}</span>
-          <strong>{money(Number(value))}</strong>
+          <strong>
+            <FinanceMoney value={Number(value)} />
+          </strong>
           <small>{note}</small>
         </section>
       ))}
@@ -66,7 +69,7 @@ export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts']
               <thead>
                 <tr>
                   <th>지급일 / 번호</th>
-                  <th className="stl-money-cell">지급 대상 정산금</th>
+                  <th className="stl-money-cell">환불 차감 전 지급액</th>
                   <th className="stl-money-cell">환불 회수 차감</th>
                   <th className="stl-money-cell">실제 지급액</th>
                   <th>상세</th>
@@ -82,13 +85,16 @@ export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts']
                         {p.origin === 'LEGACY_BACKFILL' ? ' · 과거 이관 기록' : ''}
                       </small>
                     </td>
-                    <td className="stl-money-cell">{money(p.settlementAmount)}</td>
+                    <td className="stl-money-cell">
+                      <FinanceMoney value={p.settlementAmount} />
+                    </td>
                     <td className="stl-money-cell payout-deduction">
-                      {p.refundDeductionAmount ? '−' : ''}
-                      {money(p.refundDeductionAmount)}
+                      <FinanceMoney value={-p.refundDeductionAmount} />
                     </td>
                     <td className="stl-money-cell">
-                      <strong className="payout-actual">{money(p.payoutAmount)}</strong>
+                      <strong className="payout-actual">
+                        <FinanceMoney value={p.payoutAmount} />
+                      </strong>
                       {p.payoutAmount === 0 && p.refundDeductionAmount > 0 && (
                         <small>환불 회수로 전액 상계</small>
                       )}
@@ -132,12 +138,18 @@ export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts']
               {detail.origin === 'LEGACY_BACKFILL' ? '기록 기준' : '확정'}
             </p>
             <dl>
-              <dt>지급 대상 정산금</dt>
-              <dd>{money(detail.settlementAmount)}</dd>
+              <dt>환불 차감 전 지급액</dt>
+              <dd>
+                <FinanceMoney value={detail.settlementAmount} />
+              </dd>
               <dt>환불 회수 차감</dt>
-              <dd className="payout-deduction">−{money(detail.refundDeductionAmount)}</dd>
+              <dd className="payout-deduction">
+                <FinanceMoney value={-detail.refundDeductionAmount} />
+              </dd>
               <dt>실제 지급액</dt>
-              <dd className="payout-actual">{money(detail.payoutAmount)}</dd>
+              <dd className="payout-actual">
+                <FinanceMoney value={detail.payoutAmount} />
+              </dd>
             </dl>
             <p>
               {detail.payoutAmount === 0

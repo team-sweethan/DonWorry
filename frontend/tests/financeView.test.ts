@@ -78,6 +78,15 @@ test('D+3 정산 예정은 픽업 완료 없이도 예정 상태와 별도 픽�
   assert.equal(missing.status, 'sch')
   assert.equal(missing.pickup, null)
 })
+
+test('과거 API 분류도 별도 예상 상태를 만들지 않고 정산 예정으로 통합한다', () => {
+  const [row] = settlementViewEntries({
+    ...report,
+    entries: [{ ...report.entries[0], status: 'SCHEDULED', classification: 'EXPECTED' }],
+  })
+  assert.equal(row.status, 'sch')
+  assert.equal(row.settlementAmount, 70)
+})
 test('날짜·정산 표시·수수료·빈 상품은 한국 날짜와 서버 값 그대로 유지한다', () => {
   assert.equal(koreanToday(new Date('2026-11-01T15:00:00Z')), '2026-11-02')
   const rows = settlementViewEntries({
@@ -186,8 +195,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
         date: '2026-11-02',
         openingBalance: 100,
         completedIncome: 0,
-        scheduledIncome: 30,
-        expectedIncome: 0,
+        scheduledIncome: 20,
+        expectedIncome: 10,
         paidExpenses: 20,
         plannedExpenses: 0,
         closingBalance: 110,
@@ -223,6 +232,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
     ],
   }
   const view = forecastView(forecast)
+  assert.equal(view.days[0].scheduled, 30)
+  assert.equal('expected' in view.days[0], false)
   assert.equal(view.days[0].expenses, 20)
   assert.equal(view.incomes[0].amount, 30)
   assert.equal(view.incomes[0].settlementAmount, 50)

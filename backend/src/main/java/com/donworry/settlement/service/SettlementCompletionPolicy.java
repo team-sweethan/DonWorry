@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Objects;
 import org.springframework.stereotype.Component;
 
-/** 취소 연동 전 범위의 완료 조건이다. 취소 동시 실행 보장은 후속 계약에서 확장한다. */
+/** 가맹점 잠금 안에서 매입 정합성과 저장된 D+3 정산일을 검증한다. */
 @Component
 public class SettlementCompletionPolicy {
     public String evaluate(Settlement s, Capture c, Instant now) {

@@ -27,7 +27,7 @@ export type SettlementPreviewEntry = {
   gross: number
   pickup: Date | null
   date: Date
-  status: 'done' | 'sch' | 'exp' | 'can'
+  status: 'done' | 'sch' | 'can'
   cardFeeAmount?: number
   pgFeeAmount?: number
   settlementAmount?: number
