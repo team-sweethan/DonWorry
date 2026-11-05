@@ -1,3 +1,4 @@
+import { DirectoryDetailSkeleton, DirectoryTableSkeleton } from './DirectoryLoading'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -9,7 +10,6 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
 } from 'antd'
@@ -95,7 +95,7 @@ export function AdminMerchantsPage() {
       setQuery(adminMerchantListParams({ ...filter, page: lastPage }), { replace: true })
   }, [filter, lastPage, setQuery])
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 관리"
         description="가맹점을 등록하고 사용 상태를 관리합니다."
@@ -108,7 +108,7 @@ export function AdminMerchantsPage() {
           </Space>
         }
       />
-      <Card>
+      <Card className="directory-surface">
         <Space wrap style={{ marginBottom: 20 }}>
           <ListSearch
             label="가맹점 검색"
@@ -131,7 +131,7 @@ export function AdminMerchantsPage() {
         )}
         <Table<AdminMerchant>
           rowKey="merchantId"
-          loading={!current}
+          loading={!current && (visible?.data?.items.length ?? 0) > 0}
           dataSource={visible?.data?.items ?? []}
           scroll={{ x: 650, scrollToFirstRowOnChange: false }}
           pagination={
@@ -146,29 +146,30 @@ export function AdminMerchantsPage() {
               : false
           }
           locale={{
-            emptyText:
-              !current || (lastPage !== null && filter.page > lastPage) ? (
-                <span aria-hidden="true" />
-              ) : current.error ? (
-                '목록을 불러오지 못했습니다.'
-              ) : isAdminMerchantListFiltered(filter) ? (
-                <ListEmpty
-                  title="검색 조건에 맞는 가맹점이 없어요"
-                  description="검색어나 필터를 바꿔 보세요."
-                  action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
-                />
-              ) : (
-                <ListEmpty
-                  mascot
-                  title="아직 등록된 가맹점이 없어요"
-                  description="이용 신청을 승인하거나 직접 만들면 여기에 표시돼요."
-                  action={
-                    <Link to="/admin/applications">
-                      <Button>이용 신청 보기</Button>
-                    </Link>
-                  }
-                />
-              ),
+            emptyText: !current ? (
+              <DirectoryTableSkeleton kind="merchants" />
+            ) : lastPage !== null && filter.page > lastPage ? (
+              <span aria-hidden="true" />
+            ) : current.error ? (
+              '목록을 불러오지 못했습니다.'
+            ) : isAdminMerchantListFiltered(filter) ? (
+              <ListEmpty
+                title="검색 조건에 맞는 가맹점이 없어요"
+                description="검색어나 필터를 바꿔 보세요."
+                action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
+              />
+            ) : (
+              <ListEmpty
+                mascot
+                title="아직 등록된 가맹점이 없어요"
+                description="이용 신청을 승인하거나 직접 만들면 여기에 표시돼요."
+                action={
+                  <Link to="/admin/applications">
+                    <Button>이용 신청 보기</Button>
+                  </Link>
+                }
+              />
+            ),
           }}
           columns={[
             {
@@ -189,7 +190,7 @@ export function AdminMerchantsPage() {
           ]}
         />
       </Card>
-    </>
+    </div>
   )
 }
 
@@ -224,13 +225,13 @@ export function AdminCreateMerchantPage() {
     }
   }
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 만들기"
         description="가맹점을 만든 뒤 사장님 계정을 연결할 수 있습니다."
         actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
-      <Card style={{ maxWidth: 640 }}>
+      <Card className="directory-surface" style={{ maxWidth: 640 }}>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
         <Form<MerchantForm>
           form={form}
@@ -289,7 +290,7 @@ export function AdminCreateMerchantPage() {
           </Button>
         </Form>
       </Card>
-    </>
+    </div>
   )
 }
 
@@ -346,7 +347,7 @@ export function AdminMerchantDetailPage() {
   }
   const invalidId = !Number.isSafeInteger(merchantId) || merchantId <= 0
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 상세"
         actions={
@@ -367,9 +368,9 @@ export function AdminMerchantDetailPage() {
           style={{ marginBottom: 16 }}
         />
       )}
-      {!invalidId && !current && <Spin />}
+      {!invalidId && !current && <DirectoryDetailSkeleton kind="merchant" />}
       {merchant && (
-        <Card>
+        <Card className="directory-surface">
           <Descriptions
             column={1}
             items={[
@@ -435,6 +436,6 @@ export function AdminMerchantDetailPage() {
         </p>
         {error && <Alert type="error" showIcon message={error} />}
       </Modal>
-    </>
+    </div>
   )
 }
