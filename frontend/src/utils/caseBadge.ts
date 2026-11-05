@@ -43,6 +43,14 @@ export function createCaseBadgeStore(load: () => Promise<CaseCounts>) {
         // 배지는 보조 표시다. 오류 안내는 각 화면의 조회가 맡는다
       }
     },
+    /**
+     * 화면이 이미 받은 건수로 맞춘다 (#553 홈 · 목록 자동 반영). 요청을 따로 보내지 않는다.
+     * 진행 중인 refresh 응답이 이 값을 덮지 않게 순번을 올린다.
+     */
+    apply(counts: CaseCounts) {
+      sequence += 1
+      set(needActionCount(counts))
+    },
     /** 로그아웃 · 계정 전환 때 이전 계정의 숫자를 지운다. */
     reset() {
       sequence += 1

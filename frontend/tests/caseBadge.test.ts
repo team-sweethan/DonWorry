@@ -78,3 +78,16 @@ test('reset하면 null이 되고 그 전에 보낸 조회 결과는 버린다', 
   await before
   assert.equal(store.getSnapshot(), null)
 })
+
+test('apply는 화면이 받은 건수로 바로 맞추고, 그 전에 보낸 조회 결과가 덮지 않는다 (#553)', async () => {
+  const pending: Array<(c: CaseCounts) => void> = []
+  const store = createCaseBadgeStore(
+    () => new Promise<CaseCounts>((resolve) => pending.push(resolve)),
+  )
+  const before = store.refresh()
+  store.apply(counts({ DECISION_PENDING: 2, ACTION_FAILED: 1 }))
+  assert.equal(store.getSnapshot(), 3)
+  pending[0](counts({ DECISION_PENDING: 9 }))
+  await before
+  assert.equal(store.getSnapshot(), 3)
+})
