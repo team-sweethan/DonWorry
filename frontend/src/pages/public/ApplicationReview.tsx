@@ -52,18 +52,18 @@ export function ApplicationReview({
           <dl>
             {items.map(({ field, label, value }) => (
               <div className="dw-application-review-row" key={field}>
-                <div>
-                  <dt>{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-                <Button
-                  type="link"
-                  disabled={disabled}
-                  aria-label={`${label} 수정`}
-                  onClick={() => onEdit(field)}
-                >
-                  수정
-                </Button>
+                <dt>{label}</dt>
+                <dd>
+                  <span>{value}</span>
+                  <Button
+                    type="link"
+                    disabled={disabled}
+                    aria-label={`${label} 수정`}
+                    onClick={() => onEdit(field)}
+                  >
+                    수정
+                  </Button>
+                </dd>
               </div>
             ))}
           </dl>

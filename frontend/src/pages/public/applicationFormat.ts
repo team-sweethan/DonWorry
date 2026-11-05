@@ -1,8 +1,9 @@
 // 유효하지 않은 문자를 지워 정상 번호처럼 만들지 않고, 서버 검증에 그대로 전달한다.
+// 숫자와 구분자만 있는데 지원 범위를 벗어나면, 입력 도중 넣은 구분자가 남지 않도록 숫자만 돌려준다.
 export function formatBusinessNumber(value: string): string {
   if (!/^[0-9 -]*$/.test(value)) return value
   const digits = value.replace(/[- ]/g, '')
-  if (digits.length > 10) return value
+  if (digits.length > 10) return digits
   return [digits.slice(0, 3), digits.slice(3, 5), digits.slice(5)].filter(Boolean).join('-')
 }
 
@@ -17,12 +18,8 @@ export function formatPhone(value: string): string {
   } else if (/^(?:01[016789]|0(?:3[123]|4[1234]|5[12345]|6[1234]|70|80))/.test(digits)) {
     prefix = 3
     maximum = 11
-  } else if (/^1[568][0-9]/.test(digits)) {
-    prefix = 4
-    maximum = 8
-  } else return value
-  if (digits.length > maximum) return value
-  if (prefix === 4) return [digits.slice(0, 4), digits.slice(4)].filter(Boolean).join('-')
+  } else return digits
+  if (digits.length > maximum) return digits
   const middle = digits.length >= prefix + 8 ? 4 : 3
   return [
     digits.slice(0, prefix),
@@ -61,9 +58,15 @@ export function formatApplicationEdit(
   previous: string,
   inputType: string,
   format: (value: string) => string,
+  hadSelection = false,
 ): { value: string; start: number; end: number } {
-  // 자동 구분자만 지웠을 때도 Backspace/Delete가 실제 숫자를 지우도록 한다.
-  if (raw.length === previous.length - 1 && format(raw) === previous && start === end) {
+  // 자동 구분자에 붙은 Backspace/Delete는 옆 숫자를 지운다. 구분자만 선택해 지운 경우는 숫자를 지키고 구분자를 되살린다.
+  if (
+    !hadSelection &&
+    raw.length === previous.length - 1 &&
+    format(raw) === previous &&
+    start === end
+  ) {
     if (inputType === 'deleteContentBackward' && previous[start] === '-') {
       raw = raw.slice(0, start - 1) + raw.slice(start)
       start = end = Math.max(0, start - 1)

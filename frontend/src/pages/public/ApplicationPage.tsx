@@ -200,26 +200,6 @@ export function ApplicationPage() {
   return (
     <PublicShell step={1} wide>
       <div className="dw-application-layout">
-        <aside className="dw-application-guide" aria-label="신청 안내">
-          <span className="dw-application-eyebrow">DONWORRY · PARTNERS</span>
-          <h2>
-            안심할 수 있는 결제 운영,
-            <br />
-            돈워리와 함께 시작하세요.
-          </h2>
-          <p>가맹점·담당자 정보와 사용할 로그인 아이디를 준비해 주세요.</p>
-          <ol>
-            {journey.map((title, index) => (
-              <li key={title}>
-                <span aria-hidden="true">{index + 1}</span>
-                {title}
-              </li>
-            ))}
-          </ol>
-          <p className="dw-application-guide-note">
-            관리자 승인 후 계정을 발급하며, 결제 연동은 별도로 진행합니다.
-          </p>
-        </aside>
         <div className="dw-application-content">
           {receipt && <Mascot size={120} className="dw-application-mascot dw-mascot-float" />}
           <h1 ref={heading} tabIndex={-1}>
@@ -321,12 +301,9 @@ export function ApplicationPage() {
                         name="businessRegistrationNumber"
                         label="사업자등록번호"
                         extra={
-                          <div id="business-number-feedback" aria-live="polite" aria-atomic="true">
-                            {businessNumber &&
-                            !/^[0-9]{10}$/.test(businessNumber.replace(/[- ]/g, '')) ? (
-                              '사업자등록번호 숫자 10자리를 입력해 주세요.'
-                            ) : /^[0-9]{10}$/.test(businessNumber.replace(/[- ]/g, '')) &&
-                              !isBusinessNumberValid(businessNumber) ? (
+                          <div aria-live="polite" aria-atomic="true">
+                            {/^[0-9]{10}$/.test(businessNumber.replace(/[- ]/g, '')) &&
+                            !isBusinessNumberValid(businessNumber) ? (
                               <span className="dw-application-warning">
                                 형식은 맞지만 확인해 보세요. 체크섬이 일치하지 않아도 제출은
                                 가능합니다.
@@ -350,7 +327,6 @@ export function ApplicationPage() {
                           maxLength={20}
                           inputMode="numeric"
                           placeholder="123-45-67890"
-                          aria-describedby="business-number-feedback"
                         />
                       </Form.Item>
                       <Form.Item
@@ -458,10 +434,7 @@ export function ApplicationPage() {
                       label="로그인 아이디"
                       extra={
                         <>
-                          <InputChecks
-                            id="application-login-checks"
-                            checks={loginIdChecks(loginId)}
-                          />
+                          <InputChecks checks={loginIdChecks(loginId)} />
                           <span>
                             아이디 사용 가능 여부는 제출할 때 확인합니다. 사용 중이거나 다른
                             신청에서 선택한 아이디는 사용할 수 없습니다.
@@ -484,7 +457,6 @@ export function ApplicationPage() {
                       <Input
                         maxLength={30}
                         autoComplete="username"
-                        aria-describedby="application-login-checks"
                         autoCapitalize="none"
                         spellCheck={false}
                         placeholder="예: sweet_owner"
@@ -553,6 +525,26 @@ export function ApplicationPage() {
             <Link to="/">서비스 소개로 돌아가기</Link>
           </p>
         </div>
+        <aside className="dw-application-guide" aria-label="신청 안내">
+          <span className="dw-application-eyebrow">DONWORRY · PARTNERS</span>
+          <h2>
+            안심할 수 있는 결제 운영,
+            <br />
+            돈워리와 함께 시작하세요.
+          </h2>
+          {!receipt && !review && <p>가맹점·담당자 정보와 사용할 로그인 아이디를 준비해 주세요.</p>}
+          <ol>
+            {journey.map((title, index) => (
+              <li key={title}>
+                <span aria-hidden="true">{index + 1}</span>
+                {title}
+              </li>
+            ))}
+          </ol>
+          <p className="dw-application-guide-note">
+            관리자 승인 후 계정을 발급하며, 결제 연동은 별도로 진행합니다.
+          </p>
+        </aside>
       </div>
     </PublicShell>
   )

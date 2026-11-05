@@ -116,10 +116,6 @@
 .dw-application-main .ant-alert {
   margin: 16px 0;
 }
-.dw-application-main .ant-descriptions-item-content {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
 .dw-application-consent {
   background: #f4f6f9;
   padding: 1px 20px 12px;
@@ -190,7 +186,14 @@
 .dw-application-fields > * {
   min-width: 0;
 }
+/* 읽는 순서는 본문 → 안내. 데스크톱에서만 안내를 왼쪽에 놓는다 */
+.dw-application-content {
+  grid-column: 2;
+  grid-row: 1;
+}
 .dw-application-guide {
+  grid-column: 1;
+  grid-row: 1;
   padding-top: 4px;
 }
 .dw-application-eyebrow {
@@ -266,9 +269,13 @@
 .dw-application-field-full {
   grid-column: 1 / -1;
 }
-.dw-application-content .ant-input,
-.dw-application-content .ant-input-affix-wrapper {
+.dw-application-content .ant-input {
   padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 16px;
+}
+/* 글자 수 표시가 붙은 칸은 안쪽 textarea가 여백을 갖는다 */
+.dw-application-content .ant-input-affix-wrapper {
   border-radius: 8px;
   font-size: 16px;
 }
@@ -323,10 +330,6 @@
   margin: 0;
 }
 .dw-application-review-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
   padding: 14px 0;
   border-bottom: 1px solid #eef0f4;
 }
@@ -337,7 +340,13 @@
   padding-bottom: 0;
   border-bottom: 0;
 }
-.dw-application-review-row > div {
+.dw-application-review-row dd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.dw-application-review-row dd > span {
   min-width: 0;
 }
 .dw-application-review-row dt,
@@ -386,8 +395,12 @@
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
   }
+  .dw-application-content,
   .dw-application-guide {
-    order: 2;
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .dw-application-guide {
     padding-top: 28px;
     border-top: 1px solid #e5e8ed;
   }

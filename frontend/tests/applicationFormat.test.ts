@@ -34,9 +34,8 @@ test('formatPhone_whenKnownKoreanPattern_formatsOnlySupportedNumbers', () => {
     ['0311234567', '031-123-4567'],
     ['0441234567', '044-123-4567'],
     ['07012345678', '070-1234-5678'],
-    ['15881234', '1588-1234'],
-    ['16441234', '1644-1234'],
-    ['18001234', '1800-1234'],
+    ['15881234', '15881234'],
+    ['1245125', '1245125'],
     ['0101', '010-1'],
     ['0101234', '010-123-4'],
     ['+1 415 555 2671', '+1 415 555 2671'],
@@ -47,6 +46,29 @@ test('formatPhone_whenKnownKoreanPattern_formatsOnlySupportedNumbers', () => {
     ['010ABC', '010ABC'],
   ])
     assert.equal(formatPhone(input!), expected, input)
+})
+
+// 입력 도중 지원 범위를 벗어나면 앞서 넣은 자동 구분자가 잘못된 자리에 남지 않는다.
+test('format_whenTypingPastSupportedRange_dropsAutoSeparators', () => {
+  const type = (digits: string, format: (value: string) => string) =>
+    Array.from(digits).reduce((value, digit) => {
+      const raw = value + digit
+      return formatApplicationEdit(raw, raw.length, raw.length, value, 'insertText', format).value
+    }, '')
+  assert.equal(type('16505551234', formatPhone), '16505551234')
+  assert.equal(type('010123456789', formatPhone), '010123456789')
+  assert.equal(type('12345678901', formatBusinessNumber), '12345678901')
+  assert.deepEqual(
+    formatApplicationEdit(
+      '01012345678',
+      11,
+      11,
+      '010123456789',
+      'deleteContentBackward',
+      formatPhone,
+    ),
+    { value: '010-1234-5678', start: 13, end: 13 },
+  )
 })
 
 // 체크섬은 알려진 번호와 마지막 검증 숫자 변조를 구분한다.
@@ -102,6 +124,22 @@ test('formatApplicationEdit_whenDeletingSeparator_deletesAdjacentDigit', () => {
       formatBusinessNumber,
     ),
     { value: '123-56-7890', start: 3, end: 3 },
+  )
+})
+
+// 구분자만 선택해 지우면 숫자는 그대로 두고 구분자를 되살린다.
+test('formatApplicationEdit_whenSeparatorWasSelected_keepsDigits', () => {
+  assert.deepEqual(
+    formatApplicationEdit(
+      '12345-67890',
+      3,
+      3,
+      '123-45-67890',
+      'deleteContentBackward',
+      formatBusinessNumber,
+      true,
+    ),
+    { value: '123-45-67890', start: 3, end: 3 },
   )
 })
 
