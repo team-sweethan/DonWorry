@@ -1,3 +1,4 @@
+import { DirectoryDetailSkeleton, DirectoryTableSkeleton } from './DirectoryLoading'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
@@ -10,7 +11,6 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
   Table,
   Tabs,
   Tag,
@@ -162,7 +162,7 @@ export function AdminUsersPage() {
       setSearchParams(adminUserListParams({ ...filter, page: lastPage }), { replace: true })
   }, [filter, lastPage, setSearchParams])
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="계정 관리"
         description="계정을 만들고 조회 권한과 사용 상태를 관리합니다."
@@ -175,7 +175,7 @@ export function AdminUsersPage() {
           </Space>
         }
       />
-      <Card>
+      <Card className="directory-surface">
         <Space wrap style={{ marginBottom: 20 }}>
           <ListSearch
             label="계정 검색"
@@ -224,26 +224,27 @@ export function AdminUsersPage() {
         ) : (
           <Table<AdminUser>
             rowKey="userId"
-            loading={!current}
+            loading={!current && (visible?.data?.items.length ?? 0) > 0}
             dataSource={visible?.data?.items ?? []}
             scroll={{ scrollToFirstRowOnChange: false, x: 750 }}
             locale={{
-              emptyText:
-                !current || (lastPage !== null && filter.page > lastPage) ? (
-                  <span aria-hidden="true" />
-                ) : isAdminUserListFiltered(filter) ? (
-                  <ListEmpty
-                    title="검색 조건에 맞는 계정이 없어요"
-                    description="검색어나 필터를 바꿔 보세요."
-                    action={<Button onClick={() => setSearchParams({})}>조건 지우기</Button>}
-                  />
-                ) : (
-                  <ListEmpty
-                    mascot
-                    title="아직 등록된 계정이 없어요"
-                    description="계정을 만들면 여기에 표시돼요."
-                  />
-                ),
+              emptyText: !current ? (
+                <DirectoryTableSkeleton kind="users" />
+              ) : lastPage !== null && filter.page > lastPage ? (
+                <span aria-hidden="true" />
+              ) : isAdminUserListFiltered(filter) ? (
+                <ListEmpty
+                  title="검색 조건에 맞는 계정이 없어요"
+                  description="검색어나 필터를 바꿔 보세요."
+                  action={<Button onClick={() => setSearchParams({})}>조건 지우기</Button>}
+                />
+              ) : (
+                <ListEmpty
+                  mascot
+                  title="아직 등록된 계정이 없어요"
+                  description="계정을 만들면 여기에 표시돼요."
+                />
+              ),
             }}
             columns={[
               {
@@ -299,7 +300,7 @@ export function AdminUsersPage() {
           />
         )}
       </Card>
-    </>
+    </div>
   )
 }
 
@@ -368,13 +369,13 @@ export function AdminCreateUserPage() {
     }
   }
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="계정 만들기"
         description="처음에는 임시 비밀번호가 발급됩니다. 관리자 계정은 만들 수 없습니다."
         actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
       />
-      <Card style={{ maxWidth: 640 }}>
+      <Card className="directory-surface" style={{ maxWidth: 640 }}>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
         <Form<CreateUser>
           form={form}
@@ -453,7 +454,7 @@ export function AdminCreateUserPage() {
           if (id) navigate(withQuery(`/admin/users/${id}`, listQuery), { replace: true })
         }}
       />
-    </>
+    </div>
   )
 }
 
@@ -522,7 +523,7 @@ export function AdminUserDetailPage() {
   if (!Number.isSafeInteger(userId) || userId <= 0)
     return <Alert type="error" message="계정 주소를 확인해 주세요." />
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="계정 상세"
         actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
@@ -534,7 +535,7 @@ export function AdminUserDetailPage() {
           action={<Button onClick={() => setRevision((r) => r + 1)}>다시 시도</Button>}
         />
       ) : !user ? (
-        <Spin />
+        <DirectoryDetailSkeleton kind="user" />
       ) : (
         <Tabs
           destroyOnHidden
@@ -545,7 +546,7 @@ export function AdminUserDetailPage() {
               children: (
                 <Space direction="vertical" size={20} style={{ width: '100%' }}>
                   {feedback && <Alert type="error" showIcon message={feedback} />}
-                  <Card title={user.displayName}>
+                  <Card className="directory-surface" title={user.displayName}>
                     <Descriptions
                       column={{ xs: 1, sm: 2 }}
                       items={[
@@ -574,7 +575,7 @@ export function AdminUserDetailPage() {
                       ]}
                     />
                   </Card>
-                  <Card title="조회 권한">
+                  <Card className="directory-surface" title="조회 권한">
                     {user.role === 'OPERATOR' ? (
                       <Space direction="vertical">
                         <Checkbox.Group
@@ -602,7 +603,7 @@ export function AdminUserDetailPage() {
                       </Typography.Text>
                     )}
                   </Card>
-                  <Card title="계정 사용 및 비밀번호">
+                  <Card className="directory-surface" title="계정 사용 및 비밀번호">
                     <p>
                       정지·복구 또는 비밀번호 초기화 시 해당 사용자의 기존 로그인이 종료됩니다.
                       계정은 삭제하지 않습니다.
@@ -673,6 +674,6 @@ export function AdminUserDetailPage() {
           }
         }}
       />
-    </>
+    </div>
   )
 }
