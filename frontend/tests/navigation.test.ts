@@ -170,7 +170,7 @@ test('보안 직원과 관리자는 탐지 메뉴를 업무 용어로 표시한�
   )
   assert.deepEqual(
     adminDetectionItems?.items.map((item) => item.label),
-    ['탐지 룰 목록', '룰 끄기 요청'],
+    ['탐지 룰 목록', '계정 접근 이상 탐지', '룰 변경 요청', '룰 변경 이력'],
   )
 })
 

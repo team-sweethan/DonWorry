@@ -24,6 +24,9 @@ import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
+import { RulePolicyChangeHistoriesPage } from '../pages/admin/RulePolicyChangeHistoriesPage'
+import { OperatorAccessDetectionsPage } from '../pages/admin/OperatorAccessDetectionsPage'
+import { OperatorAccessDetectionDetailPage } from '../pages/admin/OperatorAccessDetectionDetailPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
@@ -149,6 +152,26 @@ export const router = createBrowserRouter([
                 path: 'fds/rule-change-requests',
                 handle: { title: '규칙 변경 요청' },
                 element: <RuleChangeRequestsPage />,
+              },
+              {
+                path: 'fds/rule-policy-change-histories',
+                handle: { title: '규칙 변경 이력' },
+                element: <RulePolicyChangeHistoriesPage />,
+              },
+              {
+                path: 'fds/operator-access-detections',
+                handle: { title: '계정 접근 이상 탐지' },
+                element: <OperatorAccessDetectionsPage />,
+              },
+              {
+                path: 'fds/operator-access-detections/low/:eventId',
+                handle: { title: '저위험 접근 이상 상세' },
+                element: <OperatorAccessDetectionDetailPage />,
+              },
+              {
+                path: 'fds/operator-access-detections/:id',
+                handle: { title: '계정 접근 이상 상세' },
+                element: <OperatorAccessDetectionDetailPage />,
               },
               {
                 path: 'finance',

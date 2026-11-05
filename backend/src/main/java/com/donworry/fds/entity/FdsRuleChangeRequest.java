@@ -13,7 +13,7 @@ public class FdsRuleChangeRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long ruleChangeRequestId;
 
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 100)
     private String ruleCode;
 
     @Column(nullable = false)

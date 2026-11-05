@@ -69,11 +69,13 @@ export const adminNavigation = {
       title: '탐지',
       items: [
         { label: '탐지 룰 목록', path: '/admin/fds/rules' },
+        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
         {
-          label: '룰 끄기 요청',
+          label: '룰 변경 요청',
           path: '/admin/fds/rule-change-requests',
           badge: 'ruleChangeRequests',
         },
+        { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
       ],
     },
   ] satisfies NavGroup[],
