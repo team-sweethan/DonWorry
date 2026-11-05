@@ -150,15 +150,23 @@ def split_history(
     return burst[:shown], earlier[:shown], later[:shown]
 
 
-def _history_items(payments: list[HistoryPayment]) -> list[dict[str, object]]:
-    return [
-        {
-            "금액(원)": p.amount,
-            "결제 상태": PAYMENT_STATUS_KO.get(p.paymentStatus or "", None),
-            "요청 시각": p.requestedAt,
-        }
-        for p in payments
-    ]
+# with_status=False: 같은 연속 결제는 결제 상태를 주지 않는다 (#542)
+# "모두 매입 완료"를 보고 AI가 평소 결제처럼 정상 근거로 썼다 — 판정 코드는 평소 결제로 치지 않는다
+def _history_items(
+    payments: list[HistoryPayment], with_status: bool = True
+) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for p in payments:
+        item: dict[str, object] = {"금액(원)": p.amount, "요청 시각": p.requestedAt}
+        if with_status:
+            item["결제 상태"] = PAYMENT_STATUS_KO.get(p.paymentStatus or "", None)
+        items.append(item)
+    return items
+
+
+# 사건에 같은 연속 결제(사건 결제 앞뒤 10분 안의 다른 결제)가 있는지 — AI 문장 거르기에 쓴다 (#542)
+def has_burst(case_payments: CasePaymentsTool, history: PaymentHistoryTool | None) -> bool:
+    return history is not None and bool(split_history(case_payments, history)[0])
 
 
 # 근거에 있는 규칙 밖 정황 — 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
@@ -230,11 +238,30 @@ def linked_facts(match: LinkedMatch) -> dict[str, object] | str:
 
 # "고액 결제와 단시간 반복 결제 규칙에 걸렸습니다"처럼 규칙만 되풀이한 위험 근거 (#355, Case 10)
 # 규칙 카드에 이미 있는 내용이라 코드가 뺀다 — 프롬프트로는 안 막혔고, 다시 쓰기보다 싸다
-_RULE_ONLY = re.compile(r"^[^,，]*규칙(?:에|이|을)?\s*(?:걸렸|적중했|적중되었)습니다\.?$")
+# "규칙에 적중하여 의심 신호가 있습니다"도 같은 내용이다 (#542, 로컬 시연 Case 2)
+# 앞부분이 이 사건의 규칙 이름(와 · 과 · 및 · 쉼표로 이은 것)뿐일 때만 뺀다
+# 다른 정황이 붙으면 남긴다 (#542 리뷰)
+_RULE_TAIL = (
+    r"\s*규칙(?:에|이|을)?\s*"
+    r"(?:(?:걸렸|적중했|적중되었)습니다|(?:걸려|적중하여|적중해)\s*의심\s*신호가\s*있습니다)\.?$"
+)
+_RULE_JOIN = r"\s*(?:와|과|및|·|,|，)\s*"
 
 
-def drop_rule_only(items: list[str]) -> list[str]:
-    return [item for item in items if not _RULE_ONLY.match(item.strip())]
+def _rule_only(rule_names: set[str]) -> re.Pattern[str] | None:
+    # 띄어쓰기가 달라도 같은 이름으로 본다 ("고액결제")
+    names = [r"\s*".join(map(re.escape, name.split())) for name in rule_names if name.strip()]
+    if not names:
+        return None
+    name = "(?:" + "|".join(sorted(names, key=len, reverse=True)) + ")"
+    return re.compile("^" + name + "(?:" + _RULE_JOIN + name + ")*" + _RULE_TAIL)
+
+
+def drop_rule_only(items: list[str], rule_names: set[str]) -> list[str]:
+    pattern = _rule_only(rule_names)
+    if pattern is None:
+        return items
+    return [item for item in items if not pattern.match(item.strip())]
 
 
 def similar_outcome(accept: int, reject: int) -> str:
@@ -313,7 +340,7 @@ def facts_json(
             "건수": len(history.payments),
             "더 있음": history.truncated,
             "상태별 건수": history_counts(history),
-            BURST_KEY: _history_items(burst),
+            BURST_KEY: _history_items(burst, with_status=False),
             EARLIER_KEY: _history_items(earlier),
             LATER_KEY: _history_items(later),
         }
@@ -442,6 +469,8 @@ def assemble_report(
     )
     checks = list(narrative.additionalChecks)
     fds_evidence_ids = _fds_evidence_ids(context, records)
+    # 위험 근거가 규칙 이름만 되풀이했는지 볼 때 쓴다 — 사건 전체 규칙 이름 (#542 리뷰)
+    rule_names = {rule.name for e in fds.values() if e is not None for rule in e.ruleHits}
     for payment in case_payments.payments:
         if not analyzable(payment):
             limitations.append(
@@ -467,7 +496,7 @@ def assemble_report(
                 requestedAt=payment.requestedAt,
                 riskScore=evidence.riskScore if evidence else None,
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
-                riskEvidence=drop_rule_only(written.riskEvidence),
+                riskEvidence=drop_rule_only(written.riskEvidence, rule_names),
                 normalEvidence=written.normalEvidence,
                 unknowns=_unique(unknowns),
                 recommendation=basis.recommendation if basis else "NEEDS_CHECK",
