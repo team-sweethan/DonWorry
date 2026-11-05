@@ -36,6 +36,7 @@ import {
   signalRuleRecord,
   summaryBoxLines,
   verdictCardTitle,
+  mlReportLine,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -613,4 +614,34 @@ test('signalRuleRecord_matchesCodeAndLegacyAlias_nullForNonRuleSignal', () => {
   assert.equal(signalRuleRecord(signal('R01', '고액 결제'), undefined), null)
   assert.equal(signalRecordText(high!), '+30점 · 증거 E-2-v1-02')
   assert.equal(signalRecordText(legacy!), '증거 E-1-v1-02')
+})
+
+// ── ML 참고 위험도 (#544) ──
+// 판정에 쓰지 않는 참고 점수 — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
+test('mlReportLine_eachState_saysScoreOrWhyMissing', () => {
+  const scored = {
+    kind: 'scored',
+    percent: 72,
+    thresholdPercent: 50,
+    modelVersion: 'rf-v2',
+  } as const
+  assert.equal(
+    mlReportLine({ ...scored, aboveThreshold: true }),
+    'ML 참고 위험도 72% · 기준 50% 이상 (rf-v2 · 판정에 쓰지 않음)',
+  )
+  assert.equal(
+    mlReportLine({ ...scored, percent: 29, aboveThreshold: false }),
+    'ML 참고 위험도 29% · 기준 50% 미만 (rf-v2 · 판정에 쓰지 않음)',
+  )
+  assert.equal(
+    mlReportLine({ kind: 'none' }),
+    'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요',
+  )
+  assert.equal(
+    mlReportLine({ kind: 'failed' }),
+    'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)',
+  )
+  assert.equal(mlReportLine({ kind: 'skipped' }), 'ML 참고 위험도 · 채점하지 않았어요')
+  assert.equal(mlReportLine({ kind: 'unknown' }), 'ML 참고 위험도를 불러오지 못했어요')
+  assert.equal(mlReportLine({ kind: 'loading' }), 'ML 참고 위험도 불러오는 중…')
 })

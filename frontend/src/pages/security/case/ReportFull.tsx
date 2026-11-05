@@ -1,8 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
+import { getMlShadowScores } from '../../../api/mlShadowScores'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
   isCodeReason,
+  mlReportLine,
   recommendationSource,
   recommendationSummaryTitle,
   reportHeadline,
@@ -17,6 +19,13 @@ import {
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
+import {
+  mlCell,
+  mlScoresRequestKey,
+  mlScoresView,
+  type LoadedMlScores,
+  type MlScores,
+} from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
 import { SummaryBox, WhyCard } from './BasisCard'
@@ -30,14 +39,32 @@ import { SimilarCasesCard } from './SimilarCasesCard'
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
-export function ReportFull({ body, label }: { body: ReportBody; label: string }) {
+// refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
+export function ReportFull({
+  body,
+  label,
+  refreshKey,
+}: {
+  body: ReportBody
+  label: string
+  refreshKey: number
+}) {
   // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
   const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
+  const ml = useMlScores(
+    body.paymentAnalyses.map((p) => p.paymentId),
+    refreshKey,
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <VerdictCard body={body} label={label} hideSummary={single} />
       {body.paymentAnalyses.map((p) => (
-        <PaymentEvidence key={p.paymentId} analysis={p} summary={single ? body.summary : []} />
+        <PaymentEvidence
+          key={p.paymentId}
+          analysis={p}
+          summary={single ? body.summary : []}
+          ml={mlReportLine(mlCell(p.paymentId, ml))}
+        />
       ))}
       {body.similarCases !== undefined && (
         <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
@@ -136,9 +163,11 @@ function VerdictCard({
 function PaymentEvidence({
   analysis: p,
   summary,
+  ml,
 }: {
   analysis: PaymentAnalysis
   summary: string[]
+  ml: string
 }) {
   const source = recommendationSource(p)
   return (
@@ -164,6 +193,7 @@ function PaymentEvidence({
             reason={isCodeReason(p.reason) ? p.reason : undefined}
             details={p.ruleHitDetails}
           />
+          <MlLine text={ml} />
           <AiNotes risk={p.riskEvidence} normal={p.normalEvidence} />
         </>
       ) : (
@@ -173,6 +203,7 @@ function PaymentEvidence({
               <AiTag /> {p.reason}
             </p>
           )}
+          <MlLine text={ml} />
           <RuleCompare analysis={p} />
         </>
       )}
@@ -226,6 +257,37 @@ function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
       </div>
     </div>
   )
+}
+
+// ML 참고 위험도 (#544) — 보고서에 넣지 않고 화면을 열 때 읽는다
+// ML 채점은 평가가 저장된 뒤 주기적으로(기본 30초) 돌아 보고서보다 늦을 수 있다
+function useMlScores(paymentIds: string[], refreshKey: number): MlScores {
+  const ids = paymentIds.join(',')
+  const key = mlScoresRequestKey(paymentIds, refreshKey)
+  const [loaded, setLoaded] = useState<LoadedMlScores | null>(null)
+  useEffect(() => {
+    if (!ids) return
+    let alive = true
+    // 실패해도 보고서 다른 칸은 그대로 보이고 이 줄만 "불러오지 못했어요"
+    getMlShadowScores(ids.split(','))
+      .then((found) => {
+        if (!alive) return
+        const scoreByPaymentId = new Map(found.map((score) => [score.paymentId, score]))
+        setLoaded({ key, scores: { status: 'loaded', scoreByPaymentId } })
+      })
+      .catch(() => {
+        if (alive) setLoaded({ key, scores: { status: 'failed' } })
+      })
+    return () => {
+      alive = false
+    }
+  }, [ids, key])
+  return mlScoresView(loaded, paymentIds, refreshKey)
+}
+
+// ML 참고 위험도 한 줄 — 판정(기준표)과 섞이지 않게 회색 점선 칸
+function MlLine({ text }: { text: string }) {
+  return <div style={mlLineStyle}>{text}</div>
 }
 
 // AI 참고 설명 — AI가 근거를 읽고 쓴 위험 쪽 · 정상 쪽 문장 (#543)
@@ -549,6 +611,15 @@ const compareStyle: CSSProperties = {
   gap: 16,
 }
 const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
+const mlLineStyle: CSSProperties = {
+  fontSize: 13,
+  color: '#475569',
+  background: '#F8FAFC',
+  border: '1px dashed #CBD5E1',
+  borderRadius: 8,
+  padding: '8px 12px',
+  marginBottom: 16,
+}
 const aiNotesStyle: CSSProperties = {
   background: '#FAF5FF',
   border: '1px solid #E9D5FF',
