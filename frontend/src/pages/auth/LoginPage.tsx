@@ -6,6 +6,7 @@ import { ApiError } from '../../api/client'
 import { InvalidCredentialsError } from '../../api/auth'
 import { readLoginPreferences, type LoginValues } from '../../auth/loginPreferences'
 import './LoginPage.css'
+import { LoginOuterScreen } from './LoginOuterScreen'
 import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from '../public/ApplicationEntry'
@@ -28,17 +29,6 @@ const feedbackMessages: Record<Feedback, string> = {
 
 // LoginPage.css의 펼침 연출 미디어 쿼리와 같은 조건이다.
 const OPEN_MOTION_QUERY = '(prefers-reduced-motion: no-preference) and (min-width: 801px)'
-
-const outerDate = new Intl.DateTimeFormat('ko-KR', {
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long',
-})
-const outerTime = new Intl.DateTimeFormat('ko-KR', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-})
 
 export function LoginPage({ onSubmit, notice }: LoginPageProps) {
   const submittingRef = useRef(false)
@@ -201,13 +191,7 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
           {deviceOpening && (
             <div className="dw-signin-outer" aria-hidden="true">
               <div className="dw-signin-outer-front">
-                <span className="dw-signin-outer-date">{outerDate.format(new Date())}</span>
-                <span className="dw-signin-outer-time">{outerTime.format(new Date())}</span>
-                <span className="dw-signin-outer-brand">
-                  <BrandMark size={28} />
-                  돈워리
-                </span>
-                <i className="dw-signin-outer-button" />
+                <LoginOuterScreen />
               </div>
               <div className="dw-signin-outer-back" />
             </div>

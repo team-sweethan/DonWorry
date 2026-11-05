@@ -1,8 +1,11 @@
 @import '../../styles/public.css';
 
 .dw-signin {
-  /* 뒤집혀도 같게 보이도록 세로 그라데이션만 쓴다. */
-  --dw-signin-surface: linear-gradient(180deg, #fbefd0, #f4dfae);
+  /* 펼치기 전 화면과 왼쪽 칸이 같은 바탕을 쓴다. */
+  --dw-signin-surface:
+    radial-gradient(120% 46% at 15% 100%, #c8a56e, transparent 62%),
+    radial-gradient(110% 40% at 95% 80%, #e7d2a6, transparent 64%),
+    linear-gradient(180deg, #cfdbe4, #efe4cb 46%, #dcc595);
   position: relative;
   min-height: 100vh;
   display: flex;
@@ -73,7 +76,7 @@
   grid-row: 1;
   padding: 56px 32px 32px;
   background: var(--dw-signin-surface);
-  color: #6f5524;
+  color: #4d5a75;
   text-align: center;
 }
 .dw-signin-hero h2 {
@@ -263,67 +266,134 @@
   background: var(--dw-signin-surface);
   backface-visibility: hidden;
 }
-/* 접힌 면은 잠금 화면처럼 보이게 한다. */
+/* 접힌 면은 경첩이 왼쪽에 있는 바깥 화면의 홈 화면처럼 보이게 한다. */
 .dw-signin-outer-front {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  gap: 14px;
+  overflow: hidden;
+  padding: 22px 14px 18px 20px;
+  border-radius: 6px 52px 52px 6px;
+  box-shadow:
+    -3px 0 0 #c9c0ae,
+    0 0 0 2px #d8cfbd,
+    0 34px 60px -28px #0d122288;
+}
+.dw-signin-home {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-signin-widgets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.dw-signin-widget {
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+}
+.dw-signin-widget.is-date {
+  justify-content: space-between;
+  padding: 16px;
+  background: #13204a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dw-signin-widget.is-date strong {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dw-signin-widget.is-brand {
+  align-items: center;
+  justify-content: center;
+  background: #fff7e3;
+  color: #13204a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dw-signin-apps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.dw-signin-tile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  box-shadow: 0 4px 10px -6px #0d122266;
+  font-size: 26px;
+}
+.dw-signin-tile.is-navy {
+  background: #13204a;
+  color: #f1d68e;
+}
+.dw-signin-tile.is-gold {
+  background: linear-gradient(180deg, #f1d68e, #d4a548);
+  color: #13204a;
+}
+.dw-signin-tile.is-blue {
+  background: #3b76ea;
+  color: #fff;
+}
+.dw-signin-tile.is-green {
+  background: #2fb573;
+  color: #fff;
+}
+.dw-signin-tile.is-coral {
+  background: #f0705f;
+  color: #fff;
+}
+.dw-signin-tile.is-white {
+  background: #fff;
+  color: #13204a;
+}
+.dw-signin-rail {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 84px 24px 52px;
-  border-radius: 34px;
-  box-shadow: 0 34px 60px -28px #0d122288;
-  color: #13204a;
+  gap: 6px;
 }
-.dw-signin-outer-front::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 120px;
-  height: 22px;
-  border-radius: 0 0 14px 14px;
+.dw-signin-camera {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   background: #0d1222;
-  transform: translateX(-50%);
 }
-.dw-signin-outer-front::after {
-  content: '';
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  width: 132px;
-  height: 5px;
-  border-radius: 3px;
-  background: #13204a;
-  transform: translateX(-50%);
-}
-.dw-signin-outer-date {
-  color: #6f5524;
-  font-size: 17px;
+.dw-signin-clock {
+  color: #fff;
+  font-size: 13px;
   font-weight: 600;
-}
-.dw-signin-outer-time {
-  margin-top: 4px;
-  font-size: 84px;
-  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -3px;
-  line-height: 1.1;
 }
-.dw-signin-outer-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.dw-signin-dock {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  margin-top: 44px;
+  padding: 8px;
+  border-radius: 20px;
+  background: #ffffff55;
+}
+.dw-signin-dock .dw-signin-tile {
+  font-size: 20px;
+}
+.dw-signin-search {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
   margin-top: auto;
-  font-size: 18px;
-  font-weight: 700;
-}
-.dw-signin-outer-button {
-  position: absolute;
-  top: 132px;
-  right: -11px;
-  width: 3px;
-  height: 76px;
-  border-radius: 0 3px 3px 0;
-  background: #0d1222;
+  border-radius: 50%;
+  background: #ffffff66;
+  color: #13204a;
+  font-size: 17px;
 }
 /* 넘어간 뒤 바깥쪽이 되는 모서리는 뒤집힌 좌표의 왼쪽이다. */
 .dw-signin-outer-back {
