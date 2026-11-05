@@ -1,4 +1,5 @@
 import {
+  applicationEmptyKind,
   applicationListStatus,
   normalizeApplicationListStatusQuery,
 } from '../../utils/applicationListStatusQuery.ts'
@@ -11,7 +12,6 @@ import {
   Card,
   Checkbox,
   Descriptions,
-  Empty,
   Form,
   Input,
   Modal,
@@ -27,6 +27,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ListEmpty } from '../../components/common/ListEmpty'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ApiError } from '../../api/client'
 import {
@@ -99,6 +100,7 @@ export function AdminApplicationsPage() {
     }
   }, [page, keyword, status, mailAttention, revision, key])
   const current = result?.key === key ? result : null
+  const emptyKind = applicationEmptyKind(statusValue, keyword, mailAttention)
   const change = (next: {
     page?: number
     keyword?: string
@@ -176,14 +178,21 @@ export function AdminApplicationsPage() {
             dataSource={current?.data?.items ?? []}
             scroll={{ x: 800 }}
             locale={{
-              emptyText: (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    keyword
-                      ? '검색 조건에 맞는 신청이 없습니다.'
-                      : '이 상태의 이용 신청이 없습니다.'
+              emptyText: !current ? (
+                <span aria-hidden="true" />
+              ) : emptyKind === 'no-result' ? (
+                <ListEmpty
+                  title="검색 조건에 맞는 신청이 없어요"
+                  description="검색어나 필터를 바꿔 보세요."
+                  action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
+                />
+              ) : (
+                <ListEmpty
+                  mascot
+                  title={
+                    emptyKind === 'all-done' ? '검토할 신청이 없어요' : '아직 이용 신청이 없어요'
                   }
+                  description="새 신청이 들어오면 여기에 표시돼요."
                 />
               ),
             }}

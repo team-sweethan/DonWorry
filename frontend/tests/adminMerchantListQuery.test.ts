@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   adminMerchantListParams,
+  isAdminMerchantListFiltered,
   parseAdminMerchantListQuery,
 } from '../src/utils/adminMerchantListQuery.ts'
 
@@ -22,4 +23,11 @@ test('merchantQuery_whenInvalid_usesDefaults', () => {
     assert.equal(parsed.status, undefined)
     assert.equal(parsed.keyword.length, 100)
   }
+})
+
+// 페이지 번호는 검색 조건이 아니므로 빈 목록 안내를 바꾸지 않는다.
+test('merchantQuery_whenOnlyPageIsSet_isNotFiltered', () => {
+  assert.equal(isAdminMerchantListFiltered({ page: 3, keyword: '' }), false)
+  assert.equal(isAdminMerchantListFiltered({ page: 1, keyword: '가게' }), true)
+  assert.equal(isAdminMerchantListFiltered({ page: 1, keyword: '', status: 'INACTIVE' }), true)
 })

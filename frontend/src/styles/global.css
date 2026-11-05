@@ -511,6 +511,28 @@ textarea {
   justify-content: center;
   padding: 30px;
 }
+.dw-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px 32px;
+  text-align: center;
+}
+.dw-list-empty h2 {
+  margin: 8px 0 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+.dw-list-empty p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+.dw-list-empty-action {
+  margin-top: 12px;
+}
 /* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
 .dw-login-shell {
   min-height: 100vh;

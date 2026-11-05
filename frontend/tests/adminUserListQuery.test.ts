@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   adminUserListParams,
+  isAdminUserListFiltered,
   parseAdminUserListQuery,
   normalizeAdminUserListStatusQuery,
 } from '../src/utils/adminUserListQuery.ts'
@@ -85,4 +86,15 @@ test('adminUserStatus_whenNotLegacy_preservesCurrentQuery', () => {
     assert.equal(normalizeAdminUserListStatusQuery(query).toString(), query.toString())
   }
   assert.equal(normalizeAdminUserListStatusQuery(new URLSearchParams()).toString(), '')
+})
+
+test('페이지 번호만 있으면 검색 조건이 없는 목록으로 본다', () => {
+  assert.equal(isAdminUserListFiltered({ page: 3, keyword: '' }), false)
+  assert.equal(isAdminUserListFiltered({ page: 1, keyword: 'cake' }), true)
+  assert.equal(isAdminUserListFiltered({ page: 1, keyword: '', role: 'OPERATOR' }), true)
+  assert.equal(isAdminUserListFiltered({ page: 1, keyword: '', status: 'INACTIVE' }), true)
+  assert.equal(
+    isAdminUserListFiltered({ page: 1, keyword: '', passwordChangeRequired: true }),
+    true,
+  )
 })
