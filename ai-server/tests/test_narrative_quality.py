@@ -124,10 +124,10 @@ def test_limitations_come_only_from_tool_records() -> None:
     from app.agent.assemble import LINKED_PRIVACY
     from app.agent.graph import run_investigation
     from app.config import Settings
-    from tests.fakes import ScriptedLlm, call, context
+    from tests.fakes import LINKED_SUMMARY, ScriptedLlm, call, context
     from tests.test_linked_payments import _toolbox
 
-    written = json.loads(narrative(PAYMENTS))
+    written = json.loads(narrative(PAYMENTS, summary=LINKED_SUMMARY))
     written["limitations"] = ["다른 고객의 결제 이력 정보는 이번 조사에서 알 수 없었습니다."]
     llm = ScriptedLlm(
         turns=[[call("get_case_payments")]], outputs=[json.dumps(written, ensure_ascii=False)]

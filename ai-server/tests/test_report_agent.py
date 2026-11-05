@@ -5,7 +5,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.config import Settings
-from tests.fakes import BrokenLlm, ScriptedLlm, call, context, narrative, toolbox
+from tests.fakes import LINKED_SUMMARY, BrokenLlm, ScriptedLlm, call, context, narrative, toolbox
 
 SETTINGS = Settings(_env_file=None)
 FIXTURE = json.loads(open("tests/fixtures/sample_case.json", encoding="utf-8").read())
@@ -266,7 +266,7 @@ def test_recommendation_comes_from_basis_not_ai() -> None:
     from app.schemas.tools import LinkedPaymentsTool
     from tests.test_linked_payments import LINKED, _toolbox
 
-    written = json.loads(narrative())
+    written = json.loads(narrative(summary=LINKED_SUMMARY))
     written["recommendation"] = "ACCEPT_REVIEW"
     llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
     toolbox_with_linked = _toolbox(LinkedPaymentsTool.model_validate(LINKED))
