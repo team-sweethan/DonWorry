@@ -2,6 +2,7 @@ package com.donworry.fds.service;
 
 import com.donworry.fds.entity.OperatorAccessDetectionActionStatus;
 import com.donworry.fds.repository.OperatorAccessDetectionRepository;
+import com.donworry.identity.api.OperatorAccountStatusReader;
 import com.donworry.identity.api.OperatorAccountSuspender;
 import com.donworry.identity.api.OperatorAccountSuspensionException;
 import java.time.Clock;
@@ -18,12 +19,24 @@ import org.springframework.transaction.annotation.Transactional;
 class OperatorAccessDetectionActionService {
     private final OperatorAccessDetectionRepository detections;
     private final OperatorAccountSuspender suspender;
+    private final OperatorAccountStatusReader statusReader;
     private final Clock clock;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void suspend(Long detectionId, Long userId) {
         var detection = detections.findById(detectionId).orElse(null);
         if (detection == null) return;
+        var currentActivation = statusReader
+                .findById(userId)
+                .map(value -> value.lastActivatedAt())
+                .orElse(null);
+        if (currentActivation != null
+                && (detection.getLastActivatedAt() == null
+                        || currentActivation.isAfter(detection.getLastActivatedAt()))) {
+            detection.complete(
+                    OperatorAccessDetectionActionStatus.SKIPPED_REACTIVATED, "ACCOUNT_REACTIVATED", clock.instant());
+            return;
+        }
         try {
             suspender.suspend(userId);
             detection.complete(OperatorAccessDetectionActionStatus.SUCCEEDED, null, clock.instant());

@@ -49,7 +49,12 @@ def main() -> int:
         try:
             denied_request = urllib.request.Request(
                 base + args.path,
-                headers={'X-XSRF-TOKEN': csrf} if args.method != 'GET' and csrf else {},
+                # 브라우저의 동일 출처 요청만 자동 정지 근거로 집계한다. urllib은 Fetch Metadata를
+                # 넣지 않으므로, 이 시연은 브라우저와 같은 요청 분류를 명시해 재현한다.
+                headers={
+                    'Sec-Fetch-Site': 'same-origin',
+                    **({'X-XSRF-TOKEN': csrf} if args.method != 'GET' and csrf else {}),
+                },
                 method=args.method,
             )
             client.open(denied_request).read()

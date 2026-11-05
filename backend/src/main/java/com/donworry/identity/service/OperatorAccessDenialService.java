@@ -76,6 +76,8 @@ public class OperatorAccessDenialService {
                 .deniedType(denial.getDeniedType())
                 .clientIp(denial.getClientIp())
                 .occurredAt(occurredAt)
+                // 브라우저가 보장하는 동일 출처 요청만 계정 정지 자동화의 근거로 쓴다.
+                .suspensionEligible("same-origin".equalsIgnoreCase(request.getHeader("Sec-Fetch-Site")))
                 .build());
     }
 }

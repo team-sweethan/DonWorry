@@ -110,15 +110,21 @@ export function OperatorAccessDetectionsPage() {
                   color={
                     value === 'SUCCEEDED'
                       ? 'green'
-                      : value === 'NONE'
+                      : value === 'SKIPPED_REACTIVATED'
                         ? 'default'
-                        : value === 'REQUESTED'
-                          ? 'blue'
-                          : 'red'
+                        : value === 'NONE'
+                          ? 'default'
+                          : value === 'REQUESTED'
+                            ? 'blue'
+                            : 'red'
                   }
                 >
-                  {{ SUCCEEDED: '조치 완료', NONE: '조치 없음', REQUESTED: '처리 중' }[value] ??
-                    '조치 실패'}
+                  {{
+                    SUCCEEDED: '조치 완료',
+                    SKIPPED_REACTIVATED: '재활성화 후 조치 제외',
+                    NONE: '조치 없음',
+                    REQUESTED: '처리 중',
+                  }[value] ?? '조치 실패'}
                 </Tag>
               ),
             },

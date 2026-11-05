@@ -42,6 +42,9 @@ public class OperatorAccessEvent {
     @Column(name = "client_ip", length = 45)
     private String clientIp;
 
+    @Column(name = "suspension_eligible", nullable = false)
+    private boolean suspensionEligible;
+
     @Column(name = "received_at", nullable = false)
     private Instant receivedAt;
 
@@ -59,7 +62,8 @@ public class OperatorAccessEvent {
             OperatorAccessDeniedType deniedType,
             Instant occurredAt,
             String clientIp,
-            Instant receivedAt) {
+            Instant receivedAt,
+            boolean suspensionEligible) {
         this.identityEventId = identityEventId;
         this.userId = userId;
         this.loginId = loginId;
@@ -69,6 +73,7 @@ public class OperatorAccessEvent {
         this.deniedType = deniedType;
         this.occurredAt = occurredAt;
         this.clientIp = clientIp;
+        this.suspensionEligible = suspensionEligible;
         this.receivedAt = receivedAt;
         this.createdAt = receivedAt;
     }
@@ -83,7 +88,8 @@ public class OperatorAccessEvent {
             OperatorAccessDeniedType deniedType,
             Instant occurredAt,
             String clientIp,
-            Instant receivedAt) {
+            Instant receivedAt,
+            boolean suspensionEligible) {
         return builder()
                 .identityEventId(identityEventId)
                 .userId(userId)
@@ -95,6 +101,7 @@ public class OperatorAccessEvent {
                 .occurredAt(occurredAt)
                 .clientIp(clientIp)
                 .receivedAt(receivedAt)
+                .suspensionEligible(suspensionEligible)
                 .build();
     }
 }

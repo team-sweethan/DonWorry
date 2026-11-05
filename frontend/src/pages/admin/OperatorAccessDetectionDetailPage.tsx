@@ -90,11 +90,13 @@ export function OperatorAccessDetectionDetailPage() {
                 <Tag color={result.actionStatus === 'SUCCEEDED' ? 'green' : 'default'}>
                   {result.actionStatus === 'SUCCEEDED'
                     ? '계정 정지 완료'
-                    : result.actionStatus === 'NONE'
-                      ? '조치 대상 아님'
-                      : result.actionStatus === 'REQUESTED'
-                        ? '정지 처리 중'
-                        : '조치 실패'}
+                    : result.actionStatus === 'SKIPPED_REACTIVATED'
+                      ? '재활성화 후 조치 제외'
+                      : result.actionStatus === 'NONE'
+                        ? '조치 대상 아님'
+                        : result.actionStatus === 'REQUESTED'
+                          ? '정지 처리 중'
+                          : '조치 실패'}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="조치 시각">

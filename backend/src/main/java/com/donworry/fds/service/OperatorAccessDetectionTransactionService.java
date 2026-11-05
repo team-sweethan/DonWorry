@@ -65,25 +65,36 @@ public class OperatorAccessDetectionTransactionService {
                 OperatorAccessDeniedType.valueOf(input.deniedType().name()),
                 input.occurredAt(),
                 input.clientIp(),
-                now));
+                now,
+                input.suspensionEligible()));
+        // 교차 사이트 GET 거절은 감사 이력에는 남기되 자동 계정 정지 근거로는 쓰지 않는다.
+        if (!event.isSuspensionEligible()) return;
         var rule = ruleFor(event.getDeniedType());
         if (rulePolicies
                 .findByRuleCode(rule.code())
                 .map(policy -> !policy.isActive())
                 .orElse(false)) return;
-        var initialStart = event.getOccurredAt().minus(rule.window());
-        if (events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
-                                event.getUserId(), event.getDeniedType(), initialStart, event.getOccurredAt())
-                        .size()
-                < rule.threshold()) return;
         var status = statusReader.findById(event.getUserId());
         if (status.isEmpty() || status.get().status() == OperatorAccountStatus.INACTIVE) return;
-        var effectiveStart = status.get().lastActivatedAt() == null
-                ? initialStart
-                : max(initialStart, status.get().lastActivatedAt());
-        List<OperatorAccessEvent> matched = events.findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
-                event.getUserId(), event.getDeniedType(), effectiveStart, event.getOccurredAt());
-        if (matched.size() < rule.threshold()) return;
+        // 늦게 수신한 이벤트는 자신과 이후 발생 이벤트의 판정 구간에 모두 영향을 줄 수 있다.
+        var candidates =
+                events.findByUserIdAndDeniedTypeAndSuspensionEligibleTrueAndOccurredAtBetweenOrderByOccurredAtAsc(
+                        event.getUserId(),
+                        event.getDeniedType(),
+                        event.getOccurredAt(),
+                        event.getOccurredAt().plus(rule.window()));
+        for (var candidate : candidates) {
+            if (detect(candidate, rule, status.get().lastActivatedAt(), now)) return;
+        }
+    }
+
+    private boolean detect(OperatorAccessEvent event, Rule rule, Instant lastActivatedAt, Instant now) {
+        var initialStart = event.getOccurredAt().minus(rule.window());
+        var effectiveStart = lastActivatedAt == null ? initialStart : max(initialStart, lastActivatedAt);
+        List<OperatorAccessEvent> matched =
+                events.findByUserIdAndDeniedTypeAndSuspensionEligibleTrueAndOccurredAtBetweenOrderByOccurredAtAsc(
+                        event.getUserId(), event.getDeniedType(), effectiveStart, event.getOccurredAt());
+        if (matched.size() < rule.threshold()) return false;
         var detection = detections.saveAndFlush(OperatorAccessDetection.detected(
                 event,
                 rule.code(),
@@ -92,7 +103,7 @@ public class OperatorAccessDetectionTransactionService {
                 matched.size(),
                 effectiveStart,
                 event.getOccurredAt(),
-                status.get().lastActivatedAt(),
+                lastActivatedAt,
                 now));
         evidences.saveAll(matched.stream()
                 .map(value -> OperatorAccessDetectionEvidence.evidence(detection, value, now))
@@ -103,6 +114,7 @@ public class OperatorAccessDetectionTransactionService {
                 actions.suspend(detection.getId(), event.getUserId());
             }
         });
+        return true;
     }
 
     private static Rule ruleFor(OperatorAccessDeniedType type) {
