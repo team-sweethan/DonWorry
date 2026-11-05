@@ -144,7 +144,7 @@ const aiStepStyle: CSSProperties = {
   border: '1px solid #E2E8F0',
   borderRadius: 8,
 }
-// 시스템이 한 단계(빠진 근거 재요청 · 보충 조회 · 조립)는 회색 바탕으로 AI가 한 일과 구분한다
+// 시스템이 한 단계(기본 조회 · 조립, #578 전 보고서는 재요청 · 보충 조회)는 회색 바탕으로 AI와 구분한다
 const systemStepStyle: CSSProperties = {
   ...aiStepStyle,
   background: '#F1F5F9',

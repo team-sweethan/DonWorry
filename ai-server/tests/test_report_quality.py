@@ -12,7 +12,7 @@ from app.agent.prompts import WRITE_EXAMPLES
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePayment, CasePaymentsTool, FdsEvidenceTool, FdsPayment
-from tests.fakes import ScriptedLlm, call, catalog, context, narrative, toolbox
+from tests.fakes import ScriptedLlm, catalog, context, narrative, toolbox
 
 # AI 실제 실행에서 나온 실수를 코드가 막는지 본다 — 걸리면 다시 쓰게 한다
 # (코드값 · 확률 단정 · 한자 · 영어 · 반복 · "미확인 없음")
@@ -90,18 +90,6 @@ def test_facts_use_korean_labels() -> None:
     texts = " ".join(f.text for f in catalog(CASES, history))
 
     assert "매입 완료" in texts and "CAPTURED" not in texts
-
-
-# AI가 지어낸 인자(case_id)는 쓰지도 기록하지도 않는다
-def test_invented_tool_args_are_dropped() -> None:
-    llm = ScriptedLlm(
-        turns=[[call("get_case_payments", case_id=101)], [call("get_fds_evidence")], None],
-        outputs=[narrative()],
-    )
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.records[0].args == {}
 
 
 # 프롬프트 예시 문장도 검사를 통과해야 한다 — 예시가 규칙을 어기면 AI가 따라 한다

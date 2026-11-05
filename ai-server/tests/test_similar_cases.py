@@ -1,13 +1,11 @@
 import json
 
-from langchain_core.messages import HumanMessage
-
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
-from tests.fakes import ScriptedLlm, call, context, narrative
+from tests.fakes import context
 
 # 비슷한 과거 사건 (#296) — 사실 값은 Tool 기록에서 코드가 채운다
 # AI가 안 부르면 다시 요청 → 그래도 안 하면 시스템 보충
@@ -66,28 +64,7 @@ def test_similar_cases_filled_from_tool_record_not_ai() -> None:
     assert saved == {"cases": SIMILAR["cases"], "totalMatched": 7}
 
 
-# AI가 비슷한 사건을 안 보면 한 번 더 요청하고, 그래도 안 보면 시스템이 조회한다
-def test_similar_cases_nudged_then_system_filled() -> None:
-    llm = ScriptedLlm(
-        turns=[[call("get_case_payments")], [call("get_fds_evidence")], None],
-        outputs=[narrative(["9001", "9002"])],
-    )
-
-    outcome = run_investigation(context(), llm, _toolbox(), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    nudges = [m for m in llm.choose_messages[-1] if isinstance(m, HumanMessage)]
-    assert any("비슷한 과거 사건" in str(m.content) for m in nudges)
-    filled = [
-        s
-        for s in outcome.report.investigationTrace.steps
-        if s.title == "비슷한 과거 사건 조회 (시스템 보충)"
-    ]
-    assert [s.actor for s in filled] == ["SYSTEM"]
-    assert outcome.report.similarCases.totalMatched == 7
-
-
-# 보충 조회까지 실패해도 판정에 필요한 보고서는 만든다 — 비슷한 사건 칸만 비어 있다
+# 비슷한 사건 조회가 실패해도 판정에 필요한 보고서는 만든다 — 비슷한 사건 칸만 비어 있다
 def test_similar_cases_fill_failure_still_succeeds() -> None:
     toolbox = _BrokenSimilarToolBox(
         CasePaymentsTool.model_validate(FIXTURE["casePayments"]),
@@ -97,5 +74,8 @@ def test_similar_cases_fill_failure_still_succeeds() -> None:
 
     assert outcome.status == "SUCCEEDED"
     assert outcome.report.similarCases is None
-    fill = [s for s in outcome.report.investigationTrace.steps if s.actor == "SYSTEM"][-2]
-    assert fill.received == "조회 실패 — 비슷한 사건 없이 진행"
+    steps = outcome.report.investigationTrace.steps
+    failed = [s for s in steps if s.title == "비슷한 과거 사건 조회"]
+    assert [(s.actor, s.received) for s in failed] == [
+        ("SYSTEM", "조회 실패 — 비슷한 사건 없이 진행")
+    ]

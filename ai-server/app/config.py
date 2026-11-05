@@ -35,10 +35,8 @@ class Settings(BaseSettings):
     max_concurrent_investigations: int = 2
     max_kept_results: int = 500
 
-    # Agent 안전장치 — Tool 호출 최대 횟수, 필수 근거 재요청 횟수, 보고서 고쳐 쓰기 횟수
-    # 필수 도구 5종(#352) + 여유 2번
-    agent_max_tool_calls: int = 7
-    agent_max_nudges: int = 2
+    # Agent 안전장치 — AI가 고르는 추가 조회 최대 횟수(#578), 보고서 고쳐 쓰기 횟수
+    agent_max_extra_calls: int = 3
     agent_max_repairs: int = 2
 
     # RF 사기 확률 모델 (Shadow Mode) — 파일 이름이 모델 버전이 된다 (rf-v2.joblib → rf-v2)

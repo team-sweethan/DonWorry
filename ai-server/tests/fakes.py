@@ -89,12 +89,14 @@ class ScriptedLlm:
         self._outputs = list(outputs)
         self._repeat = repeat_last_turn
         self.choose_messages: list[list[BaseMessage]] = []
+        self.choose_tools_offered: list[list[str]] = []
         self.write_messages: list[list[BaseMessage]] = []
         self.write_schemas: list[dict[str, Any]] = []
         self.write_calls = 0
 
     def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
         self.choose_messages.append(list(messages))
+        self.choose_tools_offered.append([t["function"]["name"] for t in tools])
         if not self._turns:
             return AIMessage(content="조사 완료")
         turn = self._turns[0] if self._repeat and len(self._turns) == 1 else self._turns.pop(0)

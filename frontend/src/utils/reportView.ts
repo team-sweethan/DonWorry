@@ -142,7 +142,8 @@ export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]):
     return { title: '조사 시작을 기다리는 중', note: '다른 조사가 끝나면 시작합니다' }
   }
   const last = steps.at(-1)
-  if (!last) return { title: '사건 근거를 보고 첫 조회를 고르는 중', note: null }
+  // 기본 조회는 코드가 한 단계로 한다 (#578) — 끝나기 전에는 단계가 없다
+  if (!last) return { title: '기본 조회 실행 중', note: null }
   const writes = steps.filter((s) => s.kind === 'WRITE').length
   const writing = (attempt: number): LiveTask => ({
     title: attempt === 1 ? '판단 문장 쓰는 중 (1차)' : `판단 문장 다시 쓰는 중 (${attempt}차)`,
@@ -154,7 +155,7 @@ export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]):
         ? writing(1)
         : { title: '고른 조회를 실행하는 중', note: null }
     case 'TOOL':
-      // 시스템 보충 조회는 AI가 조사 완료라고 답한 뒤에 하므로 다음은 판단 문장 쓰기다
+      // 시스템 조회는 기본 조회다 — 추가 도구가 없는 지금은 다음이 판단 문장 쓰기다 (#578)
       return last.actor === 'SYSTEM'
         ? writing(1)
         : { title: '다음에 볼 조회를 고르는 중', note: null }

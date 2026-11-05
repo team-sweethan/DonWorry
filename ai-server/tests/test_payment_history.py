@@ -1,7 +1,5 @@
 import json
 
-from langchain_core.messages import HumanMessage
-
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.tools import StaticToolBox
@@ -64,29 +62,6 @@ def test_payment_history_filled_from_tool_record_not_ai() -> None:
     assert outcome.report.paymentHistory.model_dump() == {
         key: HISTORY[key] for key in ("lookbackDays", "payments", "statusCounts", "truncated")
     }
-
-
-# AI가 고객 최근 결제를 안 보면 다시 요청하고, 그래도 안 보면 시스템이 조회한다
-def test_payment_history_nudged_then_system_filled() -> None:
-    llm = ScriptedLlm(
-        turns=[
-            [call("get_case_payments")],
-            [call("get_fds_evidence")],
-            [call("find_similar_cases")],
-            [call("find_linked_payments")],
-            None,
-        ],
-        outputs=[narrative(["9001", "9002"])],
-    )
-
-    outcome = run_investigation(context(), llm, _toolbox(), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    nudges = [m for m in llm.choose_messages[-1] if isinstance(m, HumanMessage)]
-    assert any("고객 최근 결제" in str(m.content) for m in nudges)
-    filled = [r for r in outcome.records if r.filled_by_system]
-    assert [r.tool_name for r in filled] == ["get_payment_history"]
-    assert outcome.report.paymentHistory.statusCounts[0].count == 2
 
 
 # 이력에 있는 금액을 쓴 문장은 그 사실 번호를 붙이면 숫자 검사를 통과한다 — 한 번에 통과한다

@@ -3,7 +3,7 @@ import logging
 from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -116,20 +116,10 @@ class OpenAiLlmClient:
         return LlmText.of(str(result.content), usage)
 
 
-# Ollama 없이 도는 정해진 순서의 조사 — CI · Ollama 없는 팀원 PC용. 판단 문장은 고정이다
+# Ollama 없이 도는 조사 — CI · Ollama 없는 팀원 PC용. 판단 문장은 고정이다
 class MockLlmClient:
+    # 기본 조회는 코드가 하므로(#578) 추가 조사는 고르지 않는다
     def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
-        called = {message.name for message in messages if isinstance(message, ToolMessage)}
-        for name in (
-            "get_case_payments",
-            "get_fds_evidence",
-            "find_similar_cases",
-            "get_payment_history",
-            "find_linked_payments",
-        ):
-            if name not in called:
-                call = {"name": name, "args": {}, "id": f"mock-{name}", "type": "tool_call"}
-                return AIMessage(content="", tool_calls=[call])
         return AIMessage(content="조사 완료")
 
     # 받은 사실 번호를 모두 단 고정 문장 — 숫자를 쓰지 않아 숫자 검사에 걸리지 않는다 (#548, #559)
