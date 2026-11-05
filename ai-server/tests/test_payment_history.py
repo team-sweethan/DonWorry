@@ -93,10 +93,7 @@ def test_payment_history_nudged_then_system_filled() -> None:
 def test_payment_history_numbers_allowed_in_sentences() -> None:
     written = json.loads(narrative())
     sentence = "이 고객은 최근 58만 원 결제가 매입 완료된 이력이 있습니다."
-    written["topics"] = {
-        **written["topics"],
-        "history": [{"text": sentence, "facts": ["이력-2"]}],
-    }
+    written["summary"] = [{"text": sentence, "facts": ["이력-2"]}]
     llm = ScriptedLlm(
         turns=[
             [call("get_case_payments")],
@@ -112,5 +109,4 @@ def test_payment_history_numbers_allowed_in_sentences() -> None:
 
     assert outcome.status == "SUCCEEDED"
     assert llm.write_calls == 1
-    history = next(t for t in outcome.report.factTopics if t.topic == "history")
-    assert [s.text for s in history.sentences] == [sentence]
+    assert outcome.report.summary == [sentence]

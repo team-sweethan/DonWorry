@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError, field_validator
 
-from app.agent.facts import Fact, topic_keys
+from app.agent.facts import Fact
 from app.agent.prompts import EXAMPLE_SENTENCES
 
 # AI가 쓰는 부분 — 조회한 사실을 주제별로 전달하는 문장 (#548)
@@ -31,51 +31,50 @@ class FactSentence(BaseModel):
 
 
 # 결론 한 줄 · 권고 요약 · 결제별 이유는 AI가 쓰지 않는다 — 코드가 쓴다 (#532)
-# topics: 주제 키(history · linked · signals · similar) → 그 주제의 사실 문장
+# 주제별 문장 칸은 없앴다 — 표 카드와 겹치고 같은 결제를 따로 써 오해를 불렀다 (#559)
+# summary: 주제를 넘나들며 사실을 이어 쓴 요약 1~3문장 (문장마다 근거 사실 번호)
 class Narrative(BaseModel):
     summary: list[FactSentence]
-    topics: dict[str, list[FactSentence]]
     additionalChecks: list[str]
 
     check_lists = field_validator("additionalChecks")(_no_blank)
 
 
 _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
-# 요약 · 확인할 것은 2문장 이상 (#355)
+# 확인할 것은 2개 이상 (#355)
 MIN_SENTENCES = 2
 _TEXT_LIST_2 = {**_TEXT_LIST, "minItems": MIN_SENTENCES}
+# 요약은 1~3문장 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
+SUMMARY_MIN, SUMMARY_MAX = 1, 3
 
 
-def _sentence_list(ids: list[str], min_items: int) -> dict[str, Any]:
+# 사실 번호 목록을 고정한 JSON Schema — Ollama format · OpenAI 구조화 출력으로 넘긴다
+def narrative_schema(facts: list[Fact]) -> dict[str, Any]:
     sentence = {
         "type": "object",
         "properties": {
             "text": {"type": "string"},
             # 준 사실 번호만 고르게 한다 — 그래도 검사는 따로 한다
-            "facts": {"type": "array", "items": {"type": "string", "enum": ids}, "minItems": 1},
+            "facts": {
+                "type": "array",
+                "items": {"type": "string", "enum": [f.id for f in facts]},
+                "minItems": 1,
+            },
         },
         "required": ["text", "facts"],
     }
-    return {"type": "array", "items": sentence, "minItems": min_items}
-
-
-# 주제 키 · 사실 번호를 고정한 JSON Schema — Ollama format · OpenAI 구조화 출력으로 넘긴다
-def narrative_schema(facts: list[Fact]) -> dict[str, Any]:
-    keys = topic_keys(facts)
     return {
         "type": "object",
         "properties": {
-            "summary": _sentence_list([f.id for f in facts], MIN_SENTENCES),
-            "topics": {
-                "type": "object",
-                "properties": {
-                    key: _sentence_list([f.id for f in facts if f.topic == key], 1) for key in keys
-                },
-                "required": keys,
+            "summary": {
+                "type": "array",
+                "items": sentence,
+                "minItems": SUMMARY_MIN,
+                "maxItems": SUMMARY_MAX,
             },
             "additionalChecks": _TEXT_LIST_2,
         },
-        "required": ["summary", "topics", "additionalChecks"],
+        "required": ["summary", "additionalChecks"],
     }
 
 
@@ -170,7 +169,6 @@ def _sentence_errors(
     sentence: FactSentence,
     by_id: dict[str, Fact],
     base_numbers: set[int],
-    topic: str | None,
 ) -> list[str]:
     text = sentence.text
     if not sentence.facts:
@@ -180,12 +178,6 @@ def _sentence_errors(
         return [f'준 적 없는 사실 번호 {unknown}: "{text}"']
     cited = [by_id[fid] for fid in sentence.facts]
     errors: list[str] = []
-    if topic is not None:
-        other = [f.id for f in cited if f.topic != topic]
-        if other:
-            errors.append(
-                f'topics.{topic}에는 이 주제의 사실 번호만 붙여라 (다른 주제 {other}): "{text}"'
-            )
     allowed = set(base_numbers)
     words = set(ALLOWED_WORDS)
     for fact in cited:
@@ -208,17 +200,7 @@ def validate_narrative(
         return None, [f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()]
     by_id = {fact.id: fact for fact in facts}
     base = {len(payment_ids)} | {n for pid in payment_ids for n in _numbers(pid)}
-    errors: list[str] = []
-    expected = topic_keys(facts)
-    if missing := [key for key in expected if key not in narrative.topics]:
-        errors.append(f"topics에 빠진 주제: {missing}")
-    if extra := [key for key in narrative.topics if key not in expected]:
-        errors.append(f"topics에 없는 주제: {extra}")
-    errors += [e for s in narrative.summary for e in _sentence_errors(s, by_id, base, None)]
-    for key, sentences in narrative.topics.items():
-        if key in expected and not sentences:
-            errors.append(f"topics.{key}에 사실 문장을 1개 이상 써라")
-        errors += [e for s in sentences for e in _sentence_errors(s, by_id, base, key)]
+    errors = [e for sent in narrative.summary for e in _sentence_errors(sent, by_id, base)]
     # 확인할 것은 사실 번호를 붙이지 않는다 — 숫자는 준 사실 전체 안에서만
     all_numbers = base | {n for fact in facts for n in _numbers(fact.text)}
     all_words = set(ALLOWED_WORDS) | {w for fact in facts for w in _ENGLISH.findall(fact.text)}
@@ -226,16 +208,15 @@ def validate_narrative(
         if wrong := sorted(_numbers(text) - all_numbers):
             errors.append(f'사실에 없는 숫자 {wrong}: "{text}"')
         errors += _style_errors(text, all_words)
-    groups = [
-        [s.text for s in narrative.summary],
-        narrative.additionalChecks,
-        *[[s.text for s in sentences] for sentences in narrative.topics.values()],
-    ]
+    groups = [[s.text for s in narrative.summary], narrative.additionalChecks]
     errors += [f'같은 문장을 반복하지 마라: "{t}"' for texts in groups for t in _repeats(texts)]
-    for name, count in (
-        ("summary", len(narrative.summary)),
-        ("additionalChecks", len(narrative.additionalChecks)),
-    ):
-        if count < MIN_SENTENCES:
-            errors.append(f"{name}는 {MIN_SENTENCES}개 이상 써라 (지금 {count}개)")
+    if not SUMMARY_MIN <= len(narrative.summary) <= SUMMARY_MAX:
+        errors.append(
+            f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 (지금 {len(narrative.summary)}개)"
+        )
+    if len(narrative.additionalChecks) < MIN_SENTENCES:
+        errors.append(
+            f"additionalChecks는 {MIN_SENTENCES}개 이상 써라 "
+            f"(지금 {len(narrative.additionalChecks)}개)"
+        )
     return (narrative, []) if not errors else (None, errors)

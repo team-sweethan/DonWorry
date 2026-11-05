@@ -421,7 +421,7 @@ class AiInvestigationFlowTests {
                 Map.entry("summary", List.of("요약")),
                 Map.entry("paymentAnalyses", List.of(analysis(String.valueOf(f.paymentId())))),
                 Map.entry("timeline", List.of()),
-                Map.entry("factTopics", List.of()),
+                Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of()),
                 Map.entry("recommendation", Map.of("summary", "추가 확인", "limitations", List.of())),

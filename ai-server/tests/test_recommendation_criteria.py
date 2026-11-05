@@ -50,5 +50,5 @@ def test_investigation_ignores_ai_recommendation_and_keeps_basis() -> None:
 def test_examples_have_no_judgement_fields() -> None:
     for example in WRITE_EXAMPLES:
         out = example["출력"]
-        assert set(out) == {"summary", "topics", "additionalChecks"}
+        assert set(out) == {"summary", "additionalChecks"}
         assert "riskEvidence" not in json.dumps(out) and "normalEvidence" not in json.dumps(out)

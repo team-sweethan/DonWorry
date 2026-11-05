@@ -11,7 +11,7 @@ from app.schemas.tools import (
     PaymentHistoryTool,
     StatusCount,
 )
-from tests.fakes import catalog, fill_topics, narrative
+from tests.fakes import catalog, narrative
 from tests.test_linked_payments import FIXTURE, LINKED
 
 # #355 문장 다듬기 중 #548 뒤에도 남는 것
@@ -41,23 +41,23 @@ def test_example_sentence_copied_is_rewritten() -> None:
     copied = WRITE_EXAMPLES[0]["출력"]["additionalChecks"][0]
     raw = narrative(PAYMENTS, additionalChecks=["고객 본인 확인", copied])
 
-    parsed, errors = validate_narrative(fill_topics(raw, narrative_schema(facts)), facts, PAYMENTS)
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
 
     assert parsed is None
     assert any("예시 문장" in e for e in errors)
 
 
-# 요약 · 확인할 것이 1개면 다시 쓰게 한다 — 출력 형식도 2개 이상을 요구한다
+# 확인할 것이 1개면 다시 쓰게 한다 — 출력 형식도 2개 이상을 요구한다
+# 요약은 1~3문장 (#559 — 사실이 적은 사건에 억지로 2문장을 채우지 않게)
 def test_summary_and_checks_need_two_items() -> None:
     facts = catalog(CASES, FDS)
-    schema = narrative_schema(facts)
-    short = fill_topics(narrative(PAYMENTS, additionalChecks=["고객 본인 확인"]), schema)
+    short = narrative(PAYMENTS, additionalChecks=["고객 본인 확인"])
 
     _, errors = validate_narrative(short, facts, PAYMENTS)
-    schema = schema["properties"]
+    schema = narrative_schema(facts)["properties"]
 
     assert any("additionalChecks는 2개 이상" in e for e in errors)
-    assert schema["summary"]["minItems"] == 2
+    assert (schema["summary"]["minItems"], schema["summary"]["maxItems"]) == (1, 3)
     assert schema["additionalChecks"]["minItems"] == 2
 
 

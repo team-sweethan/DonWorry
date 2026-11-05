@@ -165,15 +165,15 @@ export type ReportRuleHitDetail = {
 }
 
 // verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
-// AI가 조사한 사실 (#548) — 문장마다 근거 사실 번호(factIds)가 있고, 번호는 facts의 id
-export type ReportFactTopic = {
+// 사실 번호별 원래 사실 (#548) — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
+// paymentId는 접속 정보처럼 결제 하나의 사실일 때만 있다 (#559)
+export type ReportFact = {
+  id: string
   topic: string
-  title: string
-  sentences: Array<{ text: string; factIds: string[] }>
+  text: string
+  evidenceId: string
+  paymentId?: string | null
 }
-
-// 사실 번호별 원래 사실 — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
-export type ReportFact = { id: string; topic: string; text: string; evidenceId: string }
 
 export type ReportBody = {
   overview: {
@@ -187,6 +187,8 @@ export type ReportBody = {
     reportVersion: number
   }
   summary: string[]
+  // 요약 문장마다 근거 사실 번호 (#559) — summary와 같은 문장 · 순서. 없으면 그 전 보고서
+  summaryFacts?: Array<{ text: string; factIds: string[] }>
   paymentAnalyses: Array<{
     paymentId: string
     amount: number
@@ -205,8 +207,7 @@ export type ReportBody = {
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
   timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
-  // AI가 조사한 사실 (#548) — 없으면(undefined) 예전 형식 보고서. 종합 분석(AI 문장)은 없앴다
-  factTopics?: ReportFactTopic[]
+  // 사실 번호 목록 (#548) — 요약 링크가 번호의 주제로 표 카드를 찾는다. 종합 분석 · 주제별 문장은 없앴다
   facts?: ReportFact[]
   additionalChecks: string[]
   recommendation: { summary: string; limitations: string[] }

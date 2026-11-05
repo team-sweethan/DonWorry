@@ -132,24 +132,17 @@ class MockLlmClient:
                 return AIMessage(content="", tool_calls=[call])
         return AIMessage(content="조사 완료")
 
-    # 주제마다 첫 사실 번호를 단 고정 문장 — 숫자를 쓰지 않아 숫자 검사에 걸리지 않는다 (#548)
+    # 첫 사실 번호를 단 고정 문장 — 숫자를 쓰지 않아 숫자 검사에 걸리지 않는다 (#548, #559)
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
-        topics = schema["properties"]["topics"]["properties"]
-        first = {
-            key: spec["items"]["properties"]["facts"]["items"]["enum"][0]
-            for key, spec in topics.items()
-        }
-        any_fact = next(iter(first.values()))
+        ids = schema["properties"]["summary"]["items"]["properties"]["facts"]["items"]["enum"]
         return json.dumps(
             {
                 "summary": [
-                    {"text": "주제별 조회 결과를 아래에 정리했습니다.", "facts": [any_fact]},
-                    {"text": "mock 조사라 사실을 고정 문장으로만 전달합니다.", "facts": [any_fact]},
+                    {
+                        "text": "mock 조사라 조회한 사실을 고정 문장으로만 전달합니다.",
+                        "facts": [ids[0]],
+                    }
                 ],
-                "topics": {
-                    key: [{"text": "이 주제의 조회 결과를 확인했습니다.", "facts": [fact_id]}]
-                    for key, fact_id in first.items()
-                },
                 "additionalChecks": ["고객 본인 확인 필요 여부", "결제별 FDS 근거 확인"],
             },
             ensure_ascii=False,

@@ -446,41 +446,44 @@ export function summaryBoxLines(
   return reason && !isCodeReason(reason) ? [...summary, reason] : summary
 }
 
-// ── AI가 조사한 사실 (#548) ──
-// AI는 판단하지 않고 조회한 사실을 주제별로 전달한다. 문장마다 근거 사실 번호가 있다
+// ── 요약 문장 끝 표 링크 (#559) ──
+// AI 요약 문장의 근거 사실 번호를 보고, 그 사실이 있는 표 카드로 가는 링크를 붙인다
+// 번호(이력-1 등)는 화면에 보이지 않는다 — 표 카드 제목으로 보여 준다
 
-export type FactRef = {
-  id: string
-  text: string
-  evidence: ReportBody['evidence'][number] | null
+export type SummaryLink = { target: string; label: string }
+export type SummaryLine = { text: string; links: SummaryLink[] }
+
+// 주제 → 이동할 카드 (ReportFull의 id와 같다). 접속 정보는 결제 카드로 간다
+const TOPIC_CARDS: Record<string, SummaryLink> = {
+  history: { target: 'report-history', label: '고객 최근 결제' },
+  linked: { target: 'report-linked', label: '같은 카드 · 기기 · IP' },
+  similar: { target: 'report-similar', label: '비슷한 과거 사건' },
 }
-export type FactTopicView = { title: string; sentences: Array<{ text: string; refs: FactRef[] }> }
-export type AiFactsView =
-  { kind: 'legacy' } | { kind: 'none' } | { kind: 'topics'; topics: FactTopicView[] }
 
-// 예전 형식(사실 칸 없음)은 안내만, 고정 보고서처럼 사실이 없으면 없음
-// 번호마다 원래 사실과 그 사실을 가져온 조회 기록을 붙인다
-export function aiFactsView(body: ReportBody): AiFactsView {
-  if (!body.factTopics || !body.facts) return { kind: 'legacy' }
-  const topics = body.factTopics.filter((t) => t.sentences.length > 0)
-  if (topics.length === 0) return { kind: 'none' }
+export function paymentCardId(paymentId: string): string {
+  return `report-payment-${paymentId}`
+}
+
+// 링크 정보가 없는 보고서(#559 전)는 문장만, 같은 카드는 문장마다 한 번만
+export function summaryLines(body: ReportBody): SummaryLine[] {
+  if (!body.summaryFacts || !body.facts) return body.summary.map((text) => ({ text, links: [] }))
   const facts = new Map(body.facts.map((f) => [f.id, f]))
-  const evidence = new Map(body.evidence.map((e) => [e.evidenceId, e]))
-  const ref = (id: string): FactRef => {
-    const fact = facts.get(id)
-    return {
-      id,
-      text: fact?.text ?? '이 번호의 사실을 찾지 못했어요',
-      evidence: fact ? (evidence.get(fact.evidenceId) ?? null) : null,
+  return body.summaryFacts.map((sentence) => {
+    const links: SummaryLink[] = []
+    for (const id of sentence.factIds) {
+      const fact = facts.get(id)
+      const link =
+        fact?.topic === 'signals'
+          ? fact.paymentId
+            ? { target: paymentCardId(fact.paymentId), label: `결제 ${fact.paymentId} 접속 정보` }
+            : null
+          : fact
+            ? TOPIC_CARDS[fact.topic]
+            : null
+      if (link && !links.some((l) => l.target === link.target)) links.push(link)
     }
-  }
-  return {
-    kind: 'topics',
-    topics: topics.map((t) => ({
-      title: t.title,
-      sentences: t.sentences.map((s) => ({ text: s.text, refs: s.factIds.map(ref) })),
-    })),
-  }
+    return { text: sentence.text, links }
+  })
 }
 
 // 예전 영문 규칙 코드 → R 코드 — ai-server evidence._ALIASES와 같은 표

@@ -176,8 +176,8 @@ class FixedReportGenerator {
                                 "직원은 판정 근거와 결제 기록을 확인한 뒤 판정해 주세요.")),
                 Map.entry("paymentAnalyses", analyses),
                 Map.entry("timeline", timeline(securityCase, payments)),
-                // 고정 보고서는 AI가 조사한 사실이 없다 (#548)
-                Map.entry("factTopics", List.of()),
+                // 고정 보고서는 AI가 조사한 사실 · 요약 근거 번호가 없다 (#548, #559)
+                Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
                 Map.entry(

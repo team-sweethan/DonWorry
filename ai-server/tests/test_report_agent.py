@@ -20,9 +20,9 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
     assert list(report) == [
         "overview",
         "summary",
+        "summaryFacts",
         "paymentAnalyses",
         "timeline",
-        "factTopics",
         "facts",
         "additionalChecks",
         "recommendation",
@@ -171,19 +171,6 @@ def test_invalid_narrative_is_repaired() -> None:
 
     assert outcome.status == "SUCCEEDED"
     assert llm.write_calls == 2
-
-
-# 조회하지 않은 주제를 쓰면 형식 오류로 돌려보내고, 최종 보고서에도 들어가지 않는다 (#548)
-def test_unknown_topic_in_narrative_is_rejected() -> None:
-    wrong = json.loads(narrative())
-    wrong["topics"]["refunds"] = [{"text": "환불 이력은 없습니다.", "facts": ["접속-1"]}]
-    llm = ScriptedLlm(turns=[], outputs=[json.dumps(wrong, ensure_ascii=False), narrative()])
-
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
-
-    assert outcome.status == "SUCCEEDED"
-    assert llm.write_calls == 2
-    assert "refunds" not in [t.topic for t in outcome.report.factTopics]
 
 
 # 고쳐 쓰기 횟수를 넘으면 실패로 끝낸다 — 자동 판정 없음

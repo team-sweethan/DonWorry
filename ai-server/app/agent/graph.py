@@ -10,7 +10,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts, trace
 from app.agent.assemble import analyzable, assemble_report
-from app.agent.facts import fact_catalog, prompt_facts, report_sections
+from app.agent.facts import fact_catalog, prompt_facts, report_facts
 from app.agent.llm import LlmClient
 from app.agent.narrative import Narrative, narrative_schema, validate_narrative
 from app.agent.tools import (
@@ -23,7 +23,7 @@ from app.agent.tools import (
 )
 from app.config import Settings
 from app.schemas.case_context import CaseContext
-from app.schemas.report import ReportBody, TraceStep
+from app.schemas.report import FactSentenceItem, ReportBody, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
     FdsEvidenceTool,
@@ -298,7 +298,7 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
                 "AI",
                 f"사실 문장 쓰기 {attempt}차",
                 duration_ms=trace.elapsed_ms(started),
-                asked=f"결제 {len(payment_ids)}건의 조사 사실 {len(facts)}개를 주제별로 쓰기",
+                asked=f"결제 {len(payment_ids)}건의 조사 사실 {len(facts)}개를 이어 요약 쓰기",
                 received=received + used_tokens,
                 retry_reason=reason,
             )
@@ -338,21 +338,13 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         case_payments = _latest_case_payments(records)
         narrative = state["narrative"]
         assert case_payments is not None and narrative is not None
-        fact_topics, facts = report_sections(
-            fact_catalog(context, records),
-            {
-                key: [(sentence.text, sentence.facts) for sentence in sentences]
-                for key, sentences in narrative.topics.items()
-            },
-        )
         report = assemble_report(
             context,
             case_payments,
             _fds_by_payment(records),
-            [sentence.text for sentence in narrative.summary],
+            [FactSentenceItem(text=s.text, factIds=s.facts) for s in narrative.summary],
             narrative.additionalChecks,
-            fact_topics,
-            facts,
+            report_facts(fact_catalog(context, records)),
             records,
             _now(),
             trace.build_trace(settings, list(state["trace"]), 0),

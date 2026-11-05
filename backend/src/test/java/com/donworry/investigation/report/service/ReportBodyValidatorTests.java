@@ -49,20 +49,20 @@ class ReportBodyValidatorTests {
         assertThat(validator.validate(report, unknownRecommendation)).anyMatch(error -> error.contains("AUTO_ACCEPT"));
     }
 
-    // 새 형식에서 AI가 조사한 사실(factTopics · facts)이 빠지면 저장하지 않는다 (#548)
+    // 새 형식에서 요약 근거 번호(summaryFacts)가 빠지면 저장하지 않는다 (#559)
     // ai-server와 Spring의 보고서 계약이 어긋난 본문이 성공 보고서로 남지 않게
     @Test
-    void validate_missingFactTopics_returnsError() {
+    void validate_missingSummaryFacts_returnsError() {
         SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
         ReflectionTestUtils.setField(securityCase, "id", 7L);
         when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
                 .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
         ReportBodyValidator validator = new ReportBodyValidator(casePaymentRepository);
-        Map<String, Object> noFactTopics = new HashMap<>(body());
-        noFactTopics.remove("factTopics");
+        Map<String, Object> noSummaryFacts = new HashMap<>(body());
+        noSummaryFacts.remove("summaryFacts");
 
-        assertThat(validator.validate(AiReport.pending(7L, 1, 1, NOW), noFactTopics))
-                .anyMatch(error -> error.contains("factTopics"));
+        assertThat(validator.validate(AiReport.pending(7L, 1, 1, NOW), noSummaryFacts))
+                .anyMatch(error -> error.contains("summaryFacts"));
     }
 
     private static Map<String, Object> body() {
@@ -74,7 +74,7 @@ class ReportBodyValidatorTests {
                         List.of(Map.of(
                                 "paymentId", "3", "recommendation", "NEEDS_CHECK", "ruleHitDetails", List.of()))),
                 Map.entry("timeline", List.of()),
-                Map.entry("factTopics", List.of()),
+                Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of()),
                 Map.entry("recommendation", Map.of("summary", "추가 확인", "limitations", List.of())),
