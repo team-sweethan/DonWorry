@@ -4,7 +4,6 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.narrative import narrative_schema
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, SimilarCasesTool
@@ -65,8 +64,6 @@ def test_similar_cases_filled_from_tool_record_not_ai() -> None:
     assert outcome.status == "SUCCEEDED"
     saved = outcome.report.similarCases.model_dump()
     assert saved == {"cases": SIMILAR["cases"], "totalMatched": 7}
-    # AI가 쓰는 판단 문장 형식에는 비슷한 사건 칸이 없다
-    assert "similar" not in json.dumps(narrative_schema(["9001", "9002"])).lower()
 
 
 # AI가 비슷한 사건을 안 보면 한 번 더 요청하고, 그래도 안 보면 시스템이 조회한다

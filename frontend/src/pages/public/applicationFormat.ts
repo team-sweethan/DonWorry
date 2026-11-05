@@ -91,15 +91,18 @@ export function loginIdChecks(value: string) {
   ]
 }
 
-export function passwordChecks(value: string) {
+export function passwordChecks(value: string, loginId?: string) {
   const length = Array.from(value).length
   return [
     { label: '영문 포함', met: /[a-zA-Z]/.test(value) },
     { label: '숫자 포함', met: /[0-9]/.test(value) },
     { label: '8~64자', met: length >= 8 && length <= 64 },
     {
-      label: '72바이트 이하',
+      label: '문자 조합에 맞는 길이 (한글은 약 23자까지)',
       met: value.length > 0 && new TextEncoder().encode(value).length <= 72,
     },
+    ...(loginId === undefined
+      ? []
+      : [{ label: '아이디와 다름', met: value.length > 0 && value !== loginId }]),
   ]
 }

@@ -1,21 +1,18 @@
 import json
-import re
 
 import httpx
 
-from app.agent.assemble import LINKED_UNAVAILABLE, facts_json
+from app.agent.assemble import LINKED_UNAVAILABLE
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.narrative import narrative_schema
 from app.agent.tools import StaticToolBox
 from app.client.spring import SpringToolClient
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, LinkedPaymentsTool
-from tests.fakes import ScriptedLlm, call, context, narrative
+from tests.fakes import ScriptedLlm, call, catalog, context, narrative
 
 # 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352)
 # 건수 · 고객 수 · 판정은 Tool 기록에서 코드가 채운다
-# AI에게는 있음/없음 · 한 명/여러 명 · 판정 이름만 보여 준다
 
 SETTINGS = Settings(_env_file=None)
 FIXTURE = json.loads(open("tests/fixtures/sample_case.json", encoding="utf-8").read())
@@ -73,18 +70,16 @@ def test_linked_payments_filled_from_tool_record_not_ai() -> None:
     assert outcome.report.linkedPayments.model_dump() == {
         key: LINKED[key] for key in ("lookbackDays", "card", "device", "ip")
     }
-    # AI가 쓰는 판단 문장 형식에는 연관 결제 칸이 없다
-    assert "linked" not in json.dumps(narrative_schema(["9001", "9002"])).lower()
-    # AI에게 보여 주는 근거에는 숫자 대신 있음/없음 · 여러 명 · 판정 이름만 들어간다
+    # AI에게 주는 사실은 Tool 응답 숫자 그대로 — 사실 번호 검사로 옮겨 적기를 맞춰 본다 (#548)
     cases = CasePaymentsTool.model_validate(FIXTURE["casePayments"])
-    facts = json.loads(facts_json(cases, {}, None, None, tool))
-    linked_facts = facts["같은 카드 · 기기 · IP를 쓴 다른 고객 결제(최근 30일)"]
-    assert not re.search(r"\d", json.dumps(linked_facts, ensure_ascii=False))
-    assert linked_facts["같은 카드"]["다른 고객"] == "여러 명"
-    assert linked_facts["같은 IP"] == "정보 없음 (가맹점이 보내지 않음)"
+    texts = [f.text for f in catalog(cases, tool) if f.topic == "linked"]
+    assert texts[0].endswith(
+        "같은 카드: 최근 30일 다른 고객 2명 · 결제 3건 "
+        "(FDS 판정 검토 2건 · 차단 1건), 카드사 거절 1건"
+    )
+    assert texts[2].endswith("같은 IP: IP 정보를 가맹점이 보내지 않아 찾지 못함")
 
 
-# Spring 응답 키를 그대로 읽는다 — 어긋나면 카드가 늘 "조회하지 못함"이 된다 (FastAPI ↔ Spring 계약)
 def test_find_linked_payments_parses_spring_response() -> None:
     seen: list[httpx.Request] = []
 

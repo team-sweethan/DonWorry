@@ -85,8 +85,8 @@ class PaymentAnalysis(BaseModel):
     requestedAt: str
     riskScore: int | None
     ruleHits: list[str]
-    riskEvidence: list[str]
-    normalEvidence: list[str]
+    # 위험 근거 · 정상 근거 칸은 없앴다 — 어느 쪽에 넣는 것 자체가 AI 판단이었다 (#548)
+    # 모르는 사실은 코드가 채운다
     unknowns: list[str]
     # 기준표 판정 (#501) — basis.recommendation과 같다. 예전 보고서는 AI가 고른 값
     recommendation: Recommendation
@@ -125,7 +125,7 @@ class Verdict(BaseModel):
 
 
 # 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 둔다 (#294)
-# kind: AI 판단 · 조회 · 빠진 근거 재요청 · 판단 문장 쓰기 · 보고서 조립
+# kind: AI 판단 · 조회 · 빠진 근거 재요청 · 사실 문장 쓰기 · 보고서 조립
 # actor: AI가 했는지 코드가 보충했는지
 class TraceStep(BaseModel):
     kind: Literal["DECIDE", "TOOL", "NUDGE", "WRITE", "ASSEMBLE"]
@@ -208,12 +208,35 @@ class LinkedPayments(BaseModel):
     ip: LinkedMatch
 
 
+# AI가 전달한 조사 사실 (#548) — 사실 번호(id)는 코드가 Tool 기록에서 만든다
+class FactItem(BaseModel):
+    id: str
+    topic: str
+    text: str
+    # 이 사실을 가져온 조회 기록 — evidence의 evidenceId
+    evidenceId: str
+
+
+class FactSentenceItem(BaseModel):
+    text: str
+    factIds: list[str] = Field(min_length=1)
+
+
+# 조회 도구 하나 = 주제 하나 (결제 이력 · 같은 카드 · 기기 · IP · 접속 정보 · 비슷한 과거 사건)
+class FactTopicSection(BaseModel):
+    topic: str
+    title: str
+    sentences: list[FactSentenceItem]
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
     paymentAnalyses: list[PaymentAnalysis]
     timeline: list[TimelineItem]
-    overallAnalysis: list[str]
+    # 종합 분석 칸은 없앴다 — 판단 문장이었다 (#548)
+    factTopics: list[FactTopicSection]
+    facts: list[FactItem]
     additionalChecks: list[str]
     recommendation: ReportRecommendation
     evidence: list[EvidenceItem]

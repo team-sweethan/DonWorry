@@ -17,8 +17,13 @@ def _repaired_run():
     llm = ScriptedLlm(
         turns=[],
         outputs=[
-            narrative(["9001", "9002"], summary=[ENGLISH_SENTENCE, "짧은 간격의 결제입니다."]),
-            narrative(["9001", "9002"]),
+            narrative(
+                summary=[
+                    {"text": ENGLISH_SENTENCE, "facts": ["접속-1"]},
+                    {"text": "카드 정보가 없습니다.", "facts": ["접속-1"]},
+                ]
+            ),
+            narrative(),
         ],
     )
     return run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
@@ -90,12 +95,12 @@ def test_trace_excludes_raw_tool_values_and_ai_sentences() -> None:
     assert "risk가 높은" not in saved
 
 
-# 다시 쓴 판단 문장은 몇 번째였는지와 걸린 검사 규칙이 남는다
+# 다시 쓴 사실 문장은 몇 번째였는지와 걸린 검사 규칙이 남는다
 def test_trace_repair_step_keeps_rule_reason() -> None:
     outcome = _repaired_run()
 
     writes = [s for s in outcome.report.investigationTrace.steps if s.kind == "WRITE"]
-    assert [s.title for s in writes] == ["판단 문장 쓰기 1차", "판단 문장 쓰기 2차"]
+    assert [s.title for s in writes] == ["사실 문장 쓰기 1차", "사실 문장 쓰기 2차"]
     assert writes[0].received == "형식 검사 실패 → 다시 쓰기"
     assert writes[0].retryReason is not None and "영어 단어" in writes[0].retryReason
     assert writes[1].received == "형식 검사 통과"

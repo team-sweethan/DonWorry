@@ -9,23 +9,10 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts, trace
-from app.agent.assemble import (
-    analyzable,
-    assemble_report,
-    fact_numbers,
-    facts_json,
-    has_burst,
-    outside_rule_evidence,
-)
-from app.agent.evidence import decision_basis
+from app.agent.assemble import analyzable, assemble_report
+from app.agent.facts import fact_catalog, prompt_facts, report_sections
 from app.agent.llm import LlmClient
-from app.agent.narrative import (
-    Narrative,
-    emptied_errors,
-    narrative_schema,
-    sanitize_narrative,
-    validate_narrative,
-)
+from app.agent.narrative import Narrative, narrative_schema, validate_narrative
 from app.agent.tools import (
     ALLOWED_TOOL_NAMES,
     TOOL_ARGS,
@@ -48,7 +35,7 @@ from app.schemas.tools import (
 )
 
 # 조사 Agent — Qwen이 다음에 볼 도구를 고르고, 코드는 허용 · 횟수 · 필수 근거 · 기록을 지킨다
-# 흐름: 고르기 ↔ 실행 → 필수 근거 확인 → 판단 문장 쓰기(형식 검사 · 고쳐 쓰기) → 보고서 조립
+# 흐름: 고르기 ↔ 실행 → 필수 근거 확인 → 사실 문장 쓰기(형식 검사 · 고쳐 쓰기) → 보고서 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
 # 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
 
@@ -291,48 +278,17 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         case_payments = _latest_case_payments(records)
         assert case_payments is not None
         payment_ids = [p.paymentId for p in case_payments.payments if analyzable(p)]
+        # AI에게 주는 사실과 보고서에 저장할 사실을 같은 함수로 만든다 — 번호가 어긋나지 않게 (#548)
+        facts = fact_catalog(context, records)
         messages = state.get("write_messages") or [
             SystemMessage(content=prompts.WRITE_SYSTEM),
             HumanMessage(
-                content=prompts.WRITE_FACTS.format(
-                    facts=facts_json(
-                        case_payments,
-                        _fds_by_payment(records),
-                        _latest_similar(records),
-                        _latest_history(records),
-                        _latest_linked(records),
-                    )
-                )
+                content=prompts.WRITE_FACTS.format(facts=prompt_facts(facts, payment_ids))
             ),
         ]
         started = time.perf_counter()
-        raw = llm.write_json(messages, narrative_schema(payment_ids))
-        # 연관 결제(#352)는 AI에게 숫자를 보여 주지 않으므로 허용 숫자에 넣지 않는다
-        allowed = fact_numbers(
-            case_payments,
-            _fds_by_payment(records),
-            _latest_similar(records),
-            _latest_history(records),
-        )
-        # 규칙 밖 정황이 있으면 "다른 근거가 없다"는 이유를 막는다 (#355)
-        fds, history, linked = (
-            _fds_by_payment(records),
-            _latest_history(records),
-            _latest_linked(records),
-        )
-        outside = outside_rule_evidence(fds, history, linked)
-        by_payment = {pid: outside_rule_evidence(fds, history, linked, pid) for pid in payment_ids}
-        # 결제별 기준표 판정 (#501) — 추가 확인이면 모르는 사실을 쓰게 한다
-        judged = {
-            p.paymentId: decision_basis(
-                p, fds[p.paymentId], case_payments, history, linked
-            ).recommendation
-            for p in case_payments.payments
-            if analyzable(p) and p.paymentId in fds
-        }
-        narrative, errors = validate_narrative(
-            raw, payment_ids, allowed, outside, by_payment, judged
-        )
+        raw = llm.write_json(messages, narrative_schema(facts))
+        narrative, errors = validate_narrative(raw, facts, payment_ids)
         used_tokens = trace.tokens(getattr(raw, "usage", None))
         attempt = state["repairs"] + 1
 
@@ -340,28 +296,22 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
             done = trace.step(
                 "WRITE",
                 "AI",
-                f"판단 문장 쓰기 {attempt}차",
+                f"사실 문장 쓰기 {attempt}차",
                 duration_ms=trace.elapsed_ms(started),
-                asked=f"결제 {len(payment_ids)}건의 근거 요약을 보고 판단 문장 쓰기",
+                asked=f"결제 {len(payment_ids)}건의 조사 사실 {len(facts)}개를 주제별로 쓰기",
                 received=received + used_tokens,
                 retry_reason=reason,
             )
             return [*state["trace"], done]
 
+        # 걸린 문장은 코드가 몰래 지우지 않고 다시 쓰게 한다 (#548)
         if narrative is not None:
-            # 틀리거나 겹친 문장은 다시 쓰게 하지 않고 코드가 뺀다 (#355)
-            # 같은 연속 결제를 정상으로 쓴 문장도 뺀다 (#542)
-            narrative, removed = sanitize_narrative(narrative, has_burst(case_payments, history))
-            # 빼고 나서 필수 목록이 비었으면 그때만 다시 쓰게 한다 (#355 리뷰)
-            errors = emptied_errors(narrative, judged)
-            if not errors:
-                passed = "형식 검사 통과" + (f" · 문장 {removed}개 뺌" if removed else "")
-                return {
-                    "narrative": narrative,
-                    "write_messages": messages,
-                    "next": "assemble",
-                    "trace": written(passed),
-                }
+            return {
+                "narrative": narrative,
+                "write_messages": messages,
+                "next": "assemble",
+                "trace": written("형식 검사 통과"),
+            }
         if state["repairs"] < settings.agent_max_repairs:
             repair = HumanMessage(content=prompts.REPAIR.format(errors="; ".join(errors)))
             return {
@@ -388,11 +338,21 @@ def build_graph(context: CaseContext, llm: LlmClient, toolbox: ToolBox, settings
         case_payments = _latest_case_payments(records)
         narrative = state["narrative"]
         assert case_payments is not None and narrative is not None
+        fact_topics, facts = report_sections(
+            fact_catalog(context, records),
+            {
+                key: [(sentence.text, sentence.facts) for sentence in sentences]
+                for key, sentences in narrative.topics.items()
+            },
+        )
         report = assemble_report(
             context,
             case_payments,
             _fds_by_payment(records),
-            narrative,
+            [sentence.text for sentence in narrative.summary],
+            narrative.additionalChecks,
+            fact_topics,
+            facts,
             records,
             _now(),
             trace.build_trace(settings, list(state["trace"]), 0),

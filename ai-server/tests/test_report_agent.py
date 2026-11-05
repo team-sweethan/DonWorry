@@ -22,7 +22,8 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "summary",
         "paymentAnalyses",
         "timeline",
-        "overallAnalysis",
+        "factTopics",
+        "facts",
         "additionalChecks",
         "recommendation",
         "evidence",
@@ -172,19 +173,17 @@ def test_invalid_narrative_is_repaired() -> None:
     assert llm.write_calls == 2
 
 
-# 근거에 없는 결제 ID를 쓰면 형식 오류로 돌려보내고, 최종 보고서에도 들어가지 않는다
-def test_unknown_payment_id_in_narrative_is_rejected() -> None:
-    wrong = json.loads(narrative(["9001", "9002"]))
-    wrong["payments"]["9999"] = wrong["payments"]["9001"]
-    llm = ScriptedLlm(
-        turns=[], outputs=[json.dumps(wrong, ensure_ascii=False), narrative(["9001", "9002"])]
-    )
+# 조회하지 않은 주제를 쓰면 형식 오류로 돌려보내고, 최종 보고서에도 들어가지 않는다 (#548)
+def test_unknown_topic_in_narrative_is_rejected() -> None:
+    wrong = json.loads(narrative())
+    wrong["topics"]["refunds"] = [{"text": "환불 이력은 없습니다.", "facts": ["접속-1"]}]
+    llm = ScriptedLlm(turns=[], outputs=[json.dumps(wrong, ensure_ascii=False), narrative()])
 
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
     assert llm.write_calls == 2
-    assert [p.paymentId for p in outcome.report.paymentAnalyses] == ["9001", "9002"]
+    assert "refunds" not in [t.topic for t in outcome.report.factTopics]
 
 
 # 고쳐 쓰기 횟수를 넘으면 실패로 끝낸다 — 자동 판정 없음
@@ -277,14 +276,15 @@ def test_overall_recommendation_is_reject_when_any_payment_is_reject() -> None:
 # 결제별 권고는 판정 기준표가 정한다 (#501) — 같은 카드를 다른 고객이 썼고 새 카드 징후도 있으면
 # AI가 매입 진행 검토라고 써도 승인 취소 검토
 def test_recommendation_comes_from_basis_not_ai() -> None:
-    from tests.test_narrative_quality import _toolbox_with_linked
+    from app.schemas.tools import LinkedPaymentsTool
+    from tests.test_linked_payments import LINKED, _toolbox
 
-    written = json.loads(narrative(["9001", "9002"]))
-    for payment in written["payments"].values():
-        payment["recommendation"] = "ACCEPT_REVIEW"
+    written = json.loads(narrative())
+    written["recommendation"] = "ACCEPT_REVIEW"
     llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
+    toolbox_with_linked = _toolbox(LinkedPaymentsTool.model_validate(LINKED))
 
-    outcome = run_investigation(context(), llm, _toolbox_with_linked(), SETTINGS)
+    outcome = run_investigation(context(), llm, toolbox_with_linked, SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
     for analysis in outcome.report.paymentAnalyses:

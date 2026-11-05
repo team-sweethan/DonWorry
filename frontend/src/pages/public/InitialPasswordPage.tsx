@@ -113,8 +113,8 @@ export function InitialPasswordPage() {
                   <>
                     <InputChecks checks={passwordChecks(password)} />
                     <span>
-                      로그인 아이디와 다르게 입력해 주세요. 한글·특수문자도 사용할 수 있으며 UTF-8
-                      기준 72바이트까지입니다.
+                      로그인 아이디와 다르게 입력해 주세요. 한글·특수문자도 사용할 수 있어요. 한글은
+                      약 23자까지 가능하며 이모지나 문자 조합에 따라 달라져요.
                     </span>
                   </>
                 }
@@ -126,7 +126,9 @@ export function InitialPasswordPage() {
                       return passwordChecks(value).every(({ met }) => met)
                         ? Promise.resolve()
                         : Promise.reject(
-                            new Error('영문·숫자를 포함한 8~64자, 72바이트 이하로 입력해 주세요.'),
+                            new Error(
+                              '영문·숫자를 포함해 8~64자로 입력하고 길이 안내를 확인해 주세요.',
+                            ),
                           )
                     },
                   },

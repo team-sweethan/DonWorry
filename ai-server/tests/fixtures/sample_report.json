@@ -23,12 +23,6 @@
         "HIGH_AMOUNT",
         "NEW_CARD"
       ],
-      "riskEvidence": [
-        "FDS 규칙 적중 내역을 확인했습니다."
-      ],
-      "normalEvidence": [
-        "추가로 확인된 정상 정황은 없습니다."
-      ],
       "unknowns": [
         "고객 본인의 결제 의사",
         "구매자 본인의 결제 의사"
@@ -58,12 +52,6 @@
       "ruleHits": [
         "RAPID_REPEAT_PAYMENT",
         "NEW_CARD"
-      ],
-      "riskEvidence": [
-        "FDS 규칙 적중 내역을 확인했습니다."
-      ],
-      "normalEvidence": [
-        "추가로 확인된 정상 정황은 없습니다."
       ],
       "unknowns": [
         "고객 본인의 결제 의사",
@@ -104,8 +92,34 @@
       "kind": "PAYMENT"
     }
   ],
-  "overallAnalysis": [
-    "결제 간 공통 기기 · 계정 관계는 확인하지 않았습니다."
+  "factTopics": [
+    {
+      "topic": "signals",
+      "title": "카드 · 기기 · 접속 정보",
+      "sentences": [
+        {
+          "text": "두 결제 모두 카드 · 기기 · 접속 정보가 없습니다.",
+          "factIds": [
+            "접속-1",
+            "접속-2"
+          ]
+        }
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "id": "접속-1",
+      "topic": "signals",
+      "text": "결제 9001: 카드 · 기기 · 접속 정보 없음",
+      "evidenceId": "E-101-v1-02"
+    },
+    {
+      "id": "접속-2",
+      "topic": "signals",
+      "text": "결제 9002: 카드 · 기기 · 접속 정보 없음",
+      "evidenceId": "E-101-v1-02"
+    }
   ],
   "additionalChecks": [
     "고객 본인 확인 필요 여부"

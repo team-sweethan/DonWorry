@@ -27,8 +27,6 @@ const report = (
       requestedAt: '2026-10-29T01:00:00Z',
       riskScore: 85,
       ruleHits: [],
-      riskEvidence: [],
-      normalEvidence: [],
       unknowns: [],
     })),
   } as unknown as ReportBody,

@@ -4,7 +4,6 @@ from langchain_core.messages import HumanMessage
 
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.narrative import narrative_schema
 from app.agent.tools import StaticToolBox
 from app.config import Settings
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, PaymentHistoryTool
@@ -65,8 +64,6 @@ def test_payment_history_filled_from_tool_record_not_ai() -> None:
     assert outcome.report.paymentHistory.model_dump() == {
         key: HISTORY[key] for key in ("lookbackDays", "payments", "statusCounts", "truncated")
     }
-    # AI가 쓰는 판단 문장 형식에는 이력 칸이 없다
-    assert "history" not in json.dumps(narrative_schema(["9001", "9002"])).lower()
 
 
 # AI가 고객 최근 결제를 안 보면 다시 요청하고, 그래도 안 보면 시스템이 조회한다
@@ -92,11 +89,14 @@ def test_payment_history_nudged_then_system_filled() -> None:
     assert outcome.report.paymentHistory.statusCounts[0].count == 2
 
 
-# 이력에 있는 금액을 쓴 문장은 "근거에 없는 숫자"로 거부되지 않는다 — 한 번에 통과한다
+# 이력에 있는 금액을 쓴 문장은 그 사실 번호를 붙이면 숫자 검사를 통과한다 — 한 번에 통과한다
 def test_payment_history_numbers_allowed_in_sentences() -> None:
-    written = json.loads(narrative(["9001", "9002"]))
+    written = json.loads(narrative())
     sentence = "이 고객은 최근 58만 원 결제가 매입 완료된 이력이 있습니다."
-    written["payments"]["9001"]["normalEvidence"] = [sentence]
+    written["topics"] = {
+        **written["topics"],
+        "history": [{"text": sentence, "facts": ["이력-2"]}],
+    }
     llm = ScriptedLlm(
         turns=[
             [call("get_case_payments")],
@@ -112,4 +112,5 @@ def test_payment_history_numbers_allowed_in_sentences() -> None:
 
     assert outcome.status == "SUCCEEDED"
     assert llm.write_calls == 1
-    assert outcome.report.paymentAnalyses[0].normalEvidence == [sentence]
+    history = next(t for t in outcome.report.factTopics if t.topic == "history")
+    assert [s.text for s in history.sentences] == [sentence]

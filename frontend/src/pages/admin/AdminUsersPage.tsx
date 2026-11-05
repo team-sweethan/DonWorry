@@ -34,6 +34,7 @@ import type {
   UserPage,
 } from '../../api/adminAccounts'
 import { ApiError } from '../../api/client'
+import { ListSearch } from '../../components/common/ListSearch'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
 import { LoginHistoryTable } from '../auth/LoginHistoryPage'
@@ -43,6 +44,12 @@ import {
   normalizeAdminUserListStatusQuery,
   type AdminUserListQuery,
 } from '../../utils/adminUserListQuery'
+import {
+  LIST_PAGE_SIZE,
+  lastListPage,
+  listResultForDisplay,
+  withQuery,
+} from '../../utils/listQuery'
 
 const roleLabels = { ADMIN: '관리자', OPERATOR: '사장님', SECURITY_STAFF: '보안 직원' }
 const permissionOptions = [
@@ -85,7 +92,11 @@ function TemporaryPasswordModal({
           <p>
             아이디: <strong>{result.user.loginId}</strong>
           </p>
-          <Typography.Text code style={{ fontSize: 20, userSelect: 'all' }}>
+          <Typography.Text
+            code
+            copyable={{ tooltips: ['복사', '복사됨'] }}
+            style={{ fontSize: 20, userSelect: 'all' }}
+          >
             {result.temporaryPassword}
           </Typography.Text>
           <p>로그인 후 비밀번호를 변경해야 합니다.</p>
@@ -104,10 +115,15 @@ export function AdminUsersPage() {
       setSearchParams(normalized, { replace: true })
     }
   }, [searchParams, setSearchParams])
+  const listQuery = adminUserListParams(filter).toString()
   const [revision, setRevision] = useState(0)
-  const updateFilter = (changes: Partial<AdminUserListQuery>) =>
-    setSearchParams(adminUserListParams({ ...filter, ...changes }))
   const refresh = () => setRevision((value) => value + 1)
+  const updateFilter = (changes: Partial<AdminUserListQuery>) => {
+    const next = adminUserListParams({ ...filter, ...changes })
+    // 같은 조건을 다시 검색하면 방문 기록을 늘리지 않고 최신 목록만 읽는다.
+    if (next.toString() === listQuery) refresh()
+    else setSearchParams(next)
+  }
   const [result, setResult] = useState<{
     filter: typeof filter
     revision: number
@@ -134,6 +150,15 @@ export function AdminUsersPage() {
     }
   }, [filter, revision])
   const current = result?.filter === filter && result.revision === revision ? result : null
+  // 같은 조건의 재조회·페이지 이동은 기존 행을 유지해 표 높이가 줄며 스크롤이 당겨지지 않게 한다.
+  // 조건이 바뀌면 이전 결과를 새 조건의 결과처럼 보여 주지 않는다.
+  const visible = listResultForDisplay(result, filter, adminUserListParams)
+  const lastPage = current?.data ? lastListPage(current.data.totalElements) : null
+  useEffect(() => {
+    // 마지막 행이 사라진 페이지로 돌아오면 빈 목록에 갇히지 않게 있는 페이지로 옮긴다.
+    if (lastPage !== null && filter.page > lastPage)
+      setSearchParams(adminUserListParams({ ...filter, page: lastPage }), { replace: true })
+  }, [filter, lastPage, setSearchParams])
   return (
     <>
       <PageHeader
@@ -142,7 +167,7 @@ export function AdminUsersPage() {
         actions={
           <Space>
             <Button onClick={refresh}>새로고침</Button>
-            <Link to="/admin/users/new">
+            <Link to={withQuery('/admin/users/new', listQuery)}>
               <Button type="primary">계정 만들기</Button>
             </Link>
           </Space>
@@ -150,14 +175,11 @@ export function AdminUsersPage() {
       />
       <Card>
         <Space wrap style={{ marginBottom: 20 }}>
-          <Input.Search
-            aria-label="계정 검색"
+          <ListSearch
+            label="계정 검색"
             placeholder="아이디 또는 이름"
-            key={filter.keyword}
-            defaultValue={filter.keyword}
-            maxLength={100}
+            keyword={filter.keyword}
             onSearch={(keyword) => updateFilter({ keyword, page: 1 })}
-            allowClear
           />
           <Select
             aria-label="역할 필터"
@@ -201,15 +223,20 @@ export function AdminUsersPage() {
           <Table<AdminUser>
             rowKey="userId"
             loading={!current}
-            dataSource={current?.data?.items ?? []}
-            scroll={{ x: 750 }}
+            dataSource={visible?.data?.items ?? []}
+            scroll={{ scrollToFirstRowOnChange: false, x: 750 }}
             columns={[
               {
                 title: '아이디',
                 dataIndex: 'loginId',
-                render: (value: string, user) => (
-                  <Link to={`/admin/users/${user.userId}`}>{value}</Link>
-                ),
+                render: (value: string, user) =>
+                  visible ? (
+                    <Link to={withQuery(`/admin/users/${user.userId}`, visible.query)}>
+                      {value}
+                    </Link>
+                  ) : (
+                    value
+                  ),
               },
               { title: '이름', dataIndex: 'displayName' },
               {
@@ -237,14 +264,18 @@ export function AdminUsersPage() {
                 render: (required: boolean) => (required ? '변경 필요' : '설정됨'),
               },
             ]}
-            pagination={{
-              current: filter.page,
-              pageSize: 20,
-              total: current?.data?.totalElements ?? 0,
-              showSizeChanger: false,
-              showTotal: (total) => `총 ${total}명`,
-              onChange: (page) => updateFilter({ page }),
-            }}
+            pagination={
+              visible?.data
+                ? {
+                    current: filter.page,
+                    pageSize: LIST_PAGE_SIZE,
+                    total: visible.data.totalElements,
+                    showSizeChanger: false,
+                    showTotal: (total) => `총 ${total}명`,
+                    onChange: (page) => updateFilter({ page }),
+                  }
+                : false
+            }
           />
         )}
       </Card>
@@ -253,6 +284,8 @@ export function AdminUsersPage() {
 }
 
 export function AdminCreateUserPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminUserListParams(parseAdminUserListQuery(query)).toString()
   const [form] = Form.useForm<CreateUser>()
   const role = Form.useWatch('role', form) as CreateUser['role'] | undefined
   const [keyword, setKeyword] = useState('')
@@ -319,7 +352,7 @@ export function AdminCreateUserPage() {
       <PageHeader
         title="계정 만들기"
         description="처음에는 임시 비밀번호가 발급됩니다. 관리자 계정은 만들 수 없습니다."
-        actions={<Link to="/admin/users">목록으로</Link>}
+        actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
       />
       <Card style={{ maxWidth: 640 }}>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
@@ -397,7 +430,7 @@ export function AdminCreateUserPage() {
         onClose={() => {
           const id = secret?.user.userId
           setSecret(null)
-          if (id) navigate(`/admin/users/${id}`, { replace: true })
+          if (id) navigate(withQuery(`/admin/users/${id}`, listQuery), { replace: true })
         }}
       />
     </>
@@ -405,6 +438,8 @@ export function AdminCreateUserPage() {
 }
 
 export function AdminUserDetailPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminUserListParams(parseAdminUserListQuery(query)).toString()
   const { id } = useParams()
   const userId = Number(id)
   const { user: actor, store } = useAuth()
@@ -468,7 +503,10 @@ export function AdminUserDetailPage() {
     return <Alert type="error" message="계정 주소를 확인해 주세요." />
   return (
     <>
-      <PageHeader title="계정 상세" actions={<Link to="/admin/users">목록으로</Link>} />
+      <PageHeader
+        title="계정 상세"
+        actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
+      />
       {current?.error ? (
         <Alert
           type="error"

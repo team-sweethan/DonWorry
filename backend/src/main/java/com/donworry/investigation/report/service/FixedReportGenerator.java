@@ -136,7 +136,7 @@ class FixedReportGenerator {
         List<Map<String, Object>> analyses = new ArrayList<>();
         String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
         for (PaymentInfo payment : payments) {
-            // 정상 근거는 비워 둔다 — 고정 보고서는 결제 · FDS 근거 외에 확인한 것이 없다 (#288)
+            // 위험 · 정상 근거 칸은 없다 — AI 보고서와 같은 모양 (#548)
             Map<String, Object> analysis = new HashMap<>(Map.ofEntries(
                     Map.entry("paymentId", payment.paymentId()),
                     Map.entry("amount", payment.amount()),
@@ -145,12 +145,6 @@ class FixedReportGenerator {
                     Map.entry(
                             "ruleHits",
                             payment.ruleHits().stream().map(RuleHit::code).toList()),
-                    Map.entry(
-                            "riskEvidence",
-                            payment.ruleHits().stream()
-                                    .map(rule -> rule.name() + " 규칙 적중")
-                                    .toList()),
-                    Map.entry("normalEvidence", List.of()),
                     Map.entry("unknowns", List.of("고객 본인의 결제 의사")),
                     Map.entry("recommendation", "NEEDS_CHECK"),
                     Map.entry("reason", "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다."),
@@ -179,10 +173,12 @@ class FixedReportGenerator {
                         "summary",
                         List.of(
                                 "조사 대상 결제 " + payments.size() + "건에서 FDS 규칙 적중이 확인되었습니다.",
-                                "직원은 결제별 위험 근거와 정상 정황을 비교한 뒤 판정해 주세요.")),
+                                "직원은 판정 근거와 결제 기록을 확인한 뒤 판정해 주세요.")),
                 Map.entry("paymentAnalyses", analyses),
                 Map.entry("timeline", timeline(securityCase, payments)),
-                Map.entry("overallAnalysis", List.of("결제 간 공통 기기·계정 관계는 확인되지 않았습니다.")),
+                // 고정 보고서는 AI가 조사한 사실이 없다 (#548)
+                Map.entry("factTopics", List.of()),
+                Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
                 Map.entry(
                         "recommendation",

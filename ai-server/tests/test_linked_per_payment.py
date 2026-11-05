@@ -1,8 +1,8 @@
 import json
 
-from app.agent.assemble import OUTSIDE_RULE_LABELS, facts_json, outside_rule_evidence
 from app.agent.evidence import decision_basis
 from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool, LinkedPaymentsTool
+from tests.fakes import catalog
 from tests.test_linked_payments import LINKED
 
 # 같은 카드 · 기기 · IP 징후는 그 결제의 것만 붙인다 (#533)
@@ -45,18 +45,8 @@ def test_linked_signal_without_per_payment_says_case_level() -> None:
 
 # AI에게도 결제마다 그 결제의 연결 결제를 보여 준다 — 9002에 "다른 고객 결제 없음"
 def test_facts_show_links_per_payment() -> None:
-    facts = json.loads(
-        facts_json(CASE, FDS, None, None, LinkedPaymentsTool.model_validate(PER_PAYMENT))
-    )
+    facts = catalog(CASE, LinkedPaymentsTool.model_validate(PER_PAYMENT))
 
-    by_id = {p["결제 ID"]: p for p in facts["결제"]}
-    assert by_id["9001"]["같은 카드 · 기기 · IP(이 결제)"]["같은 카드"]["다른 고객 결제"] == "있음"
-    assert by_id["9002"]["같은 카드 · 기기 · IP(이 결제)"]["같은 카드"] == "다른 고객 결제 없음"
-
-
-# 9002의 "다른 근거가 없다" 검사에는 연결 결제를 규칙 밖 정황으로 넣지 않는다
-def test_outside_rule_evidence_uses_payment_links() -> None:
-    tool = LinkedPaymentsTool.model_validate(PER_PAYMENT)
-
-    assert OUTSIDE_RULE_LABELS["linked"] in outside_rule_evidence(FDS, None, tool, "9001")
-    assert OUTSIDE_RULE_LABELS["linked"] not in outside_rule_evidence(FDS, None, tool, "9002")
+    texts = [f.text for f in facts if f.topic == "linked"]
+    assert texts[0].startswith("결제 9001 · 같은 카드: 최근 30일 다른 고객 2명 · 결제 3건")
+    assert "결제 9002 · 같은 카드: 최근 30일 다른 고객 결제 없음" in texts

@@ -4,9 +4,16 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from app.agent.tools import StaticToolBox
+from app.agent.facts import Fact, fact_catalog
+from app.agent.tools import StaticToolBox, ToolRecord
 from app.schemas.case_context import CaseContext
-from app.schemas.tools import CasePaymentsTool, FdsEvidenceTool
+from app.schemas.tools import (
+    CasePaymentsTool,
+    FdsEvidenceTool,
+    LinkedPaymentsTool,
+    PaymentHistoryTool,
+    SimilarCasesTool,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -30,31 +37,65 @@ def context(case_id: str = "101", evidence_version: int = 2) -> CaseContext:
     )
 
 
+_TOOL_NAMES: dict[type, str] = {
+    CasePaymentsTool: "get_case_payments",
+    FdsEvidenceTool: "get_fds_evidence",
+    SimilarCasesTool: "find_similar_cases",
+    PaymentHistoryTool: "get_payment_history",
+    LinkedPaymentsTool: "find_linked_payments",
+}
+
+
+# Tool 응답들을 조회 기록 순서대로 넣어 사실 목록을 만든다 (#548)
+def catalog(*results: Any) -> list[Fact]:
+    records = [ToolRecord(_TOOL_NAMES[type(r)], {}, r) for r in results]
+    return fact_catalog(context(), records)
+
+
 def call(name: str, **args: Any) -> dict[str, Any]:
     return {"name": name, "args": args, "id": f"call-{name}-{len(args)}", "type": "tool_call"}
 
 
-def narrative(payment_ids: list[str], **overrides: Any) -> str:
-    body = {
+# 가짜 AI 출력 (#548) — 주제는 그때 조회한 Tool에 따라 달라서 자리 표시만 해 둔다
+# ScriptedLlm이 JSON Schema를 보고 ALL_TOPICS를 실제 주제마다, FIRST_FACT를 그 주제 첫 번호로 바꾼다
+# 접속 정보(접속-1)는 FDS 근거가 있으면 늘 있어 요약 근거로 쓴다
+ALL_TOPICS = "__all_topics__"
+FIRST_FACT = "__first_fact__"
+
+
+def narrative(payment_ids: list[str] | None = None, **overrides: Any) -> str:
+    body: dict[str, Any] = {
         "summary": [
-            "결제 2건 모두 처음 쓰는 카드로 결제됐습니다.",
-            "짧은 간격으로 이어진 결제라 본인 결제인지 확인이 필요합니다.",
+            {"text": "결제마다 카드 · 기기 · 접속 정보를 모았습니다.", "facts": ["접속-1"]},
+            {"text": "조회한 기록을 주제별로 아래에 정리했습니다.", "facts": ["접속-1"]},
         ],
-        "payments": {
-            payment_id: {
-                "riskEvidence": ["처음 쓰는 카드 규칙 적중"],
-                "normalEvidence": ["확인된 정상 정황 없음"],
-                "unknowns": ["고객 본인의 결제 의사"],
-            }
-            for payment_id in payment_ids
+        "topics": {
+            ALL_TOPICS: [{"text": "이 주제의 조회 결과를 정리했습니다.", "facts": [FIRST_FACT]}]
         },
-        "overallAnalysis": [
-            "짧은 간격의 반복 결제입니다.",
-            "처음 쓰는 카드라 카드 주인이 맞는지는 아직 모릅니다.",
-        ],
         "additionalChecks": ["고객 본인 확인", "카드 명의 확인"],
     }
     body.update(overrides)
+    return json.dumps(body, ensure_ascii=False)
+
+
+# 자리 표시를 이번 Schema의 주제 · 첫 사실 번호로 바꾼다
+def fill_topics(raw: str, schema: dict[str, Any]) -> str:
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    topics = body.get("topics") if isinstance(body, dict) else None
+    if not isinstance(topics, dict) or ALL_TOPICS not in topics:
+        return raw
+    template = topics.pop(ALL_TOPICS)
+    # 테스트가 직접 쓴 주제는 그대로 둔다
+    for key, spec in schema["properties"]["topics"]["properties"].items():
+        if key in topics:
+            continue
+        first = spec["items"]["properties"]["facts"]["items"]["enum"][0]
+        topics[key] = [
+            {**s, "facts": [first if f == FIRST_FACT else f for f in s["facts"]]} for s in template
+        ]
     return json.dumps(body, ensure_ascii=False)
 
 
@@ -70,6 +111,8 @@ class ScriptedLlm:
         self._outputs = list(outputs)
         self._repeat = repeat_last_turn
         self.choose_messages: list[list[BaseMessage]] = []
+        self.write_messages: list[list[BaseMessage]] = []
+        self.write_schemas: list[dict[str, Any]] = []
         self.write_calls = 0
 
     def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
@@ -85,7 +128,10 @@ class ScriptedLlm:
 
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
         self.write_calls += 1
-        return self._outputs.pop(0) if len(self._outputs) > 1 else self._outputs[0]
+        self.write_messages.append(list(messages))
+        self.write_schemas.append(schema)
+        raw = self._outputs.pop(0) if len(self._outputs) > 1 else self._outputs[0]
+        return fill_topics(raw, schema)
 
 
 class BrokenLlm:

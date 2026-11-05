@@ -21,7 +21,8 @@ type Feedback = 'ready' | 'invalid' | 'input' | 'network'
 const feedbackMessages: Record<Feedback, string> = {
   ready: '로그인 기능 연결 준비 중입니다.',
   input: '아이디와 비밀번호를 확인해 주세요.',
-  invalid: '아이디 또는 비밀번호가 올바르지 않습니다.',
+  // 잠긴 계정만 다른 문구를 쓰면 계정 존재가 드러나므로 모든 인증 실패에 같은 안내를 보여 준다 (ADR-0029).
+  invalid: '아이디 또는 비밀번호가 올바르지 않습니다. 여러 번 틀렸다면 15분 뒤 다시 시도해 주세요.',
   network: '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.',
 }
 
@@ -144,6 +145,7 @@ export function LoginPage({ onSubmit, notice }: LoginPageProps) {
                 로그인
               </Button>
             </Form>
+            <p className="dw-signin-help">비밀번호를 잊었다면 관리자에게 초기화를 요청해 주세요.</p>
           </div>
           <div className="dw-signin-foot">
             돈워리가 처음이신가요?
