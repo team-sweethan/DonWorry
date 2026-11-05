@@ -206,7 +206,8 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
-  // headline은 AI 결론 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
+  // headline은 결론 한 줄 — #532부터 코드가 기준표 판정으로 쓴다(그 전 보고서는 AI 문장)
+  // overallRecommendation은 결제별 권고로 코드가 계산
   verdict?: { headline: string; overallRecommendation: AiRecommendation }
   // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
   investigationTrace?: InvestigationTrace

@@ -30,6 +30,12 @@ import {
   similarOutcomeTags,
   topRiskScore,
   traceProviderLabel,
+  isCodeReason,
+  recommendationSummaryTitle,
+  signalRecordText,
+  signalRuleRecord,
+  summaryBoxLines,
+  verdictCardTitle,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -532,4 +538,79 @@ test('compareSignals_pastJpNowThVn_pairsOneCountryDiffersOnce', () => {
       [null, '해외 접속 (VN)', 'ONLY'],
     ],
   )
+})
+
+// ── 코드 문장과 AI 문장 구분 (#543) ──
+// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓴다. AI 이름표 아래에 두지 않는다
+
+// 결론 카드 · 상세 정보 제목 — 기준표 보고서면 기준표, 예전 보고서는 AI 이름 그대로
+test('verdictCardTitle_ruleTableReport_isRuleTableElseAiSummary', () => {
+  const ruleTable = body({
+    paymentAnalyses: [{ ...analysis('1', basis1011), reason: '적중한 징후가 없습니다.' }],
+  })
+  const old = body({ paymentAnalyses: [analysis('1')] })
+  assert.equal(verdictCardTitle(ruleTable), '기준표 판정')
+  assert.equal(verdictCardTitle(old), 'AI 조사 요약')
+  assert.equal(recommendationSummaryTitle(ruleTable), '권고 요약 (기준표)')
+  assert.equal(recommendationSummaryTitle(old), 'AI 권고 원문')
+})
+
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 결론 · 권고 요약 · 이유를 AI가 썼다 (#546 Codex 리뷰)
+// 판정 근거 유무가 아니라 문장을 코드가 썼는지로 제목을 정한다 — 결제별 이유로 알아본다
+test('verdictCardTitle_basisButAiWrittenReport_isAiTitle', () => {
+  const aiWritten = body({
+    paymentAnalyses: [
+      {
+        ...analysis('1', basis1011),
+        reason: '처음 쓰는 카드로 고액 결제가 있어 확인이 필요합니다.',
+      },
+    ],
+  })
+  assert.equal(verdictCardTitle(aiWritten), 'AI 조사 요약')
+  assert.equal(recommendationSummaryTitle(aiWritten), 'AI 권고 원문')
+})
+
+// 코드가 쓴 이유는 ai-server verdict_text의 정해진 시작 말로 알아본다
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 그 문장은 AI 칸에 그대로 둔다
+test('isCodeReason_codeSentences_trueOldAiReason_false', () => {
+  for (const reason of [
+    '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다: 같은 카드를 다른 고객이 사용 · 신규 카드',
+    '정상 사유가 없는 고위험 징후가 있습니다: 거절 후 재시도',
+    '정상 사유가 없는 주의 징후가 있습니다: 고액 결제 · 단시간 반복 결제',
+    '모든 징후에 정상 사유가 있습니다: 고액 결제(최근 30일 비슷한 금액의 결제 5건 매입 완료)',
+    '적중한 징후가 없습니다.',
+    'FDS 평가 결과를 확인하지 못했습니다.',
+  ]) {
+    assert.equal(isCodeReason(reason), true, reason)
+  }
+  assert.equal(isCodeReason('처음 쓰는 카드로 이어진 결제라 본인 확인이 필요합니다.'), false)
+  assert.equal(isCodeReason(undefined), false)
+})
+
+// 조사 요약 박스(AI 해석)에는 AI 문장만 — 코드 이유는 "왜 이 판정인가요?"로 옮긴다
+test('summaryBoxLines_codeReasonMovedOut_oldAiReasonKept', () => {
+  const summary = ['고액 결제와 단시간 반복 결제 규칙에 적중한 결제입니다.']
+  const code = {
+    ...analysis('1', basis1011),
+    reason: '정상 사유가 없는 주의 징후가 있습니다: 고액 결제',
+  }
+  const oldAi = { ...analysis('1', basis1011), reason: '처음 쓰는 카드라 본인 확인이 필요합니다.' }
+  assert.deepEqual(summaryBoxLines(summary, code), summary)
+  assert.deepEqual(summaryBoxLines(summary, oldAi), [...summary, oldAi.reason])
+})
+
+// 규칙 징후 줄에 FDS 기록(점수 · 증거 번호)을 붙인다 — 아래 위험 근거의 규칙 줄과 겹치지 않게
+test('signalRuleRecord_matchesCodeAndLegacyAlias_nullForNonRuleSignal', () => {
+  const details = [
+    { code: 'R01', name: '고액 결제', appliedScore: 30, evidenceId: 'E-2-v1-02' },
+    { code: 'NEW_CARD', name: '처음 쓰는 카드', appliedScore: null, evidenceId: 'E-1-v1-02' },
+  ]
+  const high = signalRuleRecord(signal('R01', '고액 결제'), details)
+  const legacy = signalRuleRecord(signal('R03', '신규 카드'), details)
+  assert.deepEqual(high, { appliedScore: 30, evidenceId: 'E-2-v1-02' })
+  assert.deepEqual(legacy, { appliedScore: null, evidenceId: 'E-1-v1-02' })
+  assert.equal(signalRuleRecord(signal('LINKED_IP', '같은 IP를 다른 고객이 사용'), details), null)
+  assert.equal(signalRuleRecord(signal('R01', '고액 결제'), undefined), null)
+  assert.equal(signalRecordText(high!), '+30점 · 증거 E-2-v1-02')
+  assert.equal(signalRecordText(legacy!), '증거 E-1-v1-02')
 })
