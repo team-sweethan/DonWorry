@@ -545,12 +545,29 @@ test('compareSignals_pastJpNowThVn_pairsOneCountryDiffersOnce', () => {
 
 // 결론 카드 · 상세 정보 제목 — 기준표 보고서면 기준표, 예전 보고서는 AI 이름 그대로
 test('verdictCardTitle_ruleTableReport_isRuleTableElseAiSummary', () => {
-  const ruleTable = body({ paymentAnalyses: [analysis('1', basis1011)] })
+  const ruleTable = body({
+    paymentAnalyses: [{ ...analysis('1', basis1011), reason: '적중한 징후가 없습니다.' }],
+  })
   const old = body({ paymentAnalyses: [analysis('1')] })
   assert.equal(verdictCardTitle(ruleTable), '기준표 판정')
   assert.equal(verdictCardTitle(old), 'AI 조사 요약')
   assert.equal(recommendationSummaryTitle(ruleTable), '권고 요약 (기준표)')
   assert.equal(recommendationSummaryTitle(old), 'AI 권고 원문')
+})
+
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 결론 · 권고 요약 · 이유를 AI가 썼다 (#546 Codex 리뷰)
+// 판정 근거 유무가 아니라 문장을 코드가 썼는지로 제목을 정한다 — 결제별 이유로 알아본다
+test('verdictCardTitle_basisButAiWrittenReport_isAiTitle', () => {
+  const aiWritten = body({
+    paymentAnalyses: [
+      {
+        ...analysis('1', basis1011),
+        reason: '처음 쓰는 카드로 고액 결제가 있어 확인이 필요합니다.',
+      },
+    ],
+  })
+  assert.equal(verdictCardTitle(aiWritten), 'AI 조사 요약')
+  assert.equal(recommendationSummaryTitle(aiWritten), 'AI 권고 원문')
 })
 
 // 코드가 쓴 이유는 ai-server verdict_text의 정해진 시작 말로 알아본다

@@ -405,16 +405,25 @@ export function decisionProgress(
 // ── 코드 문장과 AI 문장 구분 (#543) ──
 // #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓰고 AI는 사실 설명만 쓴다
 
+// 결론 · 권고 요약을 코드가 쓴 보고서인지 (#546 리뷰)
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 AI가 썼다 — #532에서 결제별 이유와 함께 코드로 바뀌어 이유로 알아본다
+function isCodeWrittenReport(body: ReportBody): boolean {
+  return (
+    reportRecommendationSource(body) === '기준표 판정' &&
+    body.paymentAnalyses.every((p) => isCodeReason(p.reason))
+  )
+}
+
 // 결론 카드 작은 제목 — 기준표 보고서면 "기준표 판정", 예전 보고서는 AI가 쓴 결론이라 그대로
 export function verdictCardTitle(body: ReportBody): '기준표 판정' | 'AI 조사 요약' {
-  return reportRecommendationSource(body) === '기준표 판정' ? '기준표 판정' : 'AI 조사 요약'
+  return isCodeWrittenReport(body) ? '기준표 판정' : 'AI 조사 요약'
 }
 
 // 상세 정보의 권고 요약 제목
 export function recommendationSummaryTitle(
   body: ReportBody,
 ): '권고 요약 (기준표)' | 'AI 권고 원문' {
-  return reportRecommendationSource(body) === '기준표 판정' ? '권고 요약 (기준표)' : 'AI 권고 원문'
+  return isCodeWrittenReport(body) ? '권고 요약 (기준표)' : 'AI 권고 원문'
 }
 
 // 코드가 쓴 결제별 이유의 시작 말 — ai-server app/agent/verdict_text.py payment_reason과 같은 문장
