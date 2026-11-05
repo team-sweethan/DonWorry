@@ -16,6 +16,11 @@ const tabs: Array<{ key: FdsRuleChangeRequest['status']; label: string }> = [
   { key: 'REJECTED', label: '반려' },
 ]
 
+function RuleTypeTag({ ruleCode }: { ruleCode: string }) {
+  const accountRule = ruleCode.startsWith('SEC_')
+  return <Tag color={accountRule ? 'purple' : 'blue'}>{accountRule ? '계정 룰' : '결제 룰'}</Tag>
+}
+
 function formatDate(value: string | null) {
   return value
     ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'short', timeStyle: 'short' }).format(
@@ -77,8 +82,8 @@ export function RuleChangeRequestsPage() {
   return (
     <>
       <PageHeader
-        title="룰 끄기 요청"
-        description="보안 직원의 탐지 룰 끄기 요청을 검토합니다. 승인하면 해당 룰이 중지되어 이상 거래 탐지에 사용되지 않습니다."
+        title="룰 변경 요청"
+        description="결제·계정 룰을 끄기 위한 요청을 검토하고 처리합니다."
       />
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
       <Card>
@@ -105,6 +110,11 @@ export function RuleChangeRequestsPage() {
               title: '탐지 룰 코드',
               dataIndex: 'ruleCode',
               render: (value: string) => <Tag>{value}</Tag>,
+            },
+            {
+              title: '구분',
+              dataIndex: 'ruleCode',
+              render: (value: string) => <RuleTypeTag ruleCode={value} />,
             },
             { title: '요청자', dataIndex: 'requestedByName' },
             { title: '요청 사유', dataIndex: 'reason', ellipsis: true },
@@ -183,6 +193,7 @@ export function RuleChangeRequestsPage() {
             <Descriptions.Item label="요청 ID">{selectedRequest.requestId}</Descriptions.Item>
             <Descriptions.Item label="탐지 룰 코드">
               <Tag>{selectedRequest.ruleCode}</Tag>
+              <RuleTypeTag ruleCode={selectedRequest.ruleCode} />
             </Descriptions.Item>
             <Descriptions.Item label="요청자">{selectedRequest.requestedByName}</Descriptions.Item>
             <Descriptions.Item label="요청 시각">

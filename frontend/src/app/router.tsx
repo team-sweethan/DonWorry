@@ -23,6 +23,9 @@ import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
 import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
+import { RulePolicyChangeHistoriesPage } from '../pages/admin/RulePolicyChangeHistoriesPage'
+import { OperatorAccessDetectionsPage } from '../pages/admin/OperatorAccessDetectionsPage'
+import { OperatorAccessDetectionDetailPage } from '../pages/admin/OperatorAccessDetectionDetailPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
@@ -119,6 +122,16 @@ export const router = createBrowserRouter([
           },
           { path: 'fds/rules', element: <RuleCatalogPage /> },
           { path: 'fds/rule-change-requests', element: <RuleChangeRequestsPage /> },
+          { path: 'fds/rule-policy-change-histories', element: <RulePolicyChangeHistoriesPage /> },
+          { path: 'fds/operator-access-detections', element: <OperatorAccessDetectionsPage /> },
+          {
+            path: 'fds/operator-access-detections/low/:eventId',
+            element: <OperatorAccessDetectionDetailPage />,
+          },
+          {
+            path: 'fds/operator-access-detections/:id',
+            element: <OperatorAccessDetectionDetailPage />,
+          },
           { path: 'finance', element: <EmptyPage title="자금관리" /> },
           { path: 'merchants', element: <AdminMerchantsPage /> },
           { path: 'merchants/new', element: <AdminCreateMerchantPage /> },
