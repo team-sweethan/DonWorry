@@ -8,6 +8,7 @@ import static org.mockito.Mockito.doAnswer;
 import com.donworry.HttpCsrfTestSupport;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.fds.service.OperatorAccessDetectionService;
+import com.donworry.fds.service.OperatorAccessDetectionTransactionService;
 import com.donworry.identity.api.OperatorAccessDenied;
 import com.donworry.identity.api.OperatorAccessDeniedType;
 import java.net.CookieManager;
@@ -27,6 +28,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicLong;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -42,6 +45,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
@@ -72,10 +76,17 @@ class OperatorAccessDetectionFlowMariaDbTests {
     @Autowired
     PlatformTransactionManager transactionManager;
 
+    @Autowired
+    OperatorAccessDeniedListener listener;
+
     @MockitoSpyBean
     OperatorAccessDetectionService detectionService;
 
+    @MockitoSpyBean
+    OperatorAccessDetectionTransactionService detectionTransactions;
+
     private final List<Boolean> outerTransactions = new CopyOnWriteArrayList<>();
+    private final AtomicLong commitDelayMillis = new AtomicLong();
     private final List<Long> merchantIds = new ArrayList<>();
     private final List<Account> accounts = new ArrayList<>();
 
@@ -90,12 +101,19 @@ class OperatorAccessDetectionFlowMariaDbTests {
                 })
                 .when(detectionService)
                 .receive(any(OperatorAccessDenied.class));
+        commitDelayMillis.set(0);
+        doAnswer(invocation -> {
+                    delayCommit();
+                    return invocation.callRealMethod();
+                })
+                .when(detectionTransactions)
+                .receive(any(OperatorAccessDenied.class));
     }
 
     @AfterEach
     void cleanUp() throws Exception {
         for (var account : accounts) {
-            awaitProcessed(account);
+            awaitProcessedForCleanup(account);
             jdbc.update(
                     "DELETE FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND SERIALIZED_EVENT LIKE ?",
                     OperatorAccessDenied.class.getName(),
@@ -196,20 +214,28 @@ class OperatorAccessDetectionFlowMariaDbTests {
         }
     }
 
-    // 트랜잭션 안에서 호출해도 수신 결과는 계정 잠금 안에서 먼저 커밋된다
+    // 커밋이 느려도 동시에 온 기준 횟수를 모두 세어 탐지를 놓치지 않는다
     @Test
-    void receive_whenCalledInsideTransaction_commitsBeforeReturning() throws Exception {
+    void listener_whenCommitIsSlow_detectsConcurrentThreshold() {
+        commitDelayMillis.set(20);
+        for (int round = 0; round < 3; round++) {
+            var owner = operator();
+            long merchantId = merchantIds.getLast();
+            var start = Instant.now();
+
+            for (int i = 0; i < 5; i++) listener.on(event(owner, merchantId, start.plusMillis(i)));
+
+            await().atMost(WAIT).until(() -> events(owner) == 5);
+            awaitStatus(owner, "INACTIVE");
+            assertThat(detections(owner)).isEqualTo(1);
+        }
+    }
+
+    // 트랜잭션 안에서 호출해도 수신 결과는 호출이 끝나기 전에 커밋된다
+    @Test
+    void receive_whenCalledInsideTransaction_commitsBeforeReturning() {
         var owner = operator();
-        var event = new OperatorAccessDenied(
-                ThreadLocalRandom.current().nextLong(1_000_000_000L, Long.MAX_VALUE),
-                owner.id(),
-                owner.loginId(),
-                merchantIds.getLast(),
-                "GET",
-                OUT_OF_ROLE_PATH,
-                OperatorAccessDeniedType.OUT_OF_ROLE,
-                Instant.now(),
-                "127.0.0.1");
+        var event = event(owner, merchantIds.getLast(), Instant.now());
 
         int visible = new TransactionTemplate(transactionManager).execute(status -> {
             detectionService.receive(event);
@@ -265,11 +291,48 @@ class OperatorAccessDetectionFlowMariaDbTests {
     }
 
     // 모든 P1 원본의 이벤트 발행이 끝나야 탐지 건수와 정리 결과가 안정된다.
-    private void awaitProcessed(Account account) throws Exception {
+    private void awaitProcessed(Account account) {
         await().atMost(WAIT).until(() -> events(account) >= denials(account) && incompletePublications(account) == 0);
     }
 
-    private void awaitStatus(Account account, String expected) throws Exception {
+    // 처리 실패가 원인인 테스트에서도 나머지 데이터는 끝까지 지운다.
+    private void awaitProcessedForCleanup(Account account) {
+        try {
+            awaitProcessed(account);
+        } catch (ConditionTimeoutException ignored) {
+            // 실패 원인은 테스트 본문이 보고한다.
+        }
+    }
+
+    private void delayCommit() {
+        long delay = commitDelayMillis.get();
+        if (delay == 0) return;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void beforeCommit(boolean readOnly) {
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        });
+    }
+
+    private static OperatorAccessDenied event(Account owner, long merchantId, Instant occurredAt) {
+        return new OperatorAccessDenied(
+                ThreadLocalRandom.current().nextLong(1_000_000_000L, Long.MAX_VALUE),
+                owner.id(),
+                owner.loginId(),
+                merchantId,
+                "GET",
+                OUT_OF_ROLE_PATH,
+                OperatorAccessDeniedType.OUT_OF_ROLE,
+                occurredAt,
+                "127.0.0.1");
+    }
+
+    private void awaitStatus(Account account, String expected) {
         await().atMost(WAIT).until(() -> expected.equals(status(account)));
     }
 
