@@ -8,6 +8,27 @@ import {
   withQuery,
   listResultForDisplay,
 } from '../src/utils/listQuery.ts'
+import { parseAdminUserListQuery } from '../src/utils/adminUserListQuery.ts'
+import { parseAdminMerchantListQuery } from '../src/utils/adminMerchantListQuery.ts'
+
+// 화면의 1부터 시작하는 페이지를 API의 0부터 시작하는 페이지로 보내도 조회 위치가 int를 넘지 않는다.
+test('listPage_whenOffsetExceedsServerRange_fallsBackToFirstPage', () => {
+  const lastAllowed = 107_374_183
+  assert.equal(parseListPage(String(lastAllowed)), lastAllowed)
+  assert.ok((lastAllowed - 1) * 20 <= 2_147_483_647)
+  assert.ok(lastAllowed * 20 > 2_147_483_647)
+  for (const page of ['107374184', '2147483647', '9007199254740991']) {
+    assert.equal(parseListPage(page), 1)
+    const params = new URLSearchParams({ page, keyword: '가게', status: 'ACTIVE' })
+    for (const parse of [parseAdminUserListQuery, parseAdminMerchantListQuery]) {
+      assert.equal(parse(params).page, 1)
+      assert.equal(parse(params).keyword, '가게')
+      assert.equal(parse(params).status, 'ACTIVE')
+    }
+  }
+  assert.equal(lastListPage(2_147_483_647), lastAllowed)
+  assert.equal(lastListPage(2_147_483_661), lastAllowed)
+})
 
 // 잘못된 페이지를 API에 보내지 않고 검색어 길이도 제한한다.
 test('listQuery_whenInvalid_usesDefaults', () => {
