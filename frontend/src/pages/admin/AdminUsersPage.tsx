@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  App,
   Button,
   Card,
   Checkbox,
@@ -62,6 +63,7 @@ function TemporaryPasswordModal({
   result: TemporaryPassword | null
   onClose: () => void
 }) {
+  const { message } = App.useApp()
   return (
     <Modal
       open={result !== null}
@@ -88,6 +90,20 @@ function TemporaryPasswordModal({
           <Typography.Text code style={{ fontSize: 20, userSelect: 'all' }}>
             {result.temporaryPassword}
           </Typography.Text>
+          <Button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(result.temporaryPassword)
+                void message.success('임시 비밀번호를 복사했습니다.')
+              } catch {
+                void message.warning(
+                  '클립보드에 복사할 수 없습니다. 임시 비밀번호를 직접 선택해 복사해 주세요.',
+                )
+              }
+            }}
+          >
+            복사
+          </Button>
           <p>로그인 후 비밀번호를 변경해야 합니다.</p>
         </>
       )}
@@ -104,6 +120,7 @@ export function AdminUsersPage() {
       setSearchParams(normalized, { replace: true })
     }
   }, [searchParams, setSearchParams])
+  const listQuery = adminUserListParams(filter).toString()
   const [revision, setRevision] = useState(0)
   const updateFilter = (changes: Partial<AdminUserListQuery>) =>
     setSearchParams(adminUserListParams({ ...filter, ...changes }))
@@ -201,14 +218,17 @@ export function AdminUsersPage() {
           <Table<AdminUser>
             rowKey="userId"
             loading={!current}
-            dataSource={current?.data?.items ?? []}
-            scroll={{ x: 750 }}
+            // 재조회 중 기존 행을 유지해 표 높이가 잠깐 줄며 스크롤이 당겨지지 않게 한다.
+            dataSource={(current ?? result)?.data?.items ?? []}
+            scroll={{ scrollToFirstRowOnChange: false, x: 750 }}
             columns={[
               {
                 title: '아이디',
                 dataIndex: 'loginId',
                 render: (value: string, user) => (
-                  <Link to={`/admin/users/${user.userId}`}>{value}</Link>
+                  <Link to={`/admin/users/${user.userId}${listQuery ? `?${listQuery}` : ''}`}>
+                    {value}
+                  </Link>
                 ),
               },
               { title: '이름', dataIndex: 'displayName' },
@@ -240,7 +260,7 @@ export function AdminUsersPage() {
             pagination={{
               current: filter.page,
               pageSize: 20,
-              total: current?.data?.totalElements ?? 0,
+              total: (current ?? result)?.data?.totalElements ?? 0,
               showSizeChanger: false,
               showTotal: (total) => `총 ${total}명`,
               onChange: (page) => updateFilter({ page }),
@@ -405,6 +425,8 @@ export function AdminCreateUserPage() {
 }
 
 export function AdminUserDetailPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminUserListParams(parseAdminUserListQuery(query)).toString()
   const { id } = useParams()
   const userId = Number(id)
   const { user: actor, store } = useAuth()
@@ -468,7 +490,12 @@ export function AdminUserDetailPage() {
     return <Alert type="error" message="계정 주소를 확인해 주세요." />
   return (
     <>
-      <PageHeader title="계정 상세" actions={<Link to="/admin/users">목록으로</Link>} />
+      <PageHeader
+        title="계정 상세"
+        actions={
+          <Link to={listQuery ? `/admin/users?${listQuery}` : '/admin/users'}>목록으로</Link>
+        }
+      />
       {current?.error ? (
         <Alert
           type="error"

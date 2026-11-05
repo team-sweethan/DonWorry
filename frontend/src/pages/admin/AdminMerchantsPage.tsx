@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -13,7 +13,7 @@ import {
   Table,
   Tag,
 } from 'antd'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ApiError } from '../../api/client'
 import {
@@ -28,6 +28,12 @@ import type { AdminMerchant, MerchantPage, MerchantStatus } from '../../api/admi
 
 import { IntegrationPanel } from '../owner/IntegrationPreviewPage'
 
+import {
+  adminMerchantListParams,
+  parseAdminMerchantListQuery,
+  type AdminMerchantListQuery,
+} from '../../utils/adminMerchantListQuery'
+
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
 // 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
 const settlementFeeNotice = '신규 정산에 등록 요율 적용 · 기존 정산 유지'
@@ -40,32 +46,32 @@ const statusTag = (status: MerchantStatus) => (
 )
 
 export function AdminMerchantsPage() {
-  const [filter, setFilter] = useState({
-    page: 0,
-    keyword: '',
-    status: undefined as MerchantStatus | undefined,
-    revision: 0,
-  })
-  const [search, setSearch] = useState('')
+  const [query, setQuery] = useSearchParams()
+  const filter = useMemo(() => parseAdminMerchantListQuery(query), [query])
+  const listQuery = adminMerchantListParams(filter).toString()
+  const [revision, setRevision] = useState(0)
+  const updateFilter = (changes: Partial<AdminMerchantListQuery>) =>
+    setQuery(adminMerchantListParams({ ...filter, ...changes }))
   const [result, setResult] = useState<{
     filter: typeof filter
+    revision: number
     data?: MerchantPage
     error?: string
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getMerchants(filter.page, filter.keyword, filter.status)
+    getMerchants(filter.page - 1, filter.keyword, filter.status)
       .then((data) => {
-        if (alive) setResult({ filter, data })
+        if (alive) setResult({ filter, revision, data })
       })
       .catch((error) => {
-        if (alive) setResult({ filter, error: errorMessage(error) })
+        if (alive) setResult({ filter, revision, error: errorMessage(error) })
       })
     return () => {
       alive = false
     }
-  }, [filter])
-  const current = result?.filter === filter ? result : null
+  }, [filter, revision])
+  const current = result?.filter === filter && result.revision === revision ? result : null
   return (
     <>
       <PageHeader
@@ -73,9 +79,7 @@ export function AdminMerchantsPage() {
         description="가맹점을 등록하고 사용 상태를 관리합니다."
         actions={
           <Space>
-            <Button onClick={() => setFilter((f) => ({ ...f, revision: f.revision + 1 }))}>
-              새로고침
-            </Button>
+            <Button onClick={() => setRevision((value) => value + 1)}>새로고침</Button>
             <Link to="/admin/merchants/new">
               <Button type="primary">가맹점 만들기</Button>
             </Link>
@@ -87,11 +91,11 @@ export function AdminMerchantsPage() {
           <Input.Search
             aria-label="가맹점 검색"
             placeholder="코드 또는 이름"
-            value={search}
+            key={filter.keyword}
+            defaultValue={filter.keyword}
             maxLength={100}
             allowClear
-            onChange={(event) => setSearch(event.target.value)}
-            onSearch={(value) => setFilter((f) => ({ ...f, page: 0, keyword: value }))}
+            onSearch={(value) => updateFilter({ page: 1, keyword: value })}
           />
           <Select
             aria-label="가맹점 상태"
@@ -100,9 +104,7 @@ export function AdminMerchantsPage() {
             style={{ width: 140 }}
             value={filter.status}
             options={Object.entries(labels).map(([value, label]) => ({ value, label }))}
-            onChange={(status: MerchantStatus | undefined) =>
-              setFilter((f) => ({ ...f, page: 0, status }))
-            }
+            onChange={(status: MerchantStatus | undefined) => updateFilter({ page: 1, status })}
           />
         </Space>
         {current?.error && (
@@ -111,14 +113,15 @@ export function AdminMerchantsPage() {
         <Table<AdminMerchant>
           rowKey="merchantId"
           loading={!current}
-          dataSource={current?.data?.items ?? []}
-          scroll={{ x: 650 }}
+          // 재조회 중 기존 행을 유지해 표 높이가 잠깐 줄며 스크롤이 당겨지지 않게 한다.
+          dataSource={(current ?? result)?.data?.items ?? []}
+          scroll={{ x: 650, scrollToFirstRowOnChange: false }}
           pagination={{
-            current: filter.page + 1,
+            current: filter.page,
             pageSize: 20,
-            total: current?.data?.totalElements ?? 0,
+            total: (current ?? result)?.data?.totalElements ?? 0,
             showSizeChanger: false,
-            onChange: (page) => setFilter((f) => ({ ...f, page: page - 1 })),
+            onChange: (page) => updateFilter({ page }),
           }}
           locale={{
             emptyText: current?.error ? '목록을 불러오지 못했습니다.' : '등록된 가맹점이 없습니다.',
@@ -128,7 +131,11 @@ export function AdminMerchantsPage() {
               title: '코드',
               dataIndex: 'merchantCode',
               render: (value: string, merchant) => (
-                <Link to={`/admin/merchants/${merchant.merchantId}`}>{value}</Link>
+                <Link
+                  to={`/admin/merchants/${merchant.merchantId}${listQuery ? `?${listQuery}` : ''}`}
+                >
+                  {value}
+                </Link>
               ),
             },
             { title: '가맹점 이름', dataIndex: 'displayName' },
@@ -240,6 +247,8 @@ export function AdminCreateMerchantPage() {
 }
 
 export function AdminMerchantDetailPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminMerchantListParams(parseAdminMerchantListQuery(query)).toString()
   const { id } = useParams()
   const merchantId = Number(id)
   const [revision, setRevision] = useState(0)
@@ -298,7 +307,9 @@ export function AdminMerchantDetailPage() {
             <Button disabled={busy} onClick={() => setRevision((value) => value + 1)}>
               새로고침
             </Button>
-            <Link to="/admin/merchants">목록으로</Link>
+            <Link to={listQuery ? `/admin/merchants?${listQuery}` : '/admin/merchants'}>
+              목록으로
+            </Link>
           </Space>
         }
       />

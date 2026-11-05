@@ -9,6 +9,22 @@ import {
   passwordChecks,
 } from '../src/pages/public/applicationFormat.ts'
 
+// 로그인 아이디를 아는 화면만 동일 비밀번호를 추가로 거절한다.
+test('passwordChecks_whenLoginIdKnown_rejectsExactMatch', () => {
+  assert.equal(
+    passwordChecks('owner123', 'owner123').every(({ met }) => met),
+    false,
+  )
+  assert.equal(
+    passwordChecks('Owner123', 'owner123').every(({ met }) => met),
+    true,
+  )
+  assert.equal(
+    passwordChecks('owner123').every(({ met }) => met),
+    true,
+  )
+})
+
 // 입력 도중과 붙여넣기 모두 숫자를 잃지 않고 사업자번호 구분자를 넣는다.
 test('formatBusinessNumber_whenTyping_formatsWithoutDiscardingInput', () => {
   for (const [input, expected] of [
