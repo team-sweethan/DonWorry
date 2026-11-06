@@ -214,7 +214,8 @@ export function ActionHistoryPage() {
       )}
       <div
         className="dw-stat-grid"
-        style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}
+        // 칸 수를 카드 개수에 맞춘다 — 카드가 늘어도 한 줄로 유지 (#585)
+        style={{ gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))` }}
         aria-label="조치 상태별 건수"
       >
         {cards.map((card) => (
