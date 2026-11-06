@@ -304,7 +304,12 @@ def prompt_facts(facts: list[Fact], payment_ids: list[str]) -> str:
 def report_facts(facts: list[Fact]) -> list[FactItem]:
     return [
         FactItem(
-            id=f.id, topic=f.topic, text=f.text, evidenceId=f.evidence_id, paymentId=f.payment_id
+            id=f.id,
+            topic=f.topic,
+            text=f.text,
+            evidenceId=f.evidence_id,
+            paymentId=f.payment_id,
+            notable=f.rank == NOTABLE,
         )
         for f in facts
     ]

@@ -49,6 +49,24 @@ FDS_UNCONFIRMED_LABEL = "FDS 평가 결과 미확인"
 
 SIMILAR_AMOUNT = "SIMILAR_AMOUNT"
 
+# 판정 전에 확인할 것 (#591) — 징후마다 직원이 할 일을 코드가 정한다 (AI가 고르지 않는다)
+# 새 징후를 추가하면 여기도 한 줄 (test_check_before_every_signal_key_has_sentence가 검사)
+CHECK_BEFORE: dict[str, str] = {
+    "R01": "고객의 평소 결제 금액과 비교 · 단체 주문 같은 구매 목적 확인",
+    "R02": "고객이 최근 기기를 바꿨는지 가맹점에 확인",
+    "R03": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인",
+    "R04": "한 주문을 나눠 낸 결제인지 주문 내역 확인",
+    "R05": "해외 체류 · VPN 사용 등 접속 경위 확인",
+    "R06": "소액 결제가 여러 카드로 이어졌는지 카드사에 확인",
+    "R07": "차단 목록에 오른 사유 · 등록 시점 확인",
+    "R08": "카드사에 거절 사유 확인",
+    "OVERSEAS": "해외 체류 · VPN 사용 등 접속 경위 확인",
+    "LINKED_CARD": "가족처럼 카드를 함께 쓰는 사이인지 확인",
+    "LINKED_DEVICE": "매장 키오스크 같은 공용 기기인지 가맹점에 확인",
+    "LINKED_IP": "매장 · 회사 같은 공용 와이파이인지 가맹점에 문의",
+    "FDS_UNCONFIRMED": "FDS 평가가 왜 없었는지 평가 기록 확인",
+}
+
 # 비슷한 금액: 이번 금액의 0.5 ~ 1.5배, 매입 완료 2건 이상
 SIMILAR_LOW, SIMILAR_HIGH, SIMILAR_MIN_COUNT = 0.5, 1.5, 2
 # 사건 결제 앞뒤 10분 안의 결제는 평소 결제가 아니다 (assemble.split_history와 같은 기준)
@@ -244,6 +262,7 @@ def decision_basis(
             # 고위험 징후는 자료만으로 정상 사유를 붙이지 않는다 — 직원 확인으로만 풀린다
             normalReason=reason_for.get(s.key) if s.level == CAUTION else None,
             countedIn=counted_in(s.key),
+            checkBefore=CHECK_BEFORE.get(s.key),
         )
         for s in raw_signals
     ]

@@ -197,10 +197,17 @@ def _sentence_errors(
     return errors + _style_errors(text, words)
 
 
+# 요약이 인용하지 않은 눈여겨볼 사실 번호 — 무엇이 눈여겨볼 사실인지는 코드가 정했다 (#568)
+def missing_notable(narrative: Narrative, facts: list[Fact]) -> list[str]:
+    cited = {fid for sent in narrative.summary for fid in sent.facts}
+    return [f.id for f in facts if f.rank == NOTABLE and f.id not in cited]
+
+
 # 형식 · 내용 검사 — 통과하면 Narrative, 아니면 AI에게 돌려줄 오류 문장 목록 (다시 쓰기)
 # payment_ids: 사건 결제 ID — 문장에서 결제를 가리킬 때 쓰는 숫자라 허용한다
+# allow_missing_notable: 안전망용 (#591) — 다시 쓰기를 다 쓴 뒤 눈여겨볼 사실 빠짐만 봐준다
 def validate_narrative(
-    raw: str, facts: list[Fact], payment_ids: list[str]
+    raw: str, facts: list[Fact], payment_ids: list[str], allow_missing_notable: bool = False
 ) -> tuple[Narrative | None, list[str]]:
     try:
         narrative = Narrative.model_validate_json(raw)
@@ -210,10 +217,8 @@ def validate_narrative(
     base = {len(payment_ids)} | {n for pid in payment_ids for n in _numbers(pid)}
     errors = [e for sent in narrative.summary for e in _sentence_errors(sent, by_id, base)]
     # 눈여겨볼 사실(다른 고객과 겹침 · 연속 결제)은 요약에서 빠지면 다시 쓰게 한다 (#568)
-    # 무엇이 눈여겨볼 사실인지는 코드가 정했다 — AI가 고르지 않는다
-    notable = {f.id for f in facts if f.rank == NOTABLE}
-    cited = {fid for sent in narrative.summary for fid in sent.facts}
-    if missing := [f.id for f in facts if f.id in notable and f.id not in cited]:
+    missing = [] if allow_missing_notable else missing_notable(narrative, facts)
+    if missing:
         # 3문장이 꽉 찬 채로 빠뜨리면 어디에 넣을지 알려 준다 (#581 — 같은 답을 3번 냈다)
         full = len(narrative.summary) >= SUMMARY_MAX
         hint = f" {SUMMARY_MAX}문장이 꽉 찼으면 다음 문장으로 이어 써라" if full else ""

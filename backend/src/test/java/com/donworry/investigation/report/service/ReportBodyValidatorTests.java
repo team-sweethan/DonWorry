@@ -65,6 +65,36 @@ class ReportBodyValidatorTests {
                 .anyMatch(error -> error.contains("summaryFacts"));
     }
 
+    // 새 선택 칸(개요 · 안전망 · 조사 범위 · 확인할 것 · 30일 표시)이 든 보고서도 저장한다 (#591)
+    // ai-server만 바꿔 Spring이 성공 보고서를 거부하면 보고서가 사라진다
+    @Test
+    void validate_bodyWithNewOptionalFields_returnsNoErrors() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        ReportBodyValidator validator = new ReportBodyValidator(casePaymentRepository);
+        Map<String, Object> withNewFields = new HashMap<>(body());
+        withNewFields.put("caseOverview", "고객 customer-1의 결제 1건이 고액 결제 규칙에 걸려 매입 보류된 사건입니다.");
+        withNewFields.put("summaryAppended", List.of("연결-1"));
+        withNewFields.put(
+                "scope", Map.of("checked", List.of("사건 결제 목록"), "withheld", List.of(), "unavailable", List.of()));
+        withNewFields.put(
+                "paymentAnalyses",
+                List.of(Map.of(
+                        "paymentId",
+                        "3",
+                        "recommendation",
+                        "NEEDS_CHECK",
+                        "ruleHitDetails",
+                        List.of(),
+                        "basis",
+                        Map.of("signals", List.of(Map.of("key", "R01", "checkBefore", "구매 목적 확인"))))));
+
+        assertThat(validator.validate(AiReport.pending(7L, 1, 1, NOW), withNewFields))
+                .isEmpty();
+    }
+
     private static Map<String, Object> body() {
         return Map.ofEntries(
                 Map.entry("overview", Map.of("caseId", "7")),

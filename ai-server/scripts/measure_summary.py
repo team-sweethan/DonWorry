@@ -108,6 +108,9 @@ class RunResult:
     cited_facts: list[list[list[str]]]
     error_code: str | None
     seconds: float
+    # 안전망이 요약 뒤에 덧붙인 눈여겨볼 사실 수 (#591) — 실패한 조사는 None
+    # 성공 수만 보면 안전망 덕분인지 AI 요약이 나아진 것인지 섞인다
+    appended: int | None = None
 
 
 def _cited(raw: str) -> set[str]:
@@ -194,6 +197,7 @@ def measure_run(sample: str, data: dict[str, Any], llm: LlmClient, settings: Set
         cited_facts=_cited_by_sentence(recorder.writes),
         error_code=outcome.error["code"] if outcome.error else None,
         seconds=seconds,
+        appended=len(report.summaryAppended) if report else None,
     )
 
 
@@ -214,6 +218,11 @@ def _rate(values: list[bool | None]) -> str:
     return f"{sum(seen)}/{len(seen)}" if seen else "해당 없음"
 
 
+# 안전망을 썼는지 — 실패한 조사는 볼 수 없어 None
+def _used_net(run: RunResult) -> bool | None:
+    return None if run.appended is None else run.appended > 0
+
+
 def summarize(results: list[RunResult]) -> str:
     detail = [r.detail_counts for r in results if r.detail_counts is not None]
     rewrites = sum(r.rewrites for r in results) / len(results)
@@ -221,6 +230,7 @@ def summarize(results: list[RunResult]) -> str:
         [
             f"{len(results)}번",
             f"성공 {sum(r.status == 'SUCCEEDED' for r in results)}",
+            f"안전망 덧붙임 {_rate([_used_net(r) for r in results])}",
             f"1차 통과 {_rate([r.first_pass for r in results])}",
             f"다시 쓰기 평균 {rewrites:.1f}",
             f"눈여겨볼 사실(1차) {_rate([r.notable_in_first for r in results])}",
@@ -300,7 +310,11 @@ def main(
         for i in range(1, args.runs + 1):
             print(f"  {name} {i}/{args.runs} ...", file=sys.stderr)
             run = measure_run(name, data, llm, settings)
-            print(f"    {run.status} · 다시 쓰기 {run.rewrites} · {run.seconds}초", file=sys.stderr)
+            net = f" · 안전망 {run.appended}개" if run.appended else ""
+            print(
+                f"    {run.status} · 다시 쓰기 {run.rewrites}{net} · {run.seconds}초",
+                file=sys.stderr,
+            )
             runs.append(run)
             results.append(run)
             if args.out:

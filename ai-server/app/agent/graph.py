@@ -12,7 +12,12 @@ from app.agent import prompts, trace
 from app.agent.assemble import analyzable, assemble_report
 from app.agent.facts import fact_catalog, prompt_facts, report_facts
 from app.agent.llm import LlmClient
-from app.agent.narrative import Narrative, narrative_schema, validate_narrative
+from app.agent.narrative import (
+    Narrative,
+    missing_notable,
+    narrative_schema,
+    validate_narrative,
+)
 from app.agent.tools import EXTRA_TOOLS, ExtraTool, ToolBox, ToolRecord, llm_content
 from app.config import Settings
 from app.schemas.case_context import CaseContext
@@ -44,6 +49,8 @@ class AgentState(TypedDict, total=False):
     write_messages: list[BaseMessage]
     repairs: int
     narrative: Narrative | None
+    # 안전망으로 요약 뒤에 덧붙일 눈여겨볼 사실 번호 (#591)
+    summary_appended: list[str]
     report: ReportBody | None
     failure: dict[str, str] | None
     next: str
@@ -294,6 +301,22 @@ def build_graph(
                 "next": "write",
                 "trace": written("형식 검사 실패 → 다시 쓰기", trace.retry_reason(errors)),
             }
+        # 안전망 (#591) — 남은 오류가 눈여겨볼 사실 빠짐뿐이면 실패 대신 코드가 그 사실을 덧붙인다
+        # 몰래 고치지 않는다: 보고서 · 화면 · 조사 과정에 "시스템이 덧붙임"으로 남긴다 (#548 개정)
+        # 숫자 · 형식 오류가 하나라도 남으면 그대로 실패한다
+        rescued, _ = validate_narrative(raw, facts, payment_ids, allow_missing_notable=True)
+        if rescued is not None:
+            appended = missing_notable(rescued, facts)
+            return {
+                "narrative": rescued,
+                "summary_appended": appended,
+                "write_messages": messages,
+                "next": "assemble",
+                "trace": written(
+                    f"눈여겨볼 사실만 빠짐 → 요약에 빠진 사실 {len(appended)}개를 시스템이 덧붙임",
+                    trace.retry_reason(errors),
+                ),
+            }
         reason = f"형식 검사 {settings.agent_max_repairs + 1}회 실패: {'; '.join(errors)}"
         return {
             "failure": {"code": "NARRATIVE_INVALID", "reason": reason},
@@ -326,6 +349,7 @@ def build_graph(
             _latest_history(records),
             _latest_linked(records),
             _base_history(records),
+            state.get("summary_appended") or [],
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [

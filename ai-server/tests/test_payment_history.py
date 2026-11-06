@@ -59,9 +59,12 @@ def test_payment_history_filled_from_tool_record_not_ai() -> None:
     outcome = run_investigation(context(), MockLlmClient(), _toolbox(), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
-    assert outcome.report.paymentHistory.model_dump() == {
+    expected = {
         key: HISTORY[key] for key in ("lookbackDays", "payments", "statusCounts", "truncated")
     }
+    # 90일 추가 조사를 안 했으니 표의 결제는 모두 기준표가 본 30일 조회에 든다 (#591)
+    expected["payments"] = [{**p, "inBasis": True} for p in HISTORY["payments"]]
+    assert outcome.report.paymentHistory.model_dump() == expected
 
 
 # 이력에 있는 금액을 쓴 문장은 그 사실 번호를 붙이면 숫자 검사를 통과한다 — 한 번에 통과한다

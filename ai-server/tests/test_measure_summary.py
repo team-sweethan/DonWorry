@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 
 from app.agent.llm import MockLlmClient
 from app.config import Settings
-from scripts.measure_summary import FIXTURES, main, measure_run
+from scripts.measure_summary import FIXTURES, main, measure_run, summarize
 
 # 요약 측정 스크립트 (#581) — 진짜 AI는 부르지 않는다 (mock · 가짜 AI만)
 
@@ -92,10 +92,21 @@ class _AlwaysMissesNotable(_FirstMissesNotable):
         return super().write_json(messages, schema)
 
 
+# 눈여겨볼 사실도 빼먹고 없는 숫자도 쓰는 AI — 안전망(#591)으로도 못 살려 조사가 실패한다
+class _AlwaysMissesNotableWithWrongNumber(_AlwaysMissesNotable):
+    def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
+        body = json.loads(super().write_json(messages, schema))
+        body["summary"][0]["text"] += " 같은 날 결제가 777건 더 있습니다."
+        return json.dumps(body, ensure_ascii=False)
+
+
 # 조사가 실패해도 답마다 불합격 사유가 남는다 — 사유가 없으면 무엇을 고칠지 알 수 없다
 def test_measure_failed_run_records_reject_reasons() -> None:
     run = measure_run(
-        "case5_new", _sample("measure_case5_new.json"), _AlwaysMissesNotable(), SETTINGS
+        "case5_new",
+        _sample("measure_case5_new.json"),
+        _AlwaysMissesNotableWithWrongNumber(),
+        SETTINGS,
     )
 
     assert (run.status, run.error_code) == ("FAILED", "NARRATIVE_INVALID")
@@ -103,6 +114,17 @@ def test_measure_failed_run_records_reject_reasons() -> None:
     for reasons in run.reject_reasons:
         assert any("눈여겨볼 사실" in reason for reason in reasons)
         assert not any("mock 조사라" in reason for reason in reasons)
+
+
+# 안전망으로 성공한 조사는 덧붙인 사실 수가 기록된다 — 안 세면 AI 품질과 안전망 효과가 섞인다
+def test_measure_safety_net_run_records_appended_count() -> None:
+    run = measure_run(
+        "case5_new", _sample("measure_case5_new.json"), _AlwaysMissesNotable(), SETTINGS
+    )
+
+    assert run.status == "SUCCEEDED"
+    assert run.appended == len(run.notable_facts) > 0
+    assert "안전망 덧붙임 1/1" in summarize([run])
 
 
 # 두 번째 조사 도중 Ctrl+C를 누른 것처럼 멈춘다
