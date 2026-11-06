@@ -3,7 +3,7 @@ import json
 from app.agent import prompts
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.tools import StaticToolBox
+from app.agent.tools import EXTRA_TOOLS, StaticToolBox
 from app.config import Settings
 from tests.fakes import FIXTURES, context
 
@@ -36,7 +36,8 @@ def test_prompt_fingerprint_same_across_cases() -> None:
     case5 = _fingerprint_of("measure_case5_new.json")
 
     assert accept is not None
-    assert accept == case5 == prompts.fingerprint([], SETTINGS.agent_max_extra_calls)
+    specs = [tool.spec for tool in EXTRA_TOOLS]
+    assert accept == case5 == prompts.fingerprint(specs, SETTINGS.agent_max_extra_calls)
 
 
 # 지시문이나 추가 도구 설명을 고치면 지문이 바뀐다 — 안 바뀌면 다른 프롬프트의 측정을 한데 묶는다

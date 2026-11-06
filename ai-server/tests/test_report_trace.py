@@ -30,7 +30,8 @@ def _repaired_run():
 
 
 # 실제로 일어난 순서 · 횟수대로 남는다
-# 기본 조회 5개는 시스템이 한 일 → 문장 → 조립 (#578, 추가 도구가 없으면 AI 고르기 없음)
+# 기본 조회 5개는 시스템이 한 일 → 추가 조회 고르기(AI, 고를 게 없으면 한 번) → 문장 → 조립
+# (#578, 첫 추가 도구 고객 이력 90일이 생겨 고르기 단계가 돈다 #581)
 def test_trace_records_steps_in_actual_order() -> None:
     outcome = run_investigation(context(), MockLlmClient(), toolbox("sample_case.json"), SETTINGS)
 
@@ -41,6 +42,7 @@ def test_trace_records_steps_in_actual_order() -> None:
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
+        ("DECIDE", "AI"),
         ("WRITE", "AI"),
         ("ASSEMBLE", "SYSTEM"),
     ]
