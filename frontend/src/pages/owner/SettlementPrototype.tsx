@@ -371,10 +371,7 @@ export function SettlementPrototype({
       {payoutData && (
         <>
           <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />
-          <div className="payout-policy-note">
-            <span>같은 날 매입 → 같은 영업일 D+3 정산일 · 하루 한 번 지급</span>
-          </div>
-          {monthSummary && <div className="payout-policy-note">{monthSummary}</div>}
+          {monthSummary && <div className="payout-policy-note payout-month-summary">{monthSummary}</div>}
         </>
       )}
       <section className="finance-card" style={{ marginBottom: 20 }}>
@@ -543,7 +540,11 @@ export function SettlementPrototype({
             {daily.slice(0, 2).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
-                  <b>{e.orderId ?? e.id}</b>
+                  <b className="stl-preview-order-id" title={e.orderId ?? String(e.id)}>
+                    {e.orderId && e.orderId.length > 16
+                      ? `${e.orderId.slice(0, 12)}…`
+                      : (e.orderId ?? e.id)}
+                  </b>
                   <span className={`stl-chip stl-${e.status}`}>{labels[e.status]}</span>
                 </div>
                 {e.orderItems?.length ? (

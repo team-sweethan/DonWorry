@@ -677,10 +677,17 @@
 
 .stl-detail .stl-settlement-preview {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+.stl-preview-order-id {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .stl-settlement-preview .stl-detail-title {
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 .stl-settlement-preview .stl-detail-title > b:first-child {

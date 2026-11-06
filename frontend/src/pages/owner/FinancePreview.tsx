@@ -177,8 +177,8 @@ export function FinancePreview() {
             previewAmountScale,
           )}
           monthSummary={
-            <span>
-              이번 달 누적 실제 지급액{' '}
+            <>
+              <div>이번 달 누적 실제 지급액</div>
               <strong>
                 <FinanceMoney
                   value={
@@ -192,9 +192,9 @@ export function FinancePreview() {
                     ).paidAmount
                   }
                 />
-              </strong>{' '}
-              · 1일~오늘, 조회 기간과 별도
-            </span>
+              </strong>
+              <small>{dayjs(today).startOf('month').format('M월 D일')}~오늘 기준</small>
+            </>
           }
           expenses={calendarExpenses}
           headerActions={headerActions}

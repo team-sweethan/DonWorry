@@ -108,6 +108,23 @@
 .payout-policy-note strong {
   color: #886211;
 }
+.payout-policy-note.payout-current-recovery,
+.payout-policy-note.payout-month-summary {
+  justify-content: flex-start;
+  gap: 4px 24px;
+}
+.payout-current-recovery > small,
+.payout-month-summary > p,
+.payout-month-summary > small {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: inherit;
+}
+.payout-current-recovery > strong,
+.payout-month-summary > strong {
+  min-width: 0;
+  max-width: 100%;
+}
 .payout-current-recovery > span {
   color: #78350f;
   font-size: 16px;

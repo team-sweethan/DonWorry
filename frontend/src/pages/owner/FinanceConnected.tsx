@@ -151,6 +151,15 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
     valid && !!setting,
   )
   const result = forecast.status === 'success' ? forecast.data.forecast : null
+  const excludedIncome = result
+    ? [
+        { label: '일정 미정', amount: result.undatedIncome },
+        { label: '지난 배치 미완료', amount: result.overdueIncome },
+        { label: '취소', amount: result.canceledIncome },
+      ]
+        .filter(({ amount }) => amount !== 0)
+        .map(({ label, amount }) => `${label} ${money(amount)}`)
+    : []
   const view = forecast.status === 'success' ? forecast.data.view : null
   const active = result?.days.find((d) => d.date === details)
   const preset = (days: number) =>
@@ -241,11 +250,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               description="예상 유입은 서버에 설정된 배치가 실행된다는 가정입니다. 실제 지급을 보장하지 않습니다."
             />
           )}
-          <Alert
-            type="info"
-            message="예측에서 제외한 정산"
-            description={`일정 미정 ${money(result.undatedIncome)} · 지난 배치 미완료 ${money(result.overdueIncome)} · 취소 ${money(result.canceledIncome)}. 지난 예정일의 미완료 지출은 자동 차감하거나 오늘로 이월하지 않습니다.`}
-          />
+          {excludedIncome.length > 0 && (
+            <Alert
+              type="info"
+              message="예측에서 제외한 정산"
+              description={excludedIncome.join(' · ')}
+            />
+          )}
           <CashFlowOverview
             {...view}
             graphDate={graphDate}
@@ -453,7 +464,7 @@ function ConnectedSettlements() {
                       <FinanceMoney value={month.data.paidAmount} />
                     </strong>
                     <p>
-                      {monthFrom}~{today} · 별도 조회
+                      {dayjs(monthFrom).format('M월 D일')}~오늘 기준
                     </p>
                   </>
                 ) : month.status === 'error' ? (
