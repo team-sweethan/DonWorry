@@ -100,6 +100,10 @@ class IdentityStatusMigrationMariaDbTests {
                 """);
         var accountsBefore =
                 jdbc.queryForList("SELECT * FROM platform_users WHERE login_id<>'staff_test' ORDER BY user_id");
+        // 후속 마이그레이션은 시드 관리자의 표시 이름만 바꾸고 나머지 계정 값은 보존한다.
+        accountsBefore.stream()
+                .filter(row -> "admin".equals(row.get("login_id")))
+                .forEach(row -> row.put("display_name", "관리자"));
         var auditBefore = jdbc.queryForList("SELECT * FROM admin_change_histories ORDER BY history_id");
         // 후속 #517은 기존 감사 값은 보존하고 수행자 유형만 STAFF로 채운다.
         auditBefore.forEach(row -> row.put("actor_type", "STAFF"));
