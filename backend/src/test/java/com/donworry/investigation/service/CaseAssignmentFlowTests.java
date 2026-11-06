@@ -334,9 +334,10 @@ class CaseAssignmentFlowTests {
         return caseId;
     }
 
+    // 업무 과다 사유는 메모 없이 요청할 수 있다 (메모 필수는 기타뿐)
     private Long pendingRequest(Long caseId, Long assignee) throws Exception {
         loginAs(assignee, "SECURITY_STAFF");
-        perform(requestChange(caseId, "CONFLICT_OF_INTEREST", null)).andExpect(status().isOk());
+        perform(requestChange(caseId, "WORKLOAD", null)).andExpect(status().isOk());
         return requestRepository
                 .findByCaseIdAndStatus(caseId, AssignmentRequestStatus.PENDING)
                 .orElseThrow()

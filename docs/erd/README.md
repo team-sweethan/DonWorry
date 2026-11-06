@@ -474,7 +474,7 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | request_id | BIGINT AUTO_INCREMENT PK | |
 | case_id | BIGINT NOT NULL FK security_cases | |
 | requested_by_staff_id | BIGINT NOT NULL | 요청한 담당 직원 (로그인 세션) |
-| reason | VARCHAR(30) NOT NULL | CONFLICT_OF_INTEREST / OTHER. CHECK 없음 — 사유는 조각 8에서 더한다 |
+| reason | VARCHAR(30) NOT NULL | CONFLICT_OF_INTEREST(이해충돌) / WORKLOAD(업무 과다) / PERSONAL(개인 사유) / OTHER(기타). CHECK 없음 — ADMIN 전용 사유는 조각 8에서 더한다 |
 | memo | VARCHAR(200) NULL | 업무 메모, OTHER면 필수 (서비스). 개인정보 금지 안내 |
 | status | VARCHAR(20) NOT NULL | PENDING / APPROVED / REJECTED (CHECK) |
 | requested_at · reviewed_at | DATETIME(6) | UTC |

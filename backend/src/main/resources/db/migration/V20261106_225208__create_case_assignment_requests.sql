@@ -18,7 +18,7 @@ CREATE TABLE case_assignment_requests
     request_id             BIGINT       NOT NULL AUTO_INCREMENT,
     case_id                BIGINT       NOT NULL,
     requested_by_staff_id  BIGINT       NOT NULL,
-    reason                 VARCHAR(30)  NOT NULL,              -- CONFLICT_OF_INTEREST / OTHER
+    reason                 VARCHAR(30)  NOT NULL,              -- CONFLICT_OF_INTEREST / WORKLOAD / PERSONAL / OTHER
     memo                   VARCHAR(200) NULL,                  -- 사유가 OTHER면 필수 (서비스 검사)
     status                 VARCHAR(20)  NOT NULL,
     requested_at           DATETIME(6)  NOT NULL,              -- UTC
