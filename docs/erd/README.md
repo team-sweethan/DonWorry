@@ -77,6 +77,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `payment` (#602) | P5 | `payment_order_contacts` (주문자 연락처 암호문, ADR-0082) | [주문자 연락처](../../backend/src/main/resources/db/migration/V20261106_222538__create_payment_order_contacts.sql) |
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_failure_analyses`, `fds_high_risk_countries`, `fds_blocklist_entries`, `fds_rule_policies`, `fds_rule_change_requests`, `fds_rule_policy_change_histories`, `fds_operator_access_events`, `fds_operator_access_detections`, `fds_operator_access_detection_evidences` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261023_135302](../../backend/src/main/resources/db/migration/V20261023_135302__add_fds_requested_amount.sql) · [20261026_174910](../../backend/src/main/resources/db/migration/V20261026_174910__add_fds_evaluation_merchant_id.sql) · [20261027_101722](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql) · [20261027_101804](../../backend/src/main/resources/db/migration/V20261027_101804__add_fds_reevaluation_lineage.sql) · [FDS v0.2](../../backend/src/main/resources/db/migration/V20261028_092416__add_fds_rule_inputs_and_policy_tables.sql) · [룰 관리](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [접근 탐지·룰 정책·변경 이력](../../backend/src/main/resources/db/migration/V20261104_152441__create_operator_access_detection_tables.sql) · [차단 식별값](../../backend/src/main/resources/db/migration/V20261028_201821__add_fds_blocklist_identifiers.sql) · [차단 해제 이력](../../backend/src/main/resources/db/migration/V20261030_114028__add_fds_blocklist_deactivation.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
+| `investigation` (#608) | P3 수민 | `security_cases` 담당 칸, `case_assignment_locks`, `case_assignment_requests` (사건 자동 배정 · 담당 변경, ADR-0082) | [담당 배정](../../backend/src/main/resources/db/migration/V20261106_225206__add_security_case_assignment.sql) · [담당 변경 요청](../../backend/src/main/resources/db/migration/V20261106_225208__create_case_assignment_requests.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
 | `investigation/report` (#412) | P4 현규 | `ml_shadow_scores` (FDS ML Shadow 채점 기록) | [ML Shadow](../../backend/src/main/resources/db/migration/V20261102_125730__create_ml_shadow_scores.sql) |
 | `settlement` | P6 민정 | `captures`, `settlements` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
@@ -108,6 +109,7 @@ erDiagram
     case_payments ||--o| payment_decisions : "case_payment_id"
     payment_decisions ||--o| action_handoffs : "decision_id"
     security_cases ||--o{ case_histories : "case_id"
+    security_cases ||--o{ case_assignment_requests : "case_id"
 
     captures ||--o| settlements : "capture_id"
 
@@ -135,7 +137,7 @@ erDiagram
 
 `fds_blocklist_entries`는 차단 등록 사유와 함께 해제 사유(`deactivation_reason`)·해제 시각(`deactivated_at`)을 보존한다. 재등록하면 기존 해제 이력은 현재 활성 차단 상태와 혼동되지 않도록 NULL로 되돌린다.
 
-그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id`(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
+그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests`의 직원 · ADMIN ID(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
 
 ## 4. 테이블별 컬럼
 
@@ -448,3 +450,35 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 행은 고치지 않는다. 암호문 파기(결제 후 540일, 실험안)는 2차다.
 제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. #525의 수집·발행에 더해 #528에서 원본 IP 정리를 구현한다. [실행 근거·미검증](../identity/528-access-record-retention.md)을 따른다.
 [ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.
+
+### #608 P3 FDS 사건 자동 배정과 담당 변경 (2026-11-06)
+
+사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 2절 선행 구현을 승인했다. Notion 반영은 후속이다.
+세 가지 모두 P3 소유다. 직원 · ADMIN ID는 P1 `platform_users`의 논리 참조(FK 없음)이고, 요청의 `case_id`만 같은 P3 FK다.
+
+`security_cases` 추가 칸
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| assignee_staff_id | BIGINT NULL | 담당 보안 직원. NULL = 미배정 (직원 없을 때 만든 사건 · 도입 전 사건 → ADMIN [미배정 배정]) |
+| assigned_at | DATETIME(6) NULL | 마지막 배정 · 변경 시각 (UTC) |
+
+인덱스 (assignee_staff_id, status) — 직원별 미종결 담당 수.
+
+`case_assignment_locks` — 배정을 한 줄로 세우는 잠금 행 1개(`FDS_CASE`). 배정 · 담당 변경 트랜잭션이 첫 문장에서 `SELECT … FOR UPDATE`로 잡는다.
+
+`case_assignment_requests` — 담당 직원의 담당 변경 요청. 물리 삭제하지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| request_id | BIGINT AUTO_INCREMENT PK | |
+| case_id | BIGINT NOT NULL FK security_cases | |
+| requested_by_staff_id | BIGINT NOT NULL | 요청한 담당 직원 (로그인 세션) |
+| reason | VARCHAR(30) NOT NULL | CONFLICT_OF_INTEREST(이해충돌) / WORKLOAD(업무 과다) / PERSONAL(개인 사유) / OTHER(기타). CHECK 없음 — ADMIN 전용 사유는 조각 8에서 더한다 |
+| memo | VARCHAR(200) NULL | 업무 메모, OTHER면 필수 (서비스). 개인정보 금지 안내 |
+| status | VARCHAR(20) NOT NULL | PENDING / APPROVED / REJECTED (CHECK) |
+| requested_at · reviewed_at | DATETIME(6) | UTC |
+| reviewed_by_admin_id · reviewed_by_admin_name | BIGINT · VARCHAR(100) NULL | 처리 ADMIN과 그때의 표시 이름 |
+| review_memo | VARCHAR(200) NULL | 거절이면 필수 (서비스) |
+| new_assignee_staff_id | BIGINT NULL | 승인일 때 새 담당 |
+| pending_case_id | 생성 칼럼 UNIQUE | PENDING일 때만 case_id — 사건당 대기 1건 |

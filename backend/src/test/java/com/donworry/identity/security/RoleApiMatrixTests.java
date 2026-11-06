@@ -101,6 +101,16 @@ class RoleApiMatrixTests {
             route("POST", "/api/admin/merchant-applications/1/reject", ADMIN),
             route("GET", "/api/admin/merchant-applications/1/mail-deliveries", ADMIN),
             route("POST", "/api/admin/merchant-applications/1/mail-resends", ADMIN),
+            // 관리자만: FDS 사건 담당 현황 · 변경 · 요청 처리 (#608). 보안 직원은 자기 담당을 바꾸지 못한다
+            route("GET", "/api/admin/case-assignments", ADMIN),
+            route("GET", "/api/admin/case-assignments/staff/1/cases", ADMIN),
+            route("POST", "/api/admin/case-assignments/cases/1/reassign", ADMIN),
+            route("POST", "/api/admin/case-assignments/staff/1/handover", ADMIN),
+            route("POST", "/api/admin/case-assignments/backfill", ADMIN),
+            route("GET", "/api/admin/case-assignments/requests", ADMIN),
+            route("GET", "/api/admin/case-assignments/requests/pending-count", ADMIN),
+            route("POST", "/api/admin/case-assignments/requests/1/approve", ADMIN),
+            route("POST", "/api/admin/case-assignments/requests/1/reject", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
             route("GET", "/api/merchants", STAFF_OR_ADMIN),
             route("GET", "/api/fds/evaluations", STAFF_OR_ADMIN),
@@ -129,6 +139,7 @@ class RoleApiMatrixTests {
             route("POST", "/api/security-cases/1/decisions", STAFF),
             route("POST", "/api/security-cases/1/handoffs/2/recheck", STAFF),
             route("POST", "/api/security-cases/1/reports", STAFF),
+            route("POST", "/api/security-cases/1/assignment-requests", STAFF),
             route("GET", "/api/security-cases/1/reports/2/progress", STAFF),
             route("GET", "/api/ml-shadow-scores", STAFF),
             // 사장님 (세션 가맹점): 연동 키는 권한 없이, 보안 조치 결과는 FDS_VIEW, 정산은 FINANCE_VIEW

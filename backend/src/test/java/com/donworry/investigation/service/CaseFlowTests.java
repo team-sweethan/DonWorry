@@ -241,9 +241,10 @@ class CaseFlowTests {
             assertThat(report.evidenceVersion()).isEqualTo(1);
             assertThat(report.reportBody()).containsKeys("overview", "summary", "paymentAnalyses", "evidence");
         });
+        // 새 사건은 만들 때 담당을 정한다 (#608) — 시드 보안 직원(demo 보안직원)이 활성이라 배정 이력이 남는다
         assertThat(detail.history())
                 .extracting(CaseDetailResponse.HistoryResponse::eventType)
-                .containsExactly("CASE_CREATED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
+                .containsExactly("CASE_CREATED", "CASE_ASSIGNED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
     }
 
     // 같은 고객의 두 번째 HELD 결제는 같은 Case에 병합되고 증거 버전 · 보고서 버전이 오른다

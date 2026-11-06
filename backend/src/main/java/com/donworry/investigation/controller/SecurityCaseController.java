@@ -1,5 +1,6 @@
 package com.donworry.investigation.controller;
 
+import com.donworry.investigation.dto.AssignmentChangeSubmitRequest;
 import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
@@ -8,6 +9,7 @@ import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.dto.HandoffListItemResponse;
 import com.donworry.investigation.service.CaseDecisionService;
 import com.donworry.investigation.service.CaseQueryService;
+import com.donworry.investigation.service.CaseReassignmentService;
 import com.donworry.investigation.service.CaseReportService;
 import com.donworry.investigation.service.HandoffRecheckService;
 import com.donworry.investigation.service.SecurityStaffGuard;
@@ -34,6 +36,7 @@ public class SecurityCaseController {
     private final CaseReportService caseReportService;
     private final HandoffRecheckService handoffRecheckService;
     private final SecurityStaffGuard securityStaffGuard;
+    private final CaseReassignmentService caseReassignmentService;
 
     // 실제 P5 결제 · P2 평가 근거를 내보내므로 보안 직원만 본다. 보안 직원은 모든 가맹점 Case를 보므로 merchantId는 표시 필터다
     @GetMapping
@@ -88,6 +91,14 @@ public class SecurityCaseController {
     public CaseDetailResponse requestReport(@PathVariable Long caseId) {
         securityStaffGuard.requireSecurityStaffId();
         caseReportService.requestMissing(caseId);
+        return caseQueryService.detail(caseId);
+    }
+
+    // 담당자 본인의 담당 변경 요청 (#608). 대기 중에는 판정만 막힌다. 반영된 상세를 돌려준다
+    @PostMapping("/{caseId}/assignment-requests")
+    public CaseDetailResponse requestAssignmentChange(
+            @PathVariable Long caseId, @Valid @RequestBody AssignmentChangeSubmitRequest body) {
+        caseReassignmentService.request(caseId, body);
         return caseQueryService.detail(caseId);
     }
 }

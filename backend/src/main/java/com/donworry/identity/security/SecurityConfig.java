@@ -319,7 +319,19 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/approve"),
                                 paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/reject"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/merchant-applications/{id}/mail-deliveries"),
-                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"))
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"),
+                                // FDS 사건 담당 현황 · 변경 · 미배정 배정 · 변경 요청 처리 (#608). 사건 상세는 열지 않는다 (ADR-0065)
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/staff/{staffId}/cases"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/cases/{caseId}/reassign"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/staff/{staffId}/handover"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/backfill"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/requests"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/requests/pending-count"),
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/approve"),
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/reject"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -360,6 +372,8 @@ public class SecurityConfig {
                                 paths.matcher(
                                         HttpMethod.POST, "/api/security-cases/{caseId}/handoffs/{handoffId}/recheck"),
                                 paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports"),
+                                // 담당자 본인의 담당 변경 요청 (#608)
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/assignment-requests"),
                                 paths.matcher(
                                         HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
                                 // 거래 내역 "ML 참고" 칸 (#441) — 옆 사건 칸(payment-links)과 같은 규칙 (ADR-0067)

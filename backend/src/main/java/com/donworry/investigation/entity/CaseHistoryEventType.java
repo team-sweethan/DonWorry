@@ -18,5 +18,12 @@ public enum CaseHistoryEventType {
     // completedAt
     // 직원 판정 · 인계 결과가 아니다. 이 결제는 새 판정 대상에서 빠지고 금융 처리가 끝난 것으로 본다
     PAYMENT_CANCELED_BY_CUSTOMER,
+    // 담당 배정 · 변경 (#608) — event_data에 assigneeStaffId · assigneeName · reason(AUTO_LEAST_OPEN · ADMIN_REASSIGN ·
+    // HANDOVER · REQUEST_APPROVED · BACKFILL). ADMIN 변경이면 previousStaffId · changeReason · memo · requestId도
+    CASE_ASSIGNED,
+    // 담당 직원이 담당 변경을 요청했다 — event_data에 requestId · reason
+    CASE_ASSIGNMENT_REQUESTED,
+    // ADMIN이 담당 변경 요청을 거절했다 — event_data에 requestId · memo(요청한 직원이 이력에서 거절 이유를 본다)
+    CASE_ASSIGNMENT_REQUEST_REJECTED,
     CASE_CLOSED
 }
