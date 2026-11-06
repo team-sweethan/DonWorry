@@ -46,15 +46,18 @@ export function FinancePeriodControl({
   min,
   max,
   actions,
+  presets,
 }: {
   value: FinancePeriod
   onChange: (value: FinancePeriod) => void
   min?: string
   max?: string
   actions?: ReactNode
+  presets?: ReactNode
 }) {
   return (
     <div className="finance-period">
+      {presets && <div className="finance-period-presets">{presets}</div>}
       <label>
         조회 시작일
         <input

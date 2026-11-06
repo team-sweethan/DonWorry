@@ -2,7 +2,7 @@
 
 `GET /api/v1/settlements/report?from=2026-11-01&to=2026-11-30`
 
-- 기본 비활성. `settlement.owner-http.enabled=true` 환경에서만 등록한다.
+- 백엔드 실행 시 등록한다.
 - 사장님 세션의 `CurrentStaff`가 OPERATOR·FINANCE_VIEW·유효 가맹점 ID를 제공해야 한다. 비로그인은 401, 권한 부족은 403이다. 요청의 merchantId는 사용하지 않는다.
 - from/to는 한국 날짜, 양 끝 날짜 포함, 최대 366일이다. DB 검색 구간은 한국 시작일 00시 이상·종료일 다음날 00시 미만으로 변환한다.
 - 한 응답에 기간 합계(completedAmount/scheduledAmount/expectedAmount), 일별 days, 개별 정산 entries를 반환한다. 금액은 원 단위다.

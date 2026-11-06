@@ -13,39 +13,67 @@ export type PayoutSummaryData = Pick<
   | 'outstandingRecoveryAmount'
   | 'payouts'
 >
-export function PayoutSummary({ data }: { data: PayoutSummaryData }) {
+export function PayoutSummary({
+  data,
+  scheduledAmount,
+}: {
+  data: PayoutSummaryData
+  scheduledAmount: number
+}) {
   return (
-    <div className="payout-summary-grid" aria-label="지급·환불 차감 요약">
-      {[
-        ['실제 지급액', data.paidAmount, '환불 회수를 차감한 입금 간주 금액', 'paid'],
-        [
-          '환불 차감 전 지급액',
-          data.paidSettlementAmount,
-          '수수료를 뺀 금액 · 환불 회수 전',
-          'original',
-        ],
-        [
-          '환불 회수 차감액',
-          data.refundDeductionAmount,
-          '이번 조회 기간의 지급에서 차감',
-          'deduction',
-        ],
-        [
-          '앞으로 회수할 금액',
-          data.outstandingRecoveryAmount,
-          '환불로 다음 정산에서 차감될 잔액 · 현재 기준',
-          'remaining',
-        ],
-      ].map(([label, value, note, variant]) => (
-        <section key={String(label)} className={`payout-stat payout-stat-${variant}`}>
-          <span>{label}</span>
-          <strong>
-            <FinanceMoney value={Number(value)} />
-          </strong>
-          <small>{note}</small>
-        </section>
-      ))}
-    </div>
+    <>
+      <section aria-labelledby="payout-summary-title">
+        <h2 id="payout-summary-title" className="payout-summary-title">
+          조회 기간 정산 요약
+        </h2>
+        <div className="payout-summary-grid">
+          {[
+            {
+              label: '실제 지급액',
+              value: data.paidAmount,
+              note: '지급일 기준 · 환불 회수 차감 후',
+              variant: 'paid',
+            },
+            {
+              label: '정산 예정금',
+              value: scheduledAmount,
+              note: '예정일 기준 · 환불 회수 차감 전',
+              variant: 'original',
+            },
+            {
+              label: '환불 차감 전 지급액',
+              value: data.paidSettlementAmount,
+              note: '지급일 기준 · 환불 회수 차감 전',
+              variant: 'before-deduction',
+            },
+            {
+              label: '환불 회수 차감액',
+              value: data.refundDeductionAmount,
+              note: '선택 기간에 지급하면서 차감한 금액',
+              variant: 'deduction',
+            },
+          ].map(({ label, value, note, variant }) => (
+            <section key={variant} className={'payout-stat payout-stat-' + variant}>
+              <span>{label}</span>
+              <strong>
+                <FinanceMoney value={value} />
+              </strong>
+              <small>{note}</small>
+            </section>
+          ))}
+        </div>
+        <p className="payout-summary-formula">
+          실제 지급액 = 환불 차감 전 지급액 − 환불 회수 차감액
+        </p>
+      </section>
+      <div className="payout-policy-note payout-current-recovery">
+        <span>현재 미회수 환불액</span>
+        <strong>
+          <FinanceMoney value={data.outstandingRecoveryAmount} />
+        </strong>
+        <small>조회 기간과 별개로, 현재 남아 있는 환불 회수 잔액</small>
+      </div>
+    </>
   )
 }
 export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts'] }) {

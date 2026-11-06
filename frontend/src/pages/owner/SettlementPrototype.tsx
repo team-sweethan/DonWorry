@@ -257,7 +257,7 @@ export function SettlementPrototype({
   return (
     <div className="stl-prototype">
       <PageHeader
-        title="정산 현황"
+        title="정산 내역"
         description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
         actions={
           <div className="finance-header-actions">
@@ -287,6 +287,19 @@ export function SettlementPrototype({
       {preview && (
         <div className="finance-period">
           <b>정산일 기준 조회</b>
+          <div className="finance-period-presets">
+            <Button onClick={() => changePeriod(dateInput(today), dateInput(today))}>오늘</Button>
+            <Button
+              onClick={() => {
+                changePeriod(
+                  dateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+                  dateInput(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+                )
+              }}
+            >
+              이번 달
+            </Button>
+          </div>
           <label>
             시작일
             <input
@@ -311,16 +324,6 @@ export function SettlementPrototype({
               }}
             />
           </label>
-          <Button
-            onClick={() => {
-              changePeriod(
-                dateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
-                dateInput(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-              )
-            }}
-          >
-            이번 달
-          </Button>
         </div>
       )}
       {notice}
@@ -367,14 +370,8 @@ export function SettlementPrototype({
       )}
       {payoutData && (
         <>
-          <PayoutSummary data={payoutData} />
+          <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />
           <div className="payout-policy-note">
-            <span>
-              <strong className="payout-scheduled-highlight">
-                정산 예정금 <FinanceMoney value={sum(byStatus('sch'))} />
-              </strong>{' '}
-              · 환불 회수 차감 전 금액입니다.
-            </span>
             <span>같은 날 매입 → 같은 영업일 D+3 정산일 · 하루 한 번 지급</span>
           </div>
           {monthSummary && <div className="payout-policy-note">{monthSummary}</div>}

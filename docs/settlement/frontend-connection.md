@@ -47,7 +47,7 @@
 
 ## 실행·검증 범위
 
-Node는 package.json engines 범위(22.14 이상 또는 24 이상)를 사용한다. backend는 DB와 `settlement.owner-http.enabled=true`가 필요하다.
+Node는 package.json engines 범위(22.14 이상 또는 24 이상)를 사용한다. backend는 DB 연결이 필요하다.
 일반 `/login`에서 OPERATOR·FINANCE_VIEW 계정으로 로그인한다. 별도 시연 로그인·가맹점 선택 헤더를 추가하지 않는다.
 
 검사: `npm run lint`, `npm run format:check`, `npm run build`, `npm test`.

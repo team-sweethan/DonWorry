@@ -17,7 +17,7 @@
 
 ## API
 
-`/api/v1/settlements/cash-flow` 이하. `settlement.owner-http.enabled=true`일 때만 등록한다.
+`/api/v1/settlements/cash-flow` 이하.
 CurrentStaff의 OPERATOR·FINANCE_VIEW·가맹점 ID를 검증한다. 요청 가맹점 ID로 대상 변경 불가. 응답은 no-store다.
 
 | 메서드 | 경로 | 동작 |

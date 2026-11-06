@@ -94,10 +94,12 @@ class OwnerSettlementControllerTests {
 
     // 명시적으로 활성화하지 않은 환경에는 새 조회 경로를 등록하지 않는다.
     @Test
-    void context_whenDisabled_doesNotRegisterController() {
+    void context_withoutFeatureFlag_registersController() {
         new ApplicationContextRunner()
+                .withBean(SettlementOwnerAccessService.class, () -> mock(SettlementOwnerAccessService.class))
+                .withBean(SettlementReportService.class, () -> mock(SettlementReportService.class))
                 .withUserConfiguration(OwnerSettlementController.class)
-                .run(c -> assertThat(c).doesNotHaveBean(OwnerSettlementController.class));
+                .run(c -> assertThat(c).hasSingleBean(OwnerSettlementController.class));
     }
 
     @Test
