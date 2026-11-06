@@ -175,6 +175,10 @@ public class PaymentSessionService {
         var fixed = Objects.requireNonNull(transactions.execute(status -> {
             var locked = sessions.findByIdForUpdate(session.getSessionId()).orElseThrow();
             locked.fixAttempt(body.card(), body.deviceId(), ipAddress, Instant.now());
+            // 지금은 없는 카드(C · D, #582)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
+            // 접수된 요청이 없어 같은 시도 키에 다른 신호가 남지 않는다. 그대로 두면 만료까지 계속 400 (PR #587 리뷰)
+            if (CheckoutMockCard.from(locked.getSubmittedCard()).isEmpty()
+                    && admittedPaymentId(locked).isEmpty()) locked.replaceRemovedCard(body.card());
             return locked;
         }));
         if (fixed.getPaymentId() != null) return result(fixed);

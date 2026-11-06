@@ -335,6 +335,31 @@ class PaymentSessionServiceTests {
         assertThat(session.getPaymentId()).isEqualTo(101L);
     }
 
+    // 지금은 없는 카드(C)로 고정만 되고 접수 전에 멈춘 세션은, 다시 고른 카드로 바꿔 접수한다.
+    // 기기 · IP는 처음 값 그대로. 바꾸지 않으면 만료까지 계속 400이다 (PR #587 리뷰)
+    @Test
+    void pay_fixedWithRemovedCardButNotAdmitted_replacesCardAndSubmits() {
+        var session = session(recent());
+        session.fixAttempt("C", "abcdef12", "203.0.113.10", Instant.now());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "ACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any())).thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "99999999"), "198.51.100.7");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow).submit(command.capture());
+        assertThat(command.getValue().riskSignals().cardDisplayLabel()).isEqualTo("한빛카드 **** 4821");
+        assertThat(command.getValue().riskSignals().deviceId()).isEqualTo("abcdef12");
+        assertThat(command.getValue().riskSignals().ipAddress()).isEqualTo("203.0.113.10");
+        assertThat(session.getSubmittedCard()).isEqualTo("A");
+    }
+
     // 접수됐지만 세션에 연결되기 전에 멈춘 결제도 결과 조회 · 결제창 열기에서 찾는다
     @Test
     void resultAndView_admittedButNotLinked_findPaymentByAttempt() {
