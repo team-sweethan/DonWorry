@@ -64,6 +64,11 @@ donworry:
   scheduling:
     # 로그인 이력 90일 삭제 등 예약 작업. 테스트는 build.gradle에서 끄고 작업을 직접 호출한다.
     enabled: ${DONWORRY_SCHEDULING_ENABLED:true}
+  pii:
+    # 주문자 연락처 암호화 · 지문 키 (#602, ADR-0082). 각각 32바이트 Base64, 서로 다른 값. 저장소에 적지 않는다
+    # 비어 있으면 주문자 정보를 저장하지 않고 결제는 그대로 진행한다. 한 번 저장한 뒤 키를 바꾸면 기존 암호문을 못 읽는다
+    encryption-key: ${DONWORRY_PII_ENCRYPTION_KEY:}
+    hmac-key: ${DONWORRY_PII_HMAC_KEY:}
 
 security:
   login-history:

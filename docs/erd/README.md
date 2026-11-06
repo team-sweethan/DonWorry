@@ -74,6 +74,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
 | `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
 | `payment` (#402) | P5 | `payment_sessions` (호스팅 결제창 세션, ADR-0064) | [결제 세션](../../backend/src/main/resources/db/migration/V20261102_142818__create_payment_sessions.sql) · [웹훅 재시도 eventId #455](../../backend/src/main/resources/db/migration/V20261103_093050__add_payment_session_notify_event_id.sql) |
+| `payment` (#602) | P5 | `payment_order_contacts` (주문자 연락처 암호문, ADR-0082) | [주문자 연락처](../../backend/src/main/resources/db/migration/V20261106_222538__create_payment_order_contacts.sql) |
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_failure_analyses`, `fds_high_risk_countries`, `fds_blocklist_entries`, `fds_rule_policies`, `fds_rule_change_requests`, `fds_rule_policy_change_histories`, `fds_operator_access_events`, `fds_operator_access_detections`, `fds_operator_access_detection_evidences` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261023_135302](../../backend/src/main/resources/db/migration/V20261023_135302__add_fds_requested_amount.sql) · [20261026_174910](../../backend/src/main/resources/db/migration/V20261026_174910__add_fds_evaluation_merchant_id.sql) · [20261027_101722](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql) · [20261027_101804](../../backend/src/main/resources/db/migration/V20261027_101804__add_fds_reevaluation_lineage.sql) · [FDS v0.2](../../backend/src/main/resources/db/migration/V20261028_092416__add_fds_rule_inputs_and_policy_tables.sql) · [룰 관리](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [접근 탐지·룰 정책·변경 이력](../../backend/src/main/resources/db/migration/V20261104_152441__create_operator_access_detection_tables.sql) · [차단 식별값](../../backend/src/main/resources/db/migration/V20261028_201821__add_fds_blocklist_identifiers.sql) · [차단 해제 이력](../../backend/src/main/resources/db/migration/V20261030_114028__add_fds_blocklist_deactivation.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
@@ -114,6 +115,7 @@ erDiagram
     payments ||--o| payment_actions : "payment_id (P5)"
     payments ||--o{ payment_cancellation_requests : "payment_id (P5)"
     payments ||--o| payment_sessions : "payment_id (P5)"
+    payment_sessions ||--o| payment_order_contacts : "session_id (P5)"
     payments ||--o| payment_cancellations : "payment_id (P5)"
     payment_cancellation_requests ||--o| payment_cancellations : "source_request_id + payment_id"
     payment_actions |o--o{ payment_cancellation_requests : "existing_void_action_id"
@@ -423,5 +425,26 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 인덱스는 `idx_staff_access_events_staff_time(staff_id, occurred_at)` · `idx_staff_access_events_staff_result_time(staff_id, result, occurred_at)`.
 허용 기록은 호출 쪽과 같은 트랜잭션, 거부 기록은 독립 트랜잭션으로 저장한다 (ADR-0082 4절).
 행은 지우거나 고치지 않는다. 보관 기간 정리(법정 접속기록 1~2년)는 후속이다.
+
+### #602 P5 주문자 연락처 (2026-11-06)
+
+사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 선행 구현을 승인했다. Notion 반영은 후속이다.
+신규 `payment_order_contacts`는 P5 소유다. `session_id`는 같은 P5 `payment_sessions`의 FK이자 PK(세션당 최대 1행), `merchant_id`는 P1 `merchants` 논리 참조다.
+이름 · 전화 원문 칸은 없다. 받기 규칙과 키는 [#602 문서](../payment/602-order-contacts.md).
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| session_id | BIGINT PK FK payment_sessions | 결제 준비 세션 |
+| merchant_id | BIGINT NOT NULL | 세션의 가맹점. 암호화 AAD에 쓴다 |
+| orderer_name_enc | VARCHAR(512) NULL | 주문자 이름 AES-GCM 암호문 (nonce 포함 Base64) |
+| orderer_phone_enc | VARCHAR(512) NULL | 주문자 전화(숫자만) 암호문 |
+| orderer_phone_hmac | VARCHAR(64) NULL | 주문자 전화 HMAC-SHA256 지문. 전화 암호문과 함께 있거나 함께 없다 (CHECK) |
+| pickup_differs | BOOLEAN NULL | 픽업자가 주문자와 다른지. 픽업자 원문은 저장하지 않는다 |
+| request_digest | VARCHAR(64) NOT NULL | 같은 요청 키 재요청의 연락처 비교용 HMAC |
+| key_id | VARCHAR(10) NOT NULL | 암호화 키 판 (`V1`) |
+| created_at | DATETIME(6) NOT NULL | UTC, 세션 생성 시각과 같다 |
+
+주문자 이름 · 전화 중 하나는 있어야 한다 (CHECK). 인덱스는 `idx_payment_order_contacts_phone(orderer_phone_hmac)` — 조각 5의 번호 대조용.
+행은 고치지 않는다. 암호문 파기(결제 후 540일, 실험안)는 2차다.
 제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. #525의 수집·발행에 더해 #528에서 원본 IP 정리를 구현한다. [실행 근거·미검증](../identity/528-access-record-retention.md)을 따른다.
 [ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.
