@@ -44,15 +44,15 @@ _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
 # 확인할 것은 2개 이상 (#355)
 MIN_SENTENCES = 2
 _TEXT_LIST_2 = {**_TEXT_LIST, "minItems": MIN_SENTENCES}
-# 요약은 1~3문장 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
-# 3문장에 눈여겨볼 사실을 다 못 담으면 이어 쓸 수 있다 — 넷째 문장부터는 앞에 없던 눈여겨볼 사실만
-# 그래서 최대 문장 수는 3 + 눈여겨볼 사실 수
-# (#581 — 이력 사실이 늘자 3문장이 꽉 차 보고서가 실패했다)
+# 요약은 1~3문장을 지시한다 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
+# 다 못 담으면 이어 써도 된다. 길이는 읽기 편의라 실패 사유로 쓰지 않는다
+# (거짓은 번호 · 숫자 검사가 막는다)
+# 최대 문장 수는 사실 수 (문장마다 사실이 하나 이상이라 사실마다 한 문장씩 써도 막히지 않는다, #581)
 SUMMARY_MIN, SUMMARY_MAX = 1, 3
 
 
 def summary_max(facts: list[Fact]) -> int:
-    return SUMMARY_MAX + sum(1 for fact in facts if fact.rank == NOTABLE)
+    return max(SUMMARY_MAX, len(facts))
 
 
 # 사실 번호 목록을 고정한 JSON Schema — Ollama format · OpenAI 구조화 출력으로 넘긴다
@@ -221,15 +221,6 @@ def validate_narrative(
             f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라."
             + hint
         )
-    # 넷째 문장부터는 앞에 없던 눈여겨볼 사실을 이어 쓸 때만 — 자리가 모자랄 때만 길어지게 (#581)
-    seen = {fid for sent in narrative.summary[:SUMMARY_MAX] for fid in sent.facts}
-    for sent in narrative.summary[SUMMARY_MAX:]:
-        if not [fid for fid in sent.facts if fid in notable and fid not in seen]:
-            errors.append(
-                f"{SUMMARY_MAX + 1}번째 문장부터는 앞에서 쓰지 않은 눈여겨볼 사실만 이어 쓴다: "
-                f'"{sent.text}"'
-            )
-        seen |= set(sent.facts)
     # 확인할 것은 사실 번호를 붙이지 않는다 — 숫자는 준 사실 전체 안에서만
     all_numbers = base | {n for fact in facts for n in _numbers(fact.text)}
     all_words = set(ALLOWED_WORDS) | {w for fact in facts for w in _ENGLISH.findall(fact.text)}
@@ -242,7 +233,7 @@ def validate_narrative(
     if not SUMMARY_MIN <= len(narrative.summary) <= summary_max(facts):
         errors.append(
             f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 "
-            f"(눈여겨볼 사실을 이어 쓰면 최대 {summary_max(facts)}개, "
+            f"(다 못 담으면 이어 써도 되지만 최대 {summary_max(facts)}개, "
             f"지금 {len(narrative.summary)}개)"
         )
     if len(narrative.additionalChecks) < MIN_SENTENCES:

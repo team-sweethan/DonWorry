@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta
 
-from app.agent.facts import NOTABLE, Fact
+from app.agent.facts import NOTABLE, NOTHING, Fact
 from app.agent.narrative import narrative_schema, validate_narrative
 from app.agent.prompts import WRITE_EXAMPLES
 from app.schemas.tools import (
@@ -211,13 +211,20 @@ def test_summary_fourth_sentence_with_new_notable_passes() -> None:
     assert narrative_schema(facts)["properties"]["summary"]["maxItems"] == 4
 
 
-# 넷째 문장에 새 눈여겨볼 사실이 없으면 다시 쓰게 한다 — 자리가 모자란 게 아니라 사실을 다시 읽는 것
-def test_summary_fourth_sentence_without_new_notable_rewritten() -> None:
-    facts = _crowded_facts()
+# 넷째 문장에 "없음" 사실(비슷한 과거 사건 없음 등)을 써도 통과한다 — 사실대로 쓴 긴 요약을 막으면
+# 보고서가 사라진다. 길이는 읽기 편의라 실패 사유가 아니다 (#581 측정: 손님 2명이 이렇게 실패)
+def test_summary_fourth_sentence_with_nothing_fact_passes() -> None:
+    facts = [
+        *_crowded_facts(),
+        Fact("과거-1", "similar", "비슷한 과거 사건 없음", "E3", rank=NOTHING),
+    ]
     first = _sentence("같은 IP를 다른 고객이 썼고 최근 결제가 있습니다.", "연결-1", "이력-1")
-    raw = narrative(PAYMENTS, summary=[first, *THREE_HISTORY[1:], THREE_HISTORY[0]])
+    raw = narrative(
+        PAYMENTS,
+        summary=[first, *THREE_HISTORY[1:], _sentence("비슷한 과거 사건은 없습니다.", "과거-1")],
+    )
 
     parsed, errors = validate_narrative(raw, facts, PAYMENTS)
 
-    assert parsed is None
-    assert any("4번째 문장부터는" in e for e in errors)
+    assert errors == [] and parsed is not None
+    assert narrative_schema(facts)["properties"]["summary"]["maxItems"] == len(facts)
