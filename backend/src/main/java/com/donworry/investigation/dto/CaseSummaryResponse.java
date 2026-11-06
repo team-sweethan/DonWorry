@@ -1,8 +1,10 @@
 package com.donworry.investigation.dto;
 
 import java.time.Instant;
+import lombok.Builder;
 
 // Case 목록 한 줄 — 화면 CaseSummary와 같은 모양
+@Builder
 public record CaseSummaryResponse(
         Long caseId,
         Long merchantId,
@@ -17,4 +19,7 @@ public record CaseSummaryResponse(
         Long totalAmount,
         Integer maxRiskScore,
         String latestReportStatus,
-        int decidedCount) {}
+        int decidedCount,
+        // 담당 보안 직원 (#608). 미배정이면 둘 다 null
+        Long assigneeStaffId,
+        String assigneeName) {}

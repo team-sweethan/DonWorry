@@ -54,6 +54,59 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
     // 보안 직원 Case 목록 — 최근 생성 순
     List<SecurityCase> findAllByOrderByCreatedAtDesc();
 
+    // 담당 배정 잠금 (#608) — 배정 · 담당 변경 트랜잭션의 첫 문장에서 잡는다. 일반 조회가 먼저 돌면 그 시점 스냅숏이 고정돼
+    // 잠금을 기다린 뒤에도 앞 트랜잭션의 배정을 못 보고 같은 직원을 고른다 (MariaDB REPEATABLE READ)
+    @Query(value = "SELECT lock_id FROM case_assignment_locks WHERE lock_name = :name FOR UPDATE", nativeQuery = true)
+    Long lockAssignment(@Param("name") String name);
+
+    // 직원별 미종결(CLOSED 아님) 담당 수 — 자동 배정 · 담당 현황
+    @Query("""
+            SELECT c.assigneeStaffId AS staffId, COUNT(c) AS openCount FROM SecurityCase c
+            WHERE c.assigneeStaffId IS NOT NULL AND c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED
+            GROUP BY c.assigneeStaffId
+            """)
+    List<AssigneeOpenCount> countOpenByAssignee();
+
+    // 미배정 미종결 사건 — 오래된 것부터 (ADMIN 미배정 배정)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c FROM SecurityCase c
+            WHERE c.assigneeStaffId IS NULL AND c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED
+            ORDER BY c.createdAt ASC, c.id ASC
+            """)
+    List<SecurityCase> findUnassignedOpenForUpdate();
+
+    @Query("""
+            SELECT COUNT(c) FROM SecurityCase c
+            WHERE c.assigneeStaffId IS NULL AND c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED
+            """)
+    long countUnassignedOpen();
+
+    // 한 직원의 미종결 담당 사건 — 오래된 것부터 (ADMIN 직원 사건 목록)
+    @Query("""
+            SELECT c FROM SecurityCase c
+            WHERE c.assigneeStaffId = :staffId AND c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED
+            ORDER BY c.createdAt ASC, c.id ASC
+            """)
+    List<SecurityCase> findOpenByAssignee(@Param("staffId") Long staffId);
+
+    // 모두 넘기기 — 넘기는 동안 판정 · 병합이 끼어들지 않게 쓰기 잠금으로 읽는다
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c FROM SecurityCase c
+            WHERE c.assigneeStaffId = :staffId AND c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED
+            ORDER BY c.createdAt ASC, c.id ASC
+            """)
+    List<SecurityCase> findOpenByAssigneeForUpdate(@Param("staffId") Long staffId);
+
+    List<SecurityCase> findByIdIn(Collection<Long> caseIds);
+
+    interface AssigneeOpenCount {
+        Long getStaffId();
+
+        Long getOpenCount();
+    }
+
     // P4 비슷한 과거 사건(#296) — 같은 가맹점 · 고객의 종료 사건, 최근 종료 순 (읽기 전용)
     List<SecurityCase> findByMerchantIdAndCustomerRefAndStatusOrderByClosedAtDesc(
             Long merchantId, String customerRef, CaseStatus status);
