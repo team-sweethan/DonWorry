@@ -134,6 +134,8 @@ export type BasisSignal = {
   level: 'HIGH_RISK' | 'CAUTION'
   normalReason: string | null
   countedIn?: string | null
+  // 판정 전에 확인할 것 (#591) — 징후마다 코드 사전 문장. 없으면 예전 보고서 · 모르는 규칙
+  checkBefore?: string | null
 }
 
 export type NormalBasis = {
@@ -173,6 +175,15 @@ export type ReportFact = {
   text: string
   evidenceId: string
   paymentId?: string | null
+  // 눈여겨볼 사실인지 (#591) — 코드가 정한다. 요약 "더 보기" 표시 · 안전망 줄에 쓴다
+  notable?: boolean
+}
+
+// 조사 범위 3칸 (#591) — 조회 기록으로 코드가 나눈다
+export type InvestigationScope = {
+  checked: string[]
+  withheld: string[]
+  unavailable: string[]
 }
 
 export type ReportBody = {
@@ -229,6 +240,13 @@ export type ReportBody = {
   paymentHistory?: PaymentHistory | null
   // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   linkedPayments?: LinkedPayments | null
+  // 아래 3칸은 #591 — 예전 보고서 · 고정 보고서(AI 끔)에는 없다
+  // 사건 개요 한 줄 (코드가 씀). 없으면 verdict.headline으로 대신한다
+  caseOverview?: string | null
+  // 안전망 — AI가 끝내 빠뜨린 눈여겨볼 사실 번호. "시스템이 덧붙임"으로 보여 준다
+  summaryAppended?: string[]
+  // 없으면 recommendation.limitations로 대신한다
+  scope?: InvestigationScope | null
 }
 
 // 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 (#352) — 건수 · 고객 수 · 판정만 온다
@@ -266,6 +284,8 @@ export type PaymentHistoryItem = {
   amount: number | null
   paymentStatus: string | null
   requestedAt: string | null
+  // 기준표가 본 30일 기본 조회에 든 결제인지 (#591) — 표의 30일 경계선. 없으면 예전 보고서
+  inBasis?: boolean | null
 }
 
 // payments는 최근 순 최대 20건, statusCounts는 그 안에서 코드가 센 값. 기간 안에 더 있으면 truncated

@@ -71,7 +71,7 @@ export function CaseReportPage() {
     <>
       <PageHeader
         title="AI 조사 보고서"
-        description="결론 → 근거 비교 → 경위 → 확인할 것 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
+        description="결론(확인할 것 포함) → 경위 → 연결 → 근거 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
         actions={
           <Space wrap>
             {reports.length > 1 && (
@@ -142,6 +142,7 @@ export function CaseReportPage() {
               report={picked.report}
               label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
               refreshKey={refreshKey}
+              onDecide={canDecide ? () => navigate(casePath, { state: listReturn }) : undefined}
             />
           )}
         </Space>
@@ -154,10 +155,12 @@ function ReportState({
   report,
   label,
   refreshKey,
+  onDecide,
 }: {
   report: AiReport
   label: string
   refreshKey: number
+  onDecide?: () => void
 }) {
   if (report.status === 'PENDING' || report.status === 'RUNNING') {
     return (
@@ -180,5 +183,14 @@ function ReportState({
     )
   }
   if (!report.reportBody) return <Empty description="보고서 내용이 없습니다." />
-  return <ReportFull body={report.reportBody} label={label} refreshKey={refreshKey} />
+  // 버전마다 새로 그린다 — 판정 전에 확인할 것 체크가 다른 버전으로 넘어가지 않게 (#591)
+  return (
+    <ReportFull
+      key={report.reportId}
+      body={report.reportBody}
+      label={label}
+      refreshKey={refreshKey}
+      onDecide={onDecide}
+    />
+  )
 }

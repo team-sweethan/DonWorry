@@ -3,22 +3,24 @@ import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
 import { getMlShadowScores } from '../../../api/mlShadowScores'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
+  appendedFactTexts,
+  caseNormals,
+  caseSignals,
+  checkRows,
+  durationText,
   isCodeReason,
   mlReportLine,
   recommendationSource,
   recommendationSummaryTitle,
-  reportHeadline,
   reportRecommendationSource,
   ruleEvidenceRows,
   signalTexts,
   paymentCardId,
   summaryBoxLines,
+  summaryFold,
   summaryLines,
-  topRiskScore,
-  verdictCardTitle,
-  verdictLines,
+  traceProviderLabel,
   type RecommendationSource,
-  type SummaryLine,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
 import {
@@ -30,72 +32,100 @@ import {
 } from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
-import { SummaryBox, SummaryLinks, WhyCard } from './BasisCard'
+import { SummaryBox, WhyCard } from './BasisCard'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
+import { ReportConclusion } from './ReportConclusion'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
-// AI 보고서 전문. 결론 → 결제별 판정 근거 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 경위 · 확인할 것 → 상세 정보 순서
+// AI 보고서 전문 — 결론 먼저 (#591): ① 결론 → ② 사건 경위 → ③ 연결 → ④ 판정 근거 상세 → ⑤ 조사 범위 · 한계
+// ①은 코드가 쓴 칸만, AI 문장(조사 요약)은 ③에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
 // AI 요약 문장 끝 링크가 표 카드로 이동한다 — 카드 id는 summaryLines의 target과 같다 (#559)
-// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? 순서 (#501)
-// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
 // refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
+// onDecide — 판정할 수 있는 Case일 때만 온다 (끝난 Case는 판정하러 가기를 보여 주지 않는다)
 export function ReportFull({
   body,
   label,
   refreshKey,
+  onDecide,
 }: {
   body: ReportBody
   label: string
   refreshKey: number
+  onDecide?: () => void
 }) {
-  // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
-  const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
   const summary = summaryLines(body)
+  const source = reportRecommendationSource(body)
   const ml = useMlScores(
     body.paymentAnalyses.map((p) => p.paymentId),
     refreshKey,
   )
+  // 판정 전에 확인할 것 체크 — 화면에서만 기억한다 (보고서 버전을 바꾸면 화면이 새로 그려져 비워진다)
+  const [checked, setChecked] = useState<string[]>([])
+  const toggle = (id: string) =>
+    setChecked((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]))
+  const signals = caseSignals(body)
+  // 요약 밑줄용 — 결제가 여러 건이면 사건 전체 징후 · 정상 근거로 긋는다
+  const marks = signals ? { signals, normals: caseNormals(body) } : null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <VerdictCard body={body} label={label} summary={single ? [] : summary} />
-      {body.paymentAnalyses.map((p) => (
-        <div key={p.paymentId} id={paymentCardId(p.paymentId)} style={anchorStyle}>
-          <PaymentEvidence
-            analysis={p}
-            summary={single ? summary : []}
-            ml={mlReportLine(mlCell(p.paymentId, ml))}
-          />
+      <ReportConclusion
+        body={body}
+        label={label}
+        source={source}
+        checked={checked}
+        onToggle={toggle}
+        onDecide={onDecide}
+      />
+      <Card title={<CardTitle title="② 사건 경위" note="시간순" />} style={cardStyle}>
+        <Timeline items={body.timeline} />
+      </Card>
+      <Card
+        title={<CardTitle title="③ 연결 — 표만 봐서는 바로 안 보이는 것" />}
+        style={cardStyle}
+        styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16 } }}
+      >
+        <SummaryBox
+          lines={summary.map((l) => l.text)}
+          basis={marks}
+          links={summary.map((l) => l.links)}
+          fold={summaryFold(body)}
+          appended={appendedFactTexts(body)}
+        />
+        {body.paymentHistory !== undefined && (
+          <div id="report-history" style={anchorStyle}>
+            <PaymentHistoryCard history={body.paymentHistory} />
+          </div>
+        )}
+        {body.linkedPayments !== undefined && (
+          <div id="report-linked" style={anchorStyle}>
+            <LinkedPaymentsCard linked={body.linkedPayments} />
+          </div>
+        )}
+        {body.similarCases !== undefined && (
+          <div id="report-similar" style={anchorStyle}>
+            <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
+          </div>
+        )}
+      </Card>
+      <div
+        id="report-evidence"
+        style={{ ...anchorStyle, display: 'flex', flexDirection: 'column', gap: 16 }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 }}>
+          <span className="dw-section-title">④ 판정 근거 상세 — 왜 이 판정인가요?</span>
+          <span style={{ color: '#94A3B8', fontSize: 12 }}>같은 근거면 언제나 같은 판정</span>
         </div>
-      ))}
-      {body.similarCases !== undefined && (
-        <div id="report-similar" style={anchorStyle}>
-          <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
-        </div>
-      )}
-      {body.paymentHistory !== undefined && (
-        <div id="report-history" style={anchorStyle}>
-          <PaymentHistoryCard history={body.paymentHistory} />
-        </div>
-      )}
-      {body.linkedPayments !== undefined && (
-        <div id="report-linked" style={anchorStyle}>
-          <LinkedPaymentsCard linked={body.linkedPayments} />
-        </div>
-      )}
-      <div className="dw-section-grid">
-        <Card title={<CardTitle title="사건 경위" note="시간순" />} style={cardStyle}>
-          <Timeline items={body.timeline} />
-        </Card>
-        {/* "AI가 아직 모르는 것"은 판정 근거의 징후와 겹쳐 보여 주지 않는다 (#548) */}
-        <Card title={<CardTitle title="판정 전에 확인할 것" />} style={cardStyle}>
-          <SubTitle>먼저 해 볼 것</SubTitle>
-          <Checklist items={body.additionalChecks} color="#94A3B8" />
-        </Card>
+        {body.paymentAnalyses.map((p) => (
+          <div key={p.paymentId} id={paymentCardId(p.paymentId)} style={anchorStyle}>
+            <PaymentEvidence analysis={p} ml={mlReportLine(mlCell(p.paymentId, ml))} />
+          </div>
+        ))}
       </div>
+      <ScopeCard body={body} />
       <Collapse
         items={[
           {
@@ -105,86 +135,130 @@ export function ReportFull({
           },
         ]}
       />
+      <DecisionBar body={body} source={source} checked={checked} onDecide={onDecide} />
     </div>
   )
 }
 
-// 결론 카드. 큰 숫자는 FDS 점수 최댓값 그대로이며 사기 확률이 아니다
-// summary: 결제가 여러 건일 때만 넘긴다 — 1건이면 결제 카드의 조사 요약에 있다
-function VerdictCard({
+// 화면 아래 고정 판정 줄 — 기준표 판정 · 확인 n/전체 · 남은 번호 · [판정하러 가기]
+function DecisionBar({
   body,
-  label,
-  summary,
+  source,
+  checked,
+  onDecide,
 }: {
   body: ReportBody
-  label: string
-  summary: SummaryLine[]
+  source: RecommendationSource
+  checked: string[]
+  onDecide?: () => void
 }) {
-  const headline = reportHeadline(body)
-  const source = reportRecommendationSource(body)
-  const title = verdictCardTitle(body)
-  const lines = verdictLines(body)
-  const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
+  const overall = body.verdict?.overallRecommendation
+  const rows = checkRows(body)
+  if (!overall && !onDecide) return null
+  const left = rows.filter((r) => !checked.includes(r.id)).map((r) => r.row)
   return (
-    <section style={verdictStyle}>
-      <div style={{ textAlign: 'center' }}>
-        <ScoreGauge score={score} dark />
-      </div>
-      <div>
-        <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>
-          {label} · {title}
-        </div>
-        {headline ? (
-          <div style={{ fontSize: 22, fontWeight: 800, margin: '6px 0 8px', lineHeight: 1.4 }}>
-            {headline}
-          </div>
-        ) : (
-          <div style={{ fontSize: 15, fontWeight: 700, margin: '6px 0 8px', lineHeight: 1.5 }}>
-            결론 항목이 생기기 전 보고서입니다. 아래 요약과 근거를 확인하세요.
-          </div>
-        )}
-        {summary.length > 0 && (
-          <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
-            {/* 결론은 기준표, 아래 요약은 AI 문장이라 앞에 표시한다 (#543) */}
-            {title === '기준표 판정' && (
-              <span style={{ color: '#D8B4FE', fontWeight: 700 }}>AI 해석 · </span>
-            )}
-            {summary.map((line, i) => (
-              <span key={i}>
-                {i > 0 && ' '}
-                {line.text}
-                <SummaryLinks links={line.links} color="#C4B5FD" />
-              </span>
-            ))}
-          </p>
-        )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          {lines.overall && <RecChip rec={lines.overall} text={source} strong />}
-          {/* 결제가 하나면 종합 칩과 같은 내용이라 다시 보여 주지 않는다 (verdictLines) */}
-          {lines.payments.map((p) => (
-            <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
-          ))}
-          {body.additionalChecks[0] && (
-            <span style={{ ...chipStyle, background: '#1E3A8A', color: '#BFDBFE' }}>
-              ☎ {body.additionalChecks[0]}
-            </span>
-          )}
-        </div>
-      </div>
-    </section>
+    <div style={barStyle}>
+      {overall && (
+        <>
+          <span style={{ fontSize: 13, color: '#475569' }}>{source}</span>
+          <span style={{ ...chipStyle, ...recLight[overall], border: '1px solid currentColor' }}>
+            {recommendationLabel[overall].label}
+          </span>
+        </>
+      )}
+      {rows.length > 0 && (
+        <>
+          <span style={{ fontSize: 14 }}>
+            확인 <b>{rows.length - left.length}</b> / {rows.length} 완료
+          </span>
+          <span style={{ fontSize: 13, color: left.length ? '#92400E' : '#166534' }}>
+            {left.length ? `남은 확인 ${left.join(' · ')}번` : '확인할 것을 모두 체크했습니다'}
+          </span>
+        </>
+      )}
+      {onDecide && (
+        <button type="button" onClick={onDecide} style={barButtonStyle}>
+          판정하러 가기
+        </button>
+      )}
+    </div>
   )
 }
 
-// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요?
-function PaymentEvidence({
-  analysis: p,
-  summary,
-  ml,
+// ⑤ 조사 범위 · 한계 — 조회한 것 / 일부러 보지 않은 것 / 확인할 방법이 없는 것 (#591)
+// 칸이 없는 예전 · 고정 보고서는 한계 문장 목록을 그대로 보여 준다
+function ScopeCard({ body }: { body: ReportBody }) {
+  const scope = body.scope
+  const trace = body.investigationTrace
+  return (
+    <Card title={<CardTitle title="⑤ 조사 범위 · 한계" />} style={cardStyle}>
+      {scope ? (
+        <div style={scopeGridStyle}>
+          <ScopeColumn title="조회한 것" color="#166534" items={scope.checked} mark="✓ " />
+          <ScopeColumn
+            title="일부러 보지 않은 것"
+            color="#1E3A8A"
+            items={scope.withheld}
+            note="개인정보 보호를 위해 AI에 넘기지 않습니다."
+          />
+          <ScopeColumn
+            title="확인할 방법이 없는 것"
+            color="#92400E"
+            items={scope.unavailable}
+            note="FDS 점수는 부정거래 확률이 아닙니다."
+          />
+        </div>
+      ) : (
+        <Bullets items={body.recommendation.limitations} />
+      )}
+      {trace && (
+        <div style={{ fontSize: 12, color: '#64748B', marginTop: 14 }}>
+          어떻게 만들었나 · {traceProviderLabel(trace)} · 조사 단계 {trace.steps.length}개 ·{' '}
+          {durationText(trace.durationMs)} · 자세한 과정은 위 [조사 과정] 탭
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ScopeColumn({
+  title,
+  color,
+  items,
+  mark = '',
+  note,
 }: {
-  analysis: PaymentAnalysis
-  summary: SummaryLine[]
-  ml: string
+  title: string
+  color: string
+  items: string[]
+  mark?: string
+  note?: string
 }) {
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, lineHeight: 1.7 }}
+    >
+      <div style={{ fontWeight: 700, color }}>
+        {title} {items.length > 0 && items.length}
+      </div>
+      {items.length === 0 ? (
+        <span style={{ color: '#94A3B8' }}>없음</span>
+      ) : (
+        items.map((item) => (
+          <div key={item}>
+            {mark}
+            {item}
+          </div>
+        ))
+      )}
+      {note && <div style={{ color: '#64748B' }}>{note}</div>}
+    </div>
+  )
+}
+
+// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 왜 이 판정인가요?
+// 조사 요약은 ③에 있다. 여기 요약 칸은 AI가 결제별 이유를 쓰던 예전 보고서(#501~#532)만
+function PaymentEvidence({ analysis: p, ml }: { analysis: PaymentAnalysis; ml: string }) {
   const source = recommendationSource(p)
   return (
     <Card
@@ -203,14 +277,7 @@ function PaymentEvidence({
       {p.signals !== undefined && <SignalLine signals={p.signals} />}
       {p.basis ? (
         <>
-          <SummaryBox
-            lines={summaryBoxLines(
-              summary.map((l) => l.text),
-              p,
-            )}
-            basis={p.basis}
-            links={summary.map((l) => l.links)}
-          />
+          <SummaryBox lines={summaryBoxLines([], p)} basis={p.basis} />
           <WhyCard
             basis={p.basis}
             reason={isCodeReason(p.reason) ? p.reason : undefined}
@@ -392,30 +459,10 @@ export function ScoreGauge({ score, dark = false }: { score: number | null; dark
   )
 }
 
-const recColor: Record<AiRecommendation, CSSProperties> = {
-  REJECT_REVIEW: { background: '#7F1D1D', color: '#FECACA' },
-  ACCEPT_REVIEW: { background: '#14532D', color: '#BBF7D0' },
-  NEEDS_CHECK: { background: '#78350F', color: '#FDE68A' },
-}
-
 const recLight: Record<AiRecommendation, CSSProperties> = {
   REJECT_REVIEW: { background: '#FEE2E2', color: '#991B1B' },
   ACCEPT_REVIEW: { background: '#DCFCE7', color: '#166534' },
   NEEDS_CHECK: { background: '#FEF3C7', color: '#92400E' },
-}
-
-function RecChip({ rec, text, strong }: { rec: AiRecommendation; text: string; strong?: boolean }) {
-  return (
-    <span
-      style={{
-        ...chipStyle,
-        ...recColor[rec],
-        outline: strong ? '1px solid currentColor' : undefined,
-      }}
-    >
-      {text} · {recommendationLabel[rec].label}
-    </span>
-  )
 }
 
 // 결제 카드 오른쪽 위 판정 꼬리표 — "기준표 판정 · 승인 취소 검토"
@@ -480,27 +527,6 @@ function SubTitle({ children, top }: { children: ReactNode; top?: boolean }) {
   )
 }
 
-function Checklist({ items, color }: { items: string[]; color: string }) {
-  if (items.length === 0) return <Typography.Text type="secondary">없음</Typography.Text>
-  return items.map((item, i) => (
-    <div
-      key={i}
-      style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, lineHeight: 1.7 }}
-    >
-      <i
-        style={{
-          flex: '0 0 12px',
-          height: 12,
-          marginTop: 5,
-          border: `2px solid ${color}`,
-          borderRadius: 3,
-        }}
-      />
-      <span>{item}</span>
-    </div>
-  ))
-}
-
 function Timeline({ items }: { items: ReportBody['timeline'] }) {
   if (items.length === 0) return <Typography.Text type="secondary">없음</Typography.Text>
   return (
@@ -550,16 +576,6 @@ const signalLineStyle: CSSProperties = {
   background: '#F8FAFC',
   borderRadius: 8,
 }
-const verdictStyle: CSSProperties = {
-  background: 'radial-gradient(ellipse at top right, #284D91, transparent 60%), #172554',
-  color: '#fff',
-  borderRadius: 14,
-  padding: '22px 26px',
-  display: 'grid',
-  gridTemplateColumns: '170px 1fr',
-  gap: 26,
-  alignItems: 'center',
-}
 const chipStyle: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -603,4 +619,35 @@ const timelineDot: Record<'PAYMENT' | 'CASE' | 'OTHER', CSSProperties> = {
   PAYMENT: { borderColor: '#D97706', background: '#FEF3C7' },
   CASE: { borderColor: '#2563EB', background: '#2563EB' },
   OTHER: { borderColor: '#94A3B8' },
+}
+const barStyle: CSSProperties = {
+  position: 'sticky',
+  bottom: 0,
+  zIndex: 5,
+  background: '#fff',
+  border: '1px solid #CBD5E1',
+  borderRadius: 12,
+  boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.08)',
+  padding: '10px 16px',
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 12,
+}
+const barButtonStyle: CSSProperties = {
+  marginLeft: 'auto',
+  height: 44,
+  padding: '0 18px',
+  borderRadius: 8,
+  border: 'none',
+  background: '#2563EB',
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: 700,
+  cursor: 'pointer',
+}
+const scopeGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: 16,
 }

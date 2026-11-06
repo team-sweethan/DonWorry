@@ -9,6 +9,8 @@ import { dateTime, paymentStatusLabel } from './caseLabels'
 
 // 화면에 늘어놓는 결제 수 — 나머지는 상태별 건수로만 본다
 const SHOWN = 5
+// 판정 기준표가 보는 기간 — AI가 90일로 넓혀도 기준표는 이 기간의 기본 조회만 본다 (#581)
+const BASIS_DAYS = 30
 
 // P5가 새 상태를 보내도 코드값 그대로 보여 준다
 function statusLabel(code: string | null) {
@@ -19,9 +21,14 @@ function statusLabel(code: string | null) {
 }
 
 export function PaymentHistoryCard({ history }: { history: PaymentHistory | null }) {
-  const days = history?.lookbackDays ?? 30
+  const days = history?.lookbackDays ?? BASIS_DAYS
   const count = history?.payments.length ?? 0
   const hidden = count - Math.min(count, SHOWN)
+  // 90일로 넓혔을 때만 기간을 강조하고 30일 경계선을 긋는다 (#591)
+  const widened = days > BASIS_DAYS
+  const shown = history?.payments.slice(0, SHOWN) ?? []
+  // 경계선 위치 — 기준표가 본 결제(inBasis) 뒤 첫 30일 밖 결제 앞. 표시가 없는 예전 보고서는 긋지 않는다
+  const boundary = widened ? shown.findIndex((p) => p.inBasis === false) : -1
 
   return (
     <Card
@@ -29,12 +36,25 @@ export function PaymentHistoryCard({ history }: { history: PaymentHistory | null
       title={
         <span className="dw-section-title">
           고객 최근 결제
+          {widened && (
+            <span style={{ color: '#6D28D9', fontSize: 12, fontWeight: 700, marginLeft: 8 }}>
+              최근 {days}일 · AI가 넓혀 조회
+            </span>
+          )}
           <span style={{ color: '#94A3B8', fontSize: 12, fontWeight: 500, marginLeft: 8 }}>
-            최근 {days}일 · 이 사건 제외
+            {widened ? '' : `최근 ${days}일 · `}이 사건 제외 · 최근 순 최대 20건
           </span>
         </span>
       }
-      extra={<span style={{ color: '#94A3B8', fontSize: 12 }}>참고용 · 자동 판정에 쓰지 않음</span>}
+      extra={
+        widened ? (
+          <span style={{ color: '#1E3A8A', fontSize: 12, fontWeight: 700 }}>
+            판정 기준표는 최근 {BASIS_DAYS}일만 봅니다
+          </span>
+        ) : (
+          <span style={{ color: '#94A3B8', fontSize: 12 }}>참고용 · 자동 판정에 쓰지 않음</span>
+        )
+      }
     >
       {history === null ? (
         <Typography.Text type="secondary">
@@ -60,20 +80,33 @@ export function PaymentHistoryCard({ history }: { history: PaymentHistory | null
               )
             })}
           </div>
-          {history.payments.slice(0, SHOWN).map((p) => {
+          {shown.map((p, i) => {
             const s = statusLabel(p.paymentStatus)
             return (
-              <div key={p.paymentId} style={rowStyle}>
-                <span style={{ color: '#64748b' }}>
-                  {p.requestedAt ? dateTime(p.requestedAt) : '시각 모름'}
-                </span>
-                <span style={{ fontWeight: 600 }}>
-                  {p.amount === null ? '금액 모름' : won(p.amount)}
-                </span>
-                <span style={{ color: '#94A3B8', fontSize: 12 }}>결제 {p.paymentId}</span>
-                <Tag color={s.color} style={tagStyle}>
-                  {s.label}
-                </Tag>
+              <div key={p.paymentId}>
+                {i === boundary && (
+                  <div style={boundaryStyle}>
+                    {i === 0
+                      ? `최근 ${BASIS_DAYS}일 결제 없음 · 아래는 판정 기준표가 보지 않은 결제`
+                      : `여기까지 최근 ${BASIS_DAYS}일 · 판정 기준표가 본 범위`}
+                  </div>
+                )}
+                <div
+                  style={
+                    p.inBasis === false && widened ? { ...rowStyle, color: '#64748B' } : rowStyle
+                  }
+                >
+                  <span style={{ color: '#64748b' }}>
+                    {p.requestedAt ? dateTime(p.requestedAt) : '시각 모름'}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>
+                    {p.amount === null ? '금액 모름' : won(p.amount)}
+                  </span>
+                  <span style={{ color: '#94A3B8', fontSize: 12 }}>결제 {p.paymentId}</span>
+                  <Tag color={s.color} style={tagStyle}>
+                    {s.label}
+                  </Tag>
+                </div>
               </div>
             )
           })}
@@ -110,3 +143,14 @@ const rowStyle: CSSProperties = {
   fontSize: 13,
 }
 const tagStyle: CSSProperties = { marginInlineEnd: 0, fontWeight: 600 }
+const boundaryStyle: CSSProperties = {
+  padding: '6px 10px',
+  margin: '4px 0',
+  background: '#EFF6FF',
+  borderTop: '2px solid #93C5FD',
+  borderBottom: '2px solid #93C5FD',
+  textAlign: 'center',
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#1E3A8A',
+}

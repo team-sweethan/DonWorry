@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from app.schemas.report import InvestigationTrace, Overview, PaymentAnalysis, Re
 # AI 보고서 형식과 화면 타입(frontend/src/types/case.ts의 ReportBody)이 어긋나지 않는지 본다
 # (ADR-0009 결정 4)
 CASE_TS = Path(__file__).resolve().parents[2] / "frontend" / "src" / "types" / "case.ts"
+SAMPLE_REPORT = Path(__file__).parent / "fixtures" / "sample_report.json"
 
 
 def _block(source: str, start: str) -> str:
@@ -39,3 +41,14 @@ def test_report_body_matches_frontend_type() -> None:
         InvestigationTrace.model_fields
     )
     assert _keys(_block(source, "export type TraceStep = {"), 2) == list(TraceStep.model_fields)
+
+
+# 새 칸이 없는 예전 · 고정 보고서도 그대로 읽힌다 (#591 선택 칸)
+def test_report_body_without_new_fields_still_validates() -> None:
+    old = json.loads(SAMPLE_REPORT.read_text(encoding="utf-8"))
+    for key in ("caseOverview", "summaryAppended", "scope"):
+        old.pop(key, None)
+
+    body = ReportBody.model_validate(old)
+
+    assert (body.caseOverview, body.summaryAppended, body.scope) == (None, [], None)

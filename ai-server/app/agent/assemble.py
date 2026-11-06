@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.agent.evidence import decision_basis
 from app.agent.tools import ToolRecord
@@ -8,6 +8,7 @@ from app.schemas.report import (
     EvidenceItem,
     FactItem,
     FactSentenceItem,
+    InvestigationScope,
     InvestigationTrace,
     LinkedPayments,
     Overview,
@@ -138,6 +139,105 @@ LINKED_PRIVACY = (
 )
 MOCK_LIMITATION = "mock 조사입니다(Qwen 미사용). AI 문장은 고정 문장입니다."
 
+# 조사 범위 3칸 (#591) — 화면 ⑤ 조사 범위. 문장 목록 limitations는 다른 화면이 읽어 그대로 둔다
+SCOPE_CHECKED = {
+    "get_case_payments": "사건 결제 목록",
+    "get_fds_evidence": "결제별 FDS 근거",
+    "find_similar_cases": "비슷한 과거 사건",
+    "find_linked_payments": "같은 카드 · 기기 · IP 결제",
+}
+SCOPE_ALWAYS_UNAVAILABLE = (
+    "로그인 기록 · 주문 정보 (조회 도구 없음)",
+    "구매자 본인의 결제 의사",
+)
+SCOPE_LINKED_WITHHELD = (
+    "같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 개별 내용 (건수 · 판정만 봄, 다른 고객 정보 보호)"
+)
+
+
+# 고객 이력은 기간으로 이름을 붙인다 — AI가 넓힌 90일은 따로 보이게
+def _checked_title(record: ToolRecord) -> str | None:
+    if isinstance(record.result, PaymentHistoryTool):
+        days = record.result.lookbackDays
+        return f"고객 최근 결제 ({days}일)" + ("" if record.filled_by_system else " · AI 추가 조사")
+    return SCOPE_CHECKED.get(record.tool_name)
+
+
+# limitations 줄을 3칸으로 나눈다 — 무엇을 봤는지는 조회 기록이 정확히 안다 (#355)
+def investigation_scope(records: list[ToolRecord], limitations: list[str]) -> InvestigationScope:
+    checked = _unique([t for t in (_checked_title(r) for r in records) if t])
+    withheld = [SCOPE_LINKED_WITHHELD] if LINKED_PRIVACY in limitations else []
+    skipped = {MOCK_LIMITATION, LINKED_PRIVACY}
+    unavailable = list(SCOPE_ALWAYS_UNAVAILABLE) + [
+        line for line in limitations if line not in skipped
+    ]
+    return InvestigationScope(checked=checked, withheld=withheld, unavailable=_unique(unavailable))
+
+
+_KST = timezone(timedelta(hours=9))
+
+
+def _kst(at: datetime) -> str:
+    return at.astimezone(_KST).strftime("%m/%d %H:%M")
+
+
+# 결제 시각 범위 — 같은 날이면 뒤쪽은 시각만 ("11/05 15:57~16:05")
+def _time_range(times: list[datetime]) -> str:
+    if not times:
+        return "시각 모름"
+    first, last = _kst(times[0]), _kst(times[-1])
+    if first == last:
+        return first
+    return f"{first}~{last[6:]}" if first[:5] == last[:5] else f"{first}~{last}"
+
+
+# 사건 개요 한 줄 (#591) — 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태
+# 모두 Tool 기록 값 — 판단 문구는 쓰지 않는다 (판정은 기준표 칸이 따로 보여 준다)
+def case_overview(
+    customer_ref: str, case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]
+) -> str:
+    payments = case_payments.payments
+    times = sorted(t for t in (_at(p.requestedAt) for p in payments) if t)
+    amounts = [p.amount for p in payments]
+    if len(payments) == 1:
+        money = "금액 모름" if amounts[0] is None else f"{amounts[0]:,}원"
+    elif None in amounts:
+        money = "합계 금액 일부 모름"
+    else:
+        money = f"합계 {sum(a for a in amounts if a is not None):,}원"
+    subject = f"고객 {customer_ref}의 결제 {len(payments)}건({money}, {_time_range(times)})"
+    rules = _unique(
+        [rule.name for p in payments if p.paymentId in fds for rule in fds[p.paymentId].ruleHits]
+    )
+    counts: dict[str, int] = {}
+    for p in payments:
+        status = PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름")
+        counts[status] = counts.get(status, 0) + 1
+    held = PAYMENT_STATUS_KO["HELD"]
+    if rules and list(counts) == [held]:
+        return f"{subject}이 {' · '.join(rules)} 규칙에 걸려 {held}된 사건입니다."
+    now = " · ".join(f"{status} {n}건" for status, n in counts.items())
+    if rules:
+        return f"{subject}이 {' · '.join(rules)} 규칙에 걸린 사건입니다 (지금 상태: {now})."
+    return f"{subject}에 대한 사건입니다 (지금 상태: {now})."
+
+
+# 표의 결제마다 기준표가 본 30일 기본 조회에 들었는지 (#591)
+# 날짜로 다시 세지 않고 실제 조회 결과로 본다 — 기준표와 어긋나지 않게
+def _report_history(
+    history: PaymentHistoryTool | None, basis_history: PaymentHistoryTool | None
+) -> PaymentHistory | None:
+    if history is None:
+        return None
+    report = PaymentHistory.model_validate(
+        history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
+    )
+    if basis_history is not None:
+        base_ids = {p.paymentId for p in basis_history.payments}
+        for item in report.payments:
+            item.inBasis = item.paymentId in base_ids
+    return report
+
 
 def similar_outcome(accept: int, reject: int) -> str:
     parts = [f"매입 진행 {accept}건"] if accept else []
@@ -203,6 +303,7 @@ def assemble_report(
     history: PaymentHistoryTool | None = None,
     linked: LinkedPaymentsTool | None = None,
     basis_history: PaymentHistoryTool | None = None,
+    summary_appended: list[str] | None = None,
 ) -> ReportBody:
     # 기준표는 코드가 늘 하는 기본 조회(30일)로만 계산한다 — AI가 90일을 불렀는지에 따라
     # 같은 사건의 권고가 달라지지 않게 (#581). 표 · 사실은 history(마지막 조회)를 쓴다
@@ -318,14 +419,13 @@ def assemble_report(
         )
         if similar is not None
         else None,
-        paymentHistory=PaymentHistory.model_validate(
-            history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
-        )
-        if history is not None
-        else None,
+        paymentHistory=_report_history(history, basis_history),
         linkedPayments=LinkedPayments.model_validate(
             linked.model_dump(include={"lookbackDays", "card", "device", "ip"})
         )
         if linked is not None
         else None,
+        caseOverview=case_overview(context.customer_ref, case_payments, fds),
+        summaryAppended=list(summary_appended or []),
+        scope=investigation_scope(records, limitations),
     )

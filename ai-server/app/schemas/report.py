@@ -55,6 +55,8 @@ class BasisSignal(BaseModel):
     level: Literal["HIGH_RISK", "CAUTION"]
     normalReason: str | None
     countedIn: str | None = None
+    # 판정 전에 확인할 것 (#591) — 징후마다 코드 사전 문장. 없으면 None (예전 보고서 · 모르는 규칙)
+    checkBefore: str | None = None
 
 
 # 정상 거래 근거 — canExplain은 설명할 수 있는 징후, explains는 이 결제에서 실제로 설명한 징후
@@ -173,6 +175,8 @@ class PaymentHistoryItem(BaseModel):
     amount: int | None
     paymentStatus: str | None
     requestedAt: str | None
+    # 기준표가 본 30일 기본 조회에 든 결제인지 (#591) — 화면 30일 경계선용, 예전 보고서는 None
+    inBasis: bool | None = None
 
 
 class PaymentStatusCount(BaseModel):
@@ -219,11 +223,22 @@ class FactItem(BaseModel):
     evidenceId: str
     # 결제 하나의 사실(접속 정보)이면 그 결제 ID — 화면 링크가 결제 카드로 간다 (#559)
     paymentId: str | None = None
+    # 눈여겨볼 사실인지 (#591) — 코드가 정한다(#568). 화면 "더 보기" 표시 · 안전망용
+    notable: bool = False
 
 
 class FactSentenceItem(BaseModel):
     text: str
     factIds: list[str] = Field(min_length=1)
+
+
+# 조사 범위 (#591) — 조회 기록으로 코드가 3칸으로 나눈다
+# checked: 조회한 것 · withheld: 일부러 보지 않은 것(다른 고객 정보 보호)
+# unavailable: 확인할 방법이 없는 것
+class InvestigationScope(BaseModel):
+    checked: list[str]
+    withheld: list[str]
+    unavailable: list[str]
 
 
 class ReportBody(BaseModel):
@@ -247,3 +262,9 @@ class ReportBody(BaseModel):
     paymentHistory: PaymentHistory | None
     # 조회하지 못했으면 None — 화면은 "조회하지 못함"을 보여 준다
     linkedPayments: LinkedPayments | None
+    # 아래 3칸은 #591 선택 칸 — 예전 보고서 · 고정 보고서(Spring)에는 없다
+    # 사건 개요 한 줄 — 코드가 Tool 기록으로 쓴다
+    caseOverview: str | None = None
+    # 안전망 — AI가 끝내 빠뜨린 눈여겨볼 사실 번호. 화면이 "시스템이 덧붙임"으로 보여 준다
+    summaryAppended: list[str] = Field(default_factory=list)
+    scope: InvestigationScope | None = None
