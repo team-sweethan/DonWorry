@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Empty, Segmented, Space, Spin, Tabs, Typography } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getCase } from '../../api/cases'
+import { getCase, isCaseAssigneeOnly } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { AiReport, CaseDetail } from '../../types/case'
+import { caseListReturnPath } from '../../utils/caseListQuery'
 import { customerPart } from '../../utils/caseRules'
 import { pickReport } from '../../utils/reportView'
+import { CaseForbidden } from './case/CaseForbidden'
 import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
 import { ReportTrace } from './case/ReportTrace'
@@ -27,7 +29,7 @@ export function CaseReportPage() {
   const scope = id
   const [loaded, setLoaded] = useState<{
     scope: string
-    detail: CaseDetail | null | 'error'
+    detail: CaseDetail | null | 'error' | 'forbidden'
   } | null>(null)
   useEffect(() => {
     let alive = true
@@ -35,8 +37,13 @@ export function CaseReportPage() {
       .then((result) => {
         if (alive) setLoaded({ scope: id, detail: result })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!alive) return
+        // 담당이 아닌 진행 중 사건 (#612)
+        if (isCaseAssigneeOnly(error)) {
+          setLoaded({ scope: id, detail: 'forbidden' })
+          return
+        }
         message.error('보고서를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
         setLoaded({ scope: id, detail: 'error' })
       })
@@ -48,6 +55,7 @@ export function CaseReportPage() {
   const reload = () => setRefreshKey((k) => k + 1)
 
   if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
+  if (result === 'forbidden') return <CaseForbidden listPath={caseListReturnPath(listReturn)} />
   if (result === 'error')
     return (
       <ScreenResult

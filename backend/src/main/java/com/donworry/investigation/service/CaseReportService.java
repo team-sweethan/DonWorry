@@ -1,5 +1,6 @@
 package com.donworry.investigation.service;
 
+import com.donworry.identity.api.StaffAccessType;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
@@ -17,12 +18,17 @@ public class CaseReportService {
     private final SecurityCaseRepository securityCaseRepository;
     private final ReportGateway reportGateway;
     private final CaseStatusService caseStatusService;
+    private final SecurityStaffGuard securityStaffGuard;
+    private final CaseAccessGuard caseAccessGuard;
 
     // 이미 현재 버전을 조사 중이거나 끝났으면 다시 요청하지 않는다. 종료된 Case는 그대로 둔다
+    // 열린 사건은 담당자만 (#612) — 응답으로 상세가 나가므로 상세 열람과 같은 판단을 한다
     public void requestMissing(Long caseId) {
+        Long staffId = securityStaffGuard.requireSecurityStaffId();
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
+        caseAccessGuard.requireAccess(securityCase, staffId, StaffAccessType.REPORT_REQUEST);
         if (securityCase.isClosed()) {
             return;
         }

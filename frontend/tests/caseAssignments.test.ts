@@ -14,7 +14,11 @@ import {
 import { getCases, requestAssignmentChange } from '../src/api/cases.ts'
 import { reasonReady } from '../src/pages/admin/caseAssignmentForm.ts'
 import type { AiReport, CaseDetailCase } from '../src/types/case.ts'
-import { canRequestAssignmentChange, caseDecisionMode } from '../src/utils/caseRules.ts'
+import {
+  canRequestAssignmentChange,
+  caseDecisionMode,
+  casesInScope,
+} from '../src/utils/caseRules.ts'
 
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 const originalFetch = globalThis.fetch
@@ -172,6 +176,36 @@ test('caseSummary_mapsAssigneeStaffIdToStringOrNull', async () => {
       ['13', null, null],
     ],
   )
+})
+
+// [내 사건만]은 서버가 숫자로 보낸 담당 ID와 로그인 사용자 ID(숫자)를 맞춰 내 사건만 남긴다 (#612)
+test('caseList_mineScope_showsOnlyMyCases', async () => {
+  const summary = {
+    ...serverCase,
+    paymentCount: 1,
+    totalAmount: 1000,
+    maxRiskScore: 80,
+    latestReportStatus: null,
+    decidedCount: 0,
+  }
+  record(() =>
+    Response.json([
+      { ...summary, caseId: 12, assigneeStaffId: 20 },
+      { ...summary, caseId: 13, assigneeStaffId: 21 },
+      { ...summary, caseId: 14, assigneeStaffId: null },
+    ]),
+  )
+  const cases = await getCases()
+
+  assert.deepEqual(
+    casesInScope(cases, 'MINE', 20).map((c) => c.caseId),
+    ['12'],
+  )
+  assert.deepEqual(
+    casesInScope(cases, 'ALL', 20).map((c) => c.caseId),
+    ['12', '13', '14'],
+  )
+  assert.deepEqual(casesInScope(cases, 'MINE', null), [])
 })
 
 const detailCase = (over: Partial<CaseDetailCase> = {}): CaseDetailCase => ({

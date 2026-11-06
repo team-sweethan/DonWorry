@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
   getCase,
+  isCaseAssigneeOnly,
   recheckHandoff,
   requestAssignmentChange,
   requestReport,
@@ -34,6 +35,7 @@ import { customerTransactionsPath } from '../../utils/transactionList'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { AssignmentRequestModal } from './case/AssignmentRequestModal'
+import { CaseForbidden } from './case/CaseForbidden'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { CaseBundle } from './case/CaseBundle'
 import { CaseProgress } from './case/CaseProgress'
@@ -93,9 +95,10 @@ export function CaseDetailPage() {
   // 늦게 도착한 이전 범위의 응답은 버린다.
   const scope = id
   // detail: null은 404(Case 없음), 'error'는 네트워크·5xx 등 일시 장애 — 404 화면으로 단정하지 않는다
+  // 'forbidden'은 담당이 아닌 진행 중 사건 (#612). 판정 등이 담당 변경으로 거부된 뒤 다시 불러올 때도 여기로 온다
   const [loaded, setLoaded] = useState<{
     scope: string
-    detail: CaseDetail | null | 'error'
+    detail: CaseDetail | null | 'error' | 'forbidden'
   } | null>(null)
   useEffect(() => {
     let alive = true
@@ -103,8 +106,12 @@ export function CaseDetailPage() {
       .then((result) => {
         if (alive) setLoaded({ scope: id, detail: result })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!alive) return
+        if (isCaseAssigneeOnly(error)) {
+          setLoaded({ scope: id, detail: 'forbidden' })
+          return
+        }
         message.error('Case를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
         setLoaded({ scope: id, detail: 'error' })
       })
@@ -113,7 +120,7 @@ export function CaseDetailPage() {
     }
   }, [id, refreshKey, message])
   const result = loaded?.scope === scope ? loaded.detail : undefined
-  const detail = result === 'error' ? null : result
+  const detail = result === 'error' || result === 'forbidden' ? null : result
   // 자동 조회 제한 시간의 시작점. null이면 다음 자동 조회부터 다시 센다 (#238)
   const [poll, setPoll] = useState<{ scope: string; from: number; stopped: boolean } | null>(null)
   // 사용자 동작으로 다시 조회할 때는 자동 조회 제한 시간도 처음부터 다시 센다
@@ -150,6 +157,7 @@ export function CaseDetailPage() {
   }, [waiting, visible, pollStopped, current?.from, scope, detail])
 
   if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
+  if (result === 'forbidden') return <CaseForbidden listPath={listPath} />
   if (result === 'error')
     return (
       <ScreenResult

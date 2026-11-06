@@ -35,7 +35,9 @@ public enum InvestigationErrorCode {
     SAME_ASSIGNEE("INV_024", "지금 담당자와 같은 직원입니다. 다른 직원을 골라 주세요.", HttpStatus.BAD_REQUEST),
     NO_AVAILABLE_STAFF("INV_025", "사건을 넘겨받을 수 있는 보안 직원이 없습니다.", HttpStatus.CONFLICT),
     ASSIGNMENT_MEMO_REQUIRED("INV_026", "사유가 기타이면 메모를 적어 주세요.", HttpStatus.BAD_REQUEST),
-    INVALID_REQUEST_STATUS("INV_027", "요청 상태 값을 확인해 주세요.", HttpStatus.BAD_REQUEST);
+    INVALID_REQUEST_STATUS("INV_027", "요청 상태 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    // 열린 사건은 담당자만 (#612)
+    CASE_ASSIGNEE_ONLY("INV_028", "진행 중인 사건은 담당자만 열람 · 처리할 수 있습니다.", HttpStatus.FORBIDDEN);
 
     private final String code;
     private final String message;

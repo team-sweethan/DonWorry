@@ -12,6 +12,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.CasePayment;
@@ -178,6 +179,7 @@ class CaseFlowTests {
         SecurityCase securityCase =
                 securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, securityCase.getId(), STAFF_ID);
         assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
         perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
@@ -651,6 +653,7 @@ class CaseFlowTests {
         Long paymentId = System.nanoTime();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, STAFF_ID);
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         caseDecisionService.decide(
                 caseId,
@@ -714,6 +717,11 @@ class CaseFlowTests {
                 .paymentId();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        // 판정 흐름은 담당자가 한다 (#612) — 로그인 직원(없으면 기본 직원)을 담당으로 둔다
+        CaseAssigneeTestSupport.assign(
+                securityCaseRepository,
+                caseId,
+                currentStaff.findCurrent().map(StaffSummary::userId).orElse(STAFF_ID));
         return new Held(paymentId, caseId);
     }
 
