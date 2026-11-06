@@ -78,6 +78,14 @@ def _latest_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     return found[-1] if found else None
 
 
+# 코드가 한 기본 조회의 고객 이력(30일) — 기준표 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
+def _base_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
+    found = [
+        r.result for r in records if r.filled_by_system and isinstance(r.result, PaymentHistoryTool)
+    ]
+    return found[-1] if found else None
+
+
 def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
     return found[-1] if found else None
@@ -317,6 +325,7 @@ def build_graph(
             _latest_similar(records),
             _latest_history(records),
             _latest_linked(records),
+            _base_history(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [

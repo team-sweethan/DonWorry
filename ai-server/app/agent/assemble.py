@@ -202,7 +202,11 @@ def assemble_report(
     similar: SimilarCasesTool | None = None,
     history: PaymentHistoryTool | None = None,
     linked: LinkedPaymentsTool | None = None,
+    basis_history: PaymentHistoryTool | None = None,
 ) -> ReportBody:
+    # 기준표는 코드가 늘 하는 기본 조회(30일)로만 계산한다 — AI가 90일을 불렀는지에 따라
+    # 같은 사건의 권고가 달라지지 않게 (#581). 표 · 사실은 history(마지막 조회)를 쓴다
+    # 기본 조회가 실패하면 90일 결과로 대신하지 않고 이력 없이 계산한다
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     # 한계 줄은 조회 기록으로 코드만 쓴다 — 무엇을 봤는지는 AI보다 코드가 정확히 안다 (#355)
@@ -230,7 +234,7 @@ def assemble_report(
         evidence = fds.get(payment.paymentId)
         # 권고는 AI가 아니라 판정 기준표가 정한다 (#501)
         basis = (
-            decision_basis(payment, evidence, case_payments, history, linked)
+            decision_basis(payment, evidence, case_payments, basis_history, linked)
             if evidence is not None
             else None
         )
