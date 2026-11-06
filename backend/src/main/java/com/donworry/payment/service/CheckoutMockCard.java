@@ -6,14 +6,13 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Optional;
 
-// 돈워리 결제창의 모의 카드 (실제 카드사 연동 전, 프로토타입 v4.2 SHOP_CARDS: A·B·D·C). ADR-0064 2절
+// 돈워리 결제창의 시연용 가상 카드 (실제 카드사 연동 전). ADR-0064 2절
 // 카드번호 원문은 없다. FDS에는 고객별 카드 토큰과 마스킹 표시값만 넘긴다.
-// 발급국·한도 초과는 아직 화면 안내용이다. 모의 승인과 FDS 입력 반영은 후속.
+// 이름은 FDS 결과가 아니라 카드 자체를 나타낸다. 같은 고객이 처음 쓰는 카드면 신규 카드가 된다.
+// 한도 초과(카드사 거절) · 해외 발급 카드는 모의 승인 · FDS 입력에 반영되기 전까지 두지 않는다 (#582)
 public enum CheckoutMockCard {
-    A("모의 카드 A (쓰던 카드)", "**** 4821", "KR", "#172554"),
-    B("모의 카드 B (처음 쓰는 카드)", "**** 1173", "KR", "#2563EB"),
-    D("모의 카드 D (해외 발급 · 미국)", "**** 5520", "US", "#0F766E"),
-    C("모의 카드 C (한도 초과)", "**** 9034", "KR", "#64748B");
+    A("한빛카드", "**** 4821", "KR", "#172554"),
+    B("누리카드", "**** 1173", "KR", "#2563EB");
 
     private final String label;
     private final String masked;
@@ -48,9 +47,9 @@ public enum CheckoutMockCard {
         return color;
     }
 
-    // FDS 카드 표시값. 50자 이하.
+    // FDS 카드 표시값(경보 상세 · 차단 목록에 보이는 값). 50자 이하.
     public String displayLabel() {
-        return "모의 카드 " + name() + " " + masked;
+        return label + " " + masked;
     }
 
     // 가맹점 고객별로 고정된 카드 토큰. 같은 고객이 같은 카드를 쓰면 같은 값이라 "쓰던 카드"가 된다.

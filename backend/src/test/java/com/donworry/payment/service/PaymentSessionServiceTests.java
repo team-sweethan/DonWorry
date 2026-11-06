@@ -200,6 +200,29 @@ class PaymentSessionServiceTests {
         verify(sessions, never()).save(any());
     }
 
+    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드는 목록에서 뺐다. 그 코드로 결제하면 시도를 고정하지 않고 400 (#582)
+    @Test
+    void pay_removedCardCode_isBadRequestWithoutFixingAttempt() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+
+        for (var code : new String[] {"C", "D"}) {
+            assertThatThrownBy(() -> service.pay(
+                            session.getSessionKey(),
+                            new CheckoutResponses.PayRequest(code, "abcdef12"),
+                            "203.0.113.10"))
+                    .as(code)
+                    .isInstanceOfSatisfying(
+                            PaymentHttpException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(400));
+        }
+        verify(flow, never()).submit(any());
+        assertThat(session.attemptFixed()).isFalse();
+        assertThat(CheckoutMockCard.values())
+                .extracting(CheckoutMockCard::label)
+                .containsExactly("한빛카드", "누리카드");
+    }
+
     // 세션을 만든 뒤 가맹점이 정지되면 아직 접수하지 않은 결제를 시작하지 않는다 (PR #425 리뷰)
     @Test
     void pay_merchantInactive_isConflictWithoutSubmitting() {
@@ -242,7 +265,7 @@ class PaymentSessionServiceTests {
         verify(flow, times(2)).submit(commands.capture());
         assertThat(commands.getAllValues()).allSatisfy(command -> {
             assertThat(command.idempotencyKey()).isEqualTo(session.getAttemptKey());
-            assertThat(command.riskSignals().cardDisplayLabel()).contains("모의 카드 A");
+            assertThat(command.riskSignals().cardDisplayLabel()).isEqualTo("한빛카드 **** 4821");
             assertThat(command.riskSignals().deviceId()).isEqualTo("abcdef12");
             assertThat(command.riskSignals().ipAddress()).isEqualTo("203.0.113.10");
         });
