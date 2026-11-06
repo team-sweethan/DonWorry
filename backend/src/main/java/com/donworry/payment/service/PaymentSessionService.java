@@ -158,10 +158,11 @@ public class PaymentSessionService {
     public CheckoutResponses.Result pay(String sessionKey, CheckoutResponses.PayRequest body, String ipAddress) {
         var session = requireSession(sessionKey);
         if (session.getPaymentId() != null) return result(session);
-        CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
-        // 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
+        // 카드 목록 · 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
         // 평가 · 승인 · 세션 연결 중에 멈춘 것이라 기한이 지났어도 이어서 처리한다 (PR #425 리뷰)
+        // 지금은 없는 카드(C · D, #582)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
         if (admittedPaymentId(session).isEmpty()) {
+            CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
             if (session.expired(Instant.now()))
                 throw new PaymentHttpException(409, "SESSION_EXPIRED", "결제 가능 시간이 지났습니다.");
             // 세션을 만든 뒤 가맹점이 정지됐을 수 있다. 아직 접수하지 않은 결제는 시작 직전에 다시 확인한다

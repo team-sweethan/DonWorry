@@ -311,6 +311,7 @@ class PaymentSessionServiceTests {
 
     // 카드 이름을 바꾸기 전(#582)에 접수돼 멈춘 결제는 저장된 위험 신호 그대로 이어 간다.
     // 새 이름으로 다시 만들면 같은 시도 키인데 표시값이 달라 키 충돌로 거절된다. 지금은 없는 C 카드여도 같다 (PR #587 리뷰)
+    // 배포 전에 열어 둔 결제창은 C를 고른 채 다시 보내므로, 이미 접수된 시도는 카드 목록 검사보다 먼저 재개한다
     @Test
     void pay_admittedBeforeCardRename_resumesWithStoredRiskSignals() {
         var session = session(recent());
@@ -324,7 +325,7 @@ class PaymentSessionServiceTests {
         when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
 
         var result =
-                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "99999999"), "198.51.100.7");
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("C", "abcdef12"), "203.0.113.10");
 
         assertThat(result.redirectUrl()).startsWith(SUCCESS);
         var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
