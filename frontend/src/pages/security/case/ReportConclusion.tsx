@@ -3,11 +3,12 @@ import type { AiRecommendation, BasisSignal, ReportBody } from '../../../types/c
 import {
   caseNormals,
   caseSignalId,
-  caseSignals,
-  openSignals,
+  conclusionGuide,
+  conclusionSignals,
   overviewText,
   topRiskScore,
   verdictLines,
+  type ConclusionSignal,
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { recommendationLabel } from './caseLabels'
@@ -50,8 +51,7 @@ export function ReportConclusion({
   onDecide?: () => void
 }) {
   const overview = overviewText(body)
-  const signals = caseSignals(body)
-  const open = signals ? openSignals(signals) : []
+  const signals = conclusionSignals(body)
   const overall = body.verdict?.overallRecommendation ?? null
   const payments = verdictLines(body).payments
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
@@ -99,9 +99,7 @@ export function ReportConclusion({
             </div>
           )}
           <div style={{ fontSize: 14, color: '#78350F', lineHeight: 1.6 }}>
-            {open.length > 0
-              ? `정상 사유가 없는 징후 ${open.length}개 — 아래 표의 확인할 것으로 정상 사유가 나오면 매입 진행 쪽, 부정 정황이 나오면 승인 취소 쪽으로 판단합니다.`
-              : '모든 징후에 정상 사유가 있습니다. 아래 근거를 확인한 뒤 판정하세요.'}
+            {conclusionGuide(body)}
           </div>
         </div>
       )}
@@ -192,7 +190,7 @@ function SignalTable({
   checked,
   onToggle,
 }: {
-  signals: BasisSignal[]
+  signals: ConclusionSignal[]
   checked: string[]
   onToggle: (id: string) => void
 }) {
@@ -233,6 +231,11 @@ function SignalTable({
                   }}
                 >
                   {s.countedIn ? `${s.countedIn}에 포함` : (s.normalReason ?? '없음')}
+                  {s.mixed && (
+                    <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'normal' }}>
+                      결제 {s.openPaymentIds.join(' · ')}만 · 다른 결제는 정상 사유 있음
+                    </div>
+                  )}
                 </td>
                 <td style={{ ...tdStyle, background: '#F8FBFF', lineHeight: 1.55 }}>
                   {!s.checkBefore ? (

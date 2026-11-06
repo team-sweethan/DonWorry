@@ -39,6 +39,8 @@ import {
   verdictCardTitle,
   mlReportLine,
   summaryFold,
+  checkRows,
+  conclusionGuide,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -738,4 +740,57 @@ test('summaryFold_fourOrMoreSentences_countsHiddenNotableFacts', () => {
   )
 
   assert.deepEqual(folded, { hidden: 2, hiddenNotable: 1 })
+})
+
+// 결론 표 재현용 결제 — 고액 결제(R01) 징후 하나, normalReason으로 정상 사유 여부를 정한다 (#591 Codex 리뷰)
+const highAmountPayment = (
+  paymentId: string,
+  normalReason: string | null,
+): ReportBody['paymentAnalyses'][number] => ({
+  paymentId,
+  amount: 600_000,
+  requestedAt: '2026-10-29T01:00:00Z',
+  riskScore: 60,
+  ruleHits: ['R01'],
+  unknowns: [],
+  recommendation: normalReason ? 'ACCEPT_REVIEW' : 'NEEDS_CHECK',
+  basis: {
+    signals: [
+      {
+        key: 'R01',
+        label: '고액 결제',
+        detail: null,
+        level: 'CAUTION',
+        normalReason,
+        checkBefore: '구매 목적 확인',
+      },
+    ],
+    normals: [],
+    rule: normalReason ? 'ALL_EXPLAINED' : 'CAUTION_ONLY',
+    recommendation: normalReason ? 'ACCEPT_REVIEW' : 'NEEDS_CHECK',
+  },
+})
+
+// 같은 징후가 한 결제에서만 설명되면 다른 결제의 확인할 것이 남는다 (#591 Codex 리뷰 P1)
+test('checkRows_sameSignalExplainedInOnlyOnePayment_keepsUncheckedRow', () => {
+  const report = body({
+    paymentAnalyses: [
+      highAmountPayment('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료'),
+      highAmountPayment('12', null),
+    ],
+    verdict: { headline: '추가 확인', overallRecommendation: 'NEEDS_CHECK' },
+  })
+
+  assert.deepEqual(checkRows(report), [{ id: 'R01', row: 1 }])
+  assert.match(conclusionGuide(report), /정상 사유가 없는 징후 1개/)
+})
+
+// 판정 근거가 없는 보고서는 정상 사유를 확인할 수 없다고 안내한다 (#591 Codex 리뷰 P2 — AI를 끈 고정 보고서)
+test('conclusionGuide_reportWithoutBasis_saysNormalReasonUnknown', () => {
+  const fixed = body({
+    paymentAnalyses: [{ ...highAmountPayment('11', null), basis: undefined }],
+    verdict: { headline: '추가 확인이 필요합니다.', overallRecommendation: 'NEEDS_CHECK' },
+  })
+
+  assert.match(conclusionGuide(fixed), /정상 사유를 확인할 수 없습니다/)
 })

@@ -551,18 +551,55 @@ export function overviewText(body: ReportBody): { text: string | null; byCode: b
   return { text: reportHeadline(body), byCode: false }
 }
 
+// 결론 표 한 줄 — openPaymentIds: 이 징후가 풀리지 않은 결제, mixed: 결제마다 정상 사유가 달라 일부만 풀림
+export type ConclusionSignal = BasisSignal & { openPaymentIds: string[]; mixed: boolean }
+
 // 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것 (기준표가 판정에 센 것)
-export function openSignals(signals: BasisSignal[]): BasisSignal[] {
-  return signals.filter((s) => !s.normalReason && !s.countedIn)
+const isOpen = (s: BasisSignal) => !s.normalReason && !s.countedIn
+
+// 결론 표 징후 — 같은 징후는 한 줄로 묶되, 한 결제라도 풀리지 않았으면 풀리지 않은 쪽을 남긴다
+// caseSignals(첫 결제 값만 남김)를 쓰면 결제 A만 정상 사유가 있을 때 결제 B의 확인할 것이 사라졌다 (#591 Codex 리뷰)
+// 정상 사유는 결제 금액마다 따로 계산된다 (ai-server evidence._normals). 판정 근거가 없으면 null
+export function conclusionSignals(body: ReportBody): ConclusionSignal[] | null {
+  const withBasis = body.paymentAnalyses.filter((p) => p.basis)
+  if (withBasis.length === 0) return null
+  const groups = new Map<string, Array<{ paymentId: string; signal: BasisSignal }>>()
+  for (const p of withBasis)
+    for (const signal of p.basis?.signals ?? []) {
+      const group = groups.get(signalId(signal)) ?? []
+      group.push({ paymentId: String(p.paymentId), signal })
+      groups.set(signalId(signal), group)
+    }
+  return [...groups.values()].map((group) => {
+    const open = group.filter((g) => isOpen(g.signal))
+    const shown = open[0]?.signal ?? group[0].signal
+    return {
+      ...shown,
+      openPaymentIds: open.map((g) => g.paymentId),
+      mixed: open.length > 0 && open.length < group.length,
+    }
+  })
 }
 
 // 체크할 징후와 결론 표의 번호 — 아래 고정 줄 "확인 1 / 3 완료 · 남은 확인 2 · 3번"
-// 결론 표와 같은 순서(caseSignals) · 같은 조건(정상 사유 없음 + 확인할 것 있음)
+// 결론 표와 같은 순서 · 같은 조건(정상 사유 없음 + 확인할 것 있음)
 export function checkRows(body: ReportBody): Array<{ id: string; row: number }> {
-  const signals = caseSignals(body) ?? []
+  const signals = conclusionSignals(body) ?? []
   return signals.flatMap((s, i) =>
-    !s.normalReason && !s.countedIn && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
+    isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
   )
+}
+
+// 판정 세 칸 아래 안내 한 줄
+// 판정 근거가 없는 보고서(AI를 끈 고정 보고서 · 예전 보고서)는 정상 사유를 알 수 없다 — "모두 정상 사유"로 세지 않는다 (#591 Codex 리뷰)
+export function conclusionGuide(body: ReportBody): string {
+  const signals = conclusionSignals(body)
+  if (signals === null)
+    return '판정 근거가 없는 보고서라 정상 사유를 확인할 수 없습니다. 아래 근거를 직접 확인한 뒤 판정하세요.'
+  const open = signals.filter(isOpen)
+  return open.length > 0
+    ? `정상 사유가 없는 징후 ${open.length}개 — 아래 표의 확인할 것으로 정상 사유가 나오면 매입 진행 쪽, 부정 정황이 나오면 승인 취소 쪽으로 판단합니다.`
+    : '모든 징후에 정상 사유가 있습니다. 아래 근거를 확인한 뒤 판정하세요.'
 }
 
 // 처음에 보여 줄 요약 문장 수 — 나머지는 [더 보기]
