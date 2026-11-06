@@ -6,7 +6,9 @@ import {
   getOperatorAccessDetection,
   type OperatorAccessDetectionDetail,
 } from '../../api/fds'
+import { getMerchantDirectory } from '../../api/merchants'
 import { PageHeader } from '../../components/common/PageHeader'
+import { merchantDisplayName } from '../../utils/merchantDisplayName'
 
 function formatDate(value: string | null) {
   return value
@@ -37,6 +39,7 @@ export function OperatorAccessDetectionDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [result, setResult] = useState<OperatorAccessDetectionDetail | null>(null)
+  const [merchantName, setMerchantName] = useState<string | null>(null)
   const [error, setError] = useState(false)
   const sourceId = Number(eventId ?? id)
   const isLowRisk = eventId !== undefined
@@ -47,12 +50,32 @@ export function OperatorAccessDetectionDetailPage() {
 
   useEffect(() => {
     if (invalidId) return
+    let active = true
     ;(isLowRisk
       ? getLowRiskOperatorAccessDetection(sourceId)
       : getOperatorAccessDetection(sourceId)
     )
-      .then(setResult)
-      .catch(() => setError(true))
+      .then((detail) => {
+        if (!active) return
+        const merchantId = detail.merchantId
+        setError(false)
+        setMerchantName(null)
+        setResult(detail)
+        if (merchantId === null) return
+        void getMerchantDirectory()
+          .then((merchants) => {
+            if (active) setMerchantName(merchantDisplayName(merchantId, merchants))
+          })
+          .catch(() => {
+            if (active) setMerchantName(null)
+          })
+      })
+      .catch(() => {
+        if (active) setError(true)
+      })
+    return () => {
+      active = false
+    }
   }, [sourceId, invalidId, isLowRisk])
 
   return (
@@ -77,7 +100,9 @@ export function OperatorAccessDetectionDetailPage() {
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="계정">{result.loginId}</Descriptions.Item>
-              <Descriptions.Item label="소속 정보">{result.merchantId ?? '—'}</Descriptions.Item>
+              <Descriptions.Item label="소속 정보">
+                {merchantName ?? result.merchantId ?? '—'}
+              </Descriptions.Item>
               <Descriptions.Item label="룰">{ruleLabel(result.ruleCode)}</Descriptions.Item>
               <Descriptions.Item label="거절 유형">
                 {deniedTypeLabel(result.deniedType)}
