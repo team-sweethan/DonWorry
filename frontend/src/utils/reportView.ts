@@ -246,7 +246,11 @@ const NORMAL_TERMS: Record<string, string> = { SIMILAR_AMOUNT: '비슷한 금액
 // "해외 접속 (TH)"처럼 괄호 붙은 이름은 괄호 앞까지로 찾는다
 const baseName = (label: string) => label.replace(/\s*\([^)]*\)\s*$/, '')
 
-export function markSignals(text: string, basis: DecisionBasis | null | undefined): TextPart[] {
+// basis: 결제 하나의 판정 근거, 또는 사건 전체 징후 · 정상 근거 (#591 — 결제가 여러 건인 요약)
+export function markSignals(
+  text: string,
+  basis: Pick<DecisionBasis, 'signals' | 'normals'> | null | undefined,
+): TextPart[] {
   if (!basis) return [{ text, mark: null }]
   const terms: Array<{ term: string; mark: MarkKind }> = [
     ...basis.signals.map((s) => ({ term: baseName(s.label), mark: s.level })),
@@ -280,6 +284,7 @@ export function markSignals(text: string, basis: DecisionBasis | null | undefine
 // 해외 접속은 나라가 이름에 들어 있어 나라별로 따로 센다 (#501 리뷰)
 const OVERSEAS = 'OVERSEAS'
 const signalId = (s: BasisSignal) => (s.key === OVERSEAS ? `${s.key}:${s.label}` : s.key)
+export const caseSignalId = signalId
 
 // 사건 전체 징후 — 결제마다 같은 징후는 한 번만, 판정 근거가 하나도 없으면 null (예전 보고서)
 export function caseSignals(body: ReportBody): BasisSignal[] | null {
@@ -535,4 +540,56 @@ export function mlReportLine(cell: MlCell): string {
     case 'loading':
       return 'ML 참고 위험도 불러오는 중…'
   }
+}
+
+// ── 결론 먼저 보고서 (#591) ──
+
+// 사건 개요 한 줄 — 코드가 쓴 개요, 없으면(예전 · 고정 보고서) 결론 한 줄로 대신한다
+export function overviewText(body: ReportBody): { text: string | null; byCode: boolean } {
+  const overview = body.caseOverview?.trim()
+  if (overview) return { text: overview, byCode: true }
+  return { text: reportHeadline(body), byCode: false }
+}
+
+// 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것 (기준표가 판정에 센 것)
+export function openSignals(signals: BasisSignal[]): BasisSignal[] {
+  return signals.filter((s) => !s.normalReason && !s.countedIn)
+}
+
+// 체크할 징후와 결론 표의 번호 — 아래 고정 줄 "확인 1 / 3 완료 · 남은 확인 2 · 3번"
+// 결론 표와 같은 순서(caseSignals) · 같은 조건(정상 사유 없음 + 확인할 것 있음)
+export function checkRows(body: ReportBody): Array<{ id: string; row: number }> {
+  const signals = caseSignals(body) ?? []
+  return signals.flatMap((s, i) =>
+    !s.normalReason && !s.countedIn && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
+  )
+}
+
+// 처음에 보여 줄 요약 문장 수 — 나머지는 [더 보기]
+export const SUMMARY_SHOWN = 3
+
+export type SummaryFold = { hidden: number; hiddenNotable: number }
+
+// 요약 접기 — 숨은 문장 수와, 숨은 문장에만 나오는 눈여겨볼 사실 수
+// 보이는 문장에 이미 나온 사실은 세지 않는다 — 버튼을 안 눌러도 놓치지 않으니까
+// 근거 번호가 문장 수와 맞지 않는 보고서(고정 · 예전)는 눈여겨볼 사실을 알 수 없어 0
+export function summaryFold(body: ReportBody, shown: number = SUMMARY_SHOWN): SummaryFold {
+  const hidden = Math.max(body.summary.length - shown, 0)
+  const sentences = body.summaryFacts
+  if (hidden === 0 || !sentences || sentences.length !== body.summary.length || !body.facts)
+    return { hidden, hiddenNotable: 0 }
+  const notable = new Set(body.facts.filter((f) => f.notable).map((f) => f.id))
+  const seen = new Set(sentences.slice(0, shown).flatMap((s) => s.factIds))
+  const later = new Set(sentences.slice(shown).flatMap((s) => s.factIds))
+  const hiddenNotable = [...later].filter((id) => notable.has(id) && !seen.has(id)).length
+  return { hidden, hiddenNotable }
+}
+
+// 안전망 줄 (#591) — AI가 빠뜨려 시스템이 덧붙인 눈여겨볼 사실 문장 (사실 문장은 코드가 썼다)
+export function appendedFactTexts(body: ReportBody): string[] {
+  const facts = new Map((body.facts ?? []).map((f) => [f.id, f.text]))
+  return (body.summaryAppended ?? []).flatMap((id) => {
+    const text = facts.get(id)
+    return text ? [text] : []
+  })
 }

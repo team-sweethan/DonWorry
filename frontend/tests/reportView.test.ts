@@ -38,6 +38,7 @@ import {
   summaryLines,
   verdictCardTitle,
   mlReportLine,
+  summaryFold,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -704,4 +705,37 @@ test('summaryLines_fixedReportEmptySummaryFacts_keepsSummary: 근거 번호 목�
       ['직원은 판정 근거를 확인하세요.', 0],
     ],
   )
+})
+
+// 요약이 4문장 이상이면 숨은 문장 속 눈여겨볼 사실 수를 센다 (#591) — 보이는 문장에 이미 나온 사실은 빼고
+test('summaryFold_fourOrMoreSentences_countsHiddenNotableFacts', () => {
+  const sentences = [
+    { text: '첫 문장', factIds: ['이력-1'] },
+    { text: '둘째 문장', factIds: ['연결-1'] },
+    { text: '셋째 문장', factIds: ['접속-1'] },
+    { text: '넷째 문장', factIds: ['연결-1', '연결-2'] },
+    { text: '다섯째 문장', factIds: ['이력-2'] },
+  ]
+  const fact = (id: string, notable: boolean) => ({
+    id,
+    topic: 'linked',
+    text: id,
+    evidenceId: 'E',
+    notable,
+  })
+  const folded = summaryFold(
+    body({
+      summary: sentences.map((s) => s.text),
+      summaryFacts: sentences,
+      facts: [
+        fact('이력-1', false),
+        fact('연결-1', true),
+        fact('접속-1', false),
+        fact('연결-2', true),
+        fact('이력-2', false),
+      ],
+    }),
+  )
+
+  assert.deepEqual(folded, { hidden: 2, hiddenNotable: 1 })
 })
