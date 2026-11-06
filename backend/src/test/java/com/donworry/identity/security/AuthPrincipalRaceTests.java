@@ -89,7 +89,10 @@ class AuthPrincipalRaceTests {
         SecurityContextHolder.setContext(context);
         authenticate();
         mvc = MockMvcBuilders.standaloneSetup(
-                        new AuthController(authService, passwordService),
+                        new AuthController(
+                                authService,
+                                passwordService,
+                                org.mockito.Mockito.mock(OperatorAccessDenialService.class)),
                         new AdminAccountController(adminAccountService),
                         new AdminMerchantController(adminMerchantService))
                 .setControllerAdvice(new AuthExceptionHandler())

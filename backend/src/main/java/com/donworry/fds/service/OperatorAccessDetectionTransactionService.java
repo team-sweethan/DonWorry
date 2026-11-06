@@ -56,6 +56,12 @@ public class OperatorAccessDetectionTransactionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void receive(OperatorAccessDenied input) {
         if (events.findByIdentityEventId(input.eventId()).isPresent()) return;
+        var deniedType = OperatorAccessDeniedType.valueOf(input.deniedType().name());
+        var rule = ruleFor(deniedType);
+        if (rulePolicies
+                .findByRuleCode(rule.code())
+                .map(policy -> !policy.isActive())
+                .orElse(false)) return;
         var now = clock.instant();
         var event = events.save(OperatorAccessEvent.received(
                 input.eventId(),
@@ -64,15 +70,10 @@ public class OperatorAccessDetectionTransactionService {
                 input.merchantId(),
                 input.httpMethod(),
                 input.path(),
-                OperatorAccessDeniedType.valueOf(input.deniedType().name()),
+                deniedType,
                 input.occurredAt(),
                 input.clientIp(),
                 now));
-        var rule = ruleFor(event.getDeniedType());
-        if (rulePolicies
-                .findByRuleCode(rule.code())
-                .map(policy -> !policy.isActive())
-                .orElse(false)) return;
         var status = statusReader.findById(event.getUserId());
         if (status.isEmpty() || status.get().status() == OperatorAccountStatus.INACTIVE) return;
         // 늦게 수신한 이벤트는 자신과 이후 발생 이벤트의 판정 구간에 모두 영향을 줄 수 있다.

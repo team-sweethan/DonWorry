@@ -1,5 +1,5 @@
 import { SessionExpiryModal } from './SessionExpiryModal'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
 import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -16,6 +16,7 @@ import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { loginWithPreferences } from './loginPreferences'
+import { recordForbiddenFrontendRoute } from '../api/auth'
 import { LatestLogin } from './LatestLogin'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
@@ -124,6 +125,17 @@ function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string })
       </Button>
     </Dropdown>
   )
+}
+
+function ForbiddenFrontendRoute({ pathname, homePath }: { pathname: string; homePath: string }) {
+  const reportedPathname = useRef<string | null>(null)
+  useEffect(() => {
+    // StrictMode가 개발 환경에서 Effect를 한 번 더 실행해도 동일 진입을 두 번 탐지하지 않는다.
+    if (reportedPathname.current === pathname) return
+    reportedPathname.current = pathname
+    void recordForbiddenFrontendRoute(pathname).catch(() => {})
+  }, [pathname])
+  return <ScreenResult kind="403" homePath={homePath} />
 }
 
 export function LandingRoute() {
@@ -278,7 +290,7 @@ export function ServerSession() {
   if (pathname === navigation.base && pathname !== home) return <Navigate to={home} replace />
   // 다른 역할 화면이나 권한 없는 메뉴는 본문만 막고 내 첫 화면으로 돌아갈 수 있게 한다.
   const forbidden = !canOpenPath(user, pathname) ? (
-    <ScreenResult kind="403" homePath={home} />
+    <ForbiddenFrontendRoute pathname={pathname} homePath={home} />
   ) : undefined
   return (
     <ManagementLayout

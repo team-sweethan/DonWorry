@@ -32,3 +32,10 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ currentPassword, newPassword }),
   })
+
+export const recordForbiddenFrontendRoute = (path: string) =>
+  api<void>('/auth/forbidden-frontend-routes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })

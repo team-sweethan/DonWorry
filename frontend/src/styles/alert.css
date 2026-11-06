@@ -285,6 +285,11 @@
   font-weight: 600;
 }
 
+.dw-alert-payment-information .ant-descriptions-item-content {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .dw-alert-detail .ant-table-cell {
   overflow-wrap: anywhere;
 }

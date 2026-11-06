@@ -330,6 +330,7 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/auth/me"),
                                 paths.matcher(HttpMethod.POST, "/api/auth/logout-all"),
                                 paths.matcher(HttpMethod.POST, "/api/auth/password"),
+                                paths.matcher(HttpMethod.POST, "/api/auth/forbidden-frontend-routes"),
                                 paths.matcher(HttpMethod.GET, "/api/auth/login-histories"),
                                 paths.matcher(HttpMethod.GET, "/api/auth/login-histories/latest-success"))
                         .authenticated()

@@ -7,6 +7,7 @@ import com.donworry.identity.entity.OperatorAccessDenial;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.repository.OperatorAccessDenialRepository;
 import com.donworry.identity.repository.PlatformUserRepository;
+import com.donworry.identity.security.OperatorAccessRoutes;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -42,19 +43,34 @@ public class OperatorAccessDenialService {
     // 필터 밖에서 독립 커밋한다. 저장·커밋 실패는 핸들러가 받아 원래 403을 유지한다.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(Long userId, OperatorAccessDeniedType deniedType, HttpServletRequest request) {
+        record(userId, deniedType, request.getMethod(), request.getServletPath(), clientIps.clientIp(request));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordForbiddenFrontendRoute(Long userId, String path, HttpServletRequest request) {
+        if (!OperatorAccessRoutes.isOperatorForbiddenFrontendPath(path)) return;
+        record(userId, OperatorAccessDeniedType.OUT_OF_ROLE, request.getMethod(), path, clientIps.clientIp(request));
+    }
+
+    private void record(
+            Long userId,
+            OperatorAccessDeniedType deniedType,
+            String requestMethod,
+            String requestPath,
+            String clientIp) {
         if (userId == null) return;
         var user = users.findById(userId)
                 .filter(account -> account.getRole() == UserRole.OPERATOR)
                 .orElse(null);
         if (user == null) return;
         var occurredAt = clock.instant().truncatedTo(ChronoUnit.MICROS);
-        var path = request.getServletPath();
+        var path = requestPath;
         int length = path.codePointCount(0, path.length());
         if (length > OperatorAccessDenied.MAX_PATH_LENGTH) {
             path = path.substring(0, path.offsetByCodePoints(0, OperatorAccessDenied.MAX_PATH_LENGTH));
         }
         // 방화벽 허용 메서드가 확장돼도 저장 길이로 감사 수집이 누락되지 않게 한다.
-        var httpMethod = request.getMethod();
+        var httpMethod = requestMethod;
         if (httpMethod.length() > OperatorAccessDenied.MAX_HTTP_METHOD_LENGTH) {
             httpMethod = httpMethod.substring(0, OperatorAccessDenied.MAX_HTTP_METHOD_LENGTH);
         }
@@ -64,7 +80,7 @@ public class OperatorAccessDenialService {
                 httpMethod,
                 path,
                 deniedType,
-                clientIps.clientIp(request),
+                clientIp,
                 LocalDateTime.ofInstant(occurredAt, ZoneOffset.UTC)));
         events.publishEvent(OperatorAccessDenied.builder()
                 .eventId(denial.getDenialId())
