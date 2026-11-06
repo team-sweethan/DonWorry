@@ -2,7 +2,7 @@
 
 - **상태:** 제안 — 실험(#536, `spike/insider-on-dev`)으로 흐름 검증, 팀 합의 필요
 - **날짜:** 2026-11-06
-- **관련:** #600 (이 ADR), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
+- **관련:** #600 (이 ADR) · #604 (허용 기록 트랜잭션), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** P1 identity, P2 fds, P3 investigation, P4 investigation/report, P5 payment, frontend
 
 ## 배경
@@ -71,7 +71,12 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 ### 4. 기록 방식
 
 - 접근 **거부** 기록: 독립 트랜잭션(`REQUIRES_NEW`). 기록이 실패해도 원래 거부 응답은 바꾸지 않는다 (ADR-0080과 같은 방식)
-- 접근 **허용** 기록: 기록이 실패하면 데이터를 내보내지 않는다(fail closed). 실험 코드는 허용 기록도 독립 트랜잭션으로 저장해 호출 쪽이 롤백돼도 기록이 남는다 — #516 초안("같은 트랜잭션")과 다르므로 **합의 필요**
+- 접근 **허용** 기록: 호출 쪽과 **같은 트랜잭션**에 저장한다 (#604). 기록 · 업무가 함께 커밋되거나 함께 롤백된다
+  - 기록이 실패하면 호출 쪽이 롤백되어 데이터를 내보내지 않는다(fail closed)
+  - 기록 메서드는 `Propagation.MANDATORY`로 둔다. 트랜잭션 밖에서 부르면 예외가 나서 빠뜨린 경계를 테스트에서 잡는다
+  - 기록을 부르는 조회는 읽기 전용 트랜잭션(`readOnly = true`)을 쓰지 않는다. 읽기 전용이면 기록 INSERT가 실패한다(이 경우도 데이터는 나가지 않는다). 부르는 쪽 변경은 해당 조각 PR에서 한다
+  - 이벤트 `StaffAccessRecorded`는 커밋 후 전달된다
+  - 커밋 뒤 응답 전송이 실패하면(네트워크 끊김) "기록 있음 · 수신 없음"이 남는다. DB 커밋과 전송은 묶을 수 없어 받아들인다
 - 원문 응답(`contact-raw-view`)은 `Cache-Control: no-store`
 - IP는 접근 기록에 복사하지 않는다. 필요하면 `login_histories`에서 읽는다
 
@@ -92,6 +97,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 | --- | --- |
 | 실험 브랜치를 dev에 한 번에 병합 | 다른 담당 표 · 모듈 변경을 확인 없이 넣게 됨, 시연 계정 시드가 모든 환경에 들어감, mariaDbTest 기존 테스트 충돌(실험 기준 42~43건) |
 | 접근 기록 · 경보 모두 P2 소유 (#516 초안) | 기록 주체인 로그인 세션 · 정지 기록이 P1에 있음. P2에 두면 payment · investigation이 기록하려고 fds를 부르고, 세션 번호를 identity 밖으로 꺼내야 함 |
+| 허용 기록도 독립 트랜잭션(`REQUIRES_NEW`)으로 저장 (실험) | 기록 뒤 같은 요청 안에서 오류가 나 데이터가 나가지 않아도 "열람함" 기록이 남는다. 실제보다 많이 기록되면 탐지 건수가 부풀어 오탐이 생기고, 감사 때 "기록 = 실제로 나감"이라고 말할 수 없다. 얻는 것은 부르는 쪽의 `readOnly` 유지뿐이다. "데이터는 나갔는데 기록 없음"은 두 방식 모두 막는다 |
 | 기존 `operator_access_denials` 재사용 | 사장님 거부만 담는 표(`merchant_id` 필수). 직원 허용 기록 · 열람 종류 · 건수 칸이 없음 |
 | 기존 `security_cases`에 `case_type`으로 내부자 사건 추가 | FDS 사건은 결제 · 판정 · 인계 전제이고 내부자 사건은 직원 · 경보 · 정지 전제라 상태 · 칸 · 화면 권한이 다름. 기존 Case 조회 · 판정 코드가 모두 분기해야 함 |
 | 내부자 신호를 FDS 결제 점수에 합침 | 결제 위험과 직원 행동은 대상 · 조치가 다름. 한 점수로 섞으면 기존 룰 결과가 바뀜 |
@@ -120,10 +126,12 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 
 정식 검증은 조각 PR마다 `./gradlew spotlessApply && ./gradlew check && ./gradlew mariaDbTest`와 프론트 검사 결과로 적는다.
 
-## 합의가 필요한 것 (PR 전에 정리하고 이 절은 지운다)
+## 합의가 필요한 것
+
+번호는 조각 이슈에서 참조하므로 정해진 항목도 번호를 유지하고 "정함"으로 표시한다. 모두 정해지면 이 절을 지우고 상태를 "채택"으로 바꾼다.
 
 1. 접근 기록 담당: P1(이 초안) vs P2(#516) — P1 주환 · P2 정후
-2. 허용 접근 기록의 트랜잭션: 독립(실험) vs 호출 쪽과 같은 트랜잭션(#516)
+2. ~~허용 접근 기록의 트랜잭션~~ — **정함 (11/06, #604)**: 같은 트랜잭션 + `MANDATORY`. 거부 기록은 독립 (4절)
 3. `StaffCaseScopeReader` 질문지 방식 허용 여부 — 전체
 4. 직원 정지 상태: `INACTIVE` 재사용 vs `LOCKED` 신설 — P1 주환
 5. 결제 준비 요청의 주문자 칸: 선택(실험) vs 필수 — P5 시은 · CakeShop
