@@ -178,3 +178,25 @@ HELD 고객 취소의 P3 연결 대기와 별도로 조사할 수 있다. 이번
 - 기존 HELD 리스너 4건은 이번 전체 검사에서 통과했다. 이전 시간 초과의 근본 원인을 수정한 것으로 주장하지 않고 11절 실패 이력과 함께 남긴다.
 - 문서 링크·diff 공백 검사 통과. 검사 후 실행/테스트 코드는 변경하지 않고 이 기록만 추가했다.
 - 실제 P6 수신·정산 배치 경합/차감/이월·운영 재전달·CakeShop 화면·외부 카드사/UNKNOWN 복구는 미검증이다. NOT_READY 유지, 미커밋이며 PR·활성화는 하지 않았다.
+
+## 13. 운영 발행 어댑터와 환불 성공 재전달
+
+P6(민정님) 회신(2026-11-06): P6 수신·지급 전 제외(#488)·지급 후 회수(#493)가 반영돼 P5 운영 발행 어댑터만 등록하면 연결된다. 켜는 순서는 P6 수신을 먼저 켜거나 같은 배포에서 함께 켠다.
+
+- `PaymentRefundEventPublisher`: `payment.refund-completion.enabled=true`일 때만 `PaymentRefundCompletion`을 등록해 `PaymentRefundSucceeded`를 발행한다. 꺼져 있으면 기존처럼 CAPTURED 고객 취소가 503 `CANCELLATION_NOT_READY`다.
+- `PaymentRefundRedeliveryScheduler`: 같은 플래그로 켜진다. `PaymentRefundSucceeded` 발행 중 `FAILED`·미완료인 것만 `IncompleteEventPublications`로 다시 보낸다.
+  - 앱 전체 재발행 정책은 아직 정하지 않았으므로([modulith 04](../modulith/04-dependency-and-events.md)) 이 이벤트로 범위를 좁혔다.
+  - 같은 성공 결과를 다시 보낼 뿐 환불 실행기는 다시 호출하지 않는다. P6는 `cancellationId`로 한 번만 반영한다.
+  - `PROCESSING`은 중단으로 단정하지 않고 둔다. 시도 횟수(`COMPLETION_ATTEMPTS`)가 상한에 닿은 `FAILED`는 ERROR 로그를 남기고 사람이 확인한다.
+  - 설정: `payment.refund-completion.redelivery-delay`(기본 `PT5M`, 첫 실행도 같은 간격 뒤), `payment.refund-completion.redelivery-max-attempts`(기본 10).
+- 7절의 "재전달 수단·담당은 P6와 확정한다"에 대해 P5 쪽 수단을 제안한 것이다. P6 확인 전에는 운영에서 켜지 않는다.
+
+배포에서 함께 켜야 하는 설정(P1):
+
+| 설정 | 담당 | 역할 |
+| --- | --- | --- |
+| `settlement.refund-receiving.enabled=true` | P6 | 환불 성공 수신. 꺼진 동안 발행한 이벤트는 P6용 발행 기록이 남지 않으므로 P5보다 먼저 또는 함께 켠다 |
+| `settlement.completion.enabled=true` | P6 | 일일 지급 확정 배치(기본 03:00 KST). 꺼져 있으면 D+3 정산 완료와 지급 후 환불 차감이 일어나지 않는다 |
+| `payment.refund-completion.enabled=true` | P5 | 환불 성공 발행과 재전달 |
+
+검증은 PR에 커밋별로 기록한다. 실제 CakeShop 요청으로 지급 전·후 환불이 사장님 정산 화면에 반영되는지는 배포 후 확인 대상이다.
