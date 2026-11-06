@@ -1,13 +1,31 @@
 import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Input, Select, Space, Table, Tabs, Typography } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Input,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Typography,
+} from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCases } from '../../api/cases'
+import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useCaseListWatch } from '../../hooks/useCaseListWatch'
 import type { CaseStatus, CaseSummary } from '../../types/case'
-import { customerPart, mergeRemainingMin } from '../../utils/caseRules'
+import {
+  type CaseScope,
+  casesInScope,
+  customerPart,
+  mergeRemainingMin,
+} from '../../utils/caseRules'
 import {
   caseListSearch,
   caseListTab,
@@ -49,6 +67,24 @@ const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
 
 const PAGE_SIZE = 20
 
+// [내 사건만 / 전체 직원] (#612) — 상세에 갔다 와도 유지되게 탭 저장소에 둔다. 저장소를 못 쓰면 기본값
+// 상태 탭의 "전체"와 헷갈리지 않게 "전체 직원"이라고 쓴다
+const SCOPE_KEY = 'donworry.caseListScope'
+function readScope(): CaseScope {
+  try {
+    return sessionStorage.getItem(SCOPE_KEY) === 'ALL' ? 'ALL' : 'MINE'
+  } catch {
+    return 'MINE'
+  }
+}
+function saveScope(scope: CaseScope) {
+  try {
+    sessionStorage.setItem(SCOPE_KEY, scope)
+  } catch {
+    // 저장하지 못해도 이번 화면에서는 바뀐 값을 쓴다
+  }
+}
+
 // 목록 위 탭 (#314) — 종료된 Case를 상태 필터 안에 숨기지 않고 바로 본다
 const tabItems: Array<{ key: CaseListTab; label: string }> = [
   { key: 'ACTIVE', label: '처리 중' },
@@ -61,6 +97,8 @@ export function CaseListPage() {
   // effect 의존성에는 렌더마다 바뀌지 않는 App의 message를 쓴다
   const { message } = App.useApp()
   const location = useLocation()
+  const { user } = useAuth()
+  const [scope, setScope] = useState<CaseScope>(readScope)
   // 목록 조건은 주소 쿼리에 둔다 (#243) — 상세에 갔다 와도 · 새로고침해도 같은 조건으로 열린다
   // 라우터로 들어온 주소(홈 카드 · 뒤로 가기 · 새로고침)가 바뀌면 그 주소의 조건을 다시 읽는다
   const [searchParams] = useSearchParams()
@@ -129,7 +167,9 @@ export function CaseListPage() {
 
   const loading = result?.refreshKey !== refreshKey
   // 새로고침 중에는 기존 목록을 유지한다.
-  const cases = useMemo(() => result?.cases ?? [], [result])
+  // [내 사건만]이면 내가 담당인 사건만 — 위 카드 건수도 같은 범위다 (#612)
+  const myId = user?.userId ?? null
+  const cases = useMemo(() => casesInScope(result?.cases ?? [], scope, myId), [result, scope, myId])
 
   const filtered = useMemo(
     () => cases.filter((c) => matchesCaseListQuery(c, query)),
@@ -342,6 +382,19 @@ export function CaseListPage() {
             <p>위험도는 소속 결제의 FDS 최고 점수와 결제 건수입니다.</p>
           </div>
           <Space size={8} wrap>
+            <Segmented<CaseScope>
+              aria-label="Case 범위"
+              value={scope}
+              onChange={(next) => {
+                setScope(next)
+                saveScope(next)
+                setQuery({})
+              }}
+              options={[
+                { value: 'MINE', label: '내 사건만' },
+                { value: 'ALL', label: '전체 직원' },
+              ]}
+            />
             <Input
               aria-label="Case 검색"
               placeholder="Case ID, 고객"
@@ -388,11 +441,13 @@ export function CaseListPage() {
           locale={{
             emptyText: (
               <Typography.Text type="secondary" style={{ display: 'block', padding: 36 }}>
-                {tab === 'CLOSED'
-                  ? '종료된 Case가 없습니다.'
-                  : caseListSearch({ ...query, page: 1 })
-                    ? '조건에 맞는 Case가 없습니다.'
-                    : '열린 Case가 없습니다.'}
+                {scope === 'MINE' && cases.length === 0
+                  ? '맡은 Case가 없습니다. 다른 직원의 사건은 [전체 직원]에서 볼 수 있어요.'
+                  : tab === 'CLOSED'
+                    ? '종료된 Case가 없습니다.'
+                    : caseListSearch({ ...query, page: 1 })
+                      ? '조건에 맞는 Case가 없습니다.'
+                      : '열린 Case가 없습니다.'}
               </Typography.Text>
             ),
           }}

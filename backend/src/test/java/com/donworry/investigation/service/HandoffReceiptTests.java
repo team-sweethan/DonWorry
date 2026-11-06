@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HandoffResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
@@ -15,6 +16,7 @@ import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.ActionType;
 import com.donworry.investigation.entity.Decision;
 import com.donworry.investigation.repository.ActionHandoffRepository;
+import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.FinancialActionGateway.Command;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
 import java.time.Instant;
@@ -64,6 +66,9 @@ class HandoffReceiptTests {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
 
     @Autowired
     TestPaymentInfoStore payments;
@@ -311,6 +316,8 @@ class HandoffReceiptTests {
                 .paymentId();
         Long newCaseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, "customer-" + UUID.randomUUID(), 100_000L, "AUTH", null, Instant.now()));
+        // 판정 · 다시 확인은 담당자가 한다 (#612)
+        CaseAssigneeTestSupport.assign(securityCaseRepository, newCaseId, 7L);
         CaseDetailResponse detail = caseQueryService.detail(newCaseId);
         caseDecisionService.decide(
                 newCaseId,

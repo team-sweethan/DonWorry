@@ -11,6 +11,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
@@ -166,6 +167,7 @@ class MerchantCaseFlowTests {
         // P5 payments에 없는 결제라 결제 정보가 비고, 목 보고서는 최종 실패(FAILED)가 된다
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(System.nanoTime(), merchantId, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
         loginAs(7L, "SECURITY_STAFF", null, List.of());
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         perform(decide(caseId, 1, null, detail.payments().getFirst().casePaymentId(), "ACCEPT"))
@@ -303,6 +305,8 @@ class MerchantCaseFlowTests {
                 .paymentId();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        // 판정은 담당 보안 직원(7번)이 한다 (#612)
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
         return new Held(paymentId, caseId);
     }
 

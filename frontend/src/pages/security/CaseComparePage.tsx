@@ -2,10 +2,11 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Spin, Tag, Typography } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getCase } from '../../api/cases'
+import { getCase, isCaseAssigneeOnly } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { BasisSignal, CaseDetail, ReportBody } from '../../types/case'
+import { caseListReturnPath } from '../../utils/caseListQuery'
 import { won } from '../../utils/format'
 import {
   caseNormals,
@@ -21,6 +22,7 @@ import {
   type CompareRow,
 } from '../../utils/reportView'
 import { Group, NormalRow, SignalRow } from './case/BasisCard'
+import { CaseForbidden } from './case/CaseForbidden'
 import { dateTime, decisionLabel, recommendationLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
 
@@ -44,7 +46,7 @@ export function CaseComparePage() {
   const scope = `${id}:${pastId}`
   const [loaded, setLoaded] = useState<{
     scope: string
-    result: { now: Side; past: Side } | null | 'error'
+    result: { now: Side; past: Side } | null | 'error' | 'forbidden'
   } | null>(null)
   useEffect(() => {
     let alive = true
@@ -54,8 +56,13 @@ export function CaseComparePage() {
         const result = now && past ? { now: side(now), past: side(past) } : null
         setLoaded({ scope: `${id}:${pastId}`, result })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!alive) return
+        // 지금 사건의 담당이 아니면 (#612). 과거 사건은 종료돼 누구나 연다
+        if (isCaseAssigneeOnly(error)) {
+          setLoaded({ scope: `${id}:${pastId}`, result: 'forbidden' })
+          return
+        }
         message.error('사건을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
         setLoaded({ scope: `${id}:${pastId}`, result: 'error' })
       })
@@ -66,6 +73,7 @@ export function CaseComparePage() {
   const result = loaded?.scope === scope ? loaded.result : undefined
 
   if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
+  if (result === 'forbidden') return <CaseForbidden listPath={caseListReturnPath(listReturn)} />
   if (result === 'error') return <ScreenResult kind="500" />
   if (result === null) return <ScreenResult kind="404" />
 

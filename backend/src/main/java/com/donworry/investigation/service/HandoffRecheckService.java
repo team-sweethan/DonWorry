@@ -1,5 +1,6 @@
 package com.donworry.investigation.service;
 
+import com.donworry.identity.api.StaffAccessType;
 import com.donworry.investigation.service.FinancialActionGateway.Command;
 import com.donworry.investigation.service.FinancialActionGateway.Receipt;
 import lombok.RequiredArgsConstructor;
@@ -17,9 +18,12 @@ public class HandoffRecheckService {
     private final SecurityStaffGuard securityStaffGuard;
     private final HandoffService handoffService;
     private final FinancialActionGateway financialActionGateway;
+    private final CaseAccessGuard caseAccessGuard;
 
+    // 열린 사건은 담당자만 (#612). 판단을 P5 호출보다 먼저 한다
     public void recheck(Long caseId, Long handoffId) {
         Long staffId = securityStaffGuard.requireSecurityStaffId();
+        caseAccessGuard.requireAccess(caseId, staffId, StaffAccessType.HANDOFF_RECHECK);
         Command command = handoffService.recheckCommandFor(caseId, handoffId);
         Receipt receipt;
         try {

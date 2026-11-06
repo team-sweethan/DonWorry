@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.CaseType;
@@ -324,6 +325,11 @@ class AiInvestigationFlowTests {
     void progress_reportOfOtherCase_returnsNotFound() throws Exception {
         Fixture mine = caseWithPayment();
         Fixture other = caseWithPayment();
+        // 열린 사건 진행 조회는 담당자만 (#612) — 두 사건 모두 조회하는 직원(7번) 담당으로 둔다
+        CaseAssigneeTestSupport.assign(securityCaseRepository, mine.caseId(), 7L);
+        CaseAssigneeTestSupport.assign(securityCaseRepository, other.caseId(), 7L);
+        // 이 클래스는 보안 직원 확인을 대역으로 둔다 — 담당 판단에 쓰는 로그인 직원 번호를 맞춘다
+        given(securityStaffGuard.requireSecurityStaffId()).willReturn(7L);
         aiReportService.request(other.caseId(), 1);
         Long otherReportId = reportOf(other).getId();
 

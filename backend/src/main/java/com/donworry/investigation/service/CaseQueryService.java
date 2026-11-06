@@ -132,11 +132,18 @@ public class CaseQueryService {
                 .toList();
     }
 
+    // 판정 · 재확인 · 보고서 요청 뒤 돌려주는 상세. 화면 진입 열람은 CaseDetailViewService (담당 판단 · 열람 기록)
     @Transactional(readOnly = true)
     public CaseDetailResponse detail(Long caseId) {
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
+        return build(securityCase);
+    }
+
+    // 트랜잭션은 부르는 쪽이 연다 — 열람 기록과 같은 읽기 · 쓰기 트랜잭션에서도 쓰려고 readOnly를 여기 두지 않는다
+    CaseDetailResponse build(SecurityCase securityCase) {
+        Long caseId = securityCase.getId();
         List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
         Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         List<CaseHistory> histories = caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseId);

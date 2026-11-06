@@ -150,6 +150,14 @@ export async function getReportProgress(caseId: string, reportId: string): Promi
   })
 }
 
+/**
+ * 진행 중인 사건을 담당이 아닌 직원이 열었을 때 403(INV_028) (#612). 서버가 거부를 접근 기록에 남긴다.
+ * 판정 · 재확인 · 보고서 요청 · 진행 조회도 같은 코드로 거부된다.
+ */
+export function isCaseAssigneeOnly(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403 && error.code === 'INV_028'
+}
+
 export async function getCase(caseId: string): Promise<CaseDetail | null> {
   try {
     return toDetail(await fetchDetail(caseId))

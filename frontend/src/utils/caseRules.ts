@@ -84,3 +84,19 @@ export function customerPart(customerRef: string) {
   const at = customerRef.indexOf(':')
   return at < 0 ? customerRef : customerRef.slice(at + 1)
 }
+
+/** 사건 목록 범위 (#612) — 기본은 내 사건만. 진행 중인 남의 사건은 열어도 서버가 거부한다 (INV_028) */
+export type CaseScope = 'MINE' | 'ALL'
+
+/**
+ * [내 사건만]이면 로그인한 직원이 담당인 사건만 남긴다. 위 카드 건수도 같은 범위로 센다.
+ * 담당 ID는 문자열, 로그인 사용자 ID는 숫자라 문자열로 맞춰 비교한다 (canRequestAssignmentChange와 같음).
+ */
+export function casesInScope<T extends Pick<CaseDetailCase, 'assigneeStaffId'>>(
+  cases: T[],
+  scope: CaseScope,
+  userId: number | null,
+): T[] {
+  if (scope === 'ALL') return cases
+  return userId === null ? [] : cases.filter((c) => c.assigneeStaffId === String(userId))
+}
