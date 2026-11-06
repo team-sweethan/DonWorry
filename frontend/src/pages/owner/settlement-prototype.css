@@ -427,6 +427,9 @@
   border-top: 1px solid #e8e1d4;
   padding-top: 12px;
 }
+.stl-detail article.stl-settlement-preview:not(:has(+ .stl-settlement-preview)) {
+  border-bottom: 0;
+}
 .stl-expense-report {
   padding: 20px;
   border-top: 1px solid #e7e1d5;

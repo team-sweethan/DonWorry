@@ -524,7 +524,10 @@ export function SettlementPrototype({
               <p>주문번호 검색 · 상태별 조회 · 20건씩 보기</p>
             </div>
             <div className="stl-preview-heading">
-              <h3>주문별 정산 · {daily.length}건</h3>
+              <div className="stl-preview-label">
+                <h3>주문별 정산 · {daily.length}건</h3>
+                <small>최신순, 최대 2건</small>
+              </div>
               <Button
                 size="small"
                 type="text"
@@ -538,7 +541,6 @@ export function SettlementPrototype({
                 더보기
               </Button>
             </div>
-            {daily.length > 0 && <p className="stl-preview-note">최신순 · 최대 2건</p>}
             {daily.slice(0, 2).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
@@ -577,7 +579,10 @@ export function SettlementPrototype({
               </p>
             )}
             <div className="stl-preview-heading stl-expense-preview-heading">
-              <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
+              <div className="stl-preview-label">
+                <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
+                <small>최신순, 최대 2건</small>
+              </div>
               <Button
                 size="small"
                 type="text"
@@ -591,7 +596,6 @@ export function SettlementPrototype({
                 더보기
               </Button>
             </div>
-            {dailyExpenses.length > 0 && <p className="stl-preview-note">최대 2건 미리보기</p>}
             {dailyExpenses.slice(0, 2).map((e) => (
               <article key={e.id}>
                 <div className="stl-detail-title">
