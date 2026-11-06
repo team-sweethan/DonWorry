@@ -7,13 +7,11 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "settlement.owner-http.enabled", havingValue = "true")
 @RequestMapping("/api/v1/settlements/cash-flow")
 public class OwnerCashFlowController {
     private final SettlementOwnerAccessService access;

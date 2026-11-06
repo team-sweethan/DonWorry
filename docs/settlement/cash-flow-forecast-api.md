@@ -7,7 +7,7 @@
 
 ## 조회와 인증
 
-`settlement.owner-http.enabled=true`에서 기존 사장님 세션 인가를 사용한다.
+사장님 세션 인가를 사용한다.
 OPERATOR와 FINANCE_VIEW 권한을 가진 인증 가맹점만 조회하며 merchantId 입력은 사용하지 않는다.
 AGENTS 4절과 ADR-0059에 따라 SecurityConfig에 두 GET 경로를 명시적으로 등록하고 해당 경로의 다른 메서드는 거절한다.
 

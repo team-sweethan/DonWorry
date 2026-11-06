@@ -374,13 +374,33 @@ function ConnectedSettlements() {
       onRefresh={refresh}
     />
   )
-  const periodControls = <FinancePeriodControl value={period} onChange={setPeriod} />
+  const periodControls = (
+    <FinancePeriodControl
+      value={period}
+      onChange={setPeriod}
+      presets={
+        <>
+          <Button onClick={() => setPeriod({ from: today, to: today })}>오늘</Button>
+          <Button
+            onClick={() =>
+              setPeriod({
+                from: dayjs(today).startOf('month').format('YYYY-MM-DD'),
+                to: dayjs(today).endOf('month').format('YYYY-MM-DD'),
+              })
+            }
+          >
+            이번 달
+          </Button>
+        </>
+      }
+    />
+  )
   return (
     <div className="finance-preview finance-connected">
       {resource.status !== 'success' && (
         <>
           <PageHeader
-            title="정산 현황"
+            title="정산 내역"
             description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
             actions={actions}
           />
