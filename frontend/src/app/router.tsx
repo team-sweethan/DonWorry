@@ -29,6 +29,7 @@ import { OperatorAccessDetectionDetailPage } from '../pages/admin/OperatorAccess
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { CaseAssignmentsPage } from '../pages/admin/CaseAssignmentsPage'
 import { CaseAssignmentRequestsPage } from '../pages/admin/CaseAssignmentRequestsPage'
+import { RawViewReviewsPage } from '../pages/admin/RawViewReviewsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
@@ -198,6 +199,11 @@ export const router = createBrowserRouter([
                 path: 'case-assignment-requests',
                 handle: { title: '담당 변경 요청' },
                 element: <CaseAssignmentRequestsPage />,
+              },
+              {
+                path: 'raw-view-reviews',
+                handle: { title: '원문 열람 검토' },
+                element: <RawViewReviewsPage />,
               },
               { path: 'users', handle: { title: '계정 관리' }, element: <AdminUsersPage /> },
               {

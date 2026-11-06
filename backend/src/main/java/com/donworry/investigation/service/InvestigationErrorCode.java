@@ -37,7 +37,14 @@ public enum InvestigationErrorCode {
     ASSIGNMENT_MEMO_REQUIRED("INV_026", "사유가 기타이면 메모를 적어 주세요.", HttpStatus.BAD_REQUEST),
     INVALID_REQUEST_STATUS("INV_027", "요청 상태 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     // 열린 사건은 담당자만 (#612)
-    CASE_ASSIGNEE_ONLY("INV_028", "진행 중인 사건은 담당자만 열람 · 처리할 수 있습니다.", HttpStatus.FORBIDDEN);
+    CASE_ASSIGNEE_ONLY("INV_028", "진행 중인 사건은 담당자만 열람 · 처리할 수 있습니다.", HttpStatus.FORBIDDEN),
+    // 사건 결제의 주문자 정보 (#619)
+    CONTACT_CASE_CLOSED("INV_029", "종료된 사건은 주문자 정보를 볼 수 없습니다.", HttpStatus.CONFLICT),
+    CONTACT_NOT_FOUND("INV_030", "이 결제에는 저장된 주문자 정보가 없습니다.", HttpStatus.NOT_FOUND),
+    INVALID_PHONE("INV_031", "전화번호 형식을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    RAW_VIEW_REVIEW_NOT_FOUND("INV_032", "원문 열람 기록이 없습니다.", HttpStatus.NOT_FOUND),
+    RAW_VIEW_REVIEW_DONE("INV_033", "이미 검토한 원문 열람입니다.", HttpStatus.CONFLICT),
+    INVALID_REVIEW_RESULT("INV_034", "검토 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

@@ -9,5 +9,12 @@ public enum StaffAccessType {
     HANDOFF_RECHECK,
     REPORT_PROGRESS_VIEW,
     // 거래 목록 조회 (#615) — 내보낸 건수 · 거른 가맹점 · 검색한 고객 번호를 남긴다
-    TRANSACTION_LIST_VIEW
+    TRANSACTION_LIST_VIEW,
+    // 사건 결제 1건의 주문자 정보 (#619) — 가린 값 열람 · 번호 대조 일치/불일치 · 전화 원문 열람. 입력 번호 · 원문은 남기지 않는다
+    // CONTACT_MATCH는 거부된 대조 시도만 (허용이면 결과에 따라 HIT · MISS)
+    CONTACT_MASKED_VIEW,
+    CONTACT_MATCH,
+    CONTACT_MATCH_HIT,
+    CONTACT_MATCH_MISS,
+    CONTACT_RAW_VIEW
 }

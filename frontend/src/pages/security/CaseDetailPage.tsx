@@ -24,6 +24,7 @@ import {
   ASSIGNMENT_PENDING_MESSAGE,
   SLA_HOURS,
   canRequestAssignmentChange,
+  canViewContacts,
   caseDecisionMode,
   customerPart,
   latestReport,
@@ -36,6 +37,7 @@ import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
 import { AssignmentRequestModal } from './case/AssignmentRequestModal'
 import { CaseForbidden } from './case/CaseForbidden'
+import { ContactCard } from './case/ContactCard'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { CaseBundle } from './case/CaseBundle'
 import { CaseProgress } from './case/CaseProgress'
@@ -182,6 +184,7 @@ export function CaseDetailPage() {
   // 담당 변경 요청이 대기 중이면 판정 입력도 막는다 (#608)
   const mode = caseDecisionMode(securityCase, reports)
   const canRequestChange = canRequestAssignmentChange(user?.userId ?? null, securityCase)
+  const contactsVisible = canViewContacts(user?.userId ?? null, securityCase)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
     try {
@@ -425,6 +428,9 @@ export function CaseDetailPage() {
             ]}
           />
         </Card>
+
+        {/* 주문자 정보 — 담당자 · 열린 사건에서만, 결제 1건씩 (#619) */}
+        {contactsVisible && <ContactCard caseId={securityCase.caseId} payments={payments} />}
 
         <div className="dw-section-grid">
           <ReportCard

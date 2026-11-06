@@ -5,6 +5,7 @@ import {
   BankOutlined,
   ControlOutlined,
   CreditCardOutlined,
+  EyeOutlined,
   FileSearchOutlined,
   FormOutlined,
   HomeOutlined,
@@ -78,6 +79,7 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/fds/rule-change-requests': <PoweroffOutlined />,
   '/admin/case-assignments': <UserSwitchOutlined />,
   '/admin/case-assignment-requests': <SwapOutlined />,
+  '/admin/raw-view-reviews': <EyeOutlined />,
 }
 
 type NavBadges = Partial<Record<NavBadge, number | null>>
