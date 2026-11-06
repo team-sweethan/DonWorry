@@ -7,7 +7,6 @@ import {
   CreditCardOutlined,
   FileSearchOutlined,
   FormOutlined,
-  FundOutlined,
   HomeOutlined,
   KeyOutlined,
   MenuFoldOutlined,
@@ -73,7 +72,6 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/applications': <FormOutlined />,
   '/admin/users': <TeamOutlined />,
   '/admin/merchants': <ShopOutlined />,
-  '/admin/finance': <FundOutlined />,
   '/admin/fds/rules': <ControlOutlined />,
   '/admin/fds/rule-change-requests': <PoweroffOutlined />,
 }

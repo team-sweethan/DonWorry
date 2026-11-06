@@ -11,7 +11,6 @@ import { CheckoutPage } from '../pages/public/CheckoutPage'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { LandingRoute, LoginRoute, NotFoundRoute, ServerSession } from '../auth/AuthRoutes'
-import { EmptyPage } from '../pages/EmptyPage'
 import { ActionHistoryPage } from '../pages/security/ActionHistoryPage'
 import { CaseComparePage } from '../pages/security/CaseComparePage'
 import { CaseDetailPage } from '../pages/security/CaseDetailPage'
@@ -172,11 +171,6 @@ export const router = createBrowserRouter([
                 path: 'fds/operator-access-detections/:id',
                 handle: { title: '계정 접근 이상 상세' },
                 element: <OperatorAccessDetectionDetailPage />,
-              },
-              {
-                path: 'finance',
-                handle: { title: '자금관리' },
-                element: <EmptyPage title="자금관리" />,
               },
               {
                 path: 'merchants',
