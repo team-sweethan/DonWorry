@@ -1,4 +1,4 @@
-import type { AiReport, CaseStatus } from '../types/case.ts'
+import type { AiReport, CaseDetailCase, CaseStatus } from '../types/case.ts'
 
 /** 화면 표시용 업무 규칙. 최종 판단은 백엔드가 하며 여기 값은 안내용이다. */
 
@@ -53,6 +53,30 @@ export function decisionMode(evidenceVersion: number, reports: AiReport[]): Deci
   if (latest.evidenceVersion !== evidenceVersion)
     return { kind: 'blocked', message: '보고서가 현재 증거 버전과 다릅니다. 재조사 후 판정하세요.' }
   return latest.status === 'FAILED' ? { kind: 'manual' } : { kind: 'normal', report: latest }
+}
+
+type AssignmentView = Pick<CaseDetailCase, 'assigneeStaffId' | 'status' | 'assignmentChangePending'>
+
+export const ASSIGNMENT_PENDING_MESSAGE = '담당 변경 요청을 처리하는 중이라 판정할 수 없습니다.'
+
+/** 판정 가능 여부에 담당 변경 대기를 더한다 (#608). 서버도 같은 조건으로 거부한다 (INV_020) */
+export function caseDecisionMode(securityCase: CaseDetailCase, reports: AiReport[]): DecisionMode {
+  if (securityCase.assignmentChangePending)
+    return { kind: 'blocked', message: ASSIGNMENT_PENDING_MESSAGE }
+  return decisionMode(securityCase.evidenceVersion, reports)
+}
+
+/**
+ * [담당 변경 요청] 버튼을 보일지 (#608) — 담당자 본인 · 열린 사건 · 대기 요청 없음. 서버가 다시 확인한다 (INV_018 · 019).
+ * 담당 ID는 api/cases.ts가 문자열로 바꾸고 로그인 사용자 ID는 숫자라 문자열로 맞춰 비교한다.
+ */
+export function canRequestAssignmentChange(userId: number | null, securityCase: AssignmentView) {
+  return (
+    userId !== null &&
+    securityCase.assigneeStaffId === String(userId) &&
+    securityCase.status !== 'CLOSED' &&
+    !securityCase.assignmentChangePending
+  )
 }
 
 /** 고객 참조의 고객 부분 (#428). 결제 쪽 내부 형식이 "가맹점ID:고객"이라 화면에는 고객 부분만 보인다. */

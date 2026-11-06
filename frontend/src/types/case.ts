@@ -28,6 +28,12 @@ export type CaseHistoryEventType =
   | 'CASE_STATUS_CHANGED'
   /** 고객이 HELD 결제 승인을 직접 취소함(P5 확인 뒤 반영, #382). eventData에 paymentId · casePaymentId · cancellationId · completedAt */
   | 'PAYMENT_CANCELED_BY_CUSTOMER'
+  /** 담당 배정 · 변경 (#608). eventData에 assigneeName · reason(AUTO_LEAST_OPEN · ADMIN_REASSIGN · HANDOVER · REQUEST_APPROVED), 관리자 변경이면 changeReason · memo */
+  | 'CASE_ASSIGNED'
+  /** 담당자의 담당 변경 요청 (#608). eventData에 requestId · reason */
+  | 'CASE_ASSIGNMENT_REQUESTED'
+  /** 관리자의 변경 요청 거절 (#608). eventData에 requestId · memo */
+  | 'CASE_ASSIGNMENT_REQUEST_REJECTED'
   | 'CASE_CLOSED'
 
 // ── 엔터티 (설계 3.9) ──
@@ -40,6 +46,9 @@ export type SecurityCase = {
   evidenceVersion: number
   createdAt: string
   closedAt: string | null
+  /** 담당 보안 직원 (#608). 미배정이면 둘 다 null */
+  assigneeStaffId: string | null
+  assigneeName: string | null
 }
 
 /**
@@ -362,8 +371,14 @@ export type CaseSummary = SecurityCase & {
   decidedCount: number
 }
 
+/** 상세에만 오는 담당 정보 (#608). assignmentChangePending이 true면 관리자가 처리할 때까지 판정만 막힌다 */
+export type CaseDetailCase = SecurityCase & {
+  assignedAt: string | null
+  assignmentChangePending: boolean
+}
+
 export type CaseDetail = {
-  securityCase: SecurityCase
+  securityCase: CaseDetailCase
   payments: CasePayment[]
   reports: AiReport[]
   decisions: PaymentDecision[]

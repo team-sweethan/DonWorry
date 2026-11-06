@@ -6,10 +6,13 @@ import {
   CaseVersionConflictError,
   getCase,
   recheckHandoff,
+  requestAssignmentChange,
   requestReport,
   submitDecisions,
 } from '../../api/cases'
+import type { AssignmentChangeReason } from '../../api/caseAssignments'
 import { ApiError } from '../../api/client'
+import { useAuth } from '../../auth/useAuth'
 import { getMerchantDirectory } from '../../api/merchants'
 import { useFeedback } from '../../components/common/Feedback'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -17,9 +20,11 @@ import { ScreenResult } from '../../components/common/ScreenResult'
 import { refreshCaseBadge } from '../../hooks/useSecurityCaseBadge'
 import type { CaseDetail, CasePayment, SubmitDecisionsRequest } from '../../types/case'
 import {
+  ASSIGNMENT_PENDING_MESSAGE,
   SLA_HOURS,
+  canRequestAssignmentChange,
+  caseDecisionMode,
   customerPart,
-  decisionMode,
   latestReport,
   mergeRemainingMin,
 } from '../../utils/caseRules'
@@ -28,6 +33,7 @@ import { caseListReturnPath } from '../../utils/caseListQuery'
 import { customerTransactionsPath } from '../../utils/transactionList'
 import { POLL_LIMIT_MS, POLL_MS, pollStep } from '../../utils/casePolling'
 import { won } from '../../utils/format'
+import { AssignmentRequestModal } from './case/AssignmentRequestModal'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { CaseBundle } from './case/CaseBundle'
 import { CaseProgress } from './case/CaseProgress'
@@ -67,6 +73,8 @@ export function CaseDetailPage() {
   const { message } = App.useApp()
   const [refreshKey, setRefreshKey] = useState(0)
   const [recheckingId, setRecheckingId] = useState<string | null>(null)
+  const { user } = useAuth()
+  const [assignmentRequestOpen, setAssignmentRequestOpen] = useState(false)
   // 제목 아래 가맹점 이름 (#428). 경보 화면과 같은 가맹점 목록을 쓴다. 못 받으면 ID만 보인다
   const [merchantNames, setMerchantNames] = useState<Map<string, string>>(new Map())
   useEffect(() => {
@@ -163,7 +171,9 @@ export function CaseDetailPage() {
     decidable.some((p) => p.casePaymentId === d.casePaymentId),
   ).length
   const mergeRemaining = mergeRemainingMin(securityCase.createdAt, decisions.length)
-  const mode = decisionMode(securityCase.evidenceVersion, reports)
+  // 담당 변경 요청이 대기 중이면 판정 입력도 막는다 (#608)
+  const mode = caseDecisionMode(securityCase, reports)
+  const canRequestChange = canRequestAssignmentChange(user?.userId ?? null, securityCase)
 
   const handleSubmit = async (request: SubmitDecisionsRequest) => {
     try {
@@ -208,6 +218,13 @@ export function CaseDetailPage() {
     load()
   }
 
+  const handleAssignmentRequest = async (reason: AssignmentChangeReason, memo: string) => {
+    await requestAssignmentChange(securityCase.caseId, reason, memo)
+    setAssignmentRequestOpen(false)
+    toast.success('담당 변경을 요청했습니다. 관리자가 처리할 때까지 이 사건의 판정은 멈춥니다.')
+    load()
+  }
+
   const handleRequestReport = async () => {
     try {
       await requestReport(securityCase.caseId)
@@ -235,6 +252,9 @@ export function CaseDetailPage() {
         actions={
           <Space>
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
+            {canRequestChange && (
+              <Button onClick={() => setAssignmentRequestOpen(true)}>담당 변경 요청</Button>
+            )}
             {customerPath && (
               <Button onClick={() => navigate(customerPath)}>이 고객 거래 내역 보기</Button>
             )}
@@ -257,6 +277,21 @@ export function CaseDetailPage() {
           description={customerClosureNote(decisions.length)}
         />
       )}
+      {securityCase.assignmentChangePending && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={ASSIGNMENT_PENDING_MESSAGE}
+          description="열람 · 조사는 그대로 할 수 있습니다. 관리자가 승인하면 새 담당이 판정하고, 거절하면 지금 담당이 다시 판정합니다."
+        />
+      )}
+      <AssignmentRequestModal
+        open={assignmentRequestOpen}
+        caseId={securityCase.caseId}
+        onClose={() => setAssignmentRequestOpen(false)}
+        onSubmit={handleAssignmentRequest}
+      />
       {waiting && pollStopped && (
         <Alert
           type="info"
@@ -298,6 +333,12 @@ export function CaseDetailPage() {
             </Descriptions.Item>
             <Descriptions.Item label="종료 시각">
               {securityCase.closedAt ? dateTime(securityCase.closedAt) : '-'}
+            </Descriptions.Item>
+            <Descriptions.Item label="담당">
+              {securityCase.assigneeName ?? '미배정'}
+            </Descriptions.Item>
+            <Descriptions.Item label="배정 시각">
+              {securityCase.assignedAt ? dateTime(securityCase.assignedAt) : '-'}
             </Descriptions.Item>
           </Descriptions>
         </Card>

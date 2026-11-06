@@ -16,7 +16,9 @@ import {
   SecurityScanOutlined,
   ShopOutlined,
   StopOutlined,
+  SwapOutlined,
   TeamOutlined,
+  UserSwitchOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
 import { Tooltip } from 'antd'
@@ -74,6 +76,8 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/merchants': <ShopOutlined />,
   '/admin/fds/rules': <ControlOutlined />,
   '/admin/fds/rule-change-requests': <PoweroffOutlined />,
+  '/admin/case-assignments': <UserSwitchOutlined />,
+  '/admin/case-assignment-requests': <SwapOutlined />,
 }
 
 type NavBadges = Partial<Record<NavBadge, number | null>>
