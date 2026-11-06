@@ -725,9 +725,9 @@ export function AlertDetailPage() {
           </Card>
           <Card
             title={<span className="dw-section-title">결제 정보</span>}
-            className="dw-alert-card"
+            className="dw-alert-card dw-alert-payment-information"
           >
-            <Descriptions column={2} colon={false}>
+            <Descriptions column={1} colon={false}>
               <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
               <Descriptions.Item label="가맹점">{merchantLabel}</Descriptions.Item>
               <Descriptions.Item label="고객 식별자">

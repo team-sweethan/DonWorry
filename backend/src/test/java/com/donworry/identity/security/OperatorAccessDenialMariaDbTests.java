@@ -181,6 +181,24 @@ class OperatorAccessDenialMariaDbTests {
         assertThat(onlyEvent().deniedType()).isEqualTo(OperatorAccessDeniedType.PERMISSION_MISSING);
     }
 
+    // 프론트 라우터가 API 요청 전에 막은 관리자 URL도 서버가 경로를 확인한 뒤 같은 원본·이벤트로 남긴다
+    @Test
+    void forbiddenFrontendRoute_whenOtherRolePath_recordsOutOfRole() throws Exception {
+        var response = HttpCsrfTestSupport.send(
+                owner,
+                HttpRequest.newBuilder(uri("/api/auth/forbidden-frontend-routes"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                mapper.writeValueAsString(Map.of("path", "/security/rules")))));
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        var event = onlyEvent();
+        assertThat(event.deniedType()).isEqualTo(OperatorAccessDeniedType.OUT_OF_ROLE);
+        assertThat(event.httpMethod()).isEqualTo("POST");
+        assertThat(event.path()).isEqualTo("/security/rules");
+        assertStored(event);
+    }
+
     // CSRF·직원·비로그인·강제 비밀번호 변경 거절은 수집하지 않는다
     @Test
     void request_whenExcluded_doesNotRecord() throws Exception {

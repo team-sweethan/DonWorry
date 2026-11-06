@@ -226,22 +226,22 @@ function RuleCatalogTabs({
       <div className="dw-rule-tab-list" role="tablist" aria-label="탐지 룰 목록 범위">
         {isAdmin && (
           <button
-            className={selectedTab === 'payment' ? 'is-active' : undefined}
-            role="tab"
-            aria-selected={selectedTab === 'payment'}
-            onClick={() => onSelect('payment')}
-          >
-            결제 룰 {paymentRuleCount || 8}
-          </button>
-        )}
-        {isAdmin && (
-          <button
             className={selectedTab === 'account' ? 'is-active' : undefined}
             role="tab"
             aria-selected={selectedTab === 'account'}
             onClick={() => onSelect('account')}
           >
             계정 룰 {accountRuleCount}
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            className={selectedTab === 'payment' ? 'is-active' : undefined}
+            role="tab"
+            aria-selected={selectedTab === 'payment'}
+            onClick={() => onSelect('payment')}
+          >
+            결제 룰 {paymentRuleCount || 8}
           </button>
         )}
         <button
@@ -325,7 +325,7 @@ export function RuleCatalogPage() {
   const [policies, setPolicies] = useState<FdsRulePolicy[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('payment')
+  const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('account')
   const policyReloadSequence = useRef(0)
   const showLoading = useMinimumLoadingIndicator(loading && rules.length === 0)
   const isAdmin = user?.role === 'ADMIN'

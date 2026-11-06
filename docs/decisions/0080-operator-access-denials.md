@@ -7,7 +7,7 @@
 ## 결정
 
 P1 소유 `operator_access_denials`에 OPERATOR의 403 원본을 저장하고 같은 트랜잭션에서 `OperatorAccessDenied`를 발행한다.
-원본 PK가 eventId다. 사용자·가맹점에만 P1 물리 FK를 두며 모듈 의존·HTTP API·화면은 추가하지 않는다.
+원본 PK가 eventId다. 사용자·가맹점에만 P1 물리 FK를 둔다.
 Notion 선행 반영 대신 저장소 ERD·ADR 기준으로 구현하도록 사용자가 승인했으며 Notion 동기화는 후속이다.
 
 기록 범위는 JsonAccessDeniedHandler까지 도달한 AccessDeniedException이다.
@@ -21,6 +21,12 @@ DB 오류 원문에는 경로·IP가 포함될 수 있으므로 예외 메시지
 path는 servletPath에서 최대 512 Unicode 문자, 시각은 identityClock의 UTC 마이크로초를 원본과 이벤트가 공유한다.
 httpMethod는 HTTP token의 앞 최대 10자를 원본·이벤트가 동일하게 기록한다. 요청·인가·거절 분류는 원문 메서드를 유지한다.
 PR #527 리뷰에서 긴 메서드의 INSERT 실패를 재현해 저장 경계를 보완했다. 현재 기본 방화벽의 사용자 정의 메서드 400 차단은 유지한다.
+
+프론트엔드 라우터가 백엔드 API 요청 전에 차단하는 관리자 화면 URL 접근도 놓치지 않도록,
+인증된 사용자는 `POST /api/auth/forbidden-frontend-routes`로 현재 pathname을 보고할 수 있다.
+서버는 `/admin`·`/admin/**`·`/security`·`/security/**`만 받아 OPERATOR의 OUT_OF_ROLE 원본·이벤트로 기록하며,
+다른 화면 경로와 ADMIN·SECURITY_STAFF 요청은 기록하지 않는다. 이 경로는 CSRF 보호를 받고,
+클라이언트가 보내는 역할·계정·가맹점 정보는 사용하지 않는다.
 
 ## 보관 정책
 

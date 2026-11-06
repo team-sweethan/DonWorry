@@ -25,6 +25,10 @@ JsonAccessDeniedHandler까지 도달한 AccessDeniedException 중 인증된 Sess
 CSRF 403·직원 403·401은 제외한다. 비밀번호 강제 변경 필터는 직접 응답하므로 기록 서비스로 오지 않는다.
 동시 로그아웃으로 인증·principal이 사라졌으면 기록을 건너뛴다.
 
+프론트엔드가 API 요청 전에 차단하는 관리자 화면 URL도 `POST /api/auth/forbidden-frontend-routes`로
+기록한다. 서버는 pathname이 `/admin`·`/admin/**`·`/security`·`/security/**`인지 다시 확인하고, DB에서 실제 OPERATOR인
+계정만 OUT_OF_ROLE로 저장한다. 요청 본문의 계정·권한·가맹점 값은 받지 않으며, 다른 경로는 무시한다.
+
 핸들러는 기록 시도 후 기존 응답 작성기를 부른다. INSERT·이벤트 발행·커밋 실패를 받아도 원래 403 AUTH_002를 유지한다.
 실패 로그는 userId·예외 클래스만 기록하며 DB 오류 원문·stack trace·요청 본문·쿼리스트링은 기록하지 않는다.
 
