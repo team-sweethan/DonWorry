@@ -29,6 +29,7 @@ def send(base_url, merchant_code, secret, method, target, body=b"", attempt=""):
         content_type, attempt, hashlib.sha256(body).hexdigest(),
     ])
     headers = {
+        "User-Agent": "DonWorry-Merchant-Connect/1.0",
         "X-Merchant-Code": merchant_code,
         "X-Timestamp": timestamp,
         "X-Nonce": nonce,

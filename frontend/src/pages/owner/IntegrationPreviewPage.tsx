@@ -27,6 +27,7 @@ import type {
   KeyResult,
 } from '../../api/integration'
 import { useAuth } from '../../auth/useAuth'
+import { IntegrationCredentials } from './IntegrationCredentials'
 import './integration-preview.css'
 
 const actionLabels: Record<string, string> = {
@@ -39,12 +40,12 @@ const ownerGuides: Record<IntegrationStatus, { message: string; description: str
   NO_KEY: {
     message: '시크릿 키 발급이 필요합니다',
     description:
-      '키를 발급해 쇼핑몰 서버에 설정한 뒤 연결 확인을 진행해 주세요. 키가 없으면 신규 결제를 요청할 수 없습니다.',
+      '키를 발급해 가맹점 코드와 시크릿 키를 모두 쇼핑몰 서버에 설정한 뒤 연결 확인을 진행해 주세요. 키가 없으면 신규 결제를 요청할 수 없습니다.',
   },
   PENDING_CONNECTION: {
     message: '쇼핑몰 연결 확인이 필요합니다',
     description:
-      '키를 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.',
+      '가맹점 코드와 시크릿 키를 모두 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.',
   },
   CONNECTED: {
     message: '쇼핑몰 연동이 완료되었습니다',
@@ -87,7 +88,7 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const [password, setPassword] = useState('')
   const [reason, setReason] = useState('')
-  const [key, setKey] = useState<KeyResult | null>(null)
+  const [key, setKey] = useState<(KeyResult & { merchantCode: string }) | null>(null)
   const [busy, setBusy] = useState(false)
   const [needsRefresh, setNeedsRefresh] = useState(false)
   const pending = useRef<AbortController | null>(null)
@@ -160,7 +161,7 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
     setConfirmation({ action, version: data.keyVersion })
   }
   const submit = async () => {
-    if (!confirmation || pending.current) return
+    if (!confirmation || !data || pending.current) return
     const controller = new AbortController(),
       id = generation.current
     pending.current = controller
@@ -183,7 +184,8 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
           confirmation.version,
           controller.signal,
         )
-        if (generation.current === id && !controller.signal.aborted) setKey(value)
+        if (generation.current === id && !controller.signal.aborted)
+          setKey({ ...value, merchantCode: data.merchantCode })
       }
       if (generation.current === id && !controller.signal.aborted) {
         setConfirmation(null)
@@ -233,7 +235,11 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               {
                 key: 'code',
                 label: '가맹점 코드',
-                children: <Typography.Text code>{data.merchantCode}</Typography.Text>,
+                children: (
+                  <Typography.Text code copyable={{ text: data.merchantCode }}>
+                    {data.merchantCode}
+                  </Typography.Text>
+                ),
               },
               {
                 key: 'status',
@@ -419,31 +425,17 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
       </Modal>
       <Modal
         open={!!key}
-        title="시크릿 키"
+        title="쇼핑몰 서버 연동 정보"
         footer={<Button onClick={() => setKey(null)}>닫기</Button>}
         onCancel={() => setKey(null)}
       >
-        <Alert
-          type="warning"
-          showIcon
-          message="쇼핑몰 서버에만 보관하세요"
-          description="이 창을 닫거나 다른 화면으로 이동하면 표시된 키를 지웁니다."
-        />
-        <Typography.Paragraph code style={{ overflowWrap: 'anywhere', marginTop: 16 }}>
-          {key?.secret}
-        </Typography.Paragraph>
-        <Button
-          onClick={() => {
-            if (key)
-              void navigator.clipboard
-                .writeText(key.secret)
-                .catch(() =>
-                  setError('클립보드에 복사할 수 없습니다. 키를 직접 선택해 복사해 주세요.'),
-                )
-          }}
-        >
-          복사
-        </Button>
+        {key && (
+          <IntegrationCredentials
+            merchantCode={key.merchantCode}
+            secret={key.secret}
+            onCopyError={setError}
+          />
+        )}
       </Modal>
     </Card>
   )
