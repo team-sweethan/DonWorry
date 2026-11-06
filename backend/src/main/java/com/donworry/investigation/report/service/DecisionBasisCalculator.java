@@ -113,13 +113,25 @@ public final class DecisionBasisCalculator {
     private DecisionBasisCalculator() {}
 
     // 사건 결제마다 기준표를 계산한다 — 금액 · 요청 시각을 모르거나 FDS 근거가 없는 결제는 뺀다 (받는 쪽이 추가 확인으로 둔다)
-    // history(30일 기본 조회) · linked가 null이면 조회 실패 — 정상 사유 · 연결 징후 없이 계산한다
+    // history(30일 기본 조회)가 null이면 조회 실패 — 정상 사유 없이 계산한다. linked가 null이면 기준표를 주지 않는다 (아래)
     public static DecisionBasisToolResponse forCase(
             CasePaymentsToolResponse cases,
             FdsEvidenceToolResponse fds,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
             Instant retrievedAt) {
+        // 연결 결제 조회 실패(null)는 "연결 징후 없음"이 아니다 — 고위험 징후(같은 카드 · 기기)를 확인하지 못했으니 기준표를 주지 않는다
+        // 빈 목록이면 ai-server가 결제마다 추가 확인 + 한계 줄로 둔다 (#618 Codex 리뷰)
+        // 고객 이력 실패(null)는 정상 사유만 빠져 권고가 매입 진행 쪽으로 올라가지 않으므로 그대로 계산한다
+        if (linked == null) {
+            return DecisionBasisToolResponse.builder()
+                    .caseId(cases.caseId())
+                    .evidenceVersion(cases.evidenceVersion())
+                    .source("P4")
+                    .retrievedAt(retrievedAt)
+                    .payments(List.of())
+                    .build();
+        }
         Map<String, FdsEvidenceToolResponse.Payment> evidence = fds.payments().stream()
                 .collect(
                         Collectors.toMap(FdsEvidenceToolResponse.Payment::paymentId, Function.identity(), (a, b) -> b));

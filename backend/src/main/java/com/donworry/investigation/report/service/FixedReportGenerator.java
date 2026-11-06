@@ -51,6 +51,8 @@ class FixedReportGenerator {
             "DENIED", "자동 차단",
             "DECLINED", "카드사 거절",
             "EXPIRED", "만료");
+    // 기준표를 계산하지 못한 결제의 이유 — ai-server verdict_text.NO_BASIS_REASON과 같은 문장 (화면이 시작 말로 코드 이유를 고른다)
+    static final String NO_BASIS_REASON = "판정 기준표를 받지 못해 추가 확인이 필요합니다.";
     // 권고 요약 · 결론 앞말 — ai-server verdict_text와 같은 말 (#618)
     private static final Map<String, String> RECOMMENDATION_KO = Map.of(
             DecisionBasisCalculator.REJECT_REVIEW, "승인 취소 검토",
@@ -165,9 +167,13 @@ class FixedReportGenerator {
                 .toList();
         for (int i = 0; i < payments.size(); i++) {
             PaymentInfo payment = payments.get(i);
-            Basis basis = DecisionBasisCalculator.basis(
-                    casePayments.get(i), fdsPayment(payment, signals), casePayments, history, linked);
-            recommendations.add(basis.recommendation());
+            // 같은 카드 · 기기 · IP 조회가 실패하면 고위험 징후를 확인하지 못했으니 기준표 없이 추가 확인 (#618 Codex 리뷰)
+            Basis basis = linked == null
+                    ? null
+                    : DecisionBasisCalculator.basis(
+                            casePayments.get(i), fdsPayment(payment, signals), casePayments, history, linked);
+            String recommendation = basis == null ? DecisionBasisCalculator.NEEDS_CHECK : basis.recommendation();
+            recommendations.add(recommendation);
             // 위험 · 정상 근거 칸은 없다 — AI 보고서와 같은 모양 (#548)
             Map<String, Object> analysis = new HashMap<>(Map.ofEntries(
                     Map.entry("paymentId", payment.paymentId()),
@@ -178,9 +184,8 @@ class FixedReportGenerator {
                             "ruleHits",
                             payment.ruleHits().stream().map(RuleHit::code).toList()),
                     Map.entry("unknowns", List.of("고객 본인의 결제 의사")),
-                    Map.entry("recommendation", basis.recommendation()),
-                    Map.entry("reason", reasonOf(basis)),
-                    Map.entry("basis", basis),
+                    Map.entry("recommendation", recommendation),
+                    Map.entry("reason", basis == null ? NO_BASIS_REASON : reasonOf(basis)),
                     Map.entry(
                             "ruleHitDetails",
                             payment.ruleHits().stream()
@@ -188,6 +193,7 @@ class FixedReportGenerator {
                                     .toList())));
             // 카드 · 기기 · 접속 국가 (#346) — ai-server와 같은 키. 평가가 없으면 null
             analysis.put("signals", signalsOf(signals.get(payment.paymentId())));
+            analysis.put("basis", basis);
             analyses.add(analysis);
         }
         String overall = DecisionBasisCalculator.overall(recommendations);

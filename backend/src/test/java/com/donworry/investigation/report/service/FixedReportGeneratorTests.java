@@ -410,6 +410,8 @@ class FixedReportGeneratorTests {
                                         new RuleHit("R06", "카드 테스팅", 40),
                                         new RuleHit("R01", "고액 결제", 30),
                                         new RuleHit("R02", "신규 단말기", 20)))));
+        // 실제 조회는 연결 결제가 없어도 null이 아니라 "없음" 응답을 준다 — null은 조회 실패다
+        when(linkedPaymentFinder.find(7L, NOW)).thenReturn(noLinks(NOW));
         FixedReportGenerator generator = new FixedReportGenerator(
                 securityCaseRepository,
                 casePaymentRepository,
@@ -428,5 +430,81 @@ class FixedReportGeneratorTests {
         assertThat((String) analysis.get("reason")).startsWith("고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다");
         assertThat(((Map<?, ?>) body.get("verdict")).get("overallRecommendation"))
                 .isEqualTo("REJECT_REVIEW");
+    }
+
+    // 같은 카드 · 기기 · IP 조회가 실패하면 기준표 없이 추가 확인으로 둔다 (#618 Codex 리뷰)
+    // "연결 징후 없음"으로 계산하면 고액 + 평소 금액 이력 결제가 매입 진행 검토로 나온다 — 고위험 징후를 확인하지 못했는데도
+    @Test
+    void generate_linkedLookupFails_needsCheckWithoutBasis() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
+        when(paymentHistoryFinder.find(7L, NOW, PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS))
+                .thenReturn(usualHistory(NOW));
+        when(linkedPaymentFinder.find(7L, NOW)).thenThrow(new IllegalStateException("조회 실패"));
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder);
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
+        assertThat(analysis.get("basis")).isNull();
+        assertThat(analysis.get("recommendation")).isEqualTo("NEEDS_CHECK");
+        assertThat(((Map<?, ?>) body.get("verdict")).get("overallRecommendation"))
+                .isEqualTo("NEEDS_CHECK");
+    }
+
+    // 사건 며칠 전 비슷한 금액 매입 완료 2건 — 기준표가 고액 결제의 정상 사유로 본다
+    static PaymentHistoryToolResponse usualHistory(Instant now) {
+        return PaymentHistoryToolResponse.builder()
+                .caseId("7")
+                .evidenceVersion(1)
+                .source("P5")
+                .retrievedAt(now)
+                .lookbackDays(PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS)
+                .payments(List.of(
+                        PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId("90")
+                                .amount(580_000L)
+                                .paymentStatus("CAPTURED")
+                                .requestedAt(now.minusSeconds(3 * 86_400))
+                                .build(),
+                        PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId("91")
+                                .amount(620_000L)
+                                .paymentStatus("CAPTURED")
+                                .requestedAt(now.minusSeconds(5 * 86_400))
+                                .build()))
+                .statusCounts(List.of(new StatusCount("CAPTURED", 2)))
+                .truncated(false)
+                .build();
+    }
+
+    static LinkedPaymentsToolResponse noLinks(Instant now) {
+        Match none = Match.builder().provided(true).resultCounts(List.of()).build();
+        return LinkedPaymentsToolResponse.builder()
+                .caseId("7")
+                .evidenceVersion(1)
+                .source("P2")
+                .retrievedAt(now)
+                .lookbackDays(LinkedPaymentFinder.LOOKBACK_DAYS)
+                .card(none)
+                .device(none)
+                .ip(none)
+                .payments(List.of())
+                .build();
     }
 }

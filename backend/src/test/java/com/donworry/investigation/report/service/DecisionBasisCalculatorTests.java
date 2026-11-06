@@ -407,7 +407,7 @@ class DecisionBasisCalculatorTests {
         FdsEvidenceToolResponse fds = new FdsEvidenceToolResponse(
                 "9", 4, "P2", AT, List.of(fds("1", List.of(), "KR"), fds("2", List.of(), "KR")), List.of());
 
-        DecisionBasisToolResponse response = DecisionBasisCalculator.forCase(cases, fds, null, null, AT);
+        DecisionBasisToolResponse response = DecisionBasisCalculator.forCase(cases, fds, null, linked(0, 0), AT);
 
         assertThat(response.evidenceVersion()).isEqualTo(4);
         assertThat(response.payments())

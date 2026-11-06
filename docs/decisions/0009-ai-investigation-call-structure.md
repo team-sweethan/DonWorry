@@ -382,7 +382,7 @@ sequenceDiagram
   - #548 이후 AI 입력에 기준표가 들어가지 않아(결정 8), ai-server가 기준표를 계산할 이유도 없어졌다
 - **결정:**
   - 기준표는 Spring `investigation/report`의 `DecisionBasisCalculator`가 계산한다. 계산 규칙은 결정 7 그대로 옮겼다(같은 시험지 사건 · 같은 기대값 테스트 `DecisionBasisCalculatorTests`). 조회 · 저장은 하지 않는 순수 계산이다
-  - 새 Tool `GET /internal/ai/tools/get_decision_basis?caseId=` (`DecisionBasisToolResponse`): 결제별 `basis`(보고서 `paymentAnalyses[].basis`와 같은 키). 고객 이력은 늘 30일 기본 조회(#581), 고객 이력 · 연결 결제 조회가 실패하면 정상 사유 · 연결 징후 없이 계산한다(매입 진행 쪽으로 가지 않는다). 금액 · 요청 시각 · FDS 근거를 모르는 결제는 목록에 없다
+  - 새 Tool `GET /internal/ai/tools/get_decision_basis?caseId=` (`DecisionBasisToolResponse`): 결제별 `basis`(보고서 `paymentAnalyses[].basis`와 같은 키). 고객 이력은 늘 30일 기본 조회(#581), 고객 이력 조회가 실패하면 정상 사유 없이 계산한다(정상 사유만 빠져 매입 진행 쪽으로 올라가지 않는다). 연결 결제 조회가 실패하면 기준표를 주지 않는다 — "연결 징후 없음"으로 계산하면 고위험 징후(같은 카드 · 기기)가 빠져 승인 취소 검토가 내려가거나 매입 진행 검토까지 나온다(#618 Codex 리뷰). 고정 보고서도 같다(기준표 없이 추가 확인). 금액 · 요청 시각 · FDS 근거를 모르는 결제는 목록에 없다
   - ai-server는 기본 조회 맨 뒤(6번째, 앞 조회의 증거 번호가 바뀌지 않게)에 이 Tool을 부르고 받은 값을 그대로 싣는다. 조회가 실패하거나 결제가 빠져 있으면 그 결제는 `NEEDS_CHECK` + 한계 줄 "판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다." — 기준표 없이 승인 취소 · 매입 진행 쪽 권고를 만들지 않는다. AI 추가 조사 고르기 입력에는 넣지 않는다(AI가 판정을 보고 조사 방향을 정하지 않게)
   - Spring 저장 전 검사: 기준표가 있는 결제는 권고가 칸의 권고와 같아야 하고, 기준표가 없는 결제는 `NEEDS_CHECK`만 받는다. 종합 권고는 결제별 권고로 정한 값(결정 4)과 같아야 한다
   - AI를 끈 고정 보고서도 같은 계산기로 결제별 기준표 · 권고 · 이유 · 종합 권고를 채운다

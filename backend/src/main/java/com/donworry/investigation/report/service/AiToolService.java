@@ -137,7 +137,8 @@ public class AiToolService {
 
     // 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — 기준표는 Spring이 계산하고 ai-server는 그대로 싣는다 (ADR-0009 결정 7)
     // 고객 이력은 늘 30일 기본 조회로 본다 — AI가 90일을 불렀는지와 상관없이 같은 사건엔 같은 권고 (#581)
-    // 고객 이력 · 연결 결제 조회가 실패하면 정상 사유 · 연결 징후 없이 계산한다 (권고가 매입 진행 쪽으로 가지 않는다)
+    // 고객 이력 조회가 실패하면 정상 사유 없이 계산한다 (권고가 매입 진행 쪽으로 올라가지 않는다)
+    // 연결 결제 조회가 실패하면 기준표를 주지 않는다 — 고위험 징후를 확인하지 못했다 (#618 Codex 리뷰, DecisionBasisCalculator.forCase)
     // 트랜잭션을 열지 않는다 — 참고 조회 실패가 감싼 읽기 트랜잭션을 rollback-only로 만들지 않게 조회마다 따로 읽는다
     public DecisionBasisToolResponse decisionBasis(Long caseId) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
