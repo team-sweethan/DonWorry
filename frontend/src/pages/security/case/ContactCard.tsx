@@ -9,6 +9,7 @@ import {
 } from '../../../api/caseContacts'
 import { ApiError } from '../../../api/client'
 import type { CasePayment } from '../../../types/case'
+import { createLatestRequest } from '../../../utils/latestRequest'
 
 const errorText = (error: unknown, fallback: string) =>
   error instanceof ApiError && error.detail ? error.detail : fallback
@@ -33,7 +34,10 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
   const [rawInput, setRawInput] = useState<RawViewInput>(emptyRawInput)
   // 원문은 이 상태에만 잠깐 둔다 — 창을 닫거나 새로고침하면 사라진다
   const [rawPhone, setRawPhone] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [matchSaving, setMatchSaving] = useState(false)
+  const [rawSaving, setRawSaving] = useState(false)
+  const [matchRequests] = useState(createLatestRequest)
+  const [rawRequests] = useState(createLatestRequest)
 
   const rows: Row[] = payments.map((p) => ({
     paymentId: p.paymentId,
@@ -53,41 +57,61 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
     }
   }
 
-  const openMatch = (contact: CaseContact) => {
-    setMatchPhone('')
+  // 입력 변경 · 창 닫기 · 대상 변경 뒤에 도착한 응답은 버린다 — 다른 번호 · 다른 결제의 결과가 지금 창에 보이지 않게 (#621 리뷰)
+  const resetMatch = () => {
+    matchRequests.invalidate()
+    setMatchSaving(false)
     setMatchResult(null)
+  }
+  const openMatch = (contact: CaseContact) => {
+    resetMatch()
+    setMatchPhone('')
     setMatching(contact)
+  }
+  const closeMatch = () => {
+    resetMatch()
+    setMatching(null)
   }
   const submitMatch = async () => {
     if (!matching) return
-    setSaving(true)
+    const request = matchRequests.begin()
+    setMatchSaving(true)
     try {
-      setMatchResult(await matchContact(caseId, matching.paymentId, matchPhone))
+      const matched = await matchContact(caseId, matching.paymentId, matchPhone)
+      if (matchRequests.isCurrent(request)) setMatchResult(matched)
     } catch (e) {
-      message.error(errorText(e, '번호를 대조하지 못했습니다.'))
+      if (matchRequests.isCurrent(request))
+        message.error(errorText(e, '번호를 대조하지 못했습니다.'))
     } finally {
-      setSaving(false)
+      if (matchRequests.isCurrent(request)) setMatchSaving(false)
     }
   }
 
-  const openRaw = (contact: CaseContact) => {
-    setRawInput(emptyRawInput)
+  const resetRaw = () => {
+    rawRequests.invalidate()
+    setRawSaving(false)
     setRawPhone(null)
+  }
+  const openRaw = (contact: CaseContact) => {
+    resetRaw()
+    setRawInput(emptyRawInput)
     setRawTarget(contact)
   }
   const closeRaw = () => {
-    setRawPhone(null)
+    resetRaw()
     setRawTarget(null)
   }
   const submitRaw = async () => {
     if (!rawTarget) return
-    setSaving(true)
+    const request = rawRequests.begin()
+    setRawSaving(true)
     try {
-      setRawPhone(await viewRawContact(caseId, rawTarget.paymentId, rawInput))
+      const phone = await viewRawContact(caseId, rawTarget.paymentId, rawInput)
+      if (rawRequests.isCurrent(request)) setRawPhone(phone)
     } catch (e) {
-      message.error(errorText(e, '원문을 볼 수 없습니다.'))
+      if (rawRequests.isCurrent(request)) message.error(errorText(e, '원문을 볼 수 없습니다.'))
     } finally {
-      setSaving(false)
+      if (rawRequests.isCurrent(request)) setRawSaving(false)
     }
   }
   const rawReady =
@@ -171,10 +195,10 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
         open={matching !== null}
         okText="대조"
         cancelText="닫기"
-        confirmLoading={saving}
+        confirmLoading={matchSaving}
         okButtonProps={{ disabled: matchPhone.trim() === '' }}
         onOk={() => void submitMatch()}
-        onCancel={() => setMatching(null)}
+        onCancel={closeMatch}
       >
         <p>
           고객이 말한 번호를 입력하면 이 결제의 주문자 번호와 같은지만 알려 드립니다. 저장된 번호는
@@ -185,8 +209,9 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
           maxLength={20}
           placeholder="010-1234-5678"
           onChange={(event) => {
+            // 보낸 번호와 다른 번호 아래에 이전 결과가 보이지 않게 진행 중인 대조를 무효로 한다
+            resetMatch()
             setMatchPhone(event.target.value)
-            setMatchResult(null)
           }}
         />
         {matchResult !== null && (
@@ -204,7 +229,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
         okText={rawPhone ? '닫기' : '원문 보기'}
         cancelButtonProps={{ style: rawPhone ? { display: 'none' } : undefined }}
         cancelText="취소"
-        confirmLoading={saving}
+        confirmLoading={rawSaving}
         okButtonProps={{ disabled: !rawPhone && !rawReady }}
         onOk={() => (rawPhone ? closeRaw() : void submitRaw())}
         onCancel={closeRaw}
