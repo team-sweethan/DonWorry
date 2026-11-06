@@ -412,7 +412,7 @@ function ConnectedSettlements() {
         <>
           <PageHeader
             title="정산 내역"
-            description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            description="매입일 기준 영업일 D+3(주말 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
             actions={actions}
           />
           {periodControls}
@@ -459,14 +459,9 @@ function ConnectedSettlements() {
                 {mismatch ? (
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
-                  <>
-                    <strong className="stl-value">
-                      <FinanceMoney value={month.data.paidAmount} />
-                    </strong>
-                    <p>
-                      {dayjs(monthFrom).format('M월 D일')}~오늘 기준
-                    </p>
-                  </>
+                  <strong className="stl-value">
+                    <FinanceMoney value={month.data.paidAmount} />
+                  </strong>
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>
                 ) : (

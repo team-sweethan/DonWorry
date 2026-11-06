@@ -193,7 +193,6 @@ export function FinancePreview() {
                   }
                 />
               </strong>
-              <small>{dayjs(today).startOf('month').format('M월 D일')}~오늘 기준</small>
             </>
           }
           expenses={calendarExpenses}
