@@ -42,6 +42,7 @@ def test_trace_records_steps_in_actual_order() -> None:
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
+        ("TOOL", "SYSTEM"),
         ("DECIDE", "AI"),
         ("WRITE", "AI"),
         ("ASSEMBLE", "SYSTEM"),
@@ -52,6 +53,7 @@ def test_trace_records_steps_in_actual_order() -> None:
         "비슷한 과거 사건 조회",
         "고객 최근 결제 조회",
         "같은 카드 · 기기 · IP 결제 조회",
+        "판정 기준표 조회",
     ]
     assert trace.steps[1].asked == "결제 9001 · 9002의 FDS 근거"
     assert all(s.durationMs is not None and s.durationMs >= 0 for s in trace.steps)

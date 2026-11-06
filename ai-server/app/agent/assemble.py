@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from app.agent.evidence import decision_basis
 from app.agent.tools import ToolRecord
-from app.agent.verdict_text import headline, payment_reason, recommendation_summary
+from app.agent.verdict_text import (
+    NO_BASIS_REASON,
+    headline,
+    payment_reason,
+    recommendation_summary,
+)
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
@@ -26,6 +30,7 @@ from app.schemas.report import (
 from app.schemas.tools import (
     CasePayment,
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
     HistoryPayment,
@@ -138,6 +143,8 @@ LINKED_PRIVACY = (
     "개별 결제 내용은 보지 않았습니다 (다른 고객 정보 보호)."
 )
 MOCK_LIMITATION = "mock 조사입니다(Qwen 미사용). AI 문장은 고정 문장입니다."
+# 판정 기준표는 Spring이 계산한다 (#618) — 못 받은 결제는 추가 확인으로 둔다 (자동 판정 없음)
+BASIS_UNAVAILABLE = "판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다."
 
 # 조사 범위 3칸 (#591) — 화면 ⑤ 조사 범위. 문장 목록 limitations는 다른 화면이 읽어 그대로 둔다
 SCOPE_CHECKED = {
@@ -145,6 +152,7 @@ SCOPE_CHECKED = {
     "get_fds_evidence": "결제별 FDS 근거",
     "find_similar_cases": "비슷한 과거 사건",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제",
+    "get_decision_basis": "판정 기준표 (Spring 계산)",
 }
 SCOPE_ALWAYS_UNAVAILABLE = (
     "로그인 기록 · 주문 정보 (조회 도구 없음)",
@@ -304,10 +312,10 @@ def assemble_report(
     linked: LinkedPaymentsTool | None = None,
     basis_history: PaymentHistoryTool | None = None,
     summary_appended: list[str] | None = None,
+    basis_tool: DecisionBasisTool | None = None,
 ) -> ReportBody:
-    # 기준표는 코드가 늘 하는 기본 조회(30일)로만 계산한다 — AI가 90일을 불렀는지에 따라
-    # 같은 사건의 권고가 달라지지 않게 (#581). 표 · 사실은 history(마지막 조회)를 쓴다
-    # 기본 조회가 실패하면 90일 결과로 대신하지 않고 이력 없이 계산한다
+    # 기준표는 Spring이 30일 기본 조회로 계산해 준다 (#618) — AI가 90일을 불렀는지와 상관없이
+    # 같은 사건엔 같은 권고 (#581). 표 · 사실은 history(마지막 조회), 30일 표시는 basis_history
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     # 한계 줄은 조회 기록으로 코드만 쓴다 — 무엇을 봤는지는 AI보다 코드가 정확히 안다 (#355)
@@ -333,12 +341,10 @@ def assemble_report(
             checks.append(f"결제 {payment.paymentId}의 결제 정보 확인")
             continue
         evidence = fds.get(payment.paymentId)
-        # 권고는 AI가 아니라 판정 기준표가 정한다 (#501)
-        basis = (
-            decision_basis(payment, evidence, case_payments, basis_history, linked)
-            if evidence is not None
-            else None
-        )
+        # 권고는 AI가 아니라 판정 기준표가 정한다 (#501) — Spring이 계산해 준 값 그대로 (#618)
+        basis = basis_tool.for_payment(payment.paymentId) if basis_tool else None
+        if basis is None and evidence is not None and BASIS_UNAVAILABLE not in limitations:
+            limitations.append(BASIS_UNAVAILABLE)
         # 모르는 사실은 코드가 쓴다 (#548) — AI는 조사한 사실만 전달한다
         unknowns = [ALWAYS_UNKNOWN]
         if evidence is None or evidence.riskScore is None:
@@ -352,7 +358,9 @@ def assemble_report(
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
                 unknowns=_unique(unknowns),
                 recommendation=basis.recommendation if basis else "NEEDS_CHECK",
-                reason=payment_reason(basis),
+                reason=payment_reason(basis)
+                if basis is not None or evidence is None
+                else NO_BASIS_REASON,
                 ruleHitDetails=[
                     RuleHitDetail(
                         code=rule.code,

@@ -5,6 +5,7 @@ from typing import Any, Protocol
 from app.client.spring import SpringToolClient
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     LinkedMatch,
     LinkedPaymentsTool,
@@ -97,6 +98,9 @@ class ToolBox(Protocol):
 
     def find_linked_payments(self) -> LinkedPaymentsTool: ...
 
+    # 결제별 판정 기준표 (#618) — Spring이 계산한다. AI가 고르는 도구가 아니다
+    def get_decision_basis(self) -> DecisionBasisTool: ...
+
 
 class SpringToolBox:
     def __init__(self, client: SpringToolClient, case_id: str) -> None:
@@ -118,6 +122,9 @@ class SpringToolBox:
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._client.find_linked_payments(self._case_id)
 
+    def get_decision_basis(self) -> DecisionBasisTool:
+        return self._client.get_decision_basis(self._case_id)
+
 
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
@@ -131,9 +138,11 @@ class StaticToolBox:
         history: PaymentHistoryTool | None = None,
         linked: LinkedPaymentsTool | None = None,
         history90: PaymentHistoryTool | None = None,
+        basis: DecisionBasisTool | None = None,
     ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
+        self._basis = basis
         self._similar = similar or SimilarCasesTool(
             caseId=case_payments.caseId,
             evidenceVersion=case_payments.evidenceVersion,
@@ -171,6 +180,17 @@ class StaticToolBox:
             ip=not_provided,
         )
 
+    # 판정 기준표 기본값 — 결제별 기준표가 없는 응답 (보고서는 결제마다 추가 확인, #618)
+    # 기준표는 Spring이 계산하므로 여기서 계산하지 않는다. 샘플은 decisionBasis 키로 준다
+    def _default_basis(self) -> DecisionBasisTool:
+        return DecisionBasisTool(
+            caseId=self._case_payments.caseId,
+            evidenceVersion=self._case_payments.evidenceVersion,
+            source="P4",
+            retrievedAt=self._case_payments.retrievedAt,
+            payments=[],
+        )
+
     # 샘플 JSON 하나로 만든다 — similar · history · linked 키가 없으면 위의 "없음" 응답 (측정 샘플)
     # history90은 AI가 90일 도구를 골랐을 때 돌려줄 응답 (#581)
     @classmethod
@@ -186,7 +206,13 @@ class StaticToolBox:
             history90=PaymentHistoryTool.model_validate(data["history90"])
             if "history90" in data
             else None,
+            basis=DecisionBasisTool.model_validate(data["decisionBasis"])
+            if "decisionBasis" in data
+            else None,
         )
+
+    def get_decision_basis(self) -> DecisionBasisTool:
+        return self._basis or self._default_basis()
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._linked

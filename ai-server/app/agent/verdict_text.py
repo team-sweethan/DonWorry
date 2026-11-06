@@ -16,9 +16,12 @@ _SUMMARY: dict[Recommendation, str] = {
         "고위험 징후와 정상 사유가 없는 다른 징후가 겹쳐 승인 취소를 먼저 검토할 것을 권고합니다."
     ),
     "NEEDS_CHECK": "정상 사유가 없는 징후가 있어 추가 확인 후 판정할 것을 권고합니다.",
-    "ACCEPT_REVIEW": "모든 징후에 정상 사유가 있어 매입 진행을 검토할 수 있습니다.",
+    # 징후가 0개인 결제도 이 칸이다 — "모든 징후에 정상 사유"는 실제와 달랐다 (#618)
+    "ACCEPT_REVIEW": "정상 사유가 없는 징후가 없어 매입 진행을 검토할 수 있습니다.",
 }
 NO_FDS_REASON = "FDS 평가 결과를 확인하지 못했습니다."
+# Spring 판정 기준표를 받지 못한 결제 (#618) — 추가 확인으로 둔다
+NO_BASIS_REASON = "판정 기준표를 받지 못해 추가 확인이 필요합니다."
 NO_PAYMENT_HEADLINE = "결제 정보를 확인하지 못해 추가 확인이 필요합니다."
 _SIGNALS_SHOWN = 3
 
@@ -70,7 +73,7 @@ def headline(analyses: list[PaymentAnalysis]) -> str:
             if name not in names:
                 names.append(name)
     if not names:
-        return f"{prefix} — 모든 징후에 정상 사유 있음" if only == "ACCEPT_REVIEW" else prefix
+        return f"{prefix} — 정상 사유 없는 징후 없음" if only == "ACCEPT_REVIEW" else prefix
     shown = " · ".join(names[:_SIGNALS_SHOWN]) + (" 등" if len(names) > _SIGNALS_SHOWN else "")
     return f"{prefix} — 정상 사유 없는 징후: {shown}"
 

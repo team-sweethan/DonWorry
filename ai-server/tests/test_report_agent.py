@@ -2,7 +2,9 @@ import json
 
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
+from app.agent.tools import StaticToolBox
 from app.config import Settings
+from app.schemas.tools import DecisionBasisTool
 from tests.fakes import LINKED_SUMMARY, BrokenLlm, ScriptedLlm, context, narrative, toolbox
 
 SETTINGS = Settings(_env_file=None)
@@ -44,8 +46,9 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "find_similar_cases",
         "get_payment_history",
         "find_linked_payments",
+        "get_decision_basis",
     ]
-    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2", "P5", "P2"]
+    assert [e["source"] for e in report["evidence"]] == ["P3·P5", "P2", "P3·P2", "P5", "P2", "P4"]
     assert report["evidence"][0]["dataVersion"] == "evidence v2"
     assert "FDS 점수는 부정거래 확률이 아닙니다." in report["recommendation"]["limitations"]
 
@@ -104,7 +107,7 @@ def test_llm_error_ends_failed() -> None:
 
 
 def test_fixture_matches_spring_tool_shape() -> None:
-    assert set(FIXTURE) == {"casePayments", "fdsEvidence"}
+    assert set(FIXTURE) == {"casePayments", "fdsEvidence", "decisionBasis"}
 
 
 # 결론 · 이유는 판정 근거로 코드가, 규칙 근거는 FDS 조회 기록에서 채운다 (#532)
@@ -138,8 +141,8 @@ def test_overall_recommendation_is_reject_when_any_payment_is_reject() -> None:
     assert overall_recommendation(["ACCEPT_REVIEW", "NEEDS_CHECK"]) == "NEEDS_CHECK"
 
 
-# 결제별 권고는 판정 기준표가 정한다 (#501) — 같은 카드를 다른 고객이 썼고 새 카드 징후도 있으면
-# AI가 매입 진행 검토라고 써도 승인 취소 검토
+# 결제별 권고는 판정 기준표가 정한다 (#501) — 기준표는 Spring이 계산해 준 값 그대로 싣는다 (#618)
+# 같은 카드 다른 고객 + 새 카드 징후 기준표면 AI가 매입 진행 검토라고 써도 승인 취소 검토
 def test_recommendation_comes_from_basis_not_ai() -> None:
     from app.schemas.tools import LinkedPaymentsTool
     from tests.test_linked_payments import LINKED, _toolbox
@@ -148,6 +151,14 @@ def test_recommendation_comes_from_basis_not_ai() -> None:
     written["recommendation"] = "ACCEPT_REVIEW"
     llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
     toolbox_with_linked = _toolbox(LinkedPaymentsTool.model_validate(LINKED))
+    toolbox_with_linked = StaticToolBox(
+        toolbox_with_linked.get_case_payments(),
+        toolbox_with_linked.get_fds_evidence(None),
+        linked=toolbox_with_linked.find_linked_payments(),
+        basis=DecisionBasisTool.model_validate(
+            {**FIXTURE["decisionBasis"], "payments": [_reject("9001"), _reject("9002")]}
+        ),
+    )
 
     outcome = run_investigation(context(), llm, toolbox_with_linked, SETTINGS)
 
@@ -157,3 +168,51 @@ def test_recommendation_comes_from_basis_not_ai() -> None:
         assert analysis.basis.rule == "HIGH_RISK_WITH_OTHERS"
         assert analysis.recommendation == analysis.basis.recommendation == "REJECT_REVIEW"
     assert outcome.report.verdict.overallRecommendation == "REJECT_REVIEW"
+
+
+class _NoBasisToolBox(StaticToolBox):
+    def get_decision_basis(self) -> DecisionBasisTool:
+        raise RuntimeError("Spring 503")
+
+
+def _reject(payment_id: str) -> dict:
+    signals = [
+        {"key": "LINKED_CARD", "label": "같은 카드를 다른 고객이 사용", "detail": None},
+        {"key": "R03", "label": "신규 카드", "detail": None},
+        {"key": "R01", "label": "고액 결제", "detail": None},
+    ]
+    levels = ["HIGH_RISK", "CAUTION", "CAUTION"]
+    return {
+        "paymentId": payment_id,
+        "basis": {
+            "signals": [
+                {**s, "level": lv, "normalReason": None}
+                for s, lv in zip(signals, levels, strict=True)
+            ],
+            "normals": [],
+            "rule": "HIGH_RISK_WITH_OTHERS",
+            "recommendation": "REJECT_REVIEW",
+        },
+    }
+
+
+# 판정 기준표 조회가 실패해도 보고서는 만들되 결제마다 추가 확인으로 둔다 (#618)
+# 기준표 없이 승인 취소 · 매입 진행 쪽 권고가 나가지 않게 — 한계 줄로 사실대로 남긴다
+def test_basis_lookup_fails_every_payment_needs_check() -> None:
+    sample = toolbox("sample_case.json")
+    box = _NoBasisToolBox(sample.get_case_payments(), sample.get_fds_evidence(None))
+    written = json.loads(narrative(["9001", "9002"]))
+    llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
+
+    outcome = run_investigation(context(), llm, box, SETTINGS)
+
+    assert outcome.status == "SUCCEEDED"
+    report = outcome.report
+    assert [(a.basis, a.recommendation) for a in report.paymentAnalyses] == [
+        (None, "NEEDS_CHECK"),
+        (None, "NEEDS_CHECK"),
+    ]
+    assert report.verdict.overallRecommendation == "NEEDS_CHECK"
+    assert "판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다." in (
+        report.recommendation.limitations
+    )

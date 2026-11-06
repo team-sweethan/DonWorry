@@ -200,7 +200,7 @@ export const sourceWith: Record<RecommendationSource, string> = {
   'AI 권고': 'AI 권고와',
 }
 
-// 판정 기준표 4칸 — ai-server evidence.RULE_LABELS와 같은 순서 · 문장
+// 판정 기준표 4칸 — Spring DecisionBasisCalculator의 칸과 같은 순서 (#618)
 export const BASIS_RULE_ROWS: Array<{ rule: BasisRule; text: string }> = [
   {
     rule: 'HIGH_RISK_WITH_OTHERS',
@@ -208,7 +208,8 @@ export const BASIS_RULE_ROWS: Array<{ rule: BasisRule; text: string }> = [
   },
   { rule: 'HIGH_RISK_ONLY', text: '고위험 징후 하나만 정상 사유 없음 → 추가 확인' },
   { rule: 'CAUTION_ONLY', text: '주의 징후만 정상 사유 없음 → 추가 확인' },
-  { rule: 'ALL_EXPLAINED', text: '모든 징후에 정상 사유 있음 → 매입 진행 검토' },
+  // 징후가 0개인 결제도 이 칸이다 (#618)
+  { rule: 'ALL_EXPLAINED', text: '정상 사유 없는 징후 없음 → 매입 진행 검토' },
 ]
 
 // 징후를 고위험 · 주의로 나눈다
@@ -436,6 +437,8 @@ const CODE_REASON_STARTS = [
   '모든 징후에 정상 사유가 있습니다',
   '적중한 징후가 없습니다',
   'FDS 평가 결과를 확인하지 못했습니다',
+  // Spring 판정 기준표를 받지 못한 결제 (#618)
+  '판정 기준표를 받지 못해 추가 확인이 필요합니다',
 ]
 
 // #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 시작 말로 코드 이유만 골라낸다
@@ -599,7 +602,7 @@ export function conclusionGuide(body: ReportBody): string {
   const open = signals.filter(isOpen)
   return open.length > 0
     ? `정상 사유가 없는 징후 ${open.length}개 — 아래 표의 확인할 것으로 정상 사유가 나오면 매입 진행 쪽, 부정 정황이 나오면 승인 취소 쪽으로 판단합니다.`
-    : '모든 징후에 정상 사유가 있습니다. 아래 근거를 확인한 뒤 판정하세요.'
+    : '정상 사유가 없는 징후가 없습니다. 아래 근거를 확인한 뒤 판정하세요.'
 }
 
 // 처음에 보여 줄 요약 문장 수 — 나머지는 [더 보기]

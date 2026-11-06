@@ -24,6 +24,7 @@ from app.schemas.case_context import CaseContext
 from app.schemas.report import FactSentenceItem, ReportBody, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
     LinkedPaymentsTool,
@@ -93,6 +94,11 @@ def _base_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     return found[-1] if found else None
 
 
+def _latest_basis(records: list[ToolRecord]) -> DecisionBasisTool | None:
+    found = [r.result for r in records if isinstance(r.result, DecisionBasisTool)]
+    return found[-1] if found else None
+
+
 def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
     return found[-1] if found else None
@@ -152,6 +158,11 @@ def build_graph(
             "같은 카드 · 기기 · IP 결제",
             records,
             steps,
+        )
+        # 판정 기준표는 Spring이 계산한다 (#618) — 맨 뒤에 둬 앞 조회의 증거 번호가 바뀌지 않게
+        # 못 받으면 결제마다 추가 확인으로 둔다 (승인 취소 · 매입 진행 쪽 권고를 만들지 않음)
+        _reference_lookup(
+            "get_decision_basis", toolbox.get_decision_basis, "판정 기준표", records, steps
         )
         ready = _ready_to_write(records, steps)
         if ready["next"] != "write" or not extra_tools:
@@ -350,6 +361,7 @@ def build_graph(
             _latest_linked(records),
             _base_history(records),
             state.get("summary_appended") or [],
+            _latest_basis(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [

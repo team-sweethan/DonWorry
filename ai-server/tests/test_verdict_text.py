@@ -133,7 +133,7 @@ EXPLAINED = {
 def test_headline_accept_says_all_explained() -> None:
     line = headline([_analysis("1", "ACCEPT_REVIEW", EXPLAINED)])
 
-    assert line == "매입 진행 검토 — 모든 징후에 정상 사유 있음"
+    assert line == "매입 진행 검토 — 정상 사유 없는 징후 없음"
 
 
 # 결제별 판정이 섞이면 결론은 판정별 건수, 권고 요약은 결제별 판정을 나열한다

@@ -68,3 +68,53 @@ def test_get_payment_history_sends_lookback_days_only_for_90_tool() -> None:
     assert [r.url.path for r in seen] == ["/internal/ai/tools/get_payment_history"] * 2
     assert dict(seen[0].url.params) == {"caseId": "205"}
     assert dict(seen[1].url.params) == {"caseId": "205", "lookbackDays": "90"}
+
+
+# 판정 기준표 (#618) — Spring DecisionBasisToolResponse 모양(null 칸 포함)을 그대로 읽는다
+# 키가 어긋나면 기준표를 못 읽어 모든 결제가 추가 확인이 된다
+def test_get_decision_basis_reads_spring_shape() -> None:
+    seen: list[httpx.Request] = []
+    spring = {
+        "caseId": "101",
+        "evidenceVersion": 2,
+        "source": "P4",
+        "retrievedAt": "2026-11-07T12:00:00.123456Z",
+        "payments": [
+            {
+                "paymentId": "9001",
+                "basis": {
+                    "signals": [
+                        {
+                            "key": "R01",
+                            "label": "고액 결제",
+                            "detail": None,
+                            "level": "CAUTION",
+                            "normalReason": None,
+                            "countedIn": None,
+                            "checkBefore": "고객의 평소 결제 금액과 비교",
+                        }
+                    ],
+                    "normals": [],
+                    "rule": "CAUTION_ONLY",
+                    "recommendation": "NEEDS_CHECK",
+                },
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=spring)
+
+    client = SpringToolClient("http://spring", "secret", transport=httpx.MockTransport(handler))
+
+    result = client.get_decision_basis("101")
+
+    assert seen[0].method == "GET"
+    assert seen[0].url.path == "/internal/ai/tools/get_decision_basis"
+    assert seen[0].url.params["caseId"] == "101"
+    basis = result.for_payment("9001")
+    assert basis is not None
+    assert (basis.rule, basis.recommendation) == ("CAUTION_ONLY", "NEEDS_CHECK")
+    assert basis.signals[0].checkBefore == "고객의 평소 결제 금액과 비교"
+    assert result.for_payment("9002") is None

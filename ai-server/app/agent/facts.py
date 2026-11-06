@@ -11,7 +11,6 @@ from app.agent.assemble import (
     similar_outcome,
     split_history,
 )
-from app.agent.evidence import payment_links
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.report import FactItem
@@ -211,8 +210,7 @@ def _linked(records: list[ToolRecord]) -> list[Line]:
     matches: list[tuple[str, str, LinkedMatch]] = []
     if linked.payments:
         for links in linked.payments:
-            own = payment_links(linked, links.paymentId)
-            assert own is not None
+            own = (links.card, links.device, links.ip)
             owner = _name(names, links.paymentId)
             matches += [(owner, kind, m) for (kind, _), m in zip(_KINDS, own, strict=True)]
     else:

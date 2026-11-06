@@ -21,7 +21,7 @@ import { recommendationLabel } from './caseLabels'
 const STEPS: Array<{ rec: AiRecommendation; side: string; note: string }> = [
   { rec: 'REJECT_REVIEW', side: '이상 쪽', note: '고위험 징후 + 정상 사유 없는 다른 징후' },
   { rec: 'NEEDS_CHECK', side: '가운데', note: '정상 사유 없는 징후가 남음' },
-  { rec: 'ACCEPT_REVIEW', side: '정상 쪽', note: '모든 징후에 정상 사유 있음' },
+  { rec: 'ACCEPT_REVIEW', side: '정상 쪽', note: '정상 사유 없는 징후 없음' },
 ]
 
 const levelTag: Record<BasisSignal['level'], { text: string; style: CSSProperties }> = {

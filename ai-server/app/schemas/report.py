@@ -70,7 +70,8 @@ class NormalBasis(BaseModel):
 # rule: 판정 기준표에서 해당한 칸
 # HIGH_RISK_WITH_OTHERS(고위험 + 정상 사유 없는 다른 징후 → 승인 취소 검토)
 # HIGH_RISK_ONLY(고위험 하나만 → 추가 확인) · CAUTION_ONLY(주의만 → 추가 확인)
-# ALL_EXPLAINED(모든 징후에 정상 사유 → 매입 진행 검토)
+# ALL_EXPLAINED(정상 사유 없는 징후 없음 → 매입 진행 검토, 징후 0개 포함 #618)
+# 칸은 Spring이 계산한다 (#618, DecisionBasisCalculator)
 BasisRule = Literal["HIGH_RISK_WITH_OTHERS", "HIGH_RISK_ONLY", "CAUTION_ONLY", "ALL_EXPLAINED"]
 
 
