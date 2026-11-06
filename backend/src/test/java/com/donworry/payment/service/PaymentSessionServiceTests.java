@@ -15,6 +15,7 @@ import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
 import com.donworry.payment.entity.PaymentRequest;
+import com.donworry.payment.entity.PaymentRiskSignals;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRequestRepository;
@@ -200,6 +201,29 @@ class PaymentSessionServiceTests {
         verify(sessions, never()).save(any());
     }
 
+    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드는 목록에서 뺐다. 그 코드로 결제하면 시도를 고정하지 않고 400 (#582)
+    @Test
+    void pay_removedCardCode_isBadRequestWithoutFixingAttempt() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+
+        for (var code : new String[] {"C", "D"}) {
+            assertThatThrownBy(() -> service.pay(
+                            session.getSessionKey(),
+                            new CheckoutResponses.PayRequest(code, "abcdef12"),
+                            "203.0.113.10"))
+                    .as(code)
+                    .isInstanceOfSatisfying(
+                            PaymentHttpException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(400));
+        }
+        verify(flow, never()).submit(any());
+        assertThat(session.attemptFixed()).isFalse();
+        assertThat(CheckoutMockCard.values())
+                .extracting(CheckoutMockCard::label)
+                .containsExactly("한빛카드", "누리카드");
+    }
+
     // 세션을 만든 뒤 가맹점이 정지되면 아직 접수하지 않은 결제를 시작하지 않는다 (PR #425 리뷰)
     @Test
     void pay_merchantInactive_isConflictWithoutSubmitting() {
@@ -242,7 +266,7 @@ class PaymentSessionServiceTests {
         verify(flow, times(2)).submit(commands.capture());
         assertThat(commands.getAllValues()).allSatisfy(command -> {
             assertThat(command.idempotencyKey()).isEqualTo(session.getAttemptKey());
-            assertThat(command.riskSignals().cardDisplayLabel()).contains("모의 카드 A");
+            assertThat(command.riskSignals().cardDisplayLabel()).isEqualTo("한빛카드 **** 4821");
             assertThat(command.riskSignals().deviceId()).isEqualTo("abcdef12");
             assertThat(command.riskSignals().ipAddress()).isEqualTo("203.0.113.10");
         });
@@ -285,6 +309,57 @@ class PaymentSessionServiceTests {
         assertThat(command.getValue().idempotencyKey()).isEqualTo(session.getAttemptKey());
     }
 
+    // 카드 이름을 바꾸기 전(#582)에 접수돼 멈춘 결제는 저장된 위험 신호 그대로 이어 간다.
+    // 새 이름으로 다시 만들면 같은 시도 키인데 표시값이 달라 키 충돌로 거절된다. 지금은 없는 C 카드여도 같다 (PR #587 리뷰)
+    // 배포 전에 열어 둔 결제창은 C를 고른 채 다시 보내므로, 이미 접수된 시도는 카드 목록 검사보다 먼저 재개한다
+    @Test
+    void pay_admittedBeforeCardRename_resumesWithStoredRiskSignals() {
+        var session = session(recent());
+        session.fixAttempt("C", "abcdef12", "203.0.113.10", Instant.now());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        var stored = new PaymentRiskSignals(
+                "abcdef12", "dwmock_stored", "모의 카드 C **** 9999", null, "203.0.113.10", "buyer@example.com");
+        admitted(session, 101L, stored);
+        when(flow.submit(any())).thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("C", "abcdef12"), "203.0.113.10");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow).submit(command.capture());
+        assertThat(command.getValue().idempotencyKey()).isEqualTo(session.getAttemptKey());
+        assertThat(command.getValue().riskSignals()).isEqualTo(stored);
+        assertThat(session.getPaymentId()).isEqualTo(101L);
+    }
+
+    // 지금은 없는 카드(C)로 고정만 되고 접수 전에 멈춘 세션은, 다시 고른 카드로 바꿔 접수한다.
+    // 기기 · IP는 처음 값 그대로. 바꾸지 않으면 만료까지 계속 400이다 (PR #587 리뷰)
+    @Test
+    void pay_fixedWithRemovedCardButNotAdmitted_replacesCardAndSubmits() {
+        var session = session(recent());
+        session.fixAttempt("C", "abcdef12", "203.0.113.10", Instant.now());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "ACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any())).thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "99999999"), "198.51.100.7");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow).submit(command.capture());
+        assertThat(command.getValue().riskSignals().cardDisplayLabel()).isEqualTo("한빛카드 **** 4821");
+        assertThat(command.getValue().riskSignals().deviceId()).isEqualTo("abcdef12");
+        assertThat(command.getValue().riskSignals().ipAddress()).isEqualTo("203.0.113.10");
+        assertThat(session.getSubmittedCard()).isEqualTo("A");
+    }
+
     // 접수됐지만 세션에 연결되기 전에 멈춘 결제도 결과 조회 · 결제창 열기에서 찾는다
     @Test
     void resultAndView_admittedButNotLinked_findPaymentByAttempt() {
@@ -306,8 +381,13 @@ class PaymentSessionServiceTests {
     }
 
     private void admitted(PaymentSession session, long paymentId) {
+        admitted(session, paymentId, PaymentRiskSignals.orNone(null));
+    }
+
+    private void admitted(PaymentSession session, long paymentId, PaymentRiskSignals stored) {
         var request = mock(PaymentRequest.class);
         when(request.getPaymentId()).thenReturn(paymentId);
+        when(request.riskSignals()).thenReturn(stored);
         when(requests.findByMerchantIdAndIdempotencyKey(MERCHANT_ID, session.getAttemptKey()))
                 .thenReturn(Optional.of(request));
     }

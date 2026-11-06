@@ -158,10 +158,11 @@ public class PaymentSessionService {
     public CheckoutResponses.Result pay(String sessionKey, CheckoutResponses.PayRequest body, String ipAddress) {
         var session = requireSession(sessionKey);
         if (session.getPaymentId() != null) return result(session);
-        CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
-        // 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
+        // 카드 목록 · 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
         // 평가 · 승인 · 세션 연결 중에 멈춘 것이라 기한이 지났어도 이어서 처리한다 (PR #425 리뷰)
+        // 지금은 없는 카드(C · D, #582)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
         if (admittedPaymentId(session).isEmpty()) {
+            CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
             if (session.expired(Instant.now()))
                 throw new PaymentHttpException(409, "SESSION_EXPIRED", "결제 가능 시간이 지났습니다.");
             // 세션을 만든 뒤 가맹점이 정지됐을 수 있다. 아직 접수하지 않은 결제는 시작 직전에 다시 확인한다
@@ -174,11 +175,19 @@ public class PaymentSessionService {
         var fixed = Objects.requireNonNull(transactions.execute(status -> {
             var locked = sessions.findByIdForUpdate(session.getSessionId()).orElseThrow();
             locked.fixAttempt(body.card(), body.deviceId(), ipAddress, Instant.now());
+            // 지금은 없는 카드(C · D, #582)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
+            // 접수된 요청이 없어 같은 시도 키에 다른 신호가 남지 않는다. 그대로 두면 만료까지 계속 400 (PR #587 리뷰)
+            if (CheckoutMockCard.from(locked.getSubmittedCard()).isEmpty()
+                    && admittedPaymentId(locked).isEmpty()) locked.replaceRemovedCard(body.card());
             return locked;
         }));
         if (fixed.getPaymentId() != null) return result(fixed);
-        var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
         String internalCustomer = session.getMerchantId() + ":" + session.getCustomerRef();
+        // 이미 접수된 시도를 이어 갈 때는 접수 때 저장한 위험 신호를 그대로 보낸다. 카드 이름이 바뀌었거나(#582)
+        // 지금은 없는 카드(C · D)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
+        var signals = requests.findByMerchantIdAndIdempotencyKey(session.getMerchantId(), session.getAttemptKey())
+                .map(PaymentRequest::riskSignals)
+                .orElseGet(() -> newRiskSignals(fixed, internalCustomer));
         var command = new PaymentRequestCommand(
                 session.getMerchantId(),
                 session.getOrderRef(),
@@ -186,13 +195,7 @@ public class PaymentSessionService {
                 session.getAmount(),
                 session.getOrderCreatedAt(),
                 session.getAttemptKey(),
-                new PaymentRiskSignals(
-                        fixed.getSubmittedDeviceId(),
-                        card.token(internalCustomer),
-                        card.displayLabel(),
-                        null,
-                        fixed.getSubmittedIp(),
-                        session.getBuyerEmail()));
+                signals);
         // 접수·평가·승인은 트랜잭션 밖에서 기존 흐름이 처리한다(P2 호출 포함).
         var receipt = flow.submit(command);
         var linked = transactions.execute(status -> {
@@ -201,6 +204,18 @@ public class PaymentSessionService {
             return locked;
         });
         return result(Objects.requireNonNull(linked));
+    }
+
+    // 처음 접수할 결제의 위험 신호. 고정된 카드 · 기기 · IP로 만든다.
+    private PaymentRiskSignals newRiskSignals(PaymentSession fixed, String internalCustomer) {
+        var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
+        return new PaymentRiskSignals(
+                fixed.getSubmittedDeviceId(),
+                card.token(internalCustomer),
+                card.displayLabel(),
+                null,
+                fixed.getSubmittedIp(),
+                fixed.getBuyerEmail());
     }
 
     public CheckoutResponses.Result result(String sessionKey) {
