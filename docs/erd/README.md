@@ -69,6 +69,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `identity` (#219) | P1 주환 | `merchant_request_nonces` | [HMAC nonce](../../backend/src/main/resources/db/migration/V20261027_144924__create_merchant_request_nonces.sql) |
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
 | `identity` (#525) | P1 주환 | `operator_access_denials` | [403 원본](../../backend/src/main/resources/db/migration/V20261104_153346__create_operator_access_denials.sql) |
+| `identity` (#604) | P1 주환 | `staff_access_events` (보안 직원 · ADMIN 접근 기록, ADR-0082) | [접근 기록](../../backend/src/main/resources/db/migration/V20261106_215350__create_staff_access_events.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
 | `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
@@ -88,6 +89,8 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 erDiagram
     merchants ||--o{ operator_access_denials : "merchant_id"
     platform_users ||--o{ operator_access_denials : "user_id"
+    platform_users ||--o{ staff_access_events : "staff_id"
+    merchants |o--o{ staff_access_events : "merchant_id"
     merchants ||--o{ merchant_request_nonces : "merchant_id"
     merchants |o--o{ platform_users : "merchant_id"
     platform_users ||--o{ user_permissions : "user_id"
@@ -393,5 +396,32 @@ P1 사용자가 #525 초안의 저장 구조와 저장소 ERD·ADR 선행 구현
 login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계정 값으로 이벤트에만 전달한다.
 `client_ip`는 발생 후 1년 보관하고 NULL 처리한다. 원본 행은 조사 근거이므로 IP 정리 작업에서 삭제하지 않는다.
 행 보관 기간은 조사 기록 정책으로 따로 정하며, 기존 90일 행 삭제 제안은 사용자 결정으로 대체했다.
+
+### #604 P1 보안 직원 접근 기록 (2026-11-06)
+
+사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 선행 구현을 승인했다. Notion 반영은 후속이다.
+신규 `staff_access_events`는 P1 소유다. 직원 · 가맹점은 같은 P1 FK로 연결하고, `case_id`(P3) · `payment_id`(P5)는 논리 참조다.
+이름 · 전화 같은 원문 칸은 없다. 자유 글 칸을 두지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| event_id | BIGINT AUTO_INCREMENT PK | StaffAccessRecorded.eventId |
+| staff_id | BIGINT NOT NULL FK platform_users | 로그인 세션의 직원 (요청 값이 아님) |
+| actor_role | VARCHAR(20) NOT NULL | SECURITY_STAFF / ADMIN (CHECK) |
+| access_type | VARCHAR(40) NOT NULL | StaffAccessType. CHECK 없음 — 값은 기록을 부르는 조각에서 더한다 |
+| result | VARCHAR(10) NOT NULL | ALLOWED / DENIED |
+| deny_reason | VARCHAR(40) NULL | DENIED일 때만 필수 (CHECK) |
+| case_id | BIGINT NULL | P3 사건 논리 참조 |
+| merchant_id | BIGINT NULL FK merchants | 대상 가맹점 |
+| payment_id | BIGINT NULL | P5 결제 논리 참조 |
+| customer_ref | VARCHAR(100) NULL | 숫자 고객 번호만 (`가맹점ID:번호` 포함). 검색어 원문은 넣지 않는다 |
+| field_type | VARCHAR(30) NULL | StaffAccessFieldType 코드 (예: ORDERER_PHONE) |
+| item_count | INT NULL | 목록 · 내보내기 건수, 0 이상 (CHECK) |
+| login_reference | UUID NULL | login_histories.login_reference와 같은 값 (FK 없음). IP는 복사하지 않는다 |
+| occurred_at | DATETIME(6) NOT NULL | UTC, 이벤트와 동일한 마이크로초 |
+
+인덱스는 `idx_staff_access_events_staff_time(staff_id, occurred_at)` · `idx_staff_access_events_staff_result_time(staff_id, result, occurred_at)`.
+허용 기록은 호출 쪽과 같은 트랜잭션, 거부 기록은 독립 트랜잭션으로 저장한다 (ADR-0082 4절).
+행은 지우거나 고치지 않는다. 보관 기간 정리(법정 접속기록 1~2년)는 후속이다.
 제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. #525의 수집·발행에 더해 #528에서 원본 IP 정리를 구현한다. [실행 근거·미검증](../identity/528-access-record-retention.md)을 따른다.
 [ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.
