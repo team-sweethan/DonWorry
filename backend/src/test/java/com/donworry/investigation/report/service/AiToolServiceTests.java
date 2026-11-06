@@ -2,11 +2,14 @@ package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.repository.CasePaymentRepository;
@@ -78,5 +81,87 @@ class AiToolServiceTests {
         assertThat(response.payments())
                 .extracting(FdsEvidenceToolResponse.Payment::paymentId, FdsEvidenceToolResponse.Payment::signals)
                 .containsExactly(tuple("1", null), tuple("2", card));
+    }
+
+    // 기준표용 고객 이력 조회가 실패해도 기준표는 나온다 — 정상 사유 없이 계산해 매입 진행 쪽으로 가지 않는다 (#618)
+    // 고객 이력은 30일 기본 조회만 본다 (#581, AI가 90일을 불렀는지와 상관없이 같은 권고)
+    @Test
+    void decisionBasis_historyLookupFails_computesWithoutNormalReason() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 1L, NOW)));
+        when(paymentInfoReader.findAll(List.of(1L)))
+                .thenReturn(Map.of(
+                        1L,
+                        new PaymentInfo(
+                                1L,
+                                600_000L,
+                                "HELD",
+                                NOW,
+                                60,
+                                "REVIEW",
+                                List.of(new PaymentInfoReader.RuleHit("R01", "고액 결제", 30)))));
+        when(paymentHistoryFinder.find(eq(7L), any(Instant.class), eq(PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS)))
+                .thenThrow(new IllegalStateException("조회 실패"));
+        // 연결 결제는 조회에 성공했고 다른 고객 결제가 없다 (null은 조회 실패라 기준표를 주지 않는다)
+        when(linkedPaymentFinder.find(eq(7L), any(Instant.class))).thenReturn(FixedReportGeneratorTests.noLinks(NOW));
+        AiToolService service = new AiToolService(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder);
+
+        DecisionBasisToolResponse response = service.decisionBasis(7L);
+
+        DecisionBasisToolResponse.Basis basis = response.payments().getFirst().basis();
+        assertThat(response.payments())
+                .extracting(DecisionBasisToolResponse.PaymentBasis::paymentId)
+                .containsExactly("1");
+        assertThat(basis.normals()).isEmpty();
+        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
+        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
+    }
+
+    // 기준표용 같은 카드 · 기기 · IP 조회가 실패하면 기준표를 주지 않는다 (#618 Codex 리뷰)
+    // "연결 징후 없음"으로 계산하면 고위험 징후가 빠져 승인 취소 검토가 내려가거나, 고액 + 평소 금액 이력이면
+    // 매입 진행 검토까지 나온다. 빈 목록이면 ai-server가 그 결제를 추가 확인 + 한계 줄로 둔다
+    @Test
+    void decisionBasis_linkedLookupFails_providesNoBasis() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 1L, NOW)));
+        when(paymentInfoReader.findAll(List.of(1L)))
+                .thenReturn(Map.of(
+                        1L,
+                        new PaymentInfo(
+                                1L,
+                                600_000L,
+                                "HELD",
+                                NOW,
+                                60,
+                                "REVIEW",
+                                List.of(new PaymentInfoReader.RuleHit("R01", "고액 결제", 30)))));
+        when(paymentHistoryFinder.find(eq(7L), any(Instant.class), eq(PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS)))
+                .thenReturn(FixedReportGeneratorTests.usualHistory(NOW));
+        when(linkedPaymentFinder.find(eq(7L), any(Instant.class))).thenThrow(new IllegalStateException("조회 실패"));
+        AiToolService service = new AiToolService(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder);
+
+        DecisionBasisToolResponse response = service.decisionBasis(7L);
+
+        assertThat(response.payments()).isEmpty();
     }
 }

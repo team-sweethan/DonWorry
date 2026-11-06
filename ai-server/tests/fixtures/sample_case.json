@@ -36,5 +36,69 @@
       }
     ],
     "missingPaymentIds": []
+  },
+  "decisionBasis": {
+    "caseId": "101",
+    "evidenceVersion": 2,
+    "source": "P4",
+    "retrievedAt": "2026-10-27T12:10:00Z",
+    "payments": [
+      {
+        "paymentId": "9001",
+        "basis": {
+          "signals": [
+            {
+              "key": "R01",
+              "label": "고액 결제",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "고객의 평소 결제 금액과 비교 · 단체 주문 같은 구매 목적 확인"
+            },
+            {
+              "key": "R03",
+              "label": "신규 카드",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"
+            }
+          ],
+          "normals": [],
+          "rule": "CAUTION_ONLY",
+          "recommendation": "NEEDS_CHECK"
+        }
+      },
+      {
+        "paymentId": "9002",
+        "basis": {
+          "signals": [
+            {
+              "key": "R04",
+              "label": "단시간 반복 결제",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "한 주문을 나눠 낸 결제인지 주문 내역 확인"
+            },
+            {
+              "key": "R03",
+              "label": "신규 카드",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"
+            }
+          ],
+          "normals": [],
+          "rule": "CAUTION_ONLY",
+          "recommendation": "NEEDS_CHECK"
+        }
+      }
+    ]
   }
 }

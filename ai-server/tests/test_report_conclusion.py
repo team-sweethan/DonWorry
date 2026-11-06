@@ -1,12 +1,3 @@
-from app.agent.evidence import (
-    _RULES,
-    CHECK_BEFORE,
-    FDS_UNCONFIRMED,
-    LINKED_CARD,
-    LINKED_DEVICE,
-    LINKED_IP,
-    OVERSEAS,
-)
 from app.agent.graph import run_investigation
 from app.config import Settings
 from app.schemas.tools import LinkedPaymentsTool
@@ -59,13 +50,6 @@ def test_case_overview_multiple_payments_matches_tool_values() -> None:
         "고객 customer-1의 결제 2건(합계 770,000원, 10/27 21:00~21:07)이 "
         "고액 결제 · 처음 쓰는 카드 · 단시간 반복 결제 규칙에 걸려 매입 보류된 사건입니다."
     )
-
-
-# 모든 징후에 판정 전에 확인할 것 문장이 있다
-def test_check_before_every_signal_key_has_sentence() -> None:
-    keys = [*_RULES, OVERSEAS, LINKED_CARD, LINKED_DEVICE, LINKED_IP, FDS_UNCONFIRMED]
-
-    assert [k for k in keys if not CHECK_BEFORE.get(k, "").strip()] == []
 
 
 # 30일 기본 조회에 든 결제만 기준표 범위로 표시한다

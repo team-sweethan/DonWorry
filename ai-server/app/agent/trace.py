@@ -7,6 +7,7 @@ from app.config import Settings
 from app.schemas.report import InvestigationTrace, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     LinkedMatch,
     LinkedPaymentsTool,
     PaymentHistoryTool,
@@ -23,6 +24,7 @@ TOOL_TITLES = {
     "find_similar_cases": "비슷한 과거 사건 조회",
     "get_payment_history": "고객 최근 결제 조회",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
+    "get_decision_basis": "판정 기준표 조회",
 }
 
 # 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
@@ -75,6 +77,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
         return "같은 고객의 최근 결제 (이 사건 제외)"
     if name == "find_linked_payments":
         return "같은 가맹점 최근 30일, 다른 고객 결제"
+    if name == "get_decision_basis":
+        return "이 사건 결제별 판정 기준표 (Spring 계산)"
     payment_ids = args.get("payment_ids") or []
     # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
     if not isinstance(payment_ids, list):
@@ -86,6 +90,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
 
 # 받은 것 요약 — 건수만 쓴다. 금액 · 점수 같은 원본 값은 보고서 본문에 이미 있다
 def tool_received(result: ToolResult) -> str:
+    if isinstance(result, DecisionBasisTool):
+        return f"결제 {len(result.payments)}건의 기준표 칸 · 권고"
     if isinstance(result, LinkedPaymentsTool):
         return linked_summary(result)
     if isinstance(result, PaymentHistoryTool):

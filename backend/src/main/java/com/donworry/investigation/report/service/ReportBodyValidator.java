@@ -66,6 +66,7 @@ class ReportBodyValidator {
                 if (!RECOMMENDATIONS.contains(String.valueOf(analysis.get("recommendation")))) {
                     errors.add("허용되지 않은 권고 값: " + analysis.get("recommendation"));
                 }
+                errors.addAll(basisErrors(paymentId, analysis));
                 if (!(analysis.get("ruleHitDetails") instanceof List<?>)) {
                     errors.add("결제 " + paymentId + "의 ruleHitDetails가 목록이 아니다");
                 }
@@ -74,7 +75,45 @@ class ReportBodyValidator {
             errors.add("paymentAnalyses가 목록이 아니다");
         }
         errors.addAll(verdictErrors(body));
+        errors.addAll(overallErrors(body));
         return errors;
+    }
+
+    // 종합 권고는 결제별 권고로 정해진다 (ADR-0009 결정 4) — 결제별 권고와 다른 종합 권고가 저장되지 않게 (#618)
+    private static List<String> overallErrors(Map<String, Object> body) {
+        if (!(body.get("paymentAnalyses") instanceof List<?> analyses)
+                || !(body.get("verdict") instanceof Map<?, ?> verdict)) {
+            return List.of();
+        }
+        List<String> recommendations = analyses.stream()
+                .filter(Map.class::isInstance)
+                .map(item -> String.valueOf(((Map<?, ?>) item).get("recommendation")))
+                .toList();
+        String expected = DecisionBasisCalculator.overall(recommendations);
+        Object overall = verdict.get("overallRecommendation");
+        return expected.equals(overall)
+                ? List.of()
+                : List.of("종합 권고(" + overall + ")가 결제별 권고로 정한 값(" + expected + ")과 다르다");
+    }
+
+    // 판정 근거가 있는 결제는 권고가 기준표 칸의 권고와 같아야 한다 (#618)
+    // 기준표는 Spring이 계산해 ai-server에 준다 — 보고서에서 권고만 다른 값으로 바뀌어 저장되지 않게
+    // 판정 근거가 없는 결제(기준표를 받지 못함)는 추가 확인만 허용한다 — 근거 없이 자동으로 승인 취소 · 매입 진행 쪽으로 가지 않게
+    private static List<String> basisErrors(String paymentId, Map<?, ?> analysis) {
+        Object recommendation = analysis.get("recommendation");
+        if (!(analysis.get("basis") instanceof Map<?, ?> basis)) {
+            return analysis.get("basis") == null && !DecisionBasisCalculator.NEEDS_CHECK.equals(recommendation)
+                    ? List.of("결제 " + paymentId + "는 판정 근거 없이 권고가 " + recommendation + "이다")
+                    : List.of();
+        }
+        String expected = DecisionBasisCalculator.RECOMMENDATION_BY_RULE.get(String.valueOf(basis.get("rule")));
+        if (expected == null) {
+            return List.of("결제 " + paymentId + "의 기준표 칸이 허용 밖이다: " + basis.get("rule"));
+        }
+        if (!expected.equals(basis.get("recommendation")) || !expected.equals(recommendation)) {
+            return List.of("결제 " + paymentId + "의 권고가 기준표 칸(" + basis.get("rule") + ")과 다르다: " + recommendation);
+        }
+        return List.of();
     }
 
     // 결론 카드 값 — 결론 한 줄이 있고 종합 권고가 허용된 값인지 본다

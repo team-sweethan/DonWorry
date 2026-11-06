@@ -2,9 +2,11 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.schemas.report import DecisionBasis
+
 # Spring AI Tool API 응답 — #254 CasePaymentsToolResponse · FdsEvidenceToolResponse ·
 # #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse ·
-# #352 LinkedPaymentsToolResponse와 같게 둔다
+# #352 LinkedPaymentsToolResponse · #618 DecisionBasisToolResponse와 같게 둔다
 # 못 찾은 값은 null이고 missingPaymentIds에 들어온다. 추측해서 채우지 않는다
 
 
@@ -153,7 +155,30 @@ class LinkedPaymentsTool(BaseModel):
     payments: list[PaymentLinks] | None = None
 
 
+class PaymentBasis(BaseModel):
+    paymentId: str
+    basis: DecisionBasis
+
+
+# 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — Spring이 계산한다 (ADR-0009 결정 7)
+# ai-server는 그대로 보고서에 싣고 바꾸지 않는다. 금액 · FDS 근거를 모르는 결제는 목록에 없다
+class DecisionBasisTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    payments: list[PaymentBasis]
+
+    def for_payment(self, payment_id: str) -> DecisionBasis | None:
+        return next((p.basis for p in self.payments if p.paymentId == payment_id), None)
+
+
 # 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다
 ToolResult = (
-    CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool | LinkedPaymentsTool
+    CasePaymentsTool
+    | FdsEvidenceTool
+    | SimilarCasesTool
+    | PaymentHistoryTool
+    | LinkedPaymentsTool
+    | DecisionBasisTool
 )

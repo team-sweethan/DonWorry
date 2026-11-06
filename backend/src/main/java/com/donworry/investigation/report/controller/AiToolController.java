@@ -1,6 +1,7 @@
 package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
@@ -54,5 +55,11 @@ public class AiToolController {
     @GetMapping("/find_linked_payments")
     public LinkedPaymentsToolResponse linkedPayments(@RequestParam Long caseId) {
         return aiToolService.linkedPayments(caseId);
+    }
+
+    // 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — 기준표는 Spring이 계산한다. ai-server는 그대로 싣는다
+    @GetMapping("/get_decision_basis")
+    public DecisionBasisToolResponse decisionBasis(@RequestParam Long caseId) {
+        return aiToolService.decisionBasis(caseId);
     }
 }

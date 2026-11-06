@@ -3,6 +3,7 @@ import httpx
 from app.schemas.investigation import InvestigationResult
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     LinkedPaymentsTool,
     PaymentHistoryTool,
@@ -66,6 +67,12 @@ class SpringToolClient:
         res = self._http.get("/internal/ai/tools/find_linked_payments", params={"caseId": case_id})
         res.raise_for_status()
         return LinkedPaymentsTool.model_validate(res.json())
+
+    # 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — Spring이 계산한 값을 그대로 받는다
+    def get_decision_basis(self, case_id: str) -> DecisionBasisTool:
+        res = self._http.get("/internal/ai/tools/get_decision_basis", params={"caseId": case_id})
+        res.raise_for_status()
+        return DecisionBasisTool.model_validate(res.json())
 
     # 조사가 끝나면 결과를 돌려준다 (ADR-0009 결정 1 결과 수신)
     # 전송이 실패해도 Spring이 상태 조회로 복구한다
