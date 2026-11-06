@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
@@ -384,5 +385,48 @@ class FixedReportGeneratorTests {
                 paymentHistoryFinder,
                 paymentSignalReader,
                 linkedPaymentFinder);
+    }
+
+    // AI 서버가 꺼져도 고정 보고서가 판정 기준표로 권고한다 (#618) — 전에는 늘 추가 확인이었다
+    // 카드 테스팅(고위험) + 고액 · 신규 단말기(주의) → 승인 취소 검토, 종합 권고 · 판정 근거도 같은 값
+    @Test
+    void generate_aiOff_recommendsByDecisionBasis() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L,
+                                600_000L,
+                                "HELD",
+                                NOW,
+                                90,
+                                "REVIEW",
+                                List.of(
+                                        new RuleHit("R06", "카드 테스팅", 40),
+                                        new RuleHit("R01", "고액 결제", 30),
+                                        new RuleHit("R02", "신규 단말기", 20)))));
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder);
+
+        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+
+        Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
+        DecisionBasisToolResponse.Basis basis = (DecisionBasisToolResponse.Basis) analysis.get("basis");
+        assertThat(basis.rule()).isEqualTo("HIGH_RISK_WITH_OTHERS");
+        assertThat(analysis.get("recommendation")).isEqualTo("REJECT_REVIEW");
+        assertThat((String) analysis.get("reason")).startsWith("고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다");
+        assertThat(((Map<?, ?>) body.get("verdict")).get("overallRecommendation"))
+                .isEqualTo("REJECT_REVIEW");
     }
 }

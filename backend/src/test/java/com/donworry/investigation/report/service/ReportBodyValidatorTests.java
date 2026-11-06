@@ -89,10 +89,67 @@ class ReportBodyValidatorTests {
                         "ruleHitDetails",
                         List.of(),
                         "basis",
-                        Map.of("signals", List.of(Map.of("key", "R01", "checkBefore", "구매 목적 확인"))))));
+                        Map.of(
+                                "signals",
+                                List.of(Map.of("key", "R01", "checkBefore", "구매 목적 확인")),
+                                "rule",
+                                "CAUTION_ONLY",
+                                "recommendation",
+                                "NEEDS_CHECK"))));
 
         assertThat(validator.validate(AiReport.pending(7L, 1, 1, NOW), withNewFields))
                 .isEmpty();
+    }
+
+    // 결제별 권고가 기준표 칸의 권고와 다르면 저장하지 않는다 (#618)
+    // 기준표는 Spring이 계산한다 — 보고서에서 권고만 다른 값으로 바뀌어 직원 화면에 나가면 판정 근거와 권고가 어긋난다
+    // 판정 근거가 없는 결제는 추가 확인만 허용한다 — 근거 없이 승인 취소 · 매입 진행 쪽 권고가 나가지 않게
+    @Test
+    void validate_recommendationNotMatchingBasisRule_returnsErrors() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        ReportBodyValidator validator = new ReportBodyValidator(casePaymentRepository);
+        AiReport report = AiReport.pending(7L, 1, 1, NOW);
+
+        assertThat(validator.validate(report, withAnalysis("ACCEPT_REVIEW", basis("CAUTION_ONLY", "NEEDS_CHECK"))))
+                .anyMatch(error -> error.contains("CAUTION_ONLY"));
+        assertThat(validator.validate(report, withAnalysis("REJECT_REVIEW", null)))
+                .anyMatch(error -> error.contains("판정 근거 없이"));
+        assertThat(validator.validate(report, withAnalysis("NEEDS_CHECK", basis("AUTO", "NEEDS_CHECK"))))
+                .anyMatch(error -> error.contains("허용 밖"));
+        assertThat(validator.validate(
+                        report, withAnalysis("REJECT_REVIEW", basis("HIGH_RISK_WITH_OTHERS", "REJECT_REVIEW"))))
+                .noneMatch(error -> error.contains("결제 3"));
+    }
+
+    // 종합 권고가 결제별 권고로 정한 값과 다르면 저장하지 않는다 (ADR-0009 결정 4, #618)
+    @Test
+    void validate_overallNotMatchingPaymentRecommendations_returnsError() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        ReportBodyValidator validator = new ReportBodyValidator(casePaymentRepository);
+        Map<String, Object> body =
+                new HashMap<>(withAnalysis("REJECT_REVIEW", basis("HIGH_RISK_WITH_OTHERS", "REJECT_REVIEW")));
+
+        assertThat(validator.validate(AiReport.pending(7L, 1, 1, NOW), body))
+                .containsExactly("종합 권고(NEEDS_CHECK)가 결제별 권고로 정한 값(REJECT_REVIEW)과 다르다");
+    }
+
+    private static Map<String, Object> basis(String rule, String recommendation) {
+        return Map.of("signals", List.of(), "normals", List.of(), "rule", rule, "recommendation", recommendation);
+    }
+
+    private static Map<String, Object> withAnalysis(String recommendation, Map<String, Object> basis) {
+        Map<String, Object> analysis =
+                new HashMap<>(Map.of("paymentId", "3", "recommendation", recommendation, "ruleHitDetails", List.of()));
+        analysis.put("basis", basis);
+        Map<String, Object> body = new HashMap<>(body());
+        body.put("paymentAnalyses", List.of(analysis));
+        return body;
     }
 
     private static Map<String, Object> body() {
