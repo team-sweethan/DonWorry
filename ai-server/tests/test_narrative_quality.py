@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta
 
+from app.agent.facts import NOTABLE, NOTHING, Fact
 from app.agent.narrative import narrative_schema, validate_narrative
 from app.agent.prompts import WRITE_EXAMPLES
 from app.schemas.tools import (
@@ -34,12 +35,32 @@ def test_linked_facts_separate_customer_and_payment_counts() -> None:
     assert "다른 고객 1명 · 결제 3건" in card
 
 
-# 샘플 문장("카드사에 거절 사유 문의")을 그대로 쓰면 다시 쓰게 한다 (Case 8)
-# 사건과 무관한 사실이 보고서에 들어가지 않게
-def test_example_sentence_copied_is_rewritten() -> None:
+# 확인할 것은 예시("카드사에 거절 사유 문의")와 같아도 통과한다 (#581)
+# OpenAI는 거절이 있는 사건에서만 이렇게 썼다 — 맞는 할 일을 돌려보내 다시 쓰기 · 조사 실패가 났다
+def test_example_check_copied_is_allowed() -> None:
     facts = catalog(CASES, FDS)
     copied = WRITE_EXAMPLES[0]["출력"]["additionalChecks"][0]
     raw = narrative(PAYMENTS, additionalChecks=["고객 본인 확인", copied])
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert errors == []
+    assert parsed is not None and copied in parsed.additionalChecks
+
+
+# 요약은 예시 문장과 같으면 다시 쓰게 한다 — 예시 사건의 사실이라 이번 사건에선 거짓일 수 있다
+# (Case 8, #581 측정: 같은 카드를 다른 고객 3명이 쓴 사건에 "다른 고객 결제는 없습니다")
+def test_example_summary_copied_is_still_rewritten() -> None:
+    facts = catalog(CASES, FDS)
+    summary = WRITE_EXAMPLES[0]["출력"]["summary"]
+    copied = next(s["text"] for s in summary if not any(c.isdigit() for c in s["text"]))
+    raw = narrative(
+        PAYMENTS,
+        summary=[
+            {"text": copied, "facts": ["접속-1"]},
+            {"text": "조회한 기록은 아래 표에 있습니다.", "facts": ["접속-1"]},
+        ],
+    )
 
     parsed, errors = validate_narrative(raw, facts, PAYMENTS)
 
@@ -155,3 +176,55 @@ def test_fact_catalog_historyOver5_countsAllPayments() -> None:
     burst = next(t for t in texts if t.startswith("사건 결제 앞뒤 10분 안의 다른 결제"))
     assert burst.startswith("사건 결제 앞뒤 10분 안의 다른 결제 8건")
     assert burst.count("650,000원") == 5 and burst.endswith("외 3건")
+
+
+# 눈여겨볼 사실 하나(연결-1)와 보통 이력 사실 셋 — 이력마다 한 문장씩 쓰면 3문장이 꽉 찬다 (#581)
+def _crowded_facts() -> list[Fact]:
+    history = [Fact(f"이력-{n}", "history", "이력 사실", "E1") for n in (1, 2, 3)]
+    return [*history, Fact("연결-1", "linked", "같은 IP 사실", "E2", rank=NOTABLE)]
+
+
+def _sentence(text: str, *facts: str) -> dict:
+    return {"text": text, "facts": list(facts)}
+
+
+THREE_HISTORY = [
+    _sentence("고객의 최근 결제를 이어 적습니다.", "이력-1"),
+    _sentence("연속 결제는 바로 앞의 시도입니다.", "이력-2"),
+    _sentence("그보다 앞선 결제는 매입이 끝났습니다.", "이력-3"),
+]
+
+
+# 3문장이 꽉 차도 넷째 문장에 아직 안 쓴 눈여겨볼 사실을 이어 쓰면 통과한다
+# 막으면 눈여겨볼 사실이 많은 사건일수록 다시 써도 같은 답을 내 보고서가 실패한다
+# (#581 처음 보는 손님)
+def test_summary_fourth_sentence_with_new_notable_passes() -> None:
+    facts = _crowded_facts()
+    raw = narrative(
+        PAYMENTS,
+        summary=[*THREE_HISTORY, _sentence("같은 IP를 다른 고객이 썼습니다.", "연결-1")],
+    )
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert errors == [] and parsed is not None
+    assert narrative_schema(facts)["properties"]["summary"]["maxItems"] == 4
+
+
+# 넷째 문장에 "없음" 사실(비슷한 과거 사건 없음 등)을 써도 통과한다 — 사실대로 쓴 긴 요약을 막으면
+# 보고서가 사라진다. 길이는 읽기 편의라 실패 사유가 아니다 (#581 측정: 손님 2명이 이렇게 실패)
+def test_summary_fourth_sentence_with_nothing_fact_passes() -> None:
+    facts = [
+        *_crowded_facts(),
+        Fact("과거-1", "similar", "비슷한 과거 사건 없음", "E3", rank=NOTHING),
+    ]
+    first = _sentence("같은 IP를 다른 고객이 썼고 최근 결제가 있습니다.", "연결-1", "이력-1")
+    raw = narrative(
+        PAYMENTS,
+        summary=[first, *THREE_HISTORY[1:], _sentence("비슷한 과거 사건은 없습니다.", "과거-1")],
+    )
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert errors == [] and parsed is not None
+    assert narrative_schema(facts)["properties"]["summary"]["maxItems"] == len(facts)

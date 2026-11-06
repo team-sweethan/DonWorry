@@ -237,13 +237,14 @@ test('liveCurrentTask_afterChooseOrTool_runsThenChoosesNext', () => {
   )
 })
 
-test('liveCurrentTask_doneOrSystemFill_writesFirstAttempt', () => {
+// 기본 조회(시스템)가 끝나면 다음은 추가 조회 고르기, "조사 완료"면 판단 문장 쓰기 (#581)
+test('liveCurrentTask_afterBaseLookupsOrDone_choosesThenWrites', () => {
   const done = liveCurrentTask('RUNNING', [
     step('DECIDE', '조사 완료라고 답함 · 입력 2,308 · 출력 6 토큰'),
   ])
   assert.deepEqual(done, { title: '판단 문장 쓰는 중 (1차)', note: '가장 오래 걸리는 단계입니다' })
-  const filled = liveCurrentTask('RUNNING', [step('TOOL', 'FDS 평가 1건', 'SYSTEM')])
-  assert.equal(filled.title, '판단 문장 쓰는 중 (1차)')
+  const base = liveCurrentTask('RUNNING', [step('TOOL', 'FDS 평가 1건', 'SYSTEM')])
+  assert.equal(base.title, '추가로 볼 조회를 고르는 중')
 })
 
 test('liveCurrentTask_writeFailed_showsNextAttempt', () => {

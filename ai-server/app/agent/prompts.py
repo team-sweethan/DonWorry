@@ -1,4 +1,6 @@
+import hashlib
 import json
+from typing import Any
 
 # 조사 Agent 프롬프트 — 작성 규칙은 fds 정본 기획 2.6 · 2.7을 따른다
 
@@ -43,7 +45,9 @@ WRITE_SYSTEM = """너는 결제 대행 서비스 돈워리 보안팀의 결제 �
 
 작성 규칙
 - [조사 사실]에 있는 사실만 쓴다. 사실마다 번호(예: 이력-1)가 있다.
-- summary는 1~3문장이다. 문장마다 근거로 쓴 사실 번호를 facts에 하나 이상 넣는다. 받은 번호만 쓴다.
+- summary는 1~3문장이다. 눈여겨볼 사실을 3문장에 다 담지 못하면 이어 써도 된다.
+  넷째 문장부터는 앞에서 쓰지 않은 눈여겨볼 사실만 쓴다.
+- 문장마다 근거로 쓴 사실 번호를 facts에 하나 이상 넣는다. 받은 번호만 쓴다.
 - [조사 사실]은 눈여겨볼 사실부터 준다. 준 순서대로 쓰고,
   겹친 것 · 결제가 없다는 사실("없음")은 마지막에 짧게 한 구절로 묶는다.
 - 주제를 넘나들며 사실을 잇는다. 같은 결제를 가리키는 사실은 한 문장에서 같은 결제로 이어 쓴다.
@@ -131,3 +135,16 @@ WRITE_SYSTEM += (
 WRITE_FACTS = "[조사 사실]\n{facts}"
 
 REPAIR = "형식 오류가 있다: {errors}\n같은 JSON 형식으로 처음부터 다시 출력하라."
+
+
+# 프롬프트 지문 (#581) — 사건 사실을 뺀 고정 지시문 · 추가 도구 설명만 해시한다 (전문은 저장 안 함)
+# 측정 결과를 "어느 프롬프트로 쟀는지" 묶는 데 쓴다. 지시문이나 도구 설명을 고치면 값이 바뀐다
+def fingerprint(extra_specs: list[dict[str, Any]], max_calls: int) -> str:
+    fixed = {
+        "extra": [EXTRA_SYSTEM.format(max_calls=max_calls), EXTRA_START, EXTRA_TOOL_FAILED],
+        "limit": EXTRA_LIMIT,
+        "write": [WRITE_SYSTEM, WRITE_FACTS, REPAIR],
+        "tools": extra_specs,
+    }
+    payload = json.dumps(fixed, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]

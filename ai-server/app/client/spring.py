@@ -50,8 +50,14 @@ class SpringToolClient:
         return SimilarCasesTool.model_validate(res.json())
 
     # 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제 제외 (#338)
-    def get_payment_history(self, case_id: str) -> PaymentHistoryTool:
-        res = self._http.get("/internal/ai/tools/get_payment_history", params={"caseId": case_id})
+    # 기간은 기본 조회면 보내지 않고(Spring 기본 30일), AI 추가 조사의 90일만 보낸다 (#581)
+    def get_payment_history(
+        self, case_id: str, lookback_days: int | None = None
+    ) -> PaymentHistoryTool:
+        params: dict[str, str | int] = {"caseId": case_id}
+        if lookback_days is not None:
+            params["lookbackDays"] = lookback_days
+        res = self._http.get("/internal/ai/tools/get_payment_history", params=params)
         res.raise_for_status()
         return PaymentHistoryTool.model_validate(res.json())
 

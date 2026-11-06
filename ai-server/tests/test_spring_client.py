@@ -2,6 +2,7 @@ import json
 
 import httpx
 
+from app.agent.tools import HISTORY_90, SpringToolBox
 from app.client.spring import API_KEY_HEADER, SpringToolClient
 
 FIXTURE = json.loads(open("tests/fixtures/sample_case.json", encoding="utf-8").read())
@@ -44,3 +45,26 @@ def test_no_key_header_when_key_is_empty() -> None:
     _client(seen, api_key="").get_case_payments("101")
 
     assert API_KEY_HEADER not in seen[0].headers
+
+
+# 기본 조회는 기간을 보내지 않고(Spring 기본 30일), 90일 도구만 lookbackDays=90을 보낸다 (#581)
+# AI가 지어낸 인자(days=365)는 Spring까지 가지 않는다
+def test_get_payment_history_sends_lookback_days_only_for_90_tool() -> None:
+    seen: list[httpx.Request] = []
+    history = json.loads(open("tests/fixtures/measure_case5_new.json", encoding="utf-8").read())[
+        "history"
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=history)
+
+    client = SpringToolClient("http://spring", "secret", transport=httpx.MockTransport(handler))
+    box = SpringToolBox(client, "205")
+
+    box.get_payment_history()
+    HISTORY_90.run(box, {"days": 365})
+
+    assert [r.url.path for r in seen] == ["/internal/ai/tools/get_payment_history"] * 2
+    assert dict(seen[0].url.params) == {"caseId": "205"}
+    assert dict(seen[1].url.params) == {"caseId": "205", "lookbackDays": "90"}

@@ -95,9 +95,10 @@ class FixedReportGenerator {
     }
 
     // 고객 최근 결제도 참고 자료라 조회에 실패해도 보고서는 만든다 (#338)
+    // AI가 없으니 기간은 늘 기본 30일이다 (#581)
     private PaymentHistoryToolResponse historyOrNull(Long caseId, Instant now) {
         try {
-            return paymentHistoryFinder.find(caseId, now);
+            return paymentHistoryFinder.find(caseId, now, PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS);
         } catch (RuntimeException e) {
             log.warn("고객 최근 결제 조회 실패 caseId={}", caseId, e);
             return null;
@@ -383,7 +384,7 @@ class FixedReportGenerator {
                         traceStep(
                                 "TOOL",
                                 "고객 최근 결제 조회",
-                                "같은 고객의 최근 " + PaymentHistoryFinder.LOOKBACK_DAYS + "일 결제 (이 사건 제외)",
+                                "같은 고객의 최근 " + PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS + "일 결제 (이 사건 제외)",
                                 history == null
                                         ? "조회 실패"
                                         : "결제 " + history.payments().size() + "건"),

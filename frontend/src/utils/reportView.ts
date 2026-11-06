@@ -155,9 +155,9 @@ export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]):
         ? writing(1)
         : { title: '고른 조회를 실행하는 중', note: null }
     case 'TOOL':
-      // 시스템 조회는 기본 조회다 — 추가 도구가 없는 지금은 다음이 판단 문장 쓰기다 (#578)
+      // 시스템 조회는 기본 조회다 — 다음은 AI가 추가로 볼 조회를 고르는 단계다 (#578, 첫 추가 도구 #581)
       return last.actor === 'SYSTEM'
-        ? writing(1)
+        ? { title: '추가로 볼 조회를 고르는 중', note: null }
         : { title: '다음에 볼 조회를 고르는 중', note: null }
     case 'NUDGE':
       return { title: '다음에 볼 조회를 고르는 중', note: null }

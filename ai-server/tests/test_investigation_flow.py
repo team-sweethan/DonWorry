@@ -63,7 +63,9 @@ def test_base_lookups_run_by_code_without_ai_choice() -> None:
         repeat_last_turn=True,
     )
 
-    outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
+    outcome = run_investigation(
+        context(), llm, toolbox("sample_case.json"), SETTINGS, extra_tools=()
+    )
 
     assert outcome.status == "SUCCEEDED"
     assert llm.choose_messages == []

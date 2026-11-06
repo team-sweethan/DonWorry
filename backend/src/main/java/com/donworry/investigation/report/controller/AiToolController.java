@@ -42,10 +42,12 @@ public class AiToolController {
         return aiToolService.similarCases(caseId);
     }
 
-    // 같은 가맹점 · 같은 고객의 최근 30일 결제, 이 사건 결제 제외 · 최대 20건 (#338)
+    // 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제 제외 · 최대 20건 (#338)
+    // 기간은 안 보내면 30일(기본 조회), AI 추가 조사는 90일 (#581). 그 밖의 값은 400
     @GetMapping("/get_payment_history")
-    public PaymentHistoryToolResponse paymentHistory(@RequestParam Long caseId) {
-        return aiToolService.paymentHistory(caseId);
+    public PaymentHistoryToolResponse paymentHistory(
+            @RequestParam Long caseId, @RequestParam(defaultValue = "30") int lookbackDays) {
+        return aiToolService.paymentHistory(caseId, lookbackDays);
     }
 
     // 같은 가맹점 · 최근 30일에 같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 건수 · 고객 수 · 판정 (#352)

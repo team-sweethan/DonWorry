@@ -15,7 +15,13 @@ from tests.fakes import context
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SETTINGS = Settings(_env_file=None)
-MEASURES = ["measure_reject.json", "measure_accept.json", "measure_mixed.json"]
+MEASURES = [
+    "measure_reject.json",
+    "measure_accept.json",
+    "measure_mixed.json",
+    "measure_case5_new.json",
+    "measure_case5_regular.json",
+]
 
 
 def _load(name: str) -> dict:

@@ -78,6 +78,14 @@ def _latest_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     return found[-1] if found else None
 
 
+# 코드가 한 기본 조회의 고객 이력(30일) — 기준표 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
+def _base_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
+    found = [
+        r.result for r in records if r.filled_by_system and isinstance(r.result, PaymentHistoryTool)
+    ]
+    return found[-1] if found else None
+
+
 def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
     return found[-1] if found else None
@@ -102,6 +110,7 @@ def build_graph(
     max_calls = settings.agent_max_extra_calls
     extras = {tool.name: tool for tool in extra_tools}
     specs = [tool.spec for tool in extra_tools]
+    prompt_fingerprint = prompts.fingerprint(specs, max_calls)
 
     def title(name: str) -> str:
         return extras[name].title if name in extras else trace.tool_title(name)
@@ -312,10 +321,11 @@ def build_graph(
             report_facts(fact_catalog(context, records)),
             records,
             _now(),
-            trace.build_trace(settings, list(state["trace"]), 0),
+            trace.build_trace(settings, list(state["trace"]), 0, prompt_fingerprint),
             _latest_similar(records),
             _latest_history(records),
             _latest_linked(records),
+            _base_history(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -328,7 +338,9 @@ def build_graph(
                 received=f"증거 v{context.evidence_version} 기준으로 조립",
             ),
         ]
-        final = trace.build_trace(settings, steps, trace.elapsed_ms(state["started"]))
+        final = trace.build_trace(
+            settings, steps, trace.elapsed_ms(state["started"]), prompt_fingerprint
+        )
         return {"report": report.model_copy(update={"investigationTrace": final}), "trace": steps}
 
     graph = StateGraph(AgentState)

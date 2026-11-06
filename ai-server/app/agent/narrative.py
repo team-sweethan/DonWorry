@@ -44,8 +44,15 @@ _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
 # 확인할 것은 2개 이상 (#355)
 MIN_SENTENCES = 2
 _TEXT_LIST_2 = {**_TEXT_LIST, "minItems": MIN_SENTENCES}
-# 요약은 1~3문장 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
+# 요약은 1~3문장을 지시한다 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
+# 다 못 담으면 이어 써도 된다. 길이는 읽기 편의라 실패 사유로 쓰지 않는다
+# (거짓은 번호 · 숫자 검사가 막는다)
+# 최대 문장 수는 사실 수 (문장마다 사실이 하나 이상이라 사실마다 한 문장씩 써도 막히지 않는다, #581)
 SUMMARY_MIN, SUMMARY_MAX = 1, 3
+
+
+def summary_max(facts: list[Fact]) -> int:
+    return max(SUMMARY_MAX, len(facts))
 
 
 # 사실 번호 목록을 고정한 JSON Schema — Ollama format · OpenAI 구조화 출력으로 넘긴다
@@ -70,7 +77,7 @@ def narrative_schema(facts: list[Fact]) -> dict[str, Any]:
                 "type": "array",
                 "items": sentence,
                 "minItems": SUMMARY_MIN,
-                "maxItems": SUMMARY_MAX,
+                "maxItems": summary_max(facts),
             },
             "additionalChecks": _TEXT_LIST_2,
         },
@@ -143,7 +150,8 @@ _EXAMPLES = {_key(text) for text in EXAMPLE_SENTENCES}
 
 # 겉모양 검사 — 코드값 · 확률 단정 · 판단 문구 · 한자 · 영어 · 예시 베끼기
 # 걸리면 문장을 지우지 않고 다시 쓰게 한다 (#548)
-def _style_errors(text: str, allowed_words: set[str]) -> list[str]:
+# 예시 베끼기는 요약만 본다 — 확인할 것은 할 일이라 사건에 맞으면 예시와 같아도 된다 (#581)
+def _style_errors(text: str, allowed_words: set[str], check_examples: bool = True) -> list[str]:
     errors: list[str] = []
     if code := _CODE.search(text):
         errors.append(f'코드값 "{code.group()}"을 한국어로 풀어 써라: "{text}"')
@@ -158,7 +166,7 @@ def _style_errors(text: str, allowed_words: set[str]) -> list[str]:
         )
     if hanja := _HANJA.search(text):
         errors.append(f'한자 · 일본 문자 "{hanja.group()}"를 한국어로 바꿔 써라: "{text}"')
-    if _key(text) in _EXAMPLES:
+    if check_examples and _key(text) in _EXAMPLES:
         errors.append(f'예시 문장을 그대로 쓰지 말고 이번 사실로 써라: "{text}"')
     return errors
 
@@ -203,10 +211,15 @@ def validate_narrative(
     errors = [e for sent in narrative.summary for e in _sentence_errors(sent, by_id, base)]
     # 눈여겨볼 사실(다른 고객과 겹침 · 연속 결제)은 요약에서 빠지면 다시 쓰게 한다 (#568)
     # 무엇이 눈여겨볼 사실인지는 코드가 정했다 — AI가 고르지 않는다
+    notable = {f.id for f in facts if f.rank == NOTABLE}
     cited = {fid for sent in narrative.summary for fid in sent.facts}
-    if missing := [f.id for f in facts if f.rank == NOTABLE and f.id not in cited]:
+    if missing := [f.id for f in facts if f.id in notable and f.id not in cited]:
+        # 3문장이 꽉 찬 채로 빠뜨리면 어디에 넣을지 알려 준다 (#581 — 같은 답을 3번 냈다)
+        full = len(narrative.summary) >= SUMMARY_MAX
+        hint = f" {SUMMARY_MAX}문장이 꽉 찼으면 다음 문장으로 이어 써라" if full else ""
         errors.append(
-            f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라"
+            f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라."
+            + hint
         )
     # 확인할 것은 사실 번호를 붙이지 않는다 — 숫자는 준 사실 전체 안에서만
     all_numbers = base | {n for fact in facts for n in _numbers(fact.text)}
@@ -214,12 +227,14 @@ def validate_narrative(
     for text in narrative.additionalChecks:
         if wrong := sorted(_numbers(text) - all_numbers):
             errors.append(f'사실에 없는 숫자 {wrong}: "{text}"')
-        errors += _style_errors(text, all_words)
+        errors += _style_errors(text, all_words, check_examples=False)
     groups = [[s.text for s in narrative.summary], narrative.additionalChecks]
     errors += [f'같은 문장을 반복하지 마라: "{t}"' for texts in groups for t in _repeats(texts)]
-    if not SUMMARY_MIN <= len(narrative.summary) <= SUMMARY_MAX:
+    if not SUMMARY_MIN <= len(narrative.summary) <= summary_max(facts):
         errors.append(
-            f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 (지금 {len(narrative.summary)}개)"
+            f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 "
+            f"(다 못 담으면 이어 써도 되지만 최대 {summary_max(facts)}개, "
+            f"지금 {len(narrative.summary)}개)"
         )
     if len(narrative.additionalChecks) < MIN_SENTENCES:
         errors.append(

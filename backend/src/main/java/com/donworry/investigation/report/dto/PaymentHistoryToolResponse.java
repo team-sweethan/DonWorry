@@ -2,9 +2,12 @@ package com.donworry.investigation.report.dto;
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
 // AI Tool get_payment_history 응답 — 같은 가맹점 · 같은 고객의 최근 결제, 이 사건 결제는 뺀다 (#338, ADR-0009)
 // statusCounts는 payments(최대 20건) 안에서 센 값이다. 기간 안에 더 있으면 truncated=true
+// lookbackDays는 30(기본 조회) 또는 90(AI 추가 조사, #581)
+@Builder
 public record PaymentHistoryToolResponse(
         String caseId,
         int evidenceVersion,
@@ -15,6 +18,7 @@ public record PaymentHistoryToolResponse(
         List<StatusCount> statusCounts,
         boolean truncated) {
 
+    @Builder
     public record Payment(String paymentId, Long amount, String paymentStatus, Instant requestedAt) {}
 
     public record StatusCount(String paymentStatus, int count) {}

@@ -32,8 +32,35 @@ class ExtraTool:
         return frozenset(self.spec["function"]["parameters"]["properties"])
 
 
-# 아직 없다 — 첫 도구는 고객 이력 90일 (PLAN_AI_REPORT T3)
-EXTRA_TOOLS: tuple[ExtraTool, ...] = ()
+# 고객 이력 90일 (#581) — 기본 조회의 30일로 평소 결제를 알 수 없을 때만 넓혀 본다
+# 기간은 AI가 정하지 않는다: 도구에 인자가 없고 90은 코드가 넣는다 (Spring도 30 · 90만 받음)
+HISTORY_90_DAYS = 90
+
+
+def _history_90(box: "ToolBox", args: dict[str, Any]) -> ToolResult:
+    return box.get_payment_history(HISTORY_90_DAYS)
+
+
+HISTORY_90 = ExtraTool(
+    spec={
+        "type": "function",
+        "function": {
+            "name": "get_payment_history_90d",
+            "description": (
+                "같은 고객의 최근 90일 결제(이 사건 결제 제외, 최근 순 최대 20건)와 "
+                "상태별 건수를 본다. "
+                "기본 조회의 고객 최근 결제(30일)에 이번 결제보다 앞선 결제가 없거나 적어서 "
+                "이 고객의 평소 결제를 알 수 없을 때만 부른다. "
+                "30일 결제로 평소 결제를 볼 수 있으면 부르지 않는다. 인자는 없다."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    title="고객 이력 90일 조회",
+    run=_history_90,
+)
+
+EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90,)
 
 
 # 실제로 한 조회 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
@@ -65,7 +92,8 @@ class ToolBox(Protocol):
 
     def find_similar_cases(self) -> SimilarCasesTool: ...
 
-    def get_payment_history(self) -> PaymentHistoryTool: ...
+    # lookback_days가 None이면 기본 조회(30일), 90이면 AI 추가 조사 (#581)
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool: ...
 
     def find_linked_payments(self) -> LinkedPaymentsTool: ...
 
@@ -84,8 +112,8 @@ class SpringToolBox:
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._client.find_similar_cases(self._case_id)
 
-    def get_payment_history(self) -> PaymentHistoryTool:
-        return self._client.get_payment_history(self._case_id)
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool:
+        return self._client.get_payment_history(self._case_id, lookback_days)
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._client.find_linked_payments(self._case_id)
@@ -94,6 +122,7 @@ class SpringToolBox:
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
     # similar · history · linked를 주지 않으면 비슷한 사건 · 이력 · 연관 결제가 없는 응답을 돌려준다
+    # history90을 주지 않으면 30일 이력과 같은 결제를 90일로 돌려준다 (#581)
     def __init__(
         self,
         case_payments: CasePaymentsTool,
@@ -101,6 +130,7 @@ class StaticToolBox:
         similar: SimilarCasesTool | None = None,
         history: PaymentHistoryTool | None = None,
         linked: LinkedPaymentsTool | None = None,
+        history90: PaymentHistoryTool | None = None,
     ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
@@ -122,6 +152,10 @@ class StaticToolBox:
             statusCounts=[],
             truncated=False,
         )
+        # 90일 기본값 — 샘플에 30일보다 오래된 결제가 없으면 30일 결과와 같은 결제다 (#581)
+        self._history90 = history90 or self._history.model_copy(
+            update={"lookbackDays": HISTORY_90_DAYS}
+        )
         # 연관 결제 기본값 — 카드 · 기기 · IP 모두 "정보 없음"
         not_provided = LinkedMatch(
             provided=False, otherCustomerCount=0, paymentCount=0, resultCounts=[], declinedCount=0
@@ -138,6 +172,7 @@ class StaticToolBox:
         )
 
     # 샘플 JSON 하나로 만든다 — similar · history · linked 키가 없으면 위의 "없음" 응답 (측정 샘플)
+    # history90은 AI가 90일 도구를 골랐을 때 돌려줄 응답 (#581)
     @classmethod
     def from_sample(cls, data: dict[str, Any]) -> "StaticToolBox":
         return cls(
@@ -148,6 +183,9 @@ class StaticToolBox:
             if "history" in data
             else None,
             linked=LinkedPaymentsTool.model_validate(data["linked"]) if "linked" in data else None,
+            history90=PaymentHistoryTool.model_validate(data["history90"])
+            if "history90" in data
+            else None,
         )
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
@@ -156,8 +194,8 @@ class StaticToolBox:
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._similar
 
-    def get_payment_history(self) -> PaymentHistoryTool:
-        return self._history
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool:
+        return self._history90 if lookback_days == HISTORY_90_DAYS else self._history
 
     def get_case_payments(self) -> CasePaymentsTool:
         return self._case_payments
