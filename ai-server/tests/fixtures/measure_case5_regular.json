@@ -1,0 +1,150 @@
+{
+  "_measure": "Case 5 모양 ⑤ 단골 손님 — ④와 같은 IP 겹침 + 30일 안에 매입 완료 평소 결제 5건. 90일 도구가 생겨도 AI가 부르지 않아야 한다(30일로 충분)",
+  "casePayments": {
+    "caseId": "206",
+    "evidenceVersion": 1,
+    "source": "P3·P5",
+    "retrievedAt": "2026-11-03T13:10:00Z",
+    "payments": [
+      {
+        "paymentId": "9701",
+        "amount": 89000,
+        "paymentStatus": "HELD",
+        "requestedAt": "2026-11-03T13:02:00Z"
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "206",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-11-03T13:10:01Z",
+    "payments": [
+      {
+        "paymentId": "9701",
+        "riskScore": 65,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {
+            "code": "R04",
+            "name": "특정 횟수 이상 결제",
+            "appliedScore": 40
+          },
+          {
+            "code": "R02",
+            "name": "기존 미사용 단말기",
+            "appliedScore": 25
+          }
+        ],
+        "signals": {
+          "cardDisplayLabel": "국민 •••• 3307",
+          "cardProvided": true,
+          "deviceProvided": true,
+          "ipCountryCode": "KR",
+          "ipProvided": true
+        }
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "history": {
+    "caseId": "206",
+    "evidenceVersion": 1,
+    "source": "P5",
+    "retrievedAt": "2026-11-03T13:10:03Z",
+    "lookbackDays": 30,
+    "payments": [
+      {
+        "paymentId": "9699",
+        "amount": 89000,
+        "paymentStatus": "DECLINED",
+        "requestedAt": "2026-11-03T13:00:00Z"
+      },
+      {
+        "paymentId": "9698",
+        "amount": 89000,
+        "paymentStatus": "DECLINED",
+        "requestedAt": "2026-11-03T12:58:00Z"
+      },
+      {
+        "paymentId": "9690",
+        "amount": 92000,
+        "paymentStatus": "CAPTURED",
+        "requestedAt": "2026-10-30T19:10:00Z"
+      },
+      {
+        "paymentId": "9689",
+        "amount": 85000,
+        "paymentStatus": "CAPTURED",
+        "requestedAt": "2026-10-24T12:40:00Z"
+      },
+      {
+        "paymentId": "9688",
+        "amount": 90000,
+        "paymentStatus": "CAPTURED",
+        "requestedAt": "2026-10-17T18:05:00Z"
+      },
+      {
+        "paymentId": "9687",
+        "amount": 88000,
+        "paymentStatus": "CAPTURED",
+        "requestedAt": "2026-10-11T13:20:00Z"
+      },
+      {
+        "paymentId": "9686",
+        "amount": 91000,
+        "paymentStatus": "CAPTURED",
+        "requestedAt": "2026-10-06T20:30:00Z"
+      }
+    ],
+    "statusCounts": [
+      {
+        "paymentStatus": "CAPTURED",
+        "count": 5
+      },
+      {
+        "paymentStatus": "DECLINED",
+        "count": 2
+      }
+    ],
+    "truncated": false
+  },
+  "linked": {
+    "caseId": "206",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-11-03T13:10:04Z",
+    "lookbackDays": 30,
+    "card": {
+      "provided": true,
+      "otherCustomerCount": 0,
+      "paymentCount": 0,
+      "resultCounts": [],
+      "declinedCount": 0
+    },
+    "device": {
+      "provided": true,
+      "otherCustomerCount": 0,
+      "paymentCount": 0,
+      "resultCounts": [],
+      "declinedCount": 0
+    },
+    "ip": {
+      "provided": true,
+      "otherCustomerCount": 2,
+      "paymentCount": 3,
+      "resultCounts": [
+        {
+          "result": "REVIEW",
+          "count": 2
+        },
+        {
+          "result": "DENY",
+          "count": 1
+        }
+      ],
+      "declinedCount": 1
+    }
+  }
+}

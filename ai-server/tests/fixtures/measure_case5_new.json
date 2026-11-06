@@ -1,0 +1,116 @@
+{
+  "_measure": "Case 5 모양 ④ 처음 보는 손님 — 같은 IP를 다른 고객 2명이 씀 + 30일 이력은 이번 결제 앞뒤 10분 안 카드사 거절 2건뿐(그 전 결제 없음). 요약에 '그보다 앞선 결제 없음'이 들어가는지, 90일 도구가 생기면 AI가 90일을 찾아보는지 본다",
+  "casePayments": {
+    "caseId": "205",
+    "evidenceVersion": 1,
+    "source": "P3·P5",
+    "retrievedAt": "2026-11-03T13:10:00Z",
+    "payments": [
+      {
+        "paymentId": "9601",
+        "amount": 89000,
+        "paymentStatus": "HELD",
+        "requestedAt": "2026-11-03T13:02:00Z"
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "fdsEvidence": {
+    "caseId": "205",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-11-03T13:10:01Z",
+    "payments": [
+      {
+        "paymentId": "9601",
+        "riskScore": 65,
+        "fdsResult": "REVIEW",
+        "ruleHits": [
+          {
+            "code": "R04",
+            "name": "특정 횟수 이상 결제",
+            "appliedScore": 40
+          },
+          {
+            "code": "R02",
+            "name": "기존 미사용 단말기",
+            "appliedScore": 25
+          }
+        ],
+        "signals": {
+          "cardDisplayLabel": "국민 •••• 3307",
+          "cardProvided": true,
+          "deviceProvided": true,
+          "ipCountryCode": "KR",
+          "ipProvided": true
+        }
+      }
+    ],
+    "missingPaymentIds": []
+  },
+  "history": {
+    "caseId": "205",
+    "evidenceVersion": 1,
+    "source": "P5",
+    "retrievedAt": "2026-11-03T13:10:03Z",
+    "lookbackDays": 30,
+    "payments": [
+      {
+        "paymentId": "9599",
+        "amount": 89000,
+        "paymentStatus": "DECLINED",
+        "requestedAt": "2026-11-03T13:00:00Z"
+      },
+      {
+        "paymentId": "9598",
+        "amount": 89000,
+        "paymentStatus": "DECLINED",
+        "requestedAt": "2026-11-03T12:58:00Z"
+      }
+    ],
+    "statusCounts": [
+      {
+        "paymentStatus": "DECLINED",
+        "count": 2
+      }
+    ],
+    "truncated": false
+  },
+  "linked": {
+    "caseId": "205",
+    "evidenceVersion": 1,
+    "source": "P2",
+    "retrievedAt": "2026-11-03T13:10:04Z",
+    "lookbackDays": 30,
+    "card": {
+      "provided": true,
+      "otherCustomerCount": 0,
+      "paymentCount": 0,
+      "resultCounts": [],
+      "declinedCount": 0
+    },
+    "device": {
+      "provided": true,
+      "otherCustomerCount": 0,
+      "paymentCount": 0,
+      "resultCounts": [],
+      "declinedCount": 0
+    },
+    "ip": {
+      "provided": true,
+      "otherCustomerCount": 2,
+      "paymentCount": 3,
+      "resultCounts": [
+        {
+          "result": "REVIEW",
+          "count": 2
+        },
+        {
+          "result": "DENY",
+          "count": 1
+        }
+      ],
+      "declinedCount": 1
+    }
+  }
+}

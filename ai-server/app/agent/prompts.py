@@ -1,4 +1,6 @@
+import hashlib
 import json
+from typing import Any
 
 # 조사 Agent 프롬프트 — 작성 규칙은 fds 정본 기획 2.6 · 2.7을 따른다
 
@@ -131,3 +133,16 @@ WRITE_SYSTEM += (
 WRITE_FACTS = "[조사 사실]\n{facts}"
 
 REPAIR = "형식 오류가 있다: {errors}\n같은 JSON 형식으로 처음부터 다시 출력하라."
+
+
+# 프롬프트 지문 (#581) — 사건 사실을 뺀 고정 지시문 · 추가 도구 설명만 해시한다 (전문은 저장 안 함)
+# 측정 결과를 "어느 프롬프트로 쟀는지" 묶는 데 쓴다. 지시문이나 도구 설명을 고치면 값이 바뀐다
+def fingerprint(extra_specs: list[dict[str, Any]], max_calls: int) -> str:
+    fixed = {
+        "extra": [EXTRA_SYSTEM.format(max_calls=max_calls), EXTRA_START, EXTRA_TOOL_FAILED],
+        "limit": EXTRA_LIMIT,
+        "write": [WRITE_SYSTEM, WRITE_FACTS, REPAIR],
+        "tools": extra_specs,
+    }
+    payload = json.dumps(fixed, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]

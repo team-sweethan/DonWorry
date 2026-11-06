@@ -169,7 +169,8 @@ sequenceDiagram
   - `paymentAnalyses[].ruleHitDetails[]`: `code` · `name` · `appliedScore` · `evidenceId`. 코드가 FDS 조회 기록에서 채우고, `evidenceId`는 그 값을 받은 `evidence` 줄의 ID다. AI 문장으로 만들지 않는다
 - **#326에서 더한 키 — 추가만 한다.** `paymentAnalyses[].ruleHitDetails[]`의 `criterion`(기준, 예: "50만 원 이상") · `observed`(이번 결제, 예: "60만 원"). 아래 `get_fds_evidence` 값을 코드가 그대로 옮긴다. AI 문장이 아니고, AI가 판단 문장을 쓸 때 받는 근거에도 넣지 않는다 (판단 문장의 숫자 금지는 그대로)
   - 화면 타입 · ai-server 스키마 모두 선택 항목이다. 그 전 보고서와 정리할 수 없는 규칙은 값이 없고, 화면은 규칙 이름 · 점수만 보여 준다
-- **#294에서 더한 키 — 추가만 한다.** `investigationTrace`: `provider`(`OLLAMA` · `OPENAI` · `MOCK` · `FIXED`, `OPENAI`는 #453에서 추가) · `model` · `durationMs` · `steps[]`(`kind` · `actor` · `title` · `durationMs` · `asked` · `received` · `retryReason`)
+- **#294에서 더한 키 — 추가만 한다.** `investigationTrace`: `provider`(`OLLAMA` · `OPENAI` · `MOCK` · `FIXED`, `OPENAI`는 #453에서 추가) · `model` · `durationMs` · `steps[]`(`kind` · `actor` · `title` · `durationMs` · `asked` · `received` · `retryReason`) · `promptFingerprint`(#581, 선택)
+  - `promptFingerprint`: 프롬프트 지문 — 사건 사실을 뺀 고정 지시문(추가 조사 · 사실 문장 쓰기 · 고쳐 쓰기)과 추가 도구 설명을 해시한 sha256 앞 12자리. AI 보고서만 채우고 고정 · 예전 보고서에는 없다. 요약 측정(`scripts/measure_summary.py`) 결과를 어느 프롬프트로 쟀는지 묶는 데 쓴다. 지시문 전문은 저장하지 않는다
   - `kind`: `DECIDE`(AI가 추가 조회를 고름, #578 전에는 다음 조회) · `TOOL`(조회 실행) · `NUDGE`(빠진 근거 다시 요청 — #578 전 보고서에만 있다) · `WRITE`(사실 문장 쓰기 · 형식 검사, #548 전에는 "판단 문장 쓰기") · `ASSEMBLE`(조립 · 증거 버전 확인). `actor`: `AI` / `SYSTEM`(코드가 한 기본 조회 · 확인 단계, #578 전에는 보충 조회)
   - 코드가 만든 짧은 요약만 담는다. 결제 금액 · 시각 같은 Tool 응답 원본, 프롬프트, 형식 검사에 걸린 AI 문장은 넣지 않는다 (재시도 사유는 검사 규칙만)
   - 화면 타입에서는 선택 항목(`?`), ai-server 스키마에서는 필수다. **Spring 저장 전 검사는 이 키를 요구하지 않는다** — 판정에 쓰지 않는 표시용이라, 없어도 보고서는 성공으로 저장되고 탭에만 "기록 없음"이 보인다

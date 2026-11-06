@@ -102,6 +102,7 @@ def build_graph(
     max_calls = settings.agent_max_extra_calls
     extras = {tool.name: tool for tool in extra_tools}
     specs = [tool.spec for tool in extra_tools]
+    prompt_fingerprint = prompts.fingerprint(specs, max_calls)
 
     def title(name: str) -> str:
         return extras[name].title if name in extras else trace.tool_title(name)
@@ -312,7 +313,7 @@ def build_graph(
             report_facts(fact_catalog(context, records)),
             records,
             _now(),
-            trace.build_trace(settings, list(state["trace"]), 0),
+            trace.build_trace(settings, list(state["trace"]), 0, prompt_fingerprint),
             _latest_similar(records),
             _latest_history(records),
             _latest_linked(records),
@@ -328,7 +329,9 @@ def build_graph(
                 received=f"증거 v{context.evidence_version} 기준으로 조립",
             ),
         ]
-        final = trace.build_trace(settings, steps, trace.elapsed_ms(state["started"]))
+        final = trace.build_trace(
+            settings, steps, trace.elapsed_ms(state["started"]), prompt_fingerprint
+        )
         return {"report": report.model_copy(update={"investigationTrace": final}), "trace": steps}
 
     graph = StateGraph(AgentState)

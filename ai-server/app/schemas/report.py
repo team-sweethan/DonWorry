@@ -143,6 +143,8 @@ class InvestigationTrace(BaseModel):
     model: str
     durationMs: int | None
     steps: list[TraceStep]
+    # 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 보고서 · 예전 보고서에는 없다
+    promptFingerprint: str | None = None
 
 
 # 비슷한 과거 사건 (#296) — Tool 기록 값 그대로 코드가 채운다. AI 문장으로 만들지 않는다

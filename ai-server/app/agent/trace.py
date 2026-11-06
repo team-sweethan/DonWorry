@@ -148,6 +148,17 @@ def provider_and_model(settings: Settings) -> tuple[str, str]:
     return "MOCK", "mock"
 
 
-def build_trace(settings: Settings, steps: list[TraceStep], duration_ms: int) -> InvestigationTrace:
+def build_trace(
+    settings: Settings,
+    steps: list[TraceStep],
+    duration_ms: int,
+    prompt_fingerprint: str | None = None,
+) -> InvestigationTrace:
     provider, model = provider_and_model(settings)
-    return InvestigationTrace(provider=provider, model=model, durationMs=duration_ms, steps=steps)
+    return InvestigationTrace(
+        provider=provider,
+        model=model,
+        durationMs=duration_ms,
+        steps=steps,
+        promptFingerprint=prompt_fingerprint,
+    )

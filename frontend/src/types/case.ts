@@ -317,6 +317,8 @@ export type InvestigationTrace = {
   model: string
   durationMs: number | null
   steps: TraceStep[]
+  // 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 · 예전 보고서에는 없다 (화면 표시는 나중)
+  promptFingerprint?: string | null
 }
 
 export type AiReport = {
