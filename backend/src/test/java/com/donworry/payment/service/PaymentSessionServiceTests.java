@@ -15,6 +15,7 @@ import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
 import com.donworry.payment.entity.PaymentRequest;
+import com.donworry.payment.entity.PaymentRiskSignals;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentStatus;
 import com.donworry.payment.repository.PaymentRequestRepository;
@@ -308,6 +309,31 @@ class PaymentSessionServiceTests {
         assertThat(command.getValue().idempotencyKey()).isEqualTo(session.getAttemptKey());
     }
 
+    // 카드 이름을 바꾸기 전(#582)에 접수돼 멈춘 결제는 저장된 위험 신호 그대로 이어 간다.
+    // 새 이름으로 다시 만들면 같은 시도 키인데 표시값이 달라 키 충돌로 거절된다. 지금은 없는 C 카드여도 같다 (PR #587 리뷰)
+    @Test
+    void pay_admittedBeforeCardRename_resumesWithStoredRiskSignals() {
+        var session = session(recent());
+        session.fixAttempt("C", "abcdef12", "203.0.113.10", Instant.now());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        var stored = new PaymentRiskSignals(
+                "abcdef12", "dwmock_stored", "모의 카드 C **** 9999", null, "203.0.113.10", "buyer@example.com");
+        admitted(session, 101L, stored);
+        when(flow.submit(any())).thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+
+        var result =
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "99999999"), "198.51.100.7");
+
+        assertThat(result.redirectUrl()).startsWith(SUCCESS);
+        var command = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow).submit(command.capture());
+        assertThat(command.getValue().idempotencyKey()).isEqualTo(session.getAttemptKey());
+        assertThat(command.getValue().riskSignals()).isEqualTo(stored);
+        assertThat(session.getPaymentId()).isEqualTo(101L);
+    }
+
     // 접수됐지만 세션에 연결되기 전에 멈춘 결제도 결과 조회 · 결제창 열기에서 찾는다
     @Test
     void resultAndView_admittedButNotLinked_findPaymentByAttempt() {
@@ -329,8 +355,13 @@ class PaymentSessionServiceTests {
     }
 
     private void admitted(PaymentSession session, long paymentId) {
+        admitted(session, paymentId, PaymentRiskSignals.orNone(null));
+    }
+
+    private void admitted(PaymentSession session, long paymentId, PaymentRiskSignals stored) {
         var request = mock(PaymentRequest.class);
         when(request.getPaymentId()).thenReturn(paymentId);
+        when(request.riskSignals()).thenReturn(stored);
         when(requests.findByMerchantIdAndIdempotencyKey(MERCHANT_ID, session.getAttemptKey()))
                 .thenReturn(Optional.of(request));
     }

@@ -177,8 +177,12 @@ public class PaymentSessionService {
             return locked;
         }));
         if (fixed.getPaymentId() != null) return result(fixed);
-        var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
         String internalCustomer = session.getMerchantId() + ":" + session.getCustomerRef();
+        // 이미 접수된 시도를 이어 갈 때는 접수 때 저장한 위험 신호를 그대로 보낸다. 카드 이름이 바뀌었거나(#582)
+        // 지금은 없는 카드(C · D)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
+        var signals = requests.findByMerchantIdAndIdempotencyKey(session.getMerchantId(), session.getAttemptKey())
+                .map(PaymentRequest::riskSignals)
+                .orElseGet(() -> newRiskSignals(fixed, internalCustomer));
         var command = new PaymentRequestCommand(
                 session.getMerchantId(),
                 session.getOrderRef(),
@@ -186,13 +190,7 @@ public class PaymentSessionService {
                 session.getAmount(),
                 session.getOrderCreatedAt(),
                 session.getAttemptKey(),
-                new PaymentRiskSignals(
-                        fixed.getSubmittedDeviceId(),
-                        card.token(internalCustomer),
-                        card.displayLabel(),
-                        null,
-                        fixed.getSubmittedIp(),
-                        session.getBuyerEmail()));
+                signals);
         // 접수·평가·승인은 트랜잭션 밖에서 기존 흐름이 처리한다(P2 호출 포함).
         var receipt = flow.submit(command);
         var linked = transactions.execute(status -> {
@@ -201,6 +199,18 @@ public class PaymentSessionService {
             return locked;
         });
         return result(Objects.requireNonNull(linked));
+    }
+
+    // 처음 접수할 결제의 위험 신호. 고정된 카드 · 기기 · IP로 만든다.
+    private PaymentRiskSignals newRiskSignals(PaymentSession fixed, String internalCustomer) {
+        var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
+        return new PaymentRiskSignals(
+                fixed.getSubmittedDeviceId(),
+                card.token(internalCustomer),
+                card.displayLabel(),
+                null,
+                fixed.getSubmittedIp(),
+                fixed.getBuyerEmail());
     }
 
     public CheckoutResponses.Result result(String sessionKey) {
