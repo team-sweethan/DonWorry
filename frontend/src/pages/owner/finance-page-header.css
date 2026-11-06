@@ -80,11 +80,22 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 20px;
+  margin-bottom: 10px;
   padding: 0 24px 0 20px;
 }
 .stl-detail .stl-preview-heading h3 {
   margin: 0;
   line-height: 28px;
+}
+.stl-preview-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.stl-preview-label small {
+  color: #756b5b;
+  font-size: 12px;
 }
 .stl-preview-heading .stl-expense-heading {
   margin-top: 0;

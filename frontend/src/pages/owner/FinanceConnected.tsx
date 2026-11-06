@@ -151,6 +151,15 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
     valid && !!setting,
   )
   const result = forecast.status === 'success' ? forecast.data.forecast : null
+  const excludedIncome = result
+    ? [
+        { label: '일정 미정', amount: result.undatedIncome },
+        { label: '지난 배치 미완료', amount: result.overdueIncome },
+        { label: '취소', amount: result.canceledIncome },
+      ]
+        .filter(({ amount }) => amount !== 0)
+        .map(({ label, amount }) => `${label} ${money(amount)}`)
+    : []
   const view = forecast.status === 'success' ? forecast.data.view : null
   const active = result?.days.find((d) => d.date === details)
   const preset = (days: number) =>
@@ -241,11 +250,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               description="예상 유입은 서버에 설정된 배치가 실행된다는 가정입니다. 실제 지급을 보장하지 않습니다."
             />
           )}
-          <Alert
-            type="info"
-            message="예측에서 제외한 정산"
-            description={`일정 미정 ${money(result.undatedIncome)} · 지난 배치 미완료 ${money(result.overdueIncome)} · 취소 ${money(result.canceledIncome)}. 지난 예정일의 미완료 지출은 자동 차감하거나 오늘로 이월하지 않습니다.`}
-          />
+          {excludedIncome.length > 0 && (
+            <Alert
+              type="info"
+              message="예측에서 제외한 정산"
+              description={excludedIncome.join(' · ')}
+            />
+          )}
           <CashFlowOverview
             {...view}
             graphDate={graphDate}
@@ -401,7 +412,7 @@ function ConnectedSettlements() {
         <>
           <PageHeader
             title="정산 내역"
-            description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            description="매입일 기준 영업일 D+3(주말 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
             actions={actions}
           />
           {periodControls}
@@ -440,7 +451,7 @@ function ConnectedSettlements() {
               date: e.date,
               title: e.title,
               amount: e.amount,
-              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '실제 완료' : '예정'}`,
+              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '지출 완료' : '예정'}`,
             }))}
             monthSummary={
               <>
@@ -448,14 +459,9 @@ function ConnectedSettlements() {
                 {mismatch ? (
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
-                  <>
-                    <strong className="stl-value">
-                      <FinanceMoney value={month.data.paidAmount} />
-                    </strong>
-                    <p>
-                      {monthFrom}~{today} · 별도 조회
-                    </p>
-                  </>
+                  <strong className="stl-value">
+                    <FinanceMoney value={month.data.paidAmount} />
+                  </strong>
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>
                 ) : (

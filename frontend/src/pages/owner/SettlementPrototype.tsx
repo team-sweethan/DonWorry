@@ -258,7 +258,7 @@ export function SettlementPrototype({
     <div className="stl-prototype">
       <PageHeader
         title="정산 내역"
-        description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
+        description="매입일 기준 영업일 D+3(주말 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
         actions={
           <div className="finance-header-actions">
             {headerActions}
@@ -371,10 +371,9 @@ export function SettlementPrototype({
       {payoutData && (
         <>
           <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />
-          <div className="payout-policy-note">
-            <span>같은 날 매입 → 같은 영업일 D+3 정산일 · 하루 한 번 지급</span>
-          </div>
-          {monthSummary && <div className="payout-policy-note">{monthSummary}</div>}
+          {monthSummary && (
+            <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
+          )}
         </>
       )}
       <section className="finance-card" style={{ marginBottom: 20 }}>
@@ -525,7 +524,10 @@ export function SettlementPrototype({
               <p>주문번호 검색 · 상태별 조회 · 20건씩 보기</p>
             </div>
             <div className="stl-preview-heading">
-              <h3>주문별 정산 · {daily.length}건</h3>
+              <div className="stl-preview-label">
+                <h3>주문별 정산 · {daily.length}건</h3>
+                <small>최신순, 최대 2건</small>
+              </div>
               <Button
                 size="small"
                 type="text"
@@ -539,11 +541,14 @@ export function SettlementPrototype({
                 더보기
               </Button>
             </div>
-            {daily.length > 0 && <p className="stl-preview-note">최신순 · 최대 2건</p>}
             {daily.slice(0, 2).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
-                  <b>{e.orderId ?? e.id}</b>
+                  <b className="stl-preview-order-id" title={e.orderId ?? String(e.id)}>
+                    {e.orderId && e.orderId.length > 16
+                      ? `${e.orderId.slice(0, 12)}…`
+                      : (e.orderId ?? e.id)}
+                  </b>
                   <span className={`stl-chip stl-${e.status}`}>{labels[e.status]}</span>
                 </div>
                 {e.orderItems?.length ? (
@@ -573,8 +578,11 @@ export function SettlementPrototype({
                 외 {daily.length - 2}건은 전체 보기에서 확인하세요.
               </p>
             )}
-            <div className="stl-preview-heading">
-              <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
+            <div className="stl-preview-heading stl-expense-preview-heading">
+              <div className="stl-preview-label">
+                <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
+                <small>최신순, 최대 2건</small>
+              </div>
               <Button
                 size="small"
                 type="text"
@@ -588,7 +596,6 @@ export function SettlementPrototype({
                 더보기
               </Button>
             </div>
-            {dailyExpenses.length > 0 && <p className="stl-preview-note">최대 2건 미리보기</p>}
             {dailyExpenses.slice(0, 2).map((e) => (
               <article key={e.id}>
                 <div className="stl-detail-title">

@@ -423,6 +423,13 @@
 .stl-expense-heading {
   color: #b91c1c;
 }
+.stl-expense-preview-heading {
+  border-top: 1px solid #e8e1d4;
+  padding-top: 12px;
+}
+.stl-detail article.stl-settlement-preview:not(:has(+ .stl-settlement-preview)) {
+  border-bottom: 0;
+}
 .stl-expense-report {
   padding: 20px;
   border-top: 1px solid #e7e1d5;
@@ -677,10 +684,17 @@
 
 .stl-detail .stl-settlement-preview {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+.stl-preview-order-id {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .stl-settlement-preview .stl-detail-title {
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 .stl-settlement-preview .stl-detail-title > b:first-child {

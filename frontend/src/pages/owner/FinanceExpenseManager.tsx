@@ -262,7 +262,7 @@ export function FinanceExpenseManager({
                           }
                         >
                           {row.paidAt
-                            ? '실제 완료'
+                            ? '지출 완료'
                             : row.originalDate < today
                               ? '연체 예정 · 예측 제외'
                               : '예정'}
