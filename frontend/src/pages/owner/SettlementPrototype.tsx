@@ -371,7 +371,9 @@ export function SettlementPrototype({
       {payoutData && (
         <>
           <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />
-          {monthSummary && <div className="payout-policy-note payout-month-summary">{monthSummary}</div>}
+          {monthSummary && (
+            <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
+          )}
         </>
       )}
       <section className="finance-card" style={{ marginBottom: 20 }}>
@@ -574,7 +576,7 @@ export function SettlementPrototype({
                 외 {daily.length - 2}건은 전체 보기에서 확인하세요.
               </p>
             )}
-            <div className="stl-preview-heading">
+            <div className="stl-preview-heading stl-expense-preview-heading">
               <h3 className="stl-expense-heading">지출 내역 · {dailyExpenses.length}건</h3>
               <Button
                 size="small"

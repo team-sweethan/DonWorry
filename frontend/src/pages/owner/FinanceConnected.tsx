@@ -451,7 +451,7 @@ function ConnectedSettlements() {
               date: e.date,
               title: e.title,
               amount: e.amount,
-              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '실제 완료' : '예정'}`,
+              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '지출 완료' : '예정'}`,
             }))}
             monthSummary={
               <>

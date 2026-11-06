@@ -423,6 +423,10 @@
 .stl-expense-heading {
   color: #b91c1c;
 }
+.stl-expense-preview-heading {
+  border-top: 1px solid #e8e1d4;
+  padding-top: 12px;
+}
 .stl-expense-report {
   padding: 20px;
   border-top: 1px solid #e7e1d5;
