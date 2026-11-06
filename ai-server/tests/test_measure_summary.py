@@ -83,3 +83,58 @@ def test_measure_metrics_notable_counted_on_first_attempt() -> None:
     assert (missed.status, missed.first_pass, missed.rewrites) == ("SUCCEEDED", False, 1)
     assert missed.notable_in_first is False
     assert (cited.first_pass, cited.rewrites, cited.notable_in_first) == (True, 0, True)
+
+
+# 늘 눈여겨볼 사실을 빼먹는 AI — 다시 써도 같아서 조사가 실패한다
+class _AlwaysMissesNotable(_FirstMissesNotable):
+    def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
+        self._writes = 0
+        return super().write_json(messages, schema)
+
+
+# 조사가 실패해도 답마다 불합격 사유가 남는다 — 사유가 없으면 무엇을 고칠지 알 수 없다
+def test_measure_failed_run_records_reject_reasons() -> None:
+    run = measure_run(
+        "case5_new", _sample("measure_case5_new.json"), _AlwaysMissesNotable(), SETTINGS
+    )
+
+    assert (run.status, run.error_code) == ("FAILED", "NARRATIVE_INVALID")
+    assert len(run.reject_reasons) == 1 + SETTINGS.agent_max_repairs
+    for reasons in run.reject_reasons:
+        assert any("눈여겨볼 사실" in reason for reason in reasons)
+        assert not any("mock 조사라" in reason for reason in reasons)
+
+
+# 두 번째 조사 도중 Ctrl+C를 누른 것처럼 멈춘다
+class _StopOnSecondRun:
+    def __init__(self) -> None:
+        self._mock = MockLlmClient()
+        self._writes = 0
+
+    def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
+        return AIMessage(content="조사 완료")
+
+    def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
+        self._writes += 1
+        if self._writes > 1:
+            raise KeyboardInterrupt
+        return self._mock.write_json(messages, schema)
+
+
+# 조사가 끝날 때마다 저장한다 — 도중에 멈추면 그때까지의 측정 결과가 다 사라지던 문제
+def test_measure_out_saved_after_each_run(tmp_path) -> None:
+    out = tmp_path / "before.local.json"
+    argv = ["--sample", "measure_case5_new.json", "--runs", "2", "--out", str(out)]
+
+    with pytest.raises(KeyboardInterrupt):
+        main(
+            argv,
+            settings=SETTINGS,
+            ask=_never_ask,
+            make_llm=lambda _settings: _StopOnSecondRun(),
+            out=io.StringIO(),
+        )
+
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert saved["finished"] is False
+    assert [run["status"] for run in saved["runs"]] == ["SUCCEEDED"]
