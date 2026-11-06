@@ -19,9 +19,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 // 고객 최근 결제 찾기 (#338) — AI Tool과 AI를 끈 고정 보고서가 같이 쓴다. P5 결제는 공개 창구로 읽기만 한다
 // 같은 고객 = 같은 가맹점 + customer_ref (customer_ref는 가맹점마다 따로라 SimilarCaseFinder와 같은 기준)
@@ -31,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class PaymentHistoryFinder {
 
     static final String SOURCE = "P5";
-    static final int LOOKBACK_DAYS = 30;
+    // 기본 조회는 30일. AI는 추가 조사로 90일까지만 넓힐 수 있다 — 그 밖의 기간은 받지 않는다 (#581, ADR-0009)
+    static final int DEFAULT_LOOKBACK_DAYS = 30;
+    static final Set<Integer> ALLOWED_LOOKBACK_DAYS = Set.of(DEFAULT_LOOKBACK_DAYS, 90);
     static final int MAX_PAYMENTS = 20;
     // 화면 · 보고서에 상태를 늘어놓는 순서 — 모르는 상태는 맨 뒤에 나온 순서대로
     static final List<String> STATUS_ORDER =
@@ -43,7 +47,11 @@ public class PaymentHistoryFinder {
 
     // 별도 읽기 트랜잭션 — 고정 보고서가 이 조회 실패를 잡아 넘겨도 보고서 트랜잭션이 되돌림 전용이 되지 않게 한다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public PaymentHistoryToolResponse find(Long caseId, Instant now) {
+    public PaymentHistoryToolResponse find(Long caseId, Instant now, int lookbackDays) {
+        // 사건 · 결제를 읽기 전에 거절한다 — 넓은 기간을 받으면 조회량이 커진다
+        if (!ALLOWED_LOOKBACK_DAYS.contains(lookbackDays)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "조회 기간은 30일 또는 90일만 됩니다.");
+        }
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
@@ -55,22 +63,27 @@ public class PaymentHistoryFinder {
         List<PaymentSummary> others = paymentReader.findRecentByCustomer(
                 securityCase.getMerchantId(),
                 securityCase.getCustomerRef(),
-                now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS),
+                now.minus(lookbackDays, ChronoUnit.DAYS),
                 casePaymentIds,
                 MAX_PAYMENTS + 1);
         List<PaymentSummary> shown = others.stream().limit(MAX_PAYMENTS).toList();
-        return new PaymentHistoryToolResponse(
-                String.valueOf(caseId),
-                securityCase.getEvidenceVersion(),
-                SOURCE,
-                now,
-                LOOKBACK_DAYS,
-                shown.stream()
-                        .map(p -> new PaymentHistoryToolResponse.Payment(
-                                String.valueOf(p.paymentId()), p.amount(), p.paymentStatus(), p.requestedAt()))
-                        .toList(),
-                statusCounts(shown),
-                others.size() > MAX_PAYMENTS);
+        return PaymentHistoryToolResponse.builder()
+                .caseId(String.valueOf(caseId))
+                .evidenceVersion(securityCase.getEvidenceVersion())
+                .source(SOURCE)
+                .retrievedAt(now)
+                .lookbackDays(lookbackDays)
+                .payments(shown.stream()
+                        .map(p -> PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId(String.valueOf(p.paymentId()))
+                                .amount(p.amount())
+                                .paymentStatus(p.paymentStatus())
+                                .requestedAt(p.requestedAt())
+                                .build())
+                        .toList())
+                .statusCounts(statusCounts(shown))
+                .truncated(others.size() > MAX_PAYMENTS)
+                .build();
     }
 
     private static List<StatusCount> statusCounts(List<PaymentSummary> payments) {

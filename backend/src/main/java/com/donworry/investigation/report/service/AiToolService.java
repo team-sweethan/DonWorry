@@ -121,8 +121,9 @@ public class AiToolService {
     }
 
     // 고객 최근 결제 (#338) — 고정 보고서와 같은 규칙을 쓰도록 PaymentHistoryFinder에 맡긴다 (트랜잭션도 그쪽이 연다)
-    public PaymentHistoryToolResponse paymentHistory(Long caseId) {
-        return paymentHistoryFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+    // 기간은 30일(기본 조회) 또는 90일(AI 추가 조사, #581) — 검사도 PaymentHistoryFinder가 한다
+    public PaymentHistoryToolResponse paymentHistory(Long caseId, int lookbackDays) {
+        return paymentHistoryFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS), lookbackDays);
     }
 
     // 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352) — 고정 보고서와 같은 규칙을 쓰도록 LinkedPaymentFinder에 맡긴다

@@ -48,6 +48,7 @@ class AiToolHttpTests {
     static final String API_KEY = "test-ai-key";
     static final String CASE_PAYMENTS = "/internal/ai/tools/get_case_payments";
     static final String FDS_EVIDENCE = "/internal/ai/tools/get_fds_evidence";
+    static final String PAYMENT_HISTORY = "/internal/ai/tools/get_payment_history";
 
     static final Instant LINKED_AT = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
@@ -196,6 +197,21 @@ class AiToolHttpTests {
                 .andExpect(jsonPath("$.payments[1].riskScore").isEmpty())
                 .andExpect(jsonPath("$.payments[1].ruleHits").isEmpty())
                 .andExpect(jsonPath("$.missingPaymentIds[0]").value(String.valueOf(missing)));
+    }
+
+    // 기간을 안 보내면 30일이다 — ai-server 기본 조회는 기간 없이 부른다. 90일은 AI 추가 조사, 그 밖은 400 (#581)
+    @Test
+    void paymentHistoryTool_noLookbackDays_defaults30() throws Exception {
+        String caseId = openCase().getId().toString();
+
+        mvc.perform(get(PAYMENT_HISTORY).param("caseId", caseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lookbackDays").value(30));
+        mvc.perform(get(PAYMENT_HISTORY).param("caseId", caseId).param("lookbackDays", "90"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lookbackDays").value(90));
+        mvc.perform(get(PAYMENT_HISTORY).param("caseId", caseId).param("lookbackDays", "60"))
+                .andExpect(status().isBadRequest());
     }
 
     // Tool은 읽기 전용이다 — 바꾸는 요청은 받지 않는다
