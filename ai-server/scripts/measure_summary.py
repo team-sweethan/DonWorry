@@ -102,6 +102,10 @@ class RunResult:
     reject_reasons: list[list[str]]
     # 답마다 그대로 베낀 예시 문장 (불합격 · 합격 답 모두)
     copied_examples: list[list[str]]
+    # 이 사건의 눈여겨볼 사실 번호와, 답마다 요약 문장별로 인용한 사실 번호
+    # (#581 — 무엇을 빠뜨렸나 보려고)
+    notable_facts: list[str]
+    cited_facts: list[list[list[str]]]
     error_code: str | None
     seconds: float
 
@@ -139,6 +143,18 @@ def _copied_examples(writes: list[str]) -> list[list[str]]:
     return copied
 
 
+# 답마다 요약 문장별 인용 번호 — 사실 번호는 코드가 붙인 것이라 AI 문장 없이 남긴다
+def _cited_by_sentence(writes: list[str]) -> list[list[list[str]]]:
+    cited = []
+    for raw in writes:
+        try:
+            summary = json.loads(raw).get("summary") or []
+            cited.append([list(sentence.get("facts") or []) for sentence in summary])
+        except (ValueError, AttributeError, TypeError):
+            cited.append([])
+    return cited
+
+
 def measure_run(sample: str, data: dict[str, Any], llm: LlmClient, settings: Settings) -> RunResult:
     cases = data["casePayments"]
     context = CaseContext(
@@ -174,6 +190,8 @@ def measure_run(sample: str, data: dict[str, Any], llm: LlmClient, settings: Set
         fingerprint=report.investigationTrace.promptFingerprint if report else None,
         reject_reasons=_reject_reasons(recorder.writes, facts, data),
         copied_examples=_copied_examples(recorder.writes),
+        notable_facts=sorted(notable),
+        cited_facts=_cited_by_sentence(recorder.writes),
         error_code=outcome.error["code"] if outcome.error else None,
         seconds=seconds,
     )
