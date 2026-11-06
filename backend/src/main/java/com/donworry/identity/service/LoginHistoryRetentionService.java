@@ -37,7 +37,7 @@ public class LoginHistoryRetentionService {
     public void deleteExpired() {
         var cutoff = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)
                 .truncatedTo(ChronoUnit.MICROS)
-                .minusDays(90);
+                .minus(AccessRecordRetentionPolicy.RETENTION_PERIOD);
         var tx = new TransactionTemplate(transactions);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         // 없는 아이디의 실패는 잠금 없이 계속 쌓일 수 있어 배치 수가 아닌 실행 시간으로 상한을 둔다.

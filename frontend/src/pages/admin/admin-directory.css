@@ -1,0 +1,141 @@
+/* 계정·가맹점 화면의 wrapper 아래에만 적용한다. 공통 버튼·표의 크기와 배치는 유지한다. */
+.admin-directory .directory-surface {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.admin-directory .directory-surface:focus-within {
+  border-color: #c4d3ea;
+  box-shadow: 0 0 0 3px #2563eb06;
+}
+.admin-directory a:not(:has(.ant-btn)) {
+  text-underline-offset: 4px;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
+}
+.admin-directory a:not(:has(.ant-btn)):hover {
+  text-decoration: underline;
+}
+.admin-directory a:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+.admin-directory .ant-table-tbody > tr > td {
+  transition: background-color 140ms ease;
+}
+.admin-directory .ant-btn {
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+@media (hover: hover) {
+  .admin-directory .directory-surface:hover {
+    border-color: #d3dcea;
+  }
+}
+.admin-directory .directory-table-skeleton {
+  display: grid;
+  margin: -16px;
+}
+.admin-directory .directory-skeleton-row {
+  display: grid;
+  align-items: center;
+  gap: 24px;
+  min-height: 55px;
+  padding: 15px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.admin-directory .directory-skeleton-row:last-child {
+  border-bottom: 0;
+}
+.admin-directory .is-users .directory-skeleton-row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.admin-directory .is-merchants .directory-skeleton-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.admin-directory .directory-skeleton-row .ant-skeleton {
+  min-width: 0;
+  width: 100%;
+}
+.admin-directory .directory-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.admin-directory .directory-detail-skeleton > div {
+  display: grid;
+  gap: 20px;
+}
+.admin-directory .directory-tabs-skeleton {
+  display: flex;
+  gap: 28px;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.admin-directory .directory-tabs-skeleton .ant-skeleton-input {
+  width: 76px;
+  min-width: 0;
+}
+.admin-directory .directory-description-skeleton {
+  display: grid;
+  gap: 24px;
+  margin-top: 8px;
+}
+.admin-directory .directory-description-skeleton.is-user {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+.admin-directory .directory-description-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.admin-directory .directory-actions-skeleton {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .admin-directory {
+    animation: directory-enter 160ms ease-out;
+  }
+}
+@keyframes directory-enter {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-directory .directory-surface,
+  .admin-directory a,
+  .admin-directory .ant-btn,
+  .admin-directory .ant-table-tbody > tr > td {
+    transition: none;
+  }
+  .admin-directory
+    .directory-loading
+    .ant-skeleton
+    :is(
+      .ant-skeleton-input,
+      .ant-skeleton-button,
+      .ant-skeleton-title,
+      .ant-skeleton-paragraph > li
+    ) {
+    animation: none;
+  }
+}

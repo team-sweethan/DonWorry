@@ -62,7 +62,7 @@ P6 추가 제안: [0053 정기 지출 규칙과 회차별 완료 기록](0053-p6
 | [0030](0030-cakeshop-payment-attempts.md) | CakeShop 주문별 결제 시도와 HTTP 조회 | 제안 — #149 저장 구조 방향 사용자 승인, 상세 설계·인증 연결 확인 중 |
 | [0031](0031-fds-evaluation-request-id-conflict.md) | FDS 평가 요청 ID 재사용 충돌 처리 | 제안 — 팀 합의 필요 |
 | [0032](0032-production-admin-startup.md) | 운영 설정 분리와 관리자 비밀번호 기동 적용 | 제안 — #131 PR B 운영 시작 시 시연 계정 정지 확장 |
-| [0033](0033-login-history.md) | 로그인 이력의 독립 저장과 90일 조회 | 제안 — #147 사용자 승인·구현 반영, 팀 리뷰 대상 |
+| [0033](0033-login-history.md) | 로그인 이력의 독립 저장·1년 보관과 90일 목록 조회 | 제안 — #147 사용자 승인·구현 반영, 팀 리뷰 대상 |
 | [0034](0034-fds-evidence-read-contract.md) | P3 Case 화면용 FDS 평가 근거 공개 조회 계약 | 제안 — #162 구현·P3 연동 대기 |
 | [0035](0035-long-held-payment-policy.md) | 장기 보류 결제의 확인 기한과 금융 종료 분리 | 전체 정책 제안 — 내부 조회 담당 확인 완료, 운영 시간·담당·CakeShop 정책·구현 미완료 |
 | [0036](0036-fds-failure-analysis-and-reevaluation.md) | P2 FDS 오류 분석·재탐지 계약 | 전체 계약 제안 — 내부 ERROR 정책·명시적 실행 방식 합의 완료, P5 저장·API 및 잠금·전달 복구·CSRF 설계 사용자 승인·문서화, 구현·통합 검증 전 |
@@ -145,3 +145,5 @@ P1 #482 PR 리뷰 대상: [0075 VM 공통 잠금과 지속 실행 기록으로 �
 P6 #507 PR 리뷰 대상: [0076 실제 지급 원장을 잔액 유입의 기준으로 사용](0076-p6-payout-based-cash-flow.md).
 
 P1 #483 PR 리뷰 대상: [0077 배포 전 DB 백업과 승인된 이전 이미지 복구](0077-release-backup-and-image-recovery.md) — 제안, 핵심 기능 합의·운영 검증 전.
+
+P6 #233 리뷰 대상: [0081 정산 주문 상세용 상품 스냅샷 전송](0081-p6-order-items-without-pickup.md).

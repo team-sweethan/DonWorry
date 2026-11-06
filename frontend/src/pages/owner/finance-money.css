@@ -1,0 +1,41 @@
+.finance-money.finance-money {
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: baseline;
+  white-space: nowrap;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  font-variant-numeric: tabular-nums;
+  /* 문장 안의 금액도 텍스트 기준선을 쓰도록 스크롤 박스를 만들지 않는다. */
+  overflow: visible;
+}
+.finance-money .finance-money__text {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: inherit;
+  color: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+.finance-money:focus-visible {
+  outline: 2px solid #ad7c18;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.payout-stat > strong,
+.cashflow-summary-grid strong,
+.recovery-values b,
+.stl-value,
+.stl-total b {
+  min-width: 0;
+  white-space: nowrap;
+}
+.stl-day .stl-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+}

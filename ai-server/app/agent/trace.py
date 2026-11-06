@@ -1,5 +1,6 @@
 import re
 import time
+from collections.abc import Callable
 from typing import Any
 
 from app.config import Settings
@@ -58,11 +59,11 @@ def step(
     )
 
 
-# AI가 다음에 무엇을 하기로 했는지 — 도구 이름만 옮긴다
-def decided(tool_calls: list[dict[str, Any]]) -> str:
+# AI가 다음에 무엇을 하기로 했는지 — 도구 이름만 옮긴다. 추가 도구 이름은 title이 안다 (#578)
+def decided(tool_calls: list[dict[str, Any]], title: Callable[[str], str] = tool_title) -> str:
     if not tool_calls:
         return "조사 완료라고 답함"
-    return " · ".join(tool_title(call["name"]) for call in tool_calls) + " 선택"
+    return " · ".join(title(call["name"]) for call in tool_calls) + " 선택"
 
 
 def tool_asked(name: str, args: dict[str, Any]) -> str:
@@ -147,6 +148,17 @@ def provider_and_model(settings: Settings) -> tuple[str, str]:
     return "MOCK", "mock"
 
 
-def build_trace(settings: Settings, steps: list[TraceStep], duration_ms: int) -> InvestigationTrace:
+def build_trace(
+    settings: Settings,
+    steps: list[TraceStep],
+    duration_ms: int,
+    prompt_fingerprint: str | None = None,
+) -> InvestigationTrace:
     provider, model = provider_and_model(settings)
-    return InvestigationTrace(provider=provider, model=model, durationMs=duration_ms, steps=steps)
+    return InvestigationTrace(
+        provider=provider,
+        model=model,
+        durationMs=duration_ms,
+        steps=steps,
+        promptFingerprint=prompt_fingerprint,
+    )

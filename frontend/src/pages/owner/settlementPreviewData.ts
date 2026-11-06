@@ -45,10 +45,10 @@ function captureBeforePayout(paidDate: string) {
   return date.format('YYYY-MM-DD')
 }
 // 완료 건은 실제 지급일, 미완료 건은 매입일을 별도로 설정해 두 시각을 혼동하지 않는다.
-export function previewSettlements(now: Date): PreviewOrderEntry[] {
+export function previewSettlements(now: Date, amountScale = 1): PreviewOrderEntry[] {
   type Example =
     | { gross: number; status: 'done'; paidOffset: number }
-    | { gross: number; status: 'sch' | 'exp'; captureOffset: number }
+    | { gross: number; status: 'sch'; captureOffset: number }
   const items: Example[] = [
     { gross: 32000, paidOffset: -11, status: 'done' },
     { gross: 64000, paidOffset: -8, status: 'done' },
@@ -59,14 +59,15 @@ export function previewSettlements(now: Date): PreviewOrderEntry[] {
     { gross: 32000, captureOffset: -3, status: 'sch' },
     { gross: 250000, captureOffset: -2, status: 'sch' },
     { gross: 29000, captureOffset: -1, status: 'sch' },
-    { gross: 45000, captureOffset: 1, status: 'exp' },
-    { gross: 250000, captureOffset: 3, status: 'exp' },
-    { gross: 58000, captureOffset: 5, status: 'exp' },
-    { gross: 120000, captureOffset: 9, status: 'exp' },
+    { gross: 45000, captureOffset: -1, status: 'sch' },
+    { gross: 250000, captureOffset: 0, status: 'sch' },
+    { gross: 58000, captureOffset: 0, status: 'sch' },
+    { gross: 120000, captureOffset: 0, status: 'sch' },
     { gross: 100000, paidOffset: 0, status: 'done' },
   ]
   return items.map((example, i) => {
-    const { gross, status } = example
+    const { status } = example
+    const gross = example.gross * amountScale
     const paidDate =
       status === 'done' ? dayjs(now).add(example.paidOffset, 'day').format('YYYY-MM-DD') : null
     const capturedDate = paidDate
@@ -86,23 +87,26 @@ export function previewSettlements(now: Date): PreviewOrderEntry[] {
       status,
       capturedDate,
       eligibleDate,
-      pickup: new Date(capturedDate + 'T15:20:00'),
       date: new Date((paidDate ?? eligibleDate) + 'T03:00:00'),
     }
   })
 }
 
-export function previewPayouts(now: Date, todayDeduction = 97000): SettlementReport['payouts'] {
+export function previewPayouts(
+  now: Date,
+  todayDeduction = 97000,
+  amountScale = 1,
+): SettlementReport['payouts'] {
   const today = dayjs(now).format('YYYY-MM-DD')
   const totals = new Map<string, number>()
-  for (const e of previewSettlements(now).filter((e) => e.status === 'done')) {
+  for (const e of previewSettlements(now, amountScale).filter((e) => e.status === 'done')) {
     const date = dayjs(e.date).format('YYYY-MM-DD')
     totals.set(date, (totals.get(date) ?? 0) + e.settlementAmount!)
   }
   return [...totals]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, total], index) => {
-      const deduction = date === today ? Math.min(todayDeduction, total) : 0
+      const deduction = date === today ? Math.min(todayDeduction * amountScale, total) : 0
       return {
         payoutId: 8001 + index,
         payoutDate: date,
@@ -121,8 +125,9 @@ export function previewPayoutReport(
   to: string,
   deduction = 97000,
   outstanding = 150000,
+  amountScale = 1,
 ) {
-  const payouts = previewPayouts(now, deduction).filter(
+  const payouts = previewPayouts(now, deduction, amountScale).filter(
     (p) => p.payoutDate >= from && p.payoutDate <= to,
   )
   return {
@@ -130,6 +135,6 @@ export function previewPayoutReport(
     paidSettlementAmount: payouts.reduce((n, p) => n + p.settlementAmount, 0),
     refundDeductionAmount: payouts.reduce((n, p) => n + p.refundDeductionAmount, 0),
     paidAmount: payouts.reduce((n, p) => n + p.payoutAmount, 0),
-    outstandingRecoveryAmount: outstanding,
+    outstandingRecoveryAmount: outstanding * amountScale,
   }
 }

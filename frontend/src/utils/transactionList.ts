@@ -194,6 +194,27 @@ export type MlCell =
       modelVersion: string
     }
 
+// 보고서 ML 줄 조회 결과 — 어떤 요청(결제 번호 · 새로고침 횟수)의 응답인지 함께 저장한다
+export type LoadedMlScores = { key: string; scores: MlScores }
+
+const NO_PAYMENTS: MlScores = { status: 'loaded', scoreByPaymentId: new Map() }
+
+// 새로고침 횟수를 넣어 같은 사건을 [새로고침]해도 다시 조회한다 (#547 Codex 리뷰)
+export function mlScoresRequestKey(paymentIds: string[], refreshKey: number): string {
+  return `${paymentIds.join(',')}#${refreshKey}`
+}
+
+// 지금 요청의 응답이 아니면 "불러오는 중" — 이전 결과(실패 · 채점 전)를 다시 보여 주지 않는다
+export function mlScoresView(
+  loaded: LoadedMlScores | null,
+  paymentIds: string[],
+  refreshKey: number,
+): MlScores {
+  if (paymentIds.length === 0) return NO_PAYMENTS
+  const key = mlScoresRequestKey(paymentIds, refreshKey)
+  return loaded?.key === key ? loaded.scores : { status: 'loading' }
+}
+
 // 0~1 → 정수 %, 내림 — 29.96%를 "30%"로 올리면 기준 미만인데 기준값처럼 보인다
 // DB가 소수 6자리라 먼저 그 자리에서 맞춘다 (0.29 * 100 = 28.999…가 28%로 내려가지 않게)
 const floorPercent = (rate: number) => Math.floor(Math.round(rate * 1_000_000) / 10_000)

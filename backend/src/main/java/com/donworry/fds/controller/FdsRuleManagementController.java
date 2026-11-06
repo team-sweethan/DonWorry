@@ -2,6 +2,7 @@ package com.donworry.fds.controller;
 
 import com.donworry.fds.api.FdsRuleChangeRequestPage;
 import com.donworry.fds.api.FdsRuleChangeRequestStatus;
+import com.donworry.fds.api.FdsRulePolicyChangeHistoryPage;
 import com.donworry.fds.api.FdsRulePolicySummary;
 import com.donworry.fds.service.FdsRuleManagementService;
 import java.util.List;
@@ -38,6 +39,14 @@ public class FdsRuleManagementController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return service.requests(status, Math.max(page, 0), Math.min(Math.max(size, 1), 10));
+    }
+
+    @GetMapping("/rule-policy-change-histories")
+    public FdsRulePolicyChangeHistoryPage history(
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.history(search, Math.max(page, 0), Math.min(Math.max(size, 1), 10));
     }
 
     @PutMapping("/rule-change-requests/{requestId}/review")

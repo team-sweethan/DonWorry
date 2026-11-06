@@ -255,9 +255,17 @@
 
 .dw-rule-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
+}
+
+.dw-rule-card-top > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
 }
 
 .dw-rule-code,
@@ -269,13 +277,34 @@
   font-weight: 700;
 }
 
-.dw-rule-code {
-  background: #eef2ff;
-  color: #3730a3;
+.dw-rule-card-payment .dw-rule-code {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.dw-rule-card-account .dw-rule-code {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.dw-rule-card-account {
+  border-color: #e9d5ff;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-area {
+  fill: #f3e8ff;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-line {
+  stroke: #9333ea;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-dot {
+  fill: #7e22ce;
 }
 
 .dw-rule-group {
-  margin-left: 8px;
+  margin-left: 0;
   font-size: 12px;
 }
 
@@ -332,6 +361,44 @@
   color: #0f172a;
   font-size: 17px;
   letter-spacing: -0.3px;
+}
+
+/* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다. */
+.dw-rule-card-account {
+  border-color: #ddd6fe;
+  background: linear-gradient(180deg, #fafaff 0%, #fff 38%);
+}
+
+.dw-rule-card-account .dw-rule-code {
+  border-color: #ddd6fe;
+  background: #eef2ff;
+  color: #5b21b6;
+}
+
+.dw-rule-card-account h2 {
+  color: #312e81;
+}
+
+.dw-rule-card-account .dw-rule-note {
+  border-color: #ddd6fe;
+  background: #faf5ff;
+  color: #6b21a8;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-area {
+  fill: #ede9fe;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-line {
+  stroke: #8b5cf6;
+}
+
+.dw-rule-card-account .dw-rule-sparkline-dot {
+  fill: #6d28d9;
+}
+
+.dw-rule-card-account .dw-rule-policy-switch.ant-switch-checked {
+  background: #6d28d9;
 }
 
 .dw-rule-definition {
@@ -444,6 +511,14 @@
 
 .dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked {
   background: #2563eb;
+}
+
+.dw-rule-card-account .dw-rule-frequency .dw-rule-policy-switch.ant-switch-checked {
+  background: #7e22ce;
+}
+
+.dw-rule-card-account .dw-rule-frequency strong {
+  color: #7e22ce;
 }
 
 .dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner {

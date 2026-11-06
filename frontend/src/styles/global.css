@@ -511,6 +511,28 @@ textarea {
   justify-content: center;
   padding: 30px;
 }
+.dw-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px 32px;
+  text-align: center;
+}
+.dw-list-empty h2 {
+  margin: 8px 0 0;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+.dw-list-empty p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+}
+.dw-list-empty-action {
+  margin-top: 12px;
+}
 /* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
 .dw-login-shell {
   min-height: 100vh;
@@ -864,6 +886,103 @@ textarea {
   word-break: keep-all;
 }
 
+/* 사이드바 접기 버튼 (#537) */
+.dw-sidebar-top {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 8px;
+}
+.dw-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--shell-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.dw-sidebar-toggle:hover {
+  background: var(--shell-hover);
+  color: var(--shell-active-text);
+}
+.dw-sidebar-toggle:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: -2px;
+}
+
+/* 접힌 사이드바: 아이콘만 남긴다. 휴대폰 폭(가로 메뉴)에서는 접기를 쓰지 않는다 */
+@media (min-width: 761px) {
+  .admin-viewport[data-role] {
+    --dw-sidebar-collapsed-width: 72px;
+    transition: grid-template-columns 0.2s ease;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed {
+    grid-template-columns: var(--dw-sidebar-collapsed-width) minmax(0, 1fr);
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-sidebar {
+    overflow-x: hidden;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-sidebar-top {
+    justify-content: center;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-group {
+    margin-bottom: 8px;
+  }
+  /* 묶음 제목은 얇은 구분선으로 바꾼다 */
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-heading {
+    height: 1px;
+    margin: 0 6px 8px;
+    overflow: hidden;
+    background: var(--shell-line);
+    font-size: 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-link {
+    position: relative;
+    justify-content: center;
+    padding: 9px 0;
+  }
+  /* 메뉴 이름은 화면에서만 숨기고 화면 낭독기는 그대로 읽는다 */
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  /* 처리 필요 숫자는 아이콘 모서리의 점으로 바꾼다 */
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-badge {
+    position: absolute;
+    top: 7px;
+    right: 10px;
+    min-width: 0;
+    width: 8px;
+    height: 8px;
+    margin: 0;
+    padding: 0;
+    font-size: 0;
+    line-height: 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-owner-note {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .dw-sidebar-top {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-viewport[data-role] {
+    transition: none;
+  }
+}
+
 /* 키보드 사용자: 첫 Tab에 본문 바로가기 */
 .dw-skip-link {
   position: fixed;
@@ -931,4 +1050,34 @@ textarea {
   .dw-owner-note-mascot {
     display: none;
   }
+}
+
+.dw-input-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+  color: #657185;
+  font-size: 12px;
+}
+.dw-input-checks li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dw-input-checks .is-met {
+  color: #246747;
+}
+.dw-input-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

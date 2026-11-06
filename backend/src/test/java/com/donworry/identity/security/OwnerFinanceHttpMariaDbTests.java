@@ -23,10 +23,7 @@ import tools.jackson.databind.json.JsonMapper;
 // 실제 P6 현금흐름 설정 API로 실제 로그인·세션 가맹점·공통 인가의 연결을 검증한다.
 // 정산 규칙은 등록한 메서드·경로만 열므로 테스트 전용 경로를 쓰면 허용 여부와 관계없이 거절된다 (ADR-0067)
 @Tag("mariadb")
-// P6 사장님 API는 기본 비활성이라 이 테스트에서만 켠다 (docs/settlement/balance-expenses-api.md)
-@SpringBootTest(
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "settlement.owner-http.enabled=true")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Import(MariaDbTestContainerConfig.class)
 // 테스트 전용 컨텍스트의 연결 풀을 반납해 뒤의 동시성 검사가 DB 연결 한도를 넘지 않게 한다.
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)

@@ -25,6 +25,10 @@ JsonAccessDeniedHandler까지 도달한 AccessDeniedException 중 인증된 Sess
 CSRF 403·직원 403·401은 제외한다. 비밀번호 강제 변경 필터는 직접 응답하므로 기록 서비스로 오지 않는다.
 동시 로그아웃으로 인증·principal이 사라졌으면 기록을 건너뛴다.
 
+프론트엔드가 API 요청 전에 차단하는 관리자 화면 URL도 `POST /api/auth/forbidden-frontend-routes`로
+기록한다. 서버는 pathname이 `/admin`·`/admin/**`·`/security`·`/security/**`인지 다시 확인하고, DB에서 실제 OPERATOR인
+계정만 OUT_OF_ROLE로 저장한다. 요청 본문의 계정·권한·가맹점 값은 받지 않으며, 다른 경로는 무시한다.
+
 핸들러는 기록 시도 후 기존 응답 작성기를 부른다. INSERT·이벤트 발행·커밋 실패를 받아도 원래 403 AUTH_002를 유지한다.
 실패 로그는 userId·예외 클래스만 기록하며 DB 오류 원문·stack trace·요청 본문·쿼리스트링은 기록하지 않는다.
 
@@ -66,7 +70,7 @@ OperatorAccessRoutes에 사장님 전용 경로를 모으고 SecurityConfig와 �
 접두사만 같거나 미등록 메서드는 사장님 경로로 보지 않는다. 공통 /api/auth/**는 사장님 전용 목록에 넣지 않는다.
 이 분류는 인가 결과를 대신하지 않는다.
 
-## 보관 정책 — 사용자 개정, IP 정리 미구현
+## 보관 정책 — #528 원본 IP 정리 구현
 
 - `client_ip`: 발생 시각(`occurred_at`) 기준 1년 보관 후 NULL 처리.
 - 원본 행: 조사 근거이므로 IP 정리 작업에서 삭제하지 않는다. 행 보관 기간·종료 기준은 조사 기록 보관 정책에서 따로 정한다.
@@ -74,8 +78,7 @@ OperatorAccessRoutes에 사장님 전용 경로를 모으고 SecurityConfig와 �
 
 법 조항의 참고 근거·제8조 적용 범위·2년 보관 대상 예외는 [ADR-0080 보관 정책](../decisions/0080-operator-access-denials.md#보관-정책)을 따른다.
 IP NULL 처리만으로 남은 행의 개인정보까지 모두 파기됐다고 보지 않는다.
-IP 정리는 후속 이슈에서 구현한다. 현재 코드는 수집·발행만 하며 IP를 자동으로 지우지 않는다.
-후속 범위에는 원본·P2 복사본·이벤트·백업의 IP와 날짜 경계·재실행·실패 복구 검증이 포함된다.
+#525 시점에는 수집·발행만 구현했고, #528에서 원본 IP 정리를 추가한다. 원본의 날짜 경계·재실행·실패 복구 실행 결과는 [#528 기록](528-access-record-retention.md)을 따른다. P2 복사본·이벤트·백업의 파기·복구 정책은 후속이다.
 
 ## 검증
 

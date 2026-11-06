@@ -1,9 +1,9 @@
-import json
-
 import pytest
 
-from app.agent.assemble import facts_json
 from app.agent.evidence import decision_basis
+from app.agent.facts import fact_catalog
+from app.agent.tools import ToolRecord
+from app.schemas.case_context import CaseContext
 from app.schemas.tools import (
     CasePaymentsTool,
     FdsPayment,
@@ -75,20 +75,20 @@ def _history(rows: list[tuple[int, str, str]]) -> PaymentHistoryTool:
     )
 
 
-def _linked(card_others: int = 0) -> LinkedPaymentsTool:
-    card = (
-        {**NONE, "otherCustomerCount": card_others, "paymentCount": 9, "declinedCount": 2}
-        if card_others
-        else NONE
-    )
+# Spring 응답 모양 — 사건 결제가 "1" 하나라 결제별 칸(#533)은 사건 합계와 같다
+def _linked(card_others: int = 0, device_others: int = 0) -> LinkedPaymentsTool:
+    def match(others: int) -> dict[str, object]:
+        if not others:
+            return NONE
+        return {**NONE, "otherCustomerCount": others, "paymentCount": 9, "declinedCount": 2}
+
+    links = {
+        "card": match(card_others),
+        "device": match(device_others),
+        "ip": {**NONE, "provided": False},
+    }
     return LinkedPaymentsTool.model_validate(
-        {
-            **HEAD,
-            "lookbackDays": 30,
-            "card": card,
-            "device": NONE,
-            "ip": {**NONE, "provided": False},
-        }
+        {**HEAD, "lookbackDays": 30, **links, "payments": [{"paymentId": "1", **links}]}
     )
 
 
@@ -260,38 +260,99 @@ def test_rule_signal_label_is_fds_rule_name(code: str, name: str) -> None:
     assert [s.label for s in basis.signals] == [name]
 
 
-# AI에게 주는 근거에 판정 근거 · 기준표 판정이 들어가고 영문 판정 코드는 없다
-def test_facts_include_basis_in_korean() -> None:
-    case = _case(205600)
-    fds = {"1": _fds([_rule("R03", "신규 카드")], country="TH")}
-
-    facts = json.loads(facts_json(case, fds, None, _history(USUAL), _linked(card_others=1)))
-
-    basis = facts["결제"][0]["판정 근거"]
-    assert basis["기준표 판정"].endswith("승인 취소 검토")
-    assert basis["고위험 징후"] == [{"징후": "같은 카드를 다른 고객이 사용", "정상 사유": "없음"}]
-    assert "REJECT_REVIEW" not in json.dumps(facts, ensure_ascii=False)
+# --- 사건 도중 결제 재현 (#532) ---
+# 사건은 30분 안의 보류 결제를 계속 합친다 — 10:00 보류 → 10:14 정상 결제 2건 → 10:28 보류
+# 10:14 결제는 두 사건 결제와 10분 넘게 떨어져 있지만 사건이 시작된 뒤의 결제라 평소 결제가 아니다
+STRETCHED = [("1", "2026-05-21T10:00:00Z"), ("2", "2026-05-21T10:28:00Z")]
+DURING = [
+    (220000, "CAPTURED", "2026-05-21T10:14:00Z"),
+    (230000, "CAPTURED", "2026-05-21T10:14:30Z"),
+]
 
 
-# --- Codex 리뷰 재현 (#501) ---
+def _stretched_case() -> CasePaymentsTool:
+    return CasePaymentsTool.model_validate(
+        {
+            **HEAD,
+            "payments": [
+                {"paymentId": pid, "amount": 220000, "paymentStatus": "HELD", "requestedAt": at}
+                for pid, at in STRETCHED
+            ],
+            "missingPaymentIds": [],
+        }
+    )
 
 
-# AI 입력의 판정 근거에 든 숫자는 문장 검사가 허용하는 숫자여야 한다
-# 비슷한 금액 이력이 10건을 넘으면 "17건 매입 완료"가 AI 입력에 들어가는데 허용 숫자에는 없어
-# AI가 근거를 그대로 옮겨 쓰면 다시 쓰기를 거듭하다 보고서가 실패할 수 있었다 (10 이하 수량만 예외)
-def test_basis_facts_have_no_number_outside_allowed() -> None:
-    from app.agent.assemble import fact_numbers
-    from app.agent.narrative import _numbers
+# 사건 도중 결제로 고액 징후를 설명하지 않는다 — 두 사건 결제 모두 추가 확인
+def test_payments_during_stretched_case_are_not_usual_history() -> None:
+    case = _stretched_case()
 
-    # 사건(5월 21일) 전 비슷한 금액 17건 — 날짜 · 시각 · 금액에 17이 우연히 들어가지 않게 둔다
-    days = [f"2026-04-0{d}" for d in range(1, 10)] + [f"2026-05-0{d}" for d in range(1, 9)]
-    similar = [(200000 + i * 1000, "CAPTURED", f"{day}T10:00:00Z") for i, day in enumerate(days)]
-    others = [(5000, "CAPTURED", f"2026-03-0{d}T10:00:00Z") for d in range(1, 4)]
-    history = _history(similar + others)
-    case = _case(205600)
-    fds = {"1": _fds([_rule("R01", "고액 결제")])}
+    for payment in case.payments:
+        basis = decision_basis(
+            payment, _fds([_rule("R01", "고액 결제")]), case, _history(DURING), _linked()
+        )
+        assert basis.normals == []
+        assert basis.recommendation == "NEEDS_CHECK"
 
-    facts = json.loads(facts_json(case, fds, None, history, _linked()))
 
-    basis_text = json.dumps(facts["결제"][0]["판정 근거"], ensure_ascii=False)
-    assert _numbers(basis_text) <= fact_numbers(case, fds, None, history)
+# AI에게도 사건 도중 결제를 "사건 전 결제"(평소 결제)로 보여 주지 않는다 — 판정과 같은 기준
+def test_facts_do_not_show_payments_during_case_as_earlier() -> None:
+    context = CaseContext(
+        case_id="1011",
+        evidence_version=1,
+        report_version=1,
+        merchant_id="m1",
+        customer_ref="c1",
+        case_created_at=AT,
+    )
+    records = [
+        ToolRecord("get_case_payments", {}, _stretched_case()),
+        ToolRecord("get_payment_history", {}, _history(DURING)),
+    ]
+
+    texts = [fact.text for fact in fact_catalog(context, records) if fact.topic == "history"]
+
+    assert not any(text.startswith("사건 전 결제") for text in texts)
+    assert any(text.startswith("사건 도중 · 뒤 결제 2건") for text in texts)
+
+
+# --- FDS 점수 없음 재현 (#532) ---
+# 평가 오류(점수 없음 · 적중 규칙 없음)를 "징후 없음"으로 읽어 매입 진행 검토가 나왔다
+# 지금은 보고서 생성 전 검사(graph._ready_to_write)가 막지만, 판정 코드도 스스로 막는다
+# 점수 없음은 판정을 올리지도 내리지도 않는다
+
+
+def _error_fds() -> FdsPayment:
+    return _fds([]).model_copy(update={"riskScore": None, "fdsResult": "ERROR"})
+
+
+def _linked_card_and_device() -> LinkedPaymentsTool:
+    return _linked(card_others=1, device_others=1)
+
+
+def _error_basis(linked: LinkedPaymentsTool):
+    case = _case(220000)
+    return decision_basis(case.payments[0], _error_fds(), case, _history(USUAL), linked)
+
+
+# 점수 없음만 있으면 추가 확인 — 매입 진행 검토로 가지 않는다
+def test_fds_error_alone_is_needs_check() -> None:
+    basis = _error_basis(_linked())
+
+    assert basis.recommendation == "NEEDS_CHECK"
+    assert "FDS 평가 결과 미확인" in [s.label for s in basis.signals]
+
+
+# 점수 없음 + 고위험 징후 하나 — 점수 없음을 "다른 징후"로 세어 승인 취소 검토로 올리지 않는다
+def test_fds_error_does_not_raise_single_high_risk() -> None:
+    basis = _error_basis(_linked(card_others=1))
+
+    assert basis.rule == "HIGH_RISK_ONLY"
+    assert basis.recommendation == "NEEDS_CHECK"
+
+
+# 점수 없음 + 고위험 · 다른 징후가 겹치면 승인 취소 검토를 유지한다 — 내리지도 않는다
+def test_fds_error_keeps_reject_from_other_signals() -> None:
+    basis = _error_basis(_linked_card_and_device())
+
+    assert basis.recommendation == "REJECT_REVIEW"

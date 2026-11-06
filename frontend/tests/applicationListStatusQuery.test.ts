@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  applicationEmptyKind,
   applicationListStatus,
   normalizeApplicationListStatusQuery,
 } from '../src/utils/applicationListStatusQuery.ts'
@@ -52,4 +53,13 @@ test('applicationStatus_whenUnknown_usesValidDefaultWithMailAttention', () => {
       assert.equal(normalizeApplicationListStatusQuery(query).get('status'), expected)
     }
   }
+})
+
+// 기본 목록이 빈 것과 조건 때문에 빈 것을 구분해 안내한다.
+test('applicationEmptyKind_whenListIsEmpty_separatesDoneFirstUseAndNoResult', () => {
+  assert.equal(applicationEmptyKind('REVIEW_PENDING', '', false), 'all-done')
+  assert.equal(applicationEmptyKind('ALL', '', false), 'first-use')
+  assert.equal(applicationEmptyKind('APPROVED', '', false), 'no-result')
+  assert.equal(applicationEmptyKind('REVIEW_PENDING', '가게', false), 'no-result')
+  assert.equal(applicationEmptyKind('ALL', '', true), 'no-result')
 })

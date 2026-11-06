@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { DirectoryDetailSkeleton, DirectoryTableSkeleton } from './DirectoryLoading'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -9,11 +10,12 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
   Table,
   Tag,
 } from 'antd'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListSearch } from '../../components/common/ListSearch'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ApiError } from '../../api/client'
 import {
@@ -28,6 +30,19 @@ import type { AdminMerchant, MerchantPage, MerchantStatus } from '../../api/admi
 
 import { IntegrationPanel } from '../owner/IntegrationPreviewPage'
 
+import {
+  adminMerchantListParams,
+  isAdminMerchantListFiltered,
+  parseAdminMerchantListQuery,
+  type AdminMerchantListQuery,
+} from '../../utils/adminMerchantListQuery'
+import {
+  LIST_PAGE_SIZE,
+  lastListPage,
+  listResultForDisplay,
+  withQuery,
+} from '../../utils/listQuery'
+
 const labels = { ACTIVE: '사용 중', INACTIVE: '정지' }
 // 신규 정산은 등록된 요율을 적용하고 기존 정산의 계산 결과는 유지한다.
 const settlementFeeNotice = '신규 정산에 등록 요율 적용 · 기존 정산 유지'
@@ -40,58 +55,66 @@ const statusTag = (status: MerchantStatus) => (
 )
 
 export function AdminMerchantsPage() {
-  const [filter, setFilter] = useState({
-    page: 0,
-    keyword: '',
-    status: undefined as MerchantStatus | undefined,
-    revision: 0,
-  })
-  const [search, setSearch] = useState('')
+  const [query, setQuery] = useSearchParams()
+  const filter = useMemo(() => parseAdminMerchantListQuery(query), [query])
+  const listQuery = adminMerchantListParams(filter).toString()
+  const [revision, setRevision] = useState(0)
+  const updateFilter = (changes: Partial<AdminMerchantListQuery>) => {
+    const next = adminMerchantListParams({ ...filter, ...changes })
+    // 같은 조건을 다시 검색하면 방문 기록을 늘리지 않고 최신 목록만 읽는다.
+    if (next.toString() === listQuery) setRevision((value) => value + 1)
+    else setQuery(next)
+  }
   const [result, setResult] = useState<{
     filter: typeof filter
+    revision: number
     data?: MerchantPage
     error?: string
   } | null>(null)
   useEffect(() => {
     let alive = true
-    getMerchants(filter.page, filter.keyword, filter.status)
+    getMerchants(filter.page - 1, filter.keyword, filter.status)
       .then((data) => {
-        if (alive) setResult({ filter, data })
+        if (alive) setResult({ filter, revision, data })
       })
       .catch((error) => {
-        if (alive) setResult({ filter, error: errorMessage(error) })
+        if (alive) setResult({ filter, revision, error: errorMessage(error) })
       })
     return () => {
       alive = false
     }
-  }, [filter])
-  const current = result?.filter === filter ? result : null
+  }, [filter, revision])
+  const current = result?.filter === filter && result.revision === revision ? result : null
+  // 같은 조건의 재조회·페이지 이동은 기존 행을 유지해 표 높이가 줄며 스크롤이 당겨지지 않게 한다.
+  // 조건이 바뀌면 이전 결과를 새 조건의 결과처럼 보여 주지 않는다.
+  const visible = listResultForDisplay(result, filter, adminMerchantListParams)
+  const lastPage = current?.data ? lastListPage(current.data.totalElements) : null
+  useEffect(() => {
+    // 마지막 행이 사라진 페이지로 돌아오면 빈 목록에 갇히지 않게 있는 페이지로 옮긴다.
+    if (lastPage !== null && filter.page > lastPage)
+      setQuery(adminMerchantListParams({ ...filter, page: lastPage }), { replace: true })
+  }, [filter, lastPage, setQuery])
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 관리"
         description="가맹점을 등록하고 사용 상태를 관리합니다."
         actions={
           <Space>
-            <Button onClick={() => setFilter((f) => ({ ...f, revision: f.revision + 1 }))}>
-              새로고침
-            </Button>
-            <Link to="/admin/merchants/new">
+            <Button onClick={() => setRevision((value) => value + 1)}>새로고침</Button>
+            <Link to={withQuery('/admin/merchants/new', listQuery)}>
               <Button type="primary">가맹점 만들기</Button>
             </Link>
           </Space>
         }
       />
-      <Card>
+      <Card className="directory-surface">
         <Space wrap style={{ marginBottom: 20 }}>
-          <Input.Search
-            aria-label="가맹점 검색"
+          <ListSearch
+            label="가맹점 검색"
             placeholder="코드 또는 이름"
-            value={search}
-            maxLength={100}
-            allowClear
-            onChange={(event) => setSearch(event.target.value)}
-            onSearch={(value) => setFilter((f) => ({ ...f, page: 0, keyword: value }))}
+            keyword={filter.keyword}
+            onSearch={(keyword) => updateFilter({ page: 1, keyword })}
           />
           <Select
             aria-label="가맹점 상태"
@@ -100,9 +123,7 @@ export function AdminMerchantsPage() {
             style={{ width: 140 }}
             value={filter.status}
             options={Object.entries(labels).map(([value, label]) => ({ value, label }))}
-            onChange={(status: MerchantStatus | undefined) =>
-              setFilter((f) => ({ ...f, page: 0, status }))
-            }
+            onChange={(status: MerchantStatus | undefined) => updateFilter({ page: 1, status })}
           />
         </Space>
         {current?.error && (
@@ -110,26 +131,58 @@ export function AdminMerchantsPage() {
         )}
         <Table<AdminMerchant>
           rowKey="merchantId"
-          loading={!current}
-          dataSource={current?.data?.items ?? []}
-          scroll={{ x: 650 }}
-          pagination={{
-            current: filter.page + 1,
-            pageSize: 20,
-            total: current?.data?.totalElements ?? 0,
-            showSizeChanger: false,
-            onChange: (page) => setFilter((f) => ({ ...f, page: page - 1 })),
-          }}
+          loading={!current && (visible?.data?.items.length ?? 0) > 0}
+          dataSource={visible?.data?.items ?? []}
+          scroll={{ x: 650, scrollToFirstRowOnChange: false }}
+          pagination={
+            visible?.data
+              ? {
+                  current: filter.page,
+                  pageSize: LIST_PAGE_SIZE,
+                  total: visible.data.totalElements,
+                  showSizeChanger: false,
+                  onChange: (page) => updateFilter({ page }),
+                }
+              : false
+          }
           locale={{
-            emptyText: current?.error ? '목록을 불러오지 못했습니다.' : '등록된 가맹점이 없습니다.',
+            emptyText: !current ? (
+              <DirectoryTableSkeleton kind="merchants" />
+            ) : lastPage !== null && filter.page > lastPage ? (
+              <span aria-hidden="true" />
+            ) : current.error ? (
+              '목록을 불러오지 못했습니다.'
+            ) : isAdminMerchantListFiltered(filter) ? (
+              <ListEmpty
+                title="검색 조건에 맞는 가맹점이 없어요"
+                description="검색어나 필터를 바꿔 보세요."
+                action={<Button onClick={() => setQuery({})}>조건 지우기</Button>}
+              />
+            ) : (
+              <ListEmpty
+                mascot
+                title="아직 등록된 가맹점이 없어요"
+                description="이용 신청을 승인하거나 직접 만들면 여기에 표시돼요."
+                action={
+                  <Link to="/admin/applications">
+                    <Button>이용 신청 보기</Button>
+                  </Link>
+                }
+              />
+            ),
           }}
           columns={[
             {
               title: '코드',
               dataIndex: 'merchantCode',
-              render: (value: string, merchant) => (
-                <Link to={`/admin/merchants/${merchant.merchantId}`}>{value}</Link>
-              ),
+              render: (value: string, merchant) =>
+                visible ? (
+                  <Link to={withQuery(`/admin/merchants/${merchant.merchantId}`, visible.query)}>
+                    {value}
+                  </Link>
+                ) : (
+                  value
+                ),
             },
             { title: '가맹점 이름', dataIndex: 'displayName' },
             { title: '상태', dataIndex: 'status', render: statusTag },
@@ -137,12 +190,14 @@ export function AdminMerchantsPage() {
           ]}
         />
       </Card>
-    </>
+    </div>
   )
 }
 
 type MerchantForm = { merchantCode: string; displayName: string; feePercent: string }
 export function AdminCreateMerchantPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminMerchantListParams(parseAdminMerchantListQuery(query)).toString()
   const [form] = Form.useForm<MerchantForm>()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -161,7 +216,7 @@ export function AdminCreateMerchantPage() {
         displayName: values.displayName.trim(),
         pgFeeRate: rate,
       })
-      navigate(`/admin/merchants/${merchant.merchantId}`, { replace: true })
+      navigate(withQuery(`/admin/merchants/${merchant.merchantId}`, listQuery), { replace: true })
     } catch (error) {
       setError(errorMessage(error))
     } finally {
@@ -170,13 +225,13 @@ export function AdminCreateMerchantPage() {
     }
   }
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 만들기"
         description="가맹점을 만든 뒤 사장님 계정을 연결할 수 있습니다."
-        actions={<Link to="/admin/merchants">목록으로</Link>}
+        actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
-      <Card style={{ maxWidth: 640 }}>
+      <Card className="directory-surface" style={{ maxWidth: 640 }}>
         {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
         <Form<MerchantForm>
           form={form}
@@ -235,11 +290,13 @@ export function AdminCreateMerchantPage() {
           </Button>
         </Form>
       </Card>
-    </>
+    </div>
   )
 }
 
 export function AdminMerchantDetailPage() {
+  const [query] = useSearchParams()
+  const listQuery = adminMerchantListParams(parseAdminMerchantListQuery(query)).toString()
   const { id } = useParams()
   const merchantId = Number(id)
   const [revision, setRevision] = useState(0)
@@ -290,7 +347,7 @@ export function AdminMerchantDetailPage() {
   }
   const invalidId = !Number.isSafeInteger(merchantId) || merchantId <= 0
   return (
-    <>
+    <div className="admin-directory">
       <PageHeader
         title="가맹점 상세"
         actions={
@@ -298,7 +355,7 @@ export function AdminMerchantDetailPage() {
             <Button disabled={busy} onClick={() => setRevision((value) => value + 1)}>
               새로고침
             </Button>
-            <Link to="/admin/merchants">목록으로</Link>
+            <Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>
           </Space>
         }
       />
@@ -311,9 +368,9 @@ export function AdminMerchantDetailPage() {
           style={{ marginBottom: 16 }}
         />
       )}
-      {!invalidId && !current && <Spin />}
+      {!invalidId && !current && <DirectoryDetailSkeleton kind="merchant" />}
       {merchant && (
-        <Card>
+        <Card className="directory-surface">
           <Descriptions
             column={1}
             items={[
@@ -379,6 +436,6 @@ export function AdminMerchantDetailPage() {
         </p>
         {error && <Alert type="error" showIcon message={error} />}
       </Modal>
-    </>
+    </div>
   )
 }

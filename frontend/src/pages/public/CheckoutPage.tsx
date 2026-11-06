@@ -13,6 +13,7 @@ import './CheckoutPage.css'
 const POLL_MS = 2000
 const DEVICE_KEY = 'donworry_checkout_device'
 const won = (value: number) => `${value.toLocaleString('ko-KR')}원`
+const issuerLabel = (country: string) => (country === 'KR' ? '국내 발급' : `해외 발급 (${country})`)
 
 // 결제창 기기 식별자. 브라우저마다 한 번 만들고 FDS 입력(새 기기)에만 쓴다.
 function deviceId() {
@@ -178,7 +179,8 @@ export function CheckoutPage() {
         {session && (phase === 'ready' || phase === 'paying') && (
           <div className="checkout-body">
             <fieldset className="checkout-cards" disabled={phase === 'paying'}>
-              <legend>결제 카드 (모의 카드)</legend>
+              <legend>결제 카드</legend>
+              <p className="checkout-muted">시연용 가상 카드입니다. 실제로 청구되지 않습니다.</p>
               {session.cards.map((option) => (
                 <label key={option.code} className="checkout-card">
                   <input
@@ -197,7 +199,7 @@ export function CheckoutPage() {
                     <b>{option.label}</b>
                     <br />
                     <span className="checkout-muted">
-                      {option.masked} · 발급국 {option.issuerCountry}
+                      {option.masked} · {issuerLabel(option.issuerCountry)}
                     </span>
                   </span>
                 </label>

@@ -94,6 +94,25 @@
   display: flex;
   align-items: center;
 }
+.finance-period-presets {
+  display: inline-flex;
+  gap: 6px;
+}
+.finance-period .finance-period-presets .ant-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border-color: #d8c9a9;
+  background: #fffaf0;
+  color: #574014;
+  font-size: 13px;
+  font-weight: 600;
+}
+.finance-period .finance-period-presets .ant-btn:hover {
+  background: #f7ecd2;
+  border-color: #ad7c18;
+  color: #47320e;
+}
 .finance-trend-detail label {
   display: flex;
   align-items: center;

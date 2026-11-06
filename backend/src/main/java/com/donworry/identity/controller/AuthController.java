@@ -1,10 +1,12 @@
 package com.donworry.identity.controller;
 
 import com.donworry.identity.dto.ChangePasswordRequest;
+import com.donworry.identity.dto.ForbiddenFrontendRouteRequest;
 import com.donworry.identity.dto.LoginRequest;
 import com.donworry.identity.dto.MeResponse;
 import com.donworry.identity.security.SessionUser;
 import com.donworry.identity.service.AuthService;
+import com.donworry.identity.service.OperatorAccessDenialService;
 import com.donworry.identity.service.PasswordChangeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final AuthService authService;
     private final PasswordChangeService passwordChangeService;
+    private final OperatorAccessDenialService operatorAccessDenials;
 
     @GetMapping("/csrf")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -43,6 +46,16 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response) {
         passwordChangeService.change(user, input, request, response);
+    }
+
+    @PostMapping("/forbidden-frontend-routes")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void recordForbiddenFrontendRoute(
+            @AuthenticationPrincipal SessionUser user,
+            @Valid @RequestBody ForbiddenFrontendRouteRequest input,
+            HttpServletRequest request) {
+        operatorAccessDenials.recordForbiddenFrontendRoute(
+                SessionUser.require(user).userId(), input.path(), request);
     }
 
     @PostMapping("/login")

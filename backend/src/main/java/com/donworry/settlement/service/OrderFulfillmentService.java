@@ -57,7 +57,7 @@ public class OrderFulfillmentService {
             boolean completion,
             List<PickupOrderItemRequest> itemRequests) {
         if (merchantId == null || merchantId <= 0) throw new IllegalArgumentException("가맹점 ID는 양수여야 합니다.");
-        if (at == null) throw new IllegalArgumentException("픽업 시각이 필요합니다.");
+        if (completion && at == null) throw new IllegalArgumentException("픽업 시각이 필요합니다.");
         var fulfillment = lockOrder(merchantId, orderId);
         var now = Instant.now();
         if (fulfillment.getMerchantId() != null && !Objects.equals(fulfillment.getMerchantId(), merchantId))
@@ -65,7 +65,7 @@ public class OrderFulfillmentService {
         fulfillment.bindMerchant(merchantId, now);
         if (completion) fulfillment.recordCompletion(at, now);
         else {
-            fulfillment.recordSchedule(at, now);
+            if (at != null) fulfillment.recordSchedule(at, now);
             storeItems(fulfillment.getFulfillmentId(), itemRequests, now);
         }
         var candidates = captures.findAllByMerchantIdAndOrderId(merchantId, orderId);

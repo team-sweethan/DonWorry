@@ -43,6 +43,9 @@ OVERSEAS = "OVERSEAS"
 LINKED_CARD = "LINKED_CARD"
 LINKED_DEVICE = "LINKED_DEVICE"
 LINKED_IP = "LINKED_IP"
+# 점수 없음(평가 오류 · 평가 없음) — "징후 없음"으로 읽지 않게 주의 징후로 둔다 (#532)
+FDS_UNCONFIRMED = "FDS_UNCONFIRMED"
+FDS_UNCONFIRMED_LABEL = "FDS 평가 결과 미확인"
 
 SIMILAR_AMOUNT = "SIMILAR_AMOUNT"
 
@@ -109,20 +112,42 @@ def _linked_signal(key: str, label: str, level: str, match: LinkedMatch) -> _Sig
     return _Signal(key, label, f"최근 30일 다른 고객 {people}{declined}", level)
 
 
+# 이 결제의 연결 결제(카드 · 기기 · IP) — 결제별 칸이 없으면(예전 Spring 응답) None (#533)
+def payment_links(
+    linked: LinkedPaymentsTool, payment_id: str
+) -> tuple[LinkedMatch, LinkedMatch, LinkedMatch] | None:
+    for links in linked.payments or []:
+        if links.paymentId == payment_id:
+            return links.card, links.device, links.ip
+    return None
+
+
+# 결제별 칸이 없을 때 붙이는 징후 이름 앞말 — 어느 결제의 값인지 모르니 사실대로 쓴다 (#533)
+CASE_LEVEL_PREFIX = "이 사건 결제 중 "
+
+
 def _signals(evidence: FdsPayment, linked: LinkedPaymentsTool | None) -> list[_Signal]:
     found = [_rule_signal(rule) for rule in evidence.ruleHits]
+    if evidence.riskScore is None or evidence.fdsResult == "ERROR":
+        found.append(_Signal(FDS_UNCONFIRMED, FDS_UNCONFIRMED_LABEL, None, CAUTION))
     keys = {s.key for s in found}
     country = evidence.signals.ipCountryCode if evidence.signals else None
     # 고위험 국가 규칙이 걸렸으면 해외 접속을 따로 세지 않는다
     if country and country != "KR" and "R05" not in keys:
         found.append(_Signal(OVERSEAS, f"해외 접속 ({country})", None, CAUTION))
-    # 같은 카드 · 기기 · IP 결제는 사건 전체 정보라 사건의 모든 결제에 붙인다
+    # 같은 카드 · 기기 · IP 결제는 그 결제의 것만 붙인다 (#533)
+    # 결제 1의 카드만 겹쳤는데 깨끗한 결제 2까지 고위험이 되던 문제
     if linked is not None:
+        own = payment_links(linked, evidence.paymentId)
+        card, device, ip = own or (linked.card, linked.device, linked.ip)
+        prefix = "" if own else CASE_LEVEL_PREFIX
         for signal in (
-            _linked_signal(LINKED_CARD, "같은 카드를 다른 고객이 사용", HIGH_RISK, linked.card),
-            _linked_signal(LINKED_DEVICE, "같은 기기를 다른 고객이 사용", HIGH_RISK, linked.device),
+            _linked_signal(LINKED_CARD, f"{prefix}같은 카드를 다른 고객이 사용", HIGH_RISK, card),
+            _linked_signal(
+                LINKED_DEVICE, f"{prefix}같은 기기를 다른 고객이 사용", HIGH_RISK, device
+            ),
             # 같은 IP는 공유기 · 회사 망에서도 흔해 주의 징후로 둔다
-            _linked_signal(LINKED_IP, "같은 IP를 다른 고객이 사용", CAUTION, linked.ip),
+            _linked_signal(LINKED_IP, f"{prefix}같은 IP를 다른 고객이 사용", CAUTION, ip),
         ):
             if signal is not None:
                 found.append(signal)
@@ -139,7 +164,9 @@ def _at(value: str | None) -> datetime | None:
 
 
 # 평소 결제 = 사건 전 결제 — assemble.split_history의 "그 전 결제"와 같은 기준
-# 사건 결제 앞뒤 10분 안(같은 연속 결제)과 사건 뒤 결제는 사건의 정상 근거가 아니다
+# 사건 결제 앞뒤 10분 안(같은 연속 결제)과 첫 사건 결제 뒤 결제는 사건의 정상 근거가 아니다
+# 사건은 30분 안의 보류 결제를 계속 합쳐 길어진다
+# 마지막 사건 결제를 기준으로 하면 사건 도중 결제가 섞였다 (#532)
 def _usual_history(
     case_payments: CasePaymentsTool, history: PaymentHistoryTool
 ) -> list[HistoryPayment]:
@@ -149,7 +176,7 @@ def _usual_history(
         at = _at(payment.requestedAt)
         if at is not None and any(abs(at - t) <= BURST_WINDOW for t in case_times):
             continue
-        if at is not None and case_times and at > max(case_times):
+        if at is not None and case_times and at > min(case_times):
             continue
         usual.append(payment)
     return usual
@@ -184,7 +211,9 @@ def _label_of(key: str) -> str:
 def _rule(signals: list[BasisSignal]) -> BasisRule:
     open_signals = [s for s in signals if s.normalReason is None and s.countedIn is None]
     if any(s.level == HIGH_RISK for s in open_signals):
-        return "HIGH_RISK_WITH_OTHERS" if len(open_signals) >= 2 else "HIGH_RISK_ONLY"
+        # 점수 없음은 판정을 올리지 않는다 — 고위험과 겹치는 "다른 징후"로 세지 않는다 (#532)
+        others = [s for s in open_signals if s.key != FDS_UNCONFIRMED]
+        return "HIGH_RISK_WITH_OTHERS" if len(others) >= 2 else "HIGH_RISK_ONLY"
     return "CAUTION_ONLY" if open_signals else "ALL_EXPLAINED"
 
 

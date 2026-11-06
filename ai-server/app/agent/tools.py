@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -12,87 +13,58 @@ from app.schemas.tools import (
     ToolResult,
 )
 
-# Qwen에게 보여 주는 허용 도구 — 읽기 전용만 둔다
-# (AGENTS.md 6절, ADR-0009 Tool 6종 중 1차 2종 + #296 비슷한 과거 사건 + #338 고객 최근 결제
-#  + #352 같은 카드 · 기기 · IP를 쓴 다른 결제)
-# caseId는 Qwen이 고르지 않고 코드가 묶는다 — 다른 Case를 조회할 수 없게
-TOOL_SPECS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_case_payments",
-            "description": (
-                "이 사건에 묶인 결제 목록(결제 ID · 금액 · 결제 상태 · 요청 시각)을 본다."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_fds_evidence",
-            "description": (
-                "결제별 FDS 위험 점수 · 판정 · 적중 규칙을 본다. "
-                "payment_ids를 주면 그 결제만, 비우면 사건의 모든 결제를 본다."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "payment_ids": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "자세히 볼 결제 ID 목록",
-                    }
-                },
-                "required": [],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_similar_cases",
-            "description": (
-                "이 사건과 비슷한 지난 종료 사건(같은 고객 · 같은 규칙 조합)과 "
-                "결제별 직원 판정 결과를 본다. 참고 근거다."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_payment_history",
-            "description": (
-                "이 사건 고객의 최근 30일 결제 중 이 사건 밖의 결제와 결제 상태별 건수를 본다. "
-                "평소 결제와 비교하는 참고 근거다."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "find_linked_payments",
-            "description": (
-                "이 사건 결제와 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객의 "
-                "최근 30일 결제가 몇 건 · 몇 명인지와 그 결제들의 FDS 판정을 본다. 참고 근거다."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-]
 
-ALLOWED_TOOL_NAMES = frozenset(spec["function"]["name"] for spec in TOOL_SPECS)
+# 추가 조사 도구 — 기본 조회 5개(코드)를 본 AI가 더 볼 때만 고른다 (#578)
+# 읽기 전용만 둔다 (AGENTS.md 6절). caseId 같은 권한 인자는 AI가 아니라 ToolBox가 묶는다
+@dataclass(frozen=True)
+class ExtraTool:
+    spec: dict[str, Any]
+    title: str
+    run: Callable[["ToolBox", dict[str, Any]], ToolResult]
 
-# 도구별로 받는 인자 이름 — 이 밖의 인자는 버린다
-TOOL_ARGS: dict[str, frozenset[str]] = {
-    spec["function"]["name"]: frozenset(spec["function"]["parameters"]["properties"])
-    for spec in TOOL_SPECS
-}
+    @property
+    def name(self) -> str:
+        return self.spec["function"]["name"]
+
+    # 도구 설명에 없는 인자(예: AI가 지어낸 case_id)는 쓰지도 기록하지도 않는다
+    @property
+    def arg_names(self) -> frozenset[str]:
+        return frozenset(self.spec["function"]["parameters"]["properties"])
 
 
-# Agent가 실제로 부른 도구 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
+# 고객 이력 90일 (#581) — 기본 조회의 30일로 평소 결제를 알 수 없을 때만 넓혀 본다
+# 기간은 AI가 정하지 않는다: 도구에 인자가 없고 90은 코드가 넣는다 (Spring도 30 · 90만 받음)
+HISTORY_90_DAYS = 90
+
+
+def _history_90(box: "ToolBox", args: dict[str, Any]) -> ToolResult:
+    return box.get_payment_history(HISTORY_90_DAYS)
+
+
+HISTORY_90 = ExtraTool(
+    spec={
+        "type": "function",
+        "function": {
+            "name": "get_payment_history_90d",
+            "description": (
+                "같은 고객의 최근 90일 결제(이 사건 결제 제외, 최근 순 최대 20건)와 "
+                "상태별 건수를 본다. "
+                "기본 조회의 고객 최근 결제(30일)에 이번 결제보다 앞선 결제가 없거나 적어서 "
+                "이 고객의 평소 결제를 알 수 없을 때만 부른다. "
+                "30일 결제로 평소 결제를 볼 수 있으면 부르지 않는다. 인자는 없다."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    title="고객 이력 90일 조회",
+    run=_history_90,
+)
+
+EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90,)
+
+
+# 실제로 한 조회 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
+# filled_by_system: 코드가 한 기본 조회면 True, AI가 고른 추가 조회면 False (#578)
 @dataclass(frozen=True)
 class ToolRecord:
     tool_name: str
@@ -120,7 +92,8 @@ class ToolBox(Protocol):
 
     def find_similar_cases(self) -> SimilarCasesTool: ...
 
-    def get_payment_history(self) -> PaymentHistoryTool: ...
+    # lookback_days가 None이면 기본 조회(30일), 90이면 AI 추가 조사 (#581)
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool: ...
 
     def find_linked_payments(self) -> LinkedPaymentsTool: ...
 
@@ -139,8 +112,8 @@ class SpringToolBox:
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._client.find_similar_cases(self._case_id)
 
-    def get_payment_history(self) -> PaymentHistoryTool:
-        return self._client.get_payment_history(self._case_id)
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool:
+        return self._client.get_payment_history(self._case_id, lookback_days)
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._client.find_linked_payments(self._case_id)
@@ -149,6 +122,7 @@ class SpringToolBox:
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
     # similar · history · linked를 주지 않으면 비슷한 사건 · 이력 · 연관 결제가 없는 응답을 돌려준다
+    # history90을 주지 않으면 30일 이력과 같은 결제를 90일로 돌려준다 (#581)
     def __init__(
         self,
         case_payments: CasePaymentsTool,
@@ -156,6 +130,7 @@ class StaticToolBox:
         similar: SimilarCasesTool | None = None,
         history: PaymentHistoryTool | None = None,
         linked: LinkedPaymentsTool | None = None,
+        history90: PaymentHistoryTool | None = None,
     ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
@@ -177,6 +152,10 @@ class StaticToolBox:
             statusCounts=[],
             truncated=False,
         )
+        # 90일 기본값 — 샘플에 30일보다 오래된 결제가 없으면 30일 결과와 같은 결제다 (#581)
+        self._history90 = history90 or self._history.model_copy(
+            update={"lookbackDays": HISTORY_90_DAYS}
+        )
         # 연관 결제 기본값 — 카드 · 기기 · IP 모두 "정보 없음"
         not_provided = LinkedMatch(
             provided=False, otherCustomerCount=0, paymentCount=0, resultCounts=[], declinedCount=0
@@ -193,6 +172,7 @@ class StaticToolBox:
         )
 
     # 샘플 JSON 하나로 만든다 — similar · history · linked 키가 없으면 위의 "없음" 응답 (측정 샘플)
+    # history90은 AI가 90일 도구를 골랐을 때 돌려줄 응답 (#581)
     @classmethod
     def from_sample(cls, data: dict[str, Any]) -> "StaticToolBox":
         return cls(
@@ -203,6 +183,9 @@ class StaticToolBox:
             if "history" in data
             else None,
             linked=LinkedPaymentsTool.model_validate(data["linked"]) if "linked" in data else None,
+            history90=PaymentHistoryTool.model_validate(data["history90"])
+            if "history90" in data
+            else None,
         )
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
@@ -211,8 +194,8 @@ class StaticToolBox:
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._similar
 
-    def get_payment_history(self) -> PaymentHistoryTool:
-        return self._history
+    def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool:
+        return self._history90 if lookback_days == HISTORY_90_DAYS else self._history
 
     def get_case_payments(self) -> CasePaymentsTool:
         return self._case_payments

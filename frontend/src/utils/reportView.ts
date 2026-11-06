@@ -9,10 +9,12 @@ import type {
   NormalBasis,
   PaymentSignals,
   ReportBody,
+  ReportRuleHitDetail,
   SimilarCaseItem,
   TraceStep,
 } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
+import type { MlCell } from './transactionList.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
 
@@ -87,11 +89,6 @@ export function ruleEvidenceRows(analysis: PaymentAnalysis): RuleEvidenceRow[] {
   }))
 }
 
-// 결제별 "미확인"을 한 목록으로 모은다 (같은 문장은 한 번만)
-export function unknownItems(body: ReportBody): string[] {
-  return [...new Set(body.paymentAnalyses.flatMap((p) => p.unknowns))]
-}
-
 // 조사 과정 탭의 "사용 모델" 문구 — 고정 문장 · mock을 AI 모델 이름처럼 보이지 않게 한다 (#294)
 export function traceProviderLabel(trace: Pick<InvestigationTrace, 'provider' | 'model'>): string {
   if (trace.provider === 'FIXED') return '고정 문장 (AI 서버 꺼짐)'
@@ -145,7 +142,8 @@ export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]):
     return { title: '조사 시작을 기다리는 중', note: '다른 조사가 끝나면 시작합니다' }
   }
   const last = steps.at(-1)
-  if (!last) return { title: '사건 근거를 보고 첫 조회를 고르는 중', note: null }
+  // 기본 조회는 코드가 한 단계로 한다 (#578) — 끝나기 전에는 단계가 없다
+  if (!last) return { title: '기본 조회 실행 중', note: null }
   const writes = steps.filter((s) => s.kind === 'WRITE').length
   const writing = (attempt: number): LiveTask => ({
     title: attempt === 1 ? '판단 문장 쓰는 중 (1차)' : `판단 문장 다시 쓰는 중 (${attempt}차)`,
@@ -157,9 +155,9 @@ export function liveCurrentTask(status: AiReport['status'], steps: TraceStep[]):
         ? writing(1)
         : { title: '고른 조회를 실행하는 중', note: null }
     case 'TOOL':
-      // 시스템 보충 조회는 AI가 조사 완료라고 답한 뒤에 하므로 다음은 판단 문장 쓰기다
+      // 시스템 조회는 기본 조회다 — 다음은 AI가 추가로 볼 조회를 고르는 단계다 (#578, 첫 추가 도구 #581)
       return last.actor === 'SYSTEM'
-        ? writing(1)
+        ? { title: '추가로 볼 조회를 고르는 중', note: null }
         : { title: '다음에 볼 조회를 고르는 중', note: null }
     case 'NUDGE':
       return { title: '다음에 볼 조회를 고르는 중', note: null }
@@ -399,4 +397,142 @@ export function decisionProgress(
   ).length
   const done = detail.securityCase.status === 'CLOSED' || (remaining === 0 && decidedIds.size > 0)
   return { decided: detail.decisions.length, remaining, done }
+}
+
+// ── 코드 문장과 AI 문장 구분 (#543) ──
+// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓰고 AI는 사실 설명만 쓴다
+
+// 결론 · 권고 요약을 코드가 쓴 보고서인지 (#546 리뷰)
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 AI가 썼다 — #532에서 결제별 이유와 함께 코드로 바뀌어 이유로 알아본다
+function isCodeWrittenReport(body: ReportBody): boolean {
+  return (
+    reportRecommendationSource(body) === '기준표 판정' &&
+    body.paymentAnalyses.every((p) => isCodeReason(p.reason))
+  )
+}
+
+// 결론 카드 작은 제목 — 기준표 보고서면 "기준표 판정", 예전 보고서는 AI가 쓴 결론이라 그대로
+export function verdictCardTitle(body: ReportBody): '기준표 판정' | 'AI 조사 요약' {
+  return isCodeWrittenReport(body) ? '기준표 판정' : 'AI 조사 요약'
+}
+
+// 상세 정보의 권고 요약 제목
+export function recommendationSummaryTitle(
+  body: ReportBody,
+): '권고 요약 (기준표)' | 'AI 권고 원문' {
+  return isCodeWrittenReport(body) ? '권고 요약 (기준표)' : 'AI 권고 원문'
+}
+
+// 코드가 쓴 결제별 이유의 시작 말 — ai-server app/agent/verdict_text.py payment_reason과 같은 문장
+const CODE_REASON_STARTS = [
+  '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다',
+  '정상 사유가 없는 고위험 징후가 있습니다',
+  '정상 사유가 없는 주의 징후가 있습니다',
+  '모든 징후에 정상 사유가 있습니다',
+  '적중한 징후가 없습니다',
+  'FDS 평가 결과를 확인하지 못했습니다',
+]
+
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 시작 말로 코드 이유만 골라낸다
+export function isCodeReason(reason: string | undefined): boolean {
+  return !!reason && CODE_REASON_STARTS.some((start) => reason.startsWith(start))
+}
+
+// 조사 요약 박스(AI 해석)에 넣을 문장 — 코드 이유는 "왜 이 판정인가요?"로 옮기고 AI 이유만 남긴다
+export function summaryBoxLines(
+  summary: string[],
+  analysis: Pick<PaymentAnalysis, 'reason'>,
+): string[] {
+  const reason = analysis.reason
+  return reason && !isCodeReason(reason) ? [...summary, reason] : summary
+}
+
+// ── 요약 문장 끝 표 링크 (#559) ──
+// AI 요약 문장의 근거 사실 번호를 보고, 그 사실이 있는 표 카드로 가는 링크를 붙인다
+// 번호(이력-1 등)는 화면에 보이지 않는다 — 표 카드 제목으로 보여 준다
+
+export type SummaryLink = { target: string; label: string }
+export type SummaryLine = { text: string; links: SummaryLink[] }
+
+// 주제 → 이동할 카드 (ReportFull의 id와 같다). 접속 정보는 결제 카드로 간다
+const TOPIC_CARDS: Record<string, SummaryLink> = {
+  history: { target: 'report-history', label: '고객 최근 결제' },
+  linked: { target: 'report-linked', label: '같은 카드 · 기기 · IP' },
+  similar: { target: 'report-similar', label: '비슷한 과거 사건' },
+}
+
+export function paymentCardId(paymentId: string): string {
+  return `report-payment-${paymentId}`
+}
+
+// 링크 정보가 없는 보고서(#559 전)는 문장만, 같은 카드는 문장마다 한 번만
+// 고정 보고서는 summaryFacts가 빈 목록이다 — 요약 문장 수와 다르면 요약을 그대로 보여 준다 (#559 Codex 리뷰)
+export function summaryLines(body: ReportBody): SummaryLine[] {
+  const linked = body.summaryFacts
+  if (!linked || !body.facts || linked.length !== body.summary.length) {
+    return body.summary.map((text) => ({ text, links: [] }))
+  }
+  const facts = new Map(body.facts.map((f) => [f.id, f]))
+  return linked.map((sentence) => {
+    const links: SummaryLink[] = []
+    for (const id of sentence.factIds) {
+      const fact = facts.get(id)
+      const link =
+        fact?.topic === 'signals'
+          ? fact.paymentId
+            ? { target: paymentCardId(fact.paymentId), label: `결제 ${fact.paymentId} 접속 정보` }
+            : null
+          : fact
+            ? TOPIC_CARDS[fact.topic]
+            : null
+      if (link && !links.some((l) => l.target === link.target)) links.push(link)
+    }
+    return { text: sentence.text, links }
+  })
+}
+
+// 예전 영문 규칙 코드 → R 코드 — ai-server evidence._ALIASES와 같은 표
+const RULE_ALIASES: Record<string, string> = {
+  HIGH_AMOUNT: 'R01',
+  NEW_DEVICE: 'R02',
+  NEW_CARD: 'R03',
+  RAPID_REPEAT_PAYMENT: 'R04',
+}
+
+export type SignalRuleRecord = Pick<ReportRuleHitDetail, 'appliedScore' | 'evidenceId'>
+
+// 규칙 징후에 붙일 FDS 기록(점수 · 증거 번호) — 규칙이 아닌 징후(같은 IP · 해외 접속 등)는 null
+export function signalRuleRecord(
+  signal: Pick<BasisSignal, 'key'>,
+  details: Array<Pick<ReportRuleHitDetail, 'code' | 'appliedScore' | 'evidenceId'>> | undefined,
+): SignalRuleRecord | null {
+  const hit = details?.find((d) => (RULE_ALIASES[d.code] ?? d.code) === signal.key)
+  return hit ? { appliedScore: hit.appliedScore, evidenceId: hit.evidenceId } : null
+}
+
+// "+30점 · 증거 E-2-v1-02" — 점수가 없는 예전 기록은 증거 번호만
+export function signalRecordText(record: SignalRuleRecord): string {
+  const score = record.appliedScore === null ? null : `+${record.appliedScore}점`
+  return [score, `증거 ${record.evidenceId}`].filter(Boolean).join(' · ')
+}
+
+// ── ML 참고 위험도 (#544) ──
+// 판정(기준표)에 쓰지 않는 참고 점수 (ADR-0061) — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
+export function mlReportLine(cell: MlCell): string {
+  switch (cell.kind) {
+    case 'scored':
+      return `ML 참고 위험도 ${cell.percent}% · 기준 ${cell.thresholdPercent}% ${
+        cell.aboveThreshold ? '이상' : '미만'
+      } (${cell.modelVersion} · 판정에 쓰지 않음)`
+    case 'none':
+      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요'
+    case 'failed':
+      return 'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)'
+    case 'skipped':
+      return 'ML 참고 위험도 · 채점하지 않았어요'
+    case 'unknown':
+      return 'ML 참고 위험도를 불러오지 못했어요'
+    case 'loading':
+      return 'ML 참고 위험도 불러오는 중…'
+  }
 }

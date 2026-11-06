@@ -29,7 +29,7 @@ test('settlementChart_whenOverdue_doesNotInventCompletionOrExtendFutureLine', ()
     { date: '2026-10-25', amount: 100, kind: 'COMPLETED' },
     { date: '2026-10-26', amount: 200, kind: 'SCHEDULED' },
     { date: '2026-10-28', amount: 300, kind: 'SCHEDULED' },
-    { date: '2026-10-29', amount: 400, kind: 'EXPECTED' },
+    { date: '2026-10-29', amount: 400, kind: 'SCHEDULED' },
   ])
   const data = settlementSeries(days, '2026-10-27')
   assert.deepEqual(
@@ -41,7 +41,7 @@ test('settlementChart_whenOverdue_doesNotInventCompletionOrExtendFutureLine', ()
     [null, null, null, 300, 400, null],
   )
   assert.equal(data[1].scheduledAmount, 200)
-  assert.equal(data[4].expectedAmount, 400)
+  assert.equal(data[4].scheduledAmount, 400)
 })
 
 // 기록이 있는 0원 지급을 빈 날짜로 지워 버리지 않는다.
@@ -72,8 +72,7 @@ test('settlementChart_whenDailyMoneyExceedsSafeInteger_rejectsRoundedGraph', () 
           {
             date: '2026-11-01',
             completedAmount: 0,
-            scheduledAmount: Number.MAX_SAFE_INTEGER,
-            expectedAmount: 1,
+            scheduledAmount: Number.MAX_SAFE_INTEGER + 1,
           },
         ],
         '2026-11-01',

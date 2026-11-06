@@ -12,6 +12,7 @@ import com.donworry.identity.api.OperatorAccessDenied;
 import com.donworry.identity.api.OperatorAccessDeniedType;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.repository.OperatorAccessDenialRepository;
+import com.donworry.identity.service.OperatorAccessDenialRetentionService;
 import com.donworry.identity.service.OperatorAccessDenialService;
 import com.donworry.identity.service.UserSessionService;
 import java.net.*;
@@ -180,6 +181,24 @@ class OperatorAccessDenialMariaDbTests {
         assertThat(onlyEvent().deniedType()).isEqualTo(OperatorAccessDeniedType.PERMISSION_MISSING);
     }
 
+    // 프론트 라우터가 API 요청 전에 막은 관리자 URL도 서버가 경로를 확인한 뒤 같은 원본·이벤트로 남긴다
+    @Test
+    void forbiddenFrontendRoute_whenOtherRolePath_recordsOutOfRole() throws Exception {
+        var response = HttpCsrfTestSupport.send(
+                owner,
+                HttpRequest.newBuilder(uri("/api/auth/forbidden-frontend-routes"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(
+                                mapper.writeValueAsString(Map.of("path", "/security/rules")))));
+
+        assertThat(response.statusCode()).isEqualTo(204);
+        var event = onlyEvent();
+        assertThat(event.deniedType()).isEqualTo(OperatorAccessDeniedType.OUT_OF_ROLE);
+        assertThat(event.httpMethod()).isEqualTo("POST");
+        assertThat(event.path()).isEqualTo("/security/rules");
+        assertStored(event);
+    }
+
     // CSRF·직원·비로그인·강제 비밀번호 변경 거절은 수집하지 않는다
     @Test
     void request_whenExcluded_doesNotRecord() throws Exception {
@@ -344,6 +363,109 @@ class OperatorAccessDenialMariaDbTests {
             service.record(id, OperatorAccessDeniedType.OUT_OF_ROLE, new MockHttpServletRequest());
         assertThat(count()).isZero();
         assertThat(probe.committedEvents()).isEmpty();
+    }
+
+    // IP를 이미 비운 만료 행이 많아도 IP가 남은 행만 인덱스로 찾는다
+    @Test
+    void retention_whenManyClearedRows_scansOnlyRowsWithIp() throws Exception {
+        jdbc.update(
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) SELECT ?,?,'GET','/cleared',NULL,'OUT_OF_ROLE','2020-01-01 00:00:00' FROM seq_1_to_10000",
+                ownerId,
+                merchantId);
+        jdbc.update(
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) SELECT ?,?,'GET','/recent','203.0.113.8','OUT_OF_ROLE','2026-11-01 00:00:00' FROM seq_1_to_100",
+                ownerId,
+                merchantId);
+        jdbc.execute("ANALYZE TABLE operator_access_denials");
+        var query = OperatorAccessDenialRepository.class
+                .getMethod("clearExpiredIpsBatch", String.class)
+                .getAnnotation(org.springframework.data.jpa.repository.Query.class)
+                .value();
+        var plan = jdbc.queryForMap("EXPLAIN " + query.replace(":cutoff", "?"), "2025-01-01 00:00:00.000000");
+        assertThat(plan.get("key")).isEqualTo("idx_operator_access_denials_retention");
+        assertThat(plan.get("type")).isEqualTo("range");
+        assertThat(Long.parseLong(String.valueOf(plan.get("rows")))).isLessThan(1000);
+        var columns = jdbc.queryForList(
+                "SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='operator_access_denials' AND INDEX_NAME='idx_operator_access_denials_retention' ORDER BY SEQ_IN_INDEX",
+                String.class);
+        assertThat(columns).containsExactly("client_ip", "occurred_at");
+    }
+
+    // 1년 경과한 IP만 비우고 경계 직전·NULL과 행의 다른 칸은 재실행해도 유지한다
+    @Test
+    void retention_whenAtYearBoundary_clearsOnlyExpiredIpsAndIsIdempotent() {
+        var now = Instant.parse("2028-03-01T03:00:00.123456Z");
+        var cutoff = LocalDateTime.ofInstant(now, ZoneOffset.UTC).minusYears(1);
+        for (var timestamp : List.of(cutoff.minusNanos(1000), cutoff, cutoff.plusNanos(1000))) {
+            jdbc.update(
+                    "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) VALUES (?,?,'GET','/test','203.0.113.8','OUT_OF_ROLE',?)",
+                    ownerId,
+                    merchantId,
+                    timestamp);
+        }
+        jdbc.update(
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,denied_type,occurred_at) VALUES (?,?,'POST','/null','PERMISSION_MISSING',?)",
+                ownerId,
+                merchantId,
+                cutoff.minusDays(1));
+        var before = jdbc.queryForList(
+                "SELECT * FROM operator_access_denials WHERE merchant_id=? ORDER BY denial_id", merchantId);
+        var cleanup = new OperatorAccessDenialRetentionService(denials, transactions, Clock.fixed(now, ZoneOffset.UTC));
+        cleanup.clearExpiredIps();
+        cleanup.clearExpiredIps();
+        var after = jdbc.queryForList(
+                "SELECT * FROM operator_access_denials WHERE merchant_id=? ORDER BY denial_id", merchantId);
+        assertThat(after).hasSameSizeAs(before);
+        for (int i = 0; i < before.size(); i++) {
+            var expected = new HashMap<>(before.get(i));
+            var occurredAt = jdbc.queryForObject(
+                    "SELECT occurred_at FROM operator_access_denials WHERE denial_id=?",
+                    LocalDateTime.class,
+                    expected.get("denial_id"));
+            if (!occurredAt.isAfter(cutoff)) expected.put("client_ip", null);
+            assertThat(after.get(i)).isEqualTo(expected);
+        }
+        assertThat(after.get(2).get("client_ip")).isEqualTo("203.0.113.8");
+    }
+
+    // 한 배치가 실패해도 다음 실행에서 1,000건을 넘는 IP를 모두 비우고 원본 행은 보존한다
+    @Test
+    void retention_whenBatchFails_retriesAndClearsMultipleBatches() {
+        var now = Instant.parse("2028-02-29T03:00:00.123456Z");
+        var cutoff = LocalDateTime.ofInstant(now, ZoneOffset.UTC).minusYears(1);
+        jdbc.batchUpdate(
+                "INSERT INTO operator_access_denials(user_id,merchant_id,http_method,path,client_ip,denied_type,occurred_at) VALUES (?,?,'GET','/batch','203.0.113.9','OUT_OF_ROLE',?)",
+                new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+                    @Override
+                    public int getBatchSize() {
+                        return 1003;
+                    }
+
+                    @Override
+                    public void setValues(java.sql.PreparedStatement statement, int i) throws java.sql.SQLException {
+                        statement.setLong(1, ownerId);
+                        statement.setLong(2, merchantId);
+                        statement.setObject(3, cutoff);
+                    }
+                });
+        var cleanup = new OperatorAccessDenialRetentionService(denials, transactions, Clock.fixed(now, ZoneOffset.UTC));
+        doThrow(new DataAccessResourceFailureException("private DB value"))
+                .when(denials)
+                .clearExpiredIpsBatch(anyString());
+        cleanup.clearExpiredIps();
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(client_ip) FROM operator_access_denials WHERE merchant_id=?",
+                        Integer.class,
+                        merchantId))
+                .isEqualTo(1003);
+        reset(denials);
+        cleanup.clearExpiredIps();
+        assertThat(count()).isEqualTo(1003);
+        assertThat(jdbc.queryForObject(
+                        "SELECT COUNT(client_ip) FROM operator_access_denials WHERE merchant_id=?",
+                        Integer.class,
+                        merchantId))
+                .isZero();
     }
 
     private OperatorAccessDenied onlyEvent() {

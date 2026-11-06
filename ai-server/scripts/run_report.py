@@ -77,7 +77,7 @@ def main() -> int:
     elapsed = time.monotonic() - started
 
     for seq, record in enumerate(outcome.records, start=1):
-        by = "코드 보충" if record.filled_by_system else "AI 선택"
+        by = "기본 조회" if record.filled_by_system else "AI 추가 조사"
         print(f"  {seq}. {record.tool_name} {record.args} · {by}", file=sys.stderr)
     print(f"결과 {outcome.status} · {elapsed:.1f}초", file=sys.stderr)
     if outcome.report is not None:

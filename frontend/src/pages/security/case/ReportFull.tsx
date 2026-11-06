@@ -1,57 +1,98 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
+import { getMlShadowScores } from '../../../api/mlShadowScores'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
+  isCodeReason,
+  mlReportLine,
   recommendationSource,
+  recommendationSummaryTitle,
   reportHeadline,
   reportRecommendationSource,
   ruleEvidenceRows,
   signalTexts,
+  paymentCardId,
+  summaryBoxLines,
+  summaryLines,
   topRiskScore,
-  unknownItems,
+  verdictCardTitle,
   verdictLines,
   type RecommendationSource,
+  type SummaryLine,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
+import {
+  mlCell,
+  mlScoresRequestKey,
+  mlScoresView,
+  type LoadedMlScores,
+  type MlScores,
+} from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
-import { SummaryBox, WhyCard } from './BasisCard'
+import { SummaryBox, SummaryLinks, WhyCard } from './BasisCard'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
-// AI 보고서 전문. 결론 → 결제별 근거 비교 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 종합 분석 → 경위 · 확인할 것 → 상세 정보 순서 (프로토타입 v4.2)
-// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? → 위험/정상 비교 순서 (#501), 예전 보고서는 그대로
+// AI 보고서 전문. 결론 → 결제별 판정 근거 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 경위 · 확인할 것 → 상세 정보 순서
+// AI 요약 문장 끝 링크가 표 카드로 이동한다 — 카드 id는 summaryLines의 target과 같다 (#559)
+// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? 순서 (#501)
+// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
 
-export function ReportFull({ body, label }: { body: ReportBody; label: string }) {
+// refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
+export function ReportFull({
+  body,
+  label,
+  refreshKey,
+}: {
+  body: ReportBody
+  label: string
+  refreshKey: number
+}) {
   // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
   const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
+  const summary = summaryLines(body)
+  const ml = useMlScores(
+    body.paymentAnalyses.map((p) => p.paymentId),
+    refreshKey,
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <VerdictCard body={body} label={label} hideSummary={single} />
+      <VerdictCard body={body} label={label} summary={single ? [] : summary} />
       {body.paymentAnalyses.map((p) => (
-        <PaymentEvidence key={p.paymentId} analysis={p} summary={single ? body.summary : []} />
+        <div key={p.paymentId} id={paymentCardId(p.paymentId)} style={anchorStyle}>
+          <PaymentEvidence
+            analysis={p}
+            summary={single ? summary : []}
+            ml={mlReportLine(mlCell(p.paymentId, ml))}
+          />
+        </div>
       ))}
       {body.similarCases !== undefined && (
-        <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
+        <div id="report-similar" style={anchorStyle}>
+          <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
+        </div>
       )}
-      {body.paymentHistory !== undefined && <PaymentHistoryCard history={body.paymentHistory} />}
-      {body.linkedPayments !== undefined && <LinkedPaymentsCard linked={body.linkedPayments} />}
-      {body.overallAnalysis.length > 0 && (
-        <Card title={<CardTitle title="종합 분석" ai />} style={cardStyle}>
-          <Bullets items={body.overallAnalysis} />
-        </Card>
+      {body.paymentHistory !== undefined && (
+        <div id="report-history" style={anchorStyle}>
+          <PaymentHistoryCard history={body.paymentHistory} />
+        </div>
+      )}
+      {body.linkedPayments !== undefined && (
+        <div id="report-linked" style={anchorStyle}>
+          <LinkedPaymentsCard linked={body.linkedPayments} />
+        </div>
       )}
       <div className="dw-section-grid">
         <Card title={<CardTitle title="사건 경위" note="시간순" />} style={cardStyle}>
           <Timeline items={body.timeline} />
         </Card>
+        {/* "AI가 아직 모르는 것"은 판정 근거의 징후와 겹쳐 보여 주지 않는다 (#548) */}
         <Card title={<CardTitle title="판정 전에 확인할 것" />} style={cardStyle}>
-          <SubTitle>AI가 아직 모르는 것</SubTitle>
-          <Checklist items={unknownItems(body)} color="#F59E0B" />
-          <SubTitle top>먼저 해 볼 것</SubTitle>
+          <SubTitle>먼저 해 볼 것</SubTitle>
           <Checklist items={body.additionalChecks} color="#94A3B8" />
         </Card>
       </div>
@@ -69,17 +110,19 @@ export function ReportFull({ body, label }: { body: ReportBody; label: string })
 }
 
 // 결론 카드. 큰 숫자는 FDS 점수 최댓값 그대로이며 사기 확률이 아니다
+// summary: 결제가 여러 건일 때만 넘긴다 — 1건이면 결제 카드의 조사 요약에 있다
 function VerdictCard({
   body,
   label,
-  hideSummary,
+  summary,
 }: {
   body: ReportBody
   label: string
-  hideSummary: boolean
+  summary: SummaryLine[]
 }) {
   const headline = reportHeadline(body)
   const source = reportRecommendationSource(body)
+  const title = verdictCardTitle(body)
   const lines = verdictLines(body)
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
   return (
@@ -89,7 +132,7 @@ function VerdictCard({
       </div>
       <div>
         <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>
-          {label} · AI 조사 요약
+          {label} · {title}
         </div>
         {headline ? (
           <div style={{ fontSize: 22, fontWeight: 800, margin: '6px 0 8px', lineHeight: 1.4 }}>
@@ -100,9 +143,19 @@ function VerdictCard({
             결론 항목이 생기기 전 보고서입니다. 아래 요약과 근거를 확인하세요.
           </div>
         )}
-        {!hideSummary && (
+        {summary.length > 0 && (
           <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
-            {body.summary.join(' ')}
+            {/* 결론은 기준표, 아래 요약은 AI 문장이라 앞에 표시한다 (#543) */}
+            {title === '기준표 판정' && (
+              <span style={{ color: '#D8B4FE', fontWeight: 700 }}>AI 해석 · </span>
+            )}
+            {summary.map((line, i) => (
+              <span key={i}>
+                {i > 0 && ' '}
+                {line.text}
+                <SummaryLinks links={line.links} color="#C4B5FD" />
+              </span>
+            ))}
           </p>
         )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
@@ -122,15 +175,16 @@ function VerdictCard({
   )
 }
 
-// 결제 하나의 권고 · 이유와 위험 근거 / 정상 정황 비교
+// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요?
 function PaymentEvidence({
   analysis: p,
   summary,
+  ml,
 }: {
   analysis: PaymentAnalysis
-  summary: string[]
+  summary: SummaryLine[]
+  ml: string
 }) {
-  const rules = ruleEvidenceRows(p)
   const source = recommendationSource(p)
   return (
     <Card
@@ -149,62 +203,90 @@ function PaymentEvidence({
       {p.signals !== undefined && <SignalLine signals={p.signals} />}
       {p.basis ? (
         <>
-          <SummaryBox lines={[...summary, ...(p.reason ? [p.reason] : [])]} basis={p.basis} />
-          <WhyCard basis={p.basis} />
+          <SummaryBox
+            lines={summaryBoxLines(
+              summary.map((l) => l.text),
+              p,
+            )}
+            basis={p.basis}
+            links={summary.map((l) => l.links)}
+          />
+          <WhyCard
+            basis={p.basis}
+            reason={isCodeReason(p.reason) ? p.reason : undefined}
+            details={p.ruleHitDetails}
+          />
+          <MlLine text={ml} />
         </>
       ) : (
-        p.reason && (
-          <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
-            <AiTag /> {p.reason}
-          </p>
-        )
-      )}
-      <div style={compareStyle}>
-        <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
-          <SideTitle
-            color="#991B1B"
-            title="⚠ 위험 근거"
-            count={rules.length + p.riskEvidence.length}
-          />
-          {rules.map((r, i) => (
-            <Item
-              key={`rule-${i}`}
-              title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
-            >
-              {r.criterion && r.observed && (
-                <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
-                  기준 {r.criterion} · 이번 {r.observed}
-                </span>
-              )}
-              FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
-            </Item>
-          ))}
-          {p.riskEvidence.map((text, i) => (
-            <Item key={`risk-${i}`} title={text}>
-              <AiTag />
-            </Item>
-          ))}
-        </div>
-        <div style={{ ...sideStyle, background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-          <SideTitle color="#166534" title="✓ 정상 정황" count={p.normalEvidence.length} />
-          {p.normalEvidence.length === 0 ? (
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              확인된 정상 정황이 없습니다.
-            </Typography.Text>
-          ) : (
-            p.normalEvidence.map((text, i) => (
-              <Item key={i} title={text}>
-                <AiTag />
-              </Item>
-            ))
+        <>
+          {p.reason && (
+            <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
+              <AiTag /> {p.reason}
+            </p>
           )}
-        </div>
-      </div>
+          <MlLine text={ml} />
+          <RuleCompare analysis={p} />
+        </>
+      )}
     </Card>
   )
 }
 
-// 카드 · 기기 · 접속 국가 한 줄 (#346). 가맹점이 안 보낸 값은 숨기지 않고 "정보 없음"으로 보여 준다
+// 예전 보고서(판정 근거 없음)의 적중 규칙 — 예전 AI 문장(위험 근거 · 정상 정황)은 보여 주지 않는다 (#548)
+function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
+  const rules = ruleEvidenceRows(p)
+  return (
+    <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
+      <SideTitle color="#991B1B" title="⚠ 적중 규칙" count={rules.length} />
+      {rules.map((r, i) => (
+        <Item
+          key={`rule-${i}`}
+          title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
+        >
+          {r.criterion && r.observed && (
+            <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
+              기준 {r.criterion} · 이번 {r.observed}
+            </span>
+          )}
+          FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
+        </Item>
+      ))}
+    </div>
+  )
+}
+
+// ML 참고 위험도 (#544) — 보고서에 넣지 않고 화면을 열 때 읽는다
+// ML 채점은 평가가 저장된 뒤 주기적으로(기본 30초) 돌아 보고서보다 늦을 수 있다
+function useMlScores(paymentIds: string[], refreshKey: number): MlScores {
+  const ids = paymentIds.join(',')
+  const key = mlScoresRequestKey(paymentIds, refreshKey)
+  const [loaded, setLoaded] = useState<LoadedMlScores | null>(null)
+  useEffect(() => {
+    if (!ids) return
+    let alive = true
+    // 실패해도 보고서 다른 칸은 그대로 보이고 이 줄만 "불러오지 못했어요"
+    getMlShadowScores(ids.split(','))
+      .then((found) => {
+        if (!alive) return
+        const scoreByPaymentId = new Map(found.map((score) => [score.paymentId, score]))
+        setLoaded({ key, scores: { status: 'loaded', scoreByPaymentId } })
+      })
+      .catch(() => {
+        if (alive) setLoaded({ key, scores: { status: 'failed' } })
+      })
+    return () => {
+      alive = false
+    }
+  }, [ids, key])
+  return mlScoresView(loaded, paymentIds, refreshKey)
+}
+
+// ML 참고 위험도 한 줄 — 판정(기준표)과 섞이지 않게 회색 점선 칸
+function MlLine({ text }: { text: string }) {
+  return <div style={mlLineStyle}>{text}</div>
+}
+
 function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
   return (
     <div style={signalLineStyle}>
@@ -238,11 +320,11 @@ function MoreInfo({ body }: { body: ReportBody }) {
         <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
       </Descriptions>
       <div>
-        <SubTitle>{ruleTable ? 'AI 설명 원문' : 'AI 권고 원문'}</SubTitle>
+        <SubTitle>{recommendationSummaryTitle(body)}</SubTitle>
         <p style={{ fontSize: 13, margin: '0 0 6px' }}>{body.recommendation.summary}</p>
         <Bullets items={body.recommendation.limitations} />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {ruleTable ? '기준표 판정' : 'AI 권고'}는 참고용이며 최종 판정은 직원이 결제별로 합니다.
+          {ruleTable ? '기준표 판정은' : 'AI 권고는'} 참고용이며 최종 판정은 직원이 결제별로 합니다.
         </Typography.Text>
       </div>
       <div>
@@ -456,6 +538,8 @@ function Bullets({ items }: { items: string[] }) {
 }
 
 const cardStyle: CSSProperties = { borderColor: '#E2E8F0' }
+// 요약 링크로 이동할 카드 — 둥근 모서리를 맞춰 강조 테두리가 카드 모양을 따른다 (#559)
+const anchorStyle: CSSProperties = { borderRadius: 8, scrollMarginTop: 80 }
 const signalLineStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -485,12 +569,16 @@ const chipStyle: CSSProperties = {
   fontSize: 12.5,
   fontWeight: 700,
 }
-const compareStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-  gap: 16,
-}
 const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
+const mlLineStyle: CSSProperties = {
+  fontSize: 13,
+  color: '#475569',
+  background: '#F8FAFC',
+  border: '1px dashed #CBD5E1',
+  borderRadius: 8,
+  padding: '8px 12px',
+  marginBottom: 16,
+}
 const itemStyle: CSSProperties = {
   background: '#fff',
   borderRadius: 8,

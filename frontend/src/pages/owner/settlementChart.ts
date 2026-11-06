@@ -8,14 +8,11 @@ export type SettlementDay = {
   hasPayout?: boolean
   completedAmount: number
   scheduledAmount: number
-  expectedAmount: number
 }
 export function settlementSeries(days: SettlementDay[], today: string) {
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date))
   const completed = sorted.filter((d) => d.hasPayout || d.completedAmount > 0)
-  const scheduled = sorted.filter(
-    (d) => d.date >= today && amount(d.scheduledAmount + d.expectedAmount) > 0,
-  )
+  const scheduled = sorted.filter((d) => d.date >= today && amount(d.scheduledAmount) > 0)
   return sorted.map((d) => ({
     ...d,
     completed:
@@ -24,14 +21,14 @@ export function settlementSeries(days: SettlementDay[], today: string) {
         : null,
     scheduled:
       scheduled.length && d.date >= scheduled[0].date && d.date <= scheduled.at(-1)!.date
-        ? amount(d.scheduledAmount + d.expectedAmount)
+        ? amount(d.scheduledAmount)
         : null,
   }))
 }
 export function settlementDays(
   from: string,
   to: string,
-  entries: { date: string; amount: number; kind: 'COMPLETED' | 'SCHEDULED' | 'EXPECTED' }[],
+  entries: { date: string; amount: number; kind: 'COMPLETED' | 'SCHEDULED' }[],
 ): SettlementDay[] {
   if (
     !dayjs(from).isValid() ||
@@ -45,7 +42,7 @@ export function settlementDays(
   for (let index = 0; index < dayCount; index++) {
     const d = dayjs(from).add(index, 'day')
     const date = d.format('YYYY-MM-DD')
-    grouped.set(date, { date, completedAmount: 0, scheduledAmount: 0, expectedAmount: 0 })
+    grouped.set(date, { date, completedAmount: 0, scheduledAmount: 0 })
   }
   for (const e of entries) {
     amount(e.amount)
@@ -54,8 +51,7 @@ export function settlementDays(
       if (e.kind === 'COMPLETED') {
         d.completedAmount = amount(d.completedAmount + e.amount)
         d.hasPayout = true
-      } else if (e.kind === 'SCHEDULED') d.scheduledAmount = amount(d.scheduledAmount + e.amount)
-      else d.expectedAmount = amount(d.expectedAmount + e.amount)
+      } else d.scheduledAmount = amount(d.scheduledAmount + e.amount)
     }
   }
   return [...grouped.values()]

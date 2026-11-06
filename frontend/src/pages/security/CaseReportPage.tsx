@@ -141,6 +141,7 @@ export function CaseReportPage() {
             <ReportState
               report={picked.report}
               label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
+              refreshKey={refreshKey}
             />
           )}
         </Space>
@@ -149,7 +150,15 @@ export function CaseReportPage() {
   )
 }
 
-function ReportState({ report, label }: { report: AiReport; label: string }) {
+function ReportState({
+  report,
+  label,
+  refreshKey,
+}: {
+  report: AiReport
+  label: string
+  refreshKey: number
+}) {
   if (report.status === 'PENDING' || report.status === 'RUNNING') {
     return (
       <Card style={{ borderColor: '#E2E8F0', textAlign: 'center', padding: '20px 0' }}>
@@ -171,5 +180,5 @@ function ReportState({ report, label }: { report: AiReport; label: string }) {
     )
   }
   if (!report.reportBody) return <Empty description="보고서 내용이 없습니다." />
-  return <ReportFull body={report.reportBody} label={label} />
+  return <ReportFull body={report.reportBody} label={label} refreshKey={refreshKey} />
 }

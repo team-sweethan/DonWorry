@@ -1,13 +1,18 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getCaseCounts } from '../api/cases'
-import { createCaseBadgeStore } from '../utils/caseBadge'
+import { createCaseBadgeStore, type CaseCounts } from '../utils/caseBadge'
 
 const store = createCaseBadgeStore(getCaseCounts)
 
 /** 판정 저장 · 인계 다시 확인처럼 Case 상태를 바꾼 직후 화면에서 부른다. */
 export function refreshCaseBadge() {
   void store.refresh()
+}
+
+/** 홈 · 목록 자동 반영(#553)이 받은 건수로 배지를 맞춘다. 요청을 따로 보내지 않는다. */
+export function applyCaseBadgeCounts(counts: CaseCounts) {
+  store.apply(counts)
 }
 
 /**

@@ -51,3 +51,5 @@ MariaDB 테스트는 Docker 격리 DB에 Flyway 전체를 적용하고 JPA 매�
 [정책 전환 6단계 실제 지급 기반 조회·현금흐름](payout-forecast.md) — #507. 환불 회수 차감 후 실제·미래 유입을 구분한다.
 
 [정책 전환 7단계 지급·환불 차감 화면](payout-ui.md) — #512. 실제 지급/원 거래 구분, 회수 근거, DEV 목업·HTML 내보내기.
+
+[정책 전환 8단계 실연동 검증·활성화 준비](integration-verification.md) — #233·#383.

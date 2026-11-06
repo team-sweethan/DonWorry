@@ -25,12 +25,11 @@ test('settlement calendar selects and highlights Korean today across the UTC dat
             orderId: `order-${day}`,
             item: 'order',
             date: new Date(`2026-11-0${day}T12:00:00`),
-            pickup: null,
             gross: day * 100,
             cardFeeAmount: 0,
             pgFeeAmount: 0,
             settlementAmount: day * 100,
-            status: day === 2 ? 'exp' : 'sch',
+            status: 'sch',
             orderItems: [],
           })),
           period: { from: '2026-11-01', to: '2026-11-03' },
@@ -43,7 +42,7 @@ test('settlement calendar selects and highlights Korean today across the UTC dat
     assert.match(html, /aria-label="2026-11-02 예정 200원"/)
     assert.match(html, /aria-label="2026-11-03 예정 300원"/)
     assert.match(html, /class="finance-chart-cursor" aria-hidden="true"><span>선택 기준일<\/span>/)
-    assert.match(html, /선택 기간 내 예정일이 지난 미완료 금액 100원/)
+    assert.match(html.replace(/<[^>]+>/g, ''), /선택 기간 내 예정일이 지난 미완료 금액 100원/)
     assert.match(html, /선택 기준일\s*<strong>2026-11-02<\/strong>/)
     assert.match(html, /aria-label="그래프 날짜 선택"[^>]*value="2026-11-02"/)
   } finally {
@@ -92,7 +91,6 @@ test('payout calendar and ledger render zero-cash recovery without showing origi
               orderId: 'ORDER-99',
               item: '주문',
               date: new Date('2026-11-02T12:00:00'),
-              pickup: null,
               gross: 100000,
               cardFeeAmount: 2000,
               pgFeeAmount: 1000,
@@ -106,8 +104,9 @@ test('payout calendar and ledger render zero-cash recovery without showing origi
     )
     assert.match(html, /aria-label="2026-11-02 실제 지급 0원"/)
     assert.doesNotMatch(html, /aria-label="2026-11-02 실제 지급 97,000원"/)
-    assert.match(html, /앞으로 회수할 금액/)
-    assert.ok(html.indexOf('정산 현황') < html.indexOf('기간 조회 영역'))
+    assert.match(html, /현재 미회수 환불액/)
+    assert.match(html, /정산 내역/)
+    assert.ok(html.indexOf('정산 내역') < html.indexOf('기간 조회 영역'))
     assert.match(html, /환불 회수 차감/)
     const ledger = renderToStaticMarkup(createElement(PayoutLedger, { payouts: [payout] }))
     assert.match(ledger, /지급 #99/)

@@ -276,6 +276,7 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.POST, "/api/fds/rules/{ruleCode}/disable-requests"),
                                 paths.matcher(HttpMethod.PUT, "/api/fds/rules/{ruleCode}/active"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/rule-change-requests"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/rule-policy-change-histories"),
                                 paths.matcher(HttpMethod.PUT, "/api/fds/rule-change-requests/{requestId}/review"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist/status"),
@@ -286,6 +287,17 @@ public class SecurityConfig {
                             return new AuthorizationDecision(current.isAuthenticated()
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/rule-catalog"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/low/{eventId}"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/{detectionId}"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.ADMIN);
                         })
                         .requestMatchers(
                                 paths.matcher(HttpMethod.GET, "/api/admin/users"),
@@ -318,6 +330,7 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/auth/me"),
                                 paths.matcher(HttpMethod.POST, "/api/auth/logout-all"),
                                 paths.matcher(HttpMethod.POST, "/api/auth/password"),
+                                paths.matcher(HttpMethod.POST, "/api/auth/forbidden-frontend-routes"),
                                 paths.matcher(HttpMethod.GET, "/api/auth/login-histories"),
                                 paths.matcher(HttpMethod.GET, "/api/auth/login-histories/latest-success"))
                         .authenticated()

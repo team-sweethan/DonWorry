@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsLinkedPayments.Match;
+import com.donworry.fds.api.FdsLinkedPayments.PaymentMatch;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
@@ -114,6 +115,28 @@ class FdsLinkedPaymentQueryServiceTests {
                         .resultCounts(Map.of(FdsResult.DENY, 1))
                         .declinedCount(0)
                         .build());
+    }
+
+    // 사건 결제마다 그 결제의 카드 · 기기 · IP와 겹친 다른 고객 결제만 센다 (#533)
+    // 결제 100만 공유 카드를 썼으면 결제 101에는 겹침이 없다. 평가가 없는 결제 102는 정보 없음
+    @Test
+    void findLinked_twoCasePayments_countsPerPayment() {
+        givenCaseEvaluations(
+                evaluation(100L, CASE_CUSTOMER, "tok_shared", null, FdsResult.REVIEW, AT),
+                evaluation(101L, CASE_CUSTOMER, "tok_own", null, FdsResult.REVIEW, AT));
+        given(evaluationRepository.findByMerchantIdAndCardTokenInAndPaymentRequestedAtGreaterThanEqual(
+                        eq(MERCHANT), anyCollection(), any()))
+                .willReturn(List.of(evaluation(201L, "other-1", "tok_shared", null, FdsResult.REVIEW, AT)));
+
+        var result = service().findLinked(MERCHANT, CASE_CUSTOMER, List.of(100L, 101L, 102L), SINCE);
+
+        assertThat(result.card().paymentCount()).isEqualTo(1);
+        assertThat(result.payments()).extracting(PaymentMatch::paymentId).containsExactly(100L, 101L, 102L);
+        assertThat(result.payments().get(0).card().paymentCount()).isEqualTo(1);
+        assertThat(result.payments().get(1).card().provided()).isTrue();
+        assertThat(result.payments().get(1).card().paymentCount()).isZero();
+        assertThat(result.payments().get(2).card()).isEqualTo(Match.notProvided());
+        assertThat(result.toString()).doesNotContain("tok_shared", "tok_own", "other-1");
     }
 
     private FdsLinkedPaymentQueryService service() {

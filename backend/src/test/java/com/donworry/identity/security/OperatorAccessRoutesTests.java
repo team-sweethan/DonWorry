@@ -8,6 +8,18 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 class OperatorAccessRoutesTests {
+
+    @ParameterizedTest
+    @CsvSource({"/admin", "/admin/fds/operator-access-detections", "/security", "/security/rules"})
+    void isOperatorForbiddenFrontendPath_whenOtherRoleRoute_returnsTrue(String path) {
+        assertThat(OperatorAccessRoutes.isOperatorForbiddenFrontendPath(path)).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"/owner", "/owner/actions", "/adminish", "/admin//users"})
+    void isOperatorForbiddenFrontendPath_whenOwnerOrInvalidRoute_returnsFalse(String path) {
+        assertThat(OperatorAccessRoutes.isOperatorForbiddenFrontendPath(path)).isFalse();
+    }
     // 허용된 메서드와 사장님 경로의 거절은 권한 부족으로 분류한다
     @ParameterizedTest
     @CsvSource({

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleCatalog,
   getFdsRulePolicies,
+  getOperatorAccessRuleCatalog,
   requestRuleDisable,
   setFdsRuleActive,
   type FdsRuleCatalogEntry,
@@ -96,8 +97,12 @@ function RuleCard({
       setSubmitting(false)
     }
   }
+  const isAccountRule = rule.ruleCode.startsWith('SEC_')
   return (
-    <Card className={`dw-rule-card${active ? '' : ' dw-rule-card-inactive'}`} size="small">
+    <Card
+      className={`dw-rule-card ${isAccountRule ? 'dw-rule-card-account' : 'dw-rule-card-payment'}${active ? '' : ' dw-rule-card-inactive'}`}
+      size="small"
+    >
       {actionError && (
         <Alert
           type="error"
@@ -206,38 +211,48 @@ function RuleCard({
 function RuleCatalogTabs({
   selectedTab,
   paymentRuleCount,
+  accountRuleCount,
+  isAdmin,
   onSelect,
 }: {
   selectedTab: RuleCatalogTab
   paymentRuleCount: number
+  accountRuleCount: number
+  isAdmin: boolean
   onSelect: (tab: RuleCatalogTab) => void
 }) {
   return (
     <Card className="dw-rule-tabs" size="small">
       <div className="dw-rule-tab-list" role="tablist" aria-label="탐지 룰 목록 범위">
-        <button
-          className={selectedTab === 'payment' ? 'is-active' : undefined}
-          role="tab"
-          aria-selected={selectedTab === 'payment'}
-          onClick={() => onSelect('payment')}
-        >
-          결제 룰 {paymentRuleCount || 8}
-        </button>
-        <button
-          className={selectedTab === 'account' ? 'is-active' : undefined}
-          role="tab"
-          aria-selected={selectedTab === 'account'}
-          onClick={() => onSelect('account')}
-        >
-          계정 룰 0
-        </button>
+        {isAdmin && (
+          <button
+            className={selectedTab === 'account' ? 'is-active' : undefined}
+            role="tab"
+            aria-selected={selectedTab === 'account'}
+            onClick={() => onSelect('account')}
+          >
+            계정 룰 {accountRuleCount}
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            className={selectedTab === 'payment' ? 'is-active' : undefined}
+            role="tab"
+            aria-selected={selectedTab === 'payment'}
+            onClick={() => onSelect('payment')}
+          >
+            결제 룰 {paymentRuleCount || 8}
+          </button>
+        )}
         <button
           className={selectedTab === 'all' ? 'is-active' : undefined}
           role="tab"
           aria-selected={selectedTab === 'all'}
           onClick={() => onSelect('all')}
         >
-          전체 {paymentRuleCount || 8}
+          {isAdmin
+            ? `전체 ${paymentRuleCount + accountRuleCount || 8}`
+            : `결제 룰 ${paymentRuleCount || 8}`}
         </button>
       </div>
     </Card>
@@ -279,24 +294,24 @@ function AccountRuleOverview() {
         <div>
           <strong>계정 룰 · 탐지 + 방어</strong>
           <Typography.Text type="secondary">
-            계정이 뚫리면 공격자가 의심 결제를 허용하거나 Rule을 끌 수 있어, 탐지와 함께 통제를
-            둡니다.
+            계정이 뚫리면 공격자가 의심 결제를 허용하거나 룰을 끌 수 있어, 반복 접근 거부를 탐지하고
+            계정을 보호합니다.
           </Typography.Text>
         </div>
-        <Tag>개발 예정</Tag>
+        <Tag>관리자 전용</Tag>
       </div>
       <div className="dw-account-rule-placeholders">
         <div>
           <strong>로그인 보안</strong>
-          <span>의심 로그인 탐지 룰을 준비 중입니다.</span>
+          <span>역할 밖 API의 반복 호출을 탐지합니다.</span>
         </div>
         <div>
           <strong>권한 변경 통제</strong>
-          <span>민감 권한 변경 검증 룰을 준비 중입니다.</span>
+          <span>필요 권한 없이 반복한 API 호출을 탐지합니다.</span>
         </div>
         <div>
           <strong>정책 제어</strong>
-          <span>룰 변경 승인 절차를 준비 중입니다.</span>
+          <span>카드에서 최근 적중과 현재 적용 상태를 확인합니다.</span>
         </div>
       </div>
     </Card>
@@ -306,13 +321,18 @@ function AccountRuleOverview() {
 export function RuleCatalogPage() {
   const { user } = useAuth()
   const [rules, setRules] = useState<FdsRuleCatalogEntry[]>([])
+  const [accountRules, setAccountRules] = useState<FdsRuleCatalogEntry[]>([])
   const [policies, setPolicies] = useState<FdsRulePolicy[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('payment')
+  const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('account')
   const policyReloadSequence = useRef(0)
   const showLoading = useMinimumLoadingIndicator(loading && rules.length === 0)
-  const visibleRules = selectedTab === 'account' ? [] : rules
+  const isAdmin = user?.role === 'ADMIN'
+
+  useEffect(() => {
+    if (!isAdmin) setSelectedTab('all')
+  }, [isAdmin])
 
   useEffect(() => {
     let active = true
@@ -320,12 +340,14 @@ export function RuleCatalogPage() {
       setLoading(true)
       setError(null)
       try {
-        const [catalog, rulePolicies] = await Promise.all([
+        const [catalog, operatorAccessCatalog, rulePolicies] = await Promise.all([
           getFdsRuleCatalog(),
+          isAdmin ? getOperatorAccessRuleCatalog() : Promise.resolve([]),
           getFdsRulePolicies(),
         ])
         if (active) {
           setRules(catalog)
+          setAccountRules(operatorAccessCatalog)
           setPolicies(rulePolicies)
         }
       } catch {
@@ -338,7 +360,7 @@ export function RuleCatalogPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [isAdmin])
 
   const reloadPolicies = () => {
     const sequence = ++policyReloadSequence.current
@@ -348,13 +370,16 @@ export function RuleCatalogPage() {
       })
       .finally(refreshRuleChangeRequestBadge)
   }
-  const isAdmin = user?.role === 'ADMIN'
 
   return (
     <div className="dw-rule-catalog-page">
       <PageHeader
         title="탐지 룰 목록"
-        description="돈워리가 어떤 규칙으로 이상 징후를 찾는지 봅니다. 결제 룰은 가맹점 결제를, 계정 룰은 돈워리 계정을 지킵니다."
+        description={
+          isAdmin
+            ? '돈워리가 어떤 규칙으로 이상 징후를 찾는지 봅니다. 결제 룰은 가맹점 결제를, 계정 룰은 돈워리 계정을 지킵니다.'
+            : '가맹점 결제의 이상 징후를 찾는 결제 룰을 확인합니다.'
+        }
       />
       {showLoading ? (
         <div className="dw-rule-loading">
@@ -362,19 +387,31 @@ export function RuleCatalogPage() {
         </div>
       ) : error ? (
         <Alert type="error" showIcon message={error} />
-      ) : selectedTab === 'account' ? (
+      ) : selectedTab === 'account' && isAdmin ? (
         <>
           <AccountRuleOverview />
           <RuleCatalogTabs
             selectedTab={selectedTab}
             paymentRuleCount={rules.length}
+            accountRuleCount={accountRules.length}
+            isAdmin={isAdmin}
             onSelect={setSelectedTab}
           />
-          <Card className="dw-rule-empty-state">등록된 계정 룰이 없습니다.</Card>
+          <section className="dw-rule-grid" aria-label="계정 룰">
+            {accountRules.map((rule) => (
+              <RuleCard
+                key={rule.ruleCode}
+                rule={rule}
+                policy={policies.find((policy) => policy.ruleCode === rule.ruleCode)}
+                isAdmin={isAdmin}
+                onChanged={reloadPolicies}
+              />
+            ))}
+          </section>
         </>
       ) : (
         <>
-          {selectedTab === 'all' ? (
+          {selectedTab === 'all' && isAdmin ? (
             <div className="dw-rule-overview-grid">
               <PaymentRuleOverview />
               <AccountRuleOverview />
@@ -385,13 +422,15 @@ export function RuleCatalogPage() {
           <RuleCatalogTabs
             selectedTab={selectedTab}
             paymentRuleCount={rules.length}
+            accountRuleCount={accountRules.length}
+            isAdmin={isAdmin}
             onSelect={setSelectedTab}
           />
           <section
             className="dw-rule-grid"
             aria-label={selectedTab === 'all' ? '전체 룰' : '결제 룰'}
           >
-            {visibleRules.map((rule) => (
+            {rules.map((rule) => (
               <RuleCard
                 key={rule.ruleCode}
                 rule={rule}
@@ -400,6 +439,17 @@ export function RuleCatalogPage() {
                 onChanged={reloadPolicies}
               />
             ))}
+            {selectedTab === 'all' &&
+              isAdmin &&
+              accountRules.map((rule) => (
+                <RuleCard
+                  key={rule.ruleCode}
+                  rule={rule}
+                  policy={policies.find((policy) => policy.ruleCode === rule.ruleCode)}
+                  isAdmin={isAdmin}
+                  onChanged={reloadPolicies}
+                />
+              ))}
           </section>
           <div className="dw-rule-note">
             R02·R03은 과거 정상 승인 이력이 없는 첫 결제에는 적용하지 않습니다. R04·R06·R08은 평가

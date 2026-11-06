@@ -20,14 +20,12 @@ export type SettlementPreviewEntry = {
   id: string
   orderId?: string
   dateLabel?: string
-  pickupLabel?: string
   item: string
   capturedDate?: string
   eligibleDate?: string
   gross: number
-  pickup: Date | null
   date: Date
-  status: 'done' | 'sch' | 'exp' | 'can'
+  status: 'done' | 'sch' | 'can'
   cardFeeAmount?: number
   pgFeeAmount?: number
   settlementAmount?: number

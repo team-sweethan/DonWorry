@@ -7,6 +7,7 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.PaymentLinks;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -58,6 +59,10 @@ public class LinkedPaymentFinder {
                 .card(match(linked.card()))
                 .device(match(linked.device()))
                 .ip(match(linked.ip()))
+                .payments(linked.payments().stream()
+                        .map(p -> new PaymentLinks(
+                                String.valueOf(p.paymentId()), match(p.card()), match(p.device()), match(p.ip())))
+                        .toList())
                 .build();
     }
 

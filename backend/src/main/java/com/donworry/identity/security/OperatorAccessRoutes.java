@@ -7,7 +7,7 @@ import org.springframework.security.web.servlet.util.matcher.PathPatternRequestM
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 // 메서드까지 일치하는 사장님 전용 경로를 인가와 403 분류가 함께 쓴다.
-final class OperatorAccessRoutes {
+public final class OperatorAccessRoutes {
     private OperatorAccessRoutes() {}
 
     static String[] forecastPaths() {
@@ -66,5 +66,13 @@ final class OperatorAccessRoutes {
             }
         }
         return OperatorAccessDeniedType.OUT_OF_ROLE;
+    }
+
+    public static boolean isOperatorForbiddenFrontendPath(String path) {
+        if (path.contains("//")) return false;
+        return "/admin".equals(path)
+                || path.startsWith("/admin/")
+                || "/security".equals(path)
+                || path.startsWith("/security/");
     }
 }

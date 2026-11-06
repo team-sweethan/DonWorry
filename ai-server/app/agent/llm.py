@@ -3,7 +3,7 @@ import logging
 from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
@@ -72,7 +72,7 @@ class OllamaLlmClient:
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
         result = self._chat(format=schema).invoke(messages)
         usage = _usage(result) if isinstance(result, AIMessage) else None
-        log.info("Ollama 판단 문장 쓰기 토큰 %s", usage)
+        log.info("Ollama 사실 문장 쓰기 토큰 %s", usage)
         return LlmText.of(str(result.content), usage)
 
 
@@ -90,7 +90,7 @@ def _strict_schema(schema: Any) -> Any:
 
 
 # OpenAI — 배포 VM은 사양 한계로 Ollama를 설치할 수 없어 쓰는 제공자 (#453, ADR-0009)
-# 조사 흐름 · 문장 검사 · 다시 쓰기는 그대로, 도구 고르기와 판단 문장 쓰기만 맡긴다
+# 조사 흐름 · 문장 검사 · 다시 쓰기는 그대로, 도구 고르기와 사실 문장 쓰기만 맡긴다
 class OpenAiLlmClient:
     def __init__(self, chat: BaseChatModel) -> None:
         self._chat = chat
@@ -112,48 +112,29 @@ class OpenAiLlmClient:
         }
         result = self._chat.bind(response_format=response_format).invoke(messages)
         usage = _usage(result) if isinstance(result, AIMessage) else None
-        log.info("OpenAI 판단 문장 쓰기 토큰 %s", usage)
+        log.info("OpenAI 사실 문장 쓰기 토큰 %s", usage)
         return LlmText.of(str(result.content), usage)
 
 
-# Ollama 없이 도는 정해진 순서의 조사 — CI · Ollama 없는 팀원 PC용. 판단 문장은 고정이다
+# Ollama 없이 도는 조사 — CI · Ollama 없는 팀원 PC용. 판단 문장은 고정이다
 class MockLlmClient:
+    # 기본 조회는 코드가 하므로(#578) 추가 조사는 고르지 않는다
     def choose_tools(self, messages: list[BaseMessage], tools: list[dict[str, Any]]) -> AIMessage:
-        called = {message.name for message in messages if isinstance(message, ToolMessage)}
-        for name in (
-            "get_case_payments",
-            "get_fds_evidence",
-            "find_similar_cases",
-            "get_payment_history",
-            "find_linked_payments",
-        ):
-            if name not in called:
-                call = {"name": name, "args": {}, "id": f"mock-{name}", "type": "tool_call"}
-                return AIMessage(content="", tool_calls=[call])
         return AIMessage(content="조사 완료")
 
+    # 받은 사실 번호를 모두 단 고정 문장 — 숫자를 쓰지 않아 숫자 검사에 걸리지 않는다 (#548, #559)
+    # 모두 다는 이유: 눈여겨볼 사실이 빠지면 형식 검사가 돌려보낸다 (#568)
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
-        payment_ids = schema["properties"]["payments"]["required"]
-        payment = {
-            "riskEvidence": ["FDS 규칙 적중 내역을 확인했습니다."],
-            "normalEvidence": ["추가로 확인된 정상 정황은 없습니다."],
-            "unknowns": ["고객 본인의 결제 의사"],
-            "reason": "FDS 근거와 함께 조회한 정황을 비교해 추가 확인이 필요합니다.",
-        }
+        ids = schema["properties"]["summary"]["items"]["properties"]["facts"]["items"]["enum"]
         return json.dumps(
             {
-                "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
                 "summary": [
-                    f"조사 대상 결제 {len(payment_ids)}건의 FDS 근거를 확인했습니다.",
-                    "직원은 결제별 위험 근거와 정상 정황을 비교한 뒤 판정해 주세요.",
-                ],
-                "payments": {payment_id: payment for payment_id in payment_ids},
-                "overallAnalysis": [
-                    "결제 간 공통 기기 · 계정 관계는 확인하지 않았습니다.",
-                    "mock 조사라 근거 사이의 관계는 해석하지 않았습니다.",
+                    {
+                        "text": "mock 조사라 조회한 사실을 고정 문장으로만 전달합니다.",
+                        "facts": list(ids),
+                    }
                 ],
                 "additionalChecks": ["고객 본인 확인 필요 여부", "결제별 FDS 근거 확인"],
-                "recommendationSummary": "추가 확인 후 결제별로 판정할 것을 권고합니다.",
             },
             ensure_ascii=False,
         )

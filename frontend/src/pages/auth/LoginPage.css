@@ -1,28 +1,17 @@
 @import '../../styles/public.css';
 
 .dw-signin {
+  /* 펼치기 전 화면과 왼쪽 칸이 같은 바탕을 쓴다. */
+  --dw-signin-surface:
+    radial-gradient(120% 46% at 15% 100%, #c8a56e, transparent 62%),
+    radial-gradient(110% 40% at 95% 80%, #e7d2a6, transparent 64%),
+    linear-gradient(180deg, #cfdbe4, #efe4cb 46%, #dcc595);
   position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #faf7f0;
-}
-/* 오른쪽 위에만 브랜드색 빛을 번지게 둔다 */
-.dw-signin-glow {
-  position: absolute;
-  top: -240px;
-  right: -260px;
-  width: 900px;
-  height: 1200px;
-  background:
-    radial-gradient(closest-side at 60% 30%, rgba(29, 50, 112, 0.18), transparent),
-    radial-gradient(closest-side at 40% 60%, rgba(233, 196, 110, 0.4), transparent),
-    radial-gradient(closest-side at 70% 75%, rgba(246, 166, 162, 0.18), transparent);
-  filter: blur(40px);
-  opacity: 0.55;
-  transform: rotate(-18deg);
-  pointer-events: none;
+  background: linear-gradient(180deg, #f5eedd 0%, #faf7f0 100%);
 }
 .dw-signin-top {
   position: relative;
@@ -31,6 +20,9 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 48px;
+}
+.dw-signin-top .dw-mark {
+  view-transition-name: dw-brand-mark;
 }
 .dw-signin-back {
   display: inline-flex;
@@ -47,51 +39,97 @@
   position: relative;
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 72px 20px 48px;
+  padding: 24px 48px 48px;
 }
-/* 카드 뒤에서 빼꼼 — 몸 아래쪽만 카드에 가려진다 */
-.dw-signin-mascot {
-  position: absolute;
-  z-index: 1;
-  top: -8px;
-  left: calc(50% + 96px);
-}
-.dw-signin-card {
+/* 접힌 화면이 열리면 이음매 없는 큰 화면 안에 두 칸이 나란히 보인다. */
+.dw-signin-device {
   position: relative;
-  z-index: 2;
-  width: 100%;
-  max-width: 440px;
-  overflow: hidden;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.06),
-    0 2px 4px rgba(15, 23, 42, 0.04),
-    0 24px 60px rgba(23, 37, 84, 0.14);
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: min(960px, 100%);
+  min-height: 620px;
+  padding: 8px;
 }
-.dw-signin-body {
-  padding: 40px 40px 32px;
+/* 테두리는 따로 두어, 접힌 동안 오른쪽 절반만 보이게 자른다. */
+.dw-signin-device::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 34px;
+  background: #0d1222;
+  box-shadow: 0 40px 80px -30px #0d122288;
+}
+.dw-signin-pane {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 26px;
+}
+.dw-signin-hero {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 56px 32px 32px;
+  background: var(--dw-signin-surface);
+  color: #4d5a75;
+  text-align: center;
+}
+.dw-signin-hero h2 {
+  margin: 0;
+  font-size: clamp(30px, 3.4vw, 38px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -1.2px;
+  word-break: keep-all;
+}
+.dw-signin-hero h2 em {
+  color: #13204a;
+  font-style: normal;
+}
+.dw-signin-illustration {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+}
+.dw-signin-form {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: center;
+  padding: 40px;
+  background: #fff;
+}
+/* 위쪽 테두리에서 이어지는 노치. 장식이라 입력을 가로막지 않는다. */
+.dw-signin-form::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 120px;
+  height: 22px;
+  border-radius: 0 0 14px 14px;
+  background: #0d1222;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .dw-signin h1 {
-  margin: 0 0 6px;
-  font-size: 24px;
+  margin: 0 0 24px;
+  font-size: 34px;
   font-weight: 700;
   letter-spacing: -0.8px;
-}
-.dw-signin-description {
-  margin: 0 0 28px;
-  color: #4e5968;
-  font-size: 15px;
 }
 .dw-signin-notice {
   display: grid;
   gap: 8px;
-  margin: -12px 0 20px;
+  margin: 0 0 20px;
 }
 .dw-signin .ant-form-item {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 .dw-signin .ant-form-item-label {
   padding-bottom: 6px;
@@ -125,26 +163,47 @@
   font-weight: 500;
 }
 .dw-signin .ant-input-affix-wrapper {
-  height: 46px;
-  border-radius: 8px;
+  height: 52px;
+  border-color: transparent;
+  border-radius: 14px;
+  background: #f2f3f7;
+}
+.dw-signin .ant-input-affix-wrapper input {
+  background: transparent;
 }
 .dw-signin .ant-input-affix-wrapper-focused,
 .dw-signin .ant-input-affix-wrapper:focus-within {
-  border-color: #1d3270;
-  box-shadow: 0 0 0 3px rgba(29, 50, 112, 0.14);
+  border-color: #13204a;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(19, 32, 74, 0.14);
+}
+.dw-signin .ant-input-affix-wrapper-status-error {
+  border-color: #ff4d4f;
 }
 .dw-signin .ant-input-prefix {
   margin-right: 10px;
   color: #8b95a1;
 }
+.dw-signin-save {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding: 0 4px;
+  color: #333d4b;
+  font-size: 15px;
+}
+.dw-signin .ant-switch.ant-switch-checked {
+  background: #13204a;
+}
 .dw-signin .ant-btn-primary {
-  height: 48px;
+  height: 52px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #f1d68e, #d4a548);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
   color: #13204a;
-  font-size: 15px;
+  font-size: 16px;
 }
 .dw-signin .ant-btn-primary:not(:disabled):hover {
   background: linear-gradient(180deg, #f5df9f, #dcb057);
@@ -153,33 +212,32 @@
 .dw-signin-error {
   margin-bottom: 16px;
 }
-.dw-signin-top .dw-mark {
-  view-transition-name: dw-brand-mark;
-}
-.dw-signin-foot {
+.dw-signin-links {
   display: flex;
-  justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 18px 24px;
-  border-top: 1px solid #f2f4f6;
-  background: #f8fafc;
-  color: #4e5968;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 14px;
   font-size: 14px;
 }
-.dw-signin-foot a {
+.dw-signin-find.ant-btn {
+  height: auto;
+  padding: 0;
+  color: #13204a;
+  font-size: 14px;
+}
+.dw-signin-links a {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #1d3270;
+  color: #13204a;
   font-weight: 700;
 }
-.dw-signin-foot a .anticon {
-  font-size: 12px;
-  transition: transform 0.15s;
-}
-.dw-signin-foot a:hover .anticon {
-  transform: translateX(3px);
+.dw-signin-help {
+  margin: 10px 0 0;
+  color: #4e5968;
+  font-size: 13px;
 }
 .dw-signin-footer {
   position: relative;
@@ -187,38 +245,325 @@
   color: #6b7684;
   font-size: 12px;
 }
-@media (prefers-reduced-motion: no-preference) {
-  .dw-signin-card {
-    animation: dw-signin-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+/* 접힌 바깥 화면. 연출이 있을 때만 쓴다. */
+.dw-signin-outer {
+  display: none;
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 50%;
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+.dw-signin-outer-front,
+.dw-signin-outer-back {
+  position: absolute;
+  inset: 0;
+  border: 8px solid #0d1222;
+  background: var(--dw-signin-surface);
+  backface-visibility: hidden;
+}
+/* 접힌 면은 경첩이 왼쪽에 있는 바깥 화면의 홈 화면처럼 보이게 한다. */
+.dw-signin-outer-front {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px;
+  gap: 14px;
+  overflow: hidden;
+  padding: 22px 14px 18px 20px;
+  border-radius: 6px 52px 52px 6px;
+  box-shadow:
+    -3px 0 0 #c9c0ae,
+    0 0 0 2px #d8cfbd,
+    0 34px 60px -28px #0d122288;
+}
+.dw-signin-home {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.dw-signin-widgets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.dw-signin-widget {
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 24px;
+}
+.dw-signin-widget.is-date {
+  justify-content: space-between;
+  padding: 16px;
+  background: #13204a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.dw-signin-widget.is-date strong {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dw-signin-widget.is-brand {
+  align-items: center;
+  justify-content: center;
+  background: #fff7e3;
+  color: #13204a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dw-signin-apps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.dw-signin-tile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  box-shadow: 0 4px 10px -6px #0d122266;
+  font-size: 26px;
+}
+.dw-signin-tile.is-navy {
+  background: #13204a;
+  color: #f1d68e;
+}
+.dw-signin-tile.is-gold {
+  background: linear-gradient(180deg, #f1d68e, #d4a548);
+  color: #13204a;
+}
+.dw-signin-tile.is-blue {
+  background: #3b76ea;
+  color: #fff;
+}
+.dw-signin-tile.is-green {
+  background: #2fb573;
+  color: #fff;
+}
+.dw-signin-tile.is-coral {
+  background: #f0705f;
+  color: #fff;
+}
+.dw-signin-tile.is-white {
+  background: #fff;
+  color: #13204a;
+}
+.dw-signin-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.dw-signin-camera {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0d1222;
+}
+.dw-signin-clock {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dw-signin-dock {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  margin-top: 44px;
+  padding: 8px;
+  border-radius: 20px;
+  background: #ffffff55;
+}
+.dw-signin-dock .dw-signin-tile {
+  font-size: 20px;
+}
+.dw-signin-search {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  margin-top: auto;
+  border-radius: 50%;
+  background: #ffffff66;
+  color: #13204a;
+  font-size: 17px;
+}
+/* 넘어간 뒤 바깥쪽이 되는 모서리는 뒤집힌 좌표의 왼쪽이다. */
+.dw-signin-outer-back {
+  border-radius: 34px 0 0 34px;
+  background: #0d1222;
+  transform: rotateY(180deg);
+}
+/* 기본값은 펼쳐진 화면이다. 움직임이 허용되는 넓은 화면에서만 연출을 보여 준다.
+   순서: 접힌 채 멈춤 → 천천히 펼침(안쪽 화면은 꺼져 있음) → 다 펼친 뒤 화면이 켜지고 내용이 올라옴.
+   모든 애니메이션의 길이를 같게 두어 함께 끝난다.
+   조건을 바꾸면 LoginPage.tsx의 OPEN_MOTION_QUERY도 같이 바꾼다. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 801px) {
+  .dw-signin-device.is-opening {
+    --dw-open-time: 2.2s;
+    perspective: 2200px;
+    animation: dw-signin-device-settle var(--dw-open-time) linear both;
+  }
+  .dw-signin-device.is-opening::before {
+    animation: dw-signin-frame-reveal var(--dw-open-time) step-end both;
+  }
+  .dw-signin-device.is-opening .dw-signin-hero {
+    animation: dw-signin-hero-reveal var(--dw-open-time) step-end both;
+  }
+  .dw-signin-device.is-opening .dw-signin-form {
+    animation: dw-signin-form-reveal var(--dw-open-time) step-end both;
+  }
+  .dw-signin-device.is-opening .dw-signin-outer {
+    display: block;
+    animation: dw-signin-outer-open var(--dw-open-time) linear both;
+  }
+  /* 전체에 opacity를 주면 3D가 평면으로 풀려 앞면이 뒤집혀 보이므로 뒷면만 지운다. */
+  .dw-signin-device.is-opening .dw-signin-outer-back {
+    animation: dw-signin-outer-back-off var(--dw-open-time) step-end both;
+  }
+  .dw-signin-device.is-opening .dw-signin-pane::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    border-radius: inherit;
+    background: #0d1222;
+    pointer-events: none;
+    animation: dw-signin-screen-wake var(--dw-open-time) linear both;
+  }
+  .dw-signin-device.is-opening .dw-signin-pane > * {
+    animation: dw-signin-content-rise var(--dw-open-time) linear both;
   }
 }
-@keyframes dw-signin-rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
+@keyframes dw-signin-device-settle {
+  0%,
+  18% {
+    transform: perspective(2400px) translateX(-25%) rotateY(12deg) scale(0.94);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.2, 1);
   }
-  to {
+  68%,
+  100% {
+    transform: perspective(2400px) translateX(0) rotateY(0) scale(1);
+  }
+}
+@keyframes dw-signin-outer-open {
+  0%,
+  18% {
+    transform: rotateY(0);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.2, 1);
+  }
+  68%,
+  100% {
+    transform: rotateY(-180deg);
+  }
+}
+/* 왼쪽 칸은 넘어온 면이 그 자리를 덮은 뒤에 나타난다. */
+@keyframes dw-signin-frame-reveal {
+  0% {
+    clip-path: inset(50%);
+  }
+  18% {
+    clip-path: inset(-120px -120px -120px 50%);
+  }
+  66%,
+  100% {
+    clip-path: inset(-120px);
+  }
+}
+@keyframes dw-signin-hero-reveal {
+  0% {
+    visibility: hidden;
+  }
+  66%,
+  100% {
+    visibility: visible;
+  }
+}
+/* 접힌 동안 둥근 모서리 뒤로 안쪽 칸이 비치지 않게 숨긴다. */
+@keyframes dw-signin-form-reveal {
+  0% {
+    visibility: hidden;
+  }
+  18%,
+  100% {
+    visibility: visible;
+  }
+}
+@keyframes dw-signin-outer-back-off {
+  0% {
     opacity: 1;
-    transform: none;
+  }
+  68%,
+  100% {
+    opacity: 0;
   }
 }
-@media (max-width: 560px) {
+@keyframes dw-signin-screen-wake {
+  0%,
+  68% {
+    opacity: 1;
+    animation-timing-function: cubic-bezier(0.3, 0, 0.3, 1);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes dw-signin-content-rise {
+  0%,
+  74% {
+    opacity: 0;
+    transform: translateY(14px);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 800px) {
   .dw-signin-top {
-    height: 60px;
+    height: 64px;
+    padding: 0 24px;
+  }
+  .dw-signin-main {
+    padding: 16px 20px 40px;
+  }
+  /* 작은 화면은 폼이 바로 보이도록 왼쪽 칸과 테두리를 뺀다. */
+  .dw-signin-device {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    min-height: 0;
+    padding: 0;
+  }
+  .dw-signin-device::before,
+  .dw-signin-form::before,
+  .dw-signin-hero {
+    display: none;
+  }
+  .dw-signin-form {
+    grid-column: 1;
+    padding: 28px;
+    box-shadow: 0 24px 50px -28px #0d122255;
+  }
+  .dw-signin-footer {
+    padding: 0 24px 20px;
+  }
+}
+@media (max-width: 400px) {
+  .dw-signin-top {
     padding: 0 20px;
   }
   .dw-signin-main {
-    padding: 72px 16px 32px;
+    padding-inline: 16px;
   }
-  .dw-signin-mascot {
-    left: auto;
-    right: 28px;
-    top: -6px;
-  }
-  .dw-signin-body {
-    padding: 32px 24px 24px;
-  }
-  .dw-signin-footer {
-    padding: 0 20px 20px;
+  .dw-signin-form {
+    padding: 24px;
   }
 }

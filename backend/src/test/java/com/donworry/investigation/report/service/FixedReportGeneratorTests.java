@@ -84,7 +84,9 @@ class FixedReportGeneratorTests {
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
-        assertThat((List<?>) analysis.get("normalEvidence")).isEmpty();
+        assertThat(analysis.containsKey("riskEvidence") || analysis.containsKey("normalEvidence"))
+                .isFalse();
+        assertThat((List<?>) body.get("summaryFacts")).isEmpty();
         assertThat(analysis.get("reason")).isInstanceOf(String.class);
         // 기준값 · 실제값이 없는 규칙은 criterion · observed가 null — AI 보고서와 같은 모양 (#326)
         Map<String, Object> expectedRule =
@@ -217,17 +219,22 @@ class FixedReportGeneratorTests {
     @Test
     void generate_aiDisabled_addsPaymentHistory() {
         FixedReportGenerator generator = generatorForCase7();
-        when(paymentHistoryFinder.find(7L, NOW))
-                .thenReturn(new PaymentHistoryToolResponse(
-                        "7",
-                        1,
-                        "P5",
-                        NOW,
-                        30,
-                        List.of(new PaymentHistoryToolResponse.Payment(
-                                "2", 580_000L, "CAPTURED", NOW.minusSeconds(86_400))),
-                        List.of(new StatusCount("CAPTURED", 1)),
-                        false));
+        when(paymentHistoryFinder.find(7L, NOW, 30))
+                .thenReturn(PaymentHistoryToolResponse.builder()
+                        .caseId("7")
+                        .evidenceVersion(1)
+                        .source("P5")
+                        .retrievedAt(NOW)
+                        .lookbackDays(30)
+                        .payments(List.of(PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId("2")
+                                .amount(580_000L)
+                                .paymentStatus("CAPTURED")
+                                .requestedAt(NOW.minusSeconds(86_400))
+                                .build()))
+                        .statusCounts(List.of(new StatusCount("CAPTURED", 1)))
+                        .truncated(false)
+                        .build());
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 
@@ -249,7 +256,7 @@ class FixedReportGeneratorTests {
     @Test
     void generate_paymentHistoryLookupFails_stillBuildsReportWithNull() {
         FixedReportGenerator generator = generatorForCase7();
-        when(paymentHistoryFinder.find(7L, NOW)).thenThrow(new IllegalStateException("P5 조회 실패"));
+        when(paymentHistoryFinder.find(7L, NOW, 30)).thenThrow(new IllegalStateException("P5 조회 실패"));
 
         Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
 

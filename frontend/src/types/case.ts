@@ -165,6 +165,16 @@ export type ReportRuleHitDetail = {
 }
 
 // verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
+// 사실 번호별 원래 사실 (#548) — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
+// paymentId는 접속 정보처럼 결제 하나의 사실일 때만 있다 (#559)
+export type ReportFact = {
+  id: string
+  topic: string
+  text: string
+  evidenceId: string
+  paymentId?: string | null
+}
+
 export type ReportBody = {
   overview: {
     caseId: string
@@ -177,14 +187,15 @@ export type ReportBody = {
     reportVersion: number
   }
   summary: string[]
+  // 요약 문장마다 근거 사실 번호 (#559) — summary와 같은 문장 · 순서. 없으면 그 전 보고서
+  summaryFacts?: Array<{ text: string; factIds: string[] }>
   paymentAnalyses: Array<{
     paymentId: string
     amount: number
     requestedAt: string
     riskScore: number | null
     ruleHits: string[]
-    riskEvidence: string[]
-    normalEvidence: string[]
+    // 위험 근거 · 정상 정황(AI 문장)은 #548에서 없앴다 — 예전 보고서에 남아 있어도 보여 주지 않는다
     unknowns: string[]
     recommendation: AiRecommendation
     reason?: string
@@ -196,7 +207,8 @@ export type ReportBody = {
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
   timeline: Array<{ at: string; event: string; kind?: 'PAYMENT' | 'CASE' }>
-  overallAnalysis: string[]
+  // 사실 번호 목록 (#548) — 요약 링크가 번호의 주제로 표 카드를 찾는다. 종합 분석 · 주제별 문장은 없앴다
+  facts?: ReportFact[]
   additionalChecks: string[]
   recommendation: { summary: string; limitations: string[] }
   evidence: Array<{
@@ -206,7 +218,8 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
-  // headline은 AI 결론 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
+  // headline은 결론 한 줄 — #532부터 코드가 기준표 판정으로 쓴다(그 전 보고서는 AI 문장)
+  // overallRecommendation은 결제별 권고로 코드가 계산
   verdict?: { headline: string; overallRecommendation: AiRecommendation }
   // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
   investigationTrace?: InvestigationTrace
@@ -304,6 +317,8 @@ export type InvestigationTrace = {
   model: string
   durationMs: number | null
   steps: TraceStep[]
+  // 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 · 예전 보고서에는 없다 (화면 표시는 나중)
+  promptFingerprint?: string | null
 }
 
 export type AiReport = {

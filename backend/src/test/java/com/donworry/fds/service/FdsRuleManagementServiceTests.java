@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.donworry.fds.entity.FdsRuleChangeRequest;
 import com.donworry.fds.entity.FdsRulePolicy;
 import com.donworry.fds.repository.FdsRuleChangeRequestRepository;
+import com.donworry.fds.repository.FdsRulePolicyChangeHistoryRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
@@ -27,6 +28,9 @@ class FdsRuleManagementServiceTests {
 
     @Mock
     FdsRuleChangeRequestRepository requests;
+
+    @Mock
+    FdsRulePolicyChangeHistoryRepository histories;
 
     @Mock
     CurrentStaff currentStaff;
@@ -135,7 +139,7 @@ class FdsRuleManagementServiceTests {
     }
 
     private FdsRuleManagementService service() {
-        return new FdsRuleManagementService(policies, requests, currentStaff);
+        return new FdsRuleManagementService(policies, requests, histories, currentStaff);
     }
 
     private StaffSummary staff(Long userId, String displayName) {

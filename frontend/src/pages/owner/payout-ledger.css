@@ -2,7 +2,16 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
-  margin: 20px 0;
+  margin: 12px 0;
+}
+.payout-summary-title {
+  margin: 20px 0 0;
+  font-size: 16px;
+}
+.payout-summary-formula {
+  margin: 0 0 16px;
+  color: #756b5b;
+  font-size: 13px;
 }
 .payout-stat {
   border: 1px solid #dcd2bf;
@@ -58,13 +67,6 @@
 .payout-deduction {
   color: #c2410c;
 }
-.payout-stat-remaining {
-  border-top-color: #9b5843;
-  background: #fff;
-}
-.payout-stat-remaining > strong {
-  color: #8a4938;
-}
 .payout-caption {
   padding: 12px 24px;
   margin: 0;
@@ -96,7 +98,7 @@
 .payout-policy-note {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   gap: 16px;
   flex-wrap: wrap;
   color: #756b5b;
@@ -105,6 +107,19 @@
 }
 .payout-policy-note strong {
   color: #886211;
+}
+.payout-current-recovery > span {
+  color: #78350f;
+  font-size: 16px;
+  font-weight: 700;
+}
+.payout-current-recovery > strong {
+  color: #9a3412;
+  font-size: 24px;
+  font-weight: 800;
+}
+.payout-current-recovery small {
+  color: #756b5b;
 }
 .recovery-notice {
   background: #fff;

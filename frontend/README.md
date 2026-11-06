@@ -60,11 +60,10 @@ npm run dev
 | `/`                                                   | 비로그인 공개 랜딩, 로그인 상태면 권한별 첫 화면으로 이동 (#315 PR 1)                                                  |
 | `/admin/home`                                         | 관리자 첫 화면 — 룰 끄기 승인 대기 수·최신 5건, 사용 중지된 탐지 룰 수, 전체 계정·가맹점 수 (#307). 기존 조회 API 사용 |
 | `/admin/fds/rules`, `/admin/fds/rule-change-requests` | 탐지 룰 목록·룰 끄기 요청 관리                                                                                         |
-| `/admin/finance`                                      | 자금관리 담당자 구현 영역 (`EmptyPage`)                                                                                |
 | `/security/home`                                      | 보안 직원 첫 화면 — Case 처리 현황·지금 처리할 사건 (#222). `/api/security-cases` 사용                                 |
 | `/security/cases`, `/security/cases/:id`              | Case 목록·상세·판정·인계. 백엔드 `/api/security-cases` 사용 (`src/api/cases.ts`). 시연 결제만 백엔드 목업              |
 | `/security/alerts`, `/security/alerts/:id`            | 경보 목록·상세. 백엔드 `/api/fds/evaluations` 사용 (`src/api/fds.ts`)                                                  |
-| `/security/transactions`                              | 거래 내역 담당자 구현 영역 (`EmptyPage`)                                                                               |
+| `/security/transactions`                              | 거래 내역 목록 (`TransactionListPage`)                                                                                 |
 | `/owner`                                              | 사장님 공통 홈. 업무 권한과 관계없이 연동 상태·다음 행동·권한별 업무 바로가기 표시 (#378)                              |
 | `/owner/actions`, `/owner/actions/:id`                | 조치 결과(`FDS_VIEW`). 백엔드 `/api/merchant/security-cases` 사용 (`src/api/merchantCases.ts`, #205)                   |
 | `/owner/settlements`, `/owner/funds`                  | 정산 내역·자금 현황(`FINANCE_VIEW`). `SettlementRoute`의 정산·자금 시연 화면                                           |

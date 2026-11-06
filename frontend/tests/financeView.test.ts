@@ -59,7 +59,7 @@ const report: SettlementReport = {
     },
   ],
 }
-test('D+3 정산 예정은 픽업 완료 없이도 예정 상태와 별도 픽업 정보를 표시한다', () => {
+test('D+3 정산 예정은 픽업 시각 유무에 관계없이 서버 정산일과 예정 상태를 유지한다', () => {
   const entry = {
     ...report.entries[0],
     status: 'SCHEDULED' as const,
@@ -69,14 +69,23 @@ test('D+3 정산 예정은 픽업 완료 없이도 예정 상태와 별도 픽�
   }
   const row = settlementViewEntries({ ...report, entries: [entry] })[0]
   assert.equal(row.status, 'sch')
-  assert.equal(row.pickup?.getDate(), 3)
+
   assert.equal(row.date.getDate(), 2)
   const missing = settlementViewEntries({
     ...report,
     entries: [{ ...entry, scheduledPickupAt: null }],
   })[0]
   assert.equal(missing.status, 'sch')
-  assert.equal(missing.pickup, null)
+  assert.equal(missing.date.getDate(), 2)
+})
+
+test('과거 API 분류도 별도 예상 상태를 만들지 않고 정산 예정으로 통합한다', () => {
+  const [row] = settlementViewEntries({
+    ...report,
+    entries: [{ ...report.entries[0], status: 'SCHEDULED', classification: 'EXPECTED' }],
+  })
+  assert.equal(row.status, 'sch')
+  assert.equal(row.settlementAmount, 70)
 })
 test('날짜·정산 표시·수수료·빈 상품은 한국 날짜와 서버 값 그대로 유지한다', () => {
   assert.equal(koreanToday(new Date('2026-11-01T15:00:00Z')), '2026-11-02')
@@ -92,7 +101,6 @@ test('날짜·정산 표시·수수료·빈 상품은 한국 날짜와 서버 �
   assert.equal(rows[0].pgFeeAmount, 20)
   assert.equal(rows[0].settlementAmount, 70)
   assert.deepEqual(rows[0].orderItems, [])
-  assert.equal(rows[0].pickup?.getDate(), 2)
   assert.deepEqual(settlementViewEntries({ ...report, entries: [] }), [])
 })
 test('미래 회차를 미리 완료했으면 원래 회차를 키로 보존하고 실제 완료일에 표시한다', () => {
@@ -186,8 +194,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
         date: '2026-11-02',
         openingBalance: 100,
         completedIncome: 0,
-        scheduledIncome: 30,
-        expectedIncome: 0,
+        scheduledIncome: 20,
+        expectedIncome: 10,
         paidExpenses: 20,
         plannedExpenses: 0,
         closingBalance: 110,
@@ -223,6 +231,8 @@ test('현금흐름 원인은 동일 예측 응답의 반영일과 실제/예정 
     ],
   }
   const view = forecastView(forecast)
+  assert.equal(view.days[0].scheduled, 30)
+  assert.equal('expected' in view.days[0], false)
   assert.equal(view.days[0].expenses, 20)
   assert.equal(view.incomes[0].amount, 30)
   assert.equal(view.incomes[0].settlementAmount, 50)

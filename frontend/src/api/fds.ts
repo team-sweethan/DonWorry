@@ -99,6 +99,25 @@ export type FdsRuleChangeRequestPage = {
   totalPages: number
 }
 
+export type FdsRulePolicyChangeHistory = {
+  historyId: number
+  ruleCode: string
+  action: 'ENABLED' | 'DISABLED'
+  source: 'ADMIN_DIRECT' | 'SECURITY_STAFF_DIRECT' | 'DISABLE_REQUEST_APPROVED'
+  requestedByName: string | null
+  requestReason: string | null
+  changedByName: string
+  changedAt: string
+}
+
+export type FdsRulePolicyChangeHistoryPage = {
+  content: FdsRulePolicyChangeHistory[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export type FdsBlocklistEntry = {
   entryId: number
   identifierType: 'CARD_TOKEN' | 'DEVICE_ID' | 'BUYER_REF' | 'IP_ADDRESS' | 'BUYER_EMAIL'
@@ -113,6 +132,51 @@ export type FdsBlocklistEntry = {
 }
 
 export type FdsBlocklistStatusFilter = 'ACTIVE' | 'INACTIVE'
+export type OperatorAccessDetection = {
+  detectionId: number | null
+  sourceEventId: number | null
+  loginId: string
+  affiliation: string
+  ruleName: string
+  riskLevel: 'HIGH' | 'LOW'
+  eventCount: number
+  actionStatus: string
+  occurredAt: string
+}
+export type OperatorAccessDetectionPage = {
+  content: OperatorAccessDetection[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  highRiskCount: number
+  lowRiskCount: number
+}
+export type OperatorAccessDetectionDetail = {
+  detectionId: number | null
+  riskLevel: 'HIGH' | 'LOW'
+  userId: number
+  loginId: string
+  merchantId: number | null
+  ruleCode: string
+  deniedType: string
+  eventCount: number
+  actionStatus: string
+  detectedAt: string
+  windowSeconds: number
+  thresholdCount: number
+  windowStartedAt: string
+  windowEndedAt: string
+  lastActivatedAt: string | null
+  actionCompletedAt: string | null
+  failureCode: string | null
+  evidences: Array<{
+    identityEventId: number
+    httpMethod: string
+    path: string
+    occurredAt: string
+  }>
+}
 
 export type FdsBlocklistPage = {
   content: FdsBlocklistEntry[]
@@ -153,6 +217,12 @@ export function getFdsRuleCatalog() {
   return api<FdsRuleCatalogEntry[]>('/fds/evaluations/rule-catalog')
 }
 
+export function getOperatorAccessRuleCatalog() {
+  return api<FdsRuleCatalogEntry[]>('/fds/operator-access-detections/rule-catalog', {
+    cache: 'no-store',
+  })
+}
+
 export function getFdsRulePolicies() {
   return api<FdsRulePolicy[]>('/fds/rule-policies', { cache: 'no-store' })
 }
@@ -176,6 +246,13 @@ export function setFdsRuleActive(ruleCode: string, active: boolean) {
 export function getFdsRuleChangeRequests(status: FdsRuleChangeRequest['status'], page: number) {
   return api<FdsRuleChangeRequestPage>(
     `/fds/rule-change-requests?${new URLSearchParams({ status, page: String(page), size: '10' })}`,
+    { cache: 'no-store' },
+  )
+}
+
+export function getFdsRulePolicyChangeHistories(page: number, search = '') {
+  return api<FdsRulePolicyChangeHistoryPage>(
+    `/fds/rule-policy-change-histories?${new URLSearchParams({ page: String(page), size: '10', search })}`,
     { cache: 'no-store' },
   )
 }
@@ -222,4 +299,23 @@ export function getFdsBlocklistStatus(
 ) {
   const query = new URLSearchParams({ identifierType, identifierValue })
   return api<{ blocked: boolean }>(`/fds/blocklist/status?${query}`, { cache: 'no-store' })
+}
+
+export function getOperatorAccessDetections(page = 0, risk = 'ALL', search = '') {
+  return api<OperatorAccessDetectionPage>(
+    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search })}`,
+    { cache: 'no-store' },
+  )
+}
+
+export function getOperatorAccessDetection(detectionId: number) {
+  return api<OperatorAccessDetectionDetail>(`/fds/operator-access-detections/${detectionId}`, {
+    cache: 'no-store',
+  })
+}
+
+export function getLowRiskOperatorAccessDetection(eventId: number) {
+  return api<OperatorAccessDetectionDetail>(`/fds/operator-access-detections/low/${eventId}`, {
+    cache: 'no-store',
+  })
 }

@@ -1,6 +1,6 @@
 import { isShopUrlValid } from '../../utils/shopUrl.ts'
 import { useRef, useState, type ReactNode } from 'react'
-import { Alert, Button, Checkbox, Descriptions, Form, Input, Result, Space } from 'antd'
+import { Alert, Button, Checkbox, Form, Input, Result, Space } from 'antd'
 import { Link, useLoaderData } from 'react-router-dom'
 import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import {
@@ -13,12 +13,28 @@ import {
 } from '../../api/merchantApplications'
 import { ApiError } from '../../api/client'
 import { applicationError } from './applicationFeedback'
+import { FormattedApplicationInput, InputChecks } from './ApplicationInputFeedback'
+import { ApplicationReview } from './ApplicationReview'
+import {
+  formatBusinessNumber,
+  formatPhone,
+  isBusinessNumberValid,
+  loginIdChecks,
+} from './applicationFormat.ts'
 import './ApplicationPage.css'
 
 const journey = ['신청 및 이메일 확인', '관리자 검토', '승인 후 계정 발급', '첫 비밀번호 설정']
 
 /** 신청 · 이메일 확인 · 첫 비밀번호 화면의 공통 틀. step을 주면 4단계 중 지금 위치를 보여 준다. */
-export function PublicShell({ children, step }: { children: ReactNode; step?: 1 | 2 | 3 | 4 }) {
+export function PublicShell({
+  children,
+  step,
+  wide = false,
+}: {
+  children: ReactNode
+  step?: 1 | 2 | 3 | 4
+  wide?: boolean
+}) {
   return (
     <div className="dw-application-shell">
       <header className="dw-application-header">
@@ -47,7 +63,9 @@ export function PublicShell({ children, step }: { children: ReactNode; step?: 1 
           })}
         </ol>
       )}
-      <main className="dw-application-main">{children}</main>
+      <main className={`dw-application-main${wide ? ' dw-application-main-wide' : ''}`}>
+        {children}
+      </main>
     </div>
   )
 }
@@ -129,6 +147,8 @@ function ConsentNotice() {
 }
 export function ApplicationPage() {
   const [form] = Form.useForm<ApplicationInput>()
+  const businessNumber = Form.useWatch('businessRegistrationNumber', form) ?? ''
+  const loginId = Form.useWatch('requestedLoginId', form) ?? ''
   const [review, setReview] = useState<ApplicationInput | null>(null)
   const [receipt, setReceipt] = useState<{
     email: string
@@ -140,6 +160,11 @@ export function ApplicationPage() {
   const busy = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const focusHeading = () => requestAnimationFrame(() => heading.current?.focus())
+  const editField = (field: keyof ApplicationInput) => {
+    setReview(null)
+    setError(null)
+    requestAnimationFrame(() => form.scrollToField(field, { focus: true, block: 'center' }))
+  }
   const submit = async () => {
     if (!review || busy.current) return
     busy.current = true
@@ -173,260 +198,354 @@ export function ApplicationPage() {
     }
   }
   return (
-    <PublicShell step={1}>
-      {receipt && <Mascot size={120} className="dw-application-mascot dw-mascot-float" />}
-      <h1 ref={heading} tabIndex={-1}>
-        {receipt
-          ? '신청이 접수되었습니다'
-          : review
-            ? '신청 내용을 확인해 주세요'
-            : '돈워리 이용 신청'}
-      </h1>
-      {receipt ? (
-        <>
-          <p>
-            이메일 확인 후 관리자가 신청을 검토합니다. 아직 이용 승인·계정 발급이 완료된 상태는
-            아닙니다.
-          </p>
-          <Alert
-            showIcon
-            type={receipt.mailStatus === 'SENT' ? 'success' : 'warning'}
-            message={
-              receipt.mailStatus === 'SENT'
-                ? `${receipt.email}로 확인 메일을 보냈습니다. 링크는 24시간 동안 유효합니다.`
-                : '접수는 완료되었지만 메일 발송 결과를 확인하지 못했습니다. 메일함을 확인하고 필요하면 다시 요청해 주세요.'
-            }
-          />
-          <p>
-            선택한 로그인 아이디는 <strong>{receipt.requestedLoginId}</strong>입니다. 승인 후 이
-            아이디로 계정을 발급하고 비밀번호 설정 방법을 안내합니다.
-          </p>
-          <ResendEmail initialEmail={receipt.email} />
-        </>
-      ) : (
-        <>
-          <p>
-            가맹점·담당자 정보와 사용할 로그인 아이디를 입력해 주세요. 관리자 승인 후 계정을
-            발급하며, 결제 연동은 별도로 진행합니다.
-          </p>
-          <Form<ApplicationInput>
-            name="merchant-application"
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            disabled={submitting}
-            initialValues={{ consent: false }}
-            onFinish={(values) => {
-              setReview(values)
-              setError(null)
-              focusHeading()
-            }}
-            scrollToFirstError
-          >
-            <div hidden={review !== null}>
-              <h2>가맹점 정보</h2>
-              <Form.Item
-                name="merchantName"
-                label="가맹점명"
-                rules={[
-                  { required: true, whitespace: true, message: '가맹점명을 입력해 주세요.' },
-                  { max: 100, message: '100자 이하로 입력해 주세요.' },
-                ]}
-              >
-                <Input maxLength={100} autoComplete="organization" />
-              </Form.Item>
-              <Form.Item
-                name="businessRegistrationNumber"
-                label="사업자등록번호"
-                rules={[
-                  { required: true, message: '사업자등록번호를 입력해 주세요.' },
-                  {
-                    pattern: /^[0-9]{10}$/,
-                    transform: (value: string) => value?.replace(/[- ]/g, ''),
-                    message: '사업자등록번호 10자리를 입력해 주세요.',
-                  },
-                ]}
-              >
-                <Input maxLength={20} inputMode="numeric" placeholder="000-00-00000" />
-              </Form.Item>
-              <Form.Item
-                name="shopUrl"
-                label="쇼핑몰 주소"
-                extra="현재 운영 중인 쇼핑몰 주소를 입력해 주세요. 이용 신청 검토에 사용합니다."
-                rules={[
-                  { required: true, whitespace: true, message: '쇼핑몰 주소를 입력해 주세요.' },
-                  {
-                    validator: (_, value: string | undefined) =>
-                      !value?.trim() || isShopUrlValid(value)
-                        ? Promise.resolve()
-                        : Promise.reject(
-                            new Error(
-                              'http:// 또는 https://로 시작하는 쇼핑몰 주소를 입력해 주세요.',
-                            ),
-                          ),
-                  },
-                ]}
-              >
-                <Input
-                  maxLength={2048}
-                  inputMode="url"
-                  autoComplete="url"
-                  placeholder="https://shop.example.com"
-                />
-              </Form.Item>
-              <h2>담당자 정보</h2>
-              <Form.Item
-                name="contactName"
-                label="담당자명"
-                rules={[
-                  { required: true, whitespace: true, message: '담당자명을 입력해 주세요.' },
-                  { max: 100, message: '100자 이하로 입력해 주세요.' },
-                ]}
-              >
-                <Input maxLength={100} autoComplete="name" />
-              </Form.Item>
-              <Form.Item
-                name="email"
-                label="이메일"
-                extra="이메일 확인과 검토 결과를 받을 주소입니다."
-                rules={[
-                  { required: true, message: '이메일을 입력해 주세요.' },
-                  {
-                    type: 'email',
-                    transform: (value: string) => value?.trim(),
-                    message: '이메일 형식을 확인해 주세요.',
-                  },
-                  { max: 254, message: '254자 이하로 입력해 주세요.' },
-                ]}
-              >
-                <Input type="email" maxLength={254} autoComplete="email" />
-              </Form.Item>
-              <Form.Item
-                name="phone"
-                label="연락처"
-                rules={[
-                  { required: true, message: '연락처를 입력해 주세요.' },
-                  {
-                    pattern: /^[0-9]{9,15}$/,
-                    transform: (value: string) => value?.replace(/[- ]/g, ''),
-                    message: '연락처 숫자 9~15자리를 입력해 주세요.',
-                  },
-                ]}
-              >
-                <Input type="tel" maxLength={25} autoComplete="tel" />
-              </Form.Item>
-              <h2>사용할 계정</h2>
-              <Form.Item
-                name="requestedLoginId"
-                label="로그인 아이디"
-                extra="영문 소문자·숫자·밑줄(_) 3~30자. 사용 중이거나 다른 신청에서 선택한 아이디는 사용할 수 없습니다."
-                rules={[
-                  {
-                    required: true,
-                    whitespace: true,
-                    message: '사용할 로그인 아이디를 입력해 주세요.',
-                  },
-                  {
-                    pattern: /^[a-z0-9_]{3,30}$/,
-                    transform: (value: string) => value?.trim(),
-                    message: '영문 소문자·숫자·밑줄로 3~30자를 입력해 주세요.',
-                  },
-                ]}
-              >
-                <Input
-                  maxLength={30}
-                  autoComplete="username"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  placeholder="예: sweet_owner"
-                />
-              </Form.Item>
-              <p className="dw-application-account-note">
-                승인되면 선택한 아이디로 계정을 발급합니다. 비밀번호는 승인 안내 메일의 링크에서
-                직접 설정합니다.
-              </p>
-              <Form.Item
-                name="inquiry"
-                label="문의·요청 사항 (선택)"
-                rules={[{ max: 1000, message: '1,000자 이하로 입력해 주세요.' }]}
-              >
-                <Input.TextArea maxLength={1000} showCount rows={4} />
-              </Form.Item>
-              <ConsentNotice />
-              <Form.Item
-                name="consent"
-                valuePropName="checked"
-                rules={[
-                  {
-                    validator: (_, value: boolean) =>
-                      value
-                        ? Promise.resolve()
-                        : Promise.reject(new Error('개인정보 수집·이용 동의가 필요합니다.')),
-                  },
-                ]}
-              >
-                <Checkbox>[필수] 개인정보 수집·이용에 동의합니다.</Checkbox>
-              </Form.Item>
-              <Button type="primary" htmlType="submit">
-                입력 내용 확인
-              </Button>
-            </div>
-          </Form>
-          {review && (
+    <PublicShell step={1} wide>
+      <div className="dw-application-layout">
+        <div className="dw-application-content">
+          {receipt && <Mascot size={120} className="dw-application-mascot dw-mascot-float" />}
+          <h1 ref={heading} tabIndex={-1}>
+            {receipt
+              ? '신청이 접수되었습니다'
+              : review
+                ? '신청 내용을 확인해 주세요'
+                : '돈워리 이용 신청'}
+          </h1>
+          {receipt ? (
             <>
-              <Descriptions
-                bordered
-                column={1}
-                size="small"
-                items={[
-                  { key: 'merchant', label: '가맹점명', children: review.merchantName },
-                  { key: 'shopUrl', label: '쇼핑몰 주소', children: review.shopUrl.trim() },
-                  {
-                    key: 'business',
-                    label: '사업자등록번호',
-                    children: review.businessRegistrationNumber,
-                  },
-                  {
-                    key: 'login',
-                    label: '로그인 아이디',
-                    children: normalizeApplication(review).requestedLoginId,
-                  },
-                  {
-                    key: 'password',
-                    label: '비밀번호 설정',
-                    children: '승인 후 메일의 링크에서 직접 설정',
-                  },
-                  { key: 'contact', label: '담당자명', children: review.contactName },
-                  { key: 'email', label: '이메일', children: normalizeApplication(review).email },
-                  { key: 'phone', label: '연락처', children: review.phone },
-                  { key: 'inquiry', label: '문의·요청 사항', children: review.inquiry || '없음' },
-                  { key: 'consent', label: '개인정보 동의', children: '동의함' },
-                ]}
+              <p>
+                이메일 확인 후 관리자가 신청을 검토합니다. 아직 이용 승인·계정 발급이 완료된 상태는
+                아닙니다.
+              </p>
+              <Alert
+                showIcon
+                type={receipt.mailStatus === 'SENT' ? 'success' : 'warning'}
+                message={
+                  receipt.mailStatus === 'SENT'
+                    ? `${receipt.email}로 확인 메일을 보냈습니다. 링크는 24시간 동안 유효합니다.`
+                    : '접수는 완료되었지만 메일 발송 결과를 확인하지 못했습니다. 메일함을 확인하고 필요하면 다시 요청해 주세요.'
+                }
               />
-              <Space className="dw-application-actions" wrap>
-                <Button
-                  disabled={submitting}
-                  onClick={() => {
-                    setReview(null)
-                    setError(null)
-                    focusHeading()
-                  }}
-                >
-                  입력 내용 수정
-                </Button>
-                <Button type="primary" loading={submitting} onClick={submit}>
-                  신청 제출
-                </Button>
-              </Space>
+              <section
+                className="dw-application-section dw-application-receipt"
+                aria-labelledby="receipt-title"
+              >
+                <h2 id="receipt-title">접수한 계정 정보</h2>
+                <dl>
+                  <dt>이메일</dt>
+                  <dd>{receipt.email}</dd>
+                  <dt>로그인 아이디</dt>
+                  <dd>{receipt.requestedLoginId}</dd>
+                </dl>
+              </section>
+              <section className="dw-application-next" aria-labelledby="next-title">
+                <h2 id="next-title">다음 절차</h2>
+                <ol>
+                  <li>
+                    <strong>메일 확인</strong>
+                    <p>받은편지함과 스팸함에서 확인 메일을 찾아 링크를 열어 주세요.</p>
+                  </li>
+                  <li>
+                    <strong>승인 대기</strong>
+                    <p>
+                      이메일 확인 후 관리자 검토를 거쳐 결과를 이메일로 안내합니다. 승인 후 선택한
+                      아이디로 계정을 발급하고 비밀번호 설정 방법을 안내합니다.
+                    </p>
+                  </li>
+                </ol>
+              </section>
+              <ResendEmail initialEmail={receipt.email} />
+            </>
+          ) : (
+            <>
+              <p>
+                가맹점·담당자 정보와 사용할 로그인 아이디를 입력해 주세요. 관리자 승인 후 계정을
+                발급하며, 결제 연동은 별도로 진행합니다.
+              </p>
+              <Form<ApplicationInput>
+                name="merchant-application"
+                form={form}
+                layout="vertical"
+                requiredMark={false}
+                disabled={submitting}
+                initialValues={{ consent: false }}
+                onFinish={(values) => {
+                  setReview(values)
+                  setError(null)
+                  focusHeading()
+                }}
+                scrollToFirstError
+              >
+                <div hidden={review !== null}>
+                  <section
+                    className="dw-application-section"
+                    aria-labelledby="merchant-section-title"
+                  >
+                    <h2 id="merchant-section-title">
+                      <span className="dw-application-section-number">01</span>가맹점 정보
+                    </h2>
+                    <div className="dw-application-fields">
+                      <Form.Item
+                        name="merchantName"
+                        label="가맹점명"
+                        rules={[
+                          {
+                            required: true,
+                            whitespace: true,
+                            message: '가맹점명을 입력해 주세요.',
+                          },
+                          { max: 100, message: '100자 이하로 입력해 주세요.' },
+                        ]}
+                      >
+                        <Input maxLength={100} autoComplete="organization" />
+                      </Form.Item>
+                      <Form.Item
+                        name="businessRegistrationNumber"
+                        label="사업자등록번호"
+                        extra={
+                          <div aria-live="polite" aria-atomic="true">
+                            {/^[0-9]{10}$/.test(businessNumber.replace(/[- ]/g, '')) &&
+                            !isBusinessNumberValid(businessNumber) ? (
+                              <span className="dw-application-warning">
+                                형식은 맞지만 확인해 보세요. 체크섬이 일치하지 않아도 제출은
+                                가능합니다.
+                              </span>
+                            ) : (
+                              '숫자 10자리를 입력하면 하이픈을 자동으로 넣습니다.'
+                            )}
+                          </div>
+                        }
+                        rules={[
+                          { required: true, message: '사업자등록번호를 입력해 주세요.' },
+                          {
+                            pattern: /^[0-9]{10}$/,
+                            transform: (value: string) => value?.replace(/[- ]/g, ''),
+                            message: '사업자등록번호 10자리를 입력해 주세요.',
+                          },
+                        ]}
+                      >
+                        <FormattedApplicationInput
+                          format={formatBusinessNumber}
+                          maxLength={20}
+                          inputMode="numeric"
+                          placeholder="123-45-67890"
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="shopUrl"
+                        label="쇼핑몰 주소"
+                        className="dw-application-field-full"
+                        extra="현재 운영 중인 쇼핑몰 주소를 입력해 주세요. 이용 신청 검토에 사용합니다."
+                        rules={[
+                          {
+                            required: true,
+                            whitespace: true,
+                            message: '쇼핑몰 주소를 입력해 주세요.',
+                          },
+                          {
+                            validator: (_, value: string | undefined) =>
+                              !value?.trim() || isShopUrlValid(value)
+                                ? Promise.resolve()
+                                : Promise.reject(
+                                    new Error(
+                                      'http:// 또는 https://로 시작하는 쇼핑몰 주소를 입력해 주세요.',
+                                    ),
+                                  ),
+                          },
+                        ]}
+                      >
+                        <Input
+                          maxLength={2048}
+                          inputMode="url"
+                          autoComplete="url"
+                          placeholder="https://shop.example.com"
+                        />
+                      </Form.Item>
+                    </div>
+                  </section>
+                  <section
+                    className="dw-application-section"
+                    aria-labelledby="contact-section-title"
+                  >
+                    <h2 id="contact-section-title">
+                      <span className="dw-application-section-number">02</span>담당자 정보
+                    </h2>
+                    <div className="dw-application-fields">
+                      <Form.Item
+                        name="contactName"
+                        label="담당자명"
+                        rules={[
+                          {
+                            required: true,
+                            whitespace: true,
+                            message: '담당자명을 입력해 주세요.',
+                          },
+                          { max: 100, message: '100자 이하로 입력해 주세요.' },
+                        ]}
+                      >
+                        <Input maxLength={100} autoComplete="name" />
+                      </Form.Item>
+                      <Form.Item
+                        name="phone"
+                        label="연락처"
+                        rules={[
+                          { required: true, message: '연락처를 입력해 주세요.' },
+                          {
+                            pattern: /^[0-9]{9,15}$/,
+                            transform: (value: string) => value?.replace(/[- ]/g, ''),
+                            message: '연락처 숫자 9~15자리를 입력해 주세요.',
+                          },
+                        ]}
+                      >
+                        <FormattedApplicationInput
+                          format={formatPhone}
+                          type="tel"
+                          maxLength={25}
+                          autoComplete="tel"
+                          placeholder="010-1234-5678"
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        name="email"
+                        className="dw-application-field-full"
+                        label="이메일"
+                        extra="이메일 확인과 검토 결과를 받을 주소입니다."
+                        rules={[
+                          { required: true, message: '이메일을 입력해 주세요.' },
+                          {
+                            type: 'email',
+                            transform: (value: string) => value?.trim(),
+                            message: '이메일 형식을 확인해 주세요.',
+                          },
+                          { max: 254, message: '254자 이하로 입력해 주세요.' },
+                        ]}
+                      >
+                        <Input type="email" maxLength={254} autoComplete="email" />
+                      </Form.Item>
+                    </div>
+                  </section>
+                  <section
+                    className="dw-application-section"
+                    aria-labelledby="account-section-title"
+                  >
+                    <h2 id="account-section-title">
+                      <span className="dw-application-section-number">03</span>사용할 계정
+                    </h2>
+                    <Form.Item
+                      name="requestedLoginId"
+                      label="로그인 아이디"
+                      extra={
+                        <>
+                          <InputChecks checks={loginIdChecks(loginId)} />
+                          <span>
+                            아이디 사용 가능 여부는 제출할 때 확인합니다. 사용 중이거나 다른
+                            신청에서 선택한 아이디는 사용할 수 없습니다.
+                          </span>
+                        </>
+                      }
+                      rules={[
+                        {
+                          required: true,
+                          whitespace: true,
+                          message: '사용할 로그인 아이디를 입력해 주세요.',
+                        },
+                        {
+                          pattern: /^[a-z0-9_]{3,30}$/,
+                          transform: (value: string) => value?.trim(),
+                          message: '영문 소문자·숫자·밑줄로 3~30자를 입력해 주세요.',
+                        },
+                      ]}
+                    >
+                      <Input
+                        maxLength={30}
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        placeholder="예: sweet_owner"
+                      />
+                    </Form.Item>
+                    <p className="dw-application-account-note">
+                      승인되면 선택한 아이디로 계정을 발급합니다. 비밀번호는 승인 안내 메일의
+                      링크에서 직접 설정합니다.
+                    </p>
+                    <Form.Item
+                      name="inquiry"
+                      label="문의·요청 사항 (선택)"
+                      rules={[{ max: 1000, message: '1,000자 이하로 입력해 주세요.' }]}
+                    >
+                      <Input.TextArea maxLength={1000} showCount rows={4} />
+                    </Form.Item>
+                  </section>
+                  <ConsentNotice />
+                  <Form.Item
+                    name="consent"
+                    valuePropName="checked"
+                    rules={[
+                      {
+                        validator: (_, value: boolean) =>
+                          value
+                            ? Promise.resolve()
+                            : Promise.reject(new Error('개인정보 수집·이용 동의가 필요합니다.')),
+                      },
+                    ]}
+                  >
+                    <Checkbox>[필수] 개인정보 수집·이용에 동의합니다.</Checkbox>
+                  </Form.Item>
+                  <Button type="primary" htmlType="submit" size="large" block>
+                    입력 내용 확인
+                  </Button>
+                  <p className="dw-application-submit-note">
+                    다음 화면에서 내용을 확인한 후 신청을 제출합니다.
+                  </p>
+                </div>
+              </Form>
+              {review && (
+                <>
+                  <ApplicationReview values={review} disabled={submitting} onEdit={editField} />
+                  <Space className="dw-application-actions" wrap>
+                    <Button
+                      disabled={submitting}
+                      onClick={() => {
+                        setReview(null)
+                        setError(null)
+                        focusHeading()
+                      }}
+                    >
+                      입력 내용 수정
+                    </Button>
+                    <Button type="primary" loading={submitting} onClick={submit}>
+                      신청 제출
+                    </Button>
+                  </Space>
+                </>
+              )}
+              <div role="alert">{error && <Alert type="error" message={error} showIcon />}</div>
+              <ResendEmail />
             </>
           )}
-          <div role="alert">{error && <Alert type="error" message={error} showIcon />}</div>
-          <ResendEmail />
-        </>
-      )}
-      <p className="dw-application-bottom">
-        <Link to="/">서비스 소개로 돌아가기</Link>
-      </p>
+          <p className="dw-application-bottom">
+            <Link to="/">서비스 소개로 돌아가기</Link>
+          </p>
+        </div>
+        <aside className="dw-application-guide" aria-label="신청 안내">
+          <span className="dw-application-eyebrow">DONWORRY · PARTNERS</span>
+          <h2>
+            안심할 수 있는 결제 운영,
+            <br />
+            돈워리와 함께 시작하세요.
+          </h2>
+          {!receipt && !review && <p>가맹점·담당자 정보와 사용할 로그인 아이디를 준비해 주세요.</p>}
+          <ol>
+            {journey.map((title, index) => (
+              <li key={title}>
+                <span aria-hidden="true">{index + 1}</span>
+                {title}
+              </li>
+            ))}
+          </ol>
+          <p className="dw-application-guide-note">
+            관리자 승인 후 계정을 발급하며, 결제 연동은 별도로 진행합니다.
+          </p>
+        </aside>
+      </div>
     </PublicShell>
   )
 }

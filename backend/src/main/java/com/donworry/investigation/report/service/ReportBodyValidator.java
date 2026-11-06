@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 // ai-server 보고서 본문을 저장 전에 검사한다 (ADR-0009 결정 4) — 걸리면 시도 실패 1회
-// 8개 섹션 + 결론(verdict, #288) · 권고 값 3종 · 보고서 속 결제가 Case 소속인지 · 다른 Case 보고서가 아닌지
+// 필수 섹션 + 결론(verdict, #288) · 권고 값 3종 · 보고서 속 결제가 Case 소속인지 · 다른 Case 보고서가 아닌지
+// 종합 분석(overallAnalysis) 대신 사실 번호 목록(facts, #548)과 요약 근거 번호(summaryFacts, #559)를 받는다
 @Component
 @RequiredArgsConstructor
 class ReportBodyValidator {
@@ -21,9 +22,10 @@ class ReportBodyValidator {
     static final Set<String> SECTIONS = Set.of(
             "overview",
             "summary",
+            "summaryFacts",
             "paymentAnalyses",
             "timeline",
-            "overallAnalysis",
+            "facts",
             "additionalChecks",
             "recommendation",
             "evidence",

@@ -30,6 +30,14 @@ import {
   similarOutcomeTags,
   topRiskScore,
   traceProviderLabel,
+  isCodeReason,
+  recommendationSummaryTitle,
+  signalRecordText,
+  signalRuleRecord,
+  summaryBoxLines,
+  summaryLines,
+  verdictCardTitle,
+  mlReportLine,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -46,7 +54,6 @@ const body = (over: Partial<ReportBody> = {}): ReportBody => ({
   summary: ['같은 고객의 고액 결제가 이어졌습니다.'],
   paymentAnalyses: [],
   timeline: [],
-  overallAnalysis: [],
   additionalChecks: [],
   recommendation: { summary: '추가 확인 후 판정하세요.', limitations: [] },
   evidence: [],
@@ -110,8 +117,6 @@ test('ruleEvidenceRows_withDetails_keepsScoreAndEvidenceId', () => {
     requestedAt: '2026-10-29T01:00:00Z',
     riskScore: 60,
     ruleHits: ['고액'],
-    riskEvidence: [],
-    normalEvidence: [],
     unknowns: [],
     recommendation: 'NEEDS_CHECK',
     ruleHitDetails: [
@@ -133,8 +138,6 @@ test('ruleEvidenceRows_oldReportWithoutCriterion_returnsNullCriterion', () => {
     requestedAt: '2026-10-29T01:00:00Z',
     riskScore: 60,
     ruleHits: ['고액 결제'],
-    riskEvidence: [],
-    normalEvidence: [],
     unknowns: [],
     recommendation: 'NEEDS_CHECK' as const,
   }
@@ -216,9 +219,9 @@ test('liveCurrentTask_pending_waitsForStart', () => {
   assert.equal(liveCurrentTask('PENDING', []).title, '조사 시작을 기다리는 중')
 })
 
-// 첫 단계(조회 고르기)가 15초 걸려도 빈 화면이 아니게
-test('liveCurrentTask_noStepsYet_choosingFirstTool', () => {
-  assert.equal(liveCurrentTask('RUNNING', []).title, '사건 근거를 보고 첫 조회를 고르는 중')
+// 아직 끝난 단계가 없으면 코드가 기본 조회를 하는 중이다 — AI가 고르지 않는다 (#578)
+test('liveCurrentTask_noStepsYet_runsBaseLookups', () => {
+  assert.equal(liveCurrentTask('RUNNING', []).title, '기본 조회 실행 중')
 })
 
 test('liveCurrentTask_afterChooseOrTool_runsThenChoosesNext', () => {
@@ -234,13 +237,14 @@ test('liveCurrentTask_afterChooseOrTool_runsThenChoosesNext', () => {
   )
 })
 
-test('liveCurrentTask_doneOrSystemFill_writesFirstAttempt', () => {
+// 기본 조회(시스템)가 끝나면 다음은 추가 조회 고르기, "조사 완료"면 판단 문장 쓰기 (#581)
+test('liveCurrentTask_afterBaseLookupsOrDone_choosesThenWrites', () => {
   const done = liveCurrentTask('RUNNING', [
     step('DECIDE', '조사 완료라고 답함 · 입력 2,308 · 출력 6 토큰'),
   ])
   assert.deepEqual(done, { title: '판단 문장 쓰는 중 (1차)', note: '가장 오래 걸리는 단계입니다' })
-  const filled = liveCurrentTask('RUNNING', [step('TOOL', 'FDS 평가 1건', 'SYSTEM')])
-  assert.equal(filled.title, '판단 문장 쓰는 중 (1차)')
+  const base = liveCurrentTask('RUNNING', [step('TOOL', 'FDS 평가 1건', 'SYSTEM')])
+  assert.equal(base.title, '추가로 볼 조회를 고르는 중')
 })
 
 test('liveCurrentTask_writeFailed_showsNextAttempt', () => {
@@ -306,8 +310,6 @@ const analysis = (paymentId: string, basis?: DecisionBasis | null) => ({
   requestedAt: '2026-05-21T11:16:00Z',
   riskScore: 50,
   ruleHits: [],
-  riskEvidence: [],
-  normalEvidence: [],
   unknowns: [],
   recommendation: basis?.recommendation ?? ('NEEDS_CHECK' as const),
   basis,
@@ -530,6 +532,176 @@ test('compareSignals_pastJpNowThVn_pairsOneCountryDiffersOnce', () => {
     [
       ['해외 접속 (JP)', '해외 접속 (TH)', 'COUNTRY_DIFFERS'],
       [null, '해외 접속 (VN)', 'ONLY'],
+    ],
+  )
+})
+
+// ── 코드 문장과 AI 문장 구분 (#543) ──
+// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓴다. AI 이름표 아래에 두지 않는다
+
+// 결론 카드 · 상세 정보 제목 — 기준표 보고서면 기준표, 예전 보고서는 AI 이름 그대로
+test('verdictCardTitle_ruleTableReport_isRuleTableElseAiSummary', () => {
+  const ruleTable = body({
+    paymentAnalyses: [{ ...analysis('1', basis1011), reason: '적중한 징후가 없습니다.' }],
+  })
+  const old = body({ paymentAnalyses: [analysis('1')] })
+  assert.equal(verdictCardTitle(ruleTable), '기준표 판정')
+  assert.equal(verdictCardTitle(old), 'AI 조사 요약')
+  assert.equal(recommendationSummaryTitle(ruleTable), '권고 요약 (기준표)')
+  assert.equal(recommendationSummaryTitle(old), 'AI 권고 원문')
+})
+
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 결론 · 권고 요약 · 이유를 AI가 썼다 (#546 Codex 리뷰)
+// 판정 근거 유무가 아니라 문장을 코드가 썼는지로 제목을 정한다 — 결제별 이유로 알아본다
+test('verdictCardTitle_basisButAiWrittenReport_isAiTitle', () => {
+  const aiWritten = body({
+    paymentAnalyses: [
+      {
+        ...analysis('1', basis1011),
+        reason: '처음 쓰는 카드로 고액 결제가 있어 확인이 필요합니다.',
+      },
+    ],
+  })
+  assert.equal(verdictCardTitle(aiWritten), 'AI 조사 요약')
+  assert.equal(recommendationSummaryTitle(aiWritten), 'AI 권고 원문')
+})
+
+// 코드가 쓴 이유는 ai-server verdict_text의 정해진 시작 말로 알아본다
+// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 그 문장은 AI 칸에 그대로 둔다
+test('isCodeReason_codeSentences_trueOldAiReason_false', () => {
+  for (const reason of [
+    '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다: 같은 카드를 다른 고객이 사용 · 신규 카드',
+    '정상 사유가 없는 고위험 징후가 있습니다: 거절 후 재시도',
+    '정상 사유가 없는 주의 징후가 있습니다: 고액 결제 · 단시간 반복 결제',
+    '모든 징후에 정상 사유가 있습니다: 고액 결제(최근 30일 비슷한 금액의 결제 5건 매입 완료)',
+    '적중한 징후가 없습니다.',
+    'FDS 평가 결과를 확인하지 못했습니다.',
+  ]) {
+    assert.equal(isCodeReason(reason), true, reason)
+  }
+  assert.equal(isCodeReason('처음 쓰는 카드로 이어진 결제라 본인 확인이 필요합니다.'), false)
+  assert.equal(isCodeReason(undefined), false)
+})
+
+// 조사 요약 박스(AI 해석)에는 AI 문장만 — 코드 이유는 "왜 이 판정인가요?"로 옮긴다
+test('summaryBoxLines_codeReasonMovedOut_oldAiReasonKept', () => {
+  const summary = ['고액 결제와 단시간 반복 결제 규칙에 적중한 결제입니다.']
+  const code = {
+    ...analysis('1', basis1011),
+    reason: '정상 사유가 없는 주의 징후가 있습니다: 고액 결제',
+  }
+  const oldAi = { ...analysis('1', basis1011), reason: '처음 쓰는 카드라 본인 확인이 필요합니다.' }
+  assert.deepEqual(summaryBoxLines(summary, code), summary)
+  assert.deepEqual(summaryBoxLines(summary, oldAi), [...summary, oldAi.reason])
+})
+
+// 규칙 징후 줄에 FDS 기록(점수 · 증거 번호)을 붙인다 — 아래 위험 근거의 규칙 줄과 겹치지 않게
+test('signalRuleRecord_matchesCodeAndLegacyAlias_nullForNonRuleSignal', () => {
+  const details = [
+    { code: 'R01', name: '고액 결제', appliedScore: 30, evidenceId: 'E-2-v1-02' },
+    { code: 'NEW_CARD', name: '처음 쓰는 카드', appliedScore: null, evidenceId: 'E-1-v1-02' },
+  ]
+  const high = signalRuleRecord(signal('R01', '고액 결제'), details)
+  const legacy = signalRuleRecord(signal('R03', '신규 카드'), details)
+  assert.deepEqual(high, { appliedScore: 30, evidenceId: 'E-2-v1-02' })
+  assert.deepEqual(legacy, { appliedScore: null, evidenceId: 'E-1-v1-02' })
+  assert.equal(signalRuleRecord(signal('LINKED_IP', '같은 IP를 다른 고객이 사용'), details), null)
+  assert.equal(signalRuleRecord(signal('R01', '고액 결제'), undefined), null)
+  assert.equal(signalRecordText(high!), '+30점 · 증거 E-2-v1-02')
+  assert.equal(signalRecordText(legacy!), '증거 E-1-v1-02')
+})
+
+// ── ML 참고 위험도 (#544) ──
+// 판정에 쓰지 않는 참고 점수 — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
+test('mlReportLine_eachState_saysScoreOrWhyMissing', () => {
+  const scored = {
+    kind: 'scored',
+    percent: 72,
+    thresholdPercent: 50,
+    modelVersion: 'rf-v2',
+  } as const
+  assert.equal(
+    mlReportLine({ ...scored, aboveThreshold: true }),
+    'ML 참고 위험도 72% · 기준 50% 이상 (rf-v2 · 판정에 쓰지 않음)',
+  )
+  assert.equal(
+    mlReportLine({ ...scored, percent: 29, aboveThreshold: false }),
+    'ML 참고 위험도 29% · 기준 50% 미만 (rf-v2 · 판정에 쓰지 않음)',
+  )
+  assert.equal(
+    mlReportLine({ kind: 'none' }),
+    'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요',
+  )
+  assert.equal(
+    mlReportLine({ kind: 'failed' }),
+    'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)',
+  )
+  assert.equal(mlReportLine({ kind: 'skipped' }), 'ML 참고 위험도 · 채점하지 않았어요')
+  assert.equal(mlReportLine({ kind: 'unknown' }), 'ML 참고 위험도를 불러오지 못했어요')
+  assert.equal(mlReportLine({ kind: 'loading' }), 'ML 참고 위험도 불러오는 중…')
+})
+
+// summaryLinks_mapsFactsToCards_once — 요약 문장 끝 링크가 엉뚱한 표로 가거나 같은 링크가 두 번 붙으면 직원이 헤맨다 (#559)
+test('summaryLinks_mapsFactsToCards_once: 근거 번호의 주제로 표 카드를 찾고, 문장마다 한 번만 붙인다', () => {
+  const fact = (id: string, topic: string, paymentId: string | null = null) => ({
+    id,
+    topic,
+    text: `${id} 사실`,
+    evidenceId: 'E-4-v2-04',
+    paymentId,
+  })
+  const withLinks = body({
+    summary: [
+      '최근 결제 2건은 모두 사건 직전 결제입니다.',
+      '같은 IP로 다른 고객 3명이 결제했습니다.',
+    ],
+    summaryFacts: [
+      {
+        text: '최근 결제 2건은 모두 사건 직전 결제입니다.',
+        factIds: ['이력-1', '이력-2', '접속-1'],
+      },
+      { text: '같은 IP로 다른 고객 3명이 결제했습니다.', factIds: ['연결-3', '없는-9'] },
+    ],
+    facts: [
+      fact('이력-1', 'history'),
+      fact('이력-2', 'history'),
+      fact('접속-1', 'signals', '12'),
+      fact('연결-3', 'linked'),
+    ],
+  })
+
+  assert.deepEqual(
+    summaryLines(withLinks).map((l) => l.links.map((link) => [link.target, link.label])),
+    [
+      [
+        ['report-history', '고객 최근 결제'],
+        ['report-payment-12', '결제 12 접속 정보'],
+      ],
+      [['report-linked', '같은 카드 · 기기 · IP']],
+    ],
+  )
+  // #559 전 보고서는 링크 없이 문장만
+  assert.deepEqual(summaryLines(body({ summary: ['요약입니다.'] })), [
+    { text: '요약입니다.', links: [] },
+  ])
+})
+
+// summaryLines_fixedReportEmptySummaryFacts_keepsSummary — AI를 끈 고정 보고서는 summaryFacts · facts가 빈 목록이라 결론 카드 요약이 통째로 사라졌다 (#559 Codex 리뷰)
+test('summaryLines_fixedReportEmptySummaryFacts_keepsSummary: 근거 번호 목록이 비어 있으면 요약 문장을 링크 없이 그대로 보여 준다', () => {
+  const fixed = body({
+    summary: [
+      '조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.',
+      '직원은 판정 근거를 확인하세요.',
+    ],
+    summaryFacts: [],
+    facts: [],
+  })
+
+  assert.deepEqual(
+    summaryLines(fixed).map((l) => [l.text, l.links.length]),
+    [
+      ['조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.', 0],
+      ['직원은 판정 근거를 확인하세요.', 0],
     ],
   )
 })

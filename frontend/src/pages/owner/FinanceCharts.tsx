@@ -1,3 +1,4 @@
+import { FinanceMoney } from './FinanceMoney'
 import { useEffect, useRef, useState } from 'react'
 import { Button, DatePicker, Empty } from 'antd'
 import dayjs from 'dayjs'
@@ -84,19 +85,17 @@ export function SettlementLineChart({
   const todayIndex = data.findIndex((d) => d.date === today)
   const paths = (field: 'completed' | 'scheduled') =>
     data.flatMap((d, i) => (d[field] === null ? [] : [`${x(i)},${y(d[field]!)}`])).join(' ')
-  const overdue = data
-    .filter((d) => d.date < today)
-    .reduce((sum, d) => sum + d.scheduledAmount + d.expectedAmount, 0)
+  const overdue = data.filter((d) => d.date < today).reduce((sum, d) => sum + d.scheduledAmount, 0)
   return (
     <div className="finance-trend">
       <div className="finance-trend-legend">
         <span>
           <i style={{ background: '#16a34a' }} />
-          {payoutMode ? '실제 지급액' : '정산 완료'} · 실선
+          정산 완료 · 실선
         </span>
         <span>
           <i style={{ background: '#2563eb' }} />
-          정산 예정{payoutMode ? ' (회수 전)' : ''} · 실선
+          정산 예정 · 실선
         </span>
         <small>날짜별 금액 · 누적액 아님</small>
       </div>
@@ -206,12 +205,16 @@ export function SettlementLineChart({
           />
         </label>
         <span>
-          {payoutMode ? '실제 지급' : '완료'}{' '}
-          <b style={{ color: '#15803d' }}>{won(active.completedAmount)}</b>
+          정산 완료{' '}
+          <b style={{ color: '#15803d' }}>
+            <FinanceMoney value={active.completedAmount} />
+          </b>
         </span>
         <span>
-          {active.date < today ? '예정일 경과' : '예정'}{' '}
-          <b style={{ color: '#1d4ed8' }}>{won(active.scheduledAmount + active.expectedAmount)}</b>
+          {active.date < today ? '정산 예정 (예정일 경과)' : '정산 예정'}{' '}
+          <b style={{ color: '#1d4ed8' }}>
+            <FinanceMoney value={active.scheduledAmount} />
+          </b>
         </span>
         <Button size="small" onClick={() => onSelect(active.date)}>
           이날 정산 내역 보기
@@ -230,14 +233,13 @@ export function SettlementLineChart({
         366일까지 조회할 수 있습니다.
       </p>
       <p className="finance-trend-note">
-        예정액 중 매입일 기준 {won(active.scheduledAmount)} · 기존 예상 일정{' '}
-        {won(active.expectedAmount)}. 신규 정산은 매입일 기준 영업일 D+3에 예정됩니다. 예정액은 환불
-        회수 차감 전이며, 차감 후 예상 유입은 자금 현황에서 확인하세요.
+        정산은 매입일 기준 영업일 D+3에 예정됩니다. 예정액은 환불 회수 차감 전이며, 차감 후 예상
+        유입은 자금 현황에서 확인하세요.
       </p>
       {overdue > 0 && (
         <p className="finance-trend-overdue">
-          선택 기간 내 예정일이 지난 미완료 금액 {won(overdue)}은 완료로 바꾸지 않고 별도로
-          확인합니다.
+          선택 기간 내 예정일이 지난 미완료 금액 <FinanceMoney value={overdue} />은 완료로 바꾸지
+          않고 별도로 확인합니다.
         </p>
       )}
     </div>
@@ -407,8 +409,18 @@ export function CashBalanceChart({
           />
         </label>
         <span>
-          정산 유입 <b>{won(active.income ?? 0)}</b> · 지출 <b>{won(active.expense ?? 0)}</b> · 예상
-          잔액 <b>{won(active.balance)}</b>
+          정산 유입{' '}
+          <b>
+            <FinanceMoney value={active.income ?? 0} />
+          </b>{' '}
+          · 지출{' '}
+          <b>
+            <FinanceMoney value={active.expense ?? 0} />
+          </b>{' '}
+          · 예상 잔액{' '}
+          <b>
+            <FinanceMoney value={active.balance} />
+          </b>
         </span>
         <Button
           size="small"

@@ -2,9 +2,12 @@ package com.donworry.fds.service;
 
 import com.donworry.fds.api.FdsRuleChangeRequestPage;
 import com.donworry.fds.api.FdsRuleChangeRequestStatus;
+import com.donworry.fds.api.FdsRulePolicyChangeHistoryPage;
 import com.donworry.fds.api.FdsRulePolicySummary;
 import com.donworry.fds.entity.FdsRuleChangeRequest;
+import com.donworry.fds.entity.FdsRulePolicyChangeHistory;
 import com.donworry.fds.repository.FdsRuleChangeRequestRepository;
+import com.donworry.fds.repository.FdsRulePolicyChangeHistoryRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.identity.api.CurrentStaff;
 import java.time.Instant;
@@ -23,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class FdsRuleManagementService {
     private final FdsRulePolicyRepository policies;
     private final FdsRuleChangeRequestRepository requests;
+    private final FdsRulePolicyChangeHistoryRepository histories;
     private final CurrentStaff currentStaff;
 
     public List<FdsRulePolicySummary> policies() {
@@ -59,6 +63,13 @@ public class FdsRuleManagementService {
         var changedAt = Instant.now();
         if (policy.isActive() != active) {
             policy.update(active, actor.userId(), changedAt);
+            histories.save(FdsRulePolicyChangeHistory.direct(
+                    ruleCode,
+                    active,
+                    actor.userId(),
+                    displayName(actor),
+                    changedAt,
+                    "SECURITY_STAFF".equals(actor.role())));
         }
         if ("ADMIN".equals(actor.role())) {
             resolvePendingRequests(
@@ -93,6 +104,28 @@ public class FdsRuleManagementService {
                 result.getTotalPages());
     }
 
+    public FdsRulePolicyChangeHistoryPage history(String search, int page, int size) {
+        requireRole("ADMIN");
+        var result = histories.search(
+                search == null ? "" : search.trim(),
+                PageRequest.of(page, size, Sort.by("changedAt").descending()));
+        return new FdsRulePolicyChangeHistoryPage(
+                result.map(value -> new FdsRulePolicyChangeHistoryPage.Item(
+                                value.getRulePolicyChangeHistoryId(),
+                                value.getRuleCode(),
+                                value.getAction().name(),
+                                value.getSource().name(),
+                                value.getRequestedByName(),
+                                value.getRequestReason(),
+                                value.getChangedByName(),
+                                value.getChangedAt()))
+                        .toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages());
+    }
+
     @Transactional
     public void review(Long requestId, boolean approve) {
         var actor = requireRole("ADMIN");
@@ -112,6 +145,8 @@ public class FdsRuleManagementService {
                 reviewedAt);
         if (approve) {
             policy.update(false, actor.userId(), reviewedAt);
+            histories.save(FdsRulePolicyChangeHistory.approvedDisable(
+                    request, actor.userId(), displayName(actor), reviewedAt));
         }
     }
 

@@ -87,9 +87,10 @@ class AiReportServiceTests {
                             .containsOnlyKeys(
                                     "overview",
                                     "summary",
+                                    "summaryFacts",
                                     "paymentAnalyses",
                                     "timeline",
-                                    "overallAnalysis",
+                                    "facts",
                                     "additionalChecks",
                                     "recommendation",
                                     "evidence",

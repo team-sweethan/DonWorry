@@ -250,18 +250,15 @@ function calculateCashFlow(state: PreviewState, today: string, from: string, to:
       const scheduled = moneyTotal(
         projected.filter((e) => e.date === date && e.status === 'sch').map((e) => e.amount),
       )
-      const expected = moneyTotal(
-        projected.filter((e) => e.date === date && e.status === 'exp').map((e) => e.amount),
-      )
       const expenses = moneyTotal(
         pending.filter((e) => e.plannedDate === date).map((e) => e.amount),
       )
-      balance = moneyTotal([balance, scheduled, expected, -expenses])
+      balance = moneyTotal([balance, scheduled, -expenses])
       if (date >= from)
-        days.push({ date, opening, completed: 0, scheduled, expected, expenses, closing: balance })
+        days.push({ date, opening, completed: 0, scheduled, expenses, closing: balance })
     }
     moneyTotal(days.map((d) => d.expenses))
-    moneyTotal(days.map((d) => d.scheduled + d.expected))
+    moneyTotal(days.map((d) => d.scheduled))
   }
   return {
     days,

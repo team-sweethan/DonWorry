@@ -1,13 +1,15 @@
 package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
@@ -28,9 +30,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 // 고객 최근 결제 고르기 규칙 (#338) — P5 조회는 목으로 바꿔 사건 결제 빼기 · 건수 세기 · 자르기만 본다
 // 쿼리 자체(가맹점 · 고객 · 기간 · 최근 순)는 PaymentReaderMariaDbTests 몫이라 목은 쿼리 조건대로 걸러 돌려준다
@@ -61,13 +67,16 @@ class PaymentHistoryFinderTests {
         finder = new PaymentHistoryFinder(securityCaseRepository, casePaymentRepository, paymentReader);
         SecurityCase securityCase = SecurityCase.open(MERCHANT, CUSTOMER, CaseType.PAYMENT_FRAUD, NOW);
         ReflectionTestUtils.setField(securityCase, "id", 7L);
-        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
-        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+        // lenient — 기간 거절 테스트는 조회 전에 끝나 이 목을 쓰지 않는다
+        lenient().when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        lenient()
+                .when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
                 .thenAnswer(inv -> casePaymentIds.stream()
                         .map(id -> CasePayment.link(securityCase, id, NOW))
                         .toList());
         // P5 쿼리처럼 뺄 결제를 빼고 since 이후를 최근 순으로 limit건 — 가맹점 · 고객 조건은 목 데이터가 모두 같은 고객이라 생략
-        when(paymentReader.findRecentByCustomer(anyLong(), anyString(), any(), anyCollection(), anyInt()))
+        lenient()
+                .when(paymentReader.findRecentByCustomer(anyLong(), anyString(), any(), anyCollection(), anyInt()))
                 .thenAnswer(inv -> {
                     Instant since = inv.getArgument(2);
                     Collection<Long> excluded = inv.getArgument(3);
@@ -89,7 +98,7 @@ class PaymentHistoryFinderTests {
         casePaymentIds.add(casePayment);
         long before = payment("CAPTURED", 5);
 
-        PaymentHistoryToolResponse history = finder.find(7L, NOW);
+        PaymentHistoryToolResponse history = finder.find(7L, NOW, 30);
 
         assertThat(history.payments())
                 .extracting(PaymentHistoryToolResponse.Payment::paymentId)
@@ -106,7 +115,7 @@ class PaymentHistoryFinderTests {
         payment("CAPTURED", 4);
         payment("DECLINED", 5);
 
-        PaymentHistoryToolResponse history = finder.find(7L, NOW);
+        PaymentHistoryToolResponse history = finder.find(7L, NOW, 30);
 
         assertThat(history.statusCounts())
                 .extracting(StatusCount::paymentStatus, StatusCount::count)
@@ -124,7 +133,7 @@ class PaymentHistoryFinderTests {
             payment("CAPTURED", day);
         }
 
-        PaymentHistoryToolResponse history = finder.find(7L, NOW);
+        PaymentHistoryToolResponse history = finder.find(7L, NOW, 30);
 
         assertThat(history.lookbackDays()).isEqualTo(30);
         assertThat(history.payments()).hasSize(20);
@@ -143,12 +152,41 @@ class PaymentHistoryFinderTests {
             casePaymentIds.add(payment("HELD", 0));
         }
 
-        PaymentHistoryToolResponse history = finder.find(7L, NOW);
+        PaymentHistoryToolResponse history = finder.find(7L, NOW, 30);
 
         assertThat(history.payments())
                 .extracting(PaymentHistoryToolResponse.Payment::paymentId)
                 .containsExactly(String.valueOf(before));
         assertThat(history.truncated()).isFalse();
+    }
+
+    // 90일로 넓히면 31~90일 전 결제도 나온다 — 30일만 오면 AI가 "더 볼 것 없음"으로 잘못 본다 (#581)
+    @Test
+    void paymentHistory_90Days_includes31To90DaysAgo() {
+        long recent = payment("CAPTURED", 10);
+        long older = payment("CAPTURED", 45);
+        long oldest = payment("VOIDED", 89);
+        payment("CAPTURED", 91);
+
+        PaymentHistoryToolResponse history = finder.find(7L, NOW, 90);
+
+        assertThat(history.lookbackDays()).isEqualTo(90);
+        assertThat(history.payments())
+                .extracting(PaymentHistoryToolResponse.Payment::paymentId)
+                .containsExactly(String.valueOf(recent), String.valueOf(older), String.valueOf(oldest));
+        assertThat(history.statusCounts())
+                .containsExactly(new StatusCount("CAPTURED", 2), new StatusCount("VOIDED", 1));
+    }
+
+    // 30 · 90일 밖의 기간은 사건 · 결제를 읽기 전에 400으로 거절한다 — 넓은 기간 조회로 조회량이 커지지 않게 (#581)
+    @ParameterizedTest
+    @ValueSource(ints = {60, 365})
+    void paymentHistory_otherDays_rejected(int days) {
+        assertThatThrownBy(() -> finder.find(7L, NOW, days))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST));
+        verifyNoInteractions(securityCaseRepository, paymentReader);
     }
 
     // daysAgo일 전(같은 날이면 나중에 만든 결제가 더 최근)에 저장된 결제

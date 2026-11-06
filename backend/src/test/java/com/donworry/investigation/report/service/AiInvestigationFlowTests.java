@@ -416,16 +416,17 @@ class AiInvestigationFlowTests {
     }
 
     private static AiInvestigationResult succeeded(Long reportId, String attemptId, Fixture f) {
-        Map<String, Object> body = Map.of(
-                "overview", Map.of("caseId", String.valueOf(f.caseId())),
-                "summary", List.of("요약"),
-                "paymentAnalyses", List.of(analysis(String.valueOf(f.paymentId()))),
-                "timeline", List.of(),
-                "overallAnalysis", List.of(),
-                "additionalChecks", List.of(),
-                "recommendation", Map.of("summary", "추가 확인", "limitations", List.of()),
-                "evidence", List.of(),
-                "verdict", Map.of("headline", "본인 확인이 필요합니다.", "overallRecommendation", "NEEDS_CHECK"));
+        Map<String, Object> body = Map.ofEntries(
+                Map.entry("overview", Map.of("caseId", String.valueOf(f.caseId()))),
+                Map.entry("summary", List.of("요약")),
+                Map.entry("paymentAnalyses", List.of(analysis(String.valueOf(f.paymentId())))),
+                Map.entry("timeline", List.of()),
+                Map.entry("summaryFacts", List.of()),
+                Map.entry("facts", List.of()),
+                Map.entry("additionalChecks", List.of()),
+                Map.entry("recommendation", Map.of("summary", "추가 확인", "limitations", List.of())),
+                Map.entry("evidence", List.of()),
+                Map.entry("verdict", Map.of("headline", "본인 확인이 필요합니다.", "overallRecommendation", "NEEDS_CHECK")));
         return new AiInvestigationResult(String.valueOf(reportId), attemptId, "SUCCEEDED", body, null);
     }
 
