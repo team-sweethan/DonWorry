@@ -101,6 +101,8 @@ class PaymentTransactionsHttpMariaDbTests {
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
             sessions.expireAll(id);
+            // 조회 기록(#615)은 직원 · 가맹점 FK라 계정 · 가맹점보다 먼저 지운다
+            jdbc.update("DELETE FROM staff_access_events WHERE staff_id=?", id);
             jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
@@ -218,6 +220,68 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(ids(json(base + "&orderRef=ord-a-" + prefix))).containsExactly(lower);
         assertThat(ids(json(base + "&customerRef=Cust-" + prefix))).containsExactly(upper);
         assertThat(ids(json(base + "&customerRef=cust-" + prefix))).containsExactly(lower);
+    }
+
+    // 숫자 고객 번호 검색은 고객 번호 · 거른 가맹점 · 내보낸 건수와 함께 기록된다 (INS-09 재료, #615)
+    @Test
+    void list_whenNumericCustomerRefSearched_recordsCountMerchantAndRef() throws Exception {
+        String customerRef = "7" + merchantId;
+        long id = payment(merchantId, customerRef, now.minus(Duration.ofHours(1)), false);
+        payment(merchantId, "8" + merchantId, now.minus(Duration.ofHours(2)), false);
+
+        var page = json(PATH + "?merchantId=" + merchantId + "&customerRef=" + customerRef);
+
+        assertThat(ids(page)).containsExactly(id);
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("actor_role")).isEqualTo("SECURITY_STAFF");
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_LIST_VIEW");
+            assertThat(e.get("result")).isEqualTo("ALLOWED");
+            assertThat(((Number) e.get("merchant_id")).longValue()).isEqualTo(merchantId);
+            assertThat(e.get("customer_ref")).isEqualTo(customerRef);
+            assertThat(((Number) e.get("item_count")).intValue()).isEqualTo(1);
+        });
+    }
+
+    // 숫자가 아닌 검색어는 막지 않고 목록을 주되, 검색어 원문은 기록에 남기지 않는다. ADMIN 조회도 기록한다 (#615)
+    @Test
+    void list_whenSearchTermNotNumeric_returnsListAndRecordsWithoutRef() throws Exception {
+        String term = "Cust-" + prefix;
+        long id = payment(merchantId, term, now.minus(Duration.ofHours(1)), false);
+        var admin = user("admin", "ADMIN", null);
+
+        var response = send(admin, "GET", PATH + "?merchantId=" + merchantId + "&customerRef=" + term);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        assertThat(ids(mapper.readTree(response.body()))).containsExactly(id);
+        assertThat(accessEvents("admin")).singleElement().satisfies(e -> {
+            assertThat(e.get("actor_role")).isEqualTo("ADMIN");
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_LIST_VIEW");
+            assertThat(e.get("customer_ref")).isNull();
+            assertThat(((Number) e.get("merchant_id")).longValue()).isEqualTo(merchantId);
+            assertThat(((Number) e.get("item_count")).intValue()).isEqualTo(1);
+        });
+    }
+
+    // 없는 가맹점으로 걸러도 지금처럼 빈 목록이 나오고, 기록은 가맹점 없이 남는다 — 기록 표 FK로 503이 되지 않는다 (#615)
+    @Test
+    void list_whenMerchantFilterUnknown_returnsEmptyAndRecordsWithoutMerchant() throws Exception {
+        long unknown = merchantId + 1_000_000;
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM merchants WHERE merchant_id=?", Long.class, unknown))
+                .isZero();
+
+        var page = json(PATH + "?merchantId=" + unknown);
+
+        assertThat(page.path("items").size()).isZero();
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("merchant_id")).isNull();
+            assertThat(((Number) e.get("item_count")).intValue()).isZero();
+        });
+    }
+
+    private List<Map<String, Object>> accessEvents(String suffix) {
+        return jdbc.queryForList(
+                "SELECT e.* FROM staff_access_events e JOIN platform_users u ON u.user_id = e.staff_id WHERE u.login_id=?",
+                prefix + suffix);
     }
 
     private List<Long> ids(JsonNode page) {

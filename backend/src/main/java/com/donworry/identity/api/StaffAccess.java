@@ -19,8 +19,13 @@ public record StaffAccess(
 
     public StaffAccess {
         Objects.requireNonNull(accessType, "accessType");
-        if (customerRef != null && !CUSTOMER_REF.matcher(customerRef).matches())
+        if (customerRef != null && !isCustomerRef(customerRef))
             throw new IllegalArgumentException("customerRef는 숫자 고객 번호만 기록한다");
         if (itemCount != null && itemCount < 0) throw new IllegalArgumentException("itemCount");
+    }
+
+    // 검색어를 기록해도 되는지 호출 쪽이 미리 확인한다 (#615). 숫자 고객 번호가 아니면 고객 번호 없이 기록한다
+    public static boolean isCustomerRef(String value) {
+        return value != null && CUSTOMER_REF.matcher(value).matches();
     }
 }
