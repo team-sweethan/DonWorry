@@ -111,6 +111,10 @@ class RoleApiMatrixTests {
             route("GET", "/api/admin/case-assignments/requests/pending-count", ADMIN),
             route("POST", "/api/admin/case-assignments/requests/1/approve", ADMIN),
             route("POST", "/api/admin/case-assignments/requests/1/reject", ADMIN),
+            // 관리자만: 주문자 전화 원문 열람 사후 검토 (#619)
+            route("GET", "/api/admin/raw-view-reviews", ADMIN),
+            route("GET", "/api/admin/raw-view-reviews/pending-count", ADMIN),
+            route("POST", "/api/admin/raw-view-reviews/1/review", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
             route("GET", "/api/merchants", STAFF_OR_ADMIN),
             route("GET", "/api/fds/evaluations", STAFF_OR_ADMIN),
@@ -140,6 +144,9 @@ class RoleApiMatrixTests {
             route("POST", "/api/security-cases/1/handoffs/2/recheck", STAFF),
             route("POST", "/api/security-cases/1/reports", STAFF),
             route("POST", "/api/security-cases/1/assignment-requests", STAFF),
+            route("GET", "/api/security-cases/1/payments/2/contact", STAFF),
+            route("POST", "/api/security-cases/1/payments/2/contact-match", STAFF),
+            route("POST", "/api/security-cases/1/payments/2/contact-raw-view", STAFF),
             route("GET", "/api/security-cases/1/reports/2/progress", STAFF),
             route("GET", "/api/ml-shadow-scores", STAFF),
             // 사장님 (세션 가맹점): 연동 키는 권한 없이, 보안 조치 결과는 FDS_VIEW, 정산은 FINANCE_VIEW

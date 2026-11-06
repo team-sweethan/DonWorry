@@ -331,7 +331,11 @@ public class SecurityConfig {
                                 paths.matcher(
                                         HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/approve"),
                                 paths.matcher(
-                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/reject"))
+                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/reject"),
+                                // 주문자 전화 원문 열람 사후 검토 (#619). 원문 · 사건 상세는 열지 않는다
+                                paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews/pending-count"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/raw-view-reviews/{reviewId}/review"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -374,6 +378,15 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports"),
                                 // 담당자 본인의 담당 변경 요청 (#608)
                                 paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/assignment-requests"),
+                                // 사건 결제 1건의 주문자 정보 — 가린 값 · 대조 · 전화 원문 (#619). 담당 · 열린 사건은 서비스가 확인
+                                paths.matcher(
+                                        HttpMethod.GET, "/api/security-cases/{caseId}/payments/{paymentId}/contact"),
+                                paths.matcher(
+                                        HttpMethod.POST,
+                                        "/api/security-cases/{caseId}/payments/{paymentId}/contact-match"),
+                                paths.matcher(
+                                        HttpMethod.POST,
+                                        "/api/security-cases/{caseId}/payments/{paymentId}/contact-raw-view"),
                                 paths.matcher(
                                         HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
                                 // 거래 내역 "ML 참고" 칸 (#441) — 옆 사건 칸(payment-links)과 같은 규칙 (ADR-0067)

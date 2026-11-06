@@ -4,7 +4,7 @@
 
 보안 직원이 사건에서 주문자를 확인할 수 있게 가맹점이 결제 준비 때 주문자 연락처를 보낸다.
 서버는 원문을 DB에 두지 않는다. 이름 · 전화는 암호문으로, 전화는 같은 번호인지 대조할 지문(HMAC)으로만 저장한다.
-열람(가린 값 · 대조 · 사유를 적은 원문 1회)은 조각 5에서 만든다. 이 문서는 받기와 저장만 다룬다.
+열람(가린 값 · 대조 · 사유를 적은 원문)은 #619에서 만들었다 — 5절. 1 ~ 4절은 받기와 저장이다.
 
 ## 1. 요청 칸 (`POST /api/payment-sessions`, 모두 선택)
 
@@ -46,3 +46,20 @@ ADR-0064 2절의 요청 칸에 아래 4칸이 더해진다. 보내지 않으면 
 ## 4. 로그
 
 요청 객체의 `toString()`은 `buyerEmail` · 이름 · 전화를 찍지 않는다. 암호화 · 복호화 실패 예외에도 값을 넣지 않는다.
+
+## 5. 열람 (#619, ADR-0082 1절)
+
+P5 `payment.api.CustomerContactReader`가 결제 ID 하나를 받아 결제 → 결제 준비 세션 → `payment_order_contacts` 순으로 읽는다. 복호화 AAD는 저장 때와 같은 세션 가맹점 ID다.
+여러 결제를 한 번에 읽는 창구는 두지 않는다. 호출 쪽(P3 사건 API)이 담당 · 열린 사건 · 사건에 속한 결제인지 먼저 확인한다.
+
+| 단계 | API (보안 직원) | 나가는 값 | 접근 기록 |
+| --- | --- | --- | --- |
+| 가린 값 | `GET /api/security-cases/{caseId}/payments/{paymentId}/contact` | 이름 `홍*동` · 전화 `010-****-5678` · 픽업자 "주문자와 다름" 여부 | `CONTACT_MASKED_VIEW` |
+| 대조 | `POST …/contact-match` `{phone}` | 일치 여부만 | `CONTACT_MATCH_HIT` / `CONTACT_MATCH_MISS` (입력 번호 없음) |
+| 원문 | `POST …/contact-raw-view` `{disputeRef, merchantContactAttempt, reason}` | 전화 원문 1개 (`Cache-Control: no-store`) | `CONTACT_RAW_VIEW` + `raw_view_reviews` 1행 |
+
+- 이름은 가린 값만 연다. 이름 대조 · 이름 원문 · 픽업자 원문은 없다
+- 종료된 사건 · 담당 아닌 직원 · 사건 밖 결제는 거부하고 `CASE_CLOSED` · `NOT_ASSIGNEE` · `PAYMENT_NOT_IN_CASE`로 기록한다
+- 허용 기록은 같은 트랜잭션이다. 기록이 실패하면 응답 · 검토 행 모두 나가지 않는다
+- 키가 없으면 연락처가 없는 것으로 본다 (가린 값 `available=false`, 대조 · 원문 404 `INV_030`)
+- ADMIN은 `/api/admin/raw-view-reviews`에서 원문 없이 누가 · 어느 결제 · 무슨 근거로 봤는지만 보고 [적절] · [소명 요청]을 남긴다

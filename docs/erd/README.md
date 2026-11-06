@@ -78,6 +78,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `fds` | P2 정후 | `fds_evaluations`, `fds_rule_hits`, `fds_failure_analyses`, `fds_high_risk_countries`, `fds_blocklist_entries`, `fds_rule_policies`, `fds_rule_change_requests`, `fds_rule_policy_change_histories`, `fds_operator_access_events`, `fds_operator_access_detections`, `fds_operator_access_detection_evidences` | [20261022_145102](../../backend/src/main/resources/db/migration/V20261022_145102__create_fds_evaluations_table.sql) · [20261022_145104](../../backend/src/main/resources/db/migration/V20261022_145104__create_fds_rule_hits_table.sql) · [20261022_174140](../../backend/src/main/resources/db/migration/V20261022_174140__add_fds_evaluation_request_fields.sql) · [20261023_135302](../../backend/src/main/resources/db/migration/V20261023_135302__add_fds_requested_amount.sql) · [20261026_174910](../../backend/src/main/resources/db/migration/V20261026_174910__add_fds_evaluation_merchant_id.sql) · [20261027_101722](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql) · [20261027_101804](../../backend/src/main/resources/db/migration/V20261027_101804__add_fds_reevaluation_lineage.sql) · [FDS v0.2](../../backend/src/main/resources/db/migration/V20261028_092416__add_fds_rule_inputs_and_policy_tables.sql) · [룰 관리](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [접근 탐지·룰 정책·변경 이력](../../backend/src/main/resources/db/migration/V20261104_152441__create_operator_access_detection_tables.sql) · [차단 식별값](../../backend/src/main/resources/db/migration/V20261028_201821__add_fds_blocklist_identifiers.sql) · [차단 해제 이력](../../backend/src/main/resources/db/migration/V20261030_114028__add_fds_blocklist_deactivation.sql) |
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
 | `investigation` (#608) | P3 수민 | `security_cases` 담당 칸, `case_assignment_locks`, `case_assignment_requests` (사건 자동 배정 · 담당 변경, ADR-0082) | [담당 배정](../../backend/src/main/resources/db/migration/V20261106_225206__add_security_case_assignment.sql) · [담당 변경 요청](../../backend/src/main/resources/db/migration/V20261106_225208__create_case_assignment_requests.sql) |
+| `investigation` (#619) | P3 수민 | `raw_view_reviews` (주문자 전화 원문 열람 사후 검토, ADR-0082) | [원문 열람 검토](../../backend/src/main/resources/db/migration/V20261107_024052__create_raw_view_reviews.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
 | `investigation/report` (#412) | P4 현규 | `ml_shadow_scores` (FDS ML Shadow 채점 기록) | [ML Shadow](../../backend/src/main/resources/db/migration/V20261102_125730__create_ml_shadow_scores.sql) |
 | `settlement` | P6 민정 | `captures`, `settlements` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
@@ -110,6 +111,7 @@ erDiagram
     payment_decisions ||--o| action_handoffs : "decision_id"
     security_cases ||--o{ case_histories : "case_id"
     security_cases ||--o{ case_assignment_requests : "case_id"
+    security_cases ||--o{ raw_view_reviews : "case_id"
 
     captures ||--o| settlements : "capture_id"
 
@@ -137,7 +139,7 @@ erDiagram
 
 `fds_blocklist_entries`는 차단 등록 사유와 함께 해제 사유(`deactivation_reason`)·해제 시각(`deactivated_at`)을 보존한다. 재등록하면 기존 해제 이력은 현재 활성 차단 상태와 혼동되지 않도록 NULL로 되돌린다.
 
-그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests`의 직원 · ADMIN ID(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
+그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests` · `raw_view_reviews`의 직원 · ADMIN ID(→ `platform_users`), `raw_view_reviews.payment_id`(→ `payments`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
 
 ## 4. 테이블별 컬럼
 
@@ -482,3 +484,21 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | review_memo | VARCHAR(200) NULL | 거절이면 필수 (서비스) |
 | new_assignee_staff_id | BIGINT NULL | 승인일 때 새 담당 |
 | pending_case_id | 생성 칼럼 UNIQUE | PENDING일 때만 case_id — 사건당 대기 1건 |
+
+`raw_view_reviews` (#619) — 담당 보안 직원이 열린 사건 결제의 주문자 전화 원문을 볼 때마다 1행. ADMIN 사후 검토용이고 원문은 담지 않는다. 물리 삭제하지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| review_id | BIGINT AUTO_INCREMENT PK | |
+| case_id | BIGINT NOT NULL FK security_cases | |
+| payment_id | BIGINT NOT NULL | 사건에 속한 결제 (P5 논리 참조) |
+| staff_id | BIGINT NOT NULL | 원문을 본 담당 직원 (로그인 세션, P1 논리 참조) |
+| dispute_ref | VARCHAR(100) NOT NULL | 이의제기 참조 번호 (업무 메모) |
+| merchant_contact_attempt | VARCHAR(200) NOT NULL | 가맹점 연락 시도 내역 (업무 메모) |
+| reason | VARCHAR(500) NOT NULL | 사유 (업무 메모). 화면에서 고객 이름 · 번호를 적지 않도록 안내 |
+| viewed_at · reviewed_at | DATETIME(6) | UTC |
+| status | VARCHAR(30) NOT NULL | PENDING / APPROPRIATE(적절) / EXPLANATION_REQUESTED(소명 요청) (CHECK) |
+| reviewed_by_admin_id · reviewed_by_admin_name | BIGINT · VARCHAR(100) NULL | 검토 ADMIN과 그때의 표시 이름 |
+| review_memo | VARCHAR(200) NULL | 검토 메모 |
+
+인덱스 (status, viewed_at, review_id) — 검토 목록, (staff_id, viewed_at) — 직원별 열람 이력.

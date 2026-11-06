@@ -70,6 +70,18 @@ export function caseDecisionMode(securityCase: CaseDetailCase, reports: AiReport
  * [담당 변경 요청] 버튼을 보일지 (#608) — 담당자 본인 · 열린 사건 · 대기 요청 없음. 서버가 다시 확인한다 (INV_018 · 019).
  * 담당 ID는 api/cases.ts가 문자열로 바꾸고 로그인 사용자 ID는 숫자라 문자열로 맞춰 비교한다.
  */
+/**
+ * [주문자 정보] 카드를 보일지 (#619, ADR-0082 1절) — 담당자 본인 · 열린 사건. 서버가 다시 확인한다 (INV_028 · 029).
+ * 담당 변경 요청 대기 중에도 조사는 계속하므로 막지 않는다.
+ */
+export function canViewContacts(userId: number | null, securityCase: AssignmentView) {
+  return (
+    userId !== null &&
+    securityCase.assigneeStaffId === String(userId) &&
+    securityCase.status !== 'CLOSED'
+  )
+}
+
 export function canRequestAssignmentChange(userId: number | null, securityCase: AssignmentView) {
   return (
     userId !== null &&

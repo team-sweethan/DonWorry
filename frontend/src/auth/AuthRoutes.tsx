@@ -22,6 +22,7 @@ import { loginDestination, requiresLogin, type LoginRedirectState } from './logi
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
 import { useCaseAssignmentRequestBadge } from '../hooks/useCaseAssignmentRequestBadge'
+import { useRawViewReviewBadge } from '../hooks/useRawViewReviewBadge'
 import { LandingPage } from '../pages/public/LandingPage'
 import { landingEntry } from './landingEntry'
 import { screenResultHome } from './screenResultHome'
@@ -253,6 +254,11 @@ export function ServerSession() {
       ? user.userId
       : null,
   )
+  const rawViewReviews = useRawViewReviewBadge(
+    status === 'authenticated' && user?.role === 'ADMIN' && !user.passwordChangeRequired
+      ? user.userId
+      : null,
+  )
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({
@@ -303,7 +309,12 @@ export function ServerSession() {
       role={role}
       responsive={pathname === '/admin/applications' || pathname.startsWith('/admin/applications/')}
       groups={navigation.groups}
-      badges={{ securityCaseActions: caseActions, ruleChangeRequests, caseAssignmentRequests }}
+      badges={{
+        securityCaseActions: caseActions,
+        ruleChangeRequests,
+        caseAssignmentRequests,
+        rawViewReviews,
+      }}
       header={
         <header className="dw-header">
           <ManagementBrand role={role} home={home} />
