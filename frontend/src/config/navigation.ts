@@ -3,7 +3,7 @@ import type { AuthUser } from '../types/auth.ts'
 export type Role = 'security' | 'owner'
 export type Permission = 'FDS_VIEW' | 'FINANCE_VIEW'
 /** 메뉴 옆 숫자 배지 이름. 숫자는 레이아웃 바깥(역할별 훅)에서 받아 그리기만 한다. */
-export type NavBadge = 'securityCaseActions' | 'ruleChangeRequests'
+export type NavBadge = 'securityCaseActions' | 'ruleChangeRequests' | 'caseAssignmentRequests'
 export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 export type NavGroup = { title: string; items: NavItem[] }
 
@@ -75,6 +75,18 @@ export const adminNavigation = {
           badge: 'ruleChangeRequests',
         },
         { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
+      ],
+    },
+    // FDS 사건 담당 (#608) — 관리자는 사건 상세가 아니라 담당 배정만 본다 (ADR-0065)
+    {
+      title: '사건 담당',
+      items: [
+        { label: '담당 현황', path: '/admin/case-assignments' },
+        {
+          label: '변경 요청',
+          path: '/admin/case-assignment-requests',
+          badge: 'caseAssignmentRequests',
+        },
       ],
     },
   ] satisfies NavGroup[],

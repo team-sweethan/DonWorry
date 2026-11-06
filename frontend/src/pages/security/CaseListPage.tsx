@@ -210,6 +210,13 @@ export function CaseListPage() {
     },
     // 저장값 "가맹점ID:고객"에서 고객 부분만 보인다 (#462)
     { title: '고객', dataIndex: 'customerRef', width: 120, render: customerPart },
+    // 담당 보안 직원 (#608) — 미배정 사건은 관리자 [담당 현황]에서 배정한다
+    {
+      title: '담당',
+      dataIndex: 'assigneeName',
+      width: 100,
+      render: (name: CaseSummary['assigneeName']) => name ?? '미배정',
+    },
     {
       title: '위험도',
       key: 'risk',

@@ -187,3 +187,29 @@ test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공�
     assert.equal(canOpenPath({ ...admin, passwordChangeRequired: true }, path), false)
   }
 })
+
+// 사건 담당 메뉴는 관리자에게만 보이고, 보안 직원 · 사장님 · 임시 비밀번호 관리자는 경로에 들어가지 못한다 (#608)
+test('sessionNavigation_caseAssignmentMenu_adminOnly', () => {
+  const paths = ['/admin/case-assignments', '/admin/case-assignment-requests']
+  const menu = (user: AuthUser) =>
+    sessionNavigation(user).groups.flatMap((group) => group.items.map((item) => item.path))
+
+  assert.deepEqual(
+    sessionNavigation(admin).groups.find((group) => group.title === '사건 담당')?.items,
+    [
+      { label: '담당 현황', path: paths[0] },
+      { label: '변경 요청', path: paths[1], badge: 'caseAssignmentRequests' },
+    ],
+  )
+  for (const path of paths) {
+    assert.equal(canOpenPath(admin, path), true)
+    for (const user of [
+      staff,
+      owner(['FDS_VIEW', 'FINANCE_VIEW']),
+      { ...admin, passwordChangeRequired: true },
+    ]) {
+      assert.equal(menu(user).includes(path), false)
+      assert.equal(canOpenPath(user, path), false)
+    }
+  }
+})

@@ -103,6 +103,9 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_COMPLETION_RECORDED: '실제 완료 시각 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   PAYMENT_CANCELED_BY_CUSTOMER: '고객 승인 취소',
+  CASE_ASSIGNED: '담당 배정',
+  CASE_ASSIGNMENT_REQUESTED: '담당 변경 요청',
+  CASE_ASSIGNMENT_REQUEST_REJECTED: '담당 변경 요청 거절',
   CASE_CLOSED: 'Case 종료',
 }
 

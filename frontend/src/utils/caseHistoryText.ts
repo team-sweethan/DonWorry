@@ -1,9 +1,22 @@
+import { assignmentReasonLabel } from '../api/caseAssignments.ts'
 import type { CaseHistory } from '../types/case.ts'
 
 /** Case 종료 사유(CASE_CLOSED eventData.reason) — 사유가 없으면 직원 판정 · 금융 조치로 끝난 것이다 */
 const closedReasonLabel: Record<string, string> = {
   CUSTOMER_CANCELED: '고객이 모든 결제의 승인을 취소함',
 }
+
+// 담당 배정 · 변경 방식 (#608, CASE_ASSIGNED eventData.reason)
+const assignKindLabel: Record<string, string> = {
+  AUTO_LEAST_OPEN: '자동 배정',
+  ADMIN_REASSIGN: '관리자가 변경',
+  HANDOVER: '관리자가 일괄 넘김',
+  REQUEST_APPROVED: '변경 요청 승인',
+}
+// 서버가 새 사유를 먼저 보내도 화면이 깨지지 않게 문자열 키로 찾고, 모르면 값 그대로 둔다
+const changeReasonLabel: Record<string, string> = assignmentReasonLabel
+const reasonText = (value: string | undefined) =>
+  value ? (changeReasonLabel[value] ?? value) : null
 
 /**
  * 고객이 모든 결제의 승인을 취소해 닫힌 Case면 그 종료 이력 시각, 아니면 null (#382 · #443).
@@ -33,6 +46,20 @@ export function historyDetail(h: CaseHistory, time: (iso: string) => string): st
       ]
         .filter((part): part is string => part !== null)
         .join(' · ')
+    // 담당 이력은 직원 ID · 요청 번호를 늘어놓지 않고 이름 · 방식 · 사유 · 메모만 보인다 (#608)
+    case 'CASE_ASSIGNED':
+      return [
+        data.assigneeName ? `담당 ${data.assigneeName}` : null,
+        data.reason ? (assignKindLabel[data.reason] ?? data.reason) : null,
+        reasonText(data.changeReason),
+        data.memo ?? null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' · ')
+    case 'CASE_ASSIGNMENT_REQUESTED':
+      return reasonText(data.reason) ?? ''
+    case 'CASE_ASSIGNMENT_REQUEST_REJECTED':
+      return data.memo ? `거절 이유: ${data.memo}` : ''
     default:
       return Object.entries(data)
         .map(([key, value]) => (key === 'completedAt' ? `실제 완료 ${time(value)}` : value))

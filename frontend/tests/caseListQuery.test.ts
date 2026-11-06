@@ -24,6 +24,8 @@ const make = (over: Partial<CaseSummary> = {}): CaseSummary => ({
   evidenceVersion: 1,
   createdAt: hoursAgo(1),
   closedAt: null,
+  assigneeStaffId: null,
+  assigneeName: null,
   paymentCount: 1,
   totalAmount: 10_000,
   maxRiskScore: 65,

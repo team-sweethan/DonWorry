@@ -27,6 +27,8 @@ import { RulePolicyChangeHistoriesPage } from '../pages/admin/RulePolicyChangeHi
 import { OperatorAccessDetectionsPage } from '../pages/admin/OperatorAccessDetectionsPage'
 import { OperatorAccessDetectionDetailPage } from '../pages/admin/OperatorAccessDetectionDetailPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
+import { CaseAssignmentsPage } from '../pages/admin/CaseAssignmentsPage'
+import { CaseAssignmentRequestsPage } from '../pages/admin/CaseAssignmentRequestsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
@@ -186,6 +188,16 @@ export const router = createBrowserRouter([
                 path: 'merchants/:id',
                 handle: { title: '가맹점 상세' },
                 element: <AdminMerchantDetailPage />,
+              },
+              {
+                path: 'case-assignments',
+                handle: { title: '사건 담당 현황' },
+                element: <CaseAssignmentsPage />,
+              },
+              {
+                path: 'case-assignment-requests',
+                handle: { title: '담당 변경 요청' },
+                element: <CaseAssignmentRequestsPage />,
               },
               { path: 'users', handle: { title: '계정 관리' }, element: <AdminUsersPage /> },
               {
