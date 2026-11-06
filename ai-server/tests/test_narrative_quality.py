@@ -34,12 +34,32 @@ def test_linked_facts_separate_customer_and_payment_counts() -> None:
     assert "다른 고객 1명 · 결제 3건" in card
 
 
-# 샘플 문장("카드사에 거절 사유 문의")을 그대로 쓰면 다시 쓰게 한다 (Case 8)
-# 사건과 무관한 사실이 보고서에 들어가지 않게
-def test_example_sentence_copied_is_rewritten() -> None:
+# 확인할 것은 예시("카드사에 거절 사유 문의")와 같아도 통과한다 (#581)
+# OpenAI는 거절이 있는 사건에서만 이렇게 썼다 — 맞는 할 일을 돌려보내 다시 쓰기 · 조사 실패가 났다
+def test_example_check_copied_is_allowed() -> None:
     facts = catalog(CASES, FDS)
     copied = WRITE_EXAMPLES[0]["출력"]["additionalChecks"][0]
     raw = narrative(PAYMENTS, additionalChecks=["고객 본인 확인", copied])
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert errors == []
+    assert parsed is not None and copied in parsed.additionalChecks
+
+
+# 요약은 예시 문장과 같으면 다시 쓰게 한다 — 예시 사건의 사실이라 이번 사건에선 거짓일 수 있다
+# (Case 8, #581 측정: 같은 카드를 다른 고객 3명이 쓴 사건에 "다른 고객 결제는 없습니다")
+def test_example_summary_copied_is_still_rewritten() -> None:
+    facts = catalog(CASES, FDS)
+    summary = WRITE_EXAMPLES[0]["출력"]["summary"]
+    copied = next(s["text"] for s in summary if not any(c.isdigit() for c in s["text"]))
+    raw = narrative(
+        PAYMENTS,
+        summary=[
+            {"text": copied, "facts": ["접속-1"]},
+            {"text": "조회한 기록은 아래 표에 있습니다.", "facts": ["접속-1"]},
+        ],
+    )
 
     parsed, errors = validate_narrative(raw, facts, PAYMENTS)
 

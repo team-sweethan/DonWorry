@@ -143,7 +143,8 @@ _EXAMPLES = {_key(text) for text in EXAMPLE_SENTENCES}
 
 # 겉모양 검사 — 코드값 · 확률 단정 · 판단 문구 · 한자 · 영어 · 예시 베끼기
 # 걸리면 문장을 지우지 않고 다시 쓰게 한다 (#548)
-def _style_errors(text: str, allowed_words: set[str]) -> list[str]:
+# 예시 베끼기는 요약만 본다 — 확인할 것은 할 일이라 사건에 맞으면 예시와 같아도 된다 (#581)
+def _style_errors(text: str, allowed_words: set[str], check_examples: bool = True) -> list[str]:
     errors: list[str] = []
     if code := _CODE.search(text):
         errors.append(f'코드값 "{code.group()}"을 한국어로 풀어 써라: "{text}"')
@@ -158,7 +159,7 @@ def _style_errors(text: str, allowed_words: set[str]) -> list[str]:
         )
     if hanja := _HANJA.search(text):
         errors.append(f'한자 · 일본 문자 "{hanja.group()}"를 한국어로 바꿔 써라: "{text}"')
-    if _key(text) in _EXAMPLES:
+    if check_examples and _key(text) in _EXAMPLES:
         errors.append(f'예시 문장을 그대로 쓰지 말고 이번 사실로 써라: "{text}"')
     return errors
 
@@ -214,7 +215,7 @@ def validate_narrative(
     for text in narrative.additionalChecks:
         if wrong := sorted(_numbers(text) - all_numbers):
             errors.append(f'사실에 없는 숫자 {wrong}: "{text}"')
-        errors += _style_errors(text, all_words)
+        errors += _style_errors(text, all_words, check_examples=False)
     groups = [[s.text for s in narrative.summary], narrative.additionalChecks]
     errors += [f'같은 문장을 반복하지 마라: "{t}"' for texts in groups for t in _repeats(texts)]
     if not SUMMARY_MIN <= len(narrative.summary) <= SUMMARY_MAX:
