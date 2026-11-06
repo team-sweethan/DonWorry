@@ -1,5 +1,9 @@
 package com.donworry.payment.service;
 
+import com.donworry.identity.api.MerchantDirectoryReader;
+import com.donworry.identity.api.StaffAccess;
+import com.donworry.identity.api.StaffAccessRecorder;
+import com.donworry.identity.api.StaffAccessType;
 import com.donworry.payment.dto.PaymentTransactionResponse;
 import com.donworry.payment.dto.PaymentTransactionsPageResponse;
 import com.donworry.payment.dto.PaymentTransactionsQueryRequest;
@@ -15,11 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class PaymentTransactionsQueryService {
     private final PaymentTransactionsRepository repository;
+    private final StaffAccessRecorder accessRecorder;
+    private final MerchantDirectoryReader merchantDirectory;
 
+    // 읽기 전용이 아니다 — 조회 기록을 같은 트랜잭션에 저장해, 기록이 실패하면 목록도 내보내지 않는다 (ADR-0082 4절 · #615)
+    @Transactional
     public PaymentTransactionsPageResponse findPage(PaymentTransactionsQueryRequest query) {
         long total = repository.count(query);
         long pages = total / query.size() + (total % query.size() == 0 ? 0 : 1);
-        return PaymentTransactionsPageResponse.builder()
+        var page = PaymentTransactionsPageResponse.builder()
                 .items(repository.findPage(query).stream()
                         .map(PaymentTransactionsQueryService::item)
                         .toList())
@@ -31,6 +39,21 @@ public class PaymentTransactionsQueryService {
                 .from(query.from())
                 .to(query.to())
                 .build();
+        accessRecorder.recordAllowed(StaffAccess.builder()
+                .accessType(StaffAccessType.TRANSACTION_LIST_VIEW)
+                .merchantId(knownMerchant(query.merchantId()))
+                .customerRef(StaffAccess.isCustomerRef(query.customerRef()) ? query.customerRef() : null)
+                .itemCount(page.items().size())
+                .build());
+        return page;
+    }
+
+    // 기록 표의 가맹점 칸은 merchants FK다 — 없는 가맹점으로 거른 조회(빈 목록)가 기록 실패로 막히지 않게 가맹점 없이 남긴다
+    private Long knownMerchant(Long merchantId) {
+        if (merchantId == null) return null;
+        return merchantDirectory.findAll().stream().anyMatch(m -> merchantId.equals(m.merchantId()))
+                ? merchantId
+                : null;
     }
 
     private static PaymentTransactionResponse item(PaymentTransactionRow row) {

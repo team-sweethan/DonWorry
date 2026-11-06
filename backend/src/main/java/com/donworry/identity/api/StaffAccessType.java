@@ -7,5 +7,7 @@ public enum StaffAccessType {
     CASE_DECISION,
     REPORT_REQUEST,
     HANDOFF_RECHECK,
-    REPORT_PROGRESS_VIEW
+    REPORT_PROGRESS_VIEW,
+    // 거래 목록 조회 (#615) — 내보낸 건수 · 거른 가맹점 · 검색한 고객 번호를 남긴다
+    TRANSACTION_LIST_VIEW
 }
