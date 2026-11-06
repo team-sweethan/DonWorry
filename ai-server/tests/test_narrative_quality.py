@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta
 
+from app.agent.facts import NOTABLE, Fact
 from app.agent.narrative import narrative_schema, validate_narrative
 from app.agent.prompts import WRITE_EXAMPLES
 from app.schemas.tools import (
@@ -175,3 +176,48 @@ def test_fact_catalog_historyOver5_countsAllPayments() -> None:
     burst = next(t for t in texts if t.startswith("사건 결제 앞뒤 10분 안의 다른 결제"))
     assert burst.startswith("사건 결제 앞뒤 10분 안의 다른 결제 8건")
     assert burst.count("650,000원") == 5 and burst.endswith("외 3건")
+
+
+# 눈여겨볼 사실 하나(연결-1)와 보통 이력 사실 셋 — 이력마다 한 문장씩 쓰면 3문장이 꽉 찬다 (#581)
+def _crowded_facts() -> list[Fact]:
+    history = [Fact(f"이력-{n}", "history", "이력 사실", "E1") for n in (1, 2, 3)]
+    return [*history, Fact("연결-1", "linked", "같은 IP 사실", "E2", rank=NOTABLE)]
+
+
+def _sentence(text: str, *facts: str) -> dict:
+    return {"text": text, "facts": list(facts)}
+
+
+THREE_HISTORY = [
+    _sentence("고객의 최근 결제를 이어 적습니다.", "이력-1"),
+    _sentence("연속 결제는 바로 앞의 시도입니다.", "이력-2"),
+    _sentence("그보다 앞선 결제는 매입이 끝났습니다.", "이력-3"),
+]
+
+
+# 3문장이 꽉 차도 넷째 문장에 아직 안 쓴 눈여겨볼 사실을 이어 쓰면 통과한다
+# 막으면 눈여겨볼 사실이 많은 사건일수록 다시 써도 같은 답을 내 보고서가 실패한다
+# (#581 처음 보는 손님)
+def test_summary_fourth_sentence_with_new_notable_passes() -> None:
+    facts = _crowded_facts()
+    raw = narrative(
+        PAYMENTS,
+        summary=[*THREE_HISTORY, _sentence("같은 IP를 다른 고객이 썼습니다.", "연결-1")],
+    )
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert errors == [] and parsed is not None
+    assert narrative_schema(facts)["properties"]["summary"]["maxItems"] == 4
+
+
+# 넷째 문장에 새 눈여겨볼 사실이 없으면 다시 쓰게 한다 — 자리가 모자란 게 아니라 사실을 다시 읽는 것
+def test_summary_fourth_sentence_without_new_notable_rewritten() -> None:
+    facts = _crowded_facts()
+    first = _sentence("같은 IP를 다른 고객이 썼고 최근 결제가 있습니다.", "연결-1", "이력-1")
+    raw = narrative(PAYMENTS, summary=[first, *THREE_HISTORY[1:], THREE_HISTORY[0]])
+
+    parsed, errors = validate_narrative(raw, facts, PAYMENTS)
+
+    assert parsed is None
+    assert any("4번째 문장부터는" in e for e in errors)

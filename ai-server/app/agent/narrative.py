@@ -45,7 +45,14 @@ _TEXT_LIST = {"type": "array", "items": {"type": "string"}}
 MIN_SENTENCES = 2
 _TEXT_LIST_2 = {**_TEXT_LIST, "minItems": MIN_SENTENCES}
 # 요약은 1~3문장 — 사실이 적은 사건에 억지로 2문장을 채우면 같은 말을 되풀이한다 (#559)
+# 3문장에 눈여겨볼 사실을 다 못 담으면 이어 쓸 수 있다 — 넷째 문장부터는 앞에 없던 눈여겨볼 사실만
+# 그래서 최대 문장 수는 3 + 눈여겨볼 사실 수
+# (#581 — 이력 사실이 늘자 3문장이 꽉 차 보고서가 실패했다)
 SUMMARY_MIN, SUMMARY_MAX = 1, 3
+
+
+def summary_max(facts: list[Fact]) -> int:
+    return SUMMARY_MAX + sum(1 for fact in facts if fact.rank == NOTABLE)
 
 
 # 사실 번호 목록을 고정한 JSON Schema — Ollama format · OpenAI 구조화 출력으로 넘긴다
@@ -70,7 +77,7 @@ def narrative_schema(facts: list[Fact]) -> dict[str, Any]:
                 "type": "array",
                 "items": sentence,
                 "minItems": SUMMARY_MIN,
-                "maxItems": SUMMARY_MAX,
+                "maxItems": summary_max(facts),
             },
             "additionalChecks": _TEXT_LIST_2,
         },
@@ -204,11 +211,25 @@ def validate_narrative(
     errors = [e for sent in narrative.summary for e in _sentence_errors(sent, by_id, base)]
     # 눈여겨볼 사실(다른 고객과 겹침 · 연속 결제)은 요약에서 빠지면 다시 쓰게 한다 (#568)
     # 무엇이 눈여겨볼 사실인지는 코드가 정했다 — AI가 고르지 않는다
+    notable = {f.id for f in facts if f.rank == NOTABLE}
     cited = {fid for sent in narrative.summary for fid in sent.facts}
-    if missing := [f.id for f in facts if f.rank == NOTABLE and f.id not in cited]:
+    if missing := [f.id for f in facts if f.id in notable and f.id not in cited]:
+        # 3문장이 꽉 찬 채로 빠뜨리면 어디에 넣을지 알려 준다 (#581 — 같은 답을 3번 냈다)
+        full = len(narrative.summary) >= SUMMARY_MAX
+        hint = f" {SUMMARY_MAX}문장이 꽉 찼으면 다음 문장으로 이어 써라" if full else ""
         errors.append(
-            f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라"
+            f"눈여겨볼 사실 {missing}이 요약에서 빠졌다. 문장에 이어 쓰고 facts에 번호를 넣어라."
+            + hint
         )
+    # 넷째 문장부터는 앞에 없던 눈여겨볼 사실을 이어 쓸 때만 — 자리가 모자랄 때만 길어지게 (#581)
+    seen = {fid for sent in narrative.summary[:SUMMARY_MAX] for fid in sent.facts}
+    for sent in narrative.summary[SUMMARY_MAX:]:
+        if not [fid for fid in sent.facts if fid in notable and fid not in seen]:
+            errors.append(
+                f"{SUMMARY_MAX + 1}번째 문장부터는 앞에서 쓰지 않은 눈여겨볼 사실만 이어 쓴다: "
+                f'"{sent.text}"'
+            )
+        seen |= set(sent.facts)
     # 확인할 것은 사실 번호를 붙이지 않는다 — 숫자는 준 사실 전체 안에서만
     all_numbers = base | {n for fact in facts for n in _numbers(fact.text)}
     all_words = set(ALLOWED_WORDS) | {w for fact in facts for w in _ENGLISH.findall(fact.text)}
@@ -218,9 +239,11 @@ def validate_narrative(
         errors += _style_errors(text, all_words, check_examples=False)
     groups = [[s.text for s in narrative.summary], narrative.additionalChecks]
     errors += [f'같은 문장을 반복하지 마라: "{t}"' for texts in groups for t in _repeats(texts)]
-    if not SUMMARY_MIN <= len(narrative.summary) <= SUMMARY_MAX:
+    if not SUMMARY_MIN <= len(narrative.summary) <= summary_max(facts):
         errors.append(
-            f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 (지금 {len(narrative.summary)}개)"
+            f"summary는 {SUMMARY_MIN}~{SUMMARY_MAX}문장으로 써라 "
+            f"(눈여겨볼 사실을 이어 쓰면 최대 {summary_max(facts)}개, "
+            f"지금 {len(narrative.summary)}개)"
         )
     if len(narrative.additionalChecks) < MIN_SENTENCES:
         errors.append(
