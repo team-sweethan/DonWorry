@@ -31,3 +31,8 @@ spring:
 #   server:
 #     enabled: true            # 고정 보고서 대신 ai-server에 조사를 맡김 (기본 꺼짐)
 #     api-key: "내AI서버키"       # ai-server/.env의 AI_SERVER_INTERNAL_API_KEY와 같은 값
+
+# 주문자 연락처 암호화 · 지문 키 (#602). 각각 `openssl rand -base64 32`로 서로 다르게 만든다
+# 같은 개발 DB를 쓰는 동안 바꾸지 않는다(바꾸면 기존 암호문을 못 읽는다). 비우면 연락처를 저장하지 않는다
+# donworry.pii.encryption-key: ""
+# donworry.pii.hmac-key: ""
