@@ -125,6 +125,16 @@ class ResultCount(BaseModel):
     count: int
 
 
+# 사건 결제 요청 시각 앞뒤 nearbyWindowMinutes 안의 다른 고객 결제 (#637)
+# 칸 뜻은 LinkedMatch와 같다
+# 공격은 짧은 시간에 몰리고 공용 와이파이는 한 달에 흩어진다 — 30일 합계만으로는 둘이 같아 보인다
+class LinkedNearby(BaseModel):
+    otherCustomerCount: int
+    paymentCount: int
+    resultCounts: list[ResultCount]
+    declinedCount: int
+
+
 # provided=False면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻 ("정보 없음")
 class LinkedMatch(BaseModel):
     provided: bool
@@ -132,6 +142,8 @@ class LinkedMatch(BaseModel):
     paymentCount: int
     resultCounts: list[ResultCount]
     declinedCount: int
+    # 예전 Spring 응답에는 없다 (#637)
+    nearby: LinkedNearby | None = None
 
 
 # 사건 결제 하나의 연결 결제 — 그 결제의 카드 · 기기 · IP로 센 값 (#533)
@@ -148,6 +160,8 @@ class LinkedPaymentsTool(BaseModel):
     source: str
     retrievedAt: str
     lookbackDays: int
+    # 각 칸 nearby가 센 "사건 결제 앞뒤" 시간 (#637). 예전 Spring 응답에는 없다
+    nearbyWindowMinutes: int | None = None
     # card · device · ip는 사건 전체 — 화면 카드 · 고정 보고서가 쓴다
     card: LinkedMatch
     device: LinkedMatch

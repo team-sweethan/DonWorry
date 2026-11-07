@@ -23,6 +23,7 @@ from app.schemas.tools import (
     OrderContextTool,
     OrderPayment,
     PaymentHistoryTool,
+    ResultCount,
     Signals,
     SimilarCasesTool,
 )
@@ -183,21 +184,44 @@ def _linked_rank(match: LinkedMatch) -> int:
     return NOTABLE if match.paymentCount > 0 else NOTHING
 
 
-def _linked_line(owner: str, kind: str, match: LinkedMatch, days: int) -> str:
+def _counts_text(customers: int, payments: int, results: list[ResultCount], declined: int) -> str:
+    text = f"다른 고객 {customers}명 · 결제 {payments}건"
+    judged = " · ".join(f"{FDS_RESULT_KO.get(c.result, c.result)} {c.count}건" for c in results)
+    if judged:
+        text += f" (FDS 판정 {judged})"
+    return text + f", 카드사 거절 {declined}건"
+
+
+# 60분 → "1시간", 90분 → "90분"
+def _window_text(minutes: int) -> str:
+    return f"{minutes // 60}시간" if minutes % 60 == 0 else f"{minutes}분"
+
+
+# window: 사건 결제 앞뒤 몇 분을 따로 셌는지 (#637)
+# 예전 Spring 응답이면 None이라 그 구절을 붙이지 않는다
+def _linked_line(
+    owner: str, kind: str, match: LinkedMatch, days: int, window: int | None = None
+) -> str:
     if not match.provided:
         return f"{owner} · 같은 {kind}: {kind} 정보를 가맹점이 보내지 않아 찾지 못함"
     if match.paymentCount == 0:
         return f"{owner} · 같은 {kind}: 최근 {days}일 다른 고객 결제 없음"
-    results = " · ".join(
-        f"{FDS_RESULT_KO.get(c.result, c.result)} {c.count}건" for c in match.resultCounts
+    line = f"{owner} · 같은 {kind}: 최근 {days}일 " + _counts_text(
+        match.otherCustomerCount, match.paymentCount, match.resultCounts, match.declinedCount
     )
-    line = (
-        f"{owner} · 같은 {kind}: 최근 {days}일 다른 고객 {match.otherCustomerCount}명 · "
-        f"결제 {match.paymentCount}건"
+    near = match.nearby
+    if window is None or near is None:
+        return line
+    # 30일 합계와 나란히 — 몰렸는지(공격) 흩어졌는지(공용 와이파이 등)는 직원이 본다
+    if near.paymentCount == 0:
+        return line + f" / 그중 이 결제 앞뒤 {_window_text(window)} 안: 없음"
+    return (
+        line
+        + f" / 그중 이 결제 앞뒤 {_window_text(window)} 안: "
+        + _counts_text(
+            near.otherCustomerCount, near.paymentCount, near.resultCounts, near.declinedCount
+        )
     )
-    if results:
-        line += f" (FDS 판정 {results})"
-    return line + f", 카드사 거절 {match.declinedCount}건"
 
 
 # 결제별 칸이 있으면 결제마다, 없으면(예전 Spring) 사건 전체 값으로 쓴다 (#533)
@@ -218,7 +242,7 @@ def _linked(records: list[ToolRecord]) -> list[Line]:
     else:
         matches = [("사건 결제 전체", kind, getattr(linked, attr)) for kind, attr in _KINDS]
     return [
-        (_linked_line(owner, kind, m, days), seq, None, _linked_rank(m))
+        (_linked_line(owner, kind, m, days, linked.nearbyWindowMinutes), seq, None, _linked_rank(m))
         for owner, kind, m in matches
     ]
 
