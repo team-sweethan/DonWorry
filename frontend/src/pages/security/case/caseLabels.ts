@@ -1,7 +1,6 @@
 import dayjs from 'dayjs'
 import type {
   ActionType,
-  AiRecommendation,
   CaseHistoryEventType,
   CaseStatus,
   Decision,
@@ -83,13 +82,6 @@ export const handoffErrorLabel: Record<string, string> = {
 export const actionTypeLabel: Record<ActionType, string> = {
   CAPTURE: 'CAPTURE · 매입 요청 (P6)',
   VOID: 'VOID · 승인 취소 요청 (P5)',
-}
-
-// 권고 이름 (#501) — 앞말(기준표 판정 · AI 권고)은 reportView.recommendationSource가 고른다
-export const recommendationLabel: Record<AiRecommendation, Label> = {
-  ACCEPT_REVIEW: { label: '매입 진행 검토', color: 'green' },
-  REJECT_REVIEW: { label: '승인 취소 검토', color: 'red' },
-  NEEDS_CHECK: { label: '추가 확인', color: 'gold' },
 }
 
 export const historyEventLabel: Record<CaseHistoryEventType, string> = {

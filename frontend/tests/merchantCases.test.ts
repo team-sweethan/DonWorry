@@ -55,7 +55,6 @@ test('상세는 결제 ID를 문자열로 바꾸고 판정·결제 상태를 그
           requestedAt: null,
           paymentStatus: 'VOIDED',
           decision: 'REJECT',
-          aiRecommendation: null,
           customerCanceled: false,
         },
       ],
