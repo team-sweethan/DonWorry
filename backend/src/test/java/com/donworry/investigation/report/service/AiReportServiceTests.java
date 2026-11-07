@@ -100,7 +100,9 @@ class AiReportServiceTests {
                                     "caseOverview",
                                     "similarCases",
                                     "paymentHistory",
-                                    "linkedPayments");
+                                    "linkedPayments",
+                                    // 주문 정보 (#634)
+                                    "orderContext");
                 });
     }
 

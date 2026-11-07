@@ -11,6 +11,7 @@ import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse.StatusCount;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
@@ -59,6 +60,9 @@ class FixedReportGeneratorTests {
 
     @Mock
     LinkedPaymentFinder linkedPaymentFinder;
+
+    @Mock
+    OrderContextFinder orderContextFinder;
 
     // 긴급정지 중에 만든 고정 보고서는 조사 과정에 그 이유와 한계 문장을 남긴다 — "AI 연결 전"으로 오해하지 않게 (ADR-0083 결정 6)
     @Test
@@ -124,7 +128,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         Map<String, Object> body =
                 generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
@@ -165,7 +170,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         Map<String, Object> body =
                 generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
@@ -203,7 +209,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         Map<String, Object> body =
                 generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
@@ -410,6 +417,51 @@ class FixedReportGeneratorTests {
         assertThat(evidenceOf(body, "find_linked_payments")).isEmpty();
     }
 
+    // 고정 보고서의 주문 정보는 AI 도구와 같은 계산으로 만든다 (#634)
+    @Test
+    void generate_withOrderContext_matchesAiToolCalculation() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(orderContextFinder.find(7L, NOW))
+                .thenReturn(OrderContextToolResponse.builder()
+                        .caseId("7")
+                        .evidenceVersion(1)
+                        .source("P5")
+                        .retrievedAt(NOW)
+                        .payments(List.of(OrderContextToolResponse.Payment.builder()
+                                .paymentId("3")
+                                .provided(true)
+                                .orderRef("order-3")
+                                .orderName("딸기 케이크")
+                                .orderGroup(1)
+                                .orderToPaymentSeconds(42L)
+                                .ordererProvided(true)
+                                .ordererPhoneGroup(1)
+                                .pickupDiffers(true)
+                                .build()))
+                        .build());
+
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
+
+        // AI 보고서(ai-server)가 Tool 응답을 그대로 옮기는 것과 같은 키 · 같은 값
+        Map<?, ?> order = (Map<?, ?>) body.get("orderContext");
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("paymentId", "3");
+        expected.put("provided", true);
+        expected.put("orderRef", "order-3");
+        expected.put("orderName", "딸기 케이크");
+        expected.put("orderGroup", 1);
+        expected.put("orderToPaymentSeconds", 42L);
+        expected.put("ordererProvided", true);
+        expected.put("ordererPhoneGroup", 1);
+        expected.put("pickupDiffers", true);
+        assertThat(order.get("payments")).isEqualTo(List.of(expected));
+        assertThat(evidenceOf(body, "get_order_context")).singleElement().satisfies(e -> {
+            assertThat(e.get("source")).isEqualTo("P5");
+            assertThat(e.get("dataVersion")).isEqualTo("evidence v1");
+        });
+    }
+
     private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
         List<Map<?, ?>> found = new ArrayList<>();
         for (Object item : (List<?>) body.get("evidence")) {
@@ -438,7 +490,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
     }
 
     // AI 서버가 꺼져도 고정 보고서가 판정 기준표로 권고한다 (#618) — 전에는 늘 추가 확인이었다
@@ -473,7 +526,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         Map<String, Object> body =
                 generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
@@ -511,7 +565,8 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         Map<String, Object> body =
                 generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();

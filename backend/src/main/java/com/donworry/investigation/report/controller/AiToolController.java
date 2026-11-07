@@ -4,6 +4,7 @@ import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.AiToolService;
@@ -55,6 +56,12 @@ public class AiToolController {
     @GetMapping("/find_linked_payments")
     public LinkedPaymentsToolResponse linkedPayments(@RequestParam Long caseId) {
         return aiToolService.linkedPayments(caseId);
+    }
+
+    // 사건 결제마다 가맹점이 결제 준비 때 보낸 주문 정보 (#634) — 주문자 이름 · 전화 원문은 없고 묶음 번호만
+    @GetMapping("/get_order_context")
+    public OrderContextToolResponse orderContext(@RequestParam Long caseId) {
+        return aiToolService.orderContext(caseId);
     }
 
     // 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — 기준표는 Spring이 계산한다. ai-server는 그대로 싣는다
