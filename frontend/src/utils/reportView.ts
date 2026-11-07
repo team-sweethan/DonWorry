@@ -481,7 +481,7 @@ export type SummaryLine = { text: string; links: SummaryLink[] }
 // 주제 → 이동할 카드 (ReportFull의 id와 같다). 접속 정보는 결제 카드로 간다
 const TOPIC_CARDS: Record<string, SummaryLink> = {
   history: { target: 'report-history', label: '고객 최근 결제' },
-  linked: { target: 'report-linked', label: '같은 카드 · 기기 · IP' },
+  linked: { target: 'report-linked', label: '다른 손님과 겹치는 것' },
   similar: { target: 'report-similar', label: '비슷한 과거 사건' },
   order: { target: 'report-order', label: '주문 정보' },
 }

@@ -35,6 +35,12 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
   - 사건 결제 순서를 지키고, 평가가 없는 결제는 모두 `provided = false`
   - 결제마다 하나로 세고, 판정은 위와 같은 "최신 비오류 평가" 규칙을 쓴다. 카드사 거절은 평가의 `authorization_result = DECLINED`(P5가 기록)로 센다
   - DB 정렬 규칙이 대소문자를 무시해도 원문이 정확히 같은 값만 센다 (조회 뒤 다시 대조)
+- **#637에서 더한 칸 · 인자 (P2 합의 11/07, 코드는 P4가 고침).** `findLinked(…, since, nearbyWindow)` — 마지막 인자 `Duration nearbyWindow`를 더했다(사용처는 P4 `LinkedPaymentFinder` 하나라 함께 고침). `Match.nearby`(`Nearby`: `otherCustomerCount` · `paymentCount` · `resultCounts` · `declinedCount`)
+  - 위 결과 중 사건 결제 요청 시각(`payment_requested_at`) 앞뒤 `nearbyWindow` 안의 결제만 같은 규칙으로 다시 센다. 경계 포함. 사건 전체 칸은 같은 값을 쓴 사건 결제 중 하나라도 창 안이면, 결제별 칸(`payments`)은 그 결제의 시각으로 센다
+  - 조회는 그대로다 — 이미 읽은 결과를 다시 셀 뿐이라 쿼리 · 인덱스 · 스키마 변경이 없다. `since`보다 앞선 구간은 보지 않는다
+  - 창 길이는 기간(`since`)처럼 받는 쪽이 정한다. `null` · 음수는 `IllegalArgumentException`. `Match.notProvided()`의 `nearby`는 0으로 채운다(`null` 아님)
+  - 이유: 공격은 짧은 시간에 몰리고 공용 와이파이는 한 달에 흩어지는데, 30일 합계만으로는 둘이 같아 보인다 ([ADR-0009](0009-ai-investigation-call-structure.md) `find_linked_payments`)
+  - IP 값: 결제창([ADR-0064](0064-hosted-checkout-and-payment-webhook.md)) 흐름에서는 손님 브라우저가 돈워리에 직접 접속하고, P5가 그 접속 IP(`ClientIpResolver`)를 결제 위험 신호로 넘겨 평가 `ip_address`에 남는다 — 가맹점 서버 IP가 아닌 손님 IP다
 
 ## 고려한 대안
 
@@ -49,6 +55,9 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 | (#352) `FdsEvidenceReader`에 연관 결제 메서드를 더함 | P3 테스트가 이 인터페이스를 가짜로 구현해 쓰고 있어 메서드가 늘면 함께 고쳐야 한다. 쓰는 곳(P4)만 받도록 인터페이스를 나눈다 |
 | (#352) 카드 토큰 · 기기 ID · IP 주소 앞자리 인덱스 추가 | 시연 데이터 규모에서는 `merchant_id`로 시작하는 기존 인덱스로 충분하고, P2 테이블 마이그레이션이 늘어난다. 데이터가 늘면 `(merchant_id, card_token / device_id / ip_address, payment_requested_at)` 3개를 추가한다 |
 | (#352) 일치하는 결제 목록(결제 ID · 고객 번호)을 내보내고 받는 쪽이 셈 | 다른 고객 번호 · 결제 ID가 P2 밖으로 나가 AI 입력 · 보고서로 샐 수 있다. 집계는 P2가 한다 |
+| (#637) 창마다 따로 조회(1시간 · 30일 쿼리 두 번) | 같은 행을 두 번 읽는다. 30일 결과 안에서 다시 세면 조회가 늘지 않는다 |
+| (#637) 창 길이를 P2 상수로 고정 | 측정해 조정할 쪽은 보고서(P4)인데 바꿀 때마다 P2 코드를 고쳐야 한다. 기간 `since`처럼 인자로 받는다 |
+| (#637) 기존 4인자 메서드를 남기고 5인자를 더함 | 사용처가 P4 하나라 남기면 쓰지 않는 메서드만 늘어난다 |
 | (#326) P2가 규칙별 숫자를 타입 있는 필드로 풀어서 제공 | 규칙마다 키가 달라 필드가 계속 늘고, 룰을 바꿀 때마다 공개 계약을 고쳐야 한다. 원본 JSON을 주고 받는 쪽이 고른다. |
 
 ## 영향
@@ -60,6 +69,7 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 - (#352) API: `FdsLinkedPaymentReader` · `FdsLinkedPayments` 추가, 구현 `FdsLinkedPaymentQueryService`. 저장소 조회 메서드 3개(가맹점 + 기간 + 카드 토큰 / 기기 ID / IP 주소 목록) 추가. `FdsEvidenceQueryService`의 최신 평가 고르기를 같은 패키지에서 같이 쓰도록 `static`으로 바꿨다(동작 그대로). 사용처 P4 `LinkedPaymentFinder`. DB 변경 없음
 - (#352) 테스트: 다른 고객 수 · 결제 수 · 판정 · 카드사 거절 집계와 원문 미노출, 같은 고객 · 사건 결제 제외, 보내지 않은 값 = 비교 안 함, 재평가 결제 한 번만, 다른 가맹점 · 기간 밖 제외(MariaDB)
 - (#533) API: `FdsLinkedPayments`에 `payments` 칸 추가 (기존 사건 합계 그대로). 사용처 P4 `LinkedPaymentFinder`. DB 변경 · 조회 추가 없음. 테스트: 결제별 집계(단위 · MariaDB)
+- (#637) API: `FdsLinkedPaymentReader.findLinked`에 `nearbyWindow` 인자, `FdsLinkedPayments.Match.nearby` · `Nearby` 추가. 사용처 P4 `LinkedPaymentFinder`(함께 고침). DB 변경 · 조회 추가 없음. 테스트: 앞뒤 1시간 안만 세기(경계 60분 안 · 61분 밖) · 결제별은 그 결제 시각 기준(단위), 기존 MariaDB 테스트는 인자만 추가
 - 화면: P3 #163에서 Mock FDS 정보를 실제 공개 조회 결과로 교체할 수 있다.
 - 테스트: 최신 유효 판정 선택, 전체 ERROR 처리, 적중 룰 필터링, 입력 검증을 단위 테스트로 확인한다.
 - 문서: ADR 목록에 계약을 기록한다. Notion 정본에는 구현 확정 뒤 동기화 여부를 P2·P3가 확인한다.

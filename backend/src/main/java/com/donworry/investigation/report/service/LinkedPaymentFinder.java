@@ -7,16 +7,19 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Nearby;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.PaymentLinks;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InvestigationErrorCode;
 import com.donworry.investigation.service.InvestigationException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -31,6 +34,8 @@ public class LinkedPaymentFinder {
 
     static final String SOURCE = "P2";
     static final int LOOKBACK_DAYS = 30;
+    // 30일 중 사건 결제 앞뒤 이 시간 안의 결제를 따로 센다 (#637) — 출발값, 판정 기준표 개선 때 측정해 조정한다
+    static final Duration NEARBY_WINDOW = Duration.ofHours(1);
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
@@ -49,13 +54,15 @@ public class LinkedPaymentFinder {
                 securityCase.getMerchantId(),
                 securityCase.getCustomerRef(),
                 casePaymentIds,
-                now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS));
+                now.minus(LOOKBACK_DAYS, ChronoUnit.DAYS),
+                NEARBY_WINDOW);
         return LinkedPaymentsToolResponse.builder()
                 .caseId(String.valueOf(caseId))
                 .evidenceVersion(securityCase.getEvidenceVersion())
                 .source(SOURCE)
                 .retrievedAt(now)
                 .lookbackDays(LOOKBACK_DAYS)
+                .nearbyWindowMinutes((int) NEARBY_WINDOW.toMinutes())
                 .card(match(linked.card()))
                 .device(match(linked.device()))
                 .ip(match(linked.ip()))
@@ -68,16 +75,26 @@ public class LinkedPaymentFinder {
 
     // 판정별 건수는 FDS 판정 순서로 늘어놓고 0건은 뺀다
     private static Match match(FdsLinkedPayments.Match m) {
-        List<ResultCount> counts = Arrays.stream(FdsResult.values())
-                .filter(result -> m.resultCounts().getOrDefault(result, 0) > 0)
-                .map(result -> new ResultCount(result.name(), m.resultCounts().get(result)))
-                .toList();
+        FdsLinkedPayments.Nearby near = m.nearby();
         return Match.builder()
                 .provided(m.provided())
                 .otherCustomerCount(m.otherCustomerCount())
                 .paymentCount(m.paymentCount())
-                .resultCounts(counts)
+                .resultCounts(resultCounts(m.resultCounts()))
                 .declinedCount(m.declinedCount())
+                .nearby(Nearby.builder()
+                        .otherCustomerCount(near.otherCustomerCount())
+                        .paymentCount(near.paymentCount())
+                        .resultCounts(resultCounts(near.resultCounts()))
+                        .declinedCount(near.declinedCount())
+                        .build())
                 .build();
+    }
+
+    private static List<ResultCount> resultCounts(Map<FdsResult, Integer> counts) {
+        return Arrays.stream(FdsResult.values())
+                .filter(result -> counts.getOrDefault(result, 0) > 0)
+                .map(result -> new ResultCount(result.name(), counts.get(result)))
+                .toList();
     }
 }

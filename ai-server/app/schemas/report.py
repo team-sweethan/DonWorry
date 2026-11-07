@@ -202,6 +202,14 @@ class LinkedResultCount(BaseModel):
     count: int
 
 
+# 사건 결제 앞뒤 nearbyWindowMinutes 안의 다른 고객 결제 (#637)
+class LinkedNearby(BaseModel):
+    otherCustomerCount: int
+    paymentCount: int
+    resultCounts: list[LinkedResultCount]
+    declinedCount: int
+
+
 # provided=False면 이 사건 결제가 그 값을 보내지 않음 — 화면은 "정보 없음"을 보여 준다
 class LinkedMatch(BaseModel):
     provided: bool
@@ -209,10 +217,13 @@ class LinkedMatch(BaseModel):
     paymentCount: int
     resultCounts: list[LinkedResultCount]
     declinedCount: int
+    # 예전 보고서에는 없다 — 화면은 그 줄을 그리지 않는다 (#637)
+    nearby: LinkedNearby | None = None
 
 
 class LinkedPayments(BaseModel):
     lookbackDays: int
+    nearbyWindowMinutes: int | None = None
     card: LinkedMatch
     device: LinkedMatch
     ip: LinkedMatch

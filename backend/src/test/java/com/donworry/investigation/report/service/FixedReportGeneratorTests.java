@@ -10,6 +10,7 @@ import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Nearby;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
 import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
@@ -355,6 +356,12 @@ class FixedReportGeneratorTests {
                 .paymentCount(3)
                 .resultCounts(List.of(new ResultCount("REVIEW", 2), new ResultCount("DENY", 1)))
                 .declinedCount(1)
+                .nearby(Nearby.builder()
+                        .otherCustomerCount(1)
+                        .paymentCount(1)
+                        .resultCounts(List.of(new ResultCount("DENY", 1)))
+                        .declinedCount(0)
+                        .build())
                 .build();
         Match noOther = Match.builder()
                 .provided(true)
@@ -377,6 +384,7 @@ class FixedReportGeneratorTests {
                         .source("P2")
                         .retrievedAt(NOW)
                         .lookbackDays(30)
+                        .nearbyWindowMinutes(60)
                         .card(cardMatch)
                         .device(noOther)
                         .ip(notProvided)
@@ -387,14 +395,26 @@ class FixedReportGeneratorTests {
 
         Map<?, ?> linked = (Map<?, ?>) body.get("linkedPayments");
         assertThat(linked.get("lookbackDays")).isEqualTo(30);
+        // 사건 결제 앞뒤 1시간 숫자도 ai-server와 같은 키로 옮긴다 (#637)
+        assertThat(linked.get("nearbyWindowMinutes")).isEqualTo(60);
         assertThat(linked.get("card"))
                 .isEqualTo(Map.of(
-                        "provided", true,
-                        "otherCustomerCount", 2,
-                        "paymentCount", 3,
+                        "provided",
+                        true,
+                        "otherCustomerCount",
+                        2,
+                        "paymentCount",
+                        3,
                         "resultCounts",
-                                List.of(Map.of("result", "REVIEW", "count", 2), Map.of("result", "DENY", "count", 1)),
-                        "declinedCount", 1));
+                        List.of(Map.of("result", "REVIEW", "count", 2), Map.of("result", "DENY", "count", 1)),
+                        "declinedCount",
+                        1,
+                        "nearby",
+                        Map.of(
+                                "otherCustomerCount", 1,
+                                "paymentCount", 1,
+                                "resultCounts", List.of(Map.of("result", "DENY", "count", 1)),
+                                "declinedCount", 0)));
         assertThat(((Map<?, ?>) linked.get("ip")).get("provided")).isEqualTo(false);
         assertThat(evidenceOf(body, "find_linked_payments")).singleElement().satisfies(e -> {
             assertThat(e.get("source")).isEqualTo("P2");

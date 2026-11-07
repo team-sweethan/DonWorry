@@ -437,7 +437,9 @@ def assemble_report(
         else None,
         paymentHistory=_report_history(history, basis_history),
         linkedPayments=LinkedPayments.model_validate(
-            linked.model_dump(include={"lookbackDays", "card", "device", "ip"})
+            linked.model_dump(
+                include={"lookbackDays", "nearbyWindowMinutes", "card", "device", "ip"}
+            )
         )
         if linked is not None
         else None,

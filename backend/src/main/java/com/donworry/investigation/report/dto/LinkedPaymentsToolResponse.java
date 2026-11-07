@@ -14,6 +14,8 @@ public record LinkedPaymentsToolResponse(
         String source,
         Instant retrievedAt,
         int lookbackDays,
+        // 각 Match.nearby가 센 "사건 결제 앞뒤" 시간 (#637)
+        int nearbyWindowMinutes,
         Match card,
         Match device,
         Match ip,
@@ -25,13 +27,19 @@ public record LinkedPaymentsToolResponse(
 
     // provided=false면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻이다 ("정보 없음")
     // resultCounts는 FDS 판정 순서(허용 · 검토 · 차단 · 평가 오류), declinedCount는 카드사 거절 결제 수
+    // nearby: 그중 사건 결제 요청 시각 앞뒤 nearbyWindowMinutes 안의 결제만 다시 센 값 (#637)
     @Builder
     public record Match(
             boolean provided,
             int otherCustomerCount,
             int paymentCount,
             List<ResultCount> resultCounts,
-            int declinedCount) {}
+            int declinedCount,
+            Nearby nearby) {}
+
+    // 사건 결제 앞뒤 시간 안의 다른 고객 결제 (#637) — 칸 뜻은 Match와 같다
+    @Builder
+    public record Nearby(int otherCustomerCount, int paymentCount, List<ResultCount> resultCounts, int declinedCount) {}
 
     public record ResultCount(String result, int count) {}
 }
