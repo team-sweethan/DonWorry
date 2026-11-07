@@ -221,7 +221,10 @@ public class SecurityConfig {
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.GET, "/api/payment-transactions"),
                                 PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.HEAD, "/api/payment-transactions"))
+                                        .matcher(HttpMethod.HEAD, "/api/payment-transactions"),
+                                // 거래 내역 CSV 내보내기 (#651) — GET만. HEAD를 열면 본문 없이도 문지기 · 계정 정지를 탄다
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-transactions/export"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

@@ -32,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // 접근 기록 1건이 올 때마다 그 직원의 최근 기록만 다시 읽어 내부자 경보를 만든다 (#516, ADR-0082)
@@ -80,6 +81,34 @@ public class InsiderDetectionService {
             checkIns09(staffId, at, scope);
         }
         checkIns06(staffId, at);
+    }
+
+    // INS-05 경보 중 내보내기 시도 (#651) — 문지기(InsiderExportGuardService)가 부르고, 이어서 계정을 정지한다
+    // 근거 = 그때 열린 경보들의 근거 기록. 호출 쪽 롤백(차단 응답)과 따로 확정한다. 열린 경보가 없으면 null
+    // 새 트랜잭션의 첫 문장이 직원 잠금이다 — 잠금 뒤 읽는 경보가 최신 값이다(관리자 닫기 · 탐지와 같은 줄 세우기)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Long raiseExportBlock(Long staffId, Instant at) {
+        alerts.lockDetectionState(staffId);
+        List<InsiderAlert> open = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
+        List<InsiderRule> rules = open.stream()
+                .map(InsiderAlert::getRuleCode)
+                .filter(r -> r != InsiderRule.INS_05)
+                .distinct()
+                .sorted()
+                .toList();
+        if (rules.isEmpty()) return null;
+        List<InsiderAlert> causes =
+                open.stream().filter(a -> a.getRuleCode() != InsiderRule.INS_05).toList();
+        List<Long> eventIds = evidence.findAccessEventIdsOf(
+                causes.stream().map(InsiderAlert::getId).toList());
+        Instant firstAt = causes.stream()
+                .map(InsiderAlert::getFirstEventAt)
+                .min(Comparator.naturalOrder())
+                .orElse(at);
+        String summary = "열린 경보 %d개(%s) 상태에서 거래 내역 내보내기 시도 → 차단 · 계정 정지"
+                .formatted(rules.size(), rules.stream().map(InsiderRule::code).collect(Collectors.joining(" · ")));
+        return raise(staffId, InsiderRule.INS_05, InsiderAlertSeverity.CRITICAL, summary, eventIds, firstAt, at)
+                .getId();
     }
 
     // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 N개에서 막히면 주의. 같은 사건 재시도는 한 번으로 센다
@@ -249,10 +278,11 @@ public class InsiderDetectionService {
     // INS-06 경보 겹침 — 같은 직원에게 서로 다른 종류의 경보가 2개 이상 열려 있으면 높음
     // INS-08 · 09는 같은 "훑기" 행동에서 함께 나오기 쉬워 한 종류로 센다 — 훑기 하나로 높음이 되지 않게 (#643)
     // INS-06이 닫힌 적 있으면 그 뒤 새 기록이 붙은 경보만 센다 — 관리자가 정상으로 본 같은 겹침으로 다시 열지 않는다 (#627 리뷰)
+    // INS-05는 세지 않는다 — 이미 열린 경보의 결과라 같은 신호를 두 번 세게 된다 (#651)
     private void checkIns06(Long staffId, Instant at) {
         Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_06);
         List<InsiderAlert> others = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN).stream()
-                .filter(a -> a.getRuleCode() != InsiderRule.INS_06)
+                .filter(a -> a.getRuleCode() != InsiderRule.INS_06 && a.getRuleCode() != InsiderRule.INS_05)
                 .filter(a -> lastClosed == null || a.getLastEventAt().isAfter(lastClosed))
                 .toList();
         List<InsiderRule> rules = others.stream()
@@ -293,7 +323,7 @@ public class InsiderDetectionService {
     }
 
     // 사람 · 규칙당 열린 경보는 1개 — 있으면 같은 행을 갱신(등급은 올리기만), 없으면 새로 연다
-    private void raise(
+    private InsiderAlert raise(
             Long staffId,
             InsiderRule rule,
             InsiderAlertSeverity severity,
@@ -325,6 +355,7 @@ public class InsiderDetectionService {
                     .raisedAt(now)
                     .build());
         }
+        return alert;
     }
 
     // 이미 있는 근거는 다시 넣지 않는다 — 같은 기록이 다시 와도 한 줄 (DB UNIQUE가 마지막 방어)

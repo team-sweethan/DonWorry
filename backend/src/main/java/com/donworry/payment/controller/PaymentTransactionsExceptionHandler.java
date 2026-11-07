@@ -1,5 +1,7 @@
 package com.donworry.payment.controller;
 
+import com.donworry.payment.service.ExportTooLargeException;
+import com.donworry.payment.service.InsiderExportBlockedException;
 import java.time.DateTimeException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.CacheControl;
@@ -27,6 +29,20 @@ public class PaymentTransactionsExceptionHandler extends ResponseEntityException
     @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})
     ResponseEntity<Object> invalid(Exception e) {
         return problem(400, "PAYMENT_TRANSACTIONS_INVALID_QUERY", "조회 조건을 확인해주세요. 기간은 최대 31일입니다.");
+    }
+
+    @ExceptionHandler(ExportTooLargeException.class)
+    ResponseEntity<Object> tooLarge(ExportTooLargeException e) {
+        return problem(
+                400,
+                "PAYMENT_TRANSACTIONS_EXPORT_TOO_LARGE",
+                "내보낼 거래가 %,d행을 넘습니다. 기간 · 가맹점 조건을 좁혀 주세요.".formatted(e.maxRows()));
+    }
+
+    // 계정은 이미 정지 · 로그아웃됐다. 의심받는 사람에게 탐지 내용을 알리지 않게 문구는 중립으로 둔다 (#651)
+    @ExceptionHandler(InsiderExportBlockedException.class)
+    ResponseEntity<Object> insiderBlocked(InsiderExportBlockedException e) {
+        return problem(403, "INSIDER_EXPORT_BLOCKED", "보안 확인이 필요해 계정 사용이 일시 정지되었습니다. 관리자에게 문의해 주세요.");
     }
 
     @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})

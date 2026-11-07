@@ -103,6 +103,15 @@ class PaymentTransactionsHttpMariaDbTests {
             sessions.expireAll(id);
             // 조회 기록(#615)은 직원 · 가맹점 FK라 계정 · 가맹점보다 먼저 지운다
             jdbc.update("DELETE FROM staff_access_events WHERE staff_id=?", id);
+            // 내보내기 차단(#651)이 남긴 경보 · 정지 기록 · 계정 변경 이력
+            jdbc.update(
+                    "DELETE e FROM insider_alert_evidences e JOIN insider_alerts a ON a.alert_id = e.alert_id"
+                            + " WHERE a.staff_id=?",
+                    id);
+            jdbc.update("DELETE FROM insider_alerts WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM insider_detection_states WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM staff_account_locks WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM admin_change_histories WHERE target_user_id=?", id);
             jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
@@ -276,6 +285,42 @@ class PaymentTransactionsHttpMariaDbTests {
             assertThat(e.get("merchant_id")).isNull();
             assertThat(((Number) e.get("item_count")).intValue()).isZero();
         });
+    }
+
+    // 열린 내부자 경보가 있는 보안 직원의 내보내기는 파일 없이 403이다. 응답 트랜잭션이 롤백돼도
+    // 계정 정지 · 위험 경보(INS-05) · 거부 기록은 남고, 그 세션은 끊긴다 (#651)
+    @Test
+    void export_whenStaffHasOpenInsiderAlert_blocksAndKeepsSuspension() throws Exception {
+        payment(merchantId, prefix + "-cust", now.minus(Duration.ofHours(1)), false);
+        long staffId = jdbc.queryForObject(
+                "SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "staff");
+        jdbc.update(
+                "INSERT INTO insider_alerts(staff_id,rule_code,severity,status,summary,first_event_at,last_event_at,created_at,updated_at)"
+                        + " VALUES (?,'INS_03','CAUTION','OPEN','테스트 경보',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+                staffId);
+
+        var response = send(staff, "GET", PATH + "/export?merchantId=" + merchantId);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(403);
+        assertThat(response.body()).contains("INSIDER_EXPORT_BLOCKED").doesNotContain(prefix + "-cust");
+        assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, staffId))
+                .isEqualTo("SUSPENDED");
+        assertThat(jdbc.queryForList(
+                        "SELECT reason_code FROM staff_account_locks WHERE staff_id=? AND status='OPEN'",
+                        String.class,
+                        staffId))
+                .containsExactly("INSIDER_EXPORT_BLOCKED");
+        assertThat(jdbc.queryForList(
+                        "SELECT severity FROM insider_alerts WHERE staff_id=? AND rule_code='INS_05' AND status='OPEN'",
+                        String.class,
+                        staffId))
+                .containsExactly("CRITICAL");
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_EXPORT");
+            assertThat(e.get("result")).isEqualTo("DENIED");
+            assertThat(e.get("deny_reason")).isEqualTo("INSIDER_ALERT_OPEN");
+        });
+        assertThat(send(staff, "GET", PATH).statusCode()).isEqualTo(401);
     }
 
     private List<Map<String, Object>> accessEvents(String suffix) {

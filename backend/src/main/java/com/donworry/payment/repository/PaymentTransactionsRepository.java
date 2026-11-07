@@ -27,6 +27,16 @@ public class PaymentTransactionsRepository {
                 .toList();
     }
 
+    // CSV 내보내기 (#651) — 쪽 나눔 없이 최신순으로 limit행까지. 호출 쪽은 상한 + 1로 불러 넘침을 판단한다
+    public List<PaymentTransactionRow> findForExport(PaymentTransactionsQueryRequest query, int limit) {
+        var rows = entityManager.createQuery(
+                "select p, r" + FROM + where(query) + " order by p.paymentId desc", Object[].class);
+        parameters(query).forEach(rows::setParameter);
+        return rows.setMaxResults(limit).getResultList().stream()
+                .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]))
+                .toList();
+    }
+
     public long count(PaymentTransactionsQueryRequest query) {
         var count = entityManager.createQuery("select count(p)" + FROM + where(query), Long.class);
         parameters(query).forEach(count::setParameter);
