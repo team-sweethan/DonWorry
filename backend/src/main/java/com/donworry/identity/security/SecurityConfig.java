@@ -281,7 +281,9 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist/status"),
                                 paths.matcher(HttpMethod.POST, "/api/fds/blocklist"),
-                                paths.matcher(HttpMethod.PUT, "/api/fds/blocklist/{entryId}/deactivate"))
+                                paths.matcher(HttpMethod.PUT, "/api/fds/blocklist/{entryId}/deactivate"),
+                                // 경보 상세 차단 후보 등록 (#603). 등록 자체는 FdsBlocklistService가 SECURITY_STAFF만 허용
+                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/{evaluationId}/blocklist-entries"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

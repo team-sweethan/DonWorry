@@ -173,6 +173,34 @@ class FdsEvidenceQueryServiceTests {
                 .isEqualTo(new PaymentSignals(null, false, false, null, false));
     }
 
+    // #603 전에 저장한 R07 근거의 이메일 원문은 P3 · P4로 넘기기 전에 가린다
+    @Test
+    void evidence_withRawEmailInR07_returnsMaskedEmail() {
+        var deny = evaluation(105L, FdsResult.DENY, Instant.parse("2026-10-26T01:00:00Z"));
+        deny.addRuleHit(
+                "R07",
+                FdsRuleHitOutcome.MATCH,
+                100,
+                "차단 목록",
+                "{\"active\":true}",
+                "{\"buyerRef\":\"hong-gildong\",\"buyerEmail\":\"hong@example.test\","
+                        + "\"matchedIdentifierTypes\":[\"BUYER_EMAIL\"]}",
+                null,
+                null);
+        var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
+                .willReturn(List.of(deny));
+
+        var result = queryService.findLatestByPaymentIds(List.of(105L));
+
+        assertThat(result.getFirst().matchedRules())
+                .singleElement()
+                .satisfies(rule -> assertThat(rule.observedValue())
+                        .contains("\"maskedBuyerEmail\":\"ho***@example.test\"")
+                        .contains("\"matchedIdentifierTypes\":[\"BUYER_EMAIL\"]")
+                        .doesNotContain("hong@example.test"));
+    }
+
     private FdsEvaluation evaluation(Long paymentId, FdsResult result, Instant evaluatedAt) {
         var request = new FdsEvaluationRequest(
                 UUID.randomUUID(),

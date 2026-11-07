@@ -206,7 +206,9 @@ class FdsEvaluationTransactionService {
                         + ",\"cardToken\":" + json(request.cardToken())
                         + ",\"cardDisplayLabel\":" + json(request.cardDisplayLabel())
                         + ",\"ipAddress\":" + json(request.ipAddress())
-                        + ",\"buyerEmail\":" + json(request.buyerEmail())
+                        // 근거에는 원문을 복사하지 않는다 (#603). 대조는 위 blockedIdentifierTypes가 원문으로 한다
+                        + ",\"" + FdsIdentifierMasking.MASKED_EMAIL_KEY + "\":"
+                        + json(FdsIdentifierMasking.email(request.buyerEmail()))
                         + ",\"matchedIdentifierTypes\":" + json(blockedIdentifierTypes) + "}");
         evaluation.addRuleHit(
                 "R08",
