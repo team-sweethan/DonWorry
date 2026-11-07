@@ -7,7 +7,6 @@ import type {
   ReportRuleHitDetail,
 } from '../../../types/case'
 import {
-  BASIS_RULE_ROWS,
   basisGroups,
   markSignals,
   normalNote,
@@ -19,8 +18,8 @@ import {
   type SummaryLink,
 } from '../../../utils/reportView'
 
-// 판정 근거 화면 (#501) — 조사 요약(AI 해석)과 "왜 이 판정인가요?"(기준표 판정 근거)
-// 코드가 쓴 판정 이유는 조사 요약이 아니라 "왜 이 판정인가요?"에 둔다 (#543)
+// 징후 · 정상 근거 화면 (#501) — 조사 요약(AI 해석)과 결제별 "징후와 정상 거래 근거"
+// 판정 권고 · 기준표 칸 · 판정 이유는 #644에서 뺐다 (ADR-0009 결정 13)
 
 // 고위험 빨강 · 주의 노랑 · 정상 초록 — 밑줄과 근거 칸이 같은 색을 쓴다
 const levelTone: Record<MarkKind, { bg: string; border: string; text: string; line: string }> = {
@@ -129,15 +128,13 @@ function goToCard(target: string) {
   })
 }
 
-// 왜 이 판정인가요? — 판정 이유 · 고위험 징후 · 주의 징후 · 정상 거래 근거 · 판정 기준표
-// reason: 코드가 쓴 판정 이유 (#532), details: FDS 규칙 기록 — 규칙 징후 줄에 점수 · 증거 번호를 붙인다 (#543)
+// 징후와 정상 거래 근거 — 고위험 징후 · 주의 징후 · 정상 거래 근거
+// details: FDS 규칙 기록 — 규칙 징후 줄에 점수 · 증거 번호를 붙인다 (#543)
 export function WhyCard({
   basis,
-  reason,
   details,
 }: {
   basis: DecisionBasis
-  reason?: string
   details?: ReportRuleHitDetail[]
 }) {
   const { highRisk, caution } = basisGroups(basis)
@@ -149,17 +146,12 @@ export function WhyCard({
     <div style={whyStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1E3A8A' }}>
-          왜 이 판정인가요?
+          징후와 정상 거래 근거
         </h3>
         <span style={{ fontSize: 12, color: '#475569' }}>
-          돈워리 판정 기준표로 정리했습니다. 같은 근거면 언제나 같은 판정이 나옵니다.
+          판정은 보안 직원이 근거를 확인한 뒤 합니다.
         </span>
       </div>
-      {reason && (
-        <div style={{ fontSize: 14, color: '#1E3A8A' }}>
-          <b>판정 이유</b> · {reason}
-        </div>
-      )}
       <Group title="고위험 징후" note="정상 고객에게는 거의 나타나지 않는 신호" color="#991B1B">
         {highRisk.length === 0 ? <None /> : highRisk.map(row)}
       </Group>
@@ -173,25 +165,6 @@ export function WhyCard({
           basis.normals.map((n) => <NormalRow key={n.key} n={n} />)
         )}
       </Group>
-      <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E3A8A', marginBottom: 8 }}>
-          판정 기준표
-        </div>
-        <div style={ruleGridStyle}>
-          {BASIS_RULE_ROWS.map((row) => {
-            const hit = row.rule === basis.rule
-            return (
-              <div key={row.rule} style={hit ? ruleHitStyle(basis) : ruleStyle}>
-                {hit && <b>✓ 이 결제 </b>}
-                {row.text}
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>
-          기준표 판정은 참고용입니다. 최종 판정은 보안 직원이 근거를 확인한 뒤 합니다.
-        </div>
-      </div>
     </div>
   )
 }
@@ -276,17 +249,6 @@ function None({ text = '없음' }: { text?: string }) {
   return <span style={{ fontSize: 13, color: '#94A3B8' }}>{text}</span>
 }
 
-// 걸린 칸 색은 그 칸의 판정 색 — 승인 취소 빨강 · 추가 확인 노랑 · 매입 진행 초록
-function ruleHitStyle(basis: DecisionBasis): CSSProperties {
-  const tone =
-    basis.recommendation === 'REJECT_REVIEW'
-      ? { bg: '#FEE2E2', border: '#B91C1C', text: '#7F1D1D' }
-      : basis.recommendation === 'ACCEPT_REVIEW'
-        ? { bg: '#DCFCE7', border: '#15803D', text: '#14532D' }
-        : { bg: '#FEF3C7', border: '#B45309', text: '#78350F' }
-  return { ...ruleStyle, background: tone.bg, border: `2px solid ${tone.border}`, color: tone.text }
-}
-
 const linkStyle: CSSProperties = {
   background: 'none',
   border: 'none',
@@ -361,17 +323,4 @@ const pillStyle: CSSProperties = {
   padding: '3px 8px',
   borderRadius: 6,
   background: '#FFFFFF',
-}
-const ruleGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-  gap: 8,
-  fontSize: 13,
-}
-const ruleStyle: CSSProperties = {
-  border: '1px solid #E2E8F0',
-  background: '#FFFFFF',
-  color: '#475569',
-  borderRadius: 8,
-  padding: '8px 10px',
 }

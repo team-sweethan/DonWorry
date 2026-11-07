@@ -131,7 +131,9 @@ export type CaseHistory = {
 }
 
 // ── AI 보고서 (기획 2.7 표준 구성) — report_body 키 표기는 P4와 확정 전 ──
-export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
+// 판정 권고(승인 취소 검토 · 추가 확인 · 매입 진행 검토)는 #644에서 뺐다 (ADR-0009 결정 13)
+// 예전 보고서에는 recommendation · reason · basis.rule · verdict · recommendation.summary 값이 남아 있지만
+// 화면은 읽지 않는다 — 타입에서 지워 읽는 코드가 생기지 않게 한다
 
 // 판정 근거 (#501) — ai-server app/schemas/report.py의 DecisionBasis와 같게 둔다
 // level: 고위험 징후(HIGH_RISK) · 주의 징후(CAUTION), normalReason이 null이면 정상 사유 없음
@@ -154,14 +156,9 @@ export type NormalBasis = {
   explains: string[]
 }
 
-export type BasisRule =
-  'HIGH_RISK_WITH_OTHERS' | 'HIGH_RISK_ONLY' | 'CAUTION_ONLY' | 'ALL_EXPLAINED'
-
 export type DecisionBasis = {
   signals: BasisSignal[]
   normals: NormalBasis[]
-  rule: BasisRule
-  recommendation: AiRecommendation
 }
 
 // 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 evidence 목록의 같은 ID 줄
@@ -175,7 +172,7 @@ export type ReportRuleHitDetail = {
   observed?: string | null
 }
 
-// verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
+// ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
 // 사실 번호별 원래 사실 (#548) — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
 // paymentId는 접속 정보처럼 결제 하나의 사실일 때만 있다 (#559)
 export type ReportFact = {
@@ -217,12 +214,10 @@ export type ReportBody = {
     ruleHits: string[]
     // 위험 근거 · 정상 정황(AI 문장)은 #548에서 없앴다 — 예전 보고서에 남아 있어도 보여 주지 않는다
     unknowns: string[]
-    recommendation: AiRecommendation
-    reason?: string
     ruleHitDetails?: ReportRuleHitDetail[]
     // 카드 · 기기 · 접속 국가 (#346) — 없으면(undefined) 예전 보고서, null이면 FDS 평가 없음
     signals?: PaymentSignals | null
-    // 판정 근거 · 기준표 판정 (#501) — 없으면 그 전 보고서
+    // 징후 · 정상 근거 · 확인할 것 (#501) — 없으면 그 전 보고서
     basis?: DecisionBasis | null
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
@@ -230,7 +225,8 @@ export type ReportBody = {
   // 사실 번호 목록 (#548) — 요약 링크가 번호의 주제로 표 카드를 찾는다. 종합 분석 · 주제별 문장은 없앴다
   facts?: ReportFact[]
   additionalChecks: string[]
-  recommendation: { summary: string; limitations: string[] }
+  // 한계 줄 — 권고 요약(summary)은 #644에서 뺐다. scope가 없는 보고서는 이 줄로 조사 범위를 대신한다
+  recommendation: { limitations: string[] }
   evidence: Array<{
     toolName: string
     source: string
@@ -238,9 +234,6 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
-  // headline은 결론 한 줄 — #532부터 코드가 기준표 판정으로 쓴다(그 전 보고서는 AI 문장)
-  // overallRecommendation은 결제별 권고로 코드가 계산
-  verdict?: { headline: string; overallRecommendation: AiRecommendation }
   // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
   investigationTrace?: InvestigationTrace
   // 비슷한 과거 사건 (#296) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
@@ -250,7 +243,7 @@ export type ReportBody = {
   // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   linkedPayments?: LinkedPayments | null
   // 아래 3칸은 #591 — 예전 보고서 · 고정 보고서(AI 끔)에는 없다
-  // 사건 개요 한 줄 (코드가 씀). 없으면 verdict.headline으로 대신한다
+  // 사건 개요 한 줄 (코드가 씀). 없는 예전 보고서는 overview 숫자로 화면이 만든다 (결론 한 줄 verdict.headline은 권고 문장이라 쓰지 않는다, #644)
   caseOverview?: string | null
   // 안전망 — AI가 끝내 빠뜨린 눈여겨볼 사실 번호. "시스템이 덧붙임"으로 보여 준다
   summaryAppended?: string[]

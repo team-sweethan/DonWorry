@@ -1,27 +1,21 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { Alert, Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
 import { getMlShadowScores } from '../../../api/mlShadowScores'
-import type { AiRecommendation, ReportBody } from '../../../types/case'
+import type { ReportBody } from '../../../types/case'
 import {
   appendedFactTexts,
   caseNormals,
   caseSignals,
   checkRows,
   durationText,
-  isCodeReason,
   mlReportLine,
-  recommendationSource,
-  recommendationSummaryTitle,
-  reportRecommendationSource,
   ruleEvidenceRows,
   signalTexts,
   paymentCardId,
-  summaryBoxLines,
   summaryFold,
   summaryLines,
   traceProviderLabel,
   fixedReportNotice,
-  type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
 import {
@@ -32,7 +26,7 @@ import {
   type MlScores,
 } from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
-import { dateTime, recommendationLabel } from './caseLabels'
+import { dateTime } from './caseLabels'
 import { SummaryBox, WhyCard } from './BasisCard'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { OrderContextCard } from './OrderContextCard'
@@ -40,7 +34,8 @@ import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { ReportConclusion } from './ReportConclusion'
 import { SimilarCasesCard } from './SimilarCasesCard'
 
-// AI 보고서 전문 — 결론 먼저 (#591): ① 결론 → ② 사건 경위 → ③ 연결 → ④ 판정 근거 상세 → ⑤ 조사 범위 · 한계
+// AI 보고서 전문 (#591): ① 사건 요약 → ② 사건 경위 → ③ 연결 → ④ 결제별 근거 → ⑤ 조사 범위 · 한계
+// 판정 권고는 #644에서 뺐다 — 보고서는 자료와 확인할 것만, 판정은 보안 직원 (ADR-0009 결정 13)
 // ①은 코드가 쓴 칸만, AI 문장(조사 요약)은 ③에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
 // AI 요약 문장 끝 링크가 표 카드로 이동한다 — 카드 id는 summaryLines의 target과 같다 (#559)
 
@@ -60,7 +55,6 @@ export function ReportFull({
   onDecide?: () => void
 }) {
   const summary = summaryLines(body)
-  const source = reportRecommendationSource(body)
   const ml = useMlScores(
     body.paymentAnalyses.map((p) => p.paymentId),
     refreshKey,
@@ -79,7 +73,6 @@ export function ReportFull({
       <ReportConclusion
         body={body}
         label={label}
-        source={source}
         checked={checked}
         onToggle={toggle}
         onDecide={onDecide}
@@ -125,8 +118,7 @@ export function ReportFull({
         style={{ ...anchorStyle, display: 'flex', flexDirection: 'column', gap: 16 }}
       >
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 }}>
-          <span className="dw-section-title">④ 판정 근거 상세 — 왜 이 판정인가요?</span>
-          <span style={{ color: '#94A3B8', fontSize: 12 }}>같은 근거면 언제나 같은 판정</span>
+          <span className="dw-section-title">④ 결제별 근거</span>
         </div>
         {body.paymentAnalyses.map((p) => (
           <div key={p.paymentId} id={paymentCardId(p.paymentId)} style={anchorStyle}>
@@ -144,37 +136,26 @@ export function ReportFull({
           },
         ]}
       />
-      <DecisionBar body={body} source={source} checked={checked} onDecide={onDecide} />
+      <DecisionBar body={body} checked={checked} onDecide={onDecide} />
     </div>
   )
 }
 
-// 화면 아래 고정 판정 줄 — 기준표 판정 · 확인 n/전체 · 남은 번호 · [판정하러 가기]
+// 화면 아래 고정 줄 — 확인 n/전체 · 남은 번호 · [판정하러 가기]
 function DecisionBar({
   body,
-  source,
   checked,
   onDecide,
 }: {
   body: ReportBody
-  source: RecommendationSource
   checked: string[]
   onDecide?: () => void
 }) {
-  const overall = body.verdict?.overallRecommendation
   const rows = checkRows(body)
-  if (!overall && !onDecide) return null
+  if (rows.length === 0 && !onDecide) return null
   const left = rows.filter((r) => !checked.includes(r.id)).map((r) => r.row)
   return (
     <div style={barStyle}>
-      {overall && (
-        <>
-          <span style={{ fontSize: 13, color: '#475569' }}>{source}</span>
-          <span style={{ ...chipStyle, ...recLight[overall], border: '1px solid currentColor' }}>
-            {recommendationLabel[overall].label}
-          </span>
-        </>
-      )}
       {rows.length > 0 && (
         <>
           <span style={{ fontSize: 14 }}>
@@ -265,10 +246,9 @@ function ScopeColumn({
   )
 }
 
-// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 왜 이 판정인가요?
-// 조사 요약은 ③에 있다. 여기 요약 칸은 AI가 결제별 이유를 쓰던 예전 보고서(#501~#532)만
+// 결제 하나의 근거 — 징후 목록이 있으면 징후와 정상 거래 근거, 없으면(예전 보고서) 적중 규칙
+// 결제별 이유(reason)는 권고를 설명하던 문장이라 보여 주지 않는다 (#644). 조사 요약은 ③에 있다
 function PaymentEvidence({ analysis: p, ml }: { analysis: PaymentAnalysis; ml: string }) {
-  const source = recommendationSource(p)
   return (
     <Card
       style={cardStyle}
@@ -281,26 +261,15 @@ function PaymentEvidence({ analysis: p, ml }: { analysis: PaymentAnalysis; ml: s
           </span>
         </span>
       }
-      extra={<RecTag rec={p.recommendation} source={source} />}
     >
       {p.signals !== undefined && <SignalLine signals={p.signals} />}
       {p.basis ? (
         <>
-          <SummaryBox lines={summaryBoxLines([], p)} basis={p.basis} />
-          <WhyCard
-            basis={p.basis}
-            reason={isCodeReason(p.reason) ? p.reason : undefined}
-            details={p.ruleHitDetails}
-          />
+          <WhyCard basis={p.basis} details={p.ruleHitDetails} />
           <MlLine text={ml} />
         </>
       ) : (
         <>
-          {p.reason && (
-            <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
-              <AiTag /> {p.reason}
-            </p>
-          )}
           <MlLine text={ml} />
           <RuleCompare analysis={p} />
         </>
@@ -384,7 +353,6 @@ function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
 
 function MoreInfo({ body }: { body: ReportBody }) {
   const { overview } = body
-  const ruleTable = reportRecommendationSource(body) === '기준표 판정'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Descriptions size="small" column={2} colon={false} title="사건 개요">
@@ -396,11 +364,10 @@ function MoreInfo({ body }: { body: ReportBody }) {
         <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
       </Descriptions>
       <div>
-        <SubTitle>{recommendationSummaryTitle(body)}</SubTitle>
-        <p style={{ fontSize: 13, margin: '0 0 6px' }}>{body.recommendation.summary}</p>
+        <SubTitle>조사 한계</SubTitle>
         <Bullets items={body.recommendation.limitations} />
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {ruleTable ? '기준표 판정은' : 'AI 권고는'} 참고용이며 최종 판정은 직원이 결제별로 합니다.
+          최종 판정은 직원이 결제별로 합니다.
         </Typography.Text>
       </div>
       <div>
@@ -465,21 +432,6 @@ export function ScoreGauge({ score, dark = false }: { score: number | null; dark
         (사기 확률 아님)
       </text>
     </svg>
-  )
-}
-
-const recLight: Record<AiRecommendation, CSSProperties> = {
-  REJECT_REVIEW: { background: '#FEE2E2', color: '#991B1B' },
-  ACCEPT_REVIEW: { background: '#DCFCE7', color: '#166534' },
-  NEEDS_CHECK: { background: '#FEF3C7', color: '#92400E' },
-}
-
-// 결제 카드 오른쪽 위 판정 꼬리표 — "기준표 판정 · 승인 취소 검토"
-function RecTag({ rec, source }: { rec: AiRecommendation; source: RecommendationSource }) {
-  return (
-    <span style={{ ...chipStyle, ...recLight[rec], border: '1px solid currentColor' }}>
-      {source} · {recommendationLabel[rec].label}
-    </span>
   )
 }
 
@@ -584,15 +536,6 @@ const signalLineStyle: CSSProperties = {
   padding: '8px 12px',
   background: '#F8FAFC',
   borderRadius: 8,
-}
-const chipStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 11px',
-  borderRadius: 7,
-  fontSize: 12.5,
-  fontWeight: 700,
 }
 const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
 const mlLineStyle: CSSProperties = {

@@ -1,7 +1,5 @@
 import type {
-  AiRecommendation,
   AiReport,
-  BasisRule,
   CaseDetail,
   BasisSignal,
   DecisionBasis,
@@ -14,17 +12,12 @@ import type {
   TraceStep,
 } from '../types/case.ts'
 import { latestReport } from './caseRules.ts'
+import { won } from './format.ts'
 import type { MlCell } from './transactionList.ts'
 
 // AI 보고서 화면(요약 카드 · 전문 페이지) 표시 규칙. React 없이 테스트한다.
 
 type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
-
-// 결론 카드의 한 줄. #288 전에 저장된 보고서는 결론이 없어 null
-export function reportHeadline(body: ReportBody): string | null {
-  const headline = body.verdict?.headline.trim()
-  return headline ? headline : null
-}
 
 // 결론 카드의 큰 숫자 = FDS 점수 최댓값. 조회 못 한 점수(null)는 0으로 세지 않는다
 export function topRiskScore(scores: Array<number | null>): number | null {
@@ -104,7 +97,7 @@ export function traceProviderLabel(
 // 이유가 없는 예전 고정 보고서는 그때 기준표가 없었을 수 있어 "기준표는 같다"고 쓰지 않는다
 export function fixedReportNotice(trace: InvestigationTrace | undefined): string | null {
   if (trace?.provider !== 'FIXED') return null
-  const same = '조회 결과와 판정 기준표는 AI 보고서와 같고, AI 요약과 추가 조사는 없습니다.'
+  const same = '조회 결과와 징후 · 확인할 것은 AI 보고서와 같고, AI 요약과 추가 조사는 없습니다.'
   if (trace.fixedReason === 'ADMIN_STOPPED')
     return `AI 조사 긴급정지 중에 만든 고정 보고서입니다. ${same}`
   if (trace.fixedReason === 'CONFIG_OFF')
@@ -193,40 +186,7 @@ export function elapsedText(createdAt: string, now: number): string {
   return `${Math.floor(seconds / 60)}분 ${seconds % 60}초`
 }
 
-// ── 판정 근거 화면 (#501) ──
-
-// 권고 앞말 — 판정 근거가 있으면 기준표(코드)가 정한 판정, 없으면 예전 보고서의 AI 권고
-export type RecommendationSource = '기준표 판정' | 'AI 권고'
-
-export function recommendationSource(
-  analysis: Pick<PaymentAnalysis, 'basis'> | null | undefined,
-): RecommendationSource {
-  return analysis?.basis ? '기준표 판정' : 'AI 권고'
-}
-
-// 종합 권고 앞말 — 모든 결제에 판정 근거가 있을 때만 기준표 판정
-export function reportRecommendationSource(body: ReportBody): RecommendationSource {
-  const all = body.paymentAnalyses.length > 0 && body.paymentAnalyses.every((p) => p.basis)
-  return all ? '기준표 판정' : 'AI 권고'
-}
-
-// "기준표 판정과 다름" · "AI 권고와 다름"처럼 조사를 붙인다
-export const sourceWith: Record<RecommendationSource, string> = {
-  '기준표 판정': '기준표 판정과',
-  'AI 권고': 'AI 권고와',
-}
-
-// 판정 기준표 4칸 — Spring DecisionBasisCalculator의 칸과 같은 순서 (#618)
-export const BASIS_RULE_ROWS: Array<{ rule: BasisRule; text: string }> = [
-  {
-    rule: 'HIGH_RISK_WITH_OTHERS',
-    text: '고위험 징후 + 정상 사유 없는 다른 징후 → 승인 취소 검토',
-  },
-  { rule: 'HIGH_RISK_ONLY', text: '고위험 징후 하나만 정상 사유 없음 → 추가 확인' },
-  { rule: 'CAUTION_ONLY', text: '주의 징후만 정상 사유 없음 → 추가 확인' },
-  // 징후가 0개인 결제도 이 칸이다 (#618)
-  { rule: 'ALL_EXPLAINED', text: '정상 사유 없는 징후 없음 → 매입 진행 검토' },
-]
+// ── 징후 · 정상 근거 (#501, 판정 권고는 #644에서 뺐다) ──
 
 // 징후를 고위험 · 주의로 나눈다
 export function basisGroups(basis: DecisionBasis): {
@@ -387,27 +347,6 @@ export function compareReport(
   }
 }
 
-export type VerdictLines = {
-  overall: AiRecommendation | null
-  payments: Array<{ paymentId: string; recommendation: AiRecommendation }>
-}
-
-// 종합 권고 · 결제별 권고 줄 — 결제가 2건 이상이거나 결론이 없는 예전 보고서면 결제별로 보여 준다
-// 보고서 전문 · 비교 화면이 같은 규칙을 쓴다 (#501 리뷰)
-export function verdictLines(body: ReportBody): VerdictLines {
-  const overall = body.verdict?.overallRecommendation ?? null
-  const perPayment = body.paymentAnalyses.length > 1 || overall === null
-  return {
-    overall,
-    payments: perPayment
-      ? body.paymentAnalyses.map((p) => ({
-          paymentId: String(p.paymentId),
-          recommendation: p.recommendation,
-        }))
-      : [],
-  }
-}
-
 // 판정 진행 — 고객이 직접 취소한 결제는 판정 대상이 아니라 남은 건수에서 뺀다 (#501 리뷰)
 // 일부만 판정한 사건은 판정 끝이 아니다 (CaseFlowTests.decidePartially_keepsWaiting…)
 export function decisionProgress(
@@ -419,56 +358,6 @@ export function decisionProgress(
   ).length
   const done = detail.securityCase.status === 'CLOSED' || (remaining === 0 && decidedIds.size > 0)
   return { decided: detail.decisions.length, remaining, done }
-}
-
-// ── 코드 문장과 AI 문장 구분 (#543) ──
-// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓰고 AI는 사실 설명만 쓴다
-
-// 결론 · 권고 요약을 코드가 쓴 보고서인지 (#546 리뷰)
-// #501 ~ #532 사이 보고서는 판정 근거가 있어도 AI가 썼다 — #532에서 결제별 이유와 함께 코드로 바뀌어 이유로 알아본다
-function isCodeWrittenReport(body: ReportBody): boolean {
-  return (
-    reportRecommendationSource(body) === '기준표 판정' &&
-    body.paymentAnalyses.every((p) => isCodeReason(p.reason))
-  )
-}
-
-// 결론 카드 작은 제목 — 기준표 보고서면 "기준표 판정", 예전 보고서는 AI가 쓴 결론이라 그대로
-export function verdictCardTitle(body: ReportBody): '기준표 판정' | 'AI 조사 요약' {
-  return isCodeWrittenReport(body) ? '기준표 판정' : 'AI 조사 요약'
-}
-
-// 상세 정보의 권고 요약 제목
-export function recommendationSummaryTitle(
-  body: ReportBody,
-): '권고 요약 (기준표)' | 'AI 권고 원문' {
-  return isCodeWrittenReport(body) ? '권고 요약 (기준표)' : 'AI 권고 원문'
-}
-
-// 코드가 쓴 결제별 이유의 시작 말 — ai-server app/agent/verdict_text.py payment_reason과 같은 문장
-const CODE_REASON_STARTS = [
-  '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다',
-  '정상 사유가 없는 고위험 징후가 있습니다',
-  '정상 사유가 없는 주의 징후가 있습니다',
-  '모든 징후에 정상 사유가 있습니다',
-  '적중한 징후가 없습니다',
-  'FDS 평가 결과를 확인하지 못했습니다',
-  // Spring 판정 기준표를 받지 못한 결제 (#618)
-  '판정 기준표를 받지 못해 추가 확인이 필요합니다',
-]
-
-// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 시작 말로 코드 이유만 골라낸다
-export function isCodeReason(reason: string | undefined): boolean {
-  return !!reason && CODE_REASON_STARTS.some((start) => reason.startsWith(start))
-}
-
-// 조사 요약 박스(AI 해석)에 넣을 문장 — 코드 이유는 "왜 이 판정인가요?"로 옮기고 AI 이유만 남긴다
-export function summaryBoxLines(
-  summary: string[],
-  analysis: Pick<PaymentAnalysis, 'reason'>,
-): string[] {
-  const reason = analysis.reason
-  return reason && !isCodeReason(reason) ? [...summary, reason] : summary
 }
 
 // ── 요약 문장 끝 표 링크 (#559) ──
@@ -558,7 +447,7 @@ export function signalRecordText(record: SignalRuleRecord): string {
 }
 
 // ── ML 참고 위험도 (#544) ──
-// 판정(기준표)에 쓰지 않는 참고 점수 (ADR-0061) — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
+// 판정에 쓰지 않는 참고 점수 (ADR-0061) — 거래 내역 "ML 참고" 칸(mlCell)과 같은 상태 · 숫자를 문장으로
 export function mlReportLine(cell: MlCell): string {
   switch (cell.kind) {
     case 'scored':
@@ -580,17 +469,18 @@ export function mlReportLine(cell: MlCell): string {
 
 // ── 결론 먼저 보고서 (#591) ──
 
-// 사건 개요 한 줄 — 코드가 쓴 개요, 없으면(예전 · 고정 보고서) 결론 한 줄로 대신한다
-export function overviewText(body: ReportBody): { text: string | null; byCode: boolean } {
+// 사건 개요 한 줄 — 코드가 쓴 개요, 없으면(예전 · 고정 보고서) 결제 건수 · 합계로 만든다
+// 예전 보고서의 결론 한 줄(verdict.headline)은 권고 문장이라 쓰지 않는다 (#644, ADR-0009 결정 13)
+export function overviewText(body: ReportBody): string {
   const overview = body.caseOverview?.trim()
-  if (overview) return { text: overview, byCode: true }
-  return { text: reportHeadline(body), byCode: false }
+  if (overview) return overview
+  return `결제 ${body.overview.paymentCount}건 · 합계 ${won(body.overview.totalAmount)}`
 }
 
 // 결론 표 한 줄 — openPaymentIds: 이 징후가 풀리지 않은 결제, mixed: 결제마다 정상 사유가 달라 일부만 풀림
 export type ConclusionSignal = BasisSignal & { openPaymentIds: string[]; mixed: boolean }
 
-// 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것 (기준표가 판정에 센 것)
+// 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것
 const isOpen = (s: BasisSignal) => !s.normalReason && !s.countedIn
 
 // 결론 표 징후 — 같은 징후는 한 줄로 묶되, 한 결제라도 풀리지 않았으면 풀리지 않은 쪽을 남긴다
@@ -624,18 +514,6 @@ export function checkRows(body: ReportBody): Array<{ id: string; row: number }> 
   return signals.flatMap((s, i) =>
     isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
   )
-}
-
-// 판정 세 칸 아래 안내 한 줄
-// 판정 근거가 없는 보고서(AI를 끈 고정 보고서 · 예전 보고서)는 정상 사유를 알 수 없다 — "모두 정상 사유"로 세지 않는다 (#591 Codex 리뷰)
-export function conclusionGuide(body: ReportBody): string {
-  const signals = conclusionSignals(body)
-  if (signals === null)
-    return '판정 근거가 없는 보고서라 정상 사유를 확인할 수 없습니다. 아래 근거를 직접 확인한 뒤 판정하세요.'
-  const open = signals.filter(isOpen)
-  return open.length > 0
-    ? `정상 사유가 없는 징후 ${open.length}개 — 아래 표의 확인할 것으로 정상 사유가 나오면 매입 진행 쪽, 부정 정황이 나오면 승인 취소 쪽으로 판단합니다.`
-    : '정상 사유가 없는 징후가 없습니다. 아래 근거를 확인한 뒤 판정하세요.'
 }
 
 // 처음에 보여 줄 요약 문장 수 — 나머지는 [더 보기]

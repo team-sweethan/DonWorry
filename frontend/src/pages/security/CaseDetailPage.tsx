@@ -443,7 +443,6 @@ export function CaseDetailPage() {
             key={securityCase.evidenceVersion}
             payments={payments}
             decisions={decisions}
-            reports={reports}
             mode={mode}
             evidenceVersion={securityCase.evidenceVersion}
             onSubmit={handleSubmit}

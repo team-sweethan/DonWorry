@@ -10,11 +10,10 @@ import {
   elapsedText,
   hasReadableReport,
   liveCurrentTask,
-  reportHeadline,
-  reportRecommendationSource,
+  overviewText,
   topRiskScore,
 } from '../../../utils/reportView'
-import { dateTime, recommendationLabel, reportStatusLabel } from './caseLabels'
+import { dateTime, reportStatusLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
 import { ScoreGauge } from './ReportFull'
 
@@ -106,18 +105,13 @@ export function ReportCard({
                 <ScoreGauge score={topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))} />
               </div>
               <div>
+                {/* 판정 권고는 #644에서 뺐다 — 사건 개요만 보여 주고 판정은 직원이 한다 (ADR-0009 결정 13) */}
                 <Typography.Paragraph strong style={{ fontSize: 16, marginBottom: 6 }}>
-                  {reportHeadline(body) ??
-                    '결론 항목이 생기기 전 보고서입니다. 전문에서 요약과 근거를 확인하세요.'}
+                  {overviewText(body)}
                 </Typography.Paragraph>
-                {body.verdict && (
-                  <Space size={6}>
-                    <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                      {reportRecommendationSource(body)}
-                    </Typography.Text>
-                    <CodeTag value={recommendationLabel[body.verdict.overallRecommendation]} />
-                  </Space>
-                )}
+                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                  전문에서 징후와 판정 전에 확인할 것을 보세요.
+                </Typography.Text>
               </div>
             </div>
           )}

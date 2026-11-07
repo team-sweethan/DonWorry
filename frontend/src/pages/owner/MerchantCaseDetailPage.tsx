@@ -9,7 +9,7 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { MerchantCaseDetail, MerchantPaymentResult } from '../../types/merchantCase'
 import { won } from '../../utils/format'
-import { dateTime, paymentStatusLabel, recommendationLabel } from '../security/case/caseLabels'
+import { dateTime, paymentStatusLabel } from '../security/case/caseLabels'
 import { CodeTag } from '../security/case/CodeTag'
 import { isApplyingDecision, merchantCaseStatusLabel, merchantDecisionLabel } from './ownerLabels'
 
@@ -109,14 +109,7 @@ export function MerchantCaseDetailPage() {
         </Space>
       ),
     },
-    {
-      // 보안 검토 권고 (#501) — 기준표 판정 · 예전 AI 권고 모두 같은 이름으로 보여 준다
-      title: '검토 권고',
-      dataIndex: 'aiRecommendation',
-      width: 130,
-      render: (v: MerchantPaymentResult['aiRecommendation']) =>
-        v ? <CodeTag value={recommendationLabel[v]} /> : '-',
-    },
+    // AI 검토 권고 칸은 #644에서 뺐다 — 판정은 보안 담당자가 한다 (ADR-0009 결정 13)
   ]
 
   return (
