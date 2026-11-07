@@ -1,8 +1,6 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.InsiderExportGuard;
-import com.donworry.fds.entity.InsiderAlertStatus;
-import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockReason;
 import java.time.Instant;
@@ -16,13 +14,13 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 class InsiderExportGuardService implements InsiderExportGuard {
-    private final InsiderAlertRepository alerts;
     private final InsiderDetectionService detection;
     private final StaffAccountLocker locker;
 
     @Override
     public boolean allowExport(Long staffId) {
-        if (!alerts.existsByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN)) return true;
+        // 사전 확인은 새 트랜잭션에서 — 호출 쪽의 오래된 스냅샷으로 "경보 없음"을 보고 통과시키지 않는다 (Codex 리뷰)
+        if (!detection.hasOpenAlert(staffId)) return true;
         Long alertId = null;
         try {
             alertId = detection.raiseExportBlock(staffId, Instant.now());

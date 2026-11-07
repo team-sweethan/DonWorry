@@ -142,7 +142,7 @@ class RoleApiMatrixTests {
             route("GET", "/api/payment-operations", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations/1", STAFF_OR_ADMIN),
             route("GET", "/api/payment-transactions", STAFF_OR_ADMIN),
-            route("GET", "/api/payment-transactions/export", STAFF_OR_ADMIN),
+            route("POST", "/api/payment-transactions/export", STAFF_OR_ADMIN),
             // 보안 직원만: FDS 복구 실행 · Case 조회 · 판정 · 보고서 (ADMIN 제외, ADR-0065)
             route("POST", "/api/payment-operations/1/fds-reevaluations", STAFF),
             route("POST", "/api/payment-operations/1/fds-recovery-deliveries", STAFF),
@@ -244,7 +244,9 @@ class RoleApiMatrixTests {
                 new Route(HttpMethod.DELETE, "/api/fds/blocklist/1", STAFF_OR_ADMIN),
                 new Route(HttpMethod.GET, "/api/fds/evaluations/1/new-feature", STAFF_OR_ADMIN),
                 new Route(HttpMethod.POST, "/api/owner/integration/new-feature", OWNER),
-                new Route(HttpMethod.GET, "/api/auth/login-histories/new-feature", LOGGED_IN));
+                new Route(HttpMethod.GET, "/api/auth/login-histories/new-feature", LOGGED_IN),
+                // 내보내기는 POST만 (#651 Codex 리뷰) — GET이 열리면 외부 링크로 문지기 · 계정 정지를 일으킬 수 있다
+                new Route(HttpMethod.GET, "/api/payment-transactions/export", STAFF_OR_ADMIN));
         List<String> opened = new ArrayList<>();
         for (Route route : unregistered) {
             for (Persona persona : route.allowed()) {

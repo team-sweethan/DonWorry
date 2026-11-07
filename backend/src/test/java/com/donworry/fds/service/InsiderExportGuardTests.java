@@ -51,7 +51,7 @@ class InsiderExportGuardTests {
             InsiderDetectionProperties.builder().build(),
             mock(StaffLoginReader.class),
             mock(StaffCaseScopeReader.class));
-    private final InsiderExportGuardService guard = new InsiderExportGuardService(alerts, detection, locker);
+    private final InsiderExportGuardService guard = new InsiderExportGuardService(detection, locker);
 
     // 열린 경보가 있으면 INS-05 위험 경보(이벤트 발행) → 계정 정지(근거 경보 번호) → 차단
     @Test

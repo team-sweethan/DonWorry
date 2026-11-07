@@ -145,6 +145,9 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
         var demoFdsErrorPost =
                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/demo/fds-errors/next");
+        // 거래 내역 CSV 내보내기 (#651) — 경보 중이면 계정 정지까지 일으키므로 전역 CSRF 설정과 관계없이 보호한다 (ADR-0036 방식)
+        var transactionExportPost =
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/payment-transactions/export");
         var integrationRoutes = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults().matcher("/api/owner/integration/**"),
                 PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchants/{id}/integration/**"));
@@ -180,6 +183,7 @@ public class SecurityConfig {
                                 || applicationPosts.matches(request)
                                 || fdsRecoveryPosts.matches(request)
                                 || demoFdsErrorPost.matches(request)
+                                || transactionExportPost.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop HMAC은 MerchantSecurityConfiguration, AI 서버는 AiServerSecurityConfiguration이
                         // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
@@ -222,9 +226,10 @@ public class SecurityConfig {
                                         .matcher(HttpMethod.GET, "/api/payment-transactions"),
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.HEAD, "/api/payment-transactions"),
-                                // 거래 내역 CSV 내보내기 (#651) — GET만. HEAD를 열면 본문 없이도 문지기 · 계정 정지를 탄다
+                                // 거래 내역 CSV 내보내기 (#651) — POST만(CSRF 토큰 필수). GET이면 외부 링크 한 번으로
+                                // 문지기 · 계정 정지를 탈 수 있다 (Codex 리뷰)
                                 PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.GET, "/api/payment-transactions/export"))
+                                        .matcher(HttpMethod.POST, "/api/payment-transactions/export"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

@@ -299,7 +299,12 @@ class PaymentTransactionsHttpMariaDbTests {
                         + " VALUES (?,'INS_03','CAUTION','OPEN','테스트 경보',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
                 staffId);
 
-        var response = send(staff, "GET", PATH + "/export?merchantId=" + merchantId);
+        // 내보내기는 POST + CSRF 토큰 (Codex 리뷰) — 화면처럼 쿠키의 토큰을 헤더로 보낸다
+        var response = com.donworry.HttpCsrfTestSupport.send(
+                staff,
+                HttpRequest.newBuilder(
+                                URI.create("http://localhost:" + port + PATH + "/export?merchantId=" + merchantId))
+                        .POST(HttpRequest.BodyPublishers.noBody()));
 
         assertThat(response.statusCode()).as(response.body()).isEqualTo(403);
         assertThat(response.body()).contains("INSIDER_EXPORT_BLOCKED").doesNotContain(prefix + "-cust");

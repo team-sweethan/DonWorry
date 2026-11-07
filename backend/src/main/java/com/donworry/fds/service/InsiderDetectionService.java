@@ -83,6 +83,14 @@ public class InsiderDetectionService {
         checkIns06(staffId, at);
     }
 
+    // 내보내기 문지기의 사전 확인 (#651 Codex 리뷰) — 호출 쪽 트랜잭션과 떼어 지금 확정된 경보를 본다
+    // 호출 쪽(거래 내역 내보내기)은 다른 조회로 이미 스냅샷(REPEATABLE READ)을 만든 뒤 부른다. 같은 트랜잭션에서 읽으면
+    // 그 뒤 탐지가 확정한 경보가 안 보여 반출이 통과한다
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
+    public boolean hasOpenAlert(Long staffId) {
+        return alerts.existsByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
+    }
+
     // INS-05 경보 중 내보내기 시도 (#651) — 문지기(InsiderExportGuardService)가 부르고, 이어서 계정을 정지한다
     // 근거 = 그때 열린 경보들의 근거 기록. 호출 쪽 롤백(차단 응답)과 따로 확정한다. 열린 경보가 없으면 null
     // 새 트랜잭션의 첫 문장이 직원 잠금이다 — 잠금 뒤 읽는 경보가 최신 값이다(관리자 닫기 · 탐지와 같은 줄 세우기)

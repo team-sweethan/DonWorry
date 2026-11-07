@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,8 +37,9 @@ public class PaymentTransactionsController {
                 .body(service.findPage(PaymentTransactionsQueryRequest.of(parameters, Instant.now())));
     }
 
-    // CSV 내보내기 (#651) — 목록과 같은 조건(page · size는 무시). 엑셀이 한글을 읽도록 UTF-8 BOM을 붙인다
-    @GetMapping("/api/payment-transactions/export")
+    // CSV 내보내기 (#651) — 목록과 같은 조건(주소 뒤 조건, page · size는 무시). 엑셀이 한글을 읽도록 UTF-8 BOM을 붙인다
+    // POST다: 경보 중이면 계정 정지 · 기록이 남는 요청이라 외부 링크(GET)로 일으킬 수 없게 CSRF 토큰을 받는다
+    @PostMapping("/api/payment-transactions/export")
     ResponseEntity<byte[]> export(@RequestParam MultiValueMap<String, String> parameters) {
         Instant now = Instant.now();
         String csv = "﻿" + exportService.exportCsv(PaymentTransactionsQueryRequest.of(parameters, now));
