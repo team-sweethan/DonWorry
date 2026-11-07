@@ -348,6 +348,8 @@ export type InvestigationTrace = {
   steps: TraceStep[]
   // 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 · 예전 보고서에는 없다 (화면 표시는 나중)
   promptFingerprint?: string | null
+  // 고정 보고서를 만든 이유 (#626, ADR-0083) — 설정 꺼짐 · 긴급정지. AI 보고서 · 그 전 고정 보고서에는 없다
+  fixedReason?: 'CONFIG_OFF' | 'ADMIN_STOPPED' | null
 }
 
 export type AiReport = {

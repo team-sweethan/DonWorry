@@ -90,10 +90,26 @@ export function ruleEvidenceRows(analysis: PaymentAnalysis): RuleEvidenceRow[] {
 }
 
 // 조사 과정 탭의 "사용 모델" 문구 — 고정 문장 · mock을 AI 모델 이름처럼 보이지 않게 한다 (#294)
-export function traceProviderLabel(trace: Pick<InvestigationTrace, 'provider' | 'model'>): string {
+export function traceProviderLabel(
+  trace: Pick<InvestigationTrace, 'provider' | 'model' | 'fixedReason'>,
+): string {
+  if (trace.provider === 'FIXED' && trace.fixedReason === 'ADMIN_STOPPED')
+    return '고정 문장 (AI 조사 긴급정지)'
   if (trace.provider === 'FIXED') return '고정 문장 (AI 서버 꺼짐)'
   if (trace.provider === 'MOCK') return 'mock (Qwen 미사용 · 정해진 순서)'
   return trace.model
+}
+
+// 고정 보고서면 보고서 맨 위에 보여 줄 안내 (#626, ADR-0083 결정 6) — 직원이 요약이 짧은 이유를 첫 화면에서 알게
+// 이유가 없는 예전 고정 보고서는 그때 기준표가 없었을 수 있어 "기준표는 같다"고 쓰지 않는다
+export function fixedReportNotice(trace: InvestigationTrace | undefined): string | null {
+  if (trace?.provider !== 'FIXED') return null
+  const same = '조회 결과와 판정 기준표는 AI 보고서와 같고, AI 요약과 추가 조사는 없습니다.'
+  if (trace.fixedReason === 'ADMIN_STOPPED')
+    return `AI 조사 긴급정지 중에 만든 고정 보고서입니다. ${same}`
+  if (trace.fixedReason === 'CONFIG_OFF')
+    return `AI 서버가 꺼진 상태에서 만든 고정 보고서입니다. ${same}`
+  return 'AI 서버가 꺼진 상태에서 만든 고정 보고서입니다. AI 요약과 추가 조사는 없습니다.'
 }
 
 // 걸린 시간 표시 — 1초 미만은 ms, 그 이상은 소수 첫째 자리 초
