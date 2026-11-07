@@ -18,6 +18,7 @@
 - 예전 "시연: HELD 결제 발생" 버튼을 찾는다 → [1. 시연 버튼은 없어졌습니다](#1-시연-버튼은-없어졌습니다)
 - FDS 점수 · 보류 · 매입 · 정산까지 실제로 보고 싶다 → [2. 실제 결제부터 매입까지](#2-실제-결제부터-매입까지) ← **대부분 여기서 시작**
 - AI 보고서가 만들어지는 연결까지 → 2절 다음 [3. AI 보고서 붙이기](#3-ai-보고서-붙이기-mock)
+- 시연 직원 · 사건을 한 번에 채운다 → 3절 다음 [3-3. 시연 데이터 한 번에 채우기](#3-3-시연-데이터-한-번에-채우기-638)
 - 진짜 LLM(Qwen)이 쓴 보고서까지 → 3절 다음 [4. Qwen으로 바꾸기](#4-qwen으로-바꾸기)
 
 시작 전 준비: [README Getting Started](../../README.md#getting-started)대로 DB · backend · frontend가 켜지는 상태여야 합니다. 명령은 Windows PowerShell 기준이고, macOS · Linux는 [7-1](#7-1-macos--linux-명령)을 봅니다.
@@ -191,6 +192,70 @@ AI_SERVER_INTERNAL_API_KEY=①에서 만든 값
 1. 같은 카드 이름으로 두 번 보냅니다 (매번 새 손님): `py scripts/demo/cakeshop_pay.py --card A` → 한 번 더 `py scripts/demo/cakeshop_pay.py --card A`
 2. 두 번째 Case의 보고서 전문에서 "같은 카드"에 "다른 고객 1명 · 결제 3건"과 그 결제들의 FDS 판정이 보입니다
 3. 같은 손님의 결제와 이 사건 결제는 세지 않습니다. 다른 가맹점 결제도 보지 않습니다
+
+### 3-3. 시연 데이터 한 번에 채우기 (#638)
+
+시연 화면을 채울 때 씁니다. 시드는 **시드 전용 DB(`donworry_seed`)에만** 넣습니다. 작업용 DB에 가짜 직원 · 결제가 섞이지 않게 하고, 시연이 끝나면 시드 DB만 비울 수 있게 하기 위해서입니다.
+
+**처음 한 번만 — 시드 DB 만들기** (MariaDB 관리자 계정으로)
+
+```sql
+CREATE DATABASE donworry_seed CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON donworry_seed.* TO 'donworry'@'localhost';
+```
+
+Docker MariaDB를 쓰면 `'donworry'@'%'`로 권한을 줍니다.
+
+**매번 실행**
+
+1. backend를 시드 DB로 켭니다. 처음 켜면 Flyway가 표를 만듭니다.
+
+   ```powershell
+   cd backend
+   .\gradlew.bat bootRun "--args=--spring.datasource.url=jdbc:mariadb://localhost:3307/donworry_seed --payment.http.enabled=true --ai.server.enabled=true --ai.server.api-key=<ai-server/.env의 AI_SERVER_INTERNAL_API_KEY>"
+   ```
+
+2. 3-2처럼 ai-server(창 4)를 켭니다.
+3. 창 3에서 시드를 넣습니다.
+
+   ```powershell
+   py scripts/demo/seed_demo.py
+   ```
+
+- 관리자(`admin`) 비밀번호를 물어봅니다. 입력은 화면에 보이지 않습니다. 환경변수 `DONWORRY_ADMIN_PASSWORD`가 있으면 묻지 않습니다
+- 하는 일
+  1. backend가 `donworry_seed`에 붙어 있는지 확인합니다. 관리자 로그인 기록이 시드 DB에 남는지로 봅니다. 다른 DB면 아무것도 만들지 않고 멈춥니다
+  2. 시연 보안 직원 `seed_staff_a` · `seed_staff_b`를 관리자 API로 만듭니다 (비밀번호 `seed1234`). 이미 있으면 건너뜁니다
+  3. 손님 3명이 60만 원씩 3번 결제합니다 → 사건 3개
+     - 기본 손님
+     - 해외 IP 손님(`US`)
+     - 1번 손님과 같은 카드를 쓴 손님 → 이 사건 보고서의 "같은 카드"에 1번 손님 결제가 보입니다
+  4. 새 사건을 두 시연 직원 중 열린 사건이 적은 쪽에 배정합니다 (자동 배정은 `staff_test`에게 갈 수도 있어서 바꿔 줌)
+- 판정은 하지 않습니다. 시연 중에 직원이 직접 누릅니다
+- 다시 실행하면 직원은 건너뛰고 사건 3개를 더 만듭니다
+- 확인: `seed_staff_a` / `seed1234`로 로그인 → 사건 목록에 배정된 사건과 AI 보고서
+
+**비우기**
+
+```powershell
+# 시드 DB로 켠 backend를 먼저 끕니다
+py scripts/demo/seed_demo.py --reset
+```
+
+- `donworry_seed`의 표만 모두 지웁니다. 다른 DB는 지울 수 없게 DB 이름을 코드에 고정했습니다
+- 시드 DB에 붙은 접속이 남아 있으면 멈춥니다 (켜진 backend가 깨지지 않게)
+- 다시 시드 DB로 켜면 Flyway가 빈 표를 새로 만듭니다
+
+**안전장치**
+- 내 PC 주소(`localhost`)에만 실행합니다
+- ai-server 제공자가 `openai`면 멈춥니다. 사건마다 OpenAI 요청이 나가기 때문입니다. 허락을 받았을 때만 `--allow-openai`를 붙입니다
+- `.env`를 바꿨으면 ai-server를 다시 켜야 반영됩니다. 스크립트는 `ai-server/.env` 파일과 환경변수만 보고, 이미 켜진 ai-server가 쓰는 값은 모릅니다
+
+**필요한 것**
+- `mariadb` 명령줄 프로그램. PATH에 없으면 `C:\Program Files\MariaDB*\bin\mariadb.exe`를 찾고, 그래도 없으면 `DONWORRY_MARIADB_CLIENT`에 경로를 넣습니다
+- DB 비밀번호는 `DONWORRY_DB_PASSWORD` → `application-local.yml`의 `password` → `donworry` 순서로 씁니다
+
+테스트: `cd scripts/demo && py -m unittest test_seed_demo -v`
 
 ## 4. Qwen으로 바꾸기
 
