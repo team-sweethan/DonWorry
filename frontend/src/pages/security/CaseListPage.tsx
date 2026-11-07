@@ -373,6 +373,9 @@ export function CaseListPage() {
                 setScope(next)
                 saveCaseListScope(next)
                 setQuery({})
+                // 자동 갱신은 고른 범위의 건수만 본다(#640). [내 사건만]일 때 놓친 남의 Case 변화가
+                // 전환 뒤에도 남지 않게 목록을 다시 받고 감지 기준도 새로 잡는다 (#642 Codex 리뷰)
+                refresh()
               }}
               options={[
                 { value: 'MINE', label: '내 사건만' },
