@@ -3,6 +3,7 @@ package com.donworry.payment.repository;
 import com.donworry.payment.entity.PaymentSession;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,9 @@ public interface PaymentSessionRepository extends Repository<PaymentSession, Lon
     Optional<PaymentSession> findBySessionKey(String sessionKey);
 
     Optional<PaymentSession> findByPaymentId(Long paymentId);
+
+    // AI 조사 주문 요약 (#634) — 사건 결제 몇 건을 한 번에 읽는다
+    List<PaymentSession> findByPaymentIdIn(Collection<Long> paymentIds);
 
     Optional<PaymentSession> findByMerchantIdAndRequestKey(Long merchantId, UUID requestKey);
 
