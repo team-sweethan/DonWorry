@@ -188,17 +188,6 @@ export function elapsedText(createdAt: string, now: number): string {
 
 // ── 징후 · 정상 근거 (#501, 판정 권고는 #644에서 뺐다) ──
 
-// 징후를 고위험 · 주의로 나눈다
-export function basisGroups(basis: DecisionBasis): {
-  highRisk: BasisSignal[]
-  caution: BasisSignal[]
-} {
-  return {
-    highRisk: basis.signals.filter((s) => s.level === 'HIGH_RISK'),
-    caution: basis.signals.filter((s) => s.level === 'CAUTION'),
-  }
-}
-
 // 징후 오른쪽 꼬리표 — 같은 행동을 이미 셌으면 그 징후 이름, 아니면 정상 사유 유무
 export function signalTag(s: BasisSignal): { text: string; open: boolean } {
   if (s.countedIn) return { text: `${s.countedIn}에 포함 · 따로 세지 않음`, open: false }
@@ -279,6 +268,53 @@ export function caseNormals(body: ReportBody): NormalBasis[] {
   for (const p of body.paymentAnalyses)
     for (const n of p.basis?.normals ?? []) if (!seen.has(n.label)) seen.set(n.label, n)
   return [...seen.values()]
+}
+
+// ② 확인할 것 오른쪽 정상 근거 설명 — 같은 이름은 한 장으로 묶되, 결제마다 설명하는 징후가 다르면 결제 번호로 나눠 말한다
+// caseNormals(첫 결제 값만)에 normalNote를 쓰면 결제 B가 설명하는 징후를 "정상 사유가 되지 않습니다"로 보였다 (#652 Codex 리뷰)
+// 결제가 한 건이면 normalNote 문장 그대로
+export function caseNormalNotes(body: ReportBody): Array<{ label: string; note: string }> {
+  const withBasis = body.paymentAnalyses.filter((p) => p.basis)
+  const groups = new Map<string, Array<{ paymentId: string; n: NormalBasis }>>()
+  for (const p of withBasis)
+    for (const n of p.basis?.normals ?? []) {
+      const group = groups.get(n.label) ?? []
+      group.push({ paymentId: String(p.paymentId), n })
+      groups.set(n.label, group)
+    }
+  return [...groups.entries()].map(([label, group]) => {
+    if (withBasis.length <= 1) return { label, note: normalNote(group[0].n) }
+    const explaining = group.filter((g) => g.n.explains.length > 0)
+    const idle = group.filter((g) => g.n.explains.length === 0)
+    const ids = (gs: typeof group) => gs.map((g) => g.paymentId).join(' · ')
+    const explains = [...new Set(explaining.flatMap((g) => g.n.explains))].join(' · ')
+    if (idle.length === 0)
+      return { label, note: `${explains} 징후의 정상 사유입니다. (결제 ${ids(explaining)})` }
+    if (explaining.length === 0) {
+      const can = group[0].n.canExplain.join(' · ')
+      return {
+        label,
+        note: `${can} 징후의 정상 사유가 될 수 있습니다. 결제 ${ids(idle)}에는 그 징후가 없어 정상 사유가 되지 않습니다.`,
+      }
+    }
+    return {
+      label,
+      note: `결제 ${ids(explaining)}: ${explains} 징후의 정상 사유입니다. 결제 ${ids(idle)}: 그 징후가 없어 정상 사유가 되지 않습니다.`,
+    }
+  })
+}
+
+// 정상 근거를 확인하지 못한 보고서 — 고객 결제 이력(paymentHistory) 조회가 실패했고 정상 근거도 없다 (#652 Codex 리뷰)
+// 이때 "찾지 못함 · 찾아본 것"을 보이면 직원이 이력을 다 보고 없다고 읽는다
+// 한계 (#652 A안, 11/08 사용자 결정): 정상 근거는 Spring이 자기 30일 조회로 계산하는데(AiToolService.decisionBasis),
+// 그 조회의 실패 여부는 보고서 본문에 남지 않는다. 그래서 본문의 paymentHistory로 대신 판단한다
+// - 고정 보고서(AI 끔): 한 번 조회한 결과를 둘 다 쓴다 → 정확
+// - AI 보고서: ai-server의 이력 조회와 Spring의 조회가 따로다. 대개 함께 실패하지만
+//   Spring 쪽만 실패하면 여기서 못 잡아 "찾지 못함"으로 보이고(틀림),
+//   ai-server 쪽만 실패하면 정상 근거가 0건일 때 "확인하지 못함"으로 보인다(보수적)
+// 정확히 하려면 Spring 징후 계산 결과에 "이력 조회 실패" 표시를 넣어 본문까지 실어야 한다 (B안, 하지 않음 — 계약 변경)
+export function normalsUnchecked(body: ReportBody): boolean {
+  return !body.paymentHistory && caseNormalNotes(body).length === 0
 }
 
 // 비교 한 줄 — 같은 징후는 한 줄에 나란히, 한쪽에만 있으면 반대쪽은 빈칸
@@ -367,11 +403,11 @@ export function decisionProgress(
 export type SummaryLink = { target: string; label: string }
 export type SummaryLine = { text: string; links: SummaryLink[] }
 
-// 주제 → 이동할 카드 (ReportFull의 id와 같다). 접속 정보는 결제 카드로 간다
+// 주제 → 이동할 카드 (ReportFull의 id와 같다). 접속 정보는 ① 결제 표의 그 결제 줄로 간다
 const TOPIC_CARDS: Record<string, SummaryLink> = {
   history: { target: 'report-history', label: '고객 최근 결제' },
   linked: { target: 'report-linked', label: '다른 손님과 겹치는 것' },
-  similar: { target: 'report-similar', label: '비슷한 과거 사건' },
+  similar: { target: 'report-similar', label: '지난 사건과 비교' },
   order: { target: 'report-order', label: '주문 정보' },
 }
 
@@ -477,16 +513,27 @@ export function overviewText(body: ReportBody): string {
   return `결제 ${body.overview.paymentCount}건 · 합계 ${won(body.overview.totalAmount)}`
 }
 
-// 결론 표 한 줄 — openPaymentIds: 이 징후가 풀리지 않은 결제, mixed: 결제마다 정상 사유가 달라 일부만 풀림
-export type ConclusionSignal = BasisSignal & { openPaymentIds: string[]; mixed: boolean }
+// 확인할 것 카드 한 장 — paymentIds: 이 징후가 있는 결제 전부, openPaymentIds: 그중 풀리지 않은 결제
+// mixed: 결제마다 정상 사유가 달라 일부만 풀림
+// shownPaymentId: 카드에 보여 주는 값(detail)을 가져온 결제 — 규칙 점수 · 증거도 이 결제 것을 붙인다 (#652 Codex 리뷰)
+export type CheckSignal = BasisSignal & {
+  paymentIds: string[]
+  openPaymentIds: string[]
+  mixed: boolean
+  shownPaymentId: string
+}
 
 // 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것
-const isOpen = (s: BasisSignal) => !s.normalReason && !s.countedIn
+export const isOpenSignal = (s: BasisSignal) => !s.normalReason && !s.countedIn
+const isOpen = isOpenSignal
 
-// 결론 표 징후 — 같은 징후는 한 줄로 묶되, 한 결제라도 풀리지 않았으면 풀리지 않은 쪽을 남긴다
+const LEVEL_ORDER: Record<BasisSignal['level'], number> = { HIGH_RISK: 0, CAUTION: 1 }
+
+// 확인할 것 징후 (#644 ② 확인할 것) — 같은 징후는 카드 한 장으로 묶고 결제 번호를 함께 적는다. 고위험 먼저
+// 한 결제라도 풀리지 않았으면 풀리지 않은 쪽을 남긴다
 // caseSignals(첫 결제 값만 남김)를 쓰면 결제 A만 정상 사유가 있을 때 결제 B의 확인할 것이 사라졌다 (#591 Codex 리뷰)
-// 정상 사유는 결제 금액마다 따로 계산된다 (ai-server evidence._normals). 판정 근거가 없으면 null
-export function conclusionSignals(body: ReportBody): ConclusionSignal[] | null {
+// 정상 사유는 결제 금액마다 따로 계산된다 (Spring DecisionBasisCalculator). 징후 · 정상 근거가 없으면 null
+export function checkSignals(body: ReportBody): CheckSignal[] | null {
   const withBasis = body.paymentAnalyses.filter((p) => p.basis)
   if (withBasis.length === 0) return null
   const groups = new Map<string, Array<{ paymentId: string; signal: BasisSignal }>>()
@@ -496,24 +543,123 @@ export function conclusionSignals(body: ReportBody): ConclusionSignal[] | null {
       group.push({ paymentId: String(p.paymentId), signal })
       groups.set(signalId(signal), group)
     }
-  return [...groups.values()].map((group) => {
-    const open = group.filter((g) => isOpen(g.signal))
-    const shown = open[0]?.signal ?? group[0].signal
+  return [...groups.values()]
+    .map((group) => {
+      const open = group.filter((g) => isOpen(g.signal))
+      const shown = open[0] ?? group[0]
+      return {
+        ...shown.signal,
+        paymentIds: [...new Set(group.map((g) => g.paymentId))],
+        openPaymentIds: open.map((g) => g.paymentId),
+        mixed: open.length > 0 && open.length < group.length,
+        shownPaymentId: shown.paymentId,
+      }
+    })
+    .sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level])
+}
+
+// 체크할 징후와 순번 — 아래 고정 줄 "확인 1 / 3 완료"
+// 확인할 것 카드와 같은 순서 · 같은 조건(정상 사유 없음 + 확인할 것 있음)
+// 징후 카드에 붙일 FDS 규칙 기록 — 카드 값을 가져온 결제의 기록만 본다
+// 사건 전체에서 첫 기록을 고르면 결제 B의 값에 결제 A의 점수 · 증거가 붙었다 (#652 Codex 리뷰)
+export function checkSignalRecord(body: ReportBody, signal: CheckSignal): SignalRuleRecord | null {
+  const payment = body.paymentAnalyses.find((p) => String(p.paymentId) === signal.shownPaymentId)
+  return signalRuleRecord(signal, payment?.ruleHitDetails)
+}
+
+// 비교 표 "지금" 열의 판정 상태 — 일부만 판정한 사건은 판정 끝이 아니다 (#652 Codex 리뷰)
+// progress는 decisionProgress 결과 (고객이 직접 취소한 결제는 남은 건수에서 뺀다)
+export function nowDecisionText(progress: {
+  decided: number
+  remaining: number
+  done: boolean
+}): string {
+  if (progress.done) return '판정 끝'
+  if (progress.decided > 0) return `일부 판정 · 남은 결제 ${progress.remaining}건`
+  return '판정 전'
+}
+
+export function checkRows(body: ReportBody): Array<{ id: string; row: number }> {
+  const signals = checkSignals(body) ?? []
+  return signals.flatMap((s, i) =>
+    isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
+  )
+}
+
+// ── 지난 사건과 비교 (#644 ③) ──
+// 지금 사건과 지난 사건 여러 건을 징후 줄로 나란히 놓는다. 해석 문장 · 권고 줄은 없다
+
+// 사건 한 열 — null이면 징후 정리가 없는 보고서(예전 보고서 · 보고서 없음 · 불러오지 못함)
+export type CompareColumn = { signals: CheckSignal[]; normals: NormalBasis[] } | null
+
+export function compareColumn(body: ReportBody | null): CompareColumn {
+  const signals = body ? checkSignals(body) : null
+  if (!body || !signals) return null
+  return { signals, normals: caseNormals(body) }
+}
+
+// UNKNOWN: 그 사건은 징후 정리가 없어 있는지 모른다 — "없음"으로 보이면 틀린 비교가 된다
+export type PastCell =
+  | { kind: 'NONE' }
+  | { kind: 'UNKNOWN' }
+  | { kind: 'OPEN' | 'EXPLAINED' | 'COUNTED'; signal: CheckSignal }
+
+// diff[i]: i번째 열이 지금 사건(0번 열)과 다른 칸인지. 모르는 칸은 다르다고 하지 않는다
+export type PastCompareRow = {
+  id: string
+  label: string
+  level: BasisSignal['level']
+  cells: PastCell[]
+  diff: boolean[]
+}
+
+const cellOf = (column: CompareColumn, id: string): PastCell => {
+  if (!column) return { kind: 'UNKNOWN' }
+  const signal = column.signals.find((s) => signalId(s) === id)
+  if (!signal) return { kind: 'NONE' }
+  if (signal.countedIn) return { kind: 'COUNTED', signal }
+  if (signal.openPaymentIds.length === 0) return { kind: 'EXPLAINED', signal }
+  return { kind: 'OPEN', signal }
+}
+
+// columns[0]은 지금 사건. 줄은 지금 사건 징후 먼저, 지난 사건에만 있는 징후는 뒤에 (고위험 먼저)
+export function pastCompareRows(columns: CompareColumn[]): PastCompareRow[] {
+  const seen = new Map<string, CheckSignal>()
+  for (const column of columns)
+    for (const s of column?.signals ?? []) if (!seen.has(signalId(s))) seen.set(signalId(s), s)
+  const nowIds = new Set((columns[0]?.signals ?? []).map(signalId))
+  const ordered = [...seen.entries()].sort(
+    ([a, sa], [b, sb]) =>
+      Number(!nowIds.has(a)) - Number(!nowIds.has(b)) ||
+      LEVEL_ORDER[sa.level] - LEVEL_ORDER[sb.level],
+  )
+  return ordered.map(([id, s]) => {
+    const cells = columns.map((column) => cellOf(column, id))
+    const now = cells[0]
     return {
-      ...shown,
-      openPaymentIds: open.map((g) => g.paymentId),
-      mixed: open.length > 0 && open.length < group.length,
+      id,
+      label: s.label,
+      level: s.level,
+      cells,
+      diff: cells.map(
+        (cell, i) =>
+          i > 0 && cell.kind !== 'UNKNOWN' && now.kind !== 'UNKNOWN' && cell.kind !== now.kind,
+      ),
     }
   })
 }
 
-// 체크할 징후와 결론 표의 번호 — 아래 고정 줄 "확인 1 / 3 완료 · 남은 확인 2 · 3번"
-// 결론 표와 같은 순서 · 같은 조건(정상 사유 없음 + 확인할 것 있음)
-export function checkRows(body: ReportBody): Array<{ id: string; row: number }> {
-  const signals = conclusionSignals(body) ?? []
-  return signals.flatMap((s, i) =>
-    isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
-  )
+// ── PR 2(#650) 전에 저장된 보고서의 글자 ──
+// 판정 기준표 · 권고를 뺀 뒤에도 옛 본문에는 그때 이름이 남아 있다. 저장 본문은 고치지 않고 화면에서만 바꾼다
+// 조사 과정 탭의 단계 이름은 조사 기록이라 바꾸지 않는다 (11/08 사용자 결정)
+const LEGACY_TEXT: Record<string, string> = {
+  '판정 기준표 (Spring 계산)': '징후 · 정상 근거 (Spring 계산)',
+  '판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다.':
+    '징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요.',
+}
+
+export function legacyReportText(text: string): string {
+  return Object.hasOwn(LEGACY_TEXT, text) ? LEGACY_TEXT[text] : text
 }
 
 // 처음에 보여 줄 요약 문장 수 — 나머지는 [더 보기]

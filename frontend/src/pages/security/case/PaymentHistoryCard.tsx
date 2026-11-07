@@ -9,7 +9,7 @@ import { dateTime, paymentStatusLabel } from './caseLabels'
 
 // 화면에 늘어놓는 결제 수 — 나머지는 상태별 건수로만 본다
 const SHOWN = 5
-// 판정 기준표가 보는 기간 — AI가 90일로 넓혀도 기준표는 이 기간의 기본 조회만 본다 (#581)
+// 징후 · 정상 근거 계산(Spring)이 보는 기간 — AI가 90일로 넓혀도 이 기간의 기본 조회만 본다 (#581)
 const BASIS_DAYS = 30
 
 // P5가 새 상태를 보내도 코드값 그대로 보여 준다
@@ -27,7 +27,7 @@ export function PaymentHistoryCard({ history }: { history: PaymentHistory | null
   // 90일로 넓혔을 때만 기간을 강조하고 30일 경계선을 긋는다 (#591)
   const widened = days > BASIS_DAYS
   const shown = history?.payments.slice(0, SHOWN) ?? []
-  // 경계선 위치 — 기준표가 본 결제(inBasis) 뒤 첫 30일 밖 결제 앞. 표시가 없는 예전 보고서는 긋지 않는다
+  // 경계선 위치 — 징후 · 정상 근거 계산이 본 결제(inBasis) 뒤 첫 30일 밖 결제 앞. 표시가 없는 예전 보고서는 긋지 않는다
   const boundary = widened ? shown.findIndex((p) => p.inBasis === false) : -1
 
   return (
@@ -49,7 +49,7 @@ export function PaymentHistoryCard({ history }: { history: PaymentHistory | null
       extra={
         widened ? (
           <span style={{ color: '#1E3A8A', fontSize: 12, fontWeight: 700 }}>
-            판정 기준표는 최근 {BASIS_DAYS}일만 봅니다
+            징후 · 정상 근거는 최근 {BASIS_DAYS}일만 봅니다
           </span>
         ) : (
           <span style={{ color: '#94A3B8', fontSize: 12 }}>참고용 · 자동 판정에 쓰지 않음</span>
@@ -87,8 +87,8 @@ export function PaymentHistoryCard({ history }: { history: PaymentHistory | null
                 {i === boundary && (
                   <div style={boundaryStyle}>
                     {i === 0
-                      ? `최근 ${BASIS_DAYS}일 결제 없음 · 아래는 판정 기준표가 보지 않은 결제`
-                      : `여기까지 최근 ${BASIS_DAYS}일 · 판정 기준표가 본 범위`}
+                      ? `최근 ${BASIS_DAYS}일 결제 없음 · 아래는 징후 · 정상 근거 계산에 쓰지 않은 결제`
+                      : `여기까지 최근 ${BASIS_DAYS}일 · 징후 · 정상 근거 계산 범위`}
                   </div>
                 )}
                 <div

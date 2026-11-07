@@ -320,7 +320,7 @@ export type PaymentHistoryItem = {
   amount: number | null
   paymentStatus: string | null
   requestedAt: string | null
-  // 기준표가 본 30일 기본 조회에 든 결제인지 (#591) — 표의 30일 경계선. 없으면 예전 보고서
+  // 징후 · 정상 근거 계산이 본 30일 기본 조회에 든 결제인지 (#591) — 표의 30일 경계선. 없으면 예전 보고서
   inBasis?: boolean | null
 }
 

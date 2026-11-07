@@ -8,10 +8,11 @@ import { ScreenResult } from '../../components/common/ScreenResult'
 import type { AiReport, CaseDetail } from '../../types/case'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { customerPart } from '../../utils/caseRules'
-import { pickReport } from '../../utils/reportView'
+import { decisionProgress, pickReport } from '../../utils/reportView'
 import { CaseForbidden } from './case/CaseForbidden'
 import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
+import type { NowProgress } from './case/ReportPastCompare'
 import { ReportTrace } from './case/ReportTrace'
 
 // AI 보고서 전문 (#292). Case 상세 조회 API를 그대로 쓰고, 판정은 Case 상세에서 한다
@@ -74,12 +75,13 @@ export function CaseReportPage() {
   const picked = pickReport(reports, selected, securityCase.evidenceVersion)
   // 판정이 끝났거나 종료된 Case는 돌아가기만 보여 준다
   const canDecide = securityCase.status !== 'CLOSED' && decisions.length === 0
+  const progress = decisionProgress(result)
 
   return (
     <>
       <PageHeader
         title="AI 조사 보고서"
-        description="사건 요약(확인할 것 포함) → 경위 → 연결 → 근거 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
+        description="무슨 일인가 → 확인할 것 → 지난 사건과 비교 → 근거 자료 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
         actions={
           <Space wrap>
             {reports.length > 1 && (
@@ -150,6 +152,7 @@ export function CaseReportPage() {
               report={picked.report}
               label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
               refreshKey={refreshKey}
+              progress={progress}
               onDecide={canDecide ? () => navigate(casePath, { state: listReturn }) : undefined}
             />
           )}
@@ -163,11 +166,13 @@ function ReportState({
   report,
   label,
   refreshKey,
+  progress,
   onDecide,
 }: {
   report: AiReport
   label: string
   refreshKey: number
+  progress: NowProgress
   onDecide?: () => void
 }) {
   if (report.status === 'PENDING' || report.status === 'RUNNING') {
@@ -198,6 +203,7 @@ function ReportState({
       body={report.reportBody}
       label={label}
       refreshKey={refreshKey}
+      progress={progress}
       onDecide={onDecide}
     />
   )
