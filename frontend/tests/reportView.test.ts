@@ -684,7 +684,7 @@ test('summaryLinks_mapsFactsToCards_once: 근거 번호의 주제로 표 카드�
         ['report-history', '고객 최근 결제'],
         ['report-payment-12', '결제 12 접속 정보'],
       ],
-      [['report-linked', '같은 카드 · 기기 · IP']],
+      [['report-linked', '다른 손님과 겹치는 것']],
     ],
   )
   // #559 전 보고서는 링크 없이 문장만
