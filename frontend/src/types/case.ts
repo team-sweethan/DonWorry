@@ -290,10 +290,21 @@ export type LinkedMatch = {
   paymentCount: number
   resultCounts: Array<{ result: string; count: number }>
   declinedCount: number
+  // 그중 사건 결제 앞뒤 nearbyWindowMinutes 안의 결제 (#637). 예전 보고서에는 없다
+  nearby?: LinkedNearby | null
+}
+
+// 사건 결제 앞뒤 시간 안의 다른 고객 결제 (#637) — 몰렸는지(공격) 흩어졌는지(공용 와이파이 등) 보는 숫자
+export type LinkedNearby = {
+  otherCustomerCount: number
+  paymentCount: number
+  resultCounts: Array<{ result: string; count: number }>
+  declinedCount: number
 }
 
 export type LinkedPayments = {
   lookbackDays: number
+  nearbyWindowMinutes?: number | null
   card: LinkedMatch
   device: LinkedMatch
   ip: LinkedMatch
