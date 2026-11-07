@@ -30,13 +30,14 @@ def _repaired_run():
 
 
 # 실제로 일어난 순서 · 횟수대로 남는다
-# 기본 조회 5개는 시스템이 한 일 → 추가 조회 고르기(AI, 고를 게 없으면 한 번) → 문장 → 조립
+# 기본 조회 6개는 시스템이 한 일 → 추가 조회 고르기(AI, 고를 게 없으면 한 번) → 문장 → 조립
 # (#578, 첫 추가 도구 고객 이력 90일이 생겨 고르기 단계가 돈다 #581)
 def test_trace_records_steps_in_actual_order() -> None:
     outcome = run_investigation(context(), MockLlmClient(), toolbox("sample_case.json"), SETTINGS)
 
     trace = outcome.report.investigationTrace
     assert [(s.kind, s.actor) for s in trace.steps] == [
+        ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
         ("TOOL", "SYSTEM"),
@@ -53,6 +54,7 @@ def test_trace_records_steps_in_actual_order() -> None:
         "비슷한 과거 사건 조회",
         "고객 최근 결제 조회",
         "같은 카드 · 기기 · IP 결제 조회",
+        "주문 정보 조회",
         "판정 기준표 조회",
     ]
     assert trace.steps[1].asked == "결제 9001 · 9002의 FDS 근거"

@@ -256,6 +256,29 @@ export type ReportBody = {
   summaryAppended?: string[]
   // 없으면 recommendation.limitations로 대신한다
   scope?: InvestigationScope | null
+  // 주문 정보 (#634) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  orderContext?: OrderContext | null
+}
+
+// 사건 결제 하나의 주문 정보 (#634) — 가맹점이 결제 준비 때 보낸 값 (P5)
+// provided=false면 결제 준비 기록이 없어 나머지 칸이 비어 있다 ("주문 정보 없음")
+// 주문자 이름 · 전화는 오지 않는다. 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로만 온다 (ADR-0082)
+// orderRef · orderName은 가맹점이 쓴 글자라 AI는 보지 않았다 — 화면 표에만 보인다
+export type OrderPayment = {
+  paymentId: string
+  provided: boolean
+  orderRef: string | null
+  orderName: string | null
+  orderGroup: number | null
+  // 주문 생성 → 결제 요청까지 걸린 초. 가맹점 시계 기준이라 음수일 수 있다
+  orderToPaymentSeconds: number | null
+  ordererProvided: boolean
+  ordererPhoneGroup: number | null
+  pickupDiffers: boolean | null
+}
+
+export type OrderContext = {
+  payments: OrderPayment[]
 }
 
 // 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 (#352) — 건수 · 고객 수 · 판정만 온다

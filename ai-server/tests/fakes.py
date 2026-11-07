@@ -12,6 +12,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     FdsEvidenceTool,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
 )
@@ -48,6 +49,7 @@ _TOOL_NAMES: dict[type, str] = {
     SimilarCasesTool: "find_similar_cases",
     PaymentHistoryTool: "get_payment_history",
     LinkedPaymentsTool: "find_linked_payments",
+    OrderContextTool: "get_order_context",
 }
 
 

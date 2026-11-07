@@ -8,6 +8,7 @@ import com.donworry.investigation.report.dto.DecisionBasisToolResponse.Signal;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
@@ -79,6 +80,7 @@ class FixedReportGenerator {
     private final PaymentHistoryFinder paymentHistoryFinder;
     private final PaymentSignalReader paymentSignalReader;
     private final LinkedPaymentFinder linkedPaymentFinder;
+    private final OrderContextFinder orderContextFinder;
 
     // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
@@ -105,6 +107,7 @@ class FixedReportGenerator {
                 similarOrNull(caseId),
                 historyOrNull(caseId, now),
                 linkedOrNull(caseId, now),
+                orderOrNull(caseId, now),
                 reportVersion,
                 evidenceVersion,
                 now,
@@ -142,6 +145,16 @@ class FixedReportGenerator {
         }
     }
 
+    // 주문 정보도 참고 자료라 조회에 실패해도 보고서는 만든다 (#634)
+    private OrderContextToolResponse orderOrNull(Long caseId, Instant now) {
+        try {
+            return orderContextFinder.find(caseId, now);
+        } catch (RuntimeException e) {
+            log.warn("주문 정보 조회 실패 caseId={}", caseId, e);
+            return null;
+        }
+    }
+
     private static boolean hasEvidence(PaymentInfo payment) {
         return payment != null
                 && payment.amount() != null
@@ -156,6 +169,7 @@ class FixedReportGenerator {
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
             int reportVersion,
             int evidenceVersion,
             Instant now,
@@ -234,7 +248,15 @@ class FixedReportGenerator {
                         Map.of("summary", SUMMARY.get(overall), "limitations", List.of(reason.limitation))),
                 Map.entry(
                         "evidence",
-                        evidenceList(securityCase.getId(), similar, history, linked, reportVersion, now, dataVersion)),
+                        evidenceList(
+                                securityCase.getId(),
+                                similar,
+                                history,
+                                linked,
+                                order,
+                                reportVersion,
+                                now,
+                                dataVersion)),
                 Map.entry(
                         "verdict",
                         Map.of(
@@ -242,11 +264,12 @@ class FixedReportGenerator {
                                 RECOMMENDATION_KO.get(overall) + " — 판정 기준표 결과입니다. 근거를 확인한 뒤 판정해 주세요.",
                                 "overallRecommendation",
                                 overall)),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, reason))));
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, order, reason))));
         body.put("caseOverview", caseOverview(securityCase.getCustomerRef(), payments));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
         body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
+        body.put("orderContext", order == null ? null : orderContext(order));
         return body;
     }
 
@@ -314,6 +337,7 @@ class FixedReportGenerator {
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
             int reportVersion,
             Instant now,
             String dataVersion) {
@@ -349,6 +373,16 @@ class FixedReportGenerator {
                     5,
                     linked.retrievedAt(),
                     "evidence v" + linked.evidenceVersion()));
+        }
+        if (order != null) {
+            list.add(evidence(
+                    "get_order_context",
+                    order.source(),
+                    caseId,
+                    reportVersion,
+                    6,
+                    order.retrievedAt(),
+                    "evidence v" + order.evidenceVersion()));
         }
         return list;
     }
@@ -414,6 +448,29 @@ class FixedReportGenerator {
                                 .map(c -> Map.<String, Object>of("result", c.result(), "count", c.count()))
                                 .toList(),
                 "declinedCount", match.declinedCount());
+    }
+
+    // 주문 정보 (#634) — ai-server와 같은 키. 묶음 번호 · 다름 여부만 옮기고 해석하지 않는다
+    // 주문자 이름 · 전화는 처음부터 받지 않는다. 주문번호 · 상품명은 직원 화면 표에만 쓰인다
+    private static Map<String, Object> orderContext(OrderContextToolResponse order) {
+        return Map.of(
+                "payments",
+                order.payments().stream()
+                        .map(p -> {
+                            // 주문 정보가 없는 결제는 칸이 비어 있어 null을 받는 HashMap을 쓴다
+                            Map<String, Object> payment = new HashMap<>();
+                            payment.put("paymentId", p.paymentId());
+                            payment.put("provided", p.provided());
+                            payment.put("orderRef", p.orderRef());
+                            payment.put("orderName", p.orderName());
+                            payment.put("orderGroup", p.orderGroup());
+                            payment.put("orderToPaymentSeconds", p.orderToPaymentSeconds());
+                            payment.put("ordererProvided", p.ordererProvided());
+                            payment.put("ordererPhoneGroup", p.ordererPhoneGroup());
+                            payment.put("pickupDiffers", p.pickupDiffers());
+                            return payment;
+                        })
+                        .toList());
     }
 
     // 비슷한 과거 사건 (#296) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다
@@ -503,6 +560,7 @@ class FixedReportGenerator {
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
             FixedReportReason reason) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
@@ -535,6 +593,7 @@ class FixedReportGenerator {
                                 "같은 카드 · 기기 · IP 결제 조회",
                                 "같은 가맹점 최근 " + LinkedPaymentFinder.LOOKBACK_DAYS + "일, 다른 고객 결제",
                                 linked == null ? "조회 실패" : linkedSummary(linked)),
+                        traceStep("TOOL", "주문 정보 조회", "이 사건 결제의 주문 정보", order == null ? "조회 실패" : orderSummary(order)),
                         traceStep("ASSEMBLE", "고정 문장 보고서 조립", null, "AI 서버가 꺼져 정해진 문장으로 조립")));
         return trace;
     }
@@ -543,6 +602,14 @@ class FixedReportGenerator {
     private static String linkedSummary(LinkedPaymentsToolResponse linked) {
         return "카드 " + matchSummary(linked.card()) + " · 기기 " + matchSummary(linked.device()) + " · IP "
                 + matchSummary(linked.ip());
+    }
+
+    // "결제 3건 중 주문 정보 2건" — ai-server trace 요약과 같은 말
+    static String orderSummary(OrderContextToolResponse order) {
+        long provided = order.payments().stream()
+                .filter(OrderContextToolResponse.Payment::provided)
+                .count();
+        return "결제 " + order.payments().size() + "건 중 주문 정보 " + provided + "건";
     }
 
     private static String matchSummary(LinkedPaymentsToolResponse.Match match) {

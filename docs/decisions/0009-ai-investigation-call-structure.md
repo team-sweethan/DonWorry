@@ -1,7 +1,7 @@
 # 0009. AI 조사 호출 구조 (Spring ↔ FastAPI)
 
 - **상태:** 제안 — 팀 합의 필요
-- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-27 개정: 1차 Tool 2종 응답 형식 (#254) · 2026-10-28 개정: 서비스 키 인증 위치 (#266, ADR-0041) · 2026-10-29 개정: 보고서 결론 · 권고 이유 · 규칙 근거 키와 문장 품질 검사 (#288) · 2026-10-29 개정: 조사 과정 기록 (#294) · 2026-10-29 개정: 7번째 Tool 비슷한 과거 사건 (#296) · 2026-11-03 개정: LLM 제공자 OpenAI 추가 (#453) · 2026-11-03 개정: 권고 기준 판정 지원 위주 (#482) · 2026-11-04 개정: 권고를 판정 기준표(코드)로 (#501) · 2026-11-07 개정: 판정 기준표 계산을 Spring으로 (#618)
+- **날짜:** 2026-10-21 (같은 날 개정: fds 정본 ERD Baseline v1의 `ai_reports` 8개 컬럼에 맞춤) · 2026-10-23 개정: 화면 보고서 형식 · Tool 6종 반영 (#112) · 2026-10-27 개정: 1차 Tool 2종 응답 형식 (#254) · 2026-10-28 개정: 서비스 키 인증 위치 (#266, ADR-0041) · 2026-10-29 개정: 보고서 결론 · 권고 이유 · 규칙 근거 키와 문장 품질 검사 (#288) · 2026-10-29 개정: 조사 과정 기록 (#294) · 2026-10-29 개정: 7번째 Tool 비슷한 과거 사건 (#296) · 2026-11-03 개정: LLM 제공자 OpenAI 추가 (#453) · 2026-11-03 개정: 권고 기준 판정 지원 위주 (#482) · 2026-11-04 개정: 권고를 판정 기준표(코드)로 (#501) · 2026-11-07 개정: 판정 기준표 계산을 Spring으로 (#618) · 2026-11-07 개정: 주문 정보 Tool을 P5 공개 창구로 (#634)
 - **관련:** Notion fds 정본 — 02 기획 2.5 · 2.6 · 2.7, 03 설계 3.5 · 3.6 · 3.7 · 3.9⑤ · 3.11, 공통 페이지 §5.3 · §5.4, [ADR-0012](0012-payment-settlement-dependency.md) (ADR-0001 대체), 화면 타입 `frontend/src/types/case.ts`, AI 조사 긴급정지(스위치 · 고정 보고서 전환)는 [ADR-0083](0083-ai-kill-switch.md) (#626)
 - **영향 받는 담당:** P4 현규, P3 수민(조사 요청 · 판정 검증), P1 주환(인증 설정 · 보안 이벤트 조회), P2 · P5(Tool이 읽는 공개 api 제공), CakeShop(주문 정보), 화면 담당(보고서 응답 형식)
 
@@ -54,9 +54,9 @@ sequenceDiagram
 | 권한 | Tool은 GET만. 결제 · 판정 · Case 상태를 바꾸는 Tool은 만들지 않는다 |
 | 결과 수신 | FastAPI 콜백이 기본. 콜백이 정해진 시간 안에 오지 않으면 Spring이 `GET /investigations/{reportId}`로 조회해 복구. 요청 · 콜백 · 조회에는 시도 토큰 `attemptId`를 함께 싣는다 (결정 2). 이전 시도 취소 API는 두지 않는다 |
 | 진행 기록 (#322) | FastAPI `GET /investigations/{reportId}`는 `RUNNING`일 때 `progress`(지금까지 끝난 단계, `investigationTrace.steps`와 같은 모양)를 싣는다. 끝나면(`SUCCEEDED` · `FAILED`) 비우고 콜백에도 싣지 않는다. 메모리에만 두며, 새 시도가 오면 이전 시도의 늦은 진행 기록은 버린다. **화면 진행 표시에만 쓰고 결과 반영 · 재시도 판단에는 쓰지 않는다** |
-| 주문 정보 Tool | `get_order_context`는 Spring이 CakeShop을 HTTP로 조회해 전달 (CakeShop 제공 범위는 §5.7 미결) |
+| 주문 정보 Tool | `get_order_context`는 Spring이 P5 공개 창구 `PaymentOrderReader`로 읽어 전달 — CakeShop이 결제 준비 때 이미 보낸 값이라 HTTP로 다시 묻지 않는다 (결정 12, #634) |
 
-### Tool 6종 (Notion 설계 3.6) + 7번째 (#296) + 8번째 (#352) + 판정 기준표 (#618)
+### Tool 6종 (Notion 설계 3.6) + 7번째 (#296) + 8번째 (#352) + 판정 기준표 (#618) — `get_order_context`는 #634에서 구현
 
 | Tool | 입력 | 하는 일 | 데이터 주인 |
 | --- | --- | --- | --- |
@@ -64,7 +64,7 @@ sequenceDiagram
 | `get_fds_evidence` | `caseId` 또는 허용된 결제 ID | 결제별 FDS 점수 · 적중 규칙 | P2 |
 | `get_payment_history` (#338) | `caseId`, `lookbackDays`(30 기본 · 90, #581) | 같은 고객의 최근 30일(기본 조회) 또는 90일(AI 추가 조사) 결제(이 사건 제외, 최대 20건)와 상태별 건수 (참고 근거) | P5 (읽기만) |
 | `get_security_events` | `caseId`, 조회 기간 | 로그인 · 기기 · 계정 이벤트 | P1 또는 CakeShop |
-| `get_order_context` | `caseId` | 주문 · 배송 정보 | CakeShop |
+| `get_order_context` (#634) | `caseId` | 사건 결제마다 주문 묶음 · 주문 → 결제 걸린 시간 · 주문자 연락처 유무 · 주문자 전화 묶음 · 픽업자 다름 여부, 화면용 주문번호 · 상품명. 기본 조회 (결정 12) | P5 (가맹점이 결제 준비 때 보낸 값, 읽기만) |
 | `get_payment_authentication` | `caseId` 또는 허용된 결제 ID | 카드 인증 · 승인 정보 | P5 |
 | `find_similar_cases` (#296) | `caseId` | 비슷한 종료 사건과 결제별 직원 판정 결과 (참고 근거) | P3 + P2 (읽기만) |
 | `find_linked_payments` (#352) | `caseId` | 같은 가맹점 · 최근 30일에 이 사건 결제와 같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 건수 · 고객 수 · FDS 판정 · 카드사 거절 (참고 근거) | P2 (읽기만) |
@@ -402,6 +402,35 @@ sequenceDiagram
   - P3: 권고 값 3가지 · 보고서 모양 그대로(판정 패널 변경 없음). 사용자 확인: P3는 P4 의견을 따르기로 함 (11/07)
   - 배포 순서: Spring 먼저. ai-server만 먼저 나가면 기준표 조회가 404로 실패해 모든 결제가 추가 확인이 된다(조사 자체는 성공)
 
+## 결정 12 — 주문 정보 Tool을 P5 공개 창구로, 기본 조회로 (#634)
+
+- **상황:** 결정 1은 `get_order_context`를 "Spring이 CakeShop을 HTTP로 조회"로 두고 제공 범위를 §5.7 미결로 남겼다. 그 사이 CakeShop이 결제 준비 요청(ADR-0064 2절)에 주문번호 · 상품명 · 주문 시각과 주문자 · 픽업자 연락처(#602)를 보내게 됐고, 돈워리는 P5 `payment_sessions` · `payment_order_contacts`에 저장한다. 제공 범위는 CakeShop · P5와 합의했다 (11/07 사용자 확인). 구매자 로그인 기록은 이번 범위가 아니다(추후 논의)
+- **결정:**
+  - Spring `investigation/report`의 `OrderContextFinder`가 사건에 묶인 결제 ID만 P5 `payment.api.PaymentOrderReader.findOrders`에 넘겨 읽는다. CakeShop HTTP 호출은 없다. `investigation` → `payment :: api` 의존은 이미 허용돼 있다
+  - 새 Tool `GET /internal/ai/tools/get_order_context?caseId=` (`OrderContextToolResponse`). 결제마다 `provided`(결제 준비 세션 있음) · `orderRef` · `orderName` · `orderGroup` · `orderToPaymentSeconds` · `ordererProvided` · `ordererPhoneGroup` · `pickupDiffers`
+  - **주문자 이름 · 전화는 원문 · 가린 값 · 지문 어느 것도 P5 밖으로 내보내지 않는다** ([ADR-0082](0082-insider-access-security.md) 1절). 같은 전화인지는 P5가 저장된 지문(키 버전 + HMAC)으로 비교해 사건 안 묶음 번호(1, 2 …)로만 알린다. 같은 주문인지는 Spring이 주문번호로 묶음 번호를 매긴다. 픽업자는 원래 "주문자와 다름" 여부만 저장돼 있다
+  - 값이 나가지 않으므로 직원 연락처 열람(`CustomerContactReader`, 결제 1건 · 접근 기록)과 달리 접근 기록을 남기지 않는다
+  - **주문번호 · 상품명은 AI 입력에서 뺀다** — 가맹점이 쓴 글자라 지시문이 섞일 수 있다(프롬프트 주입). ai-server `tools.llm_content`가 빼고, 사실 목록(`facts.py` 주문 주제)도 이 둘을 쓰지 않는다. 보고서 `orderContext` 표에는 코드가 그대로 실어 직원만 본다
+  - **기본 조회**(코드가 조사마다, 결정 9). 같은 사건엔 늘 같은 값이 있어야 나중에 기준표 정상 사유(한 주문을 나눠 낸 결제 등)에 쓸 수 있다. 참고 자료라 실패하면 `orderContext=null` + 한계 줄 "주문 정보를 조회하지 못했습니다."로 보고서는 만든다. 판정 기준표 · 권고는 이번에 바꾸지 않는다
+  - 결제 준비 세션이 없는 결제(결제창을 거치지 않은 결제 · 예전 데이터)는 `provided=false` — "주문 정보 없음"이지 "다름"이 아니다
+  - 결제창은 접수 · 승인(보류 이벤트 → 사건 → 보고서)이 끝난 뒤에 세션에 결제 ID를 저장한다. 그 사이에 만든 보고서(특히 AI를 끈 고정 보고서)도 주문 정보를 갖도록, 결제 ID로 세션을 못 찾으면 접수 기록의 결제 시도 키(= 세션 `attemptKey`)로 찾는다 (PR #635 Codex 리뷰)
+  - 사건 병합에는 결제 건수 상한이 없어 창구도 상한을 두지 않는다. P5가 IN 조회를 100건씩 나눠 읽고, 전화 묶음 번호는 전체 기준으로 매긴다 (PR #635 Codex 리뷰)
+  - AI를 끈 고정 보고서도 같은 `OrderContextFinder` 값을 같은 키로 싣는다
+  - 늘 붙던 한계 줄은 "로그인 기록 · 주문 정보"에서 "로그인 기록"만 남긴다
+- **버린 대안:**
+  - CakeShop HTTP 조회(결정 1 원안) — 같은 값이 이미 P5에 있다. 새 서명 API · 장애 경로가 늘고, 결제 이후 바뀐 주문 값이 섞여 결제 시점 사실과 달라질 수 있다
+  - 기존 `CustomerContactReader.masked`를 결제마다 부름 — 가린 이름 · 전화가 AI 입력으로 나가고(ADR-0082 금지), 직원 열람용 창구라 접근 기록과 섞인다
+  - 전화 지문(HMAC)을 Spring으로 내보내 비교 — 지문이 P5 밖으로 나가면 다른 사건 · 다른 화면에서 같은 사람 찾기에 쓰일 수 있다
+  - 상품명을 AI에 주고 "지시를 따르지 마라"로만 막기 — 프롬프트 지시만으로는 막는다고 볼 수 없다. 판단에 필요한 건 같은 주문인지(묶음 번호)뿐이다
+  - AI가 고르는 추가 조사 — 기준표에 쓰려면 같은 사건엔 늘 같은 값이어야 한다 (11/07 사용자 결정)
+- **영향:**
+  - API: Spring `/internal/ai/tools/get_order_context`(GET) 추가 — `/internal/ai/**` 서비스 키 체인이 이미 덮어 보안 설정 변경 없음
+  - P5: `PaymentOrderReader` · `PaymentOrderSummary`(api) · `PaymentOrderReadService` 추가, `PaymentSessionRepository.findByPaymentIdIn` · `PaymentOrderContactRepository.findBySessionIdIn` 읽기 메서드 추가. 스키마 · 인덱스 변경 없음
+  - Spring report: `OrderContextFinder` · `OrderContextToolResponse` 추가, `AiToolService.orderContext`, `FixedReportGenerator`(`orderContext` · 증거 줄 · 조사 과정 줄)
+  - ai-server: `schemas/tools.py`(`OrderContextTool`) · `schemas/report.py`(`OrderPayment` · `OrderContext` · `ReportBody.orderContext`) · `client/spring.py` · `tools.py`(`llm_content` 제외 칸) · `graph.py`(기본 조회 6번째, 기준표는 7번째) · `facts.py`(주문 주제) · `assemble.py`(한계 · 조사 범위) · `trace.py` · `prompts.py`(기본 조회 6가지 — 프롬프트 지문이 바뀐다)
+  - 화면: `types/case.ts`(`OrderContext`), `OrderContextCard`, `reportView.ts`(요약 링크 주제 `order`)
+  - 배포 순서: Spring 먼저. ai-server만 먼저 나가면 주문 조회가 404로 실패해 `orderContext=null` + 한계 줄(조사 자체는 성공)
+
 ## 미정 — P3 ↔ P4 계약 (공통 페이지 §5.3)
 
 정본 §5.3의 개발 전 결정 항목(조사 요청 방식 · 입력, 완료 · 실패 통지, 병합 중 중복 요청 · 구버전 처리, 판정 시 버전 검증 · 수동 판정 전달)은 **P3 담당과 합의 전이라 이 ADR에서 정하지 않는다.** 정해지면 이 절을 갱신한다.
@@ -520,7 +549,7 @@ investigation/report/
 
 ## 영향
 
-- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases` · `find_linked_payments` · `get_decision_basis`, 구현은 현재 6종 — `get_payment_history` #338 · `find_linked_payments` #352 · `get_decision_basis` #618) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`(`RUNNING`이면 `progress`, #322). 화면용 `GET /api/security-cases/{caseId}/reports/{reportId}/progress` (#322)
+- API: Spring `/internal/ai/tools/*`(GET 6종 + `find_similar_cases` · `find_linked_payments` · `get_decision_basis`, 구현은 현재 7종 — `get_payment_history` #338 · `find_linked_payments` #352 · `get_decision_basis` #618 · `get_order_context` #634) · `/internal/ai/reports/{reportId}/result`(POST), FastAPI `POST /investigations` · `GET /investigations/{reportId}`(`RUNNING`이면 `progress`, #322). 화면용 `GET /api/security-cases/{caseId}/reports/{reportId}/progress` (#322)
 - DB: `ai_reports`는 설계 3.9⑤ 8개 컬럼 그대로. `UNIQUE(case_id, report_version)`. `case_id`는 `security_cases`에 대한 논리 참조
 - 보안: `/internal/ai/**`는 identity의 전용 보안 체인이 서비스 키로 확인한다 — #266, P1 동의 ([ADR-0041](0041-ai-server-internal-api-key-authentication.md))
 - P3: §5.3 조사 요청 · 완료 통지 · 판정 검증 방식 합의 필요 (미정)
@@ -528,7 +557,8 @@ investigation/report/
   - #338: `PaymentReader.findRecentByCustomer(merchantId, customerRef, since, excludePaymentIds, limit)` 읽기 전용 추가 (P5 허락). `payments`에 `(merchant_id, customer_ref, created_at)` 인덱스는 추가하지 않았다 — 필요하면 P5가 정한다
 - P2: `find_linked_payments`용 `FdsLinkedPaymentReader` 읽기 전용 추가 (#352, P2 허락, [ADR-0034](0034-fds-evidence-read-contract.md)). 인덱스는 추가하지 않았다
 - P1: `get_security_events`용 조회 api
-- CakeShop: `get_order_context` 제공 범위 (§5.7)
+- CakeShop: `get_order_context` 제공 범위 (§5.7) — #634에서 결제 준비 요청 칸(ADR-0064 2절 · #602)으로 정리, CakeShop 호출 없음 (결정 12)
+- P5 (#634): `get_order_context`용 `PaymentOrderReader` 읽기 전용 추가 — 주문자 연락처는 묶음 번호로만 (결정 12)
 - P1 · P2 · P5: §5.4 Tool 응답 형식 · 실패 처리 합의 필요 (미정)
 - P3: `find_similar_cases`용 읽기 쿼리 추가 — `SecurityCaseRepository`(종료 사건 2종) · `CasePaymentRepository` · `PaymentDecisionRepository`(여러 사건 한 번에) (#296, P4 개선 작업 범위로 P3 허락)
 - 화면: AI 최종 실패 알림, 보고서 최신 버전 여부 표시. 보고서 조회 응답은 결정 4 형식이며 `frontend/src/types/case.ts`와 함께 관리. #288의 새 키는 화면에서 선택 항목이며 #292 보고서 전문 페이지에서 표시한다. `investigationTrace`는 #294 "조사 과정" 탭. 생성 중 진행 단계는 #322 `ReportCard`

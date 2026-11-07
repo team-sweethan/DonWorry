@@ -53,6 +53,9 @@ class AiToolServiceTests {
     @Mock
     LinkedPaymentFinder linkedPaymentFinder;
 
+    @Mock
+    OrderContextFinder orderContextFinder;
+
     // FDS 평가가 없는 결제는 카드 정보가 비고, 다른 결제의 카드 정보가 붙지 않는다 (#346)
     @Test
     void fdsEvidence_noEvaluation_signalsNull() {
@@ -74,7 +77,8 @@ class AiToolServiceTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         FdsEvidenceToolResponse response = service.fdsEvidence(7L, List.of());
 
@@ -114,7 +118,8 @@ class AiToolServiceTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         DecisionBasisToolResponse response = service.decisionBasis(7L);
 
@@ -158,7 +163,8 @@ class AiToolServiceTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
         DecisionBasisToolResponse response = service.decisionBasis(7L);
 

@@ -28,12 +28,13 @@ from app.schemas.tools import (
     FdsEvidenceTool,
     FdsPayment,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
     ToolResult,
 )
 
-# 조사 Agent — 기본 조회 5개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
+# 조사 Agent — 기본 조회 6개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
 # 흐름: 기본 조회 → 추가 조사(추가 도구가 있을 때만) → 사실 문장 쓰기(형식 검사 · 고쳐 쓰기) → 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
 # 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
@@ -99,6 +100,11 @@ def _latest_basis(records: list[ToolRecord]) -> DecisionBasisTool | None:
     return found[-1] if found else None
 
 
+def _latest_order(records: list[ToolRecord]) -> OrderContextTool | None:
+    found = [r.result for r in records if isinstance(r.result, OrderContextTool)]
+    return found[-1] if found else None
+
+
 def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
     return found[-1] if found else None
@@ -129,7 +135,8 @@ def build_graph(
         return extras[name].title if name in extras else trace.tool_title(name)
 
     # 기본 조회: 결제 목록 + 모든 결제의 FDS 근거 + 비슷한 과거 사건(#296) + 고객 최근 결제(#338)
-    # + 같은 카드 · 기기 · IP를 쓴 다른 결제(#352). 결제 목록 · FDS 조회 실패는 조사 실패로 올린다
+    # + 같은 카드 · 기기 · IP를 쓴 다른 결제(#352) + 주문 정보(#634)
+    # 결제 목록 · FDS 조회 실패는 조사 실패로 올린다
     def base(state: AgentState) -> AgentState:
         records: list[ToolRecord] = []
         steps = list(state["trace"])
@@ -158,6 +165,9 @@ def build_graph(
             "같은 카드 · 기기 · IP 결제",
             records,
             steps,
+        )
+        _reference_lookup(
+            "get_order_context", toolbox.get_order_context, "주문 정보", records, steps
         )
         # 판정 기준표는 Spring이 계산한다 (#618) — 맨 뒤에 둬 앞 조회의 증거 번호가 바뀌지 않게
         # 못 받으면 결제마다 추가 확인으로 둔다 (승인 취소 · 매입 진행 쪽 권고를 만들지 않음)
@@ -362,6 +372,7 @@ def build_graph(
             _base_history(records),
             state.get("summary_appended") or [],
             _latest_basis(records),
+            _latest_order(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -448,6 +459,7 @@ BASE_TOOL_NAMES = (
     "find_similar_cases",
     "get_payment_history",
     "find_linked_payments",
+    "get_order_context",
 )
 
 
