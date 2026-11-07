@@ -79,7 +79,7 @@ export function CaseReportPage() {
     <>
       <PageHeader
         title="AI 조사 보고서"
-        description="결론(확인할 것 포함) → 경위 → 연결 → 근거 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
+        description="사건 요약(확인할 것 포함) → 경위 → 연결 → 근거 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
         actions={
           <Space wrap>
             {reports.length > 1 && (
