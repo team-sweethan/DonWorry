@@ -2,10 +2,10 @@ import json
 
 from app.agent.narrative import narrative_schema
 from app.agent.prompts import WRITE_EXAMPLES, WRITE_SYSTEM
-from tests.fakes import catalog, narrative
+from tests.fakes import catalog
 from tests.test_narrative_quality import CASES, FDS
 
-# 권고는 AI가 고르지 않는다 — 판정 기준표(코드)가 정한다 (#501)
+# 권고는 AI가 고르지 않는다 (#501). #644부터는 보고서에 권고 자체가 없다 (ADR-0009 결정 13)
 # AI는 판단하지 않고 조사한 사실만 전달한다 (#548)
 
 
@@ -23,27 +23,6 @@ def test_ai_does_not_choose_recommendation() -> None:
 def test_prompt_has_no_ai_weighing_rules() -> None:
     assert "REJECT_REVIEW(승인 취소 검토):" not in WRITE_SYSTEM
     assert "어느 쪽이 더 무거운지를 권고로 고른다" not in WRITE_SYSTEM
-
-
-# AI가 예전처럼 권고 칸을 써도 보고서 권고는 기준표 판정이다
-def test_investigation_ignores_ai_recommendation_and_keeps_basis() -> None:
-    from app.agent.graph import run_investigation
-    from app.config import Settings
-    from tests.fakes import ScriptedLlm, call, context, toolbox
-
-    written = json.loads(narrative())
-    written["recommendation"] = "REJECT_REVIEW"
-    llm = ScriptedLlm(
-        turns=[[call("get_case_payments")]], outputs=[json.dumps(written, ensure_ascii=False)]
-    )
-
-    outcome = run_investigation(
-        context(), llm, toolbox("sample_case.json"), Settings(_env_file=None)
-    )
-
-    assert outcome.status == "SUCCEEDED"
-    # 샘플은 주의 징후뿐이라 기준표 판정은 추가 확인 — AI가 쓴 승인 취소 검토는 쓰지 않는다
-    assert outcome.report.verdict.overallRecommendation == "NEEDS_CHECK"
 
 
 # 출력 예시에 판단 칸(결론 한 줄 · 권고 요약 · 이유 · 위험/정상 근거)이 없다 (#532, #548)

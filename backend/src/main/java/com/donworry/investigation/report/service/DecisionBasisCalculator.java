@@ -13,7 +13,6 @@ import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,31 +21,15 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-// 판정 근거 · 판정 기준표 (ADR-0009 결정 7) — 권고는 AI가 아니라 이 코드가 정한다
-// #501 ~ #614까지 ai-server evidence.py에 있던 계산을 그대로 옮겼다 (#618). AI 서버가 꺼져도 고정 보고서가 같은 기준표를 쓴다
+// 징후 · 정상 근거 (ADR-0009 결정 7) — 징후 등급은 AI가 아니라 이 코드가 정한다
+// #501 ~ #614까지 ai-server evidence.py에 있던 계산을 그대로 옮겼다 (#618). AI 서버가 꺼져도 고정 보고서가 같은 계산을 쓴다
 // 징후를 고위험 · 주의로 나누고, 정상 거래 근거가 설명하는 징후에만 정상 사유를 붙인다
+// 판정 기준표 4칸 · 권고 · 종합 권고는 #644에서 뺐다 (결정 13) — 판정은 보안 직원이 한다
 // 같은 입력이면 언제나 같은 결과다 — 조회 · 저장은 하지 않는다
 public final class DecisionBasisCalculator {
 
     public static final String HIGH_RISK = "HIGH_RISK";
     public static final String CAUTION = "CAUTION";
-
-    public static final String HIGH_RISK_WITH_OTHERS = "HIGH_RISK_WITH_OTHERS";
-    public static final String HIGH_RISK_ONLY = "HIGH_RISK_ONLY";
-    public static final String CAUTION_ONLY = "CAUTION_ONLY";
-    // 정상 사유가 없는 징후가 남지 않음 — 징후가 0개인 결제도 이 칸이다 (#618 문구 정리)
-    public static final String ALL_EXPLAINED = "ALL_EXPLAINED";
-
-    public static final String REJECT_REVIEW = "REJECT_REVIEW";
-    public static final String NEEDS_CHECK = "NEEDS_CHECK";
-    public static final String ACCEPT_REVIEW = "ACCEPT_REVIEW";
-
-    // 칸 → 권고. 권고 값 3가지는 화면 · P3 판정 패널과의 약속이라 바꾸지 않는다
-    public static final Map<String, String> RECOMMENDATION_BY_RULE = Map.of(
-            HIGH_RISK_WITH_OTHERS, REJECT_REVIEW,
-            HIGH_RISK_ONLY, NEEDS_CHECK,
-            CAUTION_ONLY, NEEDS_CHECK,
-            ALL_EXPLAINED, ACCEPT_REVIEW);
 
     static final String OVERSEAS = "OVERSEAS";
     static final String LINKED_CARD = "LINKED_CARD";
@@ -107,22 +90,22 @@ public final class DecisionBasisCalculator {
     // "전에 승인된 본인 카드"는 쓰지 않는다 — R03이 꺼진 경우와 구분할 수 없고 고객 이력은 카드별이 아니다 (#501 리뷰)
     private static final Map<String, List<String>> EXPLAINS = Map.of(SIMILAR_AMOUNT, List.of("R01"));
 
-    // 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 단시간 반복 결제다
+    // 같은 행동을 두 번 세지 않는다 — 거절 후 재시도 · 카드 테스팅은 이미 단시간 반복 결제다 (화면이 묶어 보여 준다)
     private static final Map<String, List<String>> COUNTED_IN = Map.of("R04", List.of("R08", "R06"));
 
     private DecisionBasisCalculator() {}
 
-    // 사건 결제마다 기준표를 계산한다 — 금액 · 요청 시각을 모르거나 FDS 근거가 없는 결제는 뺀다 (받는 쪽이 추가 확인으로 둔다)
-    // history(30일 기본 조회)가 null이면 조회 실패 — 정상 사유 없이 계산한다. linked가 null이면 기준표를 주지 않는다 (아래)
+    // 사건 결제마다 징후 · 정상 근거를 계산한다 — 금액 · 요청 시각을 모르거나 FDS 근거가 없는 결제는 뺀다 (받는 쪽이 한계 줄로 알린다)
+    // history(30일 기본 조회)가 null이면 조회 실패 — 정상 사유 없이 계산한다. linked가 null이면 근거를 주지 않는다 (아래)
     public static DecisionBasisToolResponse forCase(
             CasePaymentsToolResponse cases,
             FdsEvidenceToolResponse fds,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
             Instant retrievedAt) {
-        // 연결 결제 조회 실패(null)는 "연결 징후 없음"이 아니다 — 고위험 징후(같은 카드 · 기기)를 확인하지 못했으니 기준표를 주지 않는다
-        // 빈 목록이면 ai-server가 결제마다 추가 확인 + 한계 줄로 둔다 (#618 Codex 리뷰)
-        // 고객 이력 실패(null)는 정상 사유만 빠져 권고가 매입 진행 쪽으로 올라가지 않으므로 그대로 계산한다
+        // 연결 결제 조회 실패(null)는 "연결 징후 없음"이 아니다 — 고위험 징후(같은 카드 · 기기)를 확인하지 못했으니 근거를 주지 않는다
+        // 빈 목록이면 ai-server가 한계 줄로 알린다 (#618 Codex 리뷰). 징후가 빠진 목록을 "징후 없음"으로 읽지 않게
+        // 고객 이력 실패(null)는 정상 사유만 빠지므로(징후가 덜 보이지 않음) 그대로 계산한다
         if (linked == null) {
             return DecisionBasisToolResponse.builder()
                     .caseId(cases.caseId())
@@ -182,10 +165,9 @@ public final class DecisionBasisCalculator {
                         .build())
                 .toList();
         Set<String> present = labels.keySet();
-        String rule = rule(signals);
-        return Basis.builder()
-                .signals(signals)
-                .normals(normals.stream()
+        return new Basis(
+                signals,
+                normals.stream()
                         .map(n -> Normal.builder()
                                 .key(n.key())
                                 .label(n.label())
@@ -197,21 +179,7 @@ public final class DecisionBasisCalculator {
                                         .map(DecisionBasisCalculator::labelOf)
                                         .toList())
                                 .build())
-                        .toList())
-                .rule(rule)
-                .recommendation(RECOMMENDATION_BY_RULE.get(rule))
-                .build();
-    }
-
-    // 종합 권고 (ADR-0009 결정 4) — 하나라도 승인 취소 검토면 승인 취소 검토, 모두 매입 진행 검토면 매입 진행 검토, 나머지는 추가 확인
-    public static String overall(Collection<String> recommendations) {
-        if (recommendations.contains(REJECT_REVIEW)) {
-            return REJECT_REVIEW;
-        }
-        if (!recommendations.isEmpty() && recommendations.stream().allMatch(ACCEPT_REVIEW::equals)) {
-            return ACCEPT_REVIEW;
-        }
-        return NEEDS_CHECK;
+                        .toList());
     }
 
     private record RawSignal(String key, String label, String detail, String level) {}
@@ -321,18 +289,5 @@ public final class DecisionBasisCalculator {
     private static String labelOf(String key) {
         RuleGrade grade = RULES.get(key);
         return grade == null ? key : grade.label();
-    }
-
-    private static String rule(List<Signal> signals) {
-        List<Signal> open = signals.stream()
-                .filter(s -> s.normalReason() == null && s.countedIn() == null)
-                .toList();
-        if (open.stream().anyMatch(s -> HIGH_RISK.equals(s.level()))) {
-            // 점수 없음은 판정을 올리지 않는다 — 고위험과 겹치는 "다른 징후"로 세지 않는다 (#532)
-            long others =
-                    open.stream().filter(s -> !FDS_UNCONFIRMED.equals(s.key())).count();
-            return others >= 2 ? HIGH_RISK_WITH_OTHERS : HIGH_RISK_ONLY;
-        }
-        return open.isEmpty() ? ALL_EXPLAINED : CAUTION_ONLY;
     }
 }

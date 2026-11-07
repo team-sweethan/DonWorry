@@ -195,9 +195,7 @@
               "checkBefore": "매장 · 회사 같은 공용 와이파이인지 가맹점에 문의"
             }
           ],
-          "normals": [],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          "normals": []
         }
       }
     ]

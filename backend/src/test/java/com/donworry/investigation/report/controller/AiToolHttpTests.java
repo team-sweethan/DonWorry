@@ -108,10 +108,11 @@ class AiToolHttpTests {
                 .andExpect(jsonPath("$.missingPaymentIds").isEmpty());
     }
 
-    // 결제별 판정 근거 · 기준표 칸 · 권고가 보고서 basis와 같은 키로 나간다 (#618) — ai-server가 그대로 싣는 계약
+    // 결제별 징후 · 정상 근거가 보고서 basis와 같은 키로 나간다 (#618) — ai-server가 그대로 싣는 계약
+    // 기준표 칸 · 권고는 나가지 않는다 (#644, ADR-0009 결정 13)
     // 예전 영문 규칙 코드(HIGH_AMOUNT)도 같은 징후(R01 고액 결제)로 읽는다
     @Test
-    void decisionBasis_returnsPerPaymentBasisInReportShape() throws Exception {
+    void getDecisionBasis_responseHasSignalsAndNormalsOnly() throws Exception {
         SecurityCase securityCase = openCase();
         long paymentId = link(securityCase);
         givenInfo(info(paymentId, 600_000L, 65));
@@ -123,8 +124,8 @@ class AiToolHttpTests {
                 .andExpect(jsonPath("$.source").value("P4"))
                 .andExpect(jsonPath("$.retrievedAt").isNotEmpty())
                 .andExpect(jsonPath("$.payments[0].paymentId").value(String.valueOf(paymentId)))
-                .andExpect(jsonPath("$.payments[0].basis.rule").value("CAUTION_ONLY"))
-                .andExpect(jsonPath("$.payments[0].basis.recommendation").value("NEEDS_CHECK"))
+                .andExpect(jsonPath("$.payments[0].basis.rule").doesNotExist())
+                .andExpect(jsonPath("$.payments[0].basis.recommendation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].basis.signals[0].key").value("R01"))
                 .andExpect(jsonPath("$.payments[0].basis.signals[0].label").value("고액 결제"))
                 .andExpect(jsonPath("$.payments[0].basis.signals[0].level").value("CAUTION"))

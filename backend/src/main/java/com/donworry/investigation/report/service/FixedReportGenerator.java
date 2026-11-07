@@ -4,7 +4,6 @@ import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.DecisionBasisToolResponse.Basis;
-import com.donworry.investigation.report.dto.DecisionBasisToolResponse.Signal;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
@@ -58,20 +57,6 @@ class FixedReportGenerator {
             "DENIED", "자동 차단",
             "DECLINED", "카드사 거절",
             "EXPIRED", "만료");
-    // 기준표를 계산하지 못한 결제의 이유 — ai-server verdict_text.NO_BASIS_REASON과 같은 문장 (화면이 시작 말로 코드 이유를 고른다)
-    static final String NO_BASIS_REASON = "판정 기준표를 받지 못해 추가 확인이 필요합니다.";
-    // 권고 요약 · 결론 앞말 — ai-server verdict_text와 같은 말 (#618)
-    private static final Map<String, String> RECOMMENDATION_KO = Map.of(
-            DecisionBasisCalculator.REJECT_REVIEW, "승인 취소 검토",
-            DecisionBasisCalculator.NEEDS_CHECK, "추가 확인",
-            DecisionBasisCalculator.ACCEPT_REVIEW, "매입 진행 검토");
-    private static final Map<String, String> SUMMARY = Map.of(
-            DecisionBasisCalculator.REJECT_REVIEW,
-            "고위험 징후와 정상 사유가 없는 다른 징후가 겹쳐 승인 취소를 먼저 검토할 것을 권고합니다.",
-            DecisionBasisCalculator.NEEDS_CHECK,
-            "정상 사유가 없는 징후가 있어 추가 확인 후 판정할 것을 권고합니다.",
-            DecisionBasisCalculator.ACCEPT_REVIEW,
-            "정상 사유가 없는 징후가 없어 매입 진행을 검토할 수 있습니다.");
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CasePaymentRepository casePaymentRepository;
@@ -177,9 +162,9 @@ class FixedReportGenerator {
         long totalAmount = payments.stream().mapToLong(PaymentInfo::amount).sum();
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
-        List<String> recommendations = new ArrayList<>();
         String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
-        // AI가 꺼져도 AI 보고서와 같은 판정 기준표로 권고한다 (#618) — 고객 이력은 30일 기본 조회, 실패하면 없이 계산
+        // AI가 꺼져도 AI 보고서와 같은 징후 · 정상 근거를 싣는다 (#618) — 고객 이력은 30일 기본 조회, 실패하면 없이 계산
+        // 판정 권고는 만들지 않는다 (#644, ADR-0009 결정 13)
         List<CasePaymentsToolResponse.Payment> casePayments = payments.stream()
                 .map(p -> CasePaymentsToolResponse.Payment.builder()
                         .paymentId(String.valueOf(p.paymentId()))
@@ -190,13 +175,11 @@ class FixedReportGenerator {
                 .toList();
         for (int i = 0; i < payments.size(); i++) {
             PaymentInfo payment = payments.get(i);
-            // 같은 카드 · 기기 · IP 조회가 실패하면 고위험 징후를 확인하지 못했으니 기준표 없이 추가 확인 (#618 Codex 리뷰)
+            // 같은 카드 · 기기 · IP 조회가 실패하면 고위험 징후를 확인하지 못했으니 근거를 싣지 않는다 (#618 Codex 리뷰)
             Basis basis = linked == null
                     ? null
                     : DecisionBasisCalculator.basis(
                             casePayments.get(i), fdsPayment(payment, signals), casePayments, history, linked);
-            String recommendation = basis == null ? DecisionBasisCalculator.NEEDS_CHECK : basis.recommendation();
-            recommendations.add(recommendation);
             // 위험 · 정상 근거 칸은 없다 — AI 보고서와 같은 모양 (#548)
             Map<String, Object> analysis = new HashMap<>(Map.ofEntries(
                     Map.entry("paymentId", payment.paymentId()),
@@ -207,8 +190,6 @@ class FixedReportGenerator {
                             "ruleHits",
                             payment.ruleHits().stream().map(RuleHit::code).toList()),
                     Map.entry("unknowns", List.of("고객 본인의 결제 의사")),
-                    Map.entry("recommendation", recommendation),
-                    Map.entry("reason", basis == null ? NO_BASIS_REASON : reasonOf(basis)),
                     Map.entry(
                             "ruleHitDetails",
                             payment.ruleHits().stream()
@@ -219,7 +200,6 @@ class FixedReportGenerator {
             analysis.put("basis", basis);
             analyses.add(analysis);
         }
-        String overall = DecisionBasisCalculator.overall(recommendations);
         Map<String, Object> body = new HashMap<>(Map.ofEntries(
                 Map.entry(
                         "overview",
@@ -236,16 +216,15 @@ class FixedReportGenerator {
                         "summary",
                         List.of(
                                 "조사 대상 결제 " + payments.size() + "건에서 FDS 규칙 적중이 확인되었습니다.",
-                                "직원은 판정 근거와 결제 기록을 확인한 뒤 판정해 주세요.")),
+                                "직원은 징후와 결제 기록을 확인한 뒤 판정해 주세요.")),
                 Map.entry("paymentAnalyses", analyses),
                 Map.entry("timeline", timeline(securityCase, payments)),
                 // 고정 보고서는 AI가 조사한 사실 · 요약 근거 번호가 없다 (#548, #559)
                 Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
-                Map.entry(
-                        "recommendation",
-                        Map.of("summary", SUMMARY.get(overall), "limitations", List.of(reason.limitation))),
+                // 키 이름은 예전 그대로(화면 계약) — 권고 요약은 #644에서 뺐고 한계 줄만 둔다
+                Map.entry("recommendation", Map.of("limitations", List.of(reason.limitation))),
                 Map.entry(
                         "evidence",
                         evidenceList(
@@ -257,13 +236,6 @@ class FixedReportGenerator {
                                 reportVersion,
                                 now,
                                 dataVersion)),
-                Map.entry(
-                        "verdict",
-                        Map.of(
-                                "headline",
-                                RECOMMENDATION_KO.get(overall) + " — 판정 기준표 결과입니다. 근거를 확인한 뒤 판정해 주세요.",
-                                "overallRecommendation",
-                                overall)),
                 Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, order, reason))));
         body.put("caseOverview", caseOverview(securityCase.getCustomerRef(), payments));
         body.put("similarCases", similar == null ? null : similarCases(similar));
@@ -273,7 +245,7 @@ class FixedReportGenerator {
         return body;
     }
 
-    // 기준표 입력 — AI Tool get_fds_evidence와 같은 모양 (기준 · 실제 문장 포함)
+    // 징후 계산 입력 — AI Tool get_fds_evidence와 같은 모양 (기준 · 실제 문장 포함)
     private static FdsEvidenceToolResponse.Payment fdsPayment(PaymentInfo payment, Map<Long, Signals> signals) {
         return FdsEvidenceToolResponse.Payment.builder()
                 .paymentId(String.valueOf(payment.paymentId()))
@@ -284,26 +256,6 @@ class FixedReportGenerator {
                         .toList())
                 .signals(signals.get(payment.paymentId()))
                 .build();
-    }
-
-    // 결제별 이유 — ai-server verdict_text.payment_reason과 같은 문장 (화면이 시작 말로 코드 이유를 고른다)
-    static String reasonOf(Basis basis) {
-        String names = basis.signals().stream()
-                .filter(s -> s.normalReason() == null && s.countedIn() == null)
-                .map(Signal::label)
-                .collect(Collectors.joining(" · "));
-        return switch (basis.rule()) {
-            case DecisionBasisCalculator.HIGH_RISK_WITH_OTHERS -> "고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다: " + names;
-            case DecisionBasisCalculator.HIGH_RISK_ONLY -> "정상 사유가 없는 고위험 징후가 있습니다: " + names;
-            case DecisionBasisCalculator.CAUTION_ONLY -> "정상 사유가 없는 주의 징후가 있습니다: " + names;
-            default -> {
-                String explained = basis.signals().stream()
-                        .filter(s -> s.normalReason() != null)
-                        .map(s -> s.label() + "(" + s.normalReason() + ")")
-                        .collect(Collectors.joining(" · "));
-                yield explained.isEmpty() ? "적중한 징후가 없습니다." : "모든 징후에 정상 사유가 있습니다: " + explained;
-            }
-        };
     }
 
     // 사건 경위 (#310) — ai-server와 같은 모양. 결제 줄 → 사건 생성 줄을 실제 시각순으로, 같은 시각이면 결제 먼저 (안정 정렬)
@@ -518,7 +470,7 @@ class FixedReportGenerator {
     private static final String HELD_KO = PAYMENT_STATUS_KO.get("HELD");
 
     // 사건 개요 한 줄 (ADR-0083 결정 6) — ai-server assemble.py case_overview와 같은 문장이라 고정 · AI 보고서의 결론 첫 줄이 같은 모양이다
-    // 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태. 모두 조회 값이고 판단 문구는 쓰지 않는다 (판정은 기준표 칸이 보여 준다)
+    // 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태. 모두 조회 값이고 판단 문구는 쓰지 않는다 (판정은 보안 직원이 한다)
     static String caseOverview(String customerRef, List<PaymentInfo> payments) {
         List<Instant> times = payments.stream()
                 .map(PaymentInfo::requestedAt)

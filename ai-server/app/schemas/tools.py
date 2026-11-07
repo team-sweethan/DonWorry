@@ -186,7 +186,8 @@ class PaymentBasis(BaseModel):
     basis: DecisionBasis
 
 
-# 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — Spring이 계산한다 (ADR-0009 결정 7)
+# 결제별 징후 · 정상 근거 (#618) — Spring이 계산한다 (ADR-0009 결정 7 · 11)
+# 기준표 칸 · 권고는 #644에서 뺐다 (결정 13) — 옛 Spring이 보내도 모델에 없어 버린다
 # ai-server는 그대로 보고서에 싣고 바꾸지 않는다. 금액 · FDS 근거를 모르는 결제는 목록에 없다
 class DecisionBasisTool(BaseModel):
     caseId: str

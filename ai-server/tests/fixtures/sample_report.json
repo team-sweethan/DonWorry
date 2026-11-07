@@ -41,8 +41,6 @@
         "고객 본인의 결제 의사",
         "구매자 본인의 결제 의사"
       ],
-      "recommendation": "NEEDS_CHECK",
-      "reason": "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다.",
       "ruleHitDetails": [
         {
           "code": "HIGH_AMOUNT",
@@ -71,8 +69,6 @@
         "고객 본인의 결제 의사",
         "구매자 본인의 결제 의사"
       ],
-      "recommendation": "NEEDS_CHECK",
-      "reason": "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다.",
       "ruleHitDetails": [
         {
           "code": "RAPID_REPEAT_PAYMENT",
@@ -124,7 +120,6 @@
     "고객 본인 확인 필요 여부"
   ],
   "recommendation": {
-    "summary": "추가 확인 후 결제별로 판정할 것을 권고합니다.",
     "limitations": [
       "mock 조사입니다(Qwen 미사용). 판단 문장은 고정 문장입니다.",
       "결제 이력 · 기기 · 로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
@@ -148,10 +143,6 @@
       "dataVersion": "evidence v2"
     }
   ],
-  "verdict": {
-    "headline": "FDS 규칙에 걸린 결제라 본인 확인 후 판정이 필요합니다.",
-    "overallRecommendation": "NEEDS_CHECK"
-  },
   "investigationTrace": {
     "provider": "MOCK",
     "model": "mock",

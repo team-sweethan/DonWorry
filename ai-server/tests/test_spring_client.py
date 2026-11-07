@@ -70,9 +70,9 @@ def test_get_payment_history_sends_lookback_days_only_for_90_tool() -> None:
     assert dict(seen[1].url.params) == {"caseId": "205", "lookbackDays": "90"}
 
 
-# 판정 기준표 (#618) — Spring DecisionBasisToolResponse 모양(null 칸 포함)을 그대로 읽는다
-# 키가 어긋나면 기준표를 못 읽어 모든 결제가 추가 확인이 된다
-def test_get_decision_basis_reads_spring_shape() -> None:
+# 징후 · 정상 근거 (#618) — Spring DecisionBasisToolResponse 모양(null 칸 포함)을 그대로 읽는다
+# 기준표 칸 · 권고가 없는 새 응답(#644)을 읽어야 한다 — 못 읽으면 결제마다 징후 칸이 빈다
+def test_springClient_decisionBasis_parsesWithoutRuleAndRecommendation() -> None:
     seen: list[httpx.Request] = []
     spring = {
         "caseId": "101",
@@ -95,8 +95,6 @@ def test_get_decision_basis_reads_spring_shape() -> None:
                         }
                     ],
                     "normals": [],
-                    "rule": "CAUTION_ONLY",
-                    "recommendation": "NEEDS_CHECK",
                 },
             }
         ],
@@ -115,6 +113,6 @@ def test_get_decision_basis_reads_spring_shape() -> None:
     assert seen[0].url.params["caseId"] == "101"
     basis = result.for_payment("9001")
     assert basis is not None
-    assert (basis.rule, basis.recommendation) == ("CAUTION_ONLY", "NEEDS_CHECK")
+    assert list(basis.model_dump()) == ["signals", "normals"]
     assert basis.signals[0].checkBefore == "고객의 평소 결제 금액과 비교"
     assert result.for_payment("9002") is None

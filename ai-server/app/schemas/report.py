@@ -2,14 +2,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# AI 보고서 본문 8개 섹션 + 결론(verdict) + 조사 과정(investigationTrace)
+# AI 보고서 본문 8개 섹션 + 조사 과정(investigationTrace)
 # + 비슷한 과거 사건(similarCases) + 고객 최근 결제(paymentHistory, #338)
 # + 같은 카드 · 기기 · IP를 쓴 다른 결제(linkedPayments, #352) + 주문 정보(orderContext, #634)
 # frontend/src/types/case.ts의 ReportBody와 키 · 타입을 같게 둔다
 # (ADR-0009 결정 4)
 # 한쪽만 고치지 않는다. 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
-
-Recommendation = Literal["ACCEPT_REVIEW", "REJECT_REVIEW", "NEEDS_CHECK"]
+# 판정 권고(결제별 recommendation · reason, basis.rule · recommendation, verdict,
+# recommendation.summary)는 #644에서 뺐다 (ADR-0009 결정 13). 판정은 보안 직원이 한다
 
 
 # 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 그 값을 받은 증거 추적 줄
@@ -43,11 +43,10 @@ class PaymentSignals(BaseModel):
     ipProvided: bool
 
 
-# 판정 근거 (#501) — 코드가 판정 기준표로 계산한다. AI는 이 값을 바꾸지 않는다
+# 징후 · 정상 근거 (#501) — Spring이 계산한다 (#618). AI는 이 값을 바꾸지 않는다
 # level: HIGH_RISK(고위험 징후, 정상 고객에게 거의 없음) / CAUTION(주의 징후, 정상 고객에게도 있음)
 # normalReason: 이 징후를 설명하는 정상 거래 근거 이름. None이면 "정상 사유 없음"
 # countedIn: 같은 행동을 이미 센 징후 이름 (예: 짧은 시간 반복 → 거절 후 재시도)
-# 판정에 따로 세지 않는다
 class BasisSignal(BaseModel):
     key: str
     label: str
@@ -67,19 +66,10 @@ class NormalBasis(BaseModel):
     explains: list[str]
 
 
-# rule: 판정 기준표에서 해당한 칸
-# HIGH_RISK_WITH_OTHERS(고위험 + 정상 사유 없는 다른 징후 → 승인 취소 검토)
-# HIGH_RISK_ONLY(고위험 하나만 → 추가 확인) · CAUTION_ONLY(주의만 → 추가 확인)
-# ALL_EXPLAINED(정상 사유 없는 징후 없음 → 매입 진행 검토, 징후 0개 포함 #618)
-# 칸은 Spring이 계산한다 (#618, DecisionBasisCalculator)
-BasisRule = Literal["HIGH_RISK_WITH_OTHERS", "HIGH_RISK_ONLY", "CAUTION_ONLY", "ALL_EXPLAINED"]
-
-
+# 기준표 칸(rule) · 권고(recommendation)는 #644에서 뺐다 — 옛 Spring이 보내도 읽지 않는다
 class DecisionBasis(BaseModel):
     signals: list[BasisSignal]
     normals: list[NormalBasis]
-    rule: BasisRule
-    recommendation: Recommendation
 
 
 class PaymentAnalysis(BaseModel):
@@ -91,9 +81,6 @@ class PaymentAnalysis(BaseModel):
     # 위험 근거 · 정상 근거 칸은 없앴다 — 어느 쪽에 넣는 것 자체가 AI 판단이었다 (#548)
     # 모르는 사실은 코드가 채운다
     unknowns: list[str]
-    # 기준표 판정 (#501) — basis.recommendation과 같다. 예전 보고서는 AI가 고른 값
-    recommendation: Recommendation
-    reason: str
     ruleHitDetails: list[RuleHitDetail]
     # 없으면 None — 예전 Spring · FDS 평가 없음
     signals: PaymentSignals | None = None
@@ -108,8 +95,8 @@ class TimelineItem(BaseModel):
     kind: Literal["PAYMENT", "CASE"]
 
 
+# 키 이름은 예전 그대로(화면 계약) — 권고 요약(summary)은 #644에서 뺐고 한계 줄만 남았다
 class ReportRecommendation(BaseModel):
-    summary: str
     limitations: list[str]
 
 
@@ -119,12 +106,6 @@ class EvidenceItem(BaseModel):
     evidenceId: str
     retrievedAt: str
     dataVersion: str
-
-
-# 보고서 맨 위 결론 — headline은 AI 한 줄, overallRecommendation은 결제별 권고로 코드가 계산
-class Verdict(BaseModel):
-    headline: str
-    overallRecommendation: Recommendation
 
 
 # 조사 과정 한 단계 — 원본 값 · 프롬프트 없이 코드가 만든 요약만 둔다 (#294)
@@ -179,7 +160,7 @@ class PaymentHistoryItem(BaseModel):
     amount: int | None
     paymentStatus: str | None
     requestedAt: str | None
-    # 기준표가 본 30일 기본 조회에 든 결제인지 (#591) — 화면 30일 경계선용, 예전 보고서는 None
+    # 정상 근거 계산이 본 30일 조회에 든 결제인지 (#591) — 화면 30일 경계선용, 예전 보고서는 None
     inBasis: bool | None = None
 
 
@@ -290,7 +271,6 @@ class ReportBody(BaseModel):
     additionalChecks: list[str]
     recommendation: ReportRecommendation
     evidence: list[EvidenceItem]
-    verdict: Verdict
     investigationTrace: InvestigationTrace
     # 조회하지 못했으면 None — 화면은 "조회하지 못함"을 보여 준다
     similarCases: SimilarCases | None

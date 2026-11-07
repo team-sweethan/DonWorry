@@ -115,7 +115,7 @@ class MerchantCaseFlowTests {
     }
 
     // 상세는 보고서 핵심 요약 · 직원 판정 · P5 결제 상태를 따로 보내고, 내부 근거는 보내지 않는다
-    // 보고서에 판정 권고(NEEDS_CHECK)가 들어 있어도 결제별 AI 권고는 내보내지 않는다 (#644, ADR-0009 결정 13)
+    // 결제별 AI 권고 칸은 응답에 없다 — 보고서에 판정 권고를 만들지 않고, 옛 보고서에 남은 값도 내보내지 않는다 (#644, ADR-0009 결정 13)
     @Test
     void detail_beforeAndAfterDecision_separatesDecisionAndPaymentStatus() throws Exception {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);

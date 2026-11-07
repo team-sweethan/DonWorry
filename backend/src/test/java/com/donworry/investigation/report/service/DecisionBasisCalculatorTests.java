@@ -133,14 +133,12 @@ class DecisionBasisCalculatorTests {
     }
 
     // 1011 — 같은 카드를 다른 고객이 씀(고위험) + 새 기기 · 새 카드 · 해외 접속(주의)
-    // 매입 완료 이력이 있어도 고액 징후가 없어 아무것도 설명하지 못한다 → 승인 취소 검토
+    // 매입 완료 이력이 있어도 고액 징후가 없어 아무것도 설명하지 못한다 → 모든 징후에 정상 사유 없음
     @Test
-    void basis_linkedCardWithNewCardAndOverseas_isRejectReview() {
+    void basis_linkedCardWithNewCardAndOverseas_marksLinkedCardHighRiskWithoutNormalReason() {
         Basis basis = basis(
                 205_600, List.of(rule("R02", "신규 단말기"), rule("R03", "신규 카드")), history(USUAL), linked(1, 0), "TH");
 
-        assertThat(basis.rule()).isEqualTo("HIGH_RISK_WITH_OTHERS");
-        assertThat(basis.recommendation()).isEqualTo("REJECT_REVIEW");
         assertThat(byLabel(basis).get("같은 카드를 다른 고객이 사용").level()).isEqualTo("HIGH_RISK");
         assertThat(byLabel(basis)).containsKey("해외 접속 (TH)");
         assertThat(basis.signals()).allMatch(s -> s.normalReason() == null);
@@ -150,7 +148,7 @@ class DecisionBasisCalculatorTests {
     }
 
     // 1066 — 카드 테스팅 모양: 거절 후 재시도(고위험) + 단시간 반복(주의), 승인 이력 없음
-    // 단시간 반복은 거절 후 재시도와 같은 행동이라 따로 세지 않는다 → 추가 확인 (#501 리뷰)
+    // 단시간 반복은 거절 후 재시도와 같은 행동이라 그 징후에 묶는다 (#501 리뷰)
     @Test
     void basis_retryWithRepeatWithoutApprovedHistory_countsOnce() {
         List<Row> declined = List.of(
@@ -163,27 +161,26 @@ class DecisionBasisCalculatorTests {
                 linked(0, 0),
                 "KR");
 
-        assertThat(basis.rule()).isEqualTo("HIGH_RISK_ONLY");
-        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
+        assertThat(byLabel(basis).get("거절 후 재시도").level()).isEqualTo("HIGH_RISK");
         assertThat(byLabel(basis).get("단시간 반복 결제").countedIn()).isEqualTo("거절 후 재시도");
     }
 
-    // 1015 — 같은 모양의 정상 고객: 거절 후 재시도만 센다 → 추가 확인 (정상 고객을 승인 취소 검토로 보내지 않게)
+    // 1015 — 같은 모양의 정상 고객: 매입 완료 이력이 있어도 고위험 징후에는 자료만으로 정상 사유를 붙이지 않는다
     @Test
-    void basis_retryWithRepeatForUsualCustomer_isNeedsCheck() {
+    void basis_retryWithRepeatForUsualCustomer_keepsRetryHighRiskWithoutNormalReason() {
         List<Row> rows = List.of(
                 new Row(32_000, "CAPTURED", "2026-06-30T10:28:20Z"),
                 new Row(22_100, "CAPTURED", "2026-06-27T11:47:43Z"));
         Basis basis = basis(
                 28_100, List.of(rule("R04", "단시간 반복 결제"), rule("R08", "거절 후 재시도")), history(rows), linked(0, 0), "KR");
 
-        assertThat(basis.rule()).isEqualTo("HIGH_RISK_ONLY");
         Signal retry = byLabel(basis).get("거절 후 재시도");
+        assertThat(retry.level()).isEqualTo("HIGH_RISK");
         assertThat(retry.normalReason()).isNull();
         assertThat(retry.countedIn()).isNull();
     }
 
-    // 승인 이력이 있고 새 카드 규칙이 안 걸려도 "본인 카드"로 보지 않는다 (#501 리뷰) — 단시간 반복만 남으면 추가 확인
+    // 승인 이력이 있고 새 카드 규칙이 안 걸려도 "본인 카드"로 보지 않는다 (#501 리뷰) — 단시간 반복에 정상 사유 없음
     @Test
     void basis_missingNewCardRule_isNotOwnCardReason() {
         Basis basis = basis(
@@ -193,14 +190,13 @@ class DecisionBasisCalculatorTests {
                 linked(0, 0),
                 "KR");
 
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
         assertThat(basis.signals().getFirst().normalReason()).isNull();
     }
 
-    // 1014 — 해외 여행 중인 정상 고객: 새 기기 · 새 카드 · 해외 접속(주의 3개)만 → 추가 확인
-    // 주의 징후 개수로 승인 취소 검토를 만들지 않는다 (#618 — 무게를 넣지 않은 이유)
+    // 1014 — 해외 여행 중인 정상 고객: 새 기기 · 새 카드 · 해외 접속은 모두 주의 징후다
+    // 주의 징후가 여러 개라도 고위험으로 올리지 않는다 (#618 — 무게를 넣지 않은 이유)
     @Test
-    void basis_threeCautionSignalsOnly_isNeedsCheck() {
+    void basis_threeCautionSignalsOnly_staysCaution() {
         Basis basis = basis(
                 150_000,
                 List.of(rule("R02", "신규 단말기"), rule("R03", "신규 카드")),
@@ -208,31 +204,16 @@ class DecisionBasisCalculatorTests {
                 linked(0, 0),
                 "VN");
 
-        assertThat(basis.signals()).hasSize(3);
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
-        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
+        assertThat(basis.signals()).hasSize(3).allMatch(s -> "CAUTION".equals(s.level()));
     }
 
-    // 평소 금액의 고액 결제 — 비슷한 금액 매입 완료 2건 이상이 고액 징후를 설명한다 → 매입 진행 검토
+    // 평소 금액의 고액 결제 — 비슷한 금액 매입 완료 2건 이상이 고액 징후를 설명한다
     @Test
-    void basis_highAmountExplainedByUsualAmount_isAcceptReview() {
+    void basis_highAmountExplainedByUsualAmount_attachesNormalReason() {
         Basis basis = basis(220_000, List.of(rule("R01", "고액 결제")), history(USUAL), linked(0, 0), "KR");
 
-        assertThat(basis.rule()).isEqualTo("ALL_EXPLAINED");
-        assertThat(basis.recommendation()).isEqualTo("ACCEPT_REVIEW");
         assertThat(basis.signals().getFirst().normalReason()).isEqualTo("최근 30일 비슷한 금액의 결제 5건 매입 완료");
         assertThat(basis.normals().getFirst().explains()).containsExactly("고액 결제");
-    }
-
-    // 징후가 하나도 없으면 칸 값은 ALL_EXPLAINED(정상 사유 없는 징후 없음) · 매입 진행 검토 그대로 (#618)
-    // 칸 값을 새로 만들면 화면 기준표 4칸 어디에도 ✓가 붙지 않고, 저장된 보고서와 값이 달라진다
-    @Test
-    void basis_noSignals_keepsAllExplainedAndAcceptReview() {
-        Basis basis = basis(30_000, List.of(), history(List.of()), linked(0, 0), "KR");
-
-        assertThat(basis.signals()).isEmpty();
-        assertThat(basis.rule()).isEqualTo("ALL_EXPLAINED");
-        assertThat(basis.recommendation()).isEqualTo("ACCEPT_REVIEW");
     }
 
     // 비슷한 금액 이력이 1건뿐이면 정상 사유로 보지 않는다
@@ -240,7 +221,8 @@ class DecisionBasisCalculatorTests {
     void basis_singleSimilarPayment_isNotEnough() {
         Basis basis = basis(220_000, List.of(rule("R01", "고액 결제")), history(USUAL.subList(0, 1)), linked(0, 0), "KR");
 
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
+        assertThat(basis.signals().getFirst().normalReason()).isNull();
+        assertThat(basis.normals()).isEmpty();
     }
 
     // 사건 결제 앞뒤 10분 안의 결제는 평소 결제가 아니다 — 같은 연속 결제로 고액을 설명하지 않는다
@@ -251,7 +233,8 @@ class DecisionBasisCalculatorTests {
                 new Row(220_000, "CAPTURED", "2026-05-21T11:12:00Z"));
         Basis basis = basis(220_000, List.of(rule("R01", "고액 결제")), history(burst), linked(0, 0), "KR");
 
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
+        assertThat(basis.signals().getFirst().normalReason()).isNull();
+        assertThat(basis.normals()).isEmpty();
     }
 
     // 사건 뒤 결제도 평소 결제가 아니다 — 보고서를 늦게 만들어도 사건 뒤 결제로 고액을 설명하지 않는다 (#501 리뷰)
@@ -262,7 +245,8 @@ class DecisionBasisCalculatorTests {
                 new Row(220_000, "CAPTURED", "2026-05-23T10:00:00Z"));
         Basis basis = basis(220_000, List.of(rule("R01", "고액 결제")), history(later), linked(0, 0), "KR");
 
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
+        assertThat(basis.signals().getFirst().normalReason()).isNull();
+        assertThat(basis.normals()).isEmpty();
     }
 
     // 고위험 국가 규칙이 걸렸으면 해외 접속을 따로 세지 않는다 · 예전 영문 코드도 같은 징후로 읽는다
@@ -271,7 +255,7 @@ class DecisionBasisCalculatorTests {
         Basis basis = basis(100_000, List.of(rule("R05", "고위험 국가 IP"), rule("NEW_CARD", "처음 쓰는 카드")), null, null, "NG");
 
         assertThat(basis.signals()).extracting(Signal::key).containsExactly("R05", "R03");
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
+        assertThat(basis.signals()).allMatch(s -> "CAUTION".equals(s.level()));
     }
 
     // 징후 이름은 FDS 규칙 이름 그대로 — Case 상세 적중 규칙 · 조사 요약 밑줄과 같은 이름 (#505)
@@ -293,7 +277,7 @@ class DecisionBasisCalculatorTests {
     }
 
     // 사건은 30분 안의 보류 결제를 계속 합친다 — 10:00 보류 → 10:14 정상 결제 2건 → 10:28 보류 (#532)
-    // 10:14 결제는 사건이 시작된 뒤의 결제라 평소 결제가 아니다 — 두 사건 결제 모두 추가 확인
+    // 10:14 결제는 사건이 시작된 뒤의 결제라 평소 결제가 아니다 — 두 사건 결제 모두 고액에 정상 사유 없음
     @Test
     void basis_paymentsDuringStretchedCase_areNotUsualHistory() {
         List<CasePaymentsToolResponse.Payment> stretched = List.of(
@@ -311,7 +295,7 @@ class DecisionBasisCalculatorTests {
                     during,
                     linked(0, 0));
             assertThat(basis.normals()).isEmpty();
-            assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
+            assertThat(basis.signals().getFirst().normalReason()).isNull();
         }
     }
 
@@ -325,30 +309,12 @@ class DecisionBasisCalculatorTests {
         return DecisionBasisCalculator.basis(payment, error, List.of(payment), history(USUAL), linked);
     }
 
-    // FDS 점수 없음만 있으면 추가 확인 — "징후 없음 → 매입 진행 검토"가 되지 않는다 (#532)
+    // FDS 점수 없음은 주의 징후로 남긴다 — "징후 없음"으로 읽히지 않게 (#532)
     @Test
-    void basis_fdsErrorAlone_isNeedsCheck() {
+    void basis_fdsErrorAlone_addsUnconfirmedCautionSignal() {
         Basis basis = errorBasis(linked(0, 0));
 
-        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
-        assertThat(basis.signals()).extracting(Signal::label).contains("FDS 평가 결과 미확인");
-    }
-
-    // 점수 없음 + 고위험 하나 — 점수 없음을 "다른 징후"로 세어 승인 취소 검토로 올리지 않는다
-    @Test
-    void basis_fdsErrorWithSingleHighRisk_isNotRaised() {
-        Basis basis = errorBasis(linked(1, 0));
-
-        assertThat(basis.rule()).isEqualTo("HIGH_RISK_ONLY");
-        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
-    }
-
-    // 점수 없음 + 고위험 · 다른 징후가 겹치면 승인 취소 검토를 유지한다 — 내리지도 않는다
-    @Test
-    void basis_fdsErrorWithHighRiskAndOthers_keepsRejectReview() {
-        Basis basis = errorBasis(linked(1, 1));
-
-        assertThat(basis.recommendation()).isEqualTo("REJECT_REVIEW");
+        assertThat(byLabel(basis).get("FDS 평가 결과 미확인").level()).isEqualTo("CAUTION");
     }
 
     // 같은 카드 징후는 그 결제의 것만 붙인다 (#533) — 결제 1만 겹치고 결제 2는 깨끗하다
@@ -457,17 +423,5 @@ class DecisionBasisCalculatorTests {
         assertThat(basis.signals())
                 .allMatch(s -> s.checkBefore() != null && !s.checkBefore().isBlank());
         assertThat(highRiskCountry.signals().getFirst().checkBefore()).isNotBlank();
-    }
-
-    // 종합 권고 (ADR-0009 결정 4) — 하나라도 승인 취소 검토면 승인 취소 검토, 모두 매입 진행 검토일 때만 매입 진행 검토
-    @Test
-    void overall_mixedRecommendations_followsDecision4() {
-        assertThat(DecisionBasisCalculator.overall(List.of("ACCEPT_REVIEW", "REJECT_REVIEW")))
-                .isEqualTo("REJECT_REVIEW");
-        assertThat(DecisionBasisCalculator.overall(List.of("ACCEPT_REVIEW", "NEEDS_CHECK")))
-                .isEqualTo("NEEDS_CHECK");
-        assertThat(DecisionBasisCalculator.overall(List.of("ACCEPT_REVIEW", "ACCEPT_REVIEW")))
-                .isEqualTo("ACCEPT_REVIEW");
-        assertThat(DecisionBasisCalculator.overall(List.of())).isEqualTo("NEEDS_CHECK");
     }
 }

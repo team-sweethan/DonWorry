@@ -108,7 +108,7 @@ public class AiToolService {
     }
 
     // 기준값 · 실제값 원본 JSON은 내보내지 않고 정리한 문장만 싣는다 — 식별자가 AI 입력에 들어가지 않게 (#326)
-    // 고정 보고서도 같은 모양으로 기준표를 계산하려고 같은 패키지에 연다 (#618)
+    // 고정 보고서도 같은 모양으로 징후 · 정상 근거를 계산하려고 같은 패키지에 연다 (#618)
     static FdsEvidenceToolResponse.RuleHit toolRuleHit(RuleHit rule) {
         Optional<Criterion> criterion =
                 RuleCriterionFormatter.format(rule.code(), rule.thresholdSnapshot(), rule.observedValue());
@@ -142,10 +142,10 @@ public class AiToolService {
         return orderContextFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
-    // 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — 기준표는 Spring이 계산하고 ai-server는 그대로 싣는다 (ADR-0009 결정 7)
+    // 결제별 징후 · 정상 근거 (#618) — Spring이 계산하고 ai-server는 그대로 싣는다 (ADR-0009 결정 7 · 13)
     // 고객 이력은 늘 30일 기본 조회로 본다 — AI가 90일을 불렀는지와 상관없이 같은 사건엔 같은 권고 (#581)
     // 고객 이력 조회가 실패하면 정상 사유 없이 계산한다 (권고가 매입 진행 쪽으로 올라가지 않는다)
-    // 연결 결제 조회가 실패하면 기준표를 주지 않는다 — 고위험 징후를 확인하지 못했다 (#618 Codex 리뷰, DecisionBasisCalculator.forCase)
+    // 연결 결제 조회가 실패하면 근거를 주지 않는다 — 고위험 징후를 확인하지 못했다 (#618 Codex 리뷰, DecisionBasisCalculator.forCase)
     // 트랜잭션을 열지 않는다 — 참고 조회 실패가 감싼 읽기 트랜잭션을 rollback-only로 만들지 않게 조회마다 따로 읽는다
     public DecisionBasisToolResponse decisionBasis(Long caseId) {
         Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
@@ -155,13 +155,13 @@ public class AiToolService {
         try {
             history = paymentHistoryFinder.find(caseId, now, PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS);
         } catch (RuntimeException e) {
-            log.warn("기준표용 고객 최근 결제 조회 실패 caseId={}", caseId, e);
+            log.warn("징후 계산용 고객 최근 결제 조회 실패 caseId={}", caseId, e);
         }
         LinkedPaymentsToolResponse linked = null;
         try {
             linked = linkedPaymentFinder.find(caseId, now);
         } catch (RuntimeException e) {
-            log.warn("기준표용 같은 카드 · 기기 · IP 결제 조회 실패 caseId={}", caseId, e);
+            log.warn("징후 계산용 같은 카드 · 기기 · IP 결제 조회 실패 caseId={}", caseId, e);
         }
         return DecisionBasisCalculator.forCase(cases, fds, history, linked, now);
     }
