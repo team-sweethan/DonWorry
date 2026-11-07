@@ -38,6 +38,7 @@ import {
   type ReportFilter,
   type StatusFilter,
 } from '../../utils/caseListQuery'
+import { readCaseListScope, saveCaseListScope } from '../../utils/caseListScope'
 import { won } from '../../utils/format'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
@@ -67,24 +68,6 @@ const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
 
 const PAGE_SIZE = 20
 
-// [내 사건만 / 전체 직원] (#612) — 상세에 갔다 와도 유지되게 탭 저장소에 둔다. 저장소를 못 쓰면 기본값
-// 상태 탭의 "전체"와 헷갈리지 않게 "전체 직원"이라고 쓴다
-const SCOPE_KEY = 'donworry.caseListScope'
-function readScope(): CaseScope {
-  try {
-    return sessionStorage.getItem(SCOPE_KEY) === 'ALL' ? 'ALL' : 'MINE'
-  } catch {
-    return 'MINE'
-  }
-}
-function saveScope(scope: CaseScope) {
-  try {
-    sessionStorage.setItem(SCOPE_KEY, scope)
-  } catch {
-    // 저장하지 못해도 이번 화면에서는 바뀐 값을 쓴다
-  }
-}
-
 // 목록 위 탭 (#314) — 종료된 Case를 상태 필터 안에 숨기지 않고 바로 본다
 const tabItems: Array<{ key: CaseListTab; label: string }> = [
   { key: 'ACTIVE', label: '처리 중' },
@@ -98,7 +81,8 @@ export function CaseListPage() {
   const { message } = App.useApp()
   const location = useLocation()
   const { user } = useAuth()
-  const [scope, setScope] = useState<CaseScope>(readScope)
+  // [내 사건만 / 전체 직원] (#612) — 상태 탭의 "전체"와 헷갈리지 않게 "전체 직원"이라고 쓴다
+  const [scope, setScope] = useState<CaseScope>(readCaseListScope)
   // 목록 조건은 주소 쿼리에 둔다 (#243) — 상세에 갔다 와도 · 새로고침해도 같은 조건으로 열린다
   // 라우터로 들어온 주소(홈 카드 · 뒤로 가기 · 새로고침)가 바뀌면 그 주소의 조건을 다시 읽는다
   const [searchParams] = useSearchParams()
@@ -130,11 +114,11 @@ export function CaseListPage() {
   } | null>(null)
 
   // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553).
-  // 조건(탭 · 검색 · 페이지)은 주소에 있어 다시 조회해도 그대로다
+  // 조건(탭 · 검색 · 페이지)은 주소에 있어 다시 조회해도 그대로다. 고른 범위의 건수만 본다 (#640)
   const watch = useCaseListWatch((added) => {
     setRefreshKey((k) => k + 1)
     if (added > 0) message.info(`새 Case ${added}건이 들어왔습니다. 목록을 다시 불러옵니다.`)
-  })
+  }, scope)
   const { listLoaded } = watch
   const refresh = () => {
     setRefreshKey((k) => k + 1)
@@ -387,7 +371,7 @@ export function CaseListPage() {
               value={scope}
               onChange={(next) => {
                 setScope(next)
-                saveScope(next)
+                saveCaseListScope(next)
                 setQuery({})
               }}
               options={[

@@ -549,7 +549,7 @@ class CaseFlowTests {
     // 다른 테스트와 DB를 같이 쓰므로 절대값이 아니라 전후 차이로 본다
     @Test
     void counts_includesEveryStatusAndNewDecisionPendingCase() throws Exception {
-        Map<String, Long> before = caseQueryService.counts().statusCounts();
+        Map<String, Long> before = caseQueryService.counts(STAFF_ID).statusCounts();
         createHeld(customer(), 300_000L, 65);
 
         assertThat(before)
@@ -559,6 +559,26 @@ class CaseFlowTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
                 .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
+    }
+
+    // 내 건수는 로그인한 직원이 담당인 Case만 세고, 모든 직원 건수에는 남의 Case도 그대로 들어간다 (#640)
+    // 다른 테스트와 DB를 같이 쓰므로 이 테스트만 쓰는 직원 ID로 본다
+    @Test
+    void counts_myStatusCounts_onlyLoggedInStaffCases() throws Exception {
+        long me = System.nanoTime();
+        long other = me + 1;
+        Map<String, Long> before = caseQueryService.counts(me).statusCounts();
+        loginAs(me, "SECURITY_STAFF");
+        createHeld(customer(), 300_000L, 65);
+        loginAs(other, "SECURITY_STAFF");
+        createHeld(customer(), 200_000L, 60);
+        loginAs(me, "SECURITY_STAFF");
+
+        perform(get("/api/security-cases/counts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myStatusCounts.DECISION_PENDING").value(1))
+                .andExpect(jsonPath("$.myStatusCounts.CLOSED").value(0))
+                .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 2));
     }
 
     // 결제 ID → 연결된 Case (#309) — 연결된 결제만 결제 ID 순으로 오고, Case가 없는 결제는 빠진다

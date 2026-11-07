@@ -4,13 +4,15 @@ import { Alert, App, Button, Card, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import { getCases } from '../../api/cases'
+import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useCaseListWatch } from '../../hooks/useCaseListWatch'
 import type { CaseStatus, CaseSummary } from '../../types/case'
 import { won } from '../../utils/format'
 import { SLA_HOURS, customerPart } from '../../utils/caseRules'
 import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
-import { homeCounts, priorityCases, type PriorityReason } from '../../utils/securityHome'
+import { saveCaseListScope } from '../../utils/caseListScope'
+import { homeView, type PriorityReason } from '../../utils/securityHome'
 import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
@@ -31,6 +33,8 @@ export function SecurityHomePage() {
   const navigate = useNavigate()
   // effect 의존성에는 렌더마다 바뀌지 않는 App의 message를 쓴다
   const { message } = App.useApp()
+  const { user } = useAuth()
+  const myId = user?.userId ?? null
   const [refreshKey, setRefreshKey] = useState(0)
   // CaseListPage와 같이 어떤 요청에 대한 응답인지 함께 저장하고, 실패는 빈 목록과 구분한다
   const [result, setResult] = useState<{
@@ -39,11 +43,11 @@ export function SecurityHomePage() {
     failed: boolean
   } | null>(null)
 
-  // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553)
+  // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553). 홈은 내 Case만 보므로 내 건수로 본다 (#640)
   const watch = useCaseListWatch((added) => {
     setRefreshKey((k) => k + 1)
     if (added > 0) message.info(`새 Case ${added}건이 들어왔습니다. 현황을 다시 불러옵니다.`)
-  })
+  }, 'MINE')
   const { listLoaded } = watch
   const refresh = () => {
     setRefreshKey((k) => k + 1)
@@ -75,17 +79,21 @@ export function SecurityHomePage() {
   }, [refreshKey, message, listLoaded])
 
   const loading = result?.refreshKey !== refreshKey
-  const cases = useMemo(() => result?.cases ?? [], [result])
-  const counts = useMemo(() => homeCounts(cases), [cases])
-  const rows = useMemo(() => priorityCases(cases), [cases])
+  // 홈은 항상 내가 담당인 Case만 센다 (#640)
+  const { counts, rows, openCases } = useMemo(
+    () => homeView(result?.cases ?? [], myId),
+    [result, myId],
+  )
   const failed = result?.failed === true
 
-  // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243)
-  const openList = (query: Partial<CaseListQuery> = {}) =>
+  // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243). 목록도 [내 사건만]으로 열어 홈 숫자와 맞춘다 (#640)
+  const openList = (query: Partial<CaseListQuery> = {}) => {
+    saveCaseListScope('MINE')
     navigate(`/security/cases${caseListSearch(query)}`)
-  // 한 건이면 그 Case로 바로 간다
+  }
+  // 내 Case가 한 건이면 그 Case로 바로 간다
   const openFirst = (match: (c: CaseSummary) => boolean, query: Partial<CaseListQuery>) => {
-    const hits = cases.filter((c) => c.status !== 'CLOSED' && match(c))
+    const hits = openCases.filter(match)
     if (hits.length === 1) navigate(`/security/cases/${hits[0].caseId}`)
     else openList(query)
   }
@@ -147,7 +155,7 @@ export function SecurityHomePage() {
     <>
       <PageHeader
         title="홈"
-        description="지금 처리해야 할 Case를 모아 봅니다. 숫자는 종료되지 않은 Case 기준입니다."
+        description="내가 맡은 Case 중 지금 처리해야 할 것을 모아 봅니다. 숫자는 종료되지 않은 Case 기준입니다."
         actions={
           <Button icon={<ReloadOutlined />} onClick={refresh}>
             새로고침
@@ -285,7 +293,7 @@ export function SecurityHomePage() {
           locale={{
             emptyText: (
               <Typography.Text type="secondary" style={{ display: 'block', padding: 36 }}>
-                처리할 Case가 없습니다.
+                맡은 Case 중 처리할 것이 없습니다.
               </Typography.Text>
             ),
           }}

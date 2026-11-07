@@ -1,4 +1,5 @@
 import type { CaseStatus } from '../types/case.ts'
+import type { CaseScope } from './caseRules.ts'
 
 /**
  * 보안 직원 사이드바 "Case 목록" 배지 (#224). 처리 필요 = 판정 대기 + 금융 처리 실패 (프로토타입 `needAction`).
@@ -8,6 +9,9 @@ import type { CaseStatus } from '../types/case.ts'
 
 export type CaseCounts = Record<CaseStatus, number>
 
+/** 건수 API 응답 (#640) — MINE은 로그인한 직원이 담당인 Case, ALL은 모든 직원의 Case. 배지는 MINE으로 센다. */
+export type ScopedCaseCounts = Record<CaseScope, CaseCounts>
+
 export function needActionCount(counts: CaseCounts) {
   return counts.DECISION_PENDING + counts.ACTION_FAILED
 }
@@ -15,7 +19,7 @@ export function needActionCount(counts: CaseCounts) {
 /** 아직 한 번도 받지 못했으면 null — 화면은 배지를 그리지 않는다. */
 export type CaseBadgeSnapshot = number | null
 
-export function createCaseBadgeStore(load: () => Promise<CaseCounts>) {
+export function createCaseBadgeStore(load: () => Promise<ScopedCaseCounts>) {
   let value: CaseBadgeSnapshot = null
   // 늦게 온 이전 응답이 새 응답을 덮지 않게 마지막 요청만 반영한다. reset도 순번을 올려 이전 계정 응답을 버린다
   let sequence = 0
@@ -38,7 +42,7 @@ export function createCaseBadgeStore(load: () => Promise<CaseCounts>) {
       const current = ++sequence
       try {
         const counts = await load()
-        if (current === sequence) set(needActionCount(counts))
+        if (current === sequence) set(needActionCount(counts.MINE))
       } catch {
         // 배지는 보조 표시다. 오류 안내는 각 화면의 조회가 맡는다
       }
@@ -47,9 +51,9 @@ export function createCaseBadgeStore(load: () => Promise<CaseCounts>) {
      * 화면이 이미 받은 건수로 맞춘다 (#553 홈 · 목록 자동 반영). 요청을 따로 보내지 않는다.
      * 진행 중인 refresh 응답이 이 값을 덮지 않게 순번을 올린다.
      */
-    apply(counts: CaseCounts) {
+    apply(counts: ScopedCaseCounts) {
       sequence += 1
-      set(needActionCount(counts))
+      set(needActionCount(counts.MINE))
     },
     /** 로그아웃 · 계정 전환 때 이전 계정의 숫자를 지운다. */
     reset() {

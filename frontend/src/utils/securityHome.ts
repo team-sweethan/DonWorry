@@ -1,5 +1,5 @@
 import type { CaseSummary } from '../types/case.ts'
-import { slaState } from './caseRules.ts'
+import { casesInScope, slaState } from './caseRules.ts'
 
 /** 보안 직원 홈 (#222). Case 목록 하나로 처리 현황과 먼저 볼 사건을 계산한다. 최종 판단은 백엔드 상태값을 따른다. */
 
@@ -59,4 +59,17 @@ export function priorityCases(cases: CaseSummary[], limit = 6, now = Date.now())
         rank[a.reason] - rank[b.reason] || Date.parse(a.createdAt) - Date.parse(b.createdAt),
     )
     .slice(0, limit)
+}
+
+/**
+ * 보안 홈이 보여 줄 것 (#640) — 홈은 항상 내가 담당인 Case만 본다. 카드 건수 · 지금 처리할 사건 ·
+ * 1건이면 바로 이동할 후보가 모두 같은 범위여야 한다. 남의 진행 중 Case는 열어도 서버가 거부한다 (INV_028).
+ */
+export function homeView(cases: CaseSummary[], userId: number | null, now = Date.now()) {
+  const mine = casesInScope(cases, 'MINE', userId)
+  return {
+    counts: homeCounts(mine, now),
+    rows: priorityCases(mine, 6, now),
+    openCases: mine.filter(isOpen),
+  }
 }
