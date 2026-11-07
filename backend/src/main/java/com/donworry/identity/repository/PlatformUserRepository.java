@@ -2,11 +2,13 @@ package com.donworry.identity.repository;
 
 import com.donworry.identity.entity.PlatformUser;
 import com.donworry.identity.entity.UserRole;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +17,11 @@ public interface PlatformUserRepository
         extends JpaRepository<PlatformUser, Long>, JpaSpecificationExecutor<PlatformUser> {
 
     Optional<PlatformUser> findByLoginId(String loginId);
+
+    // 계정 행 잠금 읽기(SELECT ... FOR UPDATE) — 보안 정지 해제가 부른 쪽(판정) 트랜잭션 끝까지 계정 행을 잡는다.
+    // 그동안 비밀번호 초기화 · 상태 변경의 UPDATE는 기다리고, 해제는 그 사이 바뀐 비밀번호를 옛 값으로 되돌리지 않는다 (#649 리뷰)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<PlatformUser> findForUpdateByUserId(Long userId);
 
     List<PlatformUser> findByMerchantIdAndRole(Long merchantId, UserRole role);
 

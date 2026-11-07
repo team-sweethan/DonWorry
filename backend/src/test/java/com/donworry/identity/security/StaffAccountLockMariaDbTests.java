@@ -34,6 +34,7 @@ import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -138,13 +139,10 @@ class StaffAccountLockMariaDbTests {
     }
 
     // 같은 정지를 동시에 풀어도 먼저 커밋된 판정이 남고, 늦은 판정이 해제 결과 · 계정 상태를 덮어쓰지 않는다 (#649 리뷰)
+    // 늦은 판정은 권장 격리(READ_COMMITTED)로 부른다 — 앞 판정을 기다린 뒤 이미 풀린 기록을 보고 아무것도 바꾸지 않는다
     @Test
     void release_concurrent_keepsFirstDecision() throws Exception {
-        jdbc.update(
-                "INSERT INTO platform_users(login_id,password_hash,display_name,status,role,created_at,password_change_required) VALUES (?,'x','관리자','ACTIVE','ADMIN',UTC_TIMESTAMP(6),false)",
-                prefix + "_admin");
-        long adminId = jdbc.queryForObject(
-                "SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "_admin");
+        long adminId = admin();
         locker.lockBySystem(staffId, StaffLockReason.INSIDER_EXPORT_BLOCKED, null);
         var firstReleased = new CountDownLatch(1);
         var commitFirst = new CountDownLatch(1);
@@ -158,7 +156,8 @@ class StaffAccountLockMariaDbTests {
             }));
             assertThat(firstReleased.await(10, TimeUnit.SECONDS)).isTrue();
             // 늦은 판정: 무혐의(복귀) — 앞 판정이 끝날 때까지 기다려야 한다
-            var second = executor.submit(() -> locker.release(release(adminId, StaffLockOutcome.RESTORE, "CLEARED")));
+            var second = executor.submit(() -> readCommitted()
+                    .executeWithoutResult(tx -> locker.release(release(adminId, StaffLockOutcome.RESTORE, "CLEARED"))));
             assertThatThrownBy(() -> second.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
             commitFirst.countDown();
             first.get(15, TimeUnit.SECONDS);
@@ -177,6 +176,62 @@ class StaffAccountLockMariaDbTests {
                         Integer.class,
                         staffId))
                 .isEqualTo(1);
+    }
+
+    // 해제가 커밋되기 전에 시작한 비밀번호 초기화는 해제를 기다리고, 해제 결과(상태)와 비밀번호가 서로를 덮어쓰지 않는다 (#649 리뷰)
+    // 해제 쪽은 READ_COMMITTED 판정 트랜잭션, 초기화 쪽은 AdminAccountService와 같은 기본 격리 · 엔티티 저장으로 흉내 낸다
+    @Test
+    void release_whilePasswordResetPending_doesNotLoseEitherChange() throws Exception {
+        long adminId = admin();
+        locker.lockBySystem(staffId, StaffLockReason.INSIDER_EXPORT_BLOCKED, null);
+        String oldHash = passwordHash();
+        var released = new CountDownLatch(1);
+        var commitRelease = new CountDownLatch(1);
+
+        Throwable resetFailure;
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var release = executor.submit(() -> readCommitted().executeWithoutResult(tx -> {
+                locker.release(release(adminId, StaffLockOutcome.RESTORE, "CLEARED"));
+                released.countDown();
+                await(commitRelease);
+            }));
+            assertThat(released.await(10, TimeUnit.SECONDS)).isTrue();
+            var reset = executor.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(tx -> {
+                users.findById(staffId).orElseThrow().resetPasswordHash("reset-" + prefix);
+            }));
+            // 해제가 계정 행을 잡고 있어 초기화 저장은 기다린다
+            assertThatThrownBy(() -> reset.get(500, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+            commitRelease.countDown();
+            release.get(15, TimeUnit.SECONDS);
+            resetFailure = catchThrowable(() -> reset.get(15, TimeUnit.SECONDS));
+        } finally {
+            commitRelease.countDown();
+        }
+
+        // 해제 결과는 남는다
+        assertThat(status()).isEqualTo("ACTIVE");
+        // 초기화는 해제 전에 읽은 SUSPENDED로 덮어쓰지 않고 거절된다 — MariaDB 11.8 스냅숏 격리("Record has changed since last read").
+        // 관리자에게는 오류로 보이고 다시 누르면 된다
+        assertThat(resetFailure).hasRootCauseInstanceOf(java.sql.SQLException.class);
+        assertThat(passwordHash()).isEqualTo(oldHash);
+    }
+
+    private long admin() {
+        jdbc.update(
+                "INSERT INTO platform_users(login_id,password_hash,display_name,status,role,created_at,password_change_required) VALUES (?,'x','관리자','ACTIVE','ADMIN',UTC_TIMESTAMP(6),false)",
+                prefix + "_admin");
+        return jdbc.queryForObject(
+                "SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "_admin");
+    }
+
+    private TransactionTemplate readCommitted() {
+        var template = new TransactionTemplate(transactions);
+        template.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        return template;
+    }
+
+    private String passwordHash() {
+        return jdbc.queryForObject("SELECT password_hash FROM platform_users WHERE user_id=?", String.class, staffId);
     }
 
     private StaffLockRelease release(long adminId, StaffLockOutcome outcome, String decision) {

@@ -107,9 +107,11 @@ public class StaffAccountLockService implements StaffAccountLocker {
         requirePositive(release.adminId(), "adminId");
         Assert.notNull(release.outcome(), "outcome");
         requireAdmin(release.adminId());
+        // 잠금 순서: 계정 행 → 정지 기록 행. 둘 다 잠금 읽기라 최신 커밋 값을 읽고, 부른 쪽 트랜잭션이 끝날 때까지 잡는다
+        var user = users.findForUpdateByUserId(release.staffId())
+                .orElseThrow(() -> new StaffAccountLockException(Reason.USER_NOT_FOUND));
         var open = lockRecords.findForUpdateByStaffIdAndStatus(release.staffId(), StaffAccountLockStatus.OPEN);
         if (open.isEmpty()) return;
-        var user = find(release.staffId());
         UserStatus before = user.getStatus();
         open.get()
                 .release(

@@ -16,6 +16,9 @@ public interface StaffAccountLocker {
 
     // 판정으로 해제 — 호출 쪽 트랜잭션에 참여해 판정 저장과 함께 커밋 · 롤백된다
     // 열린 정지가 없으면 아무것도 바꾸지 않는다. 계정이 SUSPENDED일 때만 outcome대로 상태를 바꾼다
+    // 계정 행 · 정지 기록 행을 잠금 읽기로 잡아, 같은 계정의 동시 해제 · 비밀번호 초기화 · 상태 변경을 덮어쓰지 않는다
+    // 호출 쪽은 READ_COMMITTED를 권한다: 늦은 해제는 앞 판정을 기다린 뒤 아무것도 바꾸지 않는다.
+    // REPEATABLE READ면 그 전에 읽은 스냅숏 때문에 MariaDB가 SnapshotIsolationException으로 거절한다(덮어쓰지 않고 판정 롤백)
     void release(StaffLockRelease release);
 
     boolean isLocked(Long staffId);

@@ -50,6 +50,7 @@ class StaffAccountLockServiceTests {
     void setUp() {
         when(users.findById(STAFF)).thenReturn(Optional.of(staff));
         when(users.findById(ADMIN)).thenReturn(Optional.of(admin));
+        when(users.findForUpdateByUserId(STAFF)).thenReturn(Optional.of(staff));
         when(staff.getLoginId()).thenReturn("staff");
         when(staff.getRole()).thenReturn(UserRole.SECURITY_STAFF);
         when(staff.getStatus()).thenReturn(UserStatus.ACTIVE);
