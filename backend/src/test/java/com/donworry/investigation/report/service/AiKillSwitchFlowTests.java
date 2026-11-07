@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -28,6 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -37,6 +41,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.client.ResourceAccessException;
 
 // ai-server를 켠 서버에서 AI 조사 긴급정지가 AI로 이어지는 경로를 모두 막는지 실제 MariaDB로 확인한다 (ADR-0083 결정 4 · 5)
 // 스위치(AiSwitchService)는 대역으로 둔다 — 꺼짐 기록을 공유 DB에 남기면 다른 테스트의 AI 경로가 막힌다
@@ -76,6 +81,15 @@ class AiKillSwitchFlowTests {
 
     @MockitoBean
     AiSwitchService aiSwitchService;
+
+    // 대역 스위치도 "켜짐 확인 → 저장"(whenAiAllowed)을 isAiAllowed 값대로 흉내 낸다
+    @BeforeEach
+    void switchGateFollowsIsAiAllowed() {
+        given(aiSwitchService.whenAiAllowed(any()))
+                .willAnswer(invocation -> aiSwitchService.isAiAllowed()
+                        ? Optional.ofNullable(((Supplier<?>) invocation.getArgument(0)).get())
+                        : Optional.empty());
+    }
 
     // 꺼져 있으면 새 요청은 ai-server를 부르지 않고 고정 보고서로 끝난다 — 사건 정보가 ai-server · LLM으로 나가지 않는다
     @Test
@@ -166,6 +180,28 @@ class AiKillSwitchFlowTests {
         assertThat(report.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
         assertThat(provider(report)).isEqualTo("FIXED");
         assertThat(submittedFor(reportId)).isEqualTo(1);
+    }
+
+    // 접수 재시도 중에 끄면 남은 재시도를 ai-server로 보내지 않고 고정 보고서로 끝낸다 (#632 Codex 리뷰 재현)
+    // 첫 접수가 실패하는 사이 정지가 저장된 상황 — 반복 앞에서 한 번만 확인하면 3번 다 보내고 FAILED로 끝난다
+    @Test
+    void submit_whenStoppedDuringRetry_finishesFixedWithoutFurtherSubmit() {
+        Long caseId = caseWithEvidence();
+        AtomicBoolean allowed = new AtomicBoolean(true);
+        given(aiSwitchService.isAiAllowed()).willAnswer(invocation -> allowed.get());
+        willAnswer(invocation -> {
+                    allowed.set(false);
+                    throw new ResourceAccessException("connection refused");
+                })
+                .given(aiServerClient)
+                .submit(any());
+
+        aiReportService.request(caseId, 1);
+
+        AiReport report = onlyReportOf(caseId);
+        assertThat(report.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        assertThat(provider(report)).isEqualTo("FIXED");
+        assertThat(submittedFor(report.getId())).isEqualTo(1);
     }
 
     private Long caseWithEvidence() {

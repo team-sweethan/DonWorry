@@ -9,6 +9,7 @@ import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -63,23 +64,31 @@ class AiInvestigationRunner {
         }
     }
 
+    // AI 본문 저장은 정지와 겹치지 않게 스위치 잠금 안에서 한다 (#632 Codex 리뷰) — 정지가 먼저면 고정 보고서로 끝낸다
+    // 완료 이벤트(다음 버전 요청 · Case 갱신)는 잠금 밖에서 — 그 안의 외부 호출 동안 정지를 붙잡지 않게
     void finishSucceeded(AiReport report, Map<String, Object> body) {
+        Optional<Boolean> saved = aiSwitchService.whenAiAllowed(() -> writer.succeed(report.getId(), body, now()));
+        if (saved.isEmpty()) {
+            log.info("AI 조사 정지 중 — AI 본문을 저장하지 않고 고정 보고서로 끝냄 reportId={}", report.getId());
+            finishFixed(report);
+            return;
+        }
         tracker.remove(report.getId());
-        if (writer.succeed(report.getId(), body, now())) {
+        if (saved.get()) {
             events.publishEvent(new AiReportFinished(report.getCaseId()));
         }
     }
 
     private void submitNext(AiReport report, String lastCode, String lastReason) {
-        // 재시도 직전에도 스위치를 본다 — 끈 뒤 마감 초과 · 실패 재시도가 ai-server로 다시 나가지 않게
-        if (!aiSwitchService.isAiAllowed()) {
-            log.info("AI 조사 정지 중 — ai-server에 맡기지 않고 고정 보고서로 끝냄 reportId={}", report.getId());
-            finishFixed(report);
-            return;
-        }
         String code = lastCode;
         String reason = lastReason;
         while (true) {
+            // 접수 시도마다 스위치를 본다 — 접수가 늦거나 실패하는 사이 끄면 남은 재시도를 ai-server로 보내지 않는다 (#632 Codex 리뷰)
+            if (!aiSwitchService.isAiAllowed()) {
+                log.info("AI 조사 정지 중 — ai-server에 맡기지 않고 고정 보고서로 끝냄 reportId={}", report.getId());
+                finishFixed(report);
+                return;
+            }
             var attempt =
                     tracker.next(report.getId(), now().plus(properties.resultTimeout()), AiReportService.MAX_ATTEMPTS);
             if (attempt.isEmpty()) {

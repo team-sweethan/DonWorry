@@ -9,7 +9,10 @@ import com.donworry.investigation.report.entity.AiSwitchHistory;
 import com.donworry.investigation.report.repository.AiSwitchHistoryRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -37,9 +40,25 @@ public class AiSwitchService {
     private final CurrentStaff currentStaff;
     private final ApplicationEventPublisher events;
 
+    // 정지 기록 저장(쓰기)과 "켜짐 확인 → AI 결과 저장"(읽기)이 겹치지 않게 한다 (#632 Codex 리뷰, ADR-0083 결정 5)
+    // 정지가 먼저 저장됐으면 AI 결과는 반드시 고정 보고서로, AI 결과 저장이 먼저면 정지는 그 저장이 끝날 때까지 기다린다
+    // 서버 1대 전제 (시도 상태와 같은 메모리). 공정 모드 — 정지가 저장을 계속 기다리며 밀리지 않게
+    private final ReentrantReadWriteLock gate = new ReentrantReadWriteLock(true);
+
     // 보고서를 다룰 때마다 부른다 — 마지막 기록을 읽으므로 끄면 다음 처리부터 바로 적용된다 (재시작 없음)
     public boolean isAiAllowed() {
         return aiServerProperties.enabled() && isSwitchOn();
+    }
+
+    // AI를 쓸 수 있을 때만 save를 실행한다 — 확인과 저장 사이에 정지가 끼지 못한다. 쓸 수 없으면 빈 값 (save는 부르지 않음)
+    // save 안에는 DB 저장만 둔다. 외부 HTTP · 이벤트 발행을 넣으면 정지가 그만큼 기다린다
+    public <T> Optional<T> whenAiAllowed(Supplier<T> save) {
+        gate.readLock().lock();
+        try {
+            return isAiAllowed() ? Optional.of(save.get()) : Optional.empty();
+        } finally {
+            gate.readLock().unlock();
+        }
     }
 
     public AiSwitchStatusResponse status() {
@@ -67,14 +86,24 @@ public class AiSwitchService {
         return status();
     }
 
-    // 지금 상태를 읽고 기록을 남기는 사이에 다른 요청이 끼지 않게 묶는다 — 같은 상태 기록이 두 줄 생기지 않게 (서버 1대 전제, ADR-0083 결정 5)
+    // 지금 상태를 읽고 기록을 남기는 사이에 다른 변경 · AI 결과 저장이 끼지 않게 쓰기 잠금으로 묶는다
+    // 같은 상태 기록이 두 줄 생기지 않게 하고, 정지와 AI 결과 저장의 순서를 정한다 (서버 1대 전제, ADR-0083 결정 5)
     // save는 Spring Data 기본 트랜잭션으로 바로 커밋된다 — 커밋 뒤에 잠금이 풀린다
-    private synchronized void change(AiSwitchAction action, String reason, Set<String> allowedRoles) {
+    private void change(AiSwitchAction action, String reason, Set<String> allowedRoles) {
         StaffSummary staff = currentStaffWith(allowedRoles);
         String trimmed = reason == null ? "" : reason.strip();
         if (trimmed.isEmpty() || trimmed.length() > REASON_MAX_LENGTH) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "사유를 1~500자로 입력해 주세요.");
         }
+        gate.writeLock().lock();
+        try {
+            record(action, trimmed, staff);
+        } finally {
+            gate.writeLock().unlock();
+        }
+    }
+
+    private void record(AiSwitchAction action, String trimmed, StaffSummary staff) {
         boolean stopping = action == AiSwitchAction.STOPPED;
         if (stopping != isSwitchOn()) {
             throw new ResponseStatusException(

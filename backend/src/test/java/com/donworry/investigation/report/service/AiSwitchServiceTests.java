@@ -16,6 +16,10 @@ import com.donworry.investigation.report.repository.AiSwitchHistoryRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -90,6 +94,51 @@ class AiSwitchServiceTests {
                         ResponseStatusException.class,
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
         verify(repository, never()).save(any());
+    }
+
+    // AI 결과를 저장하는 중에 정지가 들어오면, 정지는 그 저장이 끝난 뒤에 기록된다 — 정지 뒤에 AI 본문이 저장되지 않게 (#632 Codex 리뷰)
+    @Test
+    void whenAiAllowed_whenStopRequestedDuringSave_stopWaitsUntilSaveFinishes() throws Exception {
+        givenStaff("ADMIN");
+        given(repository.findFirstByOrderByIdDesc()).willReturn(Optional.empty());
+        given(repository.findTop20ByOrderByIdDesc()).willReturn(List.of());
+        AiSwitchService service = service(true);
+        CountDownLatch saving = new CountDownLatch(1);
+        CountDownLatch finishSave = new CountDownLatch(1);
+
+        CompletableFuture<Optional<Boolean>> save = CompletableFuture.supplyAsync(() -> service.whenAiAllowed(() -> {
+            saving.countDown();
+            try {
+                return finishSave.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }));
+        assertThat(saving.await(5, TimeUnit.SECONDS)).isTrue();
+        CompletableFuture<Void> stop = CompletableFuture.runAsync(() -> service.stop("저장 중 정지"));
+
+        Thread.sleep(300);
+        assertThat(stop).isNotDone();
+        verify(repository, never()).save(any());
+        finishSave.countDown();
+        stop.get(5, TimeUnit.SECONDS);
+
+        assertThat(save.get(5, TimeUnit.SECONDS)).contains(true);
+        verify(repository).save(any());
+    }
+
+    // 정지가 먼저 저장됐으면 AI 결과 저장을 실행하지 않는다 — 호출한 쪽이 고정 보고서로 끝낸다
+    @Test
+    void whenAiAllowed_afterStop_doesNotRunSave() {
+        given(repository.findFirstByOrderByIdDesc())
+                .willReturn(Optional.of(AiSwitchHistory.record(
+                        AiSwitchAction.STOPPED, "먼저 끔", 1L, "관리자", Instant.parse("2026-11-07T00:00:00Z"))));
+        AtomicBoolean ran = new AtomicBoolean(false);
+
+        Optional<Boolean> result = service(true).whenAiAllowed(() -> ran.getAndSet(true));
+
+        assertThat(result).isEmpty();
+        assertThat(ran).isFalse();
     }
 
     private AiSwitchService service(boolean configEnabled) {
