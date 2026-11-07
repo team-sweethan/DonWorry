@@ -1,12 +1,11 @@
 import type { CSSProperties } from 'react'
 import type { BasisSignal, ReportBody } from '../../../types/case'
 import {
-  caseNormals,
+  caseNormalNotes,
   caseSignalId,
   checkSignalRecord,
   checkSignals,
   isOpenSignal,
-  normalNote,
   signalRecordText,
   type CheckSignal,
 } from '../../../utils/reportView'
@@ -186,9 +185,9 @@ function SignalCard({
   )
 }
 
-// 정상 근거 — 설명하는 징후를 함께 적는다. 못 찾았으면 무엇을 찾아봤는지 한 칸
+// 정상 근거 — 설명하는 징후를 함께 적는다(결제마다 다르면 결제 번호로 나눔). 못 찾았으면 무엇을 찾아봤는지 한 칸
 function NormalSide({ body }: { body: ReportBody }) {
-  const normals = caseNormals(body)
+  const normals = caseNormalNotes(body)
   return (
     <div style={sideStyle}>
       <div style={sideHeadStyle}>
@@ -207,7 +206,7 @@ function NormalSide({ body }: { body: ReportBody }) {
             style={{ ...cardStyle, background: '#F0FDF4', borderLeft: '4px solid #16A34A' }}
           >
             <b style={{ fontSize: 14, color: '#14532D' }}>{n.label}</b>
-            <span style={{ fontSize: 12.5, color: '#166534' }}>{normalNote(n)}</span>
+            <span style={{ fontSize: 12.5, color: '#166534' }}>{n.note}</span>
           </div>
         ))
       )}

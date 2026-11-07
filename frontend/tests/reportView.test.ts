@@ -39,6 +39,7 @@ import {
   pastCompareRows,
   checkSignalRecord,
   nowDecisionText,
+  caseNormalNotes,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -798,4 +799,26 @@ test('nowDecisionText_partiallyDecided_isNotDone', () => {
   )
   assert.equal(nowDecisionText({ decided: 0, remaining: 2, done: false }), '판정 전')
   assert.equal(nowDecisionText({ decided: 2, remaining: 0, done: true }), '판정 끝')
+})
+
+// 같은 이름의 정상 근거가 결제 A(징후 없음) · B(고액 결제 설명)에 있으면 결제별로 나눠 말한다 — 첫 결제 설명만 보이면 왼쪽 징후 카드와 어긋난다 (#652 Codex 리뷰)
+test('caseNormalNotes_sameNormalExplainsOnlyOnePayment_saysWhichPayment', () => {
+  const similar = (explains: string[]) => ({
+    key: 'SIMILAR_AMOUNT',
+    label: '최근 30일 비슷한 금액의 결제 2건 매입 완료',
+    canExplain: ['고액 결제'],
+    explains,
+  })
+  const withNormal = (paymentId: string, explains: string[]) => ({
+    ...paymentWith(paymentId, []),
+    basis: { signals: [], normals: [similar(explains)] },
+  })
+  const report = body({ paymentAnalyses: [withNormal('11', []), withNormal('12', ['고액 결제'])] })
+
+  assert.deepEqual(caseNormalNotes(report), [
+    {
+      label: '최근 30일 비슷한 금액의 결제 2건 매입 완료',
+      note: '결제 12: 고액 결제 징후의 정상 사유입니다. 결제 11: 그 징후가 없어 정상 사유가 되지 않습니다.',
+    },
+  ])
 })

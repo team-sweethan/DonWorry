@@ -270,6 +270,40 @@ export function caseNormals(body: ReportBody): NormalBasis[] {
   return [...seen.values()]
 }
 
+// ② 확인할 것 오른쪽 정상 근거 설명 — 같은 이름은 한 장으로 묶되, 결제마다 설명하는 징후가 다르면 결제 번호로 나눠 말한다
+// caseNormals(첫 결제 값만)에 normalNote를 쓰면 결제 B가 설명하는 징후를 "정상 사유가 되지 않습니다"로 보였다 (#652 Codex 리뷰)
+// 결제가 한 건이면 normalNote 문장 그대로
+export function caseNormalNotes(body: ReportBody): Array<{ label: string; note: string }> {
+  const withBasis = body.paymentAnalyses.filter((p) => p.basis)
+  const groups = new Map<string, Array<{ paymentId: string; n: NormalBasis }>>()
+  for (const p of withBasis)
+    for (const n of p.basis?.normals ?? []) {
+      const group = groups.get(n.label) ?? []
+      group.push({ paymentId: String(p.paymentId), n })
+      groups.set(n.label, group)
+    }
+  return [...groups.entries()].map(([label, group]) => {
+    if (withBasis.length <= 1) return { label, note: normalNote(group[0].n) }
+    const explaining = group.filter((g) => g.n.explains.length > 0)
+    const idle = group.filter((g) => g.n.explains.length === 0)
+    const ids = (gs: typeof group) => gs.map((g) => g.paymentId).join(' · ')
+    const explains = [...new Set(explaining.flatMap((g) => g.n.explains))].join(' · ')
+    if (idle.length === 0)
+      return { label, note: `${explains} 징후의 정상 사유입니다. (결제 ${ids(explaining)})` }
+    if (explaining.length === 0) {
+      const can = group[0].n.canExplain.join(' · ')
+      return {
+        label,
+        note: `${can} 징후의 정상 사유가 될 수 있습니다. 결제 ${ids(idle)}에는 그 징후가 없어 정상 사유가 되지 않습니다.`,
+      }
+    }
+    return {
+      label,
+      note: `결제 ${ids(explaining)}: ${explains} 징후의 정상 사유입니다. 결제 ${ids(idle)}: 그 징후가 없어 정상 사유가 되지 않습니다.`,
+    }
+  })
+}
+
 // 비교 한 줄 — 같은 징후는 한 줄에 나란히, 한쪽에만 있으면 반대쪽은 빈칸
 // tag: 두 사건 공통 · 나라만 다름(해외 접속 나라가 다름) · 한쪽만
 export type CompareTag = 'SAME' | 'COUNTRY_DIFFERS' | 'ONLY'
