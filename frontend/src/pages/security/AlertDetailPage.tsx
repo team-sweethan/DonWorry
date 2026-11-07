@@ -94,8 +94,13 @@ function observedValue(ruleCode: string, rawValue: string | null) {
   if (ruleCode === 'RAPID_REPEAT_PAYMENT' || ruleCode === 'R04') {
     return typeof value.attemptCount === 'number' ? `${value.attemptCount}회` : '—'
   }
-  if (ruleCode === 'R02') return typeof value.deviceId === 'string' ? value.deviceId : '—'
-  if (ruleCode === 'R03') return typeof value.cardToken === 'string' ? value.cardToken : '—'
+  // 기기 ID는 서버가 가린 값, 카드는 토큰 대신 표시값만 준다 (#628)
+  if (ruleCode === 'R02') {
+    return typeof value.maskedDeviceId === 'string' ? value.maskedDeviceId : '—'
+  }
+  if (ruleCode === 'R03') {
+    return typeof value.cardDisplayLabel === 'string' ? value.cardDisplayLabel : '—'
+  }
   if (ruleCode === 'R05') return typeof value.ipCountryCode === 'string' ? value.ipCountryCode : '—'
   if (ruleCode === 'R06') {
     return typeof value.smallAttemptCount === 'number'
@@ -122,10 +127,11 @@ function observedValue(ruleCode: string, rawValue: string | null) {
     }
     const valueByType: Record<string, unknown> = {
       BUYER_REF: value.buyerRef,
-      DEVICE_ID: value.deviceId,
+      // IP · 기기 ID는 서버가 가린 값만 준다 (#628)
+      DEVICE_ID: value.maskedDeviceId,
       // 카드 토큰은 화면에 노출하지 않고, P5가 준 마스킹 표시값만 쓴다.
       CARD_TOKEN: value.cardDisplayLabel,
-      IP_ADDRESS: value.ipAddress,
+      IP_ADDRESS: value.maskedIpAddress,
       // 이메일은 서버가 가린 값만 준다 (#603)
       BUYER_EMAIL: value.maskedBuyerEmail,
     }
@@ -729,9 +735,6 @@ export function AlertDetailPage() {
               <Descriptions.Item label="마스킹 카드">
                 {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="카드 식별값">
-                {detail.cardIdentifier?.cardToken ?? '—'}
-              </Descriptions.Item>
               <Descriptions.Item label="결제 요청 시각">
                 {formatDate(evaluation.paymentRequestedAt)}
               </Descriptions.Item>
@@ -791,7 +794,8 @@ export function AlertDetailPage() {
             return (
               <Checkbox key={key} value={key} disabled={blocked}>
                 {blocklistCandidateLabels[candidate.identifierType] ?? candidate.identifierType} ·{' '}
-                {candidate.displayValue} {blocked && <Tag color="red">차단 중</Tag>}
+                {candidate.displayValue ?? '표시값 없음'}{' '}
+                {blocked && <Tag color="red">차단 중</Tag>}
               </Checkbox>
             )
           })}

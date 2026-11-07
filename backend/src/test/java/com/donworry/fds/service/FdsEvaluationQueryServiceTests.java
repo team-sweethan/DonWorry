@@ -2,6 +2,7 @@ package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.BDDMockito.given;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
 class FdsEvaluationQueryServiceTests {
@@ -158,6 +160,93 @@ class FdsEvaluationQueryServiceTests {
                 .filteredOn(candidate -> candidate.blocked())
                 .extracting(candidate -> candidate.identifierType())
                 .containsExactly("BUYER_EMAIL");
+    }
+
+    // 경보 상세 응답 어디에도 IP · 기기 ID · 카드 토큰 원문이 없다 — #628 전에 원문으로 저장한 R02 · R03 · R07 근거 포함 (ISMS-P 2.6.3)
+    @Test
+    void detail_withRawIdentifiers_responseHasNoRawIpDeviceOrToken() {
+        var evaluation = evaluation(101L, FdsResult.DENY);
+        evaluation.addRuleHit(
+                "R02",
+                FdsRuleHitOutcome.MATCH,
+                25,
+                "신규 단말기",
+                "{\"requiresPriorApproved\":true}",
+                "{\"deviceId\":\"device-test-1\",\"approvedHistoryCount\":1}",
+                null,
+                null);
+        evaluation.addRuleHit(
+                "R03",
+                FdsRuleHitOutcome.MATCH,
+                25,
+                "신규 카드",
+                "{\"requiresPriorApproved\":true}",
+                "{\"cardToken\":\"card-token-test-1\",\"approvedHistoryCount\":1}",
+                null,
+                null);
+        evaluation.addRuleHit(
+                "R07",
+                FdsRuleHitOutcome.MATCH,
+                100,
+                "차단 목록",
+                "{\"active\":true}",
+                "{\"buyerRef\":\"hong-gildong\",\"deviceId\":\"device-test-1\",\"cardToken\":\"card-token-test-1\","
+                        + "\"cardDisplayLabel\":\"VISA •••• 4242\",\"ipAddress\":\"203.0.113.10\","
+                        + "\"matchedIdentifierTypes\":[\"IP_ADDRESS\"]}",
+                null,
+                null);
+        var queryService = queryService();
+        given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
+        given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+
+        var result = queryService.detail(1L);
+
+        assertThat(JsonMapper.builder().build().writeValueAsString(result))
+                .doesNotContain("device-test-1", "card-token-test-1", "203.0.113.10");
+        assertThat(result.blocklistCandidates())
+                .extracting(candidate -> candidate.identifierType(), candidate -> candidate.displayValue())
+                .contains(
+                        tuple("CARD_TOKEN", "VISA •••• 4242"),
+                        tuple("DEVICE_ID", "device-t…"),
+                        tuple("IP_ADDRESS", "203.0.*.*"));
+        assertThat(result.ruleHits())
+                .extracting(hit -> hit.observedValue())
+                .containsExactly(
+                        "{\"approvedHistoryCount\":1,\"maskedDeviceId\":\"device-t…\"}",
+                        "{\"approvedHistoryCount\":1,\"cardDisplayLabel\":\"VISA •••• 4242\"}",
+                        "{\"buyerRef\":\"hong-gildong\",\"cardDisplayLabel\":\"VISA •••• 4242\","
+                                + "\"matchedIdentifierTypes\":[\"IP_ADDRESS\"],\"maskedDeviceId\":\"device-t…\","
+                                + "\"maskedIpAddress\":\"203.0.*.*\"}");
+    }
+
+    // 카드 표시값이 없는 평가는 차단 후보에 토큰을 대신 보내지 않는다 (#628 전에는 토큰 원문이 나갔다)
+    @Test
+    void detail_whenCardHasNoDisplayLabel_omitsToken() {
+        var requestedAt = Instant.now();
+        var evaluation = FdsEvaluation.completed(
+                FdsEvaluationRequest.builder()
+                        .evaluationRequestId(UUID.randomUUID())
+                        .paymentId(101L)
+                        .merchantId(1L)
+                        .customerRef("hong-gildong")
+                        .amount(150_000L)
+                        .paymentRequestedAt(requestedAt)
+                        .cardToken("card-token-test-1")
+                        .build(),
+                FdsResult.ALLOW,
+                0,
+                requestedAt.plusSeconds(1));
+        var queryService = queryService();
+        given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
+        given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+
+        var result = queryService.detail(1L);
+
+        assertThat(result.blocklistCandidates())
+                .filteredOn(candidate -> candidate.identifierType().equals("CARD_TOKEN"))
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.displayValue()).isNull());
+        assertThat(JsonMapper.builder().build().writeValueAsString(result)).doesNotContain("card-token-test-1");
     }
 
     // 없는 평가 ID는 조회 실패 예외를 반환한다.

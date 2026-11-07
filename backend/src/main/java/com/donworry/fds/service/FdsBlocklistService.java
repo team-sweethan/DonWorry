@@ -122,11 +122,19 @@ public class FdsBlocklistService {
                 type, value, optionalDisplayLabel(displayLabel), reason.trim(), Instant.now()));
     }
 
-    // 목록 화면에 이메일 원문을 보내지 않는다 (#603). 검색 · 해제는 서버의 원문과 항목 ID로 그대로 된다
+    // 목록 화면에 이메일 · IP · 기기 ID 원문을 보내지 않고, 카드 토큰은 빼고 표시값(displayLabel)만 쓴다 (#603 · #628)
+    // 검색 · 해제는 서버의 원문과 항목 ID로 그대로 된다. 고객 번호는 가리지 않는다 (#628 하지 않는 것)
     private String displayValue(FdsBlocklistEntry entry) {
-        return CreateFdsBlocklistEntryRequest.IdentifierType.BUYER_EMAIL.name().equals(entry.getIdentifierType())
-                ? FdsIdentifierMasking.email(entry.getIdentifierValue())
-                : entry.getIdentifierValue();
+        var value = entry.getIdentifierValue();
+        // 모르는 종류는 원문 대신 가림 표시로 막는다 — 예외로 목록 전체가 실패하지 않게 한다
+        return switch (entry.getIdentifierType()) {
+            case "BUYER_EMAIL" -> FdsIdentifierMasking.email(value);
+            case "IP_ADDRESS" -> FdsIdentifierMasking.ipAddress(value);
+            case "DEVICE_ID" -> FdsIdentifierMasking.deviceId(value);
+            case "CARD_TOKEN" -> null;
+            case "BUYER_REF" -> value;
+            default -> FdsIdentifierMasking.HIDDEN;
+        };
     }
 
     @Transactional

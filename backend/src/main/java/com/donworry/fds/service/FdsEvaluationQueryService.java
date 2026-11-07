@@ -194,7 +194,7 @@ public class FdsEvaluationQueryService {
                         hit.getRuleNameSnapshot(),
                         hit.getOutcome(),
                         hit.getAppliedScore(),
-                        FdsIdentifierMasking.ruleEvidence(hit.getObservedValue()),
+                        FdsIdentifierMasking.ruleEvidence(hit.getObservedValue(), evaluation.getCardDisplayLabel()),
                         hit.getThresholdSnapshot()))
                 .toList();
         var history = evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(evaluation.getPaymentId()).stream()
@@ -202,18 +202,23 @@ public class FdsEvaluationQueryService {
                 .toList();
         var blocklistCandidates = new ArrayList<FdsBlocklistCandidate>();
         var now = Instant.now();
+        // 카드는 표시값만, 없으면 비워 둔다 — 토큰을 대신 보내지 않는다 (#628)
         addBlocklistCandidate(
-                blocklistCandidates,
-                "CARD_TOKEN",
-                evaluation.getCardToken(),
-                evaluation.getCardDisplayLabel() != null ? evaluation.getCardDisplayLabel() : evaluation.getCardToken(),
-                now);
+                blocklistCandidates, "CARD_TOKEN", evaluation.getCardToken(), evaluation.getCardDisplayLabel(), now);
         addBlocklistCandidate(
                 blocklistCandidates, "BUYER_REF", evaluation.getCustomerRef(), evaluation.getCustomerRef(), now);
         addBlocklistCandidate(
-                blocklistCandidates, "DEVICE_ID", evaluation.getDeviceId(), evaluation.getDeviceId(), now);
+                blocklistCandidates,
+                "DEVICE_ID",
+                evaluation.getDeviceId(),
+                FdsIdentifierMasking.deviceId(evaluation.getDeviceId()),
+                now);
         addBlocklistCandidate(
-                blocklistCandidates, "IP_ADDRESS", evaluation.getIpAddress(), evaluation.getIpAddress(), now);
+                blocklistCandidates,
+                "IP_ADDRESS",
+                evaluation.getIpAddress(),
+                FdsIdentifierMasking.ipAddress(evaluation.getIpAddress()),
+                now);
         addBlocklistCandidate(
                 blocklistCandidates,
                 "BUYER_EMAIL",
@@ -222,7 +227,7 @@ public class FdsEvaluationQueryService {
                 now);
         var cardIdentifier = evaluation.getCardToken() == null
                 ? null
-                : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+                : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardDisplayLabel());
         var failureAnalysis = failureAnalysisRepository
                 .findByEvaluationRequestId(evaluation.getEvaluationRequestId())
                 .map(analysis -> new FdsFailureAnalysisDetail(

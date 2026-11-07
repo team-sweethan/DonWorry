@@ -77,8 +77,9 @@ public class FdsEvidenceQueryService implements FdsEvidenceReader {
                         .ruleName(hit.getRuleNameSnapshot())
                         .appliedScore(hit.getAppliedScore())
                         .thresholdSnapshot(hit.getThresholdSnapshot())
-                        // 옛 R07 근거의 이메일 원문이 모듈 밖으로 나가지 않게 가린다 (#603)
-                        .observedValue(FdsIdentifierMasking.ruleEvidence(hit.getObservedValue()))
+                        // 옛 근거의 이메일 · IP · 기기 ID · 카드 토큰 원문이 모듈 밖으로 나가지 않게 가린다 (#603 · #628)
+                        .observedValue(FdsIdentifierMasking.ruleEvidence(
+                                hit.getObservedValue(), evaluation.getCardDisplayLabel()))
                         .build())
                 .toList();
         return new FdsPaymentEvidence(

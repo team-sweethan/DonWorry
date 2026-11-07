@@ -1,12 +1,14 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.dto.CreateFdsBlocklistEntryRequest;
+import com.donworry.fds.dto.FdsBlocklistPageResponse;
 import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.entity.FdsEvaluation;
@@ -154,7 +156,8 @@ class FdsBlocklistServiceTests {
 
         assertThat(result.content()).singleElement().satisfies(item -> {
             assertThat(item.identifierType()).isEqualTo("DEVICE_ID");
-            assertThat(item.identifierValue()).isEqualTo("device-1");
+            // 기기 ID는 가린 값으로 나간다 (#628). 8자 이하라 절반만
+            assertThat(item.identifierValue()).isEqualTo("devi…");
         });
         verify(entries, never()).findInactiveAtWithSearch(any(), any(), any());
     }
@@ -203,6 +206,30 @@ class FdsBlocklistServiceTests {
         assertThat(result.content())
                 .singleElement()
                 .satisfies(item -> assertThat(item.identifierValue()).isEqualTo("ho***@example.test"));
+    }
+
+    @Test
+    // [차단 목록] 응답에 IP · 기기 ID 원문과 카드 토큰이 없다. 카드는 화면이 표시값(displayLabel)을 쓴다 (#628, ISMS-P 2.6.3)
+    void list_withIpDeviceCardEntries_returnsMaskedOrNoRawValue() {
+        var at = java.time.Instant.now();
+        var ip = FdsBlocklistEntry.active("IP_ADDRESS", "203.0.113.10", "도용 의심", at);
+        var device = FdsBlocklistEntry.active("DEVICE_ID", "dev-7f3a9c21-abcd", "도용 의심", at);
+        var card = FdsBlocklistEntry.active("CARD_TOKEN", "tok_secret_card", "VISA •••• 4242", "도용 의심", at);
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("ADMIN")));
+        when(entries.findActiveAtWithSearch(any(), eq(""), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(ip, device, card), PageRequest.of(0, 10), 3));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, "");
+
+        assertThat(result.content())
+                .extracting(
+                        FdsBlocklistPageResponse.Item::identifierType,
+                        FdsBlocklistPageResponse.Item::identifierValue,
+                        FdsBlocklistPageResponse.Item::displayLabel)
+                .containsExactly(
+                        tuple("IP_ADDRESS", "203.0.*.*", null),
+                        tuple("DEVICE_ID", "dev-7f3a…", null),
+                        tuple("CARD_TOKEN", null, "VISA •••• 4242"));
     }
 
     private FdsEvaluation evaluationWithEmail(String buyerEmail) {

@@ -302,6 +302,31 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // 새 평가의 R02 · R03 · R07 근거에 IP · 기기 ID 원문과 카드 토큰을 저장하지 않는다. 대조는 원문으로 따로 한다 (#628)
+    void evaluate_withIdentifiers_storesMaskedValuesInEvidence() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        blocklistEvaluator().evaluate(request(1L, 10_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var observed = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> List.of("R02", "R03", "R07").contains(hit.getRuleCode()))
+                .collect(java.util.stream.Collectors.toMap(
+                        com.donworry.fds.entity.FdsRuleHit::getRuleCode,
+                        com.donworry.fds.entity.FdsRuleHit::getObservedValue));
+        assertThat(observed).hasSize(3);
+        assertThat(observed.values())
+                .allSatisfy(value ->
+                        assertThat(value).doesNotContain("device-test-1", "card-token-test-1", "203.0.113.10"));
+        assertThat(observed.get("R02")).contains("\"maskedDeviceId\":\"device-t…\"");
+        assertThat(observed.get("R03")).contains("\"cardDisplayLabel\":\"VISA •••• 1\"");
+        assertThat(observed.get("R07"))
+                .contains("\"maskedDeviceId\":\"device-t…\"")
+                .contains("\"maskedIpAddress\":\"203.0.*.*\"")
+                .contains("\"cardDisplayLabel\":\"VISA •••• 1\"");
+    }
+
+    @Test
     // 같은 요청 ID로 재호출하면 기존 평가 결과를 반환한다.
     void evaluate_existingRequestId_returnsStoredEvaluation() {
         var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
