@@ -6,6 +6,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     FdsEvidenceTool,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
 )
@@ -67,6 +68,12 @@ class SpringToolClient:
         res = self._http.get("/internal/ai/tools/find_linked_payments", params={"caseId": case_id})
         res.raise_for_status()
         return LinkedPaymentsTool.model_validate(res.json())
+
+    # 사건 결제마다 가맹점이 결제 준비 때 보낸 주문 정보 (#634) — 주문자 원문 없이 묶음 번호만
+    def get_order_context(self, case_id: str) -> OrderContextTool:
+        res = self._http.get("/internal/ai/tools/get_order_context", params={"caseId": case_id})
+        res.raise_for_status()
+        return OrderContextTool.model_validate(res.json())
 
     # 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — Spring이 계산한 값을 그대로 받는다
     def get_decision_basis(self, case_id: str) -> DecisionBasisTool:

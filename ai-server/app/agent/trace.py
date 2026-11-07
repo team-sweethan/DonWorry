@@ -10,6 +10,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     LinkedMatch,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
     ToolResult,
@@ -24,6 +25,7 @@ TOOL_TITLES = {
     "find_similar_cases": "비슷한 과거 사건 조회",
     "get_payment_history": "고객 최근 결제 조회",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
+    "get_order_context": "주문 정보 조회",
     "get_decision_basis": "판정 기준표 조회",
 }
 
@@ -79,6 +81,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
         return "같은 가맹점 최근 30일, 다른 고객 결제"
     if name == "get_decision_basis":
         return "이 사건 결제별 판정 기준표 (Spring 계산)"
+    if name == "get_order_context":
+        return "이 사건 결제의 주문 정보"
     payment_ids = args.get("payment_ids") or []
     # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
     if not isinstance(payment_ids, list):
@@ -94,6 +98,8 @@ def tool_received(result: ToolResult) -> str:
         return f"결제 {len(result.payments)}건의 기준표 칸 · 권고"
     if isinstance(result, LinkedPaymentsTool):
         return linked_summary(result)
+    if isinstance(result, OrderContextTool):
+        return order_summary(result)
     if isinstance(result, PaymentHistoryTool):
         head = f"최근 {result.lookbackDays}일 결제 {len(result.payments)}건"
         return head + (" (더 있음, 최근 것만)" if result.truncated else "")
@@ -122,6 +128,12 @@ def linked_summary(result: LinkedPaymentsTool) -> str:
         f"{label} {_match_summary(match)}"
         for label, match in (("카드", result.card), ("기기", result.device), ("IP", result.ip))
     )
+
+
+# "결제 3건 중 주문 정보 2건" — Spring 고정 보고서 조사 과정과 같은 말 (#634)
+def order_summary(result: OrderContextTool) -> str:
+    provided = sum(1 for p in result.payments if p.provided)
+    return f"결제 {len(result.payments)}건 중 주문 정보 {provided}건"
 
 
 def _match_summary(match: LinkedMatch) -> str:

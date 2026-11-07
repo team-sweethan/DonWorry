@@ -2,11 +2,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.schemas.report import DecisionBasis
+from app.schemas.report import DecisionBasis, OrderPayment
 
 # Spring AI Tool API 응답 — #254 CasePaymentsToolResponse · FdsEvidenceToolResponse ·
 # #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse ·
-# #352 LinkedPaymentsToolResponse · #618 DecisionBasisToolResponse와 같게 둔다
+# #352 LinkedPaymentsToolResponse · #618 DecisionBasisToolResponse ·
+# #634 OrderContextToolResponse와 같게 둔다
 # 못 찾은 값은 null이고 missingPaymentIds에 들어온다. 추측해서 채우지 않는다
 
 
@@ -155,6 +156,17 @@ class LinkedPaymentsTool(BaseModel):
     payments: list[PaymentLinks] | None = None
 
 
+# 사건 결제의 주문 정보 (#634) — 결제 한 줄(OrderPayment)은 보고서와 같은 모양이라 report.py에 둔다
+# orderRef · orderName은 가맹점이 쓴 글자라 AI 입력에서 뺀다 (tools.llm_content)
+# 보고서 표에만 코드가 싣는다
+class OrderContextTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    payments: list[OrderPayment]
+
+
 class PaymentBasis(BaseModel):
     paymentId: str
     basis: DecisionBasis
@@ -180,5 +192,6 @@ ToolResult = (
     | SimilarCasesTool
     | PaymentHistoryTool
     | LinkedPaymentsTool
+    | OrderContextTool
     | DecisionBasisTool
 )

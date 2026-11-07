@@ -20,6 +20,8 @@ from app.schemas.tools import (
     HistoryPayment,
     LinkedMatch,
     LinkedPaymentsTool,
+    OrderContextTool,
+    OrderPayment,
     PaymentHistoryTool,
     Signals,
     SimilarCasesTool,
@@ -271,11 +273,82 @@ def _similar(records: list[ToolRecord]) -> list[Line]:
     return [(line, seq, None, PLAIN) for line in lines]
 
 
+# 주문 → 결제 걸린 시간 — "40초" · "3분" · "2시간". 가맹점 시계 기준이라 음수면 그대로 말한다
+def _elapsed(seconds: int) -> str:
+    if seconds < 0:
+        return "주문 시각이 결제 요청보다 늦게 기록됨(가맹점 시각 기준)"
+    if seconds < 120:
+        return f"주문 {seconds}초 뒤 결제"
+    if seconds < 7200:
+        return f"주문 {seconds // 60}분 뒤 결제"
+    return f"주문 {seconds // 3600}시간 뒤 결제"
+
+
+def _pickup(differs: bool | None) -> str:
+    if differs is None:
+        return "픽업자 정보 없음"
+    return "픽업자가 주문자와 다름" if differs else "픽업자가 주문자와 같음"
+
+
+def _order_line(owner: str, p: OrderPayment) -> str:
+    parts = []
+    if p.orderToPaymentSeconds is not None:
+        parts.append(_elapsed(p.orderToPaymentSeconds))
+    parts.append("주문자 연락처 있음" if p.ordererProvided else "주문자 연락처 없음")
+    parts.append(_pickup(p.pickupDiffers))
+    return f"{owner}: " + " · ".join(parts)
+
+
+# 주문 정보 (#634) — 주문번호 · 상품명은 쓰지 않는다 (가맹점 글자, 프롬프트 주입 차단)
+# 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로 코드가 센다
+# 이름 · 전화 원문은 처음부터 없다
+def _order(records: list[ToolRecord]) -> list[Line]:
+    found = _latest(records, OrderContextTool)
+    if found is None:
+        return []
+    order, seq = found
+    assert isinstance(order, OrderContextTool)
+    names = payment_names(records)
+    provided = [p for p in order.payments if p.provided]
+    lines: list[Line] = []
+    if len(provided) >= 2:
+        groups = {p.orderGroup for p in provided}
+        if len(groups) < len(provided):
+            text = (
+                f"사건 결제 {len(provided)}건이 주문 {len(groups)}개에서 나옴"
+                "(같은 주문의 결제 여러 건)"
+            )
+            lines.append((text, seq, None, NOTABLE))
+        else:
+            lines.append((f"사건 결제 {len(provided)}건이 모두 다른 주문", seq, None, PLAIN))
+        phones = [p.ordererPhoneGroup for p in provided if p.ordererPhoneGroup is not None]
+        if len(phones) >= 2:
+            distinct = len(set(phones))
+            if distinct == 1:
+                lines.append(
+                    (f"주문자 전화를 받은 결제 {len(phones)}건 모두 같은 번호", seq, None, PLAIN)
+                )
+            else:
+                text = f"주문자 전화를 받은 결제 {len(phones)}건에 서로 다른 번호 {distinct}개"
+                lines.append((text, seq, None, NOTABLE))
+    for p in order.payments:
+        owner = _name(names, p.paymentId)
+        if not p.provided:
+            lines.append(
+                (f"{owner}: 주문 정보 없음(결제 준비 기록 없음)", seq, p.paymentId, NOTHING)
+            )
+            continue
+        rank = NOTABLE if p.pickupDiffers else PLAIN
+        lines.append((_order_line(owner, p), seq, p.paymentId, rank))
+    return lines
+
+
 FACT_TOPICS: tuple[FactTopic, ...] = (
     FactTopic("history", "이력", "get_payment_history", _history),
     FactTopic("linked", "연결", "find_linked_payments", _linked),
     FactTopic("signals", "접속", "get_fds_evidence", _signals),
     FactTopic("similar", "과거", "find_similar_cases", _similar),
+    FactTopic("order", "주문", "get_order_context", _order),
 )
 
 

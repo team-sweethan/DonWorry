@@ -9,13 +9,15 @@ from app.schemas.tools import (
     FdsEvidenceTool,
     LinkedMatch,
     LinkedPaymentsTool,
+    OrderContextTool,
+    OrderPayment,
     PaymentHistoryTool,
     SimilarCasesTool,
     ToolResult,
 )
 
 
-# 추가 조사 도구 — 기본 조회 5개(코드)를 본 AI가 더 볼 때만 고른다 (#578)
+# 추가 조사 도구 — 기본 조회 6개(코드)를 본 AI가 더 볼 때만 고른다 (#578)
 # 읽기 전용만 둔다 (AGENTS.md 6절). caseId 같은 권한 인자는 AI가 아니라 ToolBox가 묶는다
 @dataclass(frozen=True)
 class ExtraTool:
@@ -77,11 +79,16 @@ class ToolRecord:
 # AI에게 돌려줄 도구 응답 — 카드 표시값(카드사 · 끝자리 숫자)은 뺀다 (#346 리뷰)
 # 보고서를 채우는 Tool 기록(ToolRecord)에는 원래 응답을 그대로 둔다
 # 연관 결제(#352) 응답은 처음부터 건수 · 판정만 있어 뺄 것이 없다
+# 주문 정보(#634)는 주문번호 · 상품명을 뺀다 — 가맹점이 쓴 글자라 지시문이 섞일 수 있다
+# (프롬프트 주입 차단)
+# 같은 주문인지는 orderGroup 번호로 안다
 def llm_content(result: ToolResult) -> str:
     if isinstance(result, FdsEvidenceTool):
         return result.model_dump_json(
             exclude={"payments": {"__all__": {"signals": {"cardDisplayLabel"}}}}
         )
+    if isinstance(result, OrderContextTool):
+        return result.model_dump_json(exclude={"payments": {"__all__": {"orderRef", "orderName"}}})
     return result.model_dump_json()
 
 
@@ -97,6 +104,9 @@ class ToolBox(Protocol):
     def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool: ...
 
     def find_linked_payments(self) -> LinkedPaymentsTool: ...
+
+    # 사건 결제의 주문 정보 (#634) — 기본 조회
+    def get_order_context(self) -> OrderContextTool: ...
 
     # 결제별 판정 기준표 (#618) — Spring이 계산한다. AI가 고르는 도구가 아니다
     def get_decision_basis(self) -> DecisionBasisTool: ...
@@ -122,13 +132,17 @@ class SpringToolBox:
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._client.find_linked_payments(self._case_id)
 
+    def get_order_context(self) -> OrderContextTool:
+        return self._client.get_order_context(self._case_id)
+
     def get_decision_basis(self) -> DecisionBasisTool:
         return self._client.get_decision_basis(self._case_id)
 
 
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
-    # similar · history · linked를 주지 않으면 비슷한 사건 · 이력 · 연관 결제가 없는 응답을 돌려준다
+    # similar · history · linked · order를 주지 않으면
+    # 비슷한 사건 · 이력 · 연관 결제 · 주문 정보가 없는 응답을 돌려준다
     # history90을 주지 않으면 30일 이력과 같은 결제를 90일로 돌려준다 (#581)
     def __init__(
         self,
@@ -139,6 +153,7 @@ class StaticToolBox:
         linked: LinkedPaymentsTool | None = None,
         history90: PaymentHistoryTool | None = None,
         basis: DecisionBasisTool | None = None,
+        order: OrderContextTool | None = None,
     ) -> None:
         self._case_payments = case_payments
         self._fds_evidence = fds_evidence
@@ -179,6 +194,16 @@ class StaticToolBox:
             device=not_provided,
             ip=not_provided,
         )
+        # 주문 정보 기본값 — 결제마다 "주문 정보 없음" (결제 준비 세션이 없는 결제와 같다, #634)
+        self._order = order or OrderContextTool(
+            caseId=case_payments.caseId,
+            evidenceVersion=case_payments.evidenceVersion,
+            source="P5",
+            retrievedAt=case_payments.retrievedAt,
+            payments=[
+                OrderPayment(paymentId=p.paymentId, provided=False) for p in case_payments.payments
+            ],
+        )
 
     # 판정 기준표 기본값 — 결제별 기준표가 없는 응답 (보고서는 결제마다 추가 확인, #618)
     # 기준표는 Spring이 계산하므로 여기서 계산하지 않는다. 샘플은 decisionBasis 키로 준다
@@ -209,6 +234,7 @@ class StaticToolBox:
             basis=DecisionBasisTool.model_validate(data["decisionBasis"])
             if "decisionBasis" in data
             else None,
+            order=OrderContextTool.model_validate(data["order"]) if "order" in data else None,
         )
 
     def get_decision_basis(self) -> DecisionBasisTool:
@@ -216,6 +242,9 @@ class StaticToolBox:
 
     def find_linked_payments(self) -> LinkedPaymentsTool:
         return self._linked
+
+    def get_order_context(self) -> OrderContextTool:
+        return self._order
 
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._similar

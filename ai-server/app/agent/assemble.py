@@ -15,6 +15,7 @@ from app.schemas.report import (
     InvestigationScope,
     InvestigationTrace,
     LinkedPayments,
+    OrderContext,
     Overview,
     PaymentAnalysis,
     PaymentHistory,
@@ -35,6 +36,7 @@ from app.schemas.tools import (
     FdsPayment,
     HistoryPayment,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
 )
@@ -44,7 +46,8 @@ from app.schemas.tools import (
 # "AI 권고는 참고용…"은 넣지 않는다 (#355)
 # 보고서 전문 화면이 항상 같은 안내를 보여 줘 두 번 나왔다
 ALWAYS_LIMITATIONS = (
-    "로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
+    # 주문 정보는 #634부터 조회한다 — 로그인 기록만 남는다
+    "로그인 기록은 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
     "FDS 점수는 부정거래 확률이 아닙니다.",
     # 화면의 "AI가 아직 모르는 것" 칸을 없애 늘 같은 안내는 한계 줄로 옮겼다 (#548)
     "구매자 본인의 결제 의사는 확인할 방법이 없습니다.",
@@ -137,6 +140,7 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
 
 
 LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
+ORDER_UNAVAILABLE = "주문 정보를 조회하지 못했습니다."
 # 다른 고객 결제를 찾았을 때 — AI가 "다른 고객 결제 이력은 알 수 없었다"고 쓰던 자리 (#355, Case 12)
 LINKED_PRIVACY = (
     "같은 카드 · 기기 · IP를 쓴 다른 고객 결제는 건수 · 판정만 보고, "
@@ -152,10 +156,11 @@ SCOPE_CHECKED = {
     "get_fds_evidence": "결제별 FDS 근거",
     "find_similar_cases": "비슷한 과거 사건",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제",
+    "get_order_context": "주문 정보 (주문자 이름 · 전화 제외)",
     "get_decision_basis": "판정 기준표 (Spring 계산)",
 }
 SCOPE_ALWAYS_UNAVAILABLE = (
-    "로그인 기록 · 주문 정보 (조회 도구 없음)",
+    "로그인 기록 (조회 도구 없음)",
     "구매자 본인의 결제 의사",
 )
 SCOPE_LINKED_WITHHELD = (
@@ -313,6 +318,7 @@ def assemble_report(
     basis_history: PaymentHistoryTool | None = None,
     summary_appended: list[str] | None = None,
     basis_tool: DecisionBasisTool | None = None,
+    order: OrderContextTool | None = None,
 ) -> ReportBody:
     # 기준표는 Spring이 30일 기본 조회로 계산해 준다 (#618) — AI가 90일을 불렀는지와 상관없이
     # 같은 사건엔 같은 권고 (#581). 표 · 사실은 history(마지막 조회), 30일 표시는 basis_history
@@ -328,6 +334,8 @@ def assemble_report(
         limitations.append(LINKED_UNAVAILABLE)
     elif any(m.provided and m.paymentCount > 0 for m in (linked.card, linked.device, linked.ip)):
         limitations.append(LINKED_PRIVACY)
+    if order is None:
+        limitations.append(ORDER_UNAVAILABLE)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -436,4 +444,6 @@ def assemble_report(
         caseOverview=case_overview(context.customer_ref, case_payments, fds),
         summaryAppended=list(summary_appended or []),
         scope=investigation_scope(records, limitations),
+        # 주문 정보 (#634) — Tool 응답 한 줄씩 그대로. 주문번호 · 상품명은 표에만 (AI는 보지 않았다)
+        orderContext=OrderContext(payments=order.payments) if order is not None else None,
     )

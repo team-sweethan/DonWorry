@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 # AI 보고서 본문 8개 섹션 + 결론(verdict) + 조사 과정(investigationTrace)
 # + 비슷한 과거 사건(similarCases) + 고객 최근 결제(paymentHistory, #338)
-# + 같은 카드 · 기기 · IP를 쓴 다른 결제(linkedPayments, #352)
+# + 같은 카드 · 기기 · IP를 쓴 다른 결제(linkedPayments, #352) + 주문 정보(orderContext, #634)
 # frontend/src/types/case.ts의 ReportBody와 키 · 타입을 같게 둔다
 # (ADR-0009 결정 4)
 # 한쪽만 고치지 않는다. 필드 이름이 JSON 키 그대로라 camelCase를 쓴다
@@ -148,6 +148,9 @@ class InvestigationTrace(BaseModel):
     steps: list[TraceStep]
     # 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 보고서 · 예전 보고서에는 없다
     promptFingerprint: str | None = None
+    # 고정 보고서를 만든 이유 (#626, ADR-0083) — Spring 고정 보고서만 채운다. AI 보고서는 늘 None
+    # #626 때 화면 타입에만 넣어 형식 대조 테스트가 dev에서 깨져 있었다 (#634에서 맞춤)
+    fixedReason: Literal["CONFIG_OFF", "ADMIN_STOPPED"] | None = None
 
 
 # 비슷한 과거 사건 (#296) — Tool 기록 값 그대로 코드가 채운다. AI 문장으로 만들지 않는다
@@ -215,6 +218,27 @@ class LinkedPayments(BaseModel):
     ip: LinkedMatch
 
 
+# 사건 결제 하나의 주문 정보 (#634) — Spring get_order_context 응답 한 줄 그대로 코드가 채운다
+# provided=False면 결제 준비 세션이 없어 나머지 칸이 비어 있다 ("주문 정보 없음")
+# 주문자 이름 · 전화는 없다. 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로만 (ADR-0082)
+# orderRef · orderName은 가맹점이 쓴 글자 — AI에게는 주지 않고 화면 표에만 보인다
+class OrderPayment(BaseModel):
+    paymentId: str
+    provided: bool
+    orderRef: str | None = None
+    orderName: str | None = None
+    orderGroup: int | None = None
+    # 주문 생성 → 결제 요청까지 걸린 초. 가맹점 시계 기준이라 음수일 수 있다
+    orderToPaymentSeconds: int | None = None
+    ordererProvided: bool = False
+    ordererPhoneGroup: int | None = None
+    pickupDiffers: bool | None = None
+
+
+class OrderContext(BaseModel):
+    payments: list[OrderPayment]
+
+
 # AI가 전달한 조사 사실 (#548) — 사실 번호(id)는 코드가 Tool 기록에서 만든다
 class FactItem(BaseModel):
     id: str
@@ -269,3 +293,5 @@ class ReportBody(BaseModel):
     # 안전망 — AI가 끝내 빠뜨린 눈여겨볼 사실 번호. 화면이 "시스템이 덧붙임"으로 보여 준다
     summaryAppended: list[str] = Field(default_factory=list)
     scope: InvestigationScope | None = None
+    # 주문 정보 (#634) — 조회하지 못했으면 None. 예전 보고서에는 칸이 없다
+    orderContext: OrderContext | None = None
