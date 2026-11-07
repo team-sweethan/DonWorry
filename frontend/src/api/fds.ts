@@ -33,10 +33,11 @@ export type FdsEvaluationDetail = {
     thresholdSnapshot: string | null
   }>
   history: FdsEvaluationSummary[]
+  // 원문은 받지 않는다 (#603). displayValue는 카드 표시값 · 가린 이메일, blocked는 서버가 대조한 차단 여부
   blocklistCandidates: Array<{
     identifierType: FdsBlocklistEntry['identifierType']
-    identifierValue: string
-    displayLabel: string | null
+    displayValue: string
+    blocked: boolean
   }>
   cardIdentifier: {
     cardToken: string
@@ -293,12 +294,16 @@ export function deactivateFdsBlocklistEntry(entryId: number, reason: string) {
   })
 }
 
-export function getFdsBlocklistStatus(
-  identifierType: FdsBlocklistEntry['identifierType'],
-  identifierValue: string,
+// 경보 상세의 차단 후보 등록. 식별값은 보내지 않고 서버가 평가에서 찾는다 (#603)
+export function addFdsBlocklistEntryFromEvaluation(
+  evaluationId: number,
+  input: { identifierType: FdsBlocklistEntry['identifierType']; reason: string },
 ) {
-  const query = new URLSearchParams({ identifierType, identifierValue })
-  return api<{ blocked: boolean }>(`/fds/blocklist/status?${query}`, { cache: 'no-store' })
+  return api<void>(`/fds/evaluations/${evaluationId}/blocklist-entries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
 }
 
 export function getOperatorAccessDetections(page = 0, risk = 'ALL', search = '') {

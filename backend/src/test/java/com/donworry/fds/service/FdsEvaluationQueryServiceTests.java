@@ -8,8 +8,10 @@ import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsFailureDisposition;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.api.FdsRuleHitOutcome;
+import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.entity.FdsFailureAnalysis;
+import com.donworry.fds.repository.FdsBlocklistEntryRepository;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.fds.repository.FdsFailureAnalysisRepository;
 import java.time.Instant;
@@ -36,6 +38,9 @@ class FdsEvaluationQueryServiceTests {
 
     @Mock
     private FdsFailureAnalysis failureAnalysis;
+
+    @Mock
+    private FdsBlocklistEntryRepository blocklistEntries;
 
     // 판정을 지정하면 해당 평가 이력만 반환한다.
     @Test
@@ -101,6 +106,60 @@ class FdsEvaluationQueryServiceTests {
         });
     }
 
+    // 경보 상세 응답에는 이메일 원문이 없다 — 차단 후보와 R07 근거(#603 전 원문 기록 포함) 모두 가린 값 (ISMS-P 2.6.3)
+    @Test
+    void detail_withBuyerEmail_masksCandidateAndR07Evidence() {
+        var evaluation = evaluation(101L, FdsResult.DENY);
+        evaluation.addRuleHit(
+                "R07",
+                FdsRuleHitOutcome.MATCH,
+                100,
+                "차단 목록",
+                "{\"active\":true}",
+                "{\"buyerRef\":\"hong-gildong\",\"buyerEmail\":\"hong@example.test\","
+                        + "\"matchedIdentifierTypes\":[\"BUYER_EMAIL\"]}",
+                null,
+                null);
+        var queryService = queryService();
+        given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
+        given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+
+        var result = queryService.detail(1L);
+
+        assertThat(result.blocklistCandidates())
+                .filteredOn(candidate -> candidate.identifierType().equals("BUYER_EMAIL"))
+                .singleElement()
+                .satisfies(candidate -> assertThat(candidate.displayValue()).isEqualTo("ho***@example.test"));
+        assertThat(result.ruleHits())
+                .singleElement()
+                .satisfies(hit -> assertThat(hit.observedValue())
+                        .contains("\"maskedBuyerEmail\":\"ho***@example.test\"")
+                        .doesNotContain("hong@example.test"));
+    }
+
+    // 차단 여부는 서버가 원문으로 대조해 알려 준다. 화면이 원문으로 /status를 부르지 않게 하는 계약 (#603)
+    @Test
+    void detail_whenCandidateBlocked_marksBlocked() {
+        var evaluation = evaluation(101L, FdsResult.DENY);
+        var queryService = queryService();
+        given(evaluationRepository.findById(1L)).willReturn(Optional.of(evaluation));
+        given(evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(101L)).willReturn(List.of(evaluation));
+        given(blocklistEntries.findByIdentifierTypeAndIdentifierValue(
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .willReturn(List.of());
+        org.mockito.BDDMockito.willReturn(
+                        List.of(FdsBlocklistEntry.active("BUYER_EMAIL", "hong@example.test", "도용 의심", Instant.now())))
+                .given(blocklistEntries)
+                .findByIdentifierTypeAndIdentifierValue("BUYER_EMAIL", "hong@example.test");
+
+        var result = queryService.detail(1L);
+
+        assertThat(result.blocklistCandidates())
+                .filteredOn(candidate -> candidate.blocked())
+                .extracting(candidate -> candidate.identifierType())
+                .containsExactly("BUYER_EMAIL");
+    }
+
     // 없는 평가 ID는 조회 실패 예외를 반환한다.
     @Test
     void detail_missingEvaluation_throwsNotFoundException() {
@@ -159,6 +218,6 @@ class FdsEvaluationQueryServiceTests {
     }
 
     private FdsEvaluationQueryService queryService() {
-        return new FdsEvaluationQueryService(evaluationRepository, failureAnalysisRepository);
+        return new FdsEvaluationQueryService(evaluationRepository, failureAnalysisRepository, blocklistEntries);
     }
 }

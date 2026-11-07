@@ -134,6 +134,7 @@ class RoleApiMatrixTests {
             route("GET", "/api/fds/blocklist/status", STAFF_OR_ADMIN),
             route("POST", "/api/fds/blocklist", STAFF_OR_ADMIN),
             route("PUT", "/api/fds/blocklist/1/deactivate", STAFF_OR_ADMIN),
+            route("POST", "/api/fds/evaluations/1/blocklist-entries", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations/1", STAFF_OR_ADMIN),
             route("GET", "/api/payment-transactions", STAFF_OR_ADMIN),

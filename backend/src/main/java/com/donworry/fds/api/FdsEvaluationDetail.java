@@ -21,7 +21,9 @@ public record FdsEvaluationDetail(
             String observedValue,
             String thresholdSnapshot) {}
 
-    public record FdsBlocklistCandidate(String identifierType, String identifierValue, String displayLabel) {}
+    // 화면은 원문을 받지 않는다 (#603). 등록은 평가 ID와 종류만 보내고 서버가 평가에서 값을 찾는다
+    // displayValue: 카드는 표시값, 이메일은 가린 값. blocked: 지금 활성 차단 목록에 있는지
+    public record FdsBlocklistCandidate(String identifierType, String displayValue, boolean blocked) {}
 
     public record CardIdentifier(String cardToken, String cardDisplayLabel) {}
 

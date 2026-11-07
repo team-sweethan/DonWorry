@@ -20,9 +20,8 @@ import { useAuth } from '../../auth/useAuth'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import {
-  addFdsBlocklistEntry,
+  addFdsBlocklistEntryFromEvaluation,
   getFdsEvaluation,
-  getFdsBlocklistStatus,
   getFdsRulePolicies,
   type FdsEvaluationDetail,
   type FdsResult,
@@ -127,7 +126,8 @@ function observedValue(ruleCode: string, rawValue: string | null) {
       // 카드 토큰은 화면에 노출하지 않고, P5가 준 마스킹 표시값만 쓴다.
       CARD_TOKEN: value.cardDisplayLabel,
       IP_ADDRESS: value.ipAddress,
-      BUYER_EMAIL: value.buyerEmail,
+      // 이메일은 서버가 가린 값만 준다 (#603)
+      BUYER_EMAIL: value.maskedBuyerEmail,
     }
     const candidates = identifierTypes.flatMap((type) => {
       const matchedValue = valueByType[type]
@@ -247,25 +247,14 @@ export function AlertDetailPage() {
             .catch(() => {
               if (active) setMerchantName(null)
             })
-          void Promise.all(
-            response.blocklistCandidates.map(async (candidate) => ({
-              key: `${candidate.identifierType}:${candidate.identifierValue}`,
-              status: await getFdsBlocklistStatus(
-                candidate.identifierType,
-                candidate.identifierValue,
-              ),
-            })),
+          // 차단 여부는 서버가 원문으로 대조해 상세 응답에 담아 준다 (#603)
+          setBlockedCandidates(
+            new Set(
+              response.blocklistCandidates
+                .filter((candidate) => candidate.blocked)
+                .map((candidate) => candidate.identifierType),
+            ),
           )
-            .then((statuses) => {
-              if (active) {
-                setBlockedCandidates(
-                  new Set(statuses.filter(({ status }) => status.blocked).map(({ key }) => key)),
-                )
-              }
-            })
-            .catch(() => {
-              if (active) setBlockedCandidates(new Set())
-            })
           void getFdsRulePolicies()
             .then((next) => {
               if (active) {
@@ -332,8 +321,9 @@ export function AlertDetailPage() {
     score === null
       ? `오류 코드 ${evaluation.errorCode ?? '—'}`
       : `${score}점 · ${evaluation.result} 판정`
+  // 한 평가에는 종류마다 후보가 하나뿐이라 종류로 구분한다 (원문은 화면에 없음, #603)
   const candidateKey = (candidate: FdsEvaluationDetail['blocklistCandidates'][number]) =>
-    `${candidate.identifierType}:${candidate.identifierValue}`
+    candidate.identifierType
   const closeBlocklistModal = () => {
     if (blocklistSubmitting) return
     setBlocklistOpen(false)
@@ -361,10 +351,8 @@ export function AlertDetailPage() {
     try {
       const results = await Promise.allSettled(
         candidates.map((candidate) =>
-          addFdsBlocklistEntry({
+          addFdsBlocklistEntryFromEvaluation(evaluation.evaluationId, {
             identifierType: candidate.identifierType,
-            identifierValue: candidate.identifierValue,
-            displayLabel: candidate.displayLabel,
             reason: reason.trim(),
           }),
         ),
@@ -803,8 +791,7 @@ export function AlertDetailPage() {
             return (
               <Checkbox key={key} value={key} disabled={blocked}>
                 {blocklistCandidateLabels[candidate.identifierType] ?? candidate.identifierType} ·{' '}
-                {candidate.displayLabel ?? candidate.identifierValue}{' '}
-                {blocked && <Tag color="red">차단 중</Tag>}
+                {candidate.displayValue} {blocked && <Tag color="red">차단 중</Tag>}
               </Checkbox>
             )
           })}
