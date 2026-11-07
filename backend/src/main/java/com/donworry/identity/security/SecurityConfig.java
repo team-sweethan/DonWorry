@@ -290,6 +290,16 @@ public class SecurityConfig {
                                     && current.getPrincipal() instanceof SessionUser user
                                     && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
                         })
+                        // AI 조사 긴급정지 조회 · 끄기 (#626, ADR-0083) — 이상을 먼저 보는 보안 직원도 바로 끈다. 다시 켜기는 아래 ADMIN 규칙
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/ai-switch"),
+                                paths.matcher(HttpMethod.POST, "/api/ai-switch/stop"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
                         .requestMatchers(
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/rule-catalog"),
@@ -342,7 +352,9 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/open-count"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/{alertId}"),
-                                paths.matcher(HttpMethod.POST, "/api/admin/insider-alerts/{alertId}/close"))
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-alerts/{alertId}/close"),
+                                // AI 조사 다시 켜기 (#626, ADR-0083) — 가이드라인 "재개승인", 끈 사람이 아닌 책임자가 한다
+                                paths.matcher(HttpMethod.POST, "/api/ai-switch/resume"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()

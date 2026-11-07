@@ -30,6 +30,7 @@ import { AdminHomePage } from '../pages/admin/AdminHomePage'
 import { CaseAssignmentsPage } from '../pages/admin/CaseAssignmentsPage'
 import { CaseAssignmentRequestsPage } from '../pages/admin/CaseAssignmentRequestsPage'
 import { InsiderAlertsPage } from '../pages/admin/InsiderAlertsPage'
+import { AiSwitchPage } from '../pages/admin/AiSwitchPage'
 import { RawViewReviewsPage } from '../pages/admin/RawViewReviewsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
@@ -211,6 +212,11 @@ export const router = createBrowserRouter([
                 handle: { title: '내부자 경보' },
                 element: <InsiderAlertsPage />,
               },
+              {
+                path: 'ai-switch',
+                handle: { title: 'AI 조사 긴급정지' },
+                element: <AiSwitchPage />,
+              },
               { path: 'users', handle: { title: '계정 관리' }, element: <AdminUsersPage /> },
               {
                 path: 'users/new',
@@ -243,6 +249,11 @@ export const router = createBrowserRouter([
                 element: <CaseComparePage />,
               },
               { path: 'actions', handle: { title: '조치 이력' }, element: <ActionHistoryPage /> },
+              {
+                path: 'ai-switch',
+                handle: { title: 'AI 조사 긴급정지' },
+                element: <AiSwitchPage />,
+              },
               { path: 'alerts', handle: { title: '탐지 알림' }, element: <AlertListPage /> },
               {
                 path: 'alerts/:id',

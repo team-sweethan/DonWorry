@@ -17,13 +17,19 @@ import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -78,7 +84,8 @@ class FixedReportGenerator {
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
     // 커밋 뒤 리스너에서 불리므로 끝난 트랜잭션에 합류하지 않게 새 읽기 트랜잭션을 연다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public Optional<Map<String, Object>> generate(Long caseId, int reportVersion, int evidenceVersion, Instant now) {
+    public Optional<Map<String, Object>> generate(
+            Long caseId, int reportVersion, int evidenceVersion, Instant now, FixedReportReason reason) {
         SecurityCase securityCase = securityCaseRepository.findById(caseId).orElseThrow();
         List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
                 .map(CasePayment::getPaymentId)
@@ -100,7 +107,8 @@ class FixedReportGenerator {
                 linkedOrNull(caseId, now),
                 reportVersion,
                 evidenceVersion,
-                now));
+                now,
+                reason));
     }
 
     // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만든다 — 값 없음(null)으로 남겨 화면이 "조회하지 못함"을 보여 준다
@@ -150,7 +158,8 @@ class FixedReportGenerator {
             LinkedPaymentsToolResponse linked,
             int reportVersion,
             int evidenceVersion,
-            Instant now) {
+            Instant now,
+            FixedReportReason reason) {
         long totalAmount = payments.stream().mapToLong(PaymentInfo::amount).sum();
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
@@ -222,11 +231,7 @@ class FixedReportGenerator {
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
                 Map.entry(
                         "recommendation",
-                        Map.of(
-                                "summary",
-                                SUMMARY.get(overall),
-                                "limitations",
-                                List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
+                        Map.of("summary", SUMMARY.get(overall), "limitations", List.of(reason.limitation))),
                 Map.entry(
                         "evidence",
                         evidenceList(securityCase.getId(), similar, history, linked, reportVersion, now, dataVersion)),
@@ -237,7 +242,8 @@ class FixedReportGenerator {
                                 RECOMMENDATION_KO.get(overall) + " — 판정 기준표 결과입니다. 근거를 확인한 뒤 판정해 주세요.",
                                 "overallRecommendation",
                                 overall)),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked))));
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, reason))));
+        body.put("caseOverview", caseOverview(securityCase.getCustomerRef(), payments));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
         body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
@@ -430,14 +436,78 @@ class FixedReportGenerator {
                 similar.totalMatched());
     }
 
+    private static final DateTimeFormatter KST_MINUTE =
+            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.of("Asia/Seoul"));
+    private static final String HELD_KO = PAYMENT_STATUS_KO.get("HELD");
+
+    // 사건 개요 한 줄 (ADR-0083 결정 6) — ai-server assemble.py case_overview와 같은 문장이라 고정 · AI 보고서의 결론 첫 줄이 같은 모양이다
+    // 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태. 모두 조회 값이고 판단 문구는 쓰지 않는다 (판정은 기준표 칸이 보여 준다)
+    static String caseOverview(String customerRef, List<PaymentInfo> payments) {
+        List<Instant> times = payments.stream()
+                .map(PaymentInfo::requestedAt)
+                .filter(Objects::nonNull)
+                .sorted()
+                .toList();
+        String money;
+        if (payments.size() == 1) {
+            Long amount = payments.getFirst().amount();
+            money = amount == null ? "금액 모름" : String.format(Locale.ROOT, "%,d원", amount);
+        } else if (payments.stream().anyMatch(p -> p.amount() == null)) {
+            money = "합계 금액 일부 모름";
+        } else {
+            money = String.format(
+                    Locale.ROOT,
+                    "합계 %,d원",
+                    payments.stream().mapToLong(PaymentInfo::amount).sum());
+        }
+        String subject = "고객 " + customerRef + "의 결제 " + payments.size() + "건(" + money + ", " + timeRange(times) + ")";
+        LinkedHashSet<String> rules = new LinkedHashSet<>();
+        payments.forEach(p -> p.ruleHits().forEach(rule -> rules.add(rule.name())));
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (PaymentInfo payment : payments) {
+            String status = PAYMENT_STATUS_KO.getOrDefault(
+                    payment.paymentStatus() == null ? "" : payment.paymentStatus(), "상태 모름");
+            counts.merge(status, 1, Integer::sum);
+        }
+        String ruleNames = String.join(" · ", rules);
+        if (!rules.isEmpty() && counts.keySet().equals(Set.of(HELD_KO))) {
+            return subject + "이 " + ruleNames + " 규칙에 걸려 " + HELD_KO + "된 사건입니다.";
+        }
+        String now = counts.entrySet().stream()
+                .map(e -> e.getKey() + " " + e.getValue() + "건")
+                .collect(Collectors.joining(" · "));
+        if (!rules.isEmpty()) {
+            return subject + "이 " + ruleNames + " 규칙에 걸린 사건입니다 (지금 상태: " + now + ").";
+        }
+        return subject + "에 대한 사건입니다 (지금 상태: " + now + ").";
+    }
+
+    // 결제 시각 범위 — 같은 날이면 뒤쪽은 시각만 ("11/05 15:57~16:05"). assemble.py _time_range와 같다
+    private static String timeRange(List<Instant> times) {
+        if (times.isEmpty()) {
+            return "시각 모름";
+        }
+        String first = KST_MINUTE.format(times.getFirst());
+        String last = KST_MINUTE.format(times.getLast());
+        if (first.equals(last)) {
+            return first;
+        }
+        return first.substring(0, 5).equals(last.substring(0, 5))
+                ? first + "~" + last.substring(6)
+                : first + "~" + last;
+    }
+
     // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다
     private static Map<String, Object> fixedTrace(
             int paymentCount,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
-            LinkedPaymentsToolResponse linked) {
+            LinkedPaymentsToolResponse linked,
+            FixedReportReason reason) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
+        // 왜 고정인지 (ADR-0083 결정 6) — 버전마다 남아 다시 켠 뒤에도 구분된다. 예전 보고서 · AI 보고서에는 없는 선택 칸
+        trace.put("fixedReason", reason.name());
         trace.put("model", "fixed");
         trace.put("durationMs", null);
         trace.put(

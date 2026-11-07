@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
+import { Alert, Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
 import { getMlShadowScores } from '../../../api/mlShadowScores'
 import type { AiRecommendation, ReportBody } from '../../../types/case'
 import {
@@ -20,6 +20,7 @@ import {
   summaryFold,
   summaryLines,
   traceProviderLabel,
+  fixedReportNotice,
   type RecommendationSource,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
@@ -70,8 +71,10 @@ export function ReportFull({
   const signals = caseSignals(body)
   // 요약 밑줄용 — 결제가 여러 건이면 사건 전체 징후 · 정상 근거로 긋는다
   const marks = signals ? { signals, normals: caseNormals(body) } : null
+  const fixedNotice = fixedReportNotice(body.investigationTrace)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {fixedNotice && <Alert type="info" showIcon message={fixedNotice} />}
       <ReportConclusion
         body={body}
         label={label}
