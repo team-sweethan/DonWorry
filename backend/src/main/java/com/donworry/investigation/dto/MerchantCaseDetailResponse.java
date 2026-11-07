@@ -6,6 +6,7 @@ import lombok.Builder;
 
 // 고객사 "보안 조치 결과" 상세 (fds 정본 02 §2.12 ②)
 // 적중 규칙 · 증거 추적 · 판정 사유 · 판정 직원 · FDS 점수 · 내부 ID · 인계 실패 코드는 보내지 않는다
+// AI 검토 권고(aiRecommendation)는 #644에서 뺐다 — AI 보고서가 판정 권고를 내지 않는다 (ADR-0009 결정 13, ADR-0019)
 @Builder
 public record MerchantCaseDetailResponse(
         Long caseId,
@@ -28,7 +29,6 @@ public record MerchantCaseDetailResponse(
             Instant requestedAt,
             String paymentStatus,
             String decision,
-            String aiRecommendation,
             // 고객이 가맹점에서 직접 승인을 취소한 결제(#382 · #439). 직원 거절(REJECT)과 구분한다
             boolean customerCanceled) {}
 }

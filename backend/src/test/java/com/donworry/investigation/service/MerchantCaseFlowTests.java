@@ -114,7 +114,8 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.cases[0].maxRiskScore").doesNotExist());
     }
 
-    // 상세는 보고서 핵심 요약 · 결제별 AI 결론 · 직원 판정 · P5 결제 상태를 따로 보내고, 내부 근거는 보내지 않는다
+    // 상세는 보고서 핵심 요약 · 직원 판정 · P5 결제 상태를 따로 보내고, 내부 근거는 보내지 않는다
+    // 보고서에 판정 권고(NEEDS_CHECK)가 들어 있어도 결제별 AI 권고는 내보내지 않는다 (#644, ADR-0009 결정 13)
     @Test
     void detail_beforeAndAfterDecision_separatesDecisionAndPaymentStatus() throws Exception {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);
@@ -129,7 +130,7 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.payments[0].amount").value(300_000))
                 .andExpect(jsonPath("$.payments[0].paymentStatus").value("HELD"))
                 .andExpect(jsonPath("$.payments[0].decision").doesNotExist())
-                .andExpect(jsonPath("$.payments[0].aiRecommendation").value("NEEDS_CHECK"))
+                .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].riskScore").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].ruleHits").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].casePaymentId").doesNotExist())
@@ -183,7 +184,7 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.payments[0].amount").doesNotExist());
     }
 
-    // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약 · AI 결론을 내보내지 않는다 (PR #207 리뷰)
+    // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약을 내보내지 않는다 (PR #207 리뷰)
     @Test
     void detail_evidenceChangedBeforeNewReport_hidesOldSummary() throws Exception {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);

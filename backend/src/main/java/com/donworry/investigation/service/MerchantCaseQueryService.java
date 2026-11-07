@@ -15,7 +15,6 @@ import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -81,7 +80,8 @@ public class MerchantCaseQueryService {
                 paymentDecisionRepository.findByCasePaymentSecurityCaseId(caseId).stream()
                         .collect(Collectors.toMap(
                                 decision -> decision.getCasePayment().getId(), Function.identity()));
-        // 최신 보고서가 현재 증거 버전을 조사해 성공했을 때만 요약 · 결제별 결론을 보여 준다
+        // 최신 보고서가 현재 증거 버전을 조사해 성공했을 때만 요약을 보여 준다
+        // 결제별 AI 권고는 내보내지 않는다 — 예전 보고서에 값이 남아 있어도 읽지 않는다 (#644)
         // 병합 뒤 새 보고서가 아직 없거나 실패했으면 이전 버전 요약을 내보내지 않는다 (CaseStatusService.reportProgress와 같은 기준)
         Map<String, Object> reportBody = reportGateway
                 .latest(caseId)
@@ -89,7 +89,6 @@ public class MerchantCaseQueryService {
                 .filter(ReportSnapshot::isSucceeded)
                 .map(ReportSnapshot::reportBody)
                 .orElse(null);
-        Map<String, String> recommendations = recommendations(reportBody);
         // 고객이 직접 승인을 취소한 결제(#382 · #439) — 직원 거절과 구분해 보인다
         Set<Long> customerCanceled =
                 caseStatusService.canceledCasePayments(caseId).keySet();
@@ -115,7 +114,6 @@ public class MerchantCaseQueryService {
                                     .decision(decision.map(
                                                     found -> found.getDecision().name())
                                             .orElse(null))
-                                    .aiRecommendation(recommendations.get(String.valueOf(casePayment.getPaymentId())))
                                     .customerCanceled(customerCanceled.contains(casePayment.getId()))
                                     .build();
                         })
@@ -138,20 +136,5 @@ public class MerchantCaseQueryService {
             return null;
         }
         return lines.stream().map(String::valueOf).toList();
-    }
-
-    // 결제별 AI 결론만 꺼낸다. 보고서의 결제 ID는 숫자 · 문자열 어느 쪽이든 문자열로 맞춰 비교한다
-    private static Map<String, String> recommendations(Map<String, Object> reportBody) {
-        Map<String, String> found = new HashMap<>();
-        if (reportBody != null && reportBody.get("paymentAnalyses") instanceof List<?> analyses) {
-            for (Object analysis : analyses) {
-                if (analysis instanceof Map<?, ?> fields
-                        && fields.get("paymentId") != null
-                        && fields.get("recommendation") != null) {
-                    found.put(String.valueOf(fields.get("paymentId")), String.valueOf(fields.get("recommendation")));
-                }
-            }
-        }
-        return found;
     }
 }
