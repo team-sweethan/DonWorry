@@ -107,7 +107,7 @@ public class StaffAccountLockService implements StaffAccountLocker {
         requirePositive(release.adminId(), "adminId");
         Assert.notNull(release.outcome(), "outcome");
         requireAdmin(release.adminId());
-        var open = lockRecords.findByStaffIdAndStatus(release.staffId(), StaffAccountLockStatus.OPEN);
+        var open = lockRecords.findForUpdateByStaffIdAndStatus(release.staffId(), StaffAccountLockStatus.OPEN);
         if (open.isEmpty()) return;
         var user = find(release.staffId());
         UserStatus before = user.getStatus();

@@ -150,7 +150,7 @@ class StaffAccountLockServiceTests {
     private StaffAccountLock openLock() {
         var lock = StaffAccountLock.bySystem(
                 STAFF, StaffLockReason.INSIDER_EXPORT_BLOCKED, ALERT, Instant.parse("2026-11-07T09:00:00Z"));
-        when(lockRecords.findByStaffIdAndStatus(STAFF, StaffAccountLockStatus.OPEN))
+        when(lockRecords.findForUpdateByStaffIdAndStatus(STAFF, StaffAccountLockStatus.OPEN))
                 .thenReturn(Optional.of(lock));
         return lock;
     }
