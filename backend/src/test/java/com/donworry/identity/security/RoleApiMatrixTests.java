@@ -118,6 +118,10 @@ class RoleApiMatrixTests {
             // 관리자만: 내부자 경보 (#516)
             route("GET", "/api/admin/insider-alerts", ADMIN),
             route("GET", "/api/admin/insider-alerts/open-count", ADMIN),
+            // AI 조사 긴급정지 (#626, ADR-0083): 조회 · 끄기는 보안 직원 + 관리자, 다시 켜기는 관리자만
+            route("GET", "/api/ai-switch", STAFF_OR_ADMIN),
+            route("POST", "/api/ai-switch/stop", STAFF_OR_ADMIN),
+            route("POST", "/api/ai-switch/resume", ADMIN),
             route("GET", "/api/admin/insider-alerts/1", ADMIN),
             route("POST", "/api/admin/insider-alerts/1/close", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
