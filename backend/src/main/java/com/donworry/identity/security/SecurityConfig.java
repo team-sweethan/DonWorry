@@ -335,7 +335,12 @@ public class SecurityConfig {
                                 // 주문자 전화 원문 열람 사후 검토 (#619). 원문 · 사건 상세는 열지 않는다
                                 paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews/pending-count"),
-                                paths.matcher(HttpMethod.POST, "/api/admin/raw-view-reviews/{reviewId}/review"))
+                                paths.matcher(HttpMethod.POST, "/api/admin/raw-view-reviews/{reviewId}/review"),
+                                // 내부자 경보 (#516). 근거는 기록 종류 · 사건 번호만, 원문은 열지 않는다
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/open-count"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/{alertId}"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-alerts/{alertId}/close"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
