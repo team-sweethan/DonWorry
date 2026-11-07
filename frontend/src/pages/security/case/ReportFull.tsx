@@ -35,6 +35,7 @@ import { won } from '../../../utils/format'
 import { dateTime, recommendationLabel } from './caseLabels'
 import { SummaryBox, WhyCard } from './BasisCard'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
+import { OrderContextCard } from './OrderContextCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { ReportConclusion } from './ReportConclusion'
 import { SimilarCasesCard } from './SimilarCasesCard'
@@ -106,6 +107,11 @@ export function ReportFull({
         {body.linkedPayments !== undefined && (
           <div id="report-linked" style={anchorStyle}>
             <LinkedPaymentsCard linked={body.linkedPayments} />
+          </div>
+        )}
+        {body.orderContext !== undefined && (
+          <div id="report-order" style={anchorStyle}>
+            <OrderContextCard order={body.orderContext} />
           </div>
         )}
         {body.similarCases !== undefined && (

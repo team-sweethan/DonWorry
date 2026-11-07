@@ -483,6 +483,23 @@ const TOPIC_CARDS: Record<string, SummaryLink> = {
   history: { target: 'report-history', label: '고객 최근 결제' },
   linked: { target: 'report-linked', label: '같은 카드 · 기기 · IP' },
   similar: { target: 'report-similar', label: '비슷한 과거 사건' },
+  order: { target: 'report-order', label: '주문 정보' },
+}
+
+// ── 주문 정보 카드 (#634) ──
+
+// 주문 → 결제 걸린 시간 — ai-server facts._elapsed와 같은 단위. 가맹점 시계 기준이라 음수면 그렇게 말한다
+export function orderElapsedText(seconds: number | null): string | null {
+  if (seconds === null) return null
+  if (seconds < 0) return '주문 시각이 결제보다 늦게 기록됨'
+  if (seconds < 120) return `주문 ${seconds}초 뒤 결제`
+  if (seconds < 7200) return `주문 ${Math.floor(seconds / 60)}분 뒤 결제`
+  return `주문 ${Math.floor(seconds / 3600)}시간 뒤 결제`
+}
+
+// 주문자 전화 묶음 번호 → A · B · C (번호 자체가 전화번호처럼 보이지 않게)
+export function phoneGroupLabel(group: number): string {
+  return group >= 1 && group <= 26 ? String.fromCharCode(64 + group) : String(group)
 }
 
 export function paymentCardId(paymentId: string): string {
