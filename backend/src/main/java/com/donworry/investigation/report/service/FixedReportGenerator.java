@@ -17,13 +17,19 @@ import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -237,6 +243,7 @@ class FixedReportGenerator {
                                 "overallRecommendation",
                                 overall)),
                 Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, reason))));
+        body.put("caseOverview", caseOverview(securityCase.getCustomerRef(), payments));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
         body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
@@ -427,6 +434,67 @@ class FixedReportGenerator {
                         .toList(),
                 "totalMatched",
                 similar.totalMatched());
+    }
+
+    private static final DateTimeFormatter KST_MINUTE =
+            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.of("Asia/Seoul"));
+    private static final String HELD_KO = PAYMENT_STATUS_KO.get("HELD");
+
+    // 사건 개요 한 줄 (ADR-0083 결정 6) — ai-server assemble.py case_overview와 같은 문장이라 고정 · AI 보고서의 결론 첫 줄이 같은 모양이다
+    // 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태. 모두 조회 값이고 판단 문구는 쓰지 않는다 (판정은 기준표 칸이 보여 준다)
+    static String caseOverview(String customerRef, List<PaymentInfo> payments) {
+        List<Instant> times = payments.stream()
+                .map(PaymentInfo::requestedAt)
+                .filter(Objects::nonNull)
+                .sorted()
+                .toList();
+        String money;
+        if (payments.size() == 1) {
+            Long amount = payments.getFirst().amount();
+            money = amount == null ? "금액 모름" : String.format(Locale.ROOT, "%,d원", amount);
+        } else if (payments.stream().anyMatch(p -> p.amount() == null)) {
+            money = "합계 금액 일부 모름";
+        } else {
+            money = String.format(
+                    Locale.ROOT,
+                    "합계 %,d원",
+                    payments.stream().mapToLong(PaymentInfo::amount).sum());
+        }
+        String subject = "고객 " + customerRef + "의 결제 " + payments.size() + "건(" + money + ", " + timeRange(times) + ")";
+        LinkedHashSet<String> rules = new LinkedHashSet<>();
+        payments.forEach(p -> p.ruleHits().forEach(rule -> rules.add(rule.name())));
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (PaymentInfo payment : payments) {
+            String status = PAYMENT_STATUS_KO.getOrDefault(
+                    payment.paymentStatus() == null ? "" : payment.paymentStatus(), "상태 모름");
+            counts.merge(status, 1, Integer::sum);
+        }
+        String ruleNames = String.join(" · ", rules);
+        if (!rules.isEmpty() && counts.keySet().equals(Set.of(HELD_KO))) {
+            return subject + "이 " + ruleNames + " 규칙에 걸려 " + HELD_KO + "된 사건입니다.";
+        }
+        String now = counts.entrySet().stream()
+                .map(e -> e.getKey() + " " + e.getValue() + "건")
+                .collect(Collectors.joining(" · "));
+        if (!rules.isEmpty()) {
+            return subject + "이 " + ruleNames + " 규칙에 걸린 사건입니다 (지금 상태: " + now + ").";
+        }
+        return subject + "에 대한 사건입니다 (지금 상태: " + now + ").";
+    }
+
+    // 결제 시각 범위 — 같은 날이면 뒤쪽은 시각만 ("11/05 15:57~16:05"). assemble.py _time_range와 같다
+    private static String timeRange(List<Instant> times) {
+        if (times.isEmpty()) {
+            return "시각 모름";
+        }
+        String first = KST_MINUTE.format(times.getFirst());
+        String last = KST_MINUTE.format(times.getLast());
+        if (first.equals(last)) {
+            return first;
+        }
+        return first.substring(0, 5).equals(last.substring(0, 5))
+                ? first + "~" + last.substring(6)
+                : first + "~" + last;
     }
 
     // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다

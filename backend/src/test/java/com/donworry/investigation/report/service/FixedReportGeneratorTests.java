@@ -77,6 +77,33 @@ class FixedReportGeneratorTests {
                 .containsExactly(FixedReportReason.ADMIN_STOPPED.limitation);
     }
 
+    // 고정 보고서 개요 한 줄은 ai-server와 같은 문장이다 — ai-server test_case_overview_multiple_payments_matches_tool_values와 같은 입력 ·
+    // 기대값
+    @Test
+    void generate_caseOverview_matchesAiServerSentence() {
+        List<PaymentInfo> payments = List.of(
+                new PaymentInfo(
+                        15L,
+                        600_000L,
+                        "HELD",
+                        Instant.parse("2026-10-27T12:00:00Z"),
+                        60,
+                        "REVIEW",
+                        List.of(new RuleHit("R01", "고액 결제", 30), new RuleHit("R02", "처음 쓰는 카드", 20))),
+                new PaymentInfo(
+                        16L,
+                        170_000L,
+                        "HELD",
+                        Instant.parse("2026-10-27T12:07:00Z"),
+                        45,
+                        "REVIEW",
+                        List.of(new RuleHit("R03", "단시간 반복 결제", 25), new RuleHit("R01", "고액 결제", 30))));
+
+        assertThat(FixedReportGenerator.caseOverview("customer-1", payments))
+                .isEqualTo("고객 customer-1의 결제 2건(합계 770,000원, 10/27 21:00~21:07)이 "
+                        + "고액 결제 · 처음 쓰는 카드 · 단시간 반복 결제 규칙에 걸려 매입 보류된 사건입니다.");
+    }
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
