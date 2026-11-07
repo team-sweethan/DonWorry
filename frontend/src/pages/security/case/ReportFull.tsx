@@ -28,7 +28,7 @@ import { OrderContextCard } from './OrderContextCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
 import { ReportChecks } from './ReportChecks'
 import { ReportOverview } from './ReportOverview'
-import { ReportPastCompare } from './ReportPastCompare'
+import { ReportPastCompare, type NowProgress } from './ReportPastCompare'
 import { ReportSection } from './ReportSection'
 
 // AI 보고서 전문 (#644 PR 3): ① 무슨 일인가 → ② 확인할 것 → ③ 지난 사건과 비교 → ④ 근거 자료 → ⑤ 조사 범위(접음)
@@ -39,15 +39,18 @@ import { ReportSection } from './ReportSection'
 
 // refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
 // onDecide — 판정할 수 있는 Case일 때만 온다 (끝난 Case는 판정하러 가기를 보여 주지 않는다)
+// progress — 지금 사건 판정 진행 (decisionProgress). onDecide 유무로 판정 끝을 정하면 일부 판정 사건이 "판정 끝"으로 보였다 (#652 Codex 리뷰)
 export function ReportFull({
   body,
   label,
   refreshKey,
+  progress,
   onDecide,
 }: {
   body: ReportBody
   label: string
   refreshKey: number
+  progress: NowProgress
   onDecide?: () => void
 }) {
   const ml = useMlScores(
@@ -68,7 +71,12 @@ export function ReportFull({
       <ReportOverview body={body} label={label} ml={ml} marks={marks} />
       <ReportChecks body={body} checked={checked} onToggle={toggle} />
       {body.similarCases !== undefined && (
-        <ReportPastCompare body={body} similar={body.similarCases} decided={!onDecide} />
+        <ReportPastCompare
+          body={body}
+          similar={body.similarCases}
+          progress={progress}
+          refreshKey={refreshKey}
+        />
       )}
       <EvidenceSection body={body} />
       <Collapse

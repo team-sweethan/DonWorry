@@ -6,6 +6,7 @@ import { won } from '../../../utils/format'
 import {
   compareColumn,
   compareReport,
+  nowDecisionText,
   pastCompareRows,
   topRiskScore,
   type CompareColumn,
@@ -26,18 +27,26 @@ type Past =
   | { status: 'error' | 'forbidden' | 'missing' }
   | { status: 'loaded'; detail: CaseDetail }
 
+// 지금 사건 판정 진행 — decisionProgress 결과. [판정하러 가기] 조건(판정 0건)과 달리 일부 판정도 구분한다 (#652 Codex 리뷰)
+export type NowProgress = { decided: number; remaining: number; done: boolean }
+
 export function ReportPastCompare({
   body,
   similar,
-  decided,
+  progress,
+  refreshKey,
 }: {
   body: ReportBody
   similar: SimilarCases | null
-  // 지금 사건이 판정 전인지 — 보고서 전문 페이지의 [판정하러 가기] 조건과 같다
-  decided: boolean
+  progress: NowProgress
+  // 화면의 [새로고침] 횟수 — 바뀌면 지난 사건도 다시 조회한다 (실패한 열을 새로고침으로 되살리게)
+  refreshKey: number
 }) {
   const shown = similar?.cases.slice(0, PAST_SHOWN) ?? []
-  const pasts = usePastCases(shown.map((c) => c.caseId))
+  const pasts = usePastCases(
+    shown.map((c) => c.caseId),
+    refreshKey,
+  )
   const rest = similar ? similar.cases.slice(PAST_SHOWN) : []
   const notListed = similar ? similar.totalMatched - similar.cases.length : 0
   return (
@@ -56,7 +65,7 @@ export function ReportPastCompare({
         <div style={mutedText}>비슷한 지난 사건이 없습니다.</div>
       ) : (
         <>
-          <CompareTable body={body} items={shown} pasts={pasts} decided={decided} />
+          <CompareTable body={body} items={shown} pasts={pasts} progress={progress} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12.5 }}>
             <span style={{ color: '#64748B' }}>
               <span style={diffDot} /> 지금 사건과 다른 칸
@@ -74,7 +83,8 @@ export function ReportPastCompare({
 }
 
 // 지난 사건 상세를 사건마다 따로 조회한다 — 하나가 실패해도 다른 열은 보인다
-function usePastCases(ids: string[]): Record<string, Past> {
+// [새로고침]이면 다시 조회하되, 응답이 올 때까지 이전 결과를 그대로 둔다 (열이 "불러오는 중"으로 깜빡이지 않게)
+function usePastCases(ids: string[], refreshKey: number): Record<string, Past> {
   const key = ids.join(',')
   const [loaded, setLoaded] = useState<{ key: string; byId: Record<string, Past> }>({
     key: '',
@@ -100,7 +110,7 @@ function usePastCases(ids: string[]): Record<string, Past> {
     return () => {
       alive = false
     }
-  }, [key])
+  }, [key, refreshKey])
   return loaded.key === key ? loaded.byId : {}
 }
 
@@ -108,12 +118,12 @@ function CompareTable({
   body,
   items,
   pasts,
-  decided,
+  progress,
 }: {
   body: ReportBody
   items: SimilarCaseItem[]
   pasts: Record<string, Past>
-  decided: boolean
+  progress: NowProgress
 }) {
   const pastStates = items.map((c): Past => pasts[c.caseId] ?? { status: 'loading' })
   const pastReports = pastStates.map((p) =>
@@ -130,7 +140,7 @@ function CompareTable({
     <div style={{ overflowX: 'auto' }}>
       <div role="table" aria-label="지난 사건과 비교" style={grid}>
         <span role="columnheader" />
-        <NowHead body={body} decided={decided} />
+        <NowHead body={body} progress={progress} />
         {items.map((c, i) => (
           <PastHead
             key={c.caseId}
@@ -167,7 +177,10 @@ function CompareTable({
           })}
         </Row>
         <Row head="직원 판정" sub="사유는 직원이 쓴 글">
-          <Cell tone="none">{decided ? '판정 기록은 사건 상세에서' : '판정 전'}</Cell>
+          <Cell tone="none">
+            {nowDecisionText(progress)}
+            {progress.decided > 0 && ' · 판정 기록은 사건 상세에서'}
+          </Cell>
           {pastStates.map((p, i) => (
             <Cell key={i} tone="none">
               {p.status === 'loaded' ? <Decisions detail={p.detail} /> : '—'}
@@ -179,11 +192,11 @@ function CompareTable({
   )
 }
 
-function NowHead({ body, decided }: { body: ReportBody; decided: boolean }) {
+function NowHead({ body, progress }: { body: ReportBody; progress: NowProgress }) {
   const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
   return (
     <div role="columnheader" style={{ ...headStyle, border: '2px solid #1D4ED8' }}>
-      <span style={headNote}>지금 · {decided ? '판정 끝' : '판정 전'}</span>
+      <span style={headNote}>지금 · {nowDecisionText(progress)}</span>
       <b>사건 {body.overview.caseId}</b>
       <span style={headNote}>
         {won(body.overview.totalAmount)} · FDS {score ?? '-'}

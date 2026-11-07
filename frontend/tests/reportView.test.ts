@@ -37,6 +37,8 @@ import {
   compareColumn,
   legacyReportText,
   pastCompareRows,
+  checkSignalRecord,
+  nowDecisionText,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -767,4 +769,33 @@ test('legacyReportText_oldBasisWords_showsNewNames', () => {
     '징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요.',
   )
   assert.equal(legacyReportText('고객 최근 30일 결제'), '고객 최근 30일 결제')
+})
+
+// 같은 규칙이 두 결제에 걸리고 앞 결제만 정상 사유가 있으면, 카드는 뒤 결제 값을 보여 주므로 점수 · 증거도 뒤 결제 것이어야 한다 (#652 Codex 리뷰)
+test('checkSignalRecord_firstPaymentExplained_usesShownPaymentRecord', () => {
+  const withRecord = (paymentId: string, normalReason: string | null, score: number) => ({
+    ...highAmountPayment(paymentId, normalReason),
+    ruleHitDetails: [
+      { code: 'R01', name: '고액 결제', appliedScore: score, evidenceId: `E-${paymentId}` },
+    ],
+  })
+  const report = body({
+    paymentAnalyses: [
+      withRecord('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료', 20),
+      withRecord('12', null, 30),
+    ],
+  })
+
+  const [card] = checkSignals(report) ?? []
+  assert.deepEqual(checkSignalRecord(report, card), { appliedScore: 30, evidenceId: 'E-12' })
+})
+
+// 일부 결제만 판정한 사건은 비교 표에서 "판정 끝"이 아니다 (#652 Codex 리뷰, CaseFlowTests.decidePartially_keepsWaiting…)
+test('nowDecisionText_partiallyDecided_isNotDone', () => {
+  assert.equal(
+    nowDecisionText({ decided: 1, remaining: 1, done: false }),
+    '일부 판정 · 남은 결제 1건',
+  )
+  assert.equal(nowDecisionText({ decided: 0, remaining: 2, done: false }), '판정 전')
+  assert.equal(nowDecisionText({ decided: 2, remaining: 0, done: true }), '판정 끝')
 })

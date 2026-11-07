@@ -468,10 +468,12 @@ export function overviewText(body: ReportBody): string {
 
 // 확인할 것 카드 한 장 — paymentIds: 이 징후가 있는 결제 전부, openPaymentIds: 그중 풀리지 않은 결제
 // mixed: 결제마다 정상 사유가 달라 일부만 풀림
+// shownPaymentId: 카드에 보여 주는 값(detail)을 가져온 결제 — 규칙 점수 · 증거도 이 결제 것을 붙인다 (#652 Codex 리뷰)
 export type CheckSignal = BasisSignal & {
   paymentIds: string[]
   openPaymentIds: string[]
   mixed: boolean
+  shownPaymentId: string
 }
 
 // 판정 전에 확인해야 하는 징후 — 정상 사유가 없고 다른 징후에 포함되지도 않은 것
@@ -497,12 +499,13 @@ export function checkSignals(body: ReportBody): CheckSignal[] | null {
   return [...groups.values()]
     .map((group) => {
       const open = group.filter((g) => isOpen(g.signal))
-      const shown = open[0]?.signal ?? group[0].signal
+      const shown = open[0] ?? group[0]
       return {
-        ...shown,
+        ...shown.signal,
         paymentIds: [...new Set(group.map((g) => g.paymentId))],
         openPaymentIds: open.map((g) => g.paymentId),
         mixed: open.length > 0 && open.length < group.length,
+        shownPaymentId: shown.paymentId,
       }
     })
     .sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level])
@@ -510,6 +513,25 @@ export function checkSignals(body: ReportBody): CheckSignal[] | null {
 
 // 체크할 징후와 순번 — 아래 고정 줄 "확인 1 / 3 완료"
 // 확인할 것 카드와 같은 순서 · 같은 조건(정상 사유 없음 + 확인할 것 있음)
+// 징후 카드에 붙일 FDS 규칙 기록 — 카드 값을 가져온 결제의 기록만 본다
+// 사건 전체에서 첫 기록을 고르면 결제 B의 값에 결제 A의 점수 · 증거가 붙었다 (#652 Codex 리뷰)
+export function checkSignalRecord(body: ReportBody, signal: CheckSignal): SignalRuleRecord | null {
+  const payment = body.paymentAnalyses.find((p) => String(p.paymentId) === signal.shownPaymentId)
+  return signalRuleRecord(signal, payment?.ruleHitDetails)
+}
+
+// 비교 표 "지금" 열의 판정 상태 — 일부만 판정한 사건은 판정 끝이 아니다 (#652 Codex 리뷰)
+// progress는 decisionProgress 결과 (고객이 직접 취소한 결제는 남은 건수에서 뺀다)
+export function nowDecisionText(progress: {
+  decided: number
+  remaining: number
+  done: boolean
+}): string {
+  if (progress.done) return '판정 끝'
+  if (progress.decided > 0) return `일부 판정 · 남은 결제 ${progress.remaining}건`
+  return '판정 전'
+}
+
 export function checkRows(body: ReportBody): Array<{ id: string; row: number }> {
   const signals = checkSignals(body) ?? []
   return signals.flatMap((s, i) =>

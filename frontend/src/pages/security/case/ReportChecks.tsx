@@ -3,11 +3,11 @@ import type { BasisSignal, ReportBody } from '../../../types/case'
 import {
   caseNormals,
   caseSignalId,
+  checkSignalRecord,
   checkSignals,
   isOpenSignal,
   normalNote,
   signalRecordText,
-  signalRuleRecord,
   type CheckSignal,
 } from '../../../utils/reportView'
 import { goToCard } from './goToCard'
@@ -61,6 +61,12 @@ export function ReportChecks({
           <NormalSide body={body} />
         </div>
       )}
+      {/* 징후 정리가 없거나(예전 보고서 · 연결 조회 실패로 빈 근거) 있어도 늘 보인다 (#652 Codex 리뷰) */}
+      {body.additionalChecks.length > 0 && (
+        <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6 }}>
+          <b style={{ color: '#6D28D9' }}>AI 추가 제안</b> · {body.additionalChecks.join(' · ')}
+        </div>
+      )}
     </ReportSection>
   )
 }
@@ -80,7 +86,6 @@ function SignalSide({
   const counted = signals.filter((s) => s.countedIn)
   const cards = signals.filter((s) => !s.countedIn)
   const high = cards.filter((s) => s.level === 'HIGH_RISK').length
-  const details = body.paymentAnalyses.flatMap((p) => p.ruleHitDetails ?? [])
   return (
     <div style={sideStyle}>
       <div style={sideHeadStyle}>
@@ -92,7 +97,7 @@ function SignalSide({
       {cards.length === 0 && <div style={emptyStyle}>적중한 징후가 없습니다.</div>}
       {cards.map((s) => {
         const id = caseSignalId(s)
-        const record = signalRuleRecord(s, details)
+        const record = checkSignalRecord(body, s)
         return (
           <SignalCard
             key={id}
@@ -109,11 +114,6 @@ function SignalSide({
           행동이라 따로 세지 않았습니다.
         </div>
       ))}
-      {body.additionalChecks.length > 0 && (
-        <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6 }}>
-          <b style={{ color: '#6D28D9' }}>AI 추가 제안</b> · {body.additionalChecks.join(' · ')}
-        </div>
-      )}
     </div>
   )
 }
