@@ -13,13 +13,16 @@ import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -65,46 +68,80 @@ public class InsiderDetectionService {
 
     // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 N개에서 막히면 주의. 같은 사건 재시도는 한 번으로 센다
     private void checkIns01(Long staffId, Instant at) {
+        Duration window = properties.ins01Window();
         List<StaffAccessRecorded> denials =
-                recent(staffId, InsiderRule.INS_01, at.minus(properties.ins01Window()), at).stream()
+                recent(staffId, InsiderRule.INS_01, at.minus(window), at.plus(window)).stream()
                         .filter(InsiderDetectionService::isOutOfScopeDenial)
                         .toList();
-        long cases = denials.stream()
-                .map(StaffAccessRecorded::caseId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .count();
-        if (cases >= properties.ins01CautionCases()) {
-            raise(
-                    staffId,
-                    InsiderRule.INS_01,
-                    InsiderAlertSeverity.CAUTION,
-                    "%d분 안에 담당 밖 사건 %d개 접근 거부"
-                            .formatted(properties.ins01Window().toMinutes(), cases),
-                    denials);
-        }
+        List<StaffAccessRecorded> hit = windowReaching(
+                denials, at, window, InsiderDetectionService::distinctCases, properties.ins01CautionCases());
+        if (hit.isEmpty()) return;
+        raise(
+                staffId,
+                InsiderRule.INS_01,
+                InsiderAlertSeverity.CAUTION,
+                "%d분 안에 담당 밖 사건 %d개 접근 거부".formatted(window.toMinutes(), distinctCases(hit)),
+                hit);
     }
 
     // INS-03 원문 열람 집중 — 한 직원이 짧은 시간에 주문자 전화 원문을 N건 열면 주의
     private void checkIns03(Long staffId, Instant at) {
+        Duration window = properties.ins03Window();
         List<StaffAccessRecorded> views =
-                recent(staffId, InsiderRule.INS_03, at.minus(properties.ins03Window()), at).stream()
+                recent(staffId, InsiderRule.INS_03, at.minus(window), at.plus(window)).stream()
                         .filter(InsiderDetectionService::isRawView)
                         .toList();
-        if (views.size() >= properties.ins03CautionRawViews()) {
-            raise(
-                    staffId,
-                    InsiderRule.INS_03,
-                    InsiderAlertSeverity.CAUTION,
-                    "%d분 안에 주문자 전화 원문 %d건 열람".formatted(properties.ins03Window().toMinutes(), views.size()),
-                    views);
+        List<StaffAccessRecorded> hit =
+                windowReaching(views, at, window, List::size, properties.ins03CautionRawViews());
+        if (hit.isEmpty()) return;
+        raise(
+                staffId,
+                InsiderRule.INS_03,
+                InsiderAlertSeverity.CAUTION,
+                "%d분 안에 주문자 전화 원문 %d건 열람".formatted(window.toMinutes(), hit.size()),
+                hit);
+    }
+
+    // 이 기록이 들어가는 창(끝이 이 기록 ~ 창 길이 뒤)을 앞에서부터 보고, 기준에 닿은 첫 창의 기록을 돌려준다
+    // 먼저 일어난 기록이 늦게 커밋돼 마지막에 처리돼도 뒤 기록과 함께 센다 (#627 리뷰). 기록은 시각 순으로 온다
+    private static List<StaffAccessRecorded> windowReaching(
+            List<StaffAccessRecorded> records,
+            Instant at,
+            Duration window,
+            ToLongFunction<List<StaffAccessRecorded>> measure,
+            long threshold) {
+        List<Instant> ends = Stream.concat(
+                        Stream.of(at),
+                        records.stream().map(StaffAccessRecorded::occurredAt).filter(t -> t.isAfter(at)))
+                .distinct()
+                .sorted()
+                .toList();
+        for (Instant end : ends) {
+            Instant start = end.minus(window);
+            List<StaffAccessRecorded> inWindow = records.stream()
+                    .filter(r ->
+                            !r.occurredAt().isBefore(start) && !r.occurredAt().isAfter(end))
+                    .toList();
+            if (measure.applyAsLong(inWindow) >= threshold) return inWindow;
         }
+        return List.of();
+    }
+
+    private static long distinctCases(List<StaffAccessRecorded> records) {
+        return records.stream()
+                .map(StaffAccessRecorded::caseId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
     }
 
     // INS-06 경보 겹침 — 같은 직원에게 서로 다른 규칙 경보가 2개 이상 열려 있으면 높음
+    // INS-06이 닫힌 적 있으면 그 뒤 새 기록이 붙은 경보만 센다 — 관리자가 정상으로 본 같은 겹침으로 다시 열지 않는다 (#627 리뷰)
     private void checkIns06(Long staffId, Instant at) {
+        Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_06);
         List<InsiderAlert> others = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN).stream()
                 .filter(a -> a.getRuleCode() != InsiderRule.INS_06)
+                .filter(a -> lastClosed == null || a.getLastEventAt().isAfter(lastClosed))
                 .toList();
         List<InsiderRule> rules = others.stream()
                 .map(InsiderAlert::getRuleCode)

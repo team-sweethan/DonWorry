@@ -23,6 +23,9 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
     @Query("SELECT a FROM InsiderAlert a WHERE a.id = :id")
     Optional<InsiderAlert> findByIdForUpdate(@Param("id") Long id);
 
+    @Query("SELECT a.staffId FROM InsiderAlert a WHERE a.id = :id")
+    Optional<Long> findStaffIdById(@Param("id") Long id);
+
     Optional<InsiderAlert> findByStaffIdAndRuleCodeAndStatus(
             Long staffId, InsiderRule ruleCode, InsiderAlertStatus status);
 

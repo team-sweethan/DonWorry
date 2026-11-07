@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -111,9 +112,12 @@ class InsiderDetectionServiceTests {
         when(reader.findRecent(eq(STAFF), any(), any())).thenAnswer(invocation -> {
             Instant from = invocation.getArgument(1);
             Instant to = invocation.getArgument(2);
+            // 실제 읽기 창구처럼 시각 · 기록 번호 순으로 준다 — 늦게 들어온 기록도 제자리에 놓인다
             return records.stream()
                     .filter(r ->
                             !r.occurredAt().isBefore(from) && !r.occurredAt().isAfter(to))
+                    .sorted(Comparator.comparing(StaffAccessRecorded::occurredAt)
+                            .thenComparing(StaffAccessRecorded::eventId))
                     .toList();
         });
         when(reader.findByIds(any())).thenAnswer(invocation -> {
@@ -270,6 +274,52 @@ class InsiderDetectionServiceTests {
         assertThat(savedAlerts)
                 .singleElement()
                 .satisfies(a -> assertThat(a.isOpen()).isFalse());
+    }
+
+    // (#627 리뷰) 관리자가 겹침 경보만 닫았는데 같은 두 경보로 다시 열리면 닫은 판단이 뒤집히고 내부자 사건 알림이 또 나간다
+    @Test
+    void ins06_closedWhileSameAlertsStayOpen_doesNotReopen() {
+        given(rawView(1L, 501L, T0), rawView(2L, 502L, T0.plusSeconds(60)), rawView(3L, 503L, T0.plusSeconds(120)));
+        service.detect(records.get(2));
+        StaffAccessRecorded lastDenial = given(
+                denied(4L, 11L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(180)),
+                denied(5L, 12L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(240)),
+                denied(6L, 13L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(300)));
+        service.detect(lastDenial);
+        InsiderAlert ins06 = savedAlerts.stream()
+                .filter(a -> a.getRuleCode() == InsiderRule.INS_06)
+                .findFirst()
+                .orElseThrow();
+        Instant closedAt = T0.plusSeconds(600);
+        ins06.close(1L, "관리자", "같은 이의제기 묶음", closedAt);
+        when(alerts.findLastClosedAt(STAFF, InsiderRule.INS_06)).thenReturn(closedAt);
+
+        service.detect(lastDenial);
+
+        assertThat(savedAlerts)
+                .filteredOn(a -> a.getRuleCode() == InsiderRule.INS_06)
+                .singleElement();
+        verify(publisher).publishEvent(any(InsiderAlertRaised.class));
+    }
+
+    // (#627 리뷰) 먼저 일어난 열람이 늦게 커밋돼 마지막에 처리되면, 그 시각 뒤 기록까지 세지 않아 몰아보기를 놓친다
+    @Test
+    void ins03_earlierViewCommittedLast_stillRaisesCaution() {
+        StaffAccessRecorded first = rawView(1L, 501L, T0);
+        given(rawView(2L, 502L, T0.plusSeconds(600)), rawView(3L, 503L, T0.plusSeconds(1200)));
+        service.detect(records.get(1));
+        assertThat(savedAlerts).isEmpty();
+
+        given(first);
+        service.detect(first);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_03);
+            assertThat(a.getLastEventAt()).isEqualTo(T0.plusSeconds(1200));
+        });
+        assertThat(savedEvidence)
+                .extracting(InsiderAlertEvidence::getAccessEventId)
+                .containsExactlyInAnyOrder(1L, 2L, 3L);
     }
 
     // 관리자의 검토 업무가 내부자 경보가 되면 관리자 화면이 자기 경보로 채워진다

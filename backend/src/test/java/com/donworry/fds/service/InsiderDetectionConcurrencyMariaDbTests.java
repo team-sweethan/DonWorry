@@ -3,8 +3,16 @@ package com.donworry.fds.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.fds.api.InsiderAlertSeverity;
+import com.donworry.fds.api.InsiderRule;
+import com.donworry.fds.dto.CloseInsiderAlertRequest;
+import com.donworry.fds.entity.InsiderAlert;
+import com.donworry.fds.entity.InsiderAlertStatus;
+import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
+import com.donworry.identity.entity.UserRole;
+import com.donworry.identity.security.SessionUser;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -24,7 +32,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 // 같은 직원의 접근 기록이 동시에 처리될 때 직원별 행 잠금 · 열린 경보 UNIQUE가 실제 DB에서 맞물리는지 본다 (#516)
 @Tag("mariadb")
@@ -42,6 +54,15 @@ class InsiderDetectionConcurrencyMariaDbTests {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    InsiderAlertService alertService;
+
+    @Autowired
+    InsiderAlertRepository alertRepository;
+
+    @Autowired
+    PlatformTransactionManager transactions;
 
     private long staffId;
 
@@ -107,6 +128,80 @@ class InsiderDetectionConcurrencyMariaDbTests {
                         Integer.class,
                         staffId))
                 .isEqualTo(3);
+    }
+
+    // (#627 리뷰) 탐지가 열린 경보를 읽은 사이 관리자가 닫으면, 탐지가 예전 OPEN 값으로 덮어써 닫은 판단이 사라진다
+    @Test
+    void close_whileDetectionRefreshesSameAlert_staysClosed() throws Exception {
+        Instant t0 = Instant.now().minusSeconds(300);
+        deniedAt(11L, t0);
+        deniedAt(12L, t0.plusSeconds(60));
+        deniedAt(13L, t0.plusSeconds(120));
+        detectionService.detect(
+                accessReader.findRecent(staffId, t0, t0.plusSeconds(120)).getLast());
+        Long alertId = jdbc.queryForObject(
+                "SELECT alert_id FROM insider_alerts WHERE staff_id=? AND status='OPEN'", Long.class, staffId);
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch detectionRead = new CountDownLatch(1);
+        try {
+            // 탐지 흉내: 직원 잠금 → 열린 경보 읽기 → (닫기가 끼어들 틈) → 같은 경보 갱신 · 커밋
+            Future<?> detection =
+                    pool.submit(() -> new TransactionTemplate(transactions).executeWithoutResult(status -> {
+                        alertRepository.lockDetectionState(staffId);
+                        InsiderAlert open = alertRepository
+                                .findByStaffIdAndRuleCodeAndStatus(staffId, InsiderRule.INS_01, InsiderAlertStatus.OPEN)
+                                .orElseThrow();
+                        detectionRead.countDown();
+                        sleep(1_500);
+                        open.refresh(
+                                InsiderAlertSeverity.CAUTION, "10분 안에 담당 밖 사건 3개 접근 거부", Instant.now(), Instant.now());
+                    }));
+            Future<?> close = pool.submit(() -> {
+                detectionRead.await();
+                asAdmin(() -> alertService.close(alertId, new CloseInsiderAlertRequest("정상 업무")));
+                return null;
+            });
+            detection.get(30, TimeUnit.SECONDS);
+            close.get(30, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(jdbc.queryForObject("SELECT status FROM insider_alerts WHERE alert_id=?", String.class, alertId))
+                .isEqualTo("CLOSED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT closed_by_admin_id FROM insider_alerts WHERE alert_id=?", Long.class, alertId))
+                .isEqualTo(ADMIN_ID);
+    }
+
+    private static final long ADMIN_ID = 990_516L;
+
+    private static void asAdmin(Runnable action) {
+        var admin = SessionUser.builder()
+                .userId(ADMIN_ID)
+                .loginId("admin516")
+                .displayName("관리자")
+                .role(UserRole.ADMIN)
+                .permissions(List.of())
+                .loginReference(UUID.randomUUID())
+                .build();
+        SecurityContextHolder.getContext()
+                .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(admin, null, List.of()));
+        try {
+            action.run();
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     private void deniedAt(long caseId, Instant at) {

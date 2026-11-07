@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -74,9 +75,15 @@ public class InsiderAlertService implements InsiderAlertReader {
     }
 
     // 정상 업무로 닫기 — 닫힌 뒤에는 그 전 기록으로 같은 규칙 경보가 다시 열리지 않는다(InsiderDetectionService)
-    @Transactional
+    // 탐지와 같은 직원별 잠금을 먼저 잡는다: 탐지가 읽어 둔 OPEN 경보를 닫은 뒤 덮어쓰지 못하게 (#627 리뷰)
+    // 잠금 순서는 탐지와 같다(직원 행 → 경보 행). 직원 번호는 경보를 영속 상태로 올리지 않고 칸만 읽는다
+    // READ_COMMITTED: 잠금을 기다린 뒤 탐지가 바꾼 최신 행을 읽어야 한다. REPEATABLE READ면 첫 조회 때 잡힌 스냅숏 때문에
+    // MariaDB가 잠금 문장을 "Record has changed since last read"로 거절한다
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public void close(Long alertId, CloseInsiderAlertRequest request) {
         StaffSummary admin = requireAdmin();
+        Long staffId = alerts.findStaffIdById(alertId).orElseThrow(InsiderAlertService::notFound);
+        alerts.lockDetectionState(staffId);
         InsiderAlert alert = alerts.findByIdForUpdate(alertId).orElseThrow(InsiderAlertService::notFound);
         if (!alert.isOpen()) throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 닫힌 경보입니다.");
         String memo =
