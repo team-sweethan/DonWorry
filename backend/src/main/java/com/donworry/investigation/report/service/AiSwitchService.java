@@ -12,6 +12,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,6 +35,7 @@ public class AiSwitchService {
     private final AiSwitchHistoryRepository repository;
     private final AiServerProperties aiServerProperties;
     private final CurrentStaff currentStaff;
+    private final ApplicationEventPublisher events;
 
     // 보고서를 다룰 때마다 부른다 — 마지막 기록을 읽으므로 끄면 다음 처리부터 바로 적용된다 (재시작 없음)
     public boolean isAiAllowed() {
@@ -53,8 +55,10 @@ public class AiSwitchService {
                 .build();
     }
 
+    // 기록이 커밋된 뒤 진행 중 보고서를 고정 보고서로 마무리한다 (AiReportStopHandler, ADR-0083 결정 5) — 응답은 그 뒤의 상태
     public AiSwitchStatusResponse stop(String reason) {
         change(AiSwitchAction.STOPPED, reason, CAN_STOP);
+        events.publishEvent(new AiSwitchStopped());
         return status();
     }
 

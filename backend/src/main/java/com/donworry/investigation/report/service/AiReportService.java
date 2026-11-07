@@ -1,12 +1,10 @@
 package com.donworry.investigation.report.service;
 
-import com.donworry.investigation.report.client.AiServerProperties;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import com.donworry.investigation.service.ReportGateway;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,8 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 // P3 → P4 보고서 요청 · 조회 경계의 실제 구현 — 보고서를 ai_reports에 버전별로 쌓는다 (ADR-0009)
-// ai.server.enabled가 꺼져 있으면(기본) FixedReportGenerator가 같은 자리에서 고정 문장 보고서를 만든다
-// 켜져 있으면 ai-server(Qwen)에 비동기로 맡기고, 결과는 AiReportResultService가 받는다
+// AI를 쓸 수 없으면(설정 ai.server.enabled 꺼짐 · 긴급정지, ADR-0083) FixedReportRunner가 같은 자리에서 고정 문장 보고서를 만든다
+// 쓸 수 있으면 ai-server에 비동기로 맡기고, 결과는 AiReportResultService가 받는다
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -30,8 +28,8 @@ public class AiReportService implements ReportGateway {
 
     private final AiReportRepository aiReportRepository;
     private final AiReportWriter aiReportWriter;
-    private final FixedReportGenerator fixedReportGenerator;
-    private final AiServerProperties aiServerProperties;
+    private final FixedReportRunner fixedReportRunner;
+    private final AiSwitchService aiSwitchService;
     private final AiInvestigationRunner aiInvestigationRunner;
     private final AiReportResultService aiReportResultService;
 
@@ -50,17 +48,17 @@ public class AiReportService implements ReportGateway {
     }
 
     // 서버 재시작으로 PENDING · RUNNING에 멈춘 보고서를 같은 버전에서 다시 만든다 (ADR-0009 한계)
-    // ai-server를 쓰면 RUNNING(ai-server 접수됨)은 다시 만들기 전에 ai-server 결과부터 조회한다
+    // AI를 쓸 수 있으면 RUNNING(ai-server 접수됨)은 다시 만들기 전에 ai-server 결과부터 조회한다. 긴급정지 중이면 고정 보고서로 끝낸다
     // 재개한 보고서의 Case ID를 돌려준다 — 호출자가 Case 상태를 다시 계산한다
     List<Long> resumeUnfinished() {
         List<Long> resumedCaseIds = new ArrayList<>();
         for (AiReport report : aiReportRepository.findByStatusIn(List.of(ReportStatus.PENDING, ReportStatus.RUNNING))) {
             log.info("미완료 보고서 재개 reportId={} caseId={}", report.getId(), report.getCaseId());
             try {
-                if (aiServerProperties.enabled()) {
+                if (aiSwitchService.isAiAllowed()) {
                     aiReportResultService.recover(report);
                 } else {
-                    runFixed(report);
+                    fixedReportRunner.run(report);
                 }
                 resumedCaseIds.add(report.getCaseId());
             } catch (RuntimeException e) {
@@ -84,40 +82,11 @@ public class AiReportService implements ReportGateway {
     }
 
     private void run(AiReport report) {
-        if (aiServerProperties.enabled()) {
+        if (aiSwitchService.isAiAllowed()) {
             aiInvestigationRunner.start(report);
         } else {
-            runFixed(report);
+            fixedReportRunner.run(report);
         }
-    }
-
-    // 고정 문장 보고서 — 조회 오류는 최대 3회 다시 시도하고, 모두 실패하면 FAILED로 끝낸다
-    // 결제 근거가 빠진 경우는 다시 해도 같으므로 바로 FAILED — 직원은 수동 판정으로 간다 (fds 정본 02 §2.5)
-    private void runFixed(AiReport report) {
-        String lastError = "UNKNOWN";
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-            try {
-                Optional<Map<String, Object>> body = fixedReportGenerator.generate(
-                        report.getCaseId(), report.getReportVersion(), report.getEvidenceVersion(), now);
-                if (body.isEmpty()) {
-                    aiReportWriter.fail(
-                            report.getId(),
-                            AiReportWriter.error(
-                                    "EVIDENCE_MISSING", "연결 결제의 금액 · 요청 시각 · FDS 점수 중 빠진 값이 있음", attempt, now),
-                            now);
-                    return;
-                }
-                aiReportWriter.succeed(report.getId(), body.get(), now);
-                return;
-            } catch (RuntimeException e) {
-                lastError = e.getClass().getSimpleName();
-                log.warn("보고서 생성 시도 실패 reportId={} attempt={}", report.getId(), attempt, e);
-            }
-        }
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
-        aiReportWriter.fail(
-                report.getId(), AiReportWriter.error("GENERATION_ERROR", lastError, MAX_ATTEMPTS, now), now);
     }
 
     // 성공한 보고서만 본문을 내보낸다. FAILED의 error · 진행 중 보고서는 본문 null

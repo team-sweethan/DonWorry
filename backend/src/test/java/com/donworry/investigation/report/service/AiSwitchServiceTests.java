@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -33,6 +34,9 @@ class AiSwitchServiceTests {
 
     @Mock
     CurrentStaff currentStaff;
+
+    @Mock
+    ApplicationEventPublisher events;
 
     // 배포 직후 기록이 하나도 없으면 켜짐 — 꺼짐으로 읽으면 모르는 사이 AI 조사가 전부 멈춘다
     @Test
@@ -90,7 +94,7 @@ class AiSwitchServiceTests {
 
     private AiSwitchService service(boolean configEnabled) {
         return new AiSwitchService(
-                repository, AiServerProperties.builder().enabled(configEnabled).build(), currentStaff);
+                repository, AiServerProperties.builder().enabled(configEnabled).build(), currentStaff, events);
     }
 
     private void givenStaff(String role) {

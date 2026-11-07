@@ -28,6 +28,8 @@ class AiInvestigationRunner {
     private final AiReportWriter writer;
     private final SecurityCaseRepository securityCaseRepository;
     private final ApplicationEventPublisher events;
+    private final AiSwitchService aiSwitchService;
+    private final FixedReportRunner fixedReportRunner;
 
     // 새 보고서 조사를 맡긴다 (트랜잭션 밖에서 부른다 — 외부 HTTP 호출, 02-code 4절)
     void start(AiReport report) {
@@ -52,6 +54,15 @@ class AiInvestigationRunner {
         }
     }
 
+    // 긴급정지 중 (ADR-0083 결정 4 · 5) — ai-server에 다시 맡기지 않고 같은 버전을 고정 보고서로 끝낸다 (호출자가 보고서 잠금을 잡고 부른다)
+    // 시도를 지우므로 그 뒤에 온 이 보고서의 콜백은 "진행 중인 시도 없음"으로 무시된다
+    void finishFixed(AiReport report) {
+        tracker.remove(report.getId());
+        if (fixedReportRunner.run(report)) {
+            events.publishEvent(new AiReportFinished(report.getCaseId()));
+        }
+    }
+
     void finishSucceeded(AiReport report, Map<String, Object> body) {
         tracker.remove(report.getId());
         if (writer.succeed(report.getId(), body, now())) {
@@ -60,6 +71,12 @@ class AiInvestigationRunner {
     }
 
     private void submitNext(AiReport report, String lastCode, String lastReason) {
+        // 재시도 직전에도 스위치를 본다 — 끈 뒤 마감 초과 · 실패 재시도가 ai-server로 다시 나가지 않게
+        if (!aiSwitchService.isAiAllowed()) {
+            log.info("AI 조사 정지 중 — ai-server에 맡기지 않고 고정 보고서로 끝냄 reportId={}", report.getId());
+            finishFixed(report);
+            return;
+        }
         String code = lastCode;
         String reason = lastReason;
         while (true) {

@@ -229,6 +229,21 @@ class AiReportServiceTests {
         return securityCase;
     }
 
+    // 설정(ai.server.enabled)이 꺼진 서버는 스위치 기록이 없어(켜짐) 고정 보고서다 — 스위치만 보면 없는 ai-server를 불러 FAILED가 된다 (ADR-0083 결정 2)
+    @Test
+    @SuppressWarnings("unchecked")
+    void request_whenConfigDisabledAndNoSwitchHistory_createsFixedReport() {
+        SecurityCase securityCase = caseWithPayment();
+        givenEvidenceFor(securityCase);
+
+        aiReportService.request(securityCase.getId(), 1);
+
+        AiReport saved = reportsOf(securityCase).getFirst();
+        assertThat(saved.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+        assertThat((Map<String, Object>) saved.getReportBody().get("investigationTrace"))
+                .containsEntry("provider", "FIXED");
+    }
+
     private void givenEvidenceFor(SecurityCase securityCase) {
         Long paymentId = casePaymentRepository
                 .findBySecurityCaseIdOrderByLinkedAtAsc(securityCase.getId())

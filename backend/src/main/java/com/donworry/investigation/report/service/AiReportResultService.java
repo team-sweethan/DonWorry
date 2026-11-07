@@ -31,6 +31,7 @@ public class AiReportResultService {
     private final ReportBodyValidator validator;
     private final AiServerClient aiServerClient;
     private final AiServerProperties properties;
+    private final AiSwitchService aiSwitchService;
 
     public void receive(Long reportId, AiInvestigationResult result) {
         // 진행 중인 시도가 없는 보고서는 잠금을 만들기 전에 무시한다 — 없는 ID로 반복해 보내도 잠금이 쌓이지 않게
@@ -100,6 +101,12 @@ public class AiReportResultService {
     }
 
     private void apply(AiReport report, AiInvestigationResult result) {
+        // 끄기와 결과가 겹쳐도 AI 본문을 저장하지 않는다 (ADR-0083 결정 5) — 같은 버전을 고정 보고서로 끝낸다
+        if (!aiSwitchService.isAiAllowed()) {
+            log.info("AI 조사 정지 중 — 결과를 반영하지 않고 고정 보고서로 끝냄 reportId={}", report.getId());
+            runner.finishFixed(report);
+            return;
+        }
         switch (result.status()) {
             case "SUCCEEDED" -> {
                 List<String> errors = validator.validate(report, result.reportBody());
