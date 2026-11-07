@@ -8,6 +8,7 @@ import com.donworry.fds.api.FdsLinkedPaymentReader;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -47,8 +48,8 @@ class FdsLinkedPaymentQueryMariaDbTests {
         save(9202L, 2L, "other-merchant-customer", NOW.minusSeconds(7200));
         save(9203L, 1L, "old-customer", NOW.minusSeconds(40L * 24 * 3600));
 
-        var result =
-                linkedPaymentReader.findLinked(1L, "case-customer", List.of(9100L), NOW.minusSeconds(30L * 24 * 3600));
+        var result = linkedPaymentReader.findLinked(
+                1L, "case-customer", List.of(9100L), NOW.minusSeconds(30L * 24 * 3600), Duration.ofHours(1));
 
         assertThat(result.card().provided()).isTrue();
         assertThat(result.card().paymentCount()).isEqualTo(1);
@@ -63,7 +64,7 @@ class FdsLinkedPaymentQueryMariaDbTests {
         save(9201L, 1L, "other-customer", NOW.minusSeconds(7200));
 
         var result = linkedPaymentReader.findLinked(
-                1L, "case-customer", List.of(9100L, 9101L), NOW.minusSeconds(30L * 24 * 3600));
+                1L, "case-customer", List.of(9100L, 9101L), NOW.minusSeconds(30L * 24 * 3600), Duration.ofHours(1));
 
         assertThat(result.card().paymentCount()).isEqualTo(1);
         assertThat(result.payments()).extracting(p -> p.card().paymentCount()).containsExactly(1, 0);

@@ -430,24 +430,44 @@ class FixedReportGenerator {
     }
 
     // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — ai-server와 같은 키. 숫자만 옮기고 해석하지 않는다
+    // nearby · nearbyWindowMinutes: 그중 사건 결제 앞뒤 시간 안의 결제 (#637)
     private static Map<String, Object> linkedPayments(LinkedPaymentsToolResponse linked) {
         return Map.of(
                 "lookbackDays", linked.lookbackDays(),
+                "nearbyWindowMinutes", linked.nearbyWindowMinutes(),
                 "card", linkedMatch(linked.card()),
                 "device", linkedMatch(linked.device()),
                 "ip", linkedMatch(linked.ip()));
     }
 
     private static Map<String, Object> linkedMatch(LinkedPaymentsToolResponse.Match match) {
+        Map<String, Object> body = new LinkedHashMap<>(linkedCounts(
+                match.otherCustomerCount(), match.paymentCount(), match.resultCounts(), match.declinedCount()));
+        body.put("provided", match.provided());
+        // LinkedPaymentFinder는 늘 채운다 — 비어 있으면 키를 빼서 화면이 예전 보고서처럼 그 줄을 그리지 않게 한다
+        if (match.nearby() != null) {
+            LinkedPaymentsToolResponse.Nearby near = match.nearby();
+            body.put(
+                    "nearby",
+                    linkedCounts(
+                            near.otherCustomerCount(), near.paymentCount(), near.resultCounts(), near.declinedCount()));
+        }
+        return body;
+    }
+
+    private static Map<String, Object> linkedCounts(
+            int otherCustomerCount,
+            int paymentCount,
+            List<LinkedPaymentsToolResponse.ResultCount> resultCounts,
+            int declinedCount) {
         return Map.of(
-                "provided", match.provided(),
-                "otherCustomerCount", match.otherCustomerCount(),
-                "paymentCount", match.paymentCount(),
+                "otherCustomerCount", otherCustomerCount,
+                "paymentCount", paymentCount,
                 "resultCounts",
-                        match.resultCounts().stream()
+                        resultCounts.stream()
                                 .map(c -> Map.<String, Object>of("result", c.result(), "count", c.count()))
                                 .toList(),
-                "declinedCount", match.declinedCount());
+                "declinedCount", declinedCount);
     }
 
     // 주문 정보 (#634) — ai-server와 같은 키. 묶음 번호 · 다름 여부만 옮기고 해석하지 않는다

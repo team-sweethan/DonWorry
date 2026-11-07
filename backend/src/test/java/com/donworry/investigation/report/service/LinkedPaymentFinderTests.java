@@ -13,9 +13,12 @@ import com.donworry.fds.api.FdsResult;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Nearby;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.PaymentLinks;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -55,6 +58,12 @@ class LinkedPaymentFinderTests {
                 .paymentCount(2)
                 .resultCounts(Map.of(FdsResult.DENY, 1, FdsResult.REVIEW, 1))
                 .declinedCount(1)
+                .nearby(FdsLinkedPayments.Nearby.builder()
+                        .otherCustomerCount(1)
+                        .paymentCount(1)
+                        .resultCounts(Map.of(FdsResult.DENY, 1))
+                        .declinedCount(1)
+                        .build())
                 .build();
         FdsLinkedPayments.Match none = FdsLinkedPayments.Match.builder()
                 .provided(true)
@@ -62,9 +71,11 @@ class LinkedPaymentFinderTests {
                 .paymentCount(0)
                 .resultCounts(Map.of())
                 .declinedCount(0)
+                .nearby(FdsLinkedPayments.Nearby.none())
                 .build();
         FdsLinkedPayments.Match notProvided = FdsLinkedPayments.Match.notProvided();
-        when(fdsLinkedPaymentReader.findLinked(eq(1L), eq("customer-1"), eq(List.of(1L, 2L)), any()))
+        when(fdsLinkedPaymentReader.findLinked(
+                        eq(1L), eq("customer-1"), eq(List.of(1L, 2L)), any(), eq(Duration.ofHours(1))))
                 .thenReturn(new FdsLinkedPayments(
                         shared,
                         none,
@@ -84,5 +95,15 @@ class LinkedPaymentFinderTests {
         assertThat(response.payments().get(0).card().resultCounts())
                 .extracting(r -> r.result())
                 .containsExactly("REVIEW", "DENY");
+        // 사건 결제 앞뒤 1시간 숫자와 그 시간을 그대로 옮긴다 (#637)
+        assertThat(response.nearbyWindowMinutes()).isEqualTo(60);
+        assertThat(response.card().nearby())
+                .isEqualTo(Nearby.builder()
+                        .otherCustomerCount(1)
+                        .paymentCount(1)
+                        .resultCounts(List.of(new ResultCount("DENY", 1)))
+                        .declinedCount(1)
+                        .build());
+        assertThat(response.payments().get(1).card().nearby().paymentCount()).isZero();
     }
 }
