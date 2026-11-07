@@ -413,7 +413,6 @@ export function AlertDetailPage() {
     <>
       <PageHeader
         title="경보 상세"
-        description={`평가 ${evaluation.evaluationId} · 결제 ${evaluation.paymentId} · 가맹점 ${merchantLabel} · 고객 ${customerPart(evaluation.customerRef)}`}
         actions={
           <>
             {caseId && (
@@ -438,316 +437,311 @@ export function AlertDetailPage() {
           </>
         }
       />
-      <div className="dw-section-grid dw-alert-detail">
-        <div className="dw-alert-detail-column">
+      {/* 결제 정보 → 처리 흐름 → 평가 결과 → 위험 신호 순서로 모두 폭 전체를 쓴다 (#631) */}
+      <div className="dw-alert-detail dw-alert-detail-column">
+        <Card
+          title={<span className="dw-section-title">결제 정보</span>}
+          className="dw-alert-card dw-alert-payment-information"
+        >
+          <Descriptions column={{ xs: 1, sm: 2, lg: 3, xxl: 4 }} colon={false}>
+            <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
+            <Descriptions.Item label="가맹점">{merchantLabel}</Descriptions.Item>
+            <Descriptions.Item label="고객 식별자">
+              {customerPart(evaluation.customerRef)}
+              {customerPath && (
+                <Button type="link" size="small" onClick={() => navigate(customerPath)}>
+                  이 고객 거래 내역 보기 ↗
+                </Button>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="마스킹 카드">
+              {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="결제 요청 시각">
+              {formatDate(evaluation.paymentRequestedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="평가 ID">{evaluation.evaluationId}</Descriptions.Item>
+            <Descriptions.Item label="평가 시각">
+              {formatDate(evaluation.evaluatedAt)}
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+        <div className="dw-api-note">
+          평가 요청으로 받은 결제 식별자·고객 식별자·요청 시각 등 평가 근거만 저장합니다.
+        </div>
+        <Card
+          title={<span className="dw-section-title">결제 처리 흐름</span>}
+          extra={<span className="dw-alert-source-label">FDS 관측</span>}
+          className="dw-alert-card"
+        >
+          <div className="dw-alert-flow">
+            <div className="dw-alert-flow-item dw-alert-flow-item--received">
+              <strong>결제 평가 요청 수신</strong>
+              <span>{formatDate(evaluation.paymentRequestedAt)} · P5 → FDS</span>
+            </div>
+            <div className="dw-alert-flow-item dw-alert-flow-item--evaluated">
+              <strong>FDS {evaluation.result} 판정</strong>
+              <span>
+                {formatDate(evaluation.evaluatedAt)} · {resultDescription}
+              </span>
+            </div>
+            <div className="dw-alert-flow-item dw-alert-flow-item--returned">
+              <strong>P5에 평가 결과 반환</strong>
+              <span>동기 호출 응답 · {evaluation.result}</span>
+            </div>
+          </div>
+        </Card>
+        <Card
+          title={<span className="dw-section-title">평가 결과</span>}
+          extra={<ResultTag result={evaluation.result} />}
+          className="dw-alert-card"
+        >
+          {score === null ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="평가 불가 — 점수 없음"
+              description={`오류 코드 ${evaluation.errorCode ?? '—'} · 위험 판정이 아니므로 자동 ALLOW 하지 않습니다.`}
+            />
+          ) : (
+            <>
+              <div className="dw-alert-score-row">
+                <strong>{score}</strong>
+                <span>점</span>
+                <div className="dw-alert-score-scale">
+                  <div className="dw-alert-score-allow" />
+                  <div className="dw-alert-score-review" />
+                  <div className="dw-alert-score-deny" />
+                  <i
+                    className="dw-alert-score-marker"
+                    style={
+                      { '--dw-alert-score-position': `${Math.min(score, 99)}%` } as CSSProperties
+                    }
+                  />
+                </div>
+              </div>
+              <div className="dw-alert-score-labels">
+                <span>ALLOW 0~49</span>
+                <span>REVIEW 50~79</span>
+                <span>DENY 80 이상</span>
+              </div>
+            </>
+          )}
+        </Card>
+        {evaluation.result === 'ERROR' && (
           <Card
-            title={<span className="dw-section-title">평가 결과</span>}
-            extra={<ResultTag result={evaluation.result} />}
+            title={<span className="dw-section-title">오류 분석·재평가</span>}
+            extra={
+              canRunReevaluation ? (
+                <Button type="primary" onClick={openReevaluationModal}>
+                  {resumingReevaluation ? '재평가 재개' : '재평가 실행'}
+                </Button>
+              ) : undefined
+            }
             className="dw-alert-card"
           >
-            {score === null ? (
-              <Alert
-                type="warning"
-                showIcon
-                message="평가 불가 — 점수 없음"
-                description={`오류 코드 ${evaluation.errorCode ?? '—'} · 위험 판정이 아니므로 자동 ALLOW 하지 않습니다.`}
-              />
-            ) : (
-              <>
-                <div className="dw-alert-score-row">
-                  <strong>{score}</strong>
-                  <span>점</span>
-                  <div className="dw-alert-score-scale">
-                    <div className="dw-alert-score-allow" />
-                    <div className="dw-alert-score-review" />
-                    <div className="dw-alert-score-deny" />
-                    <i
-                      className="dw-alert-score-marker"
-                      style={
-                        { '--dw-alert-score-position': `${Math.min(score, 99)}%` } as CSSProperties
-                      }
-                    />
-                  </div>
-                </div>
-                <div className="dw-alert-score-labels">
-                  <span>ALLOW 0~49</span>
-                  <span>REVIEW 50~79</span>
-                  <span>DENY 80 이상</span>
-                </div>
-              </>
-            )}
-          </Card>
-          {evaluation.result === 'ERROR' && (
-            <Card
-              title={<span className="dw-section-title">오류 분석·재평가</span>}
-              extra={
-                canRunReevaluation ? (
-                  <Button type="primary" onClick={openReevaluationModal}>
-                    {resumingReevaluation ? '재평가 재개' : '재평가 실행'}
-                  </Button>
-                ) : undefined
-              }
-              className="dw-alert-card"
-            >
-              <Descriptions column={1} colon={false} size="small">
-                <Descriptions.Item label="오류 발생 원인">
-                  {failureCauseLabel(evaluation.errorCode)}
-                </Descriptions.Item>
-                <Descriptions.Item label="분석 결과">
-                  {failureAnalysisResultLabel(detail.failureAnalysis?.disposition)}
-                </Descriptions.Item>
-                {recovery && (
-                  <>
-                    <Descriptions.Item label="복구 상태">
-                      <Tag color={recoveryStatusColors[recovery.status]}>
-                        {recoveryStatusLabels[recovery.status]}
-                      </Tag>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="재평가 결과">
-                      {recovery.evaluationResult ? (
-                        <ResultTag result={recovery.evaluationResult} />
-                      ) : (
-                        '—'
-                      )}
-                    </Descriptions.Item>
-                    {recovery.reevaluationEvaluationId && (
-                      <Descriptions.Item label="재평가 경보">
-                        <Button
-                          type="link"
-                          className="dw-alert-payment-link"
-                          onClick={() => openAlertDetail(recovery.reevaluationEvaluationId!)}
-                        >
-                          경보 #{recovery.reevaluationEvaluationId}
-                        </Button>
-                      </Descriptions.Item>
+            <Descriptions column={1} colon={false} size="small">
+              <Descriptions.Item label="오류 발생 원인">
+                {failureCauseLabel(evaluation.errorCode)}
+              </Descriptions.Item>
+              <Descriptions.Item label="분석 결과">
+                {failureAnalysisResultLabel(detail.failureAnalysis?.disposition)}
+              </Descriptions.Item>
+              {recovery && (
+                <>
+                  <Descriptions.Item label="복구 상태">
+                    <Tag color={recoveryStatusColors[recovery.status]}>
+                      {recoveryStatusLabels[recovery.status]}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="재평가 결과">
+                    {recovery.evaluationResult ? (
+                      <ResultTag result={recovery.evaluationResult} />
+                    ) : (
+                      '—'
                     )}
-                    <Descriptions.Item label="결제 상태">
-                      {recovery.paymentStatus}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="처리 완료 시각">
-                      {recovery.completedAt ? formatDate(recovery.completedAt) : '—'}
-                    </Descriptions.Item>
-                  </>
-                )}
-              </Descriptions>
-              {recoveryError && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="P5 복구 상태를 불러오지 못했습니다."
-                  description="새로고침 후 다시 확인해주세요."
-                  style={{ marginTop: 16 }}
-                />
-              )}
-              {!recoveryError && !recovery && (
-                <Alert
-                  type="info"
-                  showIcon
-                  message="P5 복구 기록이 아직 없습니다."
-                  description="분석 전달 상태를 확인해주세요."
-                  style={{ marginTop: 16 }}
-                />
-              )}
-              {(recovery?.status === 'READY' || recovery?.status === 'REQUESTED') &&
-                !isSecurityStaff && (
-                  <Typography.Text type="secondary">
-                    재평가는 보안 직원만 실행할 수 있습니다.
-                  </Typography.Text>
-                )}
-              {recovery?.status === 'MANUAL_REVIEW' && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="추가 자동 재평가는 허용되지 않습니다."
-                  description="재평가 중 다시 오류가 발생했거나 결제 상태가 변경되어 수동 검토가 필요합니다."
-                  style={{ marginTop: 16 }}
-                />
-              )}
-            </Card>
-          )}
-          {evaluation.result !== 'ERROR' && (
-            <Card
-              title={<span className="dw-section-title">위험 신호</span>}
-              extra={<Typography.Text type="secondary">평가 당시 저장값</Typography.Text>}
-              className="dw-alert-card"
-            >
-              {policyError && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="현재 룰 정책을 불러오지 못했습니다. 평가 당시 저장값은 정상적으로 표시됩니다."
-                  style={{ marginBottom: 12 }}
-                />
-              )}
-              <Table
-                rowKey="hitId"
-                size="small"
-                pagination={false}
-                columns={[
-                  {
-                    title: '위험 신호',
-                    dataIndex: 'ruleName',
-                    width: 108,
-                    render: (value: string) => <strong>{value}</strong>,
-                  },
-                  {
-                    title: '결과',
-                    dataIndex: 'outcome',
-                    width: 92,
-                    render: (outcome: string) => (
-                      <Tag color={outcome === 'MATCH' ? 'gold' : 'default'}>{outcome}</Tag>
-                    ),
-                  },
-                  {
-                    title: '현재 정책',
-                    key: 'currentPolicy',
-                    width: 98,
-                    render: (_, rule) => {
-                      if (policyError) return <Tag color="warning">조회 실패</Tag>
-                      const policy = policyByRuleCode.get(rule.ruleCode)
-                      if (!policy) return <Tag>정책 정보 없음</Tag>
-                      return policy.active ? (
-                        <Tag color="green">현재 켜짐</Tag>
-                      ) : (
-                        <Tag color="default">현재 꺼짐</Tag>
-                      )
-                    },
-                  },
-                  {
-                    title: '점수',
-                    dataIndex: 'appliedScore',
-                    align: 'right',
-                    width: 55,
-                    render: (points: number) => <strong>{points ? `+${points}` : '0'}</strong>,
-                  },
-                  {
-                    title: '평가 당시 값',
-                    key: 'observedValue',
-                    width: 330,
-                    render: (_, rule) => observedValue(rule.ruleCode, rule.observedValue),
-                  },
-                  {
-                    title: '기준',
-                    key: 'thresholdSnapshot',
-                    width: 168,
-                    render: (_, rule) => threshold(rule.ruleCode, rule.thresholdSnapshot),
-                  },
-                ]}
-                dataSource={detail.ruleHits}
-                tableLayout="fixed"
-              />
-            </Card>
-          )}
-          <Card
-            title={<span className="dw-section-title">같은 결제의 평가 이력</span>}
-            className="dw-alert-card"
-          >
-            <Table
-              rowKey="evaluationId"
-              size="small"
-              pagination={false}
-              columns={[
-                { title: '평가 ID', dataIndex: 'evaluationId' },
-                { title: '평가 시각', dataIndex: 'evaluatedAt', render: formatDate },
-                {
-                  title: '점수',
-                  dataIndex: 'riskScore',
-                  align: 'right',
-                  render: (value: number | null) => value ?? '—',
-                },
-                {
-                  title: '판정',
-                  dataIndex: 'result',
-                  render: (value: FdsResult) => <ResultTag result={value} />,
-                },
-                {
-                  title: '오류 코드',
-                  dataIndex: 'errorCode',
-                  render: (value: string | null) => (value ? <code>{value}</code> : '—'),
-                },
-                {
-                  title: '사건',
-                  key: 'case',
-                  render: (_, history) => {
-                    const historyCaseId = caseIdsByPaymentId.get(String(history.paymentId))
-                    if (!historyCaseId) return '—'
-                    return (
+                  </Descriptions.Item>
+                  {recovery.reevaluationEvaluationId && (
+                    <Descriptions.Item label="재평가 경보">
                       <Button
                         type="link"
                         className="dw-alert-payment-link"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          navigate(`/security/cases/${historyCaseId}`)
-                        }}
+                        onClick={() => openAlertDetail(recovery.reevaluationEvaluationId!)}
                       >
-                        CASE-{historyCaseId}
+                        경보 #{recovery.reevaluationEvaluationId}
                       </Button>
+                    </Descriptions.Item>
+                  )}
+                  <Descriptions.Item label="결제 상태">{recovery.paymentStatus}</Descriptions.Item>
+                  <Descriptions.Item label="처리 완료 시각">
+                    {recovery.completedAt ? formatDate(recovery.completedAt) : '—'}
+                  </Descriptions.Item>
+                </>
+              )}
+            </Descriptions>
+            {recoveryError && (
+              <Alert
+                type="warning"
+                showIcon
+                message="P5 복구 상태를 불러오지 못했습니다."
+                description="새로고침 후 다시 확인해주세요."
+                style={{ marginTop: 16 }}
+              />
+            )}
+            {!recoveryError && !recovery && (
+              <Alert
+                type="info"
+                showIcon
+                message="P5 복구 기록이 아직 없습니다."
+                description="분석 전달 상태를 확인해주세요."
+                style={{ marginTop: 16 }}
+              />
+            )}
+            {(recovery?.status === 'READY' || recovery?.status === 'REQUESTED') &&
+              !isSecurityStaff && (
+                <Typography.Text type="secondary">
+                  재평가는 보안 직원만 실행할 수 있습니다.
+                </Typography.Text>
+              )}
+            {recovery?.status === 'MANUAL_REVIEW' && (
+              <Alert
+                type="warning"
+                showIcon
+                message="추가 자동 재평가는 허용되지 않습니다."
+                description="재평가 중 다시 오류가 발생했거나 결제 상태가 변경되어 수동 검토가 필요합니다."
+                style={{ marginTop: 16 }}
+              />
+            )}
+          </Card>
+        )}
+        {evaluation.result !== 'ERROR' && (
+          <Card
+            title={<span className="dw-section-title">위험 신호</span>}
+            extra={<Typography.Text type="secondary">평가 당시 저장값</Typography.Text>}
+            className="dw-alert-card"
+          >
+            {policyError && (
+              <Alert
+                type="warning"
+                showIcon
+                message="현재 룰 정책을 불러오지 못했습니다. 평가 당시 저장값은 정상적으로 표시됩니다."
+                style={{ marginBottom: 12 }}
+              />
+            )}
+            <Table
+              rowKey="hitId"
+              size="small"
+              pagination={false}
+              columns={[
+                {
+                  title: '위험 신호',
+                  dataIndex: 'ruleName',
+                  width: 108,
+                  render: (value: string) => <strong>{value}</strong>,
+                },
+                {
+                  title: '결과',
+                  dataIndex: 'outcome',
+                  width: 92,
+                  render: (outcome: string) => (
+                    <Tag color={outcome === 'MATCH' ? 'gold' : 'default'}>{outcome}</Tag>
+                  ),
+                },
+                {
+                  title: '현재 정책',
+                  key: 'currentPolicy',
+                  width: 98,
+                  render: (_, rule) => {
+                    if (policyError) return <Tag color="warning">조회 실패</Tag>
+                    const policy = policyByRuleCode.get(rule.ruleCode)
+                    if (!policy) return <Tag>정책 정보 없음</Tag>
+                    return policy.active ? (
+                      <Tag color="green">현재 켜짐</Tag>
+                    ) : (
+                      <Tag color="default">현재 꺼짐</Tag>
                     )
                   },
                 },
+                {
+                  title: '점수',
+                  dataIndex: 'appliedScore',
+                  align: 'right',
+                  width: 55,
+                  render: (points: number) => <strong>{points ? `+${points}` : '0'}</strong>,
+                },
+                {
+                  title: '평가 당시 값',
+                  key: 'observedValue',
+                  width: 330,
+                  render: (_, rule) => observedValue(rule.ruleCode, rule.observedValue),
+                },
+                {
+                  title: '기준',
+                  key: 'thresholdSnapshot',
+                  width: 168,
+                  render: (_, rule) => threshold(rule.ruleCode, rule.thresholdSnapshot),
+                },
               ]}
-              dataSource={detail.history}
-              onRow={(record) => ({
-                onClick: () => openAlertDetail(record.evaluationId),
-                style: { cursor: 'pointer' },
-              })}
+              dataSource={detail.ruleHits}
+              tableLayout="fixed"
             />
           </Card>
-        </div>
-        <div className="dw-alert-detail-column">
-          <Card
-            title={<span className="dw-section-title">결제 처리 흐름</span>}
-            extra={<span className="dw-alert-source-label">FDS 관측</span>}
-            className="dw-alert-card"
-          >
-            <div className="dw-alert-flow">
-              <div className="dw-alert-flow-item dw-alert-flow-item--received">
-                <strong>결제 평가 요청 수신</strong>
-                <span>{formatDate(evaluation.paymentRequestedAt)} · P5 → FDS</span>
-              </div>
-              <div className="dw-alert-flow-item dw-alert-flow-item--evaluated">
-                <strong>FDS {evaluation.result} 판정</strong>
-                <span>
-                  {formatDate(evaluation.evaluatedAt)} · {resultDescription}
-                </span>
-              </div>
-              <div className="dw-alert-flow-item dw-alert-flow-item--returned">
-                <strong>P5에 평가 결과 반환</strong>
-                <span>동기 호출 응답 · {evaluation.result}</span>
-              </div>
-            </div>
-          </Card>
-          <Card
-            title={<span className="dw-section-title">결제 정보</span>}
-            className="dw-alert-card dw-alert-payment-information"
-          >
-            <Descriptions column={1} colon={false}>
-              <Descriptions.Item label="결제 ID">{evaluation.paymentId}</Descriptions.Item>
-              <Descriptions.Item label="가맹점">{merchantLabel}</Descriptions.Item>
-              <Descriptions.Item label="고객 식별자">
-                {customerPart(evaluation.customerRef)}
-                {customerPath && (
-                  <Button type="link" size="small" onClick={() => navigate(customerPath)}>
-                    이 고객 거래 내역 보기 ↗
-                  </Button>
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="마스킹 카드">
-                {detail.cardIdentifier?.cardDisplayLabel ?? '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="결제 요청 시각">
-                {formatDate(evaluation.paymentRequestedAt)}
-              </Descriptions.Item>
-              <Descriptions.Item label="평가 ID">{evaluation.evaluationId}</Descriptions.Item>
-              <Descriptions.Item label="평가 시각">
-                {formatDate(evaluation.evaluatedAt)}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-          <div className="dw-api-note">
-            평가 요청으로 받은 결제 식별자·고객 식별자·요청 시각 등 평가 근거만 저장합니다.
-          </div>
-        </div>
+        )}
+        <Card
+          title={<span className="dw-section-title">같은 결제의 평가 이력</span>}
+          className="dw-alert-card"
+        >
+          <Table
+            rowKey="evaluationId"
+            size="small"
+            pagination={false}
+            columns={[
+              { title: '평가 ID', dataIndex: 'evaluationId' },
+              { title: '평가 시각', dataIndex: 'evaluatedAt', render: formatDate },
+              {
+                title: '점수',
+                dataIndex: 'riskScore',
+                align: 'right',
+                render: (value: number | null) => value ?? '—',
+              },
+              {
+                title: '판정',
+                dataIndex: 'result',
+                render: (value: FdsResult) => <ResultTag result={value} />,
+              },
+              {
+                title: '오류 코드',
+                dataIndex: 'errorCode',
+                render: (value: string | null) => (value ? <code>{value}</code> : '—'),
+              },
+              {
+                title: '사건',
+                key: 'case',
+                render: (_, history) => {
+                  const historyCaseId = caseIdsByPaymentId.get(String(history.paymentId))
+                  if (!historyCaseId) return '—'
+                  return (
+                    <Button
+                      type="link"
+                      className="dw-alert-payment-link"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        navigate(`/security/cases/${historyCaseId}`)
+                      }}
+                    >
+                      CASE-{historyCaseId}
+                    </Button>
+                  )
+                },
+              },
+            ]}
+            dataSource={detail.history}
+            onRow={(record) => ({
+              onClick: () => openAlertDetail(record.evaluationId),
+              style: { cursor: 'pointer' },
+            })}
+          />
+        </Card>
       </div>
       <Modal
         title={resumingReevaluation ? '재평가 재개' : '재평가 실행'}
