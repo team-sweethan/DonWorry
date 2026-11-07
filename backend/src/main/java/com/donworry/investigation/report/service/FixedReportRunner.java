@@ -1,5 +1,6 @@
 package com.donworry.investigation.report.service;
 
+import com.donworry.investigation.report.client.AiServerProperties;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.repository.AiReportRepository;
 import java.time.Instant;
@@ -22,6 +23,7 @@ class FixedReportRunner {
     private final AiReportRepository aiReportRepository;
     private final AiReportWriter aiReportWriter;
     private final FixedReportGenerator fixedReportGenerator;
+    private final AiServerProperties aiServerProperties;
 
     // 이 호출이 보고서를 끝냈으면 true — 이미 끝난 보고서는 만들지도 바꾸지도 않는다
     boolean run(AiReport report) {
@@ -31,12 +33,15 @@ class FixedReportRunner {
                 .isEmpty()) {
             return false;
         }
+        // 고정 보고서는 AI를 쓸 수 없을 때만 만든다 — 설정이 켜져 있는데 여기 왔으면 스위치가 꺼진 것이다
+        FixedReportReason reason =
+                aiServerProperties.enabled() ? FixedReportReason.ADMIN_STOPPED : FixedReportReason.CONFIG_OFF;
         String lastError = "UNKNOWN";
         for (int attempt = 1; attempt <= AiReportService.MAX_ATTEMPTS; attempt++) {
             Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
             try {
                 Optional<Map<String, Object>> body = fixedReportGenerator.generate(
-                        report.getCaseId(), report.getReportVersion(), report.getEvidenceVersion(), now);
+                        report.getCaseId(), report.getReportVersion(), report.getEvidenceVersion(), now, reason);
                 if (body.isEmpty()) {
                     return aiReportWriter.fail(
                             report.getId(),

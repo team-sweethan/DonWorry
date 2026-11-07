@@ -78,7 +78,8 @@ class FixedReportGenerator {
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
     // 커밋 뒤 리스너에서 불리므로 끝난 트랜잭션에 합류하지 않게 새 읽기 트랜잭션을 연다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public Optional<Map<String, Object>> generate(Long caseId, int reportVersion, int evidenceVersion, Instant now) {
+    public Optional<Map<String, Object>> generate(
+            Long caseId, int reportVersion, int evidenceVersion, Instant now, FixedReportReason reason) {
         SecurityCase securityCase = securityCaseRepository.findById(caseId).orElseThrow();
         List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
                 .map(CasePayment::getPaymentId)
@@ -100,7 +101,8 @@ class FixedReportGenerator {
                 linkedOrNull(caseId, now),
                 reportVersion,
                 evidenceVersion,
-                now));
+                now,
+                reason));
     }
 
     // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만든다 — 값 없음(null)으로 남겨 화면이 "조회하지 못함"을 보여 준다
@@ -150,7 +152,8 @@ class FixedReportGenerator {
             LinkedPaymentsToolResponse linked,
             int reportVersion,
             int evidenceVersion,
-            Instant now) {
+            Instant now,
+            FixedReportReason reason) {
         long totalAmount = payments.stream().mapToLong(PaymentInfo::amount).sum();
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
@@ -222,11 +225,7 @@ class FixedReportGenerator {
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
                 Map.entry(
                         "recommendation",
-                        Map.of(
-                                "summary",
-                                SUMMARY.get(overall),
-                                "limitations",
-                                List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
+                        Map.of("summary", SUMMARY.get(overall), "limitations", List.of(reason.limitation))),
                 Map.entry(
                         "evidence",
                         evidenceList(securityCase.getId(), similar, history, linked, reportVersion, now, dataVersion)),
@@ -237,7 +236,7 @@ class FixedReportGenerator {
                                 RECOMMENDATION_KO.get(overall) + " — 판정 기준표 결과입니다. 근거를 확인한 뒤 판정해 주세요.",
                                 "overallRecommendation",
                                 overall)),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked))));
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, reason))));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
         body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
@@ -435,9 +434,12 @@ class FixedReportGenerator {
             int paymentCount,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
-            LinkedPaymentsToolResponse linked) {
+            LinkedPaymentsToolResponse linked,
+            FixedReportReason reason) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
+        // 왜 고정인지 (ADR-0083 결정 6) — 버전마다 남아 다시 켠 뒤에도 구분된다. 예전 보고서 · AI 보고서에는 없는 선택 칸
+        trace.put("fixedReason", reason.name());
         trace.put("model", "fixed");
         trace.put("durationMs", null);
         trace.put(

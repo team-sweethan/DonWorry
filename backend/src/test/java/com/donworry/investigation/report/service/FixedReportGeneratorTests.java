@@ -60,6 +60,23 @@ class FixedReportGeneratorTests {
     @Mock
     LinkedPaymentFinder linkedPaymentFinder;
 
+    // 긴급정지 중에 만든 고정 보고서는 조사 과정에 그 이유와 한계 문장을 남긴다 — "AI 연결 전"으로 오해하지 않게 (ADR-0083 결정 6)
+    @Test
+    @SuppressWarnings("unchecked")
+    void generate_whenStoppedByAdmin_marksFixedReasonInTrace() {
+        FixedReportGenerator generator = generatorForCase7();
+
+        Map<String, Object> body = generator
+                .generate(7L, 1, 1, NOW, FixedReportReason.ADMIN_STOPPED)
+                .orElseThrow();
+
+        assertThat((Map<String, Object>) body.get("investigationTrace"))
+                .containsEntry("provider", "FIXED")
+                .containsEntry("fixedReason", "ADMIN_STOPPED");
+        assertThat((List<String>) ((Map<String, Object>) body.get("recommendation")).get("limitations"))
+                .containsExactly(FixedReportReason.ADMIN_STOPPED.limitation);
+    }
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -82,7 +99,8 @@ class FixedReportGeneratorTests {
                 paymentSignalReader,
                 linkedPaymentFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         assertThat(analysis.containsKey("riskEvidence") || analysis.containsKey("normalEvidence"))
@@ -122,7 +140,8 @@ class FixedReportGeneratorTests {
                 paymentSignalReader,
                 linkedPaymentFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body.get("timeline"))
                 .isEqualTo(List.of(
@@ -159,7 +178,8 @@ class FixedReportGeneratorTests {
                 paymentSignalReader,
                 linkedPaymentFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> trace = (Map<?, ?>) body.get("investigationTrace");
         assertThat(trace.get("provider")).isEqualTo("FIXED");
@@ -184,7 +204,8 @@ class FixedReportGeneratorTests {
                                 "3", "SAME_CUSTOMER", List.of(new SharedRule("R01", "고액 결제")), NOW, 1, 1)),
                         4));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> similar = (Map<?, ?>) body.get("similarCases");
         assertThat(similar.get("totalMatched")).isEqualTo(4);
@@ -206,7 +227,8 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(similarCaseFinder.find(7L)).thenThrow(new IllegalStateException("P2 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("similarCases");
         assertThat(body.get("similarCases")).isNull();
@@ -237,7 +259,8 @@ class FixedReportGeneratorTests {
                         .truncated(false)
                         .build());
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> history = (Map<?, ?>) body.get("paymentHistory");
         assertThat(history.get("lookbackDays")).isEqualTo(30);
@@ -259,7 +282,8 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(paymentHistoryFinder.find(7L, NOW, 30)).thenThrow(new IllegalStateException("P5 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("paymentHistory");
         assertThat(body.get("paymentHistory")).isNull();
@@ -274,7 +298,8 @@ class FixedReportGeneratorTests {
         when(paymentSignalReader.findAll(List.of(3L)))
                 .thenReturn(Map.of(3L, new Signals("신한 ****1234", true, true, null, false)));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         Map<String, Object> expected = new HashMap<>();
@@ -323,7 +348,8 @@ class FixedReportGeneratorTests {
                         .ip(notProvided)
                         .build());
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> linked = (Map<?, ?>) body.get("linkedPayments");
         assertThat(linked.get("lookbackDays")).isEqualTo(30);
@@ -348,7 +374,8 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(linkedPaymentFinder.find(7L, NOW)).thenThrow(new IllegalStateException("P2 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("linkedPayments");
         assertThat(body.get("linkedPayments")).isNull();
@@ -421,7 +448,8 @@ class FixedReportGeneratorTests {
                 paymentSignalReader,
                 linkedPaymentFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         DecisionBasisToolResponse.Basis basis = (DecisionBasisToolResponse.Basis) analysis.get("basis");
@@ -458,7 +486,8 @@ class FixedReportGeneratorTests {
                 paymentSignalReader,
                 linkedPaymentFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         assertThat(analysis.get("basis")).isNull();
