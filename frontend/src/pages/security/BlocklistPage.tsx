@@ -226,7 +226,7 @@ export function BlocklistPage() {
               render: (_, entry: FdsBlocklistEntry) =>
                 entry.identifierType === 'CARD_TOKEN'
                   ? (entry.displayLabel ?? '카드 토큰')
-                  : entry.identifierValue,
+                  : (entry.identifierValue ?? '—'),
               ellipsis: true,
             },
             { title: '사유', dataIndex: 'reason', ellipsis: true },
@@ -365,7 +365,7 @@ export function BlocklistPage() {
             <Descriptions.Item label="식별값">
               {selectedEntry.identifierType === 'CARD_TOKEN'
                 ? (selectedEntry.displayLabel ?? '카드 토큰')
-                : selectedEntry.identifierValue}
+                : (selectedEntry.identifierValue ?? '—')}
             </Descriptions.Item>
             <Descriptions.Item label="등록 시각">
               {formatDate(selectedEntry.createdAt)}

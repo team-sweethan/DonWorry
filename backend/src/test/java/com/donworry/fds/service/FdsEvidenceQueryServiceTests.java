@@ -201,6 +201,67 @@ class FdsEvidenceQueryServiceTests {
                         .doesNotContain("hong@example.test"));
     }
 
+    // #628 전에 저장한 R02 · R03 · R07 근거의 IP · 기기 ID · 카드 토큰 원문은 P3 · P4로 넘기기 전에 가리거나 뺀다
+    @Test
+    void evidence_withRawIdentifiersInOldRecords_returnsMasked() {
+        var at = Instant.parse("2026-10-26T01:00:00Z");
+        var deny = FdsEvaluation.completed(
+                FdsEvaluationRequest.builder()
+                        .evaluationRequestId(UUID.randomUUID())
+                        .paymentId(106L)
+                        .merchantId(1L)
+                        .customerRef("hong-gildong")
+                        .amount(150_000L)
+                        .paymentRequestedAt(at)
+                        .cardToken("tok_secret_card")
+                        .cardDisplayLabel("신한 ****1234")
+                        .build(),
+                FdsResult.DENY,
+                100,
+                at);
+        deny.addRuleHit(
+                "R02",
+                FdsRuleHitOutcome.MATCH,
+                25,
+                "신규 단말기",
+                "{\"requiresPriorApproved\":true}",
+                "{\"deviceId\":\"device-secret-1\",\"approvedHistoryCount\":2}",
+                null,
+                null);
+        deny.addRuleHit(
+                "R03",
+                FdsRuleHitOutcome.MATCH,
+                25,
+                "신규 카드",
+                "{\"requiresPriorApproved\":true}",
+                "{\"cardToken\":\"tok_secret_card\",\"approvedHistoryCount\":2}",
+                null,
+                null);
+        deny.addRuleHit(
+                "R07",
+                FdsRuleHitOutcome.MATCH,
+                100,
+                "차단 목록",
+                "{\"active\":true}",
+                "{\"deviceId\":\"device-secret-1\",\"cardToken\":\"tok_secret_card\",\"ipAddress\":\"203.0.113.5\","
+                        + "\"matchedIdentifierTypes\":[\"CARD_TOKEN\"]}",
+                null,
+                null);
+        var queryService = new FdsEvidenceQueryService(evaluationRepository);
+        given(evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(anyCollection()))
+                .willReturn(List.of(deny));
+
+        var result = queryService.findLatestByPaymentIds(List.of(106L));
+
+        assertThat(result.getFirst().matchedRules())
+                .extracting(rule -> rule.observedValue())
+                .containsExactly(
+                        "{\"approvedHistoryCount\":2,\"maskedDeviceId\":\"device-s…\"}",
+                        "{\"approvedHistoryCount\":2,\"cardDisplayLabel\":\"신한 ****1234\"}",
+                        "{\"matchedIdentifierTypes\":[\"CARD_TOKEN\"],\"maskedDeviceId\":\"device-s…\","
+                                + "\"maskedIpAddress\":\"203.0.*.*\",\"cardDisplayLabel\":\"신한 ****1234\"}");
+    }
+
     private FdsEvaluation evaluation(Long paymentId, FdsResult result, Instant evaluatedAt) {
         var request = new FdsEvaluationRequest(
                 UUID.randomUUID(),

@@ -21,7 +21,8 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 - P3는 Case 접근 권한과 가맹점 범위를 먼저 확인한 뒤, 그 Case에 연결된 결제 ID만 전달한다. 이 공개 API는 세션·권한을 직접 검사하지 않는다.
 - 조회 구현은 읽기 전용 트랜잭션에서 P2 테이블만 읽으며 이벤트·HTTP 엔드포인트·스키마는 변경하지 않는다.
 - **#326에서 더한 필드 — 추가만 한다.** 적중 룰에 `thresholdSnapshot` · `observedValue`(평가 당시 저장한 기준값 · 실제값 JSON 원본, 없으면 `null`)를 싣는다. 이름은 `FdsEvaluationDetail.FdsRuleHitDetail`과 같다.
-  - 차단 목록(R07) 실제값에는 카드 토큰 · IP · 이메일 같은 식별자가 들어 있다. 받는 쪽은 원본을 화면 · 외부로 그대로 내보내지 않고 필요한 값만 골라 쓴다 (P4는 숫자 키만, [ADR-0009](0009-ai-investigation-call-structure.md))
+  - 차단 목록(R07) 실제값에는 식별자가 들어 있다. 받는 쪽은 원본을 화면 · 외부로 그대로 내보내지 않고 필요한 값만 골라 쓴다 (P4는 숫자 키만, [ADR-0009](0009-ai-investigation-call-structure.md))
+  - #603 · #628부터 P2가 내보내기 전에 가린다: 이메일 · IP · 기기 ID는 가린 값(`maskedBuyerEmail` · `maskedIpAddress` · `maskedDeviceId`), 카드 토큰은 빼고 표시값(`cardDisplayLabel`)만. 예전에 원문 키(`buyerEmail` · `ipAddress` · `deviceId` · `cardToken`)로 저장한 근거도 조회할 때 바꾼다 ([ADR-0082](0082-insider-access-security.md) 1절). 고객 번호(`buyerRef`)는 그대로다
 - **#346에서 더한 필드 — 추가만 한다 (P2 허락).** `signals`(`PaymentSignals`): `cardDisplayLabel`(마스킹 카드 표시값) · `cardProvided` · `deviceProvided` · `ipCountryCode` · `ipProvided`
   - 원문 식별자(카드 토큰 · IP 주소 · 기기 ID · 이메일)는 싣지 않는다. 표시해도 되는 값(마스킹 카드 · IP 국가)만 옮기고, 나머지는 가맹점이 보냈는지 여부만 준다 (빈 문자열도 안 보낸 것으로 본다)
   - 이전 6필드 생성자는 남겨 `signals`가 `null`인 값으로 만든다 (기존 사용처 · 테스트 그대로)

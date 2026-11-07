@@ -33,14 +33,15 @@ export type FdsEvaluationDetail = {
     thresholdSnapshot: string | null
   }>
   history: FdsEvaluationSummary[]
-  // 원문은 받지 않는다 (#603). displayValue는 카드 표시값 · 가린 이메일, blocked는 서버가 대조한 차단 여부
+  // 원문은 받지 않는다 (#603 · #628). displayValue는 카드 표시값(없으면 null) · 가린 이메일 · IP · 기기 ID,
+  // blocked는 서버가 대조한 차단 여부
   blocklistCandidates: Array<{
     identifierType: FdsBlocklistEntry['identifierType']
-    displayValue: string
+    displayValue: string | null
     blocked: boolean
   }>
+  // 카드 토큰은 받지 않는다 (#628). 사람이 볼 값은 표시값이다
   cardIdentifier: {
-    cardToken: string
     cardDisplayLabel: string | null
   } | null
   failureAnalysis: {
@@ -122,7 +123,8 @@ export type FdsRulePolicyChangeHistoryPage = {
 export type FdsBlocklistEntry = {
   entryId: number
   identifierType: 'CARD_TOKEN' | 'DEVICE_ID' | 'BUYER_REF' | 'IP_ADDRESS' | 'BUYER_EMAIL'
-  identifierValue: string
+  // 이메일 · IP · 기기 ID는 가린 값, 카드는 null(표시값은 displayLabel) (#603 · #628)
+  identifierValue: string | null
   displayLabel: string | null
   reason: string
   deactivationReason: string | null
