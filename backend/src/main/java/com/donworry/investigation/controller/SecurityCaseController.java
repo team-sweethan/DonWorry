@@ -48,10 +48,10 @@ public class SecurityCaseController {
     }
 
     // 사이드바 배지용 상태별 건수. 사용자 동작(메뉴 이동 · 탭 복귀 · 판정) 때만 부른다 — 타이머로 부르면 세션 무활동 만료가 오지 않는다
+    // 내 건수는 요청 값이 아니라 로그인 세션 직원으로 센다 (#640)
     @GetMapping("/counts")
     public CaseCountsResponse counts() {
-        securityStaffGuard.requireSecurityStaffId();
-        return caseQueryService.counts();
+        return caseQueryService.counts(securityStaffGuard.requireSecurityStaffId());
     }
 
     // 결제 ID(여러 개) → 연결된 Case. 경보 화면이 Case로 이동할 때 쓴다 (#309)

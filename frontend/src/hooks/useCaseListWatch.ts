@@ -8,6 +8,7 @@ import {
   watchStep,
   type WatchState,
 } from '../utils/caseListWatch'
+import type { CaseScope } from '../utils/caseRules'
 import { applyCaseBadgeCounts } from './useSecurityCaseBadge'
 
 /**
@@ -20,15 +21,23 @@ import { applyCaseBadgeCounts } from './useSecurityCaseBadge'
  * - 탭이 보이지 않으면 조회하지 않는다. 돌아오면 바로 한 번 조회하고 제한 시간을 다시 센다.
  *   숨어 있던 사이의 변화도 기준 건수와 비교해 반영한다.
  * - 받은 건수로 사이드바 배지(#224)도 맞춘다.
+ * - scope는 화면이 보여 주는 범위다 (#640). 그 범위의 건수만 비교해, 남의 Case 변화로 내 화면을 다시 불러오지 않는다.
  *
  * 실시간 알림(SSE)으로 바꿀 때는 이 훅의 안쪽만 서버 이벤트 구독으로 바꾸고, 반환 모양은 유지한다.
  */
-export function useCaseListWatch(onChange: (added: number) => void) {
+export function useCaseListWatch(onChange: (added: number) => void, scope: CaseScope) {
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
   })
   const state = useRef<WatchState>(initialWatchState)
+  // 범위를 바꾸면 비교 기준도 바뀐다. 기준을 비워 다음 조회 결과를 새 기준으로 삼는다
+  const scopeRef = useRef(scope)
+  useEffect(() => {
+    if (scopeRef.current === scope) return
+    scopeRef.current = scope
+    state.current = initialWatchState
+  }, [scope])
   // 사용자 동작마다 1씩 올라 조회를 처음부터 다시 시작하고 제한 시간을 다시 센다
   const [generation, setGeneration] = useState(0)
   const [stoppedGeneration, setStoppedGeneration] = useState<number | null>(null)
@@ -67,7 +76,7 @@ export function useCaseListWatch(onChange: (added: number) => void) {
         const counts = await getCaseCounts()
         if (!alive) return
         applyCaseBadgeCounts(counts)
-        const next = onCountsReceived(state.current, counts)
+        const next = onCountsReceived(state.current, counts[scopeRef.current])
         state.current = next.state
         if (next.notify !== null) onChangeRef.current(next.notify)
       } catch {

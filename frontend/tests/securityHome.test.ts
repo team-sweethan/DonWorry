@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { CaseSummary } from '../src/types/case.ts'
-import { homeCounts, priorityCases, priorityReason } from '../src/utils/securityHome.ts'
+import { homeCounts, homeView, priorityCases, priorityReason } from '../src/utils/securityHome.ts'
 
 const now = Date.parse('2026-10-27T12:00:00Z')
 const hoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString()
@@ -83,4 +83,28 @@ test('지금 처리할 사건은 이유 순, 같은 이유면 오래된 순으�
   const ids = (limit: number) => priorityCases(cases, limit, now).map((c) => c.caseId)
   assert.deepEqual(ids(6), ['failed', 'sla', 'pending-old', 'pending-new', 'other'])
   assert.deepEqual(ids(2), ['failed', 'sla'])
+})
+
+// #640 — 홈 세 곳 중 하나라도 거르기가 빠지면 직원이 남의 사건을 눌러 "담당 아님"(INV_028)으로 막힌다
+test('홈은 카드 건수 · 지금 처리할 사건 · 바로 이동 후보 모두 내가 담당인 Case만 본다', () => {
+  const view = homeView(
+    [
+      make('1', { assigneeStaffId: '20' }),
+      make('2', { assigneeStaffId: '30', status: 'ACTION_FAILED' }),
+      make('3', { assigneeStaffId: null }),
+      make('4', { assigneeStaffId: '20', status: 'CLOSED' }),
+    ],
+    20,
+    now,
+  )
+  assert.equal(view.counts.decisionPending, 1)
+  assert.equal(view.counts.actionFailed, 0)
+  assert.deepEqual(
+    view.rows.map((c) => c.caseId),
+    ['1'],
+  )
+  assert.deepEqual(
+    view.openCases.map((c) => c.caseId),
+    ['1'],
+  )
 })

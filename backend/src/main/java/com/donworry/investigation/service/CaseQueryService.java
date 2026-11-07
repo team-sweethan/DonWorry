@@ -70,18 +70,25 @@ public class CaseQueryService {
         return cases.stream().map(securityCase -> summary(securityCase, names)).toList();
     }
 
-    // 사이드바 배지용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
-    // 화면이 키 유무를 따지지 않게 없는 상태도 0으로 채운다
+    // 사이드바 배지 · 화면 자동 갱신용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
+    // 모든 직원 건수와 함께 staffId가 담당인 건수를 보낸다. 배지 · 홈은 내 건수를 쓴다 (#640)
     @Transactional(readOnly = true)
-    public CaseCountsResponse counts() {
+    public CaseCountsResponse counts(Long staffId) {
+        return new CaseCountsResponse(
+                byStatus(securityCaseRepository.countByStatus()),
+                byStatus(securityCaseRepository.countByStatusForAssignee(staffId)));
+    }
+
+    // 화면이 키 유무를 따지지 않게 없는 상태도 0으로 채운다
+    private static Map<String, Long> byStatus(List<CaseStatusCount> rows) {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (CaseStatus status : CaseStatus.values()) {
             counts.put(status.name(), 0L);
         }
-        for (CaseStatusCount row : securityCaseRepository.countByStatus()) {
+        for (CaseStatusCount row : rows) {
             counts.put(row.status().name(), row.count());
         }
-        return new CaseCountsResponse(counts);
+        return counts;
     }
 
     // 결제 ID → 연결된 Case (#309) — 경보 화면이 Case로 이동할 때 쓴다. P2는 P3를 부를 수 없어 화면이 이 API를 부른다

@@ -14,6 +14,7 @@ import type {
   SubmitDecisionsRequest,
 } from '../types/case.ts'
 import type { AssignmentChangeReason } from './caseAssignments.ts'
+import type { ScopedCaseCounts } from '../utils/caseBadge.ts'
 import { api, ApiError } from './client.ts'
 
 /**
@@ -97,13 +98,16 @@ export async function getCases(): Promise<CaseSummary[]> {
   }))
 }
 
-/** 사이드바 배지용 상태별 건수 (#224). 목록과 달리 결제 · 보고서를 읽지 않아 가볍다. 모든 상태가 키로 온다. */
-export async function getCaseCounts(): Promise<Record<CaseStatus, number>> {
-  const { statusCounts } = await api<{ statusCounts: Record<CaseStatus, number> }>(
-    '/security-cases/counts',
-    { cache: 'no-store' },
-  )
-  return statusCounts
+/**
+ * 사이드바 배지 · 자동 갱신용 상태별 건수 (#224). 목록과 달리 결제 · 보고서를 읽지 않아 가볍다. 모든 상태가 키로 온다.
+ * MINE은 로그인한 직원이 담당인 Case만, ALL은 모든 직원의 Case다 (#640).
+ */
+export async function getCaseCounts(): Promise<ScopedCaseCounts> {
+  const { statusCounts, myStatusCounts } = await api<{
+    statusCounts: Record<CaseStatus, number>
+    myStatusCounts: Record<CaseStatus, number>
+  }>('/security-cases/counts', { cache: 'no-store' })
+  return { ALL: statusCounts, MINE: myStatusCounts }
 }
 
 /** 결제 ID → 연결된 Case (#309). 경보 화면이 Case로 이동할 때 쓴다. Case가 없는 결제는 결과에 없다. 한 번에 1~100개. */

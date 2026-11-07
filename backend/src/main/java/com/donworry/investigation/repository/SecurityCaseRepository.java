@@ -121,4 +121,13 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
             GROUP BY c.status
             """)
     List<CaseStatusCount> countByStatus();
+
+    // 사이드바 배지 · 보안 홈용 — 한 직원이 담당인 Case의 상태별 건수 (#640)
+    @Query("""
+            SELECT new com.donworry.investigation.repository.CaseStatusCount(c.status, COUNT(c))
+            FROM SecurityCase c
+            WHERE c.assigneeStaffId = :staffId
+            GROUP BY c.status
+            """)
+    List<CaseStatusCount> countByStatusForAssignee(@Param("staffId") Long staffId);
 }
