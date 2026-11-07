@@ -69,7 +69,7 @@ export type LinkedExplanation = { key: LinkedExplanationKey; title: string; body
 const EXPLANATIONS: Record<LinkedExplanationKey, Omit<LinkedExplanation, 'key'>> = {
   card: {
     title: '카드가 다른 손님과 겹칠 때',
-    body: '한 카드를 여러 계정이 썼다는 뜻입니다. 가족이 아니라면 드문 일이라, 판정 기준표에서도 고위험 징후로 봅니다.',
+    body: '한 카드를 여러 계정이 썼다는 뜻입니다. 가족이 아니라면 드문 일이라, 징후 계산에서도 고위험 징후로 봅니다.',
   },
   device: {
     title: '기기가 다른 손님과 겹칠 때',

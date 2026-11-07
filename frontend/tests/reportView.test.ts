@@ -40,6 +40,7 @@ import {
   checkSignalRecord,
   nowDecisionText,
   caseNormalNotes,
+  normalsUnchecked,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -821,4 +822,16 @@ test('caseNormalNotes_sameNormalExplainsOnlyOnePayment_saysWhichPayment', () => 
       note: '결제 12: 고액 결제 징후의 정상 사유입니다. 결제 11: 그 징후가 없어 정상 사유가 되지 않습니다.',
     },
   ])
+})
+
+// 고객 결제 이력 조회가 실패한 보고서는 정상 근거를 "찾지 못함"이 아니라 "확인하지 못함"으로 — 이력을 다 봤다고 오해하지 않게 (#652 Codex 리뷰)
+test('normalsUnchecked_paymentHistoryLookupFailed_isNotNotFound', () => {
+  const withBasis = { ...paymentWith('11', []), basis: { signals: [], normals: [] } }
+  const history = { lookbackDays: 30, payments: [], statusCounts: [], truncated: false }
+
+  assert.equal(normalsUnchecked(body({ paymentAnalyses: [withBasis], paymentHistory: null })), true)
+  assert.equal(
+    normalsUnchecked(body({ paymentAnalyses: [withBasis], paymentHistory: history })),
+    false,
+  )
 })

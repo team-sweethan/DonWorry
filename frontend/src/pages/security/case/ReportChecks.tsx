@@ -6,6 +6,7 @@ import {
   checkSignalRecord,
   checkSignals,
   isOpenSignal,
+  normalsUnchecked,
   signalRecordText,
   type CheckSignal,
 } from '../../../utils/reportView'
@@ -33,6 +34,10 @@ const SIGNAL_CARD: Record<string, string> = {
 // 기준을 바꾸면 여기도 함께 고친다 (SIMILAR_LOW · SIMILAR_HIGH · 2건 이상)
 const NORMAL_SEARCHED = '최근 30일, 이번 금액의 0.5 ~ 1.5배 결제 중 매입 완료 2건 이상'
 
+// 고객 결제 이력 조회가 실패해 정상 근거를 계산하지 못한 보고서 (normalsUnchecked — 한계는 그 함수 주석)
+const NORMAL_UNCHECKED =
+  '고객 결제 이력 조회가 실패해 정상 근거를 계산하지 못했습니다. 정상 사유가 없다는 뜻이 아닙니다.'
+
 export function ReportChecks({
   body,
   checked,
@@ -43,6 +48,7 @@ export function ReportChecks({
   onToggle: (id: string) => void
 }) {
   const signals = checkSignals(body)
+  const unchecked = normalsUnchecked(body)
   return (
     <ReportSection
       no="②"
@@ -56,8 +62,14 @@ export function ReportChecks({
         </div>
       ) : (
         <div style={columnsStyle}>
-          <SignalSide signals={signals} body={body} checked={checked} onToggle={onToggle} />
-          <NormalSide body={body} />
+          <SignalSide
+            signals={signals}
+            body={body}
+            unchecked={unchecked}
+            checked={checked}
+            onToggle={onToggle}
+          />
+          <NormalSide body={body} unchecked={unchecked} />
         </div>
       )}
       {/* 징후 정리가 없거나(예전 보고서 · 연결 조회 실패로 빈 근거) 있어도 늘 보인다 (#652 Codex 리뷰) */}
@@ -73,11 +85,13 @@ export function ReportChecks({
 function SignalSide({
   signals,
   body,
+  unchecked,
   checked,
   onToggle,
 }: {
   signals: CheckSignal[]
   body: ReportBody
+  unchecked: boolean
   checked: string[]
   onToggle: (id: string) => void
 }) {
@@ -102,6 +116,7 @@ function SignalSide({
             key={id}
             s={s}
             fact={[s.detail, record && signalRecordText(record)].filter(Boolean).join(' · ')}
+            unchecked={unchecked}
             checked={checked.includes(id)}
             onToggle={() => onToggle(id)}
           />
@@ -121,11 +136,13 @@ function SignalSide({
 function SignalCard({
   s,
   fact,
+  unchecked,
   checked,
   onToggle,
 }: {
   s: CheckSignal
   fact: string
+  unchecked: boolean
   checked: boolean
   onToggle: () => void
 }) {
@@ -176,7 +193,9 @@ function SignalCard({
             결제 {s.openPaymentIds.join(' · ')}만 정상 사유 없음 · 다른 결제는 정상 사유 있음
           </b>
         ) : open ? (
-          <b style={{ color: '#92400E' }}>정상 사유 찾지 못함</b>
+          <b style={{ color: '#92400E' }}>
+            {unchecked ? '정상 사유 확인하지 못함 (고객 이력 조회 실패)' : '정상 사유 찾지 못함'}
+          </b>
         ) : (
           <span style={{ color: '#166534' }}>정상 사유 있음 · {s.normalReason}</span>
         )}
@@ -186,7 +205,8 @@ function SignalCard({
 }
 
 // 정상 근거 — 설명하는 징후를 함께 적는다(결제마다 다르면 결제 번호로 나눔). 못 찾았으면 무엇을 찾아봤는지 한 칸
-function NormalSide({ body }: { body: ReportBody }) {
+// 이력 조회가 실패했으면 "찾지 못함" 대신 "확인하지 못함" — 찾아본 조건을 보이지 않는다 (#652 Codex 리뷰)
+function NormalSide({ body, unchecked }: { body: ReportBody; unchecked: boolean }) {
   const normals = caseNormalNotes(body)
   return (
     <div style={sideStyle}>
@@ -194,7 +214,12 @@ function NormalSide({ body }: { body: ReportBody }) {
         <b style={{ color: '#166534' }}>정상 근거</b>
         <span style={countStyle}>찾은 것 {normals.length}</span>
       </div>
-      {normals.length === 0 ? (
+      {unchecked ? (
+        <div style={{ ...cardStyle, background: '#FFFBEB', border: '1px dashed #F59E0B' }}>
+          <b style={{ fontSize: 14, color: '#78350F' }}>확인하지 못함</b>
+          <span style={{ fontSize: 12.5, color: '#92400E' }}>{NORMAL_UNCHECKED}</span>
+        </div>
+      ) : normals.length === 0 ? (
         <div style={{ ...cardStyle, background: '#F8FAFC', border: '1px dashed #CBD5E1' }}>
           <b style={{ fontSize: 14, color: '#475569' }}>찾지 못함</b>
           <span style={{ fontSize: 12.5, color: '#64748B' }}>찾아본 것: {NORMAL_SEARCHED}</span>

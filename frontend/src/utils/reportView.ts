@@ -304,6 +304,19 @@ export function caseNormalNotes(body: ReportBody): Array<{ label: string; note: 
   })
 }
 
+// 정상 근거를 확인하지 못한 보고서 — 고객 결제 이력(paymentHistory) 조회가 실패했고 정상 근거도 없다 (#652 Codex 리뷰)
+// 이때 "찾지 못함 · 찾아본 것"을 보이면 직원이 이력을 다 보고 없다고 읽는다
+// 한계 (#652 A안, 11/08 사용자 결정): 정상 근거는 Spring이 자기 30일 조회로 계산하는데(AiToolService.decisionBasis),
+// 그 조회의 실패 여부는 보고서 본문에 남지 않는다. 그래서 본문의 paymentHistory로 대신 판단한다
+// - 고정 보고서(AI 끔): 한 번 조회한 결과를 둘 다 쓴다 → 정확
+// - AI 보고서: ai-server의 이력 조회와 Spring의 조회가 따로다. 대개 함께 실패하지만
+//   Spring 쪽만 실패하면 여기서 못 잡아 "찾지 못함"으로 보이고(틀림),
+//   ai-server 쪽만 실패하면 정상 근거가 0건일 때 "확인하지 못함"으로 보인다(보수적)
+// 정확히 하려면 Spring 징후 계산 결과에 "이력 조회 실패" 표시를 넣어 본문까지 실어야 한다 (B안, 하지 않음 — 계약 변경)
+export function normalsUnchecked(body: ReportBody): boolean {
+  return !body.paymentHistory && caseNormalNotes(body).length === 0
+}
+
 // 비교 한 줄 — 같은 징후는 한 줄에 나란히, 한쪽에만 있으면 반대쪽은 빈칸
 // tag: 두 사건 공통 · 나라만 다름(해외 접속 나라가 다름) · 한쪽만
 export type CompareTag = 'SAME' | 'COUNTRY_DIFFERS' | 'ONLY'

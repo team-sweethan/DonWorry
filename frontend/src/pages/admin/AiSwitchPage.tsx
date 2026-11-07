@@ -79,7 +79,7 @@ export function AiSwitchPage() {
     <>
       <PageHeader
         title="AI 조사 긴급정지"
-        description="AI 보고서에 이상이 보이면 바로 정지하세요. 정지 중에도 사건 보고서는 같은 조회 결과와 판정 기준표로 만든 고정 보고서로 계속 나오고, AI 요약과 추가 조사만 빠집니다. 다시 켜기는 관리자만 할 수 있습니다."
+        description="AI 보고서에 이상이 보이면 바로 정지하세요. 정지 중에도 사건 보고서는 같은 조회 결과와 징후 · 정상 근거로 만든 고정 보고서로 계속 나오고, AI 요약과 추가 조사만 빠집니다. 다시 켜기는 관리자만 할 수 있습니다."
       />
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
       {status && !status.configEnabled && (
