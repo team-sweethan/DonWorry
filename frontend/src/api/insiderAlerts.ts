@@ -2,7 +2,7 @@ import { api } from './client.ts'
 
 /**
  * 관리자 내부자 경보 (`/api/admin/insider-alerts`, #516).
- * 보안 직원의 접근 기록을 규칙(INS-01 · 03 · 06)으로 묶은 경보와 근거. 원문 · IP는 없다.
+ * 보안 직원의 접근 기록을 규칙(INS-01 · 03 · 06 · 07 · 08 · 09)으로 묶은 경보와 근거. 원문 · IP는 없다.
  */
 export type InsiderAlertStatus = 'OPEN' | 'CLOSED'
 export type InsiderAlertSeverity = 'CAUTION' | 'HIGH'

@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
+import com.donworry.fds.api.StaffCaseScope;
+import com.donworry.fds.api.StaffCaseScopeReader;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertEvidence;
@@ -29,6 +31,8 @@ import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
+import com.donworry.identity.api.StaffLogin;
+import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.identity.api.StaffSummary;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,6 +41,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,14 +62,28 @@ class InsiderDetectionServiceTests {
     private final InsiderAlertEvidenceRepository evidence = mock(InsiderAlertEvidenceRepository.class);
     private final StaffAccessReader reader = mock(StaffAccessReader.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+    private final StaffLoginReader loginReader = mock(StaffLoginReader.class);
+    private final StaffCaseScopeReader scopeReader = mock(StaffCaseScopeReader.class);
     private final InsiderDetectionProperties properties = InsiderDetectionProperties.builder()
             .ins01Window(Duration.ofMinutes(10))
             .ins01CautionCases(3)
             .ins03Window(Duration.ofHours(1))
             .ins03CautionRawViews(3)
+            .ins07AfterLogin(Duration.ofMinutes(30))
+            .ins07Lookback(Duration.ofDays(30))
+            .ins08Window(Duration.ofHours(1))
+            .ins08CautionRows(1000)
+            .ins08MaxLinkedRatio(0.3)
+            .ins09Window(Duration.ofHours(1))
+            .ins09CautionCustomers(10)
+            .scopeClosedLookback(Duration.ofDays(30))
             .build();
     private final InsiderDetectionService service =
-            new InsiderDetectionService(alerts, evidence, reader, publisher, properties);
+            new InsiderDetectionService(alerts, evidence, reader, publisher, properties, loginReader, scopeReader);
+
+    // 담당 사건: 가맹점 1의 고객 1:MINE 하나
+    private static final StaffCaseScope SCOPE =
+            new StaffCaseScope(Set.of(1L), Set.of(new StaffCaseScope.CaseCustomer(1L, "1:MINE")));
 
     private final List<InsiderAlert> savedAlerts = new ArrayList<>();
     private final List<InsiderAlertEvidence> savedEvidence = new ArrayList<>();
@@ -124,6 +143,119 @@ class InsiderDetectionServiceTests {
             Collection<Long> ids = invocation.getArgument(0);
             return records.stream().filter(r -> ids.contains(r.eventId())).toList();
         });
+        when(scopeReader.findScope(eq(STAFF), any())).thenReturn(SCOPE);
+    }
+
+    // 탈취한 계정으로 처음 보는 브라우저에서 들어와 바로 원문을 봐도 높음 경보 · P3 알림(InsiderAlertRaised)이 없으면 놓친다
+    @Test
+    void ins07_newBrowserLoginThenRawViewWithin30Min_raisesHighAndPublishes() {
+        loggedIn(T0, "Chrome · macOS");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Edge · Windows"));
+        StaffAccessRecorded view = given(rawView(1L, 501L, T0.plusSeconds(5 * 60)));
+
+        service.detect(view);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_07);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.HIGH);
+            assertThat(a.getSummary()).contains("Chrome · macOS", "5분");
+        });
+        ArgumentCaptor<InsiderAlertRaised> raised = ArgumentCaptor.forClass(InsiderAlertRaised.class);
+        verify(publisher).publishEvent(raised.capture());
+        assertThat(raised.getValue().rule()).isEqualTo(InsiderRule.INS_07);
+        assertThat(raised.getValue().severity()).isEqualTo(InsiderAlertSeverity.HIGH);
+        assertThat(raised.getValue().staffId()).isEqualTo(STAFF);
+    }
+
+    // 평소 쓰던 브라우저로 일하는 직원에게 높음 경보가 뜨면 정상 직원이 조사 대상이 된다
+    @Test
+    void ins07_knownBrowserLogin_doesNotRaise() {
+        loggedIn(T0, "Chrome · macOS");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Chrome · macOS"));
+
+        service.detect(given(rawView(1L, 501L, T0.plusSeconds(5 * 60))));
+
+        assertThat(savedAlerts).isEmpty();
+        verify(publisher, never()).publishEvent(any());
+    }
+
+    // 비교할 지난 로그인이 없는(이번 로그인뿐인) 신규 직원은 첫 원문 열람마다 높음 경보가 뜨게 된다
+    @Test
+    void ins07_noLoginHistoryIn30Days_doesNotRaise() {
+        loggedIn(T0, "Chrome · macOS");
+        pastLogins(login(LOGIN, T0, "Chrome · macOS"));
+
+        service.detect(given(rawView(1L, 501L, T0.plusSeconds(5 * 60))));
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 맡은 사건과 상관없는 거래 목록을 대량으로 훑어도 경보가 없으면 놓친다
+    @Test
+    void ins08_unlinkedRowsReachThresholdInHour_raisesCaution() {
+        StaffAccessRecorded last =
+                given(listView(1L, null, null, 600, T0), listView(2L, 2L, null, 500, T0.plusSeconds(10 * 60)));
+
+        service.detect(last);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_08);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+            assertThat(a.getSummary()).contains("1100행", "담당 사건 연결 0%");
+        });
+    }
+
+    // 담당 사건 가맹점의 문의로 그 가맹점 거래를 여러 쪽 넘긴 정상 업무가 경보가 되면 안 된다
+    @Test
+    void ins08_merchantInquiryOnAssignedCaseMerchant_doesNotRaise() {
+        StaffAccessRecorded last = given(
+                listView(1L, 1L, null, 400, T0),
+                listView(2L, 1L, null, 400, T0.plusSeconds(60)),
+                listView(3L, 1L, null, 400, T0.plusSeconds(120)),
+                listView(4L, null, null, 200, T0.plusSeconds(180)));
+
+        service.detect(last);
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 담당 사건에 없는 고객을 여러 명 찾아봐도 경보가 없으면 특정인 조회를 놓친다
+    @Test
+    void ins09_unrelatedCustomersReachThreshold_raisesCaution() {
+        for (int i = 0; i < 10; i++) given(listView(i + 1L, 1L, "1:C" + i, 3, T0.plusSeconds(i * 60L)));
+
+        service.detect(records.getLast());
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_09);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+            assertThat(a.getSummary()).contains("10명").doesNotContain("1:C");
+        });
+    }
+
+    // 고객 1명을 여러 쪽 넘긴 것을 여러 명으로 세면 정상 조회가 경보가 된다 (담당 고객 검색도 세지 않는다)
+    @Test
+    void ins09_sameUnrelatedCustomerPagedManyTimes_countsOnce() {
+        for (int i = 0; i < 9; i++) given(listView(i + 1L, 1L, "1:C" + i, 3, T0.plusSeconds(i * 60L)));
+        for (int i = 0; i < 5; i++) given(listView(20L + i, 1L, "1:C0", 3, T0.plusSeconds(600 + i * 60L)));
+        given(listView(30L, 1L, "1:MINE", 3, T0.plusSeconds(1200)));
+
+        service.detect(records.getLast());
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 훑기 하나가 INS-08 · 09로 함께 잡혀 겹침 높음이 되면 내부자 사건(조각 8)으로 넘어가 정상보다 무겁게 다뤄진다
+    @Test
+    void ins06_ins08AndIns09Only_doesNotRaiseHigh() {
+        for (int i = 0; i < 10; i++) given(listView(i + 1L, 1L, "1:C" + i, 110, T0.plusSeconds(i * 60L)));
+
+        service.detect(records.getLast());
+
+        assertThat(savedAlerts)
+                .extracting(InsiderAlert::getRuleCode)
+                .containsExactlyInAnyOrder(InsiderRule.INS_08, InsiderRule.INS_09);
+        verify(publisher, never()).publishEvent(any());
     }
 
     // 10분 안에 서로 다른 사건 3개에서 막혔는데 경보가 없으면 남의 사건을 두드리는 직원을 놓친다 (사건 밖 결제 시도도 센다)
@@ -376,6 +508,42 @@ class InsiderDetectionServiceTests {
     }
 
     private static final UUID LOGIN = UUID.fromString("11111111-2222-3333-4444-555555555555");
+    private static final UUID OTHER_LOGIN = UUID.fromString("66666666-7777-8888-9999-000000000000");
+
+    // 원문 열람 기록의 세션(LOGIN)이 이 시각 · 브라우저로 로그인했다
+    private void loggedIn(Instant at, String device) {
+        when(loginReader.findLogin(LOGIN)).thenReturn(Optional.of(login(LOGIN, at, device)));
+    }
+
+    private void pastLogins(StaffLogin... logins) {
+        when(loginReader.findSuccessfulLogins(eq(STAFF), any(), any())).thenReturn(List.of(logins));
+    }
+
+    private static StaffLogin login(UUID reference, Instant at, String device) {
+        return StaffLogin.builder()
+                .staffId(STAFF)
+                .loginReference(reference)
+                .occurredAt(at)
+                .device(device)
+                .build();
+    }
+
+    // 거래 목록 조회 기록 — 거른 가맹점 · 검색한 고객 번호 · 내보낸 행 수 (#615)
+    private static StaffAccessRecorded listView(
+            Long eventId, Long merchantId, String customerRef, int rows, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.TRANSACTION_LIST_VIEW)
+                .result(StaffAccessResult.ALLOWED)
+                .merchantId(merchantId)
+                .customerRef(customerRef)
+                .itemCount(rows)
+                .loginReference(LOGIN)
+                .occurredAt(at)
+                .build();
+    }
 
     private StaffAccessRecorded given(StaffAccessRecorded... added) {
         records.addAll(List.of(added));
