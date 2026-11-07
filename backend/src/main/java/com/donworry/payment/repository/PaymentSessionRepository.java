@@ -25,6 +25,9 @@ public interface PaymentSessionRepository extends Repository<PaymentSession, Lon
     // AI 조사 주문 요약 (#634) — 사건 결제 몇 건을 한 번에 읽는다
     List<PaymentSession> findByPaymentIdIn(Collection<Long> paymentIds);
 
+    // 결제 ID가 아직 연결되지 않은 세션 — 결제창은 접수 · 승인 뒤에 세션에 결제 ID를 저장한다 (#634 리뷰)
+    Optional<PaymentSession> findByMerchantIdAndAttemptKey(Long merchantId, UUID attemptKey);
+
     Optional<PaymentSession> findByMerchantIdAndRequestKey(Long merchantId, UUID requestKey);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

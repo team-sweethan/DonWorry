@@ -9,6 +9,7 @@ import java.util.List;
 // 직원이 연락처를 여는 CustomerContactReader(결제 1건 · 접근 기록)와 다르다: 값이 나가지 않으므로 기록을 남기지 않는다
 public interface PaymentOrderReader {
     // 넘긴 순서대로 결제마다 하나. 결제 준비 세션이 없는 결제는 provided=false
-    // null · 0 이하 ID가 있으면 IllegalArgumentException
+    // 결제창이 아직 세션에 결제 ID를 저장하기 전(접수 · 승인 직후)인 결제도 찾는다
+    // 건수 상한은 없다(사건 병합에 상한이 없어서). null · 0 이하 ID가 있으면 IllegalArgumentException
     List<PaymentOrderSummary> findOrders(Collection<Long> paymentIds);
 }
