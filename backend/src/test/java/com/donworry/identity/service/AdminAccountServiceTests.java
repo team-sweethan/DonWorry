@@ -20,6 +20,7 @@ class AdminAccountServiceTests {
     private final AdminChangeHistoryService histories = mock(AdminChangeHistoryService.class);
     private final UserSessionService sessions = mock(UserSessionService.class);
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
+    private final StaffAccountLockRepository staffLocks = mock(StaffAccountLockRepository.class);
     private final SimpleTransactionStatus transaction = new SimpleTransactionStatus();
     private final PlatformUser actorEntity = mock(PlatformUser.class);
     private final PlatformUser target = mock(PlatformUser.class);
@@ -36,6 +37,7 @@ class AdminAccountServiceTests {
             mock(UserPermissionRepository.class),
             mock(MerchantRepository.class),
             histories,
+            staffLocks,
             new AccountLockService(),
             new MerchantLockService(),
             sessions,
@@ -98,6 +100,22 @@ class AdminAccountServiceTests {
     @Test
     void setStatus_whenUnchanged_doesNotWriteHistoryOrExpireSession() {
         service.setStatus(actor, 2L, new SetStatusRequest("ACTIVE"), request);
+        verifyNoInteractions(histories);
+        verify(sessions, never()).expireAll(any());
+    }
+
+    // 보안 정지 중인 계정은 [계정 관리] 버튼으로 풀거나 바꿀 수 없다 — 조사 판정으로만 푼다
+    @Test
+    void setStatus_openLock_isRejected() {
+        when(target.getStatus()).thenReturn(UserStatus.SUSPENDED);
+        when(staffLocks.existsByStaffIdAndStatus(2L, StaffAccountLockStatus.OPEN))
+                .thenReturn(true);
+        for (String next : new String[] {"ACTIVE", "INACTIVE"})
+            assertThatThrownBy(() -> service.setStatus(actor, 2L, new SetStatusRequest(next), request))
+                    .isInstanceOfSatisfying(
+                            AccountManagementException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(AuthErrorCode.ADMIN_USER_SECURITY_SUSPENDED));
+        verify(target, never()).changeStatus(any());
         verifyNoInteractions(histories);
         verify(sessions, never()).expireAll(any());
     }

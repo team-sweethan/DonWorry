@@ -31,6 +31,7 @@ public class AdminAccountService {
     private final UserPermissionRepository permissions;
     private final MerchantRepository merchants;
     private final AdminChangeHistoryService histories;
+    private final StaffAccountLockRepository staffLocks;
     private final AccountLockService locks;
     private final MerchantLockService merchantLocks;
     private final UserSessionService sessions;
@@ -127,6 +128,9 @@ public class AdminAccountService {
             UserStatus next = status(input.status());
             if (actor.userId().equals(id) && next == UserStatus.INACTIVE)
                 throw new AccountManagementException(AuthErrorCode.ADMIN_SELF_DISABLE);
+            // 보안 정지는 조사 판정(StaffAccountLocker.release)으로만 푼다 — [활성] · [정지] 버튼 옆문을 막는다 (ADR-0084)
+            if (staffLocks.existsByStaffIdAndStatus(id, StaffAccountLockStatus.OPEN))
+                throw new AccountManagementException(AuthErrorCode.ADMIN_USER_SECURITY_SUSPENDED);
             if (user.getStatus() == next) return false;
             String previous = user.getStatus().name();
             user.changeStatus(next);

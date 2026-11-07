@@ -70,6 +70,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `identity` (#147) | P1 주환 | `login_histories` | [로그인 이력](../../backend/src/main/resources/db/migration/V20261025_201559__create_login_histories.sql) |
 | `identity` (#525) | P1 주환 | `operator_access_denials` | [403 원본](../../backend/src/main/resources/db/migration/V20261104_153346__create_operator_access_denials.sql) |
 | `identity` (#604) | P1 주환 | `staff_access_events` (보안 직원 · ADMIN 접근 기록, ADR-0082) | [접근 기록](../../backend/src/main/resources/db/migration/V20261106_215350__create_staff_access_events.sql) |
+| `identity` (#647) | P1 주환 | `staff_account_locks` (보안 직원 계정 보안 정지 기록, ADR-0084) | [보안 정지](../../backend/src/main/resources/db/migration/V20261107_233256__create_staff_account_locks.sql) |
 | `payment` | P5 시은 | `payments` | [20261022_145100](../../backend/src/main/resources/db/migration/V20261022_145100__create_payments_table.sql) |
 | `payment` (#141) | P5 시은 | `payment_actions` | [조치 저장](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql) |
 | `payment` (#381) | P5 시은 | `payment_cancellation_requests`, `payment_cancellations` | [취소 요청](../../backend/src/main/resources/db/migration/V20261031_183409__create_payment_cancellation_requests.sql) · [금융 작업](../../backend/src/main/resources/db/migration/V20261031_183416__create_payment_cancellations.sql) |
@@ -95,6 +96,8 @@ erDiagram
     merchants ||--o{ operator_access_denials : "merchant_id"
     platform_users ||--o{ operator_access_denials : "user_id"
     platform_users ||--o{ staff_access_events : "staff_id"
+    platform_users ||--o{ staff_account_locks : "staff_id"
+    platform_users |o--o{ staff_account_locks : "locked_by · released_by"
     merchants |o--o{ staff_access_events : "merchant_id"
     merchants ||--o{ merchant_request_nonces : "merchant_id"
     merchants |o--o{ platform_users : "merchant_id"
@@ -145,7 +148,7 @@ erDiagram
 
 `fds_blocklist_entries`는 차단 등록 사유와 함께 해제 사유(`deactivation_reason`)·해제 시각(`deactivated_at`)을 보존한다. 재등록하면 기존 해제 이력은 현재 활성 차단 상태와 혼동되지 않도록 NULL로 되돌린다.
 
-그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests` · `raw_view_reviews`의 직원 · ADMIN ID(→ `platform_users`), `raw_view_reviews.payment_id`(→ `payments`), `insider_alerts.closed_by_admin_id` · `insider_detection_states.staff_id`(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
+그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests` · `raw_view_reviews`의 직원 · ADMIN ID(→ `platform_users`), `raw_view_reviews.payment_id`(→ `payments`), `insider_alerts.closed_by_admin_id` · `insider_detection_states.staff_id`(→ `platform_users`), `staff_account_locks.source_alert_id`(→ `insider_alerts`) · `release_case_id`(P3 내부자 사건), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
 
 ## 4. 테이블별 컬럼
 
@@ -435,6 +438,33 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 인덱스는 `idx_staff_access_events_staff_time(staff_id, occurred_at)` · `idx_staff_access_events_staff_result_time(staff_id, result, occurred_at)`.
 허용 기록은 호출 쪽과 같은 트랜잭션, 거부 기록은 독립 트랜잭션으로 저장한다 (ADR-0082 4절).
 행은 지우거나 고치지 않는다. 보관 기간 정리(법정 접속기록 1~2년)는 후속이다.
+
+### #647 P1 보안 직원 계정 보안 정지 (2026-11-07)
+
+사용자가 저장소 ERD · [ADR-0084](../decisions/0084-staff-account-security-suspension.md) 선행 구현을 승인했다(ADR-0082 2절 표의 P1 소유 표). Notion 반영은 후속이다.
+정지하면 `platform_users.status`를 `SUSPENDED`로 바꾸고(이미 `INACTIVE`면 유지), 이 표에 한 줄을 남긴다. 판정으로 풀 때 같은 줄에 해제를 적는다.
+`platform_users.status`는 CHECK 없는 `VARCHAR(20)`이라 `SUSPENDED` 추가에 migration이 없다. 원문(이름 · 전화) 칸은 없다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| lock_id | BIGINT AUTO_INCREMENT PK | 정지 번호 |
+| staff_id | BIGINT NOT NULL FK platform_users | 정지된 보안 직원 |
+| reason_code | VARCHAR(40) NOT NULL | `StaffLockReason` (예: INSIDER_EXPORT_BLOCKED). CHECK 없음 — 조각마다 값을 더한다 |
+| source_alert_id | BIGINT NULL | 근거 경보, P2 `insider_alerts` 논리 참조 |
+| locked_by_type | VARCHAR(20) NOT NULL | SYSTEM(자동 정지) / STAFF(관리자 정지). `admin_change_histories.actor_type`과 같은 방식 (CHECK) |
+| locked_by | BIGINT NULL FK platform_users | 정지한 관리자. SYSTEM이면 NULL (CHECK) |
+| status | VARCHAR(20) NOT NULL | OPEN / RELEASED (CHECK) |
+| locked_at | DATETIME(6) NOT NULL | UTC |
+| released_at | DATETIME(6) NULL | UTC. RELEASED일 때만 필수 (CHECK) |
+| released_by | BIGINT NULL FK platform_users | 해제한 관리자. RELEASED일 때만 필수 (CHECK) |
+| release_case_id | BIGINT NULL | 해제 근거 사건, P3 내부자 사건 논리 참조 |
+| release_decision | VARCHAR(40) NULL | P3 판정 코드. identity는 해석하지 않는다 |
+| release_outcome | VARCHAR(20) NULL | RESTORE(→ ACTIVE) / DEACTIVATE(→ INACTIVE). RELEASED일 때만 필수 (CHECK) |
+| open_key | BIGINT 생성 칼럼 | OPEN일 때만 staff_id. UNIQUE로 사람당 열린 정지 1개 (엔티티에 매핑하지 않음) |
+
+인덱스는 `idx_staff_account_locks_staff_time(staff_id, locked_at)`.
+정지는 독립 트랜잭션으로 커밋한 뒤 세션을 만료한다(부른 쪽 롤백과 무관). 해제는 부른 쪽 판정 트랜잭션에 참여한다 (ADR-0084).
+행은 지우지 않는다(조사 기록).
 
 ### #602 P5 주문자 연락처 (2026-11-06)
 
