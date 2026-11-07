@@ -4,7 +4,11 @@ export type Role = 'security' | 'owner'
 export type Permission = 'FDS_VIEW' | 'FINANCE_VIEW'
 /** 메뉴 옆 숫자 배지 이름. 숫자는 레이아웃 바깥(역할별 훅)에서 받아 그리기만 한다. */
 export type NavBadge =
-  'securityCaseActions' | 'ruleChangeRequests' | 'caseAssignmentRequests' | 'rawViewReviews'
+  | 'securityCaseActions'
+  | 'ruleChangeRequests'
+  | 'caseAssignmentRequests'
+  | 'rawViewReviews'
+  | 'insiderAlerts'
 export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 export type NavGroup = { title: string; items: NavItem[] }
 
@@ -90,12 +94,13 @@ export const adminNavigation = {
         },
       ],
     },
-    // 직원 보안 (#619) — 주문자 전화 원문 열람 사후 검토. 관리자는 원문을 보지 않는다
+    // 직원 보안 (#619 · #516) — 원문 열람 사후 검토 · 내부자 경보. 관리자는 원문을 보지 않는다
     // 메뉴 전체를 [가맹점 관리 › 운영 · 보안] / [직원 관리 › 사건 · 보안]으로 묶는 재배치는 별도로 한다
     {
       title: '직원 보안',
       items: [
         { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
+        { label: '내부자 경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
       ],
     },
   ] satisfies NavGroup[],

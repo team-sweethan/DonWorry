@@ -72,8 +72,12 @@ public class StaffAccessService implements StaffAccessRecorder {
     }
 
     private void save(StaffAccessEvent event) {
-        var saved = events.saveAndFlush(event);
-        publisher.publishEvent(StaffAccessRecorded.builder()
+        publisher.publishEvent(toRecorded(events.saveAndFlush(event)));
+    }
+
+    // 저장 알림과 읽기 창구(StaffAccessReadService)가 같은 모양을 쓴다 — 탐지가 알림으로 받은 줄과 다시 읽은 줄을 같은 기준으로 센다
+    static StaffAccessRecorded toRecorded(StaffAccessEvent saved) {
+        return StaffAccessRecorded.builder()
                 .eventId(saved.getEventId())
                 .staffId(saved.getStaffId())
                 .actorRole(saved.getActorRole().name())
@@ -88,7 +92,7 @@ public class StaffAccessService implements StaffAccessRecorder {
                 .itemCount(saved.getItemCount())
                 .loginReference(saved.getLoginReference())
                 .occurredAt(saved.getOccurredAt().toInstant(ZoneOffset.UTC))
-                .build());
+                .build();
     }
 
     // 기록 주체는 요청 값이 아니라 로그인 세션이다. 사장님 · 비로그인은 이 기록 대상이 아니다

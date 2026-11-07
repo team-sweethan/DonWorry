@@ -42,7 +42,7 @@
 | --- | --- | --- | --- |
 | P5 payment | `payment_order_contacts` | `CustomerContactReader` · `MaskedContact` | 주문자 연락처 암호문(AES-GCM) + 전화 지문(HMAC) 저장, 가린 값 · 대조 · 전화 원문 제공, 거래 내역 CSV 내보내기 |
 | P1 identity | `staff_access_events` · `staff_account_locks` | `StaffAccessRecorder` · `StaffAccessReader` · `StaffAccessRecorded`(이벤트) · `StaffLoginReader` · `StaffAccountLocker` · `SecurityStaffDirectory` | 직원 접근 기록(허용 · 거부, 원문 없음), 로그인 세션 묶기, 직원 계정 보안 정지 · 해제 |
-| P2 fds | `insider_alerts` · `insider_alert_evidence` · `insider_detection_states` | `InsiderAlertRaised`(이벤트) · `InsiderAlertReader` · `InsiderAlertCloser` · `InsiderAlertEvidenceReader` · `InsiderAlertMonitorReader` · `InsiderExportGuard` · `StaffCaseScopeReader`(질문지) | 접근 기록 수신 → 규칙 판단 → 경보, 경보 중 내보내기 차단 |
+| P2 fds | `insider_alerts` · `insider_alert_evidences` · `insider_detection_states` | `InsiderAlertRaised`(이벤트) · `InsiderAlertReader` · `InsiderAlertCloser` · `InsiderAlertEvidenceReader` · `InsiderAlertMonitorReader` · `InsiderExportGuard` · `StaffCaseScopeReader`(질문지) | 접근 기록 수신 → 규칙 판단 → 경보, 경보 중 내보내기 차단 |
 | P3 investigation | `security_cases.assignee_staff_id` · `case_assignment_locks` · `case_assignment_requests` · `raw_view_reviews` · `insider_cases` · `insider_case_alerts` | (내부) | FDS 사건 자동 배정 · 담당 변경, 열린 사건은 담당자만, 원문 열람 사후 검토, 내부자 사건 · 관리자 판정, 관제 조회(여러 모듈 데이터를 합치는 위층) |
 | P4 investigation/report | `ai_insider_reports` | (내부) | 내부자 사건 해제 검토 보고서 — 사실은 코드가 계산, 서술은 고정 문장(AI 서술은 후속), `report_version` 누적 |
 
@@ -63,7 +63,7 @@ fds ··(StaffCaseScopeReader, investigation이 구현)··▶ investigation   �
 ```
 
 - 이벤트 타입은 의존을 받는 쪽 `api/`에 둔다 (AGENTS.md 4절 · ADR-0012): `StaffAccessRecorded` → identity, `InsiderAlertRaised` → fds
-- 수신은 멱등이다: 같은 접근 기록은 경보 근거 한 줄(`insider_alert_evidence` UNIQUE), 같은 경보는 내부자 사건 한 줄(`insider_case_alerts` PK), 같은 계기는 보고서 한 판(`uk_ai_insider_reports_trigger`)
+- 수신은 멱등이다: 같은 접근 기록은 경보 근거 한 줄(`insider_alert_evidences` UNIQUE), 같은 경보는 내부자 사건 한 줄(`insider_case_alerts` PK), 같은 계기는 보고서 한 판(`uk_ai_insider_reports_trigger`)
 - 사람 · 규칙당 열린 경보 1개, 사람당 열린 내부자 사건 1개, 사람당 열린 정지 1개를 생성 칼럼 UNIQUE로 막는다
 
 **`StaffCaseScopeReader` (합의 필요):** "이 직원의 담당 사건 범위"는 P3 데이터지만 P2 규칙(INS-08 · INS-09)이 필요로 한다.

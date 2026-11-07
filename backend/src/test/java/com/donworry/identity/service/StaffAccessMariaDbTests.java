@@ -5,10 +5,15 @@ import static org.assertj.core.api.Assertions.*;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.api.StaffAccess;
 import com.donworry.identity.api.StaffAccessDenyReason;
+import com.donworry.identity.api.StaffAccessReader;
+import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessRecorder;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.entity.UserRole;
 import com.donworry.identity.security.SessionUser;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +38,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class StaffAccessMariaDbTests {
     @Autowired
     StaffAccessRecorder recorder;
+
+    @Autowired
+    StaffAccessReader reader;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -105,6 +113,56 @@ class StaffAccessMariaDbTests {
         assertThat(jdbc.queryForObject(
                         "SELECT deny_reason FROM staff_access_events WHERE staff_id=?", String.class, staffId))
                 .isEqualTo("NOT_ASSIGNEE");
+    }
+
+    // 다른 직원 기록이나 창 밖 기록이 섞이면 내부자 탐지가 엉뚱한 사람에게 경보를 낸다 (#516)
+    @Test
+    void findRecent_returnsOnlyThatStaffWithinRange() {
+        long otherId = insertStaff("s516o_");
+        try {
+            Instant from = Instant.parse("2026-11-07T01:00:00Z");
+            Instant to = from.plusSeconds(600);
+            long before = insertDenied(staffId, 1L, from.minusNanos(1_000));
+            long first = insertDenied(staffId, 2L, from);
+            long second = insertDenied(staffId, 3L, from.plusSeconds(300));
+            long last = insertDenied(staffId, 4L, to);
+            long after = insertDenied(staffId, 5L, to.plusNanos(1_000));
+            long other = insertDenied(otherId, 6L, from.plusSeconds(300));
+
+            var found = reader.findRecent(staffId, from, to);
+
+            assertThat(found)
+                    .extracting(StaffAccessRecorded::eventId)
+                    .containsExactly(first, second, last)
+                    .doesNotContain(before, after, other);
+            assertThat(found).allSatisfy(r -> assertThat(r.staffId()).isEqualTo(staffId));
+        } finally {
+            jdbc.update("DELETE FROM staff_access_events WHERE staff_id=?", otherId);
+            jdbc.update("DELETE FROM platform_users WHERE user_id=?", otherId);
+        }
+    }
+
+    private long insertStaff(String prefix) {
+        String other = prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        jdbc.update("""
+                INSERT INTO platform_users
+                    (login_id,password_hash,display_name,status,role,merchant_id,created_at,password_change_required)
+                VALUES (?,'unused','접근 기록 테스트','ACTIVE','SECURITY_STAFF',NULL,UTC_TIMESTAMP(6),false)
+                """, other);
+        return jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, other);
+    }
+
+    private long insertDenied(long staff, long caseId, Instant at) {
+        jdbc.update("""
+                INSERT INTO staff_access_events
+                    (staff_id, actor_role, access_type, result, deny_reason, case_id, occurred_at)
+                VALUES (?, 'SECURITY_STAFF', 'CASE_DETAIL_VIEW', 'DENIED', 'NOT_ASSIGNEE', ?, ?)
+                """, staff, caseId, LocalDateTime.ofInstant(at, ZoneOffset.UTC));
+        return jdbc.queryForObject(
+                "SELECT MAX(event_id) FROM staff_access_events WHERE staff_id=? AND case_id=?",
+                Long.class,
+                staff,
+                caseId);
     }
 
     private int records(String result) {
