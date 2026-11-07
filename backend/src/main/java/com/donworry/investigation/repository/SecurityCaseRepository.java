@@ -130,4 +130,19 @@ public interface SecurityCaseRepository extends Repository<SecurityCase, Long> {
             GROUP BY c.status
             """)
     List<CaseStatusCount> countByStatusForAssignee(@Param("staffId") Long staffId);
+
+    // P2 내부자 탐지 INS-08 · 09의 담당 범위 (#643) — 지금 담당인 열린 사건 + closedAfter 이후에 닫힌 담당 사건의 가맹점 · 고객
+    @Query("""
+            SELECT DISTINCT c.merchantId AS merchantId, c.customerRef AS customerRef FROM SecurityCase c
+            WHERE c.assigneeStaffId = :staffId
+              AND (c.status <> com.donworry.investigation.entity.CaseStatus.CLOSED OR c.closedAt >= :closedAfter)
+            """)
+    List<AssigneeCaseScope> findScopeOfAssignee(
+            @Param("staffId") Long staffId, @Param("closedAfter") Instant closedAfter);
+
+    interface AssigneeCaseScope {
+        Long getMerchantId();
+
+        String getCustomerRef();
+    }
 }

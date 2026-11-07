@@ -2,7 +2,7 @@
 
 - **상태:** 제안 — 실험(#536, `spike/insider-on-dev`)으로 흐름 검증, 팀 합의 필요
 - **날짜:** 2026-11-06
-- **관련:** #600 (이 ADR) · #604 (허용 기록 트랜잭션), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
+- **관련:** #600 (이 ADR) · #604 (허용 기록 트랜잭션) · #643 (합의 3 · INS-07 · 08 · 09), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** P1 identity, P2 fds, P3 investigation, P4 investigation/report, P5 payment, frontend
 
 ## 배경
@@ -73,9 +73,10 @@ fds ··(StaffCaseScopeReader, investigation이 구현)··▶ investigation   �
 - 수신은 멱등이다: 같은 접근 기록은 경보 근거 한 줄(`insider_alert_evidences` UNIQUE), 같은 경보는 내부자 사건 한 줄(`insider_case_alerts` PK), 같은 계기는 보고서 한 판(`uk_ai_insider_reports_trigger`)
 - 사람 · 규칙당 열린 경보 1개, 사람당 열린 내부자 사건 1개, 사람당 열린 정지 1개를 생성 칼럼 UNIQUE로 막는다
 
-**`StaffCaseScopeReader` (합의 필요):** "이 직원의 담당 사건 범위"는 P3 데이터지만 P2 규칙(INS-08 · INS-09)이 필요로 한다.
+**`StaffCaseScopeReader` (합의 3 정함, 11/07 · #643):** "이 직원의 담당 사건 범위"는 P3 데이터지만 P2 규칙(INS-08 · INS-09)이 필요로 한다.
 fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이스를 두고 investigation이 구현한다. 컴파일 의존은 화살표 안이지만, 실행 중에는 fds가 investigation 답을 동기로 받는다.
 저장소에서 처음 쓰는 방식이다. 모듈을 서비스로 나누게 되면 담당 변경 이벤트 → fds 사본 표로 바꾼다.
+담당 범위 = 지금 담당인 열린 사건 + 30일 안에 닫힌 담당 사건의 (가맹점, 고객 번호). 지금 배정 기준이며 지난 시점 배정 이력은 보지 않는다.
 
 ### 4. 기록 방식
 
@@ -150,7 +151,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 
 1. ~~접근 기록 담당~~ — **정함 (11/06, #604)**: P1 identity (2 · 3절 그대로). #516은 탐지 · 경보만
 2. ~~허용 접근 기록의 트랜잭션~~ — **정함 (11/06, #604)**: 같은 트랜잭션 + `MANDATORY`. 거부 기록은 독립 (4절)
-3. `StaffCaseScopeReader` 질문지 방식 허용 여부 — 전체
+3. ~~`StaffCaseScopeReader` 질문지 방식 허용 여부~~ — **정함 (11/07, #643)**: 질문지 방식(fds.api 질문지, investigation 구현). P3 동의
 4. 직원 정지 상태: `INACTIVE` 재사용 vs `LOCKED` 신설 — P1 주환
 5. 결제 준비 요청의 주문자 칸: 선택(실험) vs 필수 — P5 시은 · CakeShop
 6. 주문자 원문 보관 기간(실험안: 결제 후 540일 뒤 암호문 파기, 파기 배치는 2차) — P5 시은

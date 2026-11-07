@@ -3,6 +3,8 @@ package com.donworry.fds.service;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
+import com.donworry.fds.api.StaffCaseScope;
+import com.donworry.fds.api.StaffCaseScopeReader;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertEvidence;
 import com.donworry.fds.entity.InsiderAlertStatus;
@@ -13,6 +15,8 @@ import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
+import com.donworry.identity.api.StaffLogin;
+import com.donworry.identity.api.StaffLoginReader;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -20,7 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.ToLongFunction;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
@@ -48,21 +52,33 @@ public class InsiderDetectionService {
     private final StaffAccessReader accessReader;
     private final ApplicationEventPublisher publisher;
     private final InsiderDetectionProperties properties;
+    private final StaffLoginReader loginReader;
+    private final StaffCaseScopeReader scopeReader;
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
-        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람만 센다(화면 열람은 세지 않음)
+        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람 · 거래 목록 조회만 센다(사건 화면 열람은 세지 않음)
         if (!SECURITY_STAFF.equals(event.actorRole())) return;
         boolean outOfScope = isOutOfScopeDenial(event);
         boolean rawView = isRawView(event);
-        if (!outOfScope && !rawView) return;
+        boolean listView = isListView(event);
+        if (!outOfScope && !rawView && !listView) return;
 
         Long staffId = event.staffId();
         alerts.lockDetectionState(staffId);
 
         Instant at = event.occurredAt();
         if (outOfScope) checkIns01(staffId, at);
-        if (rawView) checkIns03(staffId, at);
+        if (rawView) {
+            checkIns03(staffId, at);
+            checkIns07(event);
+        }
+        if (listView) {
+            // 담당 범위는 지금 배정 기준이다 — 지난 시점의 배정 이력은 따로 남기지 않는다
+            StaffCaseScope scope = scopeReader.findScope(staffId, at.minus(properties.scopeClosedLookback()));
+            checkIns08(staffId, at, scope);
+            checkIns09(staffId, at, scope);
+        }
         checkIns06(staffId, at);
     }
 
@@ -73,8 +89,8 @@ public class InsiderDetectionService {
                 recent(staffId, InsiderRule.INS_01, at.minus(window), at.plus(window)).stream()
                         .filter(InsiderDetectionService::isOutOfScopeDenial)
                         .toList();
-        List<StaffAccessRecorded> hit = windowReaching(
-                denials, at, window, InsiderDetectionService::distinctCases, properties.ins01CautionCases());
+        List<StaffAccessRecorded> hit =
+                windowMatching(denials, at, window, w -> distinctCases(w) >= properties.ins01CautionCases());
         if (hit.isEmpty()) return;
         raise(
                 staffId,
@@ -92,7 +108,7 @@ public class InsiderDetectionService {
                         .filter(InsiderDetectionService::isRawView)
                         .toList();
         List<StaffAccessRecorded> hit =
-                windowReaching(views, at, window, List::size, properties.ins03CautionRawViews());
+                windowMatching(views, at, window, w -> w.size() >= properties.ins03CautionRawViews());
         if (hit.isEmpty()) return;
         raise(
                 staffId,
@@ -102,14 +118,88 @@ public class InsiderDetectionService {
                 hit);
     }
 
+    // INS-07 처음 보는 브라우저 로그인 직후 원문 — 이 세션의 브라우저 · 운영체제가 지난 기간 성공 로그인에 없고
+    // 로그인 뒤 짧은 시간 안이면 높음. 비교할 성공 로그인이 없으면(신규 직원 · 오래 쉰 계정) 울리지 않는다 — 휴면 계정 탈취는 놓친다
+    // 요약에는 기기 이름만 넣는다. IP는 login_histories에만 있다 (ADR-0082 4절)
+    private void checkIns07(StaffAccessRecorded event) {
+        if (event.loginReference() == null) return;
+        Long staffId = event.staffId();
+        StaffLogin login = loginReader.findLogin(event.loginReference()).orElse(null);
+        if (login == null || !staffId.equals(login.staffId())) return;
+        Instant loginAt = login.occurredAt();
+        if (event.occurredAt().isAfter(loginAt.plus(properties.ins07AfterLogin()))) return;
+        // 관리자가 이 로그인 뒤에 닫았으면 같은 세션으로 다시 열지 않는다
+        Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_07);
+        if (lastClosed != null && !lastClosed.isBefore(loginAt)) return;
+
+        List<StaffLogin> before =
+                loginReader.findSuccessfulLogins(staffId, loginAt.minus(properties.ins07Lookback()), loginAt).stream()
+                        .filter(l -> !event.loginReference().equals(l.loginReference()))
+                        .toList();
+        if (before.isEmpty()) return;
+        if (before.stream().anyMatch(l -> login.device().equals(l.device()))) return;
+
+        long minutes = Duration.between(loginAt, event.occurredAt()).toMinutes();
+        raise(
+                staffId,
+                InsiderRule.INS_07,
+                InsiderAlertSeverity.HIGH,
+                "처음 보는 브라우저(%s)로 로그인 %d분 뒤 원문 열람".formatted(login.device(), minutes),
+                List.of(event));
+    }
+
+    // INS-08 업무 대비 대량 조회 — 거래 목록을 많이 봤는데 담당 사건과 이어진 행이 적으면 주의
+    // 비율은 행 수 기준. 담당 사건 가맹점 문의로 그 가맹점을 여러 쪽 넘기는 건 이어진 조회라 울리지 않는다
+    private void checkIns08(Long staffId, Instant at, StaffCaseScope scope) {
+        Duration window = properties.ins08Window();
+        List<StaffAccessRecorded> views =
+                recent(staffId, InsiderRule.INS_08, at.minus(window), at.plus(window)).stream()
+                        .filter(InsiderDetectionService::isListView)
+                        .toList();
+        List<StaffAccessRecorded> hit = windowMatching(views, at, window, w -> {
+            long rows = rows(w);
+            return rows > 0
+                    && rows >= properties.ins08CautionRows()
+                    && linkedRows(w, scope) < rows * properties.ins08MaxLinkedRatio();
+        });
+        if (hit.isEmpty()) return;
+        long rows = rows(hit);
+        raise(
+                staffId,
+                InsiderRule.INS_08,
+                InsiderAlertSeverity.CAUTION,
+                "%d분 안에 거래 목록 %d행 조회(%d회) · 담당 사건 연결 %d%%"
+                        .formatted(window.toMinutes(), rows, hit.size(), linkedRows(hit, scope) * 100 / rows),
+                hit);
+    }
+
+    // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색하면 주의
+    // 같은 고객을 여러 쪽 넘긴 건 1명. 요약에는 고객 번호를 넣지 않고 숫자만
+    private void checkIns09(Long staffId, Instant at, StaffCaseScope scope) {
+        Duration window = properties.ins09Window();
+        List<StaffAccessRecorded> searches =
+                recent(staffId, InsiderRule.INS_09, at.minus(window), at.plus(window)).stream()
+                        .filter(v -> isListView(v) && v.customerRef() != null)
+                        .filter(v -> !scope.hasCustomer(v.merchantId(), v.customerRef()))
+                        .toList();
+        List<StaffAccessRecorded> hit =
+                windowMatching(searches, at, window, w -> distinctCustomers(w) >= properties.ins09CautionCustomers());
+        if (hit.isEmpty()) return;
+        raise(
+                staffId,
+                InsiderRule.INS_09,
+                InsiderAlertSeverity.CAUTION,
+                "%d분 안에 담당 사건과 무관한 고객 %d명 검색".formatted(window.toMinutes(), distinctCustomers(hit)),
+                hit);
+    }
+
     // 이 기록이 들어가는 창(끝이 이 기록 ~ 창 길이 뒤)을 앞에서부터 보고, 기준에 닿은 첫 창의 기록을 돌려준다
     // 먼저 일어난 기록이 늦게 커밋돼 마지막에 처리돼도 뒤 기록과 함께 센다 (#627 리뷰). 기록은 시각 순으로 온다
-    private static List<StaffAccessRecorded> windowReaching(
+    private static List<StaffAccessRecorded> windowMatching(
             List<StaffAccessRecorded> records,
             Instant at,
             Duration window,
-            ToLongFunction<List<StaffAccessRecorded>> measure,
-            long threshold) {
+            Predicate<List<StaffAccessRecorded>> reached) {
         List<Instant> ends = Stream.concat(
                         Stream.of(at),
                         records.stream().map(StaffAccessRecorded::occurredAt).filter(t -> t.isAfter(at)))
@@ -122,7 +212,7 @@ public class InsiderDetectionService {
                     .filter(r ->
                             !r.occurredAt().isBefore(start) && !r.occurredAt().isAfter(end))
                     .toList();
-            if (measure.applyAsLong(inWindow) >= threshold) return inWindow;
+            if (reached.test(inWindow)) return inWindow;
         }
         return List.of();
     }
@@ -135,7 +225,29 @@ public class InsiderDetectionService {
                 .count();
     }
 
-    // INS-06 경보 겹침 — 같은 직원에게 서로 다른 규칙 경보가 2개 이상 열려 있으면 높음
+    private static long distinctCustomers(List<StaffAccessRecorded> records) {
+        return records.stream().map(StaffAccessRecorded::customerRef).distinct().count();
+    }
+
+    private static long rows(List<StaffAccessRecorded> records) {
+        return records.stream()
+                .mapToLong(e -> e.itemCount() == null ? 0 : e.itemCount())
+                .sum();
+    }
+
+    private static long linkedRows(List<StaffAccessRecorded> records, StaffCaseScope scope) {
+        return rows(records.stream().filter(e -> isLinked(e, scope)).toList());
+    }
+
+    // 고객 번호 검색이면 담당 사건 고객일 때만, 가맹점만 골랐으면 담당 사건 가맹점일 때 이어진 조회. 필터 없는 전체 조회는 아니다
+    // 주문번호 검색은 접근 기록에 남기지 않아 가맹점 필터로만 판단한다 (1 ~ 2행이라 비율 영향이 작다)
+    private static boolean isLinked(StaffAccessRecorded e, StaffCaseScope scope) {
+        if (e.customerRef() != null) return scope.hasCustomer(e.merchantId(), e.customerRef());
+        return scope.hasMerchant(e.merchantId());
+    }
+
+    // INS-06 경보 겹침 — 같은 직원에게 서로 다른 종류의 경보가 2개 이상 열려 있으면 높음
+    // INS-08 · 09는 같은 "훑기" 행동에서 함께 나오기 쉬워 한 종류로 센다 — 훑기 하나로 높음이 되지 않게 (#643)
     // INS-06이 닫힌 적 있으면 그 뒤 새 기록이 붙은 경보만 센다 — 관리자가 정상으로 본 같은 겹침으로 다시 열지 않는다 (#627 리뷰)
     private void checkIns06(Long staffId, Instant at) {
         Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_06);
@@ -148,7 +260,11 @@ public class InsiderDetectionService {
                 .distinct()
                 .sorted()
                 .toList();
-        if (rules.size() < 2) return;
+        long signals = rules.stream()
+                .map(InsiderDetectionService::signalGroup)
+                .distinct()
+                .count();
+        if (signals < 2) return;
         List<Long> eventIds = evidence.findAccessEventIdsOf(
                 others.stream().map(InsiderAlert::getId).toList());
         Instant firstAt = others.stream()
@@ -235,5 +351,13 @@ public class InsiderDetectionService {
 
     private static boolean isRawView(StaffAccessRecorded e) {
         return e.result() == StaffAccessResult.ALLOWED && e.accessType() == StaffAccessType.CONTACT_RAW_VIEW;
+    }
+
+    private static boolean isListView(StaffAccessRecorded e) {
+        return e.result() == StaffAccessResult.ALLOWED && e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW;
+    }
+
+    private static String signalGroup(InsiderRule rule) {
+        return rule == InsiderRule.INS_08 || rule == InsiderRule.INS_09 ? "LIST_LOOKUP" : rule.name();
     }
 }
