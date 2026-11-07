@@ -98,9 +98,7 @@
                 "고액 결제"
               ]
             }
-          ],
-          "rule": "ALL_EXPLAINED",
-          "recommendation": "ACCEPT_REVIEW"
+          ]
         }
       }
     ]

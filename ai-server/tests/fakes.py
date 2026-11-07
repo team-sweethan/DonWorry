@@ -22,7 +22,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def toolbox(name: str) -> StaticToolBox:
     data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
-    # 판정 기준표는 Spring이 계산한다 (#618) — 샘플의 decisionBasis를 그대로 돌려준다
+    # 징후 · 정상 근거는 Spring이 계산한다 (#618) — 샘플의 decisionBasis를 그대로 돌려준다
     return StaticToolBox(
         CasePaymentsTool.model_validate(data["casePayments"]),
         FdsEvidenceTool.model_validate(data["fdsEvidence"]),

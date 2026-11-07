@@ -194,9 +194,7 @@
               ],
               "explains": []
             }
-          ],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          ]
         }
       }
     ]

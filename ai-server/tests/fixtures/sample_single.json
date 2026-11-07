@@ -56,9 +56,7 @@
               "checkBefore": "고객이 최근 기기를 바꿨는지 가맹점에 확인"
             }
           ],
-          "normals": [],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          "normals": []
         }
       }
     ]

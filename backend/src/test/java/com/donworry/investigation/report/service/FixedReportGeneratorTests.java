@@ -1,6 +1,7 @@
 package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.when;
 
 import com.donworry.investigation.entity.CasePayment;
@@ -139,7 +140,8 @@ class FixedReportGeneratorTests {
         assertThat(analysis.containsKey("riskEvidence") || analysis.containsKey("normalEvidence"))
                 .isFalse();
         assertThat((List<?>) body.get("summaryFacts")).isEmpty();
-        assertThat(analysis.get("reason")).isInstanceOf(String.class);
+        assertThat(analysis.containsKey("recommendation") || analysis.containsKey("reason"))
+                .isFalse();
         // 기준값 · 실제값이 없는 규칙은 criterion · observed가 null — AI 보고서와 같은 모양 (#326)
         Map<String, Object> expectedRule =
                 new HashMap<>(Map.of("code", "R01", "name", "고액 결제", "appliedScore", 30, "evidenceId", "E-7-v1-02"));
@@ -267,7 +269,7 @@ class FixedReportGeneratorTests {
 
         assertThat(body).containsKey("similarCases");
         assertThat(body.get("similarCases")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         // 조회하지 못한 자료는 증거 추적 표에 조회한 것처럼 남기지 않는다 (#296 리뷰)
         assertThat(evidenceOf(body, "find_similar_cases")).isEmpty();
         assertThat(evidenceOf(body, "get_fds_evidence")).hasSize(1);
@@ -322,7 +324,7 @@ class FixedReportGeneratorTests {
 
         assertThat(body).containsKey("paymentHistory");
         assertThat(body.get("paymentHistory")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         assertThat(evidenceOf(body, "get_payment_history")).isEmpty();
     }
 
@@ -433,7 +435,7 @@ class FixedReportGeneratorTests {
 
         assertThat(body).containsKey("linkedPayments");
         assertThat(body.get("linkedPayments")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         assertThat(evidenceOf(body, "find_linked_payments")).isEmpty();
     }
 
@@ -514,10 +516,10 @@ class FixedReportGeneratorTests {
                 orderContextFinder);
     }
 
-    // AI 서버가 꺼져도 고정 보고서가 판정 기준표로 권고한다 (#618) — 전에는 늘 추가 확인이었다
-    // 카드 테스팅(고위험) + 고액 · 신규 단말기(주의) → 승인 취소 검토, 종합 권고 · 판정 근거도 같은 값
+    // AI 서버가 꺼져도 고정 보고서가 AI 보고서와 같은 징후를 싣는다 (#618)
+    // 판정 권고(결제별 권고 · 이유 · 기준표 칸 · 결론 · 권고 요약)는 만들지 않는다 (#644, ADR-0009 결정 13)
     @Test
-    void generate_aiOff_recommendsByDecisionBasis() {
+    void generate_fixedReport_hasNoRecommendationKeys() {
         SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
         ReflectionTestUtils.setField(securityCase, "id", 7L);
         when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
@@ -554,17 +556,20 @@ class FixedReportGeneratorTests {
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         DecisionBasisToolResponse.Basis basis = (DecisionBasisToolResponse.Basis) analysis.get("basis");
-        assertThat(basis.rule()).isEqualTo("HIGH_RISK_WITH_OTHERS");
-        assertThat(analysis.get("recommendation")).isEqualTo("REJECT_REVIEW");
-        assertThat((String) analysis.get("reason")).startsWith("고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다");
-        assertThat(((Map<?, ?>) body.get("verdict")).get("overallRecommendation"))
-                .isEqualTo("REJECT_REVIEW");
+        assertThat(basis.signals())
+                .extracting(DecisionBasisToolResponse.Signal::key, DecisionBasisToolResponse.Signal::level)
+                .containsExactly(tuple("R06", "HIGH_RISK"), tuple("R01", "CAUTION"), tuple("R02", "CAUTION"));
+        assertThat(analysis.containsKey("recommendation") || analysis.containsKey("reason"))
+                .isFalse();
+        assertThat(body).doesNotContainKey("verdict");
+        assertThat(List.copyOf(((Map<?, ?>) body.get("recommendation")).keySet()))
+                .isEqualTo(List.of("limitations"));
     }
 
-    // 같은 카드 · 기기 · IP 조회가 실패하면 기준표 없이 추가 확인으로 둔다 (#618 Codex 리뷰)
-    // "연결 징후 없음"으로 계산하면 고액 + 평소 금액 이력 결제가 매입 진행 검토로 나온다 — 고위험 징후를 확인하지 못했는데도
+    // 같은 카드 · 기기 · IP 조회가 실패하면 징후 · 정상 근거를 싣지 않는다 (#618 Codex 리뷰)
+    // "연결 징후 없음"으로 계산하면 고위험 징후를 확인하지 못했는데도 고액에 정상 사유만 붙은 근거가 나간다
     @Test
-    void generate_linkedLookupFails_needsCheckWithoutBasis() {
+    void generate_linkedLookupFails_leavesBasisEmpty() {
         SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
         ReflectionTestUtils.setField(securityCase, "id", 7L);
         when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
@@ -593,12 +598,10 @@ class FixedReportGeneratorTests {
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         assertThat(analysis.get("basis")).isNull();
-        assertThat(analysis.get("recommendation")).isEqualTo("NEEDS_CHECK");
-        assertThat(((Map<?, ?>) body.get("verdict")).get("overallRecommendation"))
-                .isEqualTo("NEEDS_CHECK");
+        assertThat(analysis.containsKey("recommendation")).isFalse();
     }
 
-    // 사건 며칠 전 비슷한 금액 매입 완료 2건 — 기준표가 고액 결제의 정상 사유로 본다
+    // 사건 며칠 전 비슷한 금액 매입 완료 2건 — 고액 결제의 정상 사유가 된다
     static PaymentHistoryToolResponse usualHistory(Instant now) {
         return PaymentHistoryToolResponse.builder()
                 .caseId("7")

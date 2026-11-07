@@ -124,9 +124,7 @@
               "checkBefore": "가족처럼 카드를 함께 쓰는 사이인지 확인"
             }
           ],
-          "normals": [],
-          "rule": "HIGH_RISK_WITH_OTHERS",
-          "recommendation": "REJECT_REVIEW"
+          "normals": []
         }
       },
       {
@@ -161,9 +159,7 @@
               "checkBefore": "가족처럼 카드를 함께 쓰는 사이인지 확인"
             }
           ],
-          "normals": [],
-          "rule": "HIGH_RISK_WITH_OTHERS",
-          "recommendation": "REJECT_REVIEW"
+          "normals": []
         }
       }
     ]

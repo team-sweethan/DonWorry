@@ -75,7 +75,7 @@ class SpringToolClient:
         res.raise_for_status()
         return OrderContextTool.model_validate(res.json())
 
-    # 결제별 판정 근거 · 기준표 칸 · 권고 (#618) — Spring이 계산한 값을 그대로 받는다
+    # 결제별 징후 · 정상 근거 (#618) — Spring이 계산한 값을 그대로 받는다
     def get_decision_basis(self, case_id: str) -> DecisionBasisTool:
         res = self._http.get("/internal/ai/tools/get_decision_basis", params={"caseId": case_id})
         res.raise_for_status()

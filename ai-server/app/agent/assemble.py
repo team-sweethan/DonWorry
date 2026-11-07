@@ -1,12 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
 from app.agent.tools import ToolRecord
-from app.agent.verdict_text import (
-    NO_BASIS_REASON,
-    headline,
-    payment_reason,
-    recommendation_summary,
-)
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
@@ -20,13 +14,11 @@ from app.schemas.report import (
     PaymentAnalysis,
     PaymentHistory,
     PaymentSignals,
-    Recommendation,
     ReportBody,
     ReportRecommendation,
     RuleHitDetail,
     SimilarCases,
     TimelineItem,
-    Verdict,
 )
 from app.schemas.tools import (
     CasePayment,
@@ -147,8 +139,9 @@ LINKED_PRIVACY = (
     "개별 결제 내용은 보지 않았습니다 (다른 고객 정보 보호)."
 )
 MOCK_LIMITATION = "mock 조사입니다(Qwen 미사용). AI 문장은 고정 문장입니다."
-# 판정 기준표는 Spring이 계산한다 (#618) — 못 받은 결제는 추가 확인으로 둔다 (자동 판정 없음)
-BASIS_UNAVAILABLE = "판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다."
+# 징후 · 정상 근거는 Spring이 계산한다 (#618) — 못 받은 결제는 징후 칸이 비어 한계 줄로 알린다
+# 판정 권고는 만들지 않는다 (#644, ADR-0009 결정 13)
+BASIS_UNAVAILABLE = "징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요."
 
 # 조사 범위 3칸 (#591) — 화면 ⑤ 조사 범위. 문장 목록 limitations는 다른 화면이 읽어 그대로 둔다
 SCOPE_CHECKED = {
@@ -157,7 +150,7 @@ SCOPE_CHECKED = {
     "find_similar_cases": "비슷한 과거 사건",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제",
     "get_order_context": "주문 정보 (주문자 이름 · 전화 제외)",
-    "get_decision_basis": "판정 기준표 (Spring 계산)",
+    "get_decision_basis": "징후 · 정상 근거 (Spring 계산)",
 }
 SCOPE_ALWAYS_UNAVAILABLE = (
     "로그인 기록 (조회 도구 없음)",
@@ -205,7 +198,7 @@ def _time_range(times: list[datetime]) -> str:
 
 
 # 사건 개요 한 줄 (#591) — 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태
-# 모두 Tool 기록 값 — 판단 문구는 쓰지 않는다 (판정은 기준표 칸이 따로 보여 준다)
+# 모두 Tool 기록 값 — 판단 문구는 쓰지 않는다 (판정은 보안 직원이 한다)
 def case_overview(
     customer_ref: str, case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]
 ) -> str:
@@ -235,8 +228,8 @@ def case_overview(
     return f"{subject}에 대한 사건입니다 (지금 상태: {now})."
 
 
-# 표의 결제마다 기준표가 본 30일 기본 조회에 들었는지 (#591)
-# 날짜로 다시 세지 않고 실제 조회 결과로 본다 — 기준표와 어긋나지 않게
+# 표의 결제마다 징후 · 정상 근거 계산이 본 30일 기본 조회에 들었는지 (#591)
+# 날짜로 다시 세지 않고 실제 조회 결과로 본다 — 정상 근거 계산과 어긋나지 않게
 def _report_history(
     history: PaymentHistoryTool | None, basis_history: PaymentHistoryTool | None
 ) -> PaymentHistory | None:
@@ -260,14 +253,6 @@ def similar_outcome(accept: int, reject: int) -> str:
 
 def _unique(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
-
-
-def overall_recommendation(recommendations: list[Recommendation]) -> Recommendation:
-    if "REJECT_REVIEW" in recommendations:
-        return "REJECT_REVIEW"
-    if recommendations and all(r == "ACCEPT_REVIEW" for r in recommendations):
-        return "ACCEPT_REVIEW"
-    return "NEEDS_CHECK"
 
 
 CASE_CREATED_EVENT = "사건 자동 생성 · AI 조사 시작"
@@ -320,8 +305,9 @@ def assemble_report(
     basis_tool: DecisionBasisTool | None = None,
     order: OrderContextTool | None = None,
 ) -> ReportBody:
-    # 기준표는 Spring이 30일 기본 조회로 계산해 준다 (#618) — AI가 90일을 불렀는지와 상관없이
-    # 같은 사건엔 같은 권고 (#581). 표 · 사실은 history(마지막 조회), 30일 표시는 basis_history
+    # 징후 · 정상 근거는 Spring이 30일 기본 조회로 계산해 준다 (#618)
+    # AI가 90일을 불렀는지와 상관없이
+    # 같은 사건엔 같은 근거 (#581). 표 · 사실은 history(마지막 조회), 30일 표시는 basis_history
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     # 한계 줄은 조회 기록으로 코드만 쓴다 — 무엇을 봤는지는 AI보다 코드가 정확히 안다 (#355)
@@ -349,7 +335,7 @@ def assemble_report(
             checks.append(f"결제 {payment.paymentId}의 결제 정보 확인")
             continue
         evidence = fds.get(payment.paymentId)
-        # 권고는 AI가 아니라 판정 기준표가 정한다 (#501) — Spring이 계산해 준 값 그대로 (#618)
+        # 징후 · 정상 근거는 AI가 아니라 Spring이 계산해 준 값 그대로 (#501, #618)
         basis = basis_tool.for_payment(payment.paymentId) if basis_tool else None
         if basis is None and evidence is not None and BASIS_UNAVAILABLE not in limitations:
             limitations.append(BASIS_UNAVAILABLE)
@@ -365,10 +351,6 @@ def assemble_report(
                 riskScore=evidence.riskScore if evidence else None,
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
                 unknowns=_unique(unknowns),
-                recommendation=basis.recommendation if basis else "NEEDS_CHECK",
-                reason=payment_reason(basis)
-                if basis is not None or evidence is None
-                else NO_BASIS_REASON,
                 ruleHitDetails=[
                     RuleHitDetail(
                         code=rule.code,
@@ -412,7 +394,6 @@ def assemble_report(
         facts=facts,
         additionalChecks=_unique(checks),
         recommendation=ReportRecommendation(
-            summary=recommendation_summary(analyses),
             limitations=_unique(limitations + list(ALWAYS_LIMITATIONS)),
         ),
         evidence=[
@@ -425,10 +406,6 @@ def assemble_report(
             )
             for seq, record in enumerate(records, start=1)
         ],
-        verdict=Verdict(
-            headline=headline(analyses),
-            overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
-        ),
         investigationTrace=trace,
         similarCases=SimilarCases.model_validate(
             {"cases": [c.model_dump() for c in similar.cases], "totalMatched": similar.totalMatched}

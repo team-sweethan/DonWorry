@@ -430,14 +430,13 @@ class AiInvestigationFlowTests {
                 Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of()),
-                Map.entry("recommendation", Map.of("summary", "추가 확인", "limitations", List.of())),
-                Map.entry("evidence", List.of()),
-                Map.entry("verdict", Map.of("headline", "본인 확인이 필요합니다.", "overallRecommendation", "NEEDS_CHECK")));
+                Map.entry("recommendation", Map.of("limitations", List.of())),
+                Map.entry("evidence", List.of()));
         return new AiInvestigationResult(String.valueOf(reportId), attemptId, "SUCCEEDED", body, null);
     }
 
     private static Map<String, Object> analysis(String paymentId) {
-        return Map.of("paymentId", paymentId, "recommendation", "NEEDS_CHECK", "ruleHitDetails", List.of());
+        return Map.of("paymentId", paymentId, "ruleHitDetails", List.of());
     }
 
     private static AiInvestigationResult failed(Long reportId, String attemptId, String code) {

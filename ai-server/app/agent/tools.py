@@ -108,7 +108,7 @@ class ToolBox(Protocol):
     # 사건 결제의 주문 정보 (#634) — 기본 조회
     def get_order_context(self) -> OrderContextTool: ...
 
-    # 결제별 판정 기준표 (#618) — Spring이 계산한다. AI가 고르는 도구가 아니다
+    # 결제별 징후 · 정상 근거 (#618) — Spring이 계산한다. AI가 고르는 도구가 아니다
     def get_decision_basis(self) -> DecisionBasisTool: ...
 
 
@@ -205,8 +205,8 @@ class StaticToolBox:
             ],
         )
 
-    # 판정 기준표 기본값 — 결제별 기준표가 없는 응답 (보고서는 결제마다 추가 확인, #618)
-    # 기준표는 Spring이 계산하므로 여기서 계산하지 않는다. 샘플은 decisionBasis 키로 준다
+    # 징후 · 정상 근거 기본값 — 결제별 근거가 없는 응답 (보고서는 한계 줄로 알림, #618)
+    # Spring이 계산하므로 여기서 계산하지 않는다. 샘플은 decisionBasis 키로 준다
     def _default_basis(self) -> DecisionBasisTool:
         return DecisionBasisTool(
             caseId=self._case_payments.caseId,

@@ -98,7 +98,6 @@ def test_assemble_summaryFacts_keepsSummaryTextsForMerchant() -> None:
     written = json.loads(narrative())["summary"]
     assert body["summary"] == [s["text"] for s in written]
     assert body["summaryFacts"] == [{"text": s["text"], "factIds": s["facts"]} for s in written]
-    assert body["verdict"]["overallRecommendation"] == "NEEDS_CHECK"
     assert "factTopics" not in body and "overallAnalysis" not in body
     assert all(
         "riskEvidence" not in p and "normalEvidence" not in p for p in body["paymentAnalyses"]

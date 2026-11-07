@@ -87,8 +87,8 @@ class AiToolServiceTests {
                 .containsExactly(tuple("1", null), tuple("2", card));
     }
 
-    // 기준표용 고객 이력 조회가 실패해도 기준표는 나온다 — 정상 사유 없이 계산해 매입 진행 쪽으로 가지 않는다 (#618)
-    // 고객 이력은 30일 기본 조회만 본다 (#581, AI가 90일을 불렀는지와 상관없이 같은 권고)
+    // 징후 계산용 고객 이력 조회가 실패해도 징후는 나온다 — 정상 사유 없이 계산한다 (#618)
+    // 고객 이력은 30일 기본 조회만 본다 (#581, AI가 90일을 불렀는지와 상관없이 같은 근거)
     @Test
     void decisionBasis_historyLookupFails_computesWithoutNormalReason() {
         SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
@@ -109,7 +109,7 @@ class AiToolServiceTests {
                                 List.of(new PaymentInfoReader.RuleHit("R01", "고액 결제", 30)))));
         when(paymentHistoryFinder.find(eq(7L), any(Instant.class), eq(PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS)))
                 .thenThrow(new IllegalStateException("조회 실패"));
-        // 연결 결제는 조회에 성공했고 다른 고객 결제가 없다 (null은 조회 실패라 기준표를 주지 않는다)
+        // 연결 결제는 조회에 성공했고 다른 고객 결제가 없다 (null은 조회 실패라 근거를 주지 않는다)
         when(linkedPaymentFinder.find(eq(7L), any(Instant.class))).thenReturn(FixedReportGeneratorTests.noLinks(NOW));
         AiToolService service = new AiToolService(
                 securityCaseRepository,
@@ -128,13 +128,12 @@ class AiToolServiceTests {
                 .extracting(DecisionBasisToolResponse.PaymentBasis::paymentId)
                 .containsExactly("1");
         assertThat(basis.normals()).isEmpty();
-        assertThat(basis.rule()).isEqualTo("CAUTION_ONLY");
-        assertThat(basis.recommendation()).isEqualTo("NEEDS_CHECK");
+        assertThat(basis.signals()).allMatch(s -> s.normalReason() == null);
     }
 
-    // 기준표용 같은 카드 · 기기 · IP 조회가 실패하면 기준표를 주지 않는다 (#618 Codex 리뷰)
-    // "연결 징후 없음"으로 계산하면 고위험 징후가 빠져 승인 취소 검토가 내려가거나, 고액 + 평소 금액 이력이면
-    // 매입 진행 검토까지 나온다. 빈 목록이면 ai-server가 그 결제를 추가 확인 + 한계 줄로 둔다
+    // 징후 계산용 같은 카드 · 기기 · IP 조회가 실패하면 근거를 주지 않는다 (#618 Codex 리뷰)
+    // "연결 징후 없음"으로 계산하면 고위험 징후(같은 카드 · 기기)가 빠진 근거가 "징후 없음"처럼 나간다
+    // 빈 목록이면 ai-server가 한계 줄로 알린다
     @Test
     void decisionBasis_linkedLookupFails_providesNoBasis() {
         SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);

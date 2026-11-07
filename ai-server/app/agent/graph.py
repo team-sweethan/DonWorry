@@ -87,7 +87,7 @@ def _latest_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     return found[-1] if found else None
 
 
-# 코드가 한 기본 조회의 고객 이력(30일) — 기준표 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
+# 코드가 한 기본 조회의 고객 이력(30일) — 정상 근거 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
 def _base_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     found = [
         r.result for r in records if r.filled_by_system and isinstance(r.result, PaymentHistoryTool)
@@ -169,10 +169,10 @@ def build_graph(
         _reference_lookup(
             "get_order_context", toolbox.get_order_context, "주문 정보", records, steps
         )
-        # 판정 기준표는 Spring이 계산한다 (#618) — 맨 뒤에 둬 앞 조회의 증거 번호가 바뀌지 않게
-        # 못 받으면 결제마다 추가 확인으로 둔다 (승인 취소 · 매입 진행 쪽 권고를 만들지 않음)
+        # 징후 · 정상 근거는 Spring이 계산한다 (#618) — 맨 뒤에 둬 앞 조회의 증거 번호가 바뀌지 않게
+        # 못 받으면 결제의 징후 칸이 비고 한계 줄로 알린다 (판정 권고는 만들지 않음, #644)
         _reference_lookup(
-            "get_decision_basis", toolbox.get_decision_basis, "판정 기준표", records, steps
+            "get_decision_basis", toolbox.get_decision_basis, "징후 · 정상 근거", records, steps
         )
         ready = _ready_to_write(records, steps)
         if ready["next"] != "write" or not extra_tools:

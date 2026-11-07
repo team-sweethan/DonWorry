@@ -66,9 +66,7 @@
               "checkBefore": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"
             }
           ],
-          "normals": [],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          "normals": []
         }
       },
       {
@@ -94,9 +92,7 @@
               "checkBefore": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"
             }
           ],
-          "normals": [],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          "normals": []
         }
       }
     ]

@@ -41,9 +41,7 @@
               "checkBefore": "FDS 평가가 왜 없었는지 평가 기록 확인"
             }
           ],
-          "normals": [],
-          "rule": "CAUTION_ONLY",
-          "recommendation": "NEEDS_CHECK"
+          "normals": []
         }
       }
     ]

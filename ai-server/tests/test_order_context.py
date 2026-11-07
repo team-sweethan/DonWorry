@@ -111,5 +111,3 @@ def test_order_lookup_failure_report_succeeds_with_limitation() -> None:
     # 칸을 비워야 화면이 "주문 정보 없음"이 아니라 "조회하지 못함"을 보여 준다
     assert outcome.report.orderContext is None
     assert ORDER_UNAVAILABLE in outcome.report.recommendation.limitations
-    # 판정 권고는 기준표 그대로 — 주문 조회 실패가 권고를 바꾸지 않는다 (자동 판정 없음)
-    assert outcome.report.verdict.overallRecommendation == "NEEDS_CHECK"

@@ -26,7 +26,7 @@ TOOL_TITLES = {
     "get_payment_history": "고객 최근 결제 조회",
     "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
     "get_order_context": "주문 정보 조회",
-    "get_decision_basis": "판정 기준표 조회",
+    "get_decision_basis": "징후 · 정상 근거 조회",
 }
 
 # 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
@@ -80,7 +80,7 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
     if name == "find_linked_payments":
         return "같은 가맹점 최근 30일, 다른 고객 결제"
     if name == "get_decision_basis":
-        return "이 사건 결제별 판정 기준표 (Spring 계산)"
+        return "이 사건 결제별 징후 · 정상 근거 (Spring 계산)"
     if name == "get_order_context":
         return "이 사건 결제의 주문 정보"
     payment_ids = args.get("payment_ids") or []
@@ -95,7 +95,7 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
 # 받은 것 요약 — 건수만 쓴다. 금액 · 점수 같은 원본 값은 보고서 본문에 이미 있다
 def tool_received(result: ToolResult) -> str:
     if isinstance(result, DecisionBasisTool):
-        return f"결제 {len(result.payments)}건의 기준표 칸 · 권고"
+        return f"결제 {len(result.payments)}건의 징후 · 정상 근거"
     if isinstance(result, LinkedPaymentsTool):
         return linked_summary(result)
     if isinstance(result, OrderContextTool):

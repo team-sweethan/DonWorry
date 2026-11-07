@@ -1,5 +1,6 @@
 import json
 
+from app.agent.assemble import BASIS_UNAVAILABLE
 from app.agent.graph import run_investigation
 from app.agent.llm import MockLlmClient
 from app.agent.tools import StaticToolBox
@@ -27,7 +28,6 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "additionalChecks",
         "recommendation",
         "evidence",
-        "verdict",
         "investigationTrace",
         "similarCases",
         "paymentHistory",
@@ -120,21 +120,16 @@ def test_fixture_matches_spring_tool_shape() -> None:
     assert set(FIXTURE) == {"casePayments", "fdsEvidence", "decisionBasis"}
 
 
-# 결론 · 이유는 판정 근거로 코드가, 규칙 근거는 FDS 조회 기록에서 채운다 (#532)
+# 규칙 근거는 FDS 조회 기록에서 채운다 (#532)
 # 증거 ID는 그 결제를 받은 조회 줄 — 기본 조회는 FDS 근거를 한 번에 받는다 (#578)
-def test_assemble_fills_verdict_from_basis_and_rule_hits_from_tool_records() -> None:
+def test_assemble_fills_rule_hits_from_tool_records() -> None:
     written = json.loads(narrative(["9001", "9002"]))
     llm = ScriptedLlm(turns=[], outputs=[json.dumps(written, ensure_ascii=False)])
 
     outcome = run_investigation(context(), llm, toolbox("sample_case.json"), SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
-    report = outcome.report
-    assert report.verdict.headline == (
-        "결제 2건 모두 추가 확인 — 정상 사유 없는 징후: 고액 결제 · 신규 카드 · 단시간 반복 결제"
-    )
-    first, second = report.paymentAnalyses
-    assert second.reason == "정상 사유가 없는 주의 징후가 있습니다: 단시간 반복 결제 · 신규 카드"
+    first, second = outcome.report.paymentAnalyses
     assert [(r.code, r.name, r.appliedScore, r.evidenceId) for r in first.ruleHitDetails] == [
         ("HIGH_AMOUNT", "고액 결제", 35, "E-101-v1-02"),
         ("NEW_CARD", "처음 쓰는 카드", 30, "E-101-v1-02"),
@@ -142,18 +137,10 @@ def test_assemble_fills_verdict_from_basis_and_rule_hits_from_tool_records() -> 
     assert {r.evidenceId for r in second.ruleHitDetails} == {"E-101-v1-02"}
 
 
-# 결제 하나라도 승인 취소 검토면 종합 권고도 승인 취소 검토다
-def test_overall_recommendation_is_reject_when_any_payment_is_reject() -> None:
-    from app.agent.assemble import overall_recommendation
-
-    assert overall_recommendation(["ACCEPT_REVIEW", "REJECT_REVIEW"]) == "REJECT_REVIEW"
-    assert overall_recommendation(["ACCEPT_REVIEW", "ACCEPT_REVIEW"]) == "ACCEPT_REVIEW"
-    assert overall_recommendation(["ACCEPT_REVIEW", "NEEDS_CHECK"]) == "NEEDS_CHECK"
-
-
-# 결제별 권고는 판정 기준표가 정한다 (#501) — 기준표는 Spring이 계산해 준 값 그대로 싣는다 (#618)
-# 같은 카드 다른 고객 + 새 카드 징후 기준표면 AI가 매입 진행 검토라고 써도 승인 취소 검토
-def test_recommendation_comes_from_basis_not_ai() -> None:
+# 판정 권고는 보고서에 만들지 않는다 (#644, ADR-0009 결정 13)
+# 옛 Spring이 기준표 칸 · 권고를 보내고 AI가 권고 칸을 써도 보고서에는 권고 키가 없다
+# 징후 · 정상 근거 · 한계 줄은 남는다
+def test_assembleReport_whenBasisReceived_hasNoRecommendationKeys() -> None:
     from app.schemas.tools import LinkedPaymentsTool
     from tests.test_linked_payments import LINKED, _toolbox
 
@@ -173,11 +160,18 @@ def test_recommendation_comes_from_basis_not_ai() -> None:
     outcome = run_investigation(context(), llm, toolbox_with_linked, SETTINGS)
 
     assert outcome.status == "SUCCEEDED"
-    for analysis in outcome.report.paymentAnalyses:
-        assert analysis.basis is not None
-        assert analysis.basis.rule == "HIGH_RISK_WITH_OTHERS"
-        assert analysis.recommendation == analysis.basis.recommendation == "REJECT_REVIEW"
-    assert outcome.report.verdict.overallRecommendation == "REJECT_REVIEW"
+    report = outcome.report.model_dump()
+    assert "verdict" not in report
+    assert list(report["recommendation"]) == ["limitations"]
+    assert report["recommendation"]["limitations"]
+    for analysis in report["paymentAnalyses"]:
+        assert "recommendation" not in analysis and "reason" not in analysis
+        assert list(analysis["basis"]) == ["signals", "normals"]
+        assert [(s["key"], s["level"]) for s in analysis["basis"]["signals"]] == [
+            ("LINKED_CARD", "HIGH_RISK"),
+            ("R03", "CAUTION"),
+            ("R01", "CAUTION"),
+        ]
 
 
 class _NoBasisToolBox(StaticToolBox):
@@ -185,6 +179,7 @@ class _NoBasisToolBox(StaticToolBox):
         raise RuntimeError("Spring 503")
 
 
+# 옛 Spring 응답 모양 — 기준표 칸 · 권고가 함께 온다 (#644 전)
 def _reject(payment_id: str) -> dict:
     signals = [
         {"key": "LINKED_CARD", "label": "같은 카드를 다른 고객이 사용", "detail": None},
@@ -206,9 +201,8 @@ def _reject(payment_id: str) -> dict:
     }
 
 
-# 판정 기준표 조회가 실패해도 보고서는 만들되 결제마다 추가 확인으로 둔다 (#618)
-# 기준표 없이 승인 취소 · 매입 진행 쪽 권고가 나가지 않게 — 한계 줄로 사실대로 남긴다
-def test_basis_lookup_fails_every_payment_needs_check() -> None:
+# 징후 · 정상 근거 조회가 실패해도 보고서는 만들고 한계 줄로 사실대로 남긴다 (#618)
+def test_basis_lookup_fails_reportKeepsLimitation() -> None:
     sample = toolbox("sample_case.json")
     box = _NoBasisToolBox(sample.get_case_payments(), sample.get_fds_evidence(None))
     written = json.loads(narrative(["9001", "9002"]))
@@ -218,11 +212,5 @@ def test_basis_lookup_fails_every_payment_needs_check() -> None:
 
     assert outcome.status == "SUCCEEDED"
     report = outcome.report
-    assert [(a.basis, a.recommendation) for a in report.paymentAnalyses] == [
-        (None, "NEEDS_CHECK"),
-        (None, "NEEDS_CHECK"),
-    ]
-    assert report.verdict.overallRecommendation == "NEEDS_CHECK"
-    assert "판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다." in (
-        report.recommendation.limitations
-    )
+    assert [a.basis for a in report.paymentAnalyses] == [None, None]
+    assert BASIS_UNAVAILABLE in report.recommendation.limitations
