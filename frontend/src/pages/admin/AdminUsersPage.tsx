@@ -59,6 +59,17 @@ const permissionOptions = [
   { label: '정산 조회', value: 'FINANCE_VIEW' },
 ]
 const roleOptions = Object.entries(roleLabels).map(([value, label]) => ({ value, label }))
+const statusLabels: Record<AdminUser['status'], string> = {
+  ACTIVE: '사용 중',
+  INACTIVE: '정지',
+  SUSPENDED: '보안 정지(조사 중)',
+}
+const statusColors: Record<AdminUser['status'], string> = {
+  ACTIVE: 'green',
+  INACTIVE: 'red',
+  SUSPENDED: 'orange',
+}
+const statusOptions = Object.entries(statusLabels).map(([value, label]) => ({ value, label }))
 const errorMessage = (error: unknown) =>
   error instanceof ApiError
     ? (error.detail ?? '요청을 처리하지 못했습니다. 다시 시도해 주세요.')
@@ -198,10 +209,7 @@ export function AdminUsersPage() {
             allowClear
             style={{ width: 130 }}
             value={filter.status}
-            options={[
-              { value: 'ACTIVE', label: '사용 중' },
-              { value: 'INACTIVE', label: '정지' },
-            ]}
+            options={statusOptions}
             onChange={(status) => updateFilter({ status, page: 1 })}
           />
           <Select
@@ -273,10 +281,8 @@ export function AdminUsersPage() {
               {
                 title: '상태',
                 dataIndex: 'status',
-                render: (status: string) => (
-                  <Tag color={status === 'ACTIVE' ? 'green' : 'red'}>
-                    {status === 'ACTIVE' ? '사용 중' : '정지'}
-                  </Tag>
+                render: (status: AdminUser['status']) => (
+                  <Tag color={statusColors[status]}>{statusLabels[status]}</Tag>
                 ),
               },
               {
@@ -560,7 +566,7 @@ export function AdminUserDetailPage() {
                         {
                           key: 'status',
                           label: '상태',
-                          children: user.status === 'ACTIVE' ? '사용 중' : '정지',
+                          children: statusLabels[user.status],
                         },
                         {
                           key: 'password',
@@ -608,14 +614,22 @@ export function AdminUserDetailPage() {
                       정지·복구 또는 비밀번호 초기화 시 해당 사용자의 기존 로그인이 종료됩니다.
                       계정은 삭제하지 않습니다.
                     </p>
+                    {user.status === 'SUSPENDED' && (
+                      <p>
+                        보안 조사 중인 계정입니다. 내부자 사건 판정으로만 정지가 풀리며, 여기서는
+                        사용 상태를 바꿀 수 없습니다.
+                      </p>
+                    )}
                     <Space wrap>
-                      <Button
-                        danger={user.status === 'ACTIVE'}
-                        disabled={busy || (actor?.userId === userId && user.status === 'ACTIVE')}
-                        onClick={() => setConfirmation('status')}
-                      >
-                        {user.status === 'ACTIVE' ? '계정 정지' : '정지 해제'}
-                      </Button>
+                      {user.status !== 'SUSPENDED' && (
+                        <Button
+                          danger={user.status === 'ACTIVE'}
+                          disabled={busy || (actor?.userId === userId && user.status === 'ACTIVE')}
+                          onClick={() => setConfirmation('status')}
+                        >
+                          {user.status === 'ACTIVE' ? '계정 정지' : '정지 해제'}
+                        </Button>
+                      )}
                       <Button disabled={busy} onClick={() => setConfirmation('reset')}>
                         비밀번호 초기화
                       </Button>

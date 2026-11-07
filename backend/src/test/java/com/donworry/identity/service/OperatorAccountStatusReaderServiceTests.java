@@ -74,7 +74,8 @@ class OperatorAccountStatusReaderServiceTests {
         when(histories.findFirstByTargetUserIdAndChangeTypeOrderByCreatedAtDesc(1L, "USER_ENABLED"))
                 .thenReturn(Optional.of(history));
         when(history.getCreatedAt()).thenReturn(LocalDateTime.parse("2026-11-04T05:00:00.123456"));
-        for (var status : UserStatus.values()) {
+        // 사장님 상태는 둘뿐이다. SUSPENDED는 보안 직원 전용이라 OPERATOR에는 오지 않는다 (#647)
+        for (var status : new UserStatus[] {UserStatus.ACTIVE, UserStatus.INACTIVE}) {
             user.changeStatus(status);
             var result = reader.findById(1L).orElseThrow();
             assertThat(result.status().name()).isEqualTo(status.name());

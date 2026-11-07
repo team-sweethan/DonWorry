@@ -13,6 +13,7 @@ import com.donworry.identity.controller.AuthExceptionHandler;
 import com.donworry.identity.repository.ApplicationTokenRepository;
 import com.donworry.identity.repository.MerchantRepository;
 import com.donworry.identity.repository.PlatformUserRepository;
+import com.donworry.identity.repository.StaffAccountLockRepository;
 import com.donworry.identity.repository.UserPermissionRepository;
 import com.donworry.identity.service.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,6 +71,7 @@ class AuthPrincipalRaceTests {
                 permissions,
                 merchants,
                 changeHistories,
+                mock(StaffAccountLockRepository.class),
                 accountLocks,
                 merchantLocks,
                 sessions,
