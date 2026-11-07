@@ -202,22 +202,24 @@
   font-size: 12px;
 }
 
+/* 결제 처리 흐름은 폭 전체 카드 안에서 가로 한 줄 (#631) */
 .dw-alert-flow {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
 .dw-alert-flow > div {
   position: relative;
-  padding-left: 22px;
+  min-width: 0;
+  padding-top: 22px;
   font-size: 13px;
   font-weight: 650;
 }
 
 .dw-alert-flow > div::before {
   position: absolute;
-  top: 4px;
+  top: 0;
   left: 0;
   width: 10px;
   height: 10px;
@@ -229,12 +231,35 @@
 
 .dw-alert-flow > div:not(:last-child)::after {
   position: absolute;
-  top: 16px;
-  left: 5px;
-  width: 2px;
-  height: 19px;
+  top: 6px;
+  right: -12px;
+  left: 18px;
+  height: 2px;
   background: #e2e8f0;
   content: '';
+}
+
+@media (max-width: 760px) {
+  .dw-alert-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dw-alert-flow > div {
+    padding-top: 0;
+    padding-left: 22px;
+  }
+
+  .dw-alert-flow > div::before {
+    top: 4px;
+  }
+
+  .dw-alert-flow > div:not(:last-child)::after {
+    top: 16px;
+    right: auto;
+    left: 5px;
+    width: 2px;
+    height: calc(100% + 4px);
+  }
 }
 
 .dw-alert-flow span {
@@ -285,9 +310,18 @@
   font-weight: 600;
 }
 
+/* 결제 정보는 맨 위 폭 전체 카드 — 값을 한 글자씩 끊지 않는다 (#631) */
+.dw-alert-payment-information .ant-descriptions-item-label {
+  width: 96px;
+}
+
 .dw-alert-payment-information .ant-descriptions-item-content {
-  overflow-wrap: anywhere;
-  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.dw-alert-payment-information + .dw-api-note {
+  margin-top: -12px;
 }
 
 .dw-alert-detail .ant-table-cell {
@@ -311,16 +345,18 @@
   font-weight: 700;
 }
 
+/* 차단 목록 값은 한 줄에 하나, 순서 고정 (#631) */
 .dw-alert-blocklist-candidates {
   display: flex;
-  flex-wrap: wrap;
+  max-width: 360px;
+  flex-direction: column;
   gap: 4px;
 }
 
 .dw-alert-blocklist-candidate {
-  display: inline-flex;
+  display: grid;
   min-width: 0;
-  max-width: 100%;
+  grid-template-columns: 40px minmax(0, 1fr);
   align-items: baseline;
   gap: 4px;
   border: 1px solid #dbe4f0;
@@ -333,7 +369,6 @@
 }
 
 .dw-alert-blocklist-candidate > strong {
-  flex: 0 0 auto;
   color: #64748b;
   font-size: 11px;
 }
