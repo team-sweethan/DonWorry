@@ -17,7 +17,8 @@ export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQ
     page: parseListPage(params.get('page')),
     keyword: parseListKeyword(params.get('keyword')),
     role: role === 'ADMIN' || role === 'OPERATOR' || role === 'SECURITY_STAFF' ? role : undefined,
-    status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
+    status:
+      status === 'ACTIVE' || status === 'INACTIVE' || status === 'SUSPENDED' ? status : undefined,
     passwordChangeRequired: params.get('passwordChangeRequired') === 'true' ? true : undefined,
   }
 }

@@ -6,7 +6,8 @@ export type AdminUser = {
   loginId: string
   displayName: string
   role: AuthUser['role']
-  status: 'ACTIVE' | 'INACTIVE'
+  // SUSPENDED = 보안 정지(조사 중). 내부자 사건 판정으로만 풀리고 [계정 관리]에서는 바꿀 수 없다 (ADR-0084)
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'
   merchantId: number | null
   merchantName: string | null
   permissions: string[]
@@ -46,7 +47,7 @@ export const createUser = (input: CreateUser) =>
   api<TemporaryPassword>('/admin/users', json('POST', input))
 export const setUserPermissions = (id: number, permissions: string[]) =>
   api<void>(`/admin/users/${id}/permissions`, json('PUT', { permissions }))
-export const setUserStatus = (id: number, status: AdminUser['status']) =>
+export const setUserStatus = (id: number, status: 'ACTIVE' | 'INACTIVE') =>
   api<void>(`/admin/users/${id}/status`, json('PUT', { status }))
 export const resetUserPassword = (id: number) =>
   api<TemporaryPassword>(`/admin/users/${id}/password-reset`, { method: 'POST' })

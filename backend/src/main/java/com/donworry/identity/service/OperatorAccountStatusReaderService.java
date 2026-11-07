@@ -34,7 +34,8 @@ public class OperatorAccountStatusReaderService implements OperatorAccountStatus
                             .orElse(null);
                     var status = switch (user.getStatus()) {
                         case ACTIVE -> OperatorAccountStatus.ACTIVE;
-                        case INACTIVE -> OperatorAccountStatus.INACTIVE;
+                        // SUSPENDED는 보안 직원 전용이라 OPERATOR에는 오지 않는다. 와도 로그인 불가로 보고한다
+                        case INACTIVE, SUSPENDED -> OperatorAccountStatus.INACTIVE;
                     };
                     return new OperatorAccountStatusSnapshot(status, lastActivatedAt);
                 });

@@ -98,3 +98,9 @@ test('페이지 번호만 있으면 검색 조건이 없는 목록으로 본다'
     true,
   )
 })
+
+test('보안 정지(SUSPENDED) 필터는 주소에 저장했다가 다시 읽어도 유지된다', () => {
+  const params = adminUserListParams({ page: 1, keyword: '', status: 'SUSPENDED' })
+  assert.equal(params.toString(), 'status=SUSPENDED')
+  assert.equal(parseAdminUserListQuery(params).status, 'SUSPENDED')
+})

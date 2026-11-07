@@ -90,7 +90,9 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 - 원문 응답(`contact-raw-view`)은 `Cache-Control: no-store`
 - IP는 접근 기록에 복사하지 않는다. 필요하면 `login_histories`에서 읽는다
 
-### 5. 직원 계정 보안 정지 (합의 필요 — P1)
+### 5. 직원 계정 보안 정지 (합의 4 정함, 11/07 · #647 → [ADR-0084](0084-staff-account-security-suspension.md))
+
+**정함:** 별도 상태 `SUSPENDED`로 두고 조사 판정으로만 푼다. 해제 결과(복귀 · 비활성)는 판정이 고른다. 아래는 실험 당시 기록이다.
 
 실험은 기존 `UserStatus.INACTIVE`를 재사용하고, 정지 사유 · 근거 경보 · 해제 판정은 `staff_account_locks`에 둔다.
 알려진 한계: [계정 관리]의 [활성]으로 판정 없이 풀 수 있다(옆문). 정식안 후보는 별도 `LOCKED` 상태다. 결정은 P1 조각 PR의 별도 ADR로 남긴다.
@@ -152,7 +154,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 1. ~~접근 기록 담당~~ — **정함 (11/06, #604)**: P1 identity (2 · 3절 그대로). #516은 탐지 · 경보만
 2. ~~허용 접근 기록의 트랜잭션~~ — **정함 (11/06, #604)**: 같은 트랜잭션 + `MANDATORY`. 거부 기록은 독립 (4절)
 3. ~~`StaffCaseScopeReader` 질문지 방식 허용 여부~~ — **정함 (11/07, #643)**: 질문지 방식(fds.api 질문지, investigation 구현). P3 동의
-4. 직원 정지 상태: `INACTIVE` 재사용 vs `LOCKED` 신설 — P1 주환
+4. ~~직원 정지 상태: `INACTIVE` 재사용 vs `LOCKED` 신설~~ — **정함 (11/07, #647)**: 별도 상태 `SUSPENDED`, 판정으로만 해제 ([ADR-0084](0084-staff-account-security-suspension.md)). P1 확인 필요
 5. 결제 준비 요청의 주문자 칸: 선택(실험) vs 필수 — P5 시은 · CakeShop
 6. 주문자 원문 보관 기간(실험안: 결제 후 540일 뒤 암호문 파기, 파기 배치는 2차) — P5 시은
 7. 관리자 메뉴: 사장님 403 탐지(#515)와 묶어 보일지 — frontend · P2
