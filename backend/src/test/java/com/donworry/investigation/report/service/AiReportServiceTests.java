@@ -96,6 +96,8 @@ class AiReportServiceTests {
                                     "evidence",
                                     "verdict",
                                     "investigationTrace",
+                                    // 고정 보고서 개요 한 줄 (#626, ADR-0083 결정 6)
+                                    "caseOverview",
                                     "similarCases",
                                     "paymentHistory",
                                     "linkedPayments");
