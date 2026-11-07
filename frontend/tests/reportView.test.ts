@@ -33,6 +33,10 @@ import {
   overviewText,
   summaryFold,
   checkRows,
+  checkSignals,
+  compareColumn,
+  legacyReportText,
+  pastCompareRows,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -687,4 +691,80 @@ test('checkRows_sameSignalExplainedInOnlyOnePayment_keepsUncheckedRow', () => {
   })
 
   assert.deepEqual(checkRows(report), [{ id: 'R01', row: 1 }])
+})
+
+// ── 새 보고서 화면 (#644 PR 3) ──
+
+const paymentWith = (
+  paymentId: string,
+  signals: BasisSignal[],
+): ReportBody['paymentAnalyses'][number] => ({
+  paymentId,
+  amount: 89_000,
+  requestedAt: '2026-10-27T12:00:00Z',
+  riskScore: 70,
+  ruleHits: [],
+  unknowns: [],
+  basis: { signals, normals: [] },
+})
+
+// 같은 징후가 두 결제에 있으면 카드 한 장에 두 결제 번호를 모두 적는다 — 빠지면 직원이 한 결제만 확인하고 판정한다
+test('checkSignals_sameSignalInTwoPayments_listsBothPaymentIds', () => {
+  const report = body({
+    paymentAnalyses: [
+      highAmountPayment('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료'),
+      highAmountPayment('12', null),
+    ],
+  })
+
+  const [card] = checkSignals(report) ?? []
+  assert.deepEqual(
+    [card.key, card.paymentIds, card.openPaymentIds, card.mixed],
+    ['R01', ['11', '12'], ['12'], true],
+  )
+})
+
+// 지난 사건에만 있던 징후도 줄을 만들고, 지금 사건과 다른 칸으로 표시한다
+test('pastCompareRows_signalOnlyInPastCase_addsRowAndMarksDiff', () => {
+  const now = body({ paymentAnalyses: [paymentWith('1', [signal('R03', '신규 카드')])] })
+  const past = body({
+    paymentAnalyses: [
+      paymentWith('2', [
+        signal('R03', '신규 카드'),
+        signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
+      ]),
+    ],
+  })
+
+  const rows = pastCompareRows([compareColumn(now), compareColumn(past)])
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.cells.map((c) => c.kind), r.diff]),
+    [
+      ['R03', ['OPEN', 'OPEN'], [false, false]],
+      ['LINKED_CARD', ['NONE', 'OPEN'], [false, true]],
+    ],
+  )
+})
+
+// 징후 정리가 없는 옛 보고서는 "없음"이 아니라 모름으로 두고, 다른 칸으로 표시하지 않는다
+test('pastCompareRows_pastOldReportWithoutBasis_marksColumnUnknown', () => {
+  const now = body({ paymentAnalyses: [paymentWith('1', [signal('R03', '신규 카드')])] })
+  const oldPast = body({ paymentAnalyses: [{ ...paymentWith('2', []), basis: undefined }] })
+
+  assert.equal(compareColumn(oldPast), null)
+  const rows = pastCompareRows([compareColumn(now), compareColumn(oldPast)])
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.cells.map((c) => c.kind), r.diff]),
+    [['R03', ['OPEN', 'UNKNOWN'], [false, false]]],
+  )
+})
+
+// PR 2(#650) 전에 저장된 보고서의 "판정 기준표 · 권고" 글자는 화면에서 새 이름으로 보인다
+test('legacyReportText_oldBasisWords_showsNewNames', () => {
+  assert.equal(legacyReportText('판정 기준표 (Spring 계산)'), '징후 · 정상 근거 (Spring 계산)')
+  assert.equal(
+    legacyReportText('판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다.'),
+    '징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요.',
+  )
+  assert.equal(legacyReportText('고객 최근 30일 결제'), '고객 최근 30일 결제')
 })
