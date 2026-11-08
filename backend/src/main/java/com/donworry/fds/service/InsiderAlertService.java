@@ -1,5 +1,6 @@
 package com.donworry.fds.service;
 
+import com.donworry.fds.api.InsiderAlertCloser;
 import com.donworry.fds.api.InsiderAlertReader;
 import com.donworry.fds.dto.CloseInsiderAlertRequest;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
@@ -25,14 +26,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-// ADMIN 내부자 경보 목록 · 상세 · 정상 업무로 닫기 + 열린 경보 조회 창구 (#516)
+// ADMIN 내부자 경보 목록 · 상세 · 정상 업무로 닫기 + 열린 경보 조회 창구 (#516) + 내부자 사건 판정용 경보 닫기 (#670)
 // 컨트롤러 권한 규칙(SecurityConfig)과 별도로 여기서도 ADMIN을 확인한다
 @Service
 @RequiredArgsConstructor
-public class InsiderAlertService implements InsiderAlertReader {
+public class InsiderAlertService implements InsiderAlertReader, InsiderAlertCloser {
     private final InsiderAlertRepository alerts;
     private final InsiderAlertEvidenceRepository evidence;
     private final StaffAccessReader accessReader;
@@ -44,6 +46,24 @@ public class InsiderAlertService implements InsiderAlertReader {
     @Transactional(readOnly = true)
     public boolean hasOpenAlert(Long staffId) {
         return alerts.existsByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isOpen(Long alertId) {
+        return alerts.findById(alertId).map(InsiderAlert::isOpen).orElse(false);
+    }
+
+    // 판정하는 ADMIN 확인은 부르는 쪽(P3)이 한다. 잠금 순서는 정상 업무로 닫기와 같다(직원 행 먼저)
+    // 직원 행을 잡은 뒤 읽으므로, 그사이 탐지가 막 연 경보까지 함께 닫는다
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int closeOpenAlerts(Long staffId, Long adminId, String adminName, String memo) {
+        alerts.lockDetectionState(staffId);
+        List<InsiderAlert> open = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
+        Instant now = Instant.now();
+        open.forEach(alert -> alert.close(adminId, adminName, memo, now));
+        return open.size();
     }
 
     @Transactional(readOnly = true)

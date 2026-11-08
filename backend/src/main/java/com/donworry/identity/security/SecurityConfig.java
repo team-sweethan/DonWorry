@@ -364,6 +364,12 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/open-count"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/{alertId}"),
                                 paths.matcher(HttpMethod.POST, "/api/admin/insider-alerts/{alertId}/close"),
+                                // 내부자 사건 판정 · 징계 사건 정지 해제 (#670). 판정 · 해제는 관리자만 — 보안 직원이 자기 사건을 닫지 못하게
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases/open-count"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases/{insiderCaseId}"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-cases/{insiderCaseId}/decision"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-cases/{insiderCaseId}/lock-release"),
                                 // AI 조사 다시 켜기 (#626, ADR-0083) — 가이드라인 "재개승인", 끈 사람이 아닌 책임자가 한다
                                 paths.matcher(HttpMethod.POST, "/api/ai-switch/resume"))
                         .access((authentication, context) -> {

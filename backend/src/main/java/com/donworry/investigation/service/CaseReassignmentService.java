@@ -26,6 +26,7 @@ import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +84,7 @@ public class CaseReassignmentService {
         caseAssignmentService.lock();
         SecurityCase securityCase = openCaseForUpdate(caseId);
         Instant now = Instant.now();
-        SecurityStaffEntry next = activeStaff(body.newStaffId());
+        SecurityStaffEntry next = assignableStaff(body.newStaffId());
         moveTo(securityCase, next, "ADMIN_REASSIGN", body.reason(), memo, admin, null, now);
         approvePendingOf(securityCase, next.userId(), admin, now);
     }
@@ -98,9 +99,12 @@ public class CaseReassignmentService {
         List<SecurityCase> cases = securityCaseRepository.findOpenByAssigneeForUpdate(fromStaffId);
         Map<Long, Long> counts = caseAssignmentService.openCounts();
         Map<Long, SecurityStaffEntry> staff = staffById();
+        // 넘기는 직원과 내부자 사건 조사 중인 직원 (#670)은 받지 않는다
+        Set<Long> excluded = new HashSet<>(caseAssignmentService.staffUnderInsiderCase());
+        excluded.add(fromStaffId);
         Instant now = Instant.now();
         for (SecurityCase securityCase : cases) {
-            CaseAssignmentRules.Choice choice = CaseAssignmentRules.choose(staff.values(), counts, Set.of(fromStaffId))
+            CaseAssignmentRules.Choice choice = CaseAssignmentRules.choose(staff.values(), counts, excluded)
                     .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.NO_AVAILABLE_STAFF));
             moveTo(securityCase, staff.get(choice.staffId()), "HANDOVER", body.reason(), memo, admin, null, now);
             counts.merge(choice.staffId(), 1L, Long::sum);
@@ -116,7 +120,7 @@ public class CaseReassignmentService {
         CaseAssignmentRequest request = pendingForUpdate(requestId);
         SecurityCase securityCase = openCaseForUpdate(request.getCaseId());
         Instant now = Instant.now();
-        SecurityStaffEntry next = activeStaff(body.newStaffId());
+        SecurityStaffEntry next = assignableStaff(body.newStaffId());
         moveTo(securityCase, next, "REQUEST_APPROVED", request.getReason(), null, admin, request.getId(), now);
         request.approve(admin.userId(), admin.displayName(), next.userId(), blankToNull(body.memo()), now);
     }
@@ -147,7 +151,8 @@ public class CaseReassignmentService {
         Map<Long, Long> counts = caseAssignmentService.openCounts();
         List<SecurityStaffEntry> staff = staffDirectory.securityStaff();
         List<StaffLoadResponse> rows = new ArrayList<>();
-        List<CaseAssignmentRules.Choice> ranked = CaseAssignmentRules.rank(staff, counts, Set.of());
+        Set<Long> underInsiderCase = caseAssignmentService.staffUnderInsiderCase();
+        List<CaseAssignmentRules.Choice> ranked = CaseAssignmentRules.rank(staff, counts, underInsiderCase);
         for (int i = 0; i < ranked.size(); i++) {
             CaseAssignmentRules.Choice choice = ranked.get(i);
             rows.add(StaffLoadResponse.builder()
@@ -158,6 +163,16 @@ public class CaseReassignmentService {
                     .assignOrder(i + 1)
                     .build());
         }
+        // 내부자 사건 조사 중인 사용 중 직원 (#670) — 배정 순서 없이 표시만
+        staff.stream()
+                .filter(entry -> entry.active() && underInsiderCase.contains(entry.userId()))
+                .forEach(entry -> rows.add(StaffLoadResponse.builder()
+                        .staffId(entry.userId())
+                        .displayName(entry.displayName())
+                        .active(true)
+                        .openCount(counts.getOrDefault(entry.userId(), 0L))
+                        .insiderCaseOpen(true)
+                        .build()));
         staff.stream()
                 .filter(entry -> !entry.active())
                 .forEach(entry -> rows.add(StaffLoadResponse.builder()
@@ -165,6 +180,8 @@ public class CaseReassignmentService {
                         .displayName(entry.displayName())
                         .active(false)
                         .openCount(counts.getOrDefault(entry.userId(), 0L))
+                        // 보안 정지된 직원도 조사 중이면 함께 표시한다 — 정지와 조사는 따로 풀린다
+                        .insiderCaseOpen(underInsiderCase.contains(entry.userId()))
                         .build()));
         return new CaseAssignmentOverviewResponse(
                 rows,
@@ -285,10 +302,14 @@ public class CaseReassignmentService {
                 .ifPresent(request -> request.approve(admin.userId(), admin.displayName(), newStaffId, null, now));
     }
 
-    private SecurityStaffEntry activeStaff(Long staffId) {
+    // 배정 잠금을 잡은 뒤에 부른다. 내부자 사건 조사 중인 직원에게는 사건을 주지 않는다 (#670)
+    private SecurityStaffEntry assignableStaff(Long staffId) {
         SecurityStaffEntry entry = staffById().get(staffId);
         if (entry == null || !entry.active()) {
             throw new InvestigationException(InvestigationErrorCode.INVALID_ASSIGNEE);
+        }
+        if (caseAssignmentService.staffUnderInsiderCase().contains(staffId)) {
+            throw new InvestigationException(InvestigationErrorCode.STAFF_HAS_OPEN_INSIDER_CASE);
         }
         return entry;
     }

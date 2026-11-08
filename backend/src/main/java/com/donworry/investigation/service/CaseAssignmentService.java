@@ -6,6 +6,7 @@ import com.donworry.investigation.entity.CaseHistory;
 import com.donworry.investigation.entity.CaseHistoryEventType;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.CaseHistoryRepository;
+import com.donworry.investigation.repository.InsiderCaseRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.util.HashMap;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 // FDS 사건 담당 자동 배정 (#608). 배정 잠금 행으로 배정을 한 줄로 세운다
+// 열린 내부자 사건이 있는 직원은 후보에서 뺀다 (#670) — 사건 열기도 같은 잠금 행을 잡아, 열리는 순간 배정되는 틈이 없다
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,7 @@ public class CaseAssignmentService {
 
     private final SecurityCaseRepository securityCaseRepository;
     private final CaseHistoryRepository caseHistoryRepository;
+    private final InsiderCaseRepository insiderCases;
     private final SecurityStaffDirectory staffDirectory;
     private final SecurityStaffGuard guard;
 
@@ -45,7 +48,7 @@ public class CaseAssignmentService {
     // 배정 실패로 HELD 결제가 사건 없이 남으면 아무도 판정할 수 없다
     @Transactional(propagation = Propagation.MANDATORY)
     public void assignNew(SecurityCase securityCase, Instant now) {
-        assign(securityCase, openCounts(), null, "AUTO_LEAST_OPEN", now);
+        assign(securityCase, openCounts(), staffUnderInsiderCase(), null, "AUTO_LEAST_OPEN", now);
     }
 
     // 기능 도입 전에 만든 미배정 미종결 사건을 오래된 순서로 같은 규칙에 따라 배정한다 (ADMIN). 배정한 건수를 돌려준다
@@ -55,10 +58,11 @@ public class CaseAssignmentService {
         lock();
         List<SecurityCase> unassigned = securityCaseRepository.findUnassignedOpenForUpdate();
         Map<Long, Long> counts = openCounts();
+        Set<Long> excluded = staffUnderInsiderCase();
         Instant now = Instant.now();
         int assigned = 0;
         for (SecurityCase securityCase : unassigned) {
-            if (!assign(securityCase, counts, admin.userId(), "BACKFILL", now)) {
+            if (!assign(securityCase, counts, excluded, admin.userId(), "BACKFILL", now)) {
                 break;
             }
             assigned++;
@@ -72,9 +76,20 @@ public class CaseAssignmentService {
         return counts;
     }
 
-    private boolean assign(SecurityCase securityCase, Map<Long, Long> counts, Long adminId, String kind, Instant now) {
+    // 배정 잠금을 잡은 뒤에 부른다 — 그래야 그사이 열린 내부자 사건까지 본다
+    Set<Long> staffUnderInsiderCase() {
+        return insiderCases.findOpenStaffIds();
+    }
+
+    private boolean assign(
+            SecurityCase securityCase,
+            Map<Long, Long> counts,
+            Set<Long> excluded,
+            Long adminId,
+            String kind,
+            Instant now) {
         Optional<CaseAssignmentRules.Choice> choice =
-                CaseAssignmentRules.choose(staffDirectory.securityStaff(), counts, Set.of());
+                CaseAssignmentRules.choose(staffDirectory.securityStaff(), counts, excluded);
         if (choice.isEmpty()) {
             log.warn("배정할 보안 직원이 없어 미배정으로 둡니다 caseId={}", securityCase.getId());
             return false;

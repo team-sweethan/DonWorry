@@ -254,6 +254,7 @@ const load = (staffId: number, active: boolean, assignOrder: number | null): Sta
   active,
   openCount: 0,
   assignOrder,
+  insiderCaseOpen: false,
 })
 
 // 새 담당 기본값은 배정 순서대로 고르되 정지 직원과 지금 담당은 건너뛰고, 후보가 없으면 null

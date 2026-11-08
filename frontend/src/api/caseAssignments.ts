@@ -18,13 +18,17 @@ export const assignmentReasonLabel: Record<AssignmentChangeReason, string> = {
   OTHER: '기타',
 }
 
-/** assignOrder: 지금 새 사건이 생기면 몇 번째로 받는지(1 = 다음 후보). 정지 직원은 null */
+/**
+ * assignOrder: 지금 새 사건이 생기면 몇 번째로 받는지(1 = 다음 후보). 정지 직원 · 내부자 조사 중인 직원은 null
+ * insiderCaseOpen: 열린 내부자 사건이 있어 배정 · 담당 변경을 받지 않는 직원 (#670)
+ */
 export type StaffLoad = {
   staffId: number
   displayName: string
   active: boolean
   openCount: number
   assignOrder: number | null
+  insiderCaseOpen: boolean
 }
 
 export type AssignmentOverview = {

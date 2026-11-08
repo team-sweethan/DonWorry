@@ -44,7 +44,19 @@ public enum InvestigationErrorCode {
     INVALID_PHONE("INV_031", "전화번호 형식을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     RAW_VIEW_REVIEW_NOT_FOUND("INV_032", "원문 열람 기록이 없습니다.", HttpStatus.NOT_FOUND),
     RAW_VIEW_REVIEW_DONE("INV_033", "이미 검토한 원문 열람입니다.", HttpStatus.CONFLICT),
-    INVALID_REVIEW_RESULT("INV_034", "검토 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST);
+    INVALID_REVIEW_RESULT("INV_034", "검토 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    // 내부자 사건 (#670)
+    INSIDER_CASE_NOT_FOUND("INV_035", "내부자 사건이 없습니다.", HttpStatus.NOT_FOUND),
+    INSIDER_CASE_CLOSED("INV_036", "이미 판정한 내부자 사건입니다.", HttpStatus.CONFLICT),
+    INSIDER_CASE_HAS_OPEN_FDS_CASES(
+            "INV_037", "이 직원이 맡은 FDS 사건이 남아 있습니다. [담당 현황]에서 먼저 다른 직원에게 넘겨 주세요.", HttpStatus.CONFLICT),
+    INVALID_INSIDER_DECISION("INV_038", "판정 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    INVALID_INSIDER_CASE_STATUS("INV_039", "내부자 사건 상태 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    INSIDER_LOCK_RELEASE_NOT_ALLOWED("INV_040", "징계 요청으로 닫힌 사건만 정지를 풀 수 있습니다.", HttpStatus.CONFLICT),
+    INSIDER_LOCK_ALREADY_RELEASED("INV_041", "이미 정지를 푼 사건입니다.", HttpStatus.CONFLICT),
+    STAFF_HAS_OPEN_INSIDER_CASE("INV_042", "이 직원은 조사 중인 내부자 사건이 있습니다.", HttpStatus.CONFLICT),
+    STAFF_NOT_LOCKED("INV_043", "정지 상태가 아닌 직원입니다.", HttpStatus.CONFLICT),
+    INVALID_LOCK_OUTCOME("INV_044", "정지 해제 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

@@ -46,6 +46,7 @@ function StaffCard({
       <div style={{ color: '#64748b', fontSize: 12 }}>맡은 미종결 사건</div>
       <div style={{ marginTop: 6 }}>
         {!staff.active && <Tag>정지</Tag>}
+        {staff.insiderCaseOpen && <Tag color="red">내부자 조사 중</Tag>}
         {staff.assignOrder === 1 && <Tag color="blue">다음 배정 1순위</Tag>}
       </div>
     </Card>
@@ -156,7 +157,7 @@ export function CaseAssignmentsPage() {
   }
 
   const staffOptions = (overview?.staff ?? [])
-    .filter((s) => s.active && s.staffId !== selected?.staffId)
+    .filter((s) => s.active && !s.insiderCaseOpen && s.staffId !== selected?.staffId)
     .map((s) => ({ value: s.staffId, label: `${s.displayName} (맡은 사건 ${s.openCount}건)` }))
 
   return (
