@@ -2,6 +2,10 @@
 .dw-print-only {
   display: none;
 }
+/* 확인할 것 — 체크한 징후 카드는 화면에서 흐리게. 인쇄는 체크칸이 빠져 이유가 안 보이니 흐리지 않고 "✓ 확인함"을 찍는다 (#662) */
+.dw-check-done {
+  opacity: 0.6;
+}
 
 @media print {
   /* 가로 — 결제 표(최소 960px) · 지난 사건 비교 표가 세로 A4 폭(약 700px)에 들어가지 않아 잘린다 */
@@ -44,6 +48,9 @@
   /* 화면에서 접어 둔 내용은 펼쳐 찍는다 (li는 점 목록 모양 그대로) */
   .dw-report-print .dw-print-only {
     display: revert;
+  }
+  .dw-report-print .dw-check-done {
+    opacity: 1;
   }
   .dw-report-print .ant-collapse-content-inactive,
   .dw-report-print .ant-collapse-content-hidden {

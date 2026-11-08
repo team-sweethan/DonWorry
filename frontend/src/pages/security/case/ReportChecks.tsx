@@ -13,6 +13,7 @@ import {
 import { goToCard } from './goToCard'
 import { SIGNAL_LEVEL } from './signalLevel'
 import { ReportSection } from './ReportSection'
+import './reportPrint.css'
 
 // ② 확인할 것 (#644 PR 3) — 왼쪽 이상 징후 · 오른쪽 정상 근거 반반. 게이지 · 기울기는 그리지 않는다
 // 카드 개수가 무게로 읽히면 주의 징후만 여럿인 정상 손님이 사기처럼 보인다 (#618) — 등급 색이 먼저 보이게
@@ -131,6 +132,7 @@ function SignalSide({
 }
 
 // 체크박스는 정상 사유가 없는 징후에만 — 설명된 징후는 확인할 것을 흐리게 보여 준다
+// 체크한 카드는 화면에서 흐리게(dw-check-done), 인쇄는 체크칸이 빠지니 흐림 대신 "✓ 확인함" (#662, reportPrint.css)
 function SignalCard({
   s,
   fact,
@@ -149,11 +151,11 @@ function SignalCard({
   const target = SIGNAL_CARD[s.key]
   return (
     <div
+      className={checked ? 'dw-check-done' : undefined}
       style={{
         ...cardStyle,
         borderLeft: `4px solid ${tone.line}`,
         background: open ? tone.bg : '#F8FAFC',
-        opacity: checked ? 0.6 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -169,6 +171,14 @@ function SignalCard({
         )}
         <b style={{ fontSize: 14, color: tone.fg }}>{s.label}</b>
         <span style={{ ...pillStyle, color: tone.fg, borderColor: tone.line }}>{tone.text}</span>
+        {checked && (
+          <span
+            className="dw-print-only"
+            style={{ fontSize: 12.5, fontWeight: 600, color: '#166534' }}
+          >
+            ✓ 확인함
+          </span>
+        )}
       </div>
       {(fact || target) && (
         <div style={{ fontSize: 12.5, color: '#475569' }}>
