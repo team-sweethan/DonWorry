@@ -20,6 +20,19 @@ import { caseStatusLabel, dateTime } from '../security/case/caseLabels'
 import { errorText, reasonReady } from './caseAssignmentForm'
 import { ReasonFields } from './ReasonFields'
 
+// 사유 · 메모는 사건 이력에 남아 넘겨받은 직원도 본다 — 조사 사실을 글로 남기지 않게 (#700, ADR-0082 조각 8 후속)
+// 왜 넘겼는지는 [내부자 사건] 기록에 남는다
+function InsiderMemoNotice() {
+  return (
+    <Alert
+      type="warning"
+      showIcon
+      message="내부자 조사 중인 직원의 사건입니다"
+      description="사유와 메모는 사건을 넘겨받는 직원도 사건 이력에서 봅니다. 조사 중이라는 사실은 적지 마세요. 조사 기록은 [내부자 사건]에 남습니다."
+    />
+  )
+}
+
 function StaffCard({
   staff,
   selected,
@@ -272,6 +285,7 @@ export function CaseAssignmentsPage() {
               {target?.assignmentRequestPending && ' 처리 대기 중인 변경 요청은 함께 승인됩니다.'}
             </div>
           </div>
+          {selected?.insiderCaseOpen && <InsiderMemoNotice />}
           <ReasonFields reason={reason} memo={memo} onReason={setReason} onMemo={setMemo} />
         </Space>
       </Modal>
@@ -289,6 +303,11 @@ export function CaseAssignmentsPage() {
           미종결 사건 {cases?.length ?? 0}건을 자동 배정 순서(맡은 사건이 적은 직원 먼저)로 나머지
           직원에게 나눠 넘깁니다. 처리 대기 중인 변경 요청은 함께 승인됩니다.
         </p>
+        {selected?.insiderCaseOpen && (
+          <div style={{ marginBottom: 16 }}>
+            <InsiderMemoNotice />
+          </div>
+        )}
         <ReasonFields reason={reason} memo={memo} onReason={setReason} onMemo={setMemo} />
       </Modal>
     </>
