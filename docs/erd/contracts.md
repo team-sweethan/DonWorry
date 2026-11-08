@@ -2,9 +2,11 @@
 
 [← ERD 안내](README.md) · [관계 그림](relationships.md) · [승인·변경 기록](history.md)
 
-`ea5294e9ece7feb1e1f454fd00c103372a1aecdb`의 ERD README에서 저장 계약을 담당별로 옮겼습니다.
-본문의 날짜·제안 표현·업무 제약은 원문을 유지했습니다. 이 이동은 설계의 채택이나 현재 구현·운영 검증 완료를 뜻하지 않습니다.
-현재 컬럼·타입·제약은 관련 테이블의 CREATE와 이후 ALTER를 함께 확인합니다. 당시 승인·구현·미검증 기록은 각 절의 이력 링크를 봅니다.
+`ea5294e9ece7feb1e1f454fd00c103372a1aecdb`의 ERD README에서 옮긴 계약을 `f7db9cd307067dcaa6a71673f0ad02b3115a8754`의 SQL·관련 코드와 대조했습니다. 범위는 아래 P1~P5 절에 기술된 컬럼·제약·주요 저장 동작이며, 전체 67개 테이블의 모든 업무 경로를 검증한 문서는 아닙니다.
+
+이슈별 제목·날짜는 기존 링크와 도입 맥락을 유지합니다. 특히 제목의 “초안”·“제안”은 작성 당시 이름이며, 본문에서 확인한 현재 구현과 설계 채택 여부를 구분합니다. ADR 상태나 담당자 승인 요건은 바꾸지 않습니다. 당시 승인·검증·Notion 기록은 각 절의 이력 링크에 보존합니다.
+
+현재 컬럼·타입·제약은 CREATE와 이후 ALTER를 합쳐 확인합니다. SQL 제약과 서비스가 적용하는 업무 규칙을 구분하며, 이번 대조는 DB 적용·테스트 실행·운영 검증 결과가 아닙니다. P6의 상세 계약은 [README 담당별 문서](README.md#담당별-상세-문서)를 따릅니다.
 
 ## 목차
 
@@ -20,6 +22,8 @@
 
 [승인·도입 기록](history.md#129-p1-변경-계약-2026-10-25). 아래는 최초 계약이며, 수행자 타입과 NULL 허용의 후속 변경은 [#517](#517-p1-시스템-수행자-2026-11-04)을 함께 봅니다.
 
+SQL 근거: [비밀번호 변경 요구](../../backend/src/main/resources/db/migration/V20261025_121650__add_password_change_required.sql) · [역할 CHECK](../../backend/src/main/resources/db/migration/V20261025_121656__add_user_role_merchant_check.sql) · [감사 이력 생성](../../backend/src/main/resources/db/migration/V20261025_121657__create_admin_change_histories.sql).
+
 - `platform_users.password_change_required`: BOOLEAN NOT NULL DEFAULT FALSE. 신규·초기화 계정 TRUE, 본인 비밀번호 변경 후 FALSE.
 - `platform_users` CHECK: OPERATOR는 merchant_id 필수, ADMIN·SECURITY_STAFF는 NULL.
 - 신규 `admin_change_histories`: history_id BIGINT AUTO_INCREMENT PK, actor_user_id BIGINT NOT NULL FK platform_users, target_user_id BIGINT NULL FK platform_users, target_merchant_id BIGINT NULL FK merchants, change_type VARCHAR(40), before_data·after_data JSON NULL, created_at DATETIME(6) UTC. 대상 계정·가맹점 중 하나만 지정한다. INSERT 전용이며 비밀번호·해시는 저장하지 않는다.
@@ -30,13 +34,15 @@
 
 [승인·도입 기록](history.md#517-p1-시스템-수행자-2026-11-04).
 
-새 migration은 `admin_change_histories.actor_type VARCHAR(20) NOT NULL DEFAULT 'STAFF'`를 추가해 기존 행을 STAFF로 채우고 `actor_user_id BIGINT NULL`로 전환한다. 기존 FK는 유지한다.
+[후속 migration](../../backend/src/main/resources/db/migration/V20261104_134638__add_admin_change_history_actor_type.sql)은 `admin_change_histories.actor_type VARCHAR(20) NOT NULL DEFAULT 'STAFF'`를 추가해 기존 행을 STAFF로 채우고 `actor_user_id BIGINT NULL`로 전환한다. 기존 FK는 유지한다. 현재 스키마를 확인할 때 #129의 최초 NOT NULL 설명만 적용하지 않는다.
 `ck_admin_change_histories_actor`는 STAFF+ID 있음 또는 SYSTEM+ID 없음만 허용한다. 기존 대상 CHECK·FK·인덱스·JSON·보존 정책은 유지한다.
 기존 계정·가맹점·신청 경로는 STAFF를 명시하고, FDS 정지는 SYSTEM/NULL과 `USER_SUSPENDED_BY_FDS`로 구분한다. 운영 DB 적용 완료를 뜻하지 않는다.
 
 ### #219 P1 HMAC nonce 계약 (2026-10-27)
 
 [승인·도입 기록](history.md#219-p1-hmac-nonce-계약-2026-10-27).
+
+현재 저장 근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261027_144924__create_merchant_request_nonces.sql), [인증 순서·만료 시각](../../backend/src/main/java/com/donworry/identity/service/MerchantHmacService.java), [독립 트랜잭션 저장](../../backend/src/main/java/com/donworry/identity/service/DatabaseMerchantNonceStore.java).
 
 | 컬럼 | 타입·조건 | 의미 |
 | --- | --- | --- |
@@ -48,12 +54,14 @@
 `UNIQUE(merchant_id, nonce)`로 동시 재전송을 한 번만 소비한다. `INDEX(expires_at, request_nonce_id)`로 만료 행만 배치 삭제한다.
 가맹점 FK는 같은 P1 소유이고 삭제 연쇄는 없다. 원문 키·서명·요청 본문을 저장하지 않는다.
 서명 확인 후 업무 실행 전에 독립 커밋하므로 업무 롤백·서버 재시작으로 nonce가 복구되지 않는다. 만료 행은 금융·조사 이력이 아닌 단기 보안 기록으로 물리 삭제한다.
-기존 `merchants.secret_reference`는 Entity 매핑만 추가한다. 기존 migration·다른 담당 테이블은 변경하지 않는다.
+`merchants.secret_reference`의 Entity 매핑은 #219 당시 변경이다. 현재 키 조회는 [MerchantSecretService](../../backend/src/main/java/com/donworry/identity/service/MerchantSecretService.java)가 `merchant_integrations`의 암호문을 사용하며, `secret_reference`를 인증 키 fallback으로 쓰지 않는다. 후속 키 관리 계약은 [#354 PR B](../identity/354-pr-b-key-design.md)를 본다.
 세부 계약과 검증은 [#219 설계](../identity/219-merchant-hmac.md)와 [ADR-0037](../decisions/0037-merchant-hmac-authentication.md)을 따른다.
 
 ### #525 P1 사장님 403 원본 기록 (2026-11-04)
 
 [승인·도입 기록](history.md#525-p1-사장님-403-원본-기록-2026-11-04).
+
+SQL 근거: [생성](../../backend/src/main/resources/db/migration/V20261104_153346__create_operator_access_denials.sql)과 아래 #528 인덱스 추가. IP 보관 구현은 [정리 서비스](../../backend/src/main/java/com/donworry/identity/service/OperatorAccessDenialRetentionService.java)를 대조했다.
 
 신규 `operator_access_denials`는 P1 소유이며 사용자·가맹점 모두 같은 P1 FK로 연결하고 삭제 연쇄는 두지 않는다.
 
@@ -80,6 +88,8 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 ### #604 P1 보안 직원 접근 기록 (2026-11-06)
 
 [승인·도입 기록](history.md#604-p1-보안-직원-접근-기록-2026-11-06).
+
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261106_215350__create_staff_access_events.sql), [허용·거부 기록의 트랜잭션](../../backend/src/main/java/com/donworry/identity/service/StaffAccessService.java).
 
 신규 `staff_access_events`는 P1 소유다. 직원 · 가맹점은 같은 P1 FK로 연결하고, `case_id`(P3) · `payment_id`(P5)는 논리 참조다.
 이름 · 전화 같은 원문 칸은 없다. 자유 글 칸을 두지 않는다.
@@ -109,6 +119,8 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 
 [승인·도입 기록](history.md#647-p1-보안-직원-계정-보안-정지-2026-11-07).
 
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261107_233256__create_staff_account_locks.sql), [정지·해제 서비스](../../backend/src/main/java/com/donworry/identity/service/StaffAccountLockService.java).
+
 정지하면 `platform_users.status`를 `SUSPENDED`로 바꾸고(이미 `INACTIVE`면 유지), 이 표에 한 줄을 남긴다. 판정으로 풀 때 같은 줄에 해제를 적는다.
 `platform_users.status`는 CHECK 없는 `VARCHAR(20)`이라 `SUSPENDED` 추가에 migration이 없다. 원문(이름 · 전화) 칸은 없다.
 
@@ -126,16 +138,21 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | released_by | BIGINT NULL FK platform_users | 해제한 관리자. RELEASED일 때만 필수 (CHECK) |
 | release_case_id | BIGINT NULL | 해제 근거 사건, P3 내부자 사건 논리 참조 |
 | release_decision | VARCHAR(40) NULL | P3 판정 코드. identity는 해석하지 않는다 |
-| release_outcome | VARCHAR(20) NULL | RESTORE(→ ACTIVE) / DEACTIVATE(→ INACTIVE). RELEASED일 때만 필수 (CHECK) |
+| release_outcome | VARCHAR(20) NULL | RESTORE / DEACTIVATE. RELEASED의 결과 값(CHECK와 Entity 규칙). 계정 상태 적용 조건은 아래 설명 참조 |
 | open_key | BIGINT 생성 칼럼 | OPEN일 때만 staff_id. UNIQUE로 사람당 열린 정지 1개 (엔티티에 매핑하지 않음) |
 
 인덱스는 `idx_staff_account_locks_staff_time(staff_id, locked_at)`.
 정지는 독립 트랜잭션으로 커밋한 뒤 세션을 만료한다(부른 쪽 롤백과 무관). 해제는 부른 쪽 판정 트랜잭션에 참여한다 (ADR-0084).
+해제 당시 계정이 `SUSPENDED`인 경우에만 RESTORE는 ACTIVE, DEACTIVATE는 INACTIVE로 바꾼다. 이미 INACTIVE인 계정은 RESTORE 결과라도 되살리지 않는다. 결과 코드만으로 계정이 반드시 ACTIVE가 된다고 해석하지 않는다.
 행은 지우지 않는다(조사 기록).
 
 ## P2 fds
 
 ### 룰 변경 요청과 차단 해제 기록
+
+근거: [룰 관리 생성](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql) · [rule_code 길이 ALTER](../../backend/src/main/resources/db/migration/V20261104_152441__create_operator_access_detection_tables.sql) · [차단 해제 컬럼 ALTER](../../backend/src/main/resources/db/migration/V20261030_114028__add_fds_blocklist_deactivation.sql) · [차단 상태 전이](../../backend/src/main/java/com/donworry/fds/entity/FdsBlocklistEntry.java).
+
+현재 `fds_rule_change_requests.rule_code`는 `VARCHAR(100) NOT NULL`이다. 최초 생성의 VARCHAR(10)만 보고 길이를 정하지 않는다. 정책과의 참조는 FK 없는 논리 참조다.
 
 `fds_rule_change_requests`는 요청·처리 사용자 ID와 당시 표시 이름, 룰 끄기 요청 사유를 함께 보존한다. 사용자 이름은 Identity 소유 `platform_users`를 직접 조인하지 않고 FDS 저장 스냅샷으로 조회하며, 요청 IP는 저장하지 않는다.
 
@@ -146,6 +163,8 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 ### #608 P3 FDS 사건 자동 배정과 담당 변경 (2026-11-06)
 
 [승인·도입 기록](history.md#608-p3-fds-사건-자동-배정과-담당-변경-2026-11-06).
+
+SQL 근거: [사건 담당 ALTER·배정 잠금](../../backend/src/main/resources/db/migration/V20261106_225206__add_security_case_assignment.sql) · [담당 변경 요청](../../backend/src/main/resources/db/migration/V20261106_225208__create_case_assignment_requests.sql) · [원문 열람 검토](../../backend/src/main/resources/db/migration/V20261107_024052__create_raw_view_reviews.sql).
 
 세 가지 모두 P3 소유다. 직원 · ADMIN ID는 P1 `platform_users`의 논리 참조(FK 없음)이고, 요청의 `case_id`만 같은 P3 FK다.
 
@@ -167,14 +186,16 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | request_id | BIGINT AUTO_INCREMENT PK | |
 | case_id | BIGINT NOT NULL FK security_cases | |
 | requested_by_staff_id | BIGINT NOT NULL | 요청한 담당 직원 (로그인 세션) |
-| reason | VARCHAR(30) NOT NULL | CONFLICT_OF_INTEREST(이해충돌) / WORKLOAD(업무 과다) / PERSONAL(개인 사유) / OTHER(기타). CHECK 없음 — ADMIN 전용 사유는 조각 8에서 더한다 |
+| reason | VARCHAR(30) NOT NULL | CONFLICT_OF_INTEREST(이해충돌) / WORKLOAD(업무 과다) / PERSONAL(개인 사유) / OTHER(기타). CHECK 없음. 현재 Enum 값은 아래 설명 참조 |
 | memo | VARCHAR(200) NULL | 업무 메모, OTHER면 필수 (서비스). 개인정보 금지 안내 |
 | status | VARCHAR(20) NOT NULL | PENDING / APPROVED / REJECTED (CHECK) |
-| requested_at · reviewed_at | DATETIME(6) | UTC |
+| requested_at · reviewed_at | DATETIME(6) NOT NULL · NULL | UTC. 요청 시각 필수, 처리 시각은 처리 전 NULL |
 | reviewed_by_admin_id · reviewed_by_admin_name | BIGINT · VARCHAR(100) NULL | 처리 ADMIN과 그때의 표시 이름 |
 | review_memo | VARCHAR(200) NULL | 거절이면 필수 (서비스) |
 | new_assignee_staff_id | BIGINT NULL | 승인일 때 새 담당 |
 | pending_case_id | 생성 칼럼 UNIQUE | PENDING일 때만 case_id — 사건당 대기 1건 |
+
+[AssignmentChangeReason](../../backend/src/main/java/com/donworry/investigation/entity/AssignmentChangeReason.java)의 현재 값은 위 네 가지다. 원문의 “조각 8에서 ADMIN 전용 사유 추가”는 예정 설명이며 현재 Enum에 추가됐다는 뜻이 아니다. 여기서 새 사유나 정책을 정하지 않는다.
 
 `raw_view_reviews` (#619) — 담당 보안 직원이 열린 사건 결제의 주문자 전화 원문을 볼 때마다 1행. ADMIN 사후 검토용이고 원문은 담지 않는다. 물리 삭제하지 않는다.
 
@@ -187,7 +208,7 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | dispute_ref | VARCHAR(100) NOT NULL | 이의제기 참조 번호 (업무 메모) |
 | merchant_contact_attempt | VARCHAR(200) NOT NULL | 가맹점 연락 시도 내역 (업무 메모) |
 | reason | VARCHAR(500) NOT NULL | 사유 (업무 메모). 화면에서 고객 이름 · 번호를 적지 않도록 안내 |
-| viewed_at · reviewed_at | DATETIME(6) | UTC |
+| viewed_at · reviewed_at | DATETIME(6) NOT NULL · NULL | UTC. 열람 시각 필수, 검토 시각은 검토 전 NULL |
 | status | VARCHAR(30) NOT NULL | PENDING / APPROPRIATE(적절) / EXPLANATION_REQUESTED(소명 요청) (CHECK) |
 | reviewed_by_admin_id · reviewed_by_admin_name | BIGINT · VARCHAR(100) NULL | 검토 ADMIN과 그때의 표시 이름 |
 | review_memo | VARCHAR(200) NULL | 검토 메모 |
@@ -198,7 +219,9 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 
 [승인·도입 기록](history.md#670-p3-내부자-사건--관리자-판정--징계-사건-정지-해제-2026-11-08).
 
-두 표 모두 P3 소유다. 직원 · ADMIN ID는 P1 `platform_users`, `alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음)이고, `insider_case_alerts.insider_case_id`만 같은 P3 FK다. 원문(이름 · 전화) 칸은 없다.
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261108_123006__create_insider_cases.sql), [사건 저장·판정·해제](../../backend/src/main/java/com/donworry/investigation/service/InsiderCaseService.java), [경보 사본 Entity](../../backend/src/main/java/com/donworry/investigation/entity/InsiderCaseAlert.java).
+
+두 표 모두 P3 소유다. 직원 · ADMIN ID는 P1 `platform_users`, `alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음)이고, `insider_case_alerts.insider_case_id`만 같은 P3 FK다. 고객 이름·전화 원문 칸은 없다. 처리 ADMIN 표시 이름은 아래 컬럼에 당시 값으로 보존한다.
 사건 열기 · 판정 · 정지 해제는 `case_assignment_locks`의 `FDS_CASE` 행을 첫 문장에서 잡아 FDS 사건 배정과 한 줄로 선다 — 사건이 열린 직원은 배정 · 담당 변경 후보에서 빠진다.
 
 `insider_cases` — 높음 이상 내부자 경보를 직원 한 명당 열린 사건 하나로 묶는다. 물리 삭제하지 않는다.
@@ -210,17 +233,19 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | status | VARCHAR(20) NOT NULL | OPEN / CLOSED (CHECK) |
 | severity | VARCHAR(20) NOT NULL | HIGH / CRITICAL — 묶인 경보 중 가장 높은 등급, 올라가기만 한다 (CHECK) |
 | opened_at · updated_at | DATETIME(6) NOT NULL | UTC |
-| decision | VARCHAR(30) NULL | NORMAL_DUTY(정상 업무) / CAUTION_NOTICE(주의 조치) / DISCIPLINE_REQUEST(징계 요청). CLOSED일 때만 필수 (CHECK) |
+| decision | VARCHAR(30) NULL | NORMAL_DUTY(정상 업무) / CAUTION_NOTICE(주의 조치) / DISCIPLINE_REQUEST(징계 요청). CLOSED 전이 시 Entity가 필수 검사, SQL CHECK는 상태·허용값 조합 검사 |
 | decision_memo | VARCHAR(200) NULL | 판정 메모. 개인정보 금지 안내 |
 | decided_by_admin_id · decided_by_admin_name | BIGINT · VARCHAR(100) NULL | 판정 ADMIN과 그때의 표시 이름. CLOSED일 때 ID 필수 (CHECK) |
 | decided_at | DATETIME(6) NULL | UTC. CLOSED일 때 필수 (CHECK) |
 | lock_released_at | DATETIME(6) NULL | 징계 사건의 나중 정지 해제 시각. DISCIPLINE_REQUEST일 때만 (CHECK) |
 | lock_released_by_admin_id · lock_released_by_admin_name | BIGINT · VARCHAR(100) NULL | 해제 ADMIN |
 | lock_release_reason | VARCHAR(200) NULL | 해제 사유 (필수, 개인정보 금지 안내) |
-| lock_release_outcome | VARCHAR(20) NULL | RESTORE(사용 중 복귀) / DEACTIVATE(비활성) (CHECK) |
+| lock_release_outcome | VARCHAR(20) NULL | RESTORE / DEACTIVATE (CHECK). 해제 기록 시 Entity가 필수 검사. 실제 계정 전이는 P1의 현재 상태 조건을 따름 |
 | open_staff_id | BIGINT 생성 칼럼 | OPEN일 때만 staff_id. UNIQUE로 사람당 열린 사건 1개 (엔티티에 매핑하지 않음) |
 
 인덱스 (status, updated_at, insider_case_id) — 목록, (staff_id, opened_at) — 직원별 지난 사건.
+
+판정·해제 결과의 필수 값과 전이 조건은 [InsiderCase](../../backend/src/main/java/com/donworry/investigation/entity/InsiderCase.java)의 `decide`·`recordLockRelease`도 함께 적용한다. NULL 허용 컬럼의 `IN (...)` CHECK만으로 NOT NULL과 같은 보장을 한다고 해석하지 않는다. P1 해제 결과의 계정 적용 조건은 [#647](#647-p1-보안-직원-계정-보안-정지-2026-11-07)을 본다.
 
 `insider_case_alerts` — 사건에 묶인 경보 한 줄. 같은 경보가 다시 와도(재전달 · 등급 상승) 한 줄이다. 물리 삭제하지 않는다.
 
@@ -228,7 +253,7 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | --- | --- | --- |
 | alert_id | BIGINT PK | P2 `insider_alerts` 논리 참조 (자동 생성 아님) |
 | insider_case_id | BIGINT NOT NULL FK insider_cases | |
-| rule_code | VARCHAR(20) NOT NULL | `InsiderRule` (예: INS_01) — 화면용 사본 |
+| rule_code | VARCHAR(20) NOT NULL | `InsiderRule`의 Enum 이름(예: INS_01)을 저장하는 사본. 화면 표시 코드 SEC-INS-01과 구분 |
 | severity | VARCHAR(20) NOT NULL | HIGH / CRITICAL (CHECK) — 올라가기만 한다 |
 | summary | VARCHAR(300) NOT NULL | P2 요약 사본 (건수 · 규칙만, 원문 · IP 없음) |
 | raised_at · linked_at | DATETIME(6) NOT NULL | UTC |
@@ -241,8 +266,10 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 
 [승인·도입 기록](history.md#675-p4-내부자-사건-해제-검토-보고서-2026-11-08).
 
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261108_134720__create_ai_insider_reports.sql), [커밋 후 수신](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportListener.java), [사실 집계·실패 판 저장](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportService.java).
+
 P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음, [5절](README.md#5-모듈-간-참조-규칙) P3 ↔ P4 예외와 같은 방식)다.
-사건이 열리거나 차단(INS-05) 경보가 붙은 것이 커밋된 뒤 코드가 사실을 세어 판을 쌓는다. 보고서 실패는 사건 · 정지 상태를 바꾸지 않는다.
+사건이 열리거나 내보내기 차단(`InsiderRule.INS_05`, 기준 커밋의 표시 코드 `SEC-INS-05`) 경보가 붙은 것이 커밋된 뒤 코드가 사실을 세어 판을 쌓는다. 보고서 실패는 사건 · 정지 상태를 바꾸지 않는다.
 
 `ai_insider_reports` — 해제 검토 보고서 한 판. 판별로 쌓고 고치거나 지우지 않는다. FDS 사건 보고서 `ai_reports`와 대상 · 만드는 방식이 달라 따로 둔다.
 
@@ -262,6 +289,8 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 ### #141 P5 직원 조치 저장 설계 초안
 
 [승인·도입 기록](history.md#141-p5-직원-조치-저장-설계-초안).
+
+현재 저장 근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261025_160810__create_payment_actions_table.sql), [PaymentAction](../../backend/src/main/java/com/donworry/payment/entity/PaymentAction.java), [결과 ID 매핑](../../backend/src/main/java/com/donworry/payment/service/PaymentActionMapping.java). 제목의 “초안”은 기존 문서 이름이며 아래 구조는 SQL에 존재한다. 설계 승인 경위는 위 이력과 [ADR-0027](../decisions/0027-payment-actions.md)을 따른다.
 
 추가 테이블: `payment_actions`, 소유: P5. 직원 판정 조치만 저장하며 ALLOW 자동 매입·최초 승인에는 행을 만들지 않는다.
 
@@ -289,7 +318,9 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 
 ### #149 P5 CakeShop 결제 저장 제안
 
-[승인·도입 기록](history.md#149-p5-cakeshop-결제-저장-제안). 아래 표의 제안 표현은 작성 당시 기록을 유지한 것입니다. 현재 스키마는 CREATE와 이후 ALTER로 확인합니다.
+[승인·도입 기록](history.md#149-p5-cakeshop-결제-저장-제안). 제목의 “제안”은 기존 링크와 도입 맥락을 유지합니다. 아래는 기준 커밋의 현재 SQL·코드 설명이며 새로운 설계 채택 선언이 아닙니다.
+
+SQL 근거: [주문 생성](../../backend/src/main/resources/db/migration/V20261025_210955__create_payment_orders_table.sql) · [요청 생성](../../backend/src/main/resources/db/migration/V20261025_210956__create_payment_requests_table.sql) · [FDS 입력 ALTER](../../backend/src/main/resources/db/migration/V20261029_141011__add_payment_request_risk_signals.sql) · [결제 상태 정보 ALTER](../../backend/src/main/resources/db/migration/V20261025_210954__add_payment_status_metadata.sql).
 
 #### payment_orders — 주문 단위 접수·직렬화 기준
 
@@ -297,8 +328,8 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 | --- | --- | --- |
 | payment_order_id | BIGINT AUTO_INCREMENT PK | P5 내부 주문 접수 ID |
 | merchant_id | BIGINT NOT NULL | 인증된 P1 가맹점 논리 참조 |
-| order_ref | VARCHAR(100) NOT NULL | CakeShop 주문번호, 대소문자 구분 collation 제안 |
-| customer_ref | VARCHAR(100) NOT NULL | 합의 후 사용할 내부 고객 참조 |
+| order_ref | VARCHAR(100) COLLATE utf8mb4_bin NOT NULL | CakeShop 주문번호, 대소문자 구분 |
+| customer_ref | VARCHAR(100) COLLATE utf8mb4_bin NOT NULL | 내부 고객 참조, 대소문자 구분 |
 | amount | BIGINT NOT NULL | 주문의 확정 결제 금액, 양수 |
 | order_created_at | DATETIME(6) NOT NULL | CakeShop 최초 주문 생성 시각 |
 | payment_deadline_at | DATETIME(6) NOT NULL | 최초 주문 생성 +10분, 새 시도 접수 제한 |
@@ -306,6 +337,8 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 | created_at | DATETIME(6) NOT NULL | P5 주문 접수 기준행 생성 시각 |
 
 UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_order_id, merchant_id). CHECK: merchant_id/amount >0, last_attempt_no >=0, payment_deadline_at > order_created_at. 정확한 +10분과 주문 불변 입력은 서비스에서 검사한다. 다른 담당 merchants로 FK를 걸지 않는다. PK 행 잠금으로 같은 주문의 요청들을 직렬화한다. 최신 결제 포인터/상태를 복제하지 않고 요청행의 최대 attempt_no로 찾는다.
+
+주문번호·고객 참조의 공백뿐인 값도 SQL CHECK가 막는다. +10분 생성·시도 순번은 [PaymentOrder](../../backend/src/main/java/com/donworry/payment/entity/PaymentOrder.java), 주문 잠금·재요청 불변 입력·기존 주문 충돌은 [접수 트랜잭션](../../backend/src/main/java/com/donworry/payment/service/PaymentRequestTransactionService.java)을 따른다.
 
 #### payment_requests — 결제 시도별 식별·재개 정보
 
@@ -341,18 +374,22 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 
 #### payments 추가 제안
 
+기존 제목을 유지한 현재 구현 설명이다. `status_changed_at`·`decline_code`·아래 CHECK와 비고유 인덱스는 위 상태 정보 ALTER에 존재한다.
+
 | 컬럼 | 타입·NULL | 의미 |
 | --- | --- | --- |
 | status_changed_at | DATETIME(6) NULL | 현재 상태로 전이한 P5 시각. 과거 행은 알 수 없으면 NULL |
 | decline_code | VARCHAR(100) NULL | 외부용 최종 DENIED/DECLINED 사유 |
 
-신규 결제는 생성 시 status_changed_at=created_at. 기존 상태 메서드와 ALLOW/직원 CAPTURE·VOID 완료까지 모두 반영한다. 동일 상태 재전달은 기존 시각 보존. decline_code는 FDS_REJECTED/AUTHORIZATION_DECLINED 제안이며 그 외 상태 NULL. 기존 행은 사유를 추정 백필하지 않으므로 거절 상태에서도 NULL 허용한다. 해당 상태/코드 조합 CHECK를 추가하는 안이다.
+신규 결제는 생성 시 status_changed_at=created_at. [Payment](../../backend/src/main/java/com/donworry/payment/entity/Payment.java)의 상태 전이는 ALLOW/직원 CAPTURE·VOID 완료를 포함해 시각을 갱신하며, 동일 상태 재전달은 기존 시각을 보존한다. decline_code는 DENIED에 FDS_REJECTED, DECLINED에 AUTHORIZATION_DECLINED를 기록하고 그 외 상태는 NULL이다. SQL CHECK는 NULL 또는 이 두 상태/코드 조합을 허용한다. 기존 행의 사유를 추정 백필하지 않으므로 거절 상태에서도 NULL을 허용한다.
 
-기존 조회·거절·완료 API의 원래 시각을 대체하지 않는다. 주문·키 신규 구조는 과거 데이터 자동 편입 없이 도입하고 동일 가맹점/주문번호 과거 결제가 있으면 새 HTTP 접수를 막는다. 기존 조회를 위한 payments(merchant_id, order_ref) 비고유 인덱스도 제안한다. 기존 orders 중복 데이터를 삭제하거나 UNIQUE로 강제하지 않는다.
+기존 조회·거절·완료 API의 원래 시각을 대체하지 않는다. 주문·키 구조는 과거 데이터 자동 편입 없이 도입됐으며, 접수 트랜잭션은 같은 가맹점/주문번호의 미편입 과거 결제를 찾으면 `LEGACY_ORDER_EXISTS`로 막는다. `idx_payments_merchant_order(merchant_id, order_ref)`는 비고유 인덱스다. 이 ALTER는 기존 결제의 주문번호 중복 데이터를 삭제하거나 UNIQUE로 강제하지 않는다.
 
 ### #602 P5 주문자 연락처 (2026-11-06)
 
 [승인·도입 기록](history.md#602-p5-주문자-연락처-2026-11-06).
+
+현재 스키마 근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261106_222538__create_payment_order_contacts.sql). 아래 보관·파기 계획을 실제 배치 실행 완료로 해석하지 않는다.
 
 신규 `payment_order_contacts`는 P5 소유다. `session_id`는 같은 P5 `payment_sessions`의 FK이자 PK(세션당 최대 1행), `merchant_id`는 P1 `merchants` 논리 참조다.
 이름 · 전화 원문 칸은 없다. 받기 규칙과 키는 [#602 문서](../payment/602-order-contacts.md).

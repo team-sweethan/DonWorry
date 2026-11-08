@@ -1,7 +1,7 @@
 # ERD
 
 테이블 소유와 저장 계약을 찾는 안내입니다. 구조 정리 기준 커밋은 `ea5294e9ece7feb1e1f454fd00c103372a1aecdb`입니다.
-소유 표의 테이블 목록은 `f7db9cd307067dcaa6a71673f0ad02b3115a8754`의 migration SQL과 대조해 보완했습니다. 공통 규칙·관계 그림·저장 계약의 전체 내용 대조는 후속 작업입니다.
+소유 표의 테이블 목록과 [물리 FK 관계](relationships.md)는 `f7db9cd307067dcaa6a71673f0ad02b3115a8754`의 migration SQL과 대조했습니다. [저장 계약](contracts.md)의 대조 범위와 미검증 사항은 해당 문서와 [작업 계획](plan.md)에 기록했습니다. 공통 규칙의 모든 예외·전체 논리 참조·담당별 상세 문서 전체를 검증한 것은 아닙니다.
 
 ## 목차
 
@@ -108,7 +108,7 @@ migration 열은 생성·관련 변경 SQL을 찾는 색인입니다. 한 파일
 | 관계 | 참조 방식 | 예시 |
 | --- | --- | --- |
 | 같은 소유 담당의 테이블끼리 | 물리 FK(외래 키 제약을 DB에 건다) | `security_cases` ↔ `case_payments` (둘 다 P3) |
-| 소유 담당이 다른 테이블 | 논리 참조(ID 값만 저장, FK 없음) | `fds_evaluations.payment_id`, `fds_evaluations.merchant_id` (P2 → P5) |
+| 소유 담당이 다른 테이블 | 논리 참조(ID 값만 저장, FK 없음) | `fds_evaluations.payment_id` (P2 → P5), `fds_evaluations.merchant_id` (P2 → P1) |
 | 같은 `investigation` 모듈 안의 P3 ↔ P4 | 논리 참조 (예외) | `ai_reports` ↔ `security_cases` · `payment_decisions`, `ai_insider_reports` ↔ `insider_cases` |
 
 - 논리 참조 대상의 존재 확인은 DB가 아니라 소유 담당 모듈의 공개 `api/`로 합니다
