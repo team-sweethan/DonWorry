@@ -24,6 +24,13 @@ const ruleNames: Record<string, string> = {
   R08: '거절 후 재시도',
   SEC_OPERATOR_OUT_OF_ROLE_REPEAT: '역할 범위 밖 API 반복 호출',
   SEC_OPERATOR_PERMISSION_MISSING_REPEAT: '권한 부족 API 반복 호출',
+  // 내부자 규칙 (#685) — 백엔드 InsiderRule 이름과 같게. INS_05는 끌 수 없어 이력에 나오지 않는다
+  INS_01: '담당 밖 접근 반복',
+  INS_03: '원문 열람 집중',
+  INS_06: '경보 겹침',
+  INS_07: '처음 보는 브라우저 로그인 직후 원문',
+  INS_08: '업무 대비 거래 목록 · 내보내기 대량 조회',
+  INS_09: '담당 무관 고객 반복 검색',
 }
 
 function ruleName(ruleCode: string) {
@@ -37,7 +44,7 @@ function searchValue(value: string) {
 }
 
 function RuleTypeTag({ ruleCode }: { ruleCode: string }) {
-  const accountRule = ruleCode.startsWith('SEC_')
+  const accountRule = ruleCode.startsWith('SEC_') || ruleCode.startsWith('INS_')
   return <Tag color={accountRule ? 'purple' : 'blue'}>{accountRule ? '계정 룰' : '결제 룰'}</Tag>
 }
 

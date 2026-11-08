@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleCatalog,
   getFdsRulePolicies,
+  getInsiderRuleCatalog,
   getOperatorAccessRuleCatalog,
   requestRuleDisable,
   setFdsRuleActive,
@@ -98,7 +99,9 @@ function RuleCard({
       setSubmitting(false)
     }
   }
-  const isAccountRule = rule.ruleCode.startsWith('SEC_')
+  const isAccountRule = rule.ruleCode.startsWith('SEC_') || rule.ruleCode.startsWith('INS_')
+  // 정책 줄이 없는 규칙은 끄기 · 켜기 주소가 없다 — SEC-INS-05(높음 경보 중 내보내기 차단)가 그렇다 (#685)
+  const alwaysOn = policy === undefined
   return (
     <Card
       className={`dw-rule-card ${isAccountRule ? 'dw-rule-card-account' : 'dw-rule-card-payment'}${active ? '' : ' dw-rule-card-inactive'}`}
@@ -148,7 +151,9 @@ function RuleCard({
           <small>마지막 {formatLastMatchedAt(rule.lastMatchedAt)}</small>
         </div>
         <FrequencySparkline counts={rule.dailyMatchCounts} />
-        {isAdmin ? (
+        {alwaysOn ? (
+          <Tag className="dw-rule-always-on">항상 켜짐</Tag>
+        ) : isAdmin ? (
           <Switch
             className="dw-rule-policy-switch"
             checked={active}
@@ -296,7 +301,7 @@ function AccountRuleOverview() {
           <strong>계정 룰 · 탐지 + 방어</strong>
           <Typography.Text type="secondary">
             계정이 뚫리면 공격자가 의심 결제를 허용하거나 룰을 끌 수 있어, 반복 접근 거부를 탐지하고
-            계정을 보호합니다.
+            계정을 보호합니다. 보안 직원이 권한을 넘어 고객 정보를 보는지도 함께 살핍니다.
           </Typography.Text>
         </div>
         <Tag>관리자 전용</Tag>
@@ -309,6 +314,10 @@ function AccountRuleOverview() {
         <div>
           <strong>권한 변경 통제</strong>
           <span>필요 권한 없이 반복한 API 호출을 탐지합니다.</span>
+        </div>
+        <div>
+          <strong>직원 감시</strong>
+          <span>담당 밖 접근 · 원문 열람 집중 · 대량 조회를 탐지합니다.</span>
         </div>
         <div>
           <strong>정책 제어</strong>
@@ -341,14 +350,15 @@ export function RuleCatalogPage() {
       setLoading(true)
       setError(null)
       try {
-        const [catalog, operatorAccessCatalog, rulePolicies] = await Promise.all([
+        const [catalog, operatorAccessCatalog, insiderCatalog, rulePolicies] = await Promise.all([
           getFdsRuleCatalog(),
           isAdmin ? getOperatorAccessRuleCatalog() : Promise.resolve([]),
+          isAdmin ? getInsiderRuleCatalog() : Promise.resolve([]),
           getFdsRulePolicies(),
         ])
         if (active) {
           setRules(catalog)
-          setAccountRules(operatorAccessCatalog)
+          setAccountRules([...operatorAccessCatalog, ...insiderCatalog])
           setPolicies(rulePolicies)
         }
       } catch {
@@ -409,6 +419,10 @@ export function RuleCatalogPage() {
               />
             ))}
           </section>
+          <div className="dw-rule-note">
+            내부자 규칙(SEC-INS)은 보안 직원 본인을 살피므로 관리자만 켜고 끕니다. SEC-INS-05는
+            마지막 방어 장치라 끌 수 없습니다. 끈 규칙을 다시 켜면 켠 뒤의 접근 기록부터 셉니다.
+          </div>
         </>
       ) : (
         <>

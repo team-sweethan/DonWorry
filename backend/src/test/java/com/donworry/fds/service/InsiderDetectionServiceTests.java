@@ -15,9 +15,11 @@ import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.api.StaffCaseScope;
 import com.donworry.fds.api.StaffCaseScopeReader;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
+import com.donworry.fds.entity.FdsRulePolicy;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertEvidence;
 import com.donworry.fds.entity.InsiderAlertStatus;
+import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.CurrentStaff;
@@ -48,6 +50,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.json.JsonMapper;
@@ -81,8 +84,19 @@ class InsiderDetectionServiceTests {
             .ins09HighCustomers(30)
             .scopeClosedLookback(Duration.ofDays(30))
             .build();
+    private final FdsRulePolicyRepository rulePolicies = mock(FdsRulePolicyRepository.class);
     private final InsiderDetectionService service = new InsiderDetectionService(
-            alerts, evidence, reader, publisher, properties, loginReader, scopeReader, mock(StaffAccountLocker.class));
+            alerts,
+            evidence,
+            reader,
+            publisher,
+            properties,
+            loginReader,
+            scopeReader,
+            mock(StaffAccountLocker.class),
+            rulePolicies);
+    // 규칙 켜짐 · 꺼짐 줄 (#685). 비어 있으면 모든 규칙이 켜진 것
+    private final List<FdsRulePolicy> policyRows = new ArrayList<>();
 
     // 담당 사건: 가맹점 1의 고객 1:MINE 하나
     private static final StaffCaseScope SCOPE =
@@ -147,6 +161,67 @@ class InsiderDetectionServiceTests {
             return records.stream().filter(r -> ids.contains(r.eventId())).toList();
         });
         when(scopeReader.findScope(eq(STAFF), any())).thenReturn(SCOPE);
+        when(rulePolicies.findByRuleCodeIn(any())).thenAnswer(invocation -> List.copyOf(policyRows));
+    }
+
+    // 관리자가 끈 규칙이 계속 경보를 열면, 그 경보가 겹침 높음 → 내보내기 차단 · 계정 정지로 이어진다 (#685)
+    @Test
+    void detect_whenInsiderRuleDisabled_doesNotOpenAlert() {
+        policyRows.add(policy(InsiderRule.INS_03, false, T0.minusSeconds(60)));
+        given(rawView(1L, 501L, T0), rawView(2L, 502L, T0.plusSeconds(60)), rawView(3L, 503L, T0.plusSeconds(120)));
+
+        service.detect(records.get(2));
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 다시 켜자마자 끈 동안의 기록까지 세면 지난 행동으로 경보가 몰려 열린다 — 켠 뒤 기록만 센다 (#685 결정 3)
+    @Test
+    void detect_afterInsiderRuleReenabled_ignoresAccessesBeforeReenable() {
+        Instant reenabledAt = T0.plusSeconds(120);
+        policyRows.add(policy(InsiderRule.INS_03, true, reenabledAt));
+        given(rawView(1L, 501L, T0), rawView(2L, 502L, T0.plusSeconds(60)));
+        StaffAccessRecorded firstAfter = given(rawView(3L, 503L, T0.plusSeconds(180)));
+
+        service.detect(firstAfter);
+        assertThat(savedAlerts).isEmpty();
+
+        given(rawView(4L, 504L, T0.plusSeconds(240)));
+        service.detect(given(rawView(5L, 505L, T0.plusSeconds(300))));
+
+        assertThat(savedAlerts)
+                .singleElement()
+                .satisfies(a -> assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_03));
+        assertThat(savedEvidence)
+                .extracting(InsiderAlertEvidence::getAccessEventId)
+                .containsExactly(3L, 4L, 5L);
+    }
+
+    // 겹침 규칙을 꺼도 높음 경보가 열리면 내보내기 차단까지 간다 — 각 규칙의 주의 경보는 그대로 열린다 (#685)
+    @Test
+    void detect_whenOverlapRuleDisabled_doesNotOpenOverlapAlert() {
+        policyRows.add(policy(InsiderRule.INS_06, false, T0.minusSeconds(60)));
+        given(rawView(1L, 501L, T0), rawView(2L, 502L, T0.plusSeconds(60)), rawView(3L, 503L, T0.plusSeconds(120)));
+        service.detect(records.get(2));
+        StaffAccessRecorded lastDenial = given(
+                denied(4L, 11L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(180)),
+                denied(5L, 12L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(240)),
+                denied(6L, 13L, StaffAccessDenyReason.NOT_ASSIGNEE, T0.plusSeconds(300)));
+
+        service.detect(lastDenial);
+
+        assertThat(savedAlerts)
+                .extracting(InsiderAlert::getRuleCode)
+                .containsExactlyInAnyOrder(InsiderRule.INS_03, InsiderRule.INS_01);
+        verify(publisher, never()).publishEvent(any(InsiderAlertRaised.class));
+    }
+
+    // 관리자가 스위치로 바꾼 줄 — 마지막으로 바꾼 사람 · 시각이 남는다
+    private static FdsRulePolicy policy(InsiderRule rule, boolean active, Instant changedAt) {
+        FdsRulePolicy policy = BeanUtils.instantiateClass(FdsRulePolicy.class);
+        ReflectionTestUtils.setField(policy, "ruleCode", rule.name());
+        policy.update(active, 1L, changedAt);
+        return policy;
     }
 
     // 탈취한 계정으로 처음 보는 브라우저에서 들어와 바로 원문을 봐도 높음 경보 · P3 알림(InsiderAlertRaised)이 없으면 놓친다

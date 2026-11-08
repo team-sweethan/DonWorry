@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -11,13 +12,17 @@ import com.donworry.fds.repository.FdsRulePolicyChangeHistoryRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
@@ -136,6 +141,44 @@ class FdsRuleManagementServiceTests {
         service().setActive("R03", true);
 
         verify(policy).update(eq(true), eq(3L), any(Instant.class));
+    }
+
+    // 감시 대상인 보안 직원이 자기 감시 규칙의 끄기를 요청하거나 직접 켜고 끌 수 있으면 감시가 무력해진다 (#685 결정 1)
+    @Test
+    void insiderRulePolicy_whenSecurityStaffRequestsOrToggles_isForbidden() {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
+
+        var request = catchThrowable(() -> service().requestDisable("INS_03", "오탐 확인"));
+        var toggle = catchThrowable(() -> service().setActive("INS_03", true));
+
+        assertThat(List.of(request, toggle))
+                .allSatisfy(exception -> assertThat(((ResponseStatusException) exception)
+                                .getStatusCode()
+                                .value())
+                        .isEqualTo(403));
+        verify(policies, never()).findByRuleCodeForUpdate(any());
+        verify(requests, never()).save(any());
+        verify(histories, never()).save(any());
+    }
+
+    // SEC-INS-05(높음 경보 중 내보내기 차단)가 꺼지면 내부자가 차단 · 정지 없이 거래 내역을 가져간다 (#685 결정 2)
+    // 끌 수 없게 하는 방법은 정책 줄을 두지 않는 것 — 어느 마이그레이션도 INS_05 줄을 넣지 않아야 한다
+    @Test
+    void setActive_whenExportBlockRule_isNotFound() throws IOException {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(1L, "관리자")));
+
+        var exception = catchThrowable(() -> service().setActive("INS_05", false));
+
+        assertThat(((ResponseStatusException) exception).getStatusCode().value())
+                .isEqualTo(404);
+        verify(histories, never()).save(any());
+        var migrations = new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/*.sql");
+        assertThat(migrations).isNotEmpty();
+        for (var migration : migrations) {
+            assertThat(migration.getContentAsString(StandardCharsets.UTF_8))
+                    .as(migration.getFilename())
+                    .doesNotContain("'INS_05'");
+        }
     }
 
     private FdsRuleManagementService service() {

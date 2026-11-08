@@ -4,6 +4,7 @@ import com.donworry.fds.api.FdsRuleChangeRequestPage;
 import com.donworry.fds.api.FdsRuleChangeRequestStatus;
 import com.donworry.fds.api.FdsRulePolicyChangeHistoryPage;
 import com.donworry.fds.api.FdsRulePolicySummary;
+import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.entity.FdsRuleChangeRequest;
 import com.donworry.fds.entity.FdsRulePolicyChangeHistory;
 import com.donworry.fds.repository.FdsRuleChangeRequestRepository;
@@ -11,6 +12,7 @@ import com.donworry.fds.repository.FdsRulePolicyChangeHistoryRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.identity.api.CurrentStaff;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +43,7 @@ public class FdsRuleManagementService {
     @Transactional
     public void requestDisable(String ruleCode, String reason) {
         var actor = requireRole("SECURITY_STAFF");
+        rejectInsiderRule(ruleCode);
         var policy = policyForUpdate(ruleCode);
         if (!policy.isActive()) throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 꺼진 룰입니다.");
         if (requests.existsByRuleCodeAndStatus(ruleCode, FdsRuleChangeRequest.Status.PENDING)) {
@@ -56,6 +59,7 @@ public class FdsRuleManagementService {
         if (!"ADMIN".equals(actor.role()) && (!"SECURITY_STAFF".equals(actor.role()) || !active)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
         }
+        if ("SECURITY_STAFF".equals(actor.role())) rejectInsiderRule(ruleCode);
         var policy = policyForUpdate(ruleCode);
         if ("SECURITY_STAFF".equals(actor.role()) && policy.isActive()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 켜진 룰입니다.");
@@ -147,6 +151,13 @@ public class FdsRuleManagementService {
             policy.update(false, actor.userId(), reviewedAt);
             histories.save(FdsRulePolicyChangeHistory.approvedDisable(
                     request, actor.userId(), displayName(actor), reviewedAt));
+        }
+    }
+
+    // 내부자 규칙은 보안 직원 본인을 감시한다 — 끄기 요청 · 다시 켜기 모두 관리자만 한다 (#685, ADR-0082)
+    private void rejectInsiderRule(String ruleCode) {
+        if (Arrays.stream(InsiderRule.values()).anyMatch(rule -> rule.name().equals(ruleCode))) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내부자 규칙은 관리자만 바꿀 수 있습니다.");
         }
     }
 
