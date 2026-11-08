@@ -16,6 +16,7 @@ import com.donworry.fds.api.InsiderAlertReader;
 import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.SecurityStaffDirectory;
+import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockOutcome;
 import com.donworry.identity.api.StaffLockReason;
@@ -203,6 +204,68 @@ class InsiderCaseServiceTests {
         assertThat(saved.getFirst().getStaffId()).isEqualTo(STAFF_ID);
         assertThat(saved.getFirst().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
         assertThat(linked).extracting(InsiderCaseAlert::getAlertId).containsExactly(600L);
+    }
+
+    // 열린 사건 없이 정지만 남은 직원에게 서버 시작 때 위험 등급 사건을 연다 — 없으면 정지를 화면으로 풀 수 없다 (#698)
+    @Test
+    void openCasesForOrphanLocks_lockedStaffWithoutOpenCase_opensCriticalCase() {
+        Long activeStaffId = 22L;
+        when(staffDirectory.securityStaff())
+                .thenReturn(List.of(
+                        new SecurityStaffEntry(STAFF_ID, "정지 직원", false),
+                        new SecurityStaffEntry(activeStaffId, "사용 중 직원", true)));
+        when(locker.isLocked(STAFF_ID)).thenReturn(true);
+        when(locker.isLocked(activeStaffId)).thenReturn(false);
+        when(cases.existsByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN)).thenReturn(false);
+        when(cases.existsByStaffIdAndDecisionAndLockReleasedAtIsNull(STAFF_ID, InsiderCaseDecision.DISCIPLINE_REQUEST))
+                .thenReturn(false);
+        when(cases.save(any(InsiderCase.class))).thenAnswer(call -> withId(call.getArgument(0), CASE_ID));
+
+        int opened = service.openCasesForOrphanLocks();
+
+        assertThat(opened).isEqualTo(1);
+        var saved = ArgumentCaptor.forClass(InsiderCase.class);
+        verify(cases).save(saved.capture());
+        assertThat(saved.getValue().getStaffId()).isEqualTo(STAFF_ID);
+        assertThat(saved.getValue().isOpen()).isTrue();
+        assertThat(saved.getValue().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
+    }
+
+    // 징계 사건의 정지를 아직 안 푼 직원에게는 새 사건을 열지 않는다 — 열면 사유 없이 해제 판정으로 징계가 풀린다 (#698)
+    @Test
+    void openCasesForOrphanLocks_staffWithUnreleasedDisciplinedCase_doesNotOpenCase() {
+        when(staffDirectory.securityStaff()).thenReturn(List.of(new SecurityStaffEntry(STAFF_ID, "징계 직원", false)));
+        when(locker.isLocked(STAFF_ID)).thenReturn(true);
+        when(cases.existsByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN)).thenReturn(false);
+        when(cases.existsByStaffIdAndDecisionAndLockReleasedAtIsNull(STAFF_ID, InsiderCaseDecision.DISCIPLINE_REQUEST))
+                .thenReturn(true);
+
+        int opened = service.openCasesForOrphanLocks();
+
+        assertThat(opened).isZero();
+        verify(cases, never()).save(any());
+    }
+
+    // 서버를 여러 번 켜도 같은 직원의 사건은 하나다 (#698)
+    @Test
+    void openCasesForOrphanLocks_runTwice_opensOnlyOneCase() {
+        when(staffDirectory.securityStaff()).thenReturn(List.of(new SecurityStaffEntry(STAFF_ID, "정지 직원", false)));
+        when(locker.isLocked(STAFF_ID)).thenReturn(true);
+        List<InsiderCase> saved = new ArrayList<>();
+        when(cases.save(any(InsiderCase.class))).thenAnswer(call -> {
+            InsiderCase opened = withId(call.getArgument(0), CASE_ID);
+            saved.add(opened);
+            return opened;
+        });
+        when(cases.existsByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN))
+                .thenAnswer(call -> saved.stream().anyMatch(InsiderCase::isOpen));
+
+        int first = service.openCasesForOrphanLocks();
+        int second = service.openCasesForOrphanLocks();
+
+        assertThat(first).isEqualTo(1);
+        assertThat(second).isZero();
+        assertThat(saved).hasSize(1);
     }
 
     // 새 사건이 열리면 해제 검토 보고서 첫 판을 만들라는 알림을 보낸다 (#675)

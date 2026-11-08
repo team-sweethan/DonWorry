@@ -1,6 +1,7 @@
 package com.donworry.investigation.repository;
 
 import com.donworry.investigation.entity.InsiderCase;
+import com.donworry.investigation.entity.InsiderCaseDecision;
 import com.donworry.investigation.entity.InsiderCaseStatus;
 import jakarta.persistence.LockModeType;
 import java.util.List;
@@ -24,6 +25,9 @@ public interface InsiderCaseRepository extends Repository<InsiderCase, Long> {
     Optional<InsiderCase> findByStaffIdAndStatus(Long staffId, InsiderCaseStatus status);
 
     boolean existsByStaffIdAndStatus(Long staffId, InsiderCaseStatus status);
+
+    // 정지를 아직 풀지 않은 징계 사건이 있는지 (#698) — 판정은 닫힌 사건에만 있다
+    boolean existsByStaffIdAndDecisionAndLockReleasedAtIsNull(Long staffId, InsiderCaseDecision decision);
 
     // 배정 후보에서 뺄 직원 — 열린 내부자 사건이 있는 직원
     @Query("""

@@ -3,6 +3,7 @@ package com.donworry.investigation.service;
 import com.donworry.fds.api.InsiderAlertCloser;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
+import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
@@ -79,6 +80,29 @@ public class InsiderCaseService {
             if (alert.severity().isRaisedToOthers() && link(alert, now)) linked++;
         }
         return linked;
+    }
+
+    // 사건 없이 정지만 남은 직원에게 사건을 연다 (#698) — 서버 시작 때 InsiderCaseBackfill이 linkOpenAlerts 다음에 부른다
+    // 정지를 푸는 길은 내부자 사건 판정뿐인데, 경보를 사건에 묶지 못한 채 관리자가 경보를 닫았거나 #670 이전 정지면
+    // 열린 경보가 없어 linkOpenAlerts로도 사건이 생기지 않는다. 판정 · 해제는 그대로 관리자가 한다
+    // 안 풀린 징계 사건이 있는 직원은 그 사건의 정지 해제로 푼다 — 여기서 새 사건을 열면 사유 없이 해제 판정으로 징계가 풀린다
+    // 등급은 위험(이미 계정 정지까지 간 상태). 계기 경보가 없어 해제 검토 보고서 알림은 보내지 않는다. 연 수를 돌려준다
+    @Transactional
+    public int openCasesForOrphanLocks() {
+        caseAssignmentService.lock();
+        Instant now = Instant.now();
+        int opened = 0;
+        for (SecurityStaffEntry staff : staffDirectory.securityStaff()) {
+            Long staffId = staff.userId();
+            if (!locker.isLocked(staffId)) continue;
+            if (cases.existsByStaffIdAndStatus(staffId, InsiderCaseStatus.OPEN)) continue;
+            if (cases.existsByStaffIdAndDecisionAndLockReleasedAtIsNull(
+                    staffId, InsiderCaseDecision.DISCIPLINE_REQUEST)) continue;
+            InsiderCase insiderCase = cases.save(InsiderCase.open(staffId, InsiderAlertSeverity.CRITICAL, now));
+            log.info("사건 없이 정지된 직원에게 내부자 사건 열림 insiderCaseId={} staffId={}", insiderCase.getId(), staffId);
+            opened++;
+        }
+        return opened;
     }
 
     // 배정 잠금을 잡은 뒤 부른다. 새로 묶었으면 true
