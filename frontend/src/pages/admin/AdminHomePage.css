@@ -24,8 +24,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 18px;
-  padding: 22px 28px;
+  gap: 14px;
+  padding: 14px 24px;
   background: #fff;
   border-bottom: 1px solid #e9edf4;
 }
@@ -101,7 +101,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 24px 28px 12px;
+  padding: 12px 24px 6px;
 }
 .ah-list-heading h3 {
   margin: 0;
@@ -171,8 +171,8 @@
   font-size: 13px;
 }
 .ah-list-state {
-  padding: 32px 28px;
-  min-height: 180px;
+  padding: 16px 24px;
+  min-height: 96px;
 }
 .ah-empty {
   display: flex;
@@ -182,20 +182,20 @@
   text-align: center;
 }
 .ah-empty > .anticon {
-  font-size: 30px;
+  font-size: 24px;
   color: #94a3b8;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .ah-empty-check {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: #edf8f2;
   color: #16835d;
-  font-size: 22px;
-  margin-bottom: 12px;
+  font-size: 18px;
+  margin-bottom: 8px;
 }
 .ah-empty h3 {
   margin: 0;
@@ -251,16 +251,16 @@
   font-size: 13px;
 }
 .ah-management-overview {
-  margin-bottom: 28px;
+  margin-bottom: 16px;
 }
 .ah-management-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
+  gap: 16px;
 }
 .ah-management-card {
   position: relative;
-  padding: 28px;
+  padding: 18px 22px;
   background: linear-gradient(115deg, #f5f9ff, #fff 85%);
   transition:
     border-color 150ms,
@@ -278,26 +278,26 @@
 .ah-management-heading h2 {
   flex: 1;
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 650;
 }
 .ah-management-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #e8f0ff;
   color: #2563eb;
-  font-size: 23px;
+  font-size: 19px;
 }
 .ah-management-card:nth-child(2) .ah-management-icon {
   color: #5d52bd;
   background: #eeeafd;
 }
 .ah-management-card > p {
-  margin: 18px 0 24px;
+  margin: 8px 0 6px;
   color: #64748b;
   font-size: 13px;
   line-height: 1.7;
@@ -312,7 +312,7 @@
   color: #64748b;
 }
 .ah-management-total .ah-count {
-  font-size: 38px;
+  font-size: 30px;
 }
 .ah-management-note {
   margin: 10px 2px 0;
@@ -378,6 +378,8 @@
   color: #2563eb;
 }
 
+/* 관리자 홈은 카드 5개가 노트북 한 화면(1366×768)에 스크롤 없이 들어오게 여백 · 숫자 크기를 줄여 둔다 (#659) */
+
 /* 제목 링크가 카드 전체를 덮고, 안쪽 알림 링크만 그 위로 올린다. */
 .ah-management-link {
   color: inherit;
@@ -401,8 +403,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 18px;
-  padding: 10px 14px;
+  margin-top: 10px;
+  padding: 8px 12px;
   border: 1px solid #fde68a;
   border-radius: 10px;
   background: #fffbeb;
@@ -422,15 +424,15 @@
   justify-content: space-between;
   align-items: center;
   gap: 20px;
-  padding: 24px;
-  margin-bottom: 24px;
+  padding: 14px 22px;
+  margin-bottom: 16px;
   background: #f0f5ff;
   border: 1px solid #dce6f7;
   border-radius: 14px;
 }
 .ah-application-entry h2 {
-  font-size: 17px;
-  margin: 0 0 8px;
+  font-size: 16px;
+  margin: 0 0 2px;
 }
 .ah-application-entry p {
   margin: 0;

@@ -8,6 +8,7 @@ import {
   handOverAll,
   reassignCase,
   rejectAssignmentRequest,
+  staffInNameOrder,
   suggestedStaff,
   type StaffLoad,
 } from '../src/api/caseAssignments.ts'
@@ -272,4 +273,26 @@ test('reasonReady_requiresMemoOnlyForOther', () => {
   assert.equal(reasonReady('PERSONAL', ''), true)
   assert.equal(reasonReady('CONFLICT_OF_INTEREST', ''), true)
   assert.equal(reasonReady('WORKLOAD', ''), true)
+})
+
+// 담당 현황 카드는 이름순, 이름 속 숫자는 크기대로 — 1 → 10 → 2로 뒤섞이지 않고 정지 직원도 이름 자리에 둔다 (#659)
+test('staffInNameOrder_namesWithNumbers_ordersByNumberValue', () => {
+  const named = (staffId: number, displayName: string, active = true): StaffLoad => ({
+    ...load(staffId, active, active ? staffId : null),
+    displayName,
+  })
+  const staff = [
+    named(1, '보안직원 10'),
+    named(2, '보안직원 2'),
+    named(3, '보안직원 1'),
+    named(4, '보안직원 3', false),
+    named(5, '보안직원 11'),
+  ]
+
+  assert.deepEqual(
+    staffInNameOrder(staff).map((s) => s.displayName),
+    ['보안직원 1', '보안직원 2', '보안직원 3', '보안직원 10', '보안직원 11'],
+  )
+  // 화면 정렬이 배정 후보 계산용 원래 목록을 바꾸지 않는다
+  assert.equal(staff[0].displayName, '보안직원 10')
 })

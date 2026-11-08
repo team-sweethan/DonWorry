@@ -6,6 +6,7 @@ import {
   getStaffCases,
   handOverAll,
   reassignCase,
+  staffInNameOrder,
   suggestedStaff,
   type AssignedCase,
   type AssignmentChangeReason,
@@ -183,7 +184,7 @@ export function CaseAssignmentsPage() {
           <Empty description="보안 직원 계정이 없습니다." />
         ) : (
           <Space wrap size={12}>
-            {(overview?.staff ?? []).map((staff) => (
+            {staffInNameOrder(overview?.staff ?? []).map((staff) => (
               <StaffCard
                 key={staff.staffId}
                 staff={staff}
