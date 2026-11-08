@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -61,10 +60,19 @@ public class AdminAccountService {
             predicates.add(cb.or(
                     cb.like(cb.lower(root.get("loginId")), pattern, '!'),
                     cb.like(cb.lower(root.get("displayName")), pattern, '!')));
+            // 기본 정렬: 관리자 → 보안 직원 → 사장님, 같은 역할은 최근 계정부터 (#659).
+            // 역할 이름 순서(ADMIN · OPERATOR · SECURITY_STAFF)와 달라 순서를 직접 정한다. 개수 조회에는 붙이지 않는다
+            if (query != null && !Long.class.equals(query.getResultType())) {
+                var roleOrder = cb.<UserRole, Integer>selectCase(root.get("role"))
+                        .when(UserRole.ADMIN, 0)
+                        .when(UserRole.SECURITY_STAFF, 1)
+                        .otherwise(2);
+                query.orderBy(cb.asc(roleOrder), cb.desc(root.get("userId")));
+            }
             return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
-        var result = users.findAll(
-                filter, PageRequest.of(page, size, Sort.by("userId").descending()));
+        // 정렬은 위 조건에서 정한다. Pageable에 정렬을 넣으면 그 정렬로 덮어쓴다
+        var result = users.findAll(filter, PageRequest.of(page, size));
         return new AdminUserPageResponse(responses(result.getContent()), page, size, result.getTotalElements());
     }
 

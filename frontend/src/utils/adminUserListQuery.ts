@@ -9,6 +9,10 @@ export type AdminUserListQuery = {
   passwordChangeRequired?: true
 }
 
+/** 주소에 상태가 없으면 사용 중 계정만 보인다. 전체 상태는 주소에 ALL로 남겨 새로고침 때 기본값으로 돌아가지 않게 한다. */
+const DEFAULT_STATUS = 'ACTIVE'
+const ALL_STATUS = 'ALL'
+
 /** 화면·새로고침·뒤로가기가 같은 조건을 쓰도록 적용된 필터는 URL에서 읽는다. */
 export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQuery {
   const role = params.get('role')
@@ -17,18 +21,15 @@ export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQ
     page: parseListPage(params.get('page')),
     keyword: parseListKeyword(params.get('keyword')),
     role: role === 'ADMIN' || role === 'OPERATOR' || role === 'SECURITY_STAFF' ? role : undefined,
+    // 없거나 알 수 없는 값은 기본(사용 중), ALL은 전체 상태
     status:
-      status === 'ACTIVE' || status === 'INACTIVE' || status === 'SUSPENDED' ? status : undefined,
+      status === 'ACTIVE' || status === 'INACTIVE' || status === 'SUSPENDED'
+        ? status
+        : status === ALL_STATUS
+          ? undefined
+          : DEFAULT_STATUS,
     passwordChangeRequired: params.get('passwordChangeRequired') === 'true' ? true : undefined,
   }
-}
-
-/**
- * [계정 만들기] 역할 기본값. 보안 직원 계정 메뉴(역할 필터 SECURITY_STAFF)에서 들어오면 보안 직원,
- * 그 밖에는 사장님 — 역할을 그대로 둔 채 사장님 계정을 만드는 실수를 줄인다 (ADR-0082 8절).
- */
-export function adminCreateUserDefaultRole(query: AdminUserListQuery) {
-  return query.role === 'SECURITY_STAFF' ? 'SECURITY_STAFF' : 'OPERATOR'
 }
 
 /** 페이지를 뺀 검색 조건이 있으면 빈 목록을 "결과 없음"으로 안내한다. */
@@ -36,12 +37,13 @@ export function isAdminUserListFiltered(query: AdminUserListQuery) {
   return Boolean(query.keyword || query.role || query.status || query.passwordChangeRequired)
 }
 
-/** 전체 조건과 첫 페이지는 생략한다. 해제한 필터가 새로고침 때 다시 적용되지 않게 한다. */
+/** 기본 상태(사용 중)와 첫 페이지는 생략한다. 해제한 필터가 새로고침 때 다시 적용되지 않게 전체 상태는 ALL로 남긴다. */
 export function adminUserListParams(query: AdminUserListQuery): URLSearchParams {
   const params = new URLSearchParams()
   if (query.keyword) params.set('keyword', query.keyword)
   if (query.role) params.set('role', query.role)
-  if (query.status) params.set('status', query.status)
+  if (!query.status) params.set('status', ALL_STATUS)
+  else if (query.status !== DEFAULT_STATUS) params.set('status', query.status)
   if (query.passwordChangeRequired) params.set('passwordChangeRequired', 'true')
   if (query.page > 1) params.set('page', String(query.page))
   return params

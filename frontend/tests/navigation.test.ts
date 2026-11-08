@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canOpenPath, isNavItemActive, sessionNavigation } from '../src/config/navigation.ts'
+import { canOpenPath, sessionNavigation } from '../src/config/navigation.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
 const base: AuthUser = {
@@ -172,49 +172,19 @@ test('adminNavigation_threeTierLayout_matchesAdr0082Section8', () => {
   const layout = sessionNavigation(admin).groups.map((group) => [
     group.section ?? null,
     group.title,
-    group.items.map((item) => (item.search ? `${item.label}(${item.search})` : item.label)),
+    group.items.map((item) => item.label),
   ])
 
   assert.deepEqual(layout, [
     [null, '개요', ['홈']],
-    ['가맹점 관리', '운영', ['이용 신청', '가맹점 목록', '사장님 계정(role=OPERATOR)']],
+    ['가맹점 관리', '운영', ['이용 신청', '가맹점 목록']],
     ['가맹점 관리', '보안', ['계정 접근 이상 탐지']],
     ['직원 관리', '사건', ['담당 현황', '변경 요청']],
     ['직원 관리', '보안', ['원문 열람 검토', '내부자 경보']],
-    ['직원 관리', '계정', ['보안 직원 계정(role=SECURITY_STAFF)']],
+    ['시스템 설정', '계정', ['계정 관리']],
     ['시스템 설정', '탐지 룰', ['탐지 룰 목록', '룰 변경 요청', '룰 변경 이력']],
     ['시스템 설정', 'AI', ['AI 조사 긴급정지']],
   ])
-})
-
-// 같은 계정 화면을 여는 두 메뉴가 함께 켜지거나, 상세 · 만들기 화면에서 꺼지면 어느 목록에 있는지 헷갈린다 (#659)
-test('isNavItemActive_accountMenusWithRoleQuery_onlyMatchingRoleActive', () => {
-  const ownerAccounts = { label: '사장님 계정', path: '/admin/users', search: 'role=OPERATOR' }
-  const staffAccounts = {
-    label: '보안 직원 계정',
-    path: '/admin/users',
-    search: 'role=SECURITY_STAFF',
-  }
-  const active = (pathname: string, search: string) =>
-    [ownerAccounts, staffAccounts].filter((item) => isNavItemActive(item, pathname, search))
-
-  assert.deepEqual(active('/admin/users', '?role=SECURITY_STAFF&page=2'), [staffAccounts])
-  assert.deepEqual(active('/admin/users/new', '?role=SECURITY_STAFF'), [staffAccounts])
-  assert.deepEqual(active('/admin/users/7', '?keyword=kim&role=OPERATOR'), [ownerAccounts])
-  // 필터 "전체"(관리자 계정 포함)에서는 두 메뉴 모두 꺼진다
-  assert.deepEqual(active('/admin/users', ''), [])
-  assert.deepEqual(active('/admin/users-archive', '?role=OPERATOR'), [])
-})
-
-// 판단 규칙을 레이아웃에서 옮기다 사장님 홈 예외가 빠지면 모든 사장님 화면에서 홈이 켜진다 (#659)
-test('isNavItemActive_ownerHome_notActiveOnSubpaths', () => {
-  const ownerHome = { label: '홈', path: '/owner' }
-  const settlements = { label: '정산 내역', path: '/owner/settlements' }
-
-  assert.equal(isNavItemActive(ownerHome, '/owner', ''), true)
-  assert.equal(isNavItemActive(ownerHome, '/owner/', ''), true)
-  assert.equal(isNavItemActive(ownerHome, '/owner/settlements', ''), false)
-  assert.equal(isNavItemActive(settlements, '/owner/settlements/3', ''), true)
 })
 
 test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공한다', () => {

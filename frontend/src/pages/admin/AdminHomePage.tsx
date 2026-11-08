@@ -151,7 +151,8 @@ export function AdminHomePage() {
             icon={<TeamOutlined />}
             result={data?.users}
             loading={loading}
-            to="/admin/users"
+            // 카드 숫자는 정지 · 중지 계정을 포함한 전체 수라 목록도 전체 상태로 연다 (목록 기본은 사용 중)
+            to="/admin/users?status=ALL"
             unit="명"
           >
             {!loading &&

@@ -263,6 +263,36 @@ class AdminAccountHttpTests {
         }
     }
 
+    // 관리자 · 보안 직원이 뒤 페이지로 밀리거나 역할 이름 알파벳순(관리자 → 사장님 → 보안 직원)으로 뒤바뀌지 않게 (#659)
+    @Test
+    void listUsers_noSort_ordersAdminThenStaffThenOwnerNewestFirst() throws Exception {
+        create("_staff1", "SECURITY_STAFF");
+        create("_owner", "OPERATOR");
+        create("_staff2", "SECURITY_STAFF");
+        jdbc.update(
+                "INSERT INTO platform_users (login_id,password_hash,display_name,status,role,created_at) VALUES (?,?,'관리자 테스트','ACTIVE','ADMIN',UTC_TIMESTAMP(6))",
+                prefix + "_admin2",
+                encoder.encode("AdminPass123"));
+
+        var all = mapper.readTree(
+                send(admin, "GET", "/api/admin/users?keyword=" + prefix, null).body());
+        assertThat(all.path("items")
+                        .valueStream()
+                        .map(item -> item.path("loginId").asString()))
+                .containsExactly(
+                        prefix + "_admin2", adminLogin, prefix + "_staff2", prefix + "_staff1", prefix + "_owner");
+        // 페이지가 나뉘어도 같은 순서를 이어 간다 — 화면이 아니라 서버가 정렬한다
+        var secondPage =
+                mapper.readTree(send(admin, "GET", "/api/admin/users?keyword=" + prefix + "&size=2&page=1", null)
+                        .body());
+        assertThat(secondPage
+                        .path("items")
+                        .valueStream()
+                        .map(item -> item.path("loginId").asString()))
+                .containsExactly(prefix + "_staff2", prefix + "_staff1");
+        assertThat(secondPage.path("totalElements").asLong()).isEqualTo(5);
+    }
+
     // 생성 규칙·중복·조회 계약과 비밀정보 일회 응답을 실제 DB로 검증한다
     @Test
     void create_whenValid_returnsSecretOnceAndRejectsInvalidAccounts() throws Exception {

@@ -9,17 +9,7 @@ export type NavBadge =
   | 'caseAssignmentRequests'
   | 'rawViewReviews'
   | 'insiderAlerts'
-/**
- * search는 같은 화면을 다른 조건으로 여는 메뉴용 주소 뒤 조건이다 (예: 계정 관리 화면을 역할 필터를 걸어 연다).
- * 권한 검사는 path로만 한다.
- */
-export type NavItem = {
-  label: string
-  path: string
-  search?: string
-  permission?: Permission
-  badge?: NavBadge
-}
+export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 /** section은 관리자 메뉴의 큰 묶음 이름이다 (ADR-0082 8절). 같은 section 그룹은 붙여 둔다. */
 export type NavGroup = { section?: string; title: string; items: NavItem[] }
 
@@ -83,8 +73,6 @@ export const adminNavigation = {
       items: [
         { label: '이용 신청', path: '/admin/applications' },
         { label: '가맹점 목록', path: '/admin/merchants' },
-        // 계정 화면은 하나 — 역할 필터를 미리 걸어 연다. 관리자 계정은 필터 "전체"에서 본다
-        { label: '사장님 계정', path: '/admin/users', search: 'role=OPERATOR' },
       ],
     },
     // 사장님 계정 403 탐지 (#515)
@@ -115,10 +103,11 @@ export const adminNavigation = {
         { label: '내부자 경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
       ],
     },
+    // 계정은 사장님 · 보안 직원 · 관리자에 걸친 회사 전체 일 — 한 화면에서 역할 · 상태 필터로 나눠 본다
     {
-      section: '직원 관리',
+      section: '시스템 설정',
       title: '계정',
-      items: [{ label: '보안 직원 계정', path: '/admin/users', search: 'role=SECURITY_STAFF' }],
+      items: [{ label: '계정 관리', path: '/admin/users' }],
     },
     {
       section: '시스템 설정',
@@ -183,24 +172,6 @@ export function isAccountPasswordPath(pathname: string) {
 export function isAccountPath(pathname: string) {
   const path = pathname.replace(/\/+$/, '')
   return path === '/account/password' || path === '/account/login-history'
-}
-
-/** 같은 path를 조건만 달리 여는 메뉴가 있어 path + search로 메뉴를 구분한다. */
-export function navItemKey(item: NavItem) {
-  return item.search ? `${item.path}?${item.search}` : item.path
-}
-
-/**
- * 사이드바 선택 표시. 하위 경로(상세 · 만들기)에서도 켜지되 사장님 홈(/owner)은 자기 경로에서만 켜진다.
- * search가 있는 메뉴는 주소 조건까지 같아야 켜진다 — 같은 화면을 여는 두 계정 메뉴가 함께 켜지지 않게.
- */
-export function isNavItemActive(item: NavItem, pathname: string, search: string) {
-  const path = pathname.replace(/\/+$/, '') || '/'
-  const pathMatches =
-    path === item.path || (item.path !== '/owner' && path.startsWith(item.path + '/'))
-  if (!pathMatches || !item.search) return pathMatches
-  const current = new URLSearchParams(search)
-  return [...new URLSearchParams(item.search)].every(([key, value]) => current.get(key) === value)
 }
 
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */

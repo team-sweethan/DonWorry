@@ -40,7 +40,6 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
 import { LoginHistoryTable } from '../auth/LoginHistoryPage'
 import {
-  adminCreateUserDefaultRole,
   adminUserListParams,
   isAdminUserListFiltered,
   parseAdminUserListQuery,
@@ -313,8 +312,7 @@ export function AdminUsersPage() {
 
 export function AdminCreateUserPage() {
   const [query] = useSearchParams()
-  const listFilter = parseAdminUserListQuery(query)
-  const listQuery = adminUserListParams(listFilter).toString()
+  const listQuery = adminUserListParams(parseAdminUserListQuery(query)).toString()
   const [form] = Form.useForm<CreateUser>()
   const role = Form.useWatch('role', form) as CreateUser['role'] | undefined
   const [keyword, setKeyword] = useState('')
@@ -388,7 +386,7 @@ export function AdminCreateUserPage() {
         <Form<CreateUser>
           form={form}
           layout="vertical"
-          initialValues={{ role: adminCreateUserDefaultRole(listFilter) }}
+          initialValues={{ role: 'OPERATOR' }}
           onFinish={submit}
           disabled={busy || secret !== null}
         >
