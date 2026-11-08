@@ -18,6 +18,18 @@ const changeReasonLabel: Record<string, string> = assignmentReasonLabel
 const reasonText = (value: string | undefined) =>
   value ? (changeReasonLabel[value] ?? value) : null
 
+// Case 상태 (#648) — 이력에 코드값(OPEN · INVESTIGATING)이 그대로 보이지 않게 한다
+// 화면 꼬리표(caseLabels.caseStatusLabel)와 같은 문구. 테스트가 dayjs 없이 돌도록 여기에 따로 둔다
+const statusText: Record<string, string> = {
+  OPEN: '생성됨',
+  INVESTIGATING: '조사 중',
+  DECISION_PENDING: '판정 대기',
+  ACTION_PENDING: '금융 처리 대기',
+  ACTION_FAILED: '금융 처리 실패',
+  CLOSED: '종료',
+}
+const statusOf = (value: string | undefined) => (value ? (statusText[value] ?? value) : '-')
+
 /**
  * 고객이 모든 결제의 승인을 취소해 닫힌 Case면 그 종료 이력 시각, 아니면 null (#382 · #443).
  * 상세 위쪽 안내에 쓴다.
@@ -56,6 +68,18 @@ export function historyDetail(h: CaseHistory, time: (iso: string) => string): st
       ]
         .filter((part): part is string => part !== null)
         .join(' · ')
+    // 사건 번호는 화면 제목에 있고, 사건 안 결제 번호(casePaymentId)는 직원이 쓸 일이 없어 보이지 않는다 (#648)
+    case 'CASE_CREATED':
+      return ''
+    case 'PAYMENT_LINKED':
+      return [
+        data.paymentId ? `결제 ${data.paymentId}` : null,
+        data.evidenceVersion ? `증거 v${data.evidenceVersion}` : null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(' · ')
+    case 'CASE_STATUS_CHANGED':
+      return `${statusOf(data.from)} → ${statusOf(data.to)}`
     case 'CASE_ASSIGNMENT_REQUESTED':
       return reasonText(data.reason) ?? ''
     case 'CASE_ASSIGNMENT_REQUEST_REJECTED':

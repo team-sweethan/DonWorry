@@ -77,7 +77,22 @@ test('그 밖의 이력은 예전처럼 값을 잇고 completedAt만 실제 완�
       make({ eventType: 'CASE_STATUS_CHANGED', eventData: { from: 'OPEN', to: 'INVESTIGATING' } }),
       time,
     ),
-    'OPEN · INVESTIGATING',
+    '생성됨 → 조사 중',
+  )
+  // 내부 번호(사건 번호 · casePaymentId)는 이어 붙이지 않는다 (#648)
+  assert.equal(
+    historyDetail(make({ eventType: 'CASE_CREATED', eventData: { caseId: '8' } }), time),
+    '',
+  )
+  assert.equal(
+    historyDetail(
+      make({
+        eventType: 'PAYMENT_LINKED',
+        eventData: { evidenceVersion: '1', casePaymentId: '8', paymentId: '24' },
+      }),
+      time,
+    ),
+    '결제 24 · 증거 v1',
   )
 })
 

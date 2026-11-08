@@ -475,10 +475,106 @@ textarea {
   justify-content: flex-end;
   margin-top: 1px;
 }
-.dw-section-grid {
+/* Case 상세 (#648) — 왼쪽 본문 · 오른쪽 판정 칸 고정. 본문 폭이 좁으면(1280px 화면 등) 한 줄로 쌓고
+   판정 칸을 결제 표 바로 아래에 둔다. 앱은 1280px 미만에서 가로 스크롤이라 화면 폭 대신 본문 폭으로 나눈다 */
+.dw-case-layout-wrap {
+  container-type: inline-size;
+}
+.dw-case-layout {
   display: grid;
-  grid-template-columns: 1.25fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'pay side'
+    'main side';
   gap: 20px;
+  align-items: start;
+}
+.dw-case-pay {
+  grid-area: pay;
+  min-width: 0;
+}
+.dw-case-main {
+  grid-area: main;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.dw-case-side {
+  grid-area: side;
+  position: sticky;
+  top: calc(var(--dw-header-height) + 16px);
+  max-height: calc(100vh - var(--dw-header-height) - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@container (max-width: 1039px) {
+  .dw-case-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'pay'
+      'side'
+      'main';
+  }
+  .dw-case-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+/* 판정 선택 (#648) — ACCEPT · REJECT를 붙이지 않고 조금 띄운다. 고른 쪽은 초록(매입) / 빨강(거부) */
+.dw-decision-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dw-decision-choice .ant-radio-button-wrapper {
+  border-radius: 6px;
+  border-inline-start-width: 1px;
+}
+.dw-decision-choice .ant-radio-button-wrapper::before {
+  display: none;
+}
+.dw-decision-choice
+  .dw-choice-accept.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #15803d;
+  font-weight: 700;
+}
+.dw-decision-choice
+  .dw-choice-reject.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 700;
+}
+.dw-case-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 32px;
+}
+.dw-case-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.dw-case-fact-label {
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-case-fact-value {
+  color: #0f172a;
+  font-weight: 600;
+}
+.dw-case-fact-sub {
+  color: #64748b;
+  font-weight: 400;
 }
 .dw-info-list {
   display: grid;

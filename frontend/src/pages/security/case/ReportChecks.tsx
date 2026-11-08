@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { BasisSignal, ReportBody } from '../../../types/case'
+import type { ReportBody } from '../../../types/case'
 import {
   caseNormalNotes,
   caseSignalId,
@@ -11,6 +11,7 @@ import {
   type CheckSignal,
 } from '../../../utils/reportView'
 import { goToCard } from './goToCard'
+import { SIGNAL_LEVEL } from './signalLevel'
 import { ReportSection } from './ReportSection'
 
 // ② 확인할 것 (#644 PR 3) — 왼쪽 이상 징후 · 오른쪽 정상 근거 반반. 게이지 · 기울기는 그리지 않는다
@@ -18,10 +19,7 @@ import { ReportSection } from './ReportSection'
 // 징후 카드 = 이름 · 등급 / 사실 / 확인할 것 / 결제 번호. 결제마다 반복하던 근거(#591 ④)를 한 장으로 합쳤다
 // 체크는 화면에서만 기억한다 — 판정 기록이 아니다
 
-const LEVEL = {
-  HIGH_RISK: { text: '고위험', line: '#DC2626', bg: '#FEF2F2', fg: '#7F1D1D' },
-  CAUTION: { text: '주의', line: '#F59E0B', bg: '#FFFBEB', fg: '#78350F' },
-} satisfies Record<BasisSignal['level'], { text: string; line: string; bg: string; fg: string }>
+const LEVEL = SIGNAL_LEVEL
 
 // 근거 자료로 이동할 수 있는 징후 — 코드로 확인한 것만 잇는다 (11/08 결정, 나머지는 추측해서 잇지 않음)
 const SIGNAL_CARD: Record<string, string> = {
