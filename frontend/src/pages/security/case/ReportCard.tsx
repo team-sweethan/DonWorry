@@ -3,19 +3,21 @@ import { CheckCircleFilled } from '@ant-design/icons'
 import { Alert, Button, Card, Empty, Space, Spin, Typography } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { getReportProgress } from '../../../api/cases'
-import type { AiReport, TraceStep } from '../../../types/case'
+import type { AiReport, ReportBody, TraceStep } from '../../../types/case'
 import { latestReport } from '../../../utils/caseRules'
 import {
+  caseSignalId,
+  checkSignals,
   durationText,
   elapsedText,
   hasReadableReport,
+  isOpenSignal,
   liveCurrentTask,
   overviewText,
-  topRiskScore,
 } from '../../../utils/reportView'
 import { dateTime, reportStatusLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
-import { ScoreGauge } from './ReportFull'
+import { SIGNAL_LEVEL } from './signalLevel'
 
 // Case 상세의 AI 보고서 요약 (P4 소유). 전문 · 버전 선택은 /security/cases/:id/report (#292)
 export function ReportCard({
@@ -99,26 +101,67 @@ export function ReportCard({
               description="자동 판정은 하지 않습니다. 직접 근거를 조사한 뒤 오른쪽 판정 패널에서 수동 판정하고, 사유에 조사 근거를 기록하세요."
             />
           )}
-          {body && (
-            <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-              <div style={{ flex: '0 0 auto' }}>
-                <ScoreGauge score={topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))} />
-              </div>
-              <div>
-                {/* 판정 권고는 #644에서 뺐다 — 사건 개요만 보여 주고 판정은 직원이 한다 (ADR-0009 결정 13) */}
-                <Typography.Paragraph strong style={{ fontSize: 16, marginBottom: 6 }}>
-                  {overviewText(body)}
-                </Typography.Paragraph>
-                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                  전문에서 징후와 판정 전에 확인할 것을 보세요.
-                </Typography.Text>
-              </div>
-            </div>
-          )}
+          {body && <ReportSummary body={body} />}
         </Space>
       )}
     </Card>
   )
+}
+
+// 개요 + 판정 전에 확인할 것 (#648). 점수는 결제 표 한 곳에만 두고 여기서는 보이지 않는다
+// 확인할 것은 전문 ② 카드와 같은 목록(checkSignals, 고위험 먼저) 중 정상 사유가 없는 것만 짧게 보인다
+// 판정 권고는 #644에서 뺐다 — 판정은 직원이 한다 (ADR-0009 결정 13)
+function ReportSummary({ body }: { body: ReportBody }) {
+  const signals = checkSignals(body)
+  const open = (signals ?? []).filter(isOpenSignal)
+  const settled = (signals?.length ?? 0) - open.length
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <Typography.Paragraph strong style={{ fontSize: 15, margin: 0 }}>
+        {overviewText(body)}
+      </Typography.Paragraph>
+      {signals === null ? (
+        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+          징후 목록이 생기기 전 보고서입니다. 전문에서 걸린 규칙을 확인하세요.
+        </Typography.Text>
+      ) : (
+        <>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            판정 전에 확인할 것 {open.length}개 · 고위험 먼저
+            {settled > 0 && ` · 정상 사유가 있는 징후 ${settled}개는 전문에서`}
+          </Typography.Text>
+          {open.map((s) => {
+            const tone = SIGNAL_LEVEL[s.level]
+            return (
+              <div
+                key={caseSignalId(s)}
+                style={{ ...signalRow, borderLeft: `4px solid ${tone.line}`, background: tone.bg }}
+              >
+                <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                  <b style={{ color: tone.fg }}>{s.label}</b>
+                  <span style={{ fontSize: 12, color: tone.fg }}>{tone.text}</span>
+                  {s.detail && <span style={{ color: '#475569' }}>{s.detail}</span>}
+                  <span style={{ marginLeft: 'auto', fontSize: 12, color: '#64748b' }}>
+                    결제 {s.openPaymentIds.join(' · ')}
+                  </span>
+                </div>
+                {s.checkBefore && <div>확인 → {s.checkBefore}</div>}
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
+const signalRow = {
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: 4,
+  padding: '8px 12px',
+  borderRadius: 6,
+  fontSize: 13,
 }
 
 // 생성 중 끝난 단계 목록 + 지금 하는 일 줄 (#322, #355 A안) — 문구는 "조사 과정" 탭과 같은 요약이다

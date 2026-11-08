@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag } from 'antd'
+import { Alert, App, Button, Card, Space, Spin, Table, Tag } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CaseVersionConflictError,
@@ -39,7 +39,6 @@ import { AssignmentRequestModal } from './case/AssignmentRequestModal'
 import { CaseForbidden } from './case/CaseForbidden'
 import { ContactCard } from './case/ContactCard'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
-import { CaseBundle } from './case/CaseBundle'
 import { CaseProgress } from './case/CaseProgress'
 import {
   caseStatusLabel,
@@ -316,150 +315,182 @@ export function CaseDetailPage() {
           }
         />
       )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <Card style={{ borderColor: '#E2E8F0' }}>
-          <Descriptions column={4} colon={false} size="small" labelStyle={{ color: '#64748b' }}>
-            <Descriptions.Item label="상태">
-              <CodeTag value={caseStatusLabel[securityCase.status]} />
-            </Descriptions.Item>
-            <Descriptions.Item label="조사 유형">
-              {caseTypeLabel[securityCase.caseType] ?? securityCase.caseType}
-            </Descriptions.Item>
-            <Descriptions.Item label="증거 버전">v{securityCase.evidenceVersion}</Descriptions.Item>
-            <Descriptions.Item label="AI 보고서">
-              {latestReport(reports) ? `v${latestReport(reports)?.reportVersion}` : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="생성 시각">
-              {dateTime(securityCase.createdAt)}
-            </Descriptions.Item>
-            <Descriptions.Item label={<HelpLabel label="결제 병합" help={mergeHelp} />}>
-              {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
-            </Descriptions.Item>
-            <Descriptions.Item
+      {/* 사건 정보 한 칸 (#648) — 상태 · 기한 · 담당은 여기 한 곳에만 둔다. 가맹점 · 고객 · 유형은 제목 아래 줄 */}
+      <Card style={{ borderColor: '#E2E8F0', marginBottom: 20 }} styles={{ body: { padding: 16 } }}>
+        <div className="dw-case-facts">
+          <Fact label="상태">
+            <CodeTag value={caseStatusLabel[securityCase.status]} />
+          </Fact>
+          {securityCase.closedAt ? (
+            <Fact label="종료 시각">{dateTime(securityCase.closedAt)}</Fact>
+          ) : (
+            <Fact
               label={
                 <HelpLabel label={`조사 기한 (생성 후 ${SLA_HOURS}시간)`} help={deadlineHelp} />
               }
             >
               <DeadlineValue createdAt={securityCase.createdAt} status={securityCase.status} />
-            </Descriptions.Item>
-            <Descriptions.Item label="종료 시각">
-              {securityCase.closedAt ? dateTime(securityCase.closedAt) : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="담당">
-              {securityCase.assigneeName ?? '미배정'}
-            </Descriptions.Item>
-            <Descriptions.Item label="배정 시각">
-              {securityCase.assignedAt ? dateTime(securityCase.assignedAt) : '-'}
-            </Descriptions.Item>
-          </Descriptions>
-        </Card>
-
-        <CaseProgress
-          status={securityCase.status}
-          latestReportStatus={latest?.status ?? null}
-          allDecided={decidable.length > 0 && decidedCount >= decidable.length}
-        />
-
-        <CaseBundle
-          securityCase={securityCase}
-          payments={payments}
-          mergeRemaining={mergeRemaining}
-        />
-
-        <Card
-          title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}
-          style={{ borderColor: '#E2E8F0' }}
-        >
-          <Table<CasePayment>
-            size="small"
-            rowKey="casePaymentId"
-            pagination={false}
-            dataSource={payments}
-            columns={[
-              { title: '결제 ID', dataIndex: 'paymentId', render: (v) => <strong>{v}</strong> },
-              {
-                title: '금액',
-                dataIndex: 'amount',
-                align: 'right',
-                render: (v: CasePayment['amount']) => (v === null ? '-' : won(v)),
-              },
-              {
-                title: '결제 시각',
-                dataIndex: 'requestedAt',
-                render: (v: CasePayment['requestedAt']) => (v === null ? '-' : dateTime(v)),
-              },
-              {
-                title: '결제 상태 (P5)',
-                dataIndex: 'paymentStatus',
-                render: (v: CasePayment['paymentStatus'], p) => (
-                  <>
-                    <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
-                    {p.customerCanceledAt && (
-                      <Tag color="default" style={{ marginTop: 4 }}>
-                        고객 취소 · {dateTime(p.customerCanceledAt)}
-                      </Tag>
-                    )}
-                  </>
-                ),
-              },
-              {
-                title: 'FDS 점수',
-                dataIndex: 'riskScore',
-                align: 'right',
-                render: (v: number | null) => <strong>{v ?? '-'}</strong>,
-              },
-              {
-                title: 'FDS 판정',
-                dataIndex: 'fdsResult',
-                render: (v: CasePayment['fdsResult']) => (
-                  <CodeTag value={v ? fdsResultLabel[v] : undefined} />
-                ),
-              },
-              {
-                title: '적중 규칙',
-                dataIndex: 'ruleHits',
-                render: (rules: CasePayment['ruleHits']) =>
-                  rules.map((r) => (
-                    <Tag key={r.code} title={r.code}>
-                      {r.appliedScore === null ? r.name : `${r.name} +${r.appliedScore}`}
-                    </Tag>
-                  )),
-              },
-            ]}
-          />
-        </Card>
-
-        {/* 주문자 정보 — 담당자 · 열린 사건에서만, 결제 1건씩 (#619) */}
-        {contactsVisible && <ContactCard caseId={securityCase.caseId} payments={payments} />}
-
-        <div className="dw-section-grid">
-          <ReportCard
-            caseId={securityCase.caseId}
-            reports={reports}
-            evidenceVersion={securityCase.evidenceVersion}
-          />
-          {/* 증거 버전이 바뀌면 이전 판정 초안을 버리고 새 내용으로 다시 판정하게 한다 (설계 3.5). */}
-          <DecisionPanel
-            key={securityCase.evidenceVersion}
-            payments={payments}
-            decisions={decisions}
-            mode={mode}
-            evidenceVersion={securityCase.evidenceVersion}
-            onSubmit={handleSubmit}
+            </Fact>
+          )}
+          <Fact label="담당">
+            {securityCase.assigneeName ?? '미배정'}
+            {securityCase.assignedAt && (
+              <span className="dw-case-fact-sub"> · 배정 {dateTime(securityCase.assignedAt)}</span>
+            )}
+          </Fact>
+          <Fact label="생성 시각">{dateTime(securityCase.createdAt)}</Fact>
+          <Fact label={<HelpLabel label="결제 병합" help={mergeHelp} />}>
+            {mergeRemaining === null ? '마감' : `${mergeRemaining}분 남음`}
+          </Fact>
+          <Fact label="증거 버전">v{securityCase.evidenceVersion}</Fact>
+        </div>
+        <div style={{ marginTop: 14 }}>
+          <CaseProgress
+            status={securityCase.status}
+            latestReportStatus={latest?.status ?? null}
+            allDecided={decidable.length > 0 && decidedCount >= decidable.length}
           />
         </div>
+      </Card>
 
-        <div className="dw-section-grid">
-          <HandoffCard
-            payments={payments}
-            decisions={decisions}
-            handoffs={handoffs}
-            recheckingId={recheckingId}
-            onRecheck={handleRecheck}
-          />
-          <HistoryCard history={history} />
+      {/* 왼쪽 = 결제 표 → 주문자 정보 → AI 보고서 요약 → 이력, 오른쪽 = 판정 칸 고정 (#648)
+          좁으면 한 줄로 쌓이고 판정 칸은 결제 표 바로 아래로 온다 (global.css .dw-case-layout)
+          판정 칸 · 보고서 · 주문자 정보는 상태와 상관없이 늘 같은 자리에 둔다 — 3초 자동 조회 때 다시 그려지면
+          입력 중인 판정 초안 · 생성 진행 표시 · 열람 상태가 사라진다 */}
+      <div className="dw-case-layout-wrap">
+        <div className="dw-case-layout">
+          <div className="dw-case-pay">
+            <PaymentTable payments={payments} />
+          </div>
+          <aside className="dw-case-side" aria-label="결제별 판정과 금융 조치">
+            {/* 증거 버전이 바뀌면 이전 판정 초안을 버리고 새 내용으로 다시 판정하게 한다 (설계 3.5). */}
+            <DecisionPanel
+              key={securityCase.evidenceVersion}
+              payments={payments}
+              decisions={decisions}
+              mode={mode}
+              evidenceVersion={securityCase.evidenceVersion}
+              onSubmit={handleSubmit}
+            />
+            {/* 판정 전에는 빈 표가 자리를 차지하지 않게, 인계가 생긴 뒤에만 보인다 */}
+            {handoffs.length > 0 && (
+              <HandoffCard
+                payments={payments}
+                decisions={decisions}
+                handoffs={handoffs}
+                recheckingId={recheckingId}
+                onRecheck={handleRecheck}
+              />
+            )}
+          </aside>
+          <div className="dw-case-main">
+            {/* 주문자 정보 — 담당자 · 열린 사건에서만, 결제 1건씩 (#619) */}
+            {contactsVisible && <ContactCard caseId={securityCase.caseId} payments={payments} />}
+            <ReportCard
+              caseId={securityCase.caseId}
+              reports={reports}
+              evidenceVersion={securityCase.evidenceVersion}
+            />
+            <HistoryCard history={history} />
+          </div>
         </div>
       </div>
     </>
   )
 }
+
+function Fact({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className="dw-case-fact">
+      <span className="dw-case-fact-label">{label}</span>
+      <span className="dw-case-fact-value">{children}</span>
+    </div>
+  )
+}
+
+// 결제 정보(번호 · 금액 · FDS · 규칙 · 결제 상태)는 이 표 한 곳에만 둔다 (#648)
+// "들어온 방식" — 첫 결제가 사건을 만들고, 그 뒤 결제는 병합 기한 안에 합쳐진 것이다 (예전 "경보에서 사건까지" 그림, #320)
+function PaymentTable({ payments }: { payments: CasePayment[] }) {
+  const firstLinked = [...payments].sort(
+    (a, b) => Date.parse(a.linkedAt) - Date.parse(b.linkedAt),
+  )[0]?.casePaymentId
+  return (
+    <Card
+      title={<span className="dw-section-title">조사 대상 결제 ({payments.length}건)</span>}
+      style={{ borderColor: '#E2E8F0' }}
+    >
+      <Table<CasePayment>
+        size="small"
+        rowKey="casePaymentId"
+        pagination={false}
+        dataSource={payments}
+        columns={[
+          {
+            title: '결제 ID',
+            dataIndex: 'paymentId',
+            render: (v, p) => (
+              <Space size={6}>
+                <strong>{v}</strong>
+                <Tag
+                  color={p.casePaymentId === firstLinked ? 'blue' : 'gold'}
+                  style={{ marginInlineEnd: 0 }}
+                >
+                  {p.casePaymentId === firstLinked ? '사건 생성' : '결제 병합'}
+                </Tag>
+              </Space>
+            ),
+          },
+          {
+            title: '결제 시각',
+            dataIndex: 'requestedAt',
+            render: (v: CasePayment['requestedAt']) =>
+              v === null ? '-' : <span style={noWrap}>{dateTime(v)}</span>,
+          },
+          {
+            title: '금액',
+            dataIndex: 'amount',
+            align: 'right',
+            render: (v: CasePayment['amount']) =>
+              v === null ? '-' : <span style={noWrap}>{won(v)}</span>,
+          },
+          {
+            title: 'FDS',
+            dataIndex: 'riskScore',
+            render: (v: number | null, p) => (
+              <Space size={6}>
+                <strong>{v ?? '-'}</strong>
+                <CodeTag value={p.fdsResult ? fdsResultLabel[p.fdsResult] : undefined} />
+              </Space>
+            ),
+          },
+          {
+            title: '적중 규칙',
+            dataIndex: 'ruleHits',
+            render: (rules: CasePayment['ruleHits']) =>
+              rules.map((r) => (
+                <Tag key={r.code} title={r.code}>
+                  {r.appliedScore === null ? r.name : `${r.name} +${r.appliedScore}`}
+                </Tag>
+              )),
+          },
+          {
+            title: '결제 상태 (P5)',
+            dataIndex: 'paymentStatus',
+            render: (v: CasePayment['paymentStatus'], p) => (
+              <>
+                <CodeTag value={v ? paymentStatusLabel[v] : undefined} />
+                {p.customerCanceledAt && (
+                  <Tag color="default" style={{ marginTop: 4 }}>
+                    고객 취소 · {dateTime(p.customerCanceledAt)}
+                  </Tag>
+                )}
+              </>
+            ),
+          },
+        ]}
+      />
+    </Card>
+  )
+}
+
+const noWrap = { whiteSpace: 'nowrap' as const }

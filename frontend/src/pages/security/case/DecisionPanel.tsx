@@ -112,10 +112,10 @@ export function DecisionPanel({
           const draft = draftOf(p.casePaymentId)
           return (
             <div key={p.casePaymentId} style={rowBox}>
+              {/* FDS 점수 · 규칙은 결제 표 한 곳에만 둔다 (#648) — 여기서는 어느 결제인지만 */}
               <Space size={8} wrap style={{ marginBottom: 8 }}>
                 <strong>결제 {p.paymentId}</strong>
                 <span>{p.amount === null ? '-' : won(p.amount)}</span>
-                <span style={{ color: '#64748b' }}>FDS {p.riskScore ?? '-'}점</span>
               </Space>
               {p.customerCanceledAt && (
                 <Alert
@@ -142,18 +142,21 @@ export function DecisionPanel({
                 </div>
               ) : p.customerCanceledAt ? null : (
                 <>
+                  {/* 두 선택을 조금 띄우고 고른 쪽을 초록 / 빨강으로 (#648) — 확정 전에 무엇을 골랐는지 한눈에 */}
                   <Radio.Group
+                    className="dw-decision-choice"
                     disabled={!editable}
                     value={draft.decision}
                     onChange={(e) => update(p.casePaymentId, { decision: e.target.value })}
-                    optionType="button"
-                    buttonStyle="solid"
                     size="small"
-                    options={[
-                      { value: 'ACCEPT', label: 'ACCEPT · 매입 허용' },
-                      { value: 'REJECT', label: 'REJECT · 매입 거부' },
-                    ]}
-                  />
+                  >
+                    <Radio.Button value="ACCEPT" className="dw-choice-accept">
+                      ACCEPT · 매입 허용
+                    </Radio.Button>
+                    <Radio.Button value="REJECT" className="dw-choice-reject">
+                      REJECT · 매입 거부
+                    </Radio.Button>
+                  </Radio.Group>
                   <Input.TextArea
                     aria-label={`${p.paymentId} 판정 사유`}
                     disabled={!editable}
@@ -172,7 +175,7 @@ export function DecisionPanel({
           )
         })}
         {editable && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <Button type="primary" disabled={blocker !== null} onClick={submit}>
               판정 확정 ({selected.length}건)
             </Button>
