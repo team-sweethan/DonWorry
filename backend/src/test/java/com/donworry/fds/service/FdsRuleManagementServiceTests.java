@@ -3,6 +3,7 @@ package com.donworry.fds.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 
 import com.donworry.fds.entity.FdsRuleChangeRequest;
@@ -147,6 +148,8 @@ class FdsRuleManagementServiceTests {
     @Test
     void insiderRulePolicy_whenSecurityStaffRequestsOrToggles_isForbidden() {
         when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
+        when(policies.findByRuleCodeForUpdate("INS_03")).thenReturn(Optional.of(policy));
+        when(policy.getRuleCode()).thenReturn("INS_03");
 
         var request = catchThrowable(() -> service().requestDisable("INS_03", "오탐 확인"));
         var toggle = catchThrowable(() -> service().setActive("INS_03", true));
@@ -156,7 +159,30 @@ class FdsRuleManagementServiceTests {
                                 .getStatusCode()
                                 .value())
                         .isEqualTo(403));
-        verify(policies, never()).findByRuleCodeForUpdate(any());
+        verify(policy, never()).update(anyBoolean(), any(), any());
+        verify(requests, never()).save(any());
+        verify(histories, never()).save(any());
+    }
+
+    // (#688 Codex 리뷰) DB 비교는 대소문자를 가리지 않아(utf8mb4_unicode_ci) ins_03으로도 INS_03 정책이 잡힌다
+    // 입력 문자열로 검사하면 보안 직원이 소문자 주소로 관리자 전용 규칙을 다시 켜거나 끄기를 요청한다
+    @Test
+    void insiderRulePolicy_whenSecurityStaffUsesLowercaseCode_isForbidden() {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
+        when(policies.findByRuleCodeForUpdate("ins_03")).thenReturn(Optional.of(policy));
+        when(policy.getRuleCode()).thenReturn("INS_03");
+
+        lenient().when(policy.isActive()).thenReturn(true);
+        var request = catchThrowable(() -> service().requestDisable("ins_03", "오탐 확인"));
+        lenient().when(policy.isActive()).thenReturn(false);
+        var toggle = catchThrowable(() -> service().setActive("ins_03", true));
+
+        assertThat(List.of(request, toggle))
+                .allSatisfy(exception -> assertThat(((ResponseStatusException) exception)
+                                .getStatusCode()
+                                .value())
+                        .isEqualTo(403));
+        verify(policy, never()).update(anyBoolean(), any(), any());
         verify(requests, never()).save(any());
         verify(histories, never()).save(any());
     }

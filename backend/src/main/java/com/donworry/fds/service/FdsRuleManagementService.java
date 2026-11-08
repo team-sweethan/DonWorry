@@ -43,8 +43,8 @@ public class FdsRuleManagementService {
     @Transactional
     public void requestDisable(String ruleCode, String reason) {
         var actor = requireRole("SECURITY_STAFF");
-        rejectInsiderRule(ruleCode);
         var policy = policyForUpdate(ruleCode);
+        rejectInsiderRule(policy);
         if (!policy.isActive()) throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 꺼진 룰입니다.");
         if (requests.existsByRuleCodeAndStatus(ruleCode, FdsRuleChangeRequest.Status.PENDING)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 승인 대기 중인 요청이 있습니다.");
@@ -59,8 +59,8 @@ public class FdsRuleManagementService {
         if (!"ADMIN".equals(actor.role()) && (!"SECURITY_STAFF".equals(actor.role()) || !active)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
         }
-        if ("SECURITY_STAFF".equals(actor.role())) rejectInsiderRule(ruleCode);
         var policy = policyForUpdate(ruleCode);
+        if ("SECURITY_STAFF".equals(actor.role())) rejectInsiderRule(policy);
         if ("SECURITY_STAFF".equals(actor.role()) && policy.isActive()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 켜진 룰입니다.");
         }
@@ -155,8 +155,9 @@ public class FdsRuleManagementService {
     }
 
     // 내부자 규칙은 보안 직원 본인을 감시한다 — 끄기 요청 · 다시 켜기 모두 관리자만 한다 (#685, ADR-0082)
-    private void rejectInsiderRule(String ruleCode) {
-        if (Arrays.stream(InsiderRule.values()).anyMatch(rule -> rule.name().equals(ruleCode))) {
+    // 입력 문자열이 아니라 DB에서 찾은 정본 코드로 본다 (#688 Codex 리뷰) — DB 비교는 대소문자를 가리지 않아 ins_03으로도 INS_03이 잡힌다
+    private void rejectInsiderRule(com.donworry.fds.entity.FdsRulePolicy policy) {
+        if (Arrays.stream(InsiderRule.values()).anyMatch(rule -> rule.name().equals(policy.getRuleCode()))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내부자 규칙은 관리자만 바꿀 수 있습니다.");
         }
     }
