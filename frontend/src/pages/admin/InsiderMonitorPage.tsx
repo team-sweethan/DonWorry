@@ -23,6 +23,7 @@ import {
   type InsiderMonitorTimeline,
 } from '../../api/insiderMonitor'
 import { PageHeader } from '../../components/common/PageHeader'
+import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { InsiderCaseDrawer } from './InsiderCasesPage'
 
 // 화면이 보일 때만 2초마다 다시 읽는다 (ADR-0082 조각 10 D3). 다른 탭이면 멈춘다
@@ -129,12 +130,12 @@ function EventText({ event }: { event: InsiderMonitorEvent }) {
     return (
       <Space wrap size={4}>
         <strong>{event.type === 'ALERT_CLOSED' ? '경보 닫힘' : '경보'}</strong>
-        <span>{`${event.ruleCode} ${event.ruleLabel}`}</span>
+        <span>{`${displayRuleCode(event.ruleCode ?? '')} ${event.ruleLabel}`}</span>
         <Tag color={event.type === 'ALERT_CLOSED' ? 'default' : severity.color}>
           {severity.label}
         </Tag>
         {event.type === 'ALERT_RAISED' && event.summary && (
-          <Typography.Text type="secondary">{event.summary}</Typography.Text>
+          <Typography.Text type="secondary">{displayRuleText(event.summary)}</Typography.Text>
         )}
       </Space>
     )

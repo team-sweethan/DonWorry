@@ -228,7 +228,7 @@ class InsiderReportServiceTests {
                         tuple("TRANSACTION_EXPORT", 1L, 0L, 50L));
         assertThat(asList(facts(saved.getFirst()).get("alerts")))
                 .extracting(row -> row.get("ruleCode"))
-                .containsExactly("INS-08", "INS-01");
+                .containsExactly("SEC-INS-08", "SEC-INS-01");
     }
 
     // 고객 번호가 비어 있는 원문 열람 기록도 사건 고객으로 세고, 고객을 못 찾은 기록은 0명으로 숨기지 않고 따로 센다 (#675 Codex 리뷰)

@@ -9,6 +9,7 @@ import {
 import { getMerchantDirectory } from '../../api/merchants'
 import { PageHeader } from '../../components/common/PageHeader'
 import { merchantDisplayName } from '../../utils/merchantDisplayName'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 
 function formatDate(value: string | null) {
   return value
@@ -103,7 +104,7 @@ export function OperatorAccessDetectionDetailPage() {
               <Descriptions.Item label="소속 정보">
                 {merchantName ?? result.merchantId ?? '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="룰">{ruleLabel(result.ruleCode)}</Descriptions.Item>
+              <Descriptions.Item label="룰">{`${displayRuleCode(result.ruleCode)} ${ruleLabel(result.ruleCode)}`}</Descriptions.Item>
               <Descriptions.Item label="거절 유형">
                 {deniedTypeLabel(result.deniedType)}
               </Descriptions.Item>

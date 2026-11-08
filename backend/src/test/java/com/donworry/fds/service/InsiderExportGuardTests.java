@@ -87,7 +87,7 @@ class InsiderExportGuardTests {
         verify(alerts).save(saved.capture());
         assertThat(saved.getValue().getRuleCode()).isEqualTo(InsiderRule.INS_05);
         assertThat(saved.getValue().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
-        assertThat(saved.getValue().getSummary()).contains("INS-08");
+        assertThat(saved.getValue().getSummary()).contains("SEC-INS-08");
         verify(evidence, times(2)).save(any());
         var raised = ArgumentCaptor.forClass(InsiderAlertRaised.class);
         verify(publisher).publishEvent(raised.capture());

@@ -11,6 +11,7 @@ import {
 } from '../../api/insiderAlerts'
 import { PageHeader } from '../../components/common/PageHeader'
 import { refreshInsiderAlertBadge } from '../../hooks/useInsiderAlertBadge'
+import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { approveMemoPlaceholder, errorText } from './caseAssignmentForm'
 
@@ -186,7 +187,11 @@ export function InsiderAlertsPage() {
           columns={[
             { ...oneLine, title: '최근 시각', dataIndex: 'lastEventAt', render: dateTime },
             { ...oneLine, title: '직원', render: (_, row) => row.staffName ?? `ID ${row.staffId}` },
-            { ...oneLine, title: '규칙', render: (_, row) => `${row.ruleCode} ${row.ruleLabel}` },
+            {
+              ...oneLine,
+              title: '규칙',
+              render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
+            },
             {
               ...oneLine,
               title: '등급',
@@ -195,7 +200,7 @@ export function InsiderAlertsPage() {
                 <Tag color={severityTag[value].color}>{severityTag[value].label}</Tag>
               ),
             },
-            { title: '내용', dataIndex: 'summary' },
+            { title: '내용', dataIndex: 'summary', render: displayRuleText },
             { ...oneLine, title: '근거', render: (_, row) => `${row.evidenceCount}건` },
             status === 'OPEN'
               ? {

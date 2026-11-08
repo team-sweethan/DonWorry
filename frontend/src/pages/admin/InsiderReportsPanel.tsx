@@ -7,6 +7,7 @@ import {
   type InsiderReportAccessType,
   type InsiderReportBody,
 } from '../../api/insiderCases'
+import { displayRuleCode, displayRuleText, isExportBlockRule } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
 
@@ -77,7 +78,7 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
             {
               ...oneLine,
               title: '규칙',
-              render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
+              render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
             },
             {
               ...oneLine,
@@ -85,7 +86,7 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
               dataIndex: 'severity',
               render: (value: InsiderAlertSeverity) => severityLabel[value],
             },
-            { title: '내용', dataIndex: 'summary' },
+            { title: '내용', dataIndex: 'summary', render: displayRuleText },
           ]}
         />
       </div>
@@ -113,9 +114,10 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
           ]}
         />
         {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
-        {facts.alerts.some((alert) => alert.ruleCode === 'INS-05') && (
+        {facts.alerts.some((alert) => isExportBlockRule(alert.ruleCode)) && (
           <Typography.Text type="secondary">
-            막힌 내보내기 시도는 위 [걸린 규칙]의 INS-05 줄에 있고, 이 표의 숫자에는 세지 않습니다.
+            막힌 내보내기 시도는 위 [걸린 규칙]의 SEC-INS-05 줄에 있고, 이 표의 숫자에는 세지
+            않습니다.
           </Typography.Text>
         )}
       </div>
