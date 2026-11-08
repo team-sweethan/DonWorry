@@ -38,4 +38,7 @@ public interface InsiderCaseRepository extends Repository<InsiderCase, Long> {
     List<InsiderCase> findTop20ByStaffIdAndIdNotOrderByOpenedAtDescIdDesc(Long staffId, Long excludedId);
 
     long countByStatus(InsiderCaseStatus status);
+
+    // 내부자 관제 (#679) — 열린 사건은 사람당 1개라 직원 수보다 많지 않다
+    List<InsiderCase> findByStatusOrderByIdAsc(InsiderCaseStatus status);
 }

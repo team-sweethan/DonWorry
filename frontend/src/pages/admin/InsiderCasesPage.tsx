@@ -70,8 +70,11 @@ function decisionSummary(row: InsiderCase) {
     : `${decided} → 정지 유지`
 }
 
-/** 사건 상세 — 묶인 경보 · 정지 여부 · 남은 FDS 사건 · 지난 판정, 그리고 판정 또는 정지 해제 */
-function CaseDrawer({
+/**
+ * 사건 상세 — 묶인 경보 · 정지 여부 · 남은 FDS 사건 · 지난 판정, 그리고 판정 또는 정지 해제.
+ * 내부자 관제(#679)도 같은 창을 띄운다.
+ */
+export function InsiderCaseDrawer({
   insiderCaseId,
   onClose,
   onChanged,
@@ -458,7 +461,7 @@ export function InsiderCasesPage() {
         />
       </Card>
       {openId !== null && (
-        <CaseDrawer
+        <InsiderCaseDrawer
           key={openId}
           insiderCaseId={openId}
           onClose={() => setOpenId(null)}

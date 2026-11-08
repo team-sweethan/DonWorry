@@ -1,6 +1,8 @@
 package com.donworry.identity.service;
 
 import com.donworry.identity.api.StaffLogin;
+import com.donworry.identity.api.StaffLoginEvent;
+import com.donworry.identity.api.StaffLoginEventType;
 import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.identity.entity.LoginEventType;
 import com.donworry.identity.entity.LoginHistory;
@@ -41,6 +43,26 @@ public class StaffLoginService implements StaffLoginReader {
                         LocalDateTime.ofInstant(to, ZoneOffset.UTC))
                 .stream()
                 .map(StaffLoginService::toLogin)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StaffLoginEvent> findLoginEvents(Long staffId, Instant from, Instant to) {
+        return histories
+                .findByUserIdAndOccurredAtBetweenOrderByOccurredAtAscHistoryIdAsc(
+                        staffId,
+                        LocalDateTime.ofInstant(from, ZoneOffset.UTC),
+                        LocalDateTime.ofInstant(to, ZoneOffset.UTC))
+                .stream()
+                .map(history -> StaffLoginEvent.builder()
+                        .staffId(history.getUserId())
+                        .eventType(StaffLoginEventType.valueOf(
+                                history.getEventType().name()))
+                        .occurredAt(history.getOccurredAt().toInstant(ZoneOffset.UTC))
+                        .clientIp(history.getClientIp())
+                        .device(UserAgentDevice.label(history.getUserAgent()))
+                        .build())
                 .toList();
     }
 

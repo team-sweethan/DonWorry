@@ -56,7 +56,8 @@ public enum InvestigationErrorCode {
     INSIDER_LOCK_ALREADY_RELEASED("INV_041", "이미 정지를 푼 사건입니다.", HttpStatus.CONFLICT),
     STAFF_HAS_OPEN_INSIDER_CASE("INV_042", "이 직원은 조사 중인 내부자 사건이 있습니다.", HttpStatus.CONFLICT),
     STAFF_NOT_LOCKED("INV_043", "정지 상태가 아닌 직원입니다.", HttpStatus.CONFLICT),
-    INVALID_LOCK_OUTCOME("INV_044", "정지 해제 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST);
+    INVALID_LOCK_OUTCOME("INV_044", "정지 해제 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
+    MONITOR_STAFF_NOT_FOUND("INV_045", "보안 직원을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
 
     private final String code;
     private final String message;

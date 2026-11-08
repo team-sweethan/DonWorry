@@ -29,6 +29,10 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long
             findByUserIdAndEventTypeAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtAscHistoryIdAsc(
                     Long userId, LoginEventType eventType, LocalDateTime from, LocalDateTime to);
 
+    // 내부자 관제 타임라인 (#679, StaffLoginReader.findLoginEvents) — 종류 구분 없이 [from, to]
+    List<LoginHistory> findByUserIdAndOccurredAtBetweenOrderByOccurredAtAscHistoryIdAsc(
+            Long userId, LocalDateTime from, LocalDateTime to);
+
     @Modifying
     @Query(
             value =
