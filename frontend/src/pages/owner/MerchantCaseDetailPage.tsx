@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Descriptions, Space, Spin, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getMerchantCase } from '../../api/merchantCases'
@@ -140,30 +140,17 @@ export function MerchantCaseDetailPage() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
-      <Card title="조사 결과 요약" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
-        {result.directInvestigation && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: result.summary ? 12 : 0 }}
-            message="보안 담당자 직접 조사"
-            description="AI 보고서 없이 보안 담당자가 직접 조사해 판정한 결제가 있습니다."
-          />
-        )}
-        {result.summary ? (
+      <Card title="처리 안내" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
+        {result.summary?.length ? (
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {result.summary.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>
         ) : (
-          !result.directInvestigation && (
-            <Typography.Text type="secondary">
-              {result.displayStatus === 'INVESTIGATING'
-                ? '조사 중입니다. 결과가 나오면 이곳에 요약이 표시됩니다.'
-                : '표시할 조사 요약이 없습니다.'}
-            </Typography.Text>
-          )
+          <Typography.Text type="secondary">
+            현재 처리 상태는 아래 결제별 결과에서 확인해 주세요.
+          </Typography.Text>
         )}
       </Card>
       <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
