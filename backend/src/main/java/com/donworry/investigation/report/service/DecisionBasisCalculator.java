@@ -64,11 +64,12 @@ public final class DecisionBasisCalculator {
 
     // 판정 전에 확인할 것 (#591) — 징후마다 직원이 할 일을 코드가 정한다 (AI가 고르지 않는다)
     // 새 징후를 추가하면 여기도 한 줄 (DecisionBasisCalculatorTests가 검사)
+    // R04: P5는 한 주문을 여러 결제로 나눠 받지 않는다 — 같은 주문의 새 시도는 앞 시도가 거절 · 차단됐을 때만 (#672)
     static final Map<String, String> CHECK_BEFORE = Map.ofEntries(
             Map.entry("R01", "고객의 평소 결제 금액과 비교 · 단체 주문 같은 구매 목적 확인"),
             Map.entry("R02", "고객이 최근 기기를 바꿨는지 가맹점에 확인"),
             Map.entry("R03", "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"),
-            Map.entry("R04", "한 주문을 나눠 낸 결제인지 주문 내역 확인"),
+            Map.entry("R04", "거절 · 차단 뒤 같은 주문을 다시 결제했는지, 서로 다른 주문을 연달아 냈는지 주문 내역 확인"),
             Map.entry("R05", "해외 체류 · VPN 사용 등 접속 경위 확인"),
             Map.entry("R06", "소액 결제가 여러 카드로 이어졌는지 카드사에 확인"),
             Map.entry("R07", "차단 목록에 오른 사유 · 등록 시점 확인"),
