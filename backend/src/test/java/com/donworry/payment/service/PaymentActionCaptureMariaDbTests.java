@@ -25,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.support.DataAccessUtils;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.modulith.events.IncompleteEventPublications;
@@ -149,17 +150,30 @@ class PaymentActionCaptureMariaDbTests {
                 """, String.class, type.getName(), id, PaymentActionResult.class.getName(), TEST_RECEIVER_LISTENER_ID));
     }
 
-    private String publicationStatus(UUID id) {
-        return jdbc.queryForObject("SELECT STATUS FROM EVENT_PUBLICATION WHERE ID=?", String.class, id.toString());
+    // 기다리는 중(await)에는 발행 기록이 아직 없을 수 있다 — 없으면 null을 돌려 untilAsserted가 다시 확인하게 한다 (#579).
+    // queryForObject는 0건이면 EmptyResultDataAccessException을 던지는데, Awaitility는 AssertionError만 다시 확인해
+    // 15초를 기다리지 않고 첫 확인에서 실패했다. 2건 이상이면 예전처럼 바로 실패한다(singleResult).
+    private <T> T publicationValueOrNull(String column, Class<T> valueType, Class<?> type, long id) {
+        return DataAccessUtils.singleResult(jdbc.queryForList(
+                "SELECT " + column + " FROM EVENT_PUBLICATION"
+                        + " WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT, '$.paymentId')=?"
+                        + " AND (EVENT_TYPE<>? OR LISTENER_ID=?)",
+                valueType,
+                type.getName(),
+                id,
+                PaymentActionResult.class.getName(),
+                TEST_RECEIVER_LISTENER_ID));
+    }
+
+    private String publicationStatusOrNull(Class<?> type, long id) {
+        return publicationValueOrNull("STATUS", String.class, type, id);
     }
 
     private void completed(long id) {
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
             assertThat(state().received.get(id)).hasSize(1);
-            assertThat(jdbc.queryForObject(
-                            "SELECT COMPLETION_DATE IS NOT NULL FROM EVENT_PUBLICATION WHERE ID=?",
-                            Boolean.class,
-                            publication(PaymentActionResult.class, id).toString()))
+            assertThat(publicationValueOrNull(
+                            "COMPLETION_DATE IS NOT NULL", Boolean.class, PaymentActionResult.class, id))
                     .isTrue();
         });
     }
@@ -192,7 +206,7 @@ class PaymentActionCaptureMariaDbTests {
                 .save(any());
         assertThat(requester.request(c)).isEqualTo(PaymentActionReceipt.pending());
         await().atMost(Duration.ofSeconds(15))
-                .untilAsserted(() -> assertThat(publicationStatus(publication(CaptureRequested.class, c.paymentId())))
+                .untilAsserted(() -> assertThat(publicationStatusOrNull(CaptureRequested.class, c.paymentId()))
                         .isEqualTo("FAILED"));
         UUID original = publication(CaptureRequested.class, c.paymentId());
         assertThat(count("captures", c.paymentId())).isZero();
@@ -303,7 +317,7 @@ class PaymentActionCaptureMariaDbTests {
                 .complete(argThat(e -> e != null && e.paymentId().equals(c.paymentId())));
         requester.request(c);
         await().atMost(Duration.ofSeconds(15))
-                .untilAsserted(() -> assertThat(publicationStatus(publication(CaptureCompleted.class, c.paymentId())))
+                .untilAsserted(() -> assertThat(publicationStatusOrNull(CaptureCompleted.class, c.paymentId()))
                         .isEqualTo("FAILED"));
         assertThat(payments.findById(c.paymentId()).orElseThrow().getStatus().name())
                 .isEqualTo("HELD");
@@ -330,9 +344,8 @@ class PaymentActionCaptureMariaDbTests {
         state().failing.add(c.paymentId());
         requester.request(c);
         await().atMost(Duration.ofSeconds(15))
-                .untilAsserted(
-                        () -> assertThat(publicationStatus(publication(PaymentActionResult.class, c.paymentId())))
-                                .isEqualTo("FAILED"));
+                .untilAsserted(() -> assertThat(publicationStatusOrNull(PaymentActionResult.class, c.paymentId()))
+                        .isEqualTo("FAILED"));
         UUID original = publication(PaymentActionResult.class, c.paymentId());
         assertThat(requester.request(c).status()).isEqualTo("ACCEPTED");
         state().failing.remove(c.paymentId());
