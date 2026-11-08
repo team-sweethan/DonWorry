@@ -102,6 +102,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 | --- | --- |
 | 저장 | P2 `fds_rule_policies`에 `INS_01 · 03 · 06 · 07 · 08 · 09` 6줄(저장 이름 = `InsiderRule` enum 이름, `insider_alerts.rule_code`와 같음). 화면에서는 `SEC-INS-0x`로 보인다 |
 | 누가 | **관리자만** 끄고 켠다. 보안 직원의 끄기 요청 · 다시 켜기는 403 — 감시 대상이 자기 감시 규칙에 손대지 못하게 한다. 결제 · 사장님 규칙의 절차(보안 직원 요청 → 관리자 승인, [ADR-0042](0042-fds-rule-management.md))는 그대로다 |
+| 누가 보나 | 켜짐 · 꺼짐도 **관리자만** 본다. 보안 직원도 부르는 `GET /api/fds/rule-policies`는 보안 직원에게 `INS_0x` 줄을 빼고 준다 — 꺼진 규칙을 알면 그 규칙에 걸리는 행동만 골라 감시를 피할 수 있다 (#688 Codex 보안 리뷰) |
 | INS-05 | **끌 수 없다.** 정책 줄을 두지 않아 끄기 · 켜기 주소가 404다. 카드에는 "항상 켜짐"으로 보인다. 탐지가 아니라 3.1의 마지막 방어 장치이고, 앞 규칙을 끄면 높음 경보가 안 생겨 자연히 덜 걸린다 |
 | 끈 동안 | 접근 기록은 P1이 계속 쌓는다. 꺼진 규칙은 새 경보를 열거나 기존 경보를 갱신하지 않는다. **이미 열린 경보는 그대로** 두고 관리자가 닫는다 — 끄기 전에 열린 높음 경보는 꺼진 뒤에도 내보내기를 막는다 |
 | 다시 켤 때 | **켠 시각 이후의 기록만 센다**(정책 줄 `updated_at`, 관리자가 바꾼 줄만). 끈 동안의 기록으로 소급 경보를 열지 않는다. INS-06은 켠 뒤 새 기록이 붙은 경보만 겹침으로 센다 |
@@ -223,7 +224,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - #651: `POST /api/payment-transactions/export`(CSV, CSRF 항상 검사), 차단 응답 403 `INSIDER_EXPORT_BLOCKED`. INS-08 · 09가 허용된 내보내기도 세고 높음 단계가 생김 → 높음 경보가 `InsiderAlertRaised`로 P3에 더 자주 갈 수 있음
   - #628: FDS 평가 상세의 `cardIdentifier.cardToken` 삭제, 차단 후보 IP · 기기 ID는 가린 값 · 카드는 표시값(없으면 `null`), [차단 목록] 응답 `identifierValue`는 IP · 기기 ID 가린 값 · 카드 `null`, R02 · R03 · R07 근거 키 변경(`maskedDeviceId` · `maskedIpAddress` · `cardDisplayLabel`, `cardToken` 없음). P3 · P4는 이 키를 읽지 않음(P4 `RuleCriterionFormatter`는 R02 · R03 `approvedHistoryCount`만)
   - #679: 관리자 내부자 관제 `GET /api/admin/insider-monitor/staff` · `…/staff/{staffId}/timeline`(읽기만, 새 표 없음). identity.api `StaffLoginReader.findLoginEvents`(성공 · 실패 · 로그아웃 · 직원 자신의 접속 IP)와 fds.api `InsiderAlertMonitorReader`를 더했고 기존 `StaffLogin` 모양은 그대로다. 알려진 한계: 화면이 보이는 동안 2초마다 다시 읽는 요청이 관리자 활동으로 잡혀, 화면을 띄워 두면 관리자 로그인 유지 시간이 끝나지 않는다(SSE · 활동 제외 처리는 후속)
-  - #685: `GET /api/fds/insider-detections/rule-catalog`(ADMIN) 추가. 기존 `PUT /api/fds/rules/{ruleCode}/active` · `POST …/disable-requests`가 `INS_0x`도 받는다(보안 직원은 403, `INS_05`는 404). P2 api `FdsRuleCatalogEntry`에 `@Builder`만 더함(모양 그대로)
+  - #685: `GET /api/fds/insider-detections/rule-catalog`(ADMIN) 추가. 기존 `PUT /api/fds/rules/{ruleCode}/active` · `POST …/disable-requests`가 `INS_0x`도 받는다(보안 직원은 403 — 대소문자가 다른 입력도 DB 정본 코드로 검사, `INS_05`는 404). `GET /api/fds/rule-policies`는 보안 직원 응답에서 `INS_0x` 줄을 뺀다. P2 api `FdsRuleCatalogEntry`에 `@Builder`만 더함(모양 그대로)
   - #659: `GET /api/admin/users`의 기본 정렬이 최근 계정순 → 관리자 · 보안 직원 · 사장님 순(같은 역할은 최근 계정순)으로 바뀜. 요청 · 응답 모양은 그대로
 - DB: 새 표 12개 + `security_cases` 칸 2개 + `staff_access_events` 칸 2개 + `insider_cases` 칸 4개. 표마다 소유 담당 마이그레이션으로 만들고 [`docs/erd/`](../erd/README.md)에 적는다. 다른 담당 표 사이는 논리 참조만. 주문자 암호문 파기(2차)는 `payment_order_contacts` CHECK 변경 마이그레이션이 필요하다(7절). #685: `fds_rule_policies`에 내부자 규칙 6줄(P2 마이그레이션, 칸 변경 없음)
 - 화면: 관리자 메뉴 3단 재배치(8절, 조각 8 전 별도 PR · #659, [계정 관리]는 "시스템 설정 › 계정"으로 옮기고 목록 기본은 사용 중 계정) — 내부자 경보 · 사건 · 관제 · 원문 열람 검토는 "직원 관리 › 보안", 사건 담당은 "직원 관리 › 사건", 보안 직원 사건 상세(담당 표시 · 주문자 정보 카드 · 담당 변경 요청), 거래 목록 CSV 내보내기. #603: 경보 상세(차단 후보 · R07 근거) · [차단 목록]의 이메일 가림, 경보 상세 차단 등록이 원문 없이 동작. #628: 경보 상세 "카드 식별값" 줄 삭제, 차단 후보 · R02 · R03 · R07 근거 · [차단 목록]의 IP · 기기 ID 가림. #685: [탐지 룰 목록] 계정 룰 탭에 내부자 규칙 카드 7개(INS-05는 스위치 없이 "항상 켜짐"), 룰 변경 이력의 `INS_0x`도 `SEC-INS-0x`로 보임

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 
+import com.donworry.fds.api.FdsRulePolicySummary;
 import com.donworry.fds.entity.FdsRuleChangeRequest;
 import com.donworry.fds.entity.FdsRulePolicy;
 import com.donworry.fds.repository.FdsRuleChangeRequestRepository;
@@ -185,6 +186,25 @@ class FdsRuleManagementServiceTests {
         verify(policy, never()).update(anyBoolean(), any(), any());
         verify(requests, never()).save(any());
         verify(histories, never()).save(any());
+    }
+
+    // (#688 Codex 보안 리뷰) 감시 대상인 보안 직원이 어떤 내부자 규칙이 꺼졌는지 알면 그 규칙에 걸리는 행동만 골라 감시를 피한다
+    // 관리자는 계정 룰 탭 스위치에 이 상태가 필요하다
+    @Test
+    void policies_whenSecurityStaff_hidesInsiderRules() {
+        var payment = mock(FdsRulePolicy.class);
+        when(payment.getRuleCode()).thenReturn("R03");
+        var insider = mock(FdsRulePolicy.class);
+        when(insider.getRuleCode()).thenReturn("INS_08");
+        when(policies.findAll()).thenReturn(List.of(payment, insider));
+
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(3L, "보안 직원")));
+        var staffView = service().policies();
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff(1L, "관리자")));
+        var adminView = service().policies();
+
+        assertThat(staffView).extracting(FdsRulePolicySummary::ruleCode).containsExactly("R03");
+        assertThat(adminView).extracting(FdsRulePolicySummary::ruleCode).containsExactly("R03", "INS_08");
     }
 
     // SEC-INS-05(높음 경보 중 내보내기 차단)가 꺼지면 내부자가 차단 · 정지 없이 거래 내역을 가져간다 (#685 결정 2)
