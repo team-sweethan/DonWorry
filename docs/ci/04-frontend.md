@@ -4,6 +4,8 @@
 
 워크플로: [`.github/workflows/frontend.yml`](../../.github/workflows/frontend.yml) · job 이름 `frontend`
 
+`main` 대상 PR · push에서는 [VM Images](../../.github/workflows/vm-images.yml)의 `frontend-test` job도 같은 다섯 단계(`npm ci` → lint → format:check → test → build)를 한 번 더 돌린 뒤 이미지를 만듭니다 ([CI 08](08-vm-release-marker.md)).
+
 ## 1. 단계 한눈에
 
 ```text

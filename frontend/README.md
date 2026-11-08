@@ -46,29 +46,29 @@ npm run dev
 
 ### 관리자 (`/admin`, ADMIN)
 
-| 메뉴 구역          | 화면                                                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| 개요               | 홈 `/admin/home`                                                                                                            |
-| 가맹점 관리 › 운영 | 이용 신청 `applications`, 가맹점 목록·만들기·상세 `merchants`                                                               |
-| 가맹점 관리 › 보안 | 계정 접근 이상 탐지 `fds/operator-access-detections`                                                                        |
-| 직원 관리 › 사건   | 사건 담당 현황 `case-assignments`, 담당 변경 요청 `case-assignment-requests`                                                |
-| 직원 관리 › 보안   | 원문 열람 검토 `raw-view-reviews`, 내부자 경보 `insider-alerts`, 내부자 사건 `insider-cases`, 내부자 관제 `insider-monitor` |
-| 계정               | 계정 관리·만들기·상세 `users`                                                                                               |
-| 탐지 룰            | 탐지 룰 목록 `fds/rules`, 룰 변경 요청 `fds/rule-change-requests`, 룰 변경 이력 `fds/rule-policy-change-histories`          |
-| AI                 | AI 조사 긴급정지 `ai-switch`                                                                                                |
+| 메뉴 구역          | 화면                                                                                                                        | API 모듈                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 개요               | 홈 `/admin/home`                                                                                                            | `adminHome.ts`                                                                  |
+| 가맹점 관리 › 운영 | 이용 신청 `applications`, 가맹점 목록·만들기·상세 `merchants`                                                               | `adminApplications.ts`, `adminMerchants.ts`, `integration.ts`                   |
+| 가맹점 관리 › 보안 | 계정 접근 이상 탐지 `fds/operator-access-detections`                                                                        | `fds.ts`                                                                        |
+| 직원 관리 › 사건   | 사건 담당 현황 `case-assignments`, 담당 변경 요청 `case-assignment-requests`                                                | `caseAssignments.ts`                                                            |
+| 직원 관리 › 보안   | 원문 열람 검토 `raw-view-reviews`, 내부자 경보 `insider-alerts`, 내부자 사건 `insider-cases`, 내부자 관제 `insider-monitor` | `rawViewReviews.ts`, `insiderAlerts.ts`, `insiderCases.ts`, `insiderMonitor.ts` |
+| 계정               | 계정 관리·만들기·상세 `users`                                                                                               | `adminAccounts.ts`                                                              |
+| 탐지 룰            | 탐지 룰 목록 `fds/rules`, 룰 변경 요청 `fds/rule-change-requests`, 룰 변경 이력 `fds/rule-policy-change-histories`          | `fds.ts`                                                                        |
+| AI                 | AI 조사 긴급정지 `ai-switch`                                                                                                | `aiSwitch.ts`                                                                   |
 
 관리자는 로그인하면 이전 방문 주소 대신 항상 `/admin/home`에서 시작합니다 (#307).
 내부자 관제 화면은 화면이 보일 때 2초마다 다시 읽고, 마지막 조작 뒤 5분이 지나면 자동 갱신을 멈춥니다 (#691).
 
 ### 보안 직원 (`/security`, SECURITY_STAFF)
 
-| 메뉴 구역 | 화면                                                                                                                         |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 개요      | 홈 `/security/home`                                                                                                          |
-| 결제      | 거래 내역 `transactions` (CSV 내보내기 포함, 경보 중에는 차단 — INS-05)                                                      |
-| 탐지      | 경보 `alerts`·상세, 탐지 룰 목록 `rules`, 차단 목록 `blocklist`                                                              |
-| 조사      | Case 목록 `cases`·상세·AI 보고서 `cases/:id/report`·과거 사건 비교 `cases/:id/compare/:pastId`, AI 조사 긴급정지 `ai-switch` |
-| 조치      | 조치 내역 `actions`                                                                                                          |
+| 메뉴 구역 | 화면                                                                                                                         | API 모듈                                                           |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 개요      | 홈 `/security/home`                                                                                                          | `cases.ts`                                                         |
+| 결제      | 거래 내역 `transactions` (CSV 내보내기 포함, 경보 중에는 차단 — INS-05)                                                      | `paymentTransactions.ts`, `mlShadowScores.ts`                      |
+| 탐지      | 경보 `alerts`·상세, 탐지 룰 목록 `rules`, 차단 목록 `blocklist`                                                              | `fds.ts`, `paymentOperations.ts`                                   |
+| 조사      | Case 목록 `cases`·상세·AI 보고서 `cases/:id/report`·과거 사건 비교 `cases/:id/compare/:pastId`, AI 조사 긴급정지 `ai-switch` | `cases.ts`, `caseAssignments.ts`, `caseContacts.ts`, `aiSwitch.ts` |
+| 조치      | 조치 내역 `actions`                                                                                                          | `cases.ts`                                                         |
 
 Case 판정과 금융 조치 인계는 서버에 저장되고 P5로 요청됩니다. AI 보고서는 서버가 만듭니다(`ai.server.enabled=false`면 고정 문장 보고서).
 Case 상세는 보고서 생성 중·금융 처리 대기 중일 때 3초마다 다시 읽고, 마지막 조작 뒤 2분이 지나면 멈춥니다 (#238).
