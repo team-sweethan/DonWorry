@@ -50,7 +50,7 @@
 | --- | --- | --- |
 | 코드 모양 | 🤖 Prettier | [CI 04 4절](../ci/04-frontend.md#4-prettier) |
 | `any` 금지 · Hooks 규칙 | 🤖 oxlint | [CI 04 3절](../ci/04-frontend.md#3-oxlint-규칙) |
-| 타입 검사 | 🤖 `tsc` | [CI 04 5절](../ci/04-frontend.md#5-빌드) |
+| 타입 검사 | 🤖 `tsc` | [CI 04 6절](../ci/04-frontend.md#6-빌드) |
 | HTTP 호출 위치 · 판정은 백엔드 몫 | 📄 | [AGENTS.md 5절](../../AGENTS.md#5-frontend-규칙) |
 | 페이지 배치 · 라우터 연결 | 📄 | [공통 레이아웃 적용 가이드](../../frontend/공통레이아웃_적용가이드.md) |
 

@@ -90,6 +90,18 @@ AI는 조회한 사실과 확인할 사항을 제공하며 **최종 판정은 �
 - 대출 상품은 가상 안내이며 실제 은행 잔액 조회와 대출 신청은 제공하지 않습니다.
 - 기능별 활성화 설정과 외부 연동 준비가 필요합니다. 코드 구현 여부와 실행 환경에서의 검증 결과는 구분합니다.
 
+기본값이 실행 결과를 바꾸는 주요 설정입니다 (`backend/src/main/resources/application.yml`, `dev` `4a24d40a` 기준).
+
+| 설정 (환경 변수) | 기본 | 꺼져 있거나 비어 있으면 |
+| --- | --- | --- |
+| `ai.server.enabled` (`AI_SERVER_ENABLED`) | 꺼짐 | 결제 사건 보고서를 AI 서버 대신 고정 문장으로 만듭니다 |
+| `ai.ml-shadow.enabled` (`ML_SHADOW_ENABLED`) | 꺼짐 | ML 그림자 채점을 하지 않습니다. 켜도 결제 판정에는 쓰지 않습니다 |
+| `security.csrf.enabled` (`DONWORRY_CSRF_ENABLED`) | 켜짐 | 브라우저 변경 요청의 CSRF 검사를 하지 않습니다 |
+| `security.demo-api.enabled` | 켜짐 (운영 프로필 꺼짐) | 인증 없는 시연용 API를 막습니다. 운영에서 켜면 서버가 시작하지 않습니다 |
+| `donworry.applications.enabled` (`DONWORRY_APPLICATIONS_ENABLED`) | 켜짐 (운영 프로필 꺼짐) | 공개 이용 신청을 받지 않습니다 |
+| `donworry.scheduling.enabled` (`DONWORRY_SCHEDULING_ENABLED`) | 켜짐 | 기록 보관 기간 삭제 등 예약 작업을 돌리지 않습니다 |
+| `donworry.pii.encryption-key` · `hmac-key` | 비어 있음 | 주문자 연락처를 저장하지 않고 결제는 그대로 진행합니다 |
+
 ## 기술 스택과 아키텍처
 
 ### 기술 스택
