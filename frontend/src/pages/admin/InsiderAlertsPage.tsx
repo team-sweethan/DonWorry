@@ -21,6 +21,7 @@ const tabs: Array<{ key: InsiderAlertStatus; label: string }> = [
 const severityTag: Record<InsiderAlertSeverity, { label: string; color: string }> = {
   CAUTION: { label: '주의', color: 'gold' },
   HIGH: { label: '높음', color: 'red' },
+  CRITICAL: { label: '위험', color: 'magenta' },
 }
 // 접근 기록 종류 — 서버 enum(StaffAccessType)을 화면 이름으로. 모르는 값은 코드 그대로 보인다
 const accessLabel: Record<string, string> = {
@@ -30,6 +31,7 @@ const accessLabel: Record<string, string> = {
   HANDOFF_RECHECK: '인계 다시 확인',
   REPORT_PROGRESS_VIEW: '보고서 진행 조회',
   TRANSACTION_LIST_VIEW: '거래 목록 조회',
+  TRANSACTION_EXPORT: '거래 내역 내보내기',
   CONTACT_MASKED_VIEW: '주문자 정보(가림) 보기',
   CONTACT_MATCH: '번호 대조',
   CONTACT_MATCH_HIT: '번호 대조 일치',
@@ -40,6 +42,7 @@ const denyLabel: Record<string, string> = {
   NOT_ASSIGNEE: '담당 아님',
   CASE_CLOSED: '종료된 사건',
   PAYMENT_NOT_IN_CASE: '사건에 없는 결제',
+  INSIDER_ALERT_OPEN: '열린 경보 중 내보내기',
 }
 const oneLine = {
   onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),

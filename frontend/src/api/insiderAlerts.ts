@@ -3,9 +3,10 @@ import { api } from './client.ts'
 /**
  * 관리자 내부자 경보 (`/api/admin/insider-alerts`, #516).
  * 보안 직원의 접근 기록을 규칙(INS-01 · 03 · 06 · 07 · 08 · 09)으로 묶은 경보와 근거. 원문 · IP는 없다.
+ * INS-05(높음 경보 중 내보내기 시도, #651)는 계정 정지까지 한 위험(CRITICAL) 경보다. 주의 경보만 있으면 내보내기는 허용된다.
  */
 export type InsiderAlertStatus = 'OPEN' | 'CLOSED'
-export type InsiderAlertSeverity = 'CAUTION' | 'HIGH'
+export type InsiderAlertSeverity = 'CAUTION' | 'HIGH' | 'CRITICAL'
 
 export type InsiderAlert = {
   alertId: number

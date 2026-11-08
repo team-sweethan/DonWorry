@@ -56,7 +56,8 @@ public class PaymentTransactionsQueryService {
                 : null;
     }
 
-    private static PaymentTransactionResponse item(PaymentTransactionRow row) {
+    // CSV 내보내기도 같은 칸 · 같은 가림을 쓴다 (#651)
+    static PaymentTransactionResponse item(PaymentTransactionRow row) {
         var p = row.payment();
         var r = row.request();
         var item = PaymentTransactionResponse.builder()

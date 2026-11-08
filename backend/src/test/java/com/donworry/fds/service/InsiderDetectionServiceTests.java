@@ -73,9 +73,11 @@ class InsiderDetectionServiceTests {
             .ins07Lookback(Duration.ofDays(30))
             .ins08Window(Duration.ofHours(1))
             .ins08CautionRows(1000)
+            .ins08HighRows(3000)
             .ins08MaxLinkedRatio(0.3)
             .ins09Window(Duration.ofHours(1))
             .ins09CautionCustomers(10)
+            .ins09HighCustomers(30)
             .scopeClosedLookback(Duration.ofDays(30))
             .build();
     private final InsiderDetectionService service =
@@ -217,6 +219,45 @@ class InsiderDetectionServiceTests {
         service.detect(last);
 
         assertThat(savedAlerts).isEmpty();
+    }
+
+    // 목록 대신 CSV 내보내기만 반복해 무관 거래를 가져가도 대량 조회 경보가 없으면 놓친다 (#651 Codex 리뷰)
+    @Test
+    void ins08_unlinkedRowsByExportsOnly_raisesCaution() {
+        StaffAccessRecorded last =
+                given(export(1L, null, null, 600, T0), export(2L, 2L, null, 500, T0.plusSeconds(600)));
+
+        service.detect(last);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_08);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+            assertThat(a.getSummary()).contains("1100행");
+        });
+    }
+
+    // 주의에 머문 채 1시간에 3,000행을 가져가도 높음이 되지 않으면 내보내기 차단(INS-05)이 끝내 걸리지 않는다 (#651)
+    // 1,000행씩 세 번 — 두 번째까지 주의, 세 번째에 같은 경보가 높음으로 오르고 P3 알림(InsiderAlertRaised)이 나간다
+    @Test
+    void ins08_unlinkedRowsReachHighThreshold_raisesSameAlertToHighAndPublishes() {
+        service.detect(given(export(1L, null, null, 1000, T0)));
+        service.detect(given(export(2L, null, null, 1000, T0.plusSeconds(600))));
+        assertThat(savedAlerts)
+                .singleElement()
+                .satisfies(a -> assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION));
+        verify(publisher, never()).publishEvent(any());
+
+        service.detect(given(export(3L, null, null, 1000, T0.plusSeconds(1200))));
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_08);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.HIGH);
+            assertThat(a.getSummary()).contains("3000행");
+        });
+        ArgumentCaptor<InsiderAlertRaised> raised = ArgumentCaptor.forClass(InsiderAlertRaised.class);
+        verify(publisher).publishEvent(raised.capture());
+        assertThat(raised.getValue().rule()).isEqualTo(InsiderRule.INS_08);
+        assertThat(raised.getValue().severity()).isEqualTo(InsiderAlertSeverity.HIGH);
     }
 
     // 담당 사건에 없는 고객을 여러 명 찾아봐도 경보가 없으면 특정인 조회를 놓친다
@@ -536,6 +577,22 @@ class InsiderDetectionServiceTests {
                 .staffId(STAFF)
                 .actorRole("SECURITY_STAFF")
                 .accessType(StaffAccessType.TRANSACTION_LIST_VIEW)
+                .result(StaffAccessResult.ALLOWED)
+                .merchantId(merchantId)
+                .customerRef(customerRef)
+                .itemCount(rows)
+                .loginReference(LOGIN)
+                .occurredAt(at)
+                .build();
+    }
+
+    // 허용된 거래 내역 CSV 내보내기 기록 — 목록 조회와 같은 칸(거른 가맹점 · 고객 번호 · 행 수) (#651)
+    private static StaffAccessRecorded export(Long eventId, Long merchantId, String customerRef, int rows, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.TRANSACTION_EXPORT)
                 .result(StaffAccessResult.ALLOWED)
                 .merchantId(merchantId)
                 .customerRef(customerRef)

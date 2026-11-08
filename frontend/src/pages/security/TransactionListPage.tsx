@@ -1,6 +1,13 @@
-import { DownOutlined, InfoCircleOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import {
+  DownloadOutlined,
+  DownOutlined,
+  InfoCircleOutlined,
+  ReloadOutlined,
+  RightOutlined,
+} from '@ant-design/icons'
 import {
   Alert,
+  App,
   Badge,
   Button,
   Card,
@@ -21,7 +28,8 @@ import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
 import { getMlShadowScores } from '../../api/mlShadowScores'
-import { getPaymentTransactions } from '../../api/paymentTransactions'
+import { exportPaymentTransactionsCsv, getPaymentTransactions } from '../../api/paymentTransactions'
+import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import type { FdsResult, PaymentStatus } from '../../types/case'
 import type { PaymentTransaction, PaymentTransactionPage } from '../../types/paymentTransaction'
@@ -91,9 +99,22 @@ const ipText = (masked: string | null) => (masked?.includes(':') ? `IPv6 · ${ma
 
 type Loaded = { key: string; page: PaymentTransactionPage | null; error: string | null }
 
+// 받은 파일을 브라우저 다운로드로 넘긴다 — 서버가 이미 UTF-8 BOM을 붙였다
+function saveFile(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 export function TransactionListPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { message, modal } = App.useApp()
+  const { store } = useAuth()
+  const [exporting, setExporting] = useState(false)
   // 조건은 주소 쿼리에 둔다 (#243 방식) — 경보 · 사건으로 갔다가 뒤로 와도 같은 조건으로 열린다
   const [searchParams] = useSearchParams()
   const [edited, setEdited] = useState<{
@@ -127,6 +148,33 @@ export function TransactionListPage() {
   const needsMerchant = customerNeedsMerchant(query)
   const blocked = tooLong || needsMerchant
   const apiSearch = transactionApiParams(query).toString()
+  // CSV 내보내기 (#651) — 화면과 같은 조건. 차단되면 계정이 이미 정지 · 로그아웃된 상태라 안내 뒤 로그인 화면으로 보낸다
+  // 안내 문구는 서버가 준 중립 문구를 그대로 쓴다 (탐지 내용을 알리지 않음)
+  const exportCsv = () => {
+    setExporting(true)
+    exportPaymentTransactionsCsv(new URLSearchParams(apiSearch))
+      .then((blob) => {
+        saveFile(blob, `거래내역_${dayjs().format('YYYYMMDD_HHmm')}.csv`)
+        message.success('CSV 파일을 내려받았습니다.')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.code === 'INSIDER_EXPORT_BLOCKED') {
+          modal.error({
+            title: '계정 사용이 정지되었습니다',
+            content: error.detail ?? '관리자에게 문의해 주세요.',
+            okText: '확인',
+            onOk: () => store.expire(),
+          })
+          return
+        }
+        if (error instanceof ApiError && error.code === 'PAYMENT_TRANSACTIONS_EXPORT_TOO_LARGE') {
+          message.warning(error.detail ?? '내보낼 거래가 너무 많습니다. 조건을 좁혀 주세요.')
+          return
+        }
+        message.error('CSV 파일을 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      })
+      .finally(() => setExporting(false))
+  }
   // 어떤 요청에 대한 응답인지 함께 저장해 늦게 온 응답이 새 조건의 화면을 덮지 않게 한다
   const requestKey = `${apiSearch}#${refreshKey}`
 
@@ -489,6 +537,14 @@ export function TransactionListPage() {
             <Button onClick={() => setQuery(defaultTransactionListQuery)}>조건 초기화</Button>
             <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
               새로고침
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              loading={exporting}
+              disabled={blocked}
+              onClick={exportCsv}
+            >
+              CSV 내보내기
             </Button>
           </Space>
         </div>
