@@ -485,7 +485,7 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | created_at | DATETIME(6) NOT NULL | UTC, 세션 생성 시각과 같다 |
 
 주문자 이름 · 전화 중 하나는 있어야 한다 (CHECK). 인덱스는 `idx_payment_order_contacts_phone(orderer_phone_hmac)` — 조각 5의 번호 대조용.
-행은 고치지 않는다. 암호문 파기(결제 후 540일, 실험안)는 2차다.
+행은 고치지 않는다. 암호문 파기(`created_at`부터 540일, 열린 사건이면 종료까지 연장, ADR-0082 7절)는 2차다. 지문만 남기려면 CHECK 변경 migration이 필요하다.
 제8조 적용 범위·최소 2년 보관 대상 예외는 ADR-0080을 따른다. #525의 수집·발행에 더해 #528에서 원본 IP 정리를 구현한다. [실행 근거·미검증](../identity/528-access-record-retention.md)을 따른다.
 [ADR-0080](../decisions/0080-operator-access-denials.md), [구현·검증](../identity/525-operator-access-denials.md)을 따른다.
 
