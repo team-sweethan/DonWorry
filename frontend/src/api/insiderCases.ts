@@ -149,7 +149,10 @@ export type InsiderReportFacts = {
     periodFrom: string | null
     periodTo: string | null
     byType: InsiderReportAccessType[]
+    /** 기록의 고객 번호, 없으면 사건 고객으로 센 서로 다른 고객 수 */
     distinctCustomers: number
+    /** 사건 · 결제를 가리키는데 고객을 찾지 못한 기록 수 — 0명으로 숨기지 않고 따로 보인다 */
+    unresolvedCustomerRecords: number
     distinctMerchants: number
     distinctCases: number
   }

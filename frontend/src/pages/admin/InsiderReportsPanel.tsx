@@ -55,7 +55,11 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
         <Descriptions.Item label="기간">
           {period(access.periodFrom, access.periodTo)}
         </Descriptions.Item>
-        <Descriptions.Item label="서로 다른 고객">{access.distinctCustomers}명</Descriptions.Item>
+        <Descriptions.Item label="서로 다른 고객">
+          {access.distinctCustomers}명
+          {access.unresolvedCustomerRecords > 0 &&
+            ` (고객을 확인하지 못한 기록 ${access.unresolvedCustomerRecords}건 별도)`}
+        </Descriptions.Item>
         <Descriptions.Item label="가맹점 · 사건">
           {access.distinctMerchants}곳 · {access.distinctCases}건
         </Descriptions.Item>

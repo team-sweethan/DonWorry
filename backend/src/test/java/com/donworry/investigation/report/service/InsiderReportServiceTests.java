@@ -21,14 +21,18 @@ import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseAlert;
+import com.donworry.investigation.entity.InsiderCaseStatus;
+import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.entity.InsiderReport;
 import com.donworry.investigation.report.entity.InsiderReportTrigger;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.InsiderReportRepository;
 import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import com.donworry.investigation.repository.InsiderCaseRepository;
+import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InsiderCaseChanged;
 import com.donworry.investigation.service.SecurityStaffGuard;
 import java.time.Instant;
@@ -66,6 +70,9 @@ class InsiderReportServiceTests {
     InsiderCaseAlertRepository links;
 
     @Mock
+    SecurityCaseRepository securityCases;
+
+    @Mock
     InsiderReportRepository reports;
 
     @Mock
@@ -93,6 +100,7 @@ class InsiderReportServiceTests {
         service = new InsiderReportService(
                 insiderCases,
                 links,
+                securityCases,
                 reports,
                 new InsiderReportWriter(reports),
                 evidenceReader,
@@ -219,6 +227,45 @@ class InsiderReportServiceTests {
                 .containsExactly("INS-08", "INS-01");
     }
 
+    // 고객 번호가 비어 있는 원문 열람 기록도 사건 고객으로 세고, 고객을 못 찾은 기록은 0명으로 숨기지 않고 따로 센다 (#675 Codex 리뷰)
+    @Test
+    void facts_rawViewWithoutCustomerRef_countsCustomerFromCase() {
+        givenAlerts(alert(500L, InsiderRule.INS_07));
+        givenAccess(rawView(1L, 7L), rawView(2L, 8L), rawView(3L, 7L), rawView(4L, 9L));
+        when(securityCases.findById(7L)).thenReturn(Optional.of(securityCase(CUSTOMER_A)));
+        when(securityCases.findById(8L)).thenReturn(Optional.of(securityCase(CUSTOMER_B)));
+        when(securityCases.findById(9L)).thenReturn(Optional.empty());
+
+        service.generate(opened(500L));
+
+        Map<String, Object> access = asMap(facts(saved.getFirst()).get("access"));
+        assertThat(access).containsEntry("distinctCustomers", 2L).containsEntry("unresolvedCustomerRecords", 1L);
+        assertThat(String.valueOf(saved.getFirst().getReportBody())).doesNotContain(CUSTOMER_A, CUSTOMER_B);
+    }
+
+    // 보고서 기능 배포 전부터 열린 사건은 서버 시작 때 빠진 판을 채우고, 다시 시작해도 판이 늘지 않는다 (#675 Codex 리뷰)
+    @Test
+    void backfill_openCaseWithoutReports_createsMissingVersionsOnce() {
+        when(insiderCases.findTop100ByStatusOrderByUpdatedAtDescIdDesc(InsiderCaseStatus.OPEN))
+                .thenReturn(List.of(insiderCase()));
+        givenAlerts(alert(500L, InsiderRule.INS_08), alert(501L, InsiderRule.INS_05));
+        givenAccess();
+
+        int first = service.backfillOpenCases();
+        int second = service.backfillOpenCases();
+
+        assertThat(first).isEqualTo(2);
+        assertThat(second).isZero();
+        assertThat(saved)
+                .extracting(
+                        InsiderReport::getReportVersion,
+                        InsiderReport::getTriggerType,
+                        InsiderReport::getTriggerAlertId)
+                .containsExactly(
+                        tuple(1, InsiderReportTrigger.CASE_OPENED, 500L),
+                        tuple(2, InsiderReportTrigger.EXPORT_BLOCKED, 501L));
+    }
+
     // 다른 계기 판이 같은 번호를 먼저 잡으면(동시 알림) 다시 읽어 다음 번호로 저장한다 — 어느 판도 사라지지 않는다
     @Test
     void save_versionConflict_retriesWithNextVersion() {
@@ -300,6 +347,25 @@ class InsiderReportServiceTests {
                 .loginReference(LOGIN_REF)
                 .occurredAt(T0.plusSeconds(eventId))
                 .build();
+    }
+
+    private static StaffAccessRecorded rawView(Long eventId, Long caseId) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF_ID)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.CONTACT_RAW_VIEW)
+                .result(StaffAccessResult.ALLOWED)
+                .caseId(caseId)
+                .merchantId(100L)
+                .paymentId(caseId * 10)
+                .loginReference(LOGIN_REF)
+                .occurredAt(T0.plusSeconds(eventId))
+                .build();
+    }
+
+    private static SecurityCase securityCase(String customerRef) {
+        return SecurityCase.open(100L, customerRef, CaseType.PAYMENT_FRAUD, T0);
     }
 
     private static StaffAccessRecorded caseAccess(Long eventId, StaffAccessResult result, Long caseId) {

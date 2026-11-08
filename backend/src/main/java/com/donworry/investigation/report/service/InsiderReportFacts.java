@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +37,7 @@ final class InsiderReportFacts {
             boolean accountLocked,
             List<InsiderCaseAlert> alerts,
             List<StaffAccessRecorded> events,
+            Map<Long, String> caseCustomers,
             Instant now) {
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("insiderCaseId", insiderCase.getId());
@@ -45,7 +47,7 @@ final class InsiderReportFacts {
         facts.put("caseSeverity", insiderCase.getSeverity().name());
         facts.put("openedAt", insiderCase.getOpenedAt().toString());
         facts.put("alerts", alerts.stream().map(InsiderReportFacts::alertRow).toList());
-        facts.put("access", access(events));
+        facts.put("access", access(events, caseCustomers));
 
         Set<InsiderRule> rules =
                 alerts.stream().map(InsiderCaseAlert::getRuleCode).collect(Collectors.toSet());
@@ -75,7 +77,7 @@ final class InsiderReportFacts {
     }
 
     // 전체: 건수 · 기간 · 서로 다른 고객 · 가맹점 · 사건 수. 종류별: 허용 · 거부 · 행 수 · 사건 수
-    private static Map<String, Object> access(List<StaffAccessRecorded> events) {
+    private static Map<String, Object> access(List<StaffAccessRecorded> events, Map<Long, String> caseCustomers) {
         Map<String, Object> access = new LinkedHashMap<>();
         access.put("total", events.size());
         access.put("periodFrom", time(events, Comparator.naturalOrder()));
@@ -88,7 +90,7 @@ final class InsiderReportFacts {
                 byType.entrySet().stream()
                         .map(entry -> typeRow(entry.getKey(), entry.getValue()))
                         .toList());
-        access.put("distinctCustomers", distinct(events, StaffAccessRecorded::customerRef));
+        customers(events, caseCustomers, access);
         access.put("distinctMerchants", distinct(events, StaffAccessRecorded::merchantId));
         access.put("distinctCases", distinct(events, StaffAccessRecorded::caseId));
         return access;
@@ -118,6 +120,26 @@ final class InsiderReportFacts {
                         .sum());
         row.put("cases", distinct(rows, StaffAccessRecorded::caseId));
         return row;
+    }
+
+    // 서로 다른 고객 수 — 기록의 고객 번호, 없으면 사건 번호로 찾은 사건 고객 (#675 Codex 리뷰: 원문 열람 기록엔 고객 번호가 없다)
+    // 사건 · 결제를 가리키는데 고객을 못 찾은 기록은 0명으로 숨기지 않고 따로 센다. 고객 번호 값은 본문에 넣지 않는다
+    private static void customers(
+            List<StaffAccessRecorded> events, Map<Long, String> caseCustomers, Map<String, Object> access) {
+        Set<String> customers = new HashSet<>();
+        long unresolved = 0;
+        for (StaffAccessRecorded event : events) {
+            String ref = event.customerRef() != null
+                    ? event.customerRef()
+                    : event.caseId() == null ? null : caseCustomers.get(event.caseId());
+            if (ref != null) {
+                customers.add(ref);
+            } else if (event.caseId() != null || event.paymentId() != null) {
+                unresolved++;
+            }
+        }
+        access.put("distinctCustomers", (long) customers.size());
+        access.put("unresolvedCustomerRecords", unresolved);
     }
 
     private static String time(List<StaffAccessRecorded> events, Comparator<Instant> order) {
