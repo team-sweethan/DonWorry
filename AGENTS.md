@@ -24,21 +24,28 @@
 
 ### 어긋날 때 기준
 
-- 실제 테이블·컬럼·타입 → migration SQL (Notion ERD·[`docs/erd/`](docs/erd/README.md)보다 우선)
+- 실제 테이블·컬럼·타입·제약 → migration SQL. 소유·관계 요약은 [`docs/erd/`](docs/erd/README.md)에서 확인한다
 - 실제 검사 규칙 → `build.gradle` · `.oxlintrc.json` · `pyproject.toml` · `.github/workflows/` (문서보다 우선)
-- 모듈 의존 방향 → 채택된 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)와 `allowedDependencies` (Notion 설계 3.10보다 우선)
-- 업무 흐름·상태값의 이유 → Notion FDS 정본. 단, 작성 이후 바뀐 내용이 반영되지 않았을 수 있으므로 구현 사실은 위 저장소 기준을 따른다. #62 시점의 차이는 [`docs/README.md`](docs/README.md) 3절, 이후 발견한 차이는 `notion-sync` 라벨 Issue로 관리한다. 기존 `1 상태값` · `2 API 명세서` 페이지는 기준이 아니다
+- 모듈 의존 방향 → 채택된 ADR과 각 모듈의 `allowedDependencies`. 기본 방향은 [ADR-0012](docs/decisions/0012-payment-settlement-dependency.md)에서 확인한다
+- 업무 흐름·상태값·외부 계약의 설계 의도 → 저장소의 채택된 ADR과 해당 업무 문서
+- 실제 구현 동작 → 현재 코드와 설정. 문서의 설명만으로 구현 여부를 판단하지 않는다
 - 담당·진행 상황 → GitHub Issue
 
-Notion은 "왜"를, 저장소는 "실제로 어떤지"를 담는다. 둘이 어긋나면 임의로 한쪽을 고치지 말고 영향 범위를 적어 공유한다.
-Notion "저장소 구현 현황 (자동)" 페이지와 정본 맨 아래 🤖 자동 구역은 저장소에서 자동으로 쓴다 ([CI 07](docs/ci/07-notion-sync.md)). 직접 고치지 않는다.
-Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
+문서와 구현이 어긋나면 관련 파일·기준 커밋·영향 범위를 먼저 정리한다. 현재 구현을 설명하는 문서 오류인지, 설계 합의가 필요한 변경인지 구분한 뒤 수정한다. 코드에 구현되어 있다는 이유만으로 미합의 설계를 채택된 것으로 바꾸지 않는다.
+
+저장소에 근거가 없는 업무 정책, 미확정 ERD·모듈 계약은 추측하지 않고 담당자에게 확인한다.
+
+정본 위치와 합의 기록 절차가 다른 문서의 안내와 충돌하면 이 파일의 기준을 따른다. 기존 문서의 Notion 정본·선행 반영 안내는 저장소 문서에 합의를 기록하는 절차로 대체한다. 단, 기존 업무 계약과 담당자 승인 요건은 유지한다.
+
+문서 위치는 [`docs/README.md`](docs/README.md)에서 찾는다.
+
+Notion 자동 동기화는 별도 기능으로 유지한다. 자동 생성 페이지와 자동 구역은 직접 수정하지 않는다 ([CI 07](docs/ci/07-notion-sync.md)).
 
 ## 2. 결정됨 ≠ 구현됨 ≠ 검증됨
 
 | 상태 | 뜻 |
 | --- | --- |
-| 결정됨 | Notion 또는 ADR에 적힘 |
+| 결정됨 | 채택된 ADR 또는 담당자 합의가 기록된 저장소 업무 문서에 명시됨 |
 | 구현됨 | 해당 파일이 Git에 있음 |
 | 검증됨 | 명령을 돌려 통과한 결과가 있음 |
 
@@ -72,12 +79,12 @@ Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
   - 예외: CakeShop 서명 API는 `MerchantSecurityConfiguration`, AI 서버 API(`/internal/ai/**`)는 `AiServerSecurityConfiguration`, 결제창 공개 API(`/api/checkout/{sessionKey}`…, ADR-0064)는 `CheckoutSecurityConfiguration`에 둔다
 - 코드 모양(들여쓰기·줄바꿈·import 순서)은 손으로 맞추지 않는다. 커밋 전 `./gradlew spotlessApply` (palantir-java-format, [ADR-0013](docs/decisions/0013-code-formatter.md))
 - 같은 소유 담당의 테이블끼리만 물리 FK를 건다. 소유 담당이 다르면 FK를 걸지 않는다 (ID 값만 저장하는 논리 참조, 존재 확인은 소유 담당의 공개 경계로)
-  - 예외: `investigation` 모듈 안이라도 P4의 `ai_reports`와 P3 테이블(`security_cases` · `payment_decisions`) 사이는 논리 참조다 (fds 정본 04 §3.1 · §3.2)
+  - 예외: `investigation` 모듈 안이라도 P4의 `ai_reports`와 P3 테이블(`security_cases` · `payment_decisions`) 사이는 논리 참조다
 - 참조되는 금융 · 조사 기록(결제 · 평가 · Case · 판정 · 인계 · 보고서)은 물리 삭제하지 않는다
 - 테이블은 Flyway로만 바꾼다 (`ddl-auto: validate`). 이미 `dev`에 병합된 마이그레이션 파일은 고치지 않고 새 파일을 추가한다 (CI가 검사)
 - 마이그레이션 파일은 직접 이름 짓지 않고 `./gradlew newMigration -Pdesc=<snake_case>`로 만든다. 버전은 생성 시각(한국 시간, `Asia/Seoul` 고정) `V<yyyyMMdd_HHmmss>__<설명>.sql` ([ADR-0011](docs/decisions/0011-flyway-migration-versioning.md))
 - 한 마이그레이션은 하나의 배포 가능한 스키마 전환만 담는다. 서로 의존하는 마이그레이션은 같은 PR에 넣는다 (`out-of-order`는 순서를 보장하지 않는다)
-- 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가 · 변경한다 (1차 MVP 초기 14개 테이블만 Issue #56에서 일괄 생성). ERD(Notion 팀페이지 / ERD)에 없는 컬럼 · 테이블은 담당 페이지 합의 후 추가한다
+- 업무 테이블은 소유 담당이 자기 마이그레이션으로 추가 · 변경한다 (1차 MVP 초기 14개 테이블만 Issue #56에서 일괄 생성). 저장소 ERD에 없는 테이블·컬럼은 소유 담당에게 확인하고, 합의 내용을 저장소 문서에 기록한 뒤 추가한다. 설계 변경에 해당하면 8절에 따라 ADR을 작성한다
 - 테이블 이름은 복수, PK는 `BIGINT AUTO_INCREMENT`, 상태는 `VARCHAR`(EnumType.STRING), 시각은 UTC `DATETIME(6)`, 금액은 원 단위 `BIGINT` ([`docs/erd/` 1절](docs/erd/README.md#공통-규칙))
 - 작업 순서·로컬 DB 초기화 → [`docs/flyway/05-guide.md`](docs/flyway/05-guide.md), 오류 해결 → [`docs/flyway/06-troubleshooting.md`](docs/flyway/06-troubleshooting.md)
 
@@ -102,9 +109,10 @@ Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
 ## 6. AI Server 규칙
 
 - controller → service → agent 역할을 섞지 않는다
-- Agent는 허용 목록에 있는 읽기 전용 Tool만 호출한다. 결제 승인 · 데이터 변경은 하지 않는다
-- Spring을 부를 때는 `investigation/report`의 내부 Tool API만 쓴다. DB에 직접 접속하지 않는다 ([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md))
-- 보고서 생성이 실패해도 자동으로 ACCEPT / REJECT 하지 않는다. 판정은 직원이 한다
+- Agent는 허용 목록에 있는 읽기 전용 Tool만 호출한다. 결제 승인·판정·업무 데이터 변경은 하지 않는다
+- AI 서버가 Spring을 호출할 때는 `investigation/report`의 내부 API만 사용한다. 증거 조회는 Tool API로, 조사 결과 전달은 결과 콜백 API로 수행한다. DB에 직접 접속하지 않는다 ([ADR-0009](docs/decisions/0009-ai-investigation-call-structure.md))
+- 결제 사건 보고서 생성이 실패해도 자동으로 ACCEPT / REJECT 하지 않는다. 판정은 보안 직원이 한다
+- 내부자 사건의 해제 검토 보고서는 현재 Spring에서 사실 집계와 고정 문장으로 생성한다. 보고서 생성·실패가 사건 판정이나 계정 정지·해제 상태를 바꾸지 않는다. 판정은 관리자가 한다
 - 보고서는 `report_version`별로 쌓고 덮어쓰지 않는다. 증거 출처 · 조회 시각은 `report_body` JSON 안에 둔다 (별도 `evidence_refs` 컬럼 없음)
 - 요청 · 응답은 Pydantic 모델로 받고 내보낸다
 - 코드 모양은 손으로 맞추지 않는다. 커밋 전 `uv run ruff format .`
@@ -136,13 +144,19 @@ Notion 링크는 [`docs/README.md`](docs/README.md) 1절을 본다.
 
 ## 9. 검사 명령
 
+각 명령은 저장소 루트에서 개별 실행한다.
+
 ```bash
-cd backend   && ./gradlew spotlessApply              # 코드 모양 자동 정리 (check 전에)
-cd backend   && ./gradlew check                      # 컴파일 + 코드 모양 + ModularityTests(순환·내부 접근) + ArchitectureTests(계층)
-cd backend   && ./gradlew mariaDbTest                # Docker 필요 — MariaDB 컨테이너에 Flyway 전체 적용 + JPA validate
-cd frontend  && npm run lint && npm run format:check && npm run build
+cd backend   && ./gradlew spotlessApply
+cd backend   && ./gradlew check
+cd backend   && ./gradlew mariaDbTest
+cd frontend  && npm run lint && npm run format:check && npm run test && npm run build
 cd ai-server && uv run ruff format . && uv run ruff check . && uv run pytest
 ```
+
+- `spotlessApply`: 코드 모양 자동 정리. `check` 전에 실행한다
+- `check`: 컴파일·일반 테스트·코드 모양·ModularityTests(순환·내부 접근)·ArchitectureTests(계층) 검사
+- `mariaDbTest`: Docker 필요. Flyway 전체 적용·JPA validate·DB 기반 업무 및 이벤트 통합 테스트·한국 시간대 정산 테스트 실행
 
 CI가 무엇을 하는지와 자주 겪는 문제는 [`docs/ci/`](docs/ci/README.md).
 
@@ -154,6 +168,7 @@ CI가 무엇을 하는지와 자주 겪는 문제는 [`docs/ci/`](docs/ci/README
 - 모르는 것은 추측하지 않고 모른다고 적는다
 
 ## Code Review Rules
+
 ### Review Output Language (Mandatory)
 
 - All GitHub Pull Request code review comments MUST be written in Korean (한국어).
@@ -167,5 +182,5 @@ CI가 무엇을 하는지와 자주 겪는 문제는 [`docs/ci/`](docs/ci/README
 - 리뷰만 요청받은 경우 검토와 검증을 수행한다. 별도 수정 요청 없이 7절의 브랜치 생성·구현·PR 생성 절차를 진행하지 않는다.
 - PR 변경과 관련 코드·테스트를 확인하고, 이번 변경이 새로 만들거나 악화한 결함과 적용 가능한 기존 규칙 위반을 중심으로 지적한다. 무관한 기존 문제나 취향에 따른 스타일 변경·리팩터링은 요구하지 않는다.
 - 각 지적에는 문제 위치, 발생 조건, 영향과 수정 방향을 설명한다. 저장소 규칙 위반을 지적할 때는 해당 절을 근거로 들고, 8절에 따른 설계 변경 근거도 함께 확인한다.
-- 확인하지 못한 Notion 내용이나 미확정 ERD를 추정하여 위반으로 판단하지 않는다. 4절의 Flyway 마이그레이션 규칙을 기준으로 판단한다. 문서와 코드가 충돌하면 근거와 영향 범위를 설명한다.
+- 문서에 없는 업무 정책이나 미확정 ERD를 추정하여 위반으로 판단하지 않는다. DB 변경은 4절의 Flyway 마이그레이션 규칙을 기준으로 판단한다. 문서와 코드가 충돌하면 근거와 영향 범위를 설명한다.
 - 검증 결과는 2·7·10절에 따라 검토 대상 커밋의 실행 근거로 판단한다. 실행하지 못한 검사는 미검증으로 표시하고, 코드만 읽고 테스트가 통과했다고 쓰지 않는다.
