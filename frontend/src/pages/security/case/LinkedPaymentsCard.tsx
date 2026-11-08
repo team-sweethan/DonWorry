@@ -86,8 +86,9 @@ function Explanations({ linked }: { linked: LinkedPayments }) {
   const items = linkedExplanations(linked)
   // 겹친 것도 빠진 정보도 없으면 읽을 설명이 없다
   if (items.length === 0) return null
+  // 화면 사용 안내라 인쇄하지 않는다 (#623)
   return (
-    <div style={{ marginTop: 10 }}>
+    <div className="dw-no-print" style={{ marginTop: 10 }}>
       <Button
         type="link"
         size="small"

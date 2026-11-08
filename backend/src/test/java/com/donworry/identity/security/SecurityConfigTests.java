@@ -168,7 +168,8 @@ class SecurityConfigTests {
             "POST /api/security-cases/1/decisions",
             "POST /api/security-cases/1/handoffs/2/recheck",
             "POST /api/security-cases/1/reports",
-            "GET /api/security-cases/1/reports/2/progress");
+            "GET /api/security-cases/1/reports/2/progress",
+            "POST /api/security-cases/1/reports/2/print");
 
     private static final List<String> MERCHANT_CASE_ROUTES =
             List.of("GET /api/merchant/security-cases", "GET /api/merchant/security-cases/1");

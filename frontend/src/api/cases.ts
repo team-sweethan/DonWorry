@@ -154,6 +154,11 @@ export async function getReportProgress(caseId: string, reportId: string): Promi
   })
 }
 
+// AI 보고서 인쇄 · PDF 저장 창을 연 기록 (#623, P4) — 서버가 직원 접근 기록(REPORT_PRINT)에 남긴다
+export async function recordReportPrint(caseId: string, reportId: string): Promise<void> {
+  await api<void>(`/security-cases/${caseId}/reports/${reportId}/print`, { method: 'POST' })
+}
+
 /**
  * 진행 중인 사건을 담당이 아닌 직원이 열었을 때 403(INV_028) (#612). 서버가 거부를 접근 기록에 남긴다.
  * 판정 · 재확인 · 보고서 요청 · 진행 조회도 같은 코드로 거부된다.

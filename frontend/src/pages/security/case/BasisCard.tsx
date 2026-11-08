@@ -10,6 +10,8 @@ import {
   type SummaryLink,
 } from '../../../utils/reportView'
 import { goToCard } from './goToCard'
+// 접힌 문장(dw-print-only)을 화면에서 숨기는 규칙 — 보고서 인쇄와 같이 쓴다 (#623)
+import './reportPrint.css'
 
 // 징후 · 정상 근거 부품 (#501) — 보고서 "한눈에 보기"(AI 문장)와 비교 화면의 징후 · 정상 근거 줄
 // 판정 권고 · 기준표 칸 · 판정 이유는 #644에서 뺐다 (ADR-0009 결정 13). 결제별 근거 카드도 #644 PR 3에서 ② 확인할 것으로 합쳤다
@@ -42,7 +44,8 @@ export function SummaryBox({
   const [open, setOpen] = useState(false)
   if (lines.length === 0 && appended.length === 0) return null
   const folded = !!fold && fold.hidden > 0 && !open
-  const shown = folded ? lines.slice(0, lines.length - fold.hidden) : lines
+  // 접힌 문장도 그려 두고 화면에서만 숨긴다 — 인쇄는 모두 펼쳐 찍는다 (#623, reportPrint.css)
+  const visible = folded ? lines.length - fold.hidden : lines.length
   return (
     <div style={summaryStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
@@ -52,8 +55,8 @@ export function SummaryBox({
         </Tag>
       </div>
       <ul style={listStyle}>
-        {shown.map((line, i) => (
-          <li key={i}>
+        {lines.map((line, i) => (
+          <li key={i} className={i < visible ? undefined : 'dw-print-only'}>
             {markSignals(line, basis).map((part, j) =>
               part.mark ? (
                 <span key={j} style={{ borderBottom: `3px solid ${levelTone[part.mark].line}` }}>
@@ -68,7 +71,12 @@ export function SummaryBox({
         ))}
       </ul>
       {fold && fold.hidden > 0 && (
-        <button type="button" onClick={() => setOpen(!open)} style={moreStyle}>
+        <button
+          type="button"
+          className="dw-no-print"
+          onClick={() => setOpen(!open)}
+          style={moreStyle}
+        >
           {open ? (
             '접기'
           ) : (
