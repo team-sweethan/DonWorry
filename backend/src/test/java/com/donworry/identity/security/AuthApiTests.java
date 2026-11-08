@@ -27,6 +27,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -422,6 +423,67 @@ class AuthApiTests {
         // GET 로그아웃은 등록하지 않은 경로라 기본 거절(403)된다 (#392)
         mvc.perform(get("/api/auth/logout").session(session)).andExpect(status().isForbidden());
         mvc.perform(get("/api/auth/me").session(session)).andExpect(status().isOk());
+    }
+
+    // 겹친 로그아웃이 같은 세션을 먼저 무효화해도 늦은 요청은 500 없이 로그아웃을 마친다 (#610)
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/auth/logout", "/api/auth/logout-all"})
+    void logout_whenConcurrentLogoutInvalidatedSessionFirst_completesWithoutError(String path) throws Exception {
+        var loggedIn = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var session = new InvalidatedByConcurrentLogoutSession(loggedIn);
+        mvc.perform(post(path).with(csrf()).session(session))
+                .andExpect(status().isNoContent())
+                .andExpect(cookie().maxAge("JSESSIONID", 0));
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    // 겹친 로그아웃이 로그인 정보를 읽기 직전에 세션을 무효화해도 500 없이 비로그인으로 처리한다 (#610)
+    @ParameterizedTest
+    @CsvSource({"/api/auth/logout, 204", "/api/auth/logout-all, 401"})
+    void logout_whenConcurrentLogoutInvalidatedSessionBeforeRead_treatsAsLoggedOut(String path, int expectedStatus)
+            throws Exception {
+        var loggedIn = (MockHttpSession)
+                login("admin", "test-password", null).getRequest().getSession(false);
+        var session = new InvalidatedBeforeContextReadSession(loggedIn);
+        mvc.perform(post(path).with(csrf()).session(session)).andExpect(status().is(expectedStatus));
+        assertThat(session.isInvalid()).isTrue();
+    }
+
+    private static class CopiedSession extends MockHttpSession {
+        CopiedSession(MockHttpSession source) {
+            super(source.getServletContext(), source.getId());
+            source.getAttributeNames()
+                    .asIterator()
+                    .forEachRemaining(name -> setAttribute(name, source.getAttribute(name)));
+        }
+    }
+
+    // 요청이 세션을 받은 뒤 invalidate() 하기 직전에 다른 로그아웃이 먼저 무효화한 상태를 재현한다 (Tomcat과 같은 예외)
+    private static final class InvalidatedByConcurrentLogoutSession extends CopiedSession {
+        InvalidatedByConcurrentLogoutSession(MockHttpSession source) {
+            super(source);
+        }
+
+        @Override
+        public void invalidate() {
+            if (!isInvalid()) super.invalidate();
+            throw new IllegalStateException("invalidate: Session already invalidated");
+        }
+    }
+
+    // 요청이 세션을 받은 뒤 로그인 정보를 읽기 직전에 다른 로그아웃이 먼저 무효화한 상태를 재현한다
+    private static final class InvalidatedBeforeContextReadSession extends CopiedSession {
+        InvalidatedBeforeContextReadSession(MockHttpSession source) {
+            super(source);
+        }
+
+        @Override
+        public Object getAttribute(String name) {
+            if (HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY.equals(name) && !isInvalid())
+                super.invalidate();
+            return super.getAttribute(name);
+        }
     }
 
     // 세션 인증은 직렬화할 수 있고 비밀번호 원문과 해시를 포함하지 않는다
