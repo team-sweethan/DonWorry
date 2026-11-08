@@ -42,9 +42,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
-// 내부자 사건 (#670) — 경보 묶기 · 판정 3개 · 징계 사건 정지 해제. P2 경보 · P1 정지는 공개 창구 대역으로 정한다
+// 내부자 사건 (#670) — 경보 묶기 · 판정 3개 · 징계 사건 정지 해제 + 해제 검토 보고서 알림(#675). P2 경보 · P1 정지는 공개 창구 대역으로 정한다
 @ExtendWith(MockitoExtension.class)
 class InsiderCaseServiceTests {
 
@@ -80,6 +81,9 @@ class InsiderCaseServiceTests {
 
     @Mock
     StaffAccountLocker locker;
+
+    @Mock
+    ApplicationEventPublisher events;
 
     @InjectMocks
     InsiderCaseService service;
@@ -199,6 +203,46 @@ class InsiderCaseServiceTests {
         assertThat(saved.getFirst().getStaffId()).isEqualTo(STAFF_ID);
         assertThat(saved.getFirst().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
         assertThat(linked).extracting(InsiderCaseAlert::getAlertId).containsExactly(600L);
+    }
+
+    // 새 사건이 열리면 해제 검토 보고서 첫 판을 만들라는 알림을 보낸다 (#675)
+    @Test
+    void alertRaised_newCase_publishesCaseOpened() {
+        when(links.findById(500L)).thenReturn(Optional.empty());
+        when(alertReader.isOpen(500L)).thenReturn(true);
+        when(cases.findByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN)).thenReturn(Optional.empty());
+        when(cases.save(any(InsiderCase.class))).thenAnswer(call -> withId(call.getArgument(0), CASE_ID));
+
+        service.onAlertRaised(event(500L, InsiderAlertSeverity.HIGH));
+
+        verify(events).publishEvent(new InsiderCaseChanged(CASE_ID, InsiderCaseChanged.Reason.OPENED, 500L));
+    }
+
+    // 열린 사건에 차단(INS-05) 경보가 새로 붙으면 다음 판을 만들라는 알림을 보낸다 (#675)
+    @Test
+    void alertRaised_exportBlockOnOpenCase_publishesExportBlocked() {
+        InsiderCase existing = openCase(InsiderAlertSeverity.HIGH);
+        when(links.findById(503L)).thenReturn(Optional.empty());
+        when(alertReader.isOpen(503L)).thenReturn(true);
+        when(cases.findByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN)).thenReturn(Optional.of(existing));
+
+        service.onAlertRaised(event(503L, InsiderAlertSeverity.CRITICAL, InsiderRule.INS_05));
+
+        verify(events).publishEvent(new InsiderCaseChanged(CASE_ID, InsiderCaseChanged.Reason.EXPORT_BLOCKED, 503L));
+    }
+
+    // 서버 시작 때 예전 경보로 열린 사건도 해제 검토 보고서 첫 판 알림을 보낸다 (#675) — 알림 경로에만 두면 이 사건엔 보고서가 없다
+    @Test
+    void linkOpenAlerts_newCase_publishesCaseOpened() {
+        when(alertReader.findOpenRaisedAlerts()).thenReturn(List.of(event(600L, InsiderAlertSeverity.HIGH)));
+        when(links.findById(600L)).thenReturn(Optional.empty());
+        when(alertReader.isOpen(600L)).thenReturn(true);
+        when(cases.findByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN)).thenReturn(Optional.empty());
+        when(cases.save(any(InsiderCase.class))).thenAnswer(call -> withId(call.getArgument(0), CASE_ID));
+
+        service.linkOpenAlerts();
+
+        verify(events).publishEvent(new InsiderCaseChanged(CASE_ID, InsiderCaseChanged.Reason.OPENED, 600L));
     }
 
     // 정상 업무: 그 직원의 열린 경보를 닫고 정지를 사용 중으로 푼다
@@ -393,10 +437,14 @@ class InsiderCaseServiceTests {
     }
 
     private static InsiderAlertRaised event(Long alertId, InsiderAlertSeverity severity) {
+        return event(alertId, severity, InsiderRule.INS_01);
+    }
+
+    private static InsiderAlertRaised event(Long alertId, InsiderAlertSeverity severity, InsiderRule rule) {
         return InsiderAlertRaised.builder()
                 .alertId(alertId)
                 .staffId(STAFF_ID)
-                .rule(InsiderRule.INS_01)
+                .rule(rule)
                 .severity(severity)
                 .summary("담당 밖 접근 5건")
                 .raisedAt(T0.plusSeconds(60))

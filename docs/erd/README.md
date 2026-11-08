@@ -83,6 +83,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `investigation` (#619) | P3 수민 | `raw_view_reviews` (주문자 전화 원문 열람 사후 검토, ADR-0082) | [원문 열람 검토](../../backend/src/main/resources/db/migration/V20261107_024052__create_raw_view_reviews.sql) |
 | `investigation` (#670) | P3 수민 | `insider_cases`, `insider_case_alerts` (내부자 사건 · 관리자 판정 · 징계 사건 정지 해제, ADR-0082) | [내부자 사건](../../backend/src/main/resources/db/migration/V20261108_123006__create_insider_cases.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
+| `investigation/report` (#675) | P4 현규 | `ai_insider_reports` (내부자 사건 해제 검토 보고서, ADR-0082) | [해제 검토 보고서](../../backend/src/main/resources/db/migration/V20261108_134720__create_ai_insider_reports.sql) |
 | `investigation/report` (#412) | P4 현규 | `ml_shadow_scores` (FDS ML Shadow 채점 기록) | [ML Shadow](../../backend/src/main/resources/db/migration/V20261102_125730__create_ml_shadow_scores.sql) |
 | `investigation/report` (#626) | P4 현규 | `ai_switch_histories` (AI 조사 긴급정지 스위치 변경 기록, ADR-0083) | [긴급정지](../../backend/src/main/resources/db/migration/V20261107_101635__create_ai_switch_histories.sql) |
 | `settlement` | P6 민정 | `captures`, `settlements` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
@@ -124,6 +125,7 @@ erDiagram
     insider_cases ||--o{ insider_case_alerts : "insider_case_id"
     insider_alerts ||..o| insider_case_alerts : "alert_id (P2 경보)"
     platform_users ||..o{ insider_cases : "staff_id"
+    insider_cases ||..o{ ai_insider_reports : "insider_case_id (P4 해제 검토 보고서)"
 
     captures ||--o| settlements : "capture_id"
 
@@ -166,7 +168,7 @@ erDiagram
 | --- | --- | --- |
 | 같은 소유 담당의 테이블끼리 | 물리 FK(외래 키 제약을 DB에 건다) | `security_cases` ↔ `case_payments` (둘 다 P3) |
 | 소유 담당이 다른 테이블 | 논리 참조(ID 값만 저장, FK 없음) | `fds_evaluations.payment_id`, `fds_evaluations.merchant_id` (P2 → P5) |
-| 같은 `investigation` 모듈 안의 P3 ↔ P4 | 논리 참조 (예외) | `ai_reports` ↔ `security_cases` · `payment_decisions` |
+| 같은 `investigation` 모듈 안의 P3 ↔ P4 | 논리 참조 (예외) | `ai_reports` ↔ `security_cases` · `payment_decisions`, `ai_insider_reports` ↔ `insider_cases` |
 
 - 논리 참조 대상의 존재 확인은 DB가 아니라 소유 담당 모듈의 공개 `api/`로 합니다
 - 참조되는 금융·조사 기록(결제·평가·Case·판정·인계·보고서)은 물리 삭제하지 않습니다. 그래서 FK에 `ON DELETE` 옵션을 두지 않습니다 (참조 중이면 삭제 거부)
@@ -582,3 +584,22 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | raised_at · linked_at | DATETIME(6) NOT NULL | UTC |
 
 인덱스 (insider_case_id, linked_at).
+
+### #675 P4 내부자 사건 해제 검토 보고서 (2026-11-08)
+
+사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 2절 선행 구현을 승인했다(조각 9). Notion 반영은 후속이다.
+P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음, 5절 P3 ↔ P4 예외와 같은 방식)다.
+사건이 열리거나 차단(INS-05) 경보가 붙은 것이 커밋된 뒤 코드가 사실을 세어 판을 쌓는다. 보고서 실패는 사건 · 정지 상태를 바꾸지 않는다.
+
+`ai_insider_reports` — 해제 검토 보고서 한 판. 판별로 쌓고 고치거나 지우지 않는다. FDS 사건 보고서 `ai_reports`와 대상 · 만드는 방식이 달라 따로 둔다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| report_id | BIGINT AUTO_INCREMENT PK | |
+| insider_case_id | BIGINT NOT NULL | P3 내부자 사건 (논리 참조) |
+| report_version | INT NOT NULL | 사건별 1부터 (CHECK ≥ 1). UNIQUE(insider_case_id, report_version) |
+| trigger_type | VARCHAR(30) NOT NULL | CASE_OPENED(사건 생성) / EXPORT_BLOCKED(내보내기 차단) (CHECK). UNIQUE(insider_case_id, trigger_type) — 같은 계기는 한 판 |
+| trigger_alert_id | BIGINT NOT NULL | 이 판을 만든 경보 (P2 논리 참조) |
+| status | VARCHAR(20) NOT NULL | SUCCEEDED / FAILED (CHECK) — 만들 때 끝난 상태로 저장 |
+| report_body | JSON NOT NULL | 사실(facts) · 고정 문장 설명(narrative) · 한계(limits). FAILED면 오류 코드만. 고객 번호 · IP · 원문 없음 |
+| created_at | DATETIME(6) NOT NULL | UTC |

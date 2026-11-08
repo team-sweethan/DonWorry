@@ -1,0 +1,217 @@
+import { Alert, Button, Descriptions, Empty, Segmented, Space, Table, Tag, Typography } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import type { InsiderAlertSeverity } from '../../api/insiderAlerts'
+import {
+  getInsiderReports,
+  type InsiderReport,
+  type InsiderReportAccessType,
+  type InsiderReportBody,
+} from '../../api/insiderCases'
+import { dateTime } from '../security/case/caseLabels'
+import { errorText } from './caseAssignmentForm'
+
+const severityLabel: Record<InsiderAlertSeverity, string> = {
+  CAUTION: '주의',
+  HIGH: '높음',
+  CRITICAL: '위험',
+}
+const oneLine = {
+  onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+  onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+}
+
+function period(from: string | null, to: string | null) {
+  if (!from || !to) return '-'
+  return from === to ? dateTime(from) : `${dateTime(from)} ~ ${dateTime(to)}`
+}
+
+function Sentences({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <div>
+      <Typography.Text strong>{title}</Typography.Text>
+      <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** 한 판의 본문 — 사실(코드가 셈) · 고정 설명 · 한계. 추천 문장은 없다 */
+function ReportBody({ body }: { body: InsiderReportBody }) {
+  const { facts, narrative } = body
+  const { access } = facts
+  return (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Descriptions size="small" column={2} bordered styles={{ label: { whiteSpace: 'nowrap' } }}>
+        <Descriptions.Item label="조사 대상">
+          {facts.staffName ?? `ID ${facts.staffId}`}
+        </Descriptions.Item>
+        <Descriptions.Item label="그때 계정">
+          {facts.accountLocked ? <Tag color="volcano">보안 정지 중</Tag> : <Tag>정지 아님</Tag>}
+        </Descriptions.Item>
+        <Descriptions.Item label="근거 접근">{access.total}건</Descriptions.Item>
+        <Descriptions.Item label="기간">
+          {period(access.periodFrom, access.periodTo)}
+        </Descriptions.Item>
+        <Descriptions.Item label="서로 다른 고객">{access.distinctCustomers}명</Descriptions.Item>
+        <Descriptions.Item label="가맹점 · 사건">
+          {access.distinctMerchants}곳 · {access.distinctCases}건
+        </Descriptions.Item>
+      </Descriptions>
+
+      <div>
+        <Typography.Text strong>걸린 규칙 (순서대로)</Typography.Text>
+        <Table
+          rowKey="alertId"
+          size="small"
+          pagination={false}
+          dataSource={facts.alerts}
+          columns={[
+            { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
+            {
+              ...oneLine,
+              title: '규칙',
+              render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
+            },
+            {
+              ...oneLine,
+              title: '등급',
+              dataIndex: 'severity',
+              render: (value: InsiderAlertSeverity) => severityLabel[value],
+            },
+            { title: '내용', dataIndex: 'summary' },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Typography.Text strong>접근 종류별</Typography.Text>
+        <Table<InsiderReportAccessType>
+          rowKey="type"
+          size="small"
+          pagination={false}
+          dataSource={access.byType}
+          locale={{ emptyText: '경보 근거로 묶인 접근 기록이 없습니다.' }}
+          columns={[
+            { ...oneLine, title: '종류', dataIndex: 'label' },
+            { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
+            { ...oneLine, title: '거부', dataIndex: 'denied', align: 'right' },
+            {
+              ...oneLine,
+              title: '행 수',
+              dataIndex: 'items',
+              align: 'right',
+              render: (value: number) => (value > 0 ? value : '-'),
+            },
+            { ...oneLine, title: '사건', dataIndex: 'cases', align: 'right' },
+          ]}
+        />
+        {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
+        {facts.alerts.some((alert) => alert.ruleCode === 'INS-05') && (
+          <Typography.Text type="secondary">
+            막힌 내보내기 시도는 위 [걸린 규칙]의 INS-05 줄에 있고, 이 표의 숫자에는 세지 않습니다.
+          </Typography.Text>
+        )}
+      </div>
+
+      <div>
+        <Space size="small" style={{ marginBottom: 4 }}>
+          <Typography.Text strong>설명</Typography.Text>
+          <Tag>{narrative.sourceLabel}</Tag>
+        </Space>
+        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+          <Sentences title="정상 업무로 설명될 수 있는가" lines={narrative.normalExplanation} />
+          <Sentences title="정지를 풀면" lines={narrative.ifReleased} />
+          <Sentences title="정지를 유지하면" lines={narrative.ifKept} />
+        </Space>
+      </div>
+
+      <Typography.Text type="secondary">
+        {body.limits.map((line) => (
+          <div key={line}>· {line}</div>
+        ))}
+      </Typography.Text>
+    </Space>
+  )
+}
+
+/**
+ * 내부자 사건 해제 검토 보고서 (#675) — 판별로 고른다(기본은 최신 판).
+ * 사건이 열리고 몇 초 뒤에 첫 판이 생기므로 없으면 [새로고침]으로 다시 읽는다.
+ */
+export function InsiderReportsPanel({ insiderCaseId }: { insiderCaseId: number }) {
+  const [reports, setReports] = useState<InsiderReport[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  // 읽기 중 표시는 [새로고침]에서만 켠다 — 첫 읽기는 effect 안이라 state를 바로 바꾸지 않는다
+  const load = useCallback(() => {
+    getInsiderReports(insiderCaseId)
+      .then((next) => {
+        setReports(next)
+        setError(null)
+        setSelected(next.length > 0 ? next[next.length - 1].reportVersion : null)
+      })
+      .catch((e) =>
+        setError(errorText(e, '해제 검토 보고서를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')),
+      )
+      .finally(() => setLoading(false))
+  }, [insiderCaseId])
+  useEffect(() => {
+    load()
+  }, [load])
+  const refresh = () => {
+    setLoading(true)
+    load()
+  }
+
+  const report = reports?.find((row) => row.reportVersion === selected) ?? null
+
+  return (
+    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+      <Alert
+        type="info"
+        showIcon
+        message="정지를 풀지 판단할 때 볼 사실입니다. 숫자는 코드가 셌고 설명은 정해진 문장입니다(AI 미사용). 보고서는 추천하지 않습니다 — 판정은 관리자가 합니다."
+      />
+      {error && <Alert type="error" showIcon message={error} />}
+      {reports && reports.length === 0 && (
+        <Empty description="아직 보고서가 없습니다. 사건이 열리고 몇 초 뒤에 만들어집니다." />
+      )}
+      <Space wrap>
+        {reports && reports.length > 0 && (
+          <Segmented<number>
+            value={selected ?? undefined}
+            onChange={setSelected}
+            options={reports.map((row) => ({
+              value: row.reportVersion,
+              label: `${row.reportVersion}판 · ${row.triggerLabel}`,
+            }))}
+          />
+        )}
+        <Button size="small" loading={loading} onClick={refresh}>
+          새로고침
+        </Button>
+      </Space>
+      {report && (
+        <>
+          <Typography.Text type="secondary">
+            {report.reportVersion}판 · {report.triggerLabel} · {dateTime(report.createdAt)} 기준
+          </Typography.Text>
+          {report.status === 'FAILED' || !report.body ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="이 판은 만들지 못했습니다(기록 읽기 실패). 사건 정보 탭의 경보와 [내부자 경보] 화면의 근거로 판단하세요. 사건 · 정지 상태는 바뀌지 않았습니다."
+            />
+          ) : (
+            <ReportBody body={report.body} />
+          )}
+        </>
+      )}
+    </Space>
+  )
+}
