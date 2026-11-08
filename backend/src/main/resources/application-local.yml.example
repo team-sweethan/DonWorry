@@ -18,6 +18,7 @@ spring:
 #       V1: "개발용_마스터_키_Base64"
 
 # 로컬 시연용 (docs/demo/local-demo.md 2 · 3절) — 필요할 때 주석을 풀어 쓴다
+# 아래 payment.http.enabled · ai.server.enabled는 테스트(./gradlew check)에는 적용되지 않는다 — build.gradle이 테스트에서 끈다 (#374)
 # payment:
 #   http:
 #     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)

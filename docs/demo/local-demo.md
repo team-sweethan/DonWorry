@@ -343,6 +343,8 @@ PowerShell 명령 대신 아래를 씁니다.
 | AI 서버 키 · AI 종류 `AI_SERVER_INTERNAL_API_KEY` · `AI_SERVER_LLM_PROVIDER` | `ai-server/.env` | ai-server | 3 · 4절 |
 | OpenAI 키 · 모델 `AI_SERVER_LLM_API_KEY` · `AI_SERVER_OPENAI_MODEL` | `ai-server/.env` (VM은 환경 변수) | ai-server | 4-1절 |
 
+결제 API · AI 서버 켜기 값은 `application-local.yml`에 넣든 OS 환경 변수(`PAYMENT_HTTP_ENABLED` · `AI_SERVER_ENABLED`)로 두든 테스트(`./gradlew check`)에는 적용되지 않습니다. `backend/build.gradle`이 테스트에서 둘을 끕니다 (#374). IntelliJ 자체 실행기처럼 Gradle을 거치지 않고 테스트를 돌리면 이 설정이 빠지니 Gradle로 돌립니다.
+
 포트: backend `8081` · frontend `5173` · ai-server `8000` · DB `3307` · Ollama `11434`
 
 ### 7-4. 한계
