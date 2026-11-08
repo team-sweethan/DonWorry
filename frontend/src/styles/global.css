@@ -911,6 +911,23 @@ textarea {
   margin: 0 12px 6px;
   color: var(--shell-muted);
 }
+/* 관리자 메뉴 3단 — 큰 묶음 › 작은 묶음 › 메뉴 (ADR-0082 8절). 작은 묶음끼리는 좁게, 큰 묶음 사이는 넓게.
+   들여쓰기는 접힌 사이드바 규칙(아래 @media, 같은 선택자 세기 · 뒤에 옴)이 덮는다 */
+.admin-viewport[data-role] .dw-nav-section {
+  margin: 10px 12px 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--shell-text);
+}
+.admin-viewport[data-role] .dw-nav-subgroup {
+  margin-bottom: 12px;
+}
+.admin-viewport[data-role] .dw-nav-subgroup .dw-nav-heading {
+  margin-left: 20px;
+}
+.admin-viewport[data-role] .dw-nav-subgroup .dw-nav-link {
+  padding-left: 20px;
+}
 .admin-viewport[data-role] .dw-nav-link {
   height: auto;
   min-height: 40px;
@@ -1029,7 +1046,10 @@ textarea {
   .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-group {
     margin-bottom: 8px;
   }
-  /* 묶음 제목은 얇은 구분선으로 바꾼다 */
+  /* 큰 묶음 제목은 숨기고, 작은 묶음 제목은 얇은 구분선으로 바꾼다 */
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-section {
+    display: none;
+  }
   .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-heading {
     height: 1px;
     margin: 0 6px 8px;

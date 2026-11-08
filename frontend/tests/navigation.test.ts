@@ -156,11 +156,8 @@ test('관리자 계정 관리 메뉴와 하위 경로를 제공한다', () => {
   assert.equal(canOpenPath(staff, '/admin/users/1'), false)
 })
 
-test('보안 직원과 관리자는 탐지 메뉴를 업무 용어로 표시한다', () => {
+test('보안 직원은 탐지 메뉴를 업무 용어로 표시한다', () => {
   const securityDetectionItems = sessionNavigation(staff).groups.find(
-    (group) => group.title === '탐지',
-  )
-  const adminDetectionItems = sessionNavigation(admin).groups.find(
     (group) => group.title === '탐지',
   )
 
@@ -168,10 +165,26 @@ test('보안 직원과 관리자는 탐지 메뉴를 업무 용어로 표시한�
     securityDetectionItems?.items.map((item) => item.label),
     ['경보', '탐지 룰 목록', '차단 목록'],
   )
-  assert.deepEqual(
-    adminDetectionItems?.items.map((item) => item.label),
-    ['탐지 룰 목록', '계정 접근 이상 탐지', '룰 변경 요청', '룰 변경 이력'],
-  )
+})
+
+// 관리자 메뉴는 대상별 3단 — 사장님 403 탐지와 내부자 보안이 섞이면 합의(ADR-0082 8절)가 깨진다 (#659)
+test('adminNavigation_threeTierLayout_matchesAdr0082Section8', () => {
+  const layout = sessionNavigation(admin).groups.map((group) => [
+    group.section ?? null,
+    group.title,
+    group.items.map((item) => item.label),
+  ])
+
+  assert.deepEqual(layout, [
+    [null, '개요', ['홈']],
+    ['가맹점 관리', '운영', ['이용 신청', '가맹점 목록']],
+    ['가맹점 관리', '보안', ['계정 접근 이상 탐지']],
+    ['직원 관리', '사건', ['담당 현황', '변경 요청']],
+    ['직원 관리', '보안', ['원문 열람 검토', '내부자 경보']],
+    ['시스템 설정', '계정', ['계정 관리']],
+    ['시스템 설정', '탐지 룰', ['탐지 룰 목록', '룰 변경 요청', '룰 변경 이력']],
+    ['시스템 설정', 'AI', ['AI 조사 긴급정지']],
+  ])
 })
 
 test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공한다', () => {
@@ -195,7 +208,9 @@ test('sessionNavigation_caseAssignmentMenu_adminOnly', () => {
     sessionNavigation(user).groups.flatMap((group) => group.items.map((item) => item.path))
 
   assert.deepEqual(
-    sessionNavigation(admin).groups.find((group) => group.title === '사건 담당')?.items,
+    sessionNavigation(admin).groups.find(
+      (group) => group.section === '직원 관리' && group.title === '사건',
+    )?.items,
     [
       { label: '담당 현황', path: paths[0] },
       { label: '변경 요청', path: paths[1], badge: 'caseAssignmentRequests' },

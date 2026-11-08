@@ -135,8 +135,15 @@ function Sidebar({
         </Tooltip>
       </div>
       <nav id="dw-main-nav">
-        {groups.map((group) => (
-          <div className="dw-nav-group" key={group.title}>
+        {groups.map((group, index) => (
+          <div
+            className={`dw-nav-group${group.section ? ' dw-nav-subgroup' : ''}`}
+            key={`${group.section ?? ''}/${group.title}`}
+          >
+            {/* 관리자 메뉴의 큰 묶음 제목은 묶음의 첫 그룹 위에 한 번만 (ADR-0082 8절) */}
+            {group.section && group.section !== groups[index - 1]?.section && (
+              <div className="dw-nav-section">{group.section}</div>
+            )}
             <div className="dw-nav-heading">{group.title}</div>
             {group.items.map((item) => {
               // 0건 · 아직 모름(null)이면 숨긴다

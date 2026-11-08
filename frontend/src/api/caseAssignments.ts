@@ -129,6 +129,18 @@ export function rejectAssignmentRequest(requestId: number, memo: string) {
 }
 
 /** 새 담당 기본값 — 서버가 준 배정 순서에서 정지 직원 · 지금 담당을 뺀 첫 직원. 없으면 null */
+const staffNameOrder = new Intl.Collator('ko', { numeric: true })
+
+/**
+ * 담당 현황 카드 순서 — 이름순, 이름 속 숫자는 크기대로(보안직원 2 → 10). 정지 직원도 이름 자리에 둔다.
+ * 자동 배정 순서(assignOrder)와는 별개다. 다음 배정 후보는 카드의 "다음 배정 1순위" 표시로 본다 (#659)
+ */
+export function staffInNameOrder(staff: StaffLoad[]) {
+  return [...staff].sort(
+    (a, b) => staffNameOrder.compare(a.displayName, b.displayName) || a.staffId - b.staffId,
+  )
+}
+
 export function suggestedStaff(staff: StaffLoad[], excludeStaffId: number | null) {
   return (
     staff
