@@ -46,9 +46,7 @@ export type MerchantCaseDetail = {
   displayStatus: MerchantCaseStatus
   createdAt: string
   closedAt: string | null
-  /** 최신 AI 보고서의 핵심 요약. 조사 중이거나 보고서가 실패했으면 null. */
+  /** 사건 상태 기반 처리 안내. 내부 AI 보고서 요약은 공개하지 않는다. */
   summary: string[] | null
-  /** AI 보고서 없이 보안 담당자가 직접 조사해 판정한 결제가 있음. */
-  directInvestigation: boolean
   payments: MerchantPaymentResult[]
 }

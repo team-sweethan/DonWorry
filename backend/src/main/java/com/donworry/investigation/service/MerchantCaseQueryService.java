@@ -14,7 +14,6 @@ import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
-import com.donworry.investigation.service.ReportGateway.ReportSnapshot;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,7 +36,6 @@ public class MerchantCaseQueryService {
     private final CasePaymentRepository casePaymentRepository;
     private final PaymentDecisionRepository paymentDecisionRepository;
     private final PaymentInfoReader paymentInfoReader;
-    private final ReportGateway reportGateway;
     private final CaseStatusService caseStatusService;
 
     @Transactional(readOnly = true)
@@ -80,15 +78,6 @@ public class MerchantCaseQueryService {
                 paymentDecisionRepository.findByCasePaymentSecurityCaseId(caseId).stream()
                         .collect(Collectors.toMap(
                                 decision -> decision.getCasePayment().getId(), Function.identity()));
-        // 최신 보고서가 현재 증거 버전을 조사해 성공했을 때만 요약을 보여 준다
-        // 결제별 AI 권고는 내보내지 않는다 — 예전 보고서에 값이 남아 있어도 읽지 않는다 (#644)
-        // 병합 뒤 새 보고서가 아직 없거나 실패했으면 이전 버전 요약을 내보내지 않는다 (CaseStatusService.reportProgress와 같은 기준)
-        Map<String, Object> reportBody = reportGateway
-                .latest(caseId)
-                .filter(report -> report.evidenceVersion() == securityCase.getEvidenceVersion())
-                .filter(ReportSnapshot::isSucceeded)
-                .map(ReportSnapshot::reportBody)
-                .orElse(null);
         // 고객이 직접 승인을 취소한 결제(#382 · #439) — 직원 거절과 구분해 보인다
         Set<Long> customerCanceled =
                 caseStatusService.canceledCasePayments(caseId).keySet();
@@ -97,8 +86,7 @@ public class MerchantCaseQueryService {
                 .displayStatus(displayStatus(securityCase.getStatus()))
                 .createdAt(securityCase.getCreatedAt())
                 .closedAt(securityCase.getClosedAt())
-                .summary(summary(reportBody))
-                .directInvestigation(decisions.values().stream().anyMatch(decision -> decision.getReportId() == null))
+                .summary(MerchantCasePublicSummary.forStatus(securityCase.getStatus()))
                 .payments(casePayments.stream()
                         .map(casePayment -> {
                             Optional<PaymentInfo> info = Optional.ofNullable(infos.get(casePayment.getPaymentId()));
@@ -128,13 +116,5 @@ public class MerchantCaseQueryService {
             case ACTION_PENDING, ACTION_FAILED -> "PROCESSING";
             case CLOSED -> "CLOSED";
         };
-    }
-
-    // report_body 키는 화면 ReportBody(ADR-0009 결정 4)를 따른다. 핵심 요약 외의 키는 읽지 않는다
-    private static List<String> summary(Map<String, Object> reportBody) {
-        if (reportBody == null || !(reportBody.get("summary") instanceof List<?> lines)) {
-            return null;
-        }
-        return lines.stream().map(String::valueOf).toList();
     }
 }

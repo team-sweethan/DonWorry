@@ -13,10 +13,8 @@ public record MerchantCaseDetailResponse(
         String displayStatus,
         Instant createdAt,
         Instant closedAt,
-        // 최신 보고서가 성공했을 때의 "핵심 요약". 조사 중이거나 보고서가 실패했으면 null
+        // 사건 상태만으로 만든 사장님용 처리 안내. 내부 AI 요약과 조사 방식은 내보내지 않는다.
         List<String> summary,
-        // AI 보고서 없이 보안 직원이 직접 조사해 판정한 결제가 있으면 true — 화면은 "보안 담당자 직접 조사"로 표시한다
-        boolean directInvestigation,
         List<PaymentResult> payments) {
 
     // 직원 판정(decision)과 실제 금융 처리 결과(paymentStatus, P5 정본)를 따로 보낸다
