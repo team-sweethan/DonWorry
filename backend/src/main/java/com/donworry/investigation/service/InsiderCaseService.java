@@ -3,6 +3,7 @@ package com.donworry.investigation.service;
 import com.donworry.fds.api.InsiderAlertCloser;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
+import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.identity.api.StaffAccountLocker;
@@ -30,6 +31,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +57,7 @@ public class InsiderCaseService {
     private final InsiderAlertReader alertReader;
     private final InsiderAlertCloser alertCloser;
     private final StaffAccountLocker locker;
+    private final ApplicationEventPublisher events;
 
     // P2 경보 수신 — 열린 사건이 있으면 거기에, 없으면 새 사건. 같은 경보가 다시 와도(재전달 · 등급 상승) 한 줄
     @Transactional
@@ -97,11 +100,16 @@ public class InsiderCaseService {
         }
         InsiderCase insiderCase = cases.findByStaffIdAndStatus(event.staffId(), InsiderCaseStatus.OPEN)
                 .orElse(null);
+        boolean exportBlocked = event.rule() == InsiderRule.INS_05;
         if (insiderCase == null) {
             insiderCase = cases.save(InsiderCase.open(event.staffId(), event.severity(), now));
             log.info("내부자 사건 열림 insiderCaseId={} staffId={}", insiderCase.getId(), event.staffId());
+            // 해제 검토 보고서(#675) 첫 판 — 차단 경보로 바로 열린 사건이면 차단 판
+            publishChanged(insiderCase.getId(), exportBlocked, event.alertId());
         } else {
             insiderCase.touch(event.severity(), now);
+            // 열린 사건에 차단 경보가 새로 붙으면 다음 판 (#675)
+            if (exportBlocked) publishChanged(insiderCase.getId(), true, event.alertId());
         }
         links.save(InsiderCaseAlert.link(
                 insiderCase.getId(),
@@ -275,6 +283,14 @@ public class InsiderCaseService {
     }
 
     // 정지 · 비활성 직원도 이름을 보여야 한다 — 사건 대상은 대개 정지된 직원이다
+    // 커밋 뒤에 P4 해제 검토 보고서가 받는다 — 보고서가 실패해도 이 트랜잭션(사건 · 연결)은 그대로다
+    private void publishChanged(Long insiderCaseId, boolean exportBlocked, Long alertId) {
+        events.publishEvent(new InsiderCaseChanged(
+                insiderCaseId,
+                exportBlocked ? InsiderCaseChanged.Reason.EXPORT_BLOCKED : InsiderCaseChanged.Reason.OPENED,
+                alertId));
+    }
+
     private Map<Long, String> staffNames() {
         return staffDirectory.securityStaff().stream()
                 .collect(Collectors.toMap(SecurityStaffEntry::userId, SecurityStaffEntry::displayName, (a, b) -> a));

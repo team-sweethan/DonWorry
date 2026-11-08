@@ -35,6 +35,7 @@ import { refreshInsiderAlertBadge } from '../../hooks/useInsiderAlertBadge'
 import { refreshInsiderCaseBadge } from '../../hooks/useInsiderCaseBadge'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
+import { InsiderReportsPanel } from './InsiderReportsPanel'
 
 const tabs: Array<{ key: InsiderCaseStatus; label: string }> = [
   { key: 'OPEN', label: '열린 사건' },
@@ -160,94 +161,130 @@ function CaseDrawer({
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
       {detail && insiderCase && (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Descriptions
-            size="small"
-            column={2}
-            bordered
-            styles={{ label: { whiteSpace: 'nowrap' } }}
-          >
-            <Descriptions.Item label="상태">
-              {insiderCase.status === 'OPEN' ? <Tag color="red">열림</Tag> : <Tag>닫힘</Tag>}
-            </Descriptions.Item>
-            <Descriptions.Item label="등급">
-              <SeverityTag value={insiderCase.severity} />
-            </Descriptions.Item>
-            <Descriptions.Item label="계정">
-              {detail.accountLocked ? (
-                <Tag color="volcano">보안 정지 중</Tag>
-              ) : (
-                <Tag>정지 아님</Tag>
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="맡은 FDS 사건">
-              {detail.openFdsCaseCount}건{' '}
-              {detail.openFdsCaseCount > 0 && (
-                <Link to="/admin/case-assignments">담당 현황에서 넘기기</Link>
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="열린 시각">
-              {dateTime(insiderCase.openedAt)}
-            </Descriptions.Item>
-            <Descriptions.Item label="판정">{decisionSummary(insiderCase)}</Descriptions.Item>
-            {insiderCase.decisionMemo && (
-              <Descriptions.Item label="판정 메모" span={2}>
-                {insiderCase.decisionMemo}
-              </Descriptions.Item>
-            )}
-            {insiderCase.lockReleasedAt && (
-              <Descriptions.Item label="정지 해제" span={2}>
-                {`${insiderCase.lockReleasedByName ?? '-'} · ${dateTime(insiderCase.lockReleasedAt)} · ${insiderCase.lockReleaseReason ?? ''}`}
-              </Descriptions.Item>
-            )}
-          </Descriptions>
+          {/* 판정 · 정지 해제 카드는 탭 밖에 둔다 — 보고서를 보다가 바로 판정할 수 있게 (#675) */}
+          <Tabs
+            items={[
+              {
+                key: 'case',
+                label: '사건 정보',
+                children: (
+                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <Descriptions
+                      size="small"
+                      column={2}
+                      bordered
+                      styles={{ label: { whiteSpace: 'nowrap' } }}
+                    >
+                      <Descriptions.Item label="상태">
+                        {insiderCase.status === 'OPEN' ? (
+                          <Tag color="red">열림</Tag>
+                        ) : (
+                          <Tag>닫힘</Tag>
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="등급">
+                        <SeverityTag value={insiderCase.severity} />
+                      </Descriptions.Item>
+                      <Descriptions.Item label="계정">
+                        {detail.accountLocked ? (
+                          <Tag color="volcano">보안 정지 중</Tag>
+                        ) : (
+                          <Tag>정지 아님</Tag>
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="맡은 FDS 사건">
+                        {detail.openFdsCaseCount}건{' '}
+                        {detail.openFdsCaseCount > 0 && (
+                          <Link to="/admin/case-assignments">담당 현황에서 넘기기</Link>
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="열린 시각">
+                        {dateTime(insiderCase.openedAt)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="판정">
+                        {decisionSummary(insiderCase)}
+                      </Descriptions.Item>
+                      {insiderCase.decisionMemo && (
+                        <Descriptions.Item label="판정 메모" span={2}>
+                          {insiderCase.decisionMemo}
+                        </Descriptions.Item>
+                      )}
+                      {insiderCase.lockReleasedAt && (
+                        <Descriptions.Item label="정지 해제" span={2}>
+                          {`${insiderCase.lockReleasedByName ?? '-'} · ${dateTime(insiderCase.lockReleasedAt)} · ${insiderCase.lockReleaseReason ?? ''}`}
+                        </Descriptions.Item>
+                      )}
+                    </Descriptions>
 
-          <div>
-            <Typography.Title level={5}>묶인 경보 {detail.alerts.length}건</Typography.Title>
-            <Table<InsiderCaseAlert>
-              rowKey="alertId"
-              size="small"
-              pagination={false}
-              dataSource={detail.alerts}
-              columns={[
-                { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
-                {
-                  ...oneLine,
-                  title: '규칙',
-                  render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
-                },
-                {
-                  ...oneLine,
-                  title: '등급',
-                  dataIndex: 'severity',
-                  render: (value: InsiderAlertSeverity) => <SeverityTag value={value} />,
-                },
-                { title: '내용', dataIndex: 'summary' },
-              ]}
-            />
-            <Typography.Text type="secondary">
-              근거 접근 기록은 [내부자 경보] 화면에서 경보 줄을 펼쳐 봅니다.
-            </Typography.Text>
-          </div>
+                    <div>
+                      <Typography.Title level={5}>
+                        묶인 경보 {detail.alerts.length}건
+                      </Typography.Title>
+                      <Table<InsiderCaseAlert>
+                        rowKey="alertId"
+                        size="small"
+                        pagination={false}
+                        dataSource={detail.alerts}
+                        columns={[
+                          { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
+                          {
+                            ...oneLine,
+                            title: '규칙',
+                            render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
+                          },
+                          {
+                            ...oneLine,
+                            title: '등급',
+                            dataIndex: 'severity',
+                            render: (value: InsiderAlertSeverity) => <SeverityTag value={value} />,
+                          },
+                          { title: '내용', dataIndex: 'summary' },
+                        ]}
+                      />
+                      <Typography.Text type="secondary">
+                        근거 접근 기록은 [내부자 경보] 화면에서 경보 줄을 펼쳐 봅니다.
+                      </Typography.Text>
+                    </div>
 
-          {detail.pastCases.length > 0 && (
-            <div>
-              <Typography.Title level={5}>이 직원의 지난 내부자 사건</Typography.Title>
-              <Table<InsiderCase>
-                rowKey="insiderCaseId"
-                size="small"
-                pagination={false}
-                dataSource={detail.pastCases}
-                columns={[
-                  { ...oneLine, title: '사건', render: (_, row) => `#${row.insiderCaseId}` },
-                  { ...oneLine, title: '열린 시각', dataIndex: 'openedAt', render: dateTime },
-                  {
-                    title: '판정',
-                    render: (_, row) => (row.status === 'OPEN' ? '진행 중' : decisionSummary(row)),
-                  },
-                ]}
-              />
-            </div>
-          )}
+                    {detail.pastCases.length > 0 && (
+                      <div>
+                        <Typography.Title level={5}>이 직원의 지난 내부자 사건</Typography.Title>
+                        <Table<InsiderCase>
+                          rowKey="insiderCaseId"
+                          size="small"
+                          pagination={false}
+                          dataSource={detail.pastCases}
+                          columns={[
+                            {
+                              ...oneLine,
+                              title: '사건',
+                              render: (_, row) => `#${row.insiderCaseId}`,
+                            },
+                            {
+                              ...oneLine,
+                              title: '열린 시각',
+                              dataIndex: 'openedAt',
+                              render: dateTime,
+                            },
+                            {
+                              title: '판정',
+                              render: (_, row) =>
+                                row.status === 'OPEN' ? '진행 중' : decisionSummary(row),
+                            },
+                          ]}
+                        />
+                      </div>
+                    )}
+                  </Space>
+                ),
+              },
+              {
+                key: 'reports',
+                label: '해제 검토 보고서',
+                children: <InsiderReportsPanel insiderCaseId={insiderCase.insiderCaseId} />,
+              },
+            ]}
+          />
 
           {insiderCase.status === 'OPEN' && (
             <Card size="small" title="판정">
