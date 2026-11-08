@@ -178,7 +178,7 @@
 
 .dw-account-rule-placeholders {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -570,6 +570,22 @@
 
 .dw-rule-frequency .dw-rule-policy-switch .ant-switch-handle::before {
   border-radius: 7px;
+}
+
+/* 끌 수 없는 규칙 (#685, SEC-INS-05) — 스위치 자리에 같은 폭으로 둔다 */
+.dw-rule-frequency .dw-rule-always-on {
+  grid-column: 1 / -1;
+  display: flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 0;
+  border: 0;
+  border-radius: 9px;
+  background: #f3e8ff;
+  color: #6b21a8;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .dw-rule-disable-pending {

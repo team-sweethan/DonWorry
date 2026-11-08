@@ -226,6 +226,13 @@ export function getOperatorAccessRuleCatalog() {
   })
 }
 
+// 내부자 규칙 카드 (#685) — 관리자만. ruleCode는 저장 이름(INS_0x)이라 끄기 · 켜기 주소에 그대로 쓴다
+export function getInsiderRuleCatalog() {
+  return api<FdsRuleCatalogEntry[]>('/fds/insider-detections/rule-catalog', {
+    cache: 'no-store',
+  })
+}
+
 export function getFdsRulePolicies() {
   return api<FdsRulePolicy[]>('/fds/rule-policies', { cache: 'no-store' })
 }

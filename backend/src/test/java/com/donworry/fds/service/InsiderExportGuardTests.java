@@ -19,6 +19,7 @@ import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.api.StaffCaseScopeReader;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertStatus;
+import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.StaffAccessReader;
@@ -55,7 +56,8 @@ class InsiderExportGuardTests {
             InsiderDetectionProperties.builder().build(),
             mock(StaffLoginReader.class),
             mock(StaffCaseScopeReader.class),
-            locker);
+            locker,
+            mock(FdsRulePolicyRepository.class));
     private final InsiderExportGuardService guard = new InsiderExportGuardService(detection, locker);
 
     // 이 직원에게 열려 있는 경보 — 등급 조건 조회도 실제 쿼리처럼 이 목록에서 답한다

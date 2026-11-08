@@ -5,9 +5,11 @@ import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.api.StaffCaseScope;
 import com.donworry.fds.api.StaffCaseScopeReader;
+import com.donworry.fds.entity.FdsRulePolicy;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertEvidence;
 import com.donworry.fds.entity.InsiderAlertStatus;
+import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.StaffAccessDenyReason;
@@ -21,11 +23,14 @@ import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -61,6 +66,7 @@ public class InsiderDetectionService {
     private final StaffLoginReader loginReader;
     private final StaffCaseScopeReader scopeReader;
     private final StaffAccountLocker locker;
+    private final FdsRulePolicyRepository rulePolicies;
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
@@ -74,19 +80,50 @@ public class InsiderDetectionService {
         Long staffId = event.staffId();
         alerts.lockDetectionState(staffId);
 
+        RuleSwitches switches = ruleSwitches();
         Instant at = event.occurredAt();
-        if (outOfScope) checkIns01(staffId, at);
-        if (rawView) {
-            checkIns03(staffId, at);
-            checkIns07(event);
+        if (outOfScope && switches.counts(InsiderRule.INS_01, at)) {
+            checkIns01(staffId, at, switches.since(InsiderRule.INS_01));
         }
-        if (listView) {
+        if (rawView) {
+            if (switches.counts(InsiderRule.INS_03, at)) checkIns03(staffId, at, switches.since(InsiderRule.INS_03));
+            if (switches.counts(InsiderRule.INS_07, at)) checkIns07(event);
+        }
+        boolean ins08 = listView && switches.counts(InsiderRule.INS_08, at);
+        boolean ins09 = listView && switches.counts(InsiderRule.INS_09, at);
+        if (ins08 || ins09) {
             // 담당 범위는 지금 배정 기준이다 — 지난 시점의 배정 이력은 따로 남기지 않는다
             StaffCaseScope scope = scopeReader.findScope(staffId, at.minus(properties.scopeClosedLookback()));
-            checkIns08(staffId, at, scope);
-            checkIns09(staffId, at, scope);
+            if (ins08) checkIns08(staffId, at, scope, switches.since(InsiderRule.INS_08));
+            if (ins09) checkIns09(staffId, at, scope, switches.since(InsiderRule.INS_09));
         }
-        checkIns06(staffId, at);
+        if (switches.counts(InsiderRule.INS_06, at)) checkIns06(staffId, at, switches.since(InsiderRule.INS_06));
+    }
+
+    private RuleSwitches ruleSwitches() {
+        List<String> codes =
+                Arrays.stream(InsiderRule.values()).map(InsiderRule::name).toList();
+        return new RuleSwitches(rulePolicies.findByRuleCodeIn(codes).stream()
+                .collect(Collectors.toMap(FdsRulePolicy::getRuleCode, Function.identity())));
+    }
+
+    // 규칙 켜짐 · 꺼짐 (#685, ADR-0082). 줄이 없는 규칙은 켜진 것으로 본다 — INS-05는 줄이 없어 늘 켜져 있다
+    // 관리자가 바꾼 적 있는 줄(updatedByUserId 있음)은 마지막으로 켠 시각부터의 기록만 센다 — 끈 동안 기록으로 소급 경보를 열지 않는다
+    // 마이그레이션이 넣은 줄의 시각은 배포 시각이라 기준으로 쓰지 않는다. 이미 열린 경보는 끄기와 상관없이 관리자가 닫는다
+    private record RuleSwitches(Map<String, FdsRulePolicy> policies) {
+        boolean counts(InsiderRule rule, Instant at) {
+            FdsRulePolicy policy = policies.get(rule.name());
+            if (policy == null) return true;
+            if (!policy.isActive()) return false;
+            Instant since = since(rule);
+            return since == null || !at.isBefore(since);
+        }
+
+        Instant since(InsiderRule rule) {
+            FdsRulePolicy policy = policies.get(rule.name());
+            if (policy == null || !policy.isActive() || policy.getUpdatedByUserId() == null) return null;
+            return policy.getUpdatedAt();
+        }
     }
 
     // 내보내기 문지기의 사전 확인 (#651) — 높음 이상 경보가 열려 있는가. 주의만 있으면 막지 않는다(정상 업무 우선, ADR-0082 3.1)
@@ -134,10 +171,10 @@ public class InsiderDetectionService {
     }
 
     // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 N개에서 막히면 주의. 같은 사건 재시도는 한 번으로 센다
-    private void checkIns01(Long staffId, Instant at) {
+    private void checkIns01(Long staffId, Instant at, Instant enabledAt) {
         Duration window = properties.ins01Window();
         List<StaffAccessRecorded> denials =
-                recent(staffId, InsiderRule.INS_01, at.minus(window), at.plus(window)).stream()
+                recent(staffId, InsiderRule.INS_01, at.minus(window), at.plus(window), enabledAt).stream()
                         .filter(InsiderDetectionService::isOutOfScopeDenial)
                         .toList();
         List<StaffAccessRecorded> hit =
@@ -152,10 +189,10 @@ public class InsiderDetectionService {
     }
 
     // INS-03 원문 열람 집중 — 한 직원이 짧은 시간에 주문자 전화 원문을 N건 열면 주의
-    private void checkIns03(Long staffId, Instant at) {
+    private void checkIns03(Long staffId, Instant at, Instant enabledAt) {
         Duration window = properties.ins03Window();
         List<StaffAccessRecorded> views =
-                recent(staffId, InsiderRule.INS_03, at.minus(window), at.plus(window)).stream()
+                recent(staffId, InsiderRule.INS_03, at.minus(window), at.plus(window), enabledAt).stream()
                         .filter(InsiderDetectionService::isRawView)
                         .toList();
         List<StaffAccessRecorded> hit =
@@ -202,10 +239,10 @@ public class InsiderDetectionService {
     // INS-08 업무 대비 대량 조회 — 거래 목록 · 내보내기로 많이 가져갔는데 담당 사건과 이어진 행이 적으면 주의, 아주 많으면 높음
     // 비율은 행 수 기준. 담당 사건 가맹점 문의로 그 가맹점을 여러 쪽 넘기는 건 이어진 조회라 울리지 않는다
     // 내보내기도 센다 (#651 Codex 리뷰) — 목록 대신 내보내기만 반복하면 대량 조회가 빠지고, 그러면 INS-05 차단도 걸리지 않는다
-    private void checkIns08(Long staffId, Instant at, StaffCaseScope scope) {
+    private void checkIns08(Long staffId, Instant at, StaffCaseScope scope, Instant enabledAt) {
         Duration window = properties.ins08Window();
         List<StaffAccessRecorded> views =
-                recent(staffId, InsiderRule.INS_08, at.minus(window), at.plus(window)).stream()
+                recent(staffId, InsiderRule.INS_08, at.minus(window), at.plus(window), enabledAt).stream()
                         .filter(InsiderDetectionService::isTransactionRead)
                         .toList();
         List<StaffAccessRecorded> high =
@@ -231,10 +268,10 @@ public class InsiderDetectionService {
 
     // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색(목록 · 내보내기)하면 주의, 더 많으면 높음
     // 같은 고객을 여러 쪽 넘긴 건 1명. 요약에는 고객 번호를 넣지 않고 숫자만
-    private void checkIns09(Long staffId, Instant at, StaffCaseScope scope) {
+    private void checkIns09(Long staffId, Instant at, StaffCaseScope scope, Instant enabledAt) {
         Duration window = properties.ins09Window();
         List<StaffAccessRecorded> searches =
-                recent(staffId, InsiderRule.INS_09, at.minus(window), at.plus(window)).stream()
+                recent(staffId, InsiderRule.INS_09, at.minus(window), at.plus(window), enabledAt).stream()
                         .filter(v -> isTransactionRead(v) && v.customerRef() != null)
                         .filter(v -> !scope.hasCustomer(v.merchantId(), v.customerRef()))
                         .toList();
@@ -309,11 +346,13 @@ public class InsiderDetectionService {
     // INS-08 · 09는 같은 "훑기" 행동에서 함께 나오기 쉬워 한 종류로 센다 — 훑기 하나로 높음이 되지 않게 (#643)
     // INS-06이 닫힌 적 있으면 그 뒤 새 기록이 붙은 경보만 센다 — 관리자가 정상으로 본 같은 겹침으로 다시 열지 않는다 (#627 리뷰)
     // INS-05는 세지 않는다 — 이미 열린 경보의 결과라 같은 신호를 두 번 세게 된다 (#651)
-    private void checkIns06(Long staffId, Instant at) {
+    // INS-06을 다시 켰으면 켠 뒤 새 기록이 붙은 경보만 센다 — 끈 동안의 겹침으로 켜자마자 높음이 되지 않게 (#685)
+    private void checkIns06(Long staffId, Instant at, Instant enabledAt) {
         Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_06);
         List<InsiderAlert> others = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN).stream()
                 .filter(a -> a.getRuleCode() != InsiderRule.INS_06 && a.getRuleCode() != InsiderRule.INS_05)
                 .filter(a -> lastClosed == null || a.getLastEventAt().isAfter(lastClosed))
+                .filter(a -> enabledAt == null || !a.getLastEventAt().isBefore(enabledAt))
                 .toList();
         List<InsiderRule> rules = others.stream()
                 .map(InsiderAlert::getRuleCode)
@@ -397,9 +436,12 @@ public class InsiderDetectionService {
     }
 
     // 이 규칙이 마지막으로 닫힌 뒤의 기록만 센다 — 관리자가 정상으로 닫은 근거로 다시 경보가 뜨지 않게
-    private List<StaffAccessRecorded> recent(Long staffId, InsiderRule rule, Instant from, Instant to) {
+    // 다시 켠 규칙은 켠 시각부터 센다 (#685) — 끈 동안의 기록은 소급하지 않는다
+    private List<StaffAccessRecorded> recent(
+            Long staffId, InsiderRule rule, Instant from, Instant to, Instant enabledAt) {
         Instant lastClosed = alerts.findLastClosedAt(staffId, rule);
         Instant since = lastClosed != null && !lastClosed.isBefore(from) ? lastClosed.plusNanos(1_000) : from;
+        if (enabledAt != null && enabledAt.isAfter(since)) since = enabledAt;
         return accessReader.findRecent(staffId, since, to);
     }
 

@@ -9,9 +9,14 @@ const operatorRuleCodes: Record<string, string> = {
 
 // 앞에 SEC-가 이미 붙은 코드는 건드리지 않는다
 const legacyInsiderCode = /(?<![A-Z-])INS-(\d{2})\b/g
+// 탐지 룰 목록 · 변경 이력은 내부자 규칙도 저장 이름(INS_0x)으로 온다 — 끄기 · 켜기 주소 열쇠라서 (#685)
+const insiderStoredName = /^INS_(\d{2})$/
 
 export function displayRuleCode(ruleCode: string): string {
-  return operatorRuleCodes[ruleCode] ?? displayRuleText(ruleCode)
+  return (
+    operatorRuleCodes[ruleCode] ??
+    ruleCode.replace(insiderStoredName, 'SEC-INS-$1').replace(legacyInsiderCode, 'SEC-INS-$1')
+  )
 }
 
 export function displayRuleText(text: string): string {

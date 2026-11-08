@@ -46,6 +46,9 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
 
     long countByStatus(InsiderAlertStatus status);
 
+    // 탐지 룰 목록의 최근 7일 적중 (#685) — 그 기간에 새로 열린 경보. 같은 경보가 갱신된 것은 다시 세지 않는다
+    List<InsiderAlert> findByCreatedAtGreaterThanEqual(Instant from);
+
     // 내부자 관제 타임라인 (#679) — 기간 안에 열렸거나 닫힌 경보
     @Query("""
             SELECT a FROM InsiderAlert a
