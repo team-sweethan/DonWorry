@@ -9,8 +9,19 @@ export type NavBadge =
   | 'caseAssignmentRequests'
   | 'rawViewReviews'
   | 'insiderAlerts'
-export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
-export type NavGroup = { title: string; items: NavItem[] }
+/**
+ * search는 같은 화면을 다른 조건으로 여는 메뉴용 주소 뒤 조건이다 (예: 계정 관리 화면을 역할 필터를 걸어 연다).
+ * 권한 검사는 path로만 한다.
+ */
+export type NavItem = {
+  label: string
+  path: string
+  search?: string
+  permission?: Permission
+  badge?: NavBadge
+}
+/** section은 관리자 메뉴의 큰 묶음 이름이다 (ADR-0082 8절). 같은 section 그룹은 붙여 둔다. */
+export type NavGroup = { section?: string; title: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string }> = {
   security: { label: '보안 직원' },
@@ -63,34 +74,29 @@ export const navByRole: Record<Role, NavGroup[]> = {
 export const adminNavigation = {
   label: '관리자',
   landing: '/admin/home',
+  // 대상별 3단 — 가맹점 · 직원 · 회사 전체 설정 (ADR-0082 8절, #659)
   groups: [
     { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
     {
-      title: '관리',
+      section: '가맹점 관리',
+      title: '운영',
       items: [
         { label: '이용 신청', path: '/admin/applications' },
-        { label: '계정 관리', path: '/admin/users' },
-        { label: '가맹점 관리', path: '/admin/merchants' },
-        // AI 조사 긴급정지 (#626, ADR-0083) — 정지 · 다시 켜기 · 변경 기록
-        { label: 'AI 조사 긴급정지', path: '/admin/ai-switch' },
+        { label: '가맹점 목록', path: '/admin/merchants' },
+        // 계정 화면은 하나 — 역할 필터를 미리 걸어 연다. 관리자 계정은 필터 "전체"에서 본다
+        { label: '사장님 계정', path: '/admin/users', search: 'role=OPERATOR' },
       ],
     },
+    // 사장님 계정 403 탐지 (#515)
     {
-      title: '탐지',
-      items: [
-        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
-        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
-        {
-          label: '룰 변경 요청',
-          path: '/admin/fds/rule-change-requests',
-          badge: 'ruleChangeRequests',
-        },
-        { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
-      ],
+      section: '가맹점 관리',
+      title: '보안',
+      items: [{ label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' }],
     },
     // FDS 사건 담당 (#608) — 관리자는 사건 상세가 아니라 담당 배정만 본다 (ADR-0065)
     {
-      title: '사건 담당',
+      section: '직원 관리',
+      title: '사건',
       items: [
         { label: '담당 현황', path: '/admin/case-assignments' },
         {
@@ -100,14 +106,38 @@ export const adminNavigation = {
         },
       ],
     },
-    // 직원 보안 (#619 · #516) — 원문 열람 사후 검토 · 내부자 경보. 관리자는 원문을 보지 않는다
-    // 메뉴 전체를 [가맹점 관리 › 운영 · 보안] / [직원 관리 › 사건 · 보안]으로 묶는 재배치는 별도로 한다
+    // 원문 열람 사후 검토 · 내부자 경보 (#619 · #516). 관리자는 원문을 보지 않는다
     {
-      title: '직원 보안',
+      section: '직원 관리',
+      title: '보안',
       items: [
         { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
         { label: '내부자 경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
       ],
+    },
+    {
+      section: '직원 관리',
+      title: '계정',
+      items: [{ label: '보안 직원 계정', path: '/admin/users', search: 'role=SECURITY_STAFF' }],
+    },
+    {
+      section: '시스템 설정',
+      title: '탐지 룰',
+      items: [
+        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
+        {
+          label: '룰 변경 요청',
+          path: '/admin/fds/rule-change-requests',
+          badge: 'ruleChangeRequests',
+        },
+        { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
+      ],
+    },
+    // AI 조사 긴급정지 (#626, ADR-0083) — 정지 · 다시 켜기 · 변경 기록
+    {
+      section: '시스템 설정',
+      title: 'AI',
+      items: [{ label: 'AI 조사 긴급정지', path: '/admin/ai-switch' }],
     },
   ] satisfies NavGroup[],
 }
@@ -153,6 +183,24 @@ export function isAccountPasswordPath(pathname: string) {
 export function isAccountPath(pathname: string) {
   const path = pathname.replace(/\/+$/, '')
   return path === '/account/password' || path === '/account/login-history'
+}
+
+/** 같은 path를 조건만 달리 여는 메뉴가 있어 path + search로 메뉴를 구분한다. */
+export function navItemKey(item: NavItem) {
+  return item.search ? `${item.path}?${item.search}` : item.path
+}
+
+/**
+ * 사이드바 선택 표시. 하위 경로(상세 · 만들기)에서도 켜지되 사장님 홈(/owner)은 자기 경로에서만 켜진다.
+ * search가 있는 메뉴는 주소 조건까지 같아야 켜진다 — 같은 화면을 여는 두 계정 메뉴가 함께 켜지지 않게.
+ */
+export function isNavItemActive(item: NavItem, pathname: string, search: string) {
+  const path = pathname.replace(/\/+$/, '') || '/'
+  const pathMatches =
+    path === item.path || (item.path !== '/owner' && path.startsWith(item.path + '/'))
+  if (!pathMatches || !item.search) return pathMatches
+  const current = new URLSearchParams(search)
+  return [...new URLSearchParams(item.search)].every(([key, value]) => current.get(key) === value)
 }
 
 /** 메뉴에 걸린 권한이 있으면 그 권한이 있어야 경로에 들어갈 수 있다. */

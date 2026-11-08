@@ -235,8 +235,13 @@
     gap: 4px;
     margin: 0;
   }
-  .admin-viewport.application-review-viewport .dw-nav-heading {
+  .admin-viewport.application-review-viewport .dw-nav-heading,
+  .admin-viewport.application-review-viewport .dw-nav-section {
     display: none;
+  }
+  /* 가로 메뉴에서는 관리자 작은 묶음 들여쓰기를 쓰지 않는다 */
+  .admin-viewport[data-role].application-review-viewport .dw-nav-subgroup .dw-nav-link {
+    padding-left: 12px;
   }
   .admin-viewport.application-review-viewport .dw-nav-link {
     width: auto;

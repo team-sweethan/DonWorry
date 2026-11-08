@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  adminCreateUserDefaultRole,
   adminUserListParams,
   isAdminUserListFiltered,
   parseAdminUserListQuery,
@@ -103,4 +104,15 @@ test('보안 정지(SUSPENDED) 필터는 주소에 저장했다가 다시 읽어
   const params = adminUserListParams({ page: 1, keyword: '', status: 'SUSPENDED' })
   assert.equal(params.toString(), 'status=SUSPENDED')
   assert.equal(parseAdminUserListQuery(params).status, 'SUSPENDED')
+})
+
+// 보안 직원 계정 메뉴에서 연 [계정 만들기]가 사장님 역할로 시작하면 보안 직원 대신 사장님 계정이 생긴다 (ADR-0082 8절, #659)
+test('adminCreateUserDefaultRole_fromSecurityStaffMenu_isSecurityStaff', () => {
+  assert.equal(
+    adminCreateUserDefaultRole(parse('role=SECURITY_STAFF&keyword=kim')),
+    'SECURITY_STAFF',
+  )
+  for (const query of ['role=OPERATOR', '', 'role=ADMIN', 'role=unknown']) {
+    assert.equal(adminCreateUserDefaultRole(parse(query)), 'OPERATOR')
+  }
 })

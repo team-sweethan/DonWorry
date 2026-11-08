@@ -23,6 +23,14 @@ export function parseAdminUserListQuery(params: URLSearchParams): AdminUserListQ
   }
 }
 
+/**
+ * [계정 만들기] 역할 기본값. 보안 직원 계정 메뉴(역할 필터 SECURITY_STAFF)에서 들어오면 보안 직원,
+ * 그 밖에는 사장님 — 역할을 그대로 둔 채 사장님 계정을 만드는 실수를 줄인다 (ADR-0082 8절).
+ */
+export function adminCreateUserDefaultRole(query: AdminUserListQuery) {
+  return query.role === 'SECURITY_STAFF' ? 'SECURITY_STAFF' : 'OPERATOR'
+}
+
 /** 페이지를 뺀 검색 조건이 있으면 빈 목록을 "결과 없음"으로 안내한다. */
 export function isAdminUserListFiltered(query: AdminUserListQuery) {
   return Boolean(query.keyword || query.role || query.status || query.passwordChangeRequired)

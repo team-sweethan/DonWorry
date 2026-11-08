@@ -9,6 +9,7 @@ import {
   FileSearchOutlined,
   FormOutlined,
   HomeOutlined,
+  IdcardOutlined,
   KeyOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -25,8 +26,8 @@ import {
 import { Tooltip } from 'antd'
 import { BrandMark, Mascot } from '../components/brand/BrandMark'
 import { useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import type { NavBadge, NavGroup } from '../config/navigation'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { isNavItemActive, navItemKey, type NavBadge, type NavGroup } from '../config/navigation'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
 
 export type ManagementRole = 'admin' | 'security' | 'owner'
@@ -73,7 +74,8 @@ const menuIcons: Record<string, ReactNode> = {
   '/owner/integration': <KeyOutlined />,
   '/admin/home': <HomeOutlined />,
   '/admin/applications': <FormOutlined />,
-  '/admin/users': <TeamOutlined />,
+  '/admin/users?role=OPERATOR': <IdcardOutlined />,
+  '/admin/users?role=SECURITY_STAFF': <TeamOutlined />,
   '/admin/merchants': <ShopOutlined />,
   '/admin/fds/rules': <ControlOutlined />,
   '/admin/fds/rule-change-requests': <PoweroffOutlined />,
@@ -135,10 +137,19 @@ function Sidebar({
         </Tooltip>
       </div>
       <nav id="dw-main-nav">
-        {groups.map((group) => (
-          <div className="dw-nav-group" key={group.title}>
+        {groups.map((group, index) => (
+          <div
+            className={`dw-nav-group${group.section ? ' dw-nav-subgroup' : ''}`}
+            key={`${group.section ?? ''}/${group.title}`}
+          >
+            {/* 관리자 메뉴의 큰 묶음 제목은 묶음의 첫 그룹 위에 한 번만 (ADR-0082 8절) */}
+            {group.section && group.section !== groups[index - 1]?.section && (
+              <div className="dw-nav-section">{group.section}</div>
+            )}
             <div className="dw-nav-heading">{group.title}</div>
             {group.items.map((item) => {
+              const key = navItemKey(item)
+              const active = isNavItemActive(item, location.pathname, location.search)
               // 0건 · 아직 모름(null)이면 숨긴다
               const count = item.badge ? badges[item.badge] : null
               // 접힌 상태에서만 아이콘 옆 말풍선으로 메뉴 이름(과 처리 필요 건수)을 보여 준다
@@ -146,16 +157,14 @@ function Sidebar({
                 ? `${item.label}${count ? ` · 처리 필요 ${count}건` : ''}`
                 : undefined
               return (
-                <Tooltip key={item.path} title={tip} placement="right">
-                  <NavLink
-                    to={item.path}
-                    end
-                    className={({ isActive }) =>
-                      `dw-nav-link${isActive || (item.path !== '/owner' && location.pathname.startsWith(item.path + '/')) ? ' active' : ''}`
-                    }
+                <Tooltip key={key} title={tip} placement="right">
+                  <Link
+                    to={{ pathname: item.path, search: item.search ? `?${item.search}` : '' }}
+                    aria-current={active ? 'page' : undefined}
+                    className={`dw-nav-link${active ? ' active' : ''}`}
                   >
                     <span className="dw-nav-icon" aria-hidden="true">
-                      {menuIcons[item.path] ?? <AppstoreOutlined />}
+                      {menuIcons[key] ?? <AppstoreOutlined />}
                     </span>
                     <span className="dw-nav-label">{item.label}</span>
                     {count ? (
@@ -163,7 +172,7 @@ function Sidebar({
                         {count > 99 ? '99+' : count}
                       </span>
                     ) : null}
-                  </NavLink>
+                  </Link>
                 </Tooltip>
               )
             })}
