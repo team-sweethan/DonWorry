@@ -174,7 +174,7 @@ export function BlocklistPage() {
           />
           <Input.Search
             allowClear
-            placeholder="식별값 또는 사유 검색"
+            placeholder="식별값 전체 또는 사유 일부"
             style={{ maxWidth: 320 }}
             value={searchText}
             onChange={(event) => {

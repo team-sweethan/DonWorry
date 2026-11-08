@@ -232,6 +232,22 @@ class FdsBlocklistServiceTests {
                         tuple("CARD_TOKEN", null, "VISA •••• 4242"));
     }
 
+    @Test
+    // 식별값은 전체 일치로만 찾으므로, 등록 가능한 길이(255자)의 값 전체를 검색어로 받아야 한다 (#629 Codex 리뷰)
+    void list_whenSearchIsFullIdentifierLongerThan100_returnsEntry() {
+        var longDeviceId = "d".repeat(255);
+        var entry = FdsBlocklistEntry.active("DEVICE_ID", longDeviceId, "사기 결제 확인", java.time.Instant.now());
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
+        when(entries.findActiveAtWithSearch(any(), eq(longDeviceId), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(entry), PageRequest.of(0, 10), 1));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, longDeviceId);
+
+        assertThat(result.content())
+                .singleElement()
+                .satisfies(item -> assertThat(item.identifierType()).isEqualTo("DEVICE_ID"));
+    }
+
     private FdsEvaluation evaluationWithEmail(String buyerEmail) {
         var requestedAt = java.time.Instant.parse("2026-11-07T01:00:00Z");
         var request = new FdsEvaluationRequest(
