@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -53,7 +54,8 @@ class InsiderExportGuardTests {
             publisher,
             InsiderDetectionProperties.builder().build(),
             mock(StaffLoginReader.class),
-            mock(StaffCaseScopeReader.class));
+            mock(StaffCaseScopeReader.class),
+            locker);
     private final InsiderExportGuardService guard = new InsiderExportGuardService(detection, locker);
 
     // 이 직원에게 열려 있는 경보 — 등급 조건 조회도 실제 쿼리처럼 이 목록에서 답한다
@@ -136,6 +138,22 @@ class InsiderExportGuardTests {
         doThrow(new IllegalStateException("정지 실패")).when(locker).lockBySystem(any(), any(), any());
 
         assertThat(guard.allowExport(STAFF)).isFalse();
+    }
+
+    // 계정 정지는 경보 저장과 같은 직원 잠금 안에서 끝난다 (#670 Codex 리뷰) — 잠금을 놓은 뒤 따로 정지하면
+    // 그 사이 끝난 내부자 사건 판정(경보 닫기 · 정지 해제) 뒤에 정지가 걸려 아무도 풀 수 없게 된다
+    @Test
+    void raiseExportBlock_blockingAlertOpen_locksAccountBeforeCommit() {
+        open.add(alert(10L, InsiderRule.INS_08, InsiderAlertSeverity.HIGH));
+        when(evidence.findAccessEventIdsOf(List.of(10L))).thenReturn(List.of(101L));
+        savedAs(20L);
+
+        Long alertId = detection.raiseExportBlock(STAFF, T0);
+
+        assertThat(alertId).isEqualTo(20L);
+        var order = inOrder(alerts, locker);
+        order.verify(alerts).lockDetectionState(STAFF);
+        order.verify(locker).lockBySystem(STAFF, StaffLockReason.INSIDER_EXPORT_BLOCKED, 20L);
     }
 
     private void savedAs(Long id) {

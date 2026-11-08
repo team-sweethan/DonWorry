@@ -61,7 +61,25 @@ public class InsiderCaseService {
     public void onAlertRaised(InsiderAlertRaised event) {
         if (!event.severity().isRaisedToOthers()) return;
         caseAssignmentService.lock();
+        link(event, Instant.now());
+    }
+
+    // 사건 기능 배포 전부터 열려 있던 높음 이상 경보를 사건에 묶는다 (#670 Codex 리뷰) — 서버 시작 때 InsiderCaseBackfill이 부른다
+    // 알림은 새 경보 · 등급 상승 때만 오므로, 그 전에 정지된 직원은 이게 없으면 사건이 없어 판정 · 해제할 수 없다
+    // 이미 묶인 경보는 그대로라 몇 번 돌아도 같다. 경보는 배정 잠금을 잡은 뒤 읽는다(그 뒤 첫 조회라 최신 값). 새로 묶은 수를 돌려준다
+    @Transactional
+    public int linkOpenAlerts() {
+        caseAssignmentService.lock();
         Instant now = Instant.now();
+        int linked = 0;
+        for (InsiderAlertRaised alert : alertReader.findOpenRaisedAlerts()) {
+            if (alert.severity().isRaisedToOthers() && link(alert, now)) linked++;
+        }
+        return linked;
+    }
+
+    // 배정 잠금을 잡은 뒤 부른다. 새로 묶었으면 true
+    private boolean link(InsiderAlertRaised event, Instant now) {
         Optional<InsiderCaseAlert> known = links.findById(event.alertId());
         if (known.isPresent()) {
             InsiderCaseAlert link = known.get();
@@ -70,12 +88,12 @@ public class InsiderCaseService {
                         .filter(InsiderCase::isOpen)
                         .ifPresent(insiderCase -> insiderCase.touch(event.severity(), now));
             }
-            return;
+            return false;
         }
         // 판정이 그사이 닫은 경보의 늦은 알림 — 풀어 준 직원에게 같은 경보로 사건을 다시 열지 않는다
         if (!alertReader.isOpen(event.alertId())) {
             log.info("닫힌 경보 알림이라 내부자 사건에 묶지 않음 alertId={} staffId={}", event.alertId(), event.staffId());
-            return;
+            return false;
         }
         InsiderCase insiderCase = cases.findByStaffIdAndStatus(event.staffId(), InsiderCaseStatus.OPEN)
                 .orElse(null);
@@ -93,6 +111,7 @@ public class InsiderCaseService {
                 event.summary(),
                 event.raisedAt(),
                 now));
+        return true;
     }
 
     // 세 판정 모두 그 직원의 열린 경보를 닫는다 — 열린 채 정지를 풀면 다음 내보내기 시도에서 바로 다시 정지된다

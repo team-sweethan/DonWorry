@@ -33,6 +33,7 @@ import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import com.donworry.investigation.repository.InsiderCaseRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -163,6 +164,41 @@ class InsiderCaseServiceTests {
 
         verify(cases, never()).save(any());
         verify(links, never()).save(any());
+    }
+
+    // 배포 전부터 열려 있던 높음 경보는 서버 시작 때 사건으로 묶이고, 다시 시작해도 사건 · 묶음이 늘지 않는다 (#670 Codex 리뷰)
+    @Test
+    void backfill_openHighAlertWithoutCase_opensCaseOnce() {
+        InsiderAlertRaised existing = event(600L, InsiderAlertSeverity.CRITICAL);
+        when(alertReader.findOpenRaisedAlerts()).thenReturn(List.of(existing));
+        when(alertReader.isOpen(600L)).thenReturn(true);
+        List<InsiderCase> saved = new ArrayList<>();
+        List<InsiderCaseAlert> linked = new ArrayList<>();
+        when(cases.save(any(InsiderCase.class))).thenAnswer(call -> {
+            InsiderCase opened = withId(call.getArgument(0), CASE_ID);
+            saved.add(opened);
+            return opened;
+        });
+        when(cases.findByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN))
+                .thenAnswer(call -> saved.stream().filter(InsiderCase::isOpen).findFirst());
+        when(links.save(any(InsiderCaseAlert.class))).thenAnswer(call -> {
+            linked.add(call.getArgument(0));
+            return call.getArgument(0);
+        });
+        when(links.findById(600L))
+                .thenAnswer(call -> linked.stream()
+                        .filter(link -> link.getAlertId().equals(600L))
+                        .findFirst());
+
+        int first = service.linkOpenAlerts();
+        int second = service.linkOpenAlerts();
+
+        assertThat(first).isEqualTo(1);
+        assertThat(second).isZero();
+        assertThat(saved).hasSize(1);
+        assertThat(saved.getFirst().getStaffId()).isEqualTo(STAFF_ID);
+        assertThat(saved.getFirst().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
+        assertThat(linked).extracting(InsiderCaseAlert::getAlertId).containsExactly(600L);
     }
 
     // 정상 업무: 그 직원의 열린 경보를 닫고 정지를 사용 중으로 푼다

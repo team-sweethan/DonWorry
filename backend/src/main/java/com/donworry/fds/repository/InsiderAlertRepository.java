@@ -35,6 +35,9 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
 
     boolean existsByStaffIdAndStatus(Long staffId, InsiderAlertStatus status);
 
+    // 열린 경보 전체 — 내부자 사건 이관(#670). 열린 경보는 사람 · 규칙당 1개라 많지 않다
+    List<InsiderAlert> findByStatusOrderByIdAsc(InsiderAlertStatus status);
+
     // 내보내기 문지기 (#651) — 이 등급들 중 하나로 열린 경보가 있는가
     boolean existsByStaffIdAndStatusAndSeverityIn(
             Long staffId, InsiderAlertStatus status, Collection<InsiderAlertSeverity> severities);

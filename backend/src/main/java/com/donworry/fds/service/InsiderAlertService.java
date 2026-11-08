@@ -1,6 +1,7 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.InsiderAlertCloser;
+import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
 import com.donworry.fds.dto.CloseInsiderAlertRequest;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
@@ -52,6 +53,23 @@ public class InsiderAlertService implements InsiderAlertReader, InsiderAlertClos
     @Transactional(readOnly = true)
     public boolean isOpen(Long alertId) {
         return alerts.findById(alertId).map(InsiderAlert::isOpen).orElse(false);
+    }
+
+    // 주의 경보는 사건을 열지 않으므로 뺀다 — 알림을 보내는 조건(isRaisedToOthers)과 같다
+    @Override
+    @Transactional(readOnly = true)
+    public List<InsiderAlertRaised> findOpenRaisedAlerts() {
+        return alerts.findByStatusOrderByIdAsc(InsiderAlertStatus.OPEN).stream()
+                .filter(alert -> alert.getSeverity().isRaisedToOthers())
+                .map(alert -> InsiderAlertRaised.builder()
+                        .alertId(alert.getId())
+                        .staffId(alert.getStaffId())
+                        .rule(alert.getRuleCode())
+                        .severity(alert.getSeverity())
+                        .summary(alert.getSummary())
+                        .raisedAt(alert.getUpdatedAt())
+                        .build())
+                .toList();
     }
 
     // 판정하는 ADMIN 확인은 부르는 쪽(P3)이 한다. 잠금 순서는 정상 업무로 닫기와 같다(직원 행 먼저)
