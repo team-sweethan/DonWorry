@@ -31,6 +31,7 @@ import { CaseAssignmentsPage } from '../pages/admin/CaseAssignmentsPage'
 import { CaseAssignmentRequestsPage } from '../pages/admin/CaseAssignmentRequestsPage'
 import { InsiderAlertsPage } from '../pages/admin/InsiderAlertsPage'
 import { InsiderCasesPage } from '../pages/admin/InsiderCasesPage'
+import { InsiderMonitorPage } from '../pages/admin/InsiderMonitorPage'
 import { AiSwitchPage } from '../pages/admin/AiSwitchPage'
 import { RawViewReviewsPage } from '../pages/admin/RawViewReviewsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
@@ -217,6 +218,11 @@ export const router = createBrowserRouter([
                 path: 'insider-cases',
                 handle: { title: '내부자 사건' },
                 element: <InsiderCasesPage />,
+              },
+              {
+                path: 'insider-monitor',
+                handle: { title: '내부자 관제' },
+                element: <InsiderMonitorPage />,
               },
               {
                 path: 'ai-switch',

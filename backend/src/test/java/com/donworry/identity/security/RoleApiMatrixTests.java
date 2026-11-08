@@ -131,6 +131,8 @@ class RoleApiMatrixTests {
             route("POST", "/api/admin/insider-cases/1/decision", ADMIN),
             route("POST", "/api/admin/insider-cases/1/lock-release", ADMIN),
             route("GET", "/api/admin/insider-cases/1/reports", ADMIN),
+            route("GET", "/api/admin/insider-monitor/staff", ADMIN),
+            route("GET", "/api/admin/insider-monitor/staff/1/timeline", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
             route("GET", "/api/merchants", STAFF_OR_ADMIN),
             route("GET", "/api/fds/evaluations", STAFF_OR_ADMIN),

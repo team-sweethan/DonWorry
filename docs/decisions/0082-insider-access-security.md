@@ -65,7 +65,7 @@ fds ──(StaffAccountLocker · StaffAccessReader · StaffLoginReader)──▶
 fds ──(InsiderAlertRaised, 높음 이상, 커밋 후)──▶ investigation ──(모듈 안 알림)──▶ investigation/report
 payment ──(InsiderExportGuard 호출, 내보내기 직전 동기 검사)──▶ fds
 investigation ──(CustomerContactReader)──▶ payment
-investigation ──(InsiderAlertReader · Closer, StaffAccountLocker)──▶ fds · identity
+investigation ──(InsiderAlertReader · Closer · MonitorReader, StaffAccountLocker · StaffLoginReader · StaffAccessReader)──▶ fds · identity
 fds ··(StaffCaseScopeReader, investigation이 구현)··▶ investigation   ← 실행 중 역방향 동기 호출
 ```
 
@@ -201,6 +201,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - #603: FDS 평가 상세의 차단 후보가 `identifierValue` · `displayLabel` → `displayValue` · `blocked`로 바뀜, 평가 ID로 차단 등록하는 경로 추가, [차단 목록] 응답과 R07 근거의 이메일은 가린 값(R07 근거 키는 `maskedBuyerEmail`)
   - #651: `POST /api/payment-transactions/export`(CSV, CSRF 항상 검사), 차단 응답 403 `INSIDER_EXPORT_BLOCKED`. INS-08 · 09가 허용된 내보내기도 세고 높음 단계가 생김 → 높음 경보가 `InsiderAlertRaised`로 P3에 더 자주 갈 수 있음
   - #628: FDS 평가 상세의 `cardIdentifier.cardToken` 삭제, 차단 후보 IP · 기기 ID는 가린 값 · 카드는 표시값(없으면 `null`), [차단 목록] 응답 `identifierValue`는 IP · 기기 ID 가린 값 · 카드 `null`, R02 · R03 · R07 근거 키 변경(`maskedDeviceId` · `maskedIpAddress` · `cardDisplayLabel`, `cardToken` 없음). P3 · P4는 이 키를 읽지 않음(P4 `RuleCriterionFormatter`는 R02 · R03 `approvedHistoryCount`만)
+  - #679: 관리자 내부자 관제 `GET /api/admin/insider-monitor/staff` · `…/staff/{staffId}/timeline`(읽기만, 새 표 없음). identity.api `StaffLoginReader.findLoginEvents`(성공 · 실패 · 로그아웃 · 직원 자신의 접속 IP)와 fds.api `InsiderAlertMonitorReader`를 더했고 기존 `StaffLogin` 모양은 그대로다. 알려진 한계: 화면이 보이는 동안 2초마다 다시 읽는 요청이 관리자 활동으로 잡혀, 화면을 띄워 두면 관리자 로그인 유지 시간이 끝나지 않는다(SSE · 활동 제외 처리는 후속)
   - #659: `GET /api/admin/users`의 기본 정렬이 최근 계정순 → 관리자 · 보안 직원 · 사장님 순(같은 역할은 최근 계정순)으로 바뀜. 요청 · 응답 모양은 그대로
 - DB: 새 표 12개 + `security_cases` 칸 2개 + `staff_access_events` 칸 2개 + `insider_cases` 칸 4개. 표마다 소유 담당 마이그레이션으로 만들고 [`docs/erd/`](../erd/README.md)에 적는다. 다른 담당 표 사이는 논리 참조만. 주문자 암호문 파기(2차)는 `payment_order_contacts` CHECK 변경 마이그레이션이 필요하다(7절)
 - 화면: 관리자 메뉴 3단 재배치(8절, 조각 8 전 별도 PR · #659, [계정 관리]는 "시스템 설정 › 계정"으로 옮기고 목록 기본은 사용 중 계정) — 내부자 경보 · 사건 · 관제 · 원문 열람 검토는 "직원 관리 › 보안", 사건 담당은 "직원 관리 › 사건", 보안 직원 사건 상세(담당 표시 · 주문자 정보 카드 · 담당 변경 요청), 거래 목록 CSV 내보내기. #603: 경보 상세(차단 후보 · R07 근거) · [차단 목록]의 이메일 가림, 경보 상세 차단 등록이 원문 없이 동작. #628: 경보 상세 "카드 식별값" 줄 삭제, 차단 후보 · R02 · R03 · R07 근거 · [차단 목록]의 IP · 기기 ID 가림

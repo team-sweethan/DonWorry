@@ -1,7 +1,9 @@
 package com.donworry.fds.service;
 
 import com.donworry.fds.api.InsiderAlertCloser;
+import com.donworry.fds.api.InsiderAlertEntry;
 import com.donworry.fds.api.InsiderAlertEvidenceReader;
+import com.donworry.fds.api.InsiderAlertMonitorReader;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
 import com.donworry.fds.dto.CloseInsiderAlertRequest;
@@ -34,11 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 // ADMIN 내부자 경보 목록 · 상세 · 정상 업무로 닫기 + 열린 경보 조회 창구 (#516) + 내부자 사건 판정용 경보 닫기 (#670)
-// + 해제 검토 보고서용 근거 기록 번호 창구 (#675)
+// + 해제 검토 보고서용 근거 기록 번호 창구 (#675) + 내부자 관제 읽기 창구 (#679)
 // 컨트롤러 권한 규칙(SecurityConfig)과 별도로 여기서도 ADMIN을 확인한다
 @Service
 @RequiredArgsConstructor
-public class InsiderAlertService implements InsiderAlertReader, InsiderAlertCloser, InsiderAlertEvidenceReader {
+public class InsiderAlertService
+        implements InsiderAlertReader, InsiderAlertCloser, InsiderAlertEvidenceReader, InsiderAlertMonitorReader {
     private final InsiderAlertRepository alerts;
     private final InsiderAlertEvidenceRepository evidence;
     private final StaffAccessReader accessReader;
@@ -81,6 +84,36 @@ public class InsiderAlertService implements InsiderAlertReader, InsiderAlertClos
                         .raisedAt(alert.getUpdatedAt())
                         .build())
                 .toList();
+    }
+
+    // 내부자 관제 (#679) — ADMIN 확인은 부르는 쪽(P3 관제)이 한다
+    @Override
+    @Transactional(readOnly = true)
+    public List<InsiderAlertEntry> findOpenAlerts() {
+        return alerts.findByStatusOrderByIdAsc(InsiderAlertStatus.OPEN).stream()
+                .map(InsiderAlertService::toEntry)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<InsiderAlertEntry> findAlerts(Long staffId, Instant from, Instant to) {
+        return alerts.findTouchedBetween(staffId, from, to).stream()
+                .map(InsiderAlertService::toEntry)
+                .toList();
+    }
+
+    private static InsiderAlertEntry toEntry(InsiderAlert alert) {
+        return InsiderAlertEntry.builder()
+                .alertId(alert.getId())
+                .staffId(alert.getStaffId())
+                .rule(alert.getRuleCode())
+                .severity(alert.getSeverity())
+                .open(alert.isOpen())
+                .summary(alert.getSummary())
+                .createdAt(alert.getCreatedAt())
+                .closedAt(alert.getClosedAt())
+                .build();
     }
 
     // 판정하는 ADMIN 확인은 부르는 쪽(P3)이 한다. 잠금 순서는 정상 업무로 닫기와 같다(직원 행 먼저)

@@ -46,6 +46,16 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
 
     long countByStatus(InsiderAlertStatus status);
 
+    // 내부자 관제 타임라인 (#679) — 기간 안에 열렸거나 닫힌 경보
+    @Query("""
+            SELECT a FROM InsiderAlert a
+            WHERE a.staffId = :staffId
+              AND ((a.createdAt BETWEEN :from AND :to) OR (a.closedAt BETWEEN :from AND :to))
+            ORDER BY a.createdAt ASC, a.id ASC
+            """)
+    List<InsiderAlert> findTouchedBetween(
+            @Param("staffId") Long staffId, @Param("from") Instant from, @Param("to") Instant to);
+
     // 이 직원 · 규칙의 마지막 닫힘 시각 — 그 전 기록은 다시 세지 않는다. 닫힌 적 없으면 null
     @Query("""
             SELECT MAX(a.closedAt) FROM InsiderAlert a

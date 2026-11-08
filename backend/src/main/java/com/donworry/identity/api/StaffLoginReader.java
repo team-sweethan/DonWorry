@@ -13,4 +13,7 @@ public interface StaffLoginReader {
 
     // 한 직원의 [from, to) 성공 로그인, 시각 · 기록 번호 오름차순
     List<StaffLogin> findSuccessfulLogins(Long staffId, Instant from, Instant to);
+
+    // 한 직원의 [from, to] 로그인 성공 · 실패 · 로그아웃, 시각 · 기록 번호 오름차순 (#679 내부자 관제)
+    List<StaffLoginEvent> findLoginEvents(Long staffId, Instant from, Instant to);
 }
