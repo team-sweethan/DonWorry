@@ -50,7 +50,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityContextRepository securityContextRepository() {
-        return new HttpSessionSecurityContextRepository();
+        return new ConcurrentSafeSecurityContextRepository(new HttpSessionSecurityContextRepository());
     }
 
     @Bean
@@ -117,8 +117,11 @@ public class SecurityConfig {
             SecurityContextRepository securityContextRepository, CookieCsrfTokenRepository csrfTokenRepository) {
         var contextLogout = new SecurityContextLogoutHandler();
         contextLogout.setSecurityContextRepository(securityContextRepository);
+        // 세션 무효화는 겹친 로그아웃을 견디는 처리기가 맡는다 (#610)
+        contextLogout.setInvalidateHttpSession(false);
         return new CompositeLogoutHandler(
                 new CsrfLogoutHandler(csrfTokenRepository),
+                new ConcurrentSafeSessionLogoutHandler(),
                 contextLogout,
                 new CookieClearingLogoutHandler(SESSION_COOKIE));
     }
@@ -461,7 +464,9 @@ public class SecurityConfig {
                 .requestCache(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout.logoutRequestMatcher(
                                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/auth/logout"))
-                        .invalidateHttpSession(true)
+                        // 기본 무효화 대신 겹친 로그아웃을 견디는 처리기를 쓴다 (#610)
+                        .invalidateHttpSession(false)
+                        .addLogoutHandler(new ConcurrentSafeSessionLogoutHandler())
                         .clearAuthentication(true)
                         .deleteCookies(SESSION_COOKIE)
                         .logoutSuccessHandler((request, response, authentication) -> {
