@@ -9,6 +9,7 @@ import {
 } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
 import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestBadge'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 
 const tabs: Array<{ key: FdsRuleChangeRequest['status']; label: string }> = [
   { key: 'PENDING', label: '승인 대기' },
@@ -109,7 +110,7 @@ export function RuleChangeRequestsPage() {
             {
               title: '탐지 룰 코드',
               dataIndex: 'ruleCode',
-              render: (value: string) => <Tag>{value}</Tag>,
+              render: (value: string) => <Tag>{displayRuleCode(value)}</Tag>,
             },
             {
               title: '구분',
@@ -192,7 +193,7 @@ export function RuleChangeRequestsPage() {
           <Descriptions column={1} size="small">
             <Descriptions.Item label="요청 ID">{selectedRequest.requestId}</Descriptions.Item>
             <Descriptions.Item label="탐지 룰 코드">
-              <Tag>{selectedRequest.ruleCode}</Tag>
+              <Tag>{displayRuleCode(selectedRequest.ruleCode)}</Tag>
               <RuleTypeTag ruleCode={selectedRequest.ruleCode} />
             </Descriptions.Item>
             <Descriptions.Item label="요청자">{selectedRequest.requestedByName}</Descriptions.Item>

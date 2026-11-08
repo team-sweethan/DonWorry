@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestBadge'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 
 type RuleCatalogTab = 'payment' | 'account' | 'all'
 
@@ -114,7 +115,7 @@ function RuleCard({
       )}
       <div className="dw-rule-card-top">
         <span>
-          <Tag className="dw-rule-code">{rule.ruleCode}</Tag>
+          <Tag className="dw-rule-code">{displayRuleCode(rule.ruleCode)}</Tag>
           <Typography.Text type="secondary" className="dw-rule-group">
             {rule.category}
           </Typography.Text>

@@ -105,6 +105,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - 커밋 뒤 응답 전송이 실패하면(네트워크 끊김) "기록 있음 · 수신 없음"이 남는다. DB 커밋과 전송은 묶을 수 없어 받아들인다
 - 원문 응답(`contact-raw-view`)은 `Cache-Control: no-store`
 - IP는 접근 기록에 복사하지 않는다. 필요하면 `login_histories`에서 읽는다
+- 규칙 표시 코드 (#664): 화면 · 응답 · 경보 문장에는 `SEC-INS-0x`(번호 그대로)로 보이고, 저장 이름은 `InsiderRule` enum `INS_0x` 그대로다. 이 문서의 `INS-0x`는 같은 규칙을 가리킨다. 그 전에 저장된 경보 문장 · 보고서의 `INS-0x`는 화면에서 `SEC-INS-0x`로 바꿔 보인다. 사장님 계정 규칙도 화면에서만 `SEC-OP-01`(`SEC_OPERATOR_OUT_OF_ROLE_REPEAT`) · `SEC-OP-02`(`SEC_OPERATOR_PERMISSION_MISSING_REPEAT`)로 보인다
 
 ### 5. 직원 계정 보안 정지 (합의 4 정함, 11/07 · #647 → [ADR-0084](0084-staff-account-security-suspension.md))
 

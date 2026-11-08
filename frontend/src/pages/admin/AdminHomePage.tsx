@@ -13,6 +13,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { getAdminHome, type AdminHome } from '../../api/adminHome'
 import { PageHeader } from '../../components/common/PageHeader'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 import './AdminHomePage.css'
 
 const requestPath = '/admin/fds/rule-change-requests'
@@ -240,7 +241,7 @@ export function AdminHomePage() {
                     to={`${requestPath}?requestId=${request.requestId}`}
                     className="ah-request-link"
                   >
-                    <span className="ah-rule-code">{request.ruleCode}</span>
+                    <span className="ah-rule-code">{displayRuleCode(request.ruleCode)}</span>
                     <div className="ah-request-content">
                       <p className="ah-request-reason" title={request.reason}>
                         {request.reason}

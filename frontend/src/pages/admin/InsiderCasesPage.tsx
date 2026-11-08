@@ -33,6 +33,7 @@ import {
 import { PageHeader } from '../../components/common/PageHeader'
 import { refreshInsiderAlertBadge } from '../../hooks/useInsiderAlertBadge'
 import { refreshInsiderCaseBadge } from '../../hooks/useInsiderCaseBadge'
+import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
 import { InsiderReportsPanel } from './InsiderReportsPanel'
@@ -233,7 +234,7 @@ export function InsiderCaseDrawer({
                           {
                             ...oneLine,
                             title: '규칙',
-                            render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
+                            render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
                           },
                           {
                             ...oneLine,
@@ -241,7 +242,7 @@ export function InsiderCaseDrawer({
                             dataIndex: 'severity',
                             render: (value: InsiderAlertSeverity) => <SeverityTag value={value} />,
                           },
-                          { title: '내용', dataIndex: 'summary' },
+                          { title: '내용', dataIndex: 'summary', render: displayRuleText },
                         ]}
                       />
                       <Typography.Text type="secondary">
