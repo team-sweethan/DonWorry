@@ -258,7 +258,7 @@ export function SettlementPrototype({
     <div className="stl-prototype">
       <PageHeader
         title="정산 내역"
-        description="매입일 기준 영업일 D+3(주말 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
+        description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
         actions={
           <div className="finance-header-actions">
             {headerActions}
