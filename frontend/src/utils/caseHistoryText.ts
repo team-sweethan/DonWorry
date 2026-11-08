@@ -1,5 +1,6 @@
 import { assignmentReasonLabel } from '../api/caseAssignments.ts'
-import type { CaseHistory } from '../types/case.ts'
+import type { ActionHandoff, CaseHistory, CasePayment, PaymentDecision } from '../types/case.ts'
+import { handoffErrorLabel } from './handoffErrorText.ts'
 
 /** Case 종료 사유(CASE_CLOSED eventData.reason) — 사유가 없으면 직원 판정 · 금융 조치로 끝난 것이다 */
 const closedReasonLabel: Record<string, string> = {
@@ -30,6 +31,62 @@ const statusText: Record<string, string> = {
 }
 const statusOf = (value: string | undefined) => (value ? (statusText[value] ?? value) : '-')
 
+// 판정 · 금융 조치 이력 (#666) — 판정은 판정 칸(caseLabels.decisionLabel)과 같은 표기, 조치는 이력에 맞게 짧게
+// 모르는 값이 오면 값 그대로 둔다 (서버가 새 값을 먼저 보내도 정보가 사라지지 않게)
+const decisionText: Record<string, string> = {
+  ACCEPT: 'ACCEPT · 매입 허용',
+  REJECT: 'REJECT · 매입 거부',
+}
+const actionText: Record<string, string> = {
+  CAPTURE: '매입 요청',
+  VOID: '승인 취소 요청',
+}
+// 다시 확인 결과 (FinancialActionGateway.Receipt.Status)
+const recheckText: Record<string, string> = {
+  PENDING: '아직 처리 중',
+  ACCEPTED: '완료',
+  REJECTED: '거절',
+}
+const sourceText: Record<string, string> = {
+  RECHECK: '다시 확인으로 반영',
+}
+const codeText = (labels: Record<string, string>, value: string | undefined) =>
+  value ? (labels[value] ?? value) : null
+
+/** 이력 줄의 결제 번호를 찾는 재료 — 상세 응답의 결제 · 판정 · 인계 (#666) */
+export type HistoryRefs = {
+  payments: Pick<CasePayment, 'casePaymentId' | 'paymentId'>[]
+  decisions: Pick<PaymentDecision, 'decisionId' | 'casePaymentId'>[]
+  handoffs: Pick<ActionHandoff, 'handoffId' | 'decisionId'>[]
+}
+const NO_REFS: HistoryRefs = { payments: [], decisions: [], handoffs: [] }
+
+// eventData의 ID는 서버 JSON에서 숫자로 올 수도 있어 문자열로 맞춰 비교한다
+const same = (a: unknown, b: unknown) => a != null && b != null && String(a) === String(b)
+
+// 인계 → 판정 → 사건 결제 → 결제 번호. 하나라도 못 찾으면 null
+function paymentOfCasePayment(refs: HistoryRefs, casePaymentId: unknown): string | null {
+  return refs.payments.find((p) => same(p.casePaymentId, casePaymentId))?.paymentId ?? null
+}
+function paymentOfDecision(refs: HistoryRefs, decisionId: unknown): string | null {
+  const decision = refs.decisions.find((d) => same(d.decisionId, decisionId))
+  return decision ? paymentOfCasePayment(refs, decision.casePaymentId) : null
+}
+function paymentOfHandoff(refs: HistoryRefs, handoffId: unknown): string | null {
+  const handoff = refs.handoffs.find((x) => same(x.handoffId, handoffId))
+  return handoff ? paymentOfDecision(refs, handoff.decisionId) : null
+}
+
+const joinParts = (parts: (string | null)[]) =>
+  parts.filter((part): part is string => part !== null).join(' · ')
+
+// 문구로 바꾸지 않는 이력 · 결제를 찾지 못한 판정 · 인계 이력은 값을 그대로 잇는다 (completedAt만 실제 완료 시각)
+function rawDetail(data: Record<string, string>, time: (iso: string) => string): string {
+  return Object.entries(data)
+    .map(([key, value]) => (key === 'completedAt' ? `실제 완료 ${time(value)}` : value))
+    .join(' · ')
+}
+
 /**
  * 고객이 모든 결제의 승인을 취소해 닫힌 Case면 그 종료 이력 시각, 아니면 null (#382 · #443).
  * 상세 위쪽 안내에 쓴다.
@@ -44,11 +101,42 @@ export function customerCanceledClosure(history: CaseHistory[]): string | null {
 /**
  * 이력 한 줄 뒤에 붙일 문구 (#443). 내부 ID를 나열하지 않고 사람이 읽을 문구로 바꾼다.
  * time은 화면의 시각 표기 함수다(테스트에서 dayjs 없이 쓰려고 받는다).
- * 종료 · 고객 취소 외의 이력은 예전처럼 값을 이어 붙이고, completedAt만 "실제 완료 시각"으로 보인다.
+ * refs는 판정 · 인계 이력의 내부 번호를 결제 번호로 바꾸는 재료다(#666). 결제를 찾지 못하면 값을 그대로 잇는다.
+ * 문구로 바꾸지 않은 이력은 예전처럼 값을 이어 붙이고, completedAt만 "실제 완료 시각"으로 보인다.
  */
-export function historyDetail(h: CaseHistory, time: (iso: string) => string): string {
+export function historyDetail(
+  h: CaseHistory,
+  time: (iso: string) => string,
+  refs: HistoryRefs = NO_REFS,
+): string {
   const data = h.eventData
   switch (h.eventType) {
+    // 판정 · 금융 조치 — decisionId · handoffId · casePaymentId 대신 결제 표의 결제 번호 (#666)
+    case 'DECISION_CONFIRMED': {
+      const paymentId = paymentOfCasePayment(refs, data.casePaymentId)
+      if (!paymentId) return rawDetail(data, time)
+      return joinParts([`결제 ${paymentId}`, codeText(decisionText, data.decision)])
+    }
+    case 'HANDOFF_REQUESTED': {
+      const paymentId = paymentOfDecision(refs, data.decisionId)
+      if (!paymentId) return rawDetail(data, time)
+      return joinParts([`결제 ${paymentId}`, codeText(actionText, data.actionType)])
+    }
+    // 완료 작업 ID(targetOperationId)는 위 "금융 조치 인계" 칸에 있어 이력에는 잇지 않는다
+    case 'HANDOFF_ACCEPTED':
+    case 'HANDOFF_FAILED':
+    case 'HANDOFF_RECHECKED':
+    case 'HANDOFF_COMPLETION_RECORDED': {
+      const paymentId = paymentOfHandoff(refs, data.handoffId)
+      if (!paymentId) return rawDetail(data, time)
+      return joinParts([
+        `결제 ${paymentId}`,
+        codeText(handoffErrorLabel, data.errorCode),
+        codeText(recheckText, data.result),
+        data.completedAt ? `실제 완료 ${time(data.completedAt)}` : null,
+        codeText(sourceText, data.source),
+      ])
+    }
     case 'CASE_CLOSED':
       return data.reason ? (closedReasonLabel[data.reason] ?? data.reason) : ''
     case 'PAYMENT_CANCELED_BY_CUSTOMER':
@@ -85,9 +173,7 @@ export function historyDetail(h: CaseHistory, time: (iso: string) => string): st
     case 'CASE_ASSIGNMENT_REQUEST_REJECTED':
       return data.memo ? `거절 이유: ${data.memo}` : ''
     default:
-      return Object.entries(data)
-        .map(([key, value]) => (key === 'completedAt' ? `실제 완료 ${time(value)}` : value))
-        .join(' · ')
+      return rawDetail(data, time)
   }
 }
 

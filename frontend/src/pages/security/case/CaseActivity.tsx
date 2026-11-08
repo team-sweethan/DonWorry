@@ -9,7 +9,7 @@ import {
   paymentStatusLabel,
 } from './caseLabels'
 import { CodeTag } from './CodeTag'
-import { historyDetail } from '../../../utils/caseHistoryText'
+import { historyDetail, type HistoryRefs } from '../../../utils/caseHistoryText'
 
 /**
  * 결제별 금융 조치 인계 (설계 3.8, ADR-0027 완료 기반). ACCEPTED는 실제 매입·취소 완료다.
@@ -93,8 +93,9 @@ export function HandoffCard({
 /**
  * case_history — INSERT 전용 감사 이력을 시간순으로 보여준다.
  * 판정에 바로 쓰는 정보가 아니라 접어 두고, 접힌 줄에 건수와 마지막 일만 보인다 (#648)
+ * refs(결제 · 판정 · 인계)로 판정 · 금융 조치 이력의 내부 번호를 결제 번호로 바꿔 보인다 (#666)
  */
-export function HistoryCard({ history }: { history: CaseHistory[] }) {
+export function HistoryCard({ history, refs }: { history: CaseHistory[]; refs: HistoryRefs }) {
   const sorted = [...history].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt))
   const last = sorted.at(-1)
   return (
@@ -113,14 +114,14 @@ export function HistoryCard({ history }: { history: CaseHistory[] }) {
               </span>
             </span>
           ),
-          children: <HistoryTimeline sorted={sorted} />,
+          children: <HistoryTimeline sorted={sorted} refs={refs} />,
         },
       ]}
     />
   )
 }
 
-function HistoryTimeline({ sorted }: { sorted: CaseHistory[] }) {
+function HistoryTimeline({ sorted, refs }: { sorted: CaseHistory[]; refs: HistoryRefs }) {
   return (
     <Timeline
       items={sorted.map((h) => ({
@@ -130,19 +131,22 @@ function HistoryTimeline({ sorted }: { sorted: CaseHistory[] }) {
             : h.eventType === 'CASE_CLOSED'
               ? 'green'
               : 'blue',
-        children: (
-          <div style={{ fontSize: 13 }}>
-            <strong>{historyEventLabel[h.eventType]}</strong>
-            {historyDetail(h, dateTime) && (
-              <span style={{ color: '#475569' }}> · {historyDetail(h, dateTime)}</span>
-            )}
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>
-              {dateTime(h.createdAt)} · {h.actorType === 'STAFF' ? h.actorId : '시스템'}
-            </div>
-          </div>
-        ),
+        children: <HistoryRow h={h} refs={refs} />,
       }))}
     />
+  )
+}
+
+function HistoryRow({ h, refs }: { h: CaseHistory; refs: HistoryRefs }) {
+  const detail = historyDetail(h, dateTime, refs)
+  return (
+    <div style={{ fontSize: 13 }}>
+      <strong>{historyEventLabel[h.eventType]}</strong>
+      {detail && <span style={{ color: '#475569' }}> · {detail}</span>}
+      <div style={{ fontSize: 12, color: '#94a3b8' }}>
+        {dateTime(h.createdAt)} · {h.actorType === 'STAFF' ? h.actorId : '시스템'}
+      </div>
+    </div>
   )
 }
 

@@ -391,7 +391,7 @@ export function CaseDetailPage() {
               reports={reports}
               evidenceVersion={securityCase.evidenceVersion}
             />
-            <HistoryCard history={history} />
+            <HistoryCard history={history} refs={{ payments, decisions, handoffs }} />
           </div>
         </div>
       </div>
