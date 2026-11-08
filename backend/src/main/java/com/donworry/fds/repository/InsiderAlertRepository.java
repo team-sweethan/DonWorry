@@ -1,10 +1,12 @@
 package com.donworry.fds.repository;
 
+import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.entity.InsiderAlert;
 import com.donworry.fds.entity.InsiderAlertStatus;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Lock;
@@ -32,6 +34,10 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
     List<InsiderAlert> findByStaffIdAndStatus(Long staffId, InsiderAlertStatus status);
 
     boolean existsByStaffIdAndStatus(Long staffId, InsiderAlertStatus status);
+
+    // 내보내기 문지기 (#651) — 이 등급들 중 하나로 열린 경보가 있는가
+    boolean existsByStaffIdAndStatusAndSeverityIn(
+            Long staffId, InsiderAlertStatus status, Collection<InsiderAlertSeverity> severities);
 
     List<InsiderAlert> findTop100ByStatusOrderByUpdatedAtDescIdDesc(InsiderAlertStatus status);
 

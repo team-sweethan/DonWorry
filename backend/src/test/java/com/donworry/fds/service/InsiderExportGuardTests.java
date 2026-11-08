@@ -25,8 +25,11 @@ import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockReason;
 import com.donworry.identity.api.StaffLoginReader;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -53,20 +56,28 @@ class InsiderExportGuardTests {
             mock(StaffCaseScopeReader.class));
     private final InsiderExportGuardService guard = new InsiderExportGuardService(detection, locker);
 
-    // 열린 경보가 있으면 INS-05 위험 경보(이벤트 발행) → 계정 정지(근거 경보 번호) → 차단
-    @Test
-    void allowExport_whenOpenAlertExists_raisesIns05AndLocksAndBlocks() {
-        InsiderAlert open = openAlert(10L, InsiderRule.INS_03);
-        when(alerts.existsByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenReturn(true);
-        when(alerts.findByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenReturn(List.of(open));
-        when(evidence.findAccessEventIdsOf(List.of(10L))).thenReturn(List.of(101L, 102L));
+    // 이 직원에게 열려 있는 경보 — 등급 조건 조회도 실제 쿼리처럼 이 목록에서 답한다
+    private final List<InsiderAlert> open = new ArrayList<>();
+
+    @BeforeEach
+    void setUp() {
+        when(alerts.findByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenAnswer(call -> List.copyOf(open));
+        when(alerts.existsByStaffIdAndStatusAndSeverityIn(eq(STAFF), eq(InsiderAlertStatus.OPEN), any()))
+                .thenAnswer(call -> {
+                    Collection<InsiderAlertSeverity> severities = call.getArgument(2);
+                    return open.stream().anyMatch(a -> severities.contains(a.getSeverity()));
+                });
         when(alerts.findByStaffIdAndRuleCodeAndStatus(STAFF, InsiderRule.INS_05, InsiderAlertStatus.OPEN))
                 .thenReturn(Optional.empty());
-        when(alerts.save(any())).thenAnswer(call -> {
-            InsiderAlert saved = call.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 20L);
-            return saved;
-        });
+    }
+
+    // 높음 경보가 열려 있으면 INS-05 위험 경보(이벤트 발행) → 계정 정지(근거 경보 번호) → 차단
+    // (INS-08이 3,000행으로 높음이 된 뒤의 다음 내보내기)
+    @Test
+    void allowExport_whenHighAlertOpen_raisesIns05AndLocksAndBlocks() {
+        open.add(alert(10L, InsiderRule.INS_08, InsiderAlertSeverity.HIGH));
+        when(evidence.findAccessEventIdsOf(List.of(10L))).thenReturn(List.of(101L, 102L));
+        savedAs(20L);
 
         assertThat(guard.allowExport(STAFF)).isFalse();
 
@@ -74,7 +85,7 @@ class InsiderExportGuardTests {
         verify(alerts).save(saved.capture());
         assertThat(saved.getValue().getRuleCode()).isEqualTo(InsiderRule.INS_05);
         assertThat(saved.getValue().getSeverity()).isEqualTo(InsiderAlertSeverity.CRITICAL);
-        assertThat(saved.getValue().getSummary()).contains("INS-03");
+        assertThat(saved.getValue().getSummary()).contains("INS-08");
         verify(evidence, times(2)).save(any());
         var raised = ArgumentCaptor.forClass(InsiderAlertRaised.class);
         verify(publisher).publishEvent(raised.capture());
@@ -86,7 +97,17 @@ class InsiderExportGuardTests {
     // 열린 경보가 없으면 정지 · 경보 없이 통과한다
     @Test
     void allowExport_whenNoOpenAlert_allowsWithoutLock() {
-        when(alerts.existsByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenReturn(false);
+        assertThat(guard.allowExport(STAFF)).isTrue();
+
+        verify(locker, never()).lockBySystem(any(), any(), any());
+        verify(alerts, never()).save(any());
+    }
+
+    // 주의 경보만 열려 있으면(예: 주간 보고용 전체 내보내기로 INS-08 주의) 정지 · 경보 없이 통과한다 — 정상 업무를 막지 않는다
+    @Test
+    void allowExport_whenOnlyCautionAlertsOpen_allowsWithoutLock() {
+        open.add(alert(10L, InsiderRule.INS_08, InsiderAlertSeverity.CAUTION));
+        open.add(alert(11L, InsiderRule.INS_03, InsiderAlertSeverity.CAUTION));
 
         assertThat(guard.allowExport(STAFF)).isTrue();
 
@@ -97,12 +118,8 @@ class InsiderExportGuardTests {
     // 경보 저장이 실패해도 계정은 정지하고(근거 경보 번호 없이) 차단한다
     @Test
     void allowExport_whenAlertSaveFails_stillLocksAndBlocks() {
-        when(alerts.existsByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenReturn(true);
-        when(alerts.findByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN))
-                .thenReturn(List.of(openAlert(10L, InsiderRule.INS_03)));
+        open.add(alert(10L, InsiderRule.INS_07, InsiderAlertSeverity.HIGH));
         when(evidence.findAccessEventIdsOf(anyList())).thenReturn(List.of(101L));
-        when(alerts.findByStaffIdAndRuleCodeAndStatus(STAFF, InsiderRule.INS_05, InsiderAlertStatus.OPEN))
-                .thenReturn(Optional.empty());
         when(alerts.save(any())).thenThrow(new IllegalStateException("저장 실패"));
 
         assertThat(guard.allowExport(STAFF)).isFalse();
@@ -113,24 +130,24 @@ class InsiderExportGuardTests {
     // 계정 정지가 실패해도 내보내기는 차단한다
     @Test
     void allowExport_whenLockFails_stillBlocks() {
-        when(alerts.existsByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN)).thenReturn(true);
-        when(alerts.findByStaffIdAndStatus(STAFF, InsiderAlertStatus.OPEN))
-                .thenReturn(List.of(openAlert(10L, InsiderRule.INS_03)));
+        open.add(alert(10L, InsiderRule.INS_07, InsiderAlertSeverity.HIGH));
         when(evidence.findAccessEventIdsOf(anyList())).thenReturn(List.of(101L));
-        when(alerts.findByStaffIdAndRuleCodeAndStatus(STAFF, InsiderRule.INS_05, InsiderAlertStatus.OPEN))
-                .thenReturn(Optional.empty());
-        when(alerts.save(any())).thenAnswer(call -> {
-            InsiderAlert saved = call.getArgument(0);
-            ReflectionTestUtils.setField(saved, "id", 20L);
-            return saved;
-        });
+        savedAs(20L);
         doThrow(new IllegalStateException("정지 실패")).when(locker).lockBySystem(any(), any(), any());
 
         assertThat(guard.allowExport(STAFF)).isFalse();
     }
 
-    private static InsiderAlert openAlert(Long id, InsiderRule rule) {
-        InsiderAlert alert = InsiderAlert.open(STAFF, rule, InsiderAlertSeverity.CAUTION, "테스트", T0, T0, T0);
+    private void savedAs(Long id) {
+        when(alerts.save(any())).thenAnswer(call -> {
+            InsiderAlert saved = call.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", id);
+            return saved;
+        });
+    }
+
+    private static InsiderAlert alert(Long id, InsiderRule rule, InsiderAlertSeverity severity) {
+        InsiderAlert alert = InsiderAlert.open(STAFF, rule, severity, "테스트", T0, T0, T0);
         ReflectionTestUtils.setField(alert, "id", id);
         return alert;
     }

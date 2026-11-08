@@ -287,7 +287,7 @@ class PaymentTransactionsHttpMariaDbTests {
         });
     }
 
-    // 열린 내부자 경보가 있는 보안 직원의 내보내기는 파일 없이 403이다. 응답 트랜잭션이 롤백돼도
+    // 높음 내부자 경보가 열린 보안 직원의 내보내기는 파일 없이 403이다. 응답 트랜잭션이 롤백돼도
     // 계정 정지 · 위험 경보(INS-05) · 거부 기록은 남고, 그 세션은 끊긴다 (#651)
     @Test
     void export_whenStaffHasOpenInsiderAlert_blocksAndKeepsSuspension() throws Exception {
@@ -296,7 +296,7 @@ class PaymentTransactionsHttpMariaDbTests {
                 "SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "staff");
         jdbc.update(
                 "INSERT INTO insider_alerts(staff_id,rule_code,severity,status,summary,first_event_at,last_event_at,created_at,updated_at)"
-                        + " VALUES (?,'INS_03','CAUTION','OPEN','테스트 경보',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+                        + " VALUES (?,'INS_08','HIGH','OPEN','테스트 경보',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
                 staffId);
 
         // 내보내기는 POST + CSRF 토큰 (Codex 리뷰) — 화면처럼 쿠키의 토큰을 헤더로 보낸다

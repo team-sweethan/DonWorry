@@ -4,11 +4,12 @@ package com.donworry.fds.api;
 public enum InsiderRule {
     INS_01("INS-01", "담당 밖 접근 반복"),
     INS_03("INS-03", "원문 열람 집중"),
-    // 접근 기록이 아니라 내보내기 문지기(InsiderExportGuard)가 연다
-    INS_05("INS-05", "경보 중 내보내기 시도"),
+    // 접근 기록이 아니라 내보내기 문지기(InsiderExportGuard)가 연다. 높음 이상 경보가 열려 있을 때만 (주의만이면 허용)
+    INS_05("INS-05", "높음 경보 중 내보내기 시도"),
     INS_06("INS-06", "경보 겹침"),
     INS_07("INS-07", "처음 보는 브라우저 로그인 직후 원문"),
-    INS_08("INS-08", "업무 대비 거래 목록 대량 조회"),
+    // 거래 목록 조회와 허용된 내보내기를 함께 센다 (#651)
+    INS_08("INS-08", "업무 대비 거래 목록 · 내보내기 대량 조회"),
     INS_09("INS-09", "담당 무관 고객 반복 검색");
 
     private final String code;

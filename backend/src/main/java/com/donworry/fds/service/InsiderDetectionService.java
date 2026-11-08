@@ -47,6 +47,9 @@ public class InsiderDetectionService {
     // 담당 밖 시도로 보는 거부 이유. CASE_CLOSED는 지난 사건 확인처럼 정상 업무에서도 나와 세지 않는다 (#516 11/07 결정)
     private static final Set<StaffAccessDenyReason> OUT_OF_SCOPE =
             Set.of(StaffAccessDenyReason.NOT_ASSIGNEE, StaffAccessDenyReason.PAYMENT_NOT_IN_CASE);
+    // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
+    private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
+            Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
 
     private final InsiderAlertRepository alerts;
     private final InsiderAlertEvidenceRepository evidence;
@@ -58,11 +61,11 @@ public class InsiderDetectionService {
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
-        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람 · 거래 목록 조회만 센다(사건 화면 열람은 세지 않음)
+        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람 · 거래 목록 조회 · 내보내기만 센다(사건 화면 열람은 세지 않음)
         if (!SECURITY_STAFF.equals(event.actorRole())) return;
         boolean outOfScope = isOutOfScopeDenial(event);
         boolean rawView = isRawView(event);
-        boolean listView = isListView(event);
+        boolean listView = isTransactionRead(event);
         if (!outOfScope && !rawView && !listView) return;
 
         Long staffId = event.staffId();
@@ -83,37 +86,36 @@ public class InsiderDetectionService {
         checkIns06(staffId, at);
     }
 
-    // 내보내기 문지기의 사전 확인 (#651 Codex 리뷰) — 호출 쪽 트랜잭션과 떼어 지금 확정된 경보를 본다
-    // 호출 쪽(거래 내역 내보내기)은 다른 조회로 이미 스냅샷(REPEATABLE READ)을 만든 뒤 부른다. 같은 트랜잭션에서 읽으면
-    // 그 뒤 탐지가 확정한 경보가 안 보여 반출이 통과한다
+    // 내보내기 문지기의 사전 확인 (#651) — 높음 이상 경보가 열려 있는가. 주의만 있으면 막지 않는다(정상 업무 우선, ADR-0082 3.1)
+    // 호출 쪽 트랜잭션과 떼어 지금 확정된 경보를 본다 (Codex 리뷰): 호출 쪽(거래 내역 내보내기)은 다른 조회로 이미
+    // 스냅샷(REPEATABLE READ)을 만든 뒤 부른다. 같은 트랜잭션에서 읽으면 그 뒤 탐지가 확정한 경보가 안 보여 반출이 통과한다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public boolean hasOpenAlert(Long staffId) {
-        return alerts.existsByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
+    public boolean hasExportBlockingAlert(Long staffId) {
+        return alerts.existsByStaffIdAndStatusAndSeverityIn(staffId, InsiderAlertStatus.OPEN, EXPORT_BLOCKING);
     }
 
     // INS-05 경보 중 내보내기 시도 (#651) — 문지기(InsiderExportGuardService)가 부르고, 이어서 계정을 정지한다
-    // 근거 = 그때 열린 경보들의 근거 기록. 호출 쪽 롤백(차단 응답)과 따로 확정한다. 열린 경보가 없으면 null
+    // 근거 = 그때 열린 높음 이상 경보들의 근거 기록. 호출 쪽 롤백(차단 응답)과 따로 확정한다. 그런 경보가 없으면 null
     // 새 트랜잭션의 첫 문장이 직원 잠금이다 — 잠금 뒤 읽는 경보가 최신 값이다(관리자 닫기 · 탐지와 같은 줄 세우기)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long raiseExportBlock(Long staffId, Instant at) {
         alerts.lockDetectionState(staffId);
-        List<InsiderAlert> open = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN);
-        List<InsiderRule> rules = open.stream()
+        List<InsiderAlert> causes = alerts.findByStaffIdAndStatus(staffId, InsiderAlertStatus.OPEN).stream()
+                .filter(a -> a.getRuleCode() != InsiderRule.INS_05 && EXPORT_BLOCKING.contains(a.getSeverity()))
+                .toList();
+        List<InsiderRule> rules = causes.stream()
                 .map(InsiderAlert::getRuleCode)
-                .filter(r -> r != InsiderRule.INS_05)
                 .distinct()
                 .sorted()
                 .toList();
         if (rules.isEmpty()) return null;
-        List<InsiderAlert> causes =
-                open.stream().filter(a -> a.getRuleCode() != InsiderRule.INS_05).toList();
         List<Long> eventIds = evidence.findAccessEventIdsOf(
                 causes.stream().map(InsiderAlert::getId).toList());
         Instant firstAt = causes.stream()
                 .map(InsiderAlert::getFirstEventAt)
                 .min(Comparator.naturalOrder())
                 .orElse(at);
-        String summary = "열린 경보 %d개(%s) 상태에서 거래 내역 내보내기 시도 → 차단 · 계정 정지"
+        String summary = "열린 높음 경보 %d개(%s) 상태에서 거래 내역 내보내기 시도 → 차단 · 계정 정지"
                 .formatted(rules.size(), rules.stream().map(InsiderRule::code).collect(Collectors.joining(" · ")));
         return raise(staffId, InsiderRule.INS_05, InsiderAlertSeverity.CRITICAL, summary, eventIds, firstAt, at)
                 .getId();
@@ -185,47 +187,55 @@ public class InsiderDetectionService {
                 List.of(event));
     }
 
-    // INS-08 업무 대비 대량 조회 — 거래 목록을 많이 봤는데 담당 사건과 이어진 행이 적으면 주의
+    // INS-08 업무 대비 대량 조회 — 거래 목록 · 내보내기로 많이 가져갔는데 담당 사건과 이어진 행이 적으면 주의, 아주 많으면 높음
     // 비율은 행 수 기준. 담당 사건 가맹점 문의로 그 가맹점을 여러 쪽 넘기는 건 이어진 조회라 울리지 않는다
+    // 내보내기도 센다 (#651 Codex 리뷰) — 목록 대신 내보내기만 반복하면 대량 조회가 빠지고, 그러면 INS-05 차단도 걸리지 않는다
     private void checkIns08(Long staffId, Instant at, StaffCaseScope scope) {
         Duration window = properties.ins08Window();
         List<StaffAccessRecorded> views =
                 recent(staffId, InsiderRule.INS_08, at.minus(window), at.plus(window)).stream()
-                        .filter(InsiderDetectionService::isListView)
+                        .filter(InsiderDetectionService::isTransactionRead)
                         .toList();
-        List<StaffAccessRecorded> hit = windowMatching(views, at, window, w -> {
-            long rows = rows(w);
-            return rows > 0
-                    && rows >= properties.ins08CautionRows()
-                    && linkedRows(w, scope) < rows * properties.ins08MaxLinkedRatio();
-        });
+        List<StaffAccessRecorded> high =
+                windowMatching(views, at, window, w -> unlinkedBulk(w, scope, properties.ins08HighRows()));
+        List<StaffAccessRecorded> hit = high.isEmpty()
+                ? windowMatching(views, at, window, w -> unlinkedBulk(w, scope, properties.ins08CautionRows()))
+                : high;
         if (hit.isEmpty()) return;
         long rows = rows(hit);
         raise(
                 staffId,
                 InsiderRule.INS_08,
-                InsiderAlertSeverity.CAUTION,
-                "%d분 안에 거래 목록 %d행 조회(%d회) · 담당 사건 연결 %d%%"
+                high.isEmpty() ? InsiderAlertSeverity.CAUTION : InsiderAlertSeverity.HIGH,
+                "%d분 안에 거래 목록 · 내보내기 %d행(%d회) · 담당 사건 연결 %d%%"
                         .formatted(window.toMinutes(), rows, hit.size(), linkedRows(hit, scope) * 100 / rows),
                 hit);
     }
 
-    // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색하면 주의
+    private boolean unlinkedBulk(List<StaffAccessRecorded> window, StaffCaseScope scope, int minRows) {
+        long rows = rows(window);
+        return rows > 0 && rows >= minRows && linkedRows(window, scope) < rows * properties.ins08MaxLinkedRatio();
+    }
+
+    // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색(목록 · 내보내기)하면 주의, 더 많으면 높음
     // 같은 고객을 여러 쪽 넘긴 건 1명. 요약에는 고객 번호를 넣지 않고 숫자만
     private void checkIns09(Long staffId, Instant at, StaffCaseScope scope) {
         Duration window = properties.ins09Window();
         List<StaffAccessRecorded> searches =
                 recent(staffId, InsiderRule.INS_09, at.minus(window), at.plus(window)).stream()
-                        .filter(v -> isListView(v) && v.customerRef() != null)
+                        .filter(v -> isTransactionRead(v) && v.customerRef() != null)
                         .filter(v -> !scope.hasCustomer(v.merchantId(), v.customerRef()))
                         .toList();
-        List<StaffAccessRecorded> hit =
-                windowMatching(searches, at, window, w -> distinctCustomers(w) >= properties.ins09CautionCustomers());
+        List<StaffAccessRecorded> high =
+                windowMatching(searches, at, window, w -> distinctCustomers(w) >= properties.ins09HighCustomers());
+        List<StaffAccessRecorded> hit = high.isEmpty()
+                ? windowMatching(searches, at, window, w -> distinctCustomers(w) >= properties.ins09CautionCustomers())
+                : high;
         if (hit.isEmpty()) return;
         raise(
                 staffId,
                 InsiderRule.INS_09,
-                InsiderAlertSeverity.CAUTION,
+                high.isEmpty() ? InsiderAlertSeverity.CAUTION : InsiderAlertSeverity.HIGH,
                 "%d분 안에 담당 사건과 무관한 고객 %d명 검색".formatted(window.toMinutes(), distinctCustomers(hit)),
                 hit);
     }
@@ -392,8 +402,11 @@ public class InsiderDetectionService {
         return e.result() == StaffAccessResult.ALLOWED && e.accessType() == StaffAccessType.CONTACT_RAW_VIEW;
     }
 
-    private static boolean isListView(StaffAccessRecorded e) {
-        return e.result() == StaffAccessResult.ALLOWED && e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW;
+    // 거래 목록 조회 · 허용된 내보내기 — 둘 다 행 수 · 거른 가맹점 · 고객 번호가 같은 모양으로 기록된다 (#615 · #651)
+    private static boolean isTransactionRead(StaffAccessRecorded e) {
+        return e.result() == StaffAccessResult.ALLOWED
+                && (e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW
+                        || e.accessType() == StaffAccessType.TRANSACTION_EXPORT);
     }
 
     private static String signalGroup(InsiderRule rule) {
