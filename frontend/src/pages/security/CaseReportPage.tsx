@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeftOutlined, PrinterOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Card, Empty, Segmented, Space, Spin, Tabs, Typography } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getCase, isCaseAssigneeOnly } from '../../api/cases'
@@ -13,6 +13,7 @@ import { CaseForbidden } from './case/CaseForbidden'
 import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
 import type { NowProgress } from './case/ReportPastCompare'
+import { ReportPrintMarks } from './case/ReportPrint'
 import { ReportTrace } from './case/ReportTrace'
 
 // AI 보고서 전문 (#292). Case 상세 조회 API를 그대로 쓰고, 판정은 Case 상세에서 한다
@@ -26,6 +27,20 @@ export function CaseReportPage() {
   const [selected, setSelected] = useState<number | null>(null)
   // 버전을 바꿔도 보던 탭을 유지해 v1 · v2의 조사 과정을 바로 비교할 수 있게 한다 (#294)
   const [tab, setTab] = useState<'report' | 'trace'>('report')
+  // 인쇄는 보고서 탭만 찍는다 (#623) — 조사 과정 탭에서 Ctrl+P를 눌러도 보고서로 바꿔 찍고 끝나면 되돌린다
+  const tabBeforePrint = useRef<'report' | 'trace' | null>(null)
+  const showReportForPrint = useCallback(() => {
+    setTab((now) => {
+      // 인쇄 직전 신호가 두 번 와도 처음 보던 탭을 잃지 않는다
+      if (tabBeforePrint.current === null) tabBeforePrint.current = now
+      return 'report'
+    })
+  }, [])
+  const restoreTabAfterPrint = useCallback(() => {
+    const before = tabBeforePrint.current
+    tabBeforePrint.current = null
+    if (before) setTab(before)
+  }, [])
   // Case 상세와 같이 조회 범위와 함께 저장해 다른 Case의 늦은 응답을 버린다
   const scope = id
   const [loaded, setLoaded] = useState<{
@@ -76,9 +91,10 @@ export function CaseReportPage() {
   // 판정이 끝났거나 종료된 Case는 돌아가기만 보여 준다
   const canDecide = securityCase.status !== 'CLOSED' && decisions.length === 0
   const progress = decisionProgress(result)
+  const printable = picked?.report.status === 'SUCCEEDED' && !!picked.report.reportBody
 
   return (
-    <>
+    <div className="dw-report-print">
       <PageHeader
         title="AI 조사 보고서"
         description="무슨 일인가 → 확인할 것 → 지난 사건과 비교 → 근거 자료 → 조사 범위 순서로 읽습니다. 내부 전용 (사장님 · 구매자 비공개)"
@@ -92,6 +108,12 @@ export function CaseReportPage() {
                   .sort((a, b) => a.reportVersion - b.reportVersion)
                   .map((r) => ({ value: r.reportVersion, label: `v${r.reportVersion}` }))}
               />
+            )}
+            {printable && (
+              // 브라우저 인쇄 창 — 대상에서 "PDF로 저장"을 고른다. 출력 기록은 ReportPrintMarks가 남긴다
+              <Button icon={<PrinterOutlined />} onClick={() => window.print()}>
+                PDF로 저장
+              </Button>
             )}
             <Button icon={<ReloadOutlined />} onClick={reload}>
               새로고침
@@ -110,6 +132,16 @@ export function CaseReportPage() {
           </Space>
         }
       />
+      {/* Space 밖에 둔다 — 화면에서 숨긴 칸도 Space 간격을 차지한다 */}
+      {picked && printable && (
+        <ReportPrintMarks
+          caseId={securityCase.caseId}
+          reportId={picked.report.reportId}
+          heading={`Case ${securityCase.caseId} · 보고서 v${picked.report.reportVersion} · 증거 v${picked.report.evidenceVersion}`}
+          onBeforePrint={showReportForPrint}
+          onAfterPrint={restoreTabAfterPrint}
+        />
+      )}
       {!picked ? (
         <Card style={{ borderColor: '#E2E8F0' }}>
           <Empty description="요청된 보고서가 없습니다." />
@@ -133,7 +165,11 @@ export function CaseReportPage() {
             />
           )}
           {picked.report.status === 'SUCCEEDED' && picked.report.reportBody && (
-            <Card style={{ borderColor: '#E2E8F0' }} styles={{ body: { padding: '0 16px' } }}>
+            <Card
+              className="dw-no-print"
+              style={{ borderColor: '#E2E8F0' }}
+              styles={{ body: { padding: '0 16px' } }}
+            >
               <Tabs
                 activeKey={tab}
                 onChange={(key) => setTab(key === 'trace' ? 'trace' : 'report')}
@@ -158,7 +194,7 @@ export function CaseReportPage() {
           )}
         </Space>
       )}
-    </>
+    </div>
   )
 }
 

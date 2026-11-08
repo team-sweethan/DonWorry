@@ -158,6 +158,7 @@ class RoleApiMatrixTests {
             route("POST", "/api/security-cases/1/payments/2/contact-match", STAFF),
             route("POST", "/api/security-cases/1/payments/2/contact-raw-view", STAFF),
             route("GET", "/api/security-cases/1/reports/2/progress", STAFF),
+            route("POST", "/api/security-cases/1/reports/2/print", STAFF),
             route("GET", "/api/ml-shadow-scores", STAFF),
             // 사장님 (세션 가맹점): 연동 키는 권한 없이, 보안 조치 결과는 FDS_VIEW, 정산은 FINANCE_VIEW
             route("GET", "/api/owner/integration", OWNER),

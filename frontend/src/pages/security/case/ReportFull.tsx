@@ -84,6 +84,8 @@ export function ReportFull({
           {
             key: 'scope',
             label: <b>⑤ 조사 범위 · 한계 · 보고서 정보</b>,
+            // 접어 둬도 내용을 미리 그려 인쇄 때 펼쳐 찍는다 (#623, reportPrint.css)
+            forceRender: true,
             children: <ScopeBody body={body} />,
           },
         ]}
@@ -105,7 +107,11 @@ function EvidenceSection({ body }: { body: ReportBody }) {
   if (cards.length === 0) return null
   return (
     <ReportSection no="④" title="근거 자료" by="lookup">
-      <nav aria-label="근거 자료로 이동" style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <nav
+        aria-label="근거 자료로 이동"
+        className="dw-no-print"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+      >
         {cards.map((c) => (
           <button key={c.id} type="button" onClick={() => goToCard(c.id)} style={chipStyle}>
             {c.label}
@@ -146,7 +152,8 @@ function DecisionBar({
   const names = new Map((checkSignals(body) ?? []).map((s) => [caseSignalId(s), s.label]))
   const left = rows.filter((r) => !checked.includes(r.id)).map((r) => names.get(r.id) ?? r.id)
   return (
-    <div style={barStyle}>
+    // 화면 아래 고정이라 인쇄하면 쪽마다 겹친다 — 찍지 않는다 (#623)
+    <div className="dw-no-print" style={barStyle}>
       {rows.length > 0 && (
         <>
           <span style={{ fontSize: 14 }}>

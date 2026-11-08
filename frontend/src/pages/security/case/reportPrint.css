@@ -1,0 +1,65 @@
+/* AI 보고서 인쇄 · PDF 저장 (#623) — 브라우저 인쇄 창. 보고서 화면(.dw-report-print)이 있을 때만 적용한다 */
+.dw-print-only {
+  display: none;
+}
+
+@media print {
+  /* 가로 — 결제 표(최소 960px) · 지난 사건 비교 표가 세로 A4 폭(약 700px)에 들어가지 않아 잘린다 */
+  @page {
+    size: A4 landscape;
+    margin: 12mm 12mm 14mm;
+  }
+  html:has(.dw-report-print) {
+    background: white;
+  }
+  body:has(.dw-report-print) .dw-main {
+    zoom: 0.9;
+  }
+  /* antd Space는 inline-flex라 쪽을 나누지 못하고 통째로 다음 쪽으로 밀린다 (1쪽이 머리말만 남음) */
+  .dw-report-print .ant-space {
+    display: flex !important;
+  }
+
+  /* 화면 틀(머리줄 · 사이드바)과 화면 조작 요소는 찍지 않는다 */
+  body:has(.dw-report-print) .dw-header,
+  body:has(.dw-report-print) .dw-sidebar,
+  body:has(.dw-report-print) .dw-skip-link,
+  .dw-report-print .dw-page-header,
+  .dw-report-print .dw-no-print {
+    display: none !important;
+  }
+  body:has(.dw-report-print),
+  body:has(.dw-report-print) .dw-main {
+    background: white;
+  }
+  body:has(.dw-report-print) .admin-viewport {
+    display: block;
+    min-width: 0;
+    min-height: 0;
+  }
+  body:has(.dw-report-print) .dw-main {
+    padding: 0;
+  }
+
+  /* 화면에서 접어 둔 내용은 펼쳐 찍는다 (li는 점 목록 모양 그대로) */
+  .dw-report-print .dw-print-only {
+    display: revert;
+  }
+  .dw-report-print .ant-collapse-content-inactive,
+  .dw-report-print .ant-collapse-content-hidden {
+    display: block !important;
+  }
+  .dw-report-print .ant-collapse-expand-icon {
+    display: none !important;
+  }
+
+  /* 판정 줄은 화면 아래 고정이라 쪽마다 겹친다 — 위 dw-no-print로 숨기고, 표 줄 · 목록은 쪽 경계에서 자르지 않는다 */
+  .dw-report-print tr,
+  .dw-report-print li {
+    break-inside: avoid;
+  }
+  .dw-report-print {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -162,6 +162,7 @@ function SignalCard({
         {open && s.checkBefore && (
           <input
             type="checkbox"
+            className="dw-no-print"
             aria-label={`${s.label} 확인함`}
             checked={checked}
             onChange={onToggle}

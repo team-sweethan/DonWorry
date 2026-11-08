@@ -8,6 +8,8 @@ public enum StaffAccessType {
     REPORT_REQUEST,
     HANDOFF_RECHECK,
     REPORT_PROGRESS_VIEW,
+    // AI 보고서 인쇄 · PDF 저장 창을 연 것 (#623) — 화면은 실제 인쇄 · 저장 · 취소를 알 수 없다. 사건 번호만 남긴다
+    REPORT_PRINT,
     // 거래 목록 조회 (#615) — 내보낸 건수 · 거른 가맹점 · 검색한 고객 번호를 남긴다
     TRANSACTION_LIST_VIEW,
     // 사건 결제 1건의 주문자 정보 (#619) — 가린 값 열람 · 번호 대조 일치/불일치 · 전화 원문 열람. 입력 번호 · 원문은 남기지 않는다

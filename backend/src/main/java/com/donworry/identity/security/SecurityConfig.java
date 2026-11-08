@@ -408,6 +408,8 @@ public class SecurityConfig {
                                         "/api/security-cases/{caseId}/payments/{paymentId}/contact-raw-view"),
                                 paths.matcher(
                                         HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
+                                // AI 보고서 인쇄 · PDF 저장 기록 (#623). 담당 · 열린 사건은 서비스가 확인
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports/{reportId}/print"),
                                 // 거래 내역 "ML 참고" 칸 (#441) — 옆 사건 칸(payment-links)과 같은 규칙 (ADR-0067)
                                 paths.matcher(HttpMethod.GET, "/api/ml-shadow-scores"))
                         .access((authentication, context) -> {
