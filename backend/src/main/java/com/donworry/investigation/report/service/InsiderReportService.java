@@ -66,15 +66,19 @@ public class InsiderReportService {
     // 알림은 사건이 새로 열리거나 차단 경보가 새로 붙을 때만 오므로, 그 전에 열린 사건(특히 이미 정지된 직원)은 이게 없으면 보고서가 없다
     // 알림 흐름과 같은 계기를 고른다: 첫 경보가 차단(INS-05)이면 차단 판 하나, 아니면 사건 생성 판 + (차단 경보가 있으면) 차단 판
     // 이미 있는 계기는 건너뛰므로 몇 번 돌아도 같다. 새로 만들려고 한 판 수를 돌려준다
+    // 열린 사건 전부를 돈다(#675 Codex 2차 리뷰) — 화면 목록용 상한(100개) 조회를 쓰면 넘친 사건이 영영 빠진다. 사람당 열린 사건은 1개
     public int backfillOpenCases() {
         int requested = 0;
-        for (InsiderCase insiderCase :
-                insiderCases.findTop100ByStatusOrderByUpdatedAtDescIdDesc(InsiderCaseStatus.OPEN)) {
+        for (Long staffId : insiderCases.findOpenStaffIds()) {
+            InsiderCase insiderCase = insiderCases
+                    .findByStaffIdAndStatus(staffId, InsiderCaseStatus.OPEN)
+                    .orElse(null);
+            if (insiderCase == null) continue; // 그사이 판정으로 닫힘
             Long insiderCaseId = insiderCase.getId();
             try {
                 for (Map.Entry<InsiderReportTrigger, Long> expected :
                         expectedTriggers(insiderCaseId).entrySet()) {
-                    if (reports.existsByInsiderCaseIdAndTriggerType(insiderCaseId, expected.getKey())) continue;
+                    if (InsiderReportWriter.isCovered(reports, insiderCaseId, expected.getKey())) continue;
                     generate(insiderCaseId, expected.getKey(), expected.getValue());
                     requested++;
                 }
@@ -101,8 +105,8 @@ public class InsiderReportService {
     }
 
     private void generate(Long insiderCaseId, InsiderReportTrigger trigger, Long alertId) {
-        // 같은 알림이 다시 오면 사실을 다시 세지 않는다 — 저장할 때 한 번 더 보고, 동시면 UNIQUE가 막는다
-        if (reports.existsByInsiderCaseIdAndTriggerType(insiderCaseId, trigger)) return;
+        // 같은 알림이 다시 오거나 더 새 판(차단)이 이미 있으면 사실을 세지 않는다 — 저장할 때 한 번 더 보고, 동시면 UNIQUE가 막는다
+        if (InsiderReportWriter.isCovered(reports, insiderCaseId, trigger)) return;
         InsiderCase insiderCase = insiderCases.findById(insiderCaseId).orElse(null);
         if (insiderCase == null) {
             log.warn("해제 검토 보고서 — 내부자 사건이 없음 insiderCaseId={}", insiderCaseId);

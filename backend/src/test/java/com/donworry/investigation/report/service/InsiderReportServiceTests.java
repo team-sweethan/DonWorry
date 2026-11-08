@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -41,8 +42,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -246,8 +250,9 @@ class InsiderReportServiceTests {
     // 보고서 기능 배포 전부터 열린 사건은 서버 시작 때 빠진 판을 채우고, 다시 시작해도 판이 늘지 않는다 (#675 Codex 리뷰)
     @Test
     void backfill_openCaseWithoutReports_createsMissingVersionsOnce() {
-        when(insiderCases.findTop100ByStatusOrderByUpdatedAtDescIdDesc(InsiderCaseStatus.OPEN))
-                .thenReturn(List.of(insiderCase()));
+        when(insiderCases.findOpenStaffIds()).thenReturn(Set.of(STAFF_ID));
+        when(insiderCases.findByStaffIdAndStatus(STAFF_ID, InsiderCaseStatus.OPEN))
+                .thenReturn(Optional.of(insiderCase()));
         givenAlerts(alert(500L, InsiderRule.INS_08), alert(501L, InsiderRule.INS_05));
         givenAccess();
 
@@ -264,6 +269,45 @@ class InsiderReportServiceTests {
                 .containsExactly(
                         tuple(1, InsiderReportTrigger.CASE_OPENED, 500L),
                         tuple(2, InsiderReportTrigger.EXPORT_BLOCKED, 501L));
+    }
+
+    // 열린 사건이 화면 목록 상한(100개)보다 많아도 서버 시작 채우기는 모든 열린 사건에 판을 만든다 (#675 Codex 2차 리뷰)
+    @Test
+    void backfill_moreThan100OpenCases_fillsAll() {
+        Set<Long> staffIds = LongStream.rangeClosed(1, 101).boxed().collect(Collectors.toSet());
+        when(insiderCases.findOpenStaffIds()).thenReturn(staffIds);
+        when(insiderCases.findByStaffIdAndStatus(anyLong(), eq(InsiderCaseStatus.OPEN)))
+                .thenAnswer(call -> Optional.of(caseOf(call.getArgument(0))));
+        when(insiderCases.findById(anyLong()))
+                .thenAnswer(call -> Optional.of(caseOf((Long) call.getArgument(0) - 1000)));
+        when(links.findByInsiderCaseIdOrderByRaisedAtAscAlertIdAsc(anyLong()))
+                .thenAnswer(call -> List.of(alertOf(call.getArgument(0), InsiderRule.INS_01)));
+        when(evidenceReader.accessEventIds(anyCollection())).thenReturn(List.of());
+
+        int requested = service.backfillOpenCases();
+
+        assertThat(requested).isEqualTo(101);
+        assertThat(saved)
+                .extracting(InsiderReport::getInsiderCaseId)
+                .doesNotHaveDuplicates()
+                .hasSize(101);
+        assertThat(saved).allMatch(report -> report.getTriggerType() == InsiderReportTrigger.CASE_OPENED);
+    }
+
+    // 사건 생성 판을 만드는 사이 차단 판이 먼저 저장됐으면 사건 생성 판은 건너뛴다 — 늦은 옛 사실이 더 큰 판으로 맨 위에 오지 않는다 (#675 Codex 2차 리뷰)
+    @Test
+    void caseOpenedAfterBlocked_isSkipped() {
+        givenAlerts(alert(500L, InsiderRule.INS_08), alert(501L, InsiderRule.INS_05));
+        givenAccess();
+        when(locker.isLocked(STAFF_ID)).thenReturn(true);
+
+        service.generate(new InsiderCaseChanged(CASE_ID, InsiderCaseChanged.Reason.EXPORT_BLOCKED, 501L));
+        service.generate(opened(500L));
+
+        assertThat(saved)
+                .extracting(InsiderReport::getReportVersion, InsiderReport::getTriggerType)
+                .containsExactly(tuple(1, InsiderReportTrigger.EXPORT_BLOCKED));
+        assertThat(facts(saved.getFirst()).get("accountLocked")).isEqualTo(true);
     }
 
     // 다른 계기 판이 같은 번호를 먼저 잡으면(동시 알림) 다시 읽어 다음 번호로 저장한다 — 어느 판도 사라지지 않는다
@@ -321,6 +365,18 @@ class InsiderReportServiceTests {
         InsiderCase insiderCase = InsiderCase.open(STAFF_ID, InsiderAlertSeverity.HIGH, T0);
         ReflectionTestUtils.setField(insiderCase, "id", CASE_ID);
         return insiderCase;
+    }
+
+    // 직원별 사건 — 사건 번호는 직원 번호 + 1000
+    private static InsiderCase caseOf(Long staffId) {
+        InsiderCase insiderCase = InsiderCase.open(staffId, InsiderAlertSeverity.HIGH, T0);
+        ReflectionTestUtils.setField(insiderCase, "id", staffId + 1000);
+        return insiderCase;
+    }
+
+    private static InsiderCaseAlert alertOf(Long insiderCaseId, InsiderRule rule) {
+        return InsiderCaseAlert.link(
+                insiderCaseId, insiderCaseId * 10, rule, InsiderAlertSeverity.HIGH, rule.label() + " 경보", T0, T0);
     }
 
     private static InsiderCaseAlert alert(Long alertId, InsiderRule rule) {
