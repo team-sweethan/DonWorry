@@ -9,6 +9,7 @@ export type NavBadge =
   | 'caseAssignmentRequests'
   | 'rawViewReviews'
   | 'insiderAlerts'
+  | 'insiderCases'
 export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
 /** section은 관리자 메뉴의 큰 묶음 이름이다 (ADR-0082 8절). 같은 section 그룹은 붙여 둔다. */
 export type NavGroup = { section?: string; title: string; items: NavItem[] }
@@ -94,13 +95,14 @@ export const adminNavigation = {
         },
       ],
     },
-    // 원문 열람 사후 검토 · 내부자 경보 (#619 · #516). 관리자는 원문을 보지 않는다
+    // 원문 열람 사후 검토 · 내부자 경보 · 내부자 사건 (#619 · #516 · #670). 관리자는 원문을 보지 않는다
     {
       section: '직원 관리',
       title: '보안',
       items: [
         { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
         { label: '내부자 경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
+        { label: '내부자 사건', path: '/admin/insider-cases', badge: 'insiderCases' },
       ],
     },
     // 계정은 사장님 · 보안 직원 · 관리자에 걸친 회사 전체 일 — 한 화면에서 역할 · 상태 필터로 나눠 본다

@@ -119,7 +119,7 @@ export function CaseAssignmentRequestsPage() {
 
   const staffOptions = (exclude: number | null) =>
     staff
-      .filter((s) => s.active && s.staffId !== exclude)
+      .filter((s) => s.active && !s.insiderCaseOpen && s.staffId !== exclude)
       .map((s) => ({ value: s.staffId, label: `${s.displayName} (맡은 사건 ${s.openCount}건)` }))
 
   return (

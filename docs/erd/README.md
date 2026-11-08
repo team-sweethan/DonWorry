@@ -81,6 +81,7 @@ P6 사용자 승인 확장(#226·#227·#333, PR 리뷰 대상): `order_fulfillme
 | `investigation` | P3 수민 | `security_cases`, `case_payments`, `payment_decisions`, `action_handoffs`, `case_histories` | [20261022_145106](../../backend/src/main/resources/db/migration/V20261022_145106__create_security_cases_table.sql) · [20261022_145108](../../backend/src/main/resources/db/migration/V20261022_145108__create_case_payments_table.sql) · [20261022_145111](../../backend/src/main/resources/db/migration/V20261022_145111__create_payment_decisions_table.sql) · [20261022_145112](../../backend/src/main/resources/db/migration/V20261022_145112__create_action_handoffs_table.sql) · [20261022_145115](../../backend/src/main/resources/db/migration/V20261022_145115__create_case_histories_table.sql) |
 | `investigation` (#608) | P3 수민 | `security_cases` 담당 칸, `case_assignment_locks`, `case_assignment_requests` (사건 자동 배정 · 담당 변경, ADR-0082) | [담당 배정](../../backend/src/main/resources/db/migration/V20261106_225206__add_security_case_assignment.sql) · [담당 변경 요청](../../backend/src/main/resources/db/migration/V20261106_225208__create_case_assignment_requests.sql) |
 | `investigation` (#619) | P3 수민 | `raw_view_reviews` (주문자 전화 원문 열람 사후 검토, ADR-0082) | [원문 열람 검토](../../backend/src/main/resources/db/migration/V20261107_024052__create_raw_view_reviews.sql) |
+| `investigation` (#670) | P3 수민 | `insider_cases`, `insider_case_alerts` (내부자 사건 · 관리자 판정 · 징계 사건 정지 해제, ADR-0082) | [내부자 사건](../../backend/src/main/resources/db/migration/V20261108_123006__create_insider_cases.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
 | `investigation/report` (#412) | P4 현규 | `ml_shadow_scores` (FDS ML Shadow 채점 기록) | [ML Shadow](../../backend/src/main/resources/db/migration/V20261102_125730__create_ml_shadow_scores.sql) |
 | `investigation/report` (#626) | P4 현규 | `ai_switch_histories` (AI 조사 긴급정지 스위치 변경 기록, ADR-0083) | [긴급정지](../../backend/src/main/resources/db/migration/V20261107_101635__create_ai_switch_histories.sql) |
@@ -120,6 +121,9 @@ erDiagram
     security_cases ||--o{ case_histories : "case_id"
     security_cases ||--o{ case_assignment_requests : "case_id"
     security_cases ||--o{ raw_view_reviews : "case_id"
+    insider_cases ||--o{ insider_case_alerts : "insider_case_id"
+    insider_alerts ||..o| insider_case_alerts : "alert_id (P2 경보)"
+    platform_users ||..o{ insider_cases : "staff_id"
 
     captures ||--o| settlements : "capture_id"
 
@@ -148,7 +152,7 @@ erDiagram
 
 `fds_blocklist_entries`는 차단 등록 사유와 함께 해제 사유(`deactivation_reason`)·해제 시각(`deactivated_at`)을 보존한다. 재등록하면 기존 해제 이력은 현재 활성 차단 상태와 혼동되지 않도록 NULL로 되돌린다.
 
-그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests` · `raw_view_reviews`의 직원 · ADMIN ID(→ `platform_users`), `raw_view_reviews.payment_id`(→ `payments`), `insider_alerts.closed_by_admin_id` · `insider_detection_states.staff_id`(→ `platform_users`), `staff_account_locks.source_alert_id`(→ `insider_alerts`) · `release_case_id`(P3 내부자 사건), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
+그림에 없는 논리 참조: `security_cases` · `captures` · `settlements`의 `merchant_id`(→ `merchants`), `payment_decisions.staff_id` · `case_histories.actor_id` · `security_cases.assignee_staff_id` · `case_assignment_requests` · `raw_view_reviews`의 직원 · ADMIN ID(→ `platform_users`), `raw_view_reviews.payment_id`(→ `payments`), `insider_alerts.closed_by_admin_id` · `insider_detection_states.staff_id`(→ `platform_users`), `staff_account_locks.source_alert_id`(→ `insider_alerts`) · `release_case_id`(→ `insider_cases`), `insider_cases`의 판정 · 해제 ADMIN ID(→ `platform_users`), `settlements.payment_id`(→ `payments`), `action_handoffs.target_operation_id`(P5 · P6 작업 ID).
 
 ## 4. 테이블별 컬럼
 
@@ -538,3 +542,43 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 | review_memo | VARCHAR(200) NULL | 검토 메모 |
 
 인덱스 (status, viewed_at, review_id) — 검토 목록, (staff_id, viewed_at) — 직원별 열람 이력.
+
+### #670 P3 내부자 사건 · 관리자 판정 · 징계 사건 정지 해제 (2026-11-08)
+
+사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 2절 선행 구현을 승인했다(조각 8). Notion 반영은 후속이다.
+두 표 모두 P3 소유다. 직원 · ADMIN ID는 P1 `platform_users`, `alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음)이고, `insider_case_alerts.insider_case_id`만 같은 P3 FK다. 원문(이름 · 전화) 칸은 없다.
+사건 열기 · 판정 · 정지 해제는 `case_assignment_locks`의 `FDS_CASE` 행을 첫 문장에서 잡아 FDS 사건 배정과 한 줄로 선다 — 사건이 열린 직원은 배정 · 담당 변경 후보에서 빠진다.
+
+`insider_cases` — 높음 이상 내부자 경보를 직원 한 명당 열린 사건 하나로 묶는다. 물리 삭제하지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| insider_case_id | BIGINT AUTO_INCREMENT PK | |
+| staff_id | BIGINT NOT NULL | 조사 대상 보안 직원 (P1 논리 참조) |
+| status | VARCHAR(20) NOT NULL | OPEN / CLOSED (CHECK) |
+| severity | VARCHAR(20) NOT NULL | HIGH / CRITICAL — 묶인 경보 중 가장 높은 등급, 올라가기만 한다 (CHECK) |
+| opened_at · updated_at | DATETIME(6) NOT NULL | UTC |
+| decision | VARCHAR(30) NULL | NORMAL_DUTY(정상 업무) / CAUTION_NOTICE(주의 조치) / DISCIPLINE_REQUEST(징계 요청). CLOSED일 때만 필수 (CHECK) |
+| decision_memo | VARCHAR(200) NULL | 판정 메모. 개인정보 금지 안내 |
+| decided_by_admin_id · decided_by_admin_name | BIGINT · VARCHAR(100) NULL | 판정 ADMIN과 그때의 표시 이름. CLOSED일 때 ID 필수 (CHECK) |
+| decided_at | DATETIME(6) NULL | UTC. CLOSED일 때 필수 (CHECK) |
+| lock_released_at | DATETIME(6) NULL | 징계 사건의 나중 정지 해제 시각. DISCIPLINE_REQUEST일 때만 (CHECK) |
+| lock_released_by_admin_id · lock_released_by_admin_name | BIGINT · VARCHAR(100) NULL | 해제 ADMIN |
+| lock_release_reason | VARCHAR(200) NULL | 해제 사유 (필수, 개인정보 금지 안내) |
+| lock_release_outcome | VARCHAR(20) NULL | RESTORE(사용 중 복귀) / DEACTIVATE(비활성) (CHECK) |
+| open_staff_id | BIGINT 생성 칼럼 | OPEN일 때만 staff_id. UNIQUE로 사람당 열린 사건 1개 (엔티티에 매핑하지 않음) |
+
+인덱스 (status, updated_at, insider_case_id) — 목록, (staff_id, opened_at) — 직원별 지난 사건.
+
+`insider_case_alerts` — 사건에 묶인 경보 한 줄. 같은 경보가 다시 와도(재전달 · 등급 상승) 한 줄이다. 물리 삭제하지 않는다.
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| alert_id | BIGINT PK | P2 `insider_alerts` 논리 참조 (자동 생성 아님) |
+| insider_case_id | BIGINT NOT NULL FK insider_cases | |
+| rule_code | VARCHAR(20) NOT NULL | `InsiderRule` (예: INS_01) — 화면용 사본 |
+| severity | VARCHAR(20) NOT NULL | HIGH / CRITICAL (CHECK) — 올라가기만 한다 |
+| summary | VARCHAR(300) NOT NULL | P2 요약 사본 (건수 · 규칙만, 원문 · IP 없음) |
+| raised_at · linked_at | DATETIME(6) NOT NULL | UTC |
+
+인덱스 (insider_case_id, linked_at).

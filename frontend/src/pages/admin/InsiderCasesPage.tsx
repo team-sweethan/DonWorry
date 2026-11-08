@@ -1,0 +1,433 @@
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Descriptions,
+  Drawer,
+  Input,
+  Radio,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+} from 'antd'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import type { InsiderAlertSeverity } from '../../api/insiderAlerts'
+import {
+  decideInsiderCase,
+  decisionText,
+  getInsiderCaseDetail,
+  getInsiderCases,
+  outcomeText,
+  releaseInsiderLock,
+  type InsiderCase,
+  type InsiderCaseAlert,
+  type InsiderCaseDecision,
+  type InsiderCaseDetail,
+  type InsiderCaseStatus,
+  type LockReleaseOutcome,
+} from '../../api/insiderCases'
+import { PageHeader } from '../../components/common/PageHeader'
+import { refreshInsiderAlertBadge } from '../../hooks/useInsiderAlertBadge'
+import { refreshInsiderCaseBadge } from '../../hooks/useInsiderCaseBadge'
+import { dateTime } from '../security/case/caseLabels'
+import { errorText } from './caseAssignmentForm'
+
+const tabs: Array<{ key: InsiderCaseStatus; label: string }> = [
+  { key: 'OPEN', label: '열린 사건' },
+  { key: 'CLOSED', label: '닫힌 사건' },
+]
+const severityTag: Record<InsiderAlertSeverity, { label: string; color: string }> = {
+  CAUTION: { label: '주의', color: 'gold' },
+  HIGH: { label: '높음', color: 'red' },
+  CRITICAL: { label: '위험', color: 'magenta' },
+}
+const decisions: InsiderCaseDecision[] = ['NORMAL_DUTY', 'CAUTION_NOTICE', 'DISCIPLINE_REQUEST']
+const outcomes: LockReleaseOutcome[] = ['RESTORE', 'DEACTIVATE']
+const memoPlaceholder = '판정 메모 (선택, 200자까지). 고객 이름 · 번호 같은 개인정보는 적지 마세요.'
+const reasonPlaceholder =
+  '정지를 푸는 사유 (필수, 200자까지). 고객 이름 · 번호 같은 개인정보는 적지 마세요.'
+const oneLine = {
+  onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+  onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+}
+
+function SeverityTag({ value }: { value: InsiderAlertSeverity }) {
+  return <Tag color={severityTag[value].color}>{severityTag[value].label}</Tag>
+}
+
+/** 판정 결과 한 줄 — 징계 사건은 정지 해제 여부까지 */
+function decisionSummary(row: InsiderCase) {
+  if (!row.decision) return '-'
+  const decided = `${row.decisionLabel ?? row.decision} · ${row.decidedByName ?? '-'} · ${row.decidedAt ? dateTime(row.decidedAt) : '-'}`
+  if (row.decision !== 'DISCIPLINE_REQUEST') return decided
+  return row.lockReleasedAt
+    ? `${decided} → 정지 해제(${row.lockReleaseOutcome ? outcomeText[row.lockReleaseOutcome] : '-'})`
+    : `${decided} → 정지 유지`
+}
+
+/** 사건 상세 — 묶인 경보 · 정지 여부 · 남은 FDS 사건 · 지난 판정, 그리고 판정 또는 정지 해제 */
+function CaseDrawer({
+  insiderCaseId,
+  onClose,
+  onChanged,
+}: {
+  insiderCaseId: number
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const { message } = App.useApp()
+  const [detail, setDetail] = useState<InsiderCaseDetail | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [decision, setDecision] = useState<InsiderCaseDecision | null>(null)
+  const [memo, setMemo] = useState('')
+  const [outcome, setOutcome] = useState<LockReleaseOutcome | null>(null)
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(() => {
+    getInsiderCaseDetail(insiderCaseId)
+      .then((next) => {
+        setDetail(next)
+        setError(null)
+      })
+      .catch((e) =>
+        setError(errorText(e, '내부자 사건을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')),
+      )
+  }, [insiderCaseId])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const insiderCase = detail?.insiderCase
+  const disciplineBlocked = (detail?.openFdsCaseCount ?? 0) > 0
+  const canRelease =
+    insiderCase?.decision === 'DISCIPLINE_REQUEST' &&
+    insiderCase.lockReleasedAt === null &&
+    detail?.accountLocked === true
+
+  const afterSave = (text: string) => {
+    message.success(text)
+    onChanged()
+    refreshInsiderCaseBadge()
+    refreshInsiderAlertBadge()
+    load()
+  }
+
+  const submitDecision = async () => {
+    if (!decision) return
+    setSaving(true)
+    try {
+      await decideInsiderCase(insiderCaseId, decision, memo)
+      afterSave(`판정을 저장했습니다: ${decisionText[decision].label}`)
+    } catch (e) {
+      message.error(errorText(e, '판정하지 못했습니다. 잠시 후 다시 시도하세요.'))
+      load()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitRelease = async () => {
+    if (!outcome || !reason.trim()) return
+    setSaving(true)
+    try {
+      await releaseInsiderLock(insiderCaseId, outcome, reason)
+      afterSave(`정지를 풀었습니다 (${outcomeText[outcome]}).`)
+    } catch (e) {
+      message.error(errorText(e, '정지를 풀지 못했습니다. 잠시 후 다시 시도하세요.'))
+      load()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Drawer
+      open
+      width={720}
+      title={
+        insiderCase
+          ? `내부자 사건 #${insiderCase.insiderCaseId} · ${insiderCase.staffName ?? `ID ${insiderCase.staffId}`}`
+          : '내부자 사건'
+      }
+      onClose={onClose}
+      loading={detail === null && error === null}
+    >
+      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {detail && insiderCase && (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Descriptions
+            size="small"
+            column={2}
+            bordered
+            styles={{ label: { whiteSpace: 'nowrap' } }}
+          >
+            <Descriptions.Item label="상태">
+              {insiderCase.status === 'OPEN' ? <Tag color="red">열림</Tag> : <Tag>닫힘</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="등급">
+              <SeverityTag value={insiderCase.severity} />
+            </Descriptions.Item>
+            <Descriptions.Item label="계정">
+              {detail.accountLocked ? (
+                <Tag color="volcano">보안 정지 중</Tag>
+              ) : (
+                <Tag>정지 아님</Tag>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="맡은 FDS 사건">
+              {detail.openFdsCaseCount}건{' '}
+              {detail.openFdsCaseCount > 0 && (
+                <Link to="/admin/case-assignments">담당 현황에서 넘기기</Link>
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="열린 시각">
+              {dateTime(insiderCase.openedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="판정">{decisionSummary(insiderCase)}</Descriptions.Item>
+            {insiderCase.decisionMemo && (
+              <Descriptions.Item label="판정 메모" span={2}>
+                {insiderCase.decisionMemo}
+              </Descriptions.Item>
+            )}
+            {insiderCase.lockReleasedAt && (
+              <Descriptions.Item label="정지 해제" span={2}>
+                {`${insiderCase.lockReleasedByName ?? '-'} · ${dateTime(insiderCase.lockReleasedAt)} · ${insiderCase.lockReleaseReason ?? ''}`}
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+
+          <div>
+            <Typography.Title level={5}>묶인 경보 {detail.alerts.length}건</Typography.Title>
+            <Table<InsiderCaseAlert>
+              rowKey="alertId"
+              size="small"
+              pagination={false}
+              dataSource={detail.alerts}
+              columns={[
+                { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
+                {
+                  ...oneLine,
+                  title: '규칙',
+                  render: (_, row) => `${row.ruleCode} ${row.ruleLabel}`,
+                },
+                {
+                  ...oneLine,
+                  title: '등급',
+                  dataIndex: 'severity',
+                  render: (value: InsiderAlertSeverity) => <SeverityTag value={value} />,
+                },
+                { title: '내용', dataIndex: 'summary' },
+              ]}
+            />
+            <Typography.Text type="secondary">
+              근거 접근 기록은 [내부자 경보] 화면에서 경보 줄을 펼쳐 봅니다.
+            </Typography.Text>
+          </div>
+
+          {detail.pastCases.length > 0 && (
+            <div>
+              <Typography.Title level={5}>이 직원의 지난 내부자 사건</Typography.Title>
+              <Table<InsiderCase>
+                rowKey="insiderCaseId"
+                size="small"
+                pagination={false}
+                dataSource={detail.pastCases}
+                columns={[
+                  { ...oneLine, title: '사건', render: (_, row) => `#${row.insiderCaseId}` },
+                  { ...oneLine, title: '열린 시각', dataIndex: 'openedAt', render: dateTime },
+                  {
+                    title: '판정',
+                    render: (_, row) => (row.status === 'OPEN' ? '진행 중' : decisionSummary(row)),
+                  },
+                ]}
+              />
+            </div>
+          )}
+
+          {insiderCase.status === 'OPEN' && (
+            <Card size="small" title="판정">
+              <Radio.Group
+                value={decision}
+                onChange={(event) => setDecision(event.target.value as InsiderCaseDecision)}
+              >
+                <Space direction="vertical">
+                  {decisions.map((value) => (
+                    <Radio
+                      key={value}
+                      value={value}
+                      disabled={value === 'DISCIPLINE_REQUEST' && disciplineBlocked}
+                    >
+                      <strong>{decisionText[value].label}</strong> — {decisionText[value].help}
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+              {disciplineBlocked && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 12 }}
+                  message={`이 직원이 맡은 FDS 사건 ${detail.openFdsCaseCount}건이 남아 있어 징계 요청을 할 수 없습니다. 정지된 직원의 고객 사건은 아무도 판정할 수 없으니 [담당 현황]에서 먼저 넘겨 주세요.`}
+                />
+              )}
+              <Input.TextArea
+                style={{ marginTop: 12 }}
+                value={memo}
+                maxLength={200}
+                showCount
+                rows={3}
+                placeholder={memoPlaceholder}
+                onChange={(event) => setMemo(event.target.value)}
+              />
+              <Button
+                type="primary"
+                style={{ marginTop: 12 }}
+                disabled={decision === null}
+                loading={saving}
+                onClick={() => void submitDecision()}
+              >
+                판정 확정
+              </Button>
+            </Card>
+          )}
+
+          {canRelease && (
+            <Card size="small" title="징계 사건 정지 해제">
+              <Typography.Paragraph type="secondary">
+                징계 요청으로 닫힌 사건입니다. 소명이 받아들여졌거나 처분이 끝났을 때 사유를 적고
+                정지를 풉니다.
+              </Typography.Paragraph>
+              <Radio.Group
+                value={outcome}
+                onChange={(event) => setOutcome(event.target.value as LockReleaseOutcome)}
+              >
+                {outcomes.map((value) => (
+                  <Radio key={value} value={value}>
+                    {outcomeText[value]}
+                  </Radio>
+                ))}
+              </Radio.Group>
+              <Input.TextArea
+                style={{ marginTop: 12 }}
+                value={reason}
+                maxLength={200}
+                showCount
+                rows={3}
+                placeholder={reasonPlaceholder}
+                onChange={(event) => setReason(event.target.value)}
+              />
+              <Button
+                danger
+                style={{ marginTop: 12 }}
+                disabled={outcome === null || reason.trim().length === 0}
+                loading={saving}
+                onClick={() => void submitRelease()}
+              >
+                정지 해제
+              </Button>
+            </Card>
+          )}
+        </Space>
+      )}
+    </Drawer>
+  )
+}
+
+/**
+ * 관리자 [직원 관리 › 보안 › 내부자 사건] (#670, ADR-0082 조각 8).
+ * 높음 이상 내부자 경보를 직원 한 명당 하나의 사건으로 묶는다. 관리자가 정상 업무 · 주의 조치 · 징계 요청 중 하나로 판정한다.
+ * 사건이 열린 직원은 새 FDS 사건 배정 · 담당 변경을 받지 않는다. 원문 · 고객 번호는 보이지 않는다.
+ */
+export function InsiderCasesPage() {
+  const [status, setStatus] = useState<InsiderCaseStatus>('OPEN')
+  const [rows, setRows] = useState<InsiderCase[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<number | null>(null)
+  // 탭을 빠르게 바꾸면 늦게 온 이전 탭 결과를 버린다
+  const sequence = useRef(0)
+
+  const reload = useCallback(() => {
+    const current = ++sequence.current
+    getInsiderCases(status)
+      .then((next) => {
+        if (current !== sequence.current) return
+        setRows(next)
+        setError(null)
+      })
+      .catch(() => {
+        if (current !== sequence.current) return
+        setRows([])
+        setError('내부자 사건을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
+      })
+  }, [status])
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  return (
+    <>
+      <PageHeader
+        title="내부자 사건"
+        description="높음 이상 내부자 경보가 직원별 사건 하나로 묶여 올라옵니다. 사건을 열어 경보와 계정 정지 여부를 보고 판정하세요. 사건이 열린 직원에게는 새 FDS 사건이 배정되지 않습니다."
+      />
+      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      <Card>
+        <Tabs
+          activeKey={status}
+          onChange={(key) => {
+            setError(null)
+            sequence.current += 1
+            setRows(null)
+            setStatus(key as InsiderCaseStatus)
+          }}
+          items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
+        />
+        <Table<InsiderCase>
+          rowKey="insiderCaseId"
+          size="small"
+          loading={rows === null}
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          dataSource={rows ?? []}
+          columns={[
+            { ...oneLine, title: '사건', render: (_, row) => `#${row.insiderCaseId}` },
+            { ...oneLine, title: '직원', render: (_, row) => row.staffName ?? `ID ${row.staffId}` },
+            {
+              ...oneLine,
+              title: '등급',
+              dataIndex: 'severity',
+              render: (value: InsiderAlertSeverity) => <SeverityTag value={value} />,
+            },
+            { ...oneLine, title: '경보', render: (_, row) => `${row.alertCount}건` },
+            { ...oneLine, title: '열린 시각', dataIndex: 'openedAt', render: dateTime },
+            status === 'OPEN'
+              ? { ...oneLine, title: '최근 갱신', dataIndex: 'updatedAt', render: dateTime }
+              : { title: '판정', render: (_: unknown, row: InsiderCase) => decisionSummary(row) },
+            {
+              ...oneLine,
+              title: '',
+              render: (_: unknown, row: InsiderCase) => (
+                <Button size="small" onClick={() => setOpenId(row.insiderCaseId)}>
+                  {status === 'OPEN' ? '열어서 판정' : '상세'}
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
+      {openId !== null && (
+        <CaseDrawer
+          key={openId}
+          insiderCaseId={openId}
+          onClose={() => setOpenId(null)}
+          onChanged={reload}
+        />
+      )}
+    </>
+  )
+}

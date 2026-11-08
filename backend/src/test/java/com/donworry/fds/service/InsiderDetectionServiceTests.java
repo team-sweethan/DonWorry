@@ -31,6 +31,7 @@ import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
+import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.identity.api.StaffSummary;
@@ -80,8 +81,8 @@ class InsiderDetectionServiceTests {
             .ins09HighCustomers(30)
             .scopeClosedLookback(Duration.ofDays(30))
             .build();
-    private final InsiderDetectionService service =
-            new InsiderDetectionService(alerts, evidence, reader, publisher, properties, loginReader, scopeReader);
+    private final InsiderDetectionService service = new InsiderDetectionService(
+            alerts, evidence, reader, publisher, properties, loginReader, scopeReader, mock(StaffAccountLocker.class));
 
     // 담당 사건: 가맹점 1의 고객 1:MINE 하나
     private static final StaffCaseScope SCOPE =

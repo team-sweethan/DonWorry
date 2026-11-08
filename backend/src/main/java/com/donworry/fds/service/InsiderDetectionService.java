@@ -15,6 +15,8 @@ import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
+import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.identity.api.StaffLockReason;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
 import java.time.Duration;
@@ -58,6 +60,7 @@ public class InsiderDetectionService {
     private final InsiderDetectionProperties properties;
     private final StaffLoginReader loginReader;
     private final StaffCaseScopeReader scopeReader;
+    private final StaffAccountLocker locker;
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
@@ -94,9 +97,12 @@ public class InsiderDetectionService {
         return alerts.existsByStaffIdAndStatusAndSeverityIn(staffId, InsiderAlertStatus.OPEN, EXPORT_BLOCKING);
     }
 
-    // INS-05 경보 중 내보내기 시도 (#651) — 문지기(InsiderExportGuardService)가 부르고, 이어서 계정을 정지한다
+    // INS-05 경보 중 내보내기 시도 (#651) — 문지기(InsiderExportGuardService)가 부른다. 경보를 열고 계정까지 정지한다
     // 근거 = 그때 열린 높음 이상 경보들의 근거 기록. 호출 쪽 롤백(차단 응답)과 따로 확정한다. 그런 경보가 없으면 null
     // 새 트랜잭션의 첫 문장이 직원 잠금이다 — 잠금 뒤 읽는 경보가 최신 값이다(관리자 닫기 · 탐지와 같은 줄 세우기)
+    // 계정 정지도 이 잠금을 잡은 채로 한다 (#670 Codex 리뷰): 내부자 사건 판정(InsiderAlertCloser)이 같은 잠금을 기다리므로,
+    // 경보만 확정되고 정지는 아직인 틈에 판정이 끼어 "판정 뒤에 걸려 아무도 못 푸는 정지"가 생기지 않는다.
+    // 잠금 순서는 판정과 같다(P2 직원 행 → P1 계정 행). 정지는 P1이 따로 커밋하고, 실패해도 경보는 남긴다 — 차단은 문지기가 한다
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Long raiseExportBlock(Long staffId, Instant at) {
         alerts.lockDetectionState(staffId);
@@ -117,8 +123,14 @@ public class InsiderDetectionService {
                 .orElse(at);
         String summary = "열린 높음 경보 %d개(%s) 상태에서 거래 내역 내보내기 시도 → 차단 · 계정 정지"
                 .formatted(rules.size(), rules.stream().map(InsiderRule::code).collect(Collectors.joining(" · ")));
-        return raise(staffId, InsiderRule.INS_05, InsiderAlertSeverity.CRITICAL, summary, eventIds, firstAt, at)
+        Long alertId = raise(staffId, InsiderRule.INS_05, InsiderAlertSeverity.CRITICAL, summary, eventIds, firstAt, at)
                 .getId();
+        try {
+            locker.lockBySystem(staffId, StaffLockReason.INSIDER_EXPORT_BLOCKED, alertId);
+        } catch (RuntimeException e) {
+            log.error("INS-05 계정 정지 실패 — 내보내기는 차단 staffId={} alertId={}", staffId, alertId, e);
+        }
+        return alertId;
     }
 
     // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 N개에서 막히면 주의. 같은 사건 재시도는 한 번으로 센다
