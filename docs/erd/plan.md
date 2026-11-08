@@ -5,13 +5,15 @@
 ## 1. 현재 위치와 기준
 
 - 기록일: 2026-11-08.
-- 현재 위치: **T3 구조 분리와 최초 계획은 로컬 커밋 완료. T4 소유 표 보완은 수정·문서 검사 완료, 미커밋. T5 관계도와 T6 저장 계약 대조는 미착수.**
+- 현재 위치: **T4 소유 표 보완과 T5 검증 기록까지 로컬 커밋. 다음 작업은 T5-A(기존 관계선 오류 3건·범례 보완)의 승인 후 수정입니다. T5-B 관계도 분할·누락 보완과 T6 저장 계약 대조는 미착수입니다.**
 - 구조 분리 커밋: `fc5caa477565affe20a713a5578ccc5d7c141259`.
 - 최초 계획 커밋: `782fc52c74756aa5bbef93c423d1485ff1b9d7ce` (`docs: ERD 문서 정리 계획과 진행 상태 기록`).
-- 현재 브랜치: `feature/681-flyway-guide`. 원격 브랜치보다 2개 커밋 앞서 있으며, 아직 푸시하지 않았습니다.
+- T4 커밋: `694098da1ba2f4322aa7cb93acfb93997da20074` (`docs: ERD 소유 표의 누락 테이블과 근거 보완`).
+- T5 검증 기록 커밋: 이 갱신을 포함하는 `docs: ERD 관계도 검증 결과와 다음 작업 정리`. 커밋 ID는 `git log --oneline -- docs/erd/plan.md`에서 확인합니다.
+- 현재 브랜치: `feature/681-flyway-guide`. 문서 정리 커밋은 로컬에만 있으며, 아직 푸시하지 않았습니다.
 - 이전 ERD 조사 및 구조 정리의 내용 기준: `ea5294e9ece7feb1e1f454fd00c103372a1aecdb`.
 - T4 검증 기준: `git fetch origin` 후 `origin/dev`의 `f7db9cd307067dcaa6a71673f0ad02b3115a8754`. 이전 기준 이후 변경은 보안 탐지 표시 코드 관련 PR #687이며, migration·ERD·이번 소유 근거로 사용한 담당별 문서는 바뀌지 않았습니다.
-- 현재 HEAD와 `origin/dev`는 각각 3개·2개 고유 커밋으로 갈라져 있습니다. 브랜치 전환·병합·rebase 없이 원격 참조와 파일을 직접 대조했습니다. 현재 작업 트리의 SQL 85개는 이 원격 기준과 바이트 단위로 같습니다.
+- T5 시작 시 다시 fetch했으며 기준은 같은 `f7db9cd307067dcaa6a71673f0ad02b3115a8754`입니다. 검증 당시 HEAD `694098da`와 `origin/dev`는 각각 4개·2개 고유 커밋으로 갈라져 있었습니다. 브랜치 전환·병합·rebase 없이 원격 참조와 파일을 직접 대조했습니다. 검증 당시 작업 트리의 SQL 85개는 이 원격 기준과 바이트 단위로 같았습니다. 이번 계획 정리에서는 fetch나 구현 재검증을 추가로 수행하지 않았습니다.
 - 후속 작업에서는 기준 커밋과 분기 상태를 다시 확인합니다. 로컬 커밋을 임의로 재배치하거나 충돌을 정리하지 않습니다.
 
 ## 2. 전체 작업에서의 위치
@@ -21,8 +23,8 @@
 | T1 | AGENTS.md 직접 연결 문서의 링크·구현 근거·작성 이력 조사 | 1차 조사 완료. 모든 내용의 최신성 검증 완료를 뜻하지 않음 |
 | T2 | Flyway 작업 안내를 저장소 합의 절차와 일치시킴 | PR #686 병합 완료 |
 | T3 | ERD README를 안내·저장 계약·관계도·역사 기록으로 분리 | 로컬 커밋 완료, 미푸시 |
-| T4 | ERD README 테이블 소유 표 보완 | 사용자 승인 후 수정·문서 검사 완료, 미커밋 |
-| T5 | ERD 관계도와 참조 설명 대조·수정 | 미착수 |
+| T4 | ERD README 테이블 소유 표 보완 | 로컬 커밋 완료 (`694098da`), 미푸시 |
+| T5 | ERD 관계도와 참조 설명 대조·수정 | 검증 결과·수정안 로컬 커밋. T5-A 승인 대기, T5-B 미착수 |
 | T6 | ERD 저장 계약과 CREATE·후속 ALTER 대조·수정 | 미착수 |
 | T7 | 모듈 구조·이벤트 계약·재전달 설명 정리 | 후보 조사만 완료, 별도 범위 협의 필요 |
 | T8 | 실제 워크플로·검사 단계에 맞춰 CI 문서 정리 | 후보 조사만 완료, 별도 범위 협의 필요 |
@@ -45,7 +47,7 @@
 - 이전 작업에서 상대 링크 203개(앵커 포함 71개), 외부 문서에서 들어오는 앵커 링크 17개, 원문 보존 및 `git diff --cached --check`를 확인했습니다. 이는 구조 분리 당시 결과입니다.
 - 애플리케이션 실행, Gradle·MariaDB 테스트, 운영 DB 및 Notion 상태는 검증하지 않았습니다.
 
-## 4. T4 — README 테이블 소유 표 보완 (수정·문서 검사 완료)
+## 4. T4 — README 테이블 소유 표 보완 (로컬 커밋 완료)
 
 ### 무엇을 바꾸는가
 
@@ -88,7 +90,7 @@
 - 미검증: DB migration 실행, 애플리케이션 실행, Gradle·MariaDB 테스트, 운영 DB·Notion 상태. 모든 기존 테이블의 컬럼·제약이나 문서 내용 전체의 최신성을 검증한 것은 아닙니다.
 - 남은 범위: T5 관계도와 T6 저장 계약의 대조·수정. README의 migration 링크는 전체 변경 이력 목록이 아니므로 최종 스키마 확인 시 SQL 전체 검색이 필요합니다.
 - 추가 담당 확인: 이번 21개 소유 표 추가에서 소유가 불명확한 항목은 없었습니다. 후속 관계·계약 조사에서 드러나는 정책 충돌은 별도 확인합니다.
-- Git 상태: T4 변경과 이 진행 기록은 미커밋입니다. 이번 작업에서 푸시·PR 생성은 하지 않았습니다.
+- Git 상태: 사용자 요청 “T4 커밋 -> T5 검증 시작”에 따라 README와 당시 진행 기록을 `694098da`로 커밋했습니다. 커밋 전 `git diff --cached --check` 통과. 푸시·PR 생성은 하지 않았습니다.
 
 ## 5. T5 — 관계도 검증·수정
 
@@ -98,6 +100,60 @@
 - 검증: FK 생성·변경·삭제 SQL, 관련 코드와 업무 문서, 카디널리티를 뒷받침하는 UNIQUE·NULL 제약, Mermaid 문법 및 링크를 대조합니다.
 - 영향: 관계 설명만 변경합니다. DB 제약이나 모듈 간 계약을 새로 정하지 않습니다. 설계 합의가 필요한 충돌은 별도로 보고합니다.
 - 착수 조건: 조사 결과에 따라 정확한 변경 위치·범위를 제시하고 승인된 범위만 수정합니다.
+
+### T5 검증 범위와 결과 — 2026-11-08
+
+- 이번 승인은 T5 검증 시작입니다. `relationships.md`는 수정하지 않았고, 아래 결과와 수정 제안만 이 계획에 기록했습니다.
+- 기준: 구현 `f7db9cd3`, 문서 로컬 HEAD `694098da`. SQL 85개에서 CREATE·ALTER 및 FK·UNIQUE·NULL 관련 구문을 추출해 대조했습니다. FK 추가·삭제 ALTER나 영구 테이블 DROP·RENAME은 발견되지 않았습니다.
+- 현재 그림: 37개 테이블, 관계선 49개(문서 범례상 실선 31개·점선 18개). 영구 테이블 67개 중 그림에 없는 테이블은 30개입니다. 독립 테이블도 있으므로 30개 모두를 누락 오류로 판단하지 않습니다.
+- 실제 FK: 제약 54개 중 그림에 표현된 제약은 31개, 그림에 없는 제약은 23개입니다. `locked_by`·`released_by` 두 FK가 한 선으로 묶여 있고, FK가 없는 실선도 하나 있어 관계선 수와 제약 수를 구분했습니다.
+- 기존 물리 관계: FK 31개의 참조 컬럼 및 NULL·UNIQUE/PK에 따른 수량 표기를 대조했고, 결제 세션의 부모 선택성 1건이 맞지 않았습니다. `admin_change_histories.actor_user_id`는 이후 ALTER로 NULL 허용이 되어 기존 선택 관계 표기가 맞습니다.
+- 논리 관계: 기존 점선의 관련 컬럼·키를 확인하고, 오류 분석·룰 변경 요청·조건부 수행자·작업 ID 매핑은 코드까지 확인했습니다. 전체 시스템의 논리 참조나 서비스의 존재 확인 경로를 모두 검증한 결과는 아닙니다.
+
+### T5-A — 기존 표기 오류부터 수정하는 안 (미승인)
+
+대상은 `relationships.md` 한 파일과 이 계획의 진행 기록입니다. 기존 그림의 나머지 관계선과 역사 기록을 유지하고, 아래 세 관계선과 범례·검증 범위 안내를 보완합니다. 코드·SQL·업무 계약·ADR 상태는 바꾸지 않습니다.
+
+| 위치 (현재 파일 줄) | 현재 설명과 영향 | 확인 근거 | 수정 방향 |
+| --- | --- | --- | --- |
+| 31: 룰 정책 → 변경 요청 | `fds_rule_policies`에서 `fds_rule_change_requests`로 실선을 그려 DB가 `rule_code` 관계를 강제하는 것으로 읽힘 | [생성 SQL](../../backend/src/main/resources/db/migration/V20261028_155511__create_fds_rule_management_tables.sql)에 FK 없음. [후속 SQL](../../backend/src/main/resources/db/migration/V20261104_152441__create_operator_access_detection_tables.sql)은 `rule_code` 길이만 변경. [서비스](../../backend/src/main/java/com/donworry/fds/service/FdsRuleManagementService.java)의 `requestDisable`·`policyForUpdate`에서 정책 조회 후 요청 저장 | 프로젝트 범례에 맞춰 `\|\|--o{`를 `\|\|..o{`로 변경. 정책 존재는 정상 서비스 경로에서 확인하며 DB FK는 없음을 설명 |
+| 52: 결제 → 결제 세션 | `payments \|\|--o\| payment_sessions`로 세션에 결제가 반드시 있다고 표시 | [생성 SQL](../../backend/src/main/resources/db/migration/V20261102_142818__create_payment_sessions.sql): `payment_id` NULL 허용·UNIQUE·FK, OPEN은 NULL이고 SUBMITTED는 NOT NULL인 CHECK. 후속 `notify_event_id` ALTER는 이 관계를 바꾸지 않음 | `payments \|o--o\| payment_sessions`로 변경. 결제 전 OPEN 세션과 제출 후 상태를 설명 |
+| 30: 평가 → 오류 분석 | `fds_evaluations \|\|..o{ fds_failure_analyses`로 분석마다 실제 평가가 하나 있다고 표시 | [분석 SQL](../../backend/src/main/resources/db/migration/V20261027_101722__create_fds_failure_analyses.sql)에 FK 없음. [서비스](../../backend/src/main/java/com/donworry/fds/service/FdsFailureAnalysisService.java)의 `report`·`analyze`는 평가 미발견에도 분석 저장·`EVALUATION_NOT_FOUND` 발행. [기존 테스트](../../backend/src/test/java/com/donworry/fds/service/FdsFailureAnalysisServiceTests.java)의 `report_whenEvaluationIsMissing_publishesNotFound`도 해당 분기를 다룸(이번에 실행하지 않음) | `fds_evaluations \|o..o{ fds_failure_analyses`로 변경. 보고된 요청 UUID는 NOT NULL이어도 실제 평가 행이 없을 수 있음을 설명 |
+
+범례(11줄)는 다음처럼 보완합니다.
+
+- `|o`/`o|`는 관계 대상이 0 또는 1개임을 뜻합니다. NULL 허용 여부와 항상 같은 의미로 설명하지 않습니다. FK 없는 오류 보고는 ID를 저장했어도 대상 행이 없을 수 있습니다.
+- 실선=물리 FK·점선=논리 참조는 **이 문서에서 사용하는 표기 약속**으로 명시합니다. [Mermaid 공식 문법](https://mermaid.js.org/syntax/entityRelationshipDiagram.html#identification) 자체의 실선·점선은 식별·비식별 관계 구분이므로 일반 문법의 의미와 혼동하지 않도록 합니다.
+- Mermaid 선 모양을 수정했다고 DB에 FK가 생기거나 없어지는 것이 아님을 검증 범위 안내에서 분명히 합니다.
+
+작성 이력: `git blame -C -C -C`로 이동 전 README까지 추적했습니다. 30·31줄은 hoo0070의 `d5a74d42`·`f505dcae`, 52줄은 ssume98의 `8894427b`, 범례는 HyunGyu-Cho의 `b06a31fe`에서 왔습니다. 구조 분리 커밋 작성자만으로 원문 작성자를 판단하지 않았습니다.
+
+승인 후 검증 방법: 수정 전후 관계선 차이가 위 세 곳인지 확인하고 SQL·서비스 근거와 다시 대조합니다. 링크·앵커·`git diff --check`를 검사합니다. Mermaid 파서·렌더러를 실행하지 못하면 문법·화면 렌더링 검증을 완료로 기록하지 않습니다.
+
+### T5-B — 누락 관계와 긴 설명을 나누는 안 (미승인)
+
+현재 한 그림에 관계 23개를 모두 추가하면 읽기 어려워지므로, 같은 파일 안에 담당별 작은 그림과 논리 참조 표를 두는 방향을 제안합니다. 실제 분할 위치·이동표는 T5-A 이후 별도로 정합니다. 아래 수는 그림에 없는 FK 제약 수이며, FK 없는 업무 참조는 포함하지 않습니다.
+
+| 담당 | 누락 FK 수 | 자식 테이블과 참조 컬럼 |
+| --- | --- | --- |
+| P1 | 10 | `merchant_applications`의 reviewer_user_id·merchant_id·user_id(3), `application_tokens`의 application_id·user_id(2), `application_mail_deliveries`의 application_id·token_id(2), `merchant_integrations.merchant_id`(1), `merchant_key_histories`의 merchant_id·actor_user_id(2) |
+| P2 | 2 | `fds_operator_access_detection_evidences`의 detection_id·operator_access_event_id |
+| P5 | 3 | `payment_requests`의 (payment_order_id, merchant_id) 복합 FK·payment_id, `payment_fds_recoveries.payment_id` |
+| P6 | 8 | `order_fulfillment_items.fulfillment_id`(1), `recurring_expense_payments.recurring_expense_id`(1), `merchant_payout_items`의 payout_id·settlement_id(2), `settlement_refund_adjustments`의 settlement_id·capture_id(2), `payout_refund_allocations`의 payout_id·adjustment_id(2) |
+
+- 72줄의 긴 논리 참조 문단은 출발 테이블·컬럼, 대상, 조건, 근거를 나눈 표로 바꾸는 안을 검토합니다.
+- `case_histories.actor_id`는 [CaseHistory](../../backend/src/main/java/com/donworry/investigation/entity/CaseHistory.java)의 STAFF 생성 시 직원 ID이고 SYSTEM 생성 시 비어 있습니다. `action_handoffs.target_operation_id`는 [PaymentActionMapping](../../backend/src/main/java/com/donworry/payment/service/PaymentActionMapping.java) 기준 CAPTURE 성공이면 P6 captureId, VOID 성공이면 P5 actionId입니다. 기존 방향은 맞으며 조건을 보완하면 됩니다.
+- 새 그림·표에 포함할 논리 참조의 전체 목록과 조건은 아직 확정하지 않았습니다. 다른 담당 계약과 충돌하면 추정해서 추가하지 않고 근거와 함께 확인 대상으로 남깁니다.
+- 기존 상세 문서의 그림은 이번 범위에서 고치지 않습니다. 해당 문서까지 수정해야 하면 파일·이유·영향을 별도로 제시합니다.
+
+### T5 실행 검사와 미검증
+
+- 실행: `git fetch origin`, `git log --follow`, `git blame -C -C -C`, SQL 원격 기준 바이트 비교, 인메모리 Python을 통한 FK 목록·관계선 대조 및 FK 31개 수량 표기 검사, 관련 서비스·테스트 소스 읽기.
+- 검증 기록 검사: 계획 파일의 상대 링크 18개, Markdown 표 열 수, 후행 공백 및 `git diff --check` 통과. 참고한 서비스 파일이 검증 기준과 동일하고, `relationships.md`가 변경되지 않았음을 확인했습니다.
+- Mermaid 49개 관계문은 공식 관계 표기와 정규식으로 형태를 대조했습니다. 실제 Mermaid 파싱·렌더링은 실행하지 않았습니다.
+- 미검증: SQL을 실제 DB에 적용한 결과, 앱·Gradle·MariaDB 테스트, 운영 DB·Notion, 전체 논리 참조의 업무 경로. 테스트 소스를 읽은 것을 테스트 통과로 취급하지 않습니다.
+- 이번 결론은 현재 구현 설명의 문서 오류 3건과 범위 보완안입니다. 새 FK·스키마·업무 정책의 합의 요청이 아닙니다. T5-A 수정 여부와 T5-B 분할 방식은 사용자와 맞춘 뒤 진행합니다.
+- 사용자 요청 “커밋하고 PLAN 최신화하자”에 따라 T5 검증 기록과 현재 위치·다음 작업을 이 계획의 로컬 커밋에 함께 반영합니다. 관계도·코드·SQL은 변경하지 않았으며 푸시·PR도 하지 않았습니다.
 
 ## 6. T6 — 저장 계약 검증·수정
 
@@ -111,7 +167,7 @@
 ## 7. 진행·승인·검증 기록 방식
 
 - 다음 작업을 시작할 때 이 계획의 현재 위치와 승인 범위를 먼저 확인합니다.
-- 팀원에게 받은 수정 허락과 사용자의 구체적인 변경안 승인을 구분합니다. 최초에는 계획 파일 작성만 요청받았고, 이후 명시적인 승인으로 T4를 진행했습니다. T5·T6의 세부 변경안은 아직 승인받지 않았습니다.
+- 팀원에게 받은 수정 허락과 사용자의 구체적인 변경안 승인을 구분합니다. 최초에는 계획 파일 작성만 요청받았고, 이후 명시적인 승인으로 T4를 진행·커밋했습니다. T5 검증은 승인받았으며 T5-A·T5-B 수정과 T6의 세부 변경안은 아직 승인받지 않았습니다.
 - T4~T6의 실제 수정 전에는 대상·변경 이유·영향·검증 방법을 구체화하고 사용자가 승인한 범위를 기록합니다.
 - 작업이 진행되면 해당 Task의 상태, 기준 커밋, 변경 파일, 실행한 검사, 미검증, 담당자 확인 사항을 이 파일에 갱신합니다.
 - 커밋·푸시·PR은 각각 실제 진행 상태를 기록합니다. T3의 로컬 커밋 완료를 푸시·PR 승인 또는 완료로 간주하지 않습니다.
