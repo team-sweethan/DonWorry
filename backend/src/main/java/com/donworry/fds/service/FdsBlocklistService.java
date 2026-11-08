@@ -51,13 +51,16 @@ public class FdsBlocklistService {
                 result.getTotalPages());
     }
 
+    // 식별값은 전체 일치로만 찾으므로 등록 가능한 최대 길이(CreateFdsBlocklistEntryRequest 255자)까지 받는다 (#629)
+    private static final int MAX_SEARCH_LENGTH = 255;
+
     private String normalizeSearch(String search) {
         if (search == null) {
             return "";
         }
         var normalized = search.strip();
-        if (normalized.codePointCount(0, normalized.length()) > 100) {
-            throw new IllegalArgumentException("search must be at most 100 characters");
+        if (normalized.codePointCount(0, normalized.length()) > MAX_SEARCH_LENGTH) {
+            throw new IllegalArgumentException("search must be at most " + MAX_SEARCH_LENGTH + " characters");
         }
         return normalized;
     }
