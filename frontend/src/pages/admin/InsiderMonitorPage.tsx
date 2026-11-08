@@ -1,3 +1,4 @@
+import { ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
   Badge,
@@ -23,12 +24,14 @@ import {
   type InsiderMonitorTimeline,
 } from '../../api/insiderMonitor'
 import { PageHeader } from '../../components/common/PageHeader'
+import { pollStep } from '../../utils/casePolling'
+import {
+  INSIDER_MONITOR_POLL_LIMIT_MS,
+  INSIDER_MONITOR_POLL_MS,
+} from '../../utils/insiderMonitorPolling'
 import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { InsiderCaseDrawer } from './InsiderCasesPage'
 
-// 화면이 보일 때만 2초마다 다시 읽는다 (ADR-0082 조각 10 D3). 다른 탭이면 멈춘다
-// 알려진 한계: 이 요청도 관리자 활동으로 잡혀, 화면을 띄워 두면 관리자 로그인 유지 시간이 끝나지 않는다 (#679 결정 3)
-const POLL_MS = 2000
 // 타임라인 칸이 맨 아래에서 이만큼 안이면 새 줄을 따라 내려간다
 const FOLLOW_GAP_PX = 40
 
@@ -219,6 +222,9 @@ export function InsiderMonitorPage() {
   const [caseId, setCaseId] = useState<number | null>(null)
   const selectedRef = useRef<number | null>(null)
   const busy = useRef(false)
+  // 자동 갱신 시계: 마지막 사용자 조작 시각(null이면 다음 갱신부터 센다). 멈춤 시간이 지나면 stopped (#691)
+  const pollFrom = useRef<number | null>(null)
+  const [stopped, setStopped] = useState(false)
   const scrollBox = useRef<HTMLDivElement>(null)
   // 관리자가 위로 올려 지난 줄을 보는 중이면 false — 자동으로 끌어내리지 않는다
   const followBottom = useRef(true)
@@ -243,18 +249,37 @@ export function InsiderMonitorPage() {
     }
   }, [])
 
+  // 사용자가 직접 조작했다 — 멈춤 시계를 다시 0부터 센다
+  const resetPoll = useCallback(() => {
+    pollFrom.current = Date.now()
+    setStopped(false)
+  }, [])
+
+  const restart = useCallback(() => {
+    resetPoll()
+    void refresh()
+  }, [resetPoll, refresh])
+
   useEffect(() => {
     const tick = () => {
-      if (document.visibilityState === 'visible') void refresh()
+      if (document.visibilityState !== 'visible') return
+      const step = pollStep(pollFrom.current, Date.now(), INSIDER_MONITOR_POLL_LIMIT_MS)
+      pollFrom.current = step.from
+      if (step.poll) void refresh()
+      else setStopped(true)
+    }
+    // 탭으로 돌아오면 자리를 비운 사이 바뀐 상태를 반영하고 시계를 다시 센다
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') restart()
     }
     tick()
-    const timer = window.setInterval(tick, POLL_MS)
-    document.addEventListener('visibilitychange', tick)
+    const timer = window.setInterval(tick, INSIDER_MONITOR_POLL_MS)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.clearInterval(timer)
-      document.removeEventListener('visibilitychange', tick)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [refresh])
+  }, [refresh, restart])
 
   // 새 줄이 오면 타임라인 칸을 맨 아래로 (화면 전체가 아니라 칸 안에서만)
   useEffect(() => {
@@ -265,6 +290,7 @@ export function InsiderMonitorPage() {
   const select = (staffId: number) => {
     selectedRef.current = staffId
     followBottom.current = true
+    resetPoll()
     setSelected(staffId)
     setTimeline(null)
     getInsiderMonitorTimeline(staffId)
@@ -279,8 +305,21 @@ export function InsiderMonitorPage() {
     <>
       <PageHeader
         title="내부자 관제"
-        description="보안 직원의 지금 단계와, 고른 직원의 마지막 로그인부터 지금까지 로그인 · 고객정보 조회 · 경보 · 정지를 시간순으로 보여 줘요. 원문 값과 고객 번호는 없고, 화면을 보고 있는 동안 2초마다 새로 고쳐요."
+        description={`보안 직원의 지금 단계와, 고른 직원의 마지막 로그인부터 지금까지 로그인 · 고객정보 조회 · 경보 · 정지를 시간순으로 보여 줘요. 원문 값과 고객 번호는 없고, 화면을 보고 있는 동안 ${INSIDER_MONITOR_POLL_MS / 1000}초마다 새로 고쳐요. ${INSIDER_MONITOR_POLL_LIMIT_MS / 60_000}분 동안 조작이 없으면 자동 갱신을 멈춰요.`}
       />
+      {stopped && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`${INSIDER_MONITOR_POLL_LIMIT_MS / 60_000}분 동안 조작이 없어 자동 갱신을 멈췄습니다. 자리를 비운 동안 로그인 유지 시간이 늘어나지 않게 하기 위해서예요.`}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={restart}>
+              다시 시작
+            </Button>
+          }
+        />
+      )}
       {error && (
         <Alert
           type="error"
@@ -408,7 +447,7 @@ export function InsiderMonitorPage() {
           key={caseId}
           insiderCaseId={caseId}
           onClose={() => setCaseId(null)}
-          onChanged={() => void refresh()}
+          onChanged={restart}
         />
       )}
     </>

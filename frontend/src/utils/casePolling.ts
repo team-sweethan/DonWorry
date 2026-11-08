@@ -8,9 +8,9 @@ export const POLL_LIMIT_MS = 2 * 60_000
 
 /**
  * 타이머가 돌 때 이번에 조회할지 정한다. from이 null이면 이번이 첫 조회라 지금부터 센다.
- * 반환한 from을 다음 호출에 그대로 넘긴다.
+ * 반환한 from을 다음 호출에 그대로 넘긴다. limit은 화면마다 다르게 줄 수 있다 (내부자 관제 #691)
  */
-export function pollStep(from: number | null, now: number) {
+export function pollStep(from: number | null, now: number, limit: number = POLL_LIMIT_MS) {
   const start = from ?? now
-  return { from: start, poll: now - start < POLL_LIMIT_MS }
+  return { from: start, poll: now - start < limit }
 }
