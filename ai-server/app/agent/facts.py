@@ -325,6 +325,8 @@ def _order_line(owner: str, p: OrderPayment) -> str:
 
 # 주문 정보 (#634) — 주문번호 · 상품명은 쓰지 않는다 (가맹점 글자, 프롬프트 주입 차단)
 # 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로 코드가 센다
+# 같은 주문 결제 여러 건은 나눠 낸 결제가 아니라 재결제다 (#672)
+# — P5는 앞 시도가 거절 · 차단됐을 때만 같은 주문을 다시 받는다
 # 이름 · 전화 원문은 처음부터 없다
 def _order(records: list[ToolRecord]) -> list[Line]:
     found = _latest(records, OrderContextTool)
@@ -340,7 +342,7 @@ def _order(records: list[ToolRecord]) -> list[Line]:
         if len(groups) < len(provided):
             text = (
                 f"사건 결제 {len(provided)}건이 주문 {len(groups)}개에서 나옴"
-                "(같은 주문의 결제 여러 건)"
+                "(같은 주문을 다시 결제)"
             )
             lines.append((text, seq, None, NOTABLE))
         else:
