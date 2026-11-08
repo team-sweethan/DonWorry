@@ -68,7 +68,8 @@ export function ReportOverview({
 function HorizontalTimeline({ items }: { items: ReportBody['timeline'] }) {
   if (items.length === 0) return null
   return (
-    <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+    // 인쇄는 가로 스크롤 대신 여러 줄로 감싼다 — 결제가 많으면 종이 밖으로 잘린다 (#623, reportPrint.css)
+    <div className="dw-report-timeline" style={{ overflowX: 'auto', paddingBottom: 4 }}>
       <ol aria-label="사건 경위" style={timelineStyle}>
         {items.map((t, i) => (
           <li key={i} style={timelineItemStyle}>

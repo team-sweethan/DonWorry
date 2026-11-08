@@ -181,17 +181,24 @@ export function CaseReportPage() {
               />
             </Card>
           )}
-          {tab === 'trace' && picked.report.status === 'SUCCEEDED' && picked.report.reportBody ? (
-            <ReportTrace trace={picked.report.reportBody.investigationTrace} />
-          ) : (
-            <ReportState
-              report={picked.report}
-              label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
-              refreshKey={refreshKey}
-              progress={progress}
-              onDecide={canDecide ? () => navigate(casePath, { state: listReturn }) : undefined}
-            />
-          )}
+          {/* 조사 과정 탭에서도 보고서를 지우지 않고 숨긴다 (#623 Codex 리뷰) — 다시 그리면 ML 참고 · 지난 사건을
+              재조회해 인쇄 직전 전환 때 "불러오는 중"으로 찍히고, ② 확인할 것 체크도 지워진다 */}
+          <div>
+            {tab === 'trace' &&
+              picked.report.status === 'SUCCEEDED' &&
+              picked.report.reportBody && (
+                <ReportTrace trace={picked.report.reportBody.investigationTrace} />
+              )}
+            <div style={tab === 'trace' && printable ? { display: 'none' } : undefined}>
+              <ReportState
+                report={picked.report}
+                label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
+                refreshKey={refreshKey}
+                progress={progress}
+                onDecide={canDecide ? () => navigate(casePath, { state: listReturn }) : undefined}
+              />
+            </div>
+          </div>
         </Space>
       )}
     </div>

@@ -49,6 +49,14 @@
   .dw-report-print .ant-collapse-content-hidden {
     display: block !important;
   }
+  /* 사건 경위 — 칸 168px 고정 가로 한 줄이라 6칸쯤 넘으면 잘린다. 칸마다 선 · 점이 있어 줄을 나눠도 읽힌다 */
+  .dw-report-print .dw-report-timeline {
+    overflow: visible !important;
+  }
+  .dw-report-print .dw-report-timeline > ol {
+    flex-wrap: wrap;
+    row-gap: 14px;
+  }
   .dw-report-print .ant-collapse-expand-icon {
     display: none !important;
   }
