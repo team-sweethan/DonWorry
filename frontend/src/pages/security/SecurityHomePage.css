@@ -70,13 +70,13 @@
 .security-home-bar {
   display: flex;
   gap: 3px;
-  height: 12px;
+  height: 16px;
   margin: 20px 0 16px;
   overflow: hidden;
   border-radius: 5px;
   background: #e4eaf2;
   transform-origin: left;
-  animation: security-home-bar-enter 450ms ease-out;
+  animation: security-home-bar-enter 900ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .security-home-segment {
   min-width: 3px;
@@ -141,7 +141,8 @@
   cursor: pointer;
   transition:
     border-color 150ms ease,
-    box-shadow 150ms ease;
+    box-shadow 200ms ease,
+    transform 200ms ease;
 }
 .security-home-metric-top {
   color: #4a5870;
@@ -285,13 +286,13 @@
   font-variant-numeric: tabular-nums;
 }
 .security-home-enter {
-  animation: security-home-enter 240ms ease-out backwards;
+  animation: security-home-enter 400ms ease-out backwards;
 }
 .security-home-overview {
-  animation-delay: 60ms;
+  animation-delay: 80ms;
 }
 .security-home-queue {
-  animation-delay: 120ms;
+  animation-delay: 200ms;
 }
 .security-home-new-case > td {
   animation: security-home-arrival 1000ms ease-out;
@@ -323,7 +324,8 @@
 @media (hover: hover) {
   .security-home-metric:not(:disabled):hover {
     border-color: #9db9e5;
-    box-shadow: 0 5px 16px #183b6710;
+    box-shadow: 0 10px 24px #183b671a;
+    transform: translateY(-4px);
   }
   .security-home-metric:hover .security-home-metric-foot .anticon,
   .security-home-open:hover .anticon {
@@ -399,6 +401,171 @@
     flex-wrap: wrap;
   }
 }
+
+.security-home-summary {
+  position: relative;
+  padding-right: 132px;
+}
+.security-home-summary h2 {
+  margin-top: 18px;
+}
+.security-home-summary h2 > .security-home-total-label {
+  display: block;
+  margin: 0 0 6px;
+  color: #425878;
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.3px;
+}
+.security-home-summary h2 > .security-home-total {
+  margin: 0;
+  color: #1c4386;
+  font-size: clamp(44px, 4vw, 60px);
+  line-height: 1.1;
+  letter-spacing: -2px;
+}
+.security-home-total small {
+  margin-left: 8px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.security-home-signal {
+  position: absolute;
+  right: -4px;
+  top: 32px;
+  width: 136px;
+  height: 136px;
+}
+.security-home-signal-ring {
+  stroke: #b7ccef;
+  stroke-width: 1;
+}
+.security-home-signal-ring.inner {
+  stroke: #cfddf4;
+  stroke-dasharray: 3 5;
+}
+.security-home-signal-disc {
+  fill: #e2ecff;
+  stroke: #c6d8f5;
+}
+.security-home-signal-shield {
+  fill: #f5f9ff;
+  stroke: #4678cd;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  animation: security-home-draw 1100ms ease both;
+}
+.security-home-signal-check {
+  stroke: #4678cd;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: security-home-draw 650ms 400ms ease both;
+}
+.security-home-signal-orbit {
+  transform-origin: 80px 80px;
+  animation: security-home-orbit 3200ms cubic-bezier(0.2, 0.65, 0.3, 1) both;
+}
+.security-home-signal-spark {
+  animation: security-home-spark 1000ms 200ms ease-out 2;
+}
+.security-home-metric {
+  animation: security-home-card-enter 480ms 180ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.security-home-metric:nth-child(2) {
+  animation-delay: 260ms;
+}
+.security-home-metric:nth-child(3) {
+  animation-delay: 340ms;
+}
+.security-home-empty > .anticon {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+  border: 1px solid #d5e2f6;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e8f0ff, #f8fbff);
+  box-shadow: 0 0 0 10px #f4f7fc;
+  animation: security-home-empty-enter 800ms ease-out;
+}
+@keyframes security-home-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0.2;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+@keyframes security-home-orbit {
+  from {
+    transform: rotate(-160deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  to {
+    transform: rotate(200deg);
+    opacity: 1;
+  }
+}
+@keyframes security-home-spark {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes security-home-card-enter {
+  from {
+    opacity: 0.15;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes security-home-empty-enter {
+  from {
+    box-shadow: 0 0 0 0 #e2ecff;
+  }
+  to {
+    box-shadow: 0 0 0 10px #f4f7fc;
+  }
+}
+@media (width <= 1100px) {
+  .security-home-summary {
+    padding-right: 88px;
+  }
+  .security-home-signal {
+    right: -12px;
+    top: 48px;
+    width: 100px;
+    height: 100px;
+  }
+}
+@media (width <= 760px) {
+  .security-home-summary {
+    padding-right: 110px;
+  }
+  .security-home-signal {
+    right: 0;
+    top: 30px;
+    width: 110px;
+    height: 110px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .security-home *,
   .security-home *::before,

@@ -29,6 +29,7 @@ import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
 import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
 import { HomeCount } from './HomeCount'
+import { HomeSignal } from './HomeSignal'
 import './SecurityHomePage.css'
 
 // 우선 이유가 없으면 현재 업무 상태를 보여 준다.
@@ -41,6 +42,24 @@ const reasonLabel: Record<PriorityReason, { label: string; color: string } | nul
 
 type Row = CaseSummary & { reason: PriorityReason }
 
+type HomeResult = {
+  refreshKey: number
+  cases: CaseSummary[]
+  failed: boolean
+  receivedAt: number | null
+  newIds: string[]
+}
+
+type DashboardProps = {
+  result: HomeResult | null
+  loading: boolean
+  myId: number | null
+  watchStopped: boolean
+  refresh: () => void
+  openList: (query?: Partial<CaseListQuery>) => void
+  openCase: (caseId: string) => void
+}
+
 export function SecurityHomePage() {
   const navigate = useNavigate()
   // effect 의존성에는 렌더마다 바뀌지 않는 App의 message를 쓴다
@@ -49,13 +68,7 @@ export function SecurityHomePage() {
   const myId = user?.userId ?? null
   const [refreshKey, setRefreshKey] = useState(0)
   // CaseListPage와 같이 어떤 요청에 대한 응답인지 함께 저장하고, 실패는 빈 목록과 구분한다
-  const [result, setResult] = useState<{
-    refreshKey: number
-    cases: CaseSummary[]
-    failed: boolean
-    receivedAt: number | null
-    newIds: string[]
-  } | null>(null)
+  const [result, setResult] = useState<HomeResult | null>(null)
 
   // 새 Case · 상태 변화를 건수로 감지해 바뀌었을 때만 다시 조회한다 (#553). 홈은 내 Case만 보므로 내 건수로 본다 (#640)
   const watch = useCaseListWatch((added) => {
@@ -100,7 +113,34 @@ export function SecurityHomePage() {
     }
   }, [refreshKey, message, listLoaded, myId])
 
-  const loading = result?.refreshKey !== refreshKey
+  // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243). 목록도 [내 사건만]으로 열어 홈 숫자와 맞춘다 (#640)
+  const openList = (query: Partial<CaseListQuery> = {}) => {
+    saveCaseListScope('MINE')
+    navigate(`/security/cases${caseListSearch(query)}`)
+  }
+  return (
+    <SecurityHomeDashboard
+      result={result}
+      loading={result?.refreshKey !== refreshKey}
+      myId={myId}
+      watchStopped={watch.stopped}
+      refresh={refresh}
+      openList={openList}
+      openCase={(id) => navigate(`/security/cases/${id}`)}
+    />
+  )
+}
+
+// 실제 홈과 개발용 샘플이 같은 화면을 사용한다. 데이터 조회·인증은 실제 홈에서만 수행한다.
+export function SecurityHomeDashboard({
+  result,
+  loading,
+  myId,
+  watchStopped,
+  refresh,
+  openList,
+  openCase,
+}: DashboardProps) {
   // 홈은 항상 내가 담당인 Case만 센다 (#640)
   const { counts, rows, openCases } = useMemo(
     () => homeView(result?.cases ?? [], myId),
@@ -108,15 +148,10 @@ export function SecurityHomePage() {
   )
   const failed = result?.failed === true
 
-  // 카드 조건을 목록 주소 쿼리로 넘긴다 (#243). 목록도 [내 사건만]으로 열어 홈 숫자와 맞춘다 (#640)
-  const openList = (query: Partial<CaseListQuery> = {}) => {
-    saveCaseListScope('MINE')
-    navigate(`/security/cases${caseListSearch(query)}`)
-  }
   // 내 Case가 한 건이면 그 Case로 바로 간다
   const openFirst = (match: (c: CaseSummary) => boolean, query: Partial<CaseListQuery>) => {
     const hits = openCases.filter(match)
-    if (hits.length === 1) navigate(`/security/cases/${hits[0].caseId}`)
+    if (hits.length === 1) openCase(hits[0].caseId)
     else openList(query)
   }
 
@@ -194,7 +229,7 @@ export function SecurityHomePage() {
         <Button
           type="link"
           className="security-home-open"
-          onClick={() => navigate(`/security/cases/${c.caseId}`)}
+          onClick={() => openCase(c.caseId)}
           aria-label={`Case ${c.caseId} 사건 보기`}
         >
           사건 보기 <ArrowRightOutlined />
@@ -228,7 +263,7 @@ export function SecurityHomePage() {
           }
         />
       </div>
-      {watch.stopped && <CaseWatchStoppedNotice onRefresh={refresh} />}
+      {watchStopped && <CaseWatchStoppedNotice onRefresh={refresh} />}
       {failed && (
         <Alert
           type="error"
@@ -249,15 +284,17 @@ export function SecurityHomePage() {
       <div className="security-home-enter security-home-overview" aria-busy={loading}>
         <section className="security-home-hero" aria-label="내 담당 사건 요약">
           <div className="security-home-summary">
+            <HomeSignal />
             <span className="security-home-eyebrow">
               <SafetyCertificateOutlined /> 나의 보안 업무
             </span>
             {ready ? (
               <>
                 <h2>
-                  진행 중인 사건{' '}
-                  <span>
-                    <HomeCount value={openCases.length} />건
+                  <span className="security-home-total-label">진행 중인 사건</span>
+                  <span className="security-home-total">
+                    <HomeCount value={openCases.length} />
+                    <small>건</small>
                   </span>
                 </h2>
                 <p>
@@ -267,9 +304,7 @@ export function SecurityHomePage() {
                 </p>
                 <Button
                   type="primary"
-                  onClick={() =>
-                    rows[0] ? navigate(`/security/cases/${rows[0].caseId}`) : openList()
-                  }
+                  onClick={() => (rows[0] ? openCase(rows[0].caseId) : openList())}
                 >
                   {rows[0] ? '우선 사건 보기' : '내 사건 목록 보기'} <ArrowRightOutlined />
                 </Button>

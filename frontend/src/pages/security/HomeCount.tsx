@@ -19,7 +19,7 @@ export function HomeCount({ value }: { value: number }) {
     let frame = 0
     const start = performance.now()
     const tick = (now: number) => {
-      const progress = preference.matches ? 1 : Math.min((now - start) / 380, 1)
+      const progress = preference.matches ? 1 : Math.min((now - start) / 800, 1)
       target.textContent = String(Math.round(value * (1 - (1 - progress) ** 3)))
       if (progress < 1) frame = requestAnimationFrame(tick)
       else finished.current = true
