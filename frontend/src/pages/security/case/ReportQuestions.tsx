@@ -19,6 +19,9 @@ import {
 import { dateTime } from './caseLabels'
 import { goToCard } from './goToCard'
 
+const RUNNING_POLL_MS = 3000
+const LIMIT_TICK_MS = 60 * 1000
+
 // 보고서 아래 "이 사건에 대해 묻기" (#753, ADR-0086 7절)
 // 답은 보고서가 아니다 — 보고서와 모양을 나누고 안내를 늘 보인다. 판정은 보안 직원이 한다
 // 고정 보고서(AI 정지 · 꺼짐 중 생성)는 서버가 받지 않아 칸 대신 한 줄만 보인다 (11/10 결정)
@@ -71,8 +74,12 @@ function QuestionPanel({
   const [text, setText] = useState('')
   const [pending, setPending] = useState<string | null>(null)
   const [rejected, setRejected] = useState<QuestionRejection | null>(null)
-  // 24시간 셈의 기준 — 칸을 연 시각. 그 뒤 물은 질문은 늘 들어가고, 오래 열어 둬 생기는 차이는 서버 429가 잡는다
-  const [openedAt] = useState(() => Date.now())
+  // 24시간 셈의 기준 시각 — 1분마다 갱신해 창을 벗어난 질문이 빠지면 잠금이 저절로 풀린다 (#765 Codex 리뷰)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), LIMIT_TICK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -102,12 +109,32 @@ function QuestionPanel({
     }
   }, [reloadKey])
 
+  // 다른 탭에서 묻는 중이거나 연결이 끊긴 뒤 다시 받은 목록의 RUNNING — 끝날 때까지 다시 조회한다 (#765 Codex 리뷰)
+  // 2분 넘은 RUNNING은 서버가 FAILED로 보내므로 조회는 끝난다. 내가 묻는 중에는 POST 응답을 기다린다
+  const running = Array.isArray(questions) && questions.some((q) => q.status === 'RUNNING')
+  useEffect(() => {
+    if (!running || pending !== null) return
+    let alive = true
+    const timer = window.setInterval(() => {
+      getReportQuestions(caseId, reportId)
+        .then((list) => {
+          if (alive) setQuestions(list)
+        })
+        .catch(() => null)
+    }, RUNNING_POLL_MS)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [caseId, reportId, running, pending])
+
   const list = Array.isArray(questions) ? questions : []
-  const today = questionsToday(list, openedAt)
+  const today = questionsToday(list, now)
+  // 한도 잠금은 목록 개수로만 정한다 — 429를 따로 기억하면 창을 벗어나도 풀리지 않는다 (429 뒤에는 목록을 다시 받는다)
   const lock: QuestionRejection | null =
     aiActive === false || rejected === 'STOPPED'
       ? 'STOPPED'
-      : today >= QUESTION_DAILY_LIMIT || rejected === 'LIMIT'
+      : today >= QUESTION_DAILY_LIMIT
         ? 'LIMIT'
         : null
   const trimmed = text.trim()
@@ -121,12 +148,20 @@ function QuestionPanel({
     setPending(null)
     if (result.ok) {
       setText('')
-      setQuestions((now) => (Array.isArray(now) ? [...now, result.question] : now))
+      const answered = result.question
+      setQuestions((current) =>
+        Array.isArray(current)
+          ? current.some((q) => q.questionId === answered.questionId)
+            ? current.map((q) => (q.questionId === answered.questionId ? answered : q))
+            : [...current, answered]
+          : current,
+      )
       return
     }
     setRejected(result.reason)
-    // 시간 초과 · 연결 끊김이면 서버에 질문 행이 남았을 수 있다 — 목록을 다시 받아 맞춘다
-    if (result.reason === 'ERROR') setReloadKey((k) => k + 1)
+    // 시간 초과 · 연결 끊김이면 서버에 질문 행이 남았을 수 있고, 429면 다른 탭 질문이 목록에 없을 수 있다
+    // — 목록을 다시 받아 맞춘다
+    if (result.reason === 'ERROR' || result.reason === 'LIMIT') setReloadKey((k) => k + 1)
   }
 
   return (
@@ -187,7 +222,7 @@ function QuestionPanel({
         </ol>
       )}
 
-      {rejected && rejected !== 'LIMIT' && rejected !== 'STOPPED' && (
+      {rejected && rejected !== lock && rejected !== 'STOPPED' && (
         <Alert type="error" showIcon message={REJECTION_MESSAGES[rejected]} />
       )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
