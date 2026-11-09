@@ -361,7 +361,7 @@ export function CaseAssignmentsPage() {
           type="info"
           showIcon
           message={`처리 대기 변경 요청이 ${overview?.pendingRequestCount}건이라, 책상에는 최근 ${loadedRequests}건만 셌습니다.`}
-          description="오래된 요청만 있는 직원은 책상에 표시되지 않을 수 있습니다. 전체는 변경 요청 탭에서 확인하세요."
+          description="책상별 건수와 변경 요청 탭은 모두 요청일 기준 최신 100건만 표시합니다. 오래된 요청은 표시되지 않을 수 있습니다."
           action={<Link to="/admin/case-assignment-requests">변경 요청 탭</Link>}
         />
       )}

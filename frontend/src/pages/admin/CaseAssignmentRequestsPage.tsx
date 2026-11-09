@@ -245,7 +245,7 @@ export function CaseAssignmentRequestsPage() {
         <b>{filterName}</b>의 요청만 보는 중
       </span>
       <Button size="small" onClick={clearStaffFilter}>
-        전체 요청 보기
+        직원 필터 해제
       </Button>
     </div>
   )
@@ -257,8 +257,8 @@ export function CaseAssignmentRequestsPage() {
     ) : pendingRows.length === 0 ? (
       staffFilterId !== null ? (
         <ListEmpty
-          title={`${filterName}의 처리할 요청이 없습니다.`}
-          action={<Button onClick={clearStaffFilter}>전체 요청 보기</Button>}
+          title={`현재 목록에 ${filterName}의 처리할 요청이 없습니다.`}
+          action={<Button onClick={clearStaffFilter}>직원 필터 해제</Button>}
         />
       ) : (
         loadingOrEmpty
@@ -269,8 +269,8 @@ export function CaseAssignmentRequestsPage() {
           <ClockCircleOutlined aria-hidden="true" />
           <div>
             <strong>
-              처리를 기다리는 요청 {pendingRows.length}건
-              {oldestDays >= 1 && ` · 가장 오래된 요청 ${oldestDays}일째`}
+              현재 목록의 대기 요청 {pendingRows.length}건
+              {oldestDays >= 1 && ` · 표시된 요청 중 가장 오래된 요청 ${oldestDays}일째`}
             </strong>
             <span>대기 중에는 그 사건의 판정이 멈춰 있습니다. 승인하거나 거절해 주세요.</span>
           </div>
@@ -338,6 +338,13 @@ export function CaseAssignmentRequestsPage() {
         description="보안 직원이 맡은 사건의 담당을 바꿔 달라고 요청한 목록입니다. 처리를 기다리는 동안 그 사건은 판정만 멈추고, 열람 · 조사는 그대로 할 수 있습니다."
       />
       {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
+      <Alert
+        className="dw-page-alert"
+        type="info"
+        showIcon
+        message="각 상태의 요청일 기준 최신 100건만 표시합니다."
+        description="직원 필터도 이 목록 안에서 적용됩니다. 오래된 요청은 표시되지 않을 수 있으며, 현재 목록의 건수와 최장 대기 기간은 전체 기준이 아닙니다."
+      />
       <section className="car-board ca-panel-box">
         <Tabs
           activeKey={status}
