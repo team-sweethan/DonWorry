@@ -2,7 +2,11 @@ import { api, ApiError } from './client.ts'
 import { readSessionVersion } from './sessionVersion.ts'
 
 export type ExpenseCategory = 'MATERIAL' | 'RENT' | 'PAYROLL' | 'UTILITIES' | 'OTHER'
-export type CashFlowSettings = { openingBalance: number; baseDate: string }
+export type CashFlowSettings = {
+  openingBalance: number
+  baseDate: string
+  minimumOperatingFunds?: number
+}
 export type ExpenseInput = {
   title: string
   expenseDate: string

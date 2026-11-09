@@ -49,6 +49,13 @@
   max-width: 100%;
   font-variant-numeric: tabular-nums;
 }
+.finance-minimum-funds-form {
+  margin-block: 16px;
+  padding: 16px;
+  border: 1px solid #e7e1d5;
+  border-radius: 8px;
+  background: #fffaf0;
+}
 .finance-money-input .ant-input-number {
   width: 100%;
   min-width: 0;

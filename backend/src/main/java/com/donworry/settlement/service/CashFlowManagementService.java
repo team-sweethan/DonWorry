@@ -31,7 +31,8 @@ public class CashFlowManagementService {
     public Optional<CashFlowSettingResponse> settings(Long merchant) {
         validateMerchant(merchant);
         return settings.findByMerchantId(merchant)
-                .map(s -> new CashFlowSettingResponse(s.getOpeningBalance(), s.getBaseDate()));
+                .map(s -> new CashFlowSettingResponse(
+                        s.getOpeningBalance(), s.getBaseDate(), s.getMinimumOperatingFunds()));
     }
 
     // 다른 최초 요청이 커밋한 값을 다시 읽을 수 있어야 오래된 스냅샷으로 INSERT가 충돌하지 않는다.
@@ -39,21 +40,36 @@ public class CashFlowManagementService {
             propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
             isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public CashFlowSettingResponse saveSettings(Long merchant, Long balance, LocalDate date) {
+        return saveSettings(merchant, balance, date, null);
+    }
+
+    @Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
+    public CashFlowSettingResponse saveSettings(
+            Long merchant, Long balance, LocalDate date, Long minimumOperatingFunds) {
         validateMerchant(merchant);
+        if (minimumOperatingFunds != null && (minimumOperatingFunds < 0 || minimumOperatingFunds > 9007199254740991L))
+            throw new IllegalArgumentException("최소 운영 자금이 지원 범위를 벗어났습니다.");
         if (balance == null || balance < 0 || balance > 9007199254740991L || date == null)
             throw new IllegalArgumentException("0 이상의 시작 잔액과 기준일이 필요합니다.");
-        var existing = settings.findByMerchantId(merchant);
-        if (existing.isPresent()) return unchanged(existing.get(), balance, date);
+        var existing =
+                minimumOperatingFunds == null ? settings.findByMerchantId(merchant) : settings.findForUpdate(merchant);
+        if (existing.isPresent()) return unchanged(existing.get(), balance, date, minimumOperatingFunds);
         if (!date.equals(LocalDate.now(ZONE))) throw new IllegalArgumentException("최초 잔액 기준일은 한국 시간 오늘이어야 합니다.");
         settings.ensureInitial(merchant, balance, date, LocalDateTime.ofInstant(Instant.now(), ZoneOffset.UTC));
         // 최초 요청이 겹친 경우에도 현재 커밋된 행을 잠금 조회해 한 값만 확정한다.
-        return unchanged(settings.findForUpdate(merchant).orElseThrow(), balance, date);
+        return unchanged(settings.findForUpdate(merchant).orElseThrow(), balance, date, minimumOperatingFunds);
     }
 
-    private CashFlowSettingResponse unchanged(CashFlowSetting value, Long balance, LocalDate date) {
+    private CashFlowSettingResponse unchanged(
+            CashFlowSetting value, Long balance, LocalDate date, Long minimumOperatingFunds) {
         if (!value.getOpeningBalance().equals(balance) || !value.getBaseDate().equals(date))
             throw new SettlementRequestException(409, "SETTLEMENT_SETTING_IMMUTABLE", "최초 시작 잔액과 기준일은 변경할 수 없습니다.");
-        return new CashFlowSettingResponse(value.getOpeningBalance(), value.getBaseDate());
+        if (minimumOperatingFunds != null && minimumOperatingFunds != value.getMinimumOperatingFunds())
+            value.updateMinimumOperatingFunds(minimumOperatingFunds, Instant.now());
+        return new CashFlowSettingResponse(
+                value.getOpeningBalance(), value.getBaseDate(), value.getMinimumOperatingFunds());
     }
 
     @Transactional(readOnly = true)

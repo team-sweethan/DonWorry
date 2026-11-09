@@ -103,6 +103,7 @@ export function CashFlowOverview({
   const { pathname, search } = useLocation()
   const evidenceRef = useRef<HTMLElement>(null)
   if (!days.length) return <Empty description="올바른 조회 기간을 선택해 주세요." />
+  const minimumOperatingFunds = summary?.minimumOperatingFunds ?? 0
   const firstShortage = summary
     ? days.find((d) => d.date === summary.firstShortageDate)
     : days.find((d) => d.closing < 0)
@@ -236,11 +237,15 @@ export function CashFlowOverview({
         <h2>
           {firstShortage ? (
             <>
-              {firstShortage.date}에<br />
+              {firstShortage.date}
+              {firstShortage === days[0] && minimumOperatingFunds > 0 ? ' (조회 시작일)' : '에'}
+              <br />
               <em>
-                <FinanceMoney value={-firstShortage.closing} />
+                <FinanceMoney value={minimumOperatingFunds - firstShortage.closing} />
               </em>
-              이 부족할 것으로 예상돼요.
+              {minimumOperatingFunds > 0
+                ? '만큼 최소 운영 자금에 못 미칠 것으로 예상돼요.'
+                : '이 부족할 것으로 예상돼요.'}
             </>
           ) : (
             <>
@@ -300,8 +305,14 @@ export function CashFlowOverview({
           <span style={{ color: '#dc2626' }}>■ 지출 (완료·예정)</span>
           <span style={{ color: '#172554' }}>━ 예상 잔액</span>
           <span>주황색 점 · 부족 예상일</span>
+          {minimumOperatingFunds > 0 && (
+            <span>
+              점선 · 최소 운영 자금 <FinanceMoney value={minimumOperatingFunds} />
+            </span>
+          )}
         </div>
         <CashBalanceChart
+          minimumOperatingFunds={minimumOperatingFunds}
           points={days.map((d) => ({
             date: d.date,
             balance: d.closing,
@@ -322,9 +333,13 @@ export function CashFlowOverview({
         <div className="cashflow-section-head">
           <div>
             <span className="cashflow-eyebrow">{active.date}</span>
-            <h2>{active.closing < 0 ? '왜 자금이 부족할까요?' : '이날 잔액은 이렇게 계산돼요'}</h2>
+            <h2>
+              {active.closing < minimumOperatingFunds
+                ? '왜 자금이 부족할까요?'
+                : '이날 잔액은 이렇게 계산돼요'}
+            </h2>
           </div>
-          <strong className={active.closing < 0 ? 'cashflow-negative' : ''}>
+          <strong className={active.closing < minimumOperatingFunds ? 'cashflow-negative' : ''}>
             <FinanceMoney value={active.closing} />
           </strong>
         </div>
@@ -352,7 +367,7 @@ export function CashFlowOverview({
           <span>＝</span>
           <div>
             <small>예상 마감 잔액</small>
-            <b className={active.closing < 0 ? 'cashflow-negative' : ''}>
+            <b className={active.closing < minimumOperatingFunds ? 'cashflow-negative' : ''}>
               <FinanceMoney value={active.closing} />
             </b>
           </div>
@@ -375,7 +390,7 @@ export function CashFlowOverview({
           </p>
         )}
         <p className="cashflow-explanation">
-          {active.closing < 0
+          {active.closing < minimumOperatingFunds
             ? active.opening < 0
               ? '이전 날짜에서 이어진 부족액에 이날의 유입과 지출을 반영한 결과입니다.'
               : `전날 잔액 ${money(active.opening)}에 유입 ${money(incoming)}과 지출 ${money(active.expenses)}을 반영한 결과입니다.`

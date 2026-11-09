@@ -72,8 +72,9 @@ function InitialBalance({
         오늘 지급된 정산·완료 지출을 시작 잔액에 중복 포함하지 마세요.
       </p>
       {error !== null && <Alert type="error" message={financeErrorMessage(error)} />}
-      <Form<{ openingBalance: number }>
+      <Form<{ openingBalance: number; minimumOperatingFunds: number }>
         layout="vertical"
+        initialValues={{ minimumOperatingFunds: 0 }}
         disabled={busy}
         onFinish={async (value) => {
           if (busy) return
@@ -82,6 +83,7 @@ function InitialBalance({
           try {
             const saved = await saveCashFlowSettings({
               openingBalance: value.openingBalance,
+              minimumOperatingFunds: value.minimumOperatingFunds,
               baseDate: today,
             })
             onSaved(saved)
@@ -112,8 +114,25 @@ function InitialBalance({
             disabled={busy}
           />
         </Form.Item>
+        <Form.Item
+          name="minimumOperatingFunds"
+          label="최소 운영 자금 (원)"
+          extra="예상 마감 잔액이 이 금액보다 낮으면 경고해요. 잔액·지출 설정에서 변경할 수 있어요."
+          rules={[{ required: true }, { type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
+        >
+          <InputNumber
+            aria-label="최소 운영 자금"
+            className="finance-money-input"
+            formatter={formatWonInput}
+            parser={parseWonInput}
+            suffix="원"
+            min={0}
+            max={MAX_FINANCE_AMOUNT}
+            precision={0}
+          />
+        </Form.Item>
         <Button type="primary" htmlType="submit" loading={busy}>
-          최초 잔액 저장
+          잔액 설정 저장
         </Button>
       </Form>
     </section>

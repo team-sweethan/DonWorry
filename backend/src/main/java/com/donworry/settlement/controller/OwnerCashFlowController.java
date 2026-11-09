@@ -52,7 +52,8 @@ public class OwnerCashFlowController {
     public ResponseEntity<CashFlowSettingResponse> settings(
             @RequestAttribute("settlement.ownerMerchant") Long merchant,
             @Valid @RequestBody CashFlowSettingRequest request) {
-        return ok(management.saveSettings(merchant, request.openingBalance(), request.baseDate()));
+        return ok(management.saveSettings(
+                merchant, request.openingBalance(), request.baseDate(), request.minimumOperatingFunds()));
     }
 
     @GetMapping("/expenses")
