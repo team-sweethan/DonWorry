@@ -77,7 +77,7 @@ textarea {
   line-height: 1.6;
 }
 
-/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤.
+/* 기본은 원본 시안의 1280px 규격. 좁은 화면은 아래 screen 미디어쿼리에서 덮는다.
    헤더·사이드바는 fixed가 아닌 sticky — fixed면 가로 스크롤 시 헤더 오른쪽(로그아웃)이 잘린 채 남는다. */
 .admin-viewport {
   display: grid;
@@ -479,7 +479,7 @@ textarea {
   margin-top: 1px;
 }
 /* Case 상세 (#648) — 왼쪽 본문 · 오른쪽 판정 칸 고정. 본문 폭이 좁으면(1280px 화면 등) 한 줄로 쌓고
-   판정 칸을 결제 표 바로 아래에 둔다. 앱은 1280px 미만에서 가로 스크롤이라 화면 폭 대신 본문 폭으로 나눈다 */
+   판정 칸을 결제 표 바로 아래에 둔다. 사이드바 접힘과 본문 내부 스크롤에 맞춰 본문 폭으로 나눈다 */
 .dw-case-layout-wrap {
   container-type: inline-size;
 }
@@ -1123,47 +1123,6 @@ textarea {
   outline: none;
 }
 
-/* 휴대폰 폭: 기존에 휴대폰 배치를 지원하는 화면(이용 신청 · 사장님 홈)에서만 메뉴를 가로로 접는다 */
-@media (max-width: 760px) {
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand {
-    padding: 0;
-    gap: 8px;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-context {
-    margin-left: 0;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-header-tools {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar {
-    padding: 10px 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--shell-line);
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note {
-    display: none;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-group {
-    margin: 0;
-    flex-shrink: 0;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link {
-    width: auto;
-    margin: 0;
-    gap: 8px;
-    white-space: nowrap;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link.active {
-    box-shadow: inset 0 -3px 0 var(--shell-accent);
-  }
-}
-@media (max-width: 400px) {
-  /* 아주 좁은 폭에서는 로고 글자를 빼고 화면 이름을 남긴다 */
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-wordmark {
-    display: none;
-  }
-}
 @media (max-height: 820px) {
   /* 노트북 화면처럼 세로가 짧으면 메뉴가 먼저 보이게 마스코트를 뺀다 */
   .dw-owner-note-mascot {
@@ -1199,4 +1158,176 @@ textarea {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* 넓은 화면과 인쇄에서는 래퍼가 기존 flex 배치에 상자를 추가하지 않는다. */
+.dw-report-scroll {
+  display: contents;
+}
+
+/* 기존 유동 폭 화면은 스크롤바 gutter로 가용 폭이 1280px보다 작아져도 늘리지 않는다. */
+@media screen and (width >= 1280px) {
+  .admin-viewport:has(.oh-home, .ah-home, .application-review) {
+    min-width: 0;
+  }
+}
+
+/* #703: 가로 스크롤은 업무 본문 안에 둔다. */
+@media screen and (width < 1280px) {
+  .admin-viewport[data-role] {
+    min-width: 0;
+    --dw-content-padding: 24px;
+  }
+  .admin-viewport[data-role] .dw-header-center {
+    min-width: 0;
+  }
+  .admin-viewport[data-role] .dw-last-login {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-main:not(:has(.dw-report-print)) {
+    overflow-x: auto;
+  }
+  /* 판정 줄은 스크롤 영역의 형제로 남겨 viewport 기준 sticky를 유지한다. */
+  .dw-report-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .dw-report-scroll > * {
+    min-width: 960px;
+  }
+  .admin-viewport[data-role] .dw-page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .admin-viewport[data-role] .dw-page-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .admin-viewport[data-role] .ant-space-horizontal {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role] .ant-table-wrapper {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role] .ant-table-content {
+    overflow-x: auto;
+  }
+  .admin-viewport[data-role] .ant-table-content > table {
+    min-width: 640px;
+  }
+  /* 거래 내역·Case·보고서는 열 사이 관계를 유지한다. 표의 기존 스크롤도 그대로 둔다. */
+  .admin-viewport[data-role] .dw-container:has(.dw-tx-table, .dw-case-layout-wrap) {
+    min-width: 960px;
+  }
+  /* main이 가로 스크롤 영역이라 판정 칸 sticky가 창을 따라오지 못한다.
+     사이드바를 접어 본문이 1040px을 넘어도 펼친 상태와 같이 한 줄로 쌓는다. */
+  .admin-viewport[data-role] .dw-case-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'pay'
+      'side'
+      'main';
+  }
+  .admin-viewport[data-role] .dw-case-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media screen and (width <= 760px) {
+  .admin-viewport[data-role] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    --dw-content-padding: 16px;
+  }
+  .admin-viewport[data-role] .dw-header {
+    position: static;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-brand {
+    flex: 0 0 auto;
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    padding: 0;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-brand-context {
+    margin-left: 0;
+  }
+  .admin-viewport[data-role] .dw-header-center {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-header-tools {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .admin-viewport[data-role] .dw-account-menu .dw-user-name {
+    max-width: 110px;
+  }
+  .admin-viewport[data-role] .dw-sidebar {
+    position: static;
+    height: auto;
+    min-width: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--shell-line);
+  }
+  .admin-viewport[data-role] .dw-sidebar nav {
+    display: flex;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-nav-group {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+    margin: 0;
+  }
+  .admin-viewport[data-role] .dw-nav-heading,
+  .admin-viewport[data-role] .dw-nav-section,
+  .admin-viewport[data-role] .dw-sidebar-top,
+  .admin-viewport[data-role] .dw-owner-note {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-nav-link {
+    width: auto;
+    margin: 0;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .admin-viewport[data-role] .dw-nav-subgroup .dw-nav-link {
+    padding-left: 12px;
+  }
+  .admin-viewport[data-role] .dw-nav-link.active {
+    box-shadow: inset 0 -3px 0 var(--shell-accent);
+  }
+  .admin-viewport[data-role] .dw-main {
+    padding: 24px 16px;
+  }
+  .admin-viewport[data-role] .dw-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-viewport[data-role] .ant-card-head-title {
+    white-space: normal;
+  }
+  .admin-viewport[data-role] .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }

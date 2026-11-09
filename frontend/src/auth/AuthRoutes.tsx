@@ -319,7 +319,6 @@ export function ServerSession() {
   return (
     <ManagementLayout
       role={role}
-      responsive={pathname === '/admin/applications' || pathname.startsWith('/admin/applications/')}
       groups={navigation.groups}
       badges={{
         securityCaseActions: caseActions,

@@ -252,9 +252,6 @@
 .oh-error .ant-btn {
   margin-top: 20px;
 }
-.admin-viewport:has(.oh-home) {
-  min-width: 0;
-}
 @media (max-width: 1050px) {
   .oh-connection-main {
     flex-wrap: wrap;
@@ -264,62 +261,6 @@
   }
 }
 @media (max-width: 760px) {
-  .admin-viewport:has(.oh-home) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
-  }
-  .admin-viewport:has(.oh-home) .dw-header {
-    position: static;
-    height: auto;
-    min-height: 64px;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    gap: 12px;
-  }
-  .admin-viewport:has(.oh-home) .dw-brand {
-    width: auto;
-    flex: 0 0 auto;
-    border: 0;
-    padding: 0;
-  }
-  .admin-viewport:has(.oh-home) .dw-header-center,
-  .admin-viewport:has(.oh-home) .dw-last-login {
-    display: none;
-  }
-  .admin-viewport:has(.oh-home) .dw-header-tools {
-    padding: 0;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .admin-viewport:has(.oh-home) .dw-sidebar {
-    position: static;
-    width: auto;
-    height: auto;
-    padding: 10px 16px;
-    border-right: 0;
-    border-bottom: 1px solid #e7e1d5;
-  }
-  .admin-viewport:has(.oh-home) .dw-sidebar nav {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-  }
-  .admin-viewport:has(.oh-home) .dw-nav-group {
-    display: flex;
-    flex-shrink: 0;
-    margin: 0;
-    gap: 4px;
-  }
-  .admin-viewport:has(.oh-home) .dw-nav-heading {
-    display: none;
-  }
-  .admin-viewport:has(.oh-home) .dw-nav-link {
-    margin: 0;
-    white-space: nowrap;
-  }
-  .admin-viewport:has(.oh-home) .dw-main {
-    padding: 24px 16px;
-  }
   .oh-home .dw-page-header {
     gap: 12px;
   }
@@ -344,5 +285,23 @@
   }
   .oh-steps {
     gap: 12px;
+  }
+}
+
+@media screen and (width < 1280px) {
+  .oh-connection-main {
+    flex-wrap: wrap;
+  }
+  .oh-primary-link {
+    margin-left: 76px;
+  }
+}
+@media screen and (width <= 760px) {
+  .oh-primary-link {
+    margin-left: 0;
+  }
+  .oh-details > div,
+  .oh-security-note {
+    flex-wrap: wrap;
   }
 }

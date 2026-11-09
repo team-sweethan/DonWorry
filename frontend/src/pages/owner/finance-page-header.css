@@ -187,3 +187,78 @@
   font-weight: 700;
   border-radius: 8px;
 }
+
+@media screen and (width < 1280px) {
+  .finance-surface .finance-preview .dw-page-header,
+  .finance-surface .loan-products .dw-page-header {
+    flex-wrap: wrap;
+  }
+  .finance-surface .finance-chart-grid,
+  .finance-surface .finance-bottom-grid,
+  .finance-surface .stl-calendar-layout,
+  .finance-surface .loan-product-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .finance-metrics,
+  .finance-surface .stl-stats,
+  .finance-surface .stl-report-summary,
+  .finance-surface .payout-summary-grid,
+  .finance-surface .cashflow-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .finance-surface .finance-preview .ant-space,
+  .finance-surface .finance-preview .ant-space-item {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media screen and (width <= 760px) {
+  .finance-surface .finance-metrics,
+  .finance-surface .stl-stats,
+  .finance-surface .stl-report-summary,
+  .finance-surface .payout-summary-grid,
+  .finance-surface .cashflow-summary-grid,
+  .finance-surface .cashflow-evidence,
+  .finance-surface .loan-product-grid,
+  .finance-surface .recovery-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .finance-intro,
+  .finance-surface .loan-page-head,
+  .finance-surface .cashflow-loan-card,
+  .finance-surface .stl-calendar-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .finance-surface .finance-period,
+  .finance-surface .finance-connected .finance-period label,
+  .finance-surface .finance-header-actions,
+  .finance-surface .finance-period-actions,
+  .finance-surface .finance-period-presets,
+  .finance-surface .cashflow-equation,
+  .finance-surface .cashflow-section-head {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .finance-surface .finance-period input {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .finance-surface .finance-period-actions {
+    margin-left: 0;
+  }
+  .finance-surface .finance-nav {
+    overflow-x: auto;
+  }
+  .finance-surface .finance-nav button {
+    flex-shrink: 0;
+  }
+  .finance-surface .finance-recurring-amount-row,
+  .finance-surface .loan-products dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .loan-products dd {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+}
