@@ -159,6 +159,12 @@ export function OperatorAccessDetectionsPage() {
             onChange={(value) => setPage(value - 1)}
           />
         </div>
+        <Alert
+          type="info"
+          showIcon
+          message="표시 기준 · 고위험은 이력 전체, 저위험은 계정·룰별 최신 신호만 표시합니다. 고위험 근거는 저위험에서 제외됩니다."
+          style={{ marginTop: 12 }}
+        />
       </Card>
     </>
   )
