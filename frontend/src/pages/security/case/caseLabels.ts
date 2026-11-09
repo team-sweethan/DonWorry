@@ -52,8 +52,8 @@ export const fdsResultLabel: Record<FdsResult, Label> = {
 }
 
 export const decisionLabel: Record<Decision, Label> = {
-  ACCEPT: { label: 'ACCEPT · 매입 허용', color: 'green' },
-  REJECT: { label: 'REJECT · 매입 거부', color: 'red' },
+  ACCEPT: { label: '매입 요청', color: 'green' },
+  REJECT: { label: '승인 취소 요청', color: 'red' },
 }
 
 /** 완료 기반 (ADR-0027) — ACCEPTED는 실제 매입·취소 완료, FAILED는 확정 거절이다. */
@@ -67,8 +67,8 @@ export const handoffStatusLabel: Record<HandoffStatus, Label> = {
 export { handoffErrorLabel } from '../../../utils/handoffErrorText'
 
 export const actionTypeLabel: Record<ActionType, string> = {
-  CAPTURE: 'CAPTURE · 매입 요청 (P6)',
-  VOID: 'VOID · 승인 취소 요청 (P5)',
+  CAPTURE: '매입 처리 (P6)',
+  VOID: '승인 취소 처리 (P5)',
 }
 
 export const historyEventLabel: Record<CaseHistoryEventType, string> = {

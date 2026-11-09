@@ -102,7 +102,7 @@ export const adminNavigation = {
           ],
         },
         // 원문 열람 사후 검토 (#619). 관리자는 원문을 보지 않는다
-        { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
+        { label: '전화번호 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
       ],
     },
     // 시스템이 찾아낸 이상 접근 — 직원(내부자) · 사장님 계정 (ADR-0082 8절)

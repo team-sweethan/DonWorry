@@ -216,7 +216,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: 'raw-view-reviews',
-                handle: { title: '원문 열람 검토' },
+                handle: { title: '전화번호 열람 검토' },
                 element: <RawViewReviewsPage />,
               },
               {

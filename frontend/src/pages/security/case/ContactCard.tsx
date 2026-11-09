@@ -21,7 +21,7 @@ type Row = { paymentId: string; contact: CaseContact | null; loading: boolean }
 /**
  * 사건 결제별 주문자 정보 (#619, ADR-0082 1절) — 담당 직원 · 열린 사건에서만 보인다.
  * 결제 1건씩 [주문자 정보 보기]를 눌러야 가린 값을 읽는다 (열람마다 기록되므로 자동으로 모두 읽지 않는다).
- * [번호 대조]는 일치 여부만, [원문 보기]는 근거를 적으면 전화번호를 이 창에서 한 번 보여 준다.
+ * [전화번호 일치 확인]은 일치 여부만, [전체 전화번호 보기]는 근거를 적으면 전화번호를 이 창에서 한 번 보여 준다.
  */
 export function ContactCard({ caseId, payments }: { caseId: string; payments: CasePayment[] }) {
   const { message } = App.useApp()
@@ -81,7 +81,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
       if (matchRequests.isCurrent(request)) setMatchResult(matched)
     } catch (e) {
       if (matchRequests.isCurrent(request))
-        message.error(errorText(e, '번호를 대조하지 못했습니다.'))
+        message.error(errorText(e, '전화번호 일치 여부를 확인하지 못했습니다.'))
     } finally {
       if (matchRequests.isCurrent(request)) setMatchSaving(false)
     }
@@ -109,7 +109,8 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
       const phone = await viewRawContact(caseId, rawTarget.paymentId, rawInput)
       if (rawRequests.isCurrent(request)) setRawPhone(phone)
     } catch (e) {
-      if (rawRequests.isCurrent(request)) message.error(errorText(e, '원문을 볼 수 없습니다.'))
+      if (rawRequests.isCurrent(request))
+        message.error(errorText(e, '전체 전화번호를 볼 수 없습니다.'))
     } finally {
       if (rawRequests.isCurrent(request)) setRawSaving(false)
     }
@@ -125,7 +126,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
       style={{ borderColor: '#E2E8F0' }}
       extra={
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          담당자에게만 보입니다 · 열람 · 대조 · 원문 보기는 모두 기록됩니다
+          담당자에게만 보입니다 · 열람 · 일치 확인 · 전체 보기는 모두 기록됩니다
         </Typography.Text>
       }
     >
@@ -179,10 +180,10 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
               return (
                 <Space size={6}>
                   <Button size="small" onClick={() => openMatch(contact)}>
-                    번호 대조
+                    전화번호 일치 확인
                   </Button>
                   <Button size="small" danger onClick={() => openRaw(contact)}>
-                    원문 보기
+                    전체 전화번호 보기
                   </Button>
                 </Space>
               )
@@ -191,9 +192,9 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
         ]}
       />
       <Modal
-        title={matching ? `결제 ${matching.paymentId} 주문자 번호 대조` : ''}
+        title={matching ? `결제 ${matching.paymentId} 주문자 전화번호 일치 확인` : ''}
         open={matching !== null}
-        okText="대조"
+        okText="확인"
         cancelText="닫기"
         confirmLoading={matchSaving}
         okButtonProps={{ disabled: matchPhone.trim() === '' }}
@@ -224,9 +225,9 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
         )}
       </Modal>
       <Modal
-        title={rawTarget ? `결제 ${rawTarget.paymentId} 주문자 전화번호 원문` : ''}
+        title={rawTarget ? `결제 ${rawTarget.paymentId} 주문자 전체 전화번호` : ''}
         open={rawTarget !== null}
-        okText={rawPhone ? '닫기' : '원문 보기'}
+        okText={rawPhone ? '닫기' : '전체 전화번호 보기'}
         cancelButtonProps={{ style: rawPhone ? { display: 'none' } : undefined }}
         cancelText="취소"
         confirmLoading={rawSaving}

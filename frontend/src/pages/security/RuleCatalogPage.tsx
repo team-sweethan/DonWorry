@@ -317,7 +317,7 @@ function AccountRuleOverview() {
         </div>
         <div>
           <strong>직원 감시</strong>
-          <span>담당 밖 접근 · 원문 열람 집중 · 대량 조회를 탐지합니다.</span>
+          <span>담당 밖 접근 · 전화번호 열람 집중 · 대량 조회를 탐지합니다.</span>
         </div>
         <div>
           <strong>정책 제어</strong>
