@@ -2,6 +2,7 @@ import { QuestionCircleOutlined } from '@ant-design/icons'
 import { Button, Tour } from 'antd'
 import type { TourProps } from 'antd'
 import { useEffect, useRef, useState } from 'react'
+import './finance-guide.css'
 
 const settlementGuide = [
   [
@@ -45,7 +46,7 @@ const fundsGuide = [
   [
     '.finance-trend',
     '예상 잔액 그래프',
-    '초록 막대는 그날 들어오는 정산금, 빨간 막대는 완료·예정 지출이에요. 갈색 선은 전날 잔액에 그날의 정산금을 더하고 지출을 뺀 예상 마감 잔액이에요. 최소 운영 자금을 설정했다면 점선이 기준이고, 주황색 점은 잔액이 그 기준보다 낮은 날이에요. 가이드를 닫고 그래프를 좌우로 움직이거나 날짜의 점을 눌러 계산 근거를 확인할 수 있어요.',
+    '초록 막대는 정산 유입, 빨간 막대는 완료·예정 지출이에요. 갈색 선은 전날 잔액에 정산금을 더하고 지출을 뺀 마감 잔액이에요. 최소 운영 자금 점선 아래의 주황색 점은 기준 미달일이에요. 가이드를 닫고 좌우로 스크롤하거나 점을 눌러 계산 근거를 보세요.',
   ],
   [
     '.cashflow-verdict-warning',
@@ -88,8 +89,23 @@ export function FinanceGuide({ page }: { page: 'settlement' | 'funds' }) {
           : fundsGuide.slice(1)
     const available = guide.flatMap(([selector, title, description]) => {
       const target = root?.querySelector<HTMLElement>(selector)
+      const wide =
+        selector === '[data-guide="finance-settings"]' ||
+        selector === '.stl-detail .stl-more-button'
       return target && target.getClientRects().length && !target.matches(':disabled')
-        ? [{ title, description, target }]
+        ? [
+            {
+              title,
+              className: wide ? 'finance-guide-wide' : undefined,
+              description:
+                page === 'funds'
+                  ? description
+                      .split(/(?<=\.) /)
+                      .map((sentence) => <p key={sentence}>{sentence}</p>)
+                  : description,
+              target,
+            },
+          ]
         : []
     })
     setCurrent(0)
@@ -111,6 +127,7 @@ export function FinanceGuide({ page }: { page: 'settlement' | 'funds' }) {
         사용 가이드
       </Button>
       <Tour
+        rootClassName={page === 'funds' ? 'funds-guide' : 'settlement-guide'}
         open={open}
         current={current}
         steps={steps}
