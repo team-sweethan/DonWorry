@@ -1,5 +1,6 @@
 package com.donworry.payment.controller;
 
+import com.donworry.payment.service.ExportOutOfScopeException;
 import com.donworry.payment.service.ExportTooLargeException;
 import com.donworry.payment.service.InsiderExportBlockedException;
 import java.time.DateTimeException;
@@ -43,6 +44,15 @@ public class PaymentTransactionsExceptionHandler extends ResponseEntityException
     @ExceptionHandler(InsiderExportBlockedException.class)
     ResponseEntity<Object> insiderBlocked(InsiderExportBlockedException e) {
         return problem(403, "INSIDER_EXPORT_BLOCKED", "보안 확인이 필요해 계정 사용이 일시 정지되었습니다. 관리자에게 문의해 주세요.");
+    }
+
+    // 범위 밖은 업무 안내다 — 정지가 아니라 무엇을 하면 되는지 알려 준다 (#730)
+    @ExceptionHandler(ExportOutOfScopeException.class)
+    ResponseEntity<Object> outOfScope(ExportOutOfScopeException e) {
+        return problem(
+                403,
+                "PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE",
+                "담당 사건 고객의 거래만 내보낼 수 있습니다. 사건 상세의 [이 고객 거래 내역 보기]에서 내보내 주세요.");
     }
 
     @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})

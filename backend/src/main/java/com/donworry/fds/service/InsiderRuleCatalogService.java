@@ -41,12 +41,13 @@ public class InsiderRuleCatalogService {
                         .collect(Collectors.groupingBy(InsiderAlert::getRuleCode));
         return List.of(
                 card(InsiderRule.INS_01, opened, firstDay)
-                        .condition("%s 안에 담당 밖 사건 %d곳 이상에서 접근 거부"
+                        .condition("%s 안에 담당 밖 사건 · 고객 %d곳 이상에서 접근 거부"
                                 .formatted(span(properties.ins01Window()), properties.ins01CautionCases()))
                         .resultDescription("주의 경보")
                         .example("배정되지 않은 사건 %d곳을 %s 안에 차례로 열려다 막힘"
                                 .formatted(properties.ins01CautionCases(), span(properties.ins01Window())))
-                        .standaloneDescription("같은 사건을 다시 연 것은 한 번으로 셉니다. 닫힌 사건 거부는 세지 않습니다.")
+                        .standaloneDescription(
+                                "같은 사건 · 고객에 다시 시도한 것은 한 번으로 셉니다. 담당 아닌 고객의 거래 내역 내보내기 거부도 셉니다. 닫힌 사건 거부는 세지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_03, opened, firstDay)
                         .condition("%s 안에 주문자 전체 전화번호 %d건 이상 열람"

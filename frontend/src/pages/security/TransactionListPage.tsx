@@ -39,6 +39,7 @@ import {
   caseCell,
   customerNeedsMerchant,
   defaultTransactionListQuery,
+  exportNeedsCustomer,
   merchantChange,
   mlCell,
   parseTransactionListQuery,
@@ -147,6 +148,8 @@ export function TransactionListPage() {
   // 가맹점 없이 고객 번호만 넣으면 다른 가맹점의 같은 번호와 섞여서 조회하지 않고 안내한다 (#462)
   const needsMerchant = customerNeedsMerchant(query)
   const blocked = tooLong || needsMerchant
+  // 내보내기는 담당 사건 고객만 (#730) — 가맹점 + 고객 번호를 걸어야 버튼이 열린다. 범위 판정은 서버가 한다
+  const exportLocked = exportNeedsCustomer(query)
   const apiSearch = transactionApiParams(query).toString()
   // CSV 내보내기 (#651) — 화면과 같은 조건. 차단되면 계정이 이미 정지 · 로그아웃된 상태라 안내 뒤 로그인 화면으로 보낸다
   // 안내 문구는 서버가 준 중립 문구를 그대로 쓴다 (탐지 내용을 알리지 않음)
@@ -165,6 +168,14 @@ export function TransactionListPage() {
             okText: '확인',
             onOk: () => store.expire(),
           })
+          return
+        }
+        // 담당 사건 범위 밖 고객 (#730) — 정지가 아니라 업무 안내라 경고로 보여 준다
+        if (
+          error instanceof ApiError &&
+          error.code === 'PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE'
+        ) {
+          message.warning(error.detail ?? '담당 사건 고객의 거래만 내보낼 수 있습니다.')
           return
         }
         if (error instanceof ApiError && error.code === 'PAYMENT_TRANSACTIONS_EXPORT_TOO_LARGE') {
@@ -538,14 +549,25 @@ export function TransactionListPage() {
             <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
               새로고침
             </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              loading={exporting}
-              disabled={blocked}
-              onClick={exportCsv}
+            <Tooltip
+              title={
+                exportLocked
+                  ? '담당 사건 고객의 거래만 내보낼 수 있어요. 사건 상세의 [이 고객 거래 내역 보기]로 들어오거나 가맹점과 고객 번호로 걸러 주세요.'
+                  : undefined
+              }
             >
-              CSV 내보내기
-            </Button>
+              {/* 꺼진 버튼은 마우스 이벤트가 없어 툴팁이 안 떠서 감싼다 */}
+              <span>
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={exporting}
+                  disabled={blocked || exportLocked}
+                  onClick={exportCsv}
+                >
+                  CSV 내보내기
+                </Button>
+              </span>
+            </Tooltip>
           </Space>
         </div>
         {tooLong && (
