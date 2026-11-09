@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     agent_max_extra_calls: int = 3
     agent_max_repairs: int = 2
 
+    # 사건 질문 · 답변 (ADR-0086) — 넓혀 보기 최대 횟수 · 답 다시 쓰기 횟수
+    # 동기 호출이라(Spring 30초) 보고서보다 작게 둔다
+    question_max_tool_calls: int = 2
+    question_max_repairs: int = 1
+
     # RF 사기 확률 모델 (Shadow Mode) — 파일 이름이 모델 버전이 된다 (rf-v2.joblib → rf-v2)
     # rf-v2는 가맹점 번호를 뺀 모델 (#450). rf-v1은 되돌리기용으로 남겨 둠
     ml_model_path: Path = Path(__file__).resolve().parents[1] / "models" / "rf-v2.joblib"

@@ -103,7 +103,9 @@ class ToolBox(Protocol):
     # lookback_days가 None이면 기본 조회(30일), 90이면 AI 추가 조사 (#581)
     def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool: ...
 
-    def find_linked_payments(self) -> LinkedPaymentsTool: ...
+    # nearby_hours가 None이면 Spring 기본(앞뒤 1시간, #637)
+    # 6 · 24는 질문 · 답변의 넓혀 보기 (ADR-0086)
+    def find_linked_payments(self, nearby_hours: int | None = None) -> LinkedPaymentsTool: ...
 
     # 사건 결제의 주문 정보 (#634) — 기본 조회
     def get_order_context(self) -> OrderContextTool: ...
@@ -129,8 +131,8 @@ class SpringToolBox:
     def get_payment_history(self, lookback_days: int | None = None) -> PaymentHistoryTool:
         return self._client.get_payment_history(self._case_id, lookback_days)
 
-    def find_linked_payments(self) -> LinkedPaymentsTool:
-        return self._client.find_linked_payments(self._case_id)
+    def find_linked_payments(self, nearby_hours: int | None = None) -> LinkedPaymentsTool:
+        return self._client.find_linked_payments(self._case_id, nearby_hours)
 
     def get_order_context(self) -> OrderContextTool:
         return self._client.get_order_context(self._case_id)
@@ -240,7 +242,8 @@ class StaticToolBox:
     def get_decision_basis(self) -> DecisionBasisTool:
         return self._basis or self._default_basis()
 
-    def find_linked_payments(self) -> LinkedPaymentsTool:
+    # 시간 인자는 무시한다 — #751 전 Spring처럼 같은 응답을 준다
+    def find_linked_payments(self, nearby_hours: int | None = None) -> LinkedPaymentsTool:
         return self._linked
 
     def get_order_context(self) -> OrderContextTool:
