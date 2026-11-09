@@ -237,6 +237,8 @@ export function CaseListPage() {
       title: '고객',
       dataIndex: 'customerRef',
       width: 140,
+      // 12자리 번호여도 복사 버튼이 다음 줄로 떨어지지 않게 한 줄로 둔다
+      onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
       render: (value: string) => {
         const customer = customerPart(value)
         return (
@@ -254,7 +256,9 @@ export function CaseListPage() {
     {
       title: '담당',
       dataIndex: 'assigneeName',
-      width: 100,
+      width: 110,
+      // "보안직원 12"처럼 이름 뒤 번호가 다음 줄로 넘어가지 않게 한 줄로 둔다
+      onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
       render: (name: CaseSummary['assigneeName']) => name ?? '미배정',
     },
     {
