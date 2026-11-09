@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   ArrowRightOutlined,
-  ClockCircleOutlined,
-  FileSearchOutlined,
   ReloadOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -169,30 +167,27 @@ export function SecurityHomeDashboard({
   const updatedAt = result?.receivedAt
   const ready = updatedAt != null
   const flowActive = ready && !failed && !watchStopped && !loading
-  const metrics = [
+  const attentionItems = [
     {
-      title: '판정 대기',
-      value: counts.decisionPending,
-      foot: '결제별 판정 필요',
-      tone: 'amber',
-      icon: <FileSearchOutlined />,
-      onClick: () => openList({ status: 'DECISION_PENDING' }),
-    },
-    {
-      title: '금융 처리 실패',
-      value: counts.actionFailed,
-      foot: '매입 · 승인 취소 처리 결과 확인',
+      label: '금융 처리 실패',
+      count: counts.actionFailed,
       tone: 'red',
-      icon: <WarningOutlined />,
       onClick: () => openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' }),
+      help: '사건 상세에서 매입·승인 취소 처리 결과를 확인하세요.',
     },
     {
-      title: `생성 후 ${SLA_HOURS}시간 경과`,
-      value: counts.slaExceeded,
-      foot: '종료되지 않은 사건 기준',
+      label: '보고서 생성 실패',
+      count: counts.aiFailed,
+      tone: 'amber',
+      onClick: () => openFirst((c) => c.latestReportStatus === 'FAILED', { report: 'failed' }),
+      help: '사건 상세에서 보고서 상태와 판정 가능 여부를 확인하세요.',
+    },
+    {
+      label: `생성 후 ${SLA_HOURS}시간 경과`,
+      count: counts.slaExceeded,
       tone: 'orange',
-      icon: <ClockCircleOutlined />,
       onClick: () => openList({ slaExceeded: true }),
+      help: '종료되지 않은 담당 사건 기준입니다. 시간이 지나도 자동으로 판정하거나 종료하지 않습니다.',
     },
   ]
   const columns: ColumnsType<Row> = [
@@ -215,19 +210,6 @@ export function SecurityHomeDashboard({
       width: 150,
       render: (reason: PriorityReason, c) => (
         <CodeTag value={reasonLabel[reason] ?? caseStatusLabel[c.status]} />
-      ),
-    },
-    {
-      title: (
-        <HelpLabel
-          label="최고 위험 점수"
-          help="사건에 연결된 결제의 FDS 위험 점수 중 최댓값입니다. 점수를 확인하지 못한 결제가 있으면 표시하지 않습니다."
-        />
-      ),
-      dataIndex: 'maxRiskScore',
-      width: 165,
-      render: (score: number | null) => (
-        <strong className="security-home-risk">{score === null ? '−' : `${score}점`}</strong>
       ),
     },
     {
@@ -341,17 +323,11 @@ export function SecurityHomeDashboard({
                     <small>건</small>
                   </span>
                 </h2>
-                <p>
+                <p className="security-home-summary-scope">
                   {openCases.length > 0
-                    ? '판정 대기와 금융 처리 상태를 확인하세요.'
-                    : '현재 종료되지 않은 담당 사건이 없습니다.'}
+                    ? '종료된 사건 제외'
+                    : '현재 진행 중인 담당 사건이 없습니다.'}
                 </p>
-                <Button
-                  type="primary"
-                  onClick={() => (rows[0] ? openCase(rows[0].caseId) : openList())}
-                >
-                  {rows[0] ? '먼저 확인할 사건 보기' : '내 사건 목록 보기'} <ArrowRightOutlined />
-                </Button>
               </>
             ) : failed ? (
               <>
@@ -363,110 +339,41 @@ export function SecurityHomeDashboard({
             )}
           </div>
           {ready ? (
-            <HomeWorkflow
-              cases={openCases}
-              active={flowActive}
-              onOpenFailed={() =>
-                openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' })
-              }
-            />
+            <HomeWorkflow cases={openCases} active={flowActive} />
           ) : failed ? (
             <p className="security-home-unavailable">조회 후 업무 흐름을 확인할 수 있습니다.</p>
           ) : (
             <Skeleton active title={{ width: '40%' }} paragraph={{ rows: 4 }} />
           )}
         </section>
-        <div className="security-home-metrics" aria-label="먼저 확인할 현황">
-          {metrics.map((metric) => (
+        <div className="security-home-attention" aria-label="확인 필요한 항목">
+          <span className="security-home-attention-label">
+            <WarningOutlined /> 확인 필요
+          </span>
+          {attentionItems.map((item) => (
             <button
-              key={metric.title}
               type="button"
-              className={`security-home-metric${ready && metric.value > 0 ? ` is-${metric.tone}` : ''}`}
-              onClick={metric.onClick}
+              key={item.label}
+              title={item.help}
               disabled={!ready}
+              className={ready && item.count > 0 ? `is-${item.tone}` : undefined}
+              onClick={item.onClick}
             >
-              <div className="security-home-metric-top">
-                <span>{metric.title}</span>
-                <span aria-hidden="true">{metric.icon}</span>
-              </div>
-              <div className="security-home-metric-value">
-                {ready ? (
-                  <>
-                    <HomeCount value={metric.value} />
-                    <small>건</small>
-                  </>
-                ) : (
-                  <span className="security-home-placeholder">−</span>
-                )}
-              </div>
-              <div className="security-home-metric-foot">
-                <span>{metric.foot}</span>
-                <ArrowRightOutlined />
-              </div>
+              {item.label} <strong>{ready ? `${item.count}건` : '−'}</strong>
+              <ArrowRightOutlined />
             </button>
           ))}
-        </div>
-        <p className="security-home-count-note">한 사건이 여러 현황 항목에 포함될 수 있습니다.</p>
-        <div className="security-home-secondary" aria-label="보고서와 금융 처리 현황">
-          <button type="button" disabled={!ready} onClick={() => openList({ report: 'running' })}>
-            보고서 생성 대기·진행 <strong>{ready ? counts.aiRunning : '−'}</strong>
-            <ArrowRightOutlined />
-          </button>
-          <button
-            type="button"
-            disabled={!ready}
-            className={ready && counts.aiFailed > 0 ? 'has-failure' : ''}
-            onClick={() =>
-              openFirst((c) => c.latestReportStatus === 'FAILED', { report: 'failed' })
-            }
-          >
-            보고서 생성 실패 <strong>{ready ? counts.aiFailed : '−'}</strong>
-            <ArrowRightOutlined />
-          </button>
-          <button
-            type="button"
-            disabled={!ready}
-            onClick={() => openList({ status: 'ACTION_PENDING' })}
-          >
-            금융 처리 대기 <strong>{ready ? counts.actionPending : '−'}</strong>
-            <ArrowRightOutlined />
-          </button>
-        </div>
-        {ready && counts.aiFailed > 0 && (
-          <Alert
-            type="warning"
-            showIcon
-            className="security-home-notice"
-            message={`최신 보고서 생성 실패 ${counts.aiFailed}건 · 사건 상세에서 생성 상태와 판정 가능 여부를 확인하세요.`}
+          <HelpLabel
+            label=""
+            help="한 사건이 여러 항목에 포함될 수 있습니다. 항목을 누르면 해당 사건이나 목록으로 이동합니다."
           />
-        )}
-        {ready && counts.actionFailed > 0 && (
-          <Alert
-            type="error"
-            showIcon
-            className="security-home-notice"
-            message={`금융 처리 실패 ${counts.actionFailed}건 · 실패 사유를 확인하세요.`}
-            action={
-              <Button
-                size="small"
-                onClick={() =>
-                  openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' })
-                }
-              >
-                실패 사건 확인
-              </Button>
-            }
-          />
-        )}
+        </div>
       </div>
       <Card className="dw-table-card security-home-enter security-home-queue">
         <div className="dw-table-toolbar">
           <div>
             <h3>먼저 확인할 사건</h3>
-            <p>
-              금융 처리 실패 → 생성 후 {SLA_HOURS}시간 경과 → 판정 대기 순 · 같은 순위는 오래된
-              사건부터 최대 6건
-            </p>
+            <p>금융 처리 실패 → {SLA_HOURS}시간 경과 → 판정 대기 순 · 최대 3건</p>
           </div>
           <Button type="link" onClick={() => openList()}>
             내 사건 전체 보기 <ArrowRightOutlined />
@@ -475,10 +382,10 @@ export function SecurityHomeDashboard({
         <Table
           rowKey="caseId"
           columns={columns}
-          dataSource={rows}
+          dataSource={rows.slice(0, 3)}
           loading={loading}
           size="middle"
-          scroll={{ x: 805 }}
+          scroll={{ x: 640 }}
           pagination={false}
           rowClassName={(record) =>
             result?.newIds.includes(record.caseId) ? 'security-home-new-case' : ''

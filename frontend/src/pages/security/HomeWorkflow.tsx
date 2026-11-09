@@ -1,19 +1,13 @@
-import {
-  CreditCardOutlined,
-  FileSearchOutlined,
-  UserOutlined,
-  WarningOutlined,
-} from '@ant-design/icons'
+import { CreditCardOutlined, FileSearchOutlined, UserOutlined } from '@ant-design/icons'
 import type { CaseSummary } from '../../types/case'
 import { homeWorkflow } from '../../utils/securityHome'
 
 type Props = {
   cases: CaseSummary[]
   active: boolean
-  onOpenFailed: () => void
 }
 
-export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
+export function HomeWorkflow({ cases, active }: Props) {
   const flow = homeWorkflow(cases)
   const stages = [
     {
@@ -77,17 +71,6 @@ export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
           </li>
         ))}
       </ol>
-      <div className="security-home-workflow-footer">
-        {flow.actionFailed > 0 ? (
-          <button type="button" className="security-home-flow-failure" onClick={onOpenFailed}>
-            <WarningOutlined /> 금융 처리 실패 <strong>{flow.actionFailed}건</strong>
-            <span>확인 →</span>
-          </button>
-        ) : (
-          <span>금융 처리 실패 0건</span>
-        )}
-        <span>종료된 사건 제외 · 단계별 건수는 중복 없음</span>
-      </div>
     </section>
   )
 }

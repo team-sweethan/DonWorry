@@ -56,6 +56,12 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
       createElement(SecurityHomeDashboard, { ...defaults, result }),
     )
     assert.match(sample, /Case SAMPLE-101/)
+    assert.deepEqual(
+      [...sample.matchAll(/data-row-key="([^"]+)"/g)].map((match) => match[1]),
+      ['SAMPLE-101', 'SAMPLE-102', 'SAMPLE-111'],
+    )
+    assert.match(sample, /확인 필요한 항목/)
+    assert.doesNotMatch(sample, /최고 위험 점수|security-home-metrics|security-home-secondary/)
     assert.match(sample, /담당 사건 업무 흐름/)
     assert.doesNotMatch(sample, /security-home-signal/)
     assert.match(sample, /data-flow-active="true"/)
