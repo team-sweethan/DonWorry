@@ -133,7 +133,29 @@ def report_facts(view: ReportView) -> list[AnswerFact]:
         )
         for n, p in enumerate(view.paymentAnalyses, start=1)
     ]
-    return facts + rule_facts(view) + computed_facts(view)
+    return facts + rule_facts(view) + normal_facts(view) + computed_facts(view)
+
+
+# 정상 거래 근거와 그 근거가 설명하는 징후 (Codex 리뷰 #756)
+# Spring이 계산해 보고서에 저장한 값 그대로 — AI가 근거와 징후의 관계를 스스로 잇지 않게 한다
+# 연결은 화면(caseNormalNotes)과 같이 explains로 말한다
+# explains가 비면 canExplain으로 "이 결제엔 그 징후가 없다"고 적는다
+def normal_facts(view: ReportView) -> list[AnswerFact]:
+    names = payment_names(view)
+    lines: list[tuple[str, str]] = []
+    for p in view.paymentAnalyses:
+        for normal in p.basis.normals if p.basis else []:
+            head = f"{names[p.paymentId]} · 정상 거래 근거 {normal.label}"
+            if normal.explains:
+                text = f"{head} → 이 결제의 {' · '.join(normal.explains)} 징후를 설명"
+            else:
+                can = " · ".join(normal.canExplain)
+                text = f"{head} → {can} 징후를 설명할 수 있으나 이 결제에는 그 징후가 없음"
+            lines.append((text, p.paymentId))
+    return [
+        AnswerFact(id=f"정상-{n}", text=text, source="PAYMENT", paymentId=pid)
+        for n, (text, pid) in enumerate(lines, start=1)
+    ]
 
 
 # 적중 규칙의 기준 · 이번 값 · 가산 점수 — 보고서에 저장된 값 그대로 (Codex 리뷰 #756)

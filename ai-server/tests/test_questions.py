@@ -506,6 +506,42 @@ def test_reportFacts_ruleHitDetails_includeCriterionObservedAndScore() -> None:
     assert parsed is not None and errors == []
 
 
+# Codex 리뷰(#756): 보고서에 저장된 정상 거래 근거와 그 근거가 설명하는 징후도 번호 있는 사실로 준다
+# "이 고액 결제를 설명하는 정상 사유는?"에 저장된 값으로 답할 수 있어야 한다
+def test_reportFacts_normalBasis_includesLabelAndExplainedSignal() -> None:
+    body = json.loads(json.dumps(REPORT))
+    body["paymentAnalyses"][2]["basis"]["signals"].append(
+        {
+            "key": "R01",
+            "label": "고액 결제",
+            "detail": None,
+            "level": "CAUTION",
+            "normalReason": "최근 30일 비슷한 금액의 결제 4건 매입 완료",
+        }
+    )
+    body["paymentAnalyses"][2]["basis"]["normals"] = [
+        {
+            "key": "SIMILAR_AMOUNT",
+            "label": "최근 30일 비슷한 금액의 결제 4건 매입 완료",
+            "canExplain": ["고액 결제"],
+            "explains": ["고액 결제"],
+        }
+    ]
+    facts = report_facts(read_report(body))
+
+    normal = [f for f in facts if "비슷한 금액" in f.text]
+    assert len(normal) == 1 and normal[0].paymentId == "9003"
+    assert "고액 결제" in normal[0].text
+    reply = answer(
+        (
+            "고액 결제 징후의 정상 거래 근거는 최근 30일 비슷한 금액의 결제 4건 매입 완료입니다.",
+            [normal[0].id],
+        )
+    )
+    parsed, errors = validate_answer(reply, facts, 3)
+    assert parsed is not None and errors == []
+
+
 # Codex 리뷰(#756): AI에게 보인 앞 질문 조회 시각은 검사에서도 그 사실의 근거로 본다
 # "언제 조회한 값이에요?"에 맞게 답한 "11/09 14:32 기준"이 숫자 검사에 걸리면 안 된다
 def test_answerQuestion_previousFactRetrievedAt_canBeCited() -> None:
