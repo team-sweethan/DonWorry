@@ -421,3 +421,36 @@ export type SubmitDecisionsRequest = {
   reportId: string | null
   decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
 }
+
+// ── 보고서 뒤 사건 질문 · 답 (#753, ADR-0086) — #752 응답 모양. ID만 숫자로 와서 api가 문자열로 바꾼다 ──
+// RUNNING: 답 기다리는 중 (2분 넘으면 서버가 FAILED로 보낸다) / DECLINED: 판정 · 범위 밖 질문을 고정 문장으로 거절
+export type ReportQuestionStatus = 'RUNNING' | 'ANSWERED' | 'DECLINED' | 'FAILED'
+// ANSWER: 사실로 답함 / NOT_IN_REPORT: 보고서와 허용 조회로 알 수 없음
+// DECLINED_DECISION: 판정 · 권고 질문 / DECLINED_SCOPE: 사건 밖 · 개인정보 질문
+export type ReportQuestionKind = 'ANSWER' | 'NOT_IN_REPORT' | 'DECLINED_DECISION' | 'DECLINED_SCOPE'
+
+// 답이 인용한 사실 원문. source: REPORT(보고서 사실) · PAYMENT(보고서 결제 표) · COMPUTED(코드 계산)
+// · ADDED(이번에 새로 조회) · PREVIOUS(앞 질문에서 새로 조회한 값). 새로 조회한 값만 toolName · retrievedAt이 있다
+export type QuestionFact = {
+  id: string
+  text: string
+  source: 'REPORT' | 'PAYMENT' | 'COMPUTED' | 'ADDED' | 'PREVIOUS'
+  paymentId?: string | null
+  toolName?: string | null
+  retrievedAt?: string | null
+}
+
+export type ReportQuestion = {
+  questionId: string
+  question: string
+  status: ReportQuestionStatus
+  // 실패 · 진행 중이면 null
+  kind: ReportQuestionKind | null
+  // 문장마다 근거 사실 번호 — 코드 고정 문장(거절 · 모름)은 빈 목록
+  sentences: Array<{ text: string; facts: string[] }>
+  // 판정 질문 거절 때 그 보고서의 확인할 것 전체
+  checks: string[]
+  facts: QuestionFact[]
+  askedAt: string
+  answeredAt: string | null
+}
