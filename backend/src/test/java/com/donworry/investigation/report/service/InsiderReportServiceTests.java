@@ -262,27 +262,30 @@ class InsiderReportServiceTests {
         assertThat(String.valueOf(saved.getFirst().getReportBody())).doesNotContain(CUSTOMER_A, CUSTOMER_B);
     }
 
-    // 평소(30일)는 근거 첫 기록 직전 30일이다 (#749) — 근거 기록 자체와 근거 첫 시각의 기록은 평소에 섞지 않는다
+    // 평소(30일)는 근거 첫 기록 날의 전날까지 완전한 한국 날짜 30일이다 (#749, #755 Codex 리뷰: 날짜 경계를 하루 집계와 맞춤)
+    // 근거 기록 자체와 끝 시각(근거 날 0시)의 기록은 평소에 섞지 않는다
     @Test
-    void facts_baselineUsesThirtyDaysBeforeFirstEvidence_excludesEvidenceEvents() {
+    void facts_baselineUsesThirtyFullKoreanDaysBeforeEvidenceDay_excludesEvidenceEvents() {
         givenAlerts(alert(500L, InsiderRule.INS_09));
         StaffAccessRecorded evidence =
                 access(1L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_A, 100L, 3);
         givenAccess(evidence);
-        Instant firstEvidence = evidence.occurredAt();
-        // 읽기 창구는 끝 시각을 포함해 돌려준다 — 근거 기록과 같은 시각의 다른 기록도 함께 온다
-        when(accessReader.findRecent(STAFF_ID, firstEvidence.minus(Duration.ofDays(30)), firstEvidence))
+        // 근거 첫 기록 = 한국 11/08 10:00:01 → 평소 = 한국 10/09 0시 ~ 11/08 0시
+        Instant from = Instant.parse("2026-10-08T15:00:00Z");
+        Instant to = Instant.parse("2026-11-07T15:00:00Z");
+        // 읽기 창구는 끝 시각을 포함해 돌려준다 — 끝 시각의 기록 · 근거 기록이 함께 와도 빠져야 한다
+        when(accessReader.findRecent(STAFF_ID, from, to))
                 .thenReturn(List.of(
                         usual(90L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_B, DAY_BEFORE),
                         evidence,
-                        usual(91L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_C, firstEvidence)));
+                        usual(91L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_C, to)));
 
         service.generate(opened(500L));
 
         Map<String, Object> baseline = asMap(facts(saved.getFirst()).get("baseline"));
         assertThat(baseline)
-                .containsEntry("from", firstEvidence.minus(Duration.ofDays(30)).toString())
-                .containsEntry("to", firstEvidence.toString())
+                .containsEntry("from", from.toString())
+                .containsEntry("to", to.toString())
                 .containsEntry("hasRecords", true)
                 .containsEntry("daysWithRecords", 1);
         assertThat(asList(baseline.get("rows")))

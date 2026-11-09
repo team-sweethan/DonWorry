@@ -31,11 +31,11 @@ final class InsiderReportFacts {
 
     static final String KIND = "INSIDER_RELEASE_REVIEW";
 
-    // 평소(30일) 대비 (#749) — 근거 첫 기록 직전 이 날 수만큼을 평소로 본다. 하루는 한국 날짜로 나눈다
+    // 평소(30일) 대비 (#749) — 근거 첫 기록 날의 전날까지 완전한 한국 날짜 이 날 수만큼을 평소로 본다
     static final int BASELINE_DAYS = 30;
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    // 평소 기간 [from, to)와 그 안의 기록 — 근거 기록은 이미 빠져 있다
+    // 평소 기간 [from, to) — 한국 0시 경계, 날짜 정확히 30개. 그 안의 기록에서 근거 기록은 이미 빠져 있다
     record Baseline(Instant from, Instant to, List<StaffAccessRecorded> events) {}
 
     // 평소 대비 항목 — 평소와 이번을 같은 방법으로 센다

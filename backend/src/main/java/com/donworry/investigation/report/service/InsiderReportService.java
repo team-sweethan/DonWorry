@@ -21,7 +21,7 @@ import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InsiderCaseChanged;
 import com.donworry.investigation.service.SecurityStaffGuard;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -153,15 +153,21 @@ public class InsiderReportService {
                 now);
     }
 
-    // 평소(30일) 기록 (#749) — 경보 근거 첫 기록 직전 30일. 근거 기록이 없으면 사건이 열린 시각 직전 30일.
-    // 읽기 창구는 끝 시각을 포함하므로 그 시각의 기록과 근거 기록은 빼서, 이번 행동이 평소 값에 섞이지 않게 한다
+    // 평소(30일) 기록 (#749) — 경보 근거 첫 기록이 있는 한국 날짜의 전날까지, 완전한 한국 날짜 30일 [D-30 0시, D 0시).
+    // 근거 기록이 없으면 사건이 열린 날 기준. 하루 단위 집계와 경계를 맞춰 날짜가 31개가 되거나 반쪽 날이 최대 후보가 되지 않게 한다 (#755 Codex 리뷰)
+    // 읽기 창구는 끝 시각을 포함하므로 끝 시각의 기록과 근거 기록은 빼서, 이번 행동이 평소 값에 섞이지 않게 한다
     private InsiderReportFacts.Baseline baseline(InsiderCase insiderCase, List<StaffAccessRecorded> evidence) {
-        Instant to = evidence.stream()
+        Instant first = evidence.stream()
                 .map(StaffAccessRecorded::occurredAt)
                 .filter(Objects::nonNull)
                 .min(Comparator.naturalOrder())
                 .orElse(insiderCase.getOpenedAt());
-        Instant from = to.minus(InsiderReportFacts.BASELINE_DAYS, ChronoUnit.DAYS);
+        LocalDate evidenceDay = LocalDate.ofInstant(first, InsiderReportFacts.SEOUL);
+        Instant to = evidenceDay.atStartOfDay(InsiderReportFacts.SEOUL).toInstant();
+        Instant from = evidenceDay
+                .minusDays(InsiderReportFacts.BASELINE_DAYS)
+                .atStartOfDay(InsiderReportFacts.SEOUL)
+                .toInstant();
         Set<Long> evidenceIds =
                 evidence.stream().map(StaffAccessRecorded::eventId).collect(Collectors.toSet());
         List<StaffAccessRecorded> usual = accessReader.findRecent(insiderCase.getStaffId(), from, to).stream()
