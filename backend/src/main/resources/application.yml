@@ -88,6 +88,10 @@ donworry:
   payment-transactions:
     # 거래 내역 CSV 내보내기 한 번에 받을 수 있는 최대 행 수 (#651). 넘으면 잘라 주지 않고 거절한다(조건을 좁혀 다시)
     export-max-rows: 1000
+  insider-report:
+    # 사실 읽기가 실패한 해제 검토 보고서 알림을 다시 보낸다 (#702). 넘으면 error 로그만 남기고, 다음 서버 시작 때 빠진 판을 채운다
+    redelivery-delay: PT5M           # 다시 보내기 간격
+    redelivery-max-retries: 3        # 첫 시도 뒤 다시 보내는 최대 횟수
 
 security:
   login-history:

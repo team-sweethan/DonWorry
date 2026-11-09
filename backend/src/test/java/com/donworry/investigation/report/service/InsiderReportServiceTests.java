@@ -1,7 +1,7 @@
 package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -55,7 +55,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
-// 내부자 사건 해제 검토 보고서 (#675) — 사실 집계 · 판 누적 · 실패 판. 저장소는 메모리 목록으로 대신한다
+// 내부자 사건 해제 검토 보고서 (#675) — 사실 집계 · 판 누적 · 실패 시 판 없이 예외(#702). 저장소는 메모리 목록으로 대신한다
 // P2 근거 · P1 접근 기록 · 정지 여부는 공개 창구 대역으로 정한다
 @ExtendWith(MockitoExtension.class)
 class InsiderReportServiceTests {
@@ -181,17 +181,24 @@ class InsiderReportServiceTests {
         assertThat(saved.getFirst().getReportVersion()).isEqualTo(1);
     }
 
-    // 사실 읽기가 실패해도 예외를 밖으로 내지 않고 실패 판을 남긴다 — 사건 · 정지는 이 서비스가 건드리지 않는다
+    // 사실 읽기가 실패하면 판을 남기지 않고 예외로 끝낸다 (#702) — 실패 판이 계기를 막으면 다시 보내도 영영 만들지 못한다.
+    // 그 뒤 같은 알림이 다시 오면(재전달) 정상 판이 만들어진다
     @Test
-    void generate_factsReadFails_savesFailedVersionWithoutThrowing() {
+    void generate_factsReadFails_throwsWithoutSavingReport() {
         givenAlerts(alert(500L, InsiderRule.INS_01));
-        when(evidenceReader.accessEventIds(anyCollection())).thenThrow(new IllegalStateException("fds 읽기 실패"));
+        when(evidenceReader.accessEventIds(anyCollection()))
+                .thenThrow(new IllegalStateException("fds 읽기 실패"))
+                .thenReturn(List.of());
 
-        assertThatCode(() -> service.generate(opened(500L))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.generate(opened(500L))).isInstanceOf(IllegalStateException.class);
+        assertThat(saved).isEmpty();
 
-        assertThat(saved).hasSize(1);
-        assertThat(saved.getFirst().getStatus()).isEqualTo(ReportStatus.FAILED);
-        assertThat(saved.getFirst().getReportBody()).containsKey("error").doesNotContainKey("facts");
+        service.generate(opened(500L));
+
+        assertThat(saved).singleElement().satisfies(report -> {
+            assertThat(report.getStatus()).isEqualTo(ReportStatus.SUCCEEDED);
+            assertThat(report.getReportVersion()).isEqualTo(1);
+        });
     }
 
     // 접근 기록을 종류별 허용 · 거부 · 행 수로 나누고, 서로 다른 고객 · 가맹점 · 사건 수와 기간을 센다

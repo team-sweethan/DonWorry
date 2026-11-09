@@ -43,7 +43,7 @@ public class InsiderReport {
     // P2 insider_alerts 논리 참조 — 이 판을 만든 경보
     private Long triggerAlertId;
 
-    // SUCCEEDED · FAILED만 쓴다
+    // SUCCEEDED · FAILED만 쓴다. #702부터 새 판은 SUCCEEDED만 — 사실 읽기 실패는 판을 남기지 않고 다시 보낸다. FAILED는 그 전에 저장된 판
     @Enumerated(EnumType.STRING)
     private ReportStatus status;
 

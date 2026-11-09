@@ -266,10 +266,11 @@ SQL 근거: [사건 담당 ALTER·배정 잠금](../../backend/src/main/resource
 
 [승인·도입 기록](history.md#675-p4-내부자-사건-해제-검토-보고서-2026-11-08).
 
-근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261108_134720__create_ai_insider_reports.sql), [커밋 후 수신](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportListener.java), [사실 집계·실패 판 저장](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportService.java).
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261108_134720__create_ai_insider_reports.sql), [커밋 후 수신](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportListener.java), [사실 집계](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportService.java), [실패 다시 보내기](../../backend/src/main/java/com/donworry/investigation/report/service/InsiderReportRedeliveryScheduler.java).
 
 P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 `insider_alerts`의 논리 참조(FK 없음, [5절](README.md#5-모듈-간-참조-규칙) P3 ↔ P4 예외와 같은 방식)다.
 사건이 열리거나 내보내기 차단(`InsiderRule.INS_05`, 기준 커밋의 표시 코드 `SEC-INS-05`) 경보가 붙은 것이 커밋된 뒤 코드가 사실을 세어 판을 쌓는다. 보고서 실패는 사건 · 정지 상태를 바꾸지 않는다.
+사실 읽기가 실패하면 판을 남기지 않는다(#702). 알림이 `event_publication`에 실패로 남아 5분마다 최대 3번 다시 보내고, 그래도 없으면 다음 서버 시작 때 빠진 판을 채운다.
 
 `ai_insider_reports` — 해제 검토 보고서 한 판. 판별로 쌓고 고치거나 지우지 않는다. FDS 사건 보고서 `ai_reports`와 대상 · 만드는 방식이 달라 따로 둔다.
 
@@ -280,7 +281,7 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 | report_version | INT NOT NULL | 사건별 1부터 (CHECK ≥ 1). UNIQUE(insider_case_id, report_version) |
 | trigger_type | VARCHAR(30) NOT NULL | CASE_OPENED(사건 생성) / EXPORT_BLOCKED(내보내기 차단) (CHECK). UNIQUE(insider_case_id, trigger_type) — 같은 계기는 한 판 |
 | trigger_alert_id | BIGINT NOT NULL | 이 판을 만든 경보 (P2 논리 참조) |
-| status | VARCHAR(20) NOT NULL | SUCCEEDED / FAILED (CHECK) — 만들 때 끝난 상태로 저장 |
+| status | VARCHAR(20) NOT NULL | SUCCEEDED / FAILED (CHECK) — 만들 때 끝난 상태로 저장. #702부터 새 판은 SUCCEEDED만, FAILED는 그 전에 저장된 판 |
 | report_body | JSON NOT NULL | 사실(facts) · 고정 문장 설명(narrative) · 한계(limits). FAILED면 오류 코드만. 고객 번호 · IP · 원문 없음 |
 | created_at | DATETIME(6) NOT NULL | UTC |
 

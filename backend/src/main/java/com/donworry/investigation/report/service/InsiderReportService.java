@@ -33,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 // 내부자 사건 해제 검토 보고서 (#675, ADR-0082 조각 9) — 사건 생성 · 차단 때 사실을 세어 판을 쌓는다
 // 판정은 관리자가 한다. 보고서는 추천하지 않고, 사건 · 정지 상태를 바꾸는 호출을 하지 않는다 (AGENTS.md 6절)
-// generate는 트랜잭션 밖에서 돈다(InsiderReportListener · InsiderReportBackfill) — 사실 읽기가 실패해도 실패 판을 남기고 끝난다
+// generate는 트랜잭션 밖에서 돈다(InsiderReportListener · InsiderReportBackfill)
+// 사실 읽기가 실패하면 판을 남기지 않고 예외로 끝낸다 (#702) — 실패 판은 같은 계기를 막아 영영 다시 만들지 못했다.
+// 알림은 event_publication에 실패로 남아 InsiderReportRedeliveryScheduler가 다시 보내고, 그래도 빠지면 다음 서버 시작 때 백필이 채운다
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -41,8 +43,6 @@ public class InsiderReportService {
 
     // 판 번호 충돌 재시도 상한 — 한 사건의 계기는 둘뿐이라 두 번이면 충분하고, 여유를 하나 둔다
     static final int MAX_SAVE_ATTEMPTS = 3;
-
-    static final String FACTS_UNAVAILABLE = "FACTS_UNAVAILABLE";
 
     private final InsiderCaseRepository insiderCases;
     private final InsiderCaseAlertRepository links;
@@ -114,19 +114,16 @@ public class InsiderReportService {
         }
         Instant now = Instant.now();
         Map<String, Object> body;
-        ReportStatus status;
         try {
             body = facts(insiderCase, now);
-            status = ReportStatus.SUCCEEDED;
         } catch (RuntimeException e) {
-            log.warn("해제 검토 보고서 사실 읽기 실패 insiderCaseId={} trigger={}", insiderCaseId, trigger, e);
-            body = Map.of("error", Map.of("code", FACTS_UNAVAILABLE));
-            status = ReportStatus.FAILED;
+            log.warn("해제 검토 보고서 사실 읽기 실패 — 판을 남기지 않고 다시 보내기를 기다림 insiderCaseId={} trigger={}", insiderCaseId, trigger);
+            throw e;
         }
-        save(insiderCaseId, trigger, alertId, status, body, now);
+        save(insiderCaseId, trigger, alertId, ReportStatus.SUCCEEDED, body, now);
     }
 
-    // 관리자 화면 — 판 오름차순. 실패 판은 본문을 보내지 않는다
+    // 관리자 화면 — 판 오름차순. 실패 판(#702 이전에 저장된 것)은 본문을 보내지 않는다
     @Transactional(readOnly = true)
     public List<InsiderReportResponse> list(Long insiderCaseId) {
         guard.requireAdmin();
