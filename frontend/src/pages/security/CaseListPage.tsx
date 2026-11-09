@@ -232,8 +232,24 @@ export function CaseListPage() {
       width: 110,
       render: (s: CaseStatus) => <CodeTag value={caseStatusLabel[s]} />,
     },
-    // 저장값 "가맹점ID:고객"에서 고객 부분만 보인다 (#462)
-    { title: '고객', dataIndex: 'customerRef', width: 120, render: customerPart },
+    // 저장값 "가맹점ID:고객"에서 고객 부분만 보이고 복사된다 (#462 · #726)
+    {
+      title: '고객',
+      dataIndex: 'customerRef',
+      width: 140,
+      render: (value: string) => {
+        const customer = customerPart(value)
+        return (
+          <Space size={2}>
+            {customer}
+            {/* 줄을 누르면 사건이 열려서, 복사 버튼 클릭은 줄까지 올라가지 않게 막는다 */}
+            <span onClick={(event: MouseEvent<HTMLElement>) => event.stopPropagation()}>
+              <Typography.Text copyable={{ text: customer, tooltips: ['복사', '복사됨'] }} />
+            </span>
+          </Space>
+        )
+      },
+    },
     // 담당 보안 직원 (#608) — 미배정 사건은 관리자 [담당 현황]에서 배정한다
     {
       title: '담당',
