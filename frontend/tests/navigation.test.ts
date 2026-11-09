@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canOpenPath, sessionNavigation } from '../src/config/navigation.ts'
+import { canOpenPath, findTabbedItem, sessionNavigation } from '../src/config/navigation.ts'
 import type { AuthUser } from '../src/types/auth.ts'
 
 const base: AuthUser = {
@@ -167,24 +167,45 @@ test('보안 직원은 탐지 메뉴를 업무 용어로 표시한다', () => {
   )
 })
 
-// 관리자 메뉴는 대상별 3단 — 사장님 403 탐지와 내부자 보안이 섞이면 합의(ADR-0082 8절)가 깨진다 (#659)
-test('adminNavigation_threeTierLayout_matchesAdr0082Section8', () => {
+// 관리자 메뉴는 큰 묶음 › 메뉴 2단, 같은 대상 화면은 탭으로 합친다 (ADR-0082 8절)
+test('adminNavigation_twoTierWithTabs_matchesAdr0082Section8', () => {
   const layout = sessionNavigation(admin).groups.map((group) => [
-    group.section ?? null,
-    group.title,
-    group.items.map((item) => item.label),
+    group.title ?? null,
+    group.items.map((item) =>
+      item.tabs ? [item.label, item.tabs.map((tab) => tab.label)] : item.label,
+    ),
   ])
 
   assert.deepEqual(layout, [
-    [null, '개요', ['홈']],
-    ['가맹점 관리', '운영', ['이용 신청', '가맹점 목록']],
-    ['가맹점 관리', '보안', ['계정 접근 이상 탐지']],
-    ['직원 관리', '사건', ['담당 현황', '변경 요청']],
-    ['직원 관리', '보안', ['원문 열람 검토', '내부자 경보', '내부자 사건', '내부자 관제']],
-    ['시스템 설정', '계정', ['계정 관리']],
-    ['시스템 설정', '탐지 룰', ['탐지 룰 목록', '룰 변경 요청', '룰 변경 이력']],
-    ['시스템 설정', 'AI', ['AI 조사 긴급정지']],
+    [null, ['홈']],
+    ['가맹점 관리', ['이용 신청', '가맹점 목록', '계정 접근 이상 탐지']],
+    [
+      '직원 관리',
+      [
+        ['사건 담당', ['담당 현황', '변경 요청']],
+        '원문 열람 검토',
+        ['내부자 보안', ['관제', '경보', '사건']],
+      ],
+    ],
+    [
+      '시스템 설정',
+      ['계정 관리', ['탐지 룰', ['룰 목록', '변경 요청', '변경 이력']], 'AI 조사 긴급정지'],
+    ],
   ])
+  // 탭으로 합친 메뉴는 첫 탭 주소로 들어간다
+  for (const item of sessionNavigation(admin).groups.flatMap((group) => group.items)) {
+    if (item.tabs) assert.equal(item.path, item.tabs[0].path)
+  }
+})
+
+test('findTabbedItem_onlyOnTabPaths_returnsMergedMenu', () => {
+  const { groups } = sessionNavigation(admin)
+  assert.equal(findTabbedItem(groups, '/admin/fds/rule-change-requests')?.label, '탐지 룰')
+  assert.equal(findTabbedItem(groups, '/admin/insider-cases/')?.label, '내부자 보안')
+  assert.equal(findTabbedItem(groups, '/admin/case-assignments')?.label, '사건 담당')
+  // 탭이 없는 메뉴 · 상세 같은 하위 주소에서는 탭 줄을 보이지 않는다
+  assert.equal(findTabbedItem(groups, '/admin/users'), undefined)
+  assert.equal(findTabbedItem(groups, '/admin/insider-cases/3'), undefined)
 })
 
 test('가맹점 관리는 관리자에게만 메뉴와 하위 경로를 제공한다', () => {
@@ -208,9 +229,9 @@ test('sessionNavigation_caseAssignmentMenu_adminOnly', () => {
     sessionNavigation(user).groups.flatMap((group) => group.items.map((item) => item.path))
 
   assert.deepEqual(
-    sessionNavigation(admin).groups.find(
-      (group) => group.section === '직원 관리' && group.title === '사건',
-    )?.items,
+    sessionNavigation(admin)
+      .groups.find((group) => group.title === '직원 관리')
+      ?.items.find((item) => item.label === '사건 담당')?.tabs,
     [
       { label: '담당 현황', path: paths[0] },
       { label: '변경 요청', path: paths[1], badge: 'caseAssignmentRequests' },

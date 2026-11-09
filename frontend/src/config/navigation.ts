@@ -10,9 +10,18 @@ export type NavBadge =
   | 'rawViewReviews'
   | 'insiderAlerts'
   | 'insiderCases'
-export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
-/** section은 관리자 메뉴의 큰 묶음 이름이다 (ADR-0082 8절). 같은 section 그룹은 붙여 둔다. */
-export type NavGroup = { section?: string; title: string; items: NavItem[] }
+/** 한 메뉴 안에서 본문 위 탭으로 나눠 보는 화면 (ADR-0082 8절). 주소는 화면마다 그대로 둔다. */
+export type NavTab = { label: string; path: string; badge?: NavBadge }
+/** tabs가 있으면 path는 첫 탭 주소이고, 메뉴 배지는 탭 배지의 합이다. */
+export type NavItem = {
+  label: string
+  path: string
+  permission?: Permission
+  badge?: NavBadge
+  tabs?: NavTab[]
+}
+/** title이 없는 그룹은 묶음 제목 없이 메뉴만 보인다 (관리자 홈). */
+export type NavGroup = { title?: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string }> = {
   security: { label: '보안 직원' },
@@ -65,71 +74,68 @@ export const navByRole: Record<Role, NavGroup[]> = {
 export const adminNavigation = {
   label: '관리자',
   landing: '/admin/home',
-  // 대상별 3단 — 가맹점 · 직원 · 회사 전체 설정 (ADR-0082 8절, #659)
+  // 큰 묶음 › 메뉴 2단. 같은 대상을 다루는 화면은 한 메뉴의 탭으로 합친다 (ADR-0082 8절)
   groups: [
-    { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
+    { items: [{ label: '홈', path: '/admin/home' }] },
     {
-      section: '가맹점 관리',
-      title: '운영',
+      title: '가맹점 관리',
       items: [
         { label: '이용 신청', path: '/admin/applications' },
         { label: '가맹점 목록', path: '/admin/merchants' },
+        // 사장님 계정 403 탐지 (#515)
+        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
       ],
     },
-    // 사장님 계정 403 탐지 (#515)
     {
-      section: '가맹점 관리',
-      title: '보안',
-      items: [{ label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' }],
-    },
-    // FDS 사건 담당 (#608) — 관리자는 사건 상세가 아니라 담당 배정만 본다 (ADR-0065)
-    {
-      section: '직원 관리',
-      title: '사건',
+      title: '직원 관리',
       items: [
-        { label: '담당 현황', path: '/admin/case-assignments' },
+        // FDS 사건 담당 (#608) — 관리자는 사건 상세가 아니라 담당 배정만 본다 (ADR-0065)
         {
-          label: '변경 요청',
-          path: '/admin/case-assignment-requests',
-          badge: 'caseAssignmentRequests',
+          label: '사건 담당',
+          path: '/admin/case-assignments',
+          tabs: [
+            { label: '담당 현황', path: '/admin/case-assignments' },
+            {
+              label: '변경 요청',
+              path: '/admin/case-assignment-requests',
+              badge: 'caseAssignmentRequests',
+            },
+          ],
         },
-      ],
-    },
-    // 원문 열람 사후 검토 · 내부자 경보 · 내부자 사건 · 내부자 관제 (#619 · #516 · #670 · #679). 관리자는 원문을 보지 않는다
-    {
-      section: '직원 관리',
-      title: '보안',
-      items: [
+        // 원문 열람 사후 검토 · 내부자 관제 · 경보 · 사건 (#619 · #679 · #516 · #670). 관리자는 원문을 보지 않는다
         { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
-        { label: '내부자 경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
-        { label: '내부자 사건', path: '/admin/insider-cases', badge: 'insiderCases' },
-        { label: '내부자 관제', path: '/admin/insider-monitor' },
-      ],
-    },
-    // 계정은 사장님 · 보안 직원 · 관리자에 걸친 회사 전체 일 — 한 화면에서 역할 · 상태 필터로 나눠 본다
-    {
-      section: '시스템 설정',
-      title: '계정',
-      items: [{ label: '계정 관리', path: '/admin/users' }],
-    },
-    {
-      section: '시스템 설정',
-      title: '탐지 룰',
-      items: [
-        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
         {
-          label: '룰 변경 요청',
-          path: '/admin/fds/rule-change-requests',
-          badge: 'ruleChangeRequests',
+          label: '내부자 보안',
+          path: '/admin/insider-monitor',
+          tabs: [
+            { label: '관제', path: '/admin/insider-monitor' },
+            { label: '경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
+            { label: '사건', path: '/admin/insider-cases', badge: 'insiderCases' },
+          ],
         },
-        { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
       ],
     },
-    // AI 조사 긴급정지 (#626, ADR-0083) — 정지 · 다시 켜기 · 변경 기록
     {
-      section: '시스템 설정',
-      title: 'AI',
-      items: [{ label: 'AI 조사 긴급정지', path: '/admin/ai-switch' }],
+      title: '시스템 설정',
+      items: [
+        // 계정은 사장님 · 보안 직원 · 관리자에 걸친 회사 전체 일 — 한 화면에서 역할 · 상태 필터로 나눠 본다
+        { label: '계정 관리', path: '/admin/users' },
+        {
+          label: '탐지 룰',
+          path: '/admin/fds/rules',
+          tabs: [
+            { label: '룰 목록', path: '/admin/fds/rules' },
+            {
+              label: '변경 요청',
+              path: '/admin/fds/rule-change-requests',
+              badge: 'ruleChangeRequests',
+            },
+            { label: '변경 이력', path: '/admin/fds/rule-policy-change-histories' },
+          ],
+        },
+        // AI 조사 긴급정지 (#626, ADR-0083) — 정지 · 다시 켜기 · 변경 기록
+        { label: 'AI 조사 긴급정지', path: '/admin/ai-switch' },
+      ],
     },
   ] satisfies NavGroup[],
 }
@@ -186,10 +192,24 @@ export function canOpenPath(user: AuthUser, pathname: string) {
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups
     .flatMap((group) => group.items)
-    .find(
-      (item) =>
-        pathname === item.path || (item.path !== base && pathname.startsWith(item.path + '/')),
+    .find((item) =>
+      navItemPaths(item).some(
+        (path) => pathname === path || (path !== base && pathname.startsWith(path + '/')),
+      ),
     )
   if (!guarded?.permission) return true
   return groups.some((group) => group.items.some((item) => item.path === guarded.path))
+}
+
+/** 메뉴 하나가 여는 주소들. 탭으로 합친 메뉴는 탭 주소 전부다. */
+export function navItemPaths(item: NavItem) {
+  return item.tabs ? item.tabs.map((tab) => tab.path) : [item.path]
+}
+
+/** 지금 주소가 탭 주소와 같으면 그 메뉴를 돌려준다. 상세 같은 하위 주소에서는 탭을 보이지 않는다. */
+export function findTabbedItem(groups: NavGroup[], pathname: string) {
+  const path = pathname.replace(/\/+$/, '')
+  return groups
+    .flatMap((group) => group.items)
+    .find((item) => item.tabs?.some((tab) => tab.path === path))
 }

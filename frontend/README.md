@@ -48,16 +48,14 @@ npm run dev
 
 ### 관리자 (`/admin`, ADMIN)
 
-| 메뉴 구역          | 화면                                                                                                                        | API 모듈                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| 개요               | 홈 `/admin/home`                                                                                                            | `adminHome.ts`                                                                  |
-| 가맹점 관리 › 운영 | 이용 신청 `applications`, 가맹점 목록·만들기·상세 `merchants`                                                               | `adminApplications.ts`, `adminMerchants.ts`, `integration.ts`                   |
-| 가맹점 관리 › 보안 | 계정 접근 이상 탐지 `fds/operator-access-detections`                                                                        | `fds.ts`                                                                        |
-| 직원 관리 › 사건   | 사건 담당 현황 `case-assignments`, 담당 변경 요청 `case-assignment-requests`                                                | `caseAssignments.ts`                                                            |
-| 직원 관리 › 보안   | 원문 열람 검토 `raw-view-reviews`, 내부자 경보 `insider-alerts`, 내부자 사건 `insider-cases`, 내부자 관제 `insider-monitor` | `rawViewReviews.ts`, `insiderAlerts.ts`, `insiderCases.ts`, `insiderMonitor.ts` |
-| 계정               | 계정 관리·만들기·상세 `users`                                                                                               | `adminAccounts.ts`                                                              |
-| 탐지 룰            | 탐지 룰 목록 `fds/rules`, 룰 변경 요청 `fds/rule-change-requests`, 룰 변경 이력 `fds/rule-policy-change-histories`          | `fds.ts`                                                                        |
-| AI                 | AI 조사 긴급정지 `ai-switch`                                                                                                | `aiSwitch.ts`                                                                   |
+메뉴는 큰 묶음 › 메뉴 2단이고, 같은 대상을 다루는 화면은 메뉴 하나에 본문 위 탭으로 합칩니다 ([ADR-0082](../docs/decisions/0082-insider-access-security.md) 8절). 탭마다 주소는 그대로입니다.
+
+| 메뉴 구역   | 메뉴 › 화면                                                                                                                                                                                                 | API 모듈                                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| (제목 없음) | 홈 `/admin/home`                                                                                                                                                                                            | `adminHome.ts`                                                                                        |
+| 가맹점 관리 | 이용 신청 `applications`, 가맹점 목록·만들기·상세 `merchants`, 계정 접근 이상 탐지 `fds/operator-access-detections`                                                                                         | `adminApplications.ts`, `adminMerchants.ts`, `integration.ts`, `fds.ts`                               |
+| 직원 관리   | 사건 담당 › [담당 현황 `case-assignments` · 변경 요청 `case-assignment-requests`], 원문 열람 검토 `raw-view-reviews`, 내부자 보안 › [관제 `insider-monitor` · 경보 `insider-alerts` · 사건 `insider-cases`] | `caseAssignments.ts`, `rawViewReviews.ts`, `insiderMonitor.ts`, `insiderAlerts.ts`, `insiderCases.ts` |
+| 시스템 설정 | 계정 관리·만들기·상세 `users`, 탐지 룰 › [룰 목록 `fds/rules` · 변경 요청 `fds/rule-change-requests` · 변경 이력 `fds/rule-policy-change-histories`], AI 조사 긴급정지 `ai-switch`                          | `adminAccounts.ts`, `fds.ts`, `aiSwitch.ts`                                                           |
 
 관리자는 로그인하면 이전 방문 주소 대신 항상 `/admin/home`에서 시작합니다 (#307).
 내부자 관제 화면은 화면이 보일 때 2초마다 다시 읽고, 마지막 조작 뒤 5분이 지나면 자동 갱신을 멈춥니다 (#691).
