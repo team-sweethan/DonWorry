@@ -28,7 +28,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -52,8 +51,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class InsiderDetectionService {
     private static final String SECURITY_STAFF = "SECURITY_STAFF";
     // 담당 밖 시도로 보는 거부 이유. CASE_CLOSED는 지난 사건 확인처럼 정상 업무에서도 나와 세지 않는다 (#516 11/07 결정)
-    private static final Set<StaffAccessDenyReason> OUT_OF_SCOPE =
-            Set.of(StaffAccessDenyReason.NOT_ASSIGNEE, StaffAccessDenyReason.PAYMENT_NOT_IN_CASE);
+    // 담당 범위 밖 고객 내보내기(#730)도 같은 성격이다
+    private static final Set<StaffAccessDenyReason> OUT_OF_SCOPE = Set.of(
+            StaffAccessDenyReason.NOT_ASSIGNEE,
+            StaffAccessDenyReason.PAYMENT_NOT_IN_CASE,
+            StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE);
     // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
     private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
             Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
@@ -170,7 +172,8 @@ public class InsiderDetectionService {
         return alertId;
     }
 
-    // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 N개에서 막히면 주의. 같은 사건 재시도는 한 번으로 센다
+    // INS-01 담당 밖 접근 반복 — 짧은 시간에 서로 다른 사건 · 고객 N개에서 막히면 주의. 같은 대상 재시도는 한 번으로 센다
+    // 범위 밖 내보내기 거부(#730)는 사건 번호가 없어 가맹점 · 고객 번호를 대상으로 센다
     private void checkIns01(Long staffId, Instant at, Instant enabledAt) {
         Duration window = properties.ins01Window();
         List<StaffAccessRecorded> denials =
@@ -178,13 +181,13 @@ public class InsiderDetectionService {
                         .filter(InsiderDetectionService::isOutOfScopeDenial)
                         .toList();
         List<StaffAccessRecorded> hit =
-                windowMatching(denials, at, window, w -> distinctCases(w) >= properties.ins01CautionCases());
+                windowMatching(denials, at, window, w -> distinctTargets(w) >= properties.ins01CautionCases());
         if (hit.isEmpty()) return;
         raise(
                 staffId,
                 InsiderRule.INS_01,
                 InsiderAlertSeverity.CAUTION,
-                "%d분 안에 담당 밖 사건 %d개 접근 거부".formatted(window.toMinutes(), distinctCases(hit)),
+                "%d분 안에 담당 밖 사건 · 고객 %d개 접근 거부".formatted(window.toMinutes(), distinctTargets(hit)),
                 hit);
     }
 
@@ -313,10 +316,12 @@ public class InsiderDetectionService {
         return List.of();
     }
 
-    private static long distinctCases(List<StaffAccessRecorded> records) {
+    // 사건 거부는 사건 번호, 내보내기 거부는 (가맹점, 고객 번호)가 대상이다. 고객 조건 없는 내보내기는 한 대상으로 묶인다
+    private static long distinctTargets(List<StaffAccessRecorded> records) {
         return records.stream()
-                .map(StaffAccessRecorded::caseId)
-                .filter(Objects::nonNull)
+                .map(e -> e.caseId() != null
+                        ? "case:" + e.caseId()
+                        : "customer:" + e.merchantId() + ":" + e.customerRef())
                 .distinct()
                 .count();
     }

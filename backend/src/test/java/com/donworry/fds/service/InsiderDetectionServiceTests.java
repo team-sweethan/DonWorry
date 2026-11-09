@@ -422,6 +422,26 @@ class InsiderDetectionServiceTests {
         assertThat(savedAlerts).isEmpty();
     }
 
+    // 담당 밖 고객 3명의 거래를 10분 안에 내보내려다 막혔는데 경보가 없으면 반출 시도를 놓친다 (#730)
+    // 내보내기 거부에는 사건 번호가 없어 고객 단위로 센다
+    @Test
+    void ins01_outOfScopeExportDenialsForDistinctCustomers_raisesCaution() {
+        StaffAccessRecorded last = given(
+                exportDenied(1L, 7L, "7:1001", T0),
+                exportDenied(2L, 7L, "7:1002", T0.plusSeconds(120)),
+                exportDenied(3L, 7L, "7:1003", T0.plusSeconds(240)));
+
+        service.detect(last);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_01);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+        });
+        assertThat(savedEvidence)
+                .extracting(InsiderAlertEvidence::getAccessEventId)
+                .containsExactly(1L, 2L, 3L);
+    }
+
     // 1시간 안 원문 열람이 기준에 닿았는데 경보가 없으면 몰아보기를 놓친다 (기준 전에는 경보 없음)
     @Test
     void ins03_rawViewsReachThresholdInHour_raisesCaution() {
@@ -692,6 +712,20 @@ class InsiderDetectionServiceTests {
                 .result(StaffAccessResult.DENIED)
                 .denyReason(reason)
                 .caseId(caseId)
+                .occurredAt(at)
+                .build();
+    }
+
+    private static StaffAccessRecorded exportDenied(Long eventId, Long merchantId, String customerRef, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.TRANSACTION_EXPORT)
+                .result(StaffAccessResult.DENIED)
+                .denyReason(StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE)
+                .merchantId(merchantId)
+                .customerRef(customerRef)
                 .occurredAt(at)
                 .build();
     }

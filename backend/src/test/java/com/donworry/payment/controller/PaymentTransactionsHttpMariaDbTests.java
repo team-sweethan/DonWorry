@@ -3,6 +3,7 @@ package com.donworry.payment.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.service.UserSessionService;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentEvaluationSnapshot;
@@ -103,6 +104,10 @@ class PaymentTransactionsHttpMariaDbTests {
             sessions.expireAll(id);
             // 조회 기록(#615)은 직원 · 가맹점 FK라 계정 · 가맹점보다 먼저 지운다
             jdbc.update("DELETE FROM staff_access_events WHERE staff_id=?", id);
+            jdbc.update(
+                    "DELETE FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT,'$.staffId')=?",
+                    StaffAccessRecorded.class.getName(),
+                    id);
             // 내보내기 차단(#651)이 남긴 경보 · 정지 기록 · 계정 변경 이력
             jdbc.update(
                     "DELETE e FROM insider_alert_evidences e JOIN insider_alerts a ON a.alert_id = e.alert_id"
@@ -326,6 +331,40 @@ class PaymentTransactionsHttpMariaDbTests {
             assertThat(e.get("deny_reason")).isEqualTo("INSIDER_ALERT_OPEN");
         });
         assertThat(send(staff, "GET", PATH).statusCode()).isEqualTo(401);
+    }
+
+    // 주문번호로만 찾아 내보내면 기록에 고객 번호가 남지 않아 INS-08 · 09가 세지 못했다 (#712 재현)
+    // 이제 고객 조건이 없으면 파일 없이 거부하고 거부 기록을 남긴다. 거부만으로 계정을 정지하지는 않는다 (#730)
+    @Test
+    void export_whenSearchedByOrderRefOnly_isDeniedAndRecorded() throws Exception {
+        String orderRef = prefix + "-ord";
+        payment(merchantId, "9" + merchantId, orderRef, now.minus(Duration.ofHours(1)));
+
+        var response = export("merchantId=" + merchantId + "&orderRef=" + orderRef);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(403);
+        assertThat(response.body()).contains("PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE");
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_EXPORT");
+            assertThat(e.get("result")).isEqualTo("DENIED");
+            assertThat(e.get("deny_reason")).isEqualTo("EXPORT_OUT_OF_SCOPE");
+        });
+        assertThat(accountStatus(staffId())).isEqualTo("ACTIVE");
+    }
+
+    private long staffId() {
+        return jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "staff");
+    }
+
+    private HttpResponse<String> export(String filter) throws Exception {
+        return com.donworry.HttpCsrfTestSupport.send(
+                staff,
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + PATH + "/export?" + filter))
+                        .POST(HttpRequest.BodyPublishers.noBody()));
+    }
+
+    private String accountStatus(long staffId) {
+        return jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, staffId);
     }
 
     private List<Map<String, Object>> accessEvents(String suffix) {

@@ -160,7 +160,7 @@ final class InsiderReportFacts {
         List<String> normal = new ArrayList<>();
         normal.add("코드는 행동의 횟수와 순서만 셌습니다. 업무상 이유가 있었는지는 본인 소명과 담당 사건 기록으로 확인해야 합니다.");
         if (rules.contains(InsiderRule.INS_01)) {
-            normal.add("담당이 아닌 사건에 접근한 시각에 담당 변경 요청 · 인수인계가 있었는지 사건 배정 이력으로 확인할 수 있습니다.");
+            normal.add("담당이 아닌 사건에 접근하거나 담당이 아닌 고객의 거래를 내보내려 한 시각에 담당 변경 요청 · 인수인계가 있었는지 사건 배정 이력으로 확인할 수 있습니다.");
         }
         if (rules.contains(InsiderRule.INS_03)) {
             normal.add(

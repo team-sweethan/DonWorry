@@ -46,6 +46,7 @@ const denyLabel: Record<string, string> = {
   CASE_CLOSED: '종료된 사건',
   PAYMENT_NOT_IN_CASE: '사건에 없는 결제',
   INSIDER_ALERT_OPEN: '열린 경보 중 내보내기',
+  EXPORT_OUT_OF_SCOPE: '담당 아닌 고객 내보내기',
 }
 const oneLine = {
   onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),

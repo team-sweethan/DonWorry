@@ -13,6 +13,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.InsiderExportGuard;
+import com.donworry.fds.api.StaffCaseScope;
+import com.donworry.fds.api.StaffCaseScopeReader;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.MerchantDirectoryEntry;
 import com.donworry.identity.api.MerchantDirectoryReader;
@@ -26,34 +28,98 @@ import com.donworry.payment.dto.PaymentTransactionsQueryRequest;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.repository.PaymentTransactionRow;
 import com.donworry.payment.repository.PaymentTransactionsRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-// 거래 내역 CSV 내보내기 (#651) — 승인된 테스트 목록만 (노트 issue-651 "승인된 테스트 목록")
+// 거래 내역 CSV 내보내기 (#651 · #730) — 승인된 테스트 목록만 (노트 issue-651 · issue-730 "승인된 테스트 목록")
 // 응답 롤백 뒤 정지 유지 · 세션 끊김은 PaymentTransactionsHttpMariaDbTests가 실제 DB로 확인한다
 class PaymentTransactionsExportTests {
     private static final Long STAFF = 4L;
     private static final Long MERCHANT = 11L;
     private static final Instant NOW = Instant.parse("2026-11-08T01:00:00Z");
     private static final int MAX_ROWS = 3;
+    private static final String OWN_CUSTOMER = "11:5001";
+    private static final String OTHER_CUSTOMER = "11:5002";
 
     private final PaymentTransactionsRepository repository = mock(PaymentTransactionsRepository.class);
     private final StaffAccessRecorder recorder = mock(StaffAccessRecorder.class);
     private final CurrentStaff currentStaff = mock(CurrentStaff.class);
     private final MerchantDirectoryReader merchants = mock(MerchantDirectoryReader.class);
     private final InsiderExportGuard guard = mock(InsiderExportGuard.class);
-    private final PaymentTransactionsExportService service =
-            new PaymentTransactionsExportService(repository, recorder, currentStaff, merchants, guard, MAX_ROWS);
+    private final StaffCaseScopeReader scopeReader = mock(StaffCaseScopeReader.class);
+    private final PaymentTransactionsExportService service = new PaymentTransactionsExportService(
+            repository, recorder, currentStaff, merchants, guard, scopeReader, Duration.ofDays(30), MAX_ROWS);
 
     @BeforeEach
     void setUp() {
         when(merchants.findAll()).thenReturn(List.of(new MerchantDirectoryEntry(MERCHANT, "m-11", "케이크 가게", "ACTIVE")));
+        // 이 직원의 담당 범위 = 가맹점 11의 고객 OWN_CUSTOMER 한 명
+        when(scopeReader.findScope(eq(STAFF), any()))
+                .thenReturn(new StaffCaseScope(
+                        Set.of(MERCHANT), Set.of(new StaffCaseScope.CaseCustomer(MERCHANT, OWN_CUSTOMER))));
+    }
+
+    // 담당 아닌 고객으로 거른 내보내기가 통하면 남의 사건 고객 거래가 파일로 나간다 (#730)
+    @Test
+    void exportCsv_whenCustomerNotInStaffCaseScope_recordsDenialWithoutReadingRows() {
+        signIn("SECURITY_STAFF");
+        when(guard.allowExport(STAFF)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.exportCsv(query(OTHER_CUSTOMER)))
+                .isInstanceOf(ExportOutOfScopeException.class);
+
+        verifyNoInteractions(repository);
+        var access = ArgumentCaptor.forClass(StaffAccess.class);
+        verify(recorder).recordDenied(access.capture(), eq(StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE));
+        assertThat(access.getValue().accessType()).isEqualTo(StaffAccessType.TRANSACTION_EXPORT);
+        assertThat(access.getValue().customerRef()).isEqualTo(OTHER_CUSTOMER);
+        verify(recorder, never()).recordAllowed(any());
+    }
+
+    // 고객 조건 없이(기간 · 주문번호만) 내보내기가 통하면 한 번에 최대 상한까지 나가고, 기록에 고객이 없어 탐지도 못 센다 (#712)
+    @Test
+    void exportCsv_whenNoCustomerFilter_recordsDenialWithoutReadingRows() {
+        signIn("SECURITY_STAFF");
+        when(guard.allowExport(STAFF)).thenReturn(true);
+        var orderOnly = PaymentTransactionsQueryRequest.builder()
+                .from(NOW.minusSeconds(3600))
+                .to(NOW)
+                .merchantId(MERCHANT)
+                .orderRef("order-1")
+                .page(0)
+                .size(20)
+                .build();
+
+        assertThatThrownBy(() -> service.exportCsv(orderOnly)).isInstanceOf(ExportOutOfScopeException.class);
+
+        verifyNoInteractions(repository);
+        verify(recorder).recordDenied(any(), eq(StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE));
+        verify(recorder, never()).recordAllowed(any());
+    }
+
+    // 담당 사건 고객 내보내기는 정상 업무다 — 막히면 사건 조사 자료를 꺼낼 수 없다
+    @Test
+    void exportCsv_whenCustomerInStaffCaseScope_exportsAndRecordsAllowed() {
+        signIn("SECURITY_STAFF");
+        when(guard.allowExport(STAFF)).thenReturn(true);
+        when(repository.findForExport(any(), anyInt())).thenReturn(rows(2));
+
+        String csv = service.exportCsv(query());
+
+        assertThat(csv.split("\r\n")).hasSize(3);
+        var access = ArgumentCaptor.forClass(StaffAccess.class);
+        verify(recorder).recordAllowed(access.capture());
+        assertThat(access.getValue().customerRef()).isEqualTo(OWN_CUSTOMER);
+        assertThat(access.getValue().itemCount()).isEqualTo(2);
+        verify(recorder, never()).recordDenied(any(), any());
     }
 
     // 열린 경보로 막히면 거래 행을 읽지 않고, 거부 기록(INSIDER_ALERT_OPEN)만 남기고 차단한다
@@ -168,11 +234,17 @@ class PaymentTransactionsExportTests {
                         StaffSummary.builder().userId(STAFF).role(role).build()));
     }
 
+    // 기본은 담당 범위 안 고객으로 거른 조건 — 화면은 "가맹점ID:번호"로 보낸다
     private static PaymentTransactionsQueryRequest query() {
+        return query(OWN_CUSTOMER);
+    }
+
+    private static PaymentTransactionsQueryRequest query(String customerRef) {
         return PaymentTransactionsQueryRequest.builder()
                 .from(NOW.minusSeconds(3600))
                 .to(NOW)
                 .merchantId(MERCHANT)
+                .customerRef(customerRef)
                 .page(0)
                 .size(20)
                 .build();
