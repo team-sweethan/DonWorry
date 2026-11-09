@@ -192,14 +192,12 @@ export function ManagementLayout({
   header,
   groups,
   badges,
-  responsive = false,
   children,
 }: {
   role: ManagementRole
   header: ReactNode
   groups: NavGroup[]
   badges?: NavBadges
-  responsive?: boolean
   children?: ReactNode
 }) {
   const location = useLocation()
@@ -211,7 +209,7 @@ export function ManagementLayout({
   }
   return (
     <div
-      className={`admin-viewport${responsive ? ' application-review-viewport' : ''}${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
+      className={`admin-viewport${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
       data-role={role}
     >
       <a href="#main" className="dw-skip-link">

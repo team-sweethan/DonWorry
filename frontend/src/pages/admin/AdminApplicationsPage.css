@@ -183,77 +183,7 @@
   }
 }
 
-.admin-viewport.application-review-viewport {
-  min-width: 320px;
-}
-.admin-viewport.application-review-viewport .dw-main {
-  min-width: 0;
-}
 @media (max-width: 760px) {
-  .admin-viewport.application-review-viewport {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto 1fr;
-  }
-  .admin-viewport.application-review-viewport .dw-header {
-    flex-wrap: wrap;
-    height: auto;
-    min-height: 64px;
-    padding: 8px 16px;
-    gap: 8px;
-  }
-  .admin-viewport.application-review-viewport .dw-brand {
-    flex: 0 0 auto;
-    width: auto;
-    padding-left: 0;
-    height: auto;
-    min-height: 40px;
-  }
-  .admin-viewport.application-review-viewport .dw-header-center {
-    display: none;
-  }
-  .admin-viewport.application-review-viewport .dw-header-tools {
-    padding: 0;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .admin-viewport.application-review-viewport .dw-last-login {
-    display: none;
-  }
-  .admin-viewport.application-review-viewport .dw-sidebar {
-    position: static;
-    height: auto;
-    padding: 10px 12px;
-    min-width: 0;
-    overflow-x: auto;
-  }
-  .admin-viewport.application-review-viewport .dw-sidebar nav {
-    display: flex;
-    gap: 8px;
-  }
-  .admin-viewport.application-review-viewport .dw-nav-group {
-    display: flex;
-    gap: 4px;
-    margin: 0;
-  }
-  .admin-viewport.application-review-viewport .dw-nav-heading,
-  .admin-viewport.application-review-viewport .dw-nav-section {
-    display: none;
-  }
-  /* 가로 메뉴에서는 관리자 작은 묶음 들여쓰기를 쓰지 않는다 */
-  .admin-viewport[data-role].application-review-viewport .dw-nav-subgroup .dw-nav-link {
-    padding-left: 12px;
-  }
-  .admin-viewport.application-review-viewport .dw-nav-link {
-    width: auto;
-    white-space: nowrap;
-  }
-  .admin-viewport.application-review-viewport .dw-main {
-    padding: 24px 16px;
-  }
-  .admin-viewport.application-review-viewport .dw-page-header {
-    gap: 12px;
-    flex-wrap: wrap;
-  }
   .ar-process {
     padding: 16px;
     gap: 10px 18px;
@@ -284,4 +214,24 @@
   font-size: 12px;
   line-height: 1.8;
   margin: 0;
+}
+
+@media screen and (width < 1280px) {
+  .ar-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ar-filters {
+    flex-wrap: wrap;
+  }
+}
+@media screen and (width <= 760px) {
+  .ar-filters {
+    flex-direction: column;
+  }
+  .ar-filters .ant-select {
+    width: 100%;
+  }
+  .ar-state > div {
+    flex-wrap: wrap;
+  }
 }

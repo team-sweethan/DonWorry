@@ -335,10 +335,6 @@
   }
 }
 
-/* 홈은 좁은 창에서도 현황이 화면 밖으로 밀리지 않게 재배치한다. */
-.admin-viewport:has(.ah-home) {
-  min-width: 760px;
-}
 @media (max-width: 1100px) {
   .ah-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -443,5 +439,31 @@
   .ah-application-entry {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media screen and (width < 1280px) {
+  .ah-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ah-management-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media screen and (width <= 760px) {
+  .ah-application-entry,
+  .ah-management-heading,
+  .ah-management-total {
+    flex-wrap: wrap;
+  }
+  .ah-application-entry {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .ah-approval-summary {
+    padding: 20px;
+  }
+  .ah-summary-copy {
+    min-width: 0;
   }
 }
