@@ -239,3 +239,9 @@ P6 5단계 #493: [회수 배분 원장 ERD](../settlement/refund-recovery.md#erd
 사용자가 저장소 ERD · [ADR-0082](../decisions/0082-insider-access-security.md) 2절 선행 구현을 승인했다(조각 9). Notion 반영은 후속이다.
 
 [저장 계약](contracts.md#675-p4-내부자-사건-해제-검토-보고서-2026-11-08).
+
+### #752 P4 보고서 뒤 사건 질문 · 답변 (2026-11-10)
+
+[ADR-0086](../decisions/0086-report-case-questions.md) 5절에서 사용자가 새 표와 칸(안)을 정했다. 정확한 컬럼 · 타입은 이 PR의 migration이 정본이다.
+
+[저장 계약](contracts.md#752-p4-보고서-뒤-사건-질문--답변-2026-11-10).

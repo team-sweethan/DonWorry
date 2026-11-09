@@ -68,6 +68,7 @@ migration 열은 생성·관련 변경 SQL을 찾는 색인입니다. 한 파일
 | `investigation` (#670) | P3 수민 | `insider_cases`, `insider_case_alerts` (내부자 사건 · 관리자 판정 · 징계 사건 정지 해제, ADR-0082) | [내부자 사건](../../backend/src/main/resources/db/migration/V20261108_123006__create_insider_cases.sql) |
 | `investigation/report` | P4 현규 | `ai_reports` | [20261022_145116](../../backend/src/main/resources/db/migration/V20261022_145116__create_ai_reports_table.sql) |
 | `investigation/report` (#675) | P4 현규 | `ai_insider_reports` (내부자 사건 해제 검토 보고서, ADR-0082) | [해제 검토 보고서](../../backend/src/main/resources/db/migration/V20261108_134720__create_ai_insider_reports.sql) |
+| `investigation/report` (#752) | P4 현규 | `ai_report_questions` (보고서 뒤 사건 질문 · 답변, ADR-0086) | [사건 질문](../../backend/src/main/resources/db/migration/V20261110_053058__create_ai_report_questions.sql) |
 | `investigation/report` (#412) | P4 현규 | `ml_shadow_scores` (FDS ML Shadow 채점 기록) | [ML Shadow](../../backend/src/main/resources/db/migration/V20261102_125730__create_ml_shadow_scores.sql) |
 | `investigation/report` (#626) | P4 현규 | `ai_switch_histories` (AI 조사 긴급정지 스위치 변경 기록, ADR-0083) | [긴급정지](../../backend/src/main/resources/db/migration/V20261107_101635__create_ai_switch_histories.sql) |
 | `settlement` | P6 민정 | `captures`, `settlements` | [20261022_145118](../../backend/src/main/resources/db/migration/V20261022_145118__create_captures_table.sql) · [20261022_145120](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
@@ -88,7 +89,7 @@ migration 열은 생성·관련 변경 SQL을 찾는 색인입니다. 한 파일
 | P1 identity | [저장 계약](contracts.md#p1-identity) · [관리 계정](../identity/129-admin-account-design.md) · [로그인 잠금](../identity/127-login-attempt-design.md) · [로그인 이력](../identity/147-login-history-design.md) · [신청](../identity/315-application-design.md) · [승인](../identity/315-approval-design.md) · [주소](../identity/354-pr1-application-design.md) · [키·연동](../identity/354-pr-b-key-design.md) · [상태 전환](../identity/131-status-transition.md) · [CakeShop 시드](../identity/246-cakeshop-provisioning.md) |
 | P2 fds | [룰 변경·차단 해제 저장 설명](contracts.md#p2-fds) · 위 소유 표의 생성·변경 SQL |
 | P3 investigation | [배정·원문 열람 검토·내부자 사건 계약](contracts.md#p3-investigation) |
-| P4 investigation/report | [내부자 사건 보고서 계약](contracts.md#p4-investigationreport) · 위 소유 표의 보고서·ML Shadow·스위치 SQL |
+| P4 investigation/report | [내부자 사건 보고서 · 사건 질문 계약](contracts.md#p4-investigationreport) · 위 소유 표의 보고서·ML Shadow·스위치 SQL |
 | P5 payment | [조치·결제 주문·시도·연락처 계약](contracts.md#p5-payment) · [FDS 복구 계약](../payment/190-fds-recovery-contract.md) · [복구 저장 검토](../payment/273-fds-recovery-storage.md) · [고객 취소 저장](../payment/381-cancellation-storage.md) |
 | P6 settlement | [픽업](../settlement/pickup-schema.md) · [최초 잔액·지출](../settlement/balance-expenses-api.md) · [정기 지출](../settlement/recurring-expenses-api.md#erd) · [D+3](../settlement/d3-policy-and-erd.md) · [지급 원장](../settlement/daily-payouts.md) · [환불 수신](../settlement/refund-receiving.md) · [미지급 제외](../settlement/unpaid-refund-exclusion.md) · [환불 회수](../settlement/refund-recovery.md) |
 
