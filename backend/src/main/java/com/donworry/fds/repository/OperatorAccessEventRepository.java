@@ -12,6 +12,36 @@ import org.springframework.data.jpa.repository.Query;
 public interface OperatorAccessEventRepository extends JpaRepository<OperatorAccessEvent, Long> {
     Optional<OperatorAccessEvent> findByIdentityEventId(Long identityEventId);
 
+    // 요약 집계 (목록 위 요약 띠 · 순위). from은 UTC "yyyy-MM-dd HH:mm:ss.SSSSSS" — occurred_at 인덱스로 범위만 읽는다.
+    // 한국 날짜는 고정 +9시간으로 묶는다 (한국은 서머타임이 없다)
+    @Query(value = """
+            SELECT DATE(DATE_ADD(occurred_at, INTERVAL 9 HOUR)) AS day,
+                   COUNT(*) AS deniedCount
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            GROUP BY DATE(DATE_ADD(occurred_at, INTERVAL 9 HOUR))
+            """, nativeQuery = true)
+    List<OperatorAccessDailyCountProjection> countDailySince(String from);
+
+    @Query(value = """
+            SELECT http_method AS httpMethod,
+                   path AS path,
+                   COUNT(*) AS deniedCount
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            GROUP BY http_method, path
+            ORDER BY deniedCount DESC, path, http_method
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<OperatorAccessPathCountProjection> findTopPathsSince(String from, int limit);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT user_id)
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            """, nativeQuery = true)
+    long countAccountsSince(String from);
+
     List<OperatorAccessEvent> findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
             Long userId, OperatorAccessDeniedType deniedType, Instant from, Instant to);
 

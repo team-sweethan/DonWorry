@@ -317,6 +317,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/rule-catalog"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/summary"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/accounts"),
                                 // 내부자 규칙 카드 (#685). 감시 기준값이 보여 감시 대상인 보안 직원에게 열지 않는다
                                 paths.matcher(HttpMethod.GET, "/api/fds/insider-detections/rule-catalog"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/low/{eventId}"),
