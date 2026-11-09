@@ -196,7 +196,12 @@ export function AlertListPage() {
     const sequence = ++recentSequence.current
     void getFdsEvaluations({ merchantId: targetMerchantId, page: 0, size: RECENT_SIZE })
       .then((response) => {
-        if (sequence !== recentSequence.current) return
+        // 늦게 온 다른 가맹점 응답은 버린다 (가맹점을 바꾼 뒤 이전 가맹점의 점이 남지 않게)
+        if (
+          sequence !== recentSequence.current ||
+          conditions.current.merchantId !== targetMerchantId
+        )
+          return
         const previous =
           recentOf.current?.merchantId === targetMerchantId ? recentOf.current.ids : null
         const added = previous
@@ -390,6 +395,8 @@ export function AlertListPage() {
 
   const selectMerchant = (nextMerchantId: number) => {
     cancelScheduledSearch()
+    // 진행 중인 이전 가맹점의 최근 평가 조회를 무효로 만든다
+    recentSequence.current += 1
     setRecentEvaluations(null)
     setMerchantId(nextMerchantId)
     conditions.current = { filter, query, merchantId: nextMerchantId, page: 0 }
