@@ -1160,7 +1160,19 @@ textarea {
   border: 0;
 }
 
-/* #703: 넓은 화면과 인쇄는 기존 규격을 유지한다. 가로 스크롤은 업무 본문 안에 둔다. */
+/* 넓은 화면과 인쇄에서는 래퍼가 기존 flex 배치에 상자를 추가하지 않는다. */
+.dw-report-scroll {
+  display: contents;
+}
+
+/* 기존 유동 폭 화면은 스크롤바 gutter로 가용 폭이 1280px보다 작아져도 늘리지 않는다. */
+@media screen and (width >= 1280px) {
+  .admin-viewport:has(.oh-home, .ah-home, .application-review) {
+    min-width: 0;
+  }
+}
+
+/* #703: 가로 스크롤은 업무 본문 안에 둔다. */
 @media screen and (width < 1280px) {
   .admin-viewport[data-role] {
     min-width: 0;
@@ -1172,8 +1184,19 @@ textarea {
   .admin-viewport[data-role] .dw-last-login {
     display: none;
   }
-  .admin-viewport[data-role] .dw-main {
+  .admin-viewport[data-role] .dw-main:not(:has(.dw-report-print)) {
     overflow-x: auto;
+  }
+  /* 판정 줄은 스크롤 영역의 형제로 남겨 viewport 기준 sticky를 유지한다. */
+  .dw-report-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .dw-report-scroll > * {
+    min-width: 960px;
   }
   .admin-viewport[data-role] .dw-page-header {
     flex-wrap: wrap;
@@ -1199,8 +1222,7 @@ textarea {
     min-width: 640px;
   }
   /* 거래 내역·Case·보고서는 열 사이 관계를 유지한다. 표의 기존 스크롤도 그대로 둔다. */
-  .admin-viewport[data-role]
-    .dw-container:has(.dw-tx-table, .dw-case-layout-wrap, .dw-report-print) {
+  .admin-viewport[data-role] .dw-container:has(.dw-tx-table, .dw-case-layout-wrap) {
     min-width: 960px;
   }
 }

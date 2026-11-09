@@ -67,29 +67,31 @@ export function ReportFull({
   const fixedNotice = fixedReportNotice(body.investigationTrace)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {fixedNotice && <Alert type="info" showIcon message={fixedNotice} />}
-      <ReportOverview body={body} label={label} ml={ml} marks={marks} />
-      <ReportChecks body={body} checked={checked} onToggle={toggle} />
-      {body.similarCases !== undefined && (
-        <ReportPastCompare
-          body={body}
-          similar={body.similarCases}
-          progress={progress}
-          refreshKey={refreshKey}
+      <div className="dw-report-scroll">
+        {fixedNotice && <Alert type="info" showIcon message={fixedNotice} />}
+        <ReportOverview body={body} label={label} ml={ml} marks={marks} />
+        <ReportChecks body={body} checked={checked} onToggle={toggle} />
+        {body.similarCases !== undefined && (
+          <ReportPastCompare
+            body={body}
+            similar={body.similarCases}
+            progress={progress}
+            refreshKey={refreshKey}
+          />
+        )}
+        <EvidenceSection body={body} />
+        <Collapse
+          items={[
+            {
+              key: 'scope',
+              label: <b>⑤ 조사 범위 · 한계 · 보고서 정보</b>,
+              // 접어 둬도 내용을 미리 그려 인쇄 때 펼쳐 찍는다 (#623, reportPrint.css)
+              forceRender: true,
+              children: <ScopeBody body={body} />,
+            },
+          ]}
         />
-      )}
-      <EvidenceSection body={body} />
-      <Collapse
-        items={[
-          {
-            key: 'scope',
-            label: <b>⑤ 조사 범위 · 한계 · 보고서 정보</b>,
-            // 접어 둬도 내용을 미리 그려 인쇄 때 펼쳐 찍는다 (#623, reportPrint.css)
-            forceRender: true,
-            children: <ScopeBody body={body} />,
-          },
-        ]}
-      />
+      </div>
       <DecisionBar body={body} checked={checked} onDecide={onDecide} />
     </div>
   )
