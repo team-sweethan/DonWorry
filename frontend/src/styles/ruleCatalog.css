@@ -148,8 +148,8 @@
 
 /* 결제 룰도 계정 룰과 같은 세기의 그라데이션을 둔다. 구분은 색으로 한다 (결제 파랑 · 계정 보라, #713) */
 .dw-rule-card-payment {
-  border-color: #d6e4fb;
-  background: linear-gradient(180deg, #f6f9ff 0%, #fff 38%);
+  border-color: #b5cbf3;
+  background: linear-gradient(180deg, #d8e6ff 0%, #ecf3ff 40%, #fff 78%);
 }
 
 .dw-rule-card-account .dw-rule-code {
@@ -239,8 +239,8 @@
 /* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다.
    관리자 화면 배경이 보라라서 테두리를 한 단계 진하게 둔다 (#713). */
 .dw-rule-card-account {
-  border-color: #c4b5fd;
-  background: linear-gradient(180deg, #f8f6ff 0%, #fff 38%);
+  border-color: #b8a6fb;
+  background: linear-gradient(180deg, #eee9ff 0%, #f8f6ff 32%, #fff 60%);
 }
 
 /* 꺼진 룰은 종류와 상관없이 회색 카드로 둔다. 위 그라데이션보다 뒤에 둬야 덮인다 (#713) */
@@ -667,4 +667,32 @@
   .dw-rule-card-detail {
     padding: 0 18px 18px;
   }
+}
+
+/* 결제 룰 카드의 사용 중 · 꺼짐을 멀리서도 구분한다. 사용 중은 파랑 꽉 찬 표시, 꺼짐은 회색 점선 표시.
+   관리 화면 공통 태그 규칙(global.css .admin-viewport[data-role] .ant-tag)이 바탕을 회색으로 덮으므로
+   그보다 구체적인 선택자로 둔다. 관리자 스위치도 꺼짐일 때 진한 회색으로 둬 켜짐(파랑)과 바로 갈린다.
+   계정 룰 카드는 기존 색을 유지한다 */
+.admin-viewport[data-role] .dw-rule-card.dw-rule-card-payment .ant-tag.dw-rule-status-active {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+}
+
+.admin-viewport[data-role] .dw-rule-card.dw-rule-card-payment .ant-tag.dw-rule-status-inactive {
+  border: 1px dashed #94a3b8;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.dw-rule-card.dw-rule-card-payment
+  .dw-rule-frequency
+  .dw-rule-policy-switch:not(.ant-switch-checked) {
+  background: #64748b;
+}
+
+.dw-rule-card.dw-rule-card-payment
+  .dw-rule-frequency
+  .dw-rule-policy-switch:not(.ant-switch-checked):hover {
+  background: #475569;
 }
