@@ -1,0 +1,875 @@
+/* Case 목록 작업 대기열 (#759)
+   움직임 단계: 들어올 때(구역 · 줄 차례로, 막대 차오름, 숫자 올라감) → 고를 때(선택선 · 펼침 · 화살표) →
+   바뀔 때(조건 건수 전환, 새 줄 강조) → 기다릴 때(금융 처리 실패 신호 · 보고서 생성 중 회전).
+   [움직임 끄기]와 시스템의 움직임 줄이기 설정이면 모두 멈춘다 */
+
+.case-queue {
+  --cq-line: #e2e8f0;
+  --cq-muted: #94a3b8;
+  --cq-sub: #64748b;
+  --cq-text: #0f172a;
+  --cq-blue: #2563eb;
+  --cq-blue-soft: #eff6ff;
+  --cq-red: #dc2626;
+  --cq-red-soft: #fef2f2;
+  --cq-amber: #d97706;
+  --cq-orange: #ea580c;
+  --cq-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  transition: padding-right 260ms var(--cq-ease);
+}
+
+.case-queue-refresh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--cq-sub);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 구역이 위에서부터 차례로 들어온다 */
+.case-queue-enter {
+  animation: case-queue-rise 480ms var(--cq-ease) backwards;
+}
+.case-queue-quick.case-queue-enter {
+  animation-delay: 40ms;
+}
+.case-queue-toolbar.case-queue-enter {
+  animation-delay: 110ms;
+}
+.case-queue-table.case-queue-enter {
+  animation: none;
+}
+
+/* 새 사건 · 상태 변화 안내. 직원이 [목록에 반영]을 눌러야 줄이 바뀐다 */
+.case-queue-update {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 10px 14px 10px 32px;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--dw-radius-panel, 10px);
+  background: var(--cq-blue-soft);
+  color: #1e3a8a;
+  font-size: 14px;
+  overflow: hidden;
+  animation: case-queue-drop 320ms var(--cq-ease);
+}
+.case-queue-update::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--cq-blue);
+  animation: case-queue-ping-blue 1.8s ease-out infinite;
+}
+.case-queue-update::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.7) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: case-queue-sheen 1.2s 200ms ease-out 1;
+  pointer-events: none;
+}
+
+.case-queue-card {
+  border-color: var(--cq-line);
+}
+.case-queue-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+  padding: 0 20px;
+}
+
+/* 자주 쓰는 조건 — 범위 전체 건수 + 조건 버튼. 버튼 아래 막대는 진행 사건 중 그 조건의 비율 */
+.case-queue-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 0;
+}
+.case-queue-quick-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-right: 4px;
+  color: var(--cq-sub);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.case-queue-quick-total strong {
+  color: var(--cq-text);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-quick-total small {
+  color: var(--cq-sub);
+  font-size: 13px;
+}
+.case-queue-quick-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 6px;
+  background: var(--cq-line);
+}
+.case-queue-quick button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--cq-line);
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  animation: case-queue-rise 420ms var(--cq-ease) backwards;
+  animation-delay: calc(80ms + var(--i, 0) * 60ms);
+  transition:
+    border-color 160ms,
+    background-color 160ms,
+    color 160ms,
+    transform 160ms var(--cq-ease),
+    box-shadow 160ms;
+}
+.case-queue-quick button strong {
+  display: inline-block;
+  min-width: 14px;
+  color: var(--cq-muted);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  animation: case-queue-pop 360ms var(--cq-ease);
+}
+.case-queue-quick button.is-red strong {
+  color: var(--cq-red);
+}
+.case-queue-quick button.is-amber strong {
+  color: var(--cq-amber);
+}
+.case-queue-quick button.is-orange strong {
+  color: var(--cq-orange);
+}
+.case-queue-quick-track {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+}
+.case-queue-quick-track i {
+  display: block;
+  height: 100%;
+  background: #cbd5e1;
+  transform-origin: left;
+  animation: case-queue-grow 900ms var(--cq-ease) backwards;
+  animation-delay: calc(260ms + var(--i, 0) * 60ms);
+}
+.case-queue-quick button.is-red .case-queue-quick-track i {
+  background: var(--cq-red);
+}
+.case-queue-quick button.is-amber .case-queue-quick-track i {
+  background: var(--cq-amber);
+}
+.case-queue-quick button.is-orange .case-queue-quick-track i {
+  background: var(--cq-orange);
+}
+.case-queue-quick button:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px -6px rgb(15 23 42 / 0.25);
+}
+.case-queue-quick button:active {
+  transform: translateY(0);
+}
+.case-queue-quick button.is-on {
+  border-color: var(--cq-blue);
+  background: var(--cq-blue-soft);
+  color: #1e40af;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
+}
+.case-queue-quick button:focus-visible {
+  outline: 2px solid var(--cq-blue);
+  outline-offset: 2px;
+}
+
+.case-queue-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 20px 14px;
+}
+.case-queue-search {
+  width: 240px;
+  transition: width 240ms var(--cq-ease);
+}
+.case-queue-search.ant-input-affix-wrapper-focused {
+  width: 300px;
+}
+.case-queue-kbd,
+.case-queue-keys kbd {
+  display: inline-block;
+  min-width: 18px;
+  margin: 0 1px;
+  padding: 0 4px;
+  border: 1px solid var(--cq-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  color: #64748b;
+  font: 600 11px/16px inherit;
+  text-align: center;
+}
+.case-queue-search.ant-input-affix-wrapper-focused .case-queue-kbd {
+  opacity: 0;
+}
+.case-queue-sort {
+  min-width: 150px;
+}
+.case-queue-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  border-radius: 9px;
+  background: var(--cq-blue);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  animation: case-queue-pop 320ms var(--cq-ease);
+}
+.case-queue-total {
+  margin-left: auto;
+  color: var(--cq-sub);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  animation: case-queue-drop 220ms var(--cq-ease);
+}
+.case-queue-total strong {
+  display: inline-block;
+  color: var(--cq-blue);
+  font-size: 15px;
+  font-weight: 800;
+  animation: case-queue-count 320ms var(--cq-ease);
+}
+
+.case-queue-filter-panel {
+  display: grid;
+  gap: 12px;
+  width: 240px;
+}
+.case-queue-filter-panel label {
+  display: grid;
+  gap: 4px;
+}
+.case-queue-filter-panel label > span {
+  color: var(--cq-sub);
+  font-size: 12px;
+}
+
+.case-queue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 20px 14px;
+}
+.case-queue-chips .ant-tag {
+  animation: case-queue-pop 260ms var(--cq-ease);
+}
+
+/* ── 표 ── */
+.case-queue-table .ant-table-thead > tr > th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  color: var(--cq-sub);
+  font-size: 12px;
+  font-weight: 600;
+}
+.case-queue-table .ant-table-tbody > tr.ant-table-row > td {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  transition: background-color 160ms;
+}
+.case-queue-table .ant-table-tbody > tr.ant-table-row {
+  cursor: pointer;
+  animation: case-queue-row-in 420ms var(--cq-ease) backwards;
+  animation-delay: calc(var(--i, 0) * 32ms);
+}
+.case-queue-table .ant-table-tbody > tr.ant-table-row:focus-visible {
+  outline: 2px solid var(--cq-blue);
+  outline-offset: -2px;
+}
+.case-queue-table .case-queue-col-amount {
+  padding-right: 28px;
+}
+.case-queue-table .case-queue-col-time {
+  padding-left: 12px;
+}
+
+/* 첫 칸 왼쪽 표시선 — 선택(파랑) · 금융 처리 실패(빨강). 위아래로 펼쳐지며 나타난다 */
+.case-queue-table .ant-table-tbody > tr.ant-table-row > td:first-child {
+  position: relative;
+}
+.case-queue-table .ant-table-tbody > tr.ant-table-row > td:first-child::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: transparent;
+  transform: scaleY(0);
+  transition:
+    transform 220ms var(--cq-ease),
+    background-color 160ms;
+}
+.case-queue-table .ant-table-tbody > tr.is-urgent > td:first-child::before {
+  background: var(--cq-red);
+  transform: scaleY(1);
+}
+.case-queue-table .ant-table-tbody > tr.is-urgent > td {
+  background: linear-gradient(90deg, var(--cq-red-soft), transparent 40%);
+}
+.case-queue-table .ant-table-tbody > tr.is-selected > td:first-child::before {
+  background: var(--cq-blue);
+  transform: scaleY(1);
+}
+.case-queue-table .ant-table-tbody > tr.is-selected > td {
+  background: var(--cq-blue-soft);
+}
+.case-queue-table .ant-table-tbody > tr.is-selected:hover > td {
+  background: #e0ecff;
+}
+.case-queue-table .ant-table-tbody > tr.is-new > td {
+  animation: case-queue-new 1.8s ease-out 1;
+}
+
+.case-queue-case {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.case-queue-case strong {
+  color: var(--cq-text);
+  font-weight: 700;
+  transition: color 160ms;
+}
+.case-queue-table tr.ant-table-row:hover .case-queue-case strong,
+.case-queue-table tr.is-selected .case-queue-case strong {
+  color: var(--cq-blue);
+}
+.case-queue-case span,
+.case-queue-amount span {
+  overflow: hidden;
+  color: var(--cq-sub);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.case-queue-amount {
+  display: grid;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-amount strong {
+  font-weight: 600;
+}
+
+/* 현재 단계와 아래 한 줄 */
+.case-queue-stage {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.case-queue-stage > span {
+  color: var(--cq-sub);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.case-queue-stage > span.is-merge {
+  color: var(--cq-blue);
+}
+/* 금융 처리 실패 — 상태 아이콘에서 신호가 퍼진다 */
+.case-queue-stage.is-urgent .ant-tag::before {
+  border-radius: 50%;
+  animation: case-queue-ping-red 2s ease-out infinite;
+}
+
+/* 최고 위험 점수 — 막대가 차오른다. 80점 이상만 진하게, 50점 미만은 옅게 */
+.case-queue-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-score strong {
+  min-width: 24px;
+  color: #475569;
+  text-align: right;
+  font-weight: 700;
+}
+.case-queue-score-bar {
+  position: relative;
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      #fff calc(50% - 1px),
+      #fff 50%,
+      transparent 50%
+    ),
+    linear-gradient(
+      90deg,
+      transparent calc(80% - 1px),
+      #fff calc(80% - 1px),
+      #fff 80%,
+      transparent 80%
+    ),
+    #eef2f7;
+  overflow: hidden;
+}
+.case-queue-score-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: #cbd5e1;
+  transform-origin: left;
+  overflow: hidden;
+  animation: case-queue-grow 800ms var(--cq-ease) backwards;
+  animation-delay: calc(160ms + var(--i, 0) * 32ms);
+}
+.case-queue-score.is-review strong {
+  color: #b45309;
+}
+.case-queue-score.is-review .case-queue-score-bar i {
+  background: #f5b04b;
+}
+.case-queue-score.is-deny strong {
+  color: var(--cq-red);
+}
+.case-queue-score.is-deny .case-queue-score-bar i {
+  background: linear-gradient(90deg, #f87171, var(--cq-red));
+  box-shadow: 0 0 6px rgb(220 38 38 / 0.45);
+}
+/* 80점 이상 막대 위로 한 번 지나가는 빛 */
+.case-queue-score.is-deny .case-queue-score-bar i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.8), transparent);
+  transform: translateX(-100%);
+  animation: case-queue-sheen 900ms ease-out 1 backwards;
+  animation-delay: calc(900ms + var(--i, 0) * 32ms);
+}
+
+/* 생성 후 경과 — 글자 옆 24시간 막대. 넘긴 사건은 시계 아이콘 · 빗금 빨강 */
+.case-queue-elapsed {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-elapsed-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 64px;
+  color: #475569;
+}
+.case-queue-elapsed-bar {
+  position: relative;
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+.case-queue-elapsed-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: #93c5fd;
+  transform-origin: left;
+  animation: case-queue-grow 800ms var(--cq-ease) backwards;
+  animation-delay: calc(220ms + var(--i, 0) * 32ms);
+}
+.case-queue-elapsed.is-overdue .case-queue-elapsed-text {
+  color: var(--cq-red);
+  font-weight: 700;
+}
+.case-queue-elapsed.is-overdue .case-queue-elapsed-bar i {
+  background: repeating-linear-gradient(-45deg, #f87171 0 4px, var(--cq-red) 4px 8px);
+}
+
+.case-queue-muted {
+  color: var(--cq-muted);
+}
+.case-queue-merge {
+  color: var(--cq-blue);
+  font-weight: 600;
+}
+
+/* 보고서 생성 대기 · 생성 중 — 상태 아이콘에만 작은 회전 */
+.case-queue-report.is-running .ant-tag::before {
+  animation: case-queue-spin 1.6s linear infinite;
+}
+
+/* 열기 — 평소엔 조용하고, 줄에 올리거나 고르면 파랗게 화살표가 나아간다 */
+.case-queue-table .case-queue-open.ant-btn {
+  color: var(--cq-muted);
+  font-weight: 600;
+}
+.case-queue-open .anticon {
+  transition: transform 200ms var(--cq-ease);
+}
+.case-queue-table tr.ant-table-row:hover .case-queue-open.ant-btn,
+.case-queue-table tr.is-selected .case-queue-open.ant-btn,
+.case-queue-table .case-queue-open.ant-btn:focus-visible {
+  color: var(--cq-blue);
+}
+.case-queue-table tr.ant-table-row:hover .case-queue-open .anticon,
+.case-queue-table tr.is-selected .case-queue-open .anticon {
+  transform: translateX(4px);
+}
+.case-queue-restricted {
+  color: var(--cq-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 줄 미리보기 — 목록 데이터만 보인다 */
+.case-queue-table .ant-table-tbody > tr.ant-table-expanded-row > td {
+  padding: 0;
+  background: #f8fafc;
+}
+.case-queue-preview {
+  padding: 14px 20px 16px 23px;
+  border-bottom: 1px solid var(--cq-line);
+  box-shadow: inset 3px 0 0 var(--cq-blue);
+  transform-origin: top;
+  animation: case-queue-open 240ms var(--cq-ease);
+}
+.case-queue-preview dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px 24px;
+  margin: 0;
+}
+.case-queue-preview dl > div {
+  animation: case-queue-rise 320ms var(--cq-ease) backwards;
+}
+.case-queue-preview dl > div:nth-child(2) {
+  animation-delay: 30ms;
+}
+.case-queue-preview dl > div:nth-child(3) {
+  animation-delay: 60ms;
+}
+.case-queue-preview dl > div:nth-child(4) {
+  animation-delay: 90ms;
+}
+.case-queue-preview dl > div:nth-child(n + 5) {
+  animation-delay: 120ms;
+}
+.case-queue-preview dt {
+  margin-bottom: 2px;
+  color: var(--cq-sub);
+  font-size: 12px;
+}
+.case-queue-preview dd {
+  margin: 0;
+  color: var(--cq-text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-preview-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--cq-line);
+}
+.case-queue-preview-foot p {
+  margin: 0;
+  color: var(--cq-sub);
+  font-size: 13px;
+}
+.case-queue-preview-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 페이지 아래 단축키 안내 */
+.case-queue-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  color: var(--cq-sub);
+}
+.case-queue-keys > span {
+  color: var(--cq-muted);
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .case-queue-keys > span {
+    display: none;
+  }
+}
+
+/* 오른쪽 요약이 열리면 넓은 화면에서는 표가 가려지지 않게 비켜선다 */
+@media (min-width: 1280px) {
+  .case-queue.has-drawer {
+    padding-right: 440px;
+  }
+}
+.case-queue-drawer .ant-drawer-body {
+  padding: 16px 20px;
+}
+.case-queue-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+.case-queue-summary {
+  display: grid;
+  gap: 16px;
+}
+.case-queue-summary > * {
+  animation: case-queue-rise 360ms var(--cq-ease) backwards;
+}
+.case-queue-summary > :nth-child(2) {
+  animation-delay: 50ms;
+}
+.case-queue-summary > :nth-child(3) {
+  animation-delay: 100ms;
+}
+.case-queue-summary > :nth-child(n + 4) {
+  animation-delay: 150ms;
+}
+.case-queue-summary h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+}
+.case-queue-summary-head {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.case-queue-summary-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+.case-queue-summary-payments,
+.case-queue-summary-lines {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.case-queue-summary-payments li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  transition:
+    border-color 160ms,
+    box-shadow 160ms;
+}
+.case-queue-summary-payments li:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 6px 14px -10px rgb(37 99 235 / 0.5);
+}
+.case-queue-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.case-queue-summary-row.is-sub {
+  color: #64748b;
+  font-size: 12px;
+}
+.case-queue-summary-rules {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+}
+.case-queue-summary-lines li {
+  position: relative;
+  padding-left: 12px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.case-queue-summary-lines li::before {
+  content: '';
+  position: absolute;
+  top: 0.7em;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.case-queue-drawer .case-queue-muted {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* HomeCount의 화면 낭독기용 숫자 (보안 홈 CSS 밖에서도 숨긴다) */
+.case-queue .security-home-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes case-queue-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes case-queue-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes case-queue-open {
+  from {
+    opacity: 0;
+    transform: scaleY(0.92) translateY(-4px);
+  }
+}
+@keyframes case-queue-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@keyframes case-queue-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@keyframes case-queue-count {
+  from {
+    opacity: 0.2;
+    transform: translateY(6px);
+  }
+}
+@keyframes case-queue-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes case-queue-sheen {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes case-queue-new {
+  0%,
+  35% {
+    background: #dbeafe;
+  }
+}
+@keyframes case-queue-ping-red {
+  0% {
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0.5);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 7px rgb(220 38 38 / 0);
+  }
+}
+@keyframes case-queue-ping-blue {
+  0% {
+    box-shadow: 0 0 0 0 rgb(37 99 235 / 0.5);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px rgb(37 99 235 / 0);
+  }
+}
+@keyframes case-queue-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .case-queue-search,
+  .case-queue-search.ant-input-affix-wrapper-focused {
+    width: 100%;
+  }
+  .case-queue-total {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* [움직임 끄기] · 시스템 움직임 줄이기 — 모든 움직임을 멈추고 최종 모습만 보인다 */
+.case-queue.is-motion-paused,
+.case-queue.is-motion-paused *,
+.case-queue.is-motion-paused *::before,
+.case-queue.is-motion-paused *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .case-queue,
+  .case-queue *,
+  .case-queue *::before,
+  .case-queue *::after,
+  .case-queue-drawer *,
+  .case-queue-drawer *::before,
+  .case-queue-drawer *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
