@@ -66,7 +66,6 @@ export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
             )}
             <div className="security-home-stage-icon" aria-hidden="true">
               {stage.icon}
-              <span className="security-home-stage-packet" />
             </div>
             <span className="security-home-stage-order">0{index + 1}</span>
             <h3>{stage.label}</h3>
@@ -75,9 +74,6 @@ export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
               <small>건</small>
             </div>
             <p>{stage.detail}</p>
-            <div className="security-home-stage-track" aria-hidden="true">
-              <span />
-            </div>
           </li>
         ))}
       </ol>
