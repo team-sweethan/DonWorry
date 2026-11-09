@@ -1,4 +1,7 @@
+/* 넓은 화면에서 카드가 옆으로 끝없이 늘어나 비어 보이지 않게 폭을 제한한다 (#713) */
 .ah-home {
+  max-width: 1180px;
+  margin: 0 auto;
   color: #172b4d;
 }
 .ah-home > .ant-alert {
@@ -46,7 +49,7 @@
 }
 .ah-summary-copy h2 {
   margin: 0 0 6px;
-  font-size: 14px;
+  font-size: var(--dw-text-heading);
   font-weight: 600;
   color: #475569;
 }
@@ -55,24 +58,24 @@
   align-items: baseline;
   gap: 5px;
   color: #172b4d;
-  font-size: 34px;
+  font-size: var(--dw-text-number);
   font-weight: 750;
   line-height: 1.25;
   letter-spacing: -1px;
   font-variant-numeric: tabular-nums;
 }
 .ah-approvals .ah-count {
-  font-size: 24px;
+  font-size: var(--dw-text-number-sm);
 }
 .ah-count small {
-  font-size: 14px;
+  font-size: var(--dw-text-body);
   font-weight: 500;
   color: #64748b;
   letter-spacing: 0;
 }
 .ah-count-error {
   display: inline-block;
-  font-size: 14px;
+  font-size: var(--dw-text-body);
   font-weight: 600;
   color: #b42318;
   margin: 8px 0;
@@ -88,7 +91,7 @@
   border: 1px solid #dce4ef;
   background: #fff;
   color: #375780;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
   font-weight: 600;
   transition: background 150ms;
 }
@@ -105,11 +108,11 @@
 }
 .ah-list-heading h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--dw-text-body);
   font-weight: 650;
 }
 .ah-list-heading > span {
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   color: #64748b;
 }
 .ah-request-list {
@@ -142,7 +145,7 @@
   padding: 3px 7px;
   color: #375780;
   background: #f5f8fc;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   font-weight: 650;
   overflow-wrap: anywhere;
 }
@@ -152,7 +155,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   margin: 0 0 7px;
-  font-size: 13px;
+  font-size: var(--dw-text-body);
   line-height: 1.65;
   color: #475569;
   overflow-wrap: anywhere;
@@ -163,7 +166,7 @@
   flex-wrap: wrap;
   gap: 7px;
   color: #64748b;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   line-height: 1.6;
 }
 .ah-request-action {
@@ -199,7 +202,7 @@
 }
 .ah-empty h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--dw-text-heading);
   font-weight: 650;
 }
 .ah-side {
@@ -209,6 +212,41 @@
 .ah-rule-panel {
   padding: 24px;
 }
+/* 지금 처리할 일 (#713) */
+.ah-todo-panel {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+}
+.ah-todo-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ah-todo-list li + li {
+  border-top: 1px solid #eef1f5;
+}
+.ah-todo-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: #172b4d;
+  font-size: var(--dw-text-body);
+}
+.ah-todo-link strong {
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.ah-todo-link:hover span {
+  color: var(--shell-ink);
+}
+.ah-todo-none {
+  margin: 0;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
 .ah-section-heading {
   display: flex;
   justify-content: space-between;
@@ -217,7 +255,7 @@
 }
 .ah-section-heading h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--dw-text-heading);
   font-weight: 650;
 }
 .ah-section-heading > .anticon {
@@ -235,7 +273,7 @@
 .ah-rule-stat > span:first-child {
   flex: 1;
   color: #475569;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
 }
 .ah-rule-stat:hover .ah-count {
   color: #2563eb;
@@ -243,7 +281,7 @@
 .ah-rule-panel > p {
   margin: 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--dw-text-secondary);
   line-height: 1.8;
 }
 .ah-arrow {
@@ -278,7 +316,7 @@
 .ah-management-heading h2 {
   flex: 1;
   margin: 0;
-  font-size: 17px;
+  font-size: var(--dw-text-heading);
   font-weight: 650;
 }
 .ah-management-icon {
@@ -288,18 +326,19 @@
   height: 36px;
   flex-shrink: 0;
   border-radius: 10px;
-  background: #e8f0ff;
-  color: #2563eb;
+  background: var(--shell-tint);
+  color: var(--shell-ink);
   font-size: 19px;
 }
+/* 계정 · 가맹점 카드를 구분하는 두 번째 색. 첫 카드가 역할 색(보라)이라 회색 계열로 둔다 (#713) */
 .ah-management-card:nth-child(2) .ah-management-icon {
-  color: #5d52bd;
-  background: #eeeafd;
+  color: #475569;
+  background: #eef1f5;
 }
 .ah-management-card > p {
   margin: 8px 0 6px;
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
   line-height: 1.7;
 }
 .ah-management-total {
@@ -308,15 +347,15 @@
   gap: 12px;
 }
 .ah-management-total > span:first-child {
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
   color: #64748b;
 }
 .ah-management-total .ah-count {
-  font-size: 30px;
+  font-size: var(--dw-text-number);
 }
 .ah-management-note {
   margin: 10px 2px 0;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   color: #64748b;
 }
 @media (max-width: 1350px) {
@@ -365,7 +404,7 @@
   gap: 8px;
   padding: 12px 16px;
   color: #375780;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
   font-weight: 600;
   border-radius: 10px;
 }
@@ -405,7 +444,7 @@
   border-radius: 10px;
   background: #fffbeb;
   color: #92400e;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
 }
 .ah-management-alert > span {
   flex: 1;
@@ -427,7 +466,7 @@
   border-radius: 14px;
 }
 .ah-application-entry h2 {
-  font-size: 16px;
+  font-size: var(--dw-text-heading);
   margin: 0 0 2px;
 }
 .ah-application-entry p {

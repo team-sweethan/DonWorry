@@ -86,7 +86,7 @@ export function RuleChangeRequestsPage() {
         title="룰 변경 요청"
         description="결제·계정 룰을 끄기 위한 요청을 검토하고 처리합니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
         <Tabs
           activeKey={status}

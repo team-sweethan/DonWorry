@@ -1,4 +1,6 @@
 import { Alert, App, Button, Card, Input, Modal, Select, Space, Table, Tabs, Tag } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   approveAssignmentRequest,
@@ -128,7 +130,7 @@ export function CaseAssignmentRequestsPage() {
         title="담당 변경 요청"
         description="보안 직원이 맡은 사건의 담당을 바꿔 달라고 요청한 목록입니다. 처리를 기다리는 동안 그 사건은 판정만 멈추고, 열람 · 조사는 그대로 할 수 있습니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
         <Tabs
           activeKey={status}
@@ -144,11 +146,18 @@ export function CaseAssignmentRequestsPage() {
         <Table<AssignmentRequest>
           rowKey="requestId"
           size="small"
-          loading={rows === null}
           pagination={false}
           // 칸을 한 줄로 두는 대신 좁은 화면에서는 카드 안에서 가로로 넘긴다
           scroll={{ x: 'max-content' }}
           dataSource={rows ?? []}
+          locale={{
+            emptyText:
+              rows === null ? (
+                <ListLoading label="변경 요청을 불러오는 중" />
+              ) : (
+                <ListEmpty title="데이터 없음" />
+              ),
+          }}
           columns={[
             { ...oneLine, title: 'Case', dataIndex: 'caseId', render: (id: number) => `#${id}` },
             {
@@ -246,7 +255,7 @@ export function CaseAssignmentRequestsPage() {
               placeholder="넘겨받을 활성 직원이 없습니다"
               onChange={setNewStaffId}
             />
-            <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
+            <div className="dw-caption" style={{ marginTop: 4 }}>
               자동 배정 순서(맡은 사건이 적은 직원 먼저)의 첫 후보를 미리 골라 뒀습니다. 승인하면 새
               담당이 판정합니다.
             </div>

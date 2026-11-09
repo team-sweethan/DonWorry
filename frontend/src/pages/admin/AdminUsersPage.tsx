@@ -382,7 +382,7 @@ export function AdminCreateUserPage() {
         actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
       />
       <Card className="directory-surface" style={{ maxWidth: 640 }}>
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+        {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
         <Form<CreateUser>
           form={form}
           layout="vertical"

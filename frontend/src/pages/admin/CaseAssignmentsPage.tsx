@@ -1,4 +1,6 @@
-import { Alert, App, Button, Card, Empty, Modal, Select, Space, Table, Tag } from 'antd'
+import { Alert, App, Button, Card, Modal, Select, Space, Table, Tag } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   backfillUnassigned,
@@ -55,8 +57,10 @@ function StaffCard({
       }}
     >
       <div style={{ fontWeight: 600 }}>{staff.displayName}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, margin: '4px 0' }}>{staff.openCount}건</div>
-      <div style={{ color: '#64748b', fontSize: 12 }}>맡은 미종결 사건</div>
+      <div className="dw-number-sm" style={{ margin: '4px 0' }}>
+        {staff.openCount}건
+      </div>
+      <div className="dw-caption">맡은 미종결 사건</div>
       <div style={{ marginTop: 6 }}>
         {!staff.active && <Tag>정지</Tag>}
         {staff.insiderCaseOpen && <Tag color="red">내부자 조사 중</Tag>}
@@ -179,12 +183,12 @@ export function CaseAssignmentsPage() {
         title="사건 담당 현황"
         description="보안 직원마다 맡고 있는 미종결 FDS 사건 수입니다. 직원을 누르면 맡은 사건을 보고 담당을 바꿀 수 있습니다. 새 사건은 맡은 사건이 적은 직원에게 자동으로 배정됩니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       {overview && overview.unassignedOpenCount > 0 && (
         <Alert
           type="warning"
           showIcon
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
           message={`담당자가 없는 미종결 사건이 ${overview.unassignedOpenCount}건 있습니다.`}
           description="자동 배정을 켜기 전에 만들어졌거나, 만들 때 활성 보안 직원이 없던 사건입니다. 자동 배정과 같은 규칙으로 한 번에 배정합니다."
           action={<Button onClick={() => void backfill()}>미배정 사건 배정</Button>}
@@ -195,7 +199,7 @@ export function CaseAssignmentsPage() {
         style={{ marginBottom: 20 }}
       >
         {overview && overview.staff.length === 0 ? (
-          <Empty description="보안 직원 계정이 없습니다." />
+          <ListEmpty title="보안 직원 계정이 없습니다." />
         ) : (
           <Space wrap size={12}>
             {staffInNameOrder(overview?.staff ?? []).map((staff) => (
@@ -225,10 +229,16 @@ export function CaseAssignmentsPage() {
           <Table<AssignedCase>
             rowKey="caseId"
             size="small"
-            loading={cases === null}
             pagination={false}
             dataSource={cases ?? []}
-            locale={{ emptyText: <Empty description="맡은 미종결 사건이 없습니다." /> }}
+            locale={{
+              emptyText:
+                cases === null ? (
+                  <ListLoading label="맡은 사건을 불러오는 중" />
+                ) : (
+                  <ListEmpty title="맡은 미종결 사건이 없습니다." />
+                ),
+            }}
             columns={[
               { title: 'Case', dataIndex: 'caseId', render: (id: number) => `#${id}` },
               {
@@ -280,7 +290,7 @@ export function CaseAssignmentsPage() {
               placeholder="넘겨받을 활성 직원이 없습니다"
               onChange={setNewStaffId}
             />
-            <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
+            <div className="dw-caption" style={{ marginTop: 4 }}>
               자동 배정 순서(맡은 사건이 적은 직원 먼저)의 첫 후보를 미리 골라 뒀습니다.
               {target?.assignmentRequestPending && ' 처리 대기 중인 변경 요청은 함께 승인됩니다.'}
             </div>

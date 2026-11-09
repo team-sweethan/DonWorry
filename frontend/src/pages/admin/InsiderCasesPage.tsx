@@ -13,6 +13,8 @@ import {
   Tag,
   Typography,
 } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { InsiderAlertSeverity } from '../../api/insiderAlerts'
@@ -162,7 +164,7 @@ export function InsiderCaseDrawer({
       onClose={onClose}
       loading={detail === null && error === null}
     >
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       {detail && insiderCase && (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
           {/* 판정 · 정지 해제 카드는 탭 밖에 둔다 — 보고서를 보다가 바로 판정할 수 있게 (#675) */}
@@ -416,7 +418,7 @@ export function InsiderCasesPage() {
         title="내부자 사건"
         description="높음 이상 내부자 경보가 직원별 사건 하나로 묶여 올라옵니다. 사건을 열어 경보와 계정 정지 여부를 보고 판정하세요. 사건이 열린 직원에게는 새 FDS 사건이 배정되지 않습니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
         <Tabs
           activeKey={status}
@@ -431,10 +433,17 @@ export function InsiderCasesPage() {
         <Table<InsiderCase>
           rowKey="insiderCaseId"
           size="small"
-          loading={rows === null}
           pagination={false}
           scroll={{ x: 'max-content' }}
           dataSource={rows ?? []}
+          locale={{
+            emptyText:
+              rows === null ? (
+                <ListLoading label="내부자 사건을 불러오는 중" />
+              ) : (
+                <ListEmpty title="데이터 없음" />
+              ),
+          }}
           columns={[
             { ...oneLine, title: '사건', render: (_, row) => `#${row.insiderCaseId}` },
             { ...oneLine, title: '직원', render: (_, row) => row.staffName ?? `ID ${row.staffId}` },

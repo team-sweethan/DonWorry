@@ -80,7 +80,7 @@ export function RulePolicyChangeHistoriesPage() {
           type="error"
           showIcon
           message="룰 변경 이력을 불러오지 못했습니다."
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
         />
       )}
       <Card>

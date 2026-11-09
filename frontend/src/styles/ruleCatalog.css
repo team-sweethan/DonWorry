@@ -282,6 +282,12 @@
   color: #1d4ed8;
 }
 
+/* 결제 룰도 계정 룰과 같은 세기의 그라데이션을 둔다. 구분은 색으로 한다 (결제 파랑 · 계정 보라, #713) */
+.dw-rule-card-payment {
+  border-color: #d6e4fb;
+  background: linear-gradient(180deg, #f6f9ff 0%, #fff 38%);
+}
+
 .dw-rule-card-account .dw-rule-code {
   background: #f3e8ff;
   color: #7e22ce;
@@ -363,10 +369,18 @@
   letter-spacing: -0.3px;
 }
 
-/* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다. */
+/* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다.
+   관리자 화면 배경이 보라라서 테두리를 한 단계 진하게 둔다 (#713). */
 .dw-rule-card-account {
-  border-color: #ddd6fe;
-  background: linear-gradient(180deg, #fafaff 0%, #fff 38%);
+  border-color: #c4b5fd;
+  background: linear-gradient(180deg, #f8f6ff 0%, #fff 38%);
+}
+
+/* 꺼진 룰은 종류와 상관없이 회색 카드로 둔다. 위 그라데이션보다 뒤에 둬야 덮인다 (#713) */
+.dw-rule-card-inactive.dw-rule-card-payment,
+.dw-rule-card-inactive.dw-rule-card-account {
+  border-color: #dbe3ee;
+  background: #f8fafc;
 }
 
 .dw-rule-card-account .dw-rule-code {

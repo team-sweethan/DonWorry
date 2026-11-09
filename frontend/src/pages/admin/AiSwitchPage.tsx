@@ -1,4 +1,6 @@
 import { Alert, App, Button, Card, Descriptions, Input, Modal, Table, Tag } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useState } from 'react'
 import {
   getAiSwitch,
@@ -81,12 +83,12 @@ export function AiSwitchPage() {
         title="AI 조사 긴급정지"
         description="AI 보고서에 이상이 보이면 바로 정지하세요. 정지 중에도 사건 보고서는 같은 조회 결과와 징후 · 정상 근거로 만든 고정 보고서로 계속 나오고, AI 요약과 추가 조사만 빠집니다. 다시 켜기는 관리자만 할 수 있습니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       {status && !status.configEnabled && (
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
           message="이 서버는 설정에서 AI 서버가 꺼져 있습니다. 스위치를 켜도 고정 보고서로 만듭니다."
         />
       )}
@@ -144,11 +146,16 @@ export function AiSwitchPage() {
         <Table<AiSwitchHistory>
           rowKey="historyId"
           size="small"
-          loading={loading}
           pagination={false}
           scroll={{ x: 'max-content' }}
           dataSource={status?.histories ?? []}
-          locale={{ emptyText: '아직 바꾼 기록이 없습니다 (처음부터 켜짐).' }}
+          locale={{
+            emptyText: loading ? (
+              <ListLoading label="변경 기록을 불러오는 중" />
+            ) : (
+              <ListEmpty title="아직 바꾼 기록이 없습니다 (처음부터 켜짐)." />
+            ),
+          }}
           columns={[
             { ...oneLine, title: '시각', dataIndex: 'changedAt', render: dateTime },
             {

@@ -1,4 +1,6 @@
 import { Alert, App, Button, Card, Input, Modal, Space, Table, Tabs, Tag } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getRawViewReviews,
@@ -94,7 +96,7 @@ export function RawViewReviewsPage() {
         title="원문 열람 검토"
         description="보안 직원이 담당 사건 결제의 주문자 전화번호 원문을 본 기록입니다. 원문은 여기 보이지 않습니다. 근거가 업무에 맞는지 보고 [적절] 또는 [소명 요청]을 누르세요."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
         <Tabs
           activeKey={status}
@@ -110,10 +112,17 @@ export function RawViewReviewsPage() {
         <Table<RawViewReview>
           rowKey="reviewId"
           size="small"
-          loading={rows === null}
           pagination={false}
           scroll={{ x: 'max-content' }}
           dataSource={rows ?? []}
+          locale={{
+            emptyText:
+              rows === null ? (
+                <ListLoading label="원문 열람 검토를 불러오는 중" />
+              ) : (
+                <ListEmpty title="데이터 없음" />
+              ),
+          }}
           columns={[
             { ...oneLine, title: '열람 시각', dataIndex: 'viewedAt', render: dateTime },
             {
