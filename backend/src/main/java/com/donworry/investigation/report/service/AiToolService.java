@@ -133,8 +133,9 @@ public class AiToolService {
     }
 
     // 같은 카드 · 기기 · IP를 쓴 다른 고객 결제 (#352) — 고정 보고서와 같은 규칙을 쓰도록 LinkedPaymentFinder에 맡긴다
-    public LinkedPaymentsToolResponse linkedPayments(Long caseId) {
-        return linkedPaymentFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS));
+    // 앞뒤 시간은 1시간(보고서 기본) 또는 6 · 24시간(질문 넓혀 보기, #751) — 검사도 LinkedPaymentFinder가 한다
+    public LinkedPaymentsToolResponse linkedPayments(Long caseId, int nearbyHours) {
+        return linkedPaymentFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS), nearbyHours);
     }
 
     // 사건 결제의 주문 정보 (#634) — 고정 보고서와 같은 규칙을 쓰도록 OrderContextFinder에 맡긴다
