@@ -21,10 +21,14 @@ import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InsiderCaseChanged;
 import com.donworry.investigation.service.SecurityStaffGuard;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -139,7 +143,33 @@ public class InsiderReportService {
         List<StaffAccessRecorded> events = eventIds.isEmpty() ? List.of() : accessReader.findByIds(eventIds);
         Long staffId = insiderCase.getStaffId();
         return InsiderReportFacts.body(
-                insiderCase, staffName(staffId), locker.isLocked(staffId), alerts, events, caseCustomers(events), now);
+                insiderCase,
+                staffName(staffId),
+                locker.isLocked(staffId),
+                alerts,
+                events,
+                caseCustomers(events),
+                baseline(insiderCase, events),
+                now);
+    }
+
+    // 평소(30일) 기록 (#749) — 경보 근거 첫 기록 직전 30일. 근거 기록이 없으면 사건이 열린 시각 직전 30일.
+    // 읽기 창구는 끝 시각을 포함하므로 그 시각의 기록과 근거 기록은 빼서, 이번 행동이 평소 값에 섞이지 않게 한다
+    private InsiderReportFacts.Baseline baseline(InsiderCase insiderCase, List<StaffAccessRecorded> evidence) {
+        Instant to = evidence.stream()
+                .map(StaffAccessRecorded::occurredAt)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .orElse(insiderCase.getOpenedAt());
+        Instant from = to.minus(InsiderReportFacts.BASELINE_DAYS, ChronoUnit.DAYS);
+        Set<Long> evidenceIds =
+                evidence.stream().map(StaffAccessRecorded::eventId).collect(Collectors.toSet());
+        List<StaffAccessRecorded> usual = accessReader.findRecent(insiderCase.getStaffId(), from, to).stream()
+                .filter(event ->
+                        event.occurredAt() != null && event.occurredAt().isBefore(to))
+                .filter(event -> !evidenceIds.contains(event.eventId()))
+                .toList();
+        return new InsiderReportFacts.Baseline(from, to, usual);
     }
 
     // 고객 번호가 비어 있는 기록(원문 열람 · 사건 상세 등)의 고객을 사건 번호로 찾는다 (#675 Codex 리뷰) — 집계에만 쓰고 본문에는 넣지 않는다

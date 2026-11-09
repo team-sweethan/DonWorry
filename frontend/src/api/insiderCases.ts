@@ -156,6 +156,31 @@ export type InsiderReportFacts = {
     distinctMerchants: number
     distinctCases: number
   }
+  /** 평소(30일) 대비 (#749). 이 칸이 생기기 전에 만든 판에는 없다 */
+  baseline?: InsiderReportBaseline
+}
+
+/** 평소(30일) 대비 한 항목 — 평소와 이번을 같은 방법으로 센 값 */
+export type InsiderReportBaselineRow = {
+  key: 'LIST_VIEWS' | 'SEARCHED_CUSTOMERS' | 'DENIED' | 'EXPORT_ATTEMPTS'
+  label: string
+  unit: string
+  /** 30일 합 ÷ 30, 소수 첫째 자리. 평소 기록이 없으면 null */
+  dailyAverage: number | null
+  /** 가장 많았던 하루(한국 날짜). 평소 기록이 없으면 null */
+  maxDay: number | null
+  /** 이번 경보 근거 기록 */
+  current: number
+}
+
+/** 경보 근거 첫 기록 직전 30일 [from, to)의 모든 접근 기록. 근거 기록은 빠져 있다 */
+export type InsiderReportBaseline = {
+  days: number
+  from: string
+  to: string
+  hasRecords: boolean
+  daysWithRecords: number
+  rows: InsiderReportBaselineRow[]
 }
 
 export type InsiderReportBody = {
