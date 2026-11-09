@@ -4,7 +4,6 @@ import com.donworry.identity.api.StaffAccess;
 import com.donworry.identity.api.StaffAccessRecorder;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.investigation.entity.SecurityCase;
-import com.donworry.investigation.report.client.AiQuestionOutcome;
 import com.donworry.investigation.report.dto.AiQuestionRequest;
 import com.donworry.investigation.report.dto.AiQuestionResult;
 import com.donworry.investigation.report.entity.AiReport;
@@ -29,7 +28,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-// 사건 질문의 트랜잭션 1(접수) · 트랜잭션 2(결과 저장) (ADR-0086 6절)
+// 사건 질문의 트랜잭션 1(접수 start) · 트랜잭션 2(결과 저장 answer · fail) (ADR-0086 6절)
 // AiReportQuestionService 안에서 직접 부르면 @Transactional이 걸리지 않아 별도 빈으로 뺐다. ai-server 호출은 둘 사이, 트랜잭션 밖에서 한다
 @Component
 @RequiredArgsConstructor
@@ -88,31 +87,28 @@ class AiReportQuestionWriter {
                 .build();
     }
 
-    // 답을 저장하고 끝낸다. 호출 동안 AI가 정지됐으면 답을 버리고 실패로 남긴다 (ADR-0083 결정 5와 같은 잠금)
+    // 검사를 통과한 답을 저장하고 끝낸다. 호출 쪽이 AI 스위치 잠금(whenAiAllowed) 안에서 불러
+    // 스위치 확인부터 이 트랜잭션 커밋까지 정지가 끼지 않게 한다 (ADR-0083 결정 5, #764 Codex 리뷰)
     @Transactional
-    public AiReportQuestion finish(Long questionId, AiQuestionOutcome outcome) {
-        AiReportQuestion question = questionRepository
+    public AiReportQuestion answer(Long questionId, AiQuestionResult result) {
+        AiReportQuestion question = load(questionId);
+        QuestionStatus status = "DECLINED".equals(result.status()) ? QuestionStatus.DECLINED : QuestionStatus.ANSWERED;
+        question.answer(status, answerBody(result), Instant.now());
+        return question;
+    }
+
+    // 실패 정보(code · reason)를 남기고 끝낸다
+    @Transactional
+    public AiReportQuestion fail(Long questionId, String code, String reason) {
+        AiReportQuestion question = load(questionId);
+        question.fail(Map.of("code", code, "reason", reason), Instant.now());
+        return question;
+    }
+
+    private AiReportQuestion load(Long questionId) {
+        return questionRepository
                 .findById(questionId)
                 .orElseThrow(() -> new IllegalStateException("질문이 없습니다: " + questionId));
-        Instant now = Instant.now();
-        switch (outcome) {
-            case AiQuestionOutcome.Answered answered -> {
-                AiQuestionResult result = answered.result();
-                QuestionStatus status =
-                        "DECLINED".equals(result.status()) ? QuestionStatus.DECLINED : QuestionStatus.ANSWERED;
-                boolean saved = aiSwitchService
-                        .whenAiAllowed(() -> {
-                            question.answer(status, answerBody(result), now);
-                            return questionRepository.saveAndFlush(question);
-                        })
-                        .isPresent();
-                if (!saved) {
-                    question.fail(error("AI_STOPPED", "답을 받는 동안 AI 조사가 정지됨"), now);
-                }
-            }
-            case AiQuestionOutcome.Failed failed -> question.fail(error(failed.code(), failed.reason()), now);
-        }
-        return question;
     }
 
     // 목록 조회도 같은 권한 · 같은 사건 확인을 거친다
@@ -166,10 +162,6 @@ class AiReportQuestionWriter {
         body.put("toolCalls", nullToEmpty(result.toolCalls()));
         body.put("trace", nullToEmpty(result.trace()));
         return body;
-    }
-
-    private static Map<String, Object> error(String code, String reason) {
-        return Map.of("code", code, "reason", reason);
     }
 
     private static <T> List<T> nullToEmpty(List<T> values) {

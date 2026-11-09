@@ -13,9 +13,6 @@ public interface AiReportQuestionRepository extends Repository<AiReportQuestion,
 
     AiReportQuestion save(AiReportQuestion question);
 
-    // 답 저장을 AI 스위치 잠금 안에서 DB에 바로 반영한다 (AiSwitchService.whenAiAllowed)
-    AiReportQuestion saveAndFlush(AiReportQuestion question);
-
     Optional<AiReportQuestion> findById(Long questionId);
 
     // 질문 횟수 상한 — 실패한 질문도 센다 (AI를 이미 불렀을 수 있다)
