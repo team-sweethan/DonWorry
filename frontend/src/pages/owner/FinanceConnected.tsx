@@ -1,3 +1,4 @@
+import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
 import { useCallback, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -194,11 +195,14 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         title="자금 현황"
         description="실제 완료 기록과 등록한 정산·지출로 앞으로의 잔액을 확인합니다."
         actions={
-          <FinanceRefresh
-            at={forecast.lastSuccess ?? settings.lastSuccess}
-            loading={settings.status === 'loading' || forecast.status === 'loading'}
-            onRefresh={refresh}
-          />
+          <div className="finance-header-actions">
+            <FinanceGuide page="funds" />
+            <FinanceRefresh
+              at={forecast.lastSuccess ?? settings.lastSuccess}
+              loading={settings.status === 'loading' || forecast.status === 'loading'}
+              onRefresh={refresh}
+            />
+          </div>
         }
       />
       <Alert
@@ -207,7 +211,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         message="지급·지출 기록으로 계산한 잔액"
         description="은행 계좌를 조회하는 기능이 아닙니다. 환불 회수를 차감한 실제 지급액만 입금으로 간주하고, 실제 지출 완료 기록을 현재 잔액에서 차감합니다."
       />
-      <div className="finance-period">
+      <div className="finance-period" data-guide="finance-period">
         <Button onClick={() => preset(7)}>앞으로 7일</Button>
         <Button onClick={() => preset(30)}>앞으로 30일</Button>
         <Button
@@ -228,7 +232,12 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         min={setting?.baseDate}
         max={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
         actions={
-          <Button type="primary" disabled={!setting} onClick={() => setManage(true)}>
+          <Button
+            data-guide="finance-settings"
+            type="primary"
+            disabled={!setting}
+            onClick={() => setManage(true)}
+          >
             잔액·지출 설정
           </Button>
         }

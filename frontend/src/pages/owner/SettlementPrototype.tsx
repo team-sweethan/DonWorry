@@ -1,3 +1,4 @@
+import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
 import { financeTotal, matchesFinanceQuery, chartMonthPeriod } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
@@ -262,6 +263,7 @@ export function SettlementPrototype({
         actions={
           <div className="finance-header-actions">
             {headerActions}
+            <FinanceGuide page="settlement" />
             <div className="stl-switch" role="tablist" aria-label="보기 방식">
               {(['cal', 'list'] as const).map((v) => (
                 <button
