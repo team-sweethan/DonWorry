@@ -140,11 +140,40 @@ export type OperatorAccessDetection = {
   sourceEventId: number | null
   loginId: string
   affiliation: string
+  ruleCode: string
   ruleName: string
   riskLevel: 'HIGH' | 'LOW'
   eventCount: number
   actionStatus: string
   occurredAt: string
+  /** 막힌 경로 "GET /api/admin/users" — 없으면 null */
+  blockedPath: string | null
+}
+/** 목록 위 요약 — 최근 7일(한국 날짜) 거부 요청 */
+export type OperatorAccessSummary = {
+  deniedCount: number
+  accountCount: number
+  daily: Array<{ date: string; count: number }>
+  topPaths: Array<{ httpMethod: string; path: string; count: number }>
+}
+/** 계정별 보기 한 묶음 — signals는 최근 것부터 최대 5건, 전체 건수는 detectionCount */
+export type OperatorAccessAccountGroup = {
+  loginId: string
+  affiliation: string
+  riskLevel: 'HIGH' | 'LOW'
+  detectionCount: number
+  eventCount: number
+  lastOccurredAt: string
+  signals: OperatorAccessDetection[]
+}
+export type OperatorAccessAccountPage = {
+  content: OperatorAccessAccountGroup[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  highRiskCount: number
+  lowRiskCount: number
 }
 export type OperatorAccessDetectionPage = {
   content: OperatorAccessDetection[]
@@ -315,11 +344,36 @@ export function addFdsBlocklistEntryFromEvaluation(
   })
 }
 
-export function getOperatorAccessDetections(page = 0, risk = 'ALL', search = '') {
+export function getOperatorAccessDetections(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+) {
   return api<OperatorAccessDetectionPage>(
-    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search })}`,
+    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
+}
+
+export function getOperatorAccessAccounts(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+) {
+  return api<OperatorAccessAccountPage>(
+    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
+    { cache: 'no-store' },
+  )
+}
+
+export function getOperatorAccessSummary() {
+  return api<OperatorAccessSummary>('/fds/operator-access-detections/summary', {
+    cache: 'no-store',
+  })
 }
 
 export function getOperatorAccessDetection(detectionId: number) {

@@ -1,0 +1,203 @@
+/* 관리자 [계정 접근 이상 탐지 › 상세] — 위: 무엇이 · 누구에게 · 어떻게 처리됐나, 아래: 근거 요청을 시간순으로 (내부자 근거 기록과 같은 결) */
+
+.oadd-back {
+  margin-bottom: var(--dw-space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+  cursor: pointer;
+}
+.oadd-back:hover {
+  color: #0f172a;
+}
+.oadd-back:focus-visible {
+  outline: 2px solid var(--dw-accent);
+  outline-offset: 2px;
+}
+
+.oadd-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-4);
+}
+
+.oadd-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--dw-space-2) var(--dw-space-4);
+  padding: var(--dw-space-4) var(--dw-space-5);
+  border-bottom: 1px solid #e2e8f0;
+}
+.oadd-head-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-1);
+  min-width: 0;
+}
+.oadd-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  margin: 0;
+  color: #0f172a;
+  font-size: var(--dw-text-heading);
+  font-weight: 700;
+}
+.oadd-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+}
+.oadd-sub strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+.oadd-head-action {
+  padding-top: 4px;
+}
+
+/* 숫자 세 칸 — 목록 요약 띠와 같은 모양 */
+.oadd-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.oadd-fact .dw-caption {
+  overflow-wrap: anywhere;
+}
+.oadd-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-1);
+  min-width: 0;
+  padding: var(--dw-space-4) var(--dw-space-5);
+}
+.oadd-fact + .oadd-fact {
+  border-left: 1px solid #e2e8f0;
+}
+.oadd-fact-label {
+  color: #475569;
+  font-size: var(--dw-text-caption);
+  font-weight: 600;
+}
+.oadd-fact-number {
+  color: #0f172a;
+  font-size: var(--dw-text-number);
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.oadd-fact-number small {
+  margin-left: 6px;
+  color: #94a3b8;
+  font-size: var(--dw-text-secondary);
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.oadd-fact-text {
+  color: #0f172a;
+  font-size: var(--dw-text-heading);
+  font-weight: 700;
+  line-height: 1.6;
+}
+.oadd-meter {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #f1f5f9;
+}
+.oadd-meter span {
+  display: block;
+  height: 100%;
+  background: #d97706;
+}
+.oadd-meter.is-reached span {
+  background: #dc2626;
+}
+
+/* 근거 기록 */
+.oadd-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--dw-space-3);
+  padding: var(--dw-space-3) var(--dw-space-5);
+  border-bottom: 1px solid #e2e8f0;
+}
+.oadd-section-head h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: var(--dw-text-body);
+  font-weight: 700;
+}
+.oadd-log {
+  margin: 0;
+  padding: var(--dw-space-2) 0;
+  list-style: none;
+}
+.oadd-log-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--dw-space-2) var(--dw-space-4);
+  padding: 7px var(--dw-space-5);
+}
+.oadd-log-row.is-result {
+  margin-top: var(--dw-space-1);
+  border-top: 1px solid #f1f5f9;
+  padding-top: var(--dw-space-3);
+}
+.oadd-log-time {
+  color: #64748b;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.oadd-log-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  min-width: 0;
+  font-size: var(--dw-text-secondary);
+}
+.oadd-log-text strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+.oadd-path {
+  color: #475569;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  word-break: break-all;
+}
+.oadd-log-id {
+  color: #94a3b8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 다음 할 일로 — 계정 정지 · 해제는 계정 관리에서 */
+.oadd-head-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--dw-space-2);
+}
+.oadd-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 16px;
+  font-size: var(--dw-text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
