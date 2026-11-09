@@ -1,22 +1,20 @@
-/* 넓은 화면에서 카드가 옆으로 끝없이 늘어나 비어 보이지 않게 폭을 제한한다 (#713) */
+/* 폭은 관리 화면 공통 폭(global.css --dw-page-width)을 쓴다 (#735) */
 .ah-home {
-  max-width: 1180px;
-  margin: 0 auto;
   color: #172b4d;
 }
 .ah-home > .ant-alert {
-  margin-bottom: 24px;
+  margin-bottom: var(--dw-space-5);
 }
 .ah-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 310px;
-  gap: 24px;
+  gap: var(--dw-space-5);
   align-items: start;
 }
 .ah-panel {
   background: #fff;
   border: 1px solid #e1e7ef;
-  border-radius: 16px;
+  border-radius: var(--dw-radius-panel);
   box-shadow: 0 3px 12px #172b4d03;
   overflow: hidden;
 }
@@ -463,7 +461,7 @@
   margin-bottom: 16px;
   background: #f0f5ff;
   border: 1px solid #dce6f7;
-  border-radius: 14px;
+  border-radius: var(--dw-radius-panel);
 }
 .ah-application-entry h2 {
   font-size: var(--dw-text-heading);

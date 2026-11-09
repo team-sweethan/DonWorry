@@ -27,7 +27,7 @@
   padding: 56px 20px 20px;
   overflow: hidden;
   border: 1px solid #e7e0d2;
-  border-radius: 12px;
+  border-radius: var(--dw-radius-panel);
   /* 위 40px는 벽 + 걸레받이, 그 아래는 옅은 나무 바닥(가로 판자) */
   background:
     linear-gradient(#f6f1e7 0 40px, #e2d6c1 40px 44px, transparent 44px),

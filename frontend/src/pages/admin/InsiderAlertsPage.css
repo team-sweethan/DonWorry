@@ -1,9 +1,5 @@
 /* 관리자 [내부자 › 경보] — 직원별 묶음. 묶음 머리(이름 · 가장 높은 등급 · 건수 · 관제로) 아래 경보 줄, 줄마다 근거를 그 자리에서 펼친다 */
 
-.ia-page {
-  max-width: 1180px;
-  margin: 0 auto;
-}
 .ia-tabs .ant-tabs-nav {
   margin-bottom: 12px;
 }

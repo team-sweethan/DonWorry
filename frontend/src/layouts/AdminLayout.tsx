@@ -38,6 +38,11 @@ export type ManagementRole = 'admin' | 'security' | 'owner'
 
 /** 관리 화면은 시연 화면에서 읽기 쉽게 antd 기본 글자를 한 단계 키운다 (#713). 공개 화면 · 로그인은 그대로 */
 const managementTheme: ThemeConfig = { token: { fontSize: tokens.typography.managementBody } }
+/** 관리자 · 보안 직원 화면은 antd Card 모서리를 직접 만든 바깥 상자(--dw-radius-panel)와 맞춘다 (#735). 사장님 화면은 그대로 */
+const staffTheme: ThemeConfig = {
+  ...managementTheme,
+  components: { Card: { borderRadiusLG: tokens.radius.panel } },
+}
 
 /** 역할별 바깥 틀 이름 · 아이콘. 색은 global.css의 [data-role]에서 정한다. */
 const appearance: Record<ManagementRole, { title: string; icon: ReactNode }> = {
@@ -250,7 +255,7 @@ export function ManagementLayout({
     saveSidebarCollapsed(next)
   }
   return (
-    <ConfigProvider theme={managementTheme}>
+    <ConfigProvider theme={role === 'owner' ? managementTheme : staffTheme}>
       <div
         className={`admin-viewport${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
         data-role={role}

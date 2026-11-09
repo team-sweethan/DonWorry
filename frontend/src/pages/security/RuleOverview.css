@@ -7,10 +7,10 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  margin-bottom: 20px;
+  margin-bottom: var(--dw-space-5);
   overflow: hidden;
   border: 1px solid var(--guide-line);
-  border-radius: 14px;
+  border-radius: var(--dw-radius-panel);
   background: #fff;
 }
 .rule-guide-account {

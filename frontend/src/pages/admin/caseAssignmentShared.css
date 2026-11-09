@@ -1,23 +1,19 @@
 /* [사건 담당] 담당 현황 · 변경 요청 공통 — 두 탭을 오가도 폭 · 상자 · 노랑 · 날짜 표시가 같게 보이도록 여기 한 곳에서 정한다 */
 
-/* 1. 화면 폭 — 가운데 1080px */
-.ca-page {
-  max-width: 1080px;
-  margin: 0 auto;
-}
+/* 1. 화면 폭 — 관리 화면 공통 폭(global.css --dw-page-width)을 그대로 쓴다 (#735) */
 
-/* 2. 바깥 상자 — 얇은 선 · 모서리 10px · 흰 바탕 */
+/* 2. 바깥 상자 — 얇은 선 · 공통 모서리 · 흰 바탕 */
 .ca-panel-box {
   overflow: hidden;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--dw-radius-panel);
   background: #fff;
 }
 
 /* 3. 기다리는 일(미배정 사건 · 대기 요청) — 노란 실선 상자 하나로 */
 .ca-waiting-box {
   border: 1px solid #fcd34d;
-  border-radius: 10px;
+  border-radius: var(--dw-radius-panel);
   background: #fffbeb;
 }
 
