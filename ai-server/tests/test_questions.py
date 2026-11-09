@@ -530,3 +530,17 @@ def test_answerQuestion_previousFactRetrievedAt_canBeCited() -> None:
     assert llm.write_calls == 1
     assert result.status == "ANSWERED"
     assert [f.text for f in result.facts] == [added["text"]]
+
+
+# 인용 안 한 숫자가 다른 사실에 있으면 다시 쓰기 안내가 그 사실 번호를 알려 준다
+# 측정(11/10): "최근 90일 … 18,000원"에 금액 사실만 인용해 같은 실수로 두 번 실패했다
+def test_answerQuestion_numberInUncitedFact_repairHintNamesFactId() -> None:
+    wrong = answer(("최근 90일 이 고객의 다른 결제는 18,000원입니다.", ["추가-2"]))
+    right = answer(("최근 90일 이 고객의 다른 결제는 18,000원입니다.", ["추가-1", "추가-2"]))
+    llm = ScriptedLlm([[call(HISTORY_90)], None], [wrong, right])
+
+    result = answer_question(question(question="평소 금액은요?"), llm, FakeBox(), SETTINGS)
+
+    repair = str(llm.write_messages[1][-1].content)
+    assert "숫자 90은 ['추가-1']에 있다" in repair
+    assert result.status == "ANSWERED"
