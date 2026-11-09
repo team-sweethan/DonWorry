@@ -1,8 +1,16 @@
 /* P6 세 화면은 제목·설명·오른쪽 액션의 간격을 공유한다. */
+.finance-intro-alert.ant-alert-with-description {
+  padding-block: 10px;
+}
+
+.finance-intro-alert.ant-alert-with-description .ant-alert-message {
+  margin-bottom: 2px;
+}
+
 .finance-preview,
 .loan-products {
   max-width: 1400px;
-  margin: 12px auto;
+  margin: 0 auto;
 }
 .finance-preview .dw-page-header,
 .loan-products .dw-page-header {
@@ -10,14 +18,6 @@
   gap: 24px;
   margin-bottom: 20px;
   min-height: unset;
-}
-.finance-preview .dw-page-header .dw-page-title,
-.loan-products .dw-page-header .dw-page-title {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: -0.7px;
-  margin: 0 0 8px;
 }
 .finance-preview .dw-page-header .dw-page-description,
 .loan-products .dw-page-header .dw-page-description {

@@ -50,6 +50,7 @@ export function LoanProductsPage() {
         type="info"
         showIcon
         message="서민금융진흥원 상품 자료"
+        className="finance-intro-alert"
         description="저장된 상품 자료입니다. 최신 지원 조건과 접수 여부는 취급기관에서 확인해 주세요."
       />
       <section className="loan-surface loan-catalog">

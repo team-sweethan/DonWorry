@@ -250,6 +250,9 @@ textarea {
   max-width: 1720px;
   margin: 0 auto;
 }
+[data-role='owner'] .dw-container {
+  max-width: 1400px;
+}
 .dw-page-header {
   display: flex;
   align-items: flex-start;
