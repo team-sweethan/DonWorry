@@ -1,14 +1,13 @@
-import { Alert, App, Button, Card, Input, Modal, Table, Tabs, Tag } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Input, Modal, Tabs } from 'antd'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   closeInsiderAlert,
-  getInsiderAlertDetail,
   getInsiderAlerts,
   type InsiderAlert,
-  type InsiderAlertEvidence,
-  type InsiderAlertSeverity,
   type InsiderAlertStatus,
 } from '../../api/insiderAlerts'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -16,104 +15,96 @@ import { refreshInsiderAlertBadge } from '../../hooks/useInsiderAlertBadge'
 import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { approveMemoPlaceholder, errorText } from './caseAssignmentForm'
+import { EvidenceLog, SeverityMark, StaffLink } from './InsiderParts'
+import { groupAlertsByStaff, monitorPath, type StaffAlertGroup } from './insiderView'
+import './caseAssignmentShared.css'
+import './InsiderAlertsPage.css'
 
 const tabs: Array<{ key: InsiderAlertStatus; label: string }> = [
   { key: 'OPEN', label: '열린 경보' },
   { key: 'CLOSED', label: '닫힌 경보' },
 ]
-const severityTag: Record<InsiderAlertSeverity, { label: string; color: string }> = {
-  CAUTION: { label: '주의', color: 'gold' },
-  HIGH: { label: '높음', color: 'red' },
-  CRITICAL: { label: '위험', color: 'magenta' },
-}
-// 접근 기록 종류 — 서버 enum(StaffAccessType)을 화면 이름으로. 모르는 값은 코드 그대로 보인다
-const accessLabel: Record<string, string> = {
-  CASE_DETAIL_VIEW: '사건 상세 열기',
-  CASE_DECISION: '판정',
-  REPORT_REQUEST: '보고서 요청',
-  HANDOFF_RECHECK: '인계 다시 확인',
-  REPORT_PROGRESS_VIEW: '보고서 진행 조회',
-  TRANSACTION_LIST_VIEW: '거래 목록 조회',
-  TRANSACTION_EXPORT: '거래 내역 내보내기',
-  CONTACT_MASKED_VIEW: '주문자 정보(가림) 보기',
-  CONTACT_MATCH: '전화번호 일치 확인',
-  CONTACT_MATCH_HIT: '전화번호 일치 확인 · 일치',
-  CONTACT_MATCH_MISS: '전화번호 일치 확인 · 불일치',
-  CONTACT_RAW_VIEW: '전체 전화번호 보기',
-}
-const denyLabel: Record<string, string> = {
-  NOT_ASSIGNEE: '담당 아님',
-  CASE_CLOSED: '종료된 사건',
-  PAYMENT_NOT_IN_CASE: '사건에 없는 결제',
-  INSIDER_ALERT_OPEN: '열린 경보 중 내보내기',
-  EXPORT_OUT_OF_SCOPE: '담당 아닌 고객 내보내기',
-}
-const oneLine = {
-  onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
-  onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+
+/** 경보 한 줄 — 최근 시각 · 규칙 · 등급 · 내용 · 근거(펼치기) · 처리 */
+function AlertRow({
+  alert,
+  status,
+  onClose,
+}: {
+  alert: InsiderAlert
+  status: InsiderAlertStatus
+  onClose: (alert: InsiderAlert) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const bodyId = `ia-evidence-${alert.alertId}`
+  return (
+    <li className="ia-row">
+      <div className="ia-row-main">
+        <span className="ia-row-time">{dateTime(alert.lastEventAt)}</span>
+        <span className="ia-row-rule">
+          <strong>{`${displayRuleCode(alert.ruleCode)} ${alert.ruleLabel}`}</strong>
+          <span className="ia-row-summary">{displayRuleText(alert.summary)}</span>
+        </span>
+        <SeverityMark value={alert.severity} />
+        <button
+          type="button"
+          className="ia-evidence-toggle"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {`근거 ${alert.evidenceCount}건`}
+          <DownOutlined aria-hidden="true" rotate={open ? 180 : 0} />
+        </button>
+        <span className="ia-row-action">
+          {status === 'OPEN' ? (
+            <Button size="small" onClick={() => onClose(alert)}>
+              정상 업무로 닫기
+            </Button>
+          ) : (
+            <span className="dw-caption">
+              {`${alert.closedByName ?? '-'} · ${alert.closedAt ? dateTime(alert.closedAt) : '-'}${alert.closeMemo ? ` · ${alert.closeMemo}` : ''}`}
+            </span>
+          )}
+        </span>
+      </div>
+      {open && (
+        <div id={bodyId} className="ia-row-evidence">
+          <EvidenceLog alertId={alert.alertId} />
+        </div>
+      )}
+    </li>
+  )
 }
 
-/** 근거 기록 — 펼칠 때 불러온다. 원문 값은 없고 무엇을 · 어느 사건에서 · 결과만 */
-function EvidenceRows({ alertId }: { alertId: number }) {
-  const [rows, setRows] = useState<InsiderAlertEvidence[] | null>(null)
-  const [error, setError] = useState(false)
-  useEffect(() => {
-    let alive = true
-    getInsiderAlertDetail(alertId)
-      .then((detail) => {
-        if (alive) setRows(detail.evidence)
-      })
-      .catch(() => {
-        if (alive) setError(true)
-      })
-    return () => {
-      alive = false
-    }
-  }, [alertId])
-  if (error) return <Alert type="error" showIcon message="근거 기록을 불러오지 못했습니다." />
+/** 직원 한 명의 경보 묶음 — 머리에 가장 높은 등급 · 건수 · 관제로 가는 길 */
+function StaffGroup({
+  group,
+  status,
+  onClose,
+}: {
+  group: StaffAlertGroup
+  status: InsiderAlertStatus
+  onClose: (alert: InsiderAlert) => void
+}) {
   return (
-    <Table<InsiderAlertEvidence>
-      rowKey="eventId"
-      size="small"
-      pagination={false}
-      dataSource={rows ?? []}
-      locale={{
-        emptyText:
-          rows === null ? (
-            <ListLoading label="근거 기록을 불러오는 중" />
-          ) : (
-            <ListEmpty title="데이터 없음" />
-          ),
-      }}
-      columns={[
-        { ...oneLine, title: '시각', dataIndex: 'occurredAt', render: dateTime },
-        {
-          ...oneLine,
-          title: '한 일',
-          dataIndex: 'accessType',
-          render: (value: string) => accessLabel[value] ?? value,
-        },
-        {
-          ...oneLine,
-          title: '결과',
-          render: (_, row) =>
-            row.result === 'ALLOWED' ? (
-              <Tag color="blue">허용</Tag>
-            ) : (
-              <Tag color="red">
-                거부{row.denyReason ? ` · ${denyLabel[row.denyReason] ?? row.denyReason}` : ''}
-              </Tag>
-            ),
-        },
-        { ...oneLine, title: '사건', render: (_, row) => (row.caseId ? `#${row.caseId}` : '-') },
-        { ...oneLine, title: '결제', render: (_, row) => row.paymentId ?? '-' },
-        {
-          ...oneLine,
-          title: '가맹점',
-          render: (_, row) => row.merchantName ?? (row.merchantId ? `ID ${row.merchantId}` : '-'),
-        },
-      ]}
-    />
+    <section className="ia-group ca-panel-box" aria-label={`${group.staffName} 경보`}>
+      <header className="ia-group-head">
+        <span className="ia-group-who">
+          <StaffLink staffId={group.staffId} name={group.staffName} />
+          <SeverityMark value={group.topSeverity} />
+          <span className="dw-caption">{`경보 ${group.alerts.length}건 · 최근 ${dateTime(group.lastEventAt)}`}</span>
+        </span>
+        <Link className="ia-group-monitor" to={monitorPath(group.staffId)}>
+          관제에서 기록 보기 →
+        </Link>
+      </header>
+      <ul className="ia-rows">
+        {group.alerts.map((alert) => (
+          <AlertRow key={alert.alertId} alert={alert} status={status} onClose={onClose} />
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -167,14 +158,15 @@ export function InsiderAlertsPage() {
     }
   }
 
+  const groups = rows ? groupAlertsByStaff(rows) : []
   return (
-    <>
+    <div className="ia-page">
       <PageHeader
         title="내부자 경보"
-        description="보안 직원의 고객 정보 접근이 규칙에 걸리면 여기에 쌓입니다. 줄을 펼치면 근거가 된 접근 기록이 보입니다(원문 없음). 업무상 정상이면 [정상 업무로 닫기]를 누르세요."
+        description="보안 직원의 고객 정보 접근이 규칙에 걸리면 직원별로 쌓입니다. [근거]를 펼치면 근거가 된 접근 기록이 보입니다(원문 없음). 업무상 정상이면 [정상 업무로 닫기]를 누르세요."
       />
       {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
-      <Card>
+      <div className="ia-tabs">
         <Tabs
           activeKey={status}
           onChange={(key) => {
@@ -186,63 +178,39 @@ export function InsiderAlertsPage() {
           }}
           items={tabs.map((tab) => ({ key: tab.key, label: tab.label }))}
         />
-        <Table<InsiderAlert>
-          rowKey="alertId"
-          size="small"
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          dataSource={rows ?? []}
-          locale={{
-            emptyText:
-              rows === null ? (
-                <ListLoading label="내부자 경보를 불러오는 중" />
-              ) : (
-                <ListEmpty title="데이터 없음" />
-              ),
-          }}
-          expandable={{ expandedRowRender: (row) => <EvidenceRows alertId={row.alertId} /> }}
-          columns={[
-            { ...oneLine, title: '최근 시각', dataIndex: 'lastEventAt', render: dateTime },
-            { ...oneLine, title: '직원', render: (_, row) => row.staffName ?? `ID ${row.staffId}` },
-            {
-              ...oneLine,
-              title: '규칙',
-              render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
-            },
-            {
-              ...oneLine,
-              title: '등급',
-              dataIndex: 'severity',
-              render: (value: InsiderAlertSeverity) => (
-                <Tag color={severityTag[value].color}>{severityTag[value].label}</Tag>
-              ),
-            },
-            { title: '내용', dataIndex: 'summary', render: displayRuleText },
-            { ...oneLine, title: '근거', render: (_, row) => `${row.evidenceCount}건` },
-            status === 'OPEN'
-              ? {
-                  ...oneLine,
-                  title: '처리',
-                  render: (_: unknown, row: InsiderAlert) => (
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setMemo('')
-                        setTarget(row)
-                      }}
-                    >
-                      정상 업무로 닫기
-                    </Button>
-                  ),
-                }
-              : {
-                  title: '처리',
-                  render: (_: unknown, row: InsiderAlert) =>
-                    `${row.closedByName ?? '-'} · ${row.closedAt ? dateTime(row.closedAt) : '-'}${row.closeMemo ? ` · ${row.closeMemo}` : ''}`,
-                },
-          ]}
-        />
-      </Card>
+      </div>
+      {rows === null ? (
+        <ListLoading label="내부자 경보를 불러오는 중" />
+      ) : rows.length === 0 ? (
+        <div className="ia-empty ca-panel-box">
+          {/* 못 불러온 것을 "경보 없음"으로 읽지 않게 */}
+          {error ? (
+            <ListEmpty title="경보를 불러오지 못했어요." />
+          ) : (
+            <ListEmpty
+              title={status === 'OPEN' ? '열린 경보가 없어요.' : '닫힌 경보가 없어요.'}
+              mascot={status === 'OPEN'}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="ia-groups">
+          <p className="dw-caption ia-groups-caption">
+            {`직원 ${groups.length}명 · 경보 ${rows.length}건 · 높은 등급 직원이 위`}
+          </p>
+          {groups.map((group) => (
+            <StaffGroup
+              key={group.staffId}
+              group={group}
+              status={status}
+              onClose={(alert) => {
+                setMemo('')
+                setTarget(alert)
+              }}
+            />
+          ))}
+        </div>
+      )}
       <Modal
         title="정상 업무로 닫기"
         open={target !== null}
@@ -252,6 +220,15 @@ export function InsiderAlertsPage() {
         onOk={() => void submit()}
         onCancel={() => setTarget(null)}
       >
+        {target && (
+          <div className="ia-modal-target">
+            <span>
+              <b>{target.staffName ?? `ID ${target.staffId}`}</b>
+              {` · ${displayRuleCode(target.ruleCode)} ${target.ruleLabel}`}
+            </span>
+            <span className="dw-caption">{displayRuleText(target.summary)}</span>
+          </div>
+        )}
         <p>
           닫은 뒤에는 그 전 기록으로 같은 규칙 경보가 다시 뜨지 않습니다. 새로 쌓이는 기록은 다시
           셉니다.
@@ -265,6 +242,6 @@ export function InsiderAlertsPage() {
           onChange={(event) => setMemo(event.target.value)}
         />
       </Modal>
-    </>
+    </div>
   )
 }

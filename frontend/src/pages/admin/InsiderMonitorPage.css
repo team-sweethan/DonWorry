@@ -1,0 +1,499 @@
+/* 관리자 [내부자 › 관제] — 왼쪽 보안팀 사무실(직원 = 책상 한 줄, 급한 순) · 오른쪽 고른 직원의 기록.
+   [사건 담당 › 담당 현황]의 사무실 그림(나무 바닥 · 동전이 · 책상 · 모니터 · 칸막이 · 빈 의자)을 작게 줄여 쓴다.
+   단계는 모니터 화면 색과 원 아이콘 + 글자로: 정상 초록 · 주의 노랑 · 내부자 사건 주황 · 정지 빨강. 바탕색 태그는 쓰지 않는다 */
+
+.im-page {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.im-console {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.im-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 14px 16px 10px;
+}
+.im-panel-head h2 {
+  margin: 0;
+}
+
+/* 단계 아이콘 — 바탕 없는 원 + 글자 (관리 화면 공통 태그와 같은 말투) */
+.im-stage-icon {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.is-normal .im-stage-icon {
+  color: #16a34a;
+}
+.is-caution .im-stage-icon {
+  color: #d97706;
+}
+.is-insider .im-stage-icon {
+  color: #ea580c;
+}
+.is-inactive .im-stage-icon {
+  color: #dc2626;
+  background: currentColor;
+}
+
+/* 사무실 머리 — 단계별 인원 · 갱신 시각 */
+.im-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 16px 12px;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+.im-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.im-summary-item b {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.im-legend {
+  margin: 0;
+  padding: 0 16px 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+.im-clock {
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 왼쪽: 사무실 바닥 위 책상 줄 ── */
+.im-office {
+  position: sticky;
+  top: calc(var(--dw-header-height) + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--dw-header-height) - 32px);
+}
+.im-desks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  margin: 0;
+  padding: 12px;
+  overflow-y: auto;
+  border-top: 1px solid #e7e0d2;
+  background: repeating-linear-gradient(0deg, #faf6ee 0 27px, #efe6d6 27px 28px);
+  list-style: none;
+}
+.im-desk {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid #e7e0d2;
+  border-radius: 10px;
+  background: #ffffffb3;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.im-desk:hover {
+  background: #fff;
+}
+.im-desk:hover .im-desk-mascot {
+  transform: translateX(-50%) translateY(-2px) rotate(-3deg);
+}
+.im-desk:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+}
+.im-desk.is-inactive {
+  border-color: #fca5a5;
+}
+.im-desk.is-open {
+  border-color: var(--shell-strong);
+  background: #fff;
+  box-shadow: 0 4px 14px #5b35b01f;
+}
+
+/* 작은 장면: 동전이(뒤) → 책상(앞) */
+.im-desk-scene {
+  position: relative;
+  flex: none;
+  width: 104px;
+  height: 72px;
+}
+.im-desk-mascot {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: transform 200ms ease;
+}
+.im-desk-table {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  z-index: 1;
+  width: 100px;
+  height: 22px;
+  border-radius: 5px 5px 3px 3px;
+  background: linear-gradient(#e9d3ae 0 6px, #cfae7d 6px);
+  box-shadow: 0 2px 0 #b8925e;
+}
+.im-desk-monitor {
+  position: absolute;
+  right: 8px;
+  bottom: 16px;
+  width: 26px;
+  height: 18px;
+  border: 2px solid #334155;
+  border-radius: 3px;
+  background: linear-gradient(135deg, #86efac, #dcfce7);
+}
+.im-desk-monitor::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  background: #334155;
+  transform: translateX(-50%);
+}
+.im-desk.is-caution .im-desk-monitor {
+  background: linear-gradient(135deg, #fcd34d, #fef3c7);
+}
+.im-desk.is-insider .im-desk-monitor {
+  background: linear-gradient(135deg, #fb923c, #ffedd5);
+}
+.im-desk.is-inactive .im-desk-monitor {
+  border-color: #dc2626;
+  background: #1e293b;
+}
+.im-desk.is-inactive .im-desk-monitor::after {
+  background: #dc2626;
+}
+/* 정지 책상은 회색으로 — 모니터는 빼서 빨강 테두리가 살아 있게 */
+.im-desk.is-inactive .im-desk-table {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+
+/* 열린 경보 = 노란 쪽지 */
+.im-desk-notes {
+  position: absolute;
+  bottom: 18px;
+  left: 10px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  width: 22px;
+}
+.im-desk-note {
+  width: 18px;
+  height: 5px;
+  margin-top: -1px;
+  border: 1px solid #f59e0b;
+  border-radius: 1px;
+  background: #fef3c7;
+}
+.im-desk-note:nth-child(odd) {
+  transform: rotate(-5deg);
+}
+.im-desk-note:nth-child(even) {
+  transform: translateX(2px) rotate(4deg);
+}
+.im-desk-more {
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 내부자 사건 — 칸막이 뒤, 흐리게 */
+.im-desk.is-insider .im-desk-mascot {
+  filter: grayscale(0.7);
+  opacity: 0.6;
+}
+.im-desk-partition {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  z-index: 1;
+  width: 76px;
+  height: 34px;
+  border: 2px solid #94a3b8;
+  border-radius: 5px 5px 0 0;
+  background: repeating-linear-gradient(45deg, #e2e8f0cc 0 5px, #f1f5f9cc 5px 10px);
+  transform: translateX(-50%);
+}
+
+/* 정지 — 빈 의자에 출입 금지 띠 */
+.im-desk-chair {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  width: 38px;
+  height: 44px;
+  overflow: hidden;
+  border: 2px solid #94a3b8;
+  border-radius: 10px 10px 4px 4px;
+  background: #e2e8f0;
+  transform: translateX(-50%);
+}
+.im-desk-chair::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: -8px;
+  width: 54px;
+  height: 7px;
+  background: repeating-linear-gradient(135deg, #fbbf24 0 5px, #1f2937 5px 10px);
+  transform: rotate(-18deg);
+}
+
+/* 책상 글자 */
+.im-desk-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.im-desk-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.im-desk-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+}
+/* 단계 글자 — 책상 줄에서 가장 먼저 눈에 들어오게, 글자 자체에 단계 색 */
+.im-desk-stage {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.im-desk-stage .im-stage-icon {
+  width: 11px;
+  height: 11px;
+}
+.im-desk.is-normal .im-desk-stage {
+  color: #15803d;
+}
+.im-desk.is-caution .im-desk-stage {
+  color: #b45309;
+}
+.im-desk.is-insider .im-desk-stage {
+  color: #c2410c;
+}
+.im-desk-help {
+  color: #64748b;
+  font-size: 12px;
+}
+.im-desk.is-inactive .im-desk-stage {
+  color: #b91c1c;
+}
+
+/* ── 오른쪽: 고른 직원의 기록 ── */
+.im-detail {
+  position: sticky;
+  top: calc(var(--dw-header-height) + 16px);
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--dw-header-height) - 32px);
+  min-height: 520px;
+}
+.im-detail:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 3px;
+}
+.im-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.im-detail-who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.im-detail-who h2 {
+  margin: 0;
+}
+.im-detail-who .im-summary-item {
+  font-size: 15px;
+  font-weight: 700;
+}
+.im-detail-who .im-stage-icon {
+  width: 12px;
+  height: 12px;
+}
+.im-summary-item.is-normal {
+  color: #15803d;
+}
+.im-summary-item.is-caution {
+  color: #b45309;
+}
+.im-summary-item.is-insider {
+  color: #c2410c;
+}
+.im-summary-item.is-inactive {
+  color: #b91c1c;
+}
+.im-detail-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px 16px 16px;
+}
+.im-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.im-log {
+  flex: 1;
+  min-height: 200px;
+  overflow-y: auto;
+  padding: 14px 12px 0 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.im-log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.im-log-time {
+  flex-shrink: 0;
+  color: #64748b;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.im-log-text {
+  flex: 1;
+  min-width: 0;
+}
+.im-detail-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .im-desk,
+  .im-desk-mascot {
+    transition: none;
+  }
+}
+
+/* 좁은 화면 — 위 사무실 · 아래 기록으로 쌓는다. 붙어 있기(sticky)는 끈다 */
+@media (max-width: 900px) {
+  .im-console {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .im-office,
+  .im-detail {
+    position: static;
+    height: auto;
+    max-height: none;
+  }
+  .im-desks {
+    max-height: 360px;
+  }
+  .im-log {
+    max-height: 60vh;
+  }
+}
+
+/* 실제 사고 카드 — 접기 · 펼치기는 상자 없이 제목 끝 작은 글자 버튼 */
+.im-incident {
+  flex: none;
+}
+.im-incident-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.im-incident-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #64748b;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.im-incident-toggle:hover {
+  color: #334155;
+}
+.im-incident-toggle:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.im-incident-body {
+  margin: 0;
+  padding-left: 18px;
+}
+
+/* 판정 버튼 + 무엇을 하는 창인지 한 줄 */
+.im-detail-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+@media (max-width: 640px) {
+  .im-detail-action {
+    align-items: flex-start;
+  }
+}
