@@ -57,10 +57,26 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
     )
     assert.match(sample, /Case SAMPLE-101/)
     assert.match(sample, /security-home-signal/)
+    assert.match(sample, /data-flow-active="true"/)
+    assert.match(sample, /security-home-process-marker is-running/)
+    assert.match(sample, /security-home-process-marker is-finance is-running/)
+    for (const flags of [
+      { watchStopped: true },
+      { loading: true },
+      { result: { ...result, failed: true } },
+    ]) {
+      const stale = renderToStaticMarkup(
+        createElement(SecurityHomeDashboard, { ...defaults, result, ...flags }),
+      )
+      assert.match(stale, /data-flow-active="false"/)
+      assert.doesNotMatch(stale, /security-home-process-marker[^"<>]*is-running/)
+      assert.doesNotMatch(stale, /security-home-segment[^"<>]*has-flow/)
+    }
     const empty = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: { ...result, cases: [] } }),
     )
     assert.match(empty, /현재 진행 중인 담당 사건이 없습니다/)
+    assert.doesNotMatch(empty, /security-home-process-marker[^"<>]*is-running/)
     const failure = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, {
         ...defaults,

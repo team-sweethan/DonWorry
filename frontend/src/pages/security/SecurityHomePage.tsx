@@ -4,6 +4,8 @@ import {
   ClockCircleOutlined,
   FileSearchOutlined,
   ReloadOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined,
   SafetyCertificateOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
@@ -147,6 +149,7 @@ export function SecurityHomeDashboard({
     [result, myId],
   )
   const failed = result?.failed === true
+  const [motionPaused, setMotionPaused] = useState(false)
 
   // 내 Case가 한 건이면 그 Case로 바로 간다
   const openFirst = (match: (c: CaseSummary) => boolean, query: Partial<CaseListQuery>) => {
@@ -158,6 +161,7 @@ export function SecurityHomeDashboard({
   const distribution = homeDistribution(openCases)
   const updatedAt = result?.receivedAt
   const ready = updatedAt != null
+  const flowActive = ready && !failed && !watchStopped && !loading
   const metrics = [
     {
       title: '판정 대기',
@@ -258,13 +262,25 @@ export function SecurityHomeDashboard({
   ]
 
   return (
-    <div className="security-home">
+    <div
+      className={`security-home${motionPaused ? ' is-motion-paused' : ''}`}
+      data-flow-active={flowActive}
+    >
       <div className="security-home-enter security-home-heading">
         <PageHeader
           title="내 담당 사건"
           description="종료되지 않은 내 담당 사건의 상태와 확인할 일을 보여줍니다."
           actions={
             <div className="security-home-refresh">
+              <Button
+                type="text"
+                size="small"
+                icon={motionPaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                aria-pressed={motionPaused}
+                onClick={() => setMotionPaused((paused) => !paused)}
+              >
+                {motionPaused ? '반복 효과 켜기' : '반복 효과 끄기'}
+              </Button>
               {ready && (
                 <span title={dateTime(new Date(updatedAt).toISOString())}>
                   {new Date(updatedAt).toLocaleTimeString('ko-KR', {
@@ -347,7 +363,7 @@ export function SecurityHomeDashboard({
                     .map((group) => (
                       <span
                         key={group.key}
-                        className={`security-home-segment is-${group.key}`}
+                        className={`security-home-segment is-${group.key}${flowActive && ((group.key === 'investigating' && counts.aiRunning > 0) || group.key === 'action') ? ' has-flow' : ''}`}
                         style={{ flexGrow: group.count }}
                       />
                     ))}
@@ -407,6 +423,14 @@ export function SecurityHomeDashboard({
         <p className="security-home-count-note">한 사건이 여러 현황 항목에 포함될 수 있습니다.</p>
         <div className="security-home-secondary" aria-label="보고서와 금융 처리 현황">
           <button type="button" disabled={!ready} onClick={() => openList({ report: 'running' })}>
+            <span
+              className={`security-home-process-marker${flowActive && counts.aiRunning > 0 ? ' is-running' : ''}`}
+              aria-hidden="true"
+            >
+              <i />
+              <i />
+              <i />
+            </span>
             보고서 생성 대기·진행 <strong>{ready ? counts.aiRunning : '−'}</strong>
             <ArrowRightOutlined />
           </button>
@@ -426,6 +450,14 @@ export function SecurityHomeDashboard({
             disabled={!ready}
             onClick={() => openList({ status: 'ACTION_PENDING' })}
           >
+            <span
+              className={`security-home-process-marker is-finance${flowActive && counts.actionPending > 0 ? ' is-running' : ''}`}
+              aria-hidden="true"
+            >
+              <i />
+              <i />
+              <i />
+            </span>
             금융 처리 대기 <strong>{ready ? counts.actionPending : '−'}</strong>
             <ArrowRightOutlined />
           </button>
