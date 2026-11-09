@@ -1,5 +1,5 @@
 {
-  "_measure": "사건 질문 측정 (#750) — 답 종류 · 넓혀 보기 선택 · 1차 검사 통과를 센다. 사건 · 금액은 지어낸 값",
+  "_measure": "사건 질문 측정 (#750) — 답 종류 · 넓혀 보기 선택 · 1차 검사 통과를 센다. 사건 · 금액은 지어낸 값. 같은 IP는 30일 9건 · 1시간 1건이라 하루 안 건수는 넓혀 봐야 안다",
   "reportBody": {
     "facts": [
       {
@@ -13,7 +13,7 @@
       {
         "id": "연결-1",
         "topic": "linked",
-        "text": "세 번째 결제 · 같은 IP: 최근 30일 다른 고객 2명 · 결제 3건, 카드사 거절 0건 / 그중 이 결제 앞뒤 1시간 안: 다른 고객 2명 · 결제 2건, 카드사 거절 0건",
+        "text": "세 번째 결제 · 같은 IP: 최근 30일 다른 고객 5명 · 결제 9건, 카드사 거절 0건 / 그중 이 결제 앞뒤 1시간 안: 다른 고객 1명 · 결제 1건, 카드사 거절 0건",
         "evidenceId": "E-31-v1-05",
         "paymentId": "9003",
         "notable": true
@@ -196,13 +196,13 @@
       },
       "ip": {
         "provided": true,
-        "otherCustomerCount": 2,
-        "paymentCount": 3,
+        "otherCustomerCount": 5,
+        "paymentCount": 9,
         "resultCounts": [],
         "declinedCount": 0,
         "nearby": {
-          "otherCustomerCount": 2,
-          "paymentCount": 3,
+          "otherCustomerCount": 3,
+          "paymentCount": 4,
           "resultCounts": [],
           "declinedCount": 0
         }
@@ -231,13 +231,13 @@
       },
       "ip": {
         "provided": true,
-        "otherCustomerCount": 2,
-        "paymentCount": 3,
+        "otherCustomerCount": 5,
+        "paymentCount": 9,
         "resultCounts": [],
         "declinedCount": 0,
         "nearby": {
-          "otherCustomerCount": 2,
-          "paymentCount": 3,
+          "otherCustomerCount": 4,
+          "paymentCount": 6,
           "resultCounts": [],
           "declinedCount": 0
         }

@@ -18,6 +18,7 @@ from app.schemas.tools import LinkedPaymentsTool, PaymentHistoryTool
 # 질문마다 N번 돌려 답 종류 · 넓혀 보기 선택 · 1차 검사 통과를 센다
 # OpenAI면 횟수 · 예상 비용을 보여 주고 y를 받아야 돈다. pytest · CI는 이 스크립트를 실행하지 않는다
 # 예) uv run python -m scripts.measure_questions               (질문 12개 × 1번, .env 제공자)
+#     uv run python -m scripts.measure_questions --only 4,5 --runs 3
 #     uv run python -m scripts.measure_questions --runs 3
 
 SAMPLE = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "measure_questions.json"
@@ -108,13 +109,21 @@ def main(
         "--runs", type=int, default=DEFAULT_RUNS, help=f"질문마다 횟수 (1~{MAX_RUNS})"
     )
     parser.add_argument("--out", type=Path, help="결과 JSON 저장 경로 (예: q-before.local.json)")
+    parser.add_argument("--only", help="돌릴 질문 번호(1부터, 쉼표로). 예: --only 1,4,5")
     args = parser.parse_args(argv)
     if not 1 <= args.runs <= MAX_RUNS:
         print(f"--runs는 1~{MAX_RUNS}만 됩니다 (받은 값 {args.runs})", file=out)
         return 2
     settings = settings or Settings()
     data = json.loads(SAMPLE.read_text(encoding="utf-8"))
-    total = len(data["questions"]) * args.runs
+    questions = data["questions"]
+    if args.only:
+        picked = [int(n) for n in args.only.split(",")]
+        if any(not 1 <= n <= len(questions) for n in picked):
+            print(f"--only는 1~{len(questions)}만 됩니다 (받은 값 {args.only})", file=out)
+            return 2
+        questions = [questions[n - 1] for n in picked]
+    total = len(questions) * args.runs
     provider, model = provider_and_model(settings)
     # 돈이 드는 제공자만 묻는다 — mock · Ollama는 바로 돈다
     if settings.llm_provider == "openai":
@@ -128,7 +137,7 @@ def main(
     llm = make_llm(settings)
     print(f"측정 시작 · {provider} ({model}) · 질문 {total}번", file=out)
     runs: list[Run] = []
-    for question in data["questions"]:
+    for question in questions:
         for _ in range(args.runs):
             run = measure(question, data, llm, settings)
             runs.append(run)
