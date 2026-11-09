@@ -6,7 +6,11 @@ import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseAlert;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -16,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -25,6 +30,29 @@ import java.util.stream.Collectors;
 final class InsiderReportFacts {
 
     static final String KIND = "INSIDER_RELEASE_REVIEW";
+
+    // 평소(30일) 대비 (#749) — 근거 첫 기록 날의 전날까지 완전한 한국 날짜 이 날 수만큼을 평소로 본다
+    static final int BASELINE_DAYS = 30;
+    static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
+    // 평소 기간 [from, to) — 한국 0시 경계, 날짜 정확히 30개. 그 안의 기록에서 근거 기록은 이미 빠져 있다
+    record Baseline(Instant from, Instant to, List<StaffAccessRecorded> events) {}
+
+    // 평소 대비 항목 — 평소와 이번을 같은 방법으로 센다
+    private enum Measure {
+        LIST_VIEWS("거래 목록 조회", "건"),
+        SEARCHED_CUSTOMERS("검색한 고객(서로 다른)", "명"),
+        DENIED("접근 거부", "건"),
+        EXPORT_ATTEMPTS("내보내기 시도", "건");
+
+        private final String label;
+        private final String unit;
+
+        Measure(String label, String unit) {
+            this.label = label;
+            this.unit = unit;
+        }
+    }
 
     // 접근 기록 종류 — 보고서는 그때의 모습으로 남기므로 화면 이름도 본문에 담는다
     private static final Map<StaffAccessType, String> ACCESS_LABELS = accessLabels();
@@ -38,6 +66,7 @@ final class InsiderReportFacts {
             List<InsiderCaseAlert> alerts,
             List<StaffAccessRecorded> events,
             Map<Long, String> caseCustomers,
+            Baseline baseline,
             Instant now) {
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("insiderCaseId", insiderCase.getId());
@@ -48,6 +77,7 @@ final class InsiderReportFacts {
         facts.put("openedAt", insiderCase.getOpenedAt().toString());
         facts.put("alerts", alerts.stream().map(InsiderReportFacts::alertRow).toList());
         facts.put("access", access(events, caseCustomers));
+        facts.put("baseline", baseline(baseline, events));
 
         Set<InsiderRule> rules =
                 alerts.stream().map(InsiderCaseAlert::getRuleCode).collect(Collectors.toSet());
@@ -61,6 +91,7 @@ final class InsiderReportFacts {
                 List.of(
                         "고객 번호 · IP · 주문자 원문은 이 보고서에 넣지 않았습니다.",
                         "숫자는 경보 근거로 묶인 접근 기록만 셉니다. 경보와 관계없는 다른 업무 기록은 세지 않았습니다.",
+                        "평소(30일) 값은 그 기간의 모든 접근 기록을 셉니다. 그때 담당한 사건은 기록에 없어 담당과 무관한 고객인지는 다시 가리지 않았습니다.",
                         "이 판은 만든 시각의 기록입니다. 그 뒤에 생긴 경보 · 기록은 다음 판이나 사건 상세에서 확인하세요."));
         return body;
     }
@@ -153,6 +184,73 @@ final class InsiderReportFacts {
 
     private static long distinct(List<StaffAccessRecorded> events, Function<StaffAccessRecorded, ?> key) {
         return events.stream().map(key).filter(Objects::nonNull).distinct().count();
+    }
+
+    // 평소(30일) 대비 — 항목마다 하루 평균(30으로 나눔) · 가장 많은 날 · 이번(근거 기록). 평소 기록이 없으면 평균 · 최대는 비운다(0이 아님)
+    private static Map<String, Object> baseline(Baseline baseline, List<StaffAccessRecorded> evidence) {
+        Map<LocalDate, List<StaffAccessRecorded>> byDay = new TreeMap<>();
+        baseline.events()
+                .forEach(event -> byDay.computeIfAbsent(
+                                LocalDate.ofInstant(event.occurredAt(), SEOUL), day -> new ArrayList<>())
+                        .add(event));
+        boolean hasRecords = !byDay.isEmpty();
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Measure measure : Measure.values()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", measure.name());
+            row.put("label", measure.label);
+            row.put("unit", measure.unit);
+            List<Long> daily = byDay.values().stream()
+                    .map(events -> count(measure, events))
+                    .toList();
+            row.put(
+                    "dailyAverage",
+                    hasRecords
+                            ? BigDecimal.valueOf(daily.stream()
+                                            .mapToLong(Long::longValue)
+                                            .sum())
+                                    .divide(BigDecimal.valueOf(BASELINE_DAYS), 1, RoundingMode.HALF_UP)
+                            : null);
+            row.put(
+                    "maxDay",
+                    hasRecords ? daily.stream().mapToLong(Long::longValue).max().orElse(0) : null);
+            row.put("current", count(measure, evidence));
+            rows.add(row);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("days", BASELINE_DAYS);
+        result.put("from", baseline.from().toString());
+        result.put("to", baseline.to().toString());
+        result.put("hasRecords", hasRecords);
+        result.put("daysWithRecords", byDay.size());
+        result.put("rows", rows);
+        return result;
+    }
+
+    // 고객은 거래 목록 조회 · 내보내기에 남은 고객 번호로만 센다(같은 고객 여러 쪽은 1명). 값은 본문에 넣지 않는다
+    private static long count(Measure measure, List<StaffAccessRecorded> events) {
+        return switch (measure) {
+            case LIST_VIEWS ->
+                events.stream()
+                        .filter(e -> e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW)
+                        .count();
+            case SEARCHED_CUSTOMERS ->
+                events.stream()
+                        .filter(e -> e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW
+                                || e.accessType() == StaffAccessType.TRANSACTION_EXPORT)
+                        .map(StaffAccessRecorded::customerRef)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .count();
+            case DENIED ->
+                events.stream()
+                        .filter(e -> e.result() == StaffAccessResult.DENIED)
+                        .count();
+            case EXPORT_ATTEMPTS ->
+                events.stream()
+                        .filter(e -> e.accessType() == StaffAccessType.TRANSACTION_EXPORT)
+                        .count();
+        };
     }
 
     // 고정 설명 — 걸린 규칙에 맞춰 고른다. 사실을 해석하지 않고, 판정 전에 확인할 곳만 알려 준다

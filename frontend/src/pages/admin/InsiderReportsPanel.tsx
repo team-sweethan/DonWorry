@@ -6,6 +6,8 @@ import {
   getInsiderReports,
   type InsiderReport,
   type InsiderReportAccessType,
+  type InsiderReportBaseline,
+  type InsiderReportBaselineRow,
   type InsiderReportBody,
 } from '../../api/insiderCases'
 import { displayRuleCode, displayRuleText, isExportBlockRule } from '../../utils/ruleDisplayCode'
@@ -36,6 +38,50 @@ function Sentences({ title, lines }: { title: string; lines: string[] }) {
           <li key={line}>{line}</li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/** 평소(30일) 대비 (#749) — 평소 하루 평균 · 가장 많은 날과 이번을 나란히. 해석 문장은 없다 */
+function Baseline({ baseline }: { baseline: InsiderReportBaseline }) {
+  const usual = (value: number | null, unit: string) => (value === null ? '-' : `${value}${unit}`)
+  return (
+    <div>
+      <Typography.Text strong>평소({baseline.days}일) 대비</Typography.Text>
+      <Table<InsiderReportBaselineRow>
+        rowKey="key"
+        size="small"
+        pagination={false}
+        dataSource={baseline.rows}
+        columns={[
+          { ...oneLine, title: '항목', dataIndex: 'label' },
+          {
+            ...oneLine,
+            title: '평소 하루 평균',
+            align: 'right',
+            render: (_, row) => usual(row.dailyAverage, row.unit),
+          },
+          {
+            ...oneLine,
+            title: '가장 많았던 날',
+            align: 'right',
+            render: (_, row) => usual(row.maxDay, row.unit),
+          },
+          {
+            ...oneLine,
+            title: '이번 (경보 근거)',
+            align: 'right',
+            render: (_, row) => (
+              <Typography.Text strong>{`${row.current}${row.unit}`}</Typography.Text>
+            ),
+          },
+        ]}
+      />
+      <Typography.Text type="secondary">
+        {baseline.hasRecords
+          ? `평소: ${period(baseline.from, baseline.to)} · 기록 있는 날 ${baseline.daysWithRecords}일 / ${baseline.days}일`
+          : `비교할 평소 기록 없음 — ${period(baseline.from, baseline.to)} 동안 접근 기록이 없습니다(새 계정 등).`}
+      </Typography.Text>
     </div>
   )
 }
@@ -122,6 +168,9 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
           </Typography.Text>
         )}
       </div>
+
+      {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다 */}
+      {facts.baseline && <Baseline baseline={facts.baseline} />}
 
       <div>
         <Space size="small" style={{ marginBottom: 4 }}>

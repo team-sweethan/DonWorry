@@ -36,6 +36,8 @@ import com.donworry.investigation.repository.InsiderCaseRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InsiderCaseChanged;
 import com.donworry.investigation.service.SecurityStaffGuard;
+import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +67,9 @@ class InsiderReportServiceTests {
     private static final Instant T0 = Instant.parse("2026-11-08T01:00:00Z");
     private static final String CUSTOMER_A = "CUST-a1b2c3d4";
     private static final String CUSTOMER_B = "CUST-e5f6a7b8";
+    private static final String CUSTOMER_C = "CUST-c9d0e1f2";
+    // 평소 기록 시각 — T0(한국 11/08 10:00) 하루 전
+    private static final Instant DAY_BEFORE = T0.minus(Duration.ofDays(1));
     private static final UUID LOGIN_REF = UUID.fromString("0f5c1d2e-3b4a-4c5d-8e9f-a0b1c2d3e4f5");
 
     @Mock
@@ -137,12 +142,15 @@ class InsiderReportServiceTests {
         givenAccess(
                 access(1L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_A, 100L, 30),
                 access(2L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_B, 100L, 20));
+        // 평소(30일) 기록의 고객 번호도 본문에 들어가지 않는다 (#749)
+        when(accessReader.findRecent(eq(STAFF_ID), any(), any()))
+                .thenReturn(List.of(usual(90L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_C, DAY_BEFORE)));
 
         service.generate(opened(500L));
 
         assertThat(saved).hasSize(1);
         String body = String.valueOf(saved.getFirst().getReportBody());
-        assertThat(body).doesNotContain(CUSTOMER_A, CUSTOMER_B, LOGIN_REF.toString());
+        assertThat(body).doesNotContain(CUSTOMER_A, CUSTOMER_B, CUSTOMER_C, LOGIN_REF.toString());
         assertThat(body).doesNotContain("customerRef", "loginReference", "ip=");
         assertThat(asMap(facts(saved.getFirst()).get("access"))).containsEntry("distinctCustomers", 2L);
     }
@@ -252,6 +260,87 @@ class InsiderReportServiceTests {
         Map<String, Object> access = asMap(facts(saved.getFirst()).get("access"));
         assertThat(access).containsEntry("distinctCustomers", 2L).containsEntry("unresolvedCustomerRecords", 1L);
         assertThat(String.valueOf(saved.getFirst().getReportBody())).doesNotContain(CUSTOMER_A, CUSTOMER_B);
+    }
+
+    // 평소(30일)는 근거 첫 기록 날의 전날까지 완전한 한국 날짜 30일이다 (#749, #755 Codex 리뷰: 날짜 경계를 하루 집계와 맞춤)
+    // 근거 기록 자체와 끝 시각(근거 날 0시)의 기록은 평소에 섞지 않는다
+    @Test
+    void facts_baselineUsesThirtyFullKoreanDaysBeforeEvidenceDay_excludesEvidenceEvents() {
+        givenAlerts(alert(500L, InsiderRule.INS_09));
+        StaffAccessRecorded evidence =
+                access(1L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_A, 100L, 3);
+        givenAccess(evidence);
+        // 근거 첫 기록 = 한국 11/08 10:00:01 → 평소 = 한국 10/09 0시 ~ 11/08 0시
+        Instant from = Instant.parse("2026-10-08T15:00:00Z");
+        Instant to = Instant.parse("2026-11-07T15:00:00Z");
+        // 읽기 창구는 끝 시각을 포함해 돌려준다 — 끝 시각의 기록 · 근거 기록이 함께 와도 빠져야 한다
+        when(accessReader.findRecent(STAFF_ID, from, to))
+                .thenReturn(List.of(
+                        usual(90L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_B, DAY_BEFORE),
+                        evidence,
+                        usual(91L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_C, to)));
+
+        service.generate(opened(500L));
+
+        Map<String, Object> baseline = asMap(facts(saved.getFirst()).get("baseline"));
+        assertThat(baseline)
+                .containsEntry("from", from.toString())
+                .containsEntry("to", to.toString())
+                .containsEntry("hasRecords", true)
+                .containsEntry("daysWithRecords", 1);
+        assertThat(asList(baseline.get("rows")))
+                .extracting(row -> row.get("key"), row -> row.get("maxDay"), row -> row.get("current"))
+                .containsExactly(
+                        tuple("LIST_VIEWS", 1L, 1L),
+                        tuple("SEARCHED_CUSTOMERS", 1L, 1L),
+                        tuple("DENIED", 0L, 0L),
+                        tuple("EXPORT_ATTEMPTS", 0L, 0L));
+    }
+
+    // 평소 기록이 없는 직원(새 계정 등)은 평균 · 최대를 0이 아니라 빈 값으로 둔다 (#749) — "평소 0건"으로 대비가 과장되지 않게
+    @Test
+    void facts_noAccessInBaselinePeriod_marksBaselineEmptyNotZero() {
+        givenAlerts(alert(500L, InsiderRule.INS_09));
+        givenAccess(access(1L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_A, 100L, 3));
+        when(accessReader.findRecent(eq(STAFF_ID), any(), any())).thenReturn(List.of());
+
+        service.generate(opened(500L));
+
+        Map<String, Object> baseline = asMap(facts(saved.getFirst()).get("baseline"));
+        assertThat(baseline).containsEntry("hasRecords", false).containsEntry("daysWithRecords", 0);
+        assertThat(asList(baseline.get("rows")))
+                .allSatisfy(row ->
+                        assertThat(row).containsEntry("dailyAverage", null).containsEntry("maxDay", null));
+        assertThat(asList(baseline.get("rows")).getFirst()).containsEntry("current", 1L);
+    }
+
+    // 평소 값은 한국 날짜로 하루를 나눠, 날마다 서로 다른 고객을 세고 30일로 나눈다 (#749)
+    // 한국 자정 앞뒤 기록은 다른 날이다(UTC로는 같은 날). 같은 날 같은 고객 여러 쪽은 1명
+    @Test
+    void facts_baselineCountsDistinctCustomersPerDay_averageOverThirtyDays() {
+        givenAlerts(alert(500L, InsiderRule.INS_09));
+        givenAccess(access(1L, StaffAccessType.TRANSACTION_LIST_VIEW, StaffAccessResult.ALLOWED, CUSTOMER_A, 100L, 3));
+        Instant beforeMidnight = Instant.parse("2026-11-06T14:30:00Z"); // 한국 11/06 23:30
+        Instant afterMidnight = Instant.parse("2026-11-06T15:30:00Z"); // 한국 11/07 00:30
+        when(accessReader.findRecent(eq(STAFF_ID), any(), any()))
+                .thenReturn(List.of(
+                        usual(90L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_A, beforeMidnight),
+                        usual(91L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_A, beforeMidnight.plusSeconds(60)),
+                        usual(92L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_A, beforeMidnight.plusSeconds(120)),
+                        usual(93L, StaffAccessType.TRANSACTION_EXPORT, CUSTOMER_B, beforeMidnight.plusSeconds(180)),
+                        usual(94L, StaffAccessType.TRANSACTION_LIST_VIEW, CUSTOMER_A, afterMidnight)));
+
+        service.generate(opened(500L));
+
+        Map<String, Object> baseline = asMap(facts(saved.getFirst()).get("baseline"));
+        assertThat(baseline).containsEntry("daysWithRecords", 2);
+        Map<String, Object> customers = asList(baseline.get("rows")).get(1);
+        assertThat(customers)
+                .containsEntry("key", "SEARCHED_CUSTOMERS")
+                .containsEntry("maxDay", 2L)
+                .containsEntry("dailyAverage", new BigDecimal("0.1"));
+        Map<String, Object> listViews = asList(baseline.get("rows")).getFirst();
+        assertThat(listViews).containsEntry("maxDay", 3L).containsEntry("dailyAverage", new BigDecimal("0.1"));
     }
 
     // 보고서 기능 배포 전부터 열린 사건은 서버 시작 때 빠진 판을 채우고, 다시 시작해도 판이 늘지 않는다 (#675 Codex 리뷰)
@@ -424,6 +513,21 @@ class InsiderReportServiceTests {
                 .paymentId(caseId * 10)
                 .loginReference(LOGIN_REF)
                 .occurredAt(T0.plusSeconds(eventId))
+                .build();
+    }
+
+    // 평소(30일) 기록 한 줄 — 허용된 거래 조회 · 내보내기
+    private static StaffAccessRecorded usual(Long eventId, StaffAccessType type, String customerRef, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF_ID)
+                .actorRole("SECURITY_STAFF")
+                .accessType(type)
+                .result(StaffAccessResult.ALLOWED)
+                .merchantId(100L)
+                .customerRef(customerRef)
+                .loginReference(LOGIN_REF)
+                .occurredAt(at)
                 .build();
     }
 
