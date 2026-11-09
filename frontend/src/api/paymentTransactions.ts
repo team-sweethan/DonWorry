@@ -1,4 +1,8 @@
-import type { PaymentTransaction, PaymentTransactionPage } from '../types/paymentTransaction'
+import type {
+  PaymentTransaction,
+  PaymentTransactionDetail,
+  PaymentTransactionPage,
+} from '../types/paymentTransaction'
 import { api, apiBlob } from './client'
 
 type RawTransaction = Omit<PaymentTransaction, 'paymentId' | 'evaluationId'> & {
@@ -22,6 +26,21 @@ export async function getPaymentTransactions(
       paymentId: String(item.paymentId),
       evaluationId: item.evaluationId === null ? null : String(item.evaluationId),
     })),
+  }
+}
+
+// 거래 1건 상세 (#732) — 열 때마다 서버가 열람 기록을 남긴다. 없는 결제는 404
+export async function getPaymentTransaction(paymentId: string): Promise<PaymentTransactionDetail> {
+  const item = await api<
+    Omit<PaymentTransactionDetail, 'paymentId' | 'evaluationId'> & {
+      paymentId: number
+      evaluationId: number | null
+    }
+  >(`/payment-transactions/${encodeURIComponent(paymentId)}`, { cache: 'no-store' })
+  return {
+    ...item,
+    paymentId: String(item.paymentId),
+    evaluationId: item.evaluationId === null ? null : String(item.evaluationId),
   }
 }
 

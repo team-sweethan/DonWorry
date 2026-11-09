@@ -153,6 +153,8 @@ class RoleApiMatrixTests {
             route("GET", "/api/payment-operations", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations/1", STAFF_OR_ADMIN),
             route("GET", "/api/payment-transactions", STAFF_OR_ADMIN),
+            // 거래 상세 1건 (#732)
+            route("GET", "/api/payment-transactions/1", STAFF_OR_ADMIN),
             route("POST", "/api/payment-transactions/export", STAFF_OR_ADMIN),
             // 보안 직원만: FDS 복구 실행 · Case 조회 · 판정 · 보고서 (ADMIN 제외, ADR-0065)
             route("POST", "/api/payment-operations/1/fds-reevaluations", STAFF),

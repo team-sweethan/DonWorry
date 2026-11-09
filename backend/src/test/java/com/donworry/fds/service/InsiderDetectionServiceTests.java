@@ -442,6 +442,22 @@ class InsiderDetectionServiceTests {
                 .containsExactly(1L, 2L, 3L);
     }
 
+    // 주소를 바꿔 가며 남의 사건 고객 결제 상세를 두드려도 경보가 없으면 막힌 시도가 묻힌다 (#732)
+    @Test
+    void ins01_outOfScopeDetailDenialsForDistinctCustomers_raisesCaution() {
+        StaffAccessRecorded last = given(
+                detailDenied(1L, 7L, "7:1001", 501L, T0),
+                detailDenied(2L, 7L, "7:1002", 502L, T0.plusSeconds(120)),
+                detailDenied(3L, 7L, "7:1003", 503L, T0.plusSeconds(240)));
+
+        service.detect(last);
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_01);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+        });
+    }
+
     // 1시간 안 원문 열람이 기준에 닿았는데 경보가 없으면 몰아보기를 놓친다 (기준 전에는 경보 없음)
     @Test
     void ins03_rawViewsReachThresholdInHour_raisesCaution() {
@@ -694,6 +710,23 @@ class InsiderDetectionServiceTests {
                 .customerRef(customerRef)
                 .itemCount(rows)
                 .loginReference(LOGIN)
+                .occurredAt(at)
+                .build();
+    }
+
+    // 담당 밖 고객의 거래 상세 거부 기록 (#732) — 결제 번호 · 가맹점 · 고객 번호, 사건 번호 없음
+    private static StaffAccessRecorded detailDenied(
+            Long eventId, Long merchantId, String customerRef, Long paymentId, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.TRANSACTION_DETAIL_VIEW)
+                .result(StaffAccessResult.DENIED)
+                .denyReason(StaffAccessDenyReason.TRANSACTION_DETAIL_OUT_OF_SCOPE)
+                .merchantId(merchantId)
+                .paymentId(paymentId)
+                .customerRef(customerRef)
                 .occurredAt(at)
                 .build();
     }

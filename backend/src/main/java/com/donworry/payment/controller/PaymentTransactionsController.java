@@ -1,5 +1,6 @@
 package com.donworry.payment.controller;
 
+import com.donworry.payment.dto.PaymentTransactionDetailResponse;
 import com.donworry.payment.dto.PaymentTransactionsPageResponse;
 import com.donworry.payment.dto.PaymentTransactionsQueryRequest;
 import com.donworry.payment.service.PaymentTransactionsExportService;
@@ -16,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +37,12 @@ public class PaymentTransactionsController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(service.findPage(PaymentTransactionsQueryRequest.of(parameters, Instant.now())));
+    }
+
+    // 거래 상세 1건 (#732) — 열 때마다 열람 기록이 남는다
+    @GetMapping("/api/payment-transactions/{paymentId:[0-9]+}")
+    ResponseEntity<PaymentTransactionDetailResponse> detail(@PathVariable Long paymentId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.findDetail(paymentId));
     }
 
     // CSV 내보내기 (#651) — 목록과 같은 조건(주소 뒤 조건, page · size는 무시). 엑셀이 한글을 읽도록 UTF-8 BOM을 붙인다

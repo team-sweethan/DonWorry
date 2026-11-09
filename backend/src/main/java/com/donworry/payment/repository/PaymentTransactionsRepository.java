@@ -7,6 +7,7 @@ import jakarta.persistence.EntityManager;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -35,6 +36,17 @@ public class PaymentTransactionsRepository {
         return rows.setMaxResults(limit).getResultList().stream()
                 .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]))
                 .toList();
+    }
+
+    // 거래 상세 1건 (#732) — 기간 조건 없이 결제 번호로만 찾는다
+    public Optional<PaymentTransactionRow> findById(Long paymentId) {
+        return entityManager
+                .createQuery("select p, r" + FROM + " where p.paymentId = :paymentId", Object[].class)
+                .setParameter("paymentId", paymentId)
+                .getResultList()
+                .stream()
+                .findFirst()
+                .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]));
     }
 
     public long count(PaymentTransactionsQueryRequest query) {

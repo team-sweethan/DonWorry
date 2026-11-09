@@ -21,6 +21,7 @@ export const accessLabel: Record<string, string> = {
   REPORT_PRINT: '보고서 인쇄',
   TRANSACTION_LIST_VIEW: '거래 목록 조회',
   TRANSACTION_EXPORT: '거래 내역 내보내기',
+  TRANSACTION_DETAIL_VIEW: '거래 상세 열기',
   CONTACT_MASKED_VIEW: '주문자 정보(가림) 보기',
   CONTACT_MATCH: '전화번호 일치 확인',
   CONTACT_MATCH_HIT: '전화번호 일치 확인 · 일치',
@@ -33,6 +34,7 @@ export const denyLabel: Record<string, string> = {
   PAYMENT_NOT_IN_CASE: '사건에 없는 결제',
   INSIDER_ALERT_OPEN: '열린 경보 중 내보내기',
   EXPORT_OUT_OF_SCOPE: '담당 아닌 고객 내보내기',
+  TRANSACTION_DETAIL_OUT_OF_SCOPE: '담당 아닌 고객 거래 상세',
 }
 export const fieldLabel: Record<string, string> = {
   ORDERER_NAME: '주문자 이름',

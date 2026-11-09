@@ -23,7 +23,7 @@ import com.donworry.identity.api.StaffAccessDenyReason;
 import com.donworry.identity.api.StaffAccessRecorder;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffSummary;
-import com.donworry.payment.dto.PaymentTransactionResponse;
+import com.donworry.payment.dto.PaymentTransactionDetailResponse;
 import com.donworry.payment.dto.PaymentTransactionsQueryRequest;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.repository.PaymentTransactionRow;
@@ -176,9 +176,9 @@ class PaymentTransactionsExportTests {
         assertThatThrownBy(() -> service.exportCsv(query())).isInstanceOf(IllegalStateException.class);
     }
 
-    // CSV 칸은 화면 목록 응답의 칸과 같고(가린 값 · 표시값), 주문자 이름 · 전화 · 원문 칸은 없다
+    // 목록에서 카드 · 접속 · 기기 · 이메일을 뺐어도(#732) CSV는 거래 상세와 같은 15칸을 유지한다. 주문자 이름 · 전화 · 원문 칸은 없다
     @Test
-    void csv_hasSameColumnsAsListWithoutRawFields() {
+    void csv_keepsFullColumns() {
         assertThat(PaymentTransactionsCsv.headers())
                 .containsExactly(
                         "결제번호",
@@ -197,8 +197,8 @@ class PaymentTransactionsExportTests {
                         "IP(가림)",
                         "기기(가림)",
                         "회원이메일(가림)");
-        // 응답 DTO에 칸이 늘면(원문이 섞일 수 있는 변화) 이 테스트가 CSV 칸을 다시 보게 만든다
-        assertThat(PaymentTransactionResponse.class.getRecordComponents()).hasSize(15);
+        // 상세 DTO에 칸이 늘면(원문이 섞일 수 있는 변화) 이 테스트가 CSV 칸을 다시 보게 만든다
+        assertThat(PaymentTransactionDetailResponse.class.getRecordComponents()).hasSize(15);
         assertThat(String.join(",", PaymentTransactionsCsv.headers()))
                 .doesNotContain("이름")
                 .doesNotContain("전화");
@@ -207,7 +207,7 @@ class PaymentTransactionsExportTests {
     // 엑셀이 수식으로 실행하는 글자(= + - @ 탭)로 시작하는 값은 앞에 '를 붙인다. 숫자 칸은 그대로 둔다
     @Test
     void csv_whenValueStartsWithFormulaChar_prefixesQuote() {
-        var item = PaymentTransactionResponse.builder()
+        var item = PaymentTransactionDetailResponse.builder()
                 .paymentId(1L)
                 .customerRef("=HYPERLINK(\"http://x\")")
                 .orderRef("+1")

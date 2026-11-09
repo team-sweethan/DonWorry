@@ -47,6 +47,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(MariaDbTestContainerConfig.class)
 class PaymentTransactionsHttpMariaDbTests {
     private static final String PATH = "/api/payment-transactions";
+    // 목록에서 빠지고 상세에만 있는 칸 (#732)
+    private static final List<String> DETAIL_ONLY_FIELDS =
+            List.of("cardDisplayLabel", "ipCountryCode", "maskedIpAddress", "maskedDeviceId", "maskedBuyerEmail");
 
     @LocalServerPort
     int port;
@@ -144,7 +147,8 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(json(path).path("totalElements").asLong()).isEqualTo(1);
     }
 
-    // 카드 토큰 · IP · 기기 ID · 이메일 원문과 승인 참조는 응답 어디에도 없고, 표시값 · 국가 · 가린 값만 나간다
+    // 카드 토큰 · IP · 기기 ID · 이메일 원문과 승인 참조는 응답 어디에도 없다.
+    // 표시값 · 국가 · 가린 값은 목록에서 빠지고 1건 상세에서만 나간다 (#732)
     @Test
     void list_whenSignalsStored_neverExposesRawIdentifiers() throws Exception {
         var signals = PaymentRiskSignals.builder()
@@ -172,11 +176,25 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(item.path("fdsResult").asString()).isEqualTo("REVIEW");
         assertThat(item.path("evaluationId").asLong()).isEqualTo(363L);
         assertThat(item.path("attemptNo").asLong()).isEqualTo(1L);
-        assertThat(item.path("cardDisplayLabel").asString()).isEqualTo("신한 ****1234");
-        assertThat(item.path("ipCountryCode").asString()).isEqualTo("KR");
-        assertThat(item.path("maskedIpAddress").asString()).isEqualTo("211.234.*.*");
-        assertThat(item.path("maskedDeviceId").asString()).isEqualTo("dev-7f3a…");
-        assertThat(item.path("maskedBuyerEmail").asString()).isEqualTo("ch***@gmail.com");
+        for (String field : DETAIL_ONLY_FIELDS)
+            assertThat(item.has(field)).as(field).isFalse();
+
+        // 담당 범위 검사 없이 여는 관리자로 상세를 확인한다
+        var detail = send(user("admin", "ADMIN", null), "GET", PATH + "/" + id);
+        assertThat(detail.statusCode()).as(detail.body()).isEqualTo(200);
+        assertThat(detail.body())
+                .doesNotContain(
+                        "tok_secret_card_363",
+                        "211.234.10.5",
+                        "dev-7f3a9c21-raw-device",
+                        "chk990727@gmail.com",
+                        "SECRET_AUTHORIZATION");
+        var body = mapper.readTree(detail.body());
+        assertThat(body.path("cardDisplayLabel").asString()).isEqualTo("신한 ****1234");
+        assertThat(body.path("ipCountryCode").asString()).isEqualTo("KR");
+        assertThat(body.path("maskedIpAddress").asString()).isEqualTo("211.234.*.*");
+        assertThat(body.path("maskedDeviceId").asString()).isEqualTo("dev-7f3a…");
+        assertThat(body.path("maskedBuyerEmail").asString()).isEqualTo("ch***@gmail.com");
     }
 
     // 요청 기록이 없는 결제도 빠지지 않고, 신호 칸은 비어서 나온다
@@ -188,8 +206,13 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(items.size()).isEqualTo(1);
         var item = items.get(0);
         assertThat(item.path("paymentId").asLong()).isEqualTo(id);
-        for (String field : List.of("attemptNo", "fdsResult", "evaluationId", "cardDisplayLabel", "maskedIpAddress"))
+        for (String field : List.of("attemptNo", "fdsResult", "evaluationId"))
             assertThat(item.path(field).isNull()).as(field).isTrue();
+
+        var detail = mapper.readTree(
+                send(user("admin", "ADMIN", null), "GET", PATH + "/" + id).body());
+        for (String field : List.of("cardDisplayLabel", "maskedIpAddress"))
+            assertThat(detail.path(field).isNull()).as(field).isTrue();
     }
 
     // 기본 최근 7일 · 최신순 · 가맹점 · 고객 · 상태 · 주문번호 · 기간 · 페이지가 섞이지 않고 맞게 걸린다

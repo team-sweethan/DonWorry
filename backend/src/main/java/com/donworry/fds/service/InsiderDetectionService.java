@@ -55,7 +55,8 @@ public class InsiderDetectionService {
     private static final Set<StaffAccessDenyReason> OUT_OF_SCOPE = Set.of(
             StaffAccessDenyReason.NOT_ASSIGNEE,
             StaffAccessDenyReason.PAYMENT_NOT_IN_CASE,
-            StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE);
+            StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE,
+            StaffAccessDenyReason.TRANSACTION_DETAIL_OUT_OF_SCOPE);
     // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
     private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
             Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
