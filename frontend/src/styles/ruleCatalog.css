@@ -146,7 +146,7 @@
   color: #1d4ed8;
 }
 
-/* 결제 룰도 계정 룰과 같은 세기의 그라데이션을 둔다. 구분은 색으로 한다 (결제 파랑 · 계정 보라, #713) */
+/* 결제 룰 카드는 파랑 그라데이션을 계정 룰보다 조금 진하게 둔다. 구분은 색으로 한다 (결제 파랑 · 계정 보라, #713 · #742) */
 .dw-rule-card-payment {
   border-color: #b5cbf3;
   background: linear-gradient(180deg, #d8e6ff 0%, #ecf3ff 40%, #fff 78%);
