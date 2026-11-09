@@ -445,15 +445,6 @@ export function RuleCatalogPage() {
             className="dw-rule-grid"
             aria-label={selectedTab === 'all' ? '전체 룰' : '결제 룰'}
           >
-            {rules.map((rule) => (
-              <RuleCard
-                key={rule.ruleCode}
-                rule={rule}
-                policy={policies.find((policy) => policy.ruleCode === rule.ruleCode)}
-                isAdmin={isAdmin}
-                onChanged={reloadPolicies}
-              />
-            ))}
             {selectedTab === 'all' &&
               isAdmin &&
               accountRules.map((rule) => (
@@ -465,6 +456,15 @@ export function RuleCatalogPage() {
                   onChanged={reloadPolicies}
                 />
               ))}
+            {rules.map((rule) => (
+              <RuleCard
+                key={rule.ruleCode}
+                rule={rule}
+                policy={policies.find((policy) => policy.ruleCode === rule.ruleCode)}
+                isAdmin={isAdmin}
+                onChanged={reloadPolicies}
+              />
+            ))}
           </section>
           <div className="dw-rule-note">
             R02·R03은 과거 정상 승인 이력이 없는 첫 결제에는 적용하지 않습니다. R04·R06·R08은 평가

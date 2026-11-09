@@ -368,16 +368,12 @@ export function SettlementPrototype({
           description="영업일 D+3·하루 한 번 지급을 가정한 목 데이터입니다. 실제 정산일은 서버에서 계산합니다."
         />
       )}
-      {payoutData && (
-        <>
-          <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />
-          {monthSummary && (
-            <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
-          )}
-        </>
-      )}
+      {payoutData && <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />}
       <section className="finance-card" style={{ marginBottom: 20 }}>
         <h2>날짜별 지급·정산 예정 금액</h2>
+        {payoutData && monthSummary && (
+          <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
+        )}
         <SettlementLineChart
           payoutMode={!!payoutData}
           todayValue={dateInput(today)}

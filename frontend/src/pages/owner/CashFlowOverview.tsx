@@ -155,7 +155,7 @@ export function CashFlowOverview({
               : '시작 잔액 + 환불 차감 후 지급액 − 실제 지출 완료',
           ],
           [
-            '기간 내 정산 유입',
+            '기간 내 정산 예정',
             summary?.totalIncome ?? days.reduce((n, d) => n + d.completed + d.scheduled, 0),
             '실제 지급 + 환불 회수 차감 후 예상 지급',
           ],
@@ -457,7 +457,7 @@ export function CashFlowOverview({
             )
           }
         >
-          연계 대출 상품 보기 →
+          운영자금 상품 보기 →
         </Button>
       </section>
 

@@ -459,7 +459,7 @@ function ConnectedSettlements() {
                 {mismatch ? (
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
-                  <strong className="stl-value">
+                  <strong>
                     <FinanceMoney value={month.data.paidAmount} />
                   </strong>
                 ) : month.status === 'error' ? (

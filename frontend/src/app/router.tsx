@@ -1,3 +1,4 @@
+import { ConfigProvider } from 'antd'
 import { RouteLayout, RouteErrorPage } from './RouteLayout'
 import {
   AdminApplicationsPage,
@@ -54,6 +55,15 @@ import {
 import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
 
 // 업무·계정 화면은 서버 세션으로 보호하고 정산 시연 화면은 개발 환경에서만 제공한다.
+const ownerWarmTheme = {
+  token: {
+    colorPrimary: '#886211',
+    colorLink: '#886211',
+    colorBorderSecondary: '#e7e1d5',
+    colorFillAlter: '#fffaf0',
+  },
+}
+
 export const router = createBrowserRouter([
   {
     element: <RouteLayout />,
@@ -285,23 +295,39 @@ export const router = createBrowserRouter([
           {
             path: '/owner',
             children: [
-              { index: true, handle: { title: '사장님 홈' }, element: <OwnerHomePage /> },
+              {
+                index: true,
+                handle: { title: '사장님 홈' },
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <OwnerHomePage />
+                  </ConfigProvider>
+                ),
+              },
               {
                 path: 'actions',
                 handle: { title: '조치 결과' },
-                element: <MerchantCaseListPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <MerchantCaseListPage />
+                  </ConfigProvider>
+                ),
               },
               {
                 path: 'actions/:id',
                 handle: { title: '조치 결과 상세' },
-                element: <MerchantCaseDetailPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <MerchantCaseDetailPage />
+                  </ConfigProvider>
+                ),
               },
               // 정산 상세 API 연동 전에는 HTML 프로토타입의 예시 화면을 제공한다.
               { path: 'settlements', handle: { title: '정산 내역' }, element: <SettlementRoute /> },
               { path: 'funds', handle: { title: '자금 현황' }, element: <SettlementRoute /> },
               {
                 path: 'loans',
-                handle: { title: '연계 대출 상품' },
+                handle: { title: '운영자금 상품' },
                 element: <LoanProductsRoute />,
               },
               { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
@@ -309,7 +335,11 @@ export const router = createBrowserRouter([
               {
                 path: 'integration',
                 handle: { title: '시크릿 키 발급' },
-                element: <IntegrationPreviewPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <IntegrationPreviewPage />
+                  </ConfigProvider>
+                ),
               },
               { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
             ],

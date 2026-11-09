@@ -189,7 +189,6 @@
   .finance-surface .finance-chart-grid,
   .finance-surface .finance-bottom-grid,
   .finance-surface .stl-calendar-layout,
-  .finance-surface .loan-evidence-grid,
   .finance-surface .loan-product-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -213,7 +212,6 @@
   .finance-surface .payout-summary-grid,
   .finance-surface .cashflow-summary-grid,
   .finance-surface .cashflow-evidence,
-  .finance-surface .loan-evidence-grid,
   .finance-surface .loan-product-grid,
   .finance-surface .recovery-values {
     grid-template-columns: minmax(0, 1fr);

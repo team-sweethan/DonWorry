@@ -9,6 +9,7 @@ import com.donworry.fds.entity.OperatorAccessEvent;
 import com.donworry.fds.repository.OperatorAccessDetectionEvidenceRepository;
 import com.donworry.fds.repository.OperatorAccessDetectionRepository;
 import com.donworry.fds.repository.OperatorAccessEventRepository;
+import com.donworry.fds.repository.OperatorAccessHighRiskSignalProjection;
 import com.donworry.identity.api.MerchantDirectoryReader;
 import java.time.Instant;
 import java.util.List;
@@ -104,6 +105,33 @@ class OperatorAccessDetectionQueryServiceTests {
         assertThat(result.evidences())
                 .extracting(value -> value.identityEventId())
                 .containsExactly(70L);
+    }
+
+    // 같은 계정과 룰에서 새 고위험 탐지가 발생해도 이전 탐지 이력은 목록에 남는다.
+    @Test
+    void list_whenSameUserAndRuleHaveMultipleHighRiskDetections_returnsAllDetectionHistory() {
+        var earlier = highRiskSignal(10L, Instant.parse("2026-11-05T01:00:00Z"));
+        var latest = highRiskSignal(11L, Instant.parse("2026-11-05T02:00:00Z"));
+        given(merchants.findAll()).willReturn(List.of());
+        given(detections.findLatestSignals()).willReturn(List.of(earlier, latest));
+        given(events.findLatestLowRiskSignals()).willReturn(List.of());
+
+        var result = queryService().list("HIGH", null, 0, 20);
+
+        assertThat(result.content()).extracting(value -> value.detectionId()).containsExactly(11L, 10L);
+        assertThat(result.highRiskCount()).isEqualTo(2);
+    }
+
+    private OperatorAccessHighRiskSignalProjection highRiskSignal(Long detectionId, Instant occurredAt) {
+        var signal = org.mockito.Mockito.mock(OperatorAccessHighRiskSignalProjection.class);
+        given(signal.getDetectionId()).willReturn(detectionId);
+        given(signal.getLoginId()).willReturn("boss");
+        given(signal.getMerchantId()).willReturn(2L);
+        given(signal.getRuleCode()).willReturn("SEC_OPERATOR_OUT_OF_ROLE_REPEAT");
+        given(signal.getEventCount()).willReturn(5);
+        given(signal.getActionStatus()).willReturn("COMPLETED");
+        given(signal.getOccurredAt()).willReturn(occurredAt);
+        return signal;
     }
 
     private OperatorAccessEvent event(Long identityEventId, Instant occurredAt) {
