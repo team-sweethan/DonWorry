@@ -285,6 +285,32 @@ P4 소유다. `insider_case_id`는 P3 `insider_cases`, `trigger_alert_id`는 P2 
 | report_body | JSON NOT NULL | 사실(facts) · 고정 문장 설명(narrative) · 한계(limits). FAILED면 오류 코드만. 고객 번호 · IP · 원문 없음 |
 | created_at | DATETIME(6) NOT NULL | UTC |
 
+### #752 P4 보고서 뒤 사건 질문 · 답변 (2026-11-10)
+
+[승인·도입 기록](history.md#752-p4-보고서-뒤-사건-질문--답변-2026-11-10).
+
+근거: [생성 SQL](../../backend/src/main/resources/db/migration/V20261110_053058__create_ai_report_questions.sql), [접수 · 결과 저장](../../backend/src/main/java/com/donworry/investigation/report/service/AiReportQuestionWriter.java), [ADR-0086](../decisions/0086-report-case-questions.md) 5 · 6절.
+
+P4 소유다. `report_id`는 같은 담당 `ai_reports`라 물리 FK, `case_id`는 P3 `security_cases`, `staff_id`는 P1 직원의 논리 참조(FK 없음)다.
+질문 접수 때 권한 · 대상 · 긴급정지 · 횟수 상한을 확인하고 `RUNNING`으로 저장 · 커밋한 뒤, 트랜잭션 밖에서 ai-server를 불러 결과로 끝낸다. 답 실패는 사건 · 판정 상태를 바꾸지 않는다.
+
+`ai_report_questions` — 결제 사건의 성공한 AI 보고서에 직원이 한 질문 하나. 쌓기만 하고 고치거나 지우지 않는다 (끝난 줄은 다시 바꾸지 않음).
+
+| 컬럼 | 타입·NULL | 의미 |
+| --- | --- | --- |
+| question_id | BIGINT AUTO_INCREMENT PK | ai-server 요청의 questionId |
+| report_id | BIGINT NOT NULL | 질문한 보고서 (FK `ai_reports`) |
+| case_id | BIGINT NOT NULL | P3 사건 (논리 참조) |
+| staff_id | BIGINT NOT NULL | 질문한 직원 (P1 논리 참조) |
+| question | VARCHAR(300) NOT NULL | 앞뒤 공백을 뺀 질문 1~300자 |
+| status | VARCHAR(20) NOT NULL | RUNNING / ANSWERED / DECLINED / FAILED (CHECK) |
+| answer_body | JSON NULL | 답 종류 · 문장 · 근거 사실 · 판정 질문의 확인할 것 · 부른 도구 · 과정 기록. FAILED면 error(code · reason)만. 끝나기 전 NULL. 모델 · 토큰은 ai-server 응답에 없어 아직 담지 않는다 |
+| report_evidence_version | INT NOT NULL | 질문한 보고서가 분석한 증거 버전 |
+| asked_at | DATETIME(6) NOT NULL | UTC |
+| answered_at | DATETIME(6) NULL | UTC, 끝난 시각 |
+
+인덱스 `idx_ai_report_questions_report_staff (report_id, staff_id, asked_at)` — 직원 · 보고서당 최근 24시간 30개 상한과 직전 질문 3개 조회에 쓴다.
+
 ## P5 payment
 
 ### #141 P5 직원 조치 저장 설계 초안

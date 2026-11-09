@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.investigation.report.dto.AiInvestigationRequest;
 import com.donworry.investigation.report.dto.AiInvestigationResult;
+import com.donworry.investigation.report.dto.AiQuestionRequest;
 import com.donworry.investigation.report.dto.AiTraceStep;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +27,14 @@ class AiServerClientTests {
             {"reportId":"7","attemptId":"attempt-1","status":"RUNNING","reportBody":null,"error":null,
              "progress":[{"kind":"TOOL","actor":"AI","title":"결제 목록 조회","durationMs":200,
                           "asked":"이 사건의 결제 전체","received":"결제 3건","retryReason":null}]}
+            """;
+
+    // ai-server QuestionResult 모양 — 다른 질문(999)의 답
+    private static final String ANSWER_OF_OTHER_QUESTION = """
+            {"questionId":"999","status":"ANSWERED","kind":"ANSWER",
+             "sentences":[{"text":"같은 IP 결제는 3건입니다.","facts":["연결-1"]}],
+             "checks":[],"facts":[{"id":"연결-1","text":"같은 IP 결제 3건","source":"REPORT"}],
+             "toolCalls":[],"trace":[],"error":null}
             """;
 
     private HttpServer server;
@@ -45,6 +56,14 @@ class AiServerClientTests {
             } else {
                 exchange.sendResponseHeaders(202, -1);
             }
+            exchange.close();
+        });
+        server.createContext("/questions", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] body = ANSWER_OF_OTHER_QUESTION.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
             exchange.close();
         });
         server.start();
@@ -82,6 +101,23 @@ class AiServerClientTests {
                         .asked("이 사건의 결제 전체")
                         .received("결제 3건")
                         .build());
+    }
+
+    // 보낸 질문과 다른 질문 번호의 답은 저장되지 않게 실패로 바꾼다 — 다른 직원 · 다른 사건 질문의 답이 섞이지 않는다
+    @Test
+    void ask_whenResponseQuestionIdDiffers_returnsFailed() {
+        AiQuestionOutcome outcome = client().ask(AiQuestionRequest.builder()
+                .questionId("12")
+                .reportId("7")
+                .caseId("3")
+                .reportEvidenceVersion(1)
+                .currentEvidenceVersion(1)
+                .question("같은 IP 결제는 언제였나요?")
+                .reportBody(Map.of())
+                .previous(List.of())
+                .build());
+
+        assertThat(outcome).isEqualTo(new AiQuestionOutcome.Failed("RESPONSE_MISMATCH", "다른 질문의 답"));
     }
 
     private AiServerClient client() {

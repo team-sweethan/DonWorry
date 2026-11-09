@@ -10,6 +10,8 @@ public enum StaffAccessType {
     REPORT_PROGRESS_VIEW,
     // AI 보고서 인쇄 · PDF 저장 창을 연 것 (#623) — 화면은 실제 인쇄 · 저장 · 취소를 알 수 없다. 사건 번호만 남긴다
     REPORT_PRINT,
+    // AI 보고서 뒤 사건 질문 접수 (#752, ADR-0086 5절) — 질문 · 답 내용은 ai_report_questions에 있다. 사건 번호만 남긴다
+    REPORT_QUESTION,
     // 거래 목록 조회 (#615) — 내보낸 건수 · 거른 가맹점 · 검색한 고객 번호를 남긴다
     TRANSACTION_LIST_VIEW,
     // 거래 목록 CSV 내보내기 (#651) — 허용이면 내보낸 행 수, 거부는 열린 내부자 경보로 막힌 시도
