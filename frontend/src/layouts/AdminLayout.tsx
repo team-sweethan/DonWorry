@@ -22,14 +22,18 @@ import {
   UserSwitchOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
-import { Tooltip } from 'antd'
+import { ConfigProvider, Tooltip, type ThemeConfig } from 'antd'
 import { BrandMark, Mascot } from '../components/brand/BrandMark'
 import { useState, type ReactNode } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import type { NavBadge, NavGroup } from '../config/navigation'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
+import { tokens } from '../styles/tokens'
 
 export type ManagementRole = 'admin' | 'security' | 'owner'
+
+/** 관리 화면은 시연 화면에서 읽기 쉽게 antd 기본 글자를 한 단계 키운다 (#713). 공개 화면 · 로그인은 그대로 */
+const managementTheme: ThemeConfig = { token: { fontSize: tokens.typography.managementBody } }
 
 /** 역할별 바깥 틀 이름 · 아이콘. 색은 global.css의 [data-role]에서 정한다. */
 const appearance: Record<ManagementRole, { title: string; icon: ReactNode }> = {
@@ -208,28 +212,30 @@ export function ManagementLayout({
     saveSidebarCollapsed(next)
   }
   return (
-    <div
-      className={`admin-viewport${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
-      data-role={role}
-    >
-      <a href="#main" className="dw-skip-link">
-        본문으로 바로 가기
-      </a>
-      {header}
-      <Sidebar
-        groups={groups}
-        badges={badges}
-        collapsed={sidebarCollapsed}
-        onToggle={toggleSidebar}
-      />
-      <main className="dw-main" id="main" tabIndex={-1}>
-        <div className="dw-container">
-          {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
-          <ScreenErrorBoundary key={location.pathname}>
-            {children ?? <Outlet />}
-          </ScreenErrorBoundary>
-        </div>
-      </main>
-    </div>
+    <ConfigProvider theme={managementTheme}>
+      <div
+        className={`admin-viewport${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
+        data-role={role}
+      >
+        <a href="#main" className="dw-skip-link">
+          본문으로 바로 가기
+        </a>
+        {header}
+        <Sidebar
+          groups={groups}
+          badges={badges}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+        />
+        <main className="dw-main" id="main" tabIndex={-1}>
+          <div className="dw-container">
+            {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
+            <ScreenErrorBoundary key={location.pathname}>
+              {children ?? <Outlet />}
+            </ScreenErrorBoundary>
+          </div>
+        </main>
+      </div>
+    </ConfigProvider>
   )
 }

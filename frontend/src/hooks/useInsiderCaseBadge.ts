@@ -33,3 +33,11 @@ export function useInsiderCaseBadge(userId: number | null) {
 
   return userId === null ? null : count
 }
+
+/**
+ * 사이드바 배지가 이미 센 열린 내부자 사건 수를 읽기만 한다 (관리자 홈 처리할 일, #713).
+ * 다시 세거나 지우지 않으므로 서버 요청이 늘지 않고, 화면을 떠나도 사이드바 숫자가 유지된다.
+ */
+export function useInsiderCaseCount() {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot)
+}

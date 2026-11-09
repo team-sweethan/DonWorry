@@ -1,4 +1,6 @@
 import { Alert, App, Button, Card, Input, Modal, Table, Tabs, Tag } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   closeInsiderAlert,
@@ -72,9 +74,16 @@ function EvidenceRows({ alertId }: { alertId: number }) {
     <Table<InsiderAlertEvidence>
       rowKey="eventId"
       size="small"
-      loading={rows === null}
       pagination={false}
       dataSource={rows ?? []}
+      locale={{
+        emptyText:
+          rows === null ? (
+            <ListLoading label="근거 기록을 불러오는 중" />
+          ) : (
+            <ListEmpty title="데이터 없음" />
+          ),
+      }}
       columns={[
         { ...oneLine, title: '시각', dataIndex: 'occurredAt', render: dateTime },
         {
@@ -163,7 +172,7 @@ export function InsiderAlertsPage() {
         title="내부자 경보"
         description="보안 직원의 고객 정보 접근이 규칙에 걸리면 여기에 쌓입니다. 줄을 펼치면 근거가 된 접근 기록이 보입니다(원문 없음). 업무상 정상이면 [정상 업무로 닫기]를 누르세요."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
         <Tabs
           activeKey={status}
@@ -179,10 +188,17 @@ export function InsiderAlertsPage() {
         <Table<InsiderAlert>
           rowKey="alertId"
           size="small"
-          loading={rows === null}
           pagination={false}
           scroll={{ x: 'max-content' }}
           dataSource={rows ?? []}
+          locale={{
+            emptyText:
+              rows === null ? (
+                <ListLoading label="내부자 경보를 불러오는 중" />
+              ) : (
+                <ListEmpty title="데이터 없음" />
+              ),
+          }}
           expandable={{ expandedRowRender: (row) => <EvidenceRows alertId={row.alertId} /> }}
           columns={[
             { ...oneLine, title: '최근 시각', dataIndex: 'lastEventAt', render: dateTime },

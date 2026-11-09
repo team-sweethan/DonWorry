@@ -127,7 +127,7 @@ export function AdminMerchantsPage() {
           />
         </Space>
         {current?.error && (
-          <Alert type="error" showIcon message={current.error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon message={current.error} className="dw-page-alert" />
         )}
         <Table<AdminMerchant>
           rowKey="merchantId"
@@ -232,7 +232,7 @@ export function AdminCreateMerchantPage() {
         actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
       <Card className="directory-surface" style={{ maxWidth: 640 }}>
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+        {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
         <Form<MerchantForm>
           form={form}
           layout="vertical"
@@ -365,7 +365,7 @@ export function AdminMerchantDetailPage() {
           type="error"
           showIcon
           message={current?.error ?? '올바른 가맹점 주소가 아닙니다.'}
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
         />
       )}
       {!invalidId && !current && <DirectoryDetailSkeleton kind="merchant" />}

@@ -1,18 +1,7 @@
 import { ReloadOutlined } from '@ant-design/icons'
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Col,
-  Empty,
-  List,
-  Row,
-  Space,
-  Tag,
-  Timeline,
-  Typography,
-} from 'antd'
+import { Alert, Badge, Button, Card, Col, List, Row, Space, Tag, Timeline, Typography } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { ListLoading } from '../../components/common/ListLoading'
 import dayjs from 'dayjs'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -311,7 +300,7 @@ export function InsiderMonitorPage() {
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
           message={`${INSIDER_MONITOR_POLL_LIMIT_MS / 60_000}분 동안 조작이 없어 자동 갱신을 멈췄습니다. 자리를 비운 동안 로그인 유지 시간이 늘어나지 않게 하기 위해서예요.`}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={restart}>
@@ -325,16 +314,22 @@ export function InsiderMonitorPage() {
           type="error"
           showIcon
           message="관제 정보를 불러오지 못했습니다. 잠시 뒤 다시 시도해요."
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
         />
       )}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={7}>
           <Card title="보안 직원" size="small">
             <List<InsiderMonitorStaff>
-              loading={staff === null}
               dataSource={staff ?? []}
-              locale={{ emptyText: '사용 중이거나 정지된 보안 직원이 없어요.' }}
+              locale={{
+                emptyText:
+                  staff === null ? (
+                    <ListLoading label="보안 직원을 불러오는 중" columns={1} />
+                  ) : (
+                    <ListEmpty title="사용 중이거나 정지된 보안 직원이 없어요." />
+                  ),
+              }}
               renderItem={(item) => (
                 <List.Item
                   onClick={() => select(item.staffId)}
@@ -369,9 +364,9 @@ export function InsiderMonitorPage() {
               extra={current && <StageDot stage={current.stage} />}
             >
               {selected === null ? (
-                <Empty description="왼쪽에서 직원을 골라 주세요." />
+                <ListEmpty title="왼쪽에서 직원을 골라 주세요." />
               ) : timeline === null ? (
-                <Empty description="불러오는 중이에요." />
+                <ListLoading label="불러오는 중이에요." rows={5} columns={2} />
               ) : (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   <Typography.Text type="secondary">
@@ -381,7 +376,7 @@ export function InsiderMonitorPage() {
                     <Alert type="info" showIcon message="줄이 많아 최근 200줄만 보여 줘요." />
                   )}
                   {timeline.events.length === 0 ? (
-                    <Empty description="이 구간에 기록이 없어요." />
+                    <ListEmpty title="이 구간에 기록이 없어요." />
                   ) : (
                     <div
                       ref={scrollBox}

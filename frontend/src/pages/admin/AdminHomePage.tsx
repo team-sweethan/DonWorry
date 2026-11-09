@@ -13,6 +13,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { getAdminHome, type AdminHome } from '../../api/adminHome'
 import { PageHeader } from '../../components/common/PageHeader'
+import { useCaseAssignmentRequestCount } from '../../hooks/useCaseAssignmentRequestBadge'
+import { useInsiderAlertCount } from '../../hooks/useInsiderAlertBadge'
+import { useInsiderCaseCount } from '../../hooks/useInsiderCaseBadge'
+import { useRawViewReviewCount } from '../../hooks/useRawViewReviewBadge'
 import { displayRuleCode } from '../../utils/ruleDisplayCode'
 import './AdminHomePage.css'
 
@@ -93,6 +97,51 @@ function ManagementCard({
       </div>
       {children}
     </div>
+  )
+}
+
+/**
+ * 사이드바 처리 필요 숫자 중 1건 이상인 것만 모아 보여 준다 (#713).
+ * 숫자는 사이드바가 이미 센 값을 읽기만 한다. 룰 변경 요청은 바로 옆 "룰 끄기 승인 대기"와 같은 값이라 뺀다.
+ */
+function TodoPanel() {
+  const items = [
+    { label: '내부자 경보', to: '/admin/insider-alerts', count: useInsiderAlertCount() },
+    { label: '원문 열람 검토', to: '/admin/raw-view-reviews', count: useRawViewReviewCount() },
+    { label: '내부자 사건', to: '/admin/insider-cases', count: useInsiderCaseCount() },
+    {
+      label: '변경 요청',
+      to: '/admin/case-assignment-requests',
+      count: useCaseAssignmentRequestCount(),
+    },
+  ]
+  const open = items.filter((item) => (item.count ?? 0) > 0)
+  const counting = items.some((item) => item.count === null)
+  return (
+    <section className="ah-panel ah-todo-panel" aria-labelledby="ah-todo-title">
+      <div className="ah-section-heading">
+        <h2 id="ah-todo-title">지금 처리할 일</h2>
+      </div>
+      {open.length > 0 ? (
+        <ul className="ah-todo-list">
+          {open.map((item) => (
+            <li key={item.to}>
+              <Link to={item.to} className="ah-todo-link">
+                <span>{item.label}</span>
+                <strong>{(item.count ?? 0).toLocaleString('ko-KR')}건</strong>
+                <ArrowRightOutlined className="ah-arrow" aria-hidden="true" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : counting ? (
+        <div role="status" aria-label="처리할 일을 세는 중">
+          <Skeleton active title={false} paragraph={{ rows: 2 }} />
+        </div>
+      ) : (
+        <p className="ah-todo-none">처리할 일이 없습니다.</p>
+      )}
+    </section>
   )
 }
 
@@ -290,6 +339,7 @@ export function AdminHomePage() {
                 : '사용 중지된 룰은 이상 거래 탐지에서 제외됩니다.'}
             </p>
           </section>
+          <TodoPanel />
         </aside>
       </div>
     </div>

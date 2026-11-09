@@ -19,6 +19,15 @@
   --dw-header-height: 56px;
   --dw-sidebar-width: 220px;
   --dw-content-padding: 32px;
+  /* 글자 크기 단계 (#713). 화면 CSS는 px 대신 이 이름을 쓴다.
+     시연 화면에서 읽기 쉽게 일반 업무 화면보다 한 단계 크게 둔다. antd 기본 글자(15px)는 ManagementLayout이 정한다 */
+  --dw-text-page-title: 26px;
+  --dw-text-number: 32px;
+  --dw-text-number-sm: 26px;
+  --dw-text-heading: 18px;
+  --dw-text-body: 15px;
+  --dw-text-secondary: 14px;
+  --dw-text-caption: 13px;
 }
 *,
 *::before,
@@ -95,21 +104,14 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--dw-border);
-  background: white;
+  border-bottom: 1px solid;
 }
 .dw-brand {
-  width: var(--dw-sidebar-width);
-  flex: 0 0 var(--dw-sidebar-width);
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-left: 28px;
   color: #13204a;
-  font-size: 23px;
   font-weight: 800;
-  letter-spacing: -1.2px;
   text-decoration: none;
 }
 .dw-header-center {
@@ -132,10 +134,8 @@ textarea {
 .dw-role-pill {
   padding: 4px 8px;
   border-radius: 4px;
-  background: #eff6ff;
-  color: #2563eb;
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   white-space: nowrap;
 }
 .dw-header .ant-btn {
@@ -171,8 +171,6 @@ textarea {
   height: 28px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #eff6ff;
-  color: #2563eb;
 }
 .dw-account-chevron {
   color: #64748b;
@@ -205,49 +203,26 @@ textarea {
   position: sticky;
   top: var(--dw-header-height);
   height: calc(100vh - var(--dw-header-height));
-  background: var(--dw-sidebar);
   display: flex;
   flex-direction: column;
-  color: #e2e8f0;
   overflow-y: auto;
   z-index: 90;
-  padding: 22px 12px 16px;
-}
-.dw-nav-group {
-  margin-bottom: 21px;
 }
 .dw-nav-heading {
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #95a5ca;
-  margin: 0 12px 8px;
 }
 .dw-nav-link {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 13px;
-  border-radius: 5px;
-  color: #c8d5ee;
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
   font-weight: 550;
   transition:
     background 0.15s,
     color 0.15s;
-}
-.dw-nav-link:hover {
-  color: white;
-  background: #20366b;
-}
-.dw-nav-link.active {
-  color: white;
-  background: #24387a;
-  box-shadow: inset 3px 0 0 #e2bc66;
-  font-weight: 650;
 }
 .dw-nav-badge {
   margin-left: auto;
@@ -257,7 +232,7 @@ textarea {
   border-radius: 10px;
   background: #fbbf24;
   color: #1e293b;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -267,8 +242,9 @@ textarea {
   padding: var(--dw-content-padding);
   background: var(--dw-canvas);
 }
-[data-role='owner'] .dw-main {
-  background: #faf8f2;
+/* 본문 배경도 역할마다 다르다 (#713). 값은 아래 역할별 바깥 틀의 --shell-canvas */
+.admin-viewport[data-role] .dw-main {
+  background: var(--shell-canvas);
 }
 .dw-container {
   max-width: 1720px;
@@ -284,16 +260,29 @@ textarea {
 }
 .dw-page-title {
   margin: 0 0 6px;
-  font-size: 24px;
+  font-size: var(--dw-text-page-title);
   font-weight: 750;
   letter-spacing: -0.7px;
   line-height: 1.35;
   color: #0f172a;
 }
+/* 제목 앞 역할 색 선 (#713). 제목을 flex로 바꾸지 않고 덧붙여 화면별 제목 덮어쓰기와 부딪히지 않게 한다.
+   높이는 글자 크기 기준이라 제목을 28px로 키운 화면에서도 맞는다. */
+.admin-viewport[data-role] .dw-page-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 0.8em;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--shell-strong);
+  vertical-align: -0.06em;
+}
+/* 본문 배경 위 작은 회색 글자는 #64748b면 4.5:1에 못 미친다 (#713) */
 .dw-page-description {
   margin: 0;
-  font-size: 13px;
-  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  color: #5f6b7f;
   line-height: 1.5;
 }
 .dw-page-actions {
@@ -303,9 +292,18 @@ textarea {
   flex-shrink: 0;
 }
 .dw-section-title {
-  font-size: 16px;
+  font-size: var(--dw-text-heading);
   font-weight: 750;
   letter-spacing: -0.3px;
+}
+/* 글자 크기 단계를 화면 코드에서 쓸 때 (#713) */
+.dw-caption {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.dw-number-sm {
+  font-size: var(--dw-text-number-sm);
+  font-weight: 700;
 }
 .dw-panel {
   border: 1px solid var(--dw-border);
@@ -618,19 +616,56 @@ textarea {
   padding: 24px 16px 32px;
   text-align: center;
 }
+/* 동전이가 없는 빈 목록의 아이콘. 바깥 틀 밖(공개 화면)에서는 파랑으로 보인다 (#713) */
+.dw-list-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--shell-tint, #eaf2ff);
+  color: var(--shell-ink, #1e4f94);
+  font-size: 22px;
+}
 .dw-list-empty h2 {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: #0f172a;
-  font-size: 18px;
+  font-size: var(--dw-text-heading);
   font-weight: 700;
 }
 .dw-list-empty p {
+  max-width: 60ch;
   margin: 0;
-  color: #64748b;
-  font-size: 14px;
+  color: #5f6b7f;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.6;
 }
 .dw-list-empty-action {
   margin-top: 12px;
+}
+/* 처음 불러오는 동안의 표 모양 자리 (ListLoading) */
+.dw-list-loading {
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+}
+.dw-list-loading-row {
+  display: grid;
+  gap: 16px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  border-top: 1px solid #f0f0f0;
+}
+.dw-list-loading-row:first-child {
+  border-top: 0;
+}
+.dw-list-loading .ant-skeleton.ant-skeleton-element {
+  display: block;
+}
+/* 본문 위 안내 줄(Alert) 아래 여백 (#713). 화면마다 inline으로 주지 않는다 */
+.dw-page-alert {
+  margin-bottom: 16px;
 }
 /* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
 .dw-login-shell {
@@ -807,10 +842,11 @@ textarea {
   color: #64748b;
 }
 
-/* ── 역할별 바깥 틀 (#399) ──────────────────────────────────────────
-   헤더 · 사이드바 · 메뉴 강조만 역할마다 다르게 한다.
-   업무 화면 본문, 대표 색(--dw-primary), 버튼은 건드리지 않는다.
-   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 금색 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
+/* ── 역할별 바깥 틀 (#399) — 관리 화면 틀은 항상 data-role이 붙는다. 색 · 간격은 여기서만 정한다 ──────────────────────────────────────────
+   헤더 · 사이드바 · 메뉴 강조를 역할마다 다르게 한다.
+   #713: 시연 때 처음 보는 사람이 역할을 구분하도록 본문 배경 · 제목 앞 선 · 선택된 탭 · 안내 칸까지 역할 색을 넣는다.
+   대표 색(--dw-primary, antd colorPrimary)과 버튼 · 링크 파랑, 상태 색(위험 · 대기 · 완료)은 세 역할 공통이다.
+   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 보라 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
 .admin-viewport[data-role] {
   --dw-header-height: 64px;
   --dw-sidebar-width: 236px;
@@ -826,18 +862,29 @@ textarea {
   --shell-ink: #1e4f94;
   --shell-header: #f8faff;
   --shell-header-line: #dce5f4;
+  /* 본문 배경 · 제목 앞 선 · 선택된 탭 글자와 밑줄 · 옅은 안내 칸 */
+  --shell-canvas: #f5f7fb;
+  --shell-strong: #2563eb;
+  --shell-tab: #2563eb;
+  --shell-panel: #f5f8ff;
+  --shell-panel-line: #dce7f8;
 }
 .admin-viewport[data-role='admin'] {
   --shell-sidebar: #24272e;
   --shell-text: #d6d8df;
   --shell-muted: #a7abb6;
-  --shell-active: #3a372f;
-  --shell-active-text: #ffe2a1;
-  --shell-accent: #e9bd65;
-  --shell-tint: #f8f1e2;
-  --shell-ink: #6f4c12;
-  --shell-header: #fffdfa;
-  --shell-header-line: #e8e1d5;
+  --shell-active: #3a3350;
+  --shell-active-text: #e6dcff;
+  --shell-accent: #a78bfa;
+  --shell-tint: #efe9fd;
+  --shell-ink: #5b35b0;
+  --shell-header: #fdfcff;
+  --shell-header-line: #e4def2;
+  --shell-canvas: #f5f4f9;
+  --shell-strong: #7c3aed;
+  --shell-tab: #6d28d9;
+  --shell-panel: #f8f6fd;
+  --shell-panel-line: #e4dcf5;
 }
 .admin-viewport[data-role='owner'] {
   --shell-sidebar: #fffcf5;
@@ -853,6 +900,20 @@ textarea {
   --shell-ink: #6f4c0f;
   --shell-header: #fffefa;
   --shell-header-line: #ebe3d2;
+  --shell-canvas: #faf8f2;
+  --shell-strong: #a8740f;
+  --shell-tab: #8a5f0c;
+  --shell-panel: #fbf6ea;
+  --shell-panel-line: #ebe3d2;
+}
+
+/* 선택된 탭 — antd는 글자 · 밑줄 모두 colorPrimary라, 둘 다 같이 역할 색으로 덮는다 (#713).
+   모달처럼 바깥 틀 밖(포털)에 그려지는 탭은 그대로 파랑이다. */
+.admin-viewport[data-role] .ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--shell-tab);
+}
+.admin-viewport[data-role] .ant-tabs .ant-tabs-ink-bar {
+  background: var(--shell-tab);
 }
 
 /* 헤더 */
@@ -918,7 +979,7 @@ textarea {
    들여쓰기는 접힌 사이드바 규칙(아래 @media, 같은 선택자 세기 · 뒤에 옴)이 덮는다 */
 .admin-viewport[data-role] .dw-nav-section {
   margin: 10px 12px 8px;
-  font-size: 12.5px;
+  font-size: var(--dw-text-caption);
   font-weight: 700;
   color: var(--shell-text);
 }

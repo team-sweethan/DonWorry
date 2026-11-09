@@ -53,11 +53,7 @@ export function OperatorAccessDetectionsPage() {
         description="계정·룰별 반복 접근 이상을 위험도와 조치 상태로 확인합니다."
       />
       {error && (
-        <Alert
-          type="error"
-          message="탐지 목록을 불러오지 못했습니다."
-          style={{ marginBottom: 16 }}
-        />
+        <Alert type="error" message="탐지 목록을 불러오지 못했습니다." className="dw-page-alert" />
       )}
       <Card>
         <Tabs

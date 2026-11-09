@@ -1,4 +1,5 @@
-import { Alert, Button, Descriptions, Empty, Segmented, Space, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Descriptions, Segmented, Space, Table, Tag, Typography } from 'antd'
+import { ListEmpty } from '../../components/common/ListEmpty'
 import { useCallback, useEffect, useState } from 'react'
 import type { InsiderAlertSeverity } from '../../api/insiderAlerts'
 import {
@@ -98,7 +99,7 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
           size="small"
           pagination={false}
           dataSource={access.byType}
-          locale={{ emptyText: '경보 근거로 묶인 접근 기록이 없습니다.' }}
+          locale={{ emptyText: <ListEmpty title="경보 근거로 묶인 접근 기록이 없습니다." /> }}
           columns={[
             { ...oneLine, title: '종류', dataIndex: 'label' },
             { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
@@ -186,7 +187,10 @@ export function InsiderReportsPanel({ insiderCaseId }: { insiderCaseId: number }
       />
       {error && <Alert type="error" showIcon message={error} />}
       {reports && reports.length === 0 && (
-        <Empty description="아직 보고서가 없습니다. 보통 사건이 열리고 몇 초 뒤에 만들어지고, 기록을 읽지 못했으면 몇 분 뒤 다시 만듭니다. 경보 없이 열린 사건(정지만 남아 있던 직원에게 서버가 연 사건)은 보고서가 없으니 사건 정보 탭의 경보와 [내부자 경보] 화면으로 판단하세요." />
+        <ListEmpty
+          title="아직 보고서가 없습니다."
+          description="보통 사건이 열리고 몇 초 뒤에 만들어지고, 기록을 읽지 못했으면 몇 분 뒤 다시 만듭니다. 경보 없이 열린 사건(정지만 남아 있던 직원에게 서버가 연 사건)은 보고서가 없으니 사건 정보 탭의 경보와 [내부자 경보] 화면으로 판단하세요."
+        />
       )}
       <Space wrap>
         {reports && reports.length > 0 && (
