@@ -77,7 +77,7 @@ export function homeView(cases: CaseSummary[], userId: number | null, now = Date
 // 보고서 실패·기한 초과는 업무 상태와 겹치므로 분포에는 포함하지 않는다.
 export function homeDistribution(cases: CaseSummary[]) {
   const groups = [
-    { key: 'investigating', label: '접수 · 조사', count: 0 },
+    { key: 'investigating', label: '생성됨 · 조사 중', count: 0 },
     { key: 'decision', label: '판정 대기', count: 0 },
     { key: 'action', label: '금융 처리 대기', count: 0 },
     { key: 'failed', label: '금융 처리 실패', count: 0 },

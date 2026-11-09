@@ -60,7 +60,7 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
     const empty = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: { ...result, cases: [] } }),
     )
-    assert.match(empty, /현재 처리할 담당 사건이 없습니다/)
+    assert.match(empty, /현재 진행 중인 담당 사건이 없습니다/)
     const failure = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, {
         ...defaults,
@@ -68,7 +68,7 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
       }),
     )
     assert.match(failure, /사건 목록을 확인하지 못했습니다/)
-    assert.doesNotMatch(failure, /현재 처리할 담당 사건이 없습니다/)
+    assert.doesNotMatch(failure, /현재 진행 중인 담당 사건이 없습니다/)
     const loading = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: null, loading: true }),
     )

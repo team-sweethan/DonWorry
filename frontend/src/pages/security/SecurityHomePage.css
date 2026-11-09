@@ -3,7 +3,6 @@
   --home-muted: #5f6b7f;
 }
 .security-home-refresh,
-.security-home-eyebrow,
 .security-home-distribution-title,
 .security-home-metric-top,
 .security-home-metric-foot {
@@ -25,13 +24,6 @@
   border: 1px solid #d8e4f5;
   border-radius: var(--dw-radius-panel);
   background: linear-gradient(115deg, #edf4ff, #f8fbff 65%, #fff);
-}
-.security-home-eyebrow {
-  justify-content: flex-start;
-  gap: 8px;
-  color: #2857a1;
-  font-size: 13px;
-  font-weight: 650;
 }
 .security-home-summary h2 {
   margin: 14px 0 10px;
@@ -586,4 +578,14 @@
 .security-home-unavailable {
   color: var(--home-muted);
   line-height: 1.6;
+}
+
+.security-home-count-note {
+  margin: 12px 0 0;
+  color: var(--home-muted);
+  font-size: 13px;
+}
+.security-home-overdue {
+  color: #b94a16;
+  font-weight: 650;
 }

@@ -15,7 +15,7 @@ import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useCaseListWatch } from '../../hooks/useCaseListWatch'
 import type { CaseSummary } from '../../types/case'
-import { SLA_HOURS, customerPart } from '../../utils/caseRules'
+import { SLA_HOURS, customerPart, slaState } from '../../utils/caseRules'
 import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
 import { saveCaseListScope } from '../../utils/caseListScope'
 import {
@@ -27,7 +27,7 @@ import {
 import { caseStatusLabel, dateTime } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
-import { DeadlineValue, HelpLabel, deadlineHelp } from './case/CaseTimeLabels'
+import { HelpLabel } from './case/CaseTimeLabels'
 import { HomeCount } from './HomeCount'
 import { HomeSignal } from './HomeSignal'
 import './SecurityHomePage.css'
@@ -35,7 +35,7 @@ import './SecurityHomePage.css'
 // 우선 이유가 없으면 현재 업무 상태를 보여 준다.
 const reasonLabel: Record<PriorityReason, { label: string; color: string } | null> = {
   ACTION_FAILED: { label: '금융 처리 실패', color: 'red' },
-  SLA_EXCEEDED: { label: '조사 기한 지남', color: 'volcano' },
+  SLA_EXCEEDED: { label: `${SLA_HOURS}시간 경과`, color: 'volcano' },
   DECISION_PENDING: { label: '판정 필요', color: 'gold' },
   OTHER: null,
 }
@@ -162,7 +162,7 @@ export function SecurityHomeDashboard({
     {
       title: '판정 대기',
       value: counts.decisionPending,
-      foot: '직원 판정 필요',
+      foot: '결제별 판정 필요',
       tone: 'amber',
       icon: <FileSearchOutlined />,
       onClick: () => openList({ status: 'DECISION_PENDING' }),
@@ -170,15 +170,15 @@ export function SecurityHomeDashboard({
     {
       title: '금융 처리 실패',
       value: counts.actionFailed,
-      foot: '실패 사유 확인 필요',
+      foot: '매입 · 승인 취소 처리 결과 확인',
       tone: 'red',
       icon: <WarningOutlined />,
       onClick: () => openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' }),
     },
     {
-      title: '조사 기한 지남',
+      title: `생성 후 ${SLA_HOURS}시간 경과`,
       value: counts.slaExceeded,
-      foot: `생성 후 ${SLA_HOURS}시간 경과`,
+      foot: '종료되지 않은 사건 기준',
       tone: 'orange',
       icon: <ClockCircleOutlined />,
       onClick: () => openList({ slaExceeded: true }),
@@ -199,7 +199,7 @@ export function SecurityHomeDashboard({
       ),
     },
     {
-      title: '먼저 볼 이유',
+      title: '확인할 항목',
       dataIndex: 'reason',
       width: 150,
       render: (reason: PriorityReason, c) => (
@@ -207,18 +207,37 @@ export function SecurityHomeDashboard({
       ),
     },
     {
-      title: '위험도',
+      title: (
+        <HelpLabel
+          label="최고 위험 점수"
+          help="사건에 연결된 결제의 FDS 위험 점수 중 최댓값입니다. 점수를 확인하지 못한 결제가 있으면 표시하지 않습니다."
+        />
+      ),
       dataIndex: 'maxRiskScore',
-      width: 100,
+      width: 165,
       render: (score: number | null) => (
         <strong className="security-home-risk">{score === null ? '−' : `${score}점`}</strong>
       ),
     },
     {
-      title: <HelpLabel label="조사 기한" help={deadlineHelp} />,
+      title: (
+        <HelpLabel
+          label="생성 후 경과"
+          help={`사건 생성 후 지난 시간입니다. 종료되지 않은 사건이 ${SLA_HOURS}시간 이상 지나면 강조합니다. 시간이 지나도 자동으로 판정하거나 종료하지 않습니다.`}
+        />
+      ),
       key: 'sla',
       width: 160,
-      render: (_, c) => <DeadlineValue createdAt={c.createdAt} status={c.status} />,
+      render: (_, c) => {
+        const elapsed = slaState(c.createdAt, c.status)
+        if (!elapsed) return '−'
+        const hours = elapsed.exceeded ? SLA_HOURS + elapsed.hours : SLA_HOURS - elapsed.hours
+        return (
+          <span className={elapsed.exceeded ? 'security-home-overdue' : undefined}>
+            {hours < 1 ? '1시간 미만' : `${hours}시간`}
+          </span>
+        )
+      },
     },
     {
       title: '상세',
@@ -242,8 +261,8 @@ export function SecurityHomeDashboard({
     <div className="security-home">
       <div className="security-home-enter security-home-heading">
         <PageHeader
-          title="내 사건 현황"
-          description="내가 맡은 사건의 진행 상황과 먼저 확인할 일을 모았습니다."
+          title="내 담당 사건"
+          description="종료되지 않은 내 담당 사건의 상태와 확인할 일을 보여줍니다."
           actions={
             <div className="security-home-refresh">
               {ready && (
@@ -285,13 +304,10 @@ export function SecurityHomeDashboard({
         <section className="security-home-hero" aria-label="내 담당 사건 요약">
           <div className="security-home-summary">
             <HomeSignal />
-            <span className="security-home-eyebrow">
-              <SafetyCertificateOutlined /> 나의 보안 업무
-            </span>
             {ready ? (
               <>
                 <h2>
-                  <span className="security-home-total-label">진행 중인 사건</span>
+                  <span className="security-home-total-label">진행 중인 담당 사건</span>
                   <span className="security-home-total">
                     <HomeCount value={openCases.length} />
                     <small>건</small>
@@ -299,14 +315,14 @@ export function SecurityHomeDashboard({
                 </h2>
                 <p>
                   {openCases.length > 0
-                    ? '먼저 볼 사건부터 차례로 확인하세요.'
+                    ? '판정 대기와 금융 처리 상태를 확인하세요.'
                     : '현재 종료되지 않은 담당 사건이 없습니다.'}
                 </p>
                 <Button
                   type="primary"
                   onClick={() => (rows[0] ? openCase(rows[0].caseId) : openList())}
                 >
-                  {rows[0] ? '우선 사건 보기' : '내 사건 목록 보기'} <ArrowRightOutlined />
+                  {rows[0] ? '먼저 확인할 사건 보기' : '내 사건 목록 보기'} <ArrowRightOutlined />
                 </Button>
               </>
             ) : failed ? (
@@ -320,7 +336,7 @@ export function SecurityHomeDashboard({
           </div>
           <div className="security-home-distribution">
             <div className="security-home-distribution-title">
-              <strong>업무 진행 현황</strong>
+              <strong>담당 사건 상태</strong>
               <span>종료되지 않은 내 사건</span>
             </div>
             {ready ? (
@@ -388,9 +404,10 @@ export function SecurityHomeDashboard({
             </button>
           ))}
         </div>
-        <div className="security-home-secondary" aria-label="조사와 금융 처리 현황">
+        <p className="security-home-count-note">한 사건이 여러 현황 항목에 포함될 수 있습니다.</p>
+        <div className="security-home-secondary" aria-label="보고서와 금융 처리 현황">
           <button type="button" disabled={!ready} onClick={() => openList({ report: 'running' })}>
-            AI 조사 중 <strong>{ready ? counts.aiRunning : '−'}</strong>
+            보고서 생성 대기·진행 <strong>{ready ? counts.aiRunning : '−'}</strong>
             <ArrowRightOutlined />
           </button>
           <button
@@ -401,7 +418,7 @@ export function SecurityHomeDashboard({
               openFirst((c) => c.latestReportStatus === 'FAILED', { report: 'failed' })
             }
           >
-            AI 보고서 실패 <strong>{ready ? counts.aiFailed : '−'}</strong>
+            보고서 생성 실패 <strong>{ready ? counts.aiFailed : '−'}</strong>
             <ArrowRightOutlined />
           </button>
           <button
@@ -418,7 +435,7 @@ export function SecurityHomeDashboard({
             type="warning"
             showIcon
             className="security-home-notice"
-            message={`AI 보고서 실패 ${counts.aiFailed}건 · 수동 조사와 판정이 필요합니다.`}
+            message={`최신 보고서 생성 실패 ${counts.aiFailed}건 · 사건 상세에서 생성 상태와 판정 가능 여부를 확인하세요.`}
           />
         )}
         {ready && counts.actionFailed > 0 && (
@@ -434,7 +451,7 @@ export function SecurityHomeDashboard({
                   openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' })
                 }
               >
-                확인
+                실패 사건 확인
               </Button>
             }
           />
@@ -443,9 +460,10 @@ export function SecurityHomeDashboard({
       <Card className="dw-table-card security-home-enter security-home-queue">
         <div className="dw-table-toolbar">
           <div>
-            <h3>먼저 볼 사건</h3>
+            <h3>먼저 확인할 사건</h3>
             <p>
-              금융 처리 실패 → 조사 기한 지남 → 판정 대기 순 · 같은 순위는 오래된 사건부터 최대 6건
+              금융 처리 실패 → 생성 후 {SLA_HOURS}시간 경과 → 판정 대기 순 · 같은 순위는 오래된
+              사건부터 최대 6건
             </p>
           </div>
           <Button type="link" onClick={() => openList()}>
@@ -458,7 +476,7 @@ export function SecurityHomeDashboard({
           dataSource={rows}
           loading={loading}
           size="middle"
-          scroll={{ x: 740 }}
+          scroll={{ x: 805 }}
           pagination={false}
           rowClassName={(record) =>
             result?.newIds.includes(record.caseId) ? 'security-home-new-case' : ''
@@ -470,7 +488,7 @@ export function SecurityHomeDashboard({
                 <strong>
                   {failed && !ready
                     ? '사건 목록을 확인하지 못했습니다'
-                    : '현재 처리할 담당 사건이 없습니다'}
+                    : '현재 진행 중인 담당 사건이 없습니다'}
                 </strong>
                 <span>
                   {failed && !ready
