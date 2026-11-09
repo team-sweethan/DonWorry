@@ -1,5 +1,5 @@
 {
-  "_measure": "사건 질문 측정 (#750) — 답 종류 · 넓혀 보기 선택 · 1차 검사 통과를 센다. 사건 · 금액은 지어낸 값. 같은 IP는 30일 9건 · 1시간 1건이라 하루 안 건수는 넓혀 봐야 안다",
+  "_measure": "사건 질문 측정 (#750) — 답 종류 · 넓혀 보기 선택 · 1차 검사 통과를 센다. 사건 · 금액은 지어낸 값. 같은 IP는 30일 9건 · 1시간 1건이라 하루 안 건수는 넓혀 봐야 안다. 규칙 가산 점수 합 = FDS 점수",
   "reportBody": {
     "facts": [
       {
@@ -63,7 +63,7 @@
           {
             "code": "R",
             "name": "단시간 반복",
-            "appliedScore": 20,
+            "appliedScore": 35,
             "evidenceId": "E-31-v1-02"
           }
         ],
@@ -83,7 +83,7 @@
           {
             "code": "R",
             "name": "단시간 반복",
-            "appliedScore": 20,
+            "appliedScore": 55,
             "evidenceId": "E-31-v1-02"
           }
         ],
@@ -103,13 +103,13 @@
           {
             "code": "R",
             "name": "단시간 반복",
-            "appliedScore": 20,
+            "appliedScore": 35,
             "evidenceId": "E-31-v1-02"
           },
           {
             "code": "R",
             "name": "신규 기기",
-            "appliedScore": 20,
+            "appliedScore": 40,
             "evidenceId": "E-31-v1-02"
           }
         ],

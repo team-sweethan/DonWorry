@@ -504,3 +504,29 @@ def test_reportFacts_ruleHitDetails_includeCriterionObservedAndScore() -> None:
     reply = answer(("고액 결제 기준은 50만 원 이상이고 이번 값은 60만 원입니다.", [rule[0].id]))
     parsed, errors = validate_answer(reply, facts, 3)
     assert parsed is not None and errors == []
+
+
+# Codex 리뷰(#756): AI에게 보인 앞 질문 조회 시각은 검사에서도 그 사실의 근거로 본다
+# "언제 조회한 값이에요?"에 맞게 답한 "11/09 14:32 기준"이 숫자 검사에 걸리면 안 된다
+def test_answerQuestion_previousFactRetrievedAt_canBeCited() -> None:
+    added = {
+        "id": "추가-1",
+        "text": "최근 90일 이 고객의 다른 결제 1건: 매입 완료 1건",
+        "source": "ADDED",
+        "toolName": "get_payment_history",
+        "retrievedAt": "2026-11-09T05:32:00Z",
+    }
+    previous = [{"question": "평소 결제는?", "kind": "ANSWER", "sentences": [], "facts": [added]}]
+    reply = answer(("앞서 본 90일 결제는 11/09 14:32에 조회한 값입니다.", ["앞-1"]))
+    llm = ScriptedLlm([None], [reply])
+
+    result = answer_question(
+        question(question="그 값은 언제 조회한 거예요?", previous=previous),
+        llm,
+        FakeBox(),
+        SETTINGS,
+    )
+
+    assert llm.write_calls == 1
+    assert result.status == "ANSWERED"
+    assert [f.text for f in result.facts] == [added["text"]]

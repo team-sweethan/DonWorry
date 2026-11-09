@@ -10,7 +10,7 @@ from app.agent import question_prompts as qp
 from app.agent import trace
 from app.agent.facts import Fact
 from app.agent.llm import LlmClient
-from app.agent.narrative import FactSentence, _repeats, _sentence_errors
+from app.agent.narrative import FactSentence, _numbers, _repeats, _sentence_errors
 from app.agent.question_facts import (
     ORDINALS,
     ReportView,
@@ -21,6 +21,7 @@ from app.agent.question_facts import (
     read_report,
     report_checks,
     report_facts,
+    shown_text,
 )
 from app.config import Settings
 from app.schemas.question import (
@@ -154,18 +155,33 @@ def validate_answer(
         return answer, []
     if not answer.sentences:
         return None, ["kind가 ANSWER면 sentences를 하나 이상 써라"]
-    by_id = {f.id: Fact(f.id, f.source, f.text, "", f.paymentId) for f in facts}
+    by_id = {f.id: Fact(f.id, f.source, shown_text(f), "", f.paymentId) for f in facts}
     checked = [
         FactSentence(text=_without_payment_refs(s.text, payment_count), facts=s.facts)
         for s in answer.sentences
     ]
     errors = [e for s in checked for e in _sentence_errors(s, by_id, set())]
+    errors += _number_hints(checked, by_id)
     errors += [
         f'같은 문장을 반복하지 마라: "{t}"' for t in _repeats([s.text for s in answer.sentences])
     ]
     if len(answer.sentences) > qp.MAX_SENTENCES:
         errors.append(f"sentences는 {qp.MAX_SENTENCES}문장까지 써라")
     return (answer, []) if not errors else (None, errors)
+
+
+# 다시 쓰기 안내 — 인용 안 한 숫자가 다른 사실에 있으면 그 번호를 알려 준다
+# 측정(11/10): "최근 90일 … 52,000원"에 금액 사실만 인용해 "없는 숫자 90"으로 두 번 실패했다
+# 숫자를 지우거나 고치지 않고, 근거 번호를 더하게 한다
+def _number_hints(sentences: list[FactSentence], by_id: dict[str, Fact]) -> list[str]:
+    hints: list[str] = []
+    for sentence in sentences:
+        cited = {n for fid in sentence.facts if fid in by_id for n in _numbers(by_id[fid].text)}
+        for n in sorted(_numbers(sentence.text) - cited):
+            has = [fid for fid, fact in by_id.items() if n in _numbers(fact.text)][:3]
+            if has:
+                hints.append(f"숫자 {n}은 {has}에 있다. 그 문장의 facts에 그 번호를 더하라")
+    return hints
 
 
 class _Run:

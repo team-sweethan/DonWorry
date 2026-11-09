@@ -55,6 +55,8 @@ class Run:
     first_pass: bool
     seconds: float
     sentences: list[str]
+    # 실패 · 다시 쓰기 이유 — 실패한 회차의 원인을 남긴다
+    errors: list[str]
 
 
 def measure(
@@ -84,6 +86,8 @@ def measure(
         first_pass=result.status != "FAILED" and len(writes) == 1,
         seconds=round(time.perf_counter() - started, 1),
         sentences=[s.text for s in result.sentences],
+        errors=[s.retryReason for s in writes if s.retryReason]
+        + ([result.error["reason"]] if result.error else []),
     )
 
 
@@ -150,6 +154,8 @@ def main(
             )
             for text in run.sentences:
                 print(f"      {text}", file=out)
+            for reason in run.errors:
+                print(f"      ! {reason}", file=out)
     print(
         f"[전체] 답 종류 맞음 {_rate([r.kind_ok for r in runs])}"
         f" · 넓혀 보기 맞음 {_rate([r.tools_ok for r in runs])}"

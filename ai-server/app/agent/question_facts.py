@@ -177,14 +177,16 @@ def previous_facts(previous: list[PreviousTurn]) -> list[AnswerFact]:
     return facts
 
 
-# AI에게 보이는 사실 줄 — 앞 질문 조회값만 조회 시각을 붙인다
+# AI에게 보이는 사실 문장 — 앞 질문 조회값만 조회 시각을 붙인다
+# 답 검사도 이 문장으로 한다 — 보인 시각을 인용한 답이 숫자 검사에 걸리지 않게 (Codex 리뷰 #756)
+def shown_text(fact: AnswerFact) -> str:
+    if fact.source == "PREVIOUS" and fact.retrievedAt:
+        return f"{fact.text} ({_kst(fact.retrievedAt)} 조회)"
+    return fact.text
+
+
 def prompt_line(fact: AnswerFact) -> str:
-    when = (
-        f" ({_kst(fact.retrievedAt)} 조회)"
-        if fact.source == "PREVIOUS" and fact.retrievedAt
-        else ""
-    )
-    return f"{fact.id}: {fact.text}{when}"
+    return f"{fact.id}: {shown_text(fact)}"
 
 
 # 판정 질문 거절 때 보일 확인할 것 전체 — 결제별 징후의 확인할 것 + AI 추가 제안 (중복 제거)
