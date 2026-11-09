@@ -1,0 +1,23 @@
+.ant-tour.funds-guide,
+.ant-tour.settlement-guide {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.ant-tour:is(.funds-guide, .settlement-guide).finance-guide-wide {
+  width: max-content;
+  max-width: calc(100vw - 32px);
+}
+
+.finance-guide-wide .ant-tour-description {
+  word-break: keep-all;
+}
+
+.funds-guide .ant-tour-description p {
+  margin: 0;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.funds-guide .ant-tour-description p + p {
+  margin-top: 6px;
+}
