@@ -54,7 +54,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
       items: [
         { label: '정산 내역', path: '/owner/settlements', permission: 'FINANCE_VIEW' },
         { label: '자금 현황', path: '/owner/funds', permission: 'FINANCE_VIEW' },
-        { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
+        { label: '운영자금 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
       ],
     },
     // 홈과 키 관리는 권한 코드 없이도 사장님이면 사용할 수 있다 (#354).

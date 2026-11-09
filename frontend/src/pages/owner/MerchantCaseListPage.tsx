@@ -133,7 +133,7 @@ export function MerchantCaseListPage() {
           color="#B91C1C"
         />
       </div>
-      <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
+      <Card className="dw-table-card" style={{ borderColor: '#e7e1d5' }}>
         <div className="dw-table-toolbar">
           <div>
             <h3>이상 거래 Case</h3>

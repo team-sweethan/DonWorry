@@ -267,6 +267,9 @@ textarea {
   padding: var(--dw-content-padding);
   background: var(--dw-canvas);
 }
+[data-role='owner'] .dw-main {
+  background: #faf8f2;
+}
 .dw-container {
   max-width: 1720px;
   margin: 0 auto;
