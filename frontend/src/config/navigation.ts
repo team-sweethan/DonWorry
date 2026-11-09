@@ -82,10 +82,9 @@ export const adminNavigation = {
       items: [
         { label: '이용 신청', path: '/admin/applications' },
         { label: '가맹점 목록', path: '/admin/merchants' },
-        // 사장님 계정 403 탐지 (#515)
-        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
       ],
     },
+    // 직원이 한 일을 사람이 처리 — 사건 배정 · 원문 열람 사후 검토 (ADR-0082 8절)
     {
       title: '직원 관리',
       items: [
@@ -102,8 +101,15 @@ export const adminNavigation = {
             },
           ],
         },
-        // 원문 열람 사후 검토 · 내부자 관제 · 경보 · 사건 (#619 · #679 · #516 · #670). 관리자는 원문을 보지 않는다
+        // 원문 열람 사후 검토 (#619). 관리자는 원문을 보지 않는다
         { label: '원문 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
+      ],
+    },
+    // 시스템이 찾아낸 이상 접근 — 직원(내부자) · 사장님 계정 (ADR-0082 8절)
+    {
+      title: '접근 감시',
+      items: [
+        // 내부자 관제 · 경보 · 사건 (#679 · #516 · #670)
         {
           label: '내부자 보안',
           path: '/admin/insider-monitor',
@@ -113,6 +119,8 @@ export const adminNavigation = {
             { label: '사건', path: '/admin/insider-cases', badge: 'insiderCases' },
           ],
         },
+        // 사장님 계정 403 탐지 (#515)
+        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
       ],
     },
     {
