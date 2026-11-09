@@ -67,6 +67,8 @@ export function CaseAssignmentsPage() {
   const [searchParams] = useSearchParams()
   const [overview, setOverview] = useState<AssignmentOverview | null>(null)
   const [pendingCounts, setPendingCounts] = useState<Map<number, number> | null>(null)
+  // 요청 목록 API는 최신 100건만 준다 — 불러온 수가 전체 대기 수보다 적으면 책상 숫자가 일부 빠졌다고 알린다
+  const [loadedRequests, setLoadedRequests] = useState<number | null>(null)
   const [requestsFailed, setRequestsFailed] = useState(false)
   const detailRef = useRef<HTMLElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +108,7 @@ export function CaseAssignmentsPage() {
       .then((rows) => {
         if (current !== requestsSequence.current) return
         setPendingCounts(pendingByAssignee(rows))
+        setLoadedRequests(rows.length)
         setRequestsFailed(false)
       })
       .catch(() => {
@@ -161,7 +164,12 @@ export function CaseAssignmentsPage() {
   const reload = () => {
     loadOverview()
     loadRequests()
-    if (selected) loadCases(selected.staffId)
+    if (selected) {
+      // 처리 직후 이전 목록을 비운다 — 이미 넘긴 사건의 [담당 변경]을 다시 눌러 또 옮기지 않게.
+      // 서버는 이전 담당을 확인하지 않는다 (CaseReassignmentService.reassign)
+      setCasesOf(null)
+      loadCases(selected.staffId)
+    }
     // 담당 변경 · 넘기기는 그 사건의 대기 요청을 함께 승인하므로 배지도 다시 센다
     refreshCaseAssignmentRequestBadge()
   }
@@ -231,6 +239,8 @@ export function CaseAssignmentsPage() {
     }))
   const totalOpen = staffList.reduce((sum, s) => sum + s.openCount, 0)
   const unassigned = overview?.unassignedOpenCount ?? 0
+  const requestsPartial =
+    overview !== null && loadedRequests !== null && overview.pendingRequestCount > loadedRequests
 
   // 열린 책상 — 그 직원이 맡은 사건. 오래된 사건이 위
   const renderCases = (staff: StaffLoad) => (
@@ -343,6 +353,16 @@ export function CaseAssignmentsPage() {
               다시 시도
             </Button>
           }
+        />
+      )}
+      {requestsPartial && (
+        <Alert
+          className="dw-page-alert"
+          type="info"
+          showIcon
+          message={`처리 대기 변경 요청이 ${overview?.pendingRequestCount}건이라, 책상에는 최근 ${loadedRequests}건만 셌습니다.`}
+          description="오래된 요청만 있는 직원은 책상에 표시되지 않을 수 있습니다. 전체는 변경 요청 탭에서 확인하세요."
+          action={<Link to="/admin/case-assignment-requests">변경 요청 탭</Link>}
         />
       )}
       <section className="ca-board ca-panel-box" aria-labelledby="ca-board-heading">
