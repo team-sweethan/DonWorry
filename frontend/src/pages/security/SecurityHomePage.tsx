@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   ArrowRightOutlined,
   ClockCircleOutlined,
@@ -28,6 +28,16 @@ import { HelpLabel } from './case/CaseTimeLabels'
 import { HomeCount } from './HomeCount'
 import { HomeWorkflow } from './HomeWorkflow'
 import './SecurityHomePage.css'
+
+// OS 설정으로 모션이 꺼진 경우를 표시하고, 사용자가 이 화면에서 명시적으로 재생할 수 있게 한다.
+const motionQuery = '(prefers-reduced-motion: reduce)'
+const subscribeMotion = (listener: () => void) => {
+  const query = window.matchMedia(motionQuery)
+  query.addEventListener('change', listener)
+  return () => query.removeEventListener('change', listener)
+}
+const motionSnapshot = () => window.matchMedia(motionQuery).matches
+const serverMotionSnapshot = () => false
 
 // 우선 이유가 없으면 현재 업무 상태를 보여 준다.
 const reasonLabel: Record<PriorityReason, { label: string; color: string } | null> = {
@@ -145,6 +155,9 @@ export function SecurityHomeDashboard({
   )
   const failed = result?.failed === true
   const [motionPaused, setMotionPaused] = useState(false)
+  const [motionForced, setMotionForced] = useState(false)
+  const reducedMotion = useSyncExternalStore(subscribeMotion, motionSnapshot, serverMotionSnapshot)
+  const effectivePaused = motionPaused || (reducedMotion && !motionForced)
 
   // 내 Case가 한 건이면 그 Case로 바로 간다
   const openFirst = (match: (c: CaseSummary) => boolean, query: Partial<CaseListQuery>) => {
@@ -257,7 +270,7 @@ export function SecurityHomeDashboard({
 
   return (
     <div
-      className={`security-home${motionPaused ? ' is-motion-paused' : ''}`}
+      className={`security-home${effectivePaused ? ' is-motion-paused' : ''}${motionForced ? ' is-motion-forced' : ''}`}
       data-flow-active={flowActive}
     >
       <div className="security-home-enter security-home-heading">
@@ -269,12 +282,18 @@ export function SecurityHomeDashboard({
               <Button
                 type="text"
                 size="small"
-                icon={motionPaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-                aria-pressed={motionPaused}
-                onClick={() => setMotionPaused((paused) => !paused)}
+                icon={effectivePaused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+                aria-pressed={!effectivePaused}
+                onClick={() => {
+                  if (reducedMotion && !motionForced) {
+                    setMotionForced(true)
+                    setMotionPaused(false)
+                  } else setMotionPaused((paused) => !paused)
+                }}
               >
-                {motionPaused ? '반복 효과 켜기' : '반복 효과 끄기'}
+                {effectivePaused ? '움직임 켜기' : '움직임 끄기'}
               </Button>
+              {reducedMotion && !motionForced && <span>시스템 설정으로 움직임 꺼짐</span>}
               {ready && (
                 <span title={dateTime(new Date(updatedAt).toISOString())}>
                   {new Date(updatedAt).toLocaleTimeString('ko-KR', {

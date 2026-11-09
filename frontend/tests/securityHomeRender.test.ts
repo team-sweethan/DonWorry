@@ -71,12 +71,17 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
         createElement(SecurityHomeDashboard, { ...defaults, result, ...flags }),
       )
       assert.match(stale, /data-flow-active="false"/)
+      assert.doesNotMatch(stale, /security-home-workflow is-guide-active/)
       assert.doesNotMatch(stale, /security-home-stage[^"<>]*is-running/)
     }
     const empty = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: { ...result, cases: [] } }),
     )
     assert.match(empty, /현재 진행 중인 담당 사건이 없습니다/)
+    assert.match(empty, /security-home-workflow is-guide-active/)
+    assert.match(empty, /security-home-guide-link/)
+    assert.match(empty, /처리 순서 안내/)
+    assert.match(empty, /움직임 끄기/)
     assert.doesNotMatch(empty, /security-home-stage[^"<>]*is-running/)
     const failure = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, {

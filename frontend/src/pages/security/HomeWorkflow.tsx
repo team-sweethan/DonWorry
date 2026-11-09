@@ -45,10 +45,13 @@ export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
     },
   ]
   return (
-    <section className="security-home-workflow" aria-label="담당 사건 업무 흐름">
+    <section
+      className={`security-home-workflow${active ? ' is-guide-active' : ''}`}
+      aria-label="담당 사건 업무 흐름"
+    >
       <div className="security-home-workflow-heading">
         <strong>담당 사건 업무 흐름</strong>
-        <span>마지막 조회 기준</span>
+        <span>처리 순서 안내 · 숫자는 마지막 조회 기준</span>
       </div>
       <ol className="security-home-stages">
         {stages.map((stage, index) => (
@@ -56,6 +59,11 @@ export function HomeWorkflow({ cases, active, onOpenFailed }: Props) {
             key={stage.key}
             className={`security-home-stage is-${stage.key}${stage.running ? ' is-running' : ''}${stage.count === 0 ? ' is-empty' : ''}`}
           >
+            {index === 0 && (
+              <span className="security-home-guide-link" aria-hidden="true">
+                <i />
+              </span>
+            )}
             <div className="security-home-stage-icon" aria-hidden="true">
               {stage.icon}
               <span className="security-home-stage-packet" />
