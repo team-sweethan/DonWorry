@@ -975,23 +975,6 @@ textarea {
   margin: 0 12px 6px;
   color: var(--shell-muted);
 }
-/* 관리자 메뉴 3단 — 큰 묶음 › 작은 묶음 › 메뉴 (ADR-0082 8절). 작은 묶음끼리는 좁게, 큰 묶음 사이는 넓게.
-   들여쓰기는 접힌 사이드바 규칙(아래 @media, 같은 선택자 세기 · 뒤에 옴)이 덮는다 */
-.admin-viewport[data-role] .dw-nav-section {
-  margin: 10px 12px 8px;
-  font-size: var(--dw-text-caption);
-  font-weight: 700;
-  color: var(--shell-text);
-}
-.admin-viewport[data-role] .dw-nav-subgroup {
-  margin-bottom: 12px;
-}
-.admin-viewport[data-role] .dw-nav-subgroup .dw-nav-heading {
-  margin-left: 20px;
-}
-.admin-viewport[data-role] .dw-nav-subgroup .dw-nav-link {
-  padding-left: 20px;
-}
 .admin-viewport[data-role] .dw-nav-link {
   height: auto;
   min-height: 40px;
@@ -1031,6 +1014,52 @@ textarea {
 }
 .admin-viewport[data-role='owner'] .dw-nav-link.active .dw-nav-icon {
   color: var(--shell-ink);
+}
+
+/* 탭으로 합친 메뉴의 본문 위 탭 줄 (ADR-0082 8절). 선택 색은 화면 안 antd 탭과 같은 --shell-tab (#713) */
+.dw-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--dw-border);
+}
+.dw-page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+  font-weight: 550;
+  text-decoration: none;
+}
+.dw-page-tab:hover {
+  color: var(--shell-tab, #2563eb);
+}
+.dw-page-tab.active {
+  border-bottom-color: var(--shell-tab, #2563eb);
+  color: var(--shell-tab, #2563eb);
+  font-weight: 700;
+}
+.dw-page-tab:focus-visible {
+  outline: 2px solid var(--shell-tab, #2563eb);
+  outline-offset: -2px;
+}
+.dw-page-tab-badge {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #fbbf24;
+  color: #1e293b;
+  font-size: var(--dw-text-caption);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 
 /* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
@@ -1110,10 +1139,7 @@ textarea {
   .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-group {
     margin-bottom: 8px;
   }
-  /* 큰 묶음 제목은 숨기고, 작은 묶음 제목은 얇은 구분선으로 바꾼다 */
-  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-section {
-    display: none;
-  }
+  /* 묶음 제목은 얇은 구분선으로 바꾼다 */
   .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-heading {
     height: 1px;
     margin: 0 6px 8px;
@@ -1361,7 +1387,6 @@ textarea {
     margin: 0;
   }
   .admin-viewport[data-role] .dw-nav-heading,
-  .admin-viewport[data-role] .dw-nav-section,
   .admin-viewport[data-role] .dw-sidebar-top,
   .admin-viewport[data-role] .dw-owner-note {
     display: none;
@@ -1371,9 +1396,6 @@ textarea {
     margin: 0;
     gap: 8px;
     white-space: nowrap;
-  }
-  .admin-viewport[data-role] .dw-nav-subgroup .dw-nav-link {
-    padding-left: 12px;
   }
   .admin-viewport[data-role] .dw-nav-link.active {
     box-shadow: inset 0 -3px 0 var(--shell-accent);
