@@ -35,7 +35,13 @@ import {
   severityView,
   type LogFilter,
 } from './insiderView'
-import { stageClass, stageSummary, stageView, staffByUrgency } from './insiderOfficeView'
+import {
+  incidentFor,
+  stageClass,
+  stageSummary,
+  stageView,
+  staffByUrgency,
+} from './insiderOfficeView'
 import './caseAssignmentShared.css'
 import './InsiderMonitorPage.css'
 
@@ -366,6 +372,8 @@ export function InsiderMonitorPage() {
 
   const sorted = staff ? staffByUrgency(staff) : null
   const current = timeline?.staff ?? null
+  // 판정할 사건이 열린 직원만 사고 카드 (#740)
+  const incident = current ? incidentFor(current) : null
   const shownEvents = timeline
     ? timeline.events.filter((event) => matchesLogFilter(event, logFilter))
     : []
@@ -509,9 +517,9 @@ export function InsiderMonitorPage() {
                     {timeline.truncated && (
                       <Alert type="info" showIcon message="줄이 많아 최근 200줄만 보여 줘요." />
                     )}
-                    {current && (
+                    {incident && (
                       <IncidentCard
-                        stage={current.stage}
+                        stage={incident}
                         open={incidentOpen}
                         onToggle={() => setIncidentOpen((v) => !v)}
                       />
