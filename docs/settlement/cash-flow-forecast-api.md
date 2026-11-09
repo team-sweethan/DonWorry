@@ -41,14 +41,14 @@ DB 장애는 503, 성공·오류 모두 no-store다. 한도 초과 시 일부만
 
 ## 응답과 근거
 
-- baseDate/openingBalance: 최초 설정. asOf: 이번 조회 기준 UTC 시각.
+- baseDate/openingBalance: 최초 설정. minimumOperatingFunds: 가맹점별 최소 운영 자금(기본 0원). asOf: 이번 조회 기준 UTC 시각.
 - currentBalance/completedIncomeSinceBase/paidExpensesSinceBase: 실제 기록 기준 현재 잔액과 누적 근거.
 - periodOpeningBalance: from 직전 마감 잔액. totalIncome/totalExpenses: 요청 기간 내 실제·예정 합계.
-- closingBalance: to 마감 잔액. firstShortageDate/lowestBalance/maximumShortage: 요청 기간의 첫 음수 날짜·최저 마감 잔액·최대 부족액.
+- closingBalance: to 마감 잔액. firstShortageDate/lowestBalance/maximumShortage: 요청 기간의 첫 기준 미달일·최저 마감 잔액·최대 부족액. 부족액은 최소 운영 자금과 해당 일 마감 잔액의 차이다.
 - days: 날짜별 시작·마감 잔액, completedIncome/scheduledIncome/expectedIncome/paidExpenses/plannedExpenses 및 movements.
 - movements: source(SETTLEMENT/EXPENSE/RECURRING_EXPENSE), referenceId, 원래 occurrenceDate, 반영 date, title, amount, classification, eligibleAt, reflectedAt. 반복 지출의 referenceId는 규칙 ID이고 occurrenceDate와 함께 회차를 식별한다.
 - classification: COMPLETED/SCHEDULED/EXPECTED는 유입, PAID/PLANNED는 지출이다. eligibleAt은 정산 자격 시각, reflectedAt은 완료 시각 또는 예상 배치 시각이다.
-- shortages: 연속 음수 마감 날짜의 from/to/days/maximumAmount. 0원은 부족이 아니며 회복 후 재발은 별도 구간이다. 조회 시작 전에 시작한 부족은 요청 기간 경계로 잘라 반환한다.
+- shortages: 마감 잔액이 최소 운영 자금보다 낮은 연속 구간의 from/to/days/maximumAmount. 기준액과 같으면 부족이 아니며 회복 후 재발은 별도 구간이다. 조회 시작 전에 시작한 부족은 요청 기간 경계로 잘라 반환한다.
 
 해당 날짜 movements와 carryForwardMovements, 누적 실제 합계를 통해 부족의 원인을 확인한다.
 금액은 원 단위 정수이며 응답하는 각 합계·잔액의 절댓값이 JavaScript 안전 정수 상한(9,007,199,254,740,991)을 넘으면 422다.

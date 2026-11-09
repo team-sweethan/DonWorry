@@ -164,10 +164,11 @@ public class CashFlowForecastService {
             }
         }
         bounded(rows);
-        var result = calculator.calculate(initial, start, from, to, rows);
+        var result = calculator.calculate(initial, start, from, to, rows, setting.minimumOperatingFunds());
         return CashFlowForecastResponse.builder()
                 .baseDate(setting.baseDate())
                 .openingBalance(setting.openingBalance())
+                .minimumOperatingFunds(setting.minimumOperatingFunds())
                 .asOf(now)
                 .from(from)
                 .to(to)

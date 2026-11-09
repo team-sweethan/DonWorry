@@ -25,6 +25,14 @@ public class CashFlowSetting {
     @Column(name = "opening_balance", nullable = false)
     private Long openingBalance;
 
+    @Column(name = "minimum_operating_funds", nullable = false)
+    private long minimumOperatingFunds;
+
+    public void updateMinimumOperatingFunds(long amount, Instant now) {
+        minimumOperatingFunds = amount;
+        updatedAt = now;
+    }
+
     @Column(name = "base_date", nullable = false)
     private LocalDate baseDate;
 

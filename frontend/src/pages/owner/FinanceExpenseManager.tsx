@@ -31,6 +31,7 @@ import {
   getRecurringExpenses,
   getRecurringOccurrences,
   stopRecurringExpense,
+  saveCashFlowSettings,
   updatePlannedExpense,
 } from '../../api/finance'
 import {
@@ -179,6 +180,38 @@ export function FinanceExpenseManager({
           </h2>
           <p>기준일: {settings.baseDate} 하루 시작 시점</p>
           <Tag>서버 저장 완료 · 수정 불가</Tag>
+          <Form<{ amount: number }>
+            className="finance-minimum-funds-form"
+            key={settings.minimumOperatingFunds ?? 0}
+            layout="vertical"
+            initialValues={{ amount: settings.minimumOperatingFunds ?? 0 }}
+            onFinish={({ amount }) =>
+              void perform('최소 운영 자금 저장', () =>
+                saveCashFlowSettings({ ...settings, minimumOperatingFunds: amount }),
+              )
+            }
+          >
+            <Form.Item
+              name="amount"
+              label={<strong>최소 운영 자금 (원)</strong>}
+              extra="예상 마감 잔액이 이 금액보다 낮으면 경고해요. 이 기준은 언제든 변경할 수 있어요."
+              rules={[{ required: true, type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
+            >
+              <InputNumber
+                aria-label="최소 운영 자금"
+                className="finance-money-input"
+                suffix="원"
+                min={0}
+                max={MAX_FINANCE_AMOUNT}
+                precision={0}
+                formatter={formatWonInput}
+                parser={parseWonInput}
+              />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={busy}>
+              최소 운영 자금 저장
+            </Button>
+          </Form>
           <p>
             현재 잔액은 실제 완료 정산과 지출로 계산합니다. 은행 실잔액이 아니며 최초 설정은
             재로드해도 유지됩니다.
