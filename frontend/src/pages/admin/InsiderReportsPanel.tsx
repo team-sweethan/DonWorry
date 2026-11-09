@@ -146,6 +146,7 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
 /**
  * 내부자 사건 해제 검토 보고서 (#675) — 판별로 고른다(기본은 최신 판).
  * 사건이 열리고 몇 초 뒤에 첫 판이 생기므로 없으면 [새로고침]으로 다시 읽는다.
+ * 기록을 읽지 못하면 판을 남기지 않고 몇 분 뒤 다시 만든다(#702). 경보 없이 열린 사건(#698)은 판이 없다.
  */
 export function InsiderReportsPanel({ insiderCaseId }: { insiderCaseId: number }) {
   const [reports, setReports] = useState<InsiderReport[] | null>(null)
@@ -185,7 +186,7 @@ export function InsiderReportsPanel({ insiderCaseId }: { insiderCaseId: number }
       />
       {error && <Alert type="error" showIcon message={error} />}
       {reports && reports.length === 0 && (
-        <Empty description="아직 보고서가 없습니다. 사건이 열리고 몇 초 뒤에 만들어집니다." />
+        <Empty description="아직 보고서가 없습니다. 보통 사건이 열리고 몇 초 뒤에 만들어지고, 기록을 읽지 못했으면 몇 분 뒤 다시 만듭니다. 경보 없이 열린 사건(정지만 남아 있던 직원에게 서버가 연 사건)은 보고서가 없으니 사건 정보 탭의 경보와 [내부자 경보] 화면으로 판단하세요." />
       )}
       <Space wrap>
         {reports && reports.length > 0 && (
