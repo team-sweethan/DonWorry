@@ -2,14 +2,10 @@
    [사건 담당 › 담당 현황]의 사무실 그림(나무 바닥 · 동전이 · 책상 · 모니터 · 칸막이 · 빈 의자)을 작게 줄여 쓴다.
    단계는 모니터 화면 색과 원 아이콘 + 글자로: 정상 초록 · 주의 노랑 · 내부자 사건 주황 · 정지 빨강. 바탕색 태그는 쓰지 않는다 */
 
-.im-page {
-  max-width: 1320px;
-  margin: 0 auto;
-}
 .im-console {
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
-  gap: 16px;
+  gap: var(--dw-space-5);
   align-items: start;
 }
 .im-panel-head {

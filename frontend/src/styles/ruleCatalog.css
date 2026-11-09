@@ -1,19 +1,9 @@
-.dw-container:has(> .dw-rule-catalog-page, > .dw-rule-management-page) {
-  max-width: 1400px;
-}
-
 .dw-rule-catalog-page .dw-page-header {
   margin-bottom: 18px;
 }
 
-.dw-rule-catalog-page,
-.dw-rule-management-page {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
 .dw-rule-tabs {
-  margin-bottom: 20px;
+  margin-bottom: var(--dw-space-5);
 }
 
 .dw-rule-tabs .ant-tabs-nav {
@@ -23,8 +13,8 @@
 .dw-rule-overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: var(--dw-space-5);
+  margin-bottom: var(--dw-space-5);
 }
 
 .dw-rule-note {
@@ -571,7 +561,7 @@
 
 .dw-rule-records {
   border-color: #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--dw-radius-panel);
 }
 
 .dw-rule-records > .ant-card-body {

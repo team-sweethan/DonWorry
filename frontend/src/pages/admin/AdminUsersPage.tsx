@@ -381,7 +381,7 @@ export function AdminCreateUserPage() {
         description="처음에는 임시 비밀번호가 발급됩니다. 관리자 계정은 만들 수 없습니다."
         actions={<Link to={withQuery('/admin/users', listQuery)}>목록으로</Link>}
       />
-      <Card className="directory-surface" style={{ maxWidth: 640 }}>
+      <Card className="directory-surface" style={{ maxWidth: 'var(--dw-form-width)' }}>
         {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
         <Form<CreateUser>
           form={form}

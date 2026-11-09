@@ -1,10 +1,7 @@
-.application-review {
-  max-width: 1240px;
-  margin: 0 auto;
-}
+/* 폭은 관리 화면 공통 폭(global.css --dw-page-width)을 쓴다 (#735) */
 .application-review > .ant-alert,
 .application-review > [role='status'] {
-  margin-bottom: 20px;
+  margin-bottom: var(--dw-space-5);
 }
 /* 목록 — 이용 신청 시안 A (Linear 참고): 색은 상태 아이콘에만, 나머지는 회색 글자와 얇은 선 */
 .ar-process {
@@ -221,7 +218,7 @@
   grid-template-columns: minmax(0, 1fr) 300px;
   align-items: start;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--dw-radius-panel);
   background: #fff;
 }
 .ar-body {
@@ -384,7 +381,7 @@
 .ar-box {
   min-width: 0;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: var(--dw-radius-panel);
   background: #fff;
 }
 

@@ -24,9 +24,11 @@ export const tokens = {
     mainPadding: 32,
     minAdminWidth: 1280,
   },
+  // global.css의 --dw-radius-* 와 같은 값. panel은 관리자 · 보안 직원 화면의 바깥 상자(antd Card 포함)에만 쓴다 (#735)
   radius: {
     control: 6,
     card: 8,
+    panel: 10,
   },
   typography: {
     family:
@@ -40,5 +42,6 @@ export const tokens = {
     // 관리 화면(ManagementLayout) 안의 antd 기본 글자
     managementBody: 15,
   },
+  // global.css의 --dw-space-1 ~ --dw-space-7 과 같은 값 (#735)
   spacing: [4, 8, 12, 16, 24, 32, 48],
 } as const

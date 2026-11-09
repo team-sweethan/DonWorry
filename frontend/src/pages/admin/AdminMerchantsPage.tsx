@@ -232,7 +232,7 @@ export function AdminCreateMerchantPage() {
         description="가맹점을 만든 뒤 사장님 계정을 연결할 수 있습니다."
         actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
-      <Card className="directory-surface" style={{ maxWidth: 640 }}>
+      <Card className="directory-surface" style={{ maxWidth: 'var(--dw-form-width)' }}>
         {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
         <Form<MerchantForm>
           form={form}

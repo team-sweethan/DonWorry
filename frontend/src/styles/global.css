@@ -28,6 +28,16 @@
   --dw-text-body: 15px;
   --dw-text-secondary: 14px;
   --dw-text-caption: 13px;
+  /* 간격 · 모서리 단계 (#735). tokens.ts의 spacing · radius와 같은 값이다. 화면 CSS는 px 대신 이 이름을 쓴다 */
+  --dw-space-1: 4px;
+  --dw-space-2: 8px;
+  --dw-space-3: 12px;
+  --dw-space-4: 16px;
+  --dw-space-5: 24px;
+  --dw-space-6: 32px;
+  --dw-space-7: 48px;
+  --dw-radius-control: 6px;
+  --dw-radius-panel: 10px;
 }
 *,
 *::before,
@@ -249,6 +259,13 @@ textarea {
 .dw-container {
   max-width: 1720px;
   margin: 0 auto;
+}
+/* 관리자 · 보안 직원 본문 폭 (#735). 상위 탭 줄 · 페이지 제목 · 본문이 같은 바깥 틀(.dw-container)을 쓰므로
+   폭은 여기 한 곳에서만 정한다. 화면별 wrapper에서 다시 좁히지 않는다 (탭을 옮겨도 폭 · 좌우 기준선이 같게).
+   1920 창에서도 양옆이 크게 비지 않고, 1440 이하에서는 사용 가능한 폭을 그대로 채운다 */
+.admin-viewport[data-role='admin'] .dw-container,
+.admin-viewport[data-role='security'] .dw-container {
+  max-width: var(--dw-page-width);
 }
 [data-role='owner'] .dw-container {
   max-width: 1400px;
@@ -853,6 +870,9 @@ textarea {
 .admin-viewport[data-role] {
   --dw-header-height: 64px;
   --dw-sidebar-width: 236px;
+  /* 본문 최대 폭 · 안쪽 생성 폼 폭 (#735) */
+  --dw-page-width: 1520px;
+  --dw-form-width: 640px;
   --shell-sidebar: #172554;
   --shell-text: #c9d6f0;
   --shell-muted: #a1b3d7;
