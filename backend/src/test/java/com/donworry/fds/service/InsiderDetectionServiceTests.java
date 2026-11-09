@@ -362,6 +362,30 @@ class InsiderDetectionServiceTests {
         assertThat(savedAlerts).isEmpty();
     }
 
+    // 담당 밖 고객의 거래 상세를 여러 명 열어도 경보가 없으면 상세 페이지로 특정인 조회를 놓친다 (#732)
+    @Test
+    void ins09_countsOutOfScopeDetailViewsAsUnrelatedCustomers() {
+        for (int i = 0; i < 10; i++) given(detailView(i + 1L, 1L, "1:C" + i, 500L + i, T0.plusSeconds(i * 60L)));
+
+        service.detect(records.getLast());
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_09);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.CAUTION);
+            assertThat(a.getSummary()).contains("10명").doesNotContain("1:C");
+        });
+    }
+
+    // 담당 사건 고객의 결제를 여러 건 여는 정상 업무가 경보가 되면, 높음까지 가서 내보내기 차단으로 이어질 수 있다 (#732)
+    @Test
+    void ins09_ignoresInScopeDetailViews() {
+        for (int i = 0; i < 40; i++) given(detailView(i + 1L, 1L, "1:MINE", 500L + i, T0.plusSeconds(i * 60L)));
+
+        service.detect(records.getLast());
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
     // 훑기 하나가 INS-08 · 09로 함께 잡혀 겹침 높음이 되면 내부자 사건(조각 8)으로 넘어가 정상보다 무겁게 다뤄진다
     @Test
     void ins06_ins08AndIns09Only_doesNotRaiseHigh() {
@@ -693,6 +717,23 @@ class InsiderDetectionServiceTests {
                 .merchantId(merchantId)
                 .customerRef(customerRef)
                 .itemCount(rows)
+                .loginReference(LOGIN)
+                .occurredAt(at)
+                .build();
+    }
+
+    // 거래 상세 1건 열람 기록 (#732) — 결제 번호 · 가맹점 · 고객 번호, 행 수 없음
+    private static StaffAccessRecorded detailView(
+            Long eventId, Long merchantId, String customerRef, Long paymentId, Instant at) {
+        return StaffAccessRecorded.builder()
+                .eventId(eventId)
+                .staffId(STAFF)
+                .actorRole("SECURITY_STAFF")
+                .accessType(StaffAccessType.TRANSACTION_DETAIL_VIEW)
+                .result(StaffAccessResult.ALLOWED)
+                .merchantId(merchantId)
+                .paymentId(paymentId)
+                .customerRef(customerRef)
                 .loginReference(LOGIN)
                 .occurredAt(at)
                 .build();

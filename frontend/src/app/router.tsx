@@ -22,6 +22,7 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { TransactionDetailPage } from '../pages/security/TransactionDetailPage'
 import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
 import { RulePolicyChangeHistoriesPage } from '../pages/admin/RulePolicyChangeHistoriesPage'
@@ -288,6 +289,11 @@ export const router = createBrowserRouter([
                 path: 'transactions',
                 handle: { title: '거래 내역' },
                 element: <TransactionListPage />,
+              },
+              {
+                path: 'transactions/:paymentId',
+                handle: { title: '거래 상세' },
+                element: <TransactionDetailPage />,
               },
               { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
             ],

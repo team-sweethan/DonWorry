@@ -3,6 +3,7 @@ package com.donworry.payment.controller;
 import com.donworry.payment.service.ExportOutOfScopeException;
 import com.donworry.payment.service.ExportTooLargeException;
 import com.donworry.payment.service.InsiderExportBlockedException;
+import com.donworry.payment.service.PaymentTransactionNotFoundException;
 import java.time.DateTimeException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.CacheControl;
@@ -30,6 +31,11 @@ public class PaymentTransactionsExceptionHandler extends ResponseEntityException
     @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})
     ResponseEntity<Object> invalid(Exception e) {
         return problem(400, "PAYMENT_TRANSACTIONS_INVALID_QUERY", "조회 조건을 확인해주세요. 기간은 최대 31일입니다.");
+    }
+
+    @ExceptionHandler(PaymentTransactionNotFoundException.class)
+    ResponseEntity<Object> notFound(PaymentTransactionNotFoundException e) {
+        return problem(404, "PAYMENT_TRANSACTION_NOT_FOUND", "결제를 찾을 수 없습니다.");
     }
 
     @ExceptionHandler(ExportTooLargeException.class)

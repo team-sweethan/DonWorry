@@ -4,6 +4,7 @@ import com.donworry.identity.api.MerchantDirectoryReader;
 import com.donworry.identity.api.StaffAccess;
 import com.donworry.identity.api.StaffAccessRecorder;
 import com.donworry.identity.api.StaffAccessType;
+import com.donworry.payment.dto.PaymentTransactionDetailResponse;
 import com.donworry.payment.dto.PaymentTransactionResponse;
 import com.donworry.payment.dto.PaymentTransactionsPageResponse;
 import com.donworry.payment.dto.PaymentTransactionsQueryRequest;
@@ -48,6 +49,22 @@ public class PaymentTransactionsQueryService {
         return page;
     }
 
+    // 거래 상세 1건 (#732) — 열 때마다 허용 기록을 같은 트랜잭션에 남긴다. 기록이 실패하면 상세도 내보내지 않는다 (ADR-0082 4절)
+    // 담당 범위 밖이어도 막지 않는다: 기록의 가맹점 · 고객 번호로 INS-09가 담당과 무관한 고객 수를 센다
+    @Transactional
+    public PaymentTransactionDetailResponse findDetail(Long paymentId) {
+        PaymentTransactionRow row =
+                repository.findById(paymentId).orElseThrow(PaymentTransactionNotFoundException::new);
+        var payment = row.payment();
+        accessRecorder.recordAllowed(StaffAccess.builder()
+                .accessType(StaffAccessType.TRANSACTION_DETAIL_VIEW)
+                .paymentId(payment.getPaymentId())
+                .merchantId(knownMerchant(payment.getMerchantId()))
+                .customerRef(StaffAccess.isCustomerRef(payment.getCustomerRef()) ? payment.getCustomerRef() : null)
+                .build());
+        return detail(row);
+    }
+
     // 기록 표의 가맹점 칸은 merchants FK다 — 없는 가맹점으로 거른 조회(빈 목록)가 기록 실패로 막히지 않게 가맹점 없이 남긴다
     private Long knownMerchant(Long merchantId) {
         if (merchantId == null) return null;
@@ -56,7 +73,6 @@ public class PaymentTransactionsQueryService {
                 : null;
     }
 
-    // CSV 내보내기도 같은 칸 · 같은 가림을 쓴다 (#651)
     static PaymentTransactionResponse item(PaymentTransactionRow row) {
         var p = row.payment();
         var r = row.request();
@@ -70,6 +86,25 @@ public class PaymentTransactionsQueryService {
                 .paymentStatus(p.getStatus().name());
         if (r == null) return item.build();
         return item.attemptNo(r.getAttemptNo())
+                .fdsResult(r.getEvaluationResult())
+                .evaluationId(r.getEvaluationResult() == null ? null : r.getEvaluationId())
+                .build();
+    }
+
+    // 거래 상세와 CSV 내보내기가 같은 칸 · 같은 가림을 쓴다 (#651 · #732)
+    static PaymentTransactionDetailResponse detail(PaymentTransactionRow row) {
+        var p = row.payment();
+        var r = row.request();
+        var detail = PaymentTransactionDetailResponse.builder()
+                .paymentId(p.getPaymentId())
+                .createdAt(p.getCreatedAt())
+                .merchantId(p.getMerchantId())
+                .customerRef(p.getCustomerRef())
+                .orderRef(p.getOrderRef())
+                .amount(p.getAmount())
+                .paymentStatus(p.getStatus().name());
+        if (r == null) return detail.build();
+        return detail.attemptNo(r.getAttemptNo())
                 .fdsResult(r.getEvaluationResult())
                 .evaluationId(r.getEvaluationResult() == null ? null : r.getEvaluationId())
                 .cardDisplayLabel(r.getCardDisplayLabel())

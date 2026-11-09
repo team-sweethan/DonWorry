@@ -26,7 +26,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-// 조회 기록이 실패하면 거래 목록을 내보내지 않는다 (fail closed, ADR-0082 4절 · #615)
+// 조회 기록이 실패하면 거래 목록 · 상세를 내보내지 않는다 (fail closed, ADR-0082 4절 · #615 · #732)
 // 기록 창구는 트랜잭션 프록시라 스파이로는 실패를 흉내 낼 수 없어 이 클래스만 대역으로 바꾼다
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Tag("mariadb")
@@ -77,6 +77,36 @@ class PaymentTransactionsRecordFailureTests {
         assertThat(response.getContentAsString())
                 .contains("PAYMENT_TRANSACTIONS_INTERNAL_ERROR")
                 .doesNotContain("\"items\"")
+                .doesNotContain(orderRef);
+    }
+
+    // 상세 열람 기록이 실패했는데 결제 정보가 나가면 기록 없는 열람이 생긴다 (#732, ADR-0082 4절)
+    @Test
+    void detail_whenAccessRecordFails_returnsNoPaymentData() throws Exception {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String orderRef = "t732-order-" + suffix;
+        long merchantId = jdbc.queryForObject(
+                "SELECT GREATEST(COALESCE((SELECT MAX(merchant_id) FROM merchants), 0), COALESCE((SELECT MAX(merchant_id) FROM payments), 0)) + 1",
+                Long.class);
+        Payment payment = payments.save(Payment.pending(
+                merchantId,
+                "t732-cust-" + suffix,
+                orderRef,
+                1000L,
+                Instant.now().truncatedTo(ChronoUnit.SECONDS).minus(Duration.ofHours(1))));
+        willThrow(new IllegalStateException("기록 저장 실패")).given(accessRecorder).recordAllowed(any());
+
+        var response = mvc.perform(get("/api/payment-transactions/{paymentId}", payment.getPaymentId())
+                        .with(SessionUserTestSupport.sessionUser(StaffSummary.builder()
+                                .userId(7L)
+                                .role("SECURITY_STAFF")
+                                .build())))
+                .andReturn()
+                .getResponse();
+
+        assertThat(response.getStatus()).isEqualTo(500);
+        assertThat(response.getContentAsString())
+                .contains("PAYMENT_TRANSACTIONS_INTERNAL_ERROR")
                 .doesNotContain(orderRef);
     }
 }

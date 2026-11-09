@@ -1,10 +1,4 @@
-import {
-  DownloadOutlined,
-  DownOutlined,
-  InfoCircleOutlined,
-  ReloadOutlined,
-  RightOutlined,
-} from '@ant-design/icons'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
   App,
@@ -23,7 +17,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
@@ -31,7 +25,7 @@ import { getMlShadowScores } from '../../api/mlShadowScores'
 import { exportPaymentTransactionsCsv, getPaymentTransactions } from '../../api/paymentTransactions'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
-import type { FdsResult, PaymentStatus } from '../../types/case'
+import type { PaymentStatus } from '../../types/case'
 import type { PaymentTransaction, PaymentTransactionPage } from '../../types/paymentTransaction'
 import {
   MAX_PERIOD_DAYS,
@@ -52,51 +46,20 @@ import {
 } from '../../utils/transactionList'
 import { customerPart } from '../../utils/caseRules'
 import { paymentStatusLabel } from './case/caseLabels'
+import { HelpTitle } from './transaction/HelpTitle'
+import { copyable, fdsResultText, transactionHelp as help } from './transaction/transactionDisplay'
 import './TransactionListPage.css'
-
-// 경보 화면과 같은 판정이지만, 처음 보는 직원도 읽게 한국어로 쓴다
-const fdsResultText: Record<FdsResult, { label: string; color: string }> = {
-  ALLOW: { label: '통과', color: 'green' },
-  REVIEW: { label: '검토', color: 'gold' },
-  DENY: { label: '차단', color: 'red' },
-  ERROR: { label: '평가 오류', color: 'default' },
-}
 
 const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((status) => ({
   value: status,
   label: paymentStatusLabel[status].label,
 }))
 
-// 처음 보는 직원이 칸 뜻을 알 수 있게 제목 옆 ⓘ에 설명을 둔다
-const help = {
-  order: '가맹점이 손님 영수증에 찍은 번호예요. 가맹점에 문의할 때 이 번호로 찾아요.',
-  customer:
-    '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 이메일은 줄을 펼치면 보여요.',
-  device: '결제한 기기의 식별값 앞부분만 보여요. 개인정보 보호를 위해 나머지는 가렸어요.',
-  ip: '결제한 나라와 IP 앞부분이에요. 별표(*)는 가린 부분이에요.',
-  // 판정처럼 읽히지 않게 "높음 · 위험" 대신 기준 이상만 표시한다 (#441, ADR-0061)
-  ml: 'ML이 매긴 참고 점수예요. 실제 사기 확률이 아니라 시연용 학습 데이터에서 나온 점수라서, 결제 결과는 바뀌지 않아요. 학습 때 정한 기준 이상이면 한 번 더 볼 만한 결제로 표시해요. 기준값은 점수에 마우스를 올리면 보여요.',
-}
-
-function HelpTitle({ label, text }: { label: string; text: string }) {
-  return (
-    <span>
-      {label}{' '}
-      <Tooltip title={text}>
-        <InfoCircleOutlined aria-label={`${label} 설명`} style={{ color: 'rgba(0, 0, 0, 0.45)' }} />
-      </Tooltip>
-    </span>
-  )
-}
-
-// 가맹점에 전달하거나 검색칸에 붙여 넣을 때 쓰는 번호는 복사 버튼을 단다
-const copyable = (text: string) => ({ text, tooltips: ['복사', '복사됨'] })
-
-const missing = <Typography.Text type="secondary">정보 없음</Typography.Text>
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
 
-// IPv6는 가린 값(예: 0:0:*)만 보면 고장처럼 보여서 화면에서만 종류를 앞에 붙인다 (#539)
-const ipText = (masked: string | null) => (masked?.includes(':') ? `IPv6 · ${masked}` : masked)
+// 줄을 누르면 거래 상세로 간다 (#732). 줄 안의 버튼 · 링크 · 복사 단추를 누른 것은 제 동작만 한다
+const ownsClick = (target: EventTarget) =>
+  target instanceof Element && target.closest('button, a, input, [role="button"]') !== null
 
 type Loaded = { key: string; page: PaymentTransactionPage | null; error: string | null }
 
@@ -269,11 +232,9 @@ export function TransactionListPage() {
   const caseLinks: CaseLinks = links?.key === requestKey ? links.links : { status: 'loading' }
   const mlScores: MlScores = ml?.key === requestKey ? ml.scores : { status: 'loading' }
 
-  const merchantNames = new Map(
-    (merchants ?? []).map((merchant) => [merchant.merchantId, merchant.displayName]),
-  )
   const openAlert = (evaluationId: string) => navigate(`/security/alerts/${evaluationId}`)
   const openCase = (caseId: string) => navigate(`/security/cases/${caseId}`)
+  const detailPath = (paymentId: string) => `/security/transactions/${paymentId}`
 
   // 목록을 훑을 때 보는 칸만 한 줄에 둔다 — "얼마 → 어떻게 됐나 → 왜(판정) → 사건 → 누구" 순서 (#445)
   const columns: ColumnsType<PaymentTransaction> = [
@@ -281,7 +242,12 @@ export function TransactionListPage() {
       title: '결제 시각',
       dataIndex: 'createdAt',
       width: 100,
-      render: (value: string) => time(value),
+      // 키보드로도 상세에 갈 수 있게 시각은 링크로 둔다
+      render: (value: string, t) => (
+        <Link className="tx-detail-link" to={detailPath(t.paymentId)}>
+          {time(value)}
+        </Link>
+      ),
     },
     {
       title: '금액',
@@ -428,51 +394,6 @@ export function TransactionListPage() {
     },
   ]
 
-  // 특정 결제를 깊게 볼 때만 필요한 값은 줄을 펼쳐 본다 (#445). 가맹점 문의용 주문번호 복사는 여기에 둔다
-  // 주문 정보 / 결제 환경 두 묶음으로 나누고 라벨 폭을 맞춘다 (#539)
-  const renderDetail = (t: PaymentTransaction) => (
-    <div className="tx-detail">
-      <section aria-label="주문 정보">
-        <p className="tx-detail-title">주문 정보</p>
-        <dl className="tx-detail-list">
-          <dt>
-            <HelpTitle label="주문번호" text={help.order} />
-          </dt>
-          <dd>
-            <Typography.Text code copyable={copyable(t.orderRef)}>
-              {t.orderRef}
-            </Typography.Text>
-            {t.attemptNo !== null && t.attemptNo > 1 && (
-              <Typography.Text type="secondary"> {t.attemptNo}번째 시도</Typography.Text>
-            )}
-          </dd>
-          <dt>가맹점</dt>
-          <dd>{merchantNames.get(t.merchantId) ?? `가맹점 #${t.merchantId}`}</dd>
-          <dt>이메일</dt>
-          <dd>{t.maskedBuyerEmail ?? missing}</dd>
-        </dl>
-      </section>
-      <section aria-label="결제 환경">
-        <p className="tx-detail-title">결제 환경</p>
-        <dl className="tx-detail-list">
-          <dt>카드</dt>
-          <dd>{t.cardDisplayLabel ?? missing}</dd>
-          <dt>
-            <HelpTitle label="접속" text={help.ip} />
-          </dt>
-          <dd>
-            {[t.ipCountryCode, ipText(t.maskedIpAddress)].filter((v) => v !== null).join(' · ') ||
-              missing}
-          </dd>
-          <dt>
-            <HelpTitle label="기기" text={help.device} />
-          </dt>
-          <dd>{t.maskedDeviceId ? <code>{t.maskedDeviceId}</code> : missing}</dd>
-        </dl>
-      </section>
-    </div>
-  )
-
   const periodText = query.from
     ? `${query.from} ~ ${query.to} (한국 시간)`
     : page
@@ -483,7 +404,7 @@ export function TransactionListPage() {
     <div>
       <PageHeader
         title="거래 내역"
-        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
+        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 줄을 누르면 거래 상세, 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
       />
       <Card className="dw-table-card">
         <div className="dw-table-toolbar">
@@ -592,22 +513,13 @@ export function TransactionListPage() {
           dataSource={page?.items ?? []}
           loading={loading}
           size="middle"
-          // 아이콘(▸)을 눌러야 펼친다 — 줄을 눌러 펼치면 경보 · 사건 링크를 누를 때도 같이 펼쳐진다
-          expandable={{
-            expandedRowRender: renderDetail,
-            columnWidth: 48,
-            // ⊕/⊖는 더하기 · 빼기처럼 보여서 꺾쇠(▸ 닫힘 · ▾ 열림)로 바꾼다 (#539)
-            expandIcon: ({ expanded, onExpand, record }) => (
-              <Button
-                type="text"
-                size="small"
-                aria-label={expanded ? '상세 접기' : '상세 펼치기'}
-                aria-expanded={expanded}
-                icon={expanded ? <DownOutlined /> : <RightOutlined />}
-                onClick={(event) => onExpand(record, event)}
-              />
-            ),
-          }}
+          // 줄을 누르면 상세 (#732) — 펼치기 대신 1건씩 열어 열람 기록이 남게 한다
+          onRow={(t) => ({
+            className: 'tx-row',
+            onClick: (event) => {
+              if (!ownsClick(event.target)) navigate(detailPath(t.paymentId))
+            },
+          })}
           scroll={{ x: 920 }}
           pagination={{
             current: query.page,

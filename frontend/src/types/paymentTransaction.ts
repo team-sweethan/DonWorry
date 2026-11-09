@@ -1,6 +1,6 @@
 import type { FdsResult, PaymentStatus } from './case.ts'
 
-// 거래 내역 한 줄 (#363, GET /api/payment-transactions). masked* 칸은 서버에서 가린 값이다
+// 거래 내역 한 줄 (#363, GET /api/payment-transactions). 카드 · 접속 · 기기 · 이메일은 상세에서만 (#732)
 export type PaymentTransaction = {
   paymentId: string
   createdAt: string
@@ -14,6 +14,11 @@ export type PaymentTransaction = {
   // 평가 전이면 null
   fdsResult: FdsResult | null
   evaluationId: string | null
+}
+
+// 거래 1건 상세 (#732, GET /api/payment-transactions/{paymentId}) — 열 때마다 서버에 열람 기록이 남는다
+// masked* 칸은 서버에서 가린 값이다
+export type PaymentTransactionDetail = PaymentTransaction & {
   cardDisplayLabel: string | null
   ipCountryCode: string | null
   maskedIpAddress: string | null

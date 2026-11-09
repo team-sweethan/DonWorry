@@ -89,7 +89,7 @@ public class PaymentTransactionsExportService {
         List<PaymentTransactionRow> rows = repository.findForExport(query, maxRows + 1);
         if (rows.size() > maxRows) throw new ExportTooLargeException(maxRows);
         String csv = PaymentTransactionsCsv.write(
-                rows.stream().map(PaymentTransactionsQueryService::item).toList(), merchantNames);
+                rows.stream().map(PaymentTransactionsQueryService::detail).toList(), merchantNames);
         accessRecorder.recordAllowed(access.itemCount(rows.size()).build());
         return csv;
     }

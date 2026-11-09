@@ -170,7 +170,7 @@ final class InsiderReportFacts {
             normal.add("처음 보는 브라우저로 로그인한 직후의 행동이라, 본인이 아닐 가능성(계정 도용)도 함께 확인해야 합니다.");
         }
         if (rules.contains(InsiderRule.INS_08) || rules.contains(InsiderRule.INS_09)) {
-            normal.add("거래 목록을 많이 보거나 여러 고객을 검색한 것은 가맹점 문의 · 차지백 처리처럼 담당 사건과 이어진 업무였다면 설명될 수 있습니다.");
+            normal.add("거래 목록을 많이 보거나 여러 고객을 검색 · 열람한 것은 가맹점 문의 · 차지백 처리처럼 담당 사건과 이어진 업무였다면 설명될 수 있습니다.");
         }
 
         List<String> released = new ArrayList<>();
@@ -204,6 +204,7 @@ final class InsiderReportFacts {
         labels.put(StaffAccessType.REPORT_PRINT, "보고서 인쇄");
         labels.put(StaffAccessType.TRANSACTION_LIST_VIEW, "거래 목록 조회");
         labels.put(StaffAccessType.TRANSACTION_EXPORT, "거래 내역 내보내기");
+        labels.put(StaffAccessType.TRANSACTION_DETAIL_VIEW, "거래 상세 열기");
         labels.put(StaffAccessType.CONTACT_MASKED_VIEW, "주문자 정보(가림) 보기");
         labels.put(StaffAccessType.CONTACT_MATCH, "전화번호 일치 확인");
         labels.put(StaffAccessType.CONTACT_MATCH_HIT, "전화번호 일치 확인 · 일치");

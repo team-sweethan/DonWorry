@@ -1,19 +1,21 @@
 package com.donworry.payment.service;
 
-import com.donworry.payment.dto.PaymentTransactionResponse;
+import com.donworry.payment.dto.PaymentTransactionDetailResponse;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-// 거래 내역 CSV (#651) — 화면 목록과 같은 칸(가린 값)만 쓴다. 주문자 이름 · 전화 같은 원문 칸은 없다
+// 거래 내역 CSV (#651) — 거래 상세와 같은 칸(가린 값)만 쓴다. 주문자 이름 · 전화 같은 원문 칸은 없다
+// 목록 화면은 #732부터 카드 · 접속 · 기기 · 이메일을 싣지 않지만 CSV는 보안 직원이 담당 사건 고객만 내보낼 수 있어(#730) 그대로 둔다
 // 엑셀에서 수식으로 실행되지 않게 = + - @ 탭 · 줄바꿈으로 시작하는 값은 앞에 ' 를 붙인다
 public final class PaymentTransactionsCsv {
     private static final DateTimeFormatter KST =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.of("Asia/Seoul"));
 
-    private record Column(String header, BiFunction<PaymentTransactionResponse, Map<Long, String>, Object> value) {}
+    private record Column(
+            String header, BiFunction<PaymentTransactionDetailResponse, Map<Long, String>, Object> value) {}
 
     private static final List<Column> COLUMNS = List.of(
             new Column("결제번호", (t, m) -> t.paymentId()),
@@ -40,7 +42,7 @@ public final class PaymentTransactionsCsv {
     }
 
     // merchantNames: 가맹점 번호 → 이름. 없는 번호는 이름 칸을 비운다
-    public static String write(List<PaymentTransactionResponse> items, Map<Long, String> merchantNames) {
+    public static String write(List<PaymentTransactionDetailResponse> items, Map<Long, String> merchantNames) {
         var out = new StringBuilder();
         out.append(line(headers().stream().map(h -> (Object) h).toList()));
         for (var item : items) {

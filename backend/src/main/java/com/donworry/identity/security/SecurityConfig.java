@@ -229,6 +229,9 @@ public class SecurityConfig {
                                         .matcher(HttpMethod.GET, "/api/payment-transactions"),
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.HEAD, "/api/payment-transactions"),
+                                // 거래 상세 1건 (#732) — 숫자 번호만. GET /export가 여기에 걸려 열리면 안 된다(내보내기는 POST만). HEAD는 열지 않는다
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-transactions/{paymentId:[0-9]+}"),
                                 // 거래 내역 CSV 내보내기 (#651) — POST만(CSRF 토큰 필수). GET이면 외부 링크 한 번으로
                                 // 문지기 · 계정 정지를 탈 수 있다 (Codex 리뷰)
                                 PathPatternRequestMatcher.withDefaults()

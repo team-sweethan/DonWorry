@@ -4,7 +4,7 @@ import java.time.Instant;
 import lombok.Builder;
 
 // 거래 내역 한 줄 (#363). 카드 토큰 · IP · 기기 ID · 이메일 원문과 승인 참조는 담지 않는다
-// masked* 칸은 서버에서 가린 값이다 — 원문으로 착각하지 않게 이름에 드러낸다
+// 카드 · 접속 · 기기 · 이메일은 가린 값이어도 목록에 싣지 않는다 (#732) — 1건 상세(PaymentTransactionDetailResponse)에서 열람 기록과 함께 본다
 @Builder
 public record PaymentTransactionResponse(
         Long paymentId,
@@ -16,9 +16,4 @@ public record PaymentTransactionResponse(
         Long amount,
         String paymentStatus,
         String fdsResult,
-        Long evaluationId,
-        String cardDisplayLabel,
-        String ipCountryCode,
-        String maskedIpAddress,
-        String maskedDeviceId,
-        String maskedBuyerEmail) {}
+        Long evaluationId) {}
