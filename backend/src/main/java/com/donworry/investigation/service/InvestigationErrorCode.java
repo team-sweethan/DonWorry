@@ -42,8 +42,8 @@ public enum InvestigationErrorCode {
     CONTACT_CASE_CLOSED("INV_029", "종료된 사건은 주문자 정보를 볼 수 없습니다.", HttpStatus.CONFLICT),
     CONTACT_NOT_FOUND("INV_030", "이 결제에는 저장된 주문자 정보가 없습니다.", HttpStatus.NOT_FOUND),
     INVALID_PHONE("INV_031", "전화번호 형식을 확인해 주세요.", HttpStatus.BAD_REQUEST),
-    RAW_VIEW_REVIEW_NOT_FOUND("INV_032", "원문 열람 기록이 없습니다.", HttpStatus.NOT_FOUND),
-    RAW_VIEW_REVIEW_DONE("INV_033", "이미 검토한 원문 열람입니다.", HttpStatus.CONFLICT),
+    RAW_VIEW_REVIEW_NOT_FOUND("INV_032", "전화번호 열람 기록이 없습니다.", HttpStatus.NOT_FOUND),
+    RAW_VIEW_REVIEW_DONE("INV_033", "이미 검토한 전화번호 열람입니다.", HttpStatus.CONFLICT),
     INVALID_REVIEW_RESULT("INV_034", "검토 결과 값을 확인해 주세요.", HttpStatus.BAD_REQUEST),
     // 내부자 사건 (#670)
     INSIDER_CASE_NOT_FOUND("INV_035", "내부자 사건이 없습니다.", HttpStatus.NOT_FOUND),

@@ -163,7 +163,8 @@ final class InsiderReportFacts {
             normal.add("담당이 아닌 사건에 접근한 시각에 담당 변경 요청 · 인수인계가 있었는지 사건 배정 이력으로 확인할 수 있습니다.");
         }
         if (rules.contains(InsiderRule.INS_03)) {
-            normal.add("원문 열람은 매번 근거(이의제기 번호 · 가맹점 연락 내역 · 사유)를 남겼습니다. 그 근거가 실제 사건과 맞는지 [원문 열람 검토] 화면에서 확인할 수 있습니다.");
+            normal.add(
+                    "전체 전화번호 보기는 매번 근거(이의제기 번호 · 가맹점 연락 내역 · 사유)를 남겼습니다. 그 근거가 실제 사건과 맞는지 [원문 열람 검토] 화면에서 확인할 수 있습니다.");
         }
         if (rules.contains(InsiderRule.INS_07)) {
             normal.add("처음 보는 브라우저로 로그인한 직후의 행동이라, 본인이 아닐 가능성(계정 도용)도 함께 확인해야 합니다.");
@@ -204,10 +205,10 @@ final class InsiderReportFacts {
         labels.put(StaffAccessType.TRANSACTION_LIST_VIEW, "거래 목록 조회");
         labels.put(StaffAccessType.TRANSACTION_EXPORT, "거래 내역 내보내기");
         labels.put(StaffAccessType.CONTACT_MASKED_VIEW, "주문자 정보(가림) 보기");
-        labels.put(StaffAccessType.CONTACT_MATCH, "번호 대조");
-        labels.put(StaffAccessType.CONTACT_MATCH_HIT, "번호 대조 일치");
-        labels.put(StaffAccessType.CONTACT_MATCH_MISS, "번호 대조 불일치");
-        labels.put(StaffAccessType.CONTACT_RAW_VIEW, "주문자 전화 원문 보기");
+        labels.put(StaffAccessType.CONTACT_MATCH, "전화번호 일치 확인");
+        labels.put(StaffAccessType.CONTACT_MATCH_HIT, "전화번호 일치 확인 · 일치");
+        labels.put(StaffAccessType.CONTACT_MATCH_MISS, "전화번호 일치 확인 · 불일치");
+        labels.put(StaffAccessType.CONTACT_RAW_VIEW, "전체 전화번호 보기");
         return labels;
     }
 }

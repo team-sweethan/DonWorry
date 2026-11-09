@@ -131,7 +131,7 @@ test('historyDetail_decisionConfirmed_showsPaymentNumberAndDecision', () => {
       time,
       refs,
     ),
-    '결제 25 · REJECT · 매입 거부',
+    '결제 25 · 승인 취소 요청',
   )
 })
 
@@ -141,7 +141,7 @@ test('historyDetail_handoffEvents_resolvePaymentThroughDecision', () => {
 
   assert.equal(
     detail('HANDOFF_REQUESTED', { handoffId: 41, decisionId: 32, actionType: 'VOID' }),
-    '결제 25 · 승인 취소 요청',
+    '결제 25 · 승인 취소 처리',
   )
   assert.equal(
     detail('HANDOFF_ACCEPTED', {

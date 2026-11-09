@@ -49,12 +49,12 @@ public class InsiderRuleCatalogService {
                         .standaloneDescription("같은 사건을 다시 연 것은 한 번으로 셉니다. 닫힌 사건 거부는 세지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_03, opened, firstDay)
-                        .condition("%s 안에 주문자 전화 원문 %d건 이상 열람"
+                        .condition("%s 안에 주문자 전체 전화번호 %d건 이상 열람"
                                 .formatted(span(properties.ins03Window()), properties.ins03CautionRawViews()))
                         .resultDescription("주의 경보")
-                        .example("%s 동안 서로 다른 결제 %d건의 주문자 전화 원문을 엶"
+                        .example("%s 동안 서로 다른 결제 %d건의 주문자 전체 전화번호를 엶"
                                 .formatted(span(properties.ins03Window()), properties.ins03CautionRawViews()))
-                        .standaloneDescription("원문 열람은 사건 담당자만 할 수 있고, 열 때마다 기록됩니다.")
+                        .standaloneDescription("전체 전화번호 보기는 사건 담당자만 할 수 있고, 열 때마다 기록됩니다.")
                         .build(),
                 card(InsiderRule.INS_05, opened, firstDay)
                         .condition("높음 이상 경보가 열린 상태에서 거래 내역 내보내기 시도")
@@ -65,14 +65,14 @@ public class InsiderRuleCatalogService {
                 card(InsiderRule.INS_06, opened, firstDay)
                         .condition("서로 다른 종류의 경보 2개 이상이 함께 열림 (SEC-INS-08 · 09는 한 종류로 셈)")
                         .resultDescription("높음 경보 · 내부자 사건으로 넘어감")
-                        .example("원문 열람 집중 주의와 담당 밖 접근 주의가 같은 직원에게 함께 열림")
+                        .example("전화번호 열람 집중 주의와 담당 밖 접근 주의가 같은 직원에게 함께 열림")
                         .standaloneDescription("다른 규칙의 경보로만 생깁니다. 끄면 경보가 겹쳐도 높음으로 올리지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_07, opened, firstDay)
-                        .condition("지난 %d일 성공 로그인에 없던 브라우저로 로그인하고 %s 안에 원문 열람"
+                        .condition("지난 %d일 성공 로그인에 없던 브라우저로 로그인하고 %s 안에 전화번호 열람"
                                 .formatted(properties.ins07Lookback().toDays(), span(properties.ins07AfterLogin())))
                         .resultDescription("높음 경보")
-                        .example("평소 Edge · Windows로 일하던 직원 계정이 Chrome · macOS로 로그인해 5분 뒤 원문 열람")
+                        .example("평소 Edge · Windows로 일하던 직원 계정이 Chrome · macOS로 로그인해 5분 뒤 전화번호 열람")
                         .standaloneDescription("비교할 지난 로그인이 없는 신규 직원에게는 울리지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_08, opened, firstDay)

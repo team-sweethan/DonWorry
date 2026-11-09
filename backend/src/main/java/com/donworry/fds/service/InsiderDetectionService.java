@@ -202,7 +202,7 @@ public class InsiderDetectionService {
                 staffId,
                 InsiderRule.INS_03,
                 InsiderAlertSeverity.CAUTION,
-                "%d분 안에 주문자 전화 원문 %d건 열람".formatted(window.toMinutes(), hit.size()),
+                "%d분 안에 주문자 전체 전화번호 %d건 열람".formatted(window.toMinutes(), hit.size()),
                 hit);
     }
 
@@ -232,7 +232,7 @@ public class InsiderDetectionService {
                 staffId,
                 InsiderRule.INS_07,
                 InsiderAlertSeverity.HIGH,
-                "처음 보는 브라우저(%s)로 로그인 %d분 뒤 원문 열람".formatted(login.device(), minutes),
+                "처음 보는 브라우저(%s)로 로그인 %d분 뒤 전화번호 열람".formatted(login.device(), minutes),
                 List.of(event));
     }
 

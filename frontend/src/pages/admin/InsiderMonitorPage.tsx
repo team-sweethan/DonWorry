@@ -51,10 +51,10 @@ const accessLabel: Record<string, string> = {
   TRANSACTION_LIST_VIEW: '거래 목록 조회',
   TRANSACTION_EXPORT: '거래 내역 내보내기',
   CONTACT_MASKED_VIEW: '주문자 정보(가림) 보기',
-  CONTACT_MATCH: '번호 대조',
-  CONTACT_MATCH_HIT: '번호 대조 일치',
-  CONTACT_MATCH_MISS: '번호 대조 불일치',
-  CONTACT_RAW_VIEW: '주문자 전화 원문 보기',
+  CONTACT_MATCH: '전화번호 일치 확인',
+  CONTACT_MATCH_HIT: '전화번호 일치 확인 · 일치',
+  CONTACT_MATCH_MISS: '전화번호 일치 확인 · 불일치',
+  CONTACT_RAW_VIEW: '전체 전화번호 보기',
 }
 const denyLabel: Record<string, string> = {
   NOT_ASSIGNEE: '담당 아님',

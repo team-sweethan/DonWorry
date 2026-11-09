@@ -57,7 +57,7 @@ export function DecisionPanel({
     const accept = selected.filter((p) => draftOf(p.casePaymentId).decision === 'ACCEPT').length
     confirmDanger({
       title: `결제 ${selected.length}건의 판정을 확정할까요?`,
-      content: `ACCEPT ${accept}건(매입 요청) · REJECT ${selected.length - accept}건(승인 취소 요청). 확정한 판정은 변경할 수 없습니다.`,
+      content: `매입 요청 ${accept}건 · 승인 취소 요청 ${selected.length - accept}건. 확정한 판정은 변경할 수 없습니다.`,
       onConfirm: async () => {
         const saved = await onSubmit({
           evidenceVersion,
@@ -80,10 +80,10 @@ export function DecisionPanel({
         editable && (
           <Space size={6}>
             <Button size="small" onClick={() => setAll('ACCEPT')}>
-              전체 ACCEPT
+              전체 매입 요청
             </Button>
             <Button size="small" onClick={() => setAll('REJECT')}>
-              전체 REJECT
+              전체 승인 취소 요청
             </Button>
           </Space>
         )
@@ -151,10 +151,10 @@ export function DecisionPanel({
                     size="small"
                   >
                     <Radio.Button value="ACCEPT" className="dw-choice-accept">
-                      ACCEPT · 매입 허용
+                      매입 요청
                     </Radio.Button>
                     <Radio.Button value="REJECT" className="dw-choice-reject">
-                      REJECT · 매입 거부
+                      승인 취소 요청
                     </Radio.Button>
                   </Radio.Group>
                   <Input.TextArea

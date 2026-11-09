@@ -107,7 +107,7 @@ function ManagementCard({
 function TodoPanel() {
   const items = [
     { label: '내부자 경보', to: '/admin/insider-alerts', count: useInsiderAlertCount() },
-    { label: '원문 열람 검토', to: '/admin/raw-view-reviews', count: useRawViewReviewCount() },
+    { label: '전화번호 열람 검토', to: '/admin/raw-view-reviews', count: useRawViewReviewCount() },
     { label: '내부자 사건', to: '/admin/insider-cases', count: useInsiderCaseCount() },
     {
       label: '변경 요청',

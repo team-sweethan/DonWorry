@@ -510,10 +510,10 @@ export function ReportPreview({ decided = false }: { decided?: boolean }) {
         </li>
       </ul>
       <div className={`dw-preview-decision${decided ? ' is-decided' : ' is-pending'}`}>
-        <span>ACCEPT · 매입 허용</span>
+        <span>매입 요청</span>
         <span className="is-reject">
           {decided && <CheckCircleFilled />}
-          REJECT · 매입 거부
+          승인 취소 요청
         </span>
       </div>
     </div>

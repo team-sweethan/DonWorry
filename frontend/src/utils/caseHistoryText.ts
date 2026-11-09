@@ -34,12 +34,12 @@ const statusOf = (value: string | undefined) => (value ? (statusText[value] ?? v
 // 판정 · 금융 조치 이력 (#666) — 판정은 판정 칸(caseLabels.decisionLabel)과 같은 표기, 조치는 이력에 맞게 짧게
 // 모르는 값이 오면 값 그대로 둔다 (서버가 새 값을 먼저 보내도 정보가 사라지지 않게)
 const decisionText: Record<string, string> = {
-  ACCEPT: 'ACCEPT · 매입 허용',
-  REJECT: 'REJECT · 매입 거부',
+  ACCEPT: '매입 요청',
+  REJECT: '승인 취소 요청',
 }
 const actionText: Record<string, string> = {
-  CAPTURE: '매입 요청',
-  VOID: '승인 취소 요청',
+  CAPTURE: '매입 처리',
+  VOID: '승인 취소 처리',
 }
 // 다시 확인 결과 (FinancialActionGateway.Receipt.Status)
 const recheckText: Record<string, string> = {

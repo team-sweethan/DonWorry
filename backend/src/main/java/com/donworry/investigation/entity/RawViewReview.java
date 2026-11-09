@@ -97,7 +97,7 @@ public class RawViewReview {
 
     public void review(RawViewReviewStatus result, Long adminId, String adminName, String memo, Instant now) {
         if (status != RawViewReviewStatus.PENDING) {
-            throw new IllegalStateException("이미 검토한 원문 열람입니다");
+            throw new IllegalStateException("이미 검토한 전화번호 열람입니다");
         }
         if (result == null || result == RawViewReviewStatus.PENDING) {
             throw new IllegalArgumentException("검토 결과가 아닙니다");

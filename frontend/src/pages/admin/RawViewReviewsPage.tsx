@@ -61,7 +61,7 @@ export function RawViewReviewsPage() {
       .catch(() => {
         if (current !== sequence.current) return
         setRows([])
-        setError('원문 열람 기록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
+        setError('전화번호 열람 기록을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
       })
   }, [status])
   useEffect(() => {
@@ -93,8 +93,8 @@ export function RawViewReviewsPage() {
   return (
     <>
       <PageHeader
-        title="원문 열람 검토"
-        description="보안 직원이 담당 사건 결제의 주문자 전화번호 원문을 본 기록입니다. 원문은 여기 보이지 않습니다. 근거가 업무에 맞는지 보고 [적절] 또는 [소명 요청]을 누르세요."
+        title="전화번호 열람 검토"
+        description="보안 직원이 담당 사건 결제의 주문자 전체 전화번호를 본 기록입니다. 전화번호는 여기 보이지 않습니다. 근거가 업무에 맞는지 보고 [적절] 또는 [소명 요청]을 누르세요."
       />
       {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
       <Card>
@@ -118,7 +118,7 @@ export function RawViewReviewsPage() {
           locale={{
             emptyText:
               rows === null ? (
-                <ListLoading label="원문 열람 검토를 불러오는 중" />
+                <ListLoading label="전화번호 열람 검토를 불러오는 중" />
               ) : (
                 <ListEmpty title="데이터 없음" />
               ),
