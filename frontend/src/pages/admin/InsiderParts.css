@@ -1,0 +1,102 @@
+/* [내부자 보안] 관제 · 경보 · 사건 공통 부품 — 등급 표시 · 직원 링크 · 근거 기록 */
+
+/* 등급 — 관제 단계 아이콘과 같은 원. 높음과 위험을 색 · 채움으로 나눈다 */
+.ip-severity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ip-severity-icon {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.ip-severity.is-caution {
+  color: #b45309;
+}
+.ip-severity.is-high {
+  color: #c2410c;
+}
+.ip-severity.is-critical {
+  color: #b91c1c;
+}
+.ip-severity.is-critical .ip-severity-icon {
+  background: currentColor;
+}
+
+.ip-staff-link {
+  font-weight: 600;
+}
+
+/* 근거 기록 — 관제 기록 칸과 같은 결 */
+.ip-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  list-style: none;
+}
+.ip-log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ip-log-time {
+  flex-shrink: 0;
+  color: #64748b;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.ip-log-text {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  line-height: 22px;
+}
+.ip-log-allowed {
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* 상태 한 마디 — 위험은 빨간 채운 원, 조용한 것은 회색 빈 원 */
+.ip-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #334155;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ip-status-icon {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+.ip-status.is-danger {
+  color: #b91c1c;
+  font-weight: 600;
+}
+.ip-status.is-danger .ip-status-icon {
+  background: currentColor;
+}
+.ip-status.is-quiet {
+  color: #64748b;
+}
