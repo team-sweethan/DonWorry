@@ -3,7 +3,9 @@ import { test } from 'node:test'
 import type { CaseSummary } from '../src/types/case.ts'
 import {
   homeCounts,
+  homeAgeBands,
   homeDistribution,
+  homeRiskBands,
   homeView,
   newHomeCaseIds,
   priorityCases,
@@ -154,4 +156,41 @@ test('첫 조회에서는 강조하지 않고 이후 내 담당으로 들어온 
   assert.deepEqual(newHomeCaseIds(previous, current, 20), ['new', 'reassigned'])
   assert.deepEqual(newHomeCaseIds(current, current, 20), [])
   assert.deepEqual(newHomeCaseIds(previous, current, null), [])
+})
+
+test('위험도 그래프는 종료되지 않은 Case를 FDS 판정 구간(80 · 50)과 점수 없음으로 나눈다', () => {
+  const bands = homeRiskBands([
+    make('1', { maxRiskScore: 80 }),
+    make('2', { maxRiskScore: 92 }),
+    make('3', { maxRiskScore: 79 }),
+    make('4', { maxRiskScore: 49 }),
+    make('5', { maxRiskScore: null }),
+    make('6', { maxRiskScore: 95, status: 'CLOSED' }),
+  ])
+  assert.deepEqual(
+    bands.map((b) => [b.key, b.count]),
+    [
+      ['deny', 2],
+      ['review', 1],
+      ['low', 1],
+      ['none', 1],
+    ],
+  )
+})
+
+test('경과 시간 그래프의 마지막 구간은 24시간 경과 집계와 같다', () => {
+  const cases = [
+    make('1', { createdAt: hoursAgo(1) }),
+    make('2', { createdAt: hoursAgo(6) }),
+    make('3', { createdAt: hoursAgo(12) }),
+    make('4', { createdAt: hoursAgo(23.9) }),
+    make('5', { createdAt: hoursAgo(24) }),
+    make('6', { createdAt: hoursAgo(50), status: 'CLOSED' }),
+  ]
+  const bands = homeAgeBands(cases, now)
+  assert.deepEqual(
+    bands.map((b) => b.count),
+    [1, 1, 2, 1],
+  )
+  assert.equal(bands[3].count, homeCounts(cases, now).slaExceeded)
 })

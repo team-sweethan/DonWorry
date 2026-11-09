@@ -462,3 +462,181 @@
 .security-home-open .anticon {
   transition: transform 150ms ease;
 }
+
+/* 위험도 · 경과 시간 그래프. 둘 다 파랑 한 계열 — 진할수록 높은 점수 · 오래된 사건 */
+.security-home-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+  animation-delay: 140ms;
+}
+.security-home-chart {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid #e0e6ef;
+  border-radius: var(--dw-radius-panel);
+  background: #fff;
+}
+.security-home-chart h3 {
+  margin: 0;
+  color: #243858;
+  font-size: 15px;
+}
+.security-home-chart > p {
+  margin: 2px 0 14px;
+  color: var(--home-muted);
+  font-size: 13px;
+}
+.security-home-chart > small {
+  display: block;
+  margin-top: 12px;
+  color: var(--home-muted);
+  font-size: 12px;
+}
+.security-home-bars {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.security-home-bars li > button,
+.security-home-bars li > div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+}
+.security-home-bars li > button {
+  cursor: pointer;
+}
+.security-home-bars li > button:hover {
+  background: #f3f7fd;
+}
+.security-home-bars li > button:focus-visible {
+  outline: 3px solid #7ba5f0;
+  outline-offset: 1px;
+}
+.security-home-bar-label {
+  color: #42536c;
+}
+.security-home-bar-track {
+  height: 16px;
+}
+.security-home-bar-track > i {
+  position: relative;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  transition: width 400ms ease-out;
+  /* 처음 나타날 때 왼쪽에서 자라고, 줄마다 조금씩 늦게 시작한다. 이후 건수 변화는 width 전환으로 반영 */
+  animation: security-home-bar-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--bar-delay, 0ms)
+    backwards;
+}
+/* 다 자란 뒤에는 옅은 빛이 막대를 따라 계속 지나간다. 줄마다 시작을 어긋나게 해 한꺼번에 깜빡이지 않게 한다 */
+.security-home-bar-track > i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0%) 30%,
+    rgb(255 255 255 / 45%) 50%,
+    rgb(255 255 255 / 0%) 70%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: security-home-bar-sheen 3.6s ease-in-out calc(var(--bar-delay, 0ms) + 900ms) infinite;
+}
+.security-home.is-motion-paused .security-home-bar-track > i::after {
+  animation-play-state: paused;
+}
+/* 조회 중 · 실패 · 자동 갱신 중단에서는 업무 흐름 안내처럼 멈춘다 */
+.security-home[data-flow-active='false'] .security-home-bar-track > i::after {
+  animation: none;
+  opacity: 0;
+}
+.security-home-bar-value {
+  animation: security-home-bar-value 400ms ease-out 500ms backwards;
+}
+@keyframes security-home-bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes security-home-bar-value {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes security-home-bar-sheen {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+.security-home-bar-value {
+  color: #243858;
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.security-home-bar-track > .is-risk-deny {
+  background: #1c3f86;
+}
+.security-home-bar-track > .is-risk-review {
+  background: #3f6fc8;
+}
+.security-home-bar-track > .is-risk-low {
+  background: #8eaee3;
+}
+.security-home-bar-track > .is-none {
+  background: #c9d1dc;
+}
+.security-home-bar-track > .is-age-1 {
+  background: #b9cdee;
+}
+.security-home-bar-track > .is-age-2 {
+  background: #8eaee3;
+}
+.security-home-bar-track > .is-age-3 {
+  background: #3f6fc8;
+}
+.security-home-bar-track > .is-age-4 {
+  background: #1c3f86;
+}
+.security-home-bars li.is-exceeded .security-home-bar-label,
+.security-home-bars li.is-exceeded .security-home-bar-value {
+  color: #1c3f86;
+  font-weight: 700;
+}
+@media (width <= 760px) {
+  .security-home-charts {
+    grid-template-columns: 1fr;
+  }
+  .security-home-bars li > button,
+  .security-home-bars li > div {
+    grid-template-columns: 76px minmax(0, 1fr) 44px;
+  }
+}

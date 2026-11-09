@@ -63,6 +63,9 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
     assert.match(sample, /확인 필요한 항목/)
     assert.doesNotMatch(sample, /최고 위험 점수|security-home-metrics|security-home-secondary/)
     assert.match(sample, /담당 사건 업무 흐름/)
+    assert.match(sample, /위험도 분포/)
+    assert.match(sample, /생성 후 경과 시간/)
+    assert.match(sample, /80점 이상 6건 사건 목록 보기/)
     assert.doesNotMatch(sample, /security-home-signal/)
     assert.match(sample, /data-flow-active="true"/)
     assert.match(sample, /security-home-stage is-prepare is-running/)
@@ -95,6 +98,7 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
       }),
     )
     assert.match(failure, /사건 목록을 확인하지 못했습니다/)
+    assert.doesNotMatch(failure, /security-home-charts/)
     assert.doesNotMatch(failure, /현재 진행 중인 담당 사건이 없습니다/)
     const loading = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: null, loading: true }),

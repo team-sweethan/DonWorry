@@ -23,6 +23,7 @@ import { caseStatusLabel, dateTime } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
 import { HelpLabel } from './case/CaseTimeLabels'
+import { HomeCharts } from './HomeCharts'
 import { HomeCount } from './HomeCount'
 import { HomeWorkflow } from './HomeWorkflow'
 import './SecurityHomePage.css'
@@ -369,6 +370,7 @@ export function SecurityHomeDashboard({
           />
         </div>
       </div>
+      {ready && <HomeCharts cases={openCases} openList={openList} />}
       <Card className="dw-table-card security-home-enter security-home-queue">
         <div className="dw-table-toolbar">
           <div>
