@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Alert, Button } from 'antd'
 import { CheckOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
@@ -17,6 +17,15 @@ import {
   OwnerTimelinePreview,
   ReportPreview,
 } from './LandingPreview'
+
+import { LandingIntro } from './LandingIntro'
+import { createIntroVisit } from './introPlayback'
+
+const introVisit = createIntroVisit(
+  () => window.sessionStorage,
+  () =>
+    typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+)
 
 // 첫 화면 요약 — 한 줄에 하나씩, 짧게
 const heroPoints = [
@@ -231,6 +240,31 @@ function Brand() {
 }
 
 export function LandingPage({ onRetry }: { onRetry?: () => void }) {
+  const content = useRef<HTMLDivElement>(null)
+  const [showIntro, setShowIntro] = useState(() => introVisit.shouldShow())
+  const restoreFocus = useRef(false)
+  const finishIntro = useCallback(() => {
+    introVisit.complete()
+    restoreFocus.current = true
+    setShowIntro(false)
+  }, [])
+  useEffect(() => {
+    if (!showIntro && restoreFocus.current) {
+      restoreFocus.current = false
+      content.current?.querySelector<HTMLElement>('#landing-main')?.focus({ preventScroll: true })
+    }
+  }, [showIntro])
+  return (
+    <>
+      {showIntro && <LandingIntro onComplete={finishIntro} />}
+      <div ref={content} inert={showIntro} aria-hidden={showIntro || undefined}>
+        <LandingContent onRetry={onRetry} />
+      </div>
+    </>
+  )
+}
+
+function LandingContent({ onRetry }: { onRetry?: () => void }) {
   const main = useRef<HTMLElement>(null)
   const apply = useApplicationConfig()
   const owner = useRef<HTMLElement>(null)
