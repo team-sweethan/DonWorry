@@ -1,3 +1,4 @@
+import { formatKstDateTime } from '../../utils/format'
 import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -252,13 +253,17 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               },
               {
                 key: 'issued',
-                label: '키 발급 시각 (UTC)',
-                children: data.keyIssuedAt?.replace('T', ' ') ?? '아직 발급하지 않았습니다',
+                label: '키 발급 시각 (한국 시간)',
+                children: data.keyIssuedAt
+                  ? formatKstDateTime(data.keyIssuedAt)
+                  : '아직 발급하지 않았습니다',
               },
               {
                 key: 'connected',
-                label: '연결 확인 시각 (UTC)',
-                children: data.connectedAt?.replace('T', ' ') ?? '연결 확인 기록이 없습니다',
+                label: '연결 확인 시각 (한국 시간)',
+                children: data.connectedAt
+                  ? formatKstDateTime(data.connectedAt)
+                  : '연결 확인 기록이 없습니다',
               },
             ]}
           />
@@ -344,9 +349,9 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
             }}
             columns={[
               {
-                title: '시각 (UTC)',
+                title: '시각 (한국 시간)',
                 dataIndex: 'createdAt',
-                render: (v: string) => v.replace('T', ' '),
+                render: (v: string) => formatKstDateTime(v),
               },
               { title: '작업', dataIndex: 'action', render: (v: string) => actionLabels[v] ?? v },
               {

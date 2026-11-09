@@ -1,3 +1,4 @@
+import { formatKstDateTime } from '../../utils/format'
 import { DirectoryDetailSkeleton, DirectoryTableSkeleton } from './DirectoryLoading'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -384,8 +385,8 @@ export function AdminMerchantDetailPage() {
               },
               {
                 key: 'created',
-                label: '등록 시각 (UTC)',
-                children: merchant.createdAt.replace('T', ' '),
+                label: '등록 시각 (한국 시간)',
+                children: formatKstDateTime(merchant.createdAt),
               },
             ]}
           />
