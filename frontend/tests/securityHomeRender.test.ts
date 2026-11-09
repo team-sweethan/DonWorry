@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createServer } from 'vite'
 import { sampleHomeCases } from '../src/previews/security-home/fixtures.ts'
-import { homeDistribution, homeView } from '../src/utils/securityHome.ts'
+import { homeDistribution, homeView, homeWorkflow } from '../src/utils/securityHome.ts'
 
 // 샘플과 실제 홈이 같은 담당 범위·집계 규칙을 사용한다.
 test('sampleHome_whenTwelveCases_matchesRealHomeCountsAndDistribution', () => {
@@ -56,10 +56,12 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
       createElement(SecurityHomeDashboard, { ...defaults, result }),
     )
     assert.match(sample, /Case SAMPLE-101/)
-    assert.match(sample, /security-home-signal/)
+    assert.match(sample, /담당 사건 업무 흐름/)
+    assert.doesNotMatch(sample, /security-home-signal/)
     assert.match(sample, /data-flow-active="true"/)
-    assert.match(sample, /security-home-process-marker is-running/)
-    assert.match(sample, /security-home-process-marker is-finance is-running/)
+    assert.match(sample, /security-home-stage is-prepare is-running/)
+    assert.match(sample, /security-home-stage is-finance is-running/)
+    assert.doesNotMatch(sample, /security-home-stage is-decision[^"<>]*is-running/)
     for (const flags of [
       { watchStopped: true },
       { loading: true },
@@ -69,14 +71,13 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
         createElement(SecurityHomeDashboard, { ...defaults, result, ...flags }),
       )
       assert.match(stale, /data-flow-active="false"/)
-      assert.doesNotMatch(stale, /security-home-process-marker[^"<>]*is-running/)
-      assert.doesNotMatch(stale, /security-home-segment[^"<>]*has-flow/)
+      assert.doesNotMatch(stale, /security-home-stage[^"<>]*is-running/)
     }
     const empty = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, { ...defaults, result: { ...result, cases: [] } }),
     )
     assert.match(empty, /현재 진행 중인 담당 사건이 없습니다/)
-    assert.doesNotMatch(empty, /security-home-process-marker[^"<>]*is-running/)
+    assert.doesNotMatch(empty, /security-home-stage[^"<>]*is-running/)
     const failure = renderToStaticMarkup(
       createElement(SecurityHomeDashboard, {
         ...defaults,
@@ -93,4 +94,43 @@ test('securityHome_whenRenderingSharedDashboard_distinguishesLoadingEmptyAndFail
   } finally {
     await server.close()
   }
+})
+
+// 업무 단계와 실패를 합치면 미종료 사건 수와 같고, 직원 판정 이후의 보고서 상태로 준비 단계를 움직이지 않는다.
+test('homeWorkflow_whenMixedStages_countsEachCaseOnceAndRestrictsReportMotion', () => {
+  const cases = sampleHomeCases()
+  const flow = homeWorkflow(cases)
+  assert.deepEqual(flow, {
+    preparing: 4,
+    reportRunning: 4,
+    decisionPending: 5,
+    actionPending: 2,
+    actionFailed: 1,
+  })
+  assert.equal(
+    flow.preparing + flow.decisionPending + flow.actionPending + flow.actionFailed,
+    cases.length,
+  )
+  const closed = { ...cases[0]!, status: 'CLOSED' as const }
+  const waiting = {
+    ...cases[0]!,
+    status: 'DECISION_PENDING' as const,
+    latestReportStatus: 'RUNNING' as const,
+  }
+  const created = { ...cases[0]!, status: 'OPEN' as const, latestReportStatus: null }
+  const stopped = homeWorkflow([closed, waiting, created])
+  assert.deepEqual(stopped, {
+    preparing: 1,
+    reportRunning: 0,
+    decisionPending: 1,
+    actionPending: 0,
+    actionFailed: 0,
+  })
+  assert.deepEqual(homeWorkflow([]), {
+    preparing: 0,
+    reportRunning: 0,
+    decisionPending: 0,
+    actionPending: 0,
+    actionFailed: 0,
+  })
 })

@@ -20,18 +20,13 @@ import type { CaseSummary } from '../../types/case'
 import { SLA_HOURS, customerPart, slaState } from '../../utils/caseRules'
 import { caseListSearch, type CaseListQuery } from '../../utils/caseListQuery'
 import { saveCaseListScope } from '../../utils/caseListScope'
-import {
-  homeDistribution,
-  homeView,
-  newHomeCaseIds,
-  type PriorityReason,
-} from '../../utils/securityHome'
+import { homeView, newHomeCaseIds, type PriorityReason } from '../../utils/securityHome'
 import { caseStatusLabel, dateTime } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CodeTag } from './case/CodeTag'
 import { HelpLabel } from './case/CaseTimeLabels'
 import { HomeCount } from './HomeCount'
-import { HomeSignal } from './HomeSignal'
+import { HomeWorkflow } from './HomeWorkflow'
 import './SecurityHomePage.css'
 
 // 우선 이유가 없으면 현재 업무 상태를 보여 준다.
@@ -158,7 +153,6 @@ export function SecurityHomeDashboard({
     else openList(query)
   }
 
-  const distribution = homeDistribution(openCases)
   const updatedAt = result?.receivedAt
   const ready = updatedAt != null
   const flowActive = ready && !failed && !watchStopped && !loading
@@ -319,7 +313,6 @@ export function SecurityHomeDashboard({
       <div className="security-home-enter security-home-overview" aria-busy={loading}>
         <section className="security-home-hero" aria-label="내 담당 사건 요약">
           <div className="security-home-summary">
-            <HomeSignal />
             {ready ? (
               <>
                 <h2>
@@ -350,45 +343,19 @@ export function SecurityHomeDashboard({
               <Skeleton active title={{ width: '70%' }} paragraph={{ rows: 2 }} />
             )}
           </div>
-          <div className="security-home-distribution">
-            <div className="security-home-distribution-title">
-              <strong>담당 사건 상태</strong>
-              <span>종료되지 않은 내 사건</span>
-            </div>
-            {ready ? (
-              <>
-                <div className="security-home-bar" aria-hidden="true">
-                  {distribution
-                    .filter((group) => group.count > 0)
-                    .map((group) => (
-                      <span
-                        key={group.key}
-                        className={`security-home-segment is-${group.key}${flowActive && ((group.key === 'investigating' && counts.aiRunning > 0) || group.key === 'action') ? ' has-flow' : ''}`}
-                        style={{ flexGrow: group.count }}
-                      />
-                    ))}
-                </div>
-                <ul>
-                  {distribution.map((group) => (
-                    <li key={group.key}>
-                      <span>
-                        <i className={`is-${group.key}`} aria-hidden="true" />
-                        {group.label}
-                      </span>
-                      <strong>
-                        {group.count}
-                        <small>건</small>
-                      </strong>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : failed ? (
-              <p className="security-home-unavailable">조회 후 업무 상태를 확인할 수 있습니다.</p>
-            ) : (
-              <Skeleton active title={false} paragraph={{ rows: 4 }} />
-            )}
-          </div>
+          {ready ? (
+            <HomeWorkflow
+              cases={openCases}
+              active={flowActive}
+              onOpenFailed={() =>
+                openFirst((c) => c.status === 'ACTION_FAILED', { status: 'ACTION_FAILED' })
+              }
+            />
+          ) : failed ? (
+            <p className="security-home-unavailable">조회 후 업무 흐름을 확인할 수 있습니다.</p>
+          ) : (
+            <Skeleton active title={{ width: '40%' }} paragraph={{ rows: 4 }} />
+          )}
         </section>
         <div className="security-home-metrics" aria-label="먼저 확인할 현황">
           {metrics.map((metric) => (
@@ -423,14 +390,6 @@ export function SecurityHomeDashboard({
         <p className="security-home-count-note">한 사건이 여러 현황 항목에 포함될 수 있습니다.</p>
         <div className="security-home-secondary" aria-label="보고서와 금융 처리 현황">
           <button type="button" disabled={!ready} onClick={() => openList({ report: 'running' })}>
-            <span
-              className={`security-home-process-marker${flowActive && counts.aiRunning > 0 ? ' is-running' : ''}`}
-              aria-hidden="true"
-            >
-              <i />
-              <i />
-              <i />
-            </span>
             보고서 생성 대기·진행 <strong>{ready ? counts.aiRunning : '−'}</strong>
             <ArrowRightOutlined />
           </button>
@@ -450,14 +409,6 @@ export function SecurityHomeDashboard({
             disabled={!ready}
             onClick={() => openList({ status: 'ACTION_PENDING' })}
           >
-            <span
-              className={`security-home-process-marker is-finance${flowActive && counts.actionPending > 0 ? ' is-running' : ''}`}
-              aria-hidden="true"
-            >
-              <i />
-              <i />
-              <i />
-            </span>
             금융 처리 대기 <strong>{ready ? counts.actionPending : '−'}</strong>
             <ArrowRightOutlined />
           </button>

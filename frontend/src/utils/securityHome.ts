@@ -109,3 +109,20 @@ export function newHomeCaseIds(
     .filter((c) => isOpen(c) && !known.has(c.caseId))
     .map((c) => c.caseId)
 }
+
+// 판정 대기에는 자동 진행 효과를 주지 않고, 보고서 준비 단계의 실제 대기·진행만 구분한다.
+export function homeWorkflow(cases: CaseSummary[]) {
+  const groups = homeDistribution(cases)
+  const count = (key: string) => groups.find((group) => group.key === key)?.count ?? 0
+  return {
+    preparing: count('investigating'),
+    reportRunning: cases.filter(
+      (c) =>
+        (c.status === 'OPEN' || c.status === 'INVESTIGATING') &&
+        (c.latestReportStatus === 'PENDING' || c.latestReportStatus === 'RUNNING'),
+    ).length,
+    decisionPending: count('decision'),
+    actionPending: count('action'),
+    actionFailed: count('failed'),
+  }
+}
