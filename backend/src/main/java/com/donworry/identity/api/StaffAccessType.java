@@ -14,7 +14,7 @@ public enum StaffAccessType {
     TRANSACTION_LIST_VIEW,
     // 거래 목록 CSV 내보내기 (#651) — 허용이면 내보낸 행 수, 거부는 열린 내부자 경보로 막힌 시도
     TRANSACTION_EXPORT,
-    // 거래 상세 1건 열람 (#732) — 결제 번호 · 가맹점 · 고객 번호를 남긴다. 담당 밖 고객이면 INS-09가 센다
+    // 거래 상세 1건 열람 (#732) — 결제 번호 · 가맹점 · 고객 번호를 남긴다. 보안 직원은 담당 사건 고객만, 범위 밖은 거부(TRANSACTION_DETAIL_OUT_OF_SCOPE)
     TRANSACTION_DETAIL_VIEW,
     // 사건 결제 1건의 주문자 정보 (#619) — 가린 값 열람 · 번호 대조 일치/불일치 · 전화 원문 열람. 입력 번호 · 원문은 남기지 않는다
     // CONTACT_MATCH는 거부된 대조 시도만 (허용이면 결과에 따라 HIT · MISS)

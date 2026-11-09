@@ -242,12 +242,15 @@ export function TransactionListPage() {
       title: '결제 시각',
       dataIndex: 'createdAt',
       width: 100,
-      // 키보드로도 상세에 갈 수 있게 시각은 링크로 둔다
-      render: (value: string, t) => (
-        <Link className="tx-detail-link" to={detailPath(t.paymentId)}>
-          {time(value)}
-        </Link>
-      ),
+      // 키보드로도 상세에 갈 수 있게 시각은 링크로 둔다. 담당 사건 고객이 아닌 결제는 글자만 (#732)
+      render: (value: string, t) =>
+        t.detailAllowed ? (
+          <Link className="tx-detail-link" to={detailPath(t.paymentId)}>
+            {time(value)}
+          </Link>
+        ) : (
+          time(value)
+        ),
     },
     {
       title: '금액',
@@ -404,7 +407,7 @@ export function TransactionListPage() {
     <div>
       <PageHeader
         title="거래 내역"
-        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 줄을 누르면 거래 상세, 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
+        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 담당 사건 고객의 결제는 줄을 눌러 상세를 볼 수 있고, 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
       />
       <Card className="dw-table-card">
         <div className="dw-table-toolbar">
@@ -514,12 +517,17 @@ export function TransactionListPage() {
           loading={loading}
           size="middle"
           // 줄을 누르면 상세 (#732) — 펼치기 대신 1건씩 열어 열람 기록이 남게 한다
-          onRow={(t) => ({
-            className: 'tx-row',
-            onClick: (event) => {
-              if (!ownsClick(event.target)) navigate(detailPath(t.paymentId))
-            },
-          })}
+          // 담당 사건 고객의 결제만 누를 수 있다 — 나머지 줄은 눌러도 아무 일이 없다(서버도 막는다)
+          onRow={(t) =>
+            t.detailAllowed
+              ? {
+                  className: 'tx-row',
+                  onClick: (event) => {
+                    if (!ownsClick(event.target)) navigate(detailPath(t.paymentId))
+                  },
+                }
+              : {}
+          }
           scroll={{ x: 920 }}
           pagination={{
             current: query.page,

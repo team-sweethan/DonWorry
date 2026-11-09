@@ -55,7 +55,8 @@ public class InsiderDetectionService {
     private static final Set<StaffAccessDenyReason> OUT_OF_SCOPE = Set.of(
             StaffAccessDenyReason.NOT_ASSIGNEE,
             StaffAccessDenyReason.PAYMENT_NOT_IN_CASE,
-            StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE);
+            StaffAccessDenyReason.EXPORT_OUT_OF_SCOPE,
+            StaffAccessDenyReason.TRANSACTION_DETAIL_OUT_OF_SCOPE);
     // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
     private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
             Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
@@ -72,13 +73,12 @@ public class InsiderDetectionService {
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
-        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람 · 거래 목록 조회 · 내보내기 · 거래 상세 열람만 센다(사건 화면 열람은 세지 않음)
+        // ADMIN 접근은 이 규칙의 대상이 아니다. 담당 밖 거부 · 원문 열람 · 거래 목록 조회 · 내보내기만 센다(사건 화면 열람은 세지 않음)
         if (!SECURITY_STAFF.equals(event.actorRole())) return;
         boolean outOfScope = isOutOfScopeDenial(event);
         boolean rawView = isRawView(event);
         boolean listView = isTransactionRead(event);
-        boolean customerLookup = isCustomerLookup(event);
-        if (!outOfScope && !rawView && !customerLookup) return;
+        if (!outOfScope && !rawView && !listView) return;
 
         Long staffId = event.staffId();
         alerts.lockDetectionState(staffId);
@@ -93,7 +93,7 @@ public class InsiderDetectionService {
             if (switches.counts(InsiderRule.INS_07, at)) checkIns07(event);
         }
         boolean ins08 = listView && switches.counts(InsiderRule.INS_08, at);
-        boolean ins09 = customerLookup && switches.counts(InsiderRule.INS_09, at);
+        boolean ins09 = listView && switches.counts(InsiderRule.INS_09, at);
         if (ins08 || ins09) {
             // 담당 범위는 지금 배정 기준이다 — 지난 시점의 배정 이력은 따로 남기지 않는다
             StaffCaseScope scope = scopeReader.findScope(staffId, at.minus(properties.scopeClosedLookback()));
@@ -270,13 +270,13 @@ public class InsiderDetectionService {
         return rows > 0 && rows >= minRows && linkedRows(window, scope) < rows * properties.ins08MaxLinkedRatio();
     }
 
-    // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색(목록 · 내보내기) · 상세 열람하면 주의, 더 많으면 높음
-    // 같은 고객을 여러 쪽 넘기거나 그 고객 결제 여러 건을 연 건 1명. 요약에는 고객 번호를 넣지 않고 숫자만
+    // INS-09 무관 고객 반복 검색 — 담당 사건에 없는 서로 다른 고객 번호를 N명 이상 검색(목록 · 내보내기)하면 주의, 더 많으면 높음
+    // 같은 고객을 여러 쪽 넘긴 건 1명. 요약에는 고객 번호를 넣지 않고 숫자만
     private void checkIns09(Long staffId, Instant at, StaffCaseScope scope, Instant enabledAt) {
         Duration window = properties.ins09Window();
         List<StaffAccessRecorded> searches =
                 recent(staffId, InsiderRule.INS_09, at.minus(window), at.plus(window), enabledAt).stream()
-                        .filter(v -> isCustomerLookup(v) && v.customerRef() != null)
+                        .filter(v -> isTransactionRead(v) && v.customerRef() != null)
                         .filter(v -> !scope.hasCustomer(v.merchantId(), v.customerRef()))
                         .toList();
         List<StaffAccessRecorded> high =
@@ -289,7 +289,7 @@ public class InsiderDetectionService {
                 staffId,
                 InsiderRule.INS_09,
                 high.isEmpty() ? InsiderAlertSeverity.CAUTION : InsiderAlertSeverity.HIGH,
-                "%d분 안에 담당 사건과 무관한 고객 %d명 검색 · 열람".formatted(window.toMinutes(), distinctCustomers(hit)),
+                "%d분 안에 담당 사건과 무관한 고객 %d명 검색".formatted(window.toMinutes(), distinctCustomers(hit)),
                 hit);
     }
 
@@ -467,14 +467,6 @@ public class InsiderDetectionService {
         return e.result() == StaffAccessResult.ALLOWED
                 && (e.accessType() == StaffAccessType.TRANSACTION_LIST_VIEW
                         || e.accessType() == StaffAccessType.TRANSACTION_EXPORT);
-    }
-
-    // INS-09가 세는 고객 조회 — 목록 · 내보내기에 거래 상세 1건 열람을 더한다 (#732)
-    // 상세 열람은 INS-08(행 수 기준 대량 조회)에는 넣지 않는다 — 1건씩이라 행 수로는 신호가 되지 않는다
-    private static boolean isCustomerLookup(StaffAccessRecorded e) {
-        return isTransactionRead(e)
-                || (e.result() == StaffAccessResult.ALLOWED
-                        && e.accessType() == StaffAccessType.TRANSACTION_DETAIL_VIEW);
     }
 
     private static String signalGroup(InsiderRule rule) {

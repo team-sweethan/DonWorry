@@ -6,6 +6,7 @@ import {
   Card,
   Col,
   Descriptions,
+  Result,
   Row,
   Space,
   Spin,
@@ -41,7 +42,7 @@ const missing = <Typography.Text type="secondary">정보 없음</Typography.Text
 type CaseLink =
   { status: 'loading' } | { status: 'loaded'; caseId: string | null } | { status: 'failed' }
 
-// 거래 1건 상세 (#732) — 목록 줄 펼치기 대신. 열 때마다 서버에 열람 기록이 남는다(화면에 안내는 두지 않음, 11/09 결정)
+// 거래 1건 상세 (#732) — 목록 줄 펼치기 대신. 보안 직원은 담당 사건 고객의 결제만 열린다. 열 때마다 서버에 열람 기록이 남는다(화면에 안내는 두지 않음, 11/09 결정)
 // 여러 결제 비교 · FDS 점수 · 위험 신호는 여기서 다시 그리지 않고 경보 상세 · AI 보고서로 넘긴다 (ADR-0082 3.3)
 export function TransactionDetailPage() {
   const { paymentId = '' } = useParams()
@@ -49,6 +50,7 @@ export function TransactionDetailPage() {
   const [detail, setDetail] = useState<PaymentTransactionDetail | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [outOfScope, setOutOfScope] = useState<string | null>(null)
   const [merchantName, setMerchantName] = useState<string | null>(null)
   const [caseLink, setCaseLink] = useState<CaseLink>({ status: 'loading' })
 
@@ -78,6 +80,12 @@ export function TransactionDetailPage() {
       .catch((requestError: unknown) => {
         if (!alive) return
         if (requestError instanceof ApiError && requestError.status === 404) setNotFound(true)
+        // 담당 사건 고객이 아닌 결제 (#732) — 정지가 아니라 업무 안내라 서버 문구를 그대로 보여 준다
+        else if (
+          requestError instanceof ApiError &&
+          requestError.code === 'PAYMENT_TRANSACTION_OUT_OF_SCOPE'
+        )
+          setOutOfScope(requestError.detail ?? '담당 사건 고객의 결제만 상세를 볼 수 있습니다.')
         else setError('거래 상세를 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
       })
     return () => {
@@ -107,6 +115,18 @@ export function TransactionDetailPage() {
   )
 
   if (notFound) return <ScreenResult kind="404" homePath={LIST_PATH} />
+  if (outOfScope)
+    return (
+      <div>
+        {header}
+        <Result
+          status="warning"
+          title="이 결제는 볼 수 없습니다"
+          subTitle={outOfScope}
+          extra={<Button onClick={backToList}>거래 내역으로</Button>}
+        />
+      </div>
+    )
   if (error)
     return (
       <div>
@@ -236,6 +256,16 @@ export function TransactionDetailPage() {
                   {detail.maskedBuyerEmail ?? missing}
                 </Descriptions.Item>
               </Descriptions>
+              {/* 주문자 이름 · 전화는 사건에 묶인 결제만 사건 화면에서 본다 (#619 · ADR-0082 원칙 1, 11/09 결정) */}
+              {caseLink.status === 'loaded' && caseLink.caseId !== null && (
+                <Typography.Text type="secondary">
+                  주문자 이름 · 전화는{' '}
+                  <Typography.Link onClick={() => navigate(`/security/cases/${caseLink.caseId}`)}>
+                    Case {caseLink.caseId} › 주문자 정보
+                  </Typography.Link>
+                  에서 볼 수 있어요.
+                </Typography.Text>
+              )}
             </Card>
           </Col>
           <Col xs={24} lg={12}>

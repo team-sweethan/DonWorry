@@ -16,4 +16,6 @@ public record PaymentTransactionResponse(
         Long amount,
         String paymentStatus,
         String fdsResult,
-        Long evaluationId) {}
+        Long evaluationId,
+        // 이 직원이 거래 상세를 열 수 있는지 (#732) — 보안 직원은 담당 사건 고객의 결제만. 화면 편의이고 판정은 상세 조회가 한다
+        boolean detailAllowed) {}

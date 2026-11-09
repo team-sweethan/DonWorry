@@ -96,11 +96,10 @@ class PaymentTransactionsRecordFailureTests {
                 Instant.now().truncatedTo(ChronoUnit.SECONDS).minus(Duration.ofHours(1))));
         willThrow(new IllegalStateException("기록 저장 실패")).given(accessRecorder).recordAllowed(any());
 
+        // 관리자로 연다 — 보안 직원이면 담당 범위 검사(거부)에서 먼저 멈춰 허용 기록까지 가지 않는다
         var response = mvc.perform(get("/api/payment-transactions/{paymentId}", payment.getPaymentId())
-                        .with(SessionUserTestSupport.sessionUser(StaffSummary.builder()
-                                .userId(7L)
-                                .role("SECURITY_STAFF")
-                                .build())))
+                        .with(SessionUserTestSupport.sessionUser(
+                                StaffSummary.builder().userId(7L).role("ADMIN").build())))
                 .andReturn()
                 .getResponse();
 

@@ -47,7 +47,7 @@ public class InsiderRuleCatalogService {
                         .example("배정되지 않은 사건 %d곳을 %s 안에 차례로 열려다 막힘"
                                 .formatted(properties.ins01CautionCases(), span(properties.ins01Window())))
                         .standaloneDescription(
-                                "같은 사건 · 고객에 다시 시도한 것은 한 번으로 셉니다. 담당 아닌 고객의 거래 내역 내보내기 거부도 셉니다. 닫힌 사건 거부는 세지 않습니다.")
+                                "같은 사건 · 고객에 다시 시도한 것은 한 번으로 셉니다. 담당 아닌 고객의 거래 내역 내보내기 · 거래 상세 거부도 셉니다. 닫힌 사건 거부는 세지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_03, opened, firstDay)
                         .condition("%s 안에 주문자 전체 전화번호 %d건 이상 열람"
@@ -89,15 +89,15 @@ public class InsiderRuleCatalogService {
                         .standaloneDescription("담당 사건 가맹점의 거래를 여러 쪽 넘겨 본 것은 세지 않습니다.")
                         .build(),
                 card(InsiderRule.INS_09, opened, firstDay)
-                        .condition("%s 안에 담당 사건과 무관한 고객 %d명 이상 검색 · 거래 상세 열람 (%d명부터 높음)"
+                        .condition("%s 안에 담당 사건과 무관한 고객 %d명 이상 검색 (%d명부터 높음)"
                                 .formatted(
                                         span(properties.ins09Window()),
                                         properties.ins09CautionCustomers(),
                                         properties.ins09HighCustomers()))
                         .resultDescription("주의 경보 · 많으면 높음 경보")
-                        .example("%s 동안 서로 다른 고객 %d명을 거래 목록에서 검색하거나 거래 상세로 열람"
+                        .example("%s 동안 서로 다른 고객 번호 %d명을 거래 목록에서 검색"
                                 .formatted(span(properties.ins09Window()), properties.ins09CautionCustomers()))
-                        .standaloneDescription("같은 고객을 여러 쪽 넘기거나 그 고객 결제 여러 건을 연 것은 1명으로 셉니다. 담당 사건 고객 열람은 세지 않습니다.")
+                        .standaloneDescription("같은 고객을 여러 쪽 넘긴 것은 1명으로 셉니다.")
                         .build());
     }
 

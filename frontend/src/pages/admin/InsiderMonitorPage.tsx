@@ -82,11 +82,7 @@ function EventText({ event }: { event: InsiderMonitorEvent }) {
         {event.itemCount !== null && rowCountTypes.has(event.type) && (
           <span>{`${event.itemCount}건`}</span>
         )}
-        {event.customerScope === 'UNRELATED' && (
-          <Tag color="gold">
-            {event.type === 'TRANSACTION_DETAIL_VIEW' ? '무관 고객 열람' : '무관 고객 검색'}
-          </Tag>
-        )}
+        {event.customerScope === 'UNRELATED' && <Tag color="gold">무관 고객 검색</Tag>}
         {event.customerScope === 'RELATED' && <Tag>담당 사건 고객</Tag>}
         {event.result === 'DENIED' && (
           <Tag color="red">{`거부 · ${denyLabel[event.denyReason ?? ''] ?? event.denyReason ?? ''}`}</Tag>

@@ -4,6 +4,7 @@ import com.donworry.payment.service.ExportOutOfScopeException;
 import com.donworry.payment.service.ExportTooLargeException;
 import com.donworry.payment.service.InsiderExportBlockedException;
 import com.donworry.payment.service.PaymentTransactionNotFoundException;
+import com.donworry.payment.service.TransactionDetailOutOfScopeException;
 import java.time.DateTimeException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.CacheControl;
@@ -36,6 +37,15 @@ public class PaymentTransactionsExceptionHandler extends ResponseEntityException
     @ExceptionHandler(PaymentTransactionNotFoundException.class)
     ResponseEntity<Object> notFound(PaymentTransactionNotFoundException e) {
         return problem(404, "PAYMENT_TRANSACTION_NOT_FOUND", "결제를 찾을 수 없습니다.");
+    }
+
+    // 범위 밖은 업무 안내다 (#732) — 내보내기 범위 밖(#730)과 같은 결
+    @ExceptionHandler(TransactionDetailOutOfScopeException.class)
+    ResponseEntity<Object> detailOutOfScope(TransactionDetailOutOfScopeException e) {
+        return problem(
+                403,
+                "PAYMENT_TRANSACTION_OUT_OF_SCOPE",
+                "담당 사건 고객의 결제만 상세를 볼 수 있습니다. 사건 상세의 [이 고객 거래 내역 보기]에서 열어 주세요.");
     }
 
     @ExceptionHandler(ExportTooLargeException.class)

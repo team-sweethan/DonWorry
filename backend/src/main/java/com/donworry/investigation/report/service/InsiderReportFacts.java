@@ -160,7 +160,7 @@ final class InsiderReportFacts {
         List<String> normal = new ArrayList<>();
         normal.add("코드는 행동의 횟수와 순서만 셌습니다. 업무상 이유가 있었는지는 본인 소명과 담당 사건 기록으로 확인해야 합니다.");
         if (rules.contains(InsiderRule.INS_01)) {
-            normal.add("담당이 아닌 사건에 접근하거나 담당이 아닌 고객의 거래를 내보내려 한 시각에 담당 변경 요청 · 인수인계가 있었는지 사건 배정 이력으로 확인할 수 있습니다.");
+            normal.add("담당이 아닌 사건에 접근하거나 담당이 아닌 고객의 거래를 내보내거나 열려 한 시각에 담당 변경 요청 · 인수인계가 있었는지 사건 배정 이력으로 확인할 수 있습니다.");
         }
         if (rules.contains(InsiderRule.INS_03)) {
             normal.add(
@@ -170,7 +170,7 @@ final class InsiderReportFacts {
             normal.add("처음 보는 브라우저로 로그인한 직후의 행동이라, 본인이 아닐 가능성(계정 도용)도 함께 확인해야 합니다.");
         }
         if (rules.contains(InsiderRule.INS_08) || rules.contains(InsiderRule.INS_09)) {
-            normal.add("거래 목록을 많이 보거나 여러 고객을 검색 · 열람한 것은 가맹점 문의 · 차지백 처리처럼 담당 사건과 이어진 업무였다면 설명될 수 있습니다.");
+            normal.add("거래 목록을 많이 보거나 여러 고객을 검색한 것은 가맹점 문의 · 차지백 처리처럼 담당 사건과 이어진 업무였다면 설명될 수 있습니다.");
         }
 
         List<String> released = new ArrayList<>();
