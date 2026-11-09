@@ -39,3 +39,16 @@ export function staffByUrgency(staff: InsiderMonitorStaff[]) {
       a.staffName.localeCompare(b.staffName, 'ko'),
   )
 }
+
+/**
+ * 닮은 실제 사고 카드를 고를 단계 — 관리자가 판정할 내부자 사건이 열려 있을 때만 (#740).
+ * 판정이 끝나면 정지가 남아 있어도 카드를 내리지 않는다(더 판단할 것이 없음).
+ * 사건이 열린 채 정지면 내보내기 차단이다 — 관리자 판정 정지는 사건을 닫는 판정과 함께 걸린다
+ */
+export function incidentFor(
+  staff: Pick<InsiderMonitorStaff, 'stage' | 'openInsiderCaseId'>,
+): 'INSIDER_CASE' | 'BLOCKED' | null {
+  if (staff.openInsiderCaseId === null) return null
+  if (staff.stage === 'BLOCKED' || staff.stage === 'INSIDER_CASE') return staff.stage
+  return null
+}

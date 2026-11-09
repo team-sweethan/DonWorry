@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { InsiderAlert } from '../src/api/insiderAlerts.ts'
 import type { InsiderMonitorEvent, InsiderMonitorStaff } from '../src/api/insiderMonitor.ts'
-import { staffByUrgency } from '../src/pages/admin/insiderOfficeView.ts'
+import { incidentFor, staffByUrgency } from '../src/pages/admin/insiderOfficeView.ts'
 import {
   focusGroupFirst,
   groupAlertsByStaff,
@@ -235,4 +235,17 @@ test('관제에서 온 직원 묶음이 맨 위, 없으면 순서 그대로', ()
     [1, 2, 3],
   )
   assert.equal(focusGroupFirst(groups, null), groups)
+})
+
+// 판정이 끝난 직원은 정지가 남아도 사고 카드가 없다 — 판정 대기 중일 때만 (#740)
+test('incidentFor_whenDecidedButStillLocked_showsNoIncident', () => {
+  assert.equal(
+    incidentFor(member({ stage: 'BLOCKED', locked: true, openInsiderCaseId: null })),
+    null,
+  )
+  assert.equal(
+    incidentFor(member({ stage: 'BLOCKED', locked: true, openInsiderCaseId: 7 })),
+    'BLOCKED',
+  )
+  assert.equal(incidentFor(member({ stage: 'INSIDER_CASE', openInsiderCaseId: 7 })), 'INSIDER_CASE')
 })
