@@ -14,6 +14,7 @@ import { dateTime } from './case/caseLabels'
 import { ReportFull } from './case/ReportFull'
 import type { NowProgress } from './case/ReportPastCompare'
 import { ReportPrintMarks } from './case/ReportPrint'
+import { ReportQuestions } from './case/ReportQuestions'
 import { ReportTrace } from './case/ReportTrace'
 
 // AI 보고서 전문 (#292). Case 상세 조회 API를 그대로 쓰고, 판정은 Case 상세에서 한다
@@ -195,6 +196,7 @@ export function CaseReportPage() {
                 label={`Case ${securityCase.caseId} · 고객 ${customerPart(securityCase.customerRef)} · 보고서 v${picked.report.reportVersion}`}
                 refreshKey={refreshKey}
                 progress={progress}
+                evidenceMismatch={picked.evidenceMismatch}
                 onDecide={canDecide ? () => navigate(casePath, { state: listReturn }) : undefined}
               />
             </div>
@@ -210,12 +212,14 @@ function ReportState({
   label,
   refreshKey,
   progress,
+  evidenceMismatch,
   onDecide,
 }: {
   report: AiReport
   label: string
   refreshKey: number
   progress: NowProgress
+  evidenceMismatch: boolean
   onDecide?: () => void
 }) {
   if (report.status === 'PENDING' || report.status === 'RUNNING') {
@@ -240,14 +244,24 @@ function ReportState({
   }
   if (!report.reportBody) return <Empty description="보고서 내용이 없습니다." />
   // 버전마다 새로 그린다 — 판정 전에 확인할 것 체크가 다른 버전으로 넘어가지 않게 (#591)
+  // 질문 칸도 보고서마다 새로 그린다 (#753) — 질문은 보고서 하나에 묻는다. [새로고침]이면 목록도 다시 받는다
   return (
-    <ReportFull
-      key={report.reportId}
-      body={report.reportBody}
-      label={label}
-      refreshKey={refreshKey}
-      progress={progress}
-      onDecide={onDecide}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <ReportFull
+        key={report.reportId}
+        body={report.reportBody}
+        label={label}
+        refreshKey={refreshKey}
+        progress={progress}
+        onDecide={onDecide}
+      />
+      <ReportQuestions
+        key={`${report.reportId}:${refreshKey}`}
+        caseId={report.caseId}
+        reportId={report.reportId}
+        body={report.reportBody}
+        evidenceMismatch={evidenceMismatch}
+      />
+    </div>
   )
 }
