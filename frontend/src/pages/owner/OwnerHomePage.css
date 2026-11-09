@@ -7,9 +7,9 @@
 }
 .oh-connection {
   padding: 28px 32px;
-  border: 1px solid #dce5f3;
+  border: 1px solid #e7e1d5;
   border-radius: 18px;
-  background: linear-gradient(120deg, #f5f8ff, #fff 70%);
+  background: linear-gradient(120deg, #fff8e7, #fff 70%);
 }
 .oh-connection.is-connected {
   border-color: #d5e9e2;
@@ -47,8 +47,8 @@
   height: 56px;
   place-items: center;
   border-radius: 16px;
-  color: #2563eb;
-  background: #e7efff;
+  color: #886211;
+  background: #fff1ce;
   font-size: 26px;
 }
 .is-connected .oh-connection-icon {
@@ -83,18 +83,18 @@
   padding: 12px 20px;
   border-radius: 10px;
   color: #fff;
-  background: #2463db;
+  background: #886211;
   font-weight: 650;
   font-size: 14px;
-  box-shadow: 0 3px 8px #2563eb18;
+  box-shadow: 0 3px 8px #88621118;
 }
 .oh-primary-link:hover {
   color: #fff;
-  background: #1d4fb8;
+  background: #6b4b0a;
 }
 .oh-primary-link:focus-visible,
 .oh-menu-card:focus-visible {
-  outline: 3px solid #2563eb;
+  outline: 3px solid #886211;
   outline-offset: 4px;
 }
 .oh-details {
@@ -128,7 +128,7 @@
   margin: 26px 0 0;
   padding: 22px 0 0;
   list-style: none;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e7e1d5;
 }
 .oh-steps li {
   display: flex;
@@ -142,16 +142,16 @@
   place-items: center;
   width: 25px;
   height: 25px;
-  background: #e9edf4;
+  background: #f5f1e7;
   border-radius: 50%;
   font-size: 12px;
 }
 .oh-steps .is-current {
-  color: #1d4ed8;
+  color: #886211;
   font-weight: 650;
 }
 .oh-steps .is-current > span {
-  background: #2563eb;
+  background: #886211;
   color: #fff;
 }
 .oh-steps .is-done > span {
@@ -181,15 +181,15 @@
 .oh-menu-card {
   position: relative;
   padding: 24px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e7e1d5;
   background: #fff;
   border-radius: 14px;
   color: #1e293b;
 }
 .oh-menu-card:hover {
-  color: #1d4ed8;
-  border-color: #b8cef5;
-  box-shadow: 0 4px 16px #223b6810;
+  color: #886211;
+  border-color: #d8c9a9;
+  box-shadow: 0 4px 16px #88621110;
 }
 .oh-menu-icon {
   display: inline-grid;
@@ -197,8 +197,8 @@
   width: 40px;
   height: 40px;
   border-radius: 11px;
-  background: #f0f5fc;
-  color: #4b6a98;
+  background: #fff8e7;
+  color: #886211;
   font-size: 20px;
 }
 .oh-menu-card h3 {
@@ -215,19 +215,19 @@
   position: absolute;
   top: 30px;
   right: 24px;
-  color: #7085a4;
+  color: #756b5b;
 }
 .oh-no-menus {
   display: flex;
   align-items: flex-start;
   gap: 16px;
   padding: 24px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #e7e1d5;
   border-radius: 14px;
   background: #fff;
 }
 .oh-no-menus > .anticon {
-  color: #7085a4;
+  color: #756b5b;
   font-size: 24px;
 }
 .oh-no-menus h3 {
@@ -297,7 +297,7 @@
     height: auto;
     padding: 10px 16px;
     border-right: 0;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e7e1d5;
   }
   .admin-viewport:has(.oh-home) .dw-sidebar nav {
     display: flex;

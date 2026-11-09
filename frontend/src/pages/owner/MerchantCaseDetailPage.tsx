@@ -128,7 +128,7 @@ export function MerchantCaseDetailPage() {
           </>
         }
       />
-      <Card style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
+      <Card style={{ marginBottom: 16, borderColor: '#e7e1d5' }}>
         <Descriptions column={{ xs: 1, sm: 2, lg: 4 }} size="small">
           <Descriptions.Item label="상태">
             <CodeTag value={merchantCaseStatusLabel[result.displayStatus]} />
@@ -140,7 +140,7 @@ export function MerchantCaseDetailPage() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
-      <Card title="처리 안내" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
+      <Card title="처리 안내" style={{ marginBottom: 16, borderColor: '#e7e1d5' }}>
         {result.summary?.length ? (
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {result.summary.map((line, i) => (
@@ -153,7 +153,7 @@ export function MerchantCaseDetailPage() {
           </Typography.Text>
         )}
       </Card>
-      <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
+      <Card className="dw-table-card" style={{ borderColor: '#e7e1d5' }}>
         <div className="dw-table-toolbar">
           <div>
             <h3>결제별 결과</h3>

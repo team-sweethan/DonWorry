@@ -136,7 +136,7 @@ const ownerNav: { title: string; items: { icon: ReactNode; label: string }[] }[]
     items: [
       { icon: <CalendarOutlined />, label: '정산 내역' },
       { icon: <WalletOutlined />, label: '자금 현황' },
-      { icon: <BankOutlined />, label: '연계 대출 상품' },
+      { icon: <BankOutlined />, label: '운영자금 상품' },
     ],
   },
 ]
