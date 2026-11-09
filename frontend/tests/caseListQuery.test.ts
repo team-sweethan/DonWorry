@@ -9,6 +9,7 @@ import {
   defaultCaseListQuery,
   matchesCaseListQuery,
   parseCaseListQuery,
+  riskBand,
 } from '../src/utils/caseListQuery.ts'
 
 const now = Date.parse('2026-10-27T12:00:00Z')
@@ -39,12 +40,13 @@ test('빈 주소는 기본 조건(열린 Case, 1페이지)이다', () => {
 })
 
 test('주소의 조건을 읽고, 같은 조건을 다시 주소로 만든다', () => {
-  const search = '?status=DECISION_PENDING&sla=exceeded&report=running&q=abc&page=3'
+  const search = '?status=DECISION_PENDING&sla=exceeded&report=running&risk=deny&q=abc&page=3'
   const query = parse(search)
   assert.deepEqual(query, {
     status: 'DECISION_PENDING',
     slaExceeded: true,
     report: 'running',
+    risk: 'deny',
     q: 'abc',
     page: 3,
   })
@@ -52,7 +54,10 @@ test('주소의 조건을 읽고, 같은 조건을 다시 주소로 만든다', 
 })
 
 test('모르는 값은 무시하고 기본값을 쓴다', () => {
-  assert.deepEqual(parse('?status=WRONG&sla=yes&report=done&page=-2'), defaultCaseListQuery)
+  assert.deepEqual(
+    parse('?status=WRONG&sla=yes&report=done&risk=high&page=-2'),
+    defaultCaseListQuery,
+  )
   assert.equal(parse('?page=1.5').page, 1)
   assert.equal(parse('?page=abc').page, 1)
 })
@@ -108,4 +113,19 @@ test('목록 탭은 상태 조건에서 정해지고, 탭을 누르면 그 탭�
   assert.deepEqual(caseListTabPreset('ACTIVE'), { status: 'OPEN_ONLY' })
   assert.deepEqual(caseListTabPreset('CLOSED'), { status: 'CLOSED', slaExceeded: false })
   assert.deepEqual(caseListTabPreset('ALL'), { status: 'ALL' })
+})
+
+test('위험도 구간은 FDS 판정 구간(50 · 80)과 같고, 점수 없음은 따로 센다', () => {
+  assert.equal(riskBand(80), 'deny')
+  assert.equal(riskBand(79), 'review')
+  assert.equal(riskBand(50), 'review')
+  assert.equal(riskBand(49), 'low')
+  assert.equal(riskBand(null), 'none')
+  const query = { ...defaultCaseListQuery, risk: 'deny' as const }
+  assert.equal(matchesCaseListQuery(make({ maxRiskScore: 92 }), query, now), true)
+  assert.equal(matchesCaseListQuery(make({ maxRiskScore: 65 }), query, now), false)
+  assert.equal(
+    matchesCaseListQuery(make({ maxRiskScore: null }), { ...query, risk: 'none' }, now),
+    true,
+  )
 })

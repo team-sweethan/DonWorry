@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test tests/*.test.ts"
+    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test tests/*.test.ts",
+    "preview:security-home": "node scripts/preview-security-home.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

@@ -9,11 +9,30 @@ import { slaState } from './caseRules.ts'
 export type StatusFilter = 'OPEN_ONLY' | 'ALL' | CaseStatus
 /** running = 생성 대기 · 생성 중, failed = 생성 실패 */
 export type ReportFilter = 'running' | 'failed'
+/**
+ * 위험도 = 소속 결제 FDS 최고 점수. 구간은 백엔드 FDS 판정 구간과 같다
+ * (FdsEvaluationTransactionService REVIEW_MIN_SCORE 50 · DENY_MIN_SCORE 80, ReportFull 게이지와 같은 기준).
+ * none = 결제 점수를 하나라도 못 불러와 최고 점수가 없는 Case
+ */
+export type RiskFilter = 'deny' | 'review' | 'low' | 'none'
+
+export const FDS_REVIEW_MIN_SCORE = 50
+export const FDS_DENY_MIN_SCORE = 80
+
+export function riskBand(score: number | null): RiskFilter {
+  if (score === null) return 'none'
+  if (score >= FDS_DENY_MIN_SCORE) return 'deny'
+  if (score >= FDS_REVIEW_MIN_SCORE) return 'review'
+  return 'low'
+}
+
+const riskFilters: RiskFilter[] = ['deny', 'review', 'low', 'none']
 
 export type CaseListQuery = {
   status: StatusFilter
   slaExceeded: boolean
   report: ReportFilter | null
+  risk: RiskFilter | null
   q: string
   page: number
 }
@@ -22,6 +41,7 @@ export const defaultCaseListQuery: CaseListQuery = {
   status: 'OPEN_ONLY',
   slaExceeded: false,
   report: null,
+  risk: null,
   q: '',
   page: 1,
 }
@@ -40,11 +60,13 @@ const statuses: StatusFilter[] = [
 export function parseCaseListQuery(params: URLSearchParams): CaseListQuery {
   const status = statuses.find((s) => s === params.get('status')) ?? 'OPEN_ONLY'
   const report = params.get('report')
+  const risk = riskFilters.find((r) => r === params.get('risk')) ?? null
   const page = Number(params.get('page'))
   return {
     status,
     slaExceeded: params.get('sla') === 'exceeded',
     report: report === 'running' || report === 'failed' ? report : null,
+    risk,
     q: params.get('q') ?? '',
     page: Number.isInteger(page) && page > 1 ? page : 1,
   }
@@ -57,6 +79,7 @@ export function caseListSearch(query: Partial<CaseListQuery>) {
   if (q.status !== 'OPEN_ONLY') params.set('status', q.status)
   if (q.slaExceeded) params.set('sla', 'exceeded')
   if (q.report) params.set('report', q.report)
+  if (q.risk) params.set('risk', q.risk)
   if (q.q) params.set('q', q.q)
   if (q.page > 1) params.set('page', String(q.page))
   const search = params.toString()
@@ -73,9 +96,10 @@ export function matchesCaseListQuery(c: CaseSummary, query: CaseListQuery, now =
     (query.report === 'running'
       ? c.latestReportStatus === 'PENDING' || c.latestReportStatus === 'RUNNING'
       : c.latestReportStatus === 'FAILED')
+  const risk = query.risk === null || riskBand(c.maxRiskScore) === query.risk
   const keyword = query.q.trim().toLowerCase()
   const text = !keyword || [c.caseId, c.customerRef].some((v) => v.toLowerCase().includes(keyword))
-  return status && sla && report && text
+  return status && sla && report && risk && text
 }
 
 /** 목록에서 상세로 갈 때 넘기는 Router state. 상세의 "목록으로"가 이 주소로 돌아간다. */

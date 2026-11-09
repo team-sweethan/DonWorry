@@ -36,6 +36,7 @@ import {
   type CaseListReturnState,
   type CaseListTab,
   type ReportFilter,
+  type RiskFilter,
   type StatusFilter,
 } from '../../utils/caseListQuery'
 import { readCaseListScope, saveCaseListScope } from '../../utils/caseListScope'
@@ -64,6 +65,15 @@ const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'AI 보고서 전체' },
   { value: 'running', label: '생성 대기 · 생성 중' },
   { value: 'failed', label: '생성 실패' },
+]
+
+// 구간은 FDS 판정 구간과 같다 (caseListQuery riskBand). 보안 홈 위험도 그래프에서 이 조건으로 들어온다
+const riskOptions: Array<{ value: RiskFilter | 'ALL'; label: string }> = [
+  { value: 'ALL', label: '위험도 전체' },
+  { value: 'deny', label: '80점 이상' },
+  { value: 'review', label: '50~79점' },
+  { value: 'low', label: '50점 미만' },
+  { value: 'none', label: '점수 없음' },
 ]
 
 const PAGE_SIZE = 20
@@ -168,41 +178,41 @@ export function CaseListPage() {
     title: string
     foot: string
     color?: string
-    preset: Pick<CaseListQuery, 'status' | 'slaExceeded' | 'report'>
+    preset: Pick<CaseListQuery, 'status' | 'slaExceeded' | 'report' | 'risk'>
     value: number
   }> = [
     {
       title: '열린 Case',
       foot: '종료 전 Case',
-      preset: { status: 'OPEN_ONLY', slaExceeded: false, report: null },
+      preset: { status: 'OPEN_ONLY', slaExceeded: false, report: null, risk: null },
       value: open.length,
     },
     {
       title: '판정 대기',
       foot: '직원 판정 필요',
       color: '#B45309',
-      preset: { status: 'DECISION_PENDING', slaExceeded: false, report: null },
+      preset: { status: 'DECISION_PENDING', slaExceeded: false, report: null, risk: null },
       value: open.filter((c) => c.status === 'DECISION_PENDING').length,
     },
     {
       title: '금융 처리 대기',
       foot: '매입 · 승인 취소 완료 대기 중',
       color: '#1D4ED8',
-      preset: { status: 'ACTION_PENDING', slaExceeded: false, report: null },
+      preset: { status: 'ACTION_PENDING', slaExceeded: false, report: null, risk: null },
       value: open.filter((c) => c.status === 'ACTION_PENDING').length,
     },
     {
       title: '금융 처리 실패',
       foot: '실패 사유 확인 필요',
       color: '#B91C1C',
-      preset: { status: 'ACTION_FAILED', slaExceeded: false, report: null },
+      preset: { status: 'ACTION_FAILED', slaExceeded: false, report: null, risk: null },
       value: open.filter((c) => c.status === 'ACTION_FAILED').length,
     },
     {
       title: 'AI 보고서 실패',
       foot: '수동 조사 · 판정 필요',
       color: '#B91C1C',
-      preset: { status: 'OPEN_ONLY', slaExceeded: false, report: 'failed' },
+      preset: { status: 'OPEN_ONLY', slaExceeded: false, report: 'failed', risk: null },
       value: open.filter((c) => c.latestReportStatus === 'FAILED').length,
     },
   ]
@@ -367,7 +377,8 @@ export function CaseListPage() {
             selected={
               query.status === card.preset.status &&
               query.slaExceeded === card.preset.slaExceeded &&
-              query.report === card.preset.report
+              query.report === card.preset.report &&
+              query.risk === card.preset.risk
             }
             onClick={() => setQuery(card.preset)}
           />
@@ -431,6 +442,13 @@ export function CaseListPage() {
               value={query.report ?? 'ALL'}
               onChange={(v: ReportFilter | 'ALL') => setQuery({ report: v === 'ALL' ? null : v })}
               options={reportOptions}
+            />
+            <Select
+              aria-label="위험도 필터"
+              style={{ width: 130 }}
+              value={query.risk ?? 'ALL'}
+              onChange={(v: RiskFilter | 'ALL') => setQuery({ risk: v === 'ALL' ? null : v })}
+              options={riskOptions}
             />
           </Space>
         </div>
