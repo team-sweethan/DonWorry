@@ -1,3 +1,4 @@
+import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
 import { previewPayoutReport } from './settlementPreviewData'
 import { koreanToday, formatWonInput, parseWonInput, chartMonthPeriod } from './financeView'
@@ -205,7 +206,12 @@ export function FinancePreview() {
           <PageHeader
             title="자금 현황"
             description="오늘 계산 잔액을 확인하고, 예정 정산과 미래 지출로 앞으로의 잔액을 예측합니다."
-            actions={headerActions}
+            actions={
+              <div className="finance-header-actions">
+                <FinanceGuide page="funds" />
+                {headerActions}
+              </div>
+            }
           />
           <Alert
             type="info"
@@ -277,7 +283,7 @@ export function FinancePreview() {
                   action={<Button onClick={() => manage('expenses')}>확인하기</Button>}
                 />
               )}
-              <div className="finance-period">
+              <div className="finance-period" data-guide="finance-period">
                 <Button onClick={() => preset(7)}>앞으로 7일</Button>
                 <Button onClick={() => preset(30)}>앞으로 30일</Button>
                 <Button
@@ -311,7 +317,7 @@ export function FinancePreview() {
                   />
                 </label>
                 <div className="finance-period-actions">
-                  <Button type="primary" onClick={() => manage()}>
+                  <Button data-guide="finance-settings" type="primary" onClick={() => manage()}>
                     잔액·지출 설정
                   </Button>
                 </div>
