@@ -133,22 +133,40 @@ export function matchesLogFilter(event: InsiderMonitorEvent, filter: LogFilter) 
 }
 
 /**
+ * 기록 한 줄을 구분하는 열쇠. 응답에 줄 ID가 없어 종류 · 시각 · 대상 번호를 묶는다.
+ * 서버는 초 단위 → 종류 → 실제 시각 순으로 정렬해 마지막 줄이 가장 늦은 시각이라는 보장이 없고,
+ * 경보처럼 늦게 기록되는 줄은 이미 본 줄보다 이른 시각으로 나중에 올 수 있다 — 그래서 시각이 아니라 "본 줄 목록"으로 센다
+ */
+export const eventKey = (event: InsiderMonitorEvent) =>
+  [
+    event.kind,
+    event.type,
+    event.occurredAt,
+    event.alertId,
+    event.caseId,
+    event.paymentId,
+    event.insiderCaseId,
+    event.result,
+  ].join('|')
+
+/**
  * 위로 올려 지난 기록을 보는 동안 새로 온 줄 수 — 지금 거르기에 맞는 줄만 센다(화면에 보이는 것과 같게).
- * seenAt = 맨 아래를 떠날 때의 마지막 줄 시각.
- * 받은 줄이 잘렸고(200줄) 가장 오래된 줄도 seenAt 뒤면 사이 줄이 빠졌으니 'many'
+ * seen = 맨 아래를 떠날 때 받아 둔 줄의 열쇠. 맨 아래에 있으면 null.
+ * 받은 줄이 잘렸고(200줄) 본 줄이 하나도 남지 않았으면 사이 줄이 빠졌으니 'many'
  */
 export function newLogCount(
   events: InsiderMonitorEvent[],
-  seenAt: string | null,
+  seen: ReadonlySet<string> | null,
   truncated: boolean,
   filter: LogFilter = 'ALL',
 ): number | 'many' {
-  if (seenAt === null || events.length === 0) return 0
-  const seen = at(seenAt)
-  const fresh = events.filter(
-    (event) => at(event.occurredAt) > seen && matchesLogFilter(event, filter),
-  ).length
-  // 빠진 사이 줄 중에 맞는 줄이 있었는지 알 수 없다 — 지금 맞는 새 줄이 하나라도 있을 때만 'many'
-  if (truncated && at(events[0].occurredAt) > seen && fresh > 0) return 'many'
+  if (seen === null || events.length === 0) return 0
+  let fresh = 0
+  let overlap = false
+  for (const event of events) {
+    if (seen.has(eventKey(event))) overlap = true
+    else if (matchesLogFilter(event, filter)) fresh += 1
+  }
+  if (truncated && !overlap && fresh > 0) return 'many'
   return fresh
 }

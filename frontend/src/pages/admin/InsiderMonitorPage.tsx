@@ -27,6 +27,7 @@ import {
   accessLabel,
   alertsPath,
   denyLabel,
+  eventKey,
   fieldLabel,
   logFilters,
   matchesLogFilter,
@@ -227,8 +228,8 @@ export function InsiderMonitorPage() {
   const scrollBox = useRef<HTMLDivElement>(null)
   // 관리자가 위로 올려 지난 줄을 보는 중이면 false — 자동으로 끌어내리지 않는다
   const followBottom = useRef(true)
-  // 맨 아래를 떠날 때의 마지막 줄 시각 — 그 뒤에 온 줄을 "새 기록 N줄"로 센다. 맨 아래에 있으면 null
-  const [seenAt, setSeenAt] = useState<string | null>(null)
+  // 맨 아래를 떠날 때 받아 둔 줄 — 그 밖의 줄을 "새 기록 N줄"로 센다. 맨 아래에 있으면 null
+  const [seen, setSeen] = useState<ReadonlySet<string> | null>(null)
   // 기록 거르기 — 직원을 바꿔도 유지한다
   const [logFilter, setLogFilter] = useState<LogFilter>('ALL')
   const focusDetail = useRef(false)
@@ -262,7 +263,7 @@ export function InsiderMonitorPage() {
           setSelected(null)
           setTimeline(null)
           followBottom.current = true
-          setSeenAt(null)
+          setSeen(null)
           autoPicked.current = false
         }
       }
@@ -328,7 +329,7 @@ export function InsiderMonitorPage() {
   const jumpToLatest = () => {
     const box = scrollBox.current
     followBottom.current = true
-    setSeenAt(null)
+    setSeen(null)
     if (box) box.scrollTop = box.scrollHeight
   }
 
@@ -339,7 +340,7 @@ export function InsiderMonitorPage() {
     if (selectedRef.current === staffId) return
     selectedRef.current = staffId
     followBottom.current = true
-    setSeenAt(null)
+    setSeen(null)
     focusDetail.current = true
     setSelected(staffId)
     setTimeline(null)
@@ -369,9 +370,7 @@ export function InsiderMonitorPage() {
     ? timeline.events.filter((event) => matchesLogFilter(event, logFilter))
     : []
   // 새 기록은 지금 거르기에 맞는 줄만 센다 — 버튼을 눌러 내려가면 그만큼 보이게
-  const newCount = timeline
-    ? newLogCount(timeline.events, seenAt, timeline.truncated, logFilter)
-    : 0
+  const newCount = timeline ? newLogCount(timeline.events, seen, timeline.truncated, logFilter) : 0
   // 타임라인이 오기 전에도 이름 · 단계는 목록에서 바로 보인다
   const selectedStaff = current ?? staff?.find((s) => s.staffId === selected) ?? null
   return (
@@ -533,7 +532,7 @@ export function InsiderMonitorPage() {
                               onClick={() => {
                                 resetPoll()
                                 followBottom.current = true
-                                setSeenAt(null)
+                                setSeen(null)
                                 setLogFilter(filter.key)
                               }}
                             >
@@ -557,10 +556,8 @@ export function InsiderMonitorPage() {
                               box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_GAP_PX
                             if (atBottom === followBottom.current) return
                             followBottom.current = atBottom
-                            // 맨 아래를 떠나는 순간의 마지막 줄 — 그 뒤 줄을 새 기록으로 센다
-                            setSeenAt(
-                              atBottom ? null : (timeline.events.at(-1)?.occurredAt ?? null),
-                            )
+                            // 맨 아래를 떠나는 순간 받아 둔 줄 전부 — 그 밖의 줄을 새 기록으로 센다
+                            setSeen(atBottom ? null : new Set(timeline.events.map(eventKey)))
                           }}
                         >
                           {shownEvents.length === 0 ? (

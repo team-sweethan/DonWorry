@@ -8,6 +8,7 @@ import {
   groupAlertsByStaff,
   matchesLogFilter,
   newLogCount,
+  eventKey,
   waitAge,
 } from '../src/pages/admin/insiderView.ts'
 
@@ -163,32 +164,60 @@ test('기록 거르기 — 위험 접근은 거부 · 무관 고객 · 전체 �
   assert.deepEqual(pick('LOGIN'), [loginOk, loginFail])
 })
 
-test('새 기록 수 — 맨 아래를 떠난 뒤 온 줄만, 잘려서 사이가 빠졌으면 many', () => {
-  const events = [
-    event({ occurredAt: '2026-11-09T01:00:00Z' }),
-    event({ occurredAt: '2026-11-09T01:00:05Z' }),
-    event({ occurredAt: '2026-11-09T01:00:10Z' }),
-  ]
-  assert.equal(newLogCount(events, null, false), 0)
-  assert.equal(newLogCount(events, '2026-11-09T01:00:00Z', false), 2)
-  assert.equal(newLogCount(events, '2026-11-09T01:00:10Z', false), 0)
-  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true), 'many')
-  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', false), 3)
+test('새 기록 수 — 맨 아래를 떠날 때 받아 둔 줄 밖의 줄만 센다', () => {
+  const a = event({ occurredAt: '2026-11-09T01:00:00Z' })
+  const b = event({ occurredAt: '2026-11-09T01:00:05Z', caseId: 1 })
+  const c = event({ occurredAt: '2026-11-09T01:00:10Z', caseId: 2 })
+  const seen = new Set([a, b].map(eventKey))
+  assert.equal(newLogCount([a, b, c], null, false), 0)
+  assert.equal(newLogCount([a, b], seen, false), 0)
+  assert.equal(newLogCount([a, b, c], seen, false), 1)
+})
+
+test('같은 초 안에서 마지막 줄이 가장 늦지 않아도 그대로면 새 기록 0 (서버: 초 → 종류 → 시각 순)', () => {
+  const access = event({ occurredAt: '2026-11-09T01:00:00.900Z', caseId: 1 })
+  const alertRow = event({
+    occurredAt: '2026-11-09T01:00:00.700Z',
+    kind: 'ALERT',
+    type: 'ALERT_RAISED',
+    alertId: 7,
+  })
+  const events = [access, alertRow]
+  assert.equal(newLogCount(events, new Set(events.map(eventKey)), false), 0)
+})
+
+test('이미 본 줄보다 이른 시각으로 늦게 들어온 줄도 새 기록으로 센다', () => {
+  const access = event({ occurredAt: '2026-11-09T01:00:00.900Z', caseId: 1 })
+  const lateAlert = event({
+    occurredAt: '2026-11-09T01:00:00.700Z',
+    kind: 'ALERT',
+    type: 'ALERT_RAISED',
+    alertId: 7,
+  })
+  assert.equal(newLogCount([lateAlert, access], new Set([eventKey(access)]), false), 1)
+})
+
+test('잘렸고 본 줄이 하나도 안 남았으면 many, 남아 있으면 정확한 수', () => {
+  const old = event({ occurredAt: '2026-11-09T00:59:00Z' })
+  const a = event({ occurredAt: '2026-11-09T01:00:00Z', caseId: 1 })
+  const b = event({ occurredAt: '2026-11-09T01:00:05Z', caseId: 2 })
+  assert.equal(newLogCount([a, b], new Set([eventKey(old)]), true), 'many')
+  assert.equal(newLogCount([a, b], new Set([eventKey(a)]), true), 1)
 })
 
 test('새 기록 수는 지금 거르기에 맞는 줄만 센다', () => {
-  const events = [
-    event({ occurredAt: '2026-11-09T01:00:00Z' }),
-    event({ occurredAt: '2026-11-09T01:00:05Z', kind: 'LOGIN', type: 'LOGIN_SUCCESS' }),
-    event({ occurredAt: '2026-11-09T01:00:10Z', kind: 'ALERT', type: 'ALERT_RAISED' }),
-  ]
-  const seen = '2026-11-09T01:00:00Z'
+  const base = event({ occurredAt: '2026-11-09T01:00:00Z' })
+  const login = event({ occurredAt: '2026-11-09T01:00:05Z', kind: 'LOGIN', type: 'LOGIN_SUCCESS' })
+  const raised = event({ occurredAt: '2026-11-09T01:00:10Z', kind: 'ALERT', type: 'ALERT_RAISED' })
+  const events = [base, login, raised]
+  const seen = new Set([eventKey(base)])
   assert.equal(newLogCount(events, seen, false, 'ALL'), 2)
   assert.equal(newLogCount(events, seen, false, 'ALERT'), 1)
   assert.equal(newLogCount(events, seen, false, 'RISK'), 0)
   // 잘렸어도 맞는 새 줄이 없으면 버튼을 띄우지 않는다
-  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true, 'RISK'), 0)
-  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true, 'ALERT'), 'many')
+  const gone = new Set(['없는 줄'])
+  assert.equal(newLogCount(events, gone, true, 'RISK'), 0)
+  assert.equal(newLogCount(events, gone, true, 'ALERT'), 'many')
 })
 
 test('관제에서 온 직원 묶음이 맨 위, 없으면 순서 그대로', () => {
