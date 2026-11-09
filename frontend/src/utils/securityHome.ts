@@ -73,3 +73,39 @@ export function homeView(cases: CaseSummary[], userId: number | null, now = Date
     openCases: mine.filter(isOpen),
   }
 }
+
+// 보고서 실패·기한 초과는 업무 상태와 겹치므로 분포에는 포함하지 않는다.
+export function homeDistribution(cases: CaseSummary[]) {
+  const groups = [
+    { key: 'investigating', label: '접수 · 조사', count: 0 },
+    { key: 'decision', label: '판정 대기', count: 0 },
+    { key: 'action', label: '금융 처리 대기', count: 0 },
+    { key: 'failed', label: '금융 처리 실패', count: 0 },
+  ]
+  for (const c of cases) {
+    if (c.status === 'CLOSED') continue
+    const index =
+      c.status === 'DECISION_PENDING'
+        ? 1
+        : c.status === 'ACTION_PENDING'
+          ? 2
+          : c.status === 'ACTION_FAILED'
+            ? 3
+            : 0
+    groups[index].count++
+  }
+  return groups
+}
+
+// 첫 조회와 재시도 전 실패에서는 신규 사건을 추측하지 않는다.
+export function newHomeCaseIds(
+  previous: CaseSummary[] | null,
+  current: CaseSummary[],
+  userId: number | null,
+) {
+  if (previous === null) return []
+  const known = new Set(casesInScope(previous, 'MINE', userId).map((c) => c.caseId))
+  return casesInScope(current, 'MINE', userId)
+    .filter((c) => isOpen(c) && !known.has(c.caseId))
+    .map((c) => c.caseId)
+}

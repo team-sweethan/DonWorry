@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { CaseSummary } from '../src/types/case.ts'
-import { homeCounts, homeView, priorityCases, priorityReason } from '../src/utils/securityHome.ts'
+import {
+  homeCounts,
+  homeDistribution,
+  homeView,
+  newHomeCaseIds,
+  priorityCases,
+  priorityReason,
+} from '../src/utils/securityHome.ts'
 
 const now = Date.parse('2026-10-27T12:00:00Z')
 const hoursAgo = (h: number) => new Date(now - h * 3_600_000).toISOString()
@@ -107,4 +114,44 @@ test('홈은 카드 건수 · 지금 처리할 사건 · 바로 이동 후보 �
     view.openCases.map((c) => c.caseId),
     ['1'],
   )
+})
+
+test('업무 분포는 보고서 실패와 기한 초과를 중복 합산하지 않고 미종료 사건과 합계가 같다', () => {
+  const cases = [
+    make('1', { status: 'OPEN' }),
+    make('2', { status: 'INVESTIGATING', latestReportStatus: 'RUNNING' }),
+    make('3', { latestReportStatus: 'FAILED', createdAt: hoursAgo(30) }),
+    make('4', { status: 'ACTION_PENDING' }),
+    make('5', { status: 'ACTION_FAILED', latestReportStatus: 'FAILED', createdAt: hoursAgo(30) }),
+    make('6', { status: 'CLOSED' }),
+  ]
+  const groups = homeDistribution(cases)
+  assert.deepEqual(
+    groups.map((group) => group.count),
+    [2, 1, 1, 1],
+  )
+  assert.equal(
+    groups.reduce((sum, group) => sum + group.count, 0),
+    5,
+  )
+  assert.ok(homeDistribution([]).every((group) => group.count === 0))
+})
+
+test('첫 조회에서는 강조하지 않고 이후 내 담당으로 들어온 미종료 사건만 강조한다', () => {
+  const current = [
+    make('known', { assigneeStaffId: '20', status: 'ACTION_FAILED' }),
+    make('new', { assigneeStaffId: '20' }),
+    make('reassigned', { assigneeStaffId: '20' }),
+    make('other', { assigneeStaffId: '30' }),
+    make('unassigned'),
+    make('closed', { assigneeStaffId: '20', status: 'CLOSED' }),
+  ]
+  const previous = [
+    make('known', { assigneeStaffId: '20' }),
+    make('reassigned', { assigneeStaffId: '30' }),
+  ]
+  assert.deepEqual(newHomeCaseIds(null, current, 20), [])
+  assert.deepEqual(newHomeCaseIds(previous, current, 20), ['new', 'reassigned'])
+  assert.deepEqual(newHomeCaseIds(current, current, 20), [])
+  assert.deepEqual(newHomeCaseIds(previous, current, null), [])
 })
