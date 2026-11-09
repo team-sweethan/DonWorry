@@ -5,28 +5,36 @@ import './loan-products.css'
 import { PageHeader } from '../../components/common/PageHeader'
 import './finance-page-header.css'
 
-import catalog from './loan-products.json'
+import groups from './loan-products.json'
 
-type Region = keyof typeof catalog
-type Product = (typeof catalog)['']['general'][number]
+type Product = (typeof groups.general)[number]
 type Scope = 'general' | 'special' | 'all'
 const pageSize = 9
+const productRegions = (product: Product) =>
+  product.rsdAreaPamtEqltIstm.split(',').map((region) => region.trim())
+const regions = [...new Set([...groups.general, ...groups.special].flatMap(productRegions))]
+  .filter((region) => region && region !== '-' && region !== '전국')
+  .sort((a, b) => a.localeCompare(b, 'ko'))
+
 export function LoanProductsPage() {
   const { pathname, search } = useLocation()
   const [selected, setSelected] = useState<Product | null>(null)
-  const [region, setRegion] = useState<Region>('')
+  const [region, setRegion] = useState('')
   const [scope, setScope] = useState<Scope>('general')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
-  const groups = catalog[region]
   const products = (
     scope === 'all' ? [...groups.general, ...groups.special] : groups[scope]
-  ).filter((product) =>
-    [product.finprdnm, product.ofrinstnm]
-      .join(' ')
-      .toLowerCase()
-      .includes(query.trim().toLowerCase()),
-  )
+  ).filter((product) => {
+    const areas = productRegions(product)
+    return (
+      (!region || areas.includes(region) || areas.includes('전국')) &&
+      [product.finprdnm, product.ofrinstnm]
+        .join(' ')
+        .toLowerCase()
+        .includes(query.trim().toLowerCase())
+    )
+  })
   const site = selected?.rltsite?.trim()
   const back = pathname.startsWith('/dev/')
     ? `/dev/funds${new URLSearchParams(search).get('sample') === '1' ? '?sample=1' : ''}`
@@ -61,10 +69,11 @@ export function LoanProductsPage() {
           <Select
             aria-label="지역"
             value={region}
-            options={Object.keys(catalog)
-              .sort((a, b) => a.localeCompare(b, 'ko'))
-              .map((value) => ({ value, label: value || '전체 지역' }))}
-            onChange={(value: Region) => {
+            options={[
+              { value: '', label: '전체 지역' },
+              ...regions.map((value) => ({ value, label: value })),
+            ]}
+            onChange={(value) => {
               setRegion(value)
               setPage(1)
             }}
