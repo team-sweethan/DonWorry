@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from typing import Any, Protocol
 
@@ -11,10 +12,12 @@ from app.agent.facts import Fact
 from app.agent.llm import LlmClient
 from app.agent.narrative import FactSentence, _repeats, _sentence_errors
 from app.agent.question_facts import (
+    ORDINALS,
     ReportView,
     UnsupportedReport,
     added_facts,
     previous_facts,
+    prompt_line,
     read_report,
     report_checks,
     report_facts,
@@ -96,7 +99,22 @@ def _run(
 
 
 def _facts_text(facts: list[AnswerFact]) -> str:
-    return "\n".join(f"{f.id}: {f.text}" for f in facts)
+    return "\n".join(prompt_line(f) for f in facts)
+
+
+# "3번 결제" · "3번째 결제"처럼 결제를 가리키는 순번만 숫자 검사에서 뺀다 (Codex 리뷰 #756)
+# 결제 수 이하라는 이유로 다른 숫자("다른 결제 2건")까지 통과시키지 않는다
+_PAYMENT_REF = re.compile(r"(?<![\d,.])(\d+)\s*번(?:째)?\s*결제")
+
+
+def _without_payment_refs(text: str, payment_count: int) -> str:
+    def word(m: re.Match[str]) -> str:
+        n = int(m.group(1))
+        if not 1 <= n <= min(payment_count, len(ORDINALS)):
+            return m.group(0)
+        return f"{ORDINALS[n - 1]} 번째 결제"
+
+    return _PAYMENT_REF.sub(word, text)
 
 
 # 앞 질문은 뜻을 알기 위한 맥락만 — 번호 없이 문장만 보인다 (앞 답 문장을 근거로 인용하지 못하게)
@@ -137,9 +155,11 @@ def validate_answer(
     if not answer.sentences:
         return None, ["kind가 ANSWER면 sentences를 하나 이상 써라"]
     by_id = {f.id: Fact(f.id, f.source, f.text, "", f.paymentId) for f in facts}
-    # "세 번째 결제"를 "3번 결제"로 불러도 되게 결제 순번은 허용한다
-    base = set(range(1, payment_count + 1))
-    errors = [e for s in answer.sentences for e in _sentence_errors(s, by_id, base)]
+    checked = [
+        FactSentence(text=_without_payment_refs(s.text, payment_count), facts=s.facts)
+        for s in answer.sentences
+    ]
+    errors = [e for s in checked for e in _sentence_errors(s, by_id, set())]
     errors += [
         f'같은 문장을 반복하지 마라: "{t}"' for t in _repeats([s.text for s in answer.sentences])
     ]

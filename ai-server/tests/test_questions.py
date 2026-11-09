@@ -8,13 +8,13 @@ from langchain_core.messages import ToolMessage
 from app.agent import question_prompts as qp
 from app.agent.llm import MockLlmClient
 from app.agent.question import HISTORY_90, LINKED_WINDOW, answer_question, validate_answer
-from app.agent.question_facts import computed_facts, read_report, report_facts
+from app.agent.question_facts import computed_facts, previous_facts, read_report, report_facts
 from app.client.spring import API_KEY_HEADER
 from app.config import Settings
 from app.controller.investigation_controller import get_api_key
 from app.controller.question_controller import get_question_service
 from app.main import app
-from app.schemas.question import QuestionRequest
+from app.schemas.question import PreviousTurn, QuestionRequest
 from app.schemas.tools import (
     HistoryPayment,
     LinkedMatch,
@@ -424,3 +424,83 @@ def test_answerQuestion_toolFailure_answersWithoutAddedFacts() -> None:
     assert tool_reply.content == qp.CHOOSE_TOOL_FAILED
     assert not any(fid.startswith("추가") for fid in _offered_ids(llm))
     assert result.status == "ANSWERED"
+
+
+# 넓혀 보기가 성공하면 새 사실(추가-N)이 조회 도구 · 시각과 함께 답의 근거로 남는다
+def test_answerQuestion_history90Chosen_citesAddedFactsWithRetrievedAt() -> None:
+    box = FakeBox()
+    reply = answer(("최근 90일에 이 고객의 다른 결제가 1건 있습니다.", ["추가-1"]))
+    llm = ScriptedLlm([[call(HISTORY_90)], None], [reply])
+
+    result = answer_question(question(question="평소에도 이 정도 써요?"), llm, box, SETTINGS)
+
+    assert box.calls == [("history", 90)]
+    assert [(c.toolName, c.status) for c in result.toolCalls] == [(HISTORY_90, "OK")]
+    assert result.status == "ANSWERED"
+    cited = {f.id: f for f in result.facts}
+    assert cited["추가-1"].source == "ADDED"
+    assert cited["추가-1"].toolName == "get_payment_history"
+    assert cited["추가-1"].retrievedAt == "2026-11-09T05:32:00Z"
+
+
+# Codex 리뷰(#756): 결제 순번(1~3)은 "3번 결제"처럼 결제를 가리킬 때만 허용한다
+# 이력-1은 "다른 결제 없음"인데 "2건"이 결제 수 이하라는 이유로 통과하면 틀린 건수가 나간다
+def test_answerQuestion_countWithinPaymentCountButNotInFact_isRejected() -> None:
+    wrong = answer(("최근 30일 이 고객의 다른 결제는 2건입니다.", ["이력-1"]))
+    llm = ScriptedLlm([None], [wrong, wrong])
+
+    result = answer_question(question(), llm, FakeBox(), SETTINGS)
+
+    assert result.status == "FAILED"
+    ok = answer(("3번 결제는 신규 기기 규칙에 걸렸습니다.", ["결제-3"]))
+    parsed, errors = validate_answer(ok, report_facts(read_report(REPORT)), 3)
+    assert parsed is not None and errors == []
+
+
+# Codex 리뷰(#756): 앞 질문의 조회값을 다시 넘길 때 원문은 그대로, 조회 시각은 한 번만
+# 같은 사실이 여러 번 이어 넘겨져도 하나로 본다
+def test_previousFacts_reusedAcrossTurns_keepsTextAndShowsRetrievedAtOnce() -> None:
+    text = "최근 90일 이 고객의 다른 결제 1건: 매입 완료 1건"
+    first = {
+        "id": "추가-1",
+        "text": text,
+        "source": "ADDED",
+        "toolName": "get_payment_history",
+        "retrievedAt": "2026-11-09T05:32:00Z",
+    }
+    turn1 = {"question": "평소 결제는?", "kind": "ANSWER", "sentences": [], "facts": [first]}
+    # 두 번째 답이 앞-1을 인용했다면 Spring은 답이 돌려준 사실 그대로 다음 질문에 싣는다
+    reused = previous_facts([PreviousTurn.model_validate(turn1)])[0].model_dump()
+    turn2 = {"question": "그럼 금액은?", "kind": "ANSWER", "sentences": [], "facts": [reused]}
+    previous = [turn1, turn2]
+    llm = ScriptedLlm([None], [OK])
+
+    answer_question(question(previous=previous), llm, FakeBox(), SETTINGS)
+
+    offered = [fid for fid in _offered_ids(llm) if fid.startswith("앞")]
+    assert offered == ["앞-1"]
+    prompt = str(llm.write_messages[0][-1].content)
+    assert prompt.count(text) == 1
+    assert prompt.count("11/09 14:32 조회") == 1
+
+
+# Codex 리뷰(#756): 보고서에 저장된 규칙 기준 · 이번 값 · 가산 점수도 번호 있는 사실로 준다
+def test_reportFacts_ruleHitDetails_includeCriterionObservedAndScore() -> None:
+    body = json.loads(json.dumps(REPORT))
+    body["paymentAnalyses"][2]["ruleHitDetails"].append(
+        {
+            "code": "HIGH_AMOUNT",
+            "name": "고액 결제",
+            "appliedScore": 35,
+            "evidenceId": "E-31-v1-02",
+            "criterion": "50만 원 이상",
+            "observed": "60만 원",
+        }
+    )
+    facts = report_facts(read_report(body))
+
+    rule = [f for f in facts if "고액 결제" in f.text and "기준" in f.text]
+    assert len(rule) == 1 and rule[0].paymentId == "9003"
+    reply = answer(("고액 결제 기준은 50만 원 이상이고 이번 값은 60만 원입니다.", [rule[0].id]))
+    parsed, errors = validate_answer(reply, facts, 3)
+    assert parsed is not None and errors == []

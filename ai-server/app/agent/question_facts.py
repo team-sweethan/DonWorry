@@ -17,7 +17,7 @@ from app.schemas.tools import (
 # 보고서 사실에는 결제 표가 없어 코드가 결제-N을, 합계 · 간격은 코드가 계산-N을 만든다
 # AI는 더하거나 빼지 않고 인용만 한다 (11/09 사용자 결정)
 
-_ORDINALS = ("첫", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열")
+ORDINALS = ("첫", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열")
 _LEVEL_KO = {"HIGH_RISK": "고위험", "CAUTION": "주의"}
 
 
@@ -59,7 +59,7 @@ def payment_names(view: ReportView) -> dict[str, str]:
     if len(ids) == 1:
         return {ids[0]: "이번 결제"}
     return {
-        pid: f"{_ORDINALS[i]} 번째 결제" if i < len(_ORDINALS) else f"{i + 1}번째 결제"
+        pid: f"{ORDINALS[i]} 번째 결제" if i < len(ORDINALS) else f"{i + 1}번째 결제"
         for i, pid in enumerate(ids)
     }
 
@@ -133,30 +133,58 @@ def report_facts(view: ReportView) -> list[AnswerFact]:
         )
         for n, p in enumerate(view.paymentAnalyses, start=1)
     ]
-    return facts + computed_facts(view)
+    return facts + rule_facts(view) + computed_facts(view)
+
+
+# 적중 규칙의 기준 · 이번 값 · 가산 점수 — 보고서에 저장된 값 그대로 (Codex 리뷰 #756)
+# 셋 다 없으면(예전 보고서) 이름은 결제-N에 있으니 만들지 않는다
+def rule_facts(view: ReportView) -> list[AnswerFact]:
+    names = payment_names(view)
+    lines: list[tuple[str, str]] = []
+    for p in view.paymentAnalyses:
+        for rule in p.ruleHitDetails:
+            parts = []
+            if rule.criterion:
+                parts.append(f"기준 {rule.criterion}")
+            if rule.observed:
+                parts.append(f"이번 값 {rule.observed}")
+            if rule.appliedScore is not None:
+                parts.append(f"가산 {rule.appliedScore}점")
+            if parts:
+                lines.append(
+                    (f"{names[p.paymentId]} · {rule.name}: " + " · ".join(parts), p.paymentId)
+                )
+    return [
+        AnswerFact(id=f"규칙-{n}", text=text, source="PAYMENT", paymentId=pid)
+        for n, (text, pid) in enumerate(lines, start=1)
+    ]
 
 
 # 앞 질문에서 새로 조회한 값 — 번호가 이번 추가-N과 겹치지 않게 앞-N으로 다시 붙인다
 # 앞 답 문장 자체는 넣지 않는다 (근거는 사실에서만)
+# 원문은 바꾸지 않는다 — 조회 시각은 AI에게 보일 때만 붙인다
+# (Codex 리뷰 #756: 원문에 붙이면 이어 넘길수록 시각이 쌓이고 같은 사실이 둘로 갈림)
 def previous_facts(previous: list[PreviousTurn]) -> list[AnswerFact]:
     added = [f for turn in previous for f in turn.facts if f.source in ("ADDED", "PREVIOUS")]
-    seen: set[str] = set()
+    seen: set[tuple[str | None, str]] = set()
     facts: list[AnswerFact] = []
     for fact in added:
-        if fact.text in seen:
+        key = (fact.toolName, fact.text)
+        if key in seen:
             continue
-        seen.add(fact.text)
-        when = f" ({_kst(fact.retrievedAt)} 조회)" if fact.retrievedAt else ""
-        facts.append(
-            fact.model_copy(
-                update={
-                    "id": f"앞-{len(facts) + 1}",
-                    "text": fact.text + when,
-                    "source": "PREVIOUS",
-                }
-            )
-        )
+        seen.add(key)
+        facts.append(fact.model_copy(update={"id": f"앞-{len(facts) + 1}", "source": "PREVIOUS"}))
     return facts
+
+
+# AI에게 보이는 사실 줄 — 앞 질문 조회값만 조회 시각을 붙인다
+def prompt_line(fact: AnswerFact) -> str:
+    when = (
+        f" ({_kst(fact.retrievedAt)} 조회)"
+        if fact.source == "PREVIOUS" and fact.retrievedAt
+        else ""
+    )
+    return f"{fact.id}: {fact.text}{when}"
 
 
 # 판정 질문 거절 때 보일 확인할 것 전체 — 결제별 징후의 확인할 것 + AI 추가 제안 (중복 제거)
