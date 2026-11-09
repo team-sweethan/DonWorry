@@ -1,4 +1,4 @@
-export const INTRO_COUNT_MS = 800
+export const INTRO_COUNT_MS = 1680
 export const INTRO_EXIT_MS = 320
 const INTRO_KEY = 'donworry.ui.landingIntroSeen'
 
