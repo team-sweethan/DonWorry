@@ -82,8 +82,8 @@ donworry:
     ins08-high-rows: 3000            #   (이 행 수 이상이면 높음 — 높음부터 내보내기 차단 · 정지, #651)
     ins08-max-linked-ratio: 0.3      #   담당 사건과 이어진 행이 이 비율 미만이면 주의
     ins09-window: 1h                 # INS-09 무관 고객 반복 검색: 이 시간 안 담당 사건에 없는
-    ins09-caution-customers: 10      #   서로 다른 고객 번호 N명이면 주의
-    ins09-high-customers: 30         #   이 인원 이상이면 높음 (#651)
+    ins09-caution-customers: 3       #   서로 다른 고객 번호 N명이면 주의 (#743, 10 → 3)
+    ins09-high-customers: 5          #   이 인원 이상이면 높음 (#651, #743 30 → 5)
     scope-closed-lookback: 30d       # INS-08 · 09의 담당 사건 = 열린 사건 + 이 기간 안에 닫힌 사건
   payment-transactions:
     # 거래 내역 CSV 내보내기 한 번에 받을 수 있는 최대 행 수 (#651). 넘으면 잘라 주지 않고 거절한다(조건을 좁혀 다시)

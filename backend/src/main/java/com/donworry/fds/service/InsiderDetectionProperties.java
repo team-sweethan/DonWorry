@@ -26,7 +26,7 @@ public record InsiderDetectionProperties(
         @DefaultValue("0.3") double ins08MaxLinkedRatio,
         // INS-09 주의: 이 시간 안 담당 사건에 없는 서로 다른 고객 번호 검색(목록 · 내보내기) N명. 높음(#651): 이 값 이상
         @DefaultValue("1h") Duration ins09Window,
-        @DefaultValue("10") int ins09CautionCustomers,
-        @DefaultValue("30") int ins09HighCustomers,
+        @DefaultValue("3") int ins09CautionCustomers,
+        @DefaultValue("5") int ins09HighCustomers,
         // INS-08 · 09의 "담당 사건": 열린 사건 + 이 기간 안에 닫힌 사건 (닫은 뒤 차지백 · 후속 문의)
         @DefaultValue("30d") Duration scopeClosedLookback) {}
