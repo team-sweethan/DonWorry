@@ -89,7 +89,7 @@ function OwnerHome({ user }: { user: NonNullable<ReturnType<typeof useAuth>['use
         }
       />
       <section
-        className={`oh-connection${connected ? ' is-connected' : ''}`}
+        className={`oh-connection${connected ? ' is-connected' : data?.status === 'NO_KEY' ? ' is-no-key' : ''}`}
         aria-label="쇼핑몰 연동"
         aria-busy={busy}
       >

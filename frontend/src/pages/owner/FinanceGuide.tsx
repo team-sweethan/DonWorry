@@ -13,7 +13,7 @@ const settlementGuide = [
   [
     '.payout-summary-grid',
     '정산 요약',
-    '실제 지급액은 환불 회수를 차감한 금액이에요. 정산 예정금은 앞으로 지급할 금액이에요.',
+    '실제 지급액은 환불 회수를 차감한 금액이에요. 정산 예정금은 앞으로 지급될 금액이에요.',
   ],
   [
     '.stl-calendar-header',

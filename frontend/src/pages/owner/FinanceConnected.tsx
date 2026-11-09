@@ -209,6 +209,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         type="info"
         showIcon
         message="지급·지출 기록으로 계산한 잔액"
+        className="finance-intro-alert"
         description="은행 계좌를 조회하는 기능이 아닙니다. 환불 회수를 차감한 실제 지급액만 입금으로 간주하고, 실제 지출 완료 기록을 현재 잔액에서 차감합니다."
       />
       <div className="finance-period" data-guide="finance-period">
