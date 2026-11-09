@@ -344,16 +344,28 @@ export function addFdsBlocklistEntryFromEvaluation(
   })
 }
 
-export function getOperatorAccessDetections(page = 0, risk = 'ALL', search = '', rule = '') {
+export function getOperatorAccessDetections(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+) {
   return api<OperatorAccessDetectionPage>(
-    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule })}`,
+    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
 }
 
-export function getOperatorAccessAccounts(page = 0, risk = 'ALL', search = '', rule = '') {
+export function getOperatorAccessAccounts(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+) {
   return api<OperatorAccessAccountPage>(
-    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule })}`,
+    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
 }

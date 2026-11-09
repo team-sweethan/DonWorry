@@ -258,6 +258,8 @@ export function OperatorAccessDetectionsPage() {
   )
   const [view, setView] = useState<ListView>(() => parseListView(listQuery.get('view')))
   const [rule, setRule] = useState(() => parseRule(listQuery.get('rule')))
+  // 계정 거르기 — 로그인 ID 정확 일치. 검색어(부분 일치)와 따로 둔다 (boss를 고르면 boss2는 빠진다)
+  const [account, setAccount] = useState(listQuery.get('account') ?? '')
   const [search, setSearch] = useState(listQuery.get('search') ?? '')
   const [searchInput, setSearchInput] = useState(search)
   const [detections, setDetections] = useState<OperatorAccessDetectionPage | null>(null)
@@ -289,10 +291,10 @@ export function OperatorAccessDetectionsPage() {
     let active = true
     const request =
       view === 'ACCOUNT'
-        ? getOperatorAccessAccounts(page, risk, search, rule).then((value) => {
+        ? getOperatorAccessAccounts(page, risk, search, rule, account).then((value) => {
             if (active) setAccounts(value)
           })
-        : getOperatorAccessDetections(page, risk, search, rule).then((value) => {
+        : getOperatorAccessDetections(page, risk, search, rule, account).then((value) => {
             if (active) setDetections(value)
           })
     request
@@ -308,7 +310,7 @@ export function OperatorAccessDetectionsPage() {
     return () => {
       active = false
     }
-  }, [page, risk, search, rule, view, reloadKey])
+  }, [page, risk, search, rule, account, view, reloadKey])
   const current = view === 'ACCOUNT' ? accounts : detections
   const count = (value: Risk) =>
     value === 'ALL'
@@ -322,19 +324,23 @@ export function OperatorAccessDetectionsPage() {
     search,
     view,
     rule,
+    account,
   }).toString()}`
   const changeView = (next: ListView) => {
     setView(next)
     setPage(0)
   }
   const showAccount = (loginId: string) => {
-    setSearch(loginId)
-    setSearchInput(loginId)
+    setAccount(loginId)
+    setSearch('')
+    setSearchInput('')
     changeView('DETECTION')
   }
   const empty = (
     <ListEmpty
-      title={search || rule ? '조건에 맞는 탐지가 없어요.' : '탐지된 접근 이상이 없어요.'}
+      title={
+        search || rule || account ? '조건에 맞는 탐지가 없어요.' : '탐지된 접근 이상이 없어요.'
+      }
     />
   )
   return (
@@ -392,6 +398,18 @@ export function OperatorAccessDetectionsPage() {
                 setPage(0)
               }}
             />
+            {account && (
+              <Tag
+                closable
+                className="oad-account-filter"
+                onClose={() => {
+                  setAccount('')
+                  setPage(0)
+                }}
+              >
+                {`계정: ${account}`}
+              </Tag>
+            )}
             <Input.Search
               className="oad-search"
               placeholder="계정, 고객사, 룰 이름 검색"

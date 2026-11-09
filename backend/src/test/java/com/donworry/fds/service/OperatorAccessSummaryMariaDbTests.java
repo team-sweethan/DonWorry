@@ -50,8 +50,8 @@ class OperatorAccessSummaryMariaDbTests {
         link(detectionId, insert(1L, "GET", "/api/admin/merchants", at.plusSeconds(1)));
         link(detectionId, insert(1L, "GET", "/api/admin/merchants", at.plusSeconds(2)));
 
-        var list = service.list("HIGH", null, null, 0, 10);
-        var accounts = service.accounts("HIGH", null, null, 0, 10);
+        var list = service.list("HIGH", null, null, null, 0, 10);
+        var accounts = service.accounts("HIGH", null, null, null, 0, 10);
 
         assertThat(list.content()).extracting(value -> value.blockedPath()).containsExactly("GET /api/admin/merchants");
         assertThat(accounts.content()).singleElement().satisfies(group -> {
@@ -79,16 +79,36 @@ class OperatorAccessSummaryMariaDbTests {
                 "GET",
                 "/api/admin/merchants",
                 today.minusDays(7).atTime(23, 0).atZone(SEOUL).toInstant());
+        // 번호만 다른 경로는 {id}로 묶인다. 순위를 자르지 않고 모두 돌려준다
+        insert(
+                4L,
+                "GET",
+                "/api/admin/users/12",
+                today.atTime(1, 0).atZone(SEOUL).toInstant());
+        insert(
+                4L,
+                "GET",
+                "/api/admin/users/13",
+                today.atTime(1, 1).atZone(SEOUL).toInstant());
+        insert(
+                4L,
+                "GET",
+                "/api/admin/users/14/permissions",
+                today.atTime(1, 2).atZone(SEOUL).toInstant());
 
         var result = service.summary();
 
-        assertThat(result.deniedCount()).isEqualTo(3);
-        assertThat(result.accountCount()).isEqualTo(2);
-        assertThat(result.daily().getLast().count()).isEqualTo(2);
+        assertThat(result.deniedCount()).isEqualTo(6);
+        assertThat(result.accountCount()).isEqualTo(3);
+        assertThat(result.daily().getLast().count()).isEqualTo(5);
         assertThat(result.daily().get(5).count()).isEqualTo(1);
         assertThat(result.topPaths())
                 .extracting(value -> value.httpMethod() + " " + value.path() + " " + value.count())
-                .containsExactly("GET /api/admin/users 2", "POST /api/v1/settlements/report 1");
+                .containsExactly(
+                        "GET /api/admin/users 2",
+                        "GET /api/admin/users/{id} 2",
+                        "GET /api/admin/users/{id}/permissions 1",
+                        "POST /api/v1/settlements/report 1");
     }
 
     private Long insertDetection(String loginId, Instant detectedAt) {

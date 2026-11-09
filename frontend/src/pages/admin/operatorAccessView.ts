@@ -55,7 +55,10 @@ export function featureName(path: string): string | null {
 
 export type FeatureCount = { name: string; count: number; paths: string[] }
 
-/** 순위를 기능 이름으로 합친다 — /users/12 · /users/13처럼 번호만 다른 경로가 따로 줄을 차지하지 않게. 모르는 경로는 경로 그대로 */
+/** 순위 칸에 보일 기능 수 */
+export const TOP_FEATURE_LIMIT = 5
+
+/** 순위를 기능 이름으로 합친다 — 서버는 경로별 수를 자르지 않고 모두 주고, 여기서 합친 뒤 많은 순으로 자른다 — /users/12 · /users/13처럼 번호만 다른 경로가 따로 줄을 차지하지 않게. 모르는 경로는 경로 그대로 */
 export function groupByFeature(
   rows: Array<{ httpMethod: string; path: string; count: number }>,
 ): FeatureCount[] {
@@ -67,7 +70,9 @@ export function groupByFeature(
     group.paths.push(`${row.httpMethod} ${row.path}`)
     groups.set(name, group)
   }
-  return [...groups.values()].sort((a, b) => b.count - a.count)
+  return [...groups.values()]
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, TOP_FEATURE_LIMIT)
 }
 
 /** 판정 기준 시간 — 60초 단위면 "5분", 아니면 "45초" */

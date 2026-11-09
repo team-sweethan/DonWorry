@@ -21,20 +21,22 @@ public class OperatorAccessDetectionController {
     public OperatorAccessDetectionResponses.Page list(
             @RequestParam(defaultValue = "ALL") String risk,
             @RequestParam(required = false) String rule,
+            @RequestParam(required = false) String loginId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return service.list(risk, rule, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return service.list(risk, rule, loginId, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
     }
 
     @GetMapping("/accounts")
     public OperatorAccessDetectionResponses.AccountPage accounts(
             @RequestParam(defaultValue = "ALL") String risk,
             @RequestParam(required = false) String rule,
+            @RequestParam(required = false) String loginId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return service.accounts(risk, rule, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return service.accounts(risk, rule, loginId, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
     }
 
     @GetMapping("/summary")

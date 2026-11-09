@@ -116,7 +116,7 @@ class OperatorAccessDetectionQueryServiceTests {
         given(detections.findLatestSignals()).willReturn(List.of(earlier, latest));
         given(events.findLatestLowRiskSignals()).willReturn(List.of());
 
-        var result = queryService().list("HIGH", null, null, 0, 20);
+        var result = queryService().list("HIGH", null, null, null, 0, 20);
 
         assertThat(result.content()).extracting(value -> value.detectionId()).containsExactly(11L, 10L);
         assertThat(result.highRiskCount()).isEqualTo(2);
@@ -133,7 +133,7 @@ class OperatorAccessDetectionQueryServiceTests {
         var merchantsPath = pathCount(10L, "GET", "/api/admin/merchants", 2);
         given(evidences.countPathsByDetectionIds(java.util.Set.of(10L))).willReturn(List.of(users, merchantsPath));
 
-        var result = queryService().list("HIGH", null, null, 0, 20);
+        var result = queryService().list("HIGH", null, null, null, 0, 20);
 
         assertThat(result.content())
                 .extracting(value -> value.blockedPath())
@@ -150,10 +150,25 @@ class OperatorAccessDetectionQueryServiceTests {
         given(detections.findLatestSignals()).willReturn(List.of(outOfRole, missing));
         given(events.findLatestLowRiskSignals()).willReturn(List.of());
 
-        var result = queryService().list("HIGH", "SEC_OPERATOR_PERMISSION_MISSING_REPEAT", null, 0, 20);
+        var result = queryService().list("HIGH", "SEC_OPERATOR_PERMISSION_MISSING_REPEAT", null, null, 0, 20);
 
         assertThat(result.content()).extracting(value -> value.detectionId()).containsExactly(11L);
         assertThat(result.highRiskCount()).isEqualTo(1);
+    }
+
+    // 계정 거르기는 정확 일치 — boss를 고르면 boss2 탐지는 섞이지 않는다.
+    @Test
+    void list_whenLoginIdFilter_matchesExactAccountOnly() {
+        var boss = highRiskSignal(10L, Instant.parse("2026-11-05T01:00:00Z"));
+        var boss2 =
+                highRiskSignal(11L, Instant.parse("2026-11-05T02:00:00Z"), "SEC_OPERATOR_OUT_OF_ROLE_REPEAT", "boss2");
+        given(merchants.findAll()).willReturn(List.of());
+        given(detections.findLatestSignals()).willReturn(List.of(boss, boss2));
+        given(events.findLatestLowRiskSignals()).willReturn(List.of());
+
+        var result = queryService().list("HIGH", null, "boss", null, 0, 20);
+
+        assertThat(result.content()).extracting(value -> value.detectionId()).containsExactly(10L);
     }
 
     // 계정별 보기는 같은 계정 탐지를 한 묶음으로, 묶음 단위로 쪽을 나눈다.
@@ -167,7 +182,7 @@ class OperatorAccessDetectionQueryServiceTests {
         given(detections.findLatestSignals()).willReturn(List.of(bossOld, other, bossNew));
         given(events.findLatestLowRiskSignals()).willReturn(List.of());
 
-        var first = queryService().accounts("HIGH", null, null, 0, 1);
+        var first = queryService().accounts("HIGH", null, null, null, 0, 1);
 
         assertThat(first.totalElements()).isEqualTo(2);
         assertThat(first.content()).singleElement().satisfies(group -> {
@@ -197,8 +212,7 @@ class OperatorAccessDetectionQueryServiceTests {
         var todayCount = dailyCount(today, 3);
         var topPath = pathCount("GET", "/api/admin/users", 3);
         given(events.countDailySince(org.mockito.ArgumentMatchers.anyString())).willReturn(List.of(todayCount));
-        given(events.findTopPathsSince(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(5)))
-                .willReturn(List.of(topPath));
+        given(events.countPathsSince(org.mockito.ArgumentMatchers.anyString())).willReturn(List.of(topPath));
         given(events.countAccountsSince(org.mockito.ArgumentMatchers.anyString()))
                 .willReturn(2L);
 

@@ -83,3 +83,27 @@ test('노린 기능은 같은 기능을 한 번만, 처음 나온 순서로', ()
     ['직원 계정 관리', '가맹점 관리', 'POST /api/unknown'],
   )
 })
+
+test('순위는 경로별 수를 기능으로 모두 합친 뒤 상위 5개만 — 흩어진 경로의 기능도 제자리에', () => {
+  const rows = [
+    { httpMethod: 'GET', path: '/api/v1/settlements', count: 4 },
+    { httpMethod: 'GET', path: '/api/admin/merchants', count: 3 },
+    { httpMethod: 'GET', path: '/api/admin/case-assignments', count: 3 },
+    { httpMethod: 'GET', path: '/api/admin/raw-view-reviews', count: 3 },
+    { httpMethod: 'GET', path: '/api/security-cases', count: 3 },
+    { httpMethod: 'GET', path: '/api/admin/users/{id}', count: 2 },
+    { httpMethod: 'PUT', path: '/api/admin/users/{id}/permissions', count: 2 },
+    { httpMethod: 'GET', path: '/api/admin/users', count: 2 },
+  ]
+  const result = groupByFeature(rows)
+  assert.equal(result.length, 5)
+  assert.deepEqual(result[0], {
+    name: '직원 계정 관리',
+    count: 6,
+    paths: [
+      'GET /api/admin/users/{id}',
+      'PUT /api/admin/users/{id}/permissions',
+      'GET /api/admin/users',
+    ],
+  })
+})

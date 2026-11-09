@@ -23,17 +23,19 @@ public interface OperatorAccessEventRepository extends JpaRepository<OperatorAcc
             """, nativeQuery = true)
     List<OperatorAccessDailyCountProjection> countDailySince(String from);
 
+    // 경로 속 숫자 구간은 {id}로 바꿔 같은 기능 경로로 묶는다 (/users/12 · /users/13 → /users/{id}).
+    // 자르지 않고 모두 돌려준다 — 화면이 기능 이름으로 합친 뒤 순위를 정해야 순위 · 횟수가 맞다.
+    // 묶인 경로 수는 API 경로 수 정도라 작다
     @Query(value = """
             SELECT http_method AS httpMethod,
-                   path AS path,
+                   REGEXP_REPLACE(path, '/[0-9]+(?=/|$)', '/{id}') AS path,
                    COUNT(*) AS deniedCount
             FROM fds_operator_access_events
             WHERE occurred_at >= CAST(:from AS DATETIME(6))
-            GROUP BY http_method, path
+            GROUP BY http_method, REGEXP_REPLACE(path, '/[0-9]+(?=/|$)', '/{id}')
             ORDER BY deniedCount DESC, path, http_method
-            LIMIT :limit
             """, nativeQuery = true)
-    List<OperatorAccessPathCountProjection> findTopPathsSince(String from, int limit);
+    List<OperatorAccessPathCountProjection> countPathsSince(String from);
 
     @Query(value = """
             SELECT COUNT(DISTINCT user_id)
