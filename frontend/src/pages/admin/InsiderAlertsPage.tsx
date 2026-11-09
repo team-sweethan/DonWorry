@@ -3,7 +3,7 @@ import { Alert, App, Button, Input, Modal, Tabs } from 'antd'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   closeInsiderAlert,
   getInsiderAlerts,
@@ -16,7 +16,12 @@ import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { approveMemoPlaceholder, errorText } from './caseAssignmentForm'
 import { EvidenceLog, SeverityMark, StaffLink } from './InsiderParts'
-import { groupAlertsByStaff, monitorPath, type StaffAlertGroup } from './insiderView'
+import {
+  focusGroupFirst,
+  groupAlertsByStaff,
+  monitorPath,
+  type StaffAlertGroup,
+} from './insiderView'
 import './caseAssignmentShared.css'
 import './InsiderAlertsPage.css'
 
@@ -81,14 +86,20 @@ function AlertRow({
 function StaffGroup({
   group,
   status,
+  focused,
   onClose,
 }: {
   group: StaffAlertGroup
   status: InsiderAlertStatus
+  focused: boolean
   onClose: (alert: InsiderAlert) => void
 }) {
   return (
-    <section className="ia-group ca-panel-box" aria-label={`${group.staffName} 경보`}>
+    <section
+      className={`ia-group ca-panel-box${focused ? ' is-focused' : ''}`}
+      aria-label={`${group.staffName} 경보`}
+      aria-current={focused ? 'true' : undefined}
+    >
       <header className="ia-group-head">
         <span className="ia-group-who">
           <StaffLink staffId={group.staffId} name={group.staffName} />
@@ -115,6 +126,12 @@ function StaffGroup({
  */
 export function InsiderAlertsPage() {
   const { message } = App.useApp()
+  const [searchParams] = useSearchParams()
+  // 관제에서 오면(?staff=) 그 직원 묶음을 맨 위에 강조한다. 주소는 들어올 때 한 번만 읽는다
+  const [focusStaff] = useState<number | null>(() => {
+    const id = Number(searchParams.get('staff'))
+    return Number.isInteger(id) && id > 0 ? id : null
+  })
   const [status, setStatus] = useState<InsiderAlertStatus>('OPEN')
   const [rows, setRows] = useState<InsiderAlert[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -158,7 +175,9 @@ export function InsiderAlertsPage() {
     }
   }
 
-  const groups = rows ? groupAlertsByStaff(rows) : []
+  const groups = rows ? focusGroupFirst(groupAlertsByStaff(rows), focusStaff) : []
+  const focusMissing =
+    focusStaff !== null && rows !== null && !groups.some((g) => g.staffId === focusStaff)
   return (
     <div className="ia-page">
       <PageHeader
@@ -195,6 +214,17 @@ export function InsiderAlertsPage() {
         </div>
       ) : (
         <div className="ia-groups">
+          {focusMissing && (
+            <Alert
+              type="info"
+              showIcon
+              message={
+                status === 'OPEN'
+                  ? '관제에서 고른 직원의 열린 경보가 없어요.'
+                  : '관제에서 고른 직원의 닫힌 경보가 없어요.'
+              }
+            />
+          )}
           <p className="dw-caption ia-groups-caption">
             {`직원 ${groups.length}명 · 경보 ${rows.length}건 · 높은 등급 직원이 위`}
           </p>
@@ -203,6 +233,7 @@ export function InsiderAlertsPage() {
               key={group.staffId}
               group={group}
               status={status}
+              focused={group.staffId === focusStaff}
               onClose={(alert) => {
                 setMemo('')
                 setTarget(alert)

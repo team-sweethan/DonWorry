@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { InsiderAlert } from '../src/api/insiderAlerts.ts'
-import type { InsiderMonitorStaff } from '../src/api/insiderMonitor.ts'
+import type { InsiderMonitorEvent, InsiderMonitorStaff } from '../src/api/insiderMonitor.ts'
 import { staffByUrgency } from '../src/pages/admin/insiderOfficeView.ts'
-import { groupAlertsByStaff, waitAge } from '../src/pages/admin/insiderView.ts'
+import {
+  focusGroupFirst,
+  groupAlertsByStaff,
+  matchesLogFilter,
+  newLogCount,
+  waitAge,
+} from '../src/pages/admin/insiderView.ts'
 
 const alert = (over: Partial<InsiderAlert>): InsiderAlert => ({
   alertId: 1,
@@ -111,4 +117,93 @@ test('같은 초 안의 경보도 소수점 자릿수와 상관없이 최근 것
     [2, 1],
   )
   assert.equal(group.lastEventAt, '2026-11-09T01:00:05.100200Z')
+})
+
+const event = (over: Partial<InsiderMonitorEvent>): InsiderMonitorEvent => ({
+  occurredAt: '2026-11-09T01:00:00Z',
+  kind: 'ACCESS',
+  type: 'CASE_DETAIL_VIEW',
+  clientIp: null,
+  device: null,
+  result: 'ALLOWED',
+  denyReason: null,
+  caseId: null,
+  merchantId: null,
+  merchantName: null,
+  paymentId: null,
+  fieldType: null,
+  itemCount: null,
+  customerScope: null,
+  alertId: null,
+  ruleCode: null,
+  ruleLabel: null,
+  severity: null,
+  summary: null,
+  lockReason: null,
+  insiderCaseId: null,
+  decision: null,
+  ...over,
+})
+
+test('기록 거르기 — 위험 접근은 거부 · 무관 고객 · 전체 전화번호 · 로그인 실패', () => {
+  const plain = event({})
+  const denied = event({ result: 'DENIED' })
+  const unrelated = event({ customerScope: 'UNRELATED' })
+  const raw = event({ type: 'CONTACT_RAW_VIEW' })
+  const loginOk = event({ kind: 'LOGIN', type: 'LOGIN_SUCCESS', result: null })
+  const loginFail = event({ kind: 'LOGIN', type: 'LOGIN_FAILURE', result: null })
+  const alertRaised = event({ kind: 'ALERT', type: 'ALERT_RAISED', result: null })
+  const locked = event({ kind: 'LOCK', type: 'LOCKED', result: null })
+  const all = [plain, denied, unrelated, raw, loginOk, loginFail, alertRaised, locked]
+  const pick = (filter: Parameters<typeof matchesLogFilter>[1]) =>
+    all.filter((e) => matchesLogFilter(e, filter))
+  assert.equal(pick('ALL').length, all.length)
+  assert.deepEqual(pick('RISK'), [denied, unrelated, raw, loginFail])
+  assert.deepEqual(pick('ALERT'), [alertRaised, locked])
+  assert.deepEqual(pick('LOGIN'), [loginOk, loginFail])
+})
+
+test('새 기록 수 — 맨 아래를 떠난 뒤 온 줄만, 잘려서 사이가 빠졌으면 many', () => {
+  const events = [
+    event({ occurredAt: '2026-11-09T01:00:00Z' }),
+    event({ occurredAt: '2026-11-09T01:00:05Z' }),
+    event({ occurredAt: '2026-11-09T01:00:10Z' }),
+  ]
+  assert.equal(newLogCount(events, null, false), 0)
+  assert.equal(newLogCount(events, '2026-11-09T01:00:00Z', false), 2)
+  assert.equal(newLogCount(events, '2026-11-09T01:00:10Z', false), 0)
+  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true), 'many')
+  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', false), 3)
+})
+
+test('새 기록 수는 지금 거르기에 맞는 줄만 센다', () => {
+  const events = [
+    event({ occurredAt: '2026-11-09T01:00:00Z' }),
+    event({ occurredAt: '2026-11-09T01:00:05Z', kind: 'LOGIN', type: 'LOGIN_SUCCESS' }),
+    event({ occurredAt: '2026-11-09T01:00:10Z', kind: 'ALERT', type: 'ALERT_RAISED' }),
+  ]
+  const seen = '2026-11-09T01:00:00Z'
+  assert.equal(newLogCount(events, seen, false, 'ALL'), 2)
+  assert.equal(newLogCount(events, seen, false, 'ALERT'), 1)
+  assert.equal(newLogCount(events, seen, false, 'RISK'), 0)
+  // 잘렸어도 맞는 새 줄이 없으면 버튼을 띄우지 않는다
+  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true, 'RISK'), 0)
+  assert.equal(newLogCount(events, '2026-11-09T00:59:00Z', true, 'ALERT'), 'many')
+})
+
+test('관제에서 온 직원 묶음이 맨 위, 없으면 순서 그대로', () => {
+  const groups = groupAlertsByStaff([
+    alert({ alertId: 1, staffId: 1, staffName: '가', severity: 'CRITICAL' }),
+    alert({ alertId: 2, staffId: 2, staffName: '나' }),
+    alert({ alertId: 3, staffId: 3, staffName: '다' }),
+  ])
+  assert.deepEqual(
+    focusGroupFirst(groups, 3).map((g) => g.staffId),
+    [3, 1, 2],
+  )
+  assert.deepEqual(
+    focusGroupFirst(groups, 9).map((g) => g.staffId),
+    [1, 2, 3],
+  )
+  assert.equal(focusGroupFirst(groups, null), groups)
 })

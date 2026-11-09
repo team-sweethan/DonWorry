@@ -1,4 +1,5 @@
 import type { InsiderAlert, InsiderAlertSeverity } from '../../api/insiderAlerts.ts'
+import type { InsiderMonitorEvent } from '../../api/insiderMonitor.ts'
 
 /**
  * [내부자 보안] 관제 · 경보 · 사건 세 탭이 같이 쓰는 이름과 기준.
@@ -37,6 +38,9 @@ export const fieldLabel: Record<string, string> = {
   ORDERER_NAME: '주문자 이름',
   ORDERER_PHONE: '주문자 전화',
 }
+
+/** 경보 탭에서 그 직원 묶음을 맨 위에 강조해 연다 */
+export const alertsPath = (staffId: number) => `/admin/insider-alerts?staff=${staffId}`
 
 /** 관제 탭에서 그 직원을 고른 채로 연다 */
 export const monitorPath = (staffId: number) => `/admin/insider-monitor?staff=${staffId}`
@@ -91,4 +95,60 @@ export function groupAlertsByStaff(alerts: InsiderAlert[]): StaffAlertGroup[] {
       b.alerts.length - a.alerts.length ||
       a.staffName.localeCompare(b.staffName, 'ko'),
   )
+}
+
+/** 주소로 온 직원 묶음을 맨 위로 — 나머지 순서는 그대로 */
+export function focusGroupFirst(groups: StaffAlertGroup[], staffId: number | null) {
+  if (staffId === null) return groups
+  const focused = groups.filter((g) => g.staffId === staffId)
+  return focused.length === 0
+    ? groups
+    : [...focused, ...groups.filter((g) => g.staffId !== staffId)]
+}
+
+/**
+ * 관제 기록 거르기 — 받은 줄(최근 200줄) 안에서만 거른다.
+ * 위험 접근 = 거부 · 무관 고객 검색 · 전체 전화번호 보기 · 로그인 실패 (기록 점 색이 빨강 · 노랑인 줄)
+ */
+export type LogFilter = 'ALL' | 'ALERT' | 'RISK' | 'LOGIN'
+
+export const logFilters: Array<{ key: LogFilter; label: string }> = [
+  { key: 'ALL', label: '전체' },
+  { key: 'ALERT', label: '경보 · 정지' },
+  { key: 'RISK', label: '거부 · 주의 접근' },
+  { key: 'LOGIN', label: '로그인' },
+]
+
+export function matchesLogFilter(event: InsiderMonitorEvent, filter: LogFilter) {
+  if (filter === 'ALL') return true
+  if (filter === 'ALERT') return event.kind === 'ALERT' || event.kind === 'LOCK'
+  if (filter === 'LOGIN') return event.kind === 'LOGIN'
+  if (event.kind === 'LOGIN') return event.type === 'LOGIN_FAILURE'
+  return (
+    event.kind === 'ACCESS' &&
+    (event.result === 'DENIED' ||
+      event.customerScope === 'UNRELATED' ||
+      event.type === 'CONTACT_RAW_VIEW')
+  )
+}
+
+/**
+ * 위로 올려 지난 기록을 보는 동안 새로 온 줄 수 — 지금 거르기에 맞는 줄만 센다(화면에 보이는 것과 같게).
+ * seenAt = 맨 아래를 떠날 때의 마지막 줄 시각.
+ * 받은 줄이 잘렸고(200줄) 가장 오래된 줄도 seenAt 뒤면 사이 줄이 빠졌으니 'many'
+ */
+export function newLogCount(
+  events: InsiderMonitorEvent[],
+  seenAt: string | null,
+  truncated: boolean,
+  filter: LogFilter = 'ALL',
+): number | 'many' {
+  if (seenAt === null || events.length === 0) return 0
+  const seen = at(seenAt)
+  const fresh = events.filter(
+    (event) => at(event.occurredAt) > seen && matchesLogFilter(event, filter),
+  ).length
+  // 빠진 사이 줄 중에 맞는 줄이 있었는지 알 수 없다 — 지금 맞는 새 줄이 하나라도 있을 때만 'many'
+  if (truncated && at(events[0].occurredAt) > seen && fresh > 0) return 'many'
+  return fresh
 }

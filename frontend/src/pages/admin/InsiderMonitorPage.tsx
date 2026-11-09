@@ -4,7 +4,7 @@ import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
 import dayjs from 'dayjs'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   getInsiderMonitorStaff,
   getInsiderMonitorTimeline,
@@ -23,7 +23,17 @@ import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { InsiderCaseDrawer } from './InsiderCasesPage'
 import { InsiderOffice } from './InsiderOffice'
 import { SeverityMark } from './InsiderParts'
-import { accessLabel, denyLabel, fieldLabel, severityView } from './insiderView'
+import {
+  accessLabel,
+  alertsPath,
+  denyLabel,
+  fieldLabel,
+  logFilters,
+  matchesLogFilter,
+  newLogCount,
+  severityView,
+  type LogFilter,
+} from './insiderView'
 import { stageClass, stageSummary, stageView, staffByUrgency } from './insiderOfficeView'
 import './caseAssignmentShared.css'
 import './InsiderMonitorPage.css'
@@ -217,6 +227,10 @@ export function InsiderMonitorPage() {
   const scrollBox = useRef<HTMLDivElement>(null)
   // 관리자가 위로 올려 지난 줄을 보는 중이면 false — 자동으로 끌어내리지 않는다
   const followBottom = useRef(true)
+  // 맨 아래를 떠날 때의 마지막 줄 시각 — 그 뒤에 온 줄을 "새 기록 N줄"로 센다. 맨 아래에 있으면 null
+  const [seenAt, setSeenAt] = useState<string | null>(null)
+  // 기록 거르기 — 직원을 바꿔도 유지한다
+  const [logFilter, setLogFilter] = useState<LogFilter>('ALL')
   const focusDetail = useRef(false)
   const detailRef = useRef<HTMLElement>(null)
   // 처음 열 때 가장 급한 직원을 한 번만 자동으로 고른다 — 오른쪽 칸이 비어 있지 않게
@@ -247,6 +261,8 @@ export function InsiderMonitorPage() {
           selectedRef.current = null
           setSelected(null)
           setTimeline(null)
+          followBottom.current = true
+          setSeenAt(null)
           autoPicked.current = false
         }
       }
@@ -306,7 +322,15 @@ export function InsiderMonitorPage() {
   useEffect(() => {
     const box = scrollBox.current
     if (box && followBottom.current) box.scrollTop = box.scrollHeight
-  }, [timeline])
+  }, [timeline, logFilter])
+
+  // 새 기록 버튼 — 맨 아래로 내려가 다시 따라간다
+  const jumpToLatest = () => {
+    const box = scrollBox.current
+    followBottom.current = true
+    setSeenAt(null)
+    if (box) box.scrollTop = box.scrollHeight
+  }
 
   // 책상을 누르면 오른쪽 기록이 바뀐다. 좁은 화면(위아래로 쌓임)에서만 기록 칸으로 내려간다
   const select = (staffId: number) => {
@@ -315,6 +339,7 @@ export function InsiderMonitorPage() {
     if (selectedRef.current === staffId) return
     selectedRef.current = staffId
     followBottom.current = true
+    setSeenAt(null)
     focusDetail.current = true
     setSelected(staffId)
     setTimeline(null)
@@ -340,6 +365,13 @@ export function InsiderMonitorPage() {
 
   const sorted = staff ? staffByUrgency(staff) : null
   const current = timeline?.staff ?? null
+  const shownEvents = timeline
+    ? timeline.events.filter((event) => matchesLogFilter(event, logFilter))
+    : []
+  // 새 기록은 지금 거르기에 맞는 줄만 센다 — 버튼을 눌러 내려가면 그만큼 보이게
+  const newCount = timeline
+    ? newLogCount(timeline.events, seenAt, timeline.truncated, logFilter)
+    : 0
   // 타임라인이 오기 전에도 이름 · 단계는 목록에서 바로 보인다
   const selectedStaff = current ?? staff?.find((s) => s.staffId === selected) ?? null
   return (
@@ -433,10 +465,14 @@ export function InsiderMonitorPage() {
                   <span className={`im-summary-item ${stageClass[selectedStaff.stage]}`}>
                     <span className="im-stage-icon" aria-hidden="true" />
                     {stageView[selectedStaff.stage].label}
-                    {selectedStaff.openAlertCount > 0
-                      ? ` · 열린 경보 ${selectedStaff.openAlertCount}건`
-                      : ` · ${stageView[selectedStaff.stage].help}`}
+                    {selectedStaff.openAlertCount === 0 &&
+                      ` · ${stageView[selectedStaff.stage].help}`}
                   </span>
+                  {selectedStaff.openAlertCount > 0 && (
+                    <Link className="im-detail-alerts" to={alertsPath(selectedStaff.staffId)}>
+                      {`열린 경보 ${selectedStaff.openAlertCount}건 보기 →`}
+                    </Link>
+                  )}
                 </div>
                 {/* 관리자가 할 일은 맨 위 오른쪽 한 곳 — 판정 창은 이 버튼으로만 연다 */}
                 {selectedStaff.openInsiderCaseId != null && (
@@ -486,31 +522,74 @@ export function InsiderMonitorPage() {
                         <ListEmpty title="이 구간에 기록이 없어요." />
                       </div>
                     ) : (
-                      <div
-                        ref={scrollBox}
-                        className="im-log"
-                        onScroll={(event) => {
-                          const box = event.currentTarget
-                          followBottom.current =
-                            box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_GAP_PX
-                        }}
-                      >
-                        <Timeline
-                          items={timeline.events.map((event, index) => ({
-                            key: `${event.kind}-${event.occurredAt}-${index}`,
-                            color: eventColor(event),
-                            children: (
-                              // 시각 칸은 줄바꿈 · 줄어듦 없이, 긴 요약은 오른쪽 칸에서만 줄바꿈
-                              <div className="im-log-row">
-                                <span className="im-log-time">{clock(event.occurredAt)}</span>
-                                <div className="im-log-text">
-                                  <EventText event={event} />
-                                </div>
-                              </div>
-                            ),
-                          }))}
-                        />
-                      </div>
+                      <>
+                        <div className="im-log-filters" role="group" aria-label="기록 거르기">
+                          {logFilters.map((filter) => (
+                            <button
+                              key={filter.key}
+                              type="button"
+                              className={`im-log-filter${logFilter === filter.key ? ' is-active' : ''}`}
+                              aria-pressed={logFilter === filter.key}
+                              onClick={() => {
+                                resetPoll()
+                                followBottom.current = true
+                                setSeenAt(null)
+                                setLogFilter(filter.key)
+                              }}
+                            >
+                              {filter.label}
+                              <span className="im-log-filter-count">
+                                {
+                                  timeline.events.filter((event) =>
+                                    matchesLogFilter(event, filter.key),
+                                  ).length
+                                }
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        <div
+                          ref={scrollBox}
+                          className="im-log"
+                          onScroll={(event) => {
+                            const box = event.currentTarget
+                            const atBottom =
+                              box.scrollHeight - box.scrollTop - box.clientHeight < FOLLOW_GAP_PX
+                            if (atBottom === followBottom.current) return
+                            followBottom.current = atBottom
+                            // 맨 아래를 떠나는 순간의 마지막 줄 — 그 뒤 줄을 새 기록으로 센다
+                            setSeenAt(
+                              atBottom ? null : (timeline.events.at(-1)?.occurredAt ?? null),
+                            )
+                          }}
+                        >
+                          {shownEvents.length === 0 ? (
+                            <ListEmpty title="이 조건에 맞는 기록이 없어요." />
+                          ) : (
+                            <Timeline
+                              items={shownEvents.map((event, index) => ({
+                                key: `${event.kind}-${event.occurredAt}-${index}`,
+                                color: eventColor(event),
+                                children: (
+                                  // 시각 칸은 줄바꿈 · 줄어듦 없이, 긴 요약은 오른쪽 칸에서만 줄바꿈
+                                  <div className="im-log-row">
+                                    <span className="im-log-time">{clock(event.occurredAt)}</span>
+                                    <div className="im-log-text">
+                                      <EventText event={event} />
+                                    </div>
+                                  </div>
+                                ),
+                              }))}
+                            />
+                          )}
+                          {newCount !== 0 && (
+                            <button type="button" className="im-log-new" onClick={jumpToLatest}>
+                              {newCount === 'many' ? '새 기록이 많아요' : `새 기록 ${newCount}줄`}
+                              <DownOutlined aria-hidden="true" />
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </>
                 )}

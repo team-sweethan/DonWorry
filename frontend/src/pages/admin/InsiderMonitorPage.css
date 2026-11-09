@@ -497,3 +497,76 @@
     align-items: flex-start;
   }
 }
+
+.im-detail-alerts {
+  font-size: var(--dw-text-secondary);
+}
+
+/* 기록 거르기 — 탭처럼 글자 + 작은 회색 숫자, 고른 것만 진하게 */
+.im-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.im-log-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  padding: 4px 0 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #64748b;
+  font: inherit;
+  font-size: var(--dw-text-secondary);
+  cursor: pointer;
+}
+.im-log-filter:hover {
+  color: #1e293b;
+}
+.im-log-filter.is-active {
+  border-bottom-color: var(--shell-strong);
+  color: #1e293b;
+  font-weight: 600;
+}
+.im-log-filter:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+}
+.im-log-filter-count {
+  color: #94a3b8;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 새 기록 — 위로 올려 보는 동안 기록 칸 아래에 붙는 글자 버튼 하나 */
+.im-log {
+  position: relative;
+}
+.im-log-new {
+  position: sticky;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px auto;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+  font-size: var(--dw-text-secondary);
+  font-weight: 600;
+  box-shadow: 0 4px 12px #0f172a1a;
+  cursor: pointer;
+}
+.im-log-new:hover {
+  border-color: var(--shell-strong);
+}
+.im-log-new:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+}

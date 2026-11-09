@@ -136,3 +136,9 @@
     padding-left: 16px;
   }
 }
+
+/* 관제에서 온 직원 묶음 — 역할 색 테두리로 강조 */
+.ia-group.is-focused {
+  border-color: var(--shell-strong);
+  box-shadow: 0 4px 14px #5b35b01f;
+}

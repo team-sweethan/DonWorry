@@ -6,6 +6,7 @@ import {
   Descriptions,
   Drawer,
   Input,
+  Popconfirm,
   Radio,
   Space,
   Table,
@@ -206,15 +207,32 @@ export function InsiderCaseDrawer({
                   placeholder={memoPlaceholder}
                   onChange={(event) => setMemo(event.target.value)}
                 />
-                <Button
-                  type="primary"
-                  style={{ marginTop: 12 }}
-                  disabled={decision === null}
-                  loading={saving}
-                  onClick={() => void submitDecision()}
+                {/* 징계 요청은 계정 정지가 걸리는 가장 무거운 판정 — 한 번 더 묻는다. 나머지는 바로 저장 */}
+                <Popconfirm
+                  disabled={decision !== 'DISCIPLINE_REQUEST'}
+                  title="징계 요청으로 판정할까요?"
+                  description={
+                    detail.accountLocked
+                      ? '인사 처분이 끝날 때까지 계정 정지가 유지돼요.'
+                      : '지금 이 직원의 계정이 정지되고, 인사 처분이 끝날 때까지 유지돼요.'
+                  }
+                  okText="징계 요청"
+                  okButtonProps={{ danger: true }}
+                  cancelText="다시 고르기"
+                  onConfirm={() => void submitDecision()}
                 >
-                  판정 확정
-                </Button>
+                  <Button
+                    type="primary"
+                    style={{ marginTop: 12, alignSelf: 'flex-start' }}
+                    disabled={decision === null}
+                    loading={saving}
+                    onClick={
+                      decision === 'DISCIPLINE_REQUEST' ? undefined : () => void submitDecision()
+                    }
+                  >
+                    판정 확정
+                  </Button>
+                </Popconfirm>
               </div>
             )}
 
@@ -246,7 +264,7 @@ export function InsiderCaseDrawer({
                 />
                 <Button
                   danger
-                  style={{ marginTop: 12 }}
+                  style={{ marginTop: 12, alignSelf: 'flex-start' }}
                   disabled={outcome === null || reason.trim().length === 0}
                   loading={saving}
                   onClick={() => void submitRelease()}
