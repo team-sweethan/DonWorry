@@ -10,22 +10,18 @@ import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Descriptions,
   Form,
   Input,
   Modal,
-  Select,
+  Segmented,
   Spin,
+  Switch,
   Table,
   Tag,
+  Typography,
 } from 'antd'
-import {
-  ArrowLeftOutlined,
-  CheckCircleOutlined,
-  ReloadOutlined,
-  SafetyCertificateOutlined,
-} from '@ant-design/icons'
+import { ReloadOutlined } from '@ant-design/icons'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -56,16 +52,39 @@ import {
   requireApplicationDetailRefresh,
   type ApplicationDetailSnapshot,
 } from './applicationDetailSnapshot'
-import { mailStatusLabels } from '../../api/adminApplications'
-const colors = {
-  EMAIL_VERIFICATION_PENDING: 'default',
-  REVIEW_PENDING: 'blue',
-  APPROVED: 'green',
-  REJECTED: 'red',
+import { mailTag, statusTag } from './applicationStatusTag'
+// 탭 순서. 기본 목록인 검토 대기를 맨 앞에 둔다.
+const statusTabs: ApplicationStatus[] = [
+  'REVIEW_PENDING',
+  'EMAIL_VERIFICATION_PENDING',
+  'APPROVED',
+  'REJECTED',
+]
+type StatusCounts = Record<ApplicationStatus, number>
+/** 탭 숫자용. 검색어·메일 필터와 상관없이 상태별 전체 건수를 센다. 실패하면 숫자만 숨긴다. */
+function useStatusCounts(revision: number) {
+  const [counts, setCounts] = useState<{ revision: number; value: StatusCounts | null } | null>(
+    null,
+  )
+  useEffect(() => {
+    let active = true
+    Promise.all(statusTabs.map((status) => getApplications(0, '', status)))
+      .then((pages) => {
+        if (!active) return
+        const value = Object.fromEntries(
+          statusTabs.map((status, index) => [status, pages[index].totalElements]),
+        ) as StatusCounts
+        setCounts({ revision, value })
+      })
+      .catch(() => {
+        if (active) setCounts({ revision, value: null })
+      })
+    return () => {
+      active = false
+    }
+  }, [revision])
+  return counts?.revision === revision ? counts.value : null
 }
-const statusTag = (status: ApplicationStatus) => (
-  <Tag color={colors[status]}>{applicationLabels[status]}</Tag>
-)
 export function AdminApplicationsPage() {
   const [query, setQuery] = useSearchParams()
   const mailAttention = query.get('mailAttention') === 'true'
@@ -101,6 +120,14 @@ export function AdminApplicationsPage() {
     }
   }, [page, keyword, status, mailAttention, revision, key])
   const current = result?.key === key ? result : null
+  const counts = useStatusCounts(revision)
+  const countTotal = counts ? statusTabs.reduce((sum, status) => sum + counts[status], 0) : null
+  const tabLabel = (label: string, count: number | null) => (
+    <span className="ar-tab">
+      {label}
+      {count !== null && <span className="ar-tab-count">{count.toLocaleString('ko-KR')}</span>}
+    </span>
+  )
   const emptyKind = applicationEmptyKind(statusValue, keyword, mailAttention)
   // 이 화면의 page는 0부터 시작한다.
   const lastPage = current?.data ? lastListPage(current.data.totalElements) - 1 : null
@@ -130,50 +157,59 @@ export function AdminApplicationsPage() {
     <div className="application-review">
       <PageHeader
         title="이용 신청"
-        description="이메일 확인이 끝난 신청을 검토하고, 가맹점과 사장님 계정을 발급합니다."
+        description="가게 사장님이 보낸 이용 신청을 검토하고, 승인하면 가맹점과 사장님 계정을 만듭니다."
         actions={
           <Button icon={<ReloadOutlined />} onClick={() => setRevision((v) => v + 1)}>
             새로고침
           </Button>
         }
       />
-      <div className="ar-process" aria-label="이용 시작 절차">
-        <span>01 이메일 확인</span>
-        <strong>02 관리자 검토·계정 발급</strong>
-        <span>03 본인 비밀번호 설정</span>
-      </div>
-      <Card>
-        <div className="ar-filters">
-          <Checkbox
-            checked={mailAttention}
-            onChange={(event) =>
-              change({
-                mailAttention: event.target.checked,
-                status: event.target.checked ? 'ALL' : statusValue,
-              })
-            }
-          >
-            메일 확인 필요
-          </Checkbox>
-          <Select
+      <ol className="ar-process" aria-label="이용 시작 절차">
+        <li>사장님 이메일 확인</li>
+        <li className="is-current" aria-current="step">
+          관리자 검토·사장님 계정 만들기
+        </li>
+        <li>사장님 첫 비밀번호 설정</li>
+      </ol>
+      <Card className="ar-list">
+        <div className="ar-toolbar">
+          <Segmented
+            className="ar-status-tabs"
             aria-label="신청 상태"
             value={statusValue}
-            onChange={(value) => change({ status: value })}
+            onChange={(value) => change({ status: String(value) })}
             options={[
-              { value: 'ALL', label: '전체 상태' },
-              ...Object.entries(applicationLabels).map(([value, label]) => ({ value, label })),
+              ...statusTabs.map((value) => ({
+                value,
+                label: tabLabel(applicationLabels[value], counts?.[value] ?? null),
+              })),
+              { value: 'ALL', label: tabLabel('전체', countTotal) },
             ]}
           />
-          <Input.Search
-            key={keyword}
-            aria-label="가맹점명 또는 사업자등록번호 검색"
-            placeholder="가맹점명 또는 사업자등록번호"
-            defaultValue={keyword}
-            maxLength={100}
-            allowClear
-            onSearch={(value) => change({ keyword: value.trim() })}
-            enterButton="검색"
-          />
+          <div className="ar-filters">
+            <Button
+              className={mailAttention ? 'ar-mail-toggle is-on' : 'ar-mail-toggle'}
+              aria-pressed={mailAttention}
+              onClick={() =>
+                change({
+                  mailAttention: !mailAttention,
+                  status: !mailAttention ? 'ALL' : statusValue,
+                })
+              }
+            >
+              <span aria-hidden="true">{mailAttention ? '✓' : '+'}</span>메일 발송 문제만
+            </Button>
+            <Input.Search
+              key={keyword}
+              aria-label="가맹점명 또는 사업자등록번호 검색"
+              placeholder="가맹점명 또는 사업자등록번호"
+              defaultValue={keyword}
+              maxLength={100}
+              allowClear
+              onSearch={(value) => change({ keyword: value.trim() })}
+              enterButton="검색"
+            />
+          </div>
         </div>
         {current?.error ? (
           <Alert
@@ -226,22 +262,22 @@ export function AdminApplicationsPage() {
                 dataIndex: 'businessRegistrationNumber',
                 render: formatBusinessNumber,
               },
-              { title: '담당자', dataIndex: 'contactName' },
+              { title: '신청한 사장님', dataIndex: 'contactName' },
               { title: '상태', dataIndex: 'status', render: statusTag },
               {
-                title: '안내 메일',
+                title: '보낸 메일',
                 render: (_, row) =>
-                  row.latestMail ? mailStatusLabels[row.latestMail.effectiveStatus] : '—',
+                  row.latestMail ? (
+                    mailTag(row.latestMail.effectiveStatus)
+                  ) : (
+                    <span className="ar-muted">—</span>
+                  ),
               },
               {
-                title: '접수일 · 한국 시간',
+                title: '신청일 (한국 시간)',
                 dataIndex: 'createdAt',
-                render: formatApplicationTime,
-              },
-              {
-                title: '검토',
-                render: (_, row) => (
-                  <Link to={`/admin/applications/${row.applicationId}?${query}`}>상세 보기</Link>
+                render: (value: string) => (
+                  <span className="ar-time">{formatApplicationTime(value)}</span>
                 ),
               },
             ]}
@@ -257,8 +293,8 @@ export function AdminApplicationsPage() {
         )}
       </Card>
       <p className="ar-footnote">
-        이메일 확인은 주소 사용 여부를 확인하는 절차입니다. 사업자 자격과 이용 승인 여부는 관리자가
-        검토해 주세요.
+        이메일 확인은 메일 주소가 실제로 쓰이는지만 확인합니다. 진짜 사업자인지, 승인해도 되는지는
+        관리자가 직접 판단해 주세요.
       </p>
     </div>
   )
@@ -267,6 +303,50 @@ type ApprovalFields = {
   merchantCode: string
   feePercent: string
   permissions: string[]
+}
+const permissionOptions = [
+  {
+    value: 'FDS_VIEW',
+    label: 'FDS',
+  },
+  {
+    value: 'FINANCE_VIEW',
+    label: '정산·자금관리',
+  },
+]
+/** Form.Item이 value · onChange를 넣어 준다. 체크박스 대신 권한마다 스위치 한 줄. */
+function PermissionSwitches({
+  value = [],
+  onChange,
+  disabled,
+}: {
+  value?: string[]
+  onChange?: (value: string[]) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="ar-switches">
+      {permissionOptions.map((option) => (
+        <label key={option.value} className="ar-switch">
+          <strong>{option.label}</strong>
+          <Switch
+            size="small"
+            disabled={disabled}
+            checked={value.includes(option.value)}
+            onChange={(checked) =>
+              onChange?.(
+                checked
+                  ? permissionOptions
+                      .map((item) => item.value)
+                      .filter((item) => item === option.value || value.includes(item))
+                  : value.filter((item) => item !== option.value),
+              )
+            }
+          />
+        </label>
+      ))}
+    </div>
+  )
 }
 export function AdminApplicationDetailPage() {
   const { id } = useParams()
@@ -284,6 +364,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
     | null
   >(null)
   const [sending, setSending] = useState(false)
+  const [reviewTab, setReviewTab] = useState<'approve' | 'reject'>('approve')
   const pending = useRef(false)
   const [approvalForm] = Form.useForm<ApprovalFields>()
   const [rejectionForm] = Form.useForm<{ reason: string }>()
@@ -349,18 +430,27 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
       setSending(false)
     }
   }
+  const mailPanel = data ? (
+    <ApplicationMailPanel
+      id={Number(id)}
+      detail={data}
+      primary={app?.status === 'EMAIL_VERIFICATION_PENDING'}
+      onDetail={(next) => {
+        setResult((current) => applyApplicationDetailSnapshot(current, key, next))
+      }}
+    />
+  ) : null
   return (
     <div className="application-review">
-      <Link className="ar-back" to={`/admin/applications?${query}`}>
-        <ArrowLeftOutlined /> 신청 목록
-      </Link>
+      <nav className="ar-crumb" aria-label="위치">
+        <Link to={`/admin/applications?${query}`}>이용 신청</Link>
+        <span aria-hidden="true">›</span>
+        <span className="ar-crumb-current">
+          {app ? `${app.merchantName} · #${app.applicationId}` : '신청 상세'}
+        </span>
+      </nav>
       <PageHeader
         title={app?.merchantName ?? '신청 상세'}
-        description={
-          app?.status === 'REVIEW_PENDING'
-            ? '신청 정보를 확인한 뒤 승인 또는 반려해 주세요.'
-            : '신청 정보와 현재 처리 상태를 확인합니다.'
-        }
         actions={
           <Button disabled={sending} icon={<ReloadOutlined />} onClick={reload}>
             최신 상태 확인
@@ -401,109 +491,41 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
         data &&
         app && (
           <>
-            <div className={`ar-state ar-state-${app.status.toLowerCase()}`}>
-              <div>
+            <div className="ar-summary">
+              <div className="ar-meta">
                 {statusTag(app.status)}
+                <span className="ar-meta-sep" aria-hidden="true">
+                  ·
+                </span>
                 <span>신청 #{app.applicationId}</span>
+                <span className="ar-meta-sep" aria-hidden="true">
+                  ·
+                </span>
+                <span>{formatApplicationTime(app.createdAt)} 신청</span>
               </div>
-              <h2>
-                {app.status === 'REVIEW_PENDING'
-                  ? '이메일 확인이 끝났습니다. 신청 내용을 검토해 주세요.'
-                  : app.status === 'EMAIL_VERIFICATION_PENDING'
-                    ? '신청자가 이메일을 확인해야 검토할 수 있습니다.'
-                    : app.status === 'APPROVED'
-                      ? '이용 승인이 완료되었습니다.'
-                      : '신청이 반려되었습니다.'}
-              </h2>
-              <p>
-                {app.status === 'REVIEW_PENDING'
-                  ? '승인하면 새 가맹점과 사장님 계정을 함께 만들고, 첫 비밀번호 설정 메일을 보냅니다.'
-                  : app.status === 'EMAIL_VERIFICATION_PENDING'
-                    ? '확인 메일 발송만으로 이메일 확인이 완료되지는 않습니다.'
-                    : app.status === 'APPROVED'
-                      ? '계정 발급과 결제 연동은 별도 절차입니다. 결제 연동은 담당자와 따로 진행해 주세요.'
-                      : '이번 신청으로 계정은 발급되지 않았습니다. 신청자는 사유를 확인한 뒤 새로 신청할 수 있습니다.'}
-              </p>
+              {app.status !== 'APPROVED' && (
+                <p className="ar-lead">
+                  {app.status === 'REVIEW_PENDING'
+                    ? '신청 내용을 보고 승인하거나 반려해 주세요.'
+                    : app.status === 'EMAIL_VERIFICATION_PENDING'
+                      ? '사장님이 메일 속 확인 링크를 눌러야 검토할 수 있습니다.'
+                      : '사장님은 사유를 보고 새로 신청할 수 있습니다.'}
+                </p>
+              )}
             </div>
-            <ApplicationMailPanel
-              id={Number(id)}
-              detail={data}
-              onDetail={(next) => {
-                setResult((current) => applyApplicationDetailSnapshot(current, key, next))
-              }}
-            />
-            <div className="ar-detail-grid">
-              <div className="ar-information">
-                <Card title="신청 정보">
-                  <Descriptions
-                    column={1}
-                    size="small"
-                    items={[
-                      {
-                        key: 'business',
-                        label: '사업자등록번호',
-                        children: formatBusinessNumber(app.businessRegistrationNumber),
-                      },
-                      {
-                        key: 'shopUrl',
-                        label: '쇼핑몰 주소',
-                        children:
-                          data.shopUrl && isShopUrlValid(data.shopUrl) ? (
-                            <a href={data.shopUrl} target="_blank" rel="noopener noreferrer">
-                              {data.shopUrl}
-                            </a>
-                          ) : (
-                            (data.shopUrl ?? '기존 신청으로 수집하지 않은 정보입니다.')
-                          ),
-                      },
-                      { key: 'contact', label: '담당자', children: app.contactName },
-                      {
-                        key: 'email',
-                        label: '이메일',
-                        children: (
-                          <span>
-                            {data.email} {app.emailVerifiedAt && <Tag color="green">확인 완료</Tag>}
-                          </span>
-                        ),
-                      },
-                      { key: 'phone', label: '연락처', children: data.phone },
-                      {
-                        key: 'requestedLoginId',
-                        label: '신청 로그인 아이디',
-                        children: data.requestedLoginId ?? '이전 양식 · 미입력',
-                      },
-                      {
-                        key: 'created',
-                        label: '접수일',
-                        children: formatApplicationTime(app.createdAt),
-                      },
-                      {
-                        key: 'verified',
-                        label: '이메일 확인일',
-                        children: formatApplicationTime(app.emailVerifiedAt),
-                      },
-                      {
-                        key: 'consent',
-                        label: '개인정보 동의',
-                        children: `${formatApplicationTime(data.consentedAt)} · 문구 버전 ${data.consentVersion}`,
-                      },
-                    ]}
-                  />
-                  <div className="ar-inquiry">
-                    <h3>문의·요청 사항</h3>
-                    <p>{data.inquiry || '남긴 문의가 없습니다.'}</p>
-                  </div>
-                </Card>
+            <div className="ar-detail">
+              <div className="ar-body">
                 {data.duplicateMerchants.length > 0 && (
                   <Alert
+                    className="ar-duplicate"
                     type="warning"
                     showIcon
-                    message="같은 사업자등록번호의 가맹점이 있습니다"
+                    message="같은 사업자등록번호로 이미 등록된 가맹점이 있습니다"
                     description={
                       <>
                         <p>
-                          이미 등록된 가맹점인지 확인해 주세요. 별도 가맹점이 필요하면 승인할 수
-                          있습니다.
+                          같은 가게의 중복 신청인지 확인해 주세요. 지점처럼 가맹점을 따로 둬야 하면
+                          승인해도 됩니다.
                         </p>
                         <ul>
                           {data.duplicateMerchants.map((m) => (
@@ -520,223 +542,356 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
                   />
                 )}
                 {app.status === 'APPROVED' && (
-                  <Card title="발급된 가맹점·계정">
-                    <Descriptions
-                      column={1}
-                      items={[
-                        {
-                          key: 'merchant',
-                          label: '가맹점',
-                          children: (
-                            <Link to={`/admin/merchants/${data.merchantId}`}>가맹점 상세 보기</Link>
-                          ),
-                        },
-                        {
-                          key: 'user',
-                          label: '로그인 아이디',
-                          children: <Link to={`/admin/users/${data.userId}`}>{data.loginId}</Link>,
-                        },
-                        {
-                          key: 'password',
-                          label: '비밀번호',
-                          children: data.passwordChangeRequired
-                            ? '설정 또는 변경 필요'
-                            : '설정 완료',
-                        },
-                      ]}
-                    />
-                    <p className="ar-footnote">
-                      관리자가 비밀번호를 초기화한 경우에도 ‘설정 또는 변경 필요’로 표시됩니다.
+                  <section className="ar-primary" aria-labelledby="ar-issued-title">
+                    <h2 className="ar-primary-title" id="ar-issued-title">
+                      만든 사장님 계정 <span className="ar-role is-owner">사장님</span>
+                    </h2>
+                    <dl className="ar-issued">
+                      <div>
+                        <dt>사장님 아이디</dt>
+                        <dd className="ar-issued-main">
+                          <Link to={`/admin/users/${data.userId}`}>{data.loginId}</Link>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>비밀번호</dt>
+                        <dd>
+                          {data.passwordChangeRequired ? (
+                            <Tag color="gold">설정 필요</Tag>
+                          ) : (
+                            <Tag color="green">설정 완료</Tag>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>가맹점</dt>
+                        <dd>
+                          <Link to={`/admin/merchants/${data.merchantId}`}>가맹점 상세 보기</Link>
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="ar-primary-note">
+                      사장님이 아직 비밀번호를 정하지 않았거나, 관리자가 초기화하면 ‘설정 필요’로
+                      보입니다.
                     </p>
-                  </Card>
+                  </section>
                 )}
                 {app.status === 'APPROVED' && data.merchantId !== null && (
                   <IntegrationStatusSummary key={data.merchantId} merchantId={data.merchantId} />
                 )}
-                {data.reviewedAt && (
-                  <Card title="검토 기록">
-                    <Descriptions
-                      column={1}
-                      items={[
-                        {
-                          key: 'reviewer',
-                          label: '처리 관리자',
-                          children: data.reviewerName ?? `계정 #${data.reviewerUserId}`,
-                        },
-                        {
-                          key: 'reviewed',
-                          label: '처리일',
-                          children: formatApplicationTime(data.reviewedAt),
-                        },
-                        ...(data.rejectionReason
-                          ? [
-                              {
-                                key: 'reason',
-                                label: '반려 사유',
-                                children: <p className="ar-reason">{data.rejectionReason}</p>,
-                              },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  </Card>
-                )}
-              </div>
-              {app.status === 'REVIEW_PENDING' && !reviewResult && (
-                <aside className="ar-decisions" aria-label="신청 검토">
-                  <Card
-                    title={
-                      <>
-                        <SafetyCertificateOutlined /> 승인·계정 발급
-                      </>
-                    }
-                  >
-                    <p className="ar-card-intro">
-                      가맹점명은 <strong>{app.merchantName}</strong>, 계정 이름은{' '}
-                      <strong>{app.contactName}</strong>으로 등록합니다.
+                {app.status === 'REJECTED' && (
+                  <section className="ar-primary" aria-labelledby="ar-rejected-title">
+                    <h2 className="ar-primary-title" id="ar-rejected-title">
+                      반려 사유
+                    </h2>
+                    <p className="ar-reject-reason">
+                      {data.rejectionReason || '기록된 반려 사유가 없습니다.'}
                     </p>
-                    {!data.requestedLoginId && (
-                      <Alert
-                        type="warning"
-                        showIcon
-                        message="로그인 아이디가 없는 기존 신청입니다"
-                        description="관리자가 임의로 아이디를 정할 수 없습니다. 아래에서 새 양식으로 재신청이 필요하다는 사유를 적어 반려해 주세요."
-                      />
+                    {data.reviewedAt && (
+                      <p className="ar-primary-note">
+                        <span className="ar-role is-admin">관리자</span>{' '}
+                        {data.reviewerName ?? `계정 #${data.reviewerUserId}`} ·{' '}
+                        {formatApplicationTime(data.reviewedAt)} · 이 사유가 사장님 메일로 나갑니다
+                      </p>
                     )}
-                    {data.requestedLoginId && (
-                      <Form<ApprovalFields>
-                        form={approvalForm}
-                        layout="vertical"
-                        requiredMark={false}
-                        initialValues={{
-                          feePercent: '1',
-                          permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
-                        }}
-                        disabled={
-                          sending || needsRefresh || data.resendBlockedReason === 'FEATURE_DISABLED'
-                        }
-                        onFinish={(values) => {
-                          const fee = percentToFeeRate(values.feePercent)
-                          if (fee)
-                            setConfirmation({
-                              kind: 'approve',
-                              fee: values.feePercent,
-                              input: {
-                                merchantCode: values.merchantCode,
-                                pgFeeRate: fee,
-                                permissions: values.permissions,
-                              },
-                            })
-                        }}
-                      >
-                        <Form.Item
-                          name="merchantCode"
-                          label="가맹점 코드"
-                          extra="영문 대문자·숫자 3~40자. 기존 코드와 달라야 합니다."
-                          rules={[
-                            { required: true, message: '가맹점 코드를 입력해 주세요.' },
-                            {
-                              pattern: /^[A-Z0-9]{3,40}$/,
-                              message: '영문 대문자와 숫자로 3~40자를 입력해 주세요.',
-                            },
+                  </section>
+                )}
+                {app.status === 'EMAIL_VERIFICATION_PENDING' && mailPanel}
+                <section className="ar-section" aria-labelledby="ar-inquiry-title">
+                  <h2 className="ar-section-title" id="ar-inquiry-title">
+                    사장님이 남긴 말
+                  </h2>
+                  <p className={data.inquiry ? 'ar-quote' : 'ar-quote is-empty'}>
+                    {data.inquiry || '남긴 말이 없습니다.'}
+                  </p>
+                </section>
+                {app.status === 'REVIEW_PENDING' && !reviewResult && (
+                  <section className="ar-primary" aria-labelledby="ar-review-title">
+                    <h2 className="ar-primary-title" id="ar-review-title">
+                      검토
+                    </h2>
+                    <div className="ar-box ar-review">
+                      <div className="ar-review-tabs">
+                        <Segmented
+                          aria-label="검토 방식"
+                          value={reviewTab}
+                          onChange={(value) => setReviewTab(value as 'approve' | 'reject')}
+                          options={[
+                            { value: 'approve', label: '승인' },
+                            { value: 'reject', label: '반려' },
                           ]}
-                        >
-                          <Input autoComplete="off" maxLength={40} placeholder="예: SWEET001" />
-                        </Form.Item>
-                        <Form.Item
-                          name="feePercent"
-                          label="수수료율"
-                          extra="신규 정산에 등록 수수료율을 적용합니다. 기존 정산금은 유지됩니다."
-                          rules={[
-                            {
-                              validator: (_, value: string) =>
-                                percentToFeeRate(value ?? '') !== null
-                                  ? Promise.resolve()
-                                  : Promise.reject(
-                                      new Error('0 이상 100 미만, 소수 4자리까지 입력해 주세요.'),
-                                    ),
-                            },
-                          ]}
-                        >
-                          <Input suffix="%" inputMode="decimal" maxLength={7} />
-                        </Form.Item>
-                        <div className="ar-selected-login">
-                          <span>신청자가 선택한 로그인 아이디</span>
-                          <strong>{data.requestedLoginId}</strong>
-                          <p>
-                            이 아이디로 계정을 발급합니다. 비밀번호는 신청자가 승인 메일에서 직접
-                            설정합니다.
-                          </p>
-                        </div>
-                        <Form.Item
-                          name="permissions"
-                          label="사장님 기능 권한"
-                          extra={
-                            selectedPermissions?.length === 0
-                              ? '기능 권한을 선택하지 않으면 업무 화면에 접근할 수 없습니다.'
-                              : '사장님 계정으로 발급됩니다. 관리자 권한은 부여되지 않습니다.'
+                        />
+                      </div>
+                      <div className="ar-review-body" hidden={reviewTab !== 'approve'}>
+                        {!data.requestedLoginId ? (
+                          <Alert
+                            type="warning"
+                            showIcon
+                            message="아이디를 받지 않은 예전 양식의 신청입니다"
+                            description="관리자가 사장님 아이디를 대신 정할 수 없습니다. ‘반려’ 탭에서 새 양식으로 다시 신청해 달라고 적어 반려해 주세요."
+                          />
+                        ) : (
+                          <Form<ApprovalFields>
+                            form={approvalForm}
+                            layout="vertical"
+                            requiredMark={false}
+                            initialValues={{
+                              feePercent: '1',
+                              permissions: ['FDS_VIEW', 'FINANCE_VIEW'],
+                            }}
+                            disabled={
+                              sending ||
+                              needsRefresh ||
+                              data.resendBlockedReason === 'FEATURE_DISABLED'
+                            }
+                            onFinish={(values) => {
+                              const fee = percentToFeeRate(values.feePercent)
+                              if (fee)
+                                setConfirmation({
+                                  kind: 'approve',
+                                  fee: values.feePercent,
+                                  input: {
+                                    merchantCode: values.merchantCode,
+                                    pgFeeRate: fee,
+                                    permissions: values.permissions,
+                                  },
+                                })
+                            }}
+                          >
+                            <div className="ar-fixed">
+                              <span>사장님이 고른 아이디</span>
+                              <strong>{data.requestedLoginId}</strong>
+                            </div>
+                            <p className="ar-help">
+                              이 아이디로 사장님 계정을 만듭니다. 비밀번호는 사장님이 승인 메일에서
+                              직접 정합니다.
+                            </p>
+                            <div className="ar-field-row">
+                              <Form.Item
+                                name="merchantCode"
+                                label="가맹점 코드"
+                                extra="가맹점을 구분하는 코드입니다. 영문 대문자·숫자 3~40자, 다른 가맹점과 겹치면 안 됩니다."
+                                rules={[
+                                  { required: true, message: '가맹점 코드를 입력해 주세요.' },
+                                  {
+                                    pattern: /^[A-Z0-9]{3,40}$/,
+                                    message: '영문 대문자와 숫자로 3~40자를 입력해 주세요.',
+                                  },
+                                ]}
+                              >
+                                <Input
+                                  autoComplete="off"
+                                  maxLength={40}
+                                  placeholder="예: SWEET001"
+                                />
+                              </Form.Item>
+                              <Form.Item
+                                name="feePercent"
+                                label="PG 수수료율"
+                                extra="앞으로 생기는 정산부터 적용됩니다. 이미 계산된 정산금은 그대로입니다."
+                                rules={[
+                                  {
+                                    validator: (_, value: string) =>
+                                      percentToFeeRate(value ?? '') !== null
+                                        ? Promise.resolve()
+                                        : Promise.reject(
+                                            new Error(
+                                              '0 이상 100 미만, 소수 4자리까지 입력해 주세요.',
+                                            ),
+                                          ),
+                                  },
+                                ]}
+                              >
+                                <Input suffix="%" inputMode="decimal" maxLength={7} />
+                              </Form.Item>
+                            </div>
+                            <Form.Item
+                              name="permissions"
+                              label="사장님 기능 권한"
+                              extra={
+                                selectedPermissions?.length === 0 ? (
+                                  <span className="ar-help-warn">
+                                    하나도 켜지 않으면 사장님이 들어갈 수 있는 화면이 없습니다.
+                                  </span>
+                                ) : undefined
+                              }
+                            >
+                              <PermissionSwitches />
+                            </Form.Item>
+                            <div className="ar-actions">
+                              <p>
+                                가맹점 이름 <strong>{app.merchantName}</strong> · 사장님 이름{' '}
+                                <strong>{app.contactName}</strong>
+                              </p>
+                              <Button type="primary" htmlType="submit">
+                                승인하고 사장님 계정 만들기
+                              </Button>
+                            </div>
+                          </Form>
+                        )}
+                      </div>
+                      <div className="ar-review-body" hidden={reviewTab !== 'reject'}>
+                        <Form<{ reason: string }>
+                          form={rejectionForm}
+                          layout="vertical"
+                          requiredMark={false}
+                          disabled={
+                            sending ||
+                            needsRefresh ||
+                            data.resendBlockedReason === 'FEATURE_DISABLED'
+                          }
+                          onFinish={(values) =>
+                            setConfirmation({ kind: 'reject', reason: values.reason.trim() })
                           }
                         >
-                          <Checkbox.Group
-                            options={[
-                              { label: '조치 결과 조회', value: 'FDS_VIEW' },
-                              { label: '정산·자금관리', value: 'FINANCE_VIEW' },
+                          <Form.Item
+                            name="reason"
+                            label="반려 사유"
+                            extra="적은 사유는 사장님 메일로 그대로 갑니다. 무엇을 고치면 되는지 적어 주세요."
+                            rules={[
+                              {
+                                required: true,
+                                whitespace: true,
+                                message: '사장님에게 보낼 반려 사유를 입력해 주세요.',
+                              },
+                              { max: 1000, message: '1,000자 이하로 입력해 주세요.' },
                             ]}
-                          />
-                        </Form.Item>
-                        <Button
-                          type="primary"
-                          htmlType="submit"
-                          block
-                          icon={<CheckCircleOutlined />}
-                        >
-                          승인하고 계정 발급
-                        </Button>
-                      </Form>
+                          >
+                            <Input.TextArea
+                              rows={4}
+                              maxLength={1000}
+                              showCount
+                              placeholder="예: 제출한 사업자등록번호를 확인할 수 없습니다. 번호를 확인한 뒤 새로 신청해 주세요."
+                            />
+                          </Form.Item>
+                          <div className="ar-actions">
+                            <p>반려하면 가맹점과 사장님 계정을 만들지 않습니다.</p>
+                            <Button danger htmlType="submit">
+                              반려하기
+                            </Button>
+                          </div>
+                        </Form>
+                      </div>
+                    </div>
+                  </section>
+                )}
+                {app.status !== 'EMAIL_VERIFICATION_PENDING' && mailPanel}
+                <section className="ar-section" aria-labelledby="ar-history-title">
+                  <h2 className="ar-section-title" id="ar-history-title">
+                    기록
+                  </h2>
+                  <ol className="ar-timeline">
+                    <li>
+                      <span className="ar-timeline-mark" aria-hidden="true" />
+                      <span>
+                        <span className="ar-role is-owner">사장님</span>{' '}
+                        <strong>{app.contactName}</strong> 님이 이용을 신청했습니다
+                      </span>
+                      <time>{formatApplicationTime(app.createdAt)}</time>
+                    </li>
+                    {app.emailVerifiedAt && (
+                      <li>
+                        <span className="ar-timeline-mark" aria-hidden="true" />
+                        <span>
+                          <span className="ar-role is-owner">사장님</span> 메일의 확인 링크를
+                          눌렀습니다
+                        </span>
+                        <time>{formatApplicationTime(app.emailVerifiedAt)}</time>
+                      </li>
                     )}
-                  </Card>
-                  <Card title="신청 반려" className="ar-reject">
-                    <p className="ar-card-intro">
-                      신청자가 다음 신청을 준비할 수 있도록 사유를 구체적으로 적어 주세요. 입력한
-                      사유는 이메일로 전달됩니다.
-                    </p>
-                    <Form<{ reason: string }>
-                      form={rejectionForm}
-                      layout="vertical"
-                      requiredMark={false}
-                      disabled={
-                        sending || needsRefresh || data.resendBlockedReason === 'FEATURE_DISABLED'
-                      }
-                      onFinish={(values) =>
-                        setConfirmation({ kind: 'reject', reason: values.reason.trim() })
-                      }
-                    >
-                      <Form.Item
-                        name="reason"
-                        label="반려 사유"
-                        rules={[
-                          {
-                            required: true,
-                            whitespace: true,
-                            message: '신청자에게 전달할 반려 사유를 입력해 주세요.',
-                          },
-                          { max: 1000, message: '1,000자 이하로 입력해 주세요.' },
-                        ]}
+                    {data.reviewedAt && (
+                      <li>
+                        <span className="ar-timeline-mark is-strong" aria-hidden="true" />
+                        <span className="ar-timeline-text">
+                          <span className="ar-role is-admin">관리자</span>
+                          <strong>
+                            {data.reviewerName ?? `계정 #${data.reviewerUserId}`}
+                          </strong>{' '}
+                          님이 처리했습니다 {statusTag(app.status)}
+                        </span>
+                        <time>{formatApplicationTime(data.reviewedAt)}</time>
+                      </li>
+                    )}
+                  </ol>
+                </section>
+              </div>
+              <aside className="ar-props" aria-label="신청 정보">
+                <section>
+                  <h2>
+                    신청한 사장님 <span className="ar-role is-owner">사장님</span>
+                  </h2>
+                  <dl>
+                    <dt>이름</dt>
+                    <dd>{app.contactName}</dd>
+                    <dt>이메일</dt>
+                    <dd>
+                      <span>{data.email}</span>
+                      {app.emailVerifiedAt && <Tag color="green">확인됨</Tag>}
+                    </dd>
+                    <dt>연락처</dt>
+                    <dd className="ar-num">{data.phone}</dd>
+                    <dt>원하는 아이디</dt>
+                    <dd>{data.requestedLoginId ?? '예전 양식이라 받지 않음'}</dd>
+                  </dl>
+                </section>
+                <section>
+                  <h2>가게·사업자</h2>
+                  <dl>
+                    <dt>사업자번호</dt>
+                    <dd className="ar-num">
+                      <Typography.Text
+                        copyable={{
+                          text: app.businessRegistrationNumber,
+                          tooltips: ['복사', '복사됨'],
+                        }}
                       >
-                        <Input.TextArea
-                          rows={4}
-                          maxLength={1000}
-                          showCount
-                          placeholder="예: 제출한 사업자등록번호를 확인할 수 없습니다. 번호를 확인한 뒤 새로 신청해 주세요."
-                        />
-                      </Form.Item>
-                      <Button htmlType="submit" block>
-                        반려 내용 확인
-                      </Button>
-                    </Form>
-                  </Card>
-                </aside>
-              )}
+                        {formatBusinessNumber(app.businessRegistrationNumber)}
+                      </Typography.Text>
+                    </dd>
+                    <dt>쇼핑몰 주소</dt>
+                    <dd>
+                      {data.shopUrl && isShopUrlValid(data.shopUrl) ? (
+                        <a href={data.shopUrl} target="_blank" rel="noopener noreferrer">
+                          {data.shopUrl.replace(/^https?:\/\//, '')} ↗
+                        </a>
+                      ) : (
+                        <span className={data.shopUrl ? undefined : 'ar-dim'}>
+                          {data.shopUrl ?? '예전 양식이라 받지 않음'}
+                        </span>
+                      )}
+                    </dd>
+                  </dl>
+                </section>
+                <section>
+                  <h2>진행 시각</h2>
+                  <dl>
+                    <dt>신청</dt>
+                    <dd className="ar-num">{formatApplicationTime(app.createdAt)}</dd>
+                    <dt>이메일 확인</dt>
+                    <dd className="ar-num">
+                      {app.emailVerifiedAt ? (
+                        formatApplicationTime(app.emailVerifiedAt)
+                      ) : (
+                        <span className="ar-dim">아직 확인 전</span>
+                      )}
+                    </dd>
+                    <dt>개인정보 동의</dt>
+                    <dd className="ar-num ar-stack">
+                      <span>{formatApplicationTime(data.consentedAt)}</span>
+                      <span className="ar-dim">동의 문구 {data.consentVersion}</span>
+                    </dd>
+                    {data.reviewedAt && (
+                      <>
+                        <dt>처리한 관리자</dt>
+                        <dd>
+                          {data.reviewerName ?? `계정 #${data.reviewerUserId}`} ·{' '}
+                          {formatApplicationTime(data.reviewedAt)}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                </section>
+              </aside>
             </div>
           </>
         )
@@ -744,7 +899,7 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
       <Modal
         title={
           confirmation?.kind === 'approve'
-            ? '이 정보로 승인하고 계정을 발급할까요?'
+            ? '이 정보로 승인하고 사장님 계정을 만들까요?'
             : '신청을 반려할까요?'
         }
         open={!!confirmation && canReview}
@@ -756,7 +911,9 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
         keyboard={!sending}
         confirmLoading={sending}
         cancelButtonProps={{ disabled: sending }}
-        okText={confirmation?.kind === 'approve' ? '승인·계정 발급' : '반려하고 사유 메일 발송'}
+        okText={
+          confirmation?.kind === 'approve' ? '승인하고 계정 만들기' : '반려하고 사유 메일 보내기'
+        }
         cancelText="돌아가서 수정"
         onOk={() => void perform()}
       >
@@ -767,14 +924,14 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
               items={[
                 { key: 'merchant', label: '가맹점', children: app?.merchantName },
                 { key: 'code', label: '가맹점 코드', children: confirmation.input.merchantCode },
-                { key: 'login', label: '로그인 아이디', children: data?.requestedLoginId },
-                { key: 'fee', label: '수수료율', children: `${confirmation.fee}%` },
+                { key: 'login', label: '사장님 아이디', children: data?.requestedLoginId },
+                { key: 'fee', label: 'PG 수수료율', children: `${confirmation.fee}%` },
                 {
                   key: 'permissions',
-                  label: '기능 권한',
+                  label: '사장님 권한',
                   children:
                     confirmation.input.permissions
-                      .map((p) => (p === 'FDS_VIEW' ? '조치 결과 조회' : '정산·자금관리'))
+                      .map((p) => (p === 'FDS_VIEW' ? 'FDS' : '정산·자금관리'))
                       .join(', ') || '없음',
                 },
               ]}
@@ -782,17 +939,17 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
             <Alert
               type="info"
               showIcon
-              message="신청한 이메일로 첫 비밀번호 설정 링크를 보냅니다."
-              description="승인 후 신청 상태를 되돌릴 수 없습니다. 결제 연동은 별도로 진행해야 합니다."
+              message="사장님 메일로 첫 비밀번호 설정 링크를 보냅니다."
+              description="승인한 뒤에는 되돌릴 수 없습니다. 쇼핑몰 결제 연동은 따로 진행해야 합니다."
             />
           </>
         ) : (
           <>
             <p>
-              이번 신청으로 가맹점과 계정은 생성되지 않습니다. 신청자는 새로 신청할 수 있습니다.
+              가맹점과 사장님 계정은 만들지 않습니다. 사장님은 사유를 보고 새로 신청할 수 있습니다.
             </p>
             <p className="ar-reason">{confirmation?.reason}</p>
-            <p>위 사유를 {data?.email}로 보냅니다.</p>
+            <p>위 사유를 사장님 메일({data?.email})로 보냅니다.</p>
           </>
         )}
       </Modal>

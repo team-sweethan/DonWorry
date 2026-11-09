@@ -10,6 +10,7 @@ import {
   formatApplicationTime,
   applicationLabels,
 } from '../src/api/adminApplications.ts'
+import { formatKstDateTime } from '../src/utils/format.ts'
 import { setupInitialPassword } from '../src/api/merchantApplications.ts'
 import { ApiError, subscribePasswordChangeRequired } from '../src/api/client.ts'
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -182,5 +183,12 @@ test('applications_whenEmailUnverified_usesNewStatusAndOriginalLabel', async () 
   }
   const result = await getApplications(0, '', 'EMAIL_VERIFICATION_PENDING')
   assert.equal(result.items[0].status, 'EMAIL_VERIFICATION_PENDING')
-  assert.equal(applicationLabels.EMAIL_VERIFICATION_PENDING, '이메일 미확인')
+  assert.equal(applicationLabels.EMAIL_VERIFICATION_PENDING, '이메일 확인 전')
+})
+
+// UTC로 오는 시각(시간대 표시 없음 포함)을 한국 시간으로 보여 준다.
+test('formatKstDateTime_whenUtcWithoutZone_showsKoreanTime', () => {
+  assert.equal(formatKstDateTime('2026-11-09T05:31:00'), formatKstDateTime('2026-11-09T05:31:00Z'))
+  assert.match(formatKstDateTime('2026-11-09T15:30:00Z'), /2026\. 11\. 10\./)
+  assert.equal(formatKstDateTime(null), '—')
 })

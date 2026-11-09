@@ -910,6 +910,70 @@ textarea {
   --shell-panel-line: #ebe3d2;
 }
 
+/* 상태 태그 — 관리 화면 세 역할 공통 (Linear 참고, 이용 신청 시안 A).
+   색 이름이 있는 태그(상태)는 바탕 없이 아이콘 + 글자. 색 뜻: 대기 점선 원(노랑) · 완료 체크(초록) · 위험 느낌표(빨강) ·
+   진행 반쯤 찬 원(파랑) · 시작 전 빈 원(color="default") · 보라는 점.
+   색을 안 준 태그와 color="#hex" 태그는 상태가 아니라 이름표라 옅은 회색 바탕 그대로 둔다.
+   사장님 홈 연동 칸(.oh-section-heading, #721)은 알약 모양을 일부러 쓰므로 아이콘 규칙에서 뺀다. */
+.admin-viewport[data-role] .ant-tag:not(.oh-section-heading .ant-tag) {
+  margin-inline-end: 6px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.admin-viewport[data-role]
+  .ant-tag[class*='ant-tag-']:not(
+    .ant-tag-has-color,
+    .ant-tag-hidden,
+    .oh-section-heading .ant-tag
+  ) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.admin-viewport[data-role]
+  .ant-tag[class*='ant-tag-']:not(
+    .ant-tag-has-color,
+    .ant-tag-hidden,
+    .oh-section-heading .ant-tag
+  )::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--tag-icon, none) center / contain no-repeat;
+}
+.admin-viewport[data-role] .ant-tag-default {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-gold, .ant-tag-orange, .ant-tag-yellow, .ant-tag-warning) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%23d97706' stroke-width='1.5' stroke-dasharray='2.2 1.6'/%3E%3Ccircle cx='7' cy='7' r='2' fill='%23d97706'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-green, .ant-tag-lime, .ant-tag-success) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='6.25' fill='%2316a34a'/%3E%3Cpath d='M4.3 7.2l1.8 1.8 3.6-3.8' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-red, .ant-tag-volcano, .ant-tag-magenta, .ant-tag-error) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='6.25' fill='%23dc2626'/%3E%3Cpath d='M7 3.9v3.6' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='7' cy='9.9' r='0.95' fill='white'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role]
+  :is(.ant-tag-blue, .ant-tag-geekblue, .ant-tag-cyan, .ant-tag-processing) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%232563eb' stroke-width='1.5'/%3E%3Cpath d='M7 3.5a3.5 3.5 0 0 1 0 7z' fill='%232563eb'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] .ant-tag-purple {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='3.5' fill='%237c3aed'/%3E%3C/svg%3E");
+}
+
 /* 선택된 탭 — antd는 글자 · 밑줄 모두 colorPrimary라, 둘 다 같이 역할 색으로 덮는다 (#713).
    모달처럼 바깥 틀 밖(포털)에 그려지는 탭은 그대로 파랑이다. */
 .admin-viewport[data-role] .ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {

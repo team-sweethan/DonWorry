@@ -6,232 +6,838 @@
 .application-review > [role='status'] {
   margin-bottom: 20px;
 }
+/* 목록 — 이용 신청 시안 A (Linear 참고): 색은 상태 아이콘에만, 나머지는 회색 글자와 얇은 선 */
 .ar-process {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 28px;
-  padding: 18px 22px;
-  margin-bottom: 24px;
-  background: var(--shell-panel);
-  border: 1px solid var(--shell-panel-line);
-  border-radius: 12px;
-  color: #596a83;
-  font-size: var(--dw-text-secondary);
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 20px;
+  padding: 0;
+  list-style: none;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
 }
-.ar-process strong {
+.ar-process li + li::before {
+  content: '›';
+  margin-right: 6px;
+  color: #cbd5e1;
+}
+.ar-process li.is-current {
   color: var(--shell-ink);
+  font-weight: 600;
+}
+.ar-list.ant-card {
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+.ar-list .ant-card-body {
+  padding: 16px 20px 20px;
+}
+.ar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -20px;
+  padding: 0 20px 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ar-status-tabs.ant-segmented {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0;
+  background: none;
+}
+.ar-status-tabs .ant-segmented-item {
+  border-radius: 6px;
+  color: #6b6b73;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.ar-status-tabs .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.ar-status-tabs .ant-segmented-item-selected,
+.ar-status-tabs .ant-segmented-thumb {
+  background: var(--shell-tint);
+  box-shadow: none;
+  color: var(--shell-ink);
+  font-weight: 600;
+}
+.ar-status-tabs .ant-segmented-item-selected .ar-tab-count {
+  color: var(--shell-strong);
+  font-weight: 600;
+}
+.ar-status-tabs .ant-segmented-item-label {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: var(--dw-text-secondary);
+  line-height: 30px;
+}
+.ar-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ar-tab-count {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 .ar-filters {
   display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.ar-filters .ant-select {
-  width: 160px;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
 }
 .ar-filters .ant-input-search {
-  max-width: 420px;
+  width: 280px;
 }
-.ar-store-link {
+.ar-filters .ar-mail-toggle {
+  display: inline-flex;
+  gap: 6px;
+  border-style: dashed;
+  border-color: #cbd5e1;
+  color: #475569;
+  box-shadow: none;
+}
+.ar-filters .ar-mail-toggle.is-on,
+.ar-filters .ar-mail-toggle.is-on:not(:disabled):hover {
+  border-style: solid;
+  border-color: var(--shell-strong);
+  background: var(--shell-tint);
+  color: var(--shell-ink);
+}
+.ar-list .ant-table-thead > tr > th {
+  background: none;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
   font-weight: 600;
 }
+.ar-list .ant-table-thead > tr > th::before {
+  display: none;
+}
+.ar-list .ant-table-tbody > tr > td {
+  border-bottom-color: #eef2f6;
+  color: #334155;
+}
+.ar-list .ant-table-tbody > tr:hover > td {
+  background: #f8fafc;
+}
+.ar-mail {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  white-space: nowrap;
+}
+.ar-mail.is-unknown {
+  color: #c2410c;
+  font-weight: 500;
+}
+.ar-mail.is-failed {
+  color: #dc2626;
+  font-weight: 500;
+}
+.ar-mail.is-failed::before {
+  content: '! ';
+}
+.ar-muted {
+  color: #94a3b8;
+}
+.ar-time {
+  color: #64748b;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.ar-store-link {
+  color: #0f172a;
+  font-weight: 600;
+}
+.ar-store-link:hover {
+  color: var(--shell-strong);
+}
 .ar-footnote {
-  color: #62718a;
+  color: #64748b;
   line-height: 1.7;
   font-size: var(--dw-text-secondary);
   margin: 16px 0 0;
 }
-.ar-back {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.ar-state {
-  background: #eff5ff;
-  border: 1px solid #d6e5fc;
-  border-radius: 14px;
-  padding: 24px 28px;
-  margin: 24px 0;
-}
-.ar-state > div {
+/* 상세 — 왼쪽 본문(할 일 · 기록) + 오른쪽 속성 목록. 긴 이메일 · 주소 · 사유는 줄을 바꿔 넘치지 않게 한다 */
+.ar-crumb {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  color: #62718a;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ar-crumb a {
+  color: var(--shell-ink);
+  font-weight: 500;
+}
+.ar-crumb a:hover {
+  color: var(--shell-strong);
+}
+.ar-crumb-current {
+  min-width: 0;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+.application-review .dw-page-title {
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.ar-summary {
+  margin: -8px 0 24px;
+}
+.ar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: #64748b;
   font-size: var(--dw-text-secondary);
 }
-.ar-state h2 {
-  font-size: 19px;
-  line-height: 1.6;
-  margin: 14px 0 6px;
-  color: #213a60;
+.ar-meta .ant-tag {
+  font-size: var(--dw-text-secondary);
+  font-weight: 600;
 }
-.ar-state p {
-  margin: 0;
-  color: #536982;
-  line-height: 1.8;
+.ar-meta-sep {
+  color: #cbd5e1;
 }
-.ar-state-approved {
-  background: #f1faf6;
-  border-color: #cfe8db;
+.ar-lead {
+  max-width: 72ch;
+  margin: 12px 0 0;
+  color: #334155;
+  font-size: var(--dw-text-body);
+  line-height: 1.75;
 }
-.ar-state-rejected {
-  background: #faf6f5;
-  border-color: #e9dcd9;
-}
-.ar-state-email_verification_pending {
-  background: #f7f8fa;
-  border-color: #e1e5eb;
-}
-.ar-detail-grid {
+.ar-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.9fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   align-items: start;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
 }
-.ar-information,
-.ar-decisions {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+.ar-body {
+  display: grid;
+  gap: 32px;
+  min-width: 0;
+  padding: 28px 32px 36px;
+}
+.ar-section {
   min-width: 0;
 }
-.ar-information:only-child {
-  grid-column: 1/-1;
+.ar-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
 }
-.ar-information .ant-descriptions-item-label {
-  width: 142px;
-  color: #62718a;
-}
-.ar-information .ant-descriptions-item-content {
-  overflow-wrap: anywhere;
-}
-.ar-inquiry {
-  border-top: 1px solid #edf0f5;
-  padding-top: 20px;
-  margin-top: 20px;
-}
-.ar-inquiry h3 {
+.ar-section-head .ar-section-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
   margin: 0 0 10px;
-  font-size: var(--dw-text-body);
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  font-weight: 600;
 }
-.ar-inquiry p,
-.ar-reason {
-  white-space: pre-wrap;
+/* 지금 할 일 하나 — 상태마다 본문 맨 위에 한 칸만 크게 */
+.ar-primary {
+  min-width: 0;
+  padding: 22px 24px 24px;
+  border: 1px solid var(--shell-panel-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow:
+    0 1px 2px #0f172a0a,
+    0 6px 20px #0f172a0d;
+}
+.ar-primary-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  margin: 0 0 16px;
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.ar-primary-title small {
+  min-width: 0;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  font-weight: 400;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
-  line-height: 1.8;
+}
+.ar-section-head .ar-primary-title {
   margin: 0;
 }
-.ar-reason {
-  padding: 16px;
-  background: #f7f8fb;
+.ar-primary .ar-section-head {
+  margin-bottom: 16px;
+}
+.ar-primary-note {
+  margin: 14px 0 0;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  line-height: 1.6;
+}
+.ar-issued {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+}
+.ar-issued > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+.ar-issued dt {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ar-issued dd {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--dw-text-body);
+  overflow-wrap: anywhere;
+}
+.ar-issued dd.ar-issued-main {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.ar-issued dd.ar-issued-main a {
+  color: var(--shell-ink);
+}
+.ar-reject-reason {
+  margin: 0;
+  color: #0f172a;
+  font-size: 17px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* 중요하지 않은 칸 — 작은 회색 제목, 연한 글자 */
+.ar-body > .ar-section .ar-quote {
+  padding: 12px 14px;
+  border-color: #eef2f6;
+  color: #334155;
+  font-size: var(--dw-text-secondary);
+}
+.ar-body > .ant-card {
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+.ar-body > .ant-card .ant-card-head {
+  min-height: 44px;
+  font-size: var(--dw-text-secondary);
+}
+.ar-section-title small {
+  min-width: 0;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.ar-quote {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: var(--dw-text-body);
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ar-quote.is-empty {
+  color: #64748b;
+}
+.ar-duplicate ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.ar-duplicate p {
+  margin: 0;
+}
+.ar-duplicate li {
+  overflow-wrap: anywhere;
+}
+.ar-box {
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+/* 검토 — 승인 / 반려를 탭 하나로 */
+.ar-review-tabs {
+  padding: 6px;
+  border-bottom: 1px solid var(--shell-panel-line);
+  border-radius: 10px 10px 0 0;
+  background: var(--shell-panel);
+}
+.ar-review-tabs .ant-segmented {
+  padding: 0;
+  background: none;
+}
+.ar-review-tabs .ant-segmented-item {
+  border-radius: 6px;
+  color: #64748b;
+}
+.ar-review-tabs .ant-segmented-item-selected,
+.ar-review-tabs .ant-segmented-thumb {
+  background: #fff;
+  box-shadow: 0 1px 2px #0f172a14;
+  color: var(--shell-ink);
+  font-weight: 600;
+}
+.ar-review-body {
+  padding: 20px;
+}
+.ar-review-body[hidden] {
+  display: none;
+}
+.ar-review-body .ant-form-item {
+  margin-bottom: 20px;
+}
+.ar-review-body .ant-form-item-extra {
+  padding-top: 4px;
+  font-size: var(--dw-text-caption);
+  line-height: 1.6;
+}
+.ar-fixed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--shell-panel-line);
+  border-radius: 8px;
+  background: var(--shell-panel);
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ar-fixed strong {
+  min-width: 0;
+  color: var(--shell-ink);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.ar-help {
+  margin: 6px 0 20px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  line-height: 1.6;
+}
+.ar-help-warn {
+  color: #b45309;
+}
+.ar-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+.ar-switches {
+  display: grid;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
-.ar-card-intro {
-  margin: 0 0 24px;
-  line-height: 1.8;
-  color: #596a83;
-}
-.ar-decisions .ant-checkbox-group {
+.ar-switch {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
 }
-.ar-decisions .ant-form-item-extra {
+.ar-switch + .ar-switch {
+  border-top: 1px solid #e2e8f0;
+}
+.ar-switch strong {
+  color: #0f172a;
+  font-size: var(--dw-text-body);
+  font-weight: 600;
+}
+.ar-switch .ant-switch {
+  flex: none;
+}
+.ar-switch .ant-switch.ant-switch-checked,
+.ar-switch .ant-switch.ant-switch-checked:hover:not(.ant-switch-disabled) {
+  background: var(--shell-strong);
+}
+.ar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ar-actions p {
+  min-width: 0;
+  margin: 0;
+  color: #64748b;
   font-size: var(--dw-text-caption);
-  line-height: 1.7;
-  padding-top: 5px;
+  overflow-wrap: anywhere;
 }
-.ar-decisions .ant-card-head {
-  background: #f8faff;
+.ar-actions strong {
+  color: #334155;
+  font-weight: 600;
 }
-.ar-reject .ant-card-head {
-  background: #fcfbfa;
+
+/* 안내 메일 */
+.ar-mail-msg {
+  margin-bottom: 12px;
 }
-.ar-reject .ant-form-item {
-  margin-bottom: 28px;
+.ar-mail-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.ar-mail-now > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.ar-mail-now strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: #334155;
+  font-size: var(--dw-text-secondary);
+  font-weight: 500;
+}
+.ar-primary .ar-mail-now strong {
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 600;
+}
+.ar-mail-now span {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ar-mail-blocked {
+  padding: 0 16px 12px;
+  color: #b45309;
+  font-size: var(--dw-text-caption);
+  line-height: 1.6;
+}
+.ar-mail-blocked p {
+  margin: 0;
+}
+.ar-mail-foot {
+  border-top: 1px solid #e2e8f0;
+}
+.ar-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  background: none;
+  color: #64748b;
+  font: inherit;
+  font-size: var(--dw-text-caption);
+  text-align: left;
+  cursor: pointer;
+}
+.ar-disclosure:hover {
+  color: #0f172a;
+}
+.ar-disclosure:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.ar-disclosure .anticon {
+  font-size: 10px;
+  transition: transform 120ms ease;
+}
+.ar-disclosure[aria-expanded='true'] .anticon {
+  transform: rotate(90deg);
+}
+#ar-mail-history {
+  padding: 0 8px 8px;
+}
+#ar-mail-history[hidden] {
+  display: none;
+}
+.ar-mail-note {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 기록 */
+.ar-timeline {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ar-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 10px;
+  padding-bottom: 14px;
+  color: #475569;
+  font-size: var(--dw-text-caption);
+}
+.ar-timeline li:last-child {
+  padding-bottom: 0;
+}
+.ar-timeline li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  left: 9.5px;
+  width: 1px;
+  background: #e2e8f0;
+}
+.ar-timeline-mark {
+  width: 7px;
+  height: 7px;
+  margin: 7px 0 0 6.5px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+.ar-timeline-mark.is-strong {
+  background: var(--shell-strong);
+  box-shadow: 0 0 0 3px var(--shell-tint);
+}
+.ar-timeline-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.ar-timeline li > span:not(.ar-timeline-mark) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ar-timeline time {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 오른쪽 속성 목록 */
+.ar-props {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  align-self: stretch;
+  align-content: start;
+  padding: 24px 22px 32px;
+  border-left: 1px solid var(--shell-panel-line);
+  border-radius: 0 10px 10px 0;
+  background: var(--shell-panel);
+}
+.ar-props section + section {
+  padding-top: 20px;
+  border-top: 1px solid var(--shell-panel-line);
+}
+.ar-props h2 {
+  margin: 0 0 12px;
+  color: var(--shell-ink);
+  font-size: var(--dw-text-caption);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.ar-props dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  font-size: var(--dw-text-secondary);
+}
+/* 이름 위 · 값 아래로 쌓아 값이 칸 전체 폭을 쓴다. 이메일 · 주소가 중간에서 잘리지 않게 */
+.ar-props dt {
+  font-size: 12px;
+  line-height: 18px;
+}
+.ar-props dd + dt {
+  margin-top: 12px;
+}
+.ar-props dt {
+  color: #64748b;
+}
+.ar-props dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 0;
+  margin: 2px 0 0;
+  color: #1e293b;
+  line-height: 22px;
+}
+.ar-props dd.ar-stack {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.ar-props dd > span,
+.ar-props dd > a,
+.ar-props dd .ant-typography {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ar-props dd a {
+  color: #0f172a;
+  text-decoration: underline;
+  text-decoration-color: #cbd5e1;
+  text-underline-offset: 3px;
+}
+.ar-props dd a:hover {
+  text-decoration-color: #0f172a;
+}
+.ar-props dd .ant-typography {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.ar-num {
+  font-variant-numeric: tabular-nums;
+}
+.ar-dim {
+  color: #94a3b8;
+}
+.ar-reason {
+  margin: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f8fafc;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .ar-loading {
   padding: 64px;
   text-align: center;
 }
-@media (max-width: 1100px) {
-  .ar-detail-grid {
+
+@media screen and (width < 1180px) {
+  .ar-detail {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-@media (max-width: 520px) {
-  .ar-filters {
-    flex-direction: column;
-  }
-  .ar-filters .ant-select {
-    width: 100%;
-  }
-  .ar-state {
-    padding: 20px;
-  }
-  .ar-state h2 {
-    font-size: 17px;
-  }
-  .application-review .ant-card-body {
-    padding: 20px 16px;
-  }
-  .ar-information .ant-descriptions-item-label {
-    width: 120px;
-  }
-}
-
-@media (max-width: 760px) {
-  .ar-process {
-    padding: 16px;
-    gap: 10px 18px;
-  }
-}
-
-.ar-selected-login {
-  padding: 16px 18px;
-  margin: 0 0 24px;
-  border: 1px solid var(--shell-panel-line);
-  border-radius: 10px;
-  background: var(--shell-panel);
-  overflow-wrap: anywhere;
-}
-.ar-selected-login > span {
-  display: block;
-  color: #62718a;
-  font-size: var(--dw-text-caption);
-}
-.ar-selected-login strong {
-  display: block;
-  color: #213a60;
-  font-size: 17px;
-  margin: 8px 0;
-}
-.ar-selected-login p {
-  color: #536982;
-  font-size: var(--dw-text-caption);
-  line-height: 1.8;
-  margin: 0;
-}
-
-@media screen and (width < 1280px) {
-  .ar-detail-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .ar-props {
+    order: -1;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    border-left: 0;
+    border-bottom: 1px solid var(--shell-panel-line);
+    border-radius: 10px 10px 0 0;
   }
   .ar-filters {
     flex-wrap: wrap;
   }
 }
 @media screen and (width <= 760px) {
+  .ar-body {
+    padding: 20px 16px 24px;
+  }
+  .ar-props {
+    padding: 20px 16px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ar-field-row,
+  .ar-issued {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ar-primary {
+    padding: 18px 16px 20px;
+  }
+  .ar-timeline li {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .ar-timeline time {
+    grid-column: 2;
+  }
   .ar-filters {
     flex-direction: column;
+    align-items: stretch;
   }
-  .ar-filters .ant-select {
+  .ar-filters .ant-input-search {
     width: 100%;
   }
-  .ar-state > div {
-    flex-wrap: wrap;
-  }
+}
+
+/* 누가 한 일인지 — 역할 색(#713)을 그대로 쓴다. 사장님 금색 · 관리자 보라 */
+.ar-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+.ar-role.is-owner {
+  background: #f8edcf;
+  color: #6f4c0f;
+}
+.ar-role.is-admin {
+  background: #efe9fd;
+  color: #5b35b0;
+}
+.ar-props h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 반려 사유 글자 수(입력칸 아래 오른쪽)와 아래 안내 문구가 겹치지 않게 한 줄 띄운다 */
+.ar-review-body .ant-input-textarea-show-count {
+  margin-bottom: 24px;
+}
+/* 탭이 좁아져도 글자가 '…'로 잘리지 않게 줄이지 않고, 넘치면 옆으로 스크롤한다 */
+.ar-status-tabs .ant-segmented-group,
+.ar-review-tabs .ant-segmented-group {
+  width: max-content;
+}
+.ar-status-tabs .ant-segmented-item,
+.ar-review-tabs .ant-segmented-item {
+  flex: none;
+}
+.ar-status-tabs .ant-segmented-item-label,
+.ar-review-tabs .ant-segmented-item-label {
+  overflow: visible;
+}
+/* 만든 계정: 아이디는 한 줄 전체를 쓰고, 비밀번호 · 가맹점은 그 아래에 나란히 */
+.ar-issued > div:first-child {
+  grid-column: 1 / -1;
 }
