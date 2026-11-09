@@ -45,7 +45,6 @@ export function HomeWorkflow({ cases, active }: Props) {
     >
       <div className="security-home-workflow-heading">
         <strong>담당 사건 업무 흐름</strong>
-        <span>처리 순서 안내 · 숫자는 마지막 조회 기준</span>
       </div>
       <ol className="security-home-stages">
         {stages.map((stage, index) => (
