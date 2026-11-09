@@ -153,3 +153,5 @@ P6 #507 PR 리뷰 대상: [0076 실제 지급 원장을 잔액 유입의 기준�
 P1 #483 PR 리뷰 대상: [0077 배포 전 DB 백업과 승인된 이전 이미지 복구](0077-release-backup-and-image-recovery.md) — 제안, 핵심 기능 합의·운영 검증 전.
 
 P6 #233 리뷰 대상: [0081 정산 주문 상세용 상품 스냅샷 전송](0081-p6-order-items-without-pickup.md).
+
+P6 #709 리뷰 대상: [0085 최소 운영 자금 기준의 현금흐름 경고](0085-p6-minimum-operating-funds.md).

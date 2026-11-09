@@ -442,7 +442,10 @@ export function CashFlowOverview({
           <h2>
             {maximumShortage ? <FinanceMoney value={maximumShortage} /> : '추가 필요 자금 없음'}
           </h2>
-          <p>선택 기간의 최저 예상 잔액을 0원 이상으로 유지하는 데 필요한 금액입니다.</p>
+          <p>
+            선택 기간의 예상 마감 잔액을 최소 운영 자금{' '}
+            <FinanceMoney value={minimumOperatingFunds} /> 이상으로 유지하는 데 필요한 금액입니다.
+          </p>
           <small>
             등록된 정산·지출 기준의 단순 계산이며 실제 대출 필요액이나 승인 금액이 아닙니다.
           </small>
