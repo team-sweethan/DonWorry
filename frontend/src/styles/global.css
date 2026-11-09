@@ -1225,6 +1225,21 @@ textarea {
   .admin-viewport[data-role] .dw-container:has(.dw-tx-table, .dw-case-layout-wrap) {
     min-width: 960px;
   }
+  /* main이 가로 스크롤 영역이라 판정 칸 sticky가 창을 따라오지 못한다.
+     사이드바를 접어 본문이 1040px을 넘어도 펼친 상태와 같이 한 줄로 쌓는다. */
+  .admin-viewport[data-role] .dw-case-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'pay'
+      'side'
+      'main';
+  }
+  .admin-viewport[data-role] .dw-case-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 @media screen and (width <= 760px) {
