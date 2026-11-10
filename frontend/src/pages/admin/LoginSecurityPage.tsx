@@ -22,6 +22,7 @@ import {
   attemptKey,
   buildIncidents,
   type Incident,
+  mergeAttempts,
   type IncidentKind,
   type Launch,
   REPLAY_DELAY_MS,
@@ -34,6 +35,8 @@ import './LoginSecurityPage.css'
 const POLL_MS = 2_000
 // 화면 시계(서버 시각 기준, 재생 지연만큼 뒤)를 움직이는 간격 — 실시간 시도 줄 · 사건 번호가 레이더 점과 같이 나타난다
 const VIEW_TICK_MS = 250
+// 실시간 시도 줄 수 — 서버가 한 번에 주는 최대치(MAX_ATTEMPTS)와 같다
+const FEED_ROWS = 40
 
 const stateClass: Record<LoginSecurityState, string> = {
   NORMAL: 'is-normal',
@@ -413,7 +416,7 @@ function AttemptFeed({
   viewNow: number
   incidentByAttempt: Map<string, Incident>
 }) {
-  const visible = attempts.filter((a) => ms(a.occurredAt) <= viewNow)
+  const visible = attempts.filter((a) => ms(a.occurredAt) <= viewNow).slice(0, FEED_ROWS)
   const isFresh = (a: LoginSecurityAttempt) => viewNow - ms(a.occurredAt) <= 1_500
   return (
     <section className="ls-feed ca-panel-box" aria-labelledby="ls-feed-heading">
@@ -474,9 +477,18 @@ export function LoginSecurityPage() {
     if (busy.current) return
     busy.current = true
     try {
-      const d = await getLoginSecurity()
+      const received = await getLoginSecurity()
       const nowMs = Date.now()
-      clockOffset.current = nowMs - ms(d.generatedAt)
+      clockOffset.current = nowMs - ms(received.generatedAt)
+      // 최근 시도는 앞 응답과 합친 버퍼 — 2초에 40건이 넘어도 아직 안 보인 줄이 밀려나지 않게 (#791 Codex 리뷰)
+      const view = Math.max(viewFloor.current, nowMs - clockOffset.current - REPLAY_DELAY_MS)
+      const d: LoginSecurityDashboard = {
+        ...received,
+        attempts: mergeAttempts(latestRef.current?.attempts ?? [], received.attempts, {
+          viewNowMs: view,
+          keepShown: FEED_ROWS,
+        }),
+      }
       latestRef.current = d
       if (launched.current === null) {
         // 처음 열었을 때 이미 있던 시도 · 사건은 날리거나 띄우지 않는다
@@ -487,10 +499,10 @@ export function LoginSecurityPage() {
         setShown(d)
         setViewNow(viewFloor.current)
       } else {
-        const next = scheduleReplay(d.attempts, launched.current, {
+        const next = scheduleReplay(received.attempts, launched.current, {
           clockOffsetMs: clockOffset.current,
           nowMs,
-          serverNowMs: ms(d.generatedAt),
+          serverNowMs: ms(received.generatedAt),
           maxAgeMs: POLL_MS * 3,
         })
         launched.current = new Set(d.attempts.map(attemptKey))

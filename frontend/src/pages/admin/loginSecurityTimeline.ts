@@ -73,11 +73,19 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
     const code = displayRuleCode(alert.ruleCode)
     const name = alert.staffName ?? `ID ${alert.staffId}`
     if (code === 'SEC-INS-10') {
-      const mine = suspected
-        .filter((a) => a.staffId === alert.staffId)
-        .sort((a, b) => ms(a.occurredAt) - ms(b.occurredAt))
-      // 경보가 잡은 로그인 = 경보 생성 직전 의심 로그인. 그 뒤 의심 로그인은 열린 경보에 묶인 것
-      const detected = mine.filter((a) => ms(a.occurredAt) <= ms(alert.createdAt)).at(-1)
+      // 경보가 가리키는 로그인만 잇는다 — 첫 기록 = 탐지한 로그인, 마지막 기록(다르면) = 열린 경보에 묶인 다음 로그인 (#791 Codex 리뷰)
+      // 직원 번호 · 시각 앞뒤로만 고르면 같은 직원의 닫힌 경보와 새 경보가 서로의 로그인을 가져간다
+      // 한계: 서버처럼 처음 · 마지막 로그인만 남아, 그 사이에 묶인 로그인은 번호가 붙지 않는다
+      const loginAt = (iso: string | null) =>
+        iso === null
+          ? undefined
+          : suspected.find((a) => a.staffId === alert.staffId && ms(a.occurredAt) === ms(iso))
+      const detected = loginAt(alert.firstEventAt)
+      const merged =
+        alert.lastEventAt !== null &&
+        (alert.firstEventAt === null || ms(alert.lastEventAt) !== ms(alert.firstEventAt))
+          ? loginAt(alert.lastEventAt)
+          : undefined
       if (inRange(alert.createdAt)) {
         found.push({
           key: `takeover-${alert.alertId}`,
@@ -93,17 +101,16 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
           attemptKey: detected ? attemptKey(detected) : null,
         })
       }
-      for (const later of mine.filter((a) => ms(a.occurredAt) > ms(alert.createdAt))) {
-        if (!inRange(later.occurredAt)) continue
+      if (merged && inRange(merged.occurredAt)) {
         found.push({
-          key: `relogin-${attemptKey(later)}`,
+          key: `relogin-${alert.alertId}`,
           kind: 'relogin',
-          at: later.occurredAt,
-          title: `같은 계정 ${browserOf(later.device)} 로그인`,
-          detail: '열린 탈취 의심 경보에 묶임',
-          tip: [`${name} · ${later.device}`, '새 경보 없이 열린 경보에 묶음'],
+          at: merged.occurredAt,
+          title: `같은 계정 ${browserOf(merged.device)} 로그인`,
+          detail: '같은 탈취 의심 경보에 묶임',
+          tip: [`${name} · ${merged.device}`, '새 경보 없이 같은 경보에 묶음'],
           caseId: alert.insiderCaseId,
-          attemptKey: attemptKey(later),
+          attemptKey: attemptKey(merged),
         })
       }
     } else if (code === 'SEC-INS-05' && inRange(alert.createdAt)) {
@@ -124,6 +131,25 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
   return found
     .sort((a, b) => ms(a.at) - ms(b.at) || order[a.kind] - order[b.kind])
     .map((x, i) => ({ ...x, n: i + 1 }))
+}
+
+/**
+ * 최근 시도 버퍼 (#791 Codex 리뷰) — 서버는 최근 40건만 주므로, 2초에 40건이 넘으면 화면 시계가 아직 닿지 않은 시도가
+ * 새 응답에서 밀려나 한 번도 안 보인다. 새 응답과 합치고(같은 줄은 새 값 — 탈취 의심 표시가 늦게 붙을 수 있다),
+ * 아직 안 보인 줄은 모두, 이미 보인 줄은 최신 keepShown개만 남긴다. 최신이 앞
+ */
+export function mergeAttempts(
+  buffer: LoginSecurityAttempt[],
+  incoming: LoginSecurityAttempt[],
+  opts: { viewNowMs: number; keepShown: number },
+): LoginSecurityAttempt[] {
+  const byKey = new Map<string, LoginSecurityAttempt>()
+  for (const a of buffer) byKey.set(attemptKey(a), a)
+  for (const a of incoming) byKey.set(attemptKey(a), a)
+  const all = [...byKey.values()].sort((a, b) => ms(b.occurredAt) - ms(a.occurredAt))
+  const pending = all.filter((a) => ms(a.occurredAt) > opts.viewNowMs)
+  const shown = all.filter((a) => ms(a.occurredAt) <= opts.viewNowMs).slice(0, opts.keepShown)
+  return [...pending, ...shown]
 }
 
 export type LaunchKind = 'unknown' | 'fail' | 'ok' | 'suspected'

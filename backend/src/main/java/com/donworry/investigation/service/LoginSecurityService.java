@@ -104,6 +104,8 @@ public class LoginSecurityService {
                                 .open(a.open())
                                 .createdAt(a.createdAt())
                                 .insiderCaseId(linkedCases.get(a.alertId()))
+                                .firstEventAt(a.firstEventAt())
+                                .lastEventAt(a.lastEventAt())
                                 .build())
                         .toList())
                 .build();

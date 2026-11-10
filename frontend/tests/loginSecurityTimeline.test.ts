@@ -8,6 +8,7 @@ import type {
 import {
   attemptKey,
   buildIncidents,
+  mergeAttempts,
   scheduleReplay,
 } from '../src/pages/admin/loginSecurityTimeline.ts'
 
@@ -25,7 +26,13 @@ function attempt(occurredAt: string, device: string, suspected: boolean): LoginS
   }
 }
 
-function alert(alertId: number, ruleCode: string, createdAt: string): LoginSecurityAlert {
+// events = 경보가 가리키는 첫 · 마지막 로그인 시각 (SEC-INS-10). 없으면 생성 시각
+function alert(
+  alertId: number,
+  ruleCode: string,
+  createdAt: string,
+  opts: { first?: string; last?: string; open?: boolean; caseId?: number } = {},
+): LoginSecurityAlert {
   return {
     alertId,
     staffId: 31,
@@ -34,9 +41,11 @@ function alert(alertId: number, ruleCode: string, createdAt: string): LoginSecur
     ruleLabel: '',
     severity: 'HIGH',
     summary: '',
-    open: true,
+    open: opts.open ?? true,
     createdAt,
-    insiderCaseId: 27,
+    insiderCaseId: opts.caseId ?? 27,
+    firstEventAt: opts.first ?? createdAt,
+    lastEventAt: opts.last ?? opts.first ?? createdAt,
   }
 }
 
@@ -76,7 +85,13 @@ test('buildIncidents_whenAttackTakeoverAndBlock_numbersInTimeOrder', () => {
   const chrome = attempt(at('06:59:07.000'), 'Chrome · Windows', true)
   const d = dashboard(
     [chrome, detected, attempt(at('06:58:49.600'), '기타 브라우저 · 기타 운영체제', false)],
-    [alert(9, 'SEC-INS-05', at('06:59:57.000')), alert(5, 'SEC-INS-10', at('06:58:50.200'))],
+    [
+      alert(9, 'SEC-INS-05', at('06:59:57.000')),
+      alert(5, 'SEC-INS-10', at('06:58:50.200'), {
+        first: detected.occurredAt,
+        last: chrome.occurredAt,
+      }),
+    ],
   )
 
   const incidents = buildIncidents(d)
@@ -89,6 +104,66 @@ test('buildIncidents_whenAttackTakeoverAndBlock_numbersInTimeOrder', () => {
       [3, 'relogin', attemptKey(chrome)],
       [4, 'block', null],
     ],
+  )
+})
+
+// 같은 직원의 닫힌 경보와 새 경보가 함께 있으면 로그인은 자기 경보에만 붙는다 — 새 경보의 로그인이 닫힌 경보의 재로그인으로 겹쳐 보이면 안 된다 (#791 Codex 리뷰)
+test('buildIncidents_whenStaffHasClosedAndNewAlert_attachesLoginsToTheirOwnAlert', () => {
+  const firstAttack = attempt(at('06:56:00.000'), '기타 브라우저 · 기타 운영체제', true)
+  const secondAttack = attempt(at('06:58:50.000'), '기타 브라우저 · 기타 운영체제', true)
+  const chrome = attempt(at('06:59:07.000'), 'Chrome · Windows', true)
+  const d = dashboard(
+    [chrome, secondAttack, firstAttack],
+    [
+      alert(5, 'SEC-INS-10', at('06:56:00.200'), {
+        first: firstAttack.occurredAt,
+        open: false,
+        caseId: 20,
+      }),
+      alert(8, 'SEC-INS-10', at('06:58:50.200'), {
+        first: secondAttack.occurredAt,
+        last: chrome.occurredAt,
+        caseId: 21,
+      }),
+    ],
+  )
+  d.attackPeriods = []
+
+  const incidents = buildIncidents(d)
+
+  assert.deepEqual(
+    incidents.map((i) => [i.kind, i.attemptKey, i.caseId]),
+    [
+      ['takeover', attemptKey(firstAttack), 20],
+      ['takeover', attemptKey(secondAttack), 21],
+      ['relogin', attemptKey(chrome), 21],
+    ],
+  )
+})
+
+// 2초에 40건이 넘게 들어와 새 응답에서 밀려난 시도도, 아직 화면 시계가 닿지 않았으면 버퍼에 남아 줄로 보인다 (#791 Codex 리뷰)
+test('mergeAttempts_whenNewResponsePushesOutUnplayedAttempt_keepsIt', () => {
+  const unplayed = attempt(at('07:00:01.900'), '기타 브라우저', false)
+  const shownOld = attempt(at('06:59:00.000'), '기타 브라우저', false)
+  const newer = Array.from({ length: 40 }, (_, i) =>
+    attempt(
+      new Date(Date.parse(at('07:00:02.000')) + i * 50).toISOString(),
+      '기타 브라우저',
+      false,
+    ),
+  )
+
+  const merged = mergeAttempts([unplayed, shownOld], newer, {
+    viewNowMs: Date.parse(at('07:00:01.800')),
+    keepShown: 40,
+  })
+
+  assert.ok(merged.some((a) => attemptKey(a) === attemptKey(unplayed)))
+  assert.ok(merged.some((a) => attemptKey(a) === attemptKey(shownOld)))
+  assert.equal(merged.length, 42)
+  assert.deepEqual(
+    merged.map((a) => a.occurredAt),
+    [...merged.map((a) => a.occurredAt)].sort().reverse(),
   )
 })
 

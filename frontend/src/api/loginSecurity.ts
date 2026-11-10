@@ -42,6 +42,9 @@ export type LoginSecurityAlert = {
   open: boolean
   createdAt: string
   insiderCaseId: number | null
+  /** 경보가 가리키는 첫 · 마지막 기록 시각 — SEC-INS-10은 탐지한 로그인 시각(최근 시도와 같은 값) */
+  firstEventAt: string | null
+  lastEventAt: string | null
 }
 
 /**
