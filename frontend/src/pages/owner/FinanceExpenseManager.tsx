@@ -77,6 +77,9 @@ export function FinanceExpenseManager({
   revision: number
   onChanged: () => void
 }) {
+  const [completion, setCompletion] = useState<{ id: number; title: string; date: string } | null>(
+    null,
+  )
   const [detail, setDetail] = useState<ExpenseRow | null>(null)
   const [tab, setTab] = useState('balance')
   const [period, setPeriod] = useState(() => ({
@@ -142,11 +145,7 @@ export function FinanceExpenseManager({
     )
   }
   const complete = (row: ExpenseRow) =>
-    perform('실제 지출 기록', () =>
-      row.kind === 'ONEOFF'
-        ? completePlannedExpense(row.id)
-        : completeRecurringOccurrence(row.id, row.originalDate),
-    )
+    perform('실제 지출 기록', () => completeRecurringOccurrence(row.id, row.originalDate))
   const rows =
     state.status === 'success'
       ? state.data.rows.filter(
@@ -331,20 +330,35 @@ export function FinanceExpenseManager({
                           <span>완료 기록 · 수정 불가</span>
                         ) : (
                           <div className="finance-row-actions">
-                            <Popconfirm
-                              title="오늘 실제 지출 완료로 기록할까요?"
-                              description={`${row.title} ${money(row.amount)} · 미래 예정액에 다시 포함하지 않습니다.`}
-                              onConfirm={() => complete(row)}
-                            >
+                            {row.kind === 'ONEOFF' ? (
                               <Button
                                 type="primary"
                                 size="small"
                                 icon={<CheckOutlined />}
                                 disabled={busy}
+                                onClick={() => {
+                                  setError(null)
+                                  setCompletion({ id: row.id, title: row.title, date: today })
+                                }}
                               >
                                 지출 완료
                               </Button>
-                            </Popconfirm>
+                            ) : (
+                              <Popconfirm
+                                title="오늘 실제 지출 완료로 기록할까요?"
+                                description={`${row.title} ${money(row.amount)} · 미래 예정액에 다시 포함하지 않습니다.`}
+                                onConfirm={() => complete(row)}
+                              >
+                                <Button
+                                  type="primary"
+                                  size="small"
+                                  icon={<CheckOutlined />}
+                                  disabled={busy}
+                                >
+                                  지출 완료
+                                </Button>
+                              </Popconfirm>
+                            )}
                             {row.expense && (
                               <>
                                 <Button
@@ -383,6 +397,66 @@ export function FinanceExpenseManager({
             ))}
         </>
       )}
+      <Modal
+        title="실제 지출일 기록"
+        open={completion !== null && open}
+        onCancel={() => setCompletion(null)}
+        okText="지출 완료"
+        cancelText="취소"
+        confirmLoading={busy}
+        closable={!busy}
+        maskClosable={!busy}
+        cancelButtonProps={{ disabled: busy }}
+        okButtonProps={{
+          disabled:
+            !completion ||
+            !base ||
+            !completion.date ||
+            completion.date < base ||
+            completion.date > today,
+        }}
+        onOk={async () => {
+          if (
+            !completion ||
+            !base ||
+            !completion.date ||
+            completion.date < base ||
+            completion.date > today
+          )
+            return
+          try {
+            await mutate('실제 지출 기록', () =>
+              completePlannedExpense(completion.id, completion.date),
+            )
+            setCompletion(null)
+          } catch {
+            // 저장 오류는 모달 안에서 표시한다.
+          }
+        }}
+      >
+        {completion && (
+          <>
+            <p>{completion.title}을 실제로 지출한 날짜를 선택해 주세요.</p>
+            <label>
+              실제 지출일
+              <Input
+                type="date"
+                value={completion.date}
+                min={base}
+                max={today}
+                disabled={busy}
+                onChange={(event) => setCompletion({ ...completion, date: event.target.value })}
+              />
+            </label>
+            {error !== null && (
+              <Alert
+                type="error"
+                message={error instanceof Error ? error.message : String(error)}
+              />
+            )}
+          </>
+        )}
+      </Modal>
       <Modal
         title="지출 상세"
         open={detail !== null && open}

@@ -47,6 +47,20 @@ type CalendarExpense = {
   note?: string
   memo?: string | null
   originalDate?: string
+  paidAt?: string | null
+  updatedAt?: string
+}
+
+function compareExpenseRecency(a: CalendarExpense, b: CalendarExpense) {
+  if (a.paidAt && b.paidAt) {
+    return (
+      Date.parse(b.paidAt) - Date.parse(a.paidAt) ||
+      Date.parse(b.updatedAt ?? b.paidAt) - Date.parse(a.updatedAt ?? a.paidAt) ||
+      b.id.localeCompare(a.id, 'en', { numeric: true })
+    )
+  }
+  if (a.paidAt || b.paidAt) return a.paidAt ? -1 : 1
+  return b.id.localeCompare(a.id, 'en', { numeric: true })
 }
 export function SettlementPrototype({
   todayValue,
@@ -236,15 +250,13 @@ export function SettlementPrototype({
   )
   const dailyExpenses = scopedExpenses
     .filter((e) => e.date === dateInput(selectedDate))
-    .toSorted((a, b) => b.id.localeCompare(a.id, 'en', { numeric: true }))
+    .toSorted(compareExpenseRecency)
   const expenseRows = scopedExpenses
     .filter((e) =>
       dateOnly ? e.date === dateInput(selectedDate) : e.date >= rangeStart && e.date <= rangeEnd,
     )
     .filter((e) => matchesFinanceQuery('expense', reportType, e.title, query))
-    .toSorted(
-      (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id, 'en', { numeric: true }),
-    )
+    .toSorted((a, b) => b.date.localeCompare(a.date) || compareExpenseRecency(a, b))
   const scope = dateOnly ? daily : inPeriod
   const rows = scope
     .filter((e) => reportType !== 'settlement' || filter === 'all' || e.status === filter)

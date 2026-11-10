@@ -14,7 +14,11 @@ export type ExpenseInput = {
   category: ExpenseCategory
   memo: string | null
 }
-export type Expense = ExpenseInput & { expenseId: number; paidAt: string | null }
+export type Expense = ExpenseInput & {
+  expenseId: number
+  paidAt: string | null
+  updatedAt?: string
+}
 export type RecurringExpenseInput = Omit<ExpenseInput, 'expenseDate'> & {
   frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   startDate: string
@@ -172,8 +176,8 @@ export const updatePlannedExpense = (id: number, input: ExpenseInput) =>
   write<Expense>(`/cash-flow/expenses/${id}`, 'PUT', input)
 export const deletePlannedExpense = (id: number) =>
   write<void>(`/cash-flow/expenses/${id}`, 'DELETE')
-export const completePlannedExpense = (id: number) =>
-  write<Expense>(`/cash-flow/expenses/${id}/completion`, 'PUT')
+export const completePlannedExpense = (id: number, paidDate?: string) =>
+  write<Expense>(`/cash-flow/expenses/${id}/completion`, 'PUT', paidDate ? { paidDate } : undefined)
 export const getRecurringExpenses = (signal?: AbortSignal) =>
   read<RecurringExpense[]>('/cash-flow/recurring-expenses', signal)
 export const getRecurringOccurrences = (from: string, to: string, signal?: AbortSignal) =>

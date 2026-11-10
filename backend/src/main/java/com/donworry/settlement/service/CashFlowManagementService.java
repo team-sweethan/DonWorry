@@ -133,11 +133,29 @@ public class CashFlowManagementService {
 
     @Transactional
     public ExpenseResponse completeExpense(Long merchant, Long id) {
+        return completeExpense(merchant, id, null);
+    }
+
+    @Transactional
+    public ExpenseResponse completeExpense(Long merchant, Long id, LocalDate paidDate) {
         validateMerchant(merchant);
         var expense = owned(merchant, id);
         if (expense.getDeletedAt() != null)
             throw new SettlementRequestException(404, "SETTLEMENT_EXPENSE_NOT_FOUND", "지출을 찾을 수 없습니다.");
-        expense.complete(Instant.now());
+        if (expense.getPaidAt() != null) return ExpenseResponse.from(expense);
+        var now = Instant.now();
+        var today = now.atZone(ZONE).toLocalDate();
+        if (paidDate != null) {
+            var setting = settings(merchant)
+                    .orElseThrow(() -> new SettlementRequestException(
+                            409, "SETTLEMENT_SETTING_REQUIRED", "최초 시작 잔액을 먼저 설정해 주세요."));
+            if (paidDate.isBefore(setting.baseDate()) || paidDate.isAfter(today))
+                throw new IllegalArgumentException("실제 지출일은 시작 잔액 기준일부터 오늘 사이여야 합니다.");
+        }
+        var paidAt = paidDate == null || paidDate.equals(today)
+                ? now
+                : paidDate.atStartOfDay(ZONE).toInstant();
+        expense.complete(paidAt, now);
         return ExpenseResponse.from(expense);
     }
 
