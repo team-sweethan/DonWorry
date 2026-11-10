@@ -49,3 +49,9 @@
   color: #64748b;
   font-size: 12px;
 }
+
+/* 크게 보기 (#793) — 창은 화면 전체로 넓히되, 글 · 표가 한 줄로 너무 길어지지 않게 가운데 1200px 안에 둔다 */
+.ic-drawer-expanded .ant-drawer-body,
+.ic-drawer-expanded .ant-drawer-footer {
+  padding-inline: max(24px, calc((100% - 1200px) / 2));
+}
