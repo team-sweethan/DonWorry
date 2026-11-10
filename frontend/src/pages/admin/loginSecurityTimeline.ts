@@ -103,7 +103,8 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
       }
       if (merged && inRange(merged.occurredAt)) {
         found.push({
-          key: `relogin-${alert.alertId}`,
+          // 같은 열린 경보에 로그인이 또 묶이면 다른 사건 — 경보 번호만 쓰면 레이더가 이미 띄운 사건으로 본다 (#791 Codex 3차 리뷰)
+          key: `relogin-${alert.alertId}-${attemptKey(merged)}`,
           kind: 'relogin',
           at: merged.occurredAt,
           title: `같은 계정 ${browserOf(merged.device)} 로그인`,
@@ -157,19 +158,24 @@ export function mergeAttempts(
 
 export type LaunchKind = 'unknown' | 'fail' | 'ok' | 'suspected'
 
-/** 레이더에 날릴 점 하나 — arriveAt은 이 브라우저 시계(ms) 기준 가운데 닿는 시각 */
-export type Launch = { key: string; arriveAt: number; kind: LaunchKind }
+/**
+ * 레이더에 날릴 점 하나 — arriveAt은 이 브라우저 시계(ms) 기준 가운데 닿는 시각.
+ * upgrade = 이미 날린 점에 탈취 의심이 늦게 붙음. 날아가는 중이면 그 점을, 이미 닿았으면 그 자리에서 탈취 의심으로 다시 보인다
+ */
+export type Launch = { key: string; arriveAt: number; kind: LaunchKind; upgrade?: true }
 
 export const launchKind = (a: LoginSecurityAttempt): LaunchKind =>
   a.suspected ? 'suspected' : a.success ? 'ok' : a.account === 'UNKNOWN' ? 'unknown' : 'fail'
 
 /**
  * 새로 받은 시도를 발생 간격 그대로 다시 보여 줄 시각을 정한다.
- * clockOffsetMs = 브라우저 시계 - 서버 시계. 이미 본 시도와 serverNowMs보다 maxAgeMs 넘게 오래된 시도(멈췄다 다시 읽은 경우)는 날리지 않는다.
+ * clockOffsetMs = 브라우저 시계 - 서버 시계. launched = 이미 날린 시도와 그때 종류.
+ * 이미 날린 시도는 다시 날리지 않는다 — 단 그 뒤 탈취 의심이 붙었으면 upgrade로 한 번 더 보낸다(서버 판정은 로그인 커밋 뒤라 늦게 붙을 수 있다, #791 Codex 3차 리뷰).
+ * serverNowMs보다 maxAgeMs 넘게 오래된 새 시도(멈췄다 다시 읽은 경우)는 날리지 않는다.
  */
 export function scheduleReplay(
   attempts: LoginSecurityAttempt[],
-  seen: ReadonlySet<string>,
+  launched: ReadonlyMap<string, LaunchKind>,
   opts: {
     clockOffsetMs: number
     nowMs: number
@@ -179,14 +185,21 @@ export function scheduleReplay(
   },
 ): Launch[] {
   const delay = opts.delayMs ?? REPLAY_DELAY_MS
-  return attempts
-    .filter((a) => !seen.has(attemptKey(a)) && ms(a.occurredAt) >= opts.serverNowMs - opts.maxAgeMs)
-    .sort((a, b) => ms(a.occurredAt) - ms(b.occurredAt))
-    .map((a) => ({
-      key: attemptKey(a),
-      arriveAt: Math.max(opts.nowMs, ms(a.occurredAt) + opts.clockOffsetMs + delay),
-      kind: launchKind(a),
-    }))
+  const arriveAt = (a: LoginSecurityAttempt) =>
+    Math.max(opts.nowMs, ms(a.occurredAt) + opts.clockOffsetMs + delay)
+  const result: Launch[] = []
+  for (const a of [...attempts].sort((x, y) => ms(x.occurredAt) - ms(y.occurredAt))) {
+    const key = attemptKey(a)
+    const before = launched.get(key)
+    const kind = launchKind(a)
+    if (before === undefined) {
+      if (ms(a.occurredAt) >= opts.serverNowMs - opts.maxAgeMs)
+        result.push({ key, arriveAt: arriveAt(a), kind })
+    } else if (kind === 'suspected' && before !== 'suspected') {
+      result.push({ key, arriveAt: arriveAt(a), kind, upgrade: true })
+    }
+  }
+  return result
 }
 
 /** 레이더 · 상태 띠가 쓰는 상태 이름 */

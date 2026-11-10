@@ -24,7 +24,7 @@ const NOTICE_COLOR: Record<RadarNotice['tone'], string> = {
 }
 const FONT = "'Pretendard Variable', Pretendard, -apple-system, 'Segoe UI', sans-serif"
 
-type Particle = { spawn: number; arrive: number; angle: number; kind: LaunchKind }
+type Particle = { key: string; spawn: number; arrive: number; angle: number; kind: LaunchKind }
 type Impact = { at: number; angle: number; kind: LaunchKind }
 type Label = { at: number; text: string; color: string; dur: number; block: boolean }
 
@@ -61,7 +61,18 @@ export function LoginAttackRadar({
     for (const l of launches) {
       // 브라우저 시계(Date) 기준 도착 시각을 그림 시계(performance)로 옮긴다
       const arrive = now + (l.arriveAt - wall)
+      if (l.upgrade) {
+        // 탈취 의심이 늦게 붙음 — 날아가는 중이면 그 점을 바꾸고, 이미 닿았으면 원래 도착 시각(지났으면 지금)에 그 자리에서 다시 보인다
+        const flying = particles.current.find((p) => p.key === l.key)
+        if (flying) {
+          flying.kind = l.kind
+          continue
+        }
+        particles.current.push({ key: l.key, spawn: arrive, arrive, angle: 0, kind: l.kind })
+        continue
+      }
       particles.current.push({
+        key: l.key,
         spawn: Math.max(now, arrive - flight),
         arrive,
         angle: Math.random() * Math.PI * 2,

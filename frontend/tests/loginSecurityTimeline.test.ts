@@ -190,13 +190,17 @@ test('scheduleReplay_whenAttemptsArriveTogether_spacesByOccurredAt', () => {
   const serverNow = Date.parse(at('07:00:01.500'))
   const offset = 1_000
 
-  const launches = scheduleReplay([third, second, first], new Set([attemptKey(first)]), {
-    clockOffsetMs: offset,
-    nowMs: serverNow + offset,
-    serverNowMs: serverNow,
-    maxAgeMs: 6_000,
-    delayMs: 2_200,
-  })
+  const launches = scheduleReplay(
+    [third, second, first],
+    new Map([[attemptKey(first), 'unknown']]),
+    {
+      clockOffsetMs: offset,
+      nowMs: serverNow + offset,
+      serverNowMs: serverNow,
+      maxAgeMs: 6_000,
+      delayMs: 2_200,
+    },
+  )
 
   assert.deepEqual(
     launches.map((l) => [l.key, l.arriveAt]),
@@ -206,4 +210,48 @@ test('scheduleReplay_whenAttemptsArriveTogether_spacesByOccurredAt', () => {
     ],
   )
   assert.equal(launches[1].arriveAt - launches[0].arriveAt, 400)
+})
+
+// 성공으로 먼저 받은 로그인에 탈취 의심이 다음 응답에서 붙으면 그 점을 탈취 의심으로 다시 보낸다 — 아니면 금색 점이 초록으로 지나간다 (#791 Codex 3차 리뷰)
+test('scheduleReplay_whenSuspectedArrivesLate_reschedulesAsSuspected', () => {
+  const login = attempt(at('07:00:00.000'), '기타 브라우저 · 기타 운영체제', true)
+  const serverNow = Date.parse(at('07:00:01.000'))
+
+  const launches = scheduleReplay([login], new Map([[attemptKey(login), 'ok']]), {
+    clockOffsetMs: 0,
+    nowMs: serverNow,
+    serverNowMs: serverNow,
+    maxAgeMs: 6_000,
+    delayMs: 2_200,
+  })
+
+  assert.deepEqual(launches, [
+    {
+      key: attemptKey(login),
+      arriveAt: Date.parse(login.occurredAt) + 2_200,
+      kind: 'suspected',
+      upgrade: true,
+    },
+  ])
+})
+
+// 같은 열린 경보에 로그인이 또 묶이면 새 사건으로 본다 — 키가 같으면 레이더가 이미 띄운 사건으로 보고 문구를 건너뛴다 (#791 Codex 3차 리뷰)
+test('buildIncidents_whenSameAlertMergesAnotherLogin_givesEachReloginItsOwnKey', () => {
+  const detected = attempt(at('06:58:50.000'), '기타 브라우저 · 기타 운영체제', true)
+  const chrome = attempt(at('06:59:07.000'), 'Chrome · Windows', true)
+  const firefox = attempt(at('06:59:30.000'), 'Firefox · Windows', true)
+  const reloginKey = (last: LoginSecurityAttempt) =>
+    buildIncidents(
+      dashboard(
+        [last, detected],
+        [
+          alert(8, 'SEC-INS-10', at('06:58:50.200'), {
+            first: detected.occurredAt,
+            last: last.occurredAt,
+          }),
+        ],
+      ),
+    ).find((i) => i.kind === 'relogin')?.key
+
+  assert.notEqual(reloginKey(chrome), reloginKey(firefox))
 })

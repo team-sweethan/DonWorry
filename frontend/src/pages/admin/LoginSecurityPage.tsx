@@ -25,6 +25,8 @@ import {
   mergeAttempts,
   type IncidentKind,
   type Launch,
+  type LaunchKind,
+  launchKind,
   REPLAY_DELAY_MS,
   scheduleReplay,
 } from './loginSecurityTimeline'
@@ -61,6 +63,9 @@ const incidentColor: Record<IncidentKind, string> = {
   block: '#7f1d1d',
 }
 const circled = (n: number) => '①②③④⑤⑥⑦⑧⑨⑩'[n - 1] ?? `(${n})`
+// 이미 날린 시도와 그때 종류 — 탈취 의심이 늦게 붙으면 레이더에 한 번 더 보낸다
+const launchedKinds = (attempts: LoginSecurityAttempt[]) =>
+  new Map(attempts.map((a) => [attemptKey(a), launchKind(a)] as const))
 
 const time = (iso: string) => dayjs(iso).format('HH:mm:ss')
 const ms = (iso: string) => new Date(iso).getTime()
@@ -474,7 +479,7 @@ export function LoginSecurityPage() {
   const clockOffset = useRef(0)
   const pending = useRef<LoginSecurityDashboard[]>([])
   const latestRef = useRef<LoginSecurityDashboard | null>(null)
-  const launched = useRef<Set<string> | null>(null)
+  const launched = useRef<Map<string, LaunchKind> | null>(null)
   const noticed = useRef<Set<string> | null>(null)
   const viewFloor = useRef(0)
 
@@ -498,7 +503,7 @@ export function LoginSecurityPage() {
       latestRef.current = d
       if (launched.current === null) {
         // 처음 열었을 때 이미 있던 시도 · 사건은 날리거나 띄우지 않는다
-        launched.current = new Set(d.attempts.map(attemptKey))
+        launched.current = launchedKinds(d.attempts)
         noticed.current = new Set(buildIncidents(d).map((i) => i.key))
         // 처음 받은 응답까지는 바로 보인다 — 화면 시계가 이 시각 앞으로 돌아가 줄이 잠깐 사라지지 않게
         viewFloor.current = ms(d.generatedAt)
@@ -511,7 +516,7 @@ export function LoginSecurityPage() {
           serverNowMs: ms(received.generatedAt),
           maxAgeMs: POLL_MS * 3,
         })
-        launched.current = new Set(d.attempts.map(attemptKey))
+        launched.current = launchedKinds(d.attempts)
         if (next.length > 0) setLaunches(next)
         pending.current.push(d)
       }
