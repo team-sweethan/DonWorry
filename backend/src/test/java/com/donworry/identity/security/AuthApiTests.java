@@ -68,6 +68,9 @@ class AuthApiTests {
     com.donworry.identity.service.LoginHistoryService loginHistories;
 
     @MockitoBean
+    com.donworry.identity.service.LoginAttackCheck loginAttackCheck;
+
+    @MockitoBean
     com.donworry.identity.service.LoginAttemptService loginAttempts;
 
     @MockitoBean

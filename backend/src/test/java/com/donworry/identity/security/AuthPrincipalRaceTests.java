@@ -61,7 +61,8 @@ class AuthPrincipalRaceTests {
                 merchants,
                 merchantLocks,
                 loginAttempts,
-                loginHistories);
+                loginHistories,
+                mock(LoginAttackCheck.class));
         var passwordService =
                 new PasswordChangeService(users, encoder, passwordPolicy, accountLocks, sessions, transactions);
         var adminAccountService = new AdminAccountService(

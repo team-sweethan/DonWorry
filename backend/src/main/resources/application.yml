@@ -98,6 +98,12 @@ security:
     # PROXY는 관리 프록시가 X-DonWorry-Client-IP를 덮어쓰는 배포에서만 설정한다.
     ip-mode: ${DONWORRY_LOGIN_HISTORY_IP_MODE:DIRECT}
     trusted-proxies: ${DONWORRY_LOGIN_HISTORY_TRUSTED_PROXIES:}
+  login-attack:
+    # 크리덴셜 스터핑 경계 (#770, ADR-0082). 보안 직원 로그인 성공 때 최근 window 동안 전체 로그인 시도(계정 · IP 구분 없음)가
+    # min-attempts 이상이고 실패 비율이 failure-ratio 이상이면 "공격 중" 알림 → P2 SEC-INS-10이 처음 보는 브라우저인지 본다
+    window: 5m
+    min-attempts: 30
+    failure-ratio: 0.3
   csrf:
     # 브라우저 변경 요청은 기본 보호한다 (#408, ADR-0063).
     enabled: ${DONWORRY_CSRF_ENABLED:true}

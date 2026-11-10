@@ -3,6 +3,7 @@ package com.donworry.identity.repository;
 import com.donworry.identity.entity.LoginEventType;
 import com.donworry.identity.entity.LoginHistory;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +33,14 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long
     // 내부자 관제 타임라인 (#679, StaffLoginReader.findLoginEvents) — 종류 구분 없이 [from, to]
     List<LoginHistory> findByUserIdAndOccurredAtBetweenOrderByOccurredAtAscHistoryIdAsc(
             Long userId, LocalDateTime from, LocalDateTime to);
+
+    // 로그인 공격 경계 (#770, LoginAttackCheck) — (from, to] 전체 계정 시도 · 실패 수. occurred_at 색인(idx_login_histories_retention)으로
+    // 구간을 찾는다
+    long countByEventTypeInAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
+            Collection<LoginEventType> eventTypes, LocalDateTime from, LocalDateTime to);
+
+    long countByEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
+            LoginEventType eventType, LocalDateTime from, LocalDateTime to);
 
     @Modifying
     @Query(
