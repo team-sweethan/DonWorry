@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { CaseSummary } from '../src/types/case.ts'
 import {
+  caseListNeighbors,
   caseListReturnPath,
+  caseListStateFor,
   caseListSearch,
   caseListTab,
   caseListTabPreset,
@@ -40,7 +42,8 @@ test('빈 주소는 기본 조건(열린 Case, 1페이지)이다', () => {
 })
 
 test('주소의 조건을 읽고, 같은 조건을 다시 주소로 만든다', () => {
-  const search = '?status=DECISION_PENDING&sla=exceeded&report=running&risk=deny&q=abc&page=3'
+  const search =
+    '?status=DECISION_PENDING&sla=exceeded&report=running&risk=deny&q=abc&sort=risk&page=3&case=12'
   const query = parse(search)
   assert.deepEqual(query, {
     status: 'DECISION_PENDING',
@@ -48,14 +51,16 @@ test('주소의 조건을 읽고, 같은 조건을 다시 주소로 만든다', 
     report: 'running',
     risk: 'deny',
     q: 'abc',
+    sort: 'risk',
     page: 3,
+    selected: '12',
   })
   assert.equal(caseListSearch(query), search)
 })
 
 test('모르는 값은 무시하고 기본값을 쓴다', () => {
   assert.deepEqual(
-    parse('?status=WRONG&sla=yes&report=done&risk=high&page=-2'),
+    parse('?status=WRONG&sla=yes&report=done&risk=high&sort=fast&page=-2&case='),
     defaultCaseListQuery,
   )
   assert.equal(parse('?page=1.5').page, 1)
@@ -128,4 +133,48 @@ test('위험도 구간은 FDS 판정 구간(50 · 80)과 같고, 점수 없음�
     matchesCaseListQuery(make({ maxRiskScore: null }), { ...query, risk: 'none' }, now),
     true,
   )
+})
+
+test('가맹점 이름으로도 검색된다 (#759)', () => {
+  const query = { ...defaultCaseListQuery, q: '케이크' }
+  assert.equal(matchesCaseListQuery(make(), query, now, '달콤 케이크샵'), true)
+  assert.equal(matchesCaseListQuery(make(), query, now), false)
+})
+
+test('상세의 이전 · 다음 사건은 목록 순서를 따르고, 순서에 없으면 보이지 않는다 (#759)', () => {
+  const state = {
+    caseListReturn: '/security/cases?sort=risk&case=5',
+    caseListOrder: ['5', '9', '2'],
+  }
+  assert.deepEqual(caseListNeighbors(state, '9'), { prev: '5', next: '2', position: 2, total: 3 })
+  assert.deepEqual(caseListNeighbors(state, '5'), { prev: null, next: '9', position: 1, total: 3 })
+  assert.equal(caseListNeighbors(state, '7'), null)
+  assert.equal(caseListNeighbors({ caseListReturn: '/security/cases' }, '5'), null)
+  assert.equal(caseListNeighbors({ caseListOrder: [1, 2] }, '1'), null)
+  assert.equal(caseListNeighbors(null, '5'), null)
+})
+
+test('이전 · 다음으로 옮기면 순서는 그대로, 목록으로 돌아갈 때 옮겨 간 줄이 선택된다 (#759)', () => {
+  const state = {
+    caseListReturn: '/security/cases?sort=risk&page=1&case=5',
+    caseListOrder: ['5', '9'],
+  }
+  // 옮겨 간 사건이 다른 페이지일 수 있어 페이지는 빼고, 목록이 선택한 사건 위치로 정한다 (#760 Codex 리뷰)
+  assert.deepEqual(caseListStateFor(state, '9'), {
+    caseListReturn: '/security/cases?sort=risk&case=9',
+    caseListOrder: ['5', '9'],
+  })
+  // 목록 주소가 아니면 기본 목록 주소에 줄만 고른다
+  assert.deepEqual(caseListStateFor({ caseListReturn: 'https://evil.example' }, '9'), {
+    caseListReturn: '/security/cases?case=9',
+  })
+})
+
+test('접수 · 보고서 준비 조건은 생성됨 · 조사 중을 함께 보인다 (#759)', () => {
+  const query = parse('?status=PREPARE')
+  assert.equal(query.status, 'PREPARE')
+  assert.equal(caseListTab(query.status), 'ACTIVE')
+  assert.equal(matchesCaseListQuery(make({ status: 'OPEN' }), query, now), true)
+  assert.equal(matchesCaseListQuery(make({ status: 'INVESTIGATING' }), query, now), true)
+  assert.equal(matchesCaseListQuery(make({ status: 'DECISION_PENDING' }), query, now), false)
 })

@@ -40,6 +40,7 @@ import { CaseForbidden } from './case/CaseForbidden'
 import { ContactCard } from './case/ContactCard'
 import { HandoffCard, HistoryCard } from './case/CaseActivity'
 import { CaseProgress } from './case/CaseProgress'
+import { CaseQueueNav } from './case/CaseQueueNav'
 import {
   caseStatusLabel,
   caseTypeLabel,
@@ -260,7 +261,8 @@ export function CaseDetailPage() {
         title={`Case #${securityCase.caseId}`}
         description={caseHeaderLine(securityCase, merchantNames.get(securityCase.merchantId))}
         actions={
-          <Space>
+          <Space wrap>
+            <CaseQueueNav caseId={securityCase.caseId} />
             {reportMissing && <Button onClick={handleRequestReport}>AI 보고서 다시 요청</Button>}
             {canRequestChange && (
               <Button onClick={() => setAssignmentRequestOpen(true)}>담당 변경 요청</Button>
