@@ -14,6 +14,7 @@ import {
   Tag,
   Typography,
 } from 'antd'
+import { FullscreenExitOutlined, FullscreenOutlined } from '@ant-design/icons'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -94,6 +95,8 @@ export function InsiderCaseDrawer({
   const [outcome, setOutcome] = useState<LockReleaseOutcome | null>(null)
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
+  // 크게 보기 (#793) — 열 때마다 720px로 시작하고, 원할 때만 화면 전체 너비로 넓힌다 (기억하지 않음)
+  const [expanded, setExpanded] = useState(false)
 
   const load = useCallback(() => {
     getInsiderCaseDetail(insiderCaseId)
@@ -155,11 +158,21 @@ export function InsiderCaseDrawer({
   return (
     <Drawer
       open
-      width={720}
+      width={expanded ? '100%' : 720}
+      rootClassName={expanded ? 'ic-drawer-expanded' : undefined}
       title={
         insiderCase
           ? `내부자 사건 #${insiderCase.insiderCaseId} · ${insiderCase.staffName ?? `ID ${insiderCase.staffId}`}`
           : '내부자 사건'
+      }
+      extra={
+        <Button
+          size="small"
+          icon={expanded ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? '원래 크기' : '크게 보기'}
+        </Button>
       }
       onClose={onClose}
       loading={detail === null && error === null}
