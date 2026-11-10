@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 import com.donworry.fds.api.InsiderAlertEntry;
@@ -11,11 +12,13 @@ import com.donworry.fds.api.InsiderAlertMonitorReader;
 import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.LoginAttackCriteria;
+import com.donworry.identity.api.LoginAttempt;
 import com.donworry.identity.api.LoginTrafficCount;
 import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.investigation.dto.LoginSecurityAlertResponse;
+import com.donworry.investigation.dto.LoginSecurityAttemptResponse;
 import com.donworry.investigation.entity.InsiderCaseAlert;
 import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import java.time.Duration;
@@ -72,6 +75,52 @@ class LoginSecurityServiceTests {
         assertThat(response.alerts())
                 .extracting(LoginSecurityAlertResponse::alertId, LoginSecurityAlertResponse::insiderCaseId)
                 .containsExactly(tuple(5L, 2L), tuple(9L, 3L));
+    }
+
+    // 탈취 의심 표시는 경보가 실제로 탐지한 로그인(첫 · 마지막 기록 시각)에만 붙는다 (#777 Codex 리뷰)
+    // — 경보 앞뒤 시간으로만 보면 그 사이 평소 브라우저로 들어온 진짜 직원이 빨갛게 보이고, 늦게 묶인 의심 로그인은 빠진다
+    @Test
+    void dashboard_whenUsualLoginNearSuspectedAlert_marksOnlyDetectedLogins() {
+        Instant detected = NOW.minus(Duration.ofMinutes(6));
+        Instant usual = detected.plusSeconds(10);
+        Instant laterDetected = NOW.minus(Duration.ofMinutes(1));
+        InsiderAlertEntry alert = InsiderAlertEntry.builder()
+                .alertId(7L)
+                .staffId(STAFF_ID)
+                .rule(InsiderRule.INS_10)
+                .severity(InsiderAlertSeverity.HIGH)
+                .open(true)
+                .summary("로그인 공격 중 처음 보는 브라우저 로그인")
+                .createdAt(detected.plusMillis(200))
+                .firstEventAt(detected)
+                .lastEventAt(laterDetected)
+                .build();
+        when(alertReader.findAlertsOpenedBetween(anyCollection(), any(), any())).thenReturn(List.of(alert));
+        when(caseAlerts.findByAlertIdIn(anyCollection())).thenReturn(List.of(link(4L, 7L)));
+        when(traffic.findRecentAttempts(any(), any(), anyInt()))
+                .thenReturn(List.of(
+                        attempt(laterDetected, "Chrome · Windows"),
+                        attempt(usual, "Edge · Windows"),
+                        attempt(detected, "기타 브라우저 · 기타 운영체제")));
+
+        var response = service.dashboard(NOW);
+
+        assertThat(response.attempts())
+                .extracting(LoginSecurityAttemptResponse::device, LoginSecurityAttemptResponse::suspected)
+                .containsExactly(
+                        tuple("Chrome · Windows", true),
+                        tuple("Edge · Windows", false),
+                        tuple("기타 브라우저 · 기타 운영체제", true));
+    }
+
+    private static LoginAttempt attempt(Instant at, String device) {
+        return LoginAttempt.builder()
+                .occurredAt(at)
+                .success(true)
+                .userId(STAFF_ID)
+                .role("SECURITY_STAFF")
+                .device(device)
+                .build();
     }
 
     private static InsiderAlertEntry ins10(Long alertId, boolean open, Instant createdAt) {

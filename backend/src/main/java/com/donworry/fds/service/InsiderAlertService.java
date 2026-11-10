@@ -131,6 +131,8 @@ public class InsiderAlertService
                 .summary(alert.getSummary())
                 .createdAt(alert.getCreatedAt())
                 .closedAt(alert.getClosedAt())
+                .firstEventAt(alert.getFirstEventAt())
+                .lastEventAt(alert.getLastEventAt())
                 .build();
     }
 
