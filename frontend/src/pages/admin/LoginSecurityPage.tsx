@@ -75,7 +75,7 @@ function bannerText(d: LoginSecurityDashboard) {
   if (d.state === 'UNDER_ATTACK')
     return {
       head: `로그인 경계 중 — ${recent}`,
-      sub: '로그인은 막지 않습니다. 이 동안 처음 보는 브라우저로 들어온 보안 직원만 탈취 의심(SEC-INS-10)으로 올립니다.',
+      sub: '로그인은 막지 않습니다. 이 동안 처음 보는 브라우저로 들어온 보안 직원은 탈취 의심(SEC-INS-10)으로 바로 정지합니다.',
     }
   if (d.state === 'CAUTION')
     return {
@@ -92,7 +92,7 @@ function noticeOf(i: Incident): RadarNotice {
   const head = circled(i.n)
   if (i.kind === 'entry') return { key: i.key, text: `${head} 경계 진입`, tone: 'alert' }
   if (i.kind === 'takeover')
-    return { key: i.key, text: `${head} 탈취 의심 · ${i.tip[0]}`, tone: 'takeover' }
+    return { key: i.key, text: `${head} ${i.title} · ${i.tip[0]}`, tone: 'takeover' }
   if (i.kind === 'relogin') return { key: i.key, text: `${head} ${i.title}`, tone: 'takeover' }
   return { key: i.key, text: `${head} ${i.title}`, tone: 'block' }
 }

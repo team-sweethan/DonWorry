@@ -55,6 +55,7 @@ const loginLabel: Record<string, string> = {
 const lockReasonLabel: Record<string, string> = {
   INSIDER_EXPORT_BLOCKED: '경보 중 내보내기 차단 · 세션 종료',
   INSIDER_CASE_DECISION: '내부자 사건 판정 중 정지',
+  LOGIN_TAKEOVER_SUSPECTED: '로그인 탈취 의심 · 세션 종료',
 }
 const decisionLabel: Record<string, string> = {
   NORMAL_DUTY: '정상 업무',
