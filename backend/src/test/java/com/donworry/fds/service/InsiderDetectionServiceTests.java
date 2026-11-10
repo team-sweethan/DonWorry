@@ -23,6 +23,7 @@ import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.CurrentStaff;
+import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.MerchantDirectoryEntry;
 import com.donworry.identity.api.MerchantDirectoryReader;
 import com.donworry.identity.api.SecurityStaffDirectory;
@@ -96,7 +97,8 @@ class InsiderDetectionServiceTests {
             loginReader,
             scopeReader,
             mock(StaffAccountLocker.class),
-            rulePolicies);
+            rulePolicies,
+            mock(LoginTrafficReader.class));
     // 규칙 켜짐 · 꺼짐 줄 (#685). 비어 있으면 모든 규칙이 켜진 것
     private final List<FdsRulePolicy> policyRows = new ArrayList<>();
 

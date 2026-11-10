@@ -12,6 +12,9 @@ import com.donworry.fds.entity.InsiderAlertStatus;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
+import com.donworry.identity.api.LoginAttackCriteria;
+import com.donworry.identity.api.LoginTrafficCount;
+import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.StaffAccessDenyReason;
 import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
@@ -62,6 +65,9 @@ public class InsiderDetectionService {
     // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
     private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
             Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
+    // 내보내기 전 동기 판정이 보는 최근 로그인 범위 (#777) — 비동기 INS-10 판정은 보통 몇 초 안에 끝나고,
+    // 재전달은 서버 재시작 뒤에 온다. 세션 비활동 만료(30분)보다 넉넉히 둔다
+    static final Duration PENDING_LOGIN_LOOKBACK = Duration.ofHours(1);
 
     private final InsiderAlertRepository alerts;
     private final InsiderAlertEvidenceRepository evidence;
@@ -72,6 +78,7 @@ public class InsiderDetectionService {
     private final StaffCaseScopeReader scopeReader;
     private final StaffAccountLocker locker;
     private final FdsRulePolicyRepository rulePolicies;
+    private final LoginTrafficReader traffic;
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
@@ -280,6 +287,30 @@ public class InsiderDetectionService {
                                         .formatted(properties.ins10Lookback().toDays())
                                 : "");
         raise(staffId, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, summary, List.of(), loginAt, loginAt);
+    }
+
+    // 내보내기 전 INS-10 동기 판정 (#777 Codex 보안 리뷰) — P1 알림은 커밋 뒤 비동기로 와서, 로그인 직후 바로 내보내면
+    // 경보가 열리기 전에 빠져나간다. 문지기가 경보를 보기 전에 이 직원의 최근 성공 로그인 중 공격 중에 성공한 것을 여기서 판정한다
+    // P1 경계 판단과 같은 구간 · 기준으로 그 로그인 시각의 공격 여부를 다시 센다. 이미 판정한 로그인 · 꺼진 규칙은 detectLoginUnderAttack이 건너뛴다
+    // 비동기 판정과 겹쳐도 직원 잠금 · 같은 로그인 시각 확인으로 경보는 한 번만 열린다. 실패하면 예외 — 내보내기는 진행되지 않는다(fail closed)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void detectPendingLoginUnderAttack(Long staffId, Instant now) {
+        List<StaffLogin> recent =
+                loginReader.findSuccessfulLogins(staffId, now.minus(PENDING_LOGIN_LOOKBACK), now.plusSeconds(1));
+        if (recent.isEmpty()) return;
+        LoginAttackCriteria criteria = traffic.criteria();
+        for (StaffLogin login : recent) {
+            Instant at = login.occurredAt();
+            LoginTrafficCount count = traffic.count(at.minus(criteria.window()), at);
+            if (!criteria.isUnderAttack(count.attempts(), count.failures())) continue;
+            detectLoginUnderAttack(StaffLoginUnderAttack.builder()
+                    .staffId(staffId)
+                    .loginReference(login.loginReference())
+                    .loggedInAt(at)
+                    .attemptCount(count.attempts())
+                    .failureCount(count.failures())
+                    .build());
+        }
     }
 
     // INS-08 업무 대비 대량 조회 — 거래 목록 · 내보내기로 많이 가져갔는데 담당 사건과 이어진 행이 적으면 주의, 아주 많으면 높음
