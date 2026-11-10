@@ -9,6 +9,7 @@ import {
   type InsiderReportBaseline,
   type InsiderReportBaselineRow,
   type InsiderReportBody,
+  type InsiderReportLoginAttack,
 } from '../../api/insiderCases'
 import { displayRuleCode, displayRuleText, isExportBlockRule } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
@@ -82,6 +83,35 @@ function Baseline({ baseline }: { baseline: InsiderReportBaseline }) {
           ? `평소: ${period(baseline.from, baseline.to)} · 기록 있는 날 ${baseline.daysWithRecords}일 / ${baseline.days}일`
           : `비교할 평소 기록 없음 — ${period(baseline.from, baseline.to)} 동안 접근 기록이 없습니다(새 계정 등).`}
       </Typography.Text>
+    </div>
+  )
+}
+
+/** SEC-INS-10 탈취 의심 로그인 (#770) — 로그인 공격 중 처음 보는 브라우저로 들어온 로그인과 그 앞뒤 */
+function LoginAttackFacts({ login }: { login: InsiderReportLoginAttack }) {
+  return (
+    <div>
+      <Typography.Text strong>탈취 의심 로그인</Typography.Text>
+      <Descriptions size="small" column={1} bordered styles={{ label: { whiteSpace: 'nowrap' } }}>
+        <Descriptions.Item label="로그인">
+          {dateTime(login.loginAt)} · {login.device}
+        </Descriptions.Item>
+        <Descriptions.Item label="평소 브라우저 (30일)">
+          {login.usualDevices.length > 0
+            ? login.usualDevices.join(', ')
+            : '지난 30일 성공 로그인 기록 없음'}
+        </Descriptions.Item>
+        <Descriptions.Item label="로그인 전 1시간 실패">
+          {login.failuresBeforeLogin === 0
+            ? '0회 — 한 번에 맞힘'
+            : `${login.failuresBeforeLogin}회`}
+        </Descriptions.Item>
+        <Descriptions.Item label="로그인 뒤 접근">
+          {login.accessAfterLogin}건
+          {login.firstExportAttemptSeconds !== null &&
+            ` · ${login.firstExportAttemptSeconds}초 뒤 거래 내역 내보내기 시도`}
+        </Descriptions.Item>
+      </Descriptions>
     </div>
   )
 }
@@ -171,6 +201,8 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
 
       {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다 */}
       {facts.baseline && <Baseline baseline={facts.baseline} />}
+
+      {facts.loginAttack && <LoginAttackFacts login={facts.loginAttack} />}
 
       <div>
         <Space size="small" style={{ marginBottom: 4 }}>

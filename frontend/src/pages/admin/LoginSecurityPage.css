@@ -1,0 +1,234 @@
+/* 관리자 [접근 감시 › 로그인 보안] (#770) — 상태 띠 · 숫자 4개 · 1분 실패율 막대 · 직원 로그인 / 탈취 의심 두 칸.
+   상태 색은 내부자 관제와 같은 말투: 평소 초록 · 주의 노랑 · 경계 빨강. 색만으로 구분하지 않게 띠에 글자를 함께 쓴다 */
+
+.ls-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-4);
+}
+.ls-muted {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ls-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 14px 16px 10px;
+}
+.ls-panel-head h2 {
+  margin: 0;
+}
+
+/* 상태 띠 */
+.ls-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dw-space-3);
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border: 1px solid;
+  border-radius: var(--dw-radius-panel);
+}
+.ls-banner > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.ls-banner strong {
+  font-size: var(--dw-text-heading);
+}
+.ls-banner span {
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+}
+.ls-banner .ls-clock {
+  flex: none;
+  white-space: nowrap;
+}
+.ls-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 7px;
+  border-radius: 50%;
+}
+.ls-banner.is-normal {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.ls-banner.is-normal .ls-dot {
+  background: #16a34a;
+}
+.ls-banner.is-caution {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.ls-banner.is-caution .ls-dot {
+  background: #d97706;
+}
+.ls-banner.is-attack {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.ls-banner.is-attack .ls-dot {
+  background: #dc2626;
+}
+
+/* 숫자 4개 */
+.ls-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--dw-space-3);
+}
+.ls-kpi {
+  display: flex;
+  flex-direction: column;
+  padding: var(--dw-space-3) var(--dw-space-4);
+  background: #fff;
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-radius-panel);
+}
+.ls-kpi small {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ls-kpi strong {
+  font-size: var(--dw-text-number-sm);
+  font-variant-numeric: tabular-nums;
+}
+.ls-kpi.is-hot {
+  border-color: #fecaca;
+}
+.ls-kpi.is-hot strong {
+  color: #b91c1c;
+}
+
+/* 1분 막대 — 한 계열이라 범례 없음, 기준선 위 막대만 빨강 */
+.ls-chart {
+  padding-bottom: var(--dw-space-3);
+}
+.ls-plot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 160px;
+  margin: 18px 16px 0;
+  border-bottom: 1px solid #cbd5e1;
+}
+.ls-threshold {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 2px dashed #dc2626;
+  opacity: 0.7;
+  pointer-events: none;
+}
+.ls-threshold span {
+  position: absolute;
+  right: 0;
+  padding: 0 4px;
+  background: #fff;
+  color: #b91c1c;
+  font-size: var(--dw-text-caption);
+  transform: translateY(-100%);
+}
+.ls-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 100%;
+}
+.ls-col i {
+  color: #64748b;
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.ls-bar {
+  width: 100%;
+  max-width: 36px;
+  background: #94a3b8;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.4s ease;
+}
+.ls-col.is-hot .ls-bar {
+  background: #dc2626;
+}
+.ls-col.is-hot i {
+  color: #b91c1c;
+  font-weight: 700;
+}
+.ls-axis {
+  display: flex;
+  gap: 2px;
+  margin: 4px 16px 0;
+}
+.ls-axis span {
+  flex: 1;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 직원 로그인 · 탈취 의심 두 칸 */
+.ls-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--dw-space-4);
+  align-items: start;
+}
+.ls-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 420px;
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+.ls-rows li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 8px;
+  border-radius: var(--dw-radius-control);
+  font-size: var(--dw-text-secondary);
+}
+.ls-rows li.is-good {
+  background: #f0fdf4;
+}
+.ls-rows li.is-bad {
+  background: #fef2f2;
+}
+.ls-time {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.ls-who {
+  font-weight: 600;
+}
+.ls-alert-text {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .ls-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ls-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
