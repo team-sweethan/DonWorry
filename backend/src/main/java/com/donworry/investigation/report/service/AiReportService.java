@@ -3,9 +3,12 @@ package com.donworry.investigation.report.service;
 import com.donworry.investigation.report.entity.AiReport;
 import com.donworry.investigation.report.entity.ReportStatus;
 import com.donworry.investigation.report.repository.AiReportRepository;
+import com.donworry.investigation.report.repository.CaseReportStatus;
 import com.donworry.investigation.service.ReportGateway;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +48,20 @@ public class AiReportService implements ReportGateway {
         return aiReportRepository.findByCaseIdOrderByReportVersionAsc(caseId).stream()
                 .map(AiReportService::snapshot)
                 .toList();
+    }
+
+    // 목록 화면용 — 본문 없이 Case별 최신 보고서 상태만 한 번에 읽는다
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> latestStatuses(Collection<Long> caseIds) {
+        Map<Long, String> statuses = new HashMap<>();
+        if (caseIds.isEmpty()) {
+            return statuses;
+        }
+        for (CaseReportStatus row : aiReportRepository.findLatestStatusByCaseIdIn(caseIds)) {
+            statuses.put(row.caseId(), row.status().name());
+        }
+        return statuses;
     }
 
     // 서버 재시작으로 PENDING · RUNNING에 멈춘 보고서를 같은 버전에서 다시 만든다 (ADR-0009 한계)

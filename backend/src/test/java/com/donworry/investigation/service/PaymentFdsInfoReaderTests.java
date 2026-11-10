@@ -3,7 +3,6 @@ package com.donworry.investigation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -18,7 +17,6 @@ import com.donworry.payment.api.PaymentSummary;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,14 +32,14 @@ class PaymentFdsInfoReaderTests {
     @BeforeEach
     void setUp() {
         reader = new PaymentFdsInfoReader(paymentReader, fdsEvidenceReader);
-        given(paymentReader.findById(anyLong())).willReturn(Optional.empty());
+        given(paymentReader.findAllById(any())).willReturn(Map.of());
         given(fdsEvidenceReader.findLatestByPaymentIds(any())).willReturn(List.of());
     }
 
     // 결제와 평가가 모두 있으면 P5 · P2 값을 합치고 적중 룰은 코드 · 이름 · 점수로 옮긴다
     @Test
     void findAll_withPaymentAndEvaluation_mergesBoth() {
-        given(paymentReader.findById(1L)).willReturn(Optional.of(payment(1L)));
+        given(paymentReader.findAllById(List.of(1L))).willReturn(Map.of(1L, payment(1L)));
         given(fdsEvidenceReader.findLatestByPaymentIds(List.of(1L)))
                 .willReturn(List.of(evidence(
                         1L,
@@ -69,7 +67,7 @@ class PaymentFdsInfoReaderTests {
     // P2 평가가 없으면 결제 값만 채우고 점수 · 판정은 null, 적중 룰은 비운다
     @Test
     void findAll_withoutEvaluation_leavesFdsEmpty() {
-        given(paymentReader.findById(1L)).willReturn(Optional.of(payment(1L)));
+        given(paymentReader.findAllById(List.of(1L))).willReturn(Map.of(1L, payment(1L)));
 
         assertThat(reader.findAll(List.of(1L)).get(1L))
                 .isEqualTo(new PaymentInfo(1L, 150_000L, "HELD", REQUESTED_AT, null, null, List.of()));
@@ -88,7 +86,7 @@ class PaymentFdsInfoReaderTests {
     // 평가가 모두 ERROR면 점수 null · 판정 ERROR · 적중 룰 없음으로 보여 평가 없음과 구분한다
     @Test
     void findAll_withOnlyErrorEvaluation_showsErrorWithoutScore() {
-        given(paymentReader.findById(1L)).willReturn(Optional.of(payment(1L)));
+        given(paymentReader.findAllById(List.of(1L))).willReturn(Map.of(1L, payment(1L)));
         given(fdsEvidenceReader.findLatestByPaymentIds(List.of(1L)))
                 .willReturn(List.of(evidence(1L, FdsResult.ERROR, null)));
 
@@ -108,7 +106,7 @@ class PaymentFdsInfoReaderTests {
     // 조회 오류는 null로 숨기지 않고 그대로 던진다 — 장애가 "값 모름"으로 보이면 빈 근거로 판정할 수 있다
     @Test
     void findAll_whenReaderFails_propagates() {
-        given(paymentReader.findById(1L)).willThrow(new IllegalStateException("db down"));
+        given(paymentReader.findAllById(List.of(1L))).willThrow(new IllegalStateException("db down"));
 
         assertThatThrownBy(() -> reader.findAll(List.of(1L))).isInstanceOf(IllegalStateException.class);
     }

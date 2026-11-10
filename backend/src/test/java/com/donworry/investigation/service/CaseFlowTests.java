@@ -710,6 +710,52 @@ class CaseFlowTests {
                         .value(72));
     }
 
+    // 목록은 보고서 상태 · 판정 수를 한 번에 읽는다 — Case마다 따로 읽은 값과 같아야 한다
+    @Test
+    void list_batchedReportStatusAndDecidedCount_matchPerCaseValues() throws Exception {
+        String customer = customer();
+        Held merged = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        // 병합된 Case는 보고서가 버전별로 2개 이상이어야 최신 버전 고르기를 검증한다
+        assertThat(reportGateway.findByCase(merged.caseId())).hasSizeGreaterThan(1);
+        Held decided = createHeld(customer(), 200_000L, 60);
+        CaseDetailResponse detail = caseQueryService.detail(decided.caseId());
+        perform(decide(
+                        decided.caseId(),
+                        1,
+                        latestReportId(detail),
+                        List.of(item(detail.payments().getFirst().casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isOk());
+        SecurityCase noReport =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(noReport, System.nanoTime(), Instant.now()));
+
+        List<Long> ids = List.of(merged.caseId(), decided.caseId(), noReport.getId());
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> ids.contains(summary.caseId()))
+                .hasSize(3)
+                .allSatisfy(summary -> {
+                    assertThat(summary.latestReportStatus())
+                            .isEqualTo(reportGateway
+                                    .latest(summary.caseId())
+                                    .map(ReportGateway.ReportSnapshot::status)
+                                    .orElse(null));
+                    assertThat(summary.decidedCount())
+                            .isEqualTo(caseQueryService
+                                    .detail(summary.caseId())
+                                    .decisions()
+                                    .size());
+                });
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(decided.caseId()))
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.decidedCount()).isEqualTo(1));
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(noReport.getId()))
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.latestReportStatus()).isNull());
+    }
+
     // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다
     @Test
     void list_missingPaymentInfo_returnsNullTotalAmount() {

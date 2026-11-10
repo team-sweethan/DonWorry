@@ -22,6 +22,15 @@ public interface AiReportRepository extends Repository<AiReport, Long> {
 
     List<AiReport> findByCaseIdOrderByReportVersionAsc(Long caseId);
 
+    // 목록 화면 — 여러 Case의 최신 버전 보고서 상태만 읽는다 (본문 JSON은 읽지 않는다). 보고서가 없는 Case는 결과에 없다
+    @Query("""
+            SELECT new com.donworry.investigation.report.repository.CaseReportStatus(r.caseId, r.status)
+            FROM AiReport r
+            WHERE r.caseId IN :caseIds
+              AND r.reportVersion = (SELECT MAX(r2.reportVersion) FROM AiReport r2 WHERE r2.caseId = r.caseId)
+            """)
+    List<CaseReportStatus> findLatestStatusByCaseIdIn(@Param("caseIds") Collection<Long> caseIds);
+
     // 서버 재시작으로 끝나지 못한 보고서 찾기용 (AiReportRecovery)
     List<AiReport> findByStatusIn(Collection<ReportStatus> statuses);
 

@@ -1,7 +1,9 @@
 package com.donworry.investigation.service;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,6 +19,16 @@ public interface ReportGateway {
 
     default Optional<ReportSnapshot> latest(Long caseId) {
         return findByCase(caseId).stream().max(Comparator.comparingInt(ReportSnapshot::reportVersion));
+    }
+
+    // 목록 화면용 — Case ID → 최신 보고서 상태. 보고서가 없는 Case는 키가 없다
+    // 기본 구현은 Case마다 읽는다. 실제 구현은 상태만 한 번에 읽는다
+    default Map<Long, String> latestStatuses(Collection<Long> caseIds) {
+        Map<Long, String> statuses = new HashMap<>();
+        for (Long caseId : caseIds) {
+            latest(caseId).ifPresent(report -> statuses.put(caseId, report.status()));
+        }
+        return statuses;
     }
 
     // 상태값은 P4 정본(PENDING · RUNNING · SUCCEEDED · FAILED)을 문자열로 받는다

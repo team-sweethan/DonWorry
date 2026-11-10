@@ -6,8 +6,13 @@ import com.donworry.payment.entity.Payment;
 import com.donworry.payment.repository.PaymentRepository;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -28,6 +33,37 @@ public class PaymentReaderService implements PaymentReader {
             throw new IllegalArgumentException("paymentId must be positive");
         }
         return payments.findById(paymentId).map(PaymentReaderService::summary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, PaymentSummary> findAllById(Collection<Long> paymentIds) {
+        if (paymentIds == null) {
+            throw new IllegalArgumentException("paymentIds must not be null");
+        }
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Long paymentId : paymentIds) {
+            if (paymentId == null || paymentId <= 0) {
+                throw new IllegalArgumentException("paymentIds must contain only positive values");
+            }
+            ids.add(paymentId);
+        }
+        Map<Long, PaymentSummary> found = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return found;
+        }
+        Map<Long, PaymentSummary> byId = new HashMap<>();
+        for (Payment payment : payments.findByPaymentIdIn(ids)) {
+            byId.put(payment.getPaymentId(), summary(payment));
+        }
+        // 요청한 순서를 지킨다
+        for (Long id : ids) {
+            PaymentSummary summary = byId.get(id);
+            if (summary != null) {
+                found.put(id, summary);
+            }
+        }
+        return found;
     }
 
     @Override
