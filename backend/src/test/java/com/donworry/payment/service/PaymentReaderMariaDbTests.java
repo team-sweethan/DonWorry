@@ -142,6 +142,24 @@ class PaymentReaderMariaDbTests {
         assertThatIllegalArgumentException().isThrownBy(() -> reader.findById(-1L));
         assertThat(reader.findById(Long.MAX_VALUE)).isEmpty();
     }
+
+    // 여러 결제를 한 번의 조회로 읽는다 — 한 건씩 읽은 값과 같고, 요청 순서를 지키며, 없는 결제 · 중복 ID는 빠진다
+    @Test
+    void findAllById_readsOnceInRequestOrderAndMatchesFindById() {
+        long first = save(Instant.parse("2026-10-25T03:04:05Z"));
+        long second = save(Instant.parse("2026-10-25T03:04:06Z"));
+        clearInvocations(payments);
+
+        var found = reader.findAllById(List.of(second, Long.MAX_VALUE, first, second));
+
+        assertThat(found.keySet()).containsExactly(second, first);
+        assertThat(found.get(first)).isEqualTo(reader.findById(first).orElseThrow());
+        assertThat(found.get(second)).isEqualTo(reader.findById(second).orElseThrow());
+        verify(payments, times(1)).findByPaymentIdIn(any());
+        assertThat(reader.findAllById(List.of())).isEmpty();
+        assertThatIllegalArgumentException().isThrownBy(() -> reader.findAllById(null));
+        assertThatIllegalArgumentException().isThrownBy(() -> reader.findAllById(List.of(first, 0L)));
+    }
     // 고객별 최근 결제 (#338) — customer_ref는 가맹점마다 따로 매기는 값이라 가맹점이 다르면 다른 고객이다
     @Test
     void findRecentByCustomer_sameCustomerRefOtherMerchant_isExcluded() {

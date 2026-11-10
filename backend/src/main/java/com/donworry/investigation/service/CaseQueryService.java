@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,8 +67,32 @@ public class CaseQueryService {
         List<SecurityCase> cases = merchantId == null
                 ? securityCaseRepository.findAllByOrderByCreatedAtDesc()
                 : securityCaseRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId);
+        if (cases.isEmpty()) {
+            return List.of();
+        }
         Map<Long, String> names = staffNames();
-        return cases.stream().map(securityCase -> summary(securityCase, names)).toList();
+        // Case마다 따로 조회하지 않고 결제 · 평가 · 보고서 상태 · 판정 수를 목록 전체에 한 번씩 읽는다
+        List<Long> caseIds = cases.stream().map(SecurityCase::getId).toList();
+        Map<Long, List<CasePayment>> paymentsByCase = casePaymentRepository.findBySecurityCaseIdIn(caseIds).stream()
+                .sorted(Comparator.comparing(CasePayment::getLinkedAt).thenComparing(CasePayment::getId))
+                .collect(Collectors.groupingBy(
+                        casePayment -> casePayment.getSecurityCase().getId(), Collectors.toList()));
+        Map<Long, PaymentInfo> infos = paymentInfoReader.findAll(paymentsByCase.values().stream()
+                .flatMap(List::stream)
+                .map(CasePayment::getPaymentId)
+                .toList());
+        Map<Long, String> reportStatuses = reportGateway.latestStatuses(caseIds);
+        Map<Long, Long> decidedCounts = new HashMap<>();
+        paymentDecisionRepository.countByCaseIdIn(caseIds).forEach(row -> decidedCounts.put(row.caseId(), row.count()));
+        return cases.stream()
+                .map(securityCase -> summary(
+                        securityCase,
+                        paymentsByCase.getOrDefault(securityCase.getId(), List.of()),
+                        infos,
+                        reportStatuses.get(securityCase.getId()),
+                        decidedCounts.getOrDefault(securityCase.getId(), 0L),
+                        names))
+                .toList();
     }
 
     // 사이드바 배지 · 화면 자동 갱신용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
@@ -180,10 +205,14 @@ public class CaseQueryService {
                 histories.stream().map(HistoryResponse::from).toList());
     }
 
-    private CaseSummaryResponse summary(SecurityCase securityCase, Map<Long, String> staffNames) {
+    private CaseSummaryResponse summary(
+            SecurityCase securityCase,
+            List<CasePayment> casePayments,
+            Map<Long, PaymentInfo> infos,
+            String latestReportStatus,
+            long decidedCount,
+            Map<Long, String> staffNames) {
         Long caseId = securityCase.getId();
-        List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
-        Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         List<Optional<PaymentInfo>> payments = casePayments.stream()
                 .map(casePayment -> Optional.ofNullable(infos.get(casePayment.getPaymentId())))
                 .toList();
@@ -199,9 +228,8 @@ public class CaseQueryService {
                 .paymentCount(payments.size())
                 .totalAmount(totalAmount(payments))
                 .maxRiskScore(maxRiskScore(payments))
-                .latestReportStatus(
-                        reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null))
-                .decidedCount((int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId))
+                .latestReportStatus(latestReportStatus)
+                .decidedCount((int) decidedCount)
                 .assigneeStaffId(securityCase.getAssigneeStaffId())
                 .assigneeName(staffNames.get(securityCase.getAssigneeStaffId()))
                 .build();

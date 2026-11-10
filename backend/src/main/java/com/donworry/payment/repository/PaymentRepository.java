@@ -24,6 +24,9 @@ public interface PaymentRepository extends Repository<Payment, Long> {
 
     Optional<Payment> findById(Long paymentId);
 
+    // 목록 화면 — 여러 결제를 한 번에 읽는다 (PaymentReader.findAllById)
+    List<Payment> findByPaymentIdIn(Collection<Long> paymentIds);
+
     // 고객 취소도 직원 조치와 같은 결제 잠금을 먼저 잡는다. 타 가맹점 결제는 잠그지 않는다.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.QueryHints(
