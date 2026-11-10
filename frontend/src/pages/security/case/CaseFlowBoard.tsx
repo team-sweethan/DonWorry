@@ -3,6 +3,7 @@ import {
   type ReactNode,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -109,7 +110,7 @@ export function CaseFlowBoard({
   onLane,
   activeLane,
 }: Props) {
-  const grouped = boardLanes(cases)
+  const grouped = useMemo(() => boardLanes(cases), [cases])
   const [collapsed, setCollapsed] = useState(readCollapsed)
   // 화면을 켜 두는 동안 칩 바탕이 실제 경과만큼 차오르게 1분마다 기준 시각을 바꾼다
   const [now, setNow] = useState(() => Date.now())
@@ -147,7 +148,8 @@ export function CaseFlowBoard({
     })
     lastRects.current = rects
     lastLane.current = laneNow
-  })
+    // 사건 목록이 바뀔 때만 잰다 — 마우스 올림 같은 다른 다시 그리기에서는 칩 위치를 읽지 않는다 (#760 리뷰)
+  }, [grouped, motion])
 
   return (
     <section className={`case-flow${collapsed ? ' is-collapsed' : ''}`} aria-label="사건 흐름 보드">
@@ -472,7 +474,8 @@ type LaneTilesProps = {
  * 몇 번째 칩부터 접히는지는 실제 그려진 줄 위치로 잰다(폭에 따라 한 줄 칩 수가 바뀐다).
  */
 function LaneTiles({ count, shownCount, selectedIndex, label, children }: LaneTilesProps) {
-  const [expanded, setExpanded] = useState(false)
+  // null이면 저절로(선택한 칩이 접힌 칸에 있으면 펼침), 직원이 누르면 그 뜻을 따른다 (#760 리뷰)
+  const [expanded, setExpanded] = useState<boolean | null>(null)
   const [hiddenFrom, setHiddenFrom] = useState(Number.POSITIVE_INFINITY)
   const boxRef = useRef<HTMLDivElement>(null)
   const innerRef = useRef<HTMLDivElement>(null)
@@ -499,7 +502,7 @@ function LaneTiles({ count, shownCount, selectedIndex, label, children }: LaneTi
   }, [shownCount])
   const overflow = Number.isFinite(hiddenFrom) ? shownCount - hiddenFrom : 0
   // 선택한 칩이 접힌 칸에 있으면 펼친다 — 표에서 고른 사건이 보드에서도 보이게
-  const open = expanded || (selectedIndex >= 0 && selectedIndex >= hiddenFrom)
+  const open = expanded ?? (selectedIndex >= 0 && selectedIndex >= hiddenFrom)
   return (
     <>
       <div

@@ -67,6 +67,7 @@ import {
 import { readCaseListScope, saveCaseListScope } from '../../utils/caseListScope'
 import {
   type BoardLaneKey,
+  boardLaneOf,
   casesInTab,
   clearConditions,
   elapsedLabel,
@@ -306,6 +307,17 @@ export function CaseListPage() {
       selected: caseId,
       page: listPage(filteredIds, caseId, page, PAGE_SIZE),
     })
+  // 보드에서 고른 사건이 표의 단계 조건 밖이면 그 사건 레인으로 단계 조건을 옮겨 표에도 보이게 한다.
+  // 레인을 걸러 둔 채 다른 레인 칩이나 [다음 확인]을 눌러도 줄이 열린다 (#760 리뷰)
+  const selectFromBoard = (caseId: string) => {
+    if (filteredIds.includes(caseId)) return select(caseId)
+    const c = boardCases.find((item) => item.caseId === caseId)
+    if (!c || c.status === 'CLOSED') return
+    setQuery({
+      status: activeLane ? laneStatus[boardLaneOf[c.status]] : tab === 'ALL' ? 'ALL' : 'OPEN_ONLY',
+      selected: caseId,
+    })
+  }
   // 상세 · 요약의 이전 · 다음 이동 순서 (#759) — 지금 조건 · 정렬 그대로, 열 수 없는 남의 진행 중 사건은 뺀다
   const queueOrder = useMemo(
     () =>
@@ -334,6 +346,8 @@ export function CaseListPage() {
   // [요약 보기]를 다시 누르면 같은 사건이어도 다시 조회한다
   const [summaryNonce, setSummaryNonce] = useState(0)
   const summaryIndex = summaryId ? queueOrder.indexOf(summaryId) : -1
+  // 조건이 바뀌어 연 사건이 목록 순서에서 빠지면 요약을 닫는다 — 이전 · 다음이 막힌 채 남지 않게 (#760 리뷰)
+  const summaryOpenId = summaryIndex >= 0 ? summaryId : null
   const openSummary = (caseId: string) => {
     setSummaryId(caseId)
     setSummaryNonce((n) => n + 1)
@@ -603,7 +617,7 @@ export function CaseListPage() {
 
   return (
     <div
-      className={`case-queue${summaryId ? ' has-drawer' : ''}${motionPaused ? ' is-motion-paused' : ''}`}
+      className={`case-queue${summaryOpenId ? ' has-drawer' : ''}${motionPaused ? ' is-motion-paused' : ''}`}
     >
       <PageHeader
         title="Case 목록"
@@ -679,6 +693,8 @@ export function CaseListPage() {
               onChange={(next) => {
                 setScope(next)
                 saveCaseListScope(next)
+                // 범위를 바꾸면 요약을 닫는다. 열린 채 두면 다시 조회해 누르지 않은 열람 기록이 남는다 (#760 리뷰)
+                setSummaryId(null)
                 setQuery({ selected: null })
                 // 자동 갱신은 고른 범위의 건수만 본다(#640). [내 사건]일 때 놓친 남의 Case 변화가
                 // 전환 뒤에도 남지 않게 목록을 다시 받고 감지 기준도 새로 잡는다 (#642 Codex 리뷰)
@@ -790,7 +806,7 @@ export function CaseListPage() {
             next={next}
             motion={!motionPaused}
             onHover={setHoverId}
-            onSelect={(caseId) => select(caseId)}
+            onSelect={selectFromBoard}
             activeLane={activeLane}
             onLane={(lane) =>
               setQuery({
@@ -885,12 +901,12 @@ export function CaseListPage() {
         />
       </Card>
       <CaseSummaryDrawer
-        caseId={summaryId}
+        caseId={summaryOpenId}
         // 새로고침 · [목록에 반영]처럼 직원이 목록을 갱신하면 열린 요약도 다시 조회한다 (#760 Codex 리뷰)
         reloadKey={`${refreshKey}-${summaryNonce}`}
         merchantName={
-          summaryId
-            ? merchantNames.get(filtered.find((c) => c.caseId === summaryId)?.merchantId ?? '')
+          summaryOpenId
+            ? merchantNames.get(cases.find((c) => c.caseId === summaryOpenId)?.merchantId ?? '')
             : undefined
         }
         prev={summaryIndex > 0 ? queueOrder[summaryIndex - 1] : null}

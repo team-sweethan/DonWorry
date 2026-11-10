@@ -1,19 +1,12 @@
 import type { CaseStatus, CaseSummary } from '../types/case.ts'
 import { SLA_HOURS, slaState } from './caseRules.ts'
 import type { CaseListQuery, CaseListSort, CaseListTab } from './caseListQuery.ts'
-import { priorityReason, type PriorityReason } from './securityHome.ts'
+import { comparePriority, priorityReason, type PriorityReason } from './securityHome.ts'
 
 /**
  * Case 목록 작업 대기열 (#759) — 정렬 · 자주 쓰는 조건 · 적용한 조건 표시 · 경과 시간.
  * 화면 안내용이다. 판정 가능 여부와 열람 권한은 백엔드가 다시 판단한다.
  */
-
-const rank: Record<PriorityReason, number> = {
-  ACTION_FAILED: 0,
-  SLA_EXCEEDED: 1,
-  DECISION_PENDING: 2,
-  OTHER: 3,
-}
 
 const created = (c: CaseSummary) => Date.parse(c.createdAt)
 
@@ -32,7 +25,7 @@ export function sortCases(cases: CaseSummary[], sort: CaseListSort, now = Date.n
       if (closedA !== closedB) return closedA ? 1 : -1
       if (closedA)
         return Date.parse(b.closedAt ?? b.createdAt) - Date.parse(a.closedAt ?? a.createdAt)
-      return rank[priorityReason(a, now)] - rank[priorityReason(b, now)] || created(a) - created(b)
+      return comparePriority(a, b, now)
     },
     risk: (a, b) => (b.maxRiskScore ?? -1) - (a.maxRiskScore ?? -1) || created(a) - created(b),
     oldest: (a, b) => created(a) - created(b),
@@ -60,40 +53,32 @@ export function casesInTab(cases: CaseSummary[], tab: CaseListTab) {
   return cases.filter((c) => (tab === 'CLOSED') === (c.status === 'CLOSED'))
 }
 
-export type QuickCondition = 'decision' | 'actionFailed' | 'reportFailed' | 'slaExceeded'
+export type QuickCondition = 'reportFailed' | 'slaExceeded'
 
-/** 자주 쓰는 조건 (#759). 보안 홈 "확인 필요"와 같은 기준이며 종료되지 않은 사건만 센다 */
 /**
- * 판정 대기 · 금융 처리 실패는 사건 흐름 보드의 레인 머리가 같은 건수 · 조건을 맡는다.
- * 위 버튼 줄에는 레인으로 나뉘지 않는 조건만 둔다
+ * 자주 쓰는 조건 (#759). 보안 홈 "확인 필요"와 같은 기준이며 종료되지 않은 사건만 센다.
+ * 판정 대기 · 금융 처리 실패는 사건 흐름 보드의 레인 머리가 같은 건수 · 조건을 맡아, 여기에는
+ * 레인으로 나뉘지 않는 조건만 둔다
  */
 export const quickConditions: Array<{ key: QuickCondition; label: string; tone: string }> = [
   { key: 'reportFailed', label: '보고서 생성 실패', tone: 'red' },
   { key: 'slaExceeded', label: `생성 후 ${SLA_HOURS}시간 경과`, tone: 'orange' },
 ]
 
-const quickStatus: Partial<Record<QuickCondition, CaseStatus>> = {
-  decision: 'DECISION_PENDING',
-  actionFailed: 'ACTION_FAILED',
-}
-
 export function quickConditionCount(cases: CaseSummary[], key: QuickCondition, now = Date.now()) {
   return cases.filter((c) => {
     if (c.status === 'CLOSED') return false
     if (key === 'reportFailed') return c.latestReportStatus === 'FAILED'
-    if (key === 'slaExceeded') return slaState(c.createdAt, c.status, now)?.exceeded === true
-    return c.status === quickStatus[key]
+    return slaState(c.createdAt, c.status, now)?.exceeded === true
   }).length
 }
 
 export function isQuickConditionOn(query: CaseListQuery, key: QuickCondition) {
-  if (key === 'reportFailed') return query.report === 'failed'
-  if (key === 'slaExceeded') return query.slaExceeded
-  return query.status === quickStatus[key]
+  return key === 'reportFailed' ? query.report === 'failed' : query.slaExceeded
 }
 
 /**
- * 자주 쓰는 조건을 켜거나 끈다. 다른 조건과 함께 걸린다(상태 조건끼리는 하나만).
+ * 자주 쓰는 조건을 켜거나 끈다. 다른 조건과 함께 걸린다.
  * 종료 탭에서 누르면 처리 중 탭으로 옮긴다 — 진행 중 사건에만 뜻이 있는 조건이다.
  */
 export function toggleQuickCondition(
@@ -102,8 +87,6 @@ export function toggleQuickCondition(
 ): Partial<CaseListQuery> {
   const on = isQuickConditionOn(query, key)
   const status = query.status === 'CLOSED' ? 'OPEN_ONLY' : query.status
-  const target = quickStatus[key]
-  if (target) return { status: on ? 'OPEN_ONLY' : target }
   if (key === 'reportFailed') return { status, report: on ? null : 'failed' }
   return { status, slaExceeded: !on }
 }

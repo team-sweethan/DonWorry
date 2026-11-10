@@ -104,32 +104,28 @@ test('자주 쓰는 조건은 종료되지 않은 사건만 센다', () => {
     make({ status: 'CLOSED', latestReportStatus: 'FAILED', createdAt: hoursAgo(40) }),
     make({ createdAt: hoursAgo(25) }),
   ]
-  assert.equal(quickConditionCount(cases, 'decision', now), 1)
-  assert.equal(quickConditionCount(cases, 'actionFailed', now), 1)
   assert.equal(quickConditionCount(cases, 'reportFailed', now), 1)
   assert.equal(quickConditionCount(cases, 'slaExceeded', now), 1)
 })
 
-test('자주 쓰는 조건은 켜고 끄며, 상태 조건끼리는 하나만 걸린다', () => {
-  const base = defaultCaseListQuery
-  const decision = { ...base, ...toggleQuickCondition(base, 'decision') }
-  assert.equal(decision.status, 'DECISION_PENDING')
-  assert.equal(isQuickConditionOn(decision, 'decision'), true)
-
-  const failed = { ...decision, ...toggleQuickCondition(decision, 'actionFailed') }
-  assert.equal(failed.status, 'ACTION_FAILED')
-  assert.equal(isQuickConditionOn(failed, 'decision'), false)
-
-  // 다른 종류 조건과는 함께 걸린다
+test('자주 쓰는 조건은 켜고 끄며, 단계(상태) 조건과 함께 걸린다', () => {
+  const failed = { ...defaultCaseListQuery, status: 'ACTION_FAILED' as const }
   const both = { ...failed, ...toggleQuickCondition(failed, 'reportFailed') }
   assert.equal(both.status, 'ACTION_FAILED')
   assert.equal(both.report, 'failed')
+  assert.equal(isQuickConditionOn(both, 'reportFailed'), true)
+  assert.equal(isQuickConditionOn(both, 'slaExceeded'), false)
 
   // 다시 누르면 푼다
-  assert.deepEqual(toggleQuickCondition(both, 'actionFailed'), { status: 'OPEN_ONLY' })
   assert.deepEqual(toggleQuickCondition(both, 'reportFailed'), {
     status: 'ACTION_FAILED',
     report: null,
+  })
+  const sla = { ...both, ...toggleQuickCondition(both, 'slaExceeded') }
+  assert.equal(sla.slaExceeded, true)
+  assert.deepEqual(toggleQuickCondition(sla, 'slaExceeded'), {
+    status: 'ACTION_FAILED',
+    slaExceeded: false,
   })
 })
 
