@@ -22,6 +22,7 @@ import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseAlert;
@@ -99,6 +100,9 @@ class InsiderReportServiceTests {
     @Mock
     SecurityStaffGuard guard;
 
+    @Mock
+    StaffLoginReader loginReader;
+
     // 저장된 판 — 저장소 대역이 이 목록을 읽고 쓴다
     private final List<InsiderReport> saved = new ArrayList<>();
 
@@ -116,7 +120,8 @@ class InsiderReportServiceTests {
                 accessReader,
                 staffDirectory,
                 locker,
-                guard);
+                guard,
+                loginReader);
         lenient()
                 .when(reports.existsByInsiderCaseIdAndTriggerType(anyLong(), any()))
                 .thenAnswer(call -> saved.stream()

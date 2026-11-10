@@ -6,7 +6,12 @@ import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
+import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.identity.api.StaffLogin;
+import com.donworry.identity.api.StaffLoginEvent;
+import com.donworry.identity.api.StaffLoginEventType;
+import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseAlert;
 import com.donworry.investigation.entity.InsiderCaseStatus;
@@ -20,6 +25,7 @@ import com.donworry.investigation.repository.InsiderCaseRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.InsiderCaseChanged;
 import com.donworry.investigation.service.SecurityStaffGuard;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -47,6 +53,10 @@ public class InsiderReportService {
 
     // 판 번호 충돌 재시도 상한 — 한 사건의 계기는 둘뿐이라 두 번이면 충분하고, 여유를 하나 둔다
     static final int MAX_SAVE_ATTEMPTS = 3;
+    // INS-10 로그인 사실 (#770) — 경보 직전 성공 로그인을 찾는 범위 · 평소 브라우저 기간(탐지 ins10-lookback 기본값) · 로그인 전 실패를 세는 범위
+    static final Duration LOGIN_BEFORE_ALERT = Duration.ofHours(1);
+    static final Duration USUAL_LOGIN_LOOKBACK = Duration.ofDays(30);
+    static final Duration FAILURE_LOOKBACK = Duration.ofHours(1);
 
     private final InsiderCaseRepository insiderCases;
     private final InsiderCaseAlertRepository links;
@@ -58,6 +68,7 @@ public class InsiderReportService {
     private final SecurityStaffDirectory staffDirectory;
     private final StaffAccountLocker locker;
     private final SecurityStaffGuard guard;
+    private final StaffLoginReader loginReader;
 
     public void generate(InsiderCaseChanged event) {
         InsiderReportTrigger trigger = event.reason() == InsiderCaseChanged.Reason.EXPORT_BLOCKED
@@ -150,7 +161,51 @@ public class InsiderReportService {
                 events,
                 caseCustomers(events),
                 baseline(insiderCase, events),
+                loginAttack(staffId, alerts, now),
                 now);
+    }
+
+    // SEC-INS-10 로그인 사실 (#770) — 경보가 열린 시각 직전의 성공 로그인을 탈취 의심 로그인으로 본다(INS-10 경보에는 근거 기록이 없다)
+    // INS-10이 없거나 그 로그인을 찾지 못하면 null — 사실 묶음을 넣지 않는다
+    private InsiderReportFacts.LoginAttack loginAttack(Long staffId, List<InsiderCaseAlert> alerts, Instant now) {
+        InsiderCaseAlert suspected = alerts.stream()
+                .filter(alert -> alert.getRuleCode() == InsiderRule.INS_10)
+                .findFirst()
+                .orElse(null);
+        if (suspected == null) return null;
+        Instant raisedAt = suspected.getRaisedAt();
+        StaffLoginEvent login =
+                loginReader.findLoginEvents(staffId, raisedAt.minus(LOGIN_BEFORE_ALERT), raisedAt).stream()
+                        .filter(event -> event.eventType() == StaffLoginEventType.LOGIN_SUCCESS)
+                        .reduce((earlier, later) -> later)
+                        .orElse(null);
+        if (login == null) return null;
+        Instant loginAt = login.occurredAt();
+        List<String> usualDevices =
+                loginReader.findSuccessfulLogins(staffId, loginAt.minus(USUAL_LOGIN_LOOKBACK), loginAt).stream()
+                        .map(StaffLogin::device)
+                        .distinct()
+                        .toList();
+        long failuresBefore = loginReader.findLoginEvents(staffId, loginAt.minus(FAILURE_LOOKBACK), loginAt).stream()
+                .filter(event -> event.eventType() == StaffLoginEventType.LOGIN_FAILURE
+                        && event.occurredAt().isBefore(loginAt))
+                .count();
+        List<StaffAccessRecorded> after = accessReader.findRecent(staffId, loginAt, now);
+        Long exportSeconds = after.stream()
+                .filter(event -> event.accessType() == StaffAccessType.TRANSACTION_EXPORT)
+                .map(StaffAccessRecorded::occurredAt)
+                .filter(Objects::nonNull)
+                .min(Comparator.naturalOrder())
+                .map(at -> Duration.between(loginAt, at).toSeconds())
+                .orElse(null);
+        return InsiderReportFacts.LoginAttack.builder()
+                .loginAt(loginAt)
+                .device(login.device())
+                .usualDevices(usualDevices)
+                .failuresBeforeLogin(failuresBefore)
+                .accessAfterLogin(after.size())
+                .firstExportAttemptSeconds(exportSeconds)
+                .build();
     }
 
     // 평소(30일) 기록 (#749) — 경보 근거 첫 기록이 있는 한국 날짜의 전날까지, 완전한 한국 날짜 30일 [D-30 0시, D 0시).
