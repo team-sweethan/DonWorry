@@ -14,6 +14,9 @@ public interface InsiderCaseAlertRepository extends Repository<InsiderCaseAlert,
 
     Optional<InsiderCaseAlert> findById(Long alertId);
 
+    // 여러 경보가 각각 묶인 사건 (#777 로그인 보안 대시보드 — 직원의 지금 열린 사건이 아니라 경보가 실제로 속한 사건)
+    List<InsiderCaseAlert> findByAlertIdIn(Collection<Long> alertIds);
+
     List<InsiderCaseAlert> findByInsiderCaseIdOrderByRaisedAtAscAlertIdAsc(Long insiderCaseId);
 
     // 판정 때 계정 정지 근거로 남길 가장 최근 경보

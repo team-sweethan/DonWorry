@@ -30,7 +30,7 @@ export type LoginSecurityAttempt = {
   suspected: boolean
 }
 
-/** SEC-INS-10 · SEC-INS-05 경보. insiderCaseId는 그 직원의 열린 내부자 사건 */
+/** SEC-INS-10 · SEC-INS-05 경보. insiderCaseId는 이 경보가 묶인 내부자 사건(닫힌 사건일 수 있음), 아직 안 묶였으면 null */
 export type LoginSecurityAlert = {
   alertId: number
   staffId: number

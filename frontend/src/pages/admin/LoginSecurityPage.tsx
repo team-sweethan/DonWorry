@@ -415,12 +415,11 @@ export function LoginSecurityPage() {
                         </strong>
                         <span className="ls-muted">{displayRuleText(alert.summary)}</span>
                       </span>
-                      {linkedCase !== null ? (
+                      {!alert.open && <Tag>닫힘</Tag>}
+                      {linkedCase !== null && (
                         <Button size="small" onClick={() => openCase(linkedCase)}>
                           사건 보기
                         </Button>
-                      ) : (
-                        !alert.open && <Tag>닫힘</Tag>
                       )}
                     </li>
                   )

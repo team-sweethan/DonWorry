@@ -15,9 +15,8 @@ import com.donworry.investigation.dto.LoginSecurityAttemptResponse;
 import com.donworry.investigation.dto.LoginSecurityBucketResponse;
 import com.donworry.investigation.dto.LoginSecurityResponse;
 import com.donworry.investigation.dto.LoginSecurityState;
-import com.donworry.investigation.entity.InsiderCase;
-import com.donworry.investigation.entity.InsiderCaseStatus;
-import com.donworry.investigation.repository.InsiderCaseRepository;
+import com.donworry.investigation.entity.InsiderCaseAlert;
+import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -50,7 +49,7 @@ public class LoginSecurityService {
     private final LoginTrafficReader traffic;
     private final InsiderAlertMonitorReader alertReader;
     private final SecurityStaffDirectory staffDirectory;
-    private final InsiderCaseRepository insiderCases;
+    private final InsiderCaseAlertRepository caseAlerts;
 
     @Transactional(readOnly = true)
     public LoginSecurityResponse dashboard() {
@@ -64,9 +63,15 @@ public class LoginSecurityService {
         Map<Long, String> names = staffDirectory.securityStaff().stream()
                 .collect(Collectors.toMap(SecurityStaffEntry::userId, SecurityStaffEntry::displayName, (a, b) -> a));
         List<InsiderAlertEntry> alerts = loginAlerts(now);
-        // 사람당 열린 내부자 사건은 1개 (#670 uk_insider_cases_open)
-        Map<Long, Long> openCases = insiderCases.findByStatusOrderByIdAsc(InsiderCaseStatus.OPEN).stream()
-                .collect(Collectors.toMap(InsiderCase::getStaffId, InsiderCase::getId, (a, b) -> a));
+        // 경보가 실제로 묶인 사건 — 직원의 지금 열린 사건을 붙이면 판정으로 닫힌 지난 경보가 새 사건으로 이어진다 (#777 Codex 리뷰)
+        Map<Long, Long> linkedCases = alerts.isEmpty()
+                ? Map.of()
+                : caseAlerts
+                        .findByAlertIdIn(
+                                alerts.stream().map(InsiderAlertEntry::alertId).toList())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                InsiderCaseAlert::getAlertId, InsiderCaseAlert::getInsiderCaseId, (a, b) -> a));
         return LoginSecurityResponse.builder()
                 .generatedAt(now)
                 .state(state(criteria, recent))
@@ -96,7 +101,7 @@ public class LoginSecurityService {
                                 .summary(a.summary())
                                 .open(a.open())
                                 .createdAt(a.createdAt())
-                                .insiderCaseId(openCases.get(a.staffId()))
+                                .insiderCaseId(linkedCases.get(a.alertId()))
                                 .build())
                         .toList())
                 .build();
