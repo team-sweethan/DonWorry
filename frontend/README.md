@@ -27,7 +27,7 @@ npm run dev
 보안 직원·사장님은 공개된 시연 계정입니다. 운영 프로필(`prod`)은 시작할 때 이 시연 계정을 정지합니다 ([identity #131](../docs/identity/README.md#131-운영-설정)).
 관리 화면은 최소 1280px 기준이며, 작은 창에서는 가로 스크롤을 사용합니다. 공개 화면은 좁은 화면에서 한 열로 표시합니다.
 
-결제부터 매입 완료·AI 보고서까지 이어서 보려면 [로컬 시연 가이드](../docs/demo/local-demo.md)를 따릅니다. HELD Case는 결제 스크립트(`scripts/demo/cakeshop_pay.py`)로 만듭니다.
+결제부터 매입 완료·AI 보고서까지 이어서 보려면 [로컬 시연 가이드](../docs/demo/local-demo.md)를 따릅니다. HELD Case는 결제 스크립트(`scripts/demo/legacy/cakeshop_pay.py`)로 만듭니다.
 
 ## 화면
 

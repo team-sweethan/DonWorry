@@ -26,7 +26,7 @@
 
 Case 목록의 **시연: HELD 결제 발생** 버튼과 Case 상세의 **시연: 결제 병합** 버튼, 이 버튼이 부르던 `POST /api/demo/held-payments`는 #163 2단계에서 지웠습니다. 메모리 결제라 FDS 평가 · 실제 매입을 거치지 않아 실제 흐름과 달랐기 때문입니다.
 
-HELD Case는 [2절](#2-실제-결제부터-매입까지)의 결제 스크립트(`scripts/demo/cakeshop_pay.py`)로 만듭니다. 병합 장면은 판정 전에 같은 손님 번호로 다시 보냅니다(`py scripts/demo/cakeshop_pay.py <손님 번호>`). 새로 보류된 결제가 있으면 병합 기한(30분) 안에서 같은 Case에 붙습니다.
+HELD Case는 [2절](#2-실제-결제부터-매입까지)의 결제 스크립트(`scripts/demo/legacy/cakeshop_pay.py`)로 만듭니다. 병합 장면은 판정 전에 같은 손님 번호로 다시 보냅니다(`py scripts/demo/legacy/cakeshop_pay.py <손님 번호>`). 새로 보류된 결제가 있으면 병합 기한(30분) 안에서 같은 Case에 붙습니다.
 
 ## 2. 실제 결제부터 매입까지
 
@@ -49,14 +49,14 @@ fds:
 직원 비밀번호를 입력해야 합니다.
 
 ```powershell
-py scripts/demo/fds_error.py
+py scripts/demo/legacy/fds_error.py
 # 기본: 평가 시간 초과 → P2 분석 후 재평가 가능
 # 룰 정보 일시 조회 실패 → P2 분석 후 재평가 가능
-py scripts/demo/fds_error.py --scenario TRANSIENT_FDS_RULE_DATA_UNAVAILABLE
+py scripts/demo/legacy/fds_error.py --scenario TRANSIENT_FDS_RULE_DATA_UNAVAILABLE
 # 비일시 평가 처리 실패 → P2 분석 후 수동 검토 필요
-py scripts/demo/fds_error.py --scenario FDS_EVALUATION_PROCESSING_FAILED
+py scripts/demo/legacy/fds_error.py --scenario FDS_EVALUATION_PROCESSING_FAILED
 # 출력된 paymentId를 사용
-py scripts/demo/fds_reevaluate.py <paymentId>
+py scripts/demo/legacy/fds_reevaluate.py <paymentId>
 ```
 
 첫 스크립트는 다음 FDS 평가를 무장한 뒤 실제 CakeShop 서명 결제를 보내 ERROR 복구 기록을 만듭니다.
@@ -108,7 +108,7 @@ payment:
 | --- | ------------ | --------------------------------- | ----------------------------- |
 | 1   | `backend`    | `.\gradlew.bat bootRun`           | `Started DonWorryApplication` |
 | 2   | `frontend`   | `npm run dev`                     | `http://localhost:5173`       |
-| 3   | 저장소 맨 위 | `py scripts/demo/cakeshop_pay.py` | 3번째 줄에 `HELD`             |
+| 3   | 저장소 맨 위 | `py scripts/demo/legacy/cakeshop_pay.py` | 3번째 줄에 `HELD`             |
 
 창 3은 창 1이 다 켜진 뒤에 실행합니다. 결과는 이렇게 나옵니다.
 
@@ -180,24 +180,24 @@ AI_SERVER_INTERNAL_API_KEY=①에서 만든 값
 - ✅ `http://localhost:8000/health` → `{"status":"ok"}`
 - "애플리케이션 제어 정책에서 이 파일을 차단했습니다"가 나오면 [7-2](#7-2-windows에서-ai-server-실행이-막힐-때)를 봅니다.
 
-그다음 창 3에서 **새 결제**를 보냅니다(`py scripts/demo/cakeshop_pay.py`). 이미 보고서가 있는 Case에는 새 보고서가 생기지 않습니다.
+그다음 창 3에서 **새 결제**를 보냅니다(`py scripts/demo/legacy/cakeshop_pay.py`). 이미 보고서가 있는 Case에는 새 보고서가 생기지 않습니다.
 ✅ 창 4에 `POST /investigations ... 202`가 찍히고, 보고서 한계 줄에 "mock 조사입니다"가 보입니다.
 
 **"고객 최근 결제" 카드 확인 (#338)** — 스크립트는 매번 새 손님으로 결제해서 이 카드가 늘 "결제 없음"입니다. 같은 손님의 지난 결제를 보려면:
 
 1. 방금 생긴 Case에서 결제 하나라도 판정합니다 (판정이 있는 Case에는 새 결제가 병합되지 않습니다)
-2. 스크립트 끝에 찍힌 손님 번호로 다시 보냅니다: `py scripts/demo/cakeshop_pay.py <손님 번호>`
+2. 스크립트 끝에 찍힌 손님 번호로 다시 보냅니다: `py scripts/demo/legacy/cakeshop_pay.py <손님 번호>`
 3. 새 Case의 보고서 전문에 첫 실행의 결제가 "고객 최근 결제"로 보입니다 (이 사건 결제는 빠짐)
 
 **결제별 카드 · 기기 · 접속 국가 확인 (#346)** — 기본 실행부터 손님별 가짜 카드 · 기기 · 국내 IP · 이메일을 모두 보냅니다.
 
-- IP와 국가 변경: `py scripts/demo/cakeshop_pay.py --ip 203.0.113.5 --country US`
-- 이메일도 변경: `py scripts/demo/cakeshop_pay.py --email buyer@example.test`
+- IP와 국가 변경: `py scripts/demo/legacy/cakeshop_pay.py --ip 203.0.113.5 --country US`
+- 이메일도 변경: `py scripts/demo/legacy/cakeshop_pay.py --email buyer@example.test`
 - 카드 · 기기 규칙(새 기기 · 처음 쓰는 카드)이 함께 평가되므로 과거 데이터 상태에 따라 몇 번째 결제가 보류되는지가 위 표와 달라질 수 있습니다
 
 **"같은 카드 · 기기 · IP를 쓴 다른 결제" 카드 확인 (#352)** — 기본 실행은 손님별로 다른 카드를 보냅니다.
 
-1. 같은 카드 이름으로 두 번 보냅니다 (매번 새 손님): `py scripts/demo/cakeshop_pay.py --card A` → 한 번 더 `py scripts/demo/cakeshop_pay.py --card A`
+1. 같은 카드 이름으로 두 번 보냅니다 (매번 새 손님): `py scripts/demo/legacy/cakeshop_pay.py --card A` → 한 번 더 `py scripts/demo/legacy/cakeshop_pay.py --card A`
 2. 두 번째 Case의 보고서 전문에서 "같은 카드"에 "다른 고객 1명 · 결제 3건"과 그 결제들의 FDS 판정이 보입니다
 3. 같은 손님의 결제와 이 사건 결제는 세지 않습니다. 다른 가맹점 결제도 보지 않습니다
 
@@ -312,7 +312,7 @@ SELECT * FROM settlements WHERE payment_id = :paymentId;
 PowerShell 명령 대신 아래를 씁니다.
 
 - backend 실행: `./gradlew bootRun`
-- 결제 스크립트: `python3 scripts/demo/cakeshop_pay.py` (Python 3.8 이상, 표준 라이브러리만 씀)
+- 결제 스크립트: `python3 scripts/demo/legacy/cakeshop_pay.py` (Python 3.8 이상, 표준 라이브러리만 씀)
 - ai-server 설정 복사: `cp .env.example .env`
 - AI 서버 키 만들기: `python3 -c 'import secrets; print(secrets.token_hex(32))'`
 - 케이크샵 서명 키 저장: 키를 **한 번만** 만들어 그 값을 셸 설정 파일에 붙입니다. **한 번만** 실행합니다.
@@ -396,7 +396,7 @@ PowerShell 명령 대신 아래를 씁니다.
 - Docker를 사용자가 켠 뒤 일반 PowerShell에서는 `docker ps`가 정상, 실행 도구에서는 파이프 `permission denied`. 사용자가 `docker compose up -d mariadb`를 실행했다. 앱이 실제 연결한 MariaDB 12.3의 `donworry_dev`가 compose DB라는 증거는 없으므로 둘을 같은 것으로 단정하지 않는다.
 - Gradle 캐시 잠금 파일 쓰기 권한을 부여받은 뒤 compileJava·bootRun 성공. 86개 migration 검증, 새 migration 적용 없음. DB 버전이 소스의 최신 migration보다 앞선다는 경고는 남아 있다.
 - 도구가 띄운 서버는 기동 완료 로그에도 HTTP 시간 초과. 해당 프로세스를 종료하고 사용자가 일반 PowerShell에서 같은 명령을 실행하자 프론트 HTTP 200, 백엔드 비로그인 auth 401 및 브라우저 로그인 정상. 원인 세부사항은 미확정이며 권한·방화벽을 임의 변경하지 않았다.
-- `py` 런처는 설치 Python을 찾지 못했다. 실제 결제는 저장소 루트에서 `.\ai-server\.venv\Scripts\python.exe scripts/demo/cakeshop_pay.py`로 실행했다.
+- `py` 런처는 설치 Python을 찾지 못했다. 실제 결제는 저장소 루트에서 `.\ai-server\.venv\Scripts\python.exe scripts/demo/legacy/cakeshop_pay.py`로 실행했다.
 - AI 서버는 도구 실행 환경에서 기존 가상환경의 `_uuid_utils` DLL이 실행 정책에 차단됐다. 일반 터미널에서는 정상 실행됐다. 사용자가 `.env`를 저장하고 OpenAI 제공자로 AI 서버를 재시작한 뒤, 백엔드에도 `AI_SERVER_ENABLED=true`와 같은 내부 키를 적용해 실제 OpenAI 연결에 성공했다. 시스템 보안 정책은 변경하지 않았다.
 
 ### 남은 검증과 관찰

@@ -131,7 +131,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 
 ## 7. 목업 범위
 
-- P3 결제 · FDS 조회와 금융 조치에는 목업이 없다. 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 `MockPaymentInfoStore` · `MockFinancialActionGateway`는 #163 2단계에서 지웠다. HELD Case는 실제 결제의 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 로컬에서는 `scripts/demo/cakeshop_pay.py`로 만든다 ([로컬 시연 가이드](../demo/local-demo.md)).
+- P3 결제 · FDS 조회와 금융 조치에는 목업이 없다. 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 `MockPaymentInfoStore` · `MockFinancialActionGateway`는 #163 2단계에서 지웠다. HELD Case는 실제 결제의 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 로컬에서는 `scripts/demo/legacy/cakeshop_pay.py`로 만든다 ([로컬 시연 가이드](../demo/local-demo.md)).
 - 테스트는 같은 역할의 대역 `TestPaymentInfoStore` · `TestFinancialActionGateway`(테스트 소스)를 `@Import`해 쓴다. 실제 P5 · P2 연결은 `PaymentActionFlowTests` · `PaymentFdsInfoReaderTests` · `PaymentFdsInfoFlowTests`가 본다.
 - AI 보고서는 목업이 아니다(#250에서 `MockReportGateway`를 P4 `AiReportService`로 바꿨다). ai-server를 켜지 않은 로컬의 고정 문장 보고서도 실제 결제 근거로 만들고 DB에 저장한다.
 - 담당 전체의 목업 현황은 Notion [목업 데이터 · 연동 현황](https://www.notion.so/401ee45ba5e181a7b9f0ee51e9578999)을 본다.

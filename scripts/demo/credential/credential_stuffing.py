@@ -9,8 +9,8 @@
 비밀번호를 재사용한 직원 계정은 파일에 적지 않고 실행할 때 --reused로 목록 중간에 끼운다.
 그 계정이 맞으면 "적중"을 띄우고 멈춘다 — 조작자가 그 계정으로 브라우저에서 이어 간다.
 
-  uv run scripts/demo/credential_stuffing.py --reused dohyun.lee:비밀번호
-  uv run scripts/demo/credential_stuffing.py --base-url https://서버주소 --reused dohyun.lee:비밀번호 --reused-at 50
+  uv run scripts/demo/credential/credential_stuffing.py --reused dohyun.lee:비밀번호
+  uv run scripts/demo/credential/credential_stuffing.py --base-url https://서버주소 --reused dohyun.lee:비밀번호 --reused-at 50
 
 uv run이면 rich로 꾸민 화면(진행 막대 · 숫자판 · 흐르는 기록)이 나온다. rich가 없으면(python으로 바로 실행) 줄 출력으로 돌아간다.
 로그인 보안 화면(관리자 › 접근 감시 › 로그인 보안)을 옆에 띄워 두고 돌린다.

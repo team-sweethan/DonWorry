@@ -760,7 +760,7 @@ class MerchantIntegrationHttpMariaDbTests {
                     .evaluate(any());
             var process = new ProcessBuilder(
                             "python3",
-                            "../scripts/demo/merchant_connect.py",
+                            "../scripts/demo/merchant/merchant_connect.py",
                             "--base-url",
                             "http://localhost:" + port,
                             "--merchant-code",

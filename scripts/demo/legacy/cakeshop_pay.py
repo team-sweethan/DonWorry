@@ -1,8 +1,8 @@
 # 케이크샵 대신 돈워리에 HMAC 서명 결제 3건을 보내는 로컬 시연 스크립트 (docs/demo/local-demo.md)
 # 같은 손님이 60만 원을 3번 결제 → 3번째가 FDS 60점 REVIEW로 HELD(보류)되어 Case·보고서가 생긴다
 # 필요: Spring payment.http.enabled=true, Spring과 같은 DONWORRY_MERCHANT_HMAC_CAKESHOP 환경변수
-# 실행: 저장소 맨 위에서 py scripts/demo/cakeshop_pay.py (macOS · Linux: python3)
-# 같은 손님으로 다시: py scripts/demo/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
+# 실행: 저장소 맨 위에서 py scripts/demo/legacy/cakeshop_pay.py (macOS · Linux: python3)
+# 같은 손님으로 다시: py scripts/demo/legacy/cakeshop_pay.py <손님 번호> — 보고서 "고객 최근 결제"(#338) 확인용
 # 위험 신호 6개는 기본으로 가짜 값을 보낸다. IP · 국가 · 이메일 변경: --ip 203.0.113.5 --country US --email buyer@example.test (#346)
 # 손님이 달라도 같은 카드: --card A (#352) — 두 번 실행하면 두 번째 사건 보고서의 "같은 카드"에 앞 손님 결제가 잡힌다
 import argparse
@@ -138,7 +138,7 @@ def main() -> int:
         print(f"{n}번째  결제 ID {data.get('paymentId')}  상태 {data.get('paymentStatus')}  주문 {order_ref}{mark}")
         time.sleep(1)
     print("\n이제 http://localhost:5173 에서 staff_test / 1234 로 로그인해 Case 목록을 열어 보세요.")
-    print(f"같은 손님으로 다시 결제하려면: py scripts/demo/cakeshop_pay.py {customer_ref}")
+    print(f"같은 손님으로 다시 결제하려면: py scripts/demo/legacy/cakeshop_pay.py {customer_ref}")
     return 0
 
 
