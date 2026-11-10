@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -295,13 +296,14 @@ class PaymentSessionServiceTests {
         verify(sessions, never()).save(any());
     }
 
-    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드는 목록에서 뺐다. 그 코드로 결제하면 시도를 고정하지 않고 400 (#582)
+    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드(#582)와 누리카드 1173(B, #766)은 목록에서 뺐다.
+    // 그 코드로 새로 결제하면 시도를 고정하지 않고 400
     @Test
     void pay_removedCardCode_isBadRequestWithoutFixingAttempt() {
         var session = session(recent());
         when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
 
-        for (var code : new String[] {"C", "D"}) {
+        for (var code : new String[] {"B", "C", "D"}) {
             assertThatThrownBy(() -> service.pay(
                             session.getSessionKey(),
                             new CheckoutResponses.PayRequest(code, "abcdef12"),
@@ -313,9 +315,58 @@ class PaymentSessionServiceTests {
         }
         verify(flow, never()).submit(any());
         assertThat(session.attemptFixed()).isFalse();
-        assertThat(CheckoutMockCard.values())
-                .extracting(CheckoutMockCard::label)
-                .containsExactly("한빛카드", "누리카드");
+    }
+
+    // 결제창은 한빛카드 한 장을 보이고, [카드 추가]로 쓸 이 결제창의 누리카드를 따로 내려 준다 (#766, ADR-0064 2-1절)
+    @Test
+    void open_showsOneBasicCardAndThisSessionsAddableCard() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+
+        var view = service.open(session.getSessionKey());
+
+        assertThat(view.cards())
+                .extracting(CheckoutResponses.Card::code, CheckoutResponses.Card::label, CheckoutResponses.Card::masked)
+                .containsExactly(Tuple.tuple("A", "한빛카드", "**** 4821"));
+        assertThat(view.addableCard().code()).isEqualTo("N");
+        assertThat(view.addableCard().label()).isEqualTo("누리카드");
+        assertThat(view.addableCard().masked())
+                .matches("[*]{4} [0-9]{4}")
+                .isNotIn("**** 4821", "**** 1173")
+                .isEqualTo(CheckoutMockCard.N.masked(MERCHANT_ID + ":42", session.getAttemptKey()));
+    }
+
+    // 추가 카드로 결제하면 결제창에 보인 끝 4자리 그대로 FDS 표시값이 되고, 토큰은 이 결제 시도의 값이다.
+    // 다시 눌러도 같은 값이라 같은 시도로 이어지고, 다른 결제창의 추가 카드와는 다른 카드다 (#766)
+    @Test
+    void pay_addedCard_sendsShownLabelAndAttemptToken() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "ACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any()))
+                .thenThrow(new IllegalStateException("evaluation failed"))
+                .thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+        String shown = service.open(session.getSessionKey()).addableCard().masked();
+
+        assertThatThrownBy(() -> service.pay(
+                        session.getSessionKey(), new CheckoutResponses.PayRequest("N", "abcdef12"), "203.0.113.10"))
+                .isInstanceOf(IllegalStateException.class);
+        service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10");
+
+        var commands = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow, times(2)).submit(commands.capture());
+        String customer = MERCHANT_ID + ":42";
+        assertThat(commands.getAllValues()).allSatisfy(command -> {
+            assertThat(command.riskSignals().cardDisplayLabel()).isEqualTo("누리카드 " + shown);
+            assertThat(command.riskSignals().cardToken())
+                    .isEqualTo(CheckoutMockCard.N.token(customer, session.getAttemptKey()))
+                    .isNotEqualTo(CheckoutMockCard.A.token(customer, null))
+                    .isNotEqualTo(CheckoutMockCard.N.token(customer, UUID.randomUUID()));
+        });
+        assertThat(session.getSubmittedCard()).isEqualTo("N");
     }
 
     // 세션을 만든 뒤 가맹점이 정지되면 아직 접수하지 않은 결제를 시작하지 않는다 (PR #425 리뷰)
@@ -353,7 +404,7 @@ class PaymentSessionServiceTests {
                         session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10"))
                 .isInstanceOf(IllegalStateException.class);
         var result =
-                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("B", "99999999"), "198.51.100.7");
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("N", "99999999"), "198.51.100.7");
 
         assertThat(result.redirectUrl()).startsWith(SUCCESS);
         var commands = ArgumentCaptor.forClass(PaymentRequestCommand.class);

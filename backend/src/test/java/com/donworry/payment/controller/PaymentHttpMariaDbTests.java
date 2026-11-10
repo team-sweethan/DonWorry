@@ -242,10 +242,12 @@ class PaymentHttpMariaDbTests {
         var view = mapper.readTree(opened.body());
         assertThat(view.path("orderName").asText()).isEqualTo("딸기 케이크");
         assertThat(view.path("returnOrigin").asText()).isEqualTo("http://127.0.0.1:8080");
-        // 동작하지 않던 C · D를 빼고 A · B만 보여 준다 (#582)
+        // 기본 카드는 한빛카드 한 장이고, [카드 추가]로 쓸 누리카드는 따로 내려 준다 (#582, #766)
         var cardLabels = new java.util.ArrayList<String>();
         view.path("cards").forEach(card -> cardLabels.add(card.path("label").asText()));
-        assertThat(cardLabels).containsExactly("한빛카드", "누리카드");
+        assertThat(cardLabels).containsExactly("한빛카드");
+        assertThat(view.path("addableCard").path("code").asText()).isEqualTo("N");
+        assertThat(view.path("addableCard").path("label").asText()).isEqualTo("누리카드");
         assertThat(view.has("customerRef")).isFalse();
         assertThat(view.has("notifyUrl")).isFalse();
         assertThat(opened.headers().firstValue("Set-Cookie")).isEmpty();

@@ -29,6 +29,8 @@ export type CheckoutSession = {
   expiresAt: string
   expired: boolean
   cards: CheckoutCard[]
+  // [카드 추가]로 등록했다고 가정하는 이 결제창의 카드 (#766, ADR-0064 2-1절). cards에는 없다
+  addableCard: CheckoutCard | null
   result: CheckoutResult | null
   cancelUrl: string
   returnOrigin: string

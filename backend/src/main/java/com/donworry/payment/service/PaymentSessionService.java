@@ -165,10 +165,17 @@ public class PaymentSessionService {
         String merchantName = tenants.findById(session.getMerchantId())
                 .map(TenantSummary::name)
                 .orElse("가맹점");
+        // 끝 4자리는 결제 때 FDS로 넘기는 표시값과 같은 값이다(추가 카드는 이 결제 시도의 값, #766)
+        String internalCustomer = internalCustomer(session);
         var cards = Arrays.stream(CheckoutMockCard.values())
-                .map(card -> new CheckoutResponses.Card(
-                        card.name(), card.label(), card.masked(), card.issuerCountry(), card.color()))
+                .filter(card -> !card.added())
+                .map(card -> card(card, internalCustomer, session))
                 .toList();
+        var addable = Arrays.stream(CheckoutMockCard.values())
+                .filter(CheckoutMockCard::added)
+                .findFirst()
+                .map(card -> card(card, internalCustomer, session))
+                .orElse(null);
         return new CheckoutResponses.Session(
                 merchantName,
                 session.getOrderRef(),
@@ -180,6 +187,7 @@ public class PaymentSessionService {
                         && session.expired(Instant.now())
                         && admitted.isEmpty(),
                 cards,
+                addable,
                 finishedResult(session, admitted),
                 cancelUrl(session),
                 origin(session.getSuccessUrl()));
@@ -191,7 +199,7 @@ public class PaymentSessionService {
         if (session.getPaymentId() != null) return result(session);
         // 카드 목록 · 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
         // 평가 · 승인 · 세션 연결 중에 멈춘 것이라 기한이 지났어도 이어서 처리한다 (PR #425 리뷰)
-        // 지금은 없는 카드(C · D, #582)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
+        // 지금은 없는 카드(C · D, #582 · 누리카드 1173인 B, #766)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
         if (admittedPaymentId(session).isEmpty()) {
             CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
             if (session.expired(Instant.now()))
@@ -206,16 +214,16 @@ public class PaymentSessionService {
         var fixed = Objects.requireNonNull(transactions.execute(status -> {
             var locked = sessions.findByIdForUpdate(session.getSessionId()).orElseThrow();
             locked.fixAttempt(body.card(), body.deviceId(), ipAddress, Instant.now());
-            // 지금은 없는 카드(C · D, #582)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
+            // 지금은 없는 카드(C · D, #582 · 누리카드 1173인 B, #766)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
             // 접수된 요청이 없어 같은 시도 키에 다른 신호가 남지 않는다. 그대로 두면 만료까지 계속 400 (PR #587 리뷰)
             if (CheckoutMockCard.from(locked.getSubmittedCard()).isEmpty()
                     && admittedPaymentId(locked).isEmpty()) locked.replaceRemovedCard(body.card());
             return locked;
         }));
         if (fixed.getPaymentId() != null) return result(fixed);
-        String internalCustomer = session.getMerchantId() + ":" + session.getCustomerRef();
+        String internalCustomer = internalCustomer(session);
         // 이미 접수된 시도를 이어 갈 때는 접수 때 저장한 위험 신호를 그대로 보낸다. 카드 이름이 바뀌었거나(#582)
-        // 지금은 없는 카드(C · D)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
+        // 지금은 없는 카드(C · D · B)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
         var signals = requests.findByMerchantIdAndIdempotencyKey(session.getMerchantId(), session.getAttemptKey())
                 .map(PaymentRequest::riskSignals)
                 .orElseGet(() -> newRiskSignals(fixed, internalCustomer));
@@ -242,11 +250,25 @@ public class PaymentSessionService {
         var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
         return new PaymentRiskSignals(
                 fixed.getSubmittedDeviceId(),
-                card.token(internalCustomer),
-                card.displayLabel(),
+                card.token(internalCustomer, fixed.getAttemptKey()),
+                card.displayLabel(internalCustomer, fixed.getAttemptKey()),
                 null,
                 fixed.getSubmittedIp(),
                 fixed.getBuyerEmail());
+    }
+
+    // FDS 고객 키. 가맹점이 달라도 고객 참조가 겹치지 않게 가맹점 번호를 붙인다
+    private static String internalCustomer(PaymentSession session) {
+        return session.getMerchantId() + ":" + session.getCustomerRef();
+    }
+
+    private static CheckoutResponses.Card card(CheckoutMockCard card, String internalCustomer, PaymentSession session) {
+        return new CheckoutResponses.Card(
+                card.name(),
+                card.label(),
+                card.masked(internalCustomer, session.getAttemptKey()),
+                card.issuerCountry(),
+                card.color());
     }
 
     public CheckoutResponses.Result result(String sessionKey) {

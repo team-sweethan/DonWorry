@@ -25,6 +25,8 @@ public final class CheckoutResponses {
             Instant expiresAt,
             boolean expired,
             List<Card> cards,
+            // [카드 추가]로 등록했다고 가정하는 이 결제창의 카드 (#766, ADR-0064 2-1절). cards에는 없다
+            Card addableCard,
             Result result,
             String cancelUrl,
             // 결제창이 레이어(iframe)로 열렸을 때 높이·결과를 알릴 가맹점 출처(성공 URL의 출처)
