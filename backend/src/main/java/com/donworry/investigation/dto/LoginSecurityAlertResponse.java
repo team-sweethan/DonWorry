@@ -5,6 +5,8 @@ import lombok.Builder;
 
 // 로그인 공격 관련 내부자 경보 한 줄 (#770) — SEC-INS-10(탈취 의심) · SEC-INS-05(내보내기 차단 · 정지)
 // insiderCaseId = 이 경보가 묶인 내부자 사건(닫힌 사건일 수 있음, 아직 안 묶였으면 null) — 화면이 사건 상세로 넘어갈 때 쓴다 (#777)
+// firstEventAt · lastEventAt = 경보가 가리키는 첫 · 마지막 기록 시각. SEC-INS-10은 탐지한 로그인 시각이라, 화면이 최근 시도를
+// 그 경보에 정확히 잇는다(같은 직원의 닫힌 경보 · 새 경보를 섞지 않게, #791 Codex 리뷰)
 @Builder
 public record LoginSecurityAlertResponse(
         Long alertId,
@@ -16,4 +18,6 @@ public record LoginSecurityAlertResponse(
         String summary,
         boolean open,
         Instant createdAt,
-        Long insiderCaseId) {}
+        Long insiderCaseId,
+        Instant firstEventAt,
+        Instant lastEventAt) {}

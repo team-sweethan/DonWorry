@@ -42,6 +42,18 @@ export type LoginSecurityAlert = {
   open: boolean
   createdAt: string
   insiderCaseId: number | null
+  /** 경보가 가리키는 첫 · 마지막 기록 시각 — SEC-INS-10은 탐지한 로그인 시각(최근 시도와 같은 값) */
+  firstEventAt: string | null
+  lastEventAt: string | null
+}
+
+/**
+ * 경계 구간 (#788) — 서버가 1초 단위로 센다.
+ * start null = 그래프 범위 앞에서 이미 경계(진입 시각 모름), end null = 아직 경계 중
+ */
+export type LoginSecurityPeriod = {
+  start: string | null
+  end: string | null
 }
 
 export type LoginSecurityDashboard = {
@@ -58,6 +70,8 @@ export type LoginSecurityDashboard = {
   suspectedTakeoverCount: number
   bucketSeconds: number
   buckets: LoginSecurityBucket[]
+  /** buckets 범위 안 경계 구간, 시각 오름차순 */
+  attackPeriods: LoginSecurityPeriod[]
   /** 최근 시도 최신순 */
   attempts: LoginSecurityAttempt[]
   alerts: LoginSecurityAlert[]
