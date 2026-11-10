@@ -1,7 +1,9 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.donworry.fds.entity.OperatorAccessDeniedType;
@@ -123,14 +125,42 @@ class OperatorAccessDetectionQueryServiceTests {
         assertThat(result.highRiskCount()).isEqualTo(2);
     }
 
-    // 고위험 탐지 상세를 처음 열면 확인 시각을 기록해 사이드바 배지에서 빠진다.
+    // 고위험 탐지 상세를 처음 열면 다른 조치 상태를 건드리지 않는 전용 갱신으로 확인 시각을 기록한다.
     @Test
-    void review_existingDetection_marksItReviewed() {
-        given(detections.findById(10L)).willReturn(java.util.Optional.of(detection));
+    void review_existingUnreviewedDetection_updatesOnlyReviewTimestamp() {
+        given(detections.reviewIfUnreviewed(org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.any()))
+                .willReturn(1);
 
         queryService().review(10L);
 
-        verify(detection).review(org.mockito.ArgumentMatchers.any(Instant.class));
+        verify(detections)
+                .reviewIfUnreviewed(
+                        org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.any(Instant.class));
+        verify(detections, never()).existsById(10L);
+    }
+
+    // 이미 확인한 탐지를 다시 열어도 성공하되, 없는 탐지와 구분한다.
+    @Test
+    void review_whenAlreadyReviewed_keepsIdempotentSuccess() {
+        given(detections.reviewIfUnreviewed(org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.any()))
+                .willReturn(0);
+        given(detections.existsById(10L)).willReturn(true);
+
+        queryService().review(10L);
+
+        verify(detections).existsById(10L);
+    }
+
+    // 갱신할 행도 기존 행도 없으면 이전 계약대로 404를 반환한다.
+    @Test
+    void review_whenDetectionDoesNotExist_throwsNotFound() {
+        given(detections.reviewIfUnreviewed(org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.any()))
+                .willReturn(0);
+        given(detections.existsById(10L)).willReturn(false);
+
+        assertThatThrownBy(() -> queryService().review(10L))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("404 NOT_FOUND");
     }
 
     // 배지는 검토 시각이 비어 있는 고위험 탐지만 서버에서 센다.

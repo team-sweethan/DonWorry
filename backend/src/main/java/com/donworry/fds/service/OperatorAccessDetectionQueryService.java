@@ -291,10 +291,9 @@ public class OperatorAccessDetectionQueryService {
 
     @Transactional
     public void review(Long detectionId) {
-        var detection = detections
-                .findById(detectionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "탐지 기록을 찾을 수 없습니다."));
-        detection.review(Instant.now());
+        if (detections.reviewIfUnreviewed(detectionId, Instant.now()) == 0 && !detections.existsById(detectionId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "탐지 기록을 찾을 수 없습니다.");
+        }
     }
 
     @Transactional(readOnly = true)

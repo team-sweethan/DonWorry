@@ -1,9 +1,14 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getUnreviewedOperatorAccessDetectionCount } from '../api/fds'
+import { pollStep } from '../utils/casePolling'
+import {
+  OPERATOR_ACCESS_BADGE_POLL_LIMIT_MS,
+  OPERATOR_ACCESS_BADGE_POLL_MS,
+} from '../utils/operatorAccessBadgePolling'
 import { createRuleChangeRequestBadgeStore } from '../utils/ruleChangeRequestBadge'
 
-// 룰 변경 요청 배지와 같은 저장소를 쓴다. 새 고위험 탐지도 놓치지 않도록 로그인 중에는 30초마다 다시 센다.
+// 룰 변경 요청 배지와 같은 저장소를 쓴다. 로그인 활동을 무기한 연장하지 않도록 제한된 시간만 자동 갱신한다.
 const store = createRuleChangeRequestBadgeStore(getUnreviewedOperatorAccessDetectionCount)
 
 export function refreshOperatorAccessBadge() {
@@ -14,25 +19,34 @@ export function refreshOperatorAccessBadge() {
 export function useOperatorAccessBadge(userId: number | null) {
   const { pathname } = useLocation()
   const count = useSyncExternalStore(store.subscribe, store.getSnapshot)
+  const pollFrom = useRef<number | null>(null)
 
   useEffect(() => {
     if (userId === null) return
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void store.refresh()
+      if (document.visibilityState !== 'visible') return
+      pollFrom.current = Date.now()
+      void store.refresh()
     }
-    document.addEventListener('visibilitychange', onVisible)
     const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void store.refresh()
-    }, 30_000)
+      if (document.visibilityState !== 'visible') return
+      const step = pollStep(pollFrom.current, Date.now(), OPERATOR_ACCESS_BADGE_POLL_LIMIT_MS)
+      pollFrom.current = step.from
+      if (step.poll) void store.refresh()
+    }, OPERATOR_ACCESS_BADGE_POLL_MS)
+    document.addEventListener('visibilitychange', onVisible)
     return () => {
-      document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      pollFrom.current = null
       store.reset()
     }
   }, [userId])
 
   useEffect(() => {
-    if (userId !== null) void store.refresh()
+    if (userId === null) return
+    pollFrom.current = Date.now()
+    void store.refresh()
   }, [userId, pathname])
 
   return userId === null ? null : count
