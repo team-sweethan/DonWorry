@@ -133,6 +133,8 @@ class RoleApiMatrixTests {
             route("GET", "/api/admin/insider-cases/1/reports", ADMIN),
             route("GET", "/api/admin/insider-monitor/staff", ADMIN),
             route("GET", "/api/admin/insider-monitor/staff/1/timeline", ADMIN),
+            // 관리자만: 로그인 보안 대시보드 (#770) — 전체 로그인 현황이 보안 직원 · 사장님에게 보이면 안 된다
+            route("GET", "/api/admin/login-security", ADMIN),
             // 관리자만: 내부자 규칙 카드 (#685) — 감시 기준값이 감시 대상(보안 직원)에게 보이면 안 된다
             route("GET", "/api/fds/insider-detections/rule-catalog", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
