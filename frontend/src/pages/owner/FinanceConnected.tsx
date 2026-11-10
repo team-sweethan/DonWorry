@@ -482,6 +482,8 @@ function ConnectedSettlements() {
               amount: e.amount,
               memo: e.memo,
               originalDate: e.originalDate,
+              paidAt: e.paidAt,
+              updatedAt: e.expense?.updatedAt,
               note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '지출 완료' : '예정'}`,
             }))}
             monthSummary={

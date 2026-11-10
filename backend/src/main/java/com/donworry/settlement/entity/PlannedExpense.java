@@ -53,10 +53,14 @@ public class PlannedExpense {
     private Instant paidAt;
 
     public void complete(Instant now) {
+        complete(now, now);
+    }
+
+    public void complete(Instant effectivePaidAt, Instant now) {
         if (deletedAt != null) throw new IllegalStateException("삭제한 지출은 완료할 수 없습니다.");
         if (paidAt != null) return;
-        paidAt = java.util.Objects.requireNonNull(now).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
-        updatedAt = paidAt;
+        paidAt = java.util.Objects.requireNonNull(effectivePaidAt).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        updatedAt = now.truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     }
 
     public static PlannedExpense planned(

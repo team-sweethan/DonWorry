@@ -89,8 +89,10 @@ public class OwnerCashFlowController {
 
     @PutMapping("/expenses/{id}/completion")
     public ResponseEntity<ExpenseResponse> complete(
-            @RequestAttribute("settlement.ownerMerchant") Long merchant, @PathVariable Long id) {
-        return ok(management.completeExpense(merchant, id));
+            @RequestAttribute("settlement.ownerMerchant") Long merchant,
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) ExpenseCompletionRequest request) {
+        return ok(management.completeExpense(merchant, id, request == null ? null : request.paidDate()));
     }
 
     private <T> ResponseEntity<T> ok(T value) {
