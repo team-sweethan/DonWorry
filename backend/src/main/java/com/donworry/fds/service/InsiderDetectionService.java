@@ -21,6 +21,7 @@ import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockReason;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
+import com.donworry.identity.api.StaffLoginUnderAttack;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -28,6 +29,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -238,6 +240,46 @@ public class InsiderDetectionService {
                 InsiderAlertSeverity.HIGH,
                 "처음 보는 브라우저(%s)로 로그인 %d분 뒤 전화번호 열람".formatted(login.device(), minutes),
                 List.of(event));
+    }
+
+    // INS-10 로그인 공격 중 처음 보는 브라우저 (#770) — P1이 "전체 로그인 실패율 경계 중 보안 직원 로그인 성공"을 알리면
+    // 그 로그인의 브라우저 · 운영체제가 지난 기간 성공 로그인에 없을 때 높음. 높음이라 내보내기는 INS-05가 막고 계정을 정지한다
+    // INS-07과 달리 비교할 로그인이 없어도(신규 직원) 울린다 — 공격 중에는 신규 계정도 탈취 대상이다 (11/10 결정)
+    // 예전에 INS-10으로 걸린 로그인은 비교에서 뺀다 — 걸렸던 공격자 브라우저가 다음에 "평소 브라우저"가 되지 않게 (11/10 결정 A)
+    // 근거 줄은 없다(근거 표는 접근 기록 번호만 받는다). 경보 시각 = 걸린 로그인 시각이라 그 시각으로 걸린 로그인을 찾는다
+    // 한계: 열린 경보가 갱신되면 처음 · 마지막 로그인 시각만 남아, 그 사이에 걸린 로그인은 비교에서 빠지지 않는다
+    @Transactional
+    public void detectLoginUnderAttack(StaffLoginUnderAttack event) {
+        Long staffId = event.staffId();
+        if (staffId == null || event.loginReference() == null) return;
+        alerts.lockDetectionState(staffId);
+        StaffLogin login = loginReader.findLogin(event.loginReference()).orElse(null);
+        if (login == null || !staffId.equals(login.staffId())) return;
+        Instant loginAt = login.occurredAt();
+        if (!ruleSwitches().counts(InsiderRule.INS_10, loginAt)) return;
+
+        Set<Instant> flagged = alerts.findByStaffIdAndRuleCode(staffId, InsiderRule.INS_10).stream()
+                .flatMap(a -> Stream.of(a.getFirstEventAt(), a.getLastEventAt()))
+                .collect(Collectors.toSet());
+        // 같은 알림이 다시 와도 한 번만 — 이 로그인으로 이미 열렸거나 관리자가 닫았으면 그대로 둔다
+        if (flagged.contains(loginAt)) return;
+        List<StaffLogin> before =
+                loginReader.findSuccessfulLogins(staffId, loginAt.minus(properties.ins10Lookback()), loginAt).stream()
+                        .filter(l -> !event.loginReference().equals(l.loginReference()))
+                        .filter(l -> !flagged.contains(l.occurredAt()))
+                        .toList();
+        if (before.stream().anyMatch(l -> Objects.equals(login.device(), l.device()))) return;
+
+        String summary = "로그인 공격 중(최근 시도 %d건 · 실패 %d건) 처음 보는 브라우저(%s)로 로그인%s"
+                .formatted(
+                        event.attemptCount(),
+                        event.failureCount(),
+                        login.device(),
+                        before.isEmpty()
+                                ? " · 지난 %d일 로그인 기록 없음"
+                                        .formatted(properties.ins10Lookback().toDays())
+                                : "");
+        raise(staffId, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, summary, List.of(), loginAt, loginAt);
     }
 
     // INS-08 업무 대비 대량 조회 — 거래 목록 · 내보내기로 많이 가져갔는데 담당 사건과 이어진 행이 적으면 주의, 아주 많으면 높음

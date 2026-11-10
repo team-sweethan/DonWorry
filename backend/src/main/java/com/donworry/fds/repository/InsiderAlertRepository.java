@@ -33,6 +33,9 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
 
     List<InsiderAlert> findByStaffIdAndStatus(Long staffId, InsiderAlertStatus status);
 
+    // INS-10(#770) — 이 직원 · 규칙으로 열렸던 경보 전체(열림 · 닫힘). 걸린 로그인 시각을 찾는다
+    List<InsiderAlert> findByStaffIdAndRuleCode(Long staffId, InsiderRule ruleCode);
+
     boolean existsByStaffIdAndStatus(Long staffId, InsiderAlertStatus status);
 
     // 열린 경보 전체 — 내부자 사건 이관(#670). 열린 경보는 사람 · 규칙당 1개라 많지 않다

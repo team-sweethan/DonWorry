@@ -98,6 +98,13 @@ public class InsiderRuleCatalogService {
                         .example("%s 동안 서로 다른 고객 번호 %d명을 거래 목록에서 검색"
                                 .formatted(span(properties.ins09Window()), properties.ins09CautionCustomers()))
                         .standaloneDescription("같은 고객을 여러 쪽 넘긴 것은 1명으로 셉니다.")
+                        .build(),
+                card(InsiderRule.INS_10, opened, firstDay)
+                        .condition("로그인 공격 경계(최근 전체 로그인 실패율이 높음) 중 지난 %d일 성공 로그인에 없던 브라우저로 로그인 성공"
+                                .formatted(properties.ins10Lookback().toDays()))
+                        .resultDescription("높음 경보 · 내부자 사건으로 넘어감")
+                        .example("로그인 실패가 몰리는 중에 평소 Edge · Windows로 일하던 직원 계정이 처음 보는 브라우저로 로그인")
+                        .standaloneDescription("비교할 지난 로그인이 없는 신규 직원도 울립니다. 이 규칙으로 걸렸던 로그인의 브라우저는 평소 브라우저로 치지 않습니다.")
                         .build());
     }
 
