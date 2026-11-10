@@ -40,7 +40,8 @@ public class LoginSecurityService {
     static final int MAX_ATTEMPTS = 40;
     static final Duration ATTEMPT_LOOKBACK = Duration.ofMinutes(10);
     static final Duration ALERT_LOOKBACK = Duration.ofHours(24);
-    // 탈취 의심 경보는 로그인 몇 초 뒤(커밋 뒤 알림) 열린다 — 이 안이면 그 로그인 줄에 표시한다
+    // 탈취 의심 경보 앞뒤 이 안의 같은 직원 성공 로그인에 표시한다. 경보는 로그인 몇 초 뒤(커밋 뒤 알림) 열리고,
+    // 공격 도구가 맞힌 뒤 공격자가 브라우저로 다시 들어온 로그인은 열린 경보를 갱신만 해서 경보보다 늦다 (#770 시연 흐름)
     static final Duration SUSPECT_MATCH = Duration.ofMinutes(2);
     private static final List<InsiderRule> LOGIN_RULES = List.of(InsiderRule.INS_10, InsiderRule.INS_05);
     private static final String SECURITY_STAFF = "SECURITY_STAFF";
@@ -123,8 +124,10 @@ public class LoginSecurityService {
                 && alerts.stream()
                         .anyMatch(alert -> alert.rule() == InsiderRule.INS_10
                                 && alert.staffId().equals(a.userId())
-                                && !alert.createdAt().isBefore(a.occurredAt())
-                                && !alert.createdAt().isAfter(a.occurredAt().plus(SUSPECT_MATCH)));
+                                && Duration.between(alert.createdAt(), a.occurredAt())
+                                                .abs()
+                                                .compareTo(SUSPECT_MATCH)
+                                        <= 0);
         return LoginSecurityAttemptResponse.builder()
                 .occurredAt(a.occurredAt())
                 .success(a.success())
