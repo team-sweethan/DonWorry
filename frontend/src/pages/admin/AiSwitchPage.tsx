@@ -1,4 +1,5 @@
-import { Alert, App, Button, Card, Descriptions, Input, Modal, Table, Tag } from 'antd'
+import { PauseCircleOutlined, PlayCircleOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Input, Modal, Table, Tag } from 'antd'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
 import { useCallback, useEffect, useState } from 'react'
@@ -14,6 +15,7 @@ import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
+import './AiSwitchPage.css'
 
 const REASON_MAX = 500
 const actionTag: Record<AiSwitchAction, { label: string; color: string }> = {
@@ -23,6 +25,33 @@ const actionTag: Record<AiSwitchAction, { label: string; color: string }> = {
 const oneLine = {
   onHeaderCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
   onCell: () => ({ style: { whiteSpace: 'nowrap' as const } }),
+}
+
+/** 맨 위 상태 한 줄. 설정으로 AI 서버가 꺼진 서버는 스위치와 상관없이 고정 보고서다 */
+function statusView(status: AiSwitchStatus) {
+  if (!status.switchOn)
+    return {
+      tone: 'is-stopped',
+      title: 'AI 조사 정지 중',
+      detail:
+        'AI를 부르지 않고 같은 조회 결과와 징후 · 정상 근거로 고정 보고서를 만듭니다. AI 요약과 추가 조사만 빠지고, 판정은 그대로 직원이 합니다.' +
+        (status.configEnabled
+          ? ''
+          : ' 이 서버는 설정에서 AI 서버가 꺼져 있어, 스위치를 다시 켜도 고정 보고서로 만듭니다.'),
+    }
+  if (!status.configEnabled)
+    return {
+      tone: 'is-config-off',
+      title: '고정 보고서로 만드는 중',
+      detail:
+        '스위치는 켜져 있지만 이 서버 설정에서 AI 서버가 꺼져 있습니다. 스위치와 상관없이 고정 보고서로 만듭니다.',
+    }
+  return {
+    tone: 'is-on',
+    title: 'AI 조사 사용 중',
+    detail:
+      '보고서에 AI 요약과 추가 조사가 들어갑니다. 요약에 조회 결과에 없는 내용이 보이면 바로 정지하세요.',
+  }
 }
 
 /**
@@ -77,72 +106,97 @@ export function AiSwitchPage() {
   }
 
   const loading = status === null && error === null
+  const view = status ? statusView(status) : null
+  const last = status?.histories[0]
   return (
     <>
       <PageHeader
         title="AI 조사 긴급정지"
-        description="AI 보고서에 이상이 보이면 바로 정지하세요. 정지 중에도 사건 보고서는 같은 조회 결과와 징후 · 정상 근거로 만든 고정 보고서로 계속 나오고, AI 요약과 추가 조사만 빠집니다. 다시 켜기는 관리자만 할 수 있습니다."
+        description="AI 보고서에 이상이 보이면 바로 정지하세요. 정지 중에도 사건 보고서는 고정 보고서로 계속 나옵니다. 다시 켜기는 관리자만 할 수 있습니다."
       />
       {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
-      {status && !status.configEnabled && (
-        <Alert
-          type="info"
-          showIcon
-          className="dw-page-alert"
-          message="이 서버는 설정에서 AI 서버가 꺼져 있습니다. 스위치를 켜도 고정 보고서로 만듭니다."
-        />
-      )}
-      <Card loading={loading} style={{ marginBottom: 16 }}>
-        {status && (
+      <Card loading={loading} className={`ai-switch-status ${view?.tone ?? ''}`}>
+        {status && view && (
           <>
-            <Descriptions
-              column={1}
-              size="small"
-              items={[
-                {
-                  key: 'active',
-                  label: '지금 보고서',
-                  children: status.aiActive ? (
-                    <Tag color="purple">AI 조사</Tag>
-                  ) : (
-                    <Tag>고정 보고서</Tag>
-                  ),
-                },
-                {
-                  key: 'switch',
-                  label: '긴급정지 스위치',
-                  children: status.switchOn ? (
-                    <Tag color="green">켜짐</Tag>
-                  ) : (
-                    <Tag color="red">정지 중</Tag>
-                  ),
-                },
-                {
-                  key: 'config',
-                  label: '설정 (AI 서버 연결)',
-                  children: status.configEnabled ? '켜짐' : '꺼짐',
-                },
-              ]}
-            />
-            <div style={{ marginTop: 16 }}>
+            <div className="ai-switch-head">
+              <div>
+                <h2>
+                  <span className="ai-switch-mark" aria-hidden="true" />
+                  {view.title}
+                </h2>
+                <p>{view.detail}</p>
+              </div>
               {status.switchOn ? (
-                <Button danger type="primary" onClick={() => open('stop')}>
+                <Button
+                  danger
+                  type="primary"
+                  size="large"
+                  icon={<PauseCircleOutlined />}
+                  onClick={() => open('stop')}
+                >
                   AI 조사 정지
                 </Button>
               ) : canResume ? (
-                <Button type="primary" onClick={() => open('resume')}>
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<PlayCircleOutlined />}
+                  onClick={() => open('resume')}
+                >
                   AI 조사 다시 켜기
                 </Button>
               ) : (
-                <span style={{ color: 'rgba(0, 0, 0, 0.45)' }}>
+                <span className="ai-switch-note">
                   다시 켜기는 관리자가 원인을 확인한 뒤 합니다.
                 </span>
               )}
             </div>
+            <dl className="ai-switch-facts">
+              <div>
+                <dt>지금 보고서</dt>
+                <dd>
+                  {status.aiActive ? <Tag color="purple">AI 조사</Tag> : <Tag>고정 보고서</Tag>}
+                </dd>
+              </div>
+              <div>
+                <dt>긴급정지 스위치</dt>
+                <dd>
+                  {status.switchOn ? <Tag color="green">켜짐</Tag> : <Tag color="red">정지 중</Tag>}
+                </dd>
+              </div>
+              <div>
+                <dt>설정 (AI 서버 연결)</dt>
+                <dd>
+                  {status.configEnabled ? (
+                    <Tag color="green">켜짐</Tag>
+                  ) : (
+                    <Tag color="default">꺼짐</Tag>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>마지막 변경</dt>
+                <dd>
+                  {last ? (
+                    <>
+                      {dateTime(last.changedAt)} <small>· {last.changedByName}</small>
+                    </>
+                  ) : (
+                    <small>바꾼 적 없음</small>
+                  )}
+                </dd>
+              </div>
+            </dl>
           </>
         )}
       </Card>
-      <Card title="최근 변경 기록">
+      <Card className="dw-table-card">
+        <div className="dw-table-toolbar">
+          <div>
+            <h3>최근 변경 기록</h3>
+            <p>최신순 20건 · 정지 · 다시 켜기마다 사유가 남습니다.</p>
+          </div>
+        </div>
         <Table<AiSwitchHistory>
           rowKey="historyId"
           size="small"

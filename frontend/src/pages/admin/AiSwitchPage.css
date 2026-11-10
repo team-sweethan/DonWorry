@@ -1,0 +1,91 @@
+/* AI 조사 긴급정지 (#626) — 지금 상태 한 줄 + 버튼, 아래에 작은 사실 칸.
+   다른 관리 화면과 같은 말투: 바탕색 없이 원 아이콘 + 글자, 색은 아이콘에만 */
+
+.ai-switch-status {
+  margin-bottom: var(--dw-space-4);
+}
+.ai-switch-status .ant-card-body {
+  padding: 0;
+}
+
+.ai-switch-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dw-space-4) var(--dw-space-5);
+  padding: 22px 24px;
+}
+.ai-switch-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #0f172a;
+  font-size: var(--dw-text-heading);
+  font-weight: 700;
+}
+.ai-switch-head p {
+  margin: 6px 0 0 22px;
+  max-width: 640px;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+.ai-switch-note {
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+
+/* 상태 원 — 사용 중 초록, 정지 빨강, 설정으로 꺼짐 회색 빈 원 */
+.ai-switch-mark {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: currentColor;
+}
+.is-on .ai-switch-mark {
+  color: #16a34a;
+}
+.is-stopped .ai-switch-mark {
+  color: #dc2626;
+}
+.is-config-off .ai-switch-mark {
+  color: #94a3b8;
+  background: none;
+}
+
+.ai-switch-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--dw-border);
+}
+.ai-switch-facts dt {
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ai-switch-facts dd {
+  margin: 0;
+  color: #0f172a;
+  font-size: var(--dw-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.ai-switch-facts dd small {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+
+@media (max-width: 720px) {
+  .ai-switch-head,
+  .ai-switch-facts {
+    padding-inline: 16px;
+  }
+  .ai-switch-head p {
+    margin-left: 0;
+  }
+}
