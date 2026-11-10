@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Descriptions,
   Form,
   Input,
   InputNumber,
@@ -19,6 +20,13 @@ import type { RecurringExpense, RecurringExpenseInput } from './financePreviewTy
 import { MAX_PREVIEW_EXPENSE } from './recurringExpenses'
 import { formatWonInput, parseWonInput } from './financeView'
 
+const recurrenceLabel = (rule: RecurringExpense) =>
+  rule.frequency === 'DAILY'
+    ? '매일'
+    : rule.frequency === 'WEEKLY'
+      ? `매주 ${['일', '월', '화', '수', '목', '금', '토'][dayjs(rule.startDate).day()]}요일`
+      : `매달 ${dayjs(rule.startDate).date()}일`
+
 export function RecurringExpensePanel({
   rules,
   onCreate,
@@ -32,6 +40,7 @@ export function RecurringExpensePanel({
   onCreate: (input: RecurringExpenseInput) => Promise<void>
   onStop: (id: number) => Promise<void>
 }) {
+  const [detail, setDetail] = useState<RecurringExpense | null>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(null)
@@ -88,15 +97,21 @@ export function RecurringExpensePanel({
         pagination={{ pageSize: 5 }}
         scroll={{ x: 700 }}
         columns={[
-          { title: '항목', dataIndex: 'title' },
+          {
+            title: '지출명',
+            render: (_, rule) => (
+              <Button
+                type="link"
+                style={{ padding: 0, height: 'auto', whiteSpace: 'normal', textAlign: 'left' }}
+                onClick={() => setDetail(rule)}
+              >
+                {rule.title}
+              </Button>
+            ),
+          },
           {
             title: '주기',
-            render: (_, r) =>
-              r.frequency === 'DAILY'
-                ? '매일'
-                : r.frequency === 'WEEKLY'
-                  ? `매주 ${['일', '월', '화', '수', '목', '금', '토'][dayjs(r.startDate).day()]}요일`
-                  : `매달 ${dayjs(r.startDate).date()}일`,
+            render: (_, rule) => recurrenceLabel(rule),
           },
           {
             title: '금액',
@@ -125,6 +140,53 @@ export function RecurringExpensePanel({
           },
         ]}
       />
+      <Modal
+        title="정기 지출 상세"
+        open={detail !== null}
+        onCancel={() => setDetail(null)}
+        footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
+      >
+        {detail && (
+          <Descriptions
+            column={1}
+            size="small"
+            items={[
+              { key: 'title', label: '지출명', children: detail.title },
+              {
+                key: 'amount',
+                label: '회차별 금액',
+                children: <FinanceMoney value={detail.amount} compact={false} />,
+              },
+              { key: 'frequency', label: '반복 주기', children: recurrenceLabel(detail) },
+              {
+                key: 'period',
+                label: '적용 기간',
+                children: detail.startDate + ' ~ ' + (detail.endDate ?? '종료 없음'),
+              },
+              {
+                key: 'status',
+                label: '상태',
+                children: detail.stoppedFrom
+                  ? detail.stoppedFrom + '부터 중단'
+                  : detail.endDate && detail.endDate < today
+                    ? '기간 종료'
+                    : detail.startDate > today
+                      ? '적용 예정'
+                      : '적용 중',
+              },
+              {
+                key: 'memo',
+                label: '메모',
+                children: (
+                  <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                    {detail.memo || '—'}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Modal>
       <Modal
         className="finance-dialog"
         title="정기 지출 등록"

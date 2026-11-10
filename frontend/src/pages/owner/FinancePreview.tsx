@@ -84,6 +84,8 @@ export function FinancePreview() {
     date: e.date,
     title: e.title,
     amount: e.amount,
+    memo: e.memo,
+    originalDate: e.plannedDate,
     note: `${e.kind === 'RECURRING' ? '정기' : '일회성'} 지출 · ${e.paidAt ? '지출 완료' : '지출 예정'}`,
   }))
   const headerActions = (

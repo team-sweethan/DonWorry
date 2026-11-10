@@ -10,7 +10,7 @@ import { SettlementLineChart } from './FinanceCharts'
 import { settlementDays } from './settlementChart'
 import { useState, useRef, useEffect } from 'react'
 import dayjs from 'dayjs'
-import { Alert, Button, Input, Modal, Pagination, Select } from 'antd'
+import { Alert, Button, Descriptions, Input, Modal, Pagination, Select } from 'antd'
 import { PageHeader } from '../../components/common/PageHeader'
 import './settlement-prototype.css'
 
@@ -39,7 +39,15 @@ const dayLimit = (from: string) =>
 const dateInput = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-type CalendarExpense = { id: string; date: string; title: string; amount: number; note?: string }
+type CalendarExpense = {
+  id: string
+  date: string
+  title: string
+  amount: number
+  note?: string
+  memo?: string | null
+  originalDate?: string
+}
 export function SettlementPrototype({
   todayValue,
   previewAmountScale = 1,
@@ -95,6 +103,7 @@ export function SettlementPrototype({
   useEffect(() => {
     if (view === 'list') reportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [view])
+  const [expenseDetail, setExpenseDetail] = useState<CalendarExpense | null>(null)
   const [detail, setDetail] = useState<Entry | null>(null)
   const [busyDemo, setBusyDemo] = useState(false)
   const [localRangeStart, setRangeStart] = useState(() =>
@@ -601,9 +610,18 @@ export function SettlementPrototype({
                   <span className="stl-chip stl-expense">지출 내역</span>
                 </div>
                 <p>{e.note}</p>
-                <strong className="stl-expense-heading">
-                  <FinanceMoney value={-e.amount} />
-                </strong>
+                <div className="stl-detail-title">
+                  <strong className="stl-expense-heading">
+                    <FinanceMoney value={-e.amount} />
+                  </strong>
+                  <Button
+                    size="small"
+                    className="stl-preview-detail-button"
+                    onClick={() => setExpenseDetail(e)}
+                  >
+                    상세 보기 <span aria-hidden="true">›</span>
+                  </Button>
+                </div>
               </article>
             ))}
             {dailyExpenses.length > 2 && (
@@ -835,6 +853,7 @@ export function SettlementPrototype({
                       <th>반영일 (완료일 / 예정일)</th>
                       <th>구분</th>
                       <th className="stl-money-cell">지출 금액</th>
+                      <th>상세</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -854,11 +873,14 @@ export function SettlementPrototype({
                               <FinanceMoney value={-e.amount} />
                             </strong>
                           </td>
+                          <td>
+                            <Button onClick={() => setExpenseDetail(e)}>상세 보기</Button>
+                          </td>
                         </tr>
                       ))}
                     {!expenseRows.length && (
                       <tr>
-                        <td colSpan={4} className="stl-empty">
+                        <td colSpan={5} className="stl-empty">
                           조건에 맞는 지출이 없습니다.
                         </td>
                       </tr>
@@ -937,6 +959,42 @@ export function SettlementPrototype({
             </p>
             {preview && <p>화면 확인용 예시 데이터입니다.</p>}
           </div>
+        )}
+      </Modal>
+      <Modal
+        title="지출 상세"
+        open={expenseDetail !== null}
+        onCancel={() => setExpenseDetail(null)}
+        footer={<Button onClick={() => setExpenseDetail(null)}>닫기</Button>}
+      >
+        {expenseDetail && (
+          <Descriptions
+            column={1}
+            items={[
+              { key: 'title', label: '지출명', children: expenseDetail.title },
+              {
+                key: 'amount',
+                label: '금액',
+                children: <FinanceMoney value={expenseDetail.amount} compact={false} />,
+              },
+              { key: 'date', label: '캘린더 반영일', children: expenseDetail.date },
+              {
+                key: 'originalDate',
+                label: '지출 예정일',
+                children: expenseDetail.originalDate ?? expenseDetail.date,
+              },
+              { key: 'status', label: '종류·상태', children: expenseDetail.note ?? '—' },
+              {
+                key: 'memo',
+                label: '메모',
+                children: (
+                  <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                    {expenseDetail.memo || '—'}
+                  </span>
+                ),
+              },
+            ]}
+          />
         )}
       </Modal>
     </div>

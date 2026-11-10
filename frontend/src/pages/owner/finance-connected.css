@@ -1,7 +1,7 @@
 .finance-connected > .ant-alert {
   margin: 16px 0;
 }
-.finance-connected .finance-row-actions {
+.finance-drawer .finance-row-actions {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
