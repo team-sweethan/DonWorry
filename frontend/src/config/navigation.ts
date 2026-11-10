@@ -41,6 +41,8 @@ export const navByRole: Record<Role, NavGroup[]> = {
         { label: '경보', path: '/security/alerts' },
         { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
+        // ML 그림자 채점 모델의 실험 기록 (#778, ADR-0061)
+        { label: 'ML 모델', path: '/security/ml-model' },
       ],
     },
     // 업무 흐름 순서 — 탐지(경보) → 조사(Case · 판정) → 조치(결제별 매입 · 취소) (#314)
