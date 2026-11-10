@@ -22,6 +22,7 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { MlModelPage } from '../pages/security/MlModelPage'
 import { TransactionDetailPage } from '../pages/security/TransactionDetailPage'
 import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
@@ -291,6 +292,7 @@ export const router = createBrowserRouter([
               },
               { path: 'rules', handle: { title: '탐지 규칙' }, element: <RuleCatalogPage /> },
               { path: 'blocklist', handle: { title: '차단 목록' }, element: <BlocklistPage /> },
+              { path: 'ml-model', handle: { title: 'ML 모델' }, element: <MlModelPage /> },
               {
                 path: 'transactions',
                 handle: { title: '거래 내역' },

@@ -163,7 +163,7 @@ test('보안 직원은 탐지 메뉴를 업무 용어로 표시한다', () => {
 
   assert.deepEqual(
     securityDetectionItems?.items.map((item) => item.label),
-    ['경보', '탐지 룰 목록', '차단 목록'],
+    ['경보', '탐지 룰 목록', '차단 목록', 'ML 모델'],
   )
 })
 

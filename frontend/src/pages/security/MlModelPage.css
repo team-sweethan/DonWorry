@@ -1,0 +1,303 @@
+/* 보안 직원 [탐지 › ML 모델] (#778) — 실험 기록. 카드 · 표 · 숫자 칸은 기존 dw-* · antd 모양을 그대로 쓰고,
+   여기에는 묶음 상자 · 막대 · 고민 상자처럼 이 화면에만 있는 것만 둔다 */
+
+.mlm-page {
+  max-width: var(--dw-page-width, 1520px);
+  /* 한글은 단어(띄어쓰기) 단위로만 줄을 바꾸고, 너무 긴 낱말만 칸 안에서 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.mlm-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-4);
+}
+.mlm-card .ant-card-body {
+  padding: var(--dw-space-5);
+}
+.mlm-sub {
+  margin: 0 0 var(--dw-space-3);
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.6;
+}
+.mlm-muted {
+  color: #64748b;
+}
+.mlm-bad {
+  color: #b91c1c;
+}
+.mlm-warn {
+  color: #b45309;
+}
+.mlm-ok {
+  color: #15803d;
+}
+.mlm-gap {
+  margin-top: var(--dw-space-4);
+}
+.mlm-source {
+  margin: 0;
+  color: #94a3b8;
+  font-size: var(--dw-text-caption);
+}
+
+/* 묶음 상자 — 표 · 이름-값 목록을 하나씩 감싼다 */
+.mlm-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--dw-space-4);
+}
+@media (max-width: 1100px) {
+  .mlm-grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+.mlm-box {
+  padding: var(--dw-space-4);
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-radius-panel);
+  background: #fff;
+}
+.mlm-box-title {
+  margin: 0 0 var(--dw-space-3);
+  font-size: var(--dw-text-body);
+  font-weight: 700;
+}
+.mlm-box-title.mlm-gap {
+  margin-top: var(--dw-space-5);
+}
+.mlm-total {
+  margin: var(--dw-space-2) 0 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* 이름-값 목록 — 값을 이름 바로 옆에 */
+.mlm-kv .ant-descriptions-item-label {
+  width: 110px;
+  color: #64748b;
+}
+.mlm-table .ant-table-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 한눈에 숫자 칸 · 걸어 온 길 */
+.mlm-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--dw-space-3);
+}
+.mlm-stat-foot {
+  font-size: var(--dw-text-caption);
+  color: #64748b;
+  line-height: 1.5;
+}
+.mlm-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--dw-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mlm-timeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dw-space-3);
+  border: 1px solid var(--dw-border);
+  border-left: 3px solid var(--dw-primary);
+  border-radius: var(--dw-radius-control);
+  font-size: var(--dw-text-secondary);
+}
+.mlm-timeline-when {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.mlm-timeline li > span:last-child {
+  color: #475569;
+}
+
+/* 시간순 구간 막대 */
+.mlm-stack {
+  display: flex;
+  overflow: hidden;
+  height: 34px;
+  border-radius: var(--dw-radius-control);
+  color: #fff;
+  font-size: var(--dw-text-caption);
+  font-weight: 600;
+}
+.mlm-stack span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* 가로 막대 */
+.mlm-bars {
+  display: grid;
+  align-items: center;
+  gap: 10px 12px;
+  font-size: var(--dw-text-secondary);
+}
+.mlm-bar-row {
+  display: contents;
+}
+.mlm-bar-track {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+.mlm-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+}
+.mlm-bar-value {
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.is-strong {
+  font-weight: 700;
+}
+
+/* 학습 절차 */
+.mlm-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-2);
+  margin: 0 0 var(--dw-space-4);
+  padding: 0;
+  list-style: none;
+}
+.mlm-steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--dw-space-3);
+  border-radius: var(--dw-radius-control);
+  background: #f8fafc;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.55;
+}
+
+/* 모델 설명 카드 */
+.mlm-model-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--dw-space-3);
+}
+.mlm-model-cards .mlm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--dw-space-3);
+  font-size: var(--dw-text-caption);
+  line-height: 1.55;
+}
+.mlm-model-cards strong {
+  font-size: var(--dw-text-secondary);
+}
+.mlm-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+}
+
+/* 버전 카드 */
+.mlm-versions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--dw-space-3);
+}
+@media (max-width: 1100px) {
+  .mlm-versions {
+    grid-template-columns: 1fr;
+  }
+}
+.mlm-version {
+  font-size: var(--dw-text-secondary);
+  line-height: 1.6;
+}
+.mlm-version.is-current {
+  border-color: var(--dw-primary);
+  box-shadow: inset 0 0 0 1px var(--dw-primary);
+}
+.mlm-version p {
+  margin: var(--dw-space-2) 0;
+}
+.mlm-version-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dw-space-2);
+}
+.mlm-version-head strong {
+  font-size: var(--dw-text-heading);
+}
+.mlm-version-head .mlm-muted {
+  margin-left: auto;
+}
+.mlm-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mlm-criteria li {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 6px;
+  align-items: baseline;
+}
+.mlm-criteria li.is-failed {
+  font-weight: 700;
+}
+.mlm-criteria-result {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mlm-criteria li.is-failed .mlm-criteria-result {
+  color: #b91c1c;
+}
+.mlm-notes {
+  margin: var(--dw-space-2) 0 0;
+  padding-left: 18px;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.6;
+}
+
+/* 고민 · 결정 상자 — 기존 대기(노랑) 상자와 같은 톤 */
+.mlm-thought {
+  margin-top: var(--dw-space-5);
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border: 1px solid #fcd34d;
+  border-radius: var(--dw-radius-panel);
+  background: #fffbeb;
+}
+.mlm-thought-title {
+  margin: 0 0 var(--dw-space-2);
+  color: #b45309;
+  font-size: var(--dw-text-secondary);
+  font-weight: 700;
+}
+.mlm-thought ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.7;
+}
