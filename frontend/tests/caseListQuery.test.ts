@@ -169,3 +169,12 @@ test('이전 · 다음으로 옮기면 순서는 그대로, 목록으로 돌아�
     caseListReturn: '/security/cases?case=9',
   })
 })
+
+test('접수 · 보고서 준비 조건은 생성됨 · 조사 중을 함께 보인다 (#759)', () => {
+  const query = parse('?status=PREPARE')
+  assert.equal(query.status, 'PREPARE')
+  assert.equal(caseListTab(query.status), 'ACTIVE')
+  assert.equal(matchesCaseListQuery(make({ status: 'OPEN' }), query, now), true)
+  assert.equal(matchesCaseListQuery(make({ status: 'INVESTIGATING' }), query, now), true)
+  assert.equal(matchesCaseListQuery(make({ status: 'DECISION_PENDING' }), query, now), false)
+})

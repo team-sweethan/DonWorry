@@ -6,7 +6,8 @@ import { slaState } from './caseRules.ts'
  * 기본값은 주소에 쓰지 않는다. 모르는 값은 무시하고 기본값을 쓴다.
  */
 
-export type StatusFilter = 'OPEN_ONLY' | 'ALL' | CaseStatus
+/** PREPARE = 접수 · 보고서 준비(생성됨 · 조사 중), 사건 흐름 보드의 첫 레인 (#759) */
+export type StatusFilter = 'OPEN_ONLY' | 'ALL' | 'PREPARE' | CaseStatus
 /** running = 생성 대기 · 생성 중, failed = 생성 실패 */
 export type ReportFilter = 'running' | 'failed'
 /**
@@ -62,6 +63,7 @@ export const defaultCaseListQuery: CaseListQuery = {
 const statuses: StatusFilter[] = [
   'OPEN_ONLY',
   'ALL',
+  'PREPARE',
   'OPEN',
   'INVESTIGATING',
   'DECISION_PENDING',
@@ -114,7 +116,11 @@ export function matchesCaseListQuery(
 ) {
   const status =
     query.status === 'ALL' ||
-    (query.status === 'OPEN_ONLY' ? c.status !== 'CLOSED' : c.status === query.status)
+    (query.status === 'OPEN_ONLY'
+      ? c.status !== 'CLOSED'
+      : query.status === 'PREPARE'
+        ? c.status === 'OPEN' || c.status === 'INVESTIGATING'
+        : c.status === query.status)
   const sla = !query.slaExceeded || slaState(c.createdAt, c.status, now)?.exceeded === true
   const report =
     query.report === null ||

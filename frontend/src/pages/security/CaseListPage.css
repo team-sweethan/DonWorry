@@ -873,3 +873,1092 @@
     transition: none !important;
   }
 }
+
+/* 표 줄 · 흐름 보드 타일 함께 강조 */
+.case-queue-table .ant-table-tbody > tr.is-hover > td {
+  background: #f5f9ff;
+}
+
+/* ── 사건 흐름 보드 (#759) — 진행 사건 하나가 타일 하나, 단계 레인을 따라 흐른다 ── */
+.case-flow {
+  margin: 0 20px 14px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--cq-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfdff, #fff 70%);
+  animation: case-queue-rise 520ms var(--cq-ease) 160ms backwards;
+}
+.case-flow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+.case-flow-head strong {
+  margin-right: 10px;
+  color: var(--cq-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.case-flow-head > div > span {
+  color: var(--cq-muted);
+  font-size: 12px;
+}
+.case-flow-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.case-flow-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cq-sub);
+  font-size: 12px;
+}
+/* 범례 — 타일에 쓰는 장치를 그대로 보여 준다 */
+.case-flow-legend .case-flow-signal {
+  margin-right: 1px;
+}
+.case-flow-legend .is-merge::before,
+.case-flow-legend .is-report::before {
+  content: '';
+  width: 16px;
+  height: 10px;
+  border-radius: 3px;
+}
+.case-flow-legend .is-merge::before {
+  outline: 1.5px dashed var(--cq-blue);
+  outline-offset: -1px;
+}
+.case-flow-legend .is-report::before {
+  box-shadow: inset 0 0 0 1.5px #bfdbfe;
+  border-top: 1.5px solid var(--cq-blue);
+}
+
+.case-flow-lanes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.case-flow-lane {
+  position: relative;
+  min-width: 0;
+  min-height: 104px;
+  padding: 8px;
+  border: 1px solid var(--cq-line);
+  border-radius: 8px;
+  background: #fff;
+  transition:
+    opacity 200ms,
+    border-color 200ms,
+    box-shadow 200ms;
+  animation: case-queue-rise 480ms var(--cq-ease) backwards;
+  animation-delay: calc(200ms + var(--lane, 0) * 90ms);
+}
+/* 레인 사이 흐르는 점선 — 사건이 왼쪽에서 오른쪽으로 넘어간다 */
+.case-flow-lane:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 21px;
+  right: -24px;
+  width: 24px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #93c5fd 0 4px, transparent 4px 8px);
+  background-size: 16px 2px;
+  animation: case-flow-stream 900ms linear infinite;
+}
+.case-flow-lane:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  right: -6px;
+  z-index: 1;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid #93c5fd;
+}
+.case-flow-lane.is-failed {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #fff7f7, #fff);
+}
+.case-flow-lane.is-failed:not(.is-empty) .case-flow-lane-icon {
+  animation: case-queue-ping-red 2s ease-out infinite;
+}
+.case-flow-lane.is-active {
+  border-color: var(--cq-blue);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
+}
+.case-flow-lanes:has(.is-active) .case-flow-lane:not(.is-active) {
+  opacity: 0.5;
+}
+.case-flow-lane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 2px 6px;
+  border: 0;
+  border-bottom: 1px dashed var(--cq-line);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.case-flow-lane-head:focus-visible {
+  outline: 2px solid var(--cq-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.case-flow-lane-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--cq-blue-soft);
+  color: var(--cq-blue);
+  font-size: 12px;
+}
+.case-flow-lane.is-decision .case-flow-lane-icon {
+  background: #fffbeb;
+  color: #d97706;
+}
+.case-flow-lane.is-failed .case-flow-lane-icon {
+  background: var(--cq-red-soft);
+  color: var(--cq-red);
+}
+.case-flow-lane-name {
+  display: grid;
+  min-width: 0;
+  color: var(--cq-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.case-flow-lane-head b {
+  margin-left: auto;
+  color: var(--cq-text);
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  animation: case-queue-pop 360ms var(--cq-ease);
+}
+.case-flow-lane.is-failed:not(.is-empty) .case-flow-lane-head b {
+  color: var(--cq-red);
+}
+.case-flow-lane.is-empty .case-flow-lane-head b {
+  color: var(--cq-muted);
+}
+
+.case-flow-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  /* 위 여백은 다음 확인 깃발이 들어갈 자리다 */
+  padding-top: 18px;
+}
+.case-flow-none,
+.case-flow-more {
+  align-self: center;
+  color: var(--cq-muted);
+  font-size: 12px;
+}
+/* 타일 — 흰 칩 위에 위험 신호 막대 · 번호 · 24시간까지 차오르는 경과 선 */
+.case-flow-tile {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px 2px 8px;
+  border: 1px solid var(--cq-line);
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.04);
+  color: var(--cq-text);
+  font: 650 12px/1 inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.2px;
+  cursor: pointer;
+  transition:
+    translate 180ms var(--cq-ease),
+    border-color 160ms,
+    background-color 160ms,
+    box-shadow 180ms;
+  animation: case-flow-tile-in 460ms var(--cq-ease) backwards;
+  animation-delay: calc(360ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms);
+}
+.case-flow-tile.is-overdue .case-flow-id {
+  color: var(--cq-red);
+}
+
+/* 위험 신호 막대 — 80점 이상 3칸 빨강, 50~79점 2칸 주황, 50점 미만 1칸 회색, 점수 없음 빈 칸 */
+.case-flow-signal {
+  display: inline-flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 11px;
+}
+.case-flow-signal i {
+  width: 3px;
+  border-radius: 1px;
+  background: #e2e8f0;
+}
+.case-flow-signal i:nth-child(1) {
+  height: 5px;
+}
+.case-flow-signal i:nth-child(2) {
+  height: 8px;
+}
+.case-flow-signal i:nth-child(3) {
+  height: 11px;
+}
+.case-flow-signal.is-low i:nth-child(1) {
+  background: #94a3b8;
+}
+.case-flow-signal.is-review i:nth-child(-n + 2) {
+  background: #f59e0b;
+}
+.case-flow-signal.is-deny i {
+  background: var(--cq-red);
+}
+/* 신호 막대가 아래부터 차례로 켜진다 */
+.case-flow-tile .case-flow-signal i {
+  transform-origin: bottom;
+  animation: case-flow-bar-up 360ms var(--cq-ease) backwards;
+  animation-delay: calc(520ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms);
+}
+.case-flow-tile .case-flow-signal i:nth-child(2) {
+  animation-delay: calc(580ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms);
+}
+.case-flow-tile .case-flow-signal i:nth-child(3) {
+  animation-delay: calc(640ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms);
+}
+
+/* 결제 합쳐질 수 있음 — 점선 테두리가 숨 쉬듯 벌어졌다 오므라든다 */
+.case-flow-tile.is-merge {
+  outline: 1.5px dashed var(--cq-blue);
+  outline-offset: 1px;
+  animation:
+    case-flow-tile-in 460ms var(--cq-ease) backwards,
+    case-flow-breathe 1.8s ease-in-out infinite;
+}
+/* 보고서 생성 중 — 테두리를 따라 도는 빛 */
+.case-flow-tile.is-report::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  padding: 1.5px;
+  border-radius: 9px;
+  background: conic-gradient(
+    from var(--case-flow-angle, 0deg),
+    #2563eb,
+    transparent 35%,
+    transparent
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: case-flow-orbit 1.6s linear infinite;
+}
+.case-flow-tile:hover,
+.case-flow-tile.is-hover {
+  z-index: 3;
+  translate: 0 -2px;
+  border-color: #93c5fd;
+  box-shadow: 0 8px 16px -10px rgb(37 99 235 / 0.55);
+}
+.case-flow-tile:focus-visible {
+  z-index: 3;
+  outline: 2px solid var(--cq-blue);
+  outline-offset: 2px;
+}
+.case-flow-tile.is-selected {
+  z-index: 2;
+  border-color: var(--cq-blue);
+  background: var(--cq-blue-soft);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+.case-flow-tile.is-new {
+  animation:
+    case-flow-tile-in 460ms var(--cq-ease) backwards,
+    case-timeline-ripple 1.4s ease-out 3;
+}
+
+@property --case-flow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes case-flow-orbit {
+  to {
+    --case-flow-angle: 360deg;
+  }
+}
+@keyframes case-flow-tile-in {
+  from {
+    opacity: 0;
+    scale: 0.4;
+  }
+  70% {
+    scale: 1.12;
+  }
+}
+@keyframes case-flow-bar-up {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes case-flow-breathe {
+  50% {
+    outline-offset: 3px;
+  }
+}
+@keyframes case-flow-stream {
+  to {
+    background-position: 16px 0;
+  }
+}
+@keyframes case-timeline-ripple {
+  0% {
+    box-shadow: 0 0 0 0 rgb(37 99 235 / 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgb(37 99 235 / 0);
+  }
+}
+
+@media (max-width: 1180px) {
+  .case-flow-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .case-flow-lane::before,
+  .case-flow-lane::after {
+    display: none;
+  }
+}
+
+/* ── 흐름 보드 다듬기 (#759) — 다음 확인 · 레인 대기 · 24시간 경계 · 말풍선 · 접기 ── */
+.case-flow-head {
+  margin-bottom: 10px;
+}
+.case-flow-title {
+  min-width: 0;
+}
+.case-flow-title > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--cq-muted);
+  font-size: 12px;
+}
+.case-flow-mini {
+  display: inline-flex;
+  gap: 4px;
+  color: var(--cq-sub);
+}
+.case-flow-mini b {
+  color: var(--cq-text);
+  font-variant-numeric: tabular-nums;
+}
+.case-flow-mini.is-failed b {
+  color: var(--cq-red);
+}
+.case-flow-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.case-flow-legend {
+  margin-bottom: 12px;
+}
+
+/* 다음 확인 — 보드에서 가장 눈에 띄는 단 하나의 행동 */
+.case-flow-next {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f5f9ff, #eaf2ff);
+  color: #1e40af;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow: hidden;
+  animation: case-queue-pop 420ms var(--cq-ease) 500ms backwards;
+  transition:
+    transform 160ms var(--cq-ease),
+    box-shadow 160ms;
+}
+.case-flow-next b {
+  font-weight: 800;
+}
+.case-flow-next > span {
+  padding-left: 7px;
+  border-left: 1px solid #bfdbfe;
+  color: #3b82f6;
+  font-size: 12px;
+}
+.case-flow-next .anticon-arrow-right {
+  transition: transform 200ms var(--cq-ease);
+}
+.case-flow-next:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -8px rgb(37 99 235 / 0.6);
+}
+.case-flow-next:hover .anticon-arrow-right {
+  transform: translateX(3px);
+}
+.case-flow-next:focus-visible {
+  outline: 2px solid var(--cq-blue);
+  outline-offset: 2px;
+}
+/* 몇 초마다 한 번 지나가는 빛 — 다음 할 일이 여기 있다는 신호 */
+.case-flow-next::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.85) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  animation: case-flow-next-sheen 5s ease-in-out 1.2s infinite;
+}
+.case-flow-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--cq-sub);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.case-flow-toggle:hover {
+  background: #f1f5f9;
+}
+.case-flow.is-collapsed {
+  padding-bottom: 10px;
+}
+.case-flow.is-collapsed .case-flow-head {
+  margin-bottom: 0;
+}
+
+/* 레인 대기 — 최장 대기 시간과 24시간 경과 비율 막대 */
+.case-flow-lane-age {
+  display: grid;
+  gap: 4px;
+  padding: 6px 2px 0;
+  color: var(--cq-sub);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.case-flow-lane-age em {
+  color: var(--cq-red);
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* 다음 확인 타일 — 위에 작은 깃발 */
+.case-flow-tile.is-next {
+  z-index: 2;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgb(96 165 250 / 0.22);
+}
+.case-flow-next-flag {
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--cq-blue);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 13px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: case-flow-flag 1.6s ease-in-out infinite;
+}
+.case-flow-next-flag::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -3px;
+  border-top: 3px solid var(--cq-blue);
+  border-right: 3px solid transparent;
+  border-left: 3px solid transparent;
+}
+
+/* 말풍선 카드 — 타일에 올리거나 키보드로 가면 뜬다 */
+.case-flow-tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  z-index: 10;
+  display: grid;
+  gap: 2px;
+  min-width: 190px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  box-shadow: 0 10px 24px -10px rgb(15 23 42 / 0.6);
+  color: #cbd5e1;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: nowrap;
+  text-align: left;
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px);
+  transform-origin: bottom center;
+  pointer-events: none;
+  transition:
+    opacity 140ms,
+    transform 160ms var(--cq-ease);
+}
+.case-flow-tip b {
+  color: #fff;
+  font-size: 12.5px;
+}
+.case-flow-tip-note {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid rgb(148 163 184 / 0.25);
+  color: #93c5fd;
+}
+.case-flow-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-top: 5px solid #0f172a;
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+}
+.case-flow-tile:hover .case-flow-tip,
+.case-flow-tile:focus-visible .case-flow-tip,
+.case-flow-tile.is-hover .case-flow-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+/* 맨 왼쪽 · 오른쪽 레인의 카드는 화면 밖으로 나가지 않게 안쪽으로 붙인다 */
+.case-flow-lane.is-prepare .case-flow-tip {
+  left: 0;
+  transform: translateY(4px);
+  transform-origin: bottom left;
+}
+.case-flow-lane.is-prepare .case-flow-tile:hover .case-flow-tip,
+.case-flow-lane.is-prepare .case-flow-tile:focus-visible .case-flow-tip,
+.case-flow-lane.is-prepare .case-flow-tile.is-hover .case-flow-tip {
+  transform: translateY(0);
+}
+.case-flow-lane.is-failed .case-flow-tip {
+  right: 0;
+  left: auto;
+  transform: translateY(4px);
+  transform-origin: bottom right;
+}
+.case-flow-lane.is-failed .case-flow-tile:hover .case-flow-tip,
+.case-flow-lane.is-failed .case-flow-tile:focus-visible .case-flow-tip,
+.case-flow-lane.is-failed .case-flow-tile.is-hover .case-flow-tip {
+  transform: translateY(0);
+}
+.case-flow-lane.is-prepare .case-flow-tip::after {
+  left: 14px;
+}
+.case-flow-lane.is-failed .case-flow-tip::after {
+  right: 9px;
+  left: auto;
+}
+/* 마우스를 올린 레인이 이웃 레인 위로 오게 해 카드가 가려지지 않게 한다 */
+.case-flow-lane:hover,
+.case-flow-lane:focus-within {
+  z-index: 2;
+}
+
+@keyframes case-flow-next-sheen {
+  0%,
+  70% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+@keyframes case-flow-flag {
+  50% {
+    translate: 0 -2px;
+  }
+}
+
+/* ── 흐름 보드 톤 정리 (#759) — 표와 같은 밝은 회색 · 파랑 톤, 빨강은 실패 · 경과에만 ── */
+/* 상자 속 상자를 풀고 보드는 카드 안 한 구역으로 */
+.case-flow {
+  margin: 0 0 4px;
+  padding: 14px 20px 18px;
+  border: 0;
+  border-top: 1px solid var(--cq-line);
+  border-radius: 0;
+  background: linear-gradient(180deg, #f8fafc, #fff);
+}
+.case-flow-lanes {
+  gap: 28px;
+}
+/* 레인 — 테두리 없는 옅은 칸 */
+.case-flow-lane {
+  min-height: 0;
+  padding: 10px 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f1f5f9;
+  box-shadow: inset 0 0 0 1px rgb(226 232 240 / 0.6);
+}
+.case-flow-lane.is-failed {
+  border: 0;
+  background: #f1f5f9;
+}
+.case-flow-lane.is-active {
+  background: #eaf2ff;
+  box-shadow: inset 0 0 0 1.5px var(--cq-blue);
+}
+.case-flow-lane-head {
+  padding: 0 2px 8px;
+  border-bottom: 0;
+}
+.case-flow-lane-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--cq-line);
+  color: #475569;
+  font-size: 12px;
+}
+.case-flow-lane.is-decision .case-flow-lane-icon {
+  background: #fff;
+  color: #d97706;
+}
+.case-flow-lane.is-failed .case-flow-lane-icon {
+  background: #fff;
+  color: var(--cq-red);
+}
+.case-flow-lane-name {
+  font-size: 12.5px;
+}
+.case-flow-lane-head b {
+  font-size: 20px;
+  letter-spacing: -0.5px;
+}
+
+/* 레인 대기 — 글자 한 줄 + 3구간 분포 막대 */
+.case-flow-lane-age {
+  gap: 5px;
+  padding: 0 2px;
+}
+.case-flow-lane-age-text {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.case-flow-meter {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  border-radius: 2px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.case-flow-meter i {
+  flex-basis: 0;
+  min-width: 0;
+  border-radius: 2px;
+  transform-origin: left;
+  animation: case-queue-grow 900ms var(--cq-ease) backwards;
+  animation-delay: calc(420ms + var(--lane, 0) * 90ms);
+}
+.case-flow-meter .is-fresh {
+  background: #bfdbfe;
+}
+.case-flow-meter .is-waiting {
+  background: #60a5fa;
+}
+.case-flow-meter .is-overdue {
+  background: var(--cq-red);
+}
+
+/* 레인 사이 — 가는 선 위로 빛 알갱이가 흘러간다 */
+.case-flow-lane:not(:last-child)::after {
+  top: 20px;
+  right: -28px;
+  width: 28px;
+  height: 1.5px;
+  background:
+    radial-gradient(circle, #3b82f6 0 1.5px, transparent 2px) no-repeat,
+    #cbd5e1;
+  background-size:
+    6px 6px,
+    100% 100%;
+  background-position:
+    -6px 50%,
+    0 0;
+  animation: case-flow-particle 1.6s linear infinite;
+}
+.case-flow-lane:not(:last-child)::before {
+  top: 17px;
+  right: -4px;
+  border-top-width: 4px;
+  border-bottom-width: 4px;
+  border-left: 4px solid #cbd5e1;
+}
+
+/* 타일 — 흰 칩, 바탕이 24시간까지 연한 파랑으로 차오르고 넘기면 연한 빨강 칩 */
+.case-flow-tiles {
+  gap: 6px;
+  padding-top: 20px;
+}
+.case-flow-tile {
+  height: 28px;
+  padding: 0 10px 0 8px;
+  overflow: visible;
+  isolation: isolate;
+  border-color: #e2e8f0;
+  font-weight: 650;
+}
+.case-flow-fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e8f1ff var(--fill, 0%), transparent var(--fill, 0%));
+  animation: case-flow-fill-in 900ms var(--cq-ease) backwards;
+  animation-delay: calc(560ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms);
+}
+.case-flow-tile.is-overdue {
+  border-color: #fecaca;
+}
+.case-flow-tile.is-overdue .case-flow-fill {
+  background: #fff1f1;
+}
+.case-flow-tile.is-overdue .case-flow-id {
+  color: #b91c1c;
+}
+.case-flow-tile:hover,
+.case-flow-tile.is-hover {
+  border-color: #93c5fd;
+}
+.case-flow-tile.is-selected {
+  border-color: var(--cq-blue);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+
+/* 다음 확인 — 앱의 다른 버튼처럼 흰 바탕 · 파란 글자 */
+.case-flow-next {
+  border-color: var(--cq-line);
+  background: #fff;
+  color: var(--cq-text);
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.04);
+}
+.case-flow-next .anticon-aim,
+.case-flow-next b,
+.case-flow-next .anticon-arrow-right {
+  color: var(--cq-blue);
+}
+.case-flow-next > span {
+  border-left-color: var(--cq-line);
+  color: var(--cq-sub);
+}
+.case-flow-next:hover {
+  border-color: #93c5fd;
+}
+.case-flow-next::after {
+  background: linear-gradient(100deg, transparent 30%, rgb(219 234 254 / 0.9) 50%, transparent 70%);
+}
+
+@keyframes case-flow-particle {
+  to {
+    background-position:
+      18px 50%,
+      0 50%;
+  }
+}
+@keyframes case-flow-fill-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+/* ── 흐름 보드 잔잔한 움직임 (#759) — 켜 두고 계속 봐도 되는, 정보에 묶인 움직임만 둔다 ── */
+@property --fill {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 0%;
+}
+/* 칩 바탕 — 경계를 부드럽게, 1분마다 바뀌는 경과만큼 천천히 더 차오른다 */
+.case-flow-tile {
+  transition:
+    translate 180ms var(--cq-ease),
+    border-color 160ms,
+    background-color 160ms,
+    box-shadow 180ms,
+    --fill 1.6s var(--cq-ease);
+}
+.case-flow-fill {
+  background: linear-gradient(
+    90deg,
+    #e3eeff 0,
+    #e8f1ff calc(var(--fill, 0%) - 8%),
+    rgb(232 241 255 / 0) var(--fill, 0%)
+  );
+}
+/* 차오르는 끝의 빛 — 지금도 시간이 가고 있다 */
+.case-flow-fill::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: calc(var(--fill, 0%) - 1px);
+  width: 2px;
+  border-radius: 1px;
+  background: #60a5fa;
+  box-shadow: 0 0 6px #93c5fd;
+  opacity: 0;
+  animation: case-flow-edge 2.8s ease-in-out infinite;
+  animation-delay: calc(1.2s + var(--i, 0) * 90ms);
+}
+.case-flow-tile.is-overdue .case-flow-fill::after {
+  display: none;
+}
+
+/* 24시간 넘긴 칩 — 붉은 물결이 왼쪽 위부터 차례로 천천히 지나간다 */
+.case-flow-tile.is-overdue .case-flow-fill {
+  animation:
+    case-flow-fill-in 900ms var(--cq-ease) backwards,
+    case-flow-wave 5s ease-in-out infinite;
+  animation-delay:
+    calc(560ms + var(--lane, 0) * 90ms + var(--i, 0) * 18ms), calc(1.4s + var(--i, 0) * 140ms);
+}
+
+/* 레인 사이 — 길고 또렷한 선 위로 18px 간격의 빛 알갱이가 끊김 없이 흘러간다 */
+.case-flow-lanes {
+  gap: 36px;
+}
+.case-flow-lane:not(:last-child)::after {
+  top: 16px;
+  right: -36px;
+  width: 36px;
+  height: 8px;
+  border-radius: 1px;
+  background:
+    radial-gradient(circle, #2563eb 0 1.8px, rgb(96 165 250 / 0.45) 2.4px, transparent 3.6px)
+      repeat-x,
+    linear-gradient(90deg, #dbeafe, #93c5fd) no-repeat;
+  background-size:
+    18px 8px,
+    100% 2px;
+  background-position:
+    0 50%,
+    0 50%;
+  animation: case-flow-particle 1.4s linear infinite;
+}
+.case-flow-lane:not(:last-child)::before {
+  top: 16px;
+  right: -5px;
+  border-top-width: 4px;
+  border-bottom-width: 4px;
+  border-left: 5px solid #93c5fd;
+}
+
+/* 레인 대기 막대 — 몇 초마다 빛이 훑고 지나간다 */
+.case-flow-meter {
+  position: relative;
+}
+.case-flow-meter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  background-position: -40% 0;
+  animation: case-flow-meter-sheen 4.5s ease-in-out infinite;
+  animation-delay: calc(1.6s + var(--lane, 0) * 400ms);
+}
+
+/* 다음 확인 칩 — 깃발은 가만히, 칩 주변 후광이 숨 쉰다 */
+.case-flow-next-flag {
+  animation: none;
+}
+.case-flow-tile.is-next {
+  animation:
+    case-flow-tile-in 460ms var(--cq-ease) backwards,
+    case-flow-halo 2.4s ease-out 1s infinite;
+}
+
+@keyframes case-flow-edge {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes case-flow-wave {
+  0%,
+  70%,
+  100% {
+    background-color: #fff1f1;
+  }
+  80% {
+    background-color: #ffdede;
+  }
+}
+@keyframes case-flow-meter-sheen {
+  0%,
+  60% {
+    background-position: -40% 0;
+  }
+  100% {
+    background-position: 140% 0;
+  }
+}
+@keyframes case-flow-halo {
+  0% {
+    box-shadow: 0 0 0 0 rgb(59 130 246 / 0.45);
+  }
+  80%,
+  100% {
+    box-shadow: 0 0 0 9px rgb(59 130 246 / 0);
+  }
+}
+
+/* ── 읽기 쉽게 (#759) — 빛은 숫자를 가리지 않게 칩 아래 테두리로, 범례는 칩 모양 그대로 ── */
+.case-flow-fill::after {
+  top: auto;
+  bottom: -1px;
+  left: calc(var(--fill, 0%) - 4px);
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+.case-flow-legend {
+  align-items: center;
+}
+.case-flow-sample {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 7px 0 6px;
+  border: 1px solid var(--cq-line);
+  border-radius: 5px;
+  background: linear-gradient(90deg, #e3eeff 0, #e8f1ff 45%, rgb(232 241 255 / 0) 55%), #fff;
+  color: var(--cq-text);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.case-flow-sample.is-overdue {
+  border-color: #fecaca;
+  background: #fff1f1;
+  color: #b91c1c;
+}
+.case-flow-sample .case-flow-signal {
+  height: 9px;
+}
+.case-flow-sample .case-flow-signal i:nth-child(1) {
+  height: 4px;
+}
+.case-flow-sample .case-flow-signal i:nth-child(2) {
+  height: 6.5px;
+}
+.case-flow-sample .case-flow-signal i:nth-child(3) {
+  height: 9px;
+}
+.case-flow-signal-set {
+  display: inline-flex;
+  gap: 5px;
+}
+.case-flow-legend .case-flow-legend-tip {
+  margin-left: auto;
+  color: var(--cq-muted);
+}
+
+/* ── 레인 폭 · 줄 수 (#759) — 사건이 많은 레인이 넓게, 칩은 3줄까지 보이고 나머지는 접는다 ── */
+.case-flow-lanes {
+  grid-template-columns: var(--lane-cols, repeat(4, minmax(0, 1fr)));
+  transition: grid-template-columns 600ms var(--cq-ease);
+}
+/* 3줄 = 위 여백(다음 깃발 자리) 20 + 칩 28 × 3 + 줄 간격 6 × 2.
+   아래만 자르고 위 · 옆은 넉넉히 열어 말풍선 · 깃발 · 후광이 잘리지 않게 한다 */
+.case-flow-tiles-box {
+  max-height: 118px;
+  clip-path: inset(-160px -80px -4px -80px);
+}
+.case-flow-tiles-box.is-open {
+  max-height: none;
+  clip-path: none;
+}
+.case-flow-expand {
+  display: block;
+  margin: 8px auto 0;
+  padding: 3px 10px;
+  border: 1px solid var(--cq-line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--cq-blue);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  animation: case-queue-drop 260ms var(--cq-ease);
+  transition:
+    border-color 160ms,
+    box-shadow 160ms;
+}
+.case-flow-expand:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 10px -6px rgb(37 99 235 / 0.5);
+}
+.case-flow-expand:focus-visible {
+  outline: 2px solid var(--cq-blue);
+  outline-offset: 2px;
+}
+@media (max-width: 1180px) {
+  .case-flow-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

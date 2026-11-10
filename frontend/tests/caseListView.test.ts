@@ -3,13 +3,18 @@ import { test } from 'node:test'
 import type { CaseSummary } from '../src/types/case.ts'
 import { defaultCaseListQuery } from '../src/utils/caseListQuery.ts'
 import {
+  boardLanes,
   casesInTab,
   clearConditions,
   elapsedLabel,
   isQuickConditionOn,
   isRestrictedCase,
+  laneColumns,
+  laneStats,
+  durationLabel,
   listPage,
   newCaseIds,
+  nextCase,
   quickConditionCount,
   sortCases,
   toggleQuickCondition,
@@ -175,4 +180,66 @@ test('선택한 사건이 있으면 그 사건의 페이지를, 없으면 주소
   assert.equal(listPage(ids, '99', 2, 20), 2)
   assert.equal(listPage(ids, null, 9, 20), 3)
   assert.equal(listPage([], null, 3, 20), 1)
+})
+
+test('흐름 보드는 진행 사건을 단계 레인에 오래된 순으로 나누고 종료는 뺀다 (#759)', () => {
+  const lanes = boardLanes([
+    make({ caseId: '1', status: 'OPEN', createdAt: hoursAgo(1) }),
+    make({ caseId: '2', status: 'INVESTIGATING', createdAt: hoursAgo(5) }),
+    make({ caseId: '3', status: 'DECISION_PENDING' }),
+    make({ caseId: '4', status: 'ACTION_PENDING' }),
+    make({ caseId: '5', status: 'ACTION_FAILED' }),
+    make({ caseId: '6', status: 'CLOSED' }),
+  ])
+  assert.deepEqual(ids(lanes.prepare), ['2', '1'])
+  assert.deepEqual(ids(lanes.decision), ['3'])
+  assert.deepEqual(ids(lanes.action), ['4'])
+  assert.deepEqual(ids(lanes.failed), ['5'])
+})
+
+test('레인 대기 정보는 가장 오래 기다린 시간과 24시간 경과 건수다 (#759)', () => {
+  const stats = laneStats(
+    [
+      make({ createdAt: hoursAgo(37.5) }),
+      make({ createdAt: hoursAgo(3) }),
+      make({ createdAt: hoursAgo(25) }),
+      make({ status: 'CLOSED', createdAt: hoursAgo(90) }),
+    ],
+    now,
+  )
+  assert.deepEqual(stats, { oldestHours: 37, fresh: 1, waiting: 0, overdue: 2 })
+  assert.deepEqual(laneStats([], now), { oldestHours: null, fresh: 0, waiting: 0, overdue: 0 })
+})
+
+test('다음 확인 사건은 열 수 있는 사건 중 확인 우선순 1위다 (#759)', () => {
+  const cases = [
+    make({ caseId: '1', status: 'DECISION_PENDING', createdAt: hoursAgo(2) }),
+    make({ caseId: '2', status: 'ACTION_FAILED', assigneeStaffId: '8' }),
+    make({ caseId: '3', createdAt: hoursAgo(30) }),
+  ]
+  const mine = (c: CaseSummary) => c.assigneeStaffId === '7'
+  // 금융 처리 실패(2)는 남의 사건이라 건너뛰고 24시간 경과(3)를 고른다
+  assert.deepEqual(nextCase(cases, mine, now), { caseId: '3', reason: 'SLA_EXCEEDED' })
+  assert.deepEqual(
+    nextCase(cases, () => true, now),
+    { caseId: '2', reason: 'ACTION_FAILED' },
+  )
+  assert.equal(
+    nextCase([], () => true, now),
+    null,
+  )
+})
+
+test('기다린 시간은 48시간까지 시간, 그 뒤로는 일 단위로 쓴다 (#759)', () => {
+  assert.equal(durationLabel(0.4), '1시간 미만')
+  assert.equal(durationLabel(47.9), '47시간')
+  assert.equal(durationLabel(48), '2일')
+  assert.equal(durationLabel(358), '14일 22시간')
+})
+
+test('레인 폭은 사건 수의 제곱근만큼, 빈 레인도 최소 1칸 몫이다 (#759)', () => {
+  assert.equal(
+    laneColumns([0, 33, 4, 1]),
+    'minmax(168px, 1.00fr) minmax(168px, 5.74fr) minmax(168px, 2.00fr) minmax(168px, 1.00fr)',
+  )
 })

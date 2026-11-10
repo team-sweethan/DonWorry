@@ -66,6 +66,7 @@ import {
 } from '../../utils/caseListQuery'
 import { readCaseListScope, saveCaseListScope } from '../../utils/caseListScope'
 import {
+  type BoardLaneKey,
   casesInTab,
   clearConditions,
   elapsedLabel,
@@ -73,6 +74,7 @@ import {
   isRestrictedCase,
   listPage,
   newCaseIds,
+  nextCase,
   quickConditionCount,
   quickConditions,
   sortCases,
@@ -83,6 +85,7 @@ import { caseStatusLabel, dateTime, reportStatusLabel } from './case/caseLabels'
 import { CaseWatchStoppedNotice } from './case/CaseWatchStoppedNotice'
 import { CaseSummaryDrawer } from './case/CaseSummaryDrawer'
 import { HomeCount } from './HomeCount'
+import { CaseFlowBoard } from './case/CaseFlowBoard'
 import { CodeTag } from './case/CodeTag'
 import { DeadlineValue, HelpLabel, deadlineHelp, mergeHelp } from './case/CaseTimeLabels'
 import './CaseListPage.css'
@@ -90,10 +93,21 @@ import './CaseListPage.css'
 // 처리 중 탭에서 고를 수 있는 상태. 종료는 탭으로 고른다
 const statusOptions: Array<{ value: StatusFilter; label: string }> = [
   { value: 'OPEN_ONLY', label: '진행 상태 전체' },
+  { value: 'PREPARE', label: '접수 · 보고서 준비' },
   ...(Object.keys(caseStatusLabel) as CaseStatus[])
     .filter((s) => s !== 'CLOSED')
     .map((s) => ({ value: s, label: caseStatusLabel[s].label })),
 ]
+
+// 흐름 보드 레인 ↔ 상태 조건 (#759)
+const laneStatus: Record<BoardLaneKey, StatusFilter> = {
+  prepare: 'PREPARE',
+  decision: 'DECISION_PENDING',
+  action: 'ACTION_PENDING',
+  failed: 'ACTION_FAILED',
+}
+const laneOfStatus = (status: StatusFilter): BoardLaneKey | null =>
+  (Object.keys(laneStatus) as BoardLaneKey[]).find((lane) => laneStatus[lane] === status) ?? null
 
 const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
   { value: 'ALL', label: '보고서 전체' },
@@ -265,6 +279,25 @@ export function CaseListPage() {
     [cases, query, merchantNames],
   )
   const selectedId = query.selected
+  // 흐름 보드는 단계(상태) 조건만 빼고 거른다 — 한 레인을 골라도 다른 레인이 보여야 흐름이 읽힌다
+  const boardCases = useMemo(
+    () =>
+      cases.filter((c) =>
+        matchesCaseListQuery(
+          c,
+          { ...query, status: 'OPEN_ONLY' },
+          undefined,
+          merchantNames.get(c.merchantId),
+        ),
+      ),
+    [cases, query, merchantNames],
+  )
+  const activeLane = laneOfStatus(query.status)
+  // 다음 확인 사건 — 열 수 있는 사건 중 확인 우선순 1위 (홈 "먼저 확인할 사건"과 같은 순서)
+  const next = useMemo(
+    () => nextCase(boardCases, (c) => !isRestrictedCase(c, myId)),
+    [boardCases, myId],
+  )
   const filteredIds = filtered.map((c) => c.caseId)
   const page = listPage(filteredIds, selectedId, query.page, PAGE_SIZE)
   // 고른 사건이 있는 페이지를 같이 남겨, 선택을 풀어도 보던 페이지에 머문다
@@ -295,6 +328,8 @@ export function CaseListPage() {
   // 움직임 끄기 (#759) — 보안 홈과 같다. 시스템의 움직임 줄이기 설정은 CSS가 따로 끈다
   const [motionPaused, setMotionPaused] = useState(false)
   // 오른쪽 요약 (#759). 직원이 [요약 보기]를 누를 때만 연다
+  // 시간축 점과 표 줄을 함께 강조한다 (#759)
+  const [hoverId, setHoverId] = useState<string | null>(null)
   const [summaryId, setSummaryId] = useState<string | null>(null)
   // [요약 보기]를 다시 누르면 같은 사건이어도 다시 조회한다
   const [summaryNonce, setSummaryNonce] = useState(0)
@@ -349,7 +384,7 @@ export function CaseListPage() {
       ? [
           {
             key: 'status',
-            label: `상태: ${caseStatusLabel[query.status as CaseStatus].label}`,
+            label: `상태: ${statusOptions.find((o) => o.value === query.status)?.label ?? query.status}`,
             clear: { status: 'OPEN_ONLY' as const },
           },
         ]
@@ -746,6 +781,25 @@ export function CaseListPage() {
             </Button>
           </div>
         )}
+        {tab !== 'CLOSED' && (
+          <CaseFlowBoard
+            cases={boardCases}
+            selectedId={selectedId}
+            hoverId={hoverId}
+            newIds={result?.newIds ?? []}
+            next={next}
+            motion={!motionPaused}
+            onHover={setHoverId}
+            onSelect={(caseId) => select(caseId)}
+            activeLane={activeLane}
+            onLane={(lane) =>
+              setQuery({
+                status: activeLane === lane ? 'OPEN_ONLY' : laneStatus[lane],
+                selected: null,
+              })
+            }
+          />
+        )}
         <Table
           // 탭 · 정렬 · 조건 · 페이지를 바꾸면 줄이 차례로 다시 들어온다 (검색어 입력 중에는 다시 그리지 않는다)
           key={[
@@ -770,12 +824,15 @@ export function CaseListPage() {
               record.caseId === selectedId ? 'is-selected' : '',
               result?.newIds.includes(record.caseId) ? 'is-new' : '',
               record.status === 'ACTION_FAILED' ? 'is-urgent' : '',
+              record.caseId === hoverId ? 'is-hover' : '',
             ].join(' ')
           }
           onRow={(record, index) => ({
             // 줄이 위에서부터 차례로 들어오는 순서. 너무 늦어지지 않게 12줄 뒤로는 같이 들어온다
             style: { '--i': Math.min(index ?? 0, 12) } as CSSProperties,
             onClick: () => onRowClick(record.caseId),
+            onMouseEnter: () => setHoverId(record.caseId),
+            onMouseLeave: () => setHoverId(null),
             onKeyDown: (event: KeyboardEvent<HTMLElement>) => onRowKeyDown(event, record.caseId),
             tabIndex: 0,
             'aria-expanded': record.caseId === selectedId,

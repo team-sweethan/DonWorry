@@ -46,9 +46,9 @@ export function elapsedLabel(c: Pick<CaseSummary, 'createdAt' | 'status'>, now =
   const state = slaState(c.createdAt, c.status, now)
   if (!state) return null
   const exact = Math.max(0, (now - Date.parse(c.createdAt)) / 3_600_000)
-  const hours = Math.floor(exact)
   return {
-    text: hours < 1 ? '1시간 미만' : `${hours}시간`,
+    // 48시간이 넘으면 "14일 22시간"처럼 일 단위 (#759)
+    text: durationLabel(exact),
     exceeded: state.exceeded,
     ratio: Math.min(1, exact / SLA_HOURS),
   }
@@ -63,9 +63,11 @@ export function casesInTab(cases: CaseSummary[], tab: CaseListTab) {
 export type QuickCondition = 'decision' | 'actionFailed' | 'reportFailed' | 'slaExceeded'
 
 /** 자주 쓰는 조건 (#759). 보안 홈 "확인 필요"와 같은 기준이며 종료되지 않은 사건만 센다 */
+/**
+ * 판정 대기 · 금융 처리 실패는 사건 흐름 보드의 레인 머리가 같은 건수 · 조건을 맡는다.
+ * 위 버튼 줄에는 레인으로 나뉘지 않는 조건만 둔다
+ */
 export const quickConditions: Array<{ key: QuickCondition; label: string; tone: string }> = [
-  { key: 'decision', label: '판정 대기', tone: 'amber' },
-  { key: 'actionFailed', label: '금융 처리 실패', tone: 'red' },
   { key: 'reportFailed', label: '보고서 생성 실패', tone: 'red' },
   { key: 'slaExceeded', label: `생성 후 ${SLA_HOURS}시간 경과`, tone: 'orange' },
 ]
@@ -143,4 +145,101 @@ export function newCaseIds(previous: CaseSummary[] | null, current: CaseSummary[
   if (previous === null) return []
   const known = new Set(previous.map((c) => c.caseId))
   return current.filter((c) => !known.has(c.caseId)).map((c) => c.caseId)
+}
+
+export type BoardLaneKey = 'prepare' | 'decision' | 'action' | 'failed'
+
+/** 사건 흐름 보드 레인 (#759) — 사건 업무 단계. 금융 처리 실패는 금융 처리 대기 다음에 따로 둔다 */
+export const boardLaneOf: Record<Exclude<CaseStatus, 'CLOSED'>, BoardLaneKey> = {
+  OPEN: 'prepare',
+  INVESTIGATING: 'prepare',
+  DECISION_PENDING: 'decision',
+  ACTION_PENDING: 'action',
+  ACTION_FAILED: 'failed',
+}
+
+/**
+ * 진행 중인 사건을 단계 레인으로 나눈다. 레인 안은 오래된 순 — 왼쪽 위가 가장 오래 기다린 사건이다.
+ * 종료된 사건은 넣지 않는다.
+ */
+export function boardLanes(cases: CaseSummary[]) {
+  const lanes: Record<BoardLaneKey, CaseSummary[]> = {
+    prepare: [],
+    decision: [],
+    action: [],
+    failed: [],
+  }
+  for (const c of cases) {
+    if (c.status === 'CLOSED') continue
+    lanes[boardLaneOf[c.status]].push(c)
+  }
+  for (const key of Object.keys(lanes) as BoardLaneKey[]) {
+    lanes[key].sort((a, b) => created(a) - created(b) || a.caseId.localeCompare(b.caseId))
+  }
+  return lanes
+}
+
+/**
+ * 레인 대기 정보 (#759) — 가장 오래 기다린 시간(시간, 내림)과 경과 구간별 건수.
+ * fresh: 6시간 미만, waiting: 6시간 이상 24시간 미만, overdue: 생성 후 24시간 경과
+ */
+export function laneStats(cases: CaseSummary[], now = Date.now()) {
+  let oldestHours: number | null = null
+  let fresh = 0
+  let waiting = 0
+  let overdue = 0
+  for (const c of cases) {
+    if (c.status === 'CLOSED') continue
+    const exact = Math.max(0, now - created(c)) / 3_600_000
+    const hours = Math.floor(exact)
+    if (oldestHours === null || hours > oldestHours) oldestHours = hours
+    if (slaState(c.createdAt, c.status, now)?.exceeded) overdue++
+    else if (exact >= 6) waiting++
+    else fresh++
+  }
+  return { oldestHours, fresh, waiting, overdue }
+}
+
+/** 기다린 시간 문구 — 48시간까지는 시간, 그 뒤로는 "14일 22시간"처럼 일 단위 */
+export function durationLabel(hours: number) {
+  if (hours < 1) return '1시간 미만'
+  const whole = Math.floor(hours)
+  if (whole < 48) return `${whole}시간`
+  const days = Math.floor(whole / 24)
+  const rest = whole % 24
+  return rest === 0 ? `${days}일` : `${days}일 ${rest}시간`
+}
+
+export const priorityReasonLabel: Record<PriorityReason, string> = {
+  ACTION_FAILED: '금융 처리 실패',
+  SLA_EXCEEDED: `생성 후 ${SLA_HOURS}시간 경과`,
+  DECISION_PENDING: '판정 대기',
+  OTHER: '가장 오래 기다림',
+}
+
+/**
+ * 다음에 확인할 사건 (#759) — 확인 우선순 1위. 열 수 있는 사건(canOpen)만 고른다.
+ * 홈 "먼저 확인할 사건"과 같은 순서라 홈과 목록이 같은 사건을 가리킨다.
+ */
+export function nextCase(
+  cases: CaseSummary[],
+  canOpen: (c: CaseSummary) => boolean,
+  now = Date.now(),
+) {
+  const first = sortCases(
+    cases.filter((c) => c.status !== 'CLOSED' && canOpen(c)),
+    'priority',
+    now,
+  )[0]
+  return first ? { caseId: first.caseId, reason: priorityReason(first, now) } : null
+}
+
+/**
+ * 흐름 보드 레인 폭 (#759) — 사건이 많은 레인이 더 넓게 가져간다. 제곱근으로 줄여 한 레인이 다 차지하지 않게 하고,
+ * 빈 레인도 1칸 몫(최소 폭)은 남긴다. CSS grid-template-columns 값이다
+ */
+export function laneColumns(counts: number[], minWidth = 168) {
+  return counts
+    .map((count) => `minmax(${minWidth}px, ${Math.max(1, Math.sqrt(count)).toFixed(2)}fr)`)
+    .join(' ')
 }
