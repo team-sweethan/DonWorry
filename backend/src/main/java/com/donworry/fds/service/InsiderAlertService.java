@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -68,6 +69,12 @@ public class InsiderAlertService
     public List<Long> accessEventIds(Collection<Long> alertIds) {
         if (alertIds.isEmpty()) return List.of();
         return evidence.findAccessEventIdsOf(alertIds);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Instant> firstEventAt(Long alertId) {
+        return alerts.findById(alertId).map(InsiderAlert::getFirstEventAt);
     }
 
     // 주의 경보는 사건을 열지 않으므로 뺀다 — 알림을 보내는 조건(isRaisedToOthers)과 같다

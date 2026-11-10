@@ -53,8 +53,7 @@ public class InsiderReportService {
 
     // 판 번호 충돌 재시도 상한 — 한 사건의 계기는 둘뿐이라 두 번이면 충분하고, 여유를 하나 둔다
     static final int MAX_SAVE_ATTEMPTS = 3;
-    // INS-10 로그인 사실 (#770) — 경보 직전 성공 로그인을 찾는 범위 · 평소 브라우저 기간(탐지 ins10-lookback 기본값) · 로그인 전 실패를 세는 범위
-    static final Duration LOGIN_BEFORE_ALERT = Duration.ofHours(1);
+    // INS-10 로그인 사실 (#770) — 평소 브라우저 기간(탐지 ins10-lookback 기본값) · 로그인 전 실패를 세는 범위
     static final Duration USUAL_LOGIN_LOOKBACK = Duration.ofDays(30);
     static final Duration FAILURE_LOOKBACK = Duration.ofHours(1);
 
@@ -165,7 +164,8 @@ public class InsiderReportService {
                 now);
     }
 
-    // SEC-INS-10 로그인 사실 (#770) — 경보가 열린 시각 직전의 성공 로그인을 탈취 의심 로그인으로 본다(INS-10 경보에는 근거 기록이 없다)
+    // SEC-INS-10 로그인 사실 (#770) — 경보가 탐지한 로그인(경보의 첫 기록 시각과 같은 시각의 성공 로그인)을 탈취 의심 로그인으로 본다.
+    // 경보 처리 시각(raisedAt) 직전 로그인을 고르면 처리가 늦어진 사이 다시 들어온 로그인이 잡힌다 (#777 Codex 리뷰)
     // INS-10이 없거나 그 로그인을 찾지 못하면 null — 사실 묶음을 넣지 않는다
     private InsiderReportFacts.LoginAttack loginAttack(Long staffId, List<InsiderCaseAlert> alerts, Instant now) {
         InsiderCaseAlert suspected = alerts.stream()
@@ -173,12 +173,12 @@ public class InsiderReportService {
                 .findFirst()
                 .orElse(null);
         if (suspected == null) return null;
-        Instant raisedAt = suspected.getRaisedAt();
-        StaffLoginEvent login =
-                loginReader.findLoginEvents(staffId, raisedAt.minus(LOGIN_BEFORE_ALERT), raisedAt).stream()
-                        .filter(event -> event.eventType() == StaffLoginEventType.LOGIN_SUCCESS)
-                        .reduce((earlier, later) -> later)
-                        .orElse(null);
+        Instant detectedAt = evidenceReader.firstEventAt(suspected.getAlertId()).orElse(null);
+        if (detectedAt == null) return null;
+        StaffLoginEvent login = loginReader.findLoginEvents(staffId, detectedAt, detectedAt).stream()
+                .filter(event -> event.eventType() == StaffLoginEventType.LOGIN_SUCCESS)
+                .findFirst()
+                .orElse(null);
         if (login == null) return null;
         Instant loginAt = login.occurredAt();
         List<String> usualDevices =
