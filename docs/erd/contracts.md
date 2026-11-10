@@ -158,6 +158,10 @@ login_id는 복제 저장하지 않고 같은 트랜잭션에서 읽은 DB 계�
 
 `fds_blocklist_entries`는 차단 등록 사유와 함께 해제 사유(`deactivation_reason`)·해제 시각(`deactivated_at`)을 보존한다. 재등록하면 기존 해제 이력은 현재 활성 차단 상태와 혼동되지 않도록 NULL로 되돌린다.
 
+### 계정 접근 이상 탐지 확인
+
+`fds_operator_access_detections.reviewed_at`은 관리자가 고위험 탐지 상세를 처음 열어 근거를 확인한 UTC 시각이다. NULL인 탐지만 관리자 사이드바의 확인 필요 배지에 포함한다. 상세 재열람은 기존 시각을 바꾸지 않으며, 자동 정지와 계정 활성 상태에는 영향을 주지 않는다.
+
 ## P3 investigation
 
 ### #608 P3 FDS 사건 자동 배정과 담당 변경 (2026-11-06)

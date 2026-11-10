@@ -214,6 +214,7 @@ public class OperatorAccessDetectionQueryService {
                 "HIGH",
                 value.getEventCount(),
                 value.getActionStatus(),
+                value.getReviewedAt(),
                 value.getOccurredAt(),
                 null);
     }
@@ -233,6 +234,7 @@ public class OperatorAccessDetectionQueryService {
                 "LOW",
                 value.getEventCount(),
                 "NONE",
+                null,
                 value.getOccurredAt(),
                 null);
     }
@@ -285,6 +287,18 @@ public class OperatorAccessDetectionQueryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "탐지 기록을 찾을 수 없습니다."));
         return OperatorAccessDetectionResponses.Detail.from(
                 detection, evidences.findByDetectionIdOrderByOccurredAtAsc(detectionId));
+    }
+
+    @Transactional
+    public void review(Long detectionId) {
+        if (detections.reviewIfUnreviewed(detectionId, Instant.now()) == 0 && !detections.existsById(detectionId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "탐지 기록을 찾을 수 없습니다.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public long unreviewedCount() {
+        return detections.countByReviewedAtIsNull();
     }
 
     @Transactional(readOnly = true)

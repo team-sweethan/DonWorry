@@ -103,6 +103,7 @@ const signal = (actionStatus: string): OperatorAccessDetection => ({
   riskLevel: 'HIGH',
   eventCount: 5,
   actionStatus,
+  reviewedAt: null,
   occurredAt: '2026-11-10T00:00:00Z',
   blockedPath: null,
 })

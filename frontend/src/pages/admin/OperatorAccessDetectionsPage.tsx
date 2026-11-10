@@ -76,7 +76,14 @@ function DetectionRow({
           <strong>{value.eventCount}</strong>회
         </span>
         <span className="oad-row-action">
-          <Tag color={action.color}>{action.label}</Tag>
+          <span className="oad-row-statuses">
+            <Tag color={action.color}>{action.label}</Tag>
+            {value.riskLevel === 'HIGH' && (
+              <Tag color={value.reviewedAt ? 'green' : 'red'}>
+                {value.reviewedAt ? '확인됨' : '미확인'}
+              </Tag>
+            )}
+          </span>
           {action.color === 'red' && <span className="oad-row-attention">직접 확인 필요</span>}
         </span>
       </Link>

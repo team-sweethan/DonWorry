@@ -316,7 +316,7 @@ export function AdminHomePage() {
         { label: '내부자 사건', to: '/admin/insider-cases', count: insiderCases, urgent: true },
         { label: '내부자 경보', to: '/admin/insider-alerts', count: insiderAlerts, urgent: true },
         {
-          label: '자동 정지된 사장님 계정',
+          label: '미확인 고위험 접근 탐지',
           to: accessPath,
           count: useOperatorAccessCount(),
           urgent: true,

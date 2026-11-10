@@ -38,7 +38,6 @@ import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListSearch } from '../../components/common/ListSearch'
 import { PageHeader } from '../../components/common/PageHeader'
 import { useAuth } from '../../auth/useAuth'
-import { refreshOperatorAccessBadge } from '../../hooks/useOperatorAccessBadge'
 import { LoginHistoryTable } from '../auth/LoginHistoryPage'
 import {
   adminUserListParams,
@@ -518,8 +517,6 @@ export function AdminUserDetailPage() {
         if (action === 'permissions') await setUserPermissions(userId, selected)
         else {
           await setUserStatus(userId, user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
-          // 자동 정지된 사장님을 다시 켜거나 끄면 계정 접근 이상 탐지 배지 수가 바뀐다
-          if (user.role === 'OPERATOR') refreshOperatorAccessBadge()
         }
         setRevision((value) => value + 1)
       }

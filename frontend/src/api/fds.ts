@@ -1,10 +1,4 @@
-import { getUsers } from './adminAccounts.ts'
 import { api } from './client.ts'
-import {
-  autoSuspendedLoginIds,
-  countStillSuspended,
-  readAllPages,
-} from '../utils/autoSuspendedOperators.ts'
 
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
@@ -151,6 +145,8 @@ export type OperatorAccessDetection = {
   riskLevel: 'HIGH' | 'LOW'
   eventCount: number
   actionStatus: string
+  /** 고위험 탐지 상세를 처음 열어 확인한 시각 — 저위험은 null */
+  reviewedAt: string | null
   occurredAt: string
   /** 막힌 경로 "GET /api/admin/users" — 없으면 null */
   blockedPath: string | null
@@ -377,25 +373,9 @@ export function getOperatorAccessAccounts(
   )
 }
 
-/**
- * 탐지로 자동 정지된 뒤 아직 정지(INACTIVE) 상태인 사장님 계정 수 — 계정 접근 이상 탐지 배지.
- * 두 목록 모두 마지막 쪽까지 읽는다. 탐지 목록은 서버 최대 쪽 크기(100)로 요청 수를 줄인다
- */
-export async function getAutoSuspendedOperatorCount() {
-  const groups = await readAllPages(async (page) => {
-    const result = await getOperatorAccessAccounts(page, 'HIGH', '', '', '', 100)
-    return { items: result.content, last: page + 1 >= result.totalPages }
-  })
-  const suspended = autoSuspendedLoginIds(groups)
-  if (suspended.size === 0) return 0
-  const inactive = await readAllPages(async (page) => {
-    const result = await getUsers(page, '', 'OPERATOR', 'INACTIVE')
-    return {
-      items: result.items.map((user) => user.loginId),
-      last: (page + 1) * result.size >= result.totalElements,
-    }
-  })
-  return countStillSuspended(suspended, inactive)
+/** 아직 상세를 열어 확인하지 않은 고위험 계정 접근 탐지 수 — 관리자 사이드바 배지. */
+export function getUnreviewedOperatorAccessDetectionCount() {
+  return api<number>('/fds/operator-access-detections/unreviewed-count', { cache: 'no-store' })
 }
 
 export function getOperatorAccessSummary() {
@@ -408,6 +388,11 @@ export function getOperatorAccessDetection(detectionId: number) {
   return api<OperatorAccessDetectionDetail>(`/fds/operator-access-detections/${detectionId}`, {
     cache: 'no-store',
   })
+}
+
+/** 고위험 탐지 상세를 열면 확인 시각만 기록한다. 계정 자동 정지 상태에는 영향을 주지 않는다. */
+export function reviewOperatorAccessDetection(detectionId: number) {
+  return api<void>(`/fds/operator-access-detections/${detectionId}/review`, { method: 'POST' })
 }
 
 export function getLowRiskOperatorAccessDetection(eventId: number) {

@@ -7,6 +7,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +45,11 @@ public class OperatorAccessDetectionController {
         return service.summary();
     }
 
+    @GetMapping("/unreviewed-count")
+    public long unreviewedCount() {
+        return service.unreviewedCount();
+    }
+
     @GetMapping("/rule-catalog")
     public List<FdsRuleCatalogEntry> ruleCatalog() {
         return service.ruleCatalog();
@@ -57,5 +63,10 @@ public class OperatorAccessDetectionController {
     @GetMapping("/{detectionId}")
     public OperatorAccessDetectionResponses.Detail detail(@PathVariable Long detectionId) {
         return service.detail(detectionId);
+    }
+
+    @PostMapping("/{detectionId}/review")
+    public void review(@PathVariable Long detectionId) {
+        service.review(detectionId);
     }
 }
