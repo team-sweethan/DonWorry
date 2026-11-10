@@ -15,5 +15,7 @@ public interface OperatorAccessHighRiskSignalProjection {
 
     String getActionStatus();
 
+    Instant getReviewedAt();
+
     Instant getOccurredAt();
 }

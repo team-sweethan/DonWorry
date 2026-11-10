@@ -67,6 +67,9 @@ public class OperatorAccessDetection {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
     @Builder(access = AccessLevel.PRIVATE)
     private OperatorAccessDetection(
             Long userId,
@@ -129,5 +132,9 @@ public class OperatorAccessDetection {
         this.failureCode = failureCode;
         this.actionCompletedAt = completedAt;
         this.updatedAt = completedAt;
+    }
+
+    public void review(Instant reviewedAt) {
+        if (this.reviewedAt == null) this.reviewedAt = reviewedAt;
     }
 }

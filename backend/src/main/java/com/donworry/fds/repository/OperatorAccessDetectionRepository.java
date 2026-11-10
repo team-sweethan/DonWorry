@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface OperatorAccessDetectionRepository extends JpaRepository<OperatorAccessDetection, Long> {
+    long countByReviewedAtIsNull();
+
     List<OperatorAccessDetection> findByDetectedAtGreaterThanEqual(Instant detectedAt);
 
     List<OperatorAccessDetection> findTop100ByActionStatusOrderByDetectedAtAsc(
@@ -20,6 +22,7 @@ public interface OperatorAccessDetectionRepository extends JpaRepository<Operato
                    detection.rule_code AS ruleCode,
                    detection.event_count AS eventCount,
                    detection.action_status AS actionStatus,
+                   detection.reviewed_at AS reviewedAt,
                    detection.detected_at AS occurredAt
             FROM fds_operator_access_detections detection
             """, nativeQuery = true)

@@ -5,8 +5,10 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   getLowRiskOperatorAccessDetection,
   getOperatorAccessDetection,
+  reviewOperatorAccessDetection,
   type OperatorAccessDetectionDetail,
 } from '../../api/fds'
+import { refreshOperatorAccessBadge } from '../../hooks/useOperatorAccessBadge'
 import { getMerchantDirectory } from '../../api/merchants'
 import { ListEmpty } from '../../components/common/ListEmpty'
 import { ListLoading } from '../../components/common/ListLoading'
@@ -79,6 +81,11 @@ export function OperatorAccessDetectionDetailPage() {
         setError(false)
         setMerchantName(null)
         setResult(detail)
+        if (!isLowRisk) {
+          void reviewOperatorAccessDetection(sourceId)
+            .then(refreshOperatorAccessBadge)
+            .catch(() => undefined)
+        }
         if (merchantId === null) return
         void getMerchantDirectory()
           .then((merchants) => {

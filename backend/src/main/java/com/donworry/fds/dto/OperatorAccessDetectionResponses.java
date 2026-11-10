@@ -19,6 +19,7 @@ public final class OperatorAccessDetectionResponses {
             String riskLevel,
             int eventCount,
             String actionStatus,
+            Instant reviewedAt,
             Instant occurredAt,
             String blockedPath) {
         /** 목록 한 쪽에 들어간 줄만 막힌 경로("GET /api/admin/users")를 채운다 */
@@ -33,6 +34,7 @@ public final class OperatorAccessDetectionResponses {
                     riskLevel,
                     eventCount,
                     actionStatus,
+                    reviewedAt,
                     occurredAt,
                     value);
         }

@@ -2,6 +2,7 @@ package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 import com.donworry.fds.entity.OperatorAccessDeniedType;
 import com.donworry.fds.entity.OperatorAccessDetection;
@@ -120,6 +121,38 @@ class OperatorAccessDetectionQueryServiceTests {
 
         assertThat(result.content()).extracting(value -> value.detectionId()).containsExactly(11L, 10L);
         assertThat(result.highRiskCount()).isEqualTo(2);
+    }
+
+    // 고위험 탐지 상세를 처음 열면 확인 시각을 기록해 사이드바 배지에서 빠진다.
+    @Test
+    void review_existingDetection_marksItReviewed() {
+        given(detections.findById(10L)).willReturn(java.util.Optional.of(detection));
+
+        queryService().review(10L);
+
+        verify(detection).review(org.mockito.ArgumentMatchers.any(Instant.class));
+    }
+
+    // 배지는 검토 시각이 비어 있는 고위험 탐지만 서버에서 센다.
+    @Test
+    void unreviewedCount_returnsRepositoryCount() {
+        given(detections.countByReviewedAtIsNull()).willReturn(3L);
+
+        assertThat(queryService().unreviewedCount()).isEqualTo(3L);
+    }
+
+    @Test
+    void list_highRiskSignal_includesItsReviewTimestamp() {
+        var reviewedAt = Instant.parse("2026-11-05T02:30:00Z");
+        var signal = highRiskSignal(10L, Instant.parse("2026-11-05T01:00:00Z"));
+        given(signal.getReviewedAt()).willReturn(reviewedAt);
+        given(merchants.findAll()).willReturn(List.of());
+        given(detections.findLatestSignals()).willReturn(List.of(signal));
+        given(events.findLatestLowRiskSignals()).willReturn(List.of());
+
+        var result = queryService().list("HIGH", null, null, null, 0, 20);
+
+        assertThat(result.content()).extracting(value -> value.reviewedAt()).containsExactly(reviewedAt);
     }
 
     // 목록 줄의 막힌 경로는 근거 요청 중 가장 많이 막힌 경로로 채운다 (한 번의 집계로).
@@ -262,6 +295,7 @@ class OperatorAccessDetectionQueryServiceTests {
         given(signal.getRuleCode()).willReturn(ruleCode);
         given(signal.getEventCount()).willReturn(5);
         given(signal.getActionStatus()).willReturn("COMPLETED");
+        given(signal.getReviewedAt()).willReturn(null);
         given(signal.getOccurredAt()).willReturn(occurredAt);
         return signal;
     }
