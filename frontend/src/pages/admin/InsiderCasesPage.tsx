@@ -41,7 +41,7 @@ import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
 import { AgeStamp } from './AgeStamp'
-import { EvidenceLog, SeverityMark, StaffLink, StatusMark } from './InsiderParts'
+import { EvidenceLog, RuleCell, SeverityMark, StaffLink, StatusMark } from './InsiderParts'
 import { InsiderReportsPanel } from './InsiderReportsPanel'
 import { waitAge } from './insiderView'
 import './InsiderCasesPage.css'
@@ -370,9 +370,14 @@ export function InsiderCaseDrawer({
                         columns={[
                           { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
                           {
-                            ...oneLine,
                             title: '규칙',
-                            render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
+                            onHeaderCell: oneLine.onHeaderCell,
+                            render: (_, row) => (
+                              <RuleCell
+                                code={displayRuleCode(row.ruleCode)}
+                                label={row.ruleLabel}
+                              />
+                            ),
                           },
                           {
                             ...oneLine,
@@ -380,7 +385,12 @@ export function InsiderCaseDrawer({
                             dataIndex: 'severity',
                             render: (value: InsiderAlertSeverity) => <SeverityMark value={value} />,
                           },
-                          { title: '내용', dataIndex: 'summary', render: displayRuleText },
+                          {
+                            title: '내용',
+                            dataIndex: 'summary',
+                            onCell: () => ({ style: { minWidth: 220 } }),
+                            render: displayRuleText,
+                          },
                         ]}
                       />
                       <Typography.Text type="secondary">

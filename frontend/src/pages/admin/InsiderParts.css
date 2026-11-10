@@ -100,3 +100,18 @@
 .ip-status.is-quiet {
   color: #64748b;
 }
+
+/* 경보 표 규칙 칸 (#770) — 코드는 한 줄, 이름은 줄바꿈. 내용 칸이 한 글자 폭으로 눌리지 않게 폭을 정한다 */
+.ip-rule {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  max-width: 220px;
+}
+.ip-rule strong {
+  white-space: nowrap;
+}
+.ip-rule span {
+  color: #475569;
+  font-size: var(--dw-text-caption);
+}

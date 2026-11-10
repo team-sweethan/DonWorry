@@ -13,6 +13,16 @@ import { accessLabel, denyLabel, fieldLabel, monitorPath, severityView } from '.
 import './InsiderParts.css'
 
 /** 등급 — 바탕 없는 원 아이콘 + 글자. 주의 노랑(테두리) · 높음 주황(테두리) · 위험 빨강(채움) */
+/** 경보 표의 규칙 칸 — 코드는 한 줄, 이름은 다음 줄에서 줄바꿈된다. 긴 이름이 내용 칸을 밀어내지 않게 (#770) */
+export function RuleCell({ code, label }: { code: string; label: string }) {
+  return (
+    <span className="ip-rule">
+      <strong>{code}</strong>
+      <span>{label}</span>
+    </span>
+  )
+}
+
 export function SeverityMark({ value }: { value: InsiderAlertSeverity }) {
   return (
     <span className={`ip-severity is-${value.toLowerCase()}`}>
