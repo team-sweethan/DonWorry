@@ -6,6 +6,7 @@ import com.donworry.fds.api.InsiderAlertEvidenceReader;
 import com.donworry.fds.api.InsiderAlertMonitorReader;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
+import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.dto.CloseInsiderAlertRequest;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
 import com.donworry.fds.dto.InsiderAlertEvidenceResponse;
@@ -99,6 +100,16 @@ public class InsiderAlertService
     @Transactional(readOnly = true)
     public List<InsiderAlertEntry> findAlerts(Long staffId, Instant from, Instant to) {
         return alerts.findTouchedBetween(staffId, from, to).stream()
+                .map(InsiderAlertService::toEntry)
+                .toList();
+    }
+
+    // 로그인 보안 대시보드 (#770) — ADMIN 확인은 부르는 쪽(P3)이 한다
+    @Override
+    @Transactional(readOnly = true)
+    public List<InsiderAlertEntry> findAlertsOpenedBetween(Collection<InsiderRule> rules, Instant from, Instant to) {
+        if (rules.isEmpty()) return List.of();
+        return alerts.findByRuleCodeInAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(rules, from, to).stream()
                 .map(InsiderAlertService::toEntry)
                 .toList();
     }

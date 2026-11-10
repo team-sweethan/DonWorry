@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long> {
     Page<LoginHistory> findByUserIdAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
@@ -41,6 +42,46 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long
 
     long countByEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
             LoginEventType eventType, LocalDateTime from, LocalDateTime to);
+
+    // 로그인 보안 대시보드 (#770, LoginTrafficReader) — (from, to] 없는 아이디로 실패한 수
+    long countByUserIdIsNullAndEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
+            LoginEventType eventType, LocalDateTime from, LocalDateTime to);
+
+    // [from, to) 분마다 시도(성공 + 실패) · 실패 · 없는 아이디 실패 수. 시각은 UTC 문자열로 받아 접속 시간대 변환을 피한다
+    @Query(
+            value = "SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d %H:%i:00') AS minuteStart,"
+                    + " COUNT(*) AS attempts,"
+                    + " CAST(SUM(event_type = 'LOGIN_FAILURE') AS SIGNED) AS failures,"
+                    + " CAST(SUM(event_type = 'LOGIN_FAILURE' AND user_id IS NULL) AS SIGNED) AS unknownAccountFailures"
+                    + " FROM login_histories"
+                    + " WHERE occurred_at >= CAST(:from AS DATETIME(6)) AND occurred_at < CAST(:to AS DATETIME(6))"
+                    + " AND event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE')"
+                    + " GROUP BY minuteStart ORDER BY minuteStart",
+            nativeQuery = true)
+    List<LoginMinuteCount> countPerMinute(@Param("from") String from, @Param("to") String to);
+
+    interface LoginMinuteCount {
+        String getMinuteStart();
+
+        Long getAttempts();
+
+        Long getFailures();
+
+        Long getUnknownAccountFailures();
+    }
+
+    // (from, to] 보안 직원 로그인 성공 · 실패, 최근 것부터 (Pageable로 개수 제한)
+    @Query("""
+            SELECT h FROM LoginHistory h, PlatformUser u
+            WHERE u.userId = h.userId
+              AND u.role = com.donworry.identity.entity.UserRole.SECURITY_STAFF
+              AND h.eventType IN (com.donworry.identity.entity.LoginEventType.LOGIN_SUCCESS,
+                                  com.donworry.identity.entity.LoginEventType.LOGIN_FAILURE)
+              AND h.occurredAt > :from AND h.occurredAt <= :to
+            ORDER BY h.occurredAt DESC, h.historyId DESC
+            """)
+    List<LoginHistory> findSecurityStaffLogins(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, Pageable pageable);
 
     @Modifying
     @Query(

@@ -1,5 +1,6 @@
 package com.donworry.identity.service;
 
+import com.donworry.identity.api.LoginAttackCriteria;
 import com.donworry.identity.api.StaffLoginUnderAttack;
 import com.donworry.identity.entity.LoginEventType;
 import com.donworry.identity.entity.UserRole;
@@ -32,9 +33,7 @@ public class LoginAttackCheck {
     private final ApplicationEventPublisher events;
     private final TransactionTemplate separateTransaction;
     private final Clock clock;
-    private final Duration window;
-    private final long minAttempts;
-    private final double failureRatio;
+    private final LoginAttackCriteria criteria;
 
     public LoginAttackCheck(
             LoginHistoryRepository histories,
@@ -50,9 +49,12 @@ public class LoginAttackCheck {
         this.separateTransaction = new TransactionTemplate(transactions);
         this.separateTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.clock = clock;
-        this.window = window;
-        this.minAttempts = minAttempts;
-        this.failureRatio = failureRatio;
+        this.criteria = new LoginAttackCriteria(window, minAttempts, failureRatio);
+    }
+
+    // 대시보드(LoginTrafficReader)가 같은 기준을 보여 준다
+    public LoginAttackCriteria criteria() {
+        return criteria;
     }
 
     // 로그인 이력을 남긴 뒤 부른다. 집계 · 알림이 실패해도 로그인은 성공시킨다(예외를 밖으로 내지 않음)
@@ -71,13 +73,13 @@ public class LoginAttackCheck {
     private void check(SessionUser user) {
         var now = clock.instant();
         var to = LocalDateTime.ofInstant(now, ZoneOffset.UTC);
-        var from = to.minus(window);
+        var from = to.minus(criteria.window());
         long attempts =
                 histories.countByEventTypeInAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(ATTEMPTS, from, to);
-        if (attempts < minAttempts) return;
+        if (attempts < criteria.minAttempts()) return;
         long failures = histories.countByEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
                 LoginEventType.LOGIN_FAILURE, from, to);
-        if ((double) failures / attempts < failureRatio) return;
+        if (!criteria.isUnderAttack(attempts, failures)) return;
         log.warn("로그인 공격 경계 중 보안 직원 로그인 userId={} attempts={} failures={}", user.userId(), attempts, failures);
         events.publishEvent(StaffLoginUnderAttack.builder()
                 .staffId(user.userId())

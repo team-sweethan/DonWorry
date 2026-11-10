@@ -52,6 +52,10 @@ public interface InsiderAlertRepository extends Repository<InsiderAlert, Long> {
     // 탐지 룰 목록의 최근 7일 적중 (#685) — 그 기간에 새로 열린 경보. 같은 경보가 갱신된 것은 다시 세지 않는다
     List<InsiderAlert> findByCreatedAtGreaterThanEqual(Instant from);
 
+    // 로그인 보안 대시보드 (#770) — 이 규칙들 경보 중 [from, to]에 열린 것, 최근 것부터
+    List<InsiderAlert> findByRuleCodeInAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(
+            Collection<InsiderRule> rules, Instant from, Instant to);
+
     // 내부자 관제 타임라인 (#679) — 기간 안에 열렸거나 닫힌 경보
     @Query("""
             SELECT a FROM InsiderAlert a
