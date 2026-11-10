@@ -10,6 +10,8 @@ export type NavBadge =
   | 'rawViewReviews'
   | 'insiderAlerts'
   | 'insiderCases'
+  | 'operatorAccessSuspensions'
+  | 'merchantApplications'
 /** 한 메뉴 안에서 본문 위 탭으로 나눠 보는 화면 (ADR-0082 8절). 주소는 화면마다 그대로 둔다. */
 export type NavTab = { label: string; path: string; badge?: NavBadge }
 /** tabs가 있으면 path는 첫 탭 주소이고, 메뉴 배지는 탭 배지의 합이다. */
@@ -80,7 +82,8 @@ export const adminNavigation = {
     {
       title: '가맹점 관리',
       items: [
-        { label: '이용 신청', path: '/admin/applications' },
+        // 배지는 이메일 확인이 끝나 검토를 기다리는 신청 수
+        { label: '이용 신청', path: '/admin/applications', badge: 'merchantApplications' },
         { label: '가맹점 목록', path: '/admin/merchants' },
       ],
     },
@@ -119,8 +122,12 @@ export const adminNavigation = {
             { label: '사건', path: '/admin/insider-cases', badge: 'insiderCases' },
           ],
         },
-        // 사장님 계정 403 탐지 (#515)
-        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
+        // 사장님 계정 403 탐지 (#515). 배지는 자동 정지 뒤 아직 정지 상태인 사장님 계정 수
+        {
+          label: '계정 접근 이상 탐지',
+          path: '/admin/fds/operator-access-detections',
+          badge: 'operatorAccessSuspensions',
+        },
       ],
     },
     {

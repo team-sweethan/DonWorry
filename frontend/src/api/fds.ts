@@ -1,4 +1,10 @@
+import { getUsers } from './adminAccounts.ts'
 import { api } from './client.ts'
+import {
+  autoSuspendedLoginIds,
+  countStillSuspended,
+  readAllPages,
+} from '../utils/autoSuspendedOperators.ts'
 
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
@@ -363,11 +369,33 @@ export function getOperatorAccessAccounts(
   search = '',
   rule = '',
   loginId = '',
+  size = 10,
 ) {
   return api<OperatorAccessAccountPage>(
-    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
+    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: String(size), risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
+}
+
+/**
+ * 탐지로 자동 정지된 뒤 아직 정지(INACTIVE) 상태인 사장님 계정 수 — 계정 접근 이상 탐지 배지.
+ * 두 목록 모두 마지막 쪽까지 읽는다. 탐지 목록은 서버 최대 쪽 크기(100)로 요청 수를 줄인다
+ */
+export async function getAutoSuspendedOperatorCount() {
+  const groups = await readAllPages(async (page) => {
+    const result = await getOperatorAccessAccounts(page, 'HIGH', '', '', '', 100)
+    return { items: result.content, last: page + 1 >= result.totalPages }
+  })
+  const suspended = autoSuspendedLoginIds(groups)
+  if (suspended.size === 0) return 0
+  const inactive = await readAllPages(async (page) => {
+    const result = await getUsers(page, '', 'OPERATOR', 'INACTIVE')
+    return {
+      items: result.items.map((user) => user.loginId),
+      last: (page + 1) * result.size >= result.totalElements,
+    }
+  })
+  return countStillSuspended(suspended, inactive)
 }
 
 export function getOperatorAccessSummary() {

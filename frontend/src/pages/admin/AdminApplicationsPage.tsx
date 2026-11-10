@@ -38,6 +38,7 @@ import {
   reviewError,
   reviewMailMessage,
 } from '../../api/adminApplications'
+import { refreshApplicationReviewBadge } from '../../hooks/useApplicationReviewBadge'
 import type {
   ApplicationPage,
   ApplicationStatus,
@@ -417,6 +418,8 @@ function ApplicationDetail({ id }: { id: string | undefined }) {
           ? await approveApplication(Number(id), confirmation.input)
           : await rejectApplication(Number(id), confirmation.reason)
       setReviewResult(outcome)
+      // 승인 · 반려하면 검토 대기가 줄어 사이드바 배지를 다시 센다
+      refreshApplicationReviewBadge()
       setFeedback({ warning: outcome.mailStatus !== 'SENT', message: reviewMailMessage(outcome) })
       setConfirmation(null)
       reload()
