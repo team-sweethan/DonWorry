@@ -177,7 +177,7 @@ public class PaymentSession {
         this.submittedAt = PaymentStorageValues.micros(now);
     }
 
-    // 지금은 없는 카드(C · D, #582)로 고정만 되고 접수되지 않은 시도의 카드만 바꾼다. 기기 · IP · 고정 시각은 그대로.
+    // 지금은 없는 카드(C · D, #582 · 누리카드 1173인 B, #766)로 고정만 되고 접수되지 않은 시도의 카드만 바꾼다. 기기 · IP · 고정 시각은 그대로.
     // 접수 여부는 호출하는 쪽이 잠금 안에서 확인한다
     public void replaceRemovedCard(String card) {
         this.submittedCard = Objects.requireNonNull(card, "card");
