@@ -8,21 +8,26 @@ import type { InsiderAlertSeverity } from './insiderAlerts.ts'
  */
 export type LoginSecurityState = 'NORMAL' | 'CAUTION' | 'UNDER_ATTACK'
 
-/** 1분 막대 하나 — 시도 없는 분도 0으로 온다 */
-export type LoginSecurityMinute = {
-  minuteStart: string
+/** 꺾은선 한 점 — start부터 bucketSeconds 동안. 시도 없는 칸도 0으로 온다 */
+export type LoginSecurityBucket = {
+  start: string
   attempts: number
   failures: number
   unknownAccountFailures: number
 }
 
-/** 보안 직원 로그인 한 줄 — 브라우저 · 운영체제 이름만, IP 없음 */
-export type LoginSecurityStaffLogin = {
-  staffId: number
-  staffName: string | null
-  eventType: 'LOGIN_SUCCESS' | 'LOGIN_FAILURE'
+export type LoginAttemptAccount = 'UNKNOWN' | 'SECURITY_STAFF' | 'ADMIN' | 'OPERATOR'
+
+/** 실시간 시도 한 줄 — 보안 직원만 이름이 온다. IP · 시도한 아이디 없음 */
+export type LoginSecurityAttempt = {
   occurredAt: string
+  success: boolean
+  account: LoginAttemptAccount
+  staffId: number | null
+  staffName: string | null
   device: string
+  /** 이 성공 로그인 직후 같은 직원에게 SEC-INS-10이 열림 */
+  suspected: boolean
 }
 
 /** SEC-INS-10 · SEC-INS-05 경보. insiderCaseId는 그 직원의 열린 내부자 사건 */
@@ -51,8 +56,10 @@ export type LoginSecurityDashboard = {
   recentFailureRatePercent: number
   /** 최근 24시간 SEC-INS-10 */
   suspectedTakeoverCount: number
-  minutes: LoginSecurityMinute[]
-  staffLogins: LoginSecurityStaffLogin[]
+  bucketSeconds: number
+  buckets: LoginSecurityBucket[]
+  /** 최근 시도 최신순 */
+  attempts: LoginSecurityAttempt[]
   alerts: LoginSecurityAlert[]
 }
 

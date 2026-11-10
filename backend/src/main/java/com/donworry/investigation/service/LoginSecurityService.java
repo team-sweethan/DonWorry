@@ -4,22 +4,22 @@ import com.donworry.fds.api.InsiderAlertEntry;
 import com.donworry.fds.api.InsiderAlertMonitorReader;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.LoginAttackCriteria;
+import com.donworry.identity.api.LoginAttempt;
+import com.donworry.identity.api.LoginTrafficBucket;
 import com.donworry.identity.api.LoginTrafficCount;
-import com.donworry.identity.api.LoginTrafficMinute;
 import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.investigation.dto.LoginSecurityAlertResponse;
-import com.donworry.investigation.dto.LoginSecurityMinuteResponse;
+import com.donworry.investigation.dto.LoginSecurityAttemptResponse;
+import com.donworry.investigation.dto.LoginSecurityBucketResponse;
 import com.donworry.investigation.dto.LoginSecurityResponse;
-import com.donworry.investigation.dto.LoginSecurityStaffLoginResponse;
 import com.donworry.investigation.dto.LoginSecurityState;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseStatus;
 import com.donworry.investigation.repository.InsiderCaseRepository;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,12 +35,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class LoginSecurityService {
-    // 1분 막대 개수 · 보안 직원 로그인 목록 범위 · 경보 목록 범위
-    static final int MINUTES = 15;
-    static final Duration STAFF_LOGIN_LOOKBACK = Duration.ofHours(1);
-    static final int MAX_STAFF_LOGINS = 50;
+    // 꺾은선 칸 길이(구간은 탐지 window) · 실시간 시도 줄 수와 범위 · 경보 목록 범위
+    static final Duration BUCKET = Duration.ofSeconds(10);
+    static final int MAX_ATTEMPTS = 40;
+    static final Duration ATTEMPT_LOOKBACK = Duration.ofMinutes(10);
     static final Duration ALERT_LOOKBACK = Duration.ofHours(24);
+    // 탈취 의심 경보는 로그인 몇 초 뒤(커밋 뒤 알림) 열린다 — 이 안이면 그 로그인 줄에 표시한다
+    static final Duration SUSPECT_MATCH = Duration.ofMinutes(2);
     private static final List<InsiderRule> LOGIN_RULES = List.of(InsiderRule.INS_10, InsiderRule.INS_05);
+    private static final String SECURITY_STAFF = "SECURITY_STAFF";
 
     private final SecurityStaffGuard guard;
     private final LoginTrafficReader traffic;
@@ -76,17 +79,11 @@ public class LoginSecurityService {
                 .suspectedTakeoverCount(alerts.stream()
                         .filter(a -> a.rule() == InsiderRule.INS_10)
                         .count())
-                .minutes(minutes(now))
-                .staffLogins(
-                        traffic.findSecurityStaffLogins(now.minus(STAFF_LOGIN_LOOKBACK), now, MAX_STAFF_LOGINS).stream()
-                                .map(e -> LoginSecurityStaffLoginResponse.builder()
-                                        .staffId(e.staffId())
-                                        .staffName(names.get(e.staffId()))
-                                        .eventType(e.eventType().name())
-                                        .occurredAt(e.occurredAt())
-                                        .device(e.device())
-                                        .build())
-                                .toList())
+                .bucketSeconds((int) BUCKET.toSeconds())
+                .buckets(buckets(now, criteria.window()))
+                .attempts(traffic.findRecentAttempts(now.minus(ATTEMPT_LOOKBACK), now, MAX_ATTEMPTS).stream()
+                        .map(a -> attempt(a, names, alerts))
+                        .toList())
                 .alerts(alerts.stream()
                         .map(a -> LoginSecurityAlertResponse.builder()
                                 .alertId(a.alertId())
@@ -117,6 +114,28 @@ public class LoginSecurityService {
                 .toList();
     }
 
+    // 보안 직원이 아닌 계정은 이름 없이 종류만 — 이 화면은 보안 직원 탈취를 보는 곳이다
+    private static LoginSecurityAttemptResponse attempt(
+            LoginAttempt a, Map<Long, String> names, List<InsiderAlertEntry> alerts) {
+        boolean staff = SECURITY_STAFF.equals(a.role());
+        boolean suspected = staff
+                && a.success()
+                && alerts.stream()
+                        .anyMatch(alert -> alert.rule() == InsiderRule.INS_10
+                                && alert.staffId().equals(a.userId())
+                                && !alert.createdAt().isBefore(a.occurredAt())
+                                && !alert.createdAt().isAfter(a.occurredAt().plus(SUSPECT_MATCH)));
+        return LoginSecurityAttemptResponse.builder()
+                .occurredAt(a.occurredAt())
+                .success(a.success())
+                .account(a.role() == null ? "UNKNOWN" : a.role())
+                .staffId(staff ? a.userId() : null)
+                .staffName(staff ? names.get(a.userId()) : null)
+                .device(a.device())
+                .suspected(suspected)
+                .build();
+    }
+
     // 주의는 화면 안내용이다 — 시도가 적을 때 오타 몇 번으로 띠가 바뀌지 않게 기준 시도 수의 절반부터 본다
     static LoginSecurityState state(LoginAttackCriteria criteria, LoginTrafficCount recent) {
         if (criteria.isUnderAttack(recent.attempts(), recent.failures())) return LoginSecurityState.UNDER_ATTACK;
@@ -127,20 +146,21 @@ public class LoginSecurityService {
                 : LoginSecurityState.NORMAL;
     }
 
-    // 지금 분을 포함한 최근 MINUTES개 분. 빈 분은 0으로 채운다
-    private List<LoginSecurityMinuteResponse> minutes(Instant now) {
-        Instant end = now.truncatedTo(ChronoUnit.MINUTES).plus(Duration.ofMinutes(1));
-        Instant start = end.minus(Duration.ofMinutes(MINUTES));
-        Map<Instant, LoginTrafficMinute> counted = traffic.countPerMinute(start, end).stream()
-                .collect(Collectors.toMap(LoginTrafficMinute::minuteStart, Function.identity()));
-        List<LoginSecurityMinuteResponse> result = new ArrayList<>(MINUTES);
-        for (Instant minute = start; minute.isBefore(end); minute = minute.plus(Duration.ofMinutes(1))) {
-            LoginTrafficMinute m = counted.get(minute);
-            result.add(LoginSecurityMinuteResponse.builder()
-                    .minuteStart(minute)
-                    .attempts(m == null ? 0 : m.attempts())
-                    .failures(m == null ? 0 : m.failures())
-                    .unknownAccountFailures(m == null ? 0 : m.unknownAccountFailures())
+    // 지금 칸을 포함해 탐지 구간(window)만큼 BUCKET 칸. 빈 칸은 0으로 채운다. 칸 경계는 10초 단위(UTC)에 맞춘다
+    private List<LoginSecurityBucketResponse> buckets(Instant now, Duration window) {
+        long step = BUCKET.toMillis();
+        Instant end = Instant.ofEpochMilli(Math.floorDiv(now.toEpochMilli(), step) * step + step);
+        Instant start = end.minus(window);
+        Map<Instant, LoginTrafficBucket> counted = traffic.countPerBucket(start, end, BUCKET).stream()
+                .collect(Collectors.toMap(LoginTrafficBucket::start, Function.identity(), (a, b) -> a));
+        List<LoginSecurityBucketResponse> result = new ArrayList<>();
+        for (Instant at = start; at.isBefore(end); at = at.plus(BUCKET)) {
+            LoginTrafficBucket b = counted.get(at);
+            result.add(LoginSecurityBucketResponse.builder()
+                    .start(at)
+                    .attempts(b == null ? 0 : b.attempts())
+                    .failures(b == null ? 0 : b.failures())
+                    .unknownAccountFailures(b == null ? 0 : b.unknownAccountFailures())
                     .build());
         }
         return result;

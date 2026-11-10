@@ -47,21 +47,25 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long
     long countByUserIdIsNullAndEventTypeAndOccurredAtGreaterThanAndOccurredAtLessThanEqual(
             LoginEventType eventType, LocalDateTime from, LocalDateTime to);
 
-    // [from, to) 분마다 시도(성공 + 실패) · 실패 · 없는 아이디 실패 수. 시각은 UTC 문자열로 받아 접속 시간대 변환을 피한다
+    // [from, to)를 bucketMicros 길이로 나눈 칸마다 시도(성공 + 실패) · 실패 · 없는 아이디 실패 수. bucket = from부터 몇 번째 칸인지
+    // 시각은 UTC 문자열로 받아 접속 시간대 변환을 피한다
     @Query(
-            value = "SELECT DATE_FORMAT(occurred_at, '%Y-%m-%d %H:%i:00') AS minuteStart,"
-                    + " COUNT(*) AS attempts,"
-                    + " CAST(SUM(event_type = 'LOGIN_FAILURE') AS SIGNED) AS failures,"
-                    + " CAST(SUM(event_type = 'LOGIN_FAILURE' AND user_id IS NULL) AS SIGNED) AS unknownAccountFailures"
-                    + " FROM login_histories"
-                    + " WHERE occurred_at >= CAST(:from AS DATETIME(6)) AND occurred_at < CAST(:to AS DATETIME(6))"
-                    + " AND event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE')"
-                    + " GROUP BY minuteStart ORDER BY minuteStart",
+            value =
+                    "SELECT CAST(FLOOR(TIMESTAMPDIFF(MICROSECOND, CAST(:from AS DATETIME(6)), occurred_at) / :bucketMicros)"
+                            + " AS SIGNED) AS bucket,"
+                            + " COUNT(*) AS attempts,"
+                            + " CAST(SUM(event_type = 'LOGIN_FAILURE') AS SIGNED) AS failures,"
+                            + " CAST(SUM(event_type = 'LOGIN_FAILURE' AND user_id IS NULL) AS SIGNED) AS unknownAccountFailures"
+                            + " FROM login_histories"
+                            + " WHERE occurred_at >= CAST(:from AS DATETIME(6)) AND occurred_at < CAST(:to AS DATETIME(6))"
+                            + " AND event_type IN ('LOGIN_SUCCESS', 'LOGIN_FAILURE')"
+                            + " GROUP BY bucket ORDER BY bucket",
             nativeQuery = true)
-    List<LoginMinuteCount> countPerMinute(@Param("from") String from, @Param("to") String to);
+    List<LoginBucketCount> countPerBucket(
+            @Param("from") String from, @Param("to") String to, @Param("bucketMicros") long bucketMicros);
 
-    interface LoginMinuteCount {
-        String getMinuteStart();
+    interface LoginBucketCount {
+        Long getBucket();
 
         Long getAttempts();
 
@@ -70,17 +74,15 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Long
         Long getUnknownAccountFailures();
     }
 
-    // (from, to] 보안 직원 로그인 성공 · 실패, 최근 것부터 (Pageable로 개수 제한)
+    // (from, to] 로그인 성공 · 실패와 그 계정의 역할(없는 아이디면 null), 최근 것부터 (Pageable로 개수 제한)
     @Query("""
-            SELECT h FROM LoginHistory h, PlatformUser u
-            WHERE u.userId = h.userId
-              AND u.role = com.donworry.identity.entity.UserRole.SECURITY_STAFF
-              AND h.eventType IN (com.donworry.identity.entity.LoginEventType.LOGIN_SUCCESS,
+            SELECT h, u.role FROM LoginHistory h LEFT JOIN PlatformUser u ON u.userId = h.userId
+            WHERE h.eventType IN (com.donworry.identity.entity.LoginEventType.LOGIN_SUCCESS,
                                   com.donworry.identity.entity.LoginEventType.LOGIN_FAILURE)
               AND h.occurredAt > :from AND h.occurredAt <= :to
             ORDER BY h.occurredAt DESC, h.historyId DESC
             """)
-    List<LoginHistory> findSecurityStaffLogins(
+    List<Object[]> findRecentAttempts(
             @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, Pageable pageable);
 
     @Modifying
