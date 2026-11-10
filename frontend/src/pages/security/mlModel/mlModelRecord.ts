@@ -314,31 +314,37 @@ export const modelColors: Record<ModelKey, string> = {
   control: '#94a3b8',
 }
 
-export const modelCards: { key: ModelKey; title: string; body: string }[] = [
+/** body = 무엇인지, detail = 설정값 — 두 줄로 나눠 보여 준다 */
+export const modelCards: { key: ModelKey; title: string; body: string; detail: string }[] = [
   {
     key: 'rule',
     title: '탐지 룰',
-    body: '지금 판정하는 룰(R01~R08)을 같은 점수로 옮겨 채점. 데이터에 IP · 차단 목록이 없어 R05 · R07은 꺼짐',
+    body: '지금 판정하는 룰(R01~R08)을 같은 점수로 옮겨 채점',
+    detail: '데이터에 IP · 차단 목록이 없어 R05 · R07은 꺼짐',
   },
   {
     key: 'rfV2',
     title: 'rf-v1 · rf-v2',
-    body: 'Random Forest. v1은 가게 번호 포함 13칸, v2는 뺀 12칸',
+    body: 'Random Forest — 결정 나무 여러 그루의 다수결',
+    detail: 'v1은 가게 번호 포함 13칸 · v2는 뺀 12칸',
   },
   {
     key: 'xgb',
     title: 'XGBoost',
-    body: '나무를 차례로 고쳐 가며 쌓는 방식. 200그루 · 깊이 4 · 학습률 0.05',
+    body: '나무를 차례로 고쳐 가며 쌓는 방식',
+    detail: '200그루 · 깊이 4 · 학습률 0.05',
   },
   {
     key: 'transformer',
     title: 'Transformer',
-    body: '손님의 직전 결제 5건을 순서대로 읽는 신경망. 크기 32 · 4 heads · 1층 · 최대 20회 학습',
+    body: '손님의 직전 결제 5건을 순서대로 읽는 신경망',
+    detail: '크기 32 · 4 heads · 1층 · 최대 20회 학습',
   },
   {
     key: 'hybrid',
     title: '하이브리드',
-    body: 'Transformer가 결제 순서를 숫자로 요약 → XGBoost가 판단. Train 앞 70%로 Transformer, 뒤 30%로 XGBoost',
+    body: 'Transformer가 결제 순서를 숫자로 요약 → XGBoost가 판단',
+    detail: 'Train 앞 70%로 Transformer · 뒤 30%로 XGBoost',
   },
 ]
 

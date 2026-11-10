@@ -3,6 +3,9 @@
 
 .mlm-page {
   max-width: var(--dw-page-width, 1520px);
+  /* 한글은 단어(띄어쓰기) 단위로만 줄을 바꾸고, 너무 긴 낱말만 칸 안에서 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .mlm-body {
   display: flex;

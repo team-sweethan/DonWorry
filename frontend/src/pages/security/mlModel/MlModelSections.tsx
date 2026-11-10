@@ -2,7 +2,7 @@ import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
 import { Card, Descriptions, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { ReactNode } from 'react'
-import { Bars, SourceLine, StatTile, ThoughtBox } from './MlModelParts'
+import { Bars, SourceLine, StatTile, ThoughtBox, tidy } from './MlModelParts'
 import {
   baseDataset,
   baseSplitPeriods,
@@ -54,7 +54,7 @@ function SectionCard({
 }) {
   return (
     <Card title={title(heading)} className="mlm-card">
-      {sub && <p className="mlm-sub">{sub}</p>}
+      {sub && <p className="mlm-sub">{tidy(sub)}</p>}
       {children}
     </Card>
   )
@@ -65,7 +65,7 @@ function KeyValues({ items }: { items: { label: string; value: ReactNode }[] }) 
     <Descriptions column={1} colon={false} size="small" className="mlm-kv">
       {items.map((item) => (
         <Descriptions.Item key={item.label} label={item.label}>
-          {item.value}
+          {tidy(item.value)}
         </Descriptions.Item>
       ))}
     </Descriptions>
@@ -139,7 +139,7 @@ export function OverviewSection() {
             <li key={step.title}>
               <span className="mlm-timeline-when">{step.when}</span>
               <strong>{step.title}</strong>
-              <span>{step.body}</span>
+              <span>{tidy(step.body)}</span>
             </li>
           ))}
         </ol>
@@ -365,7 +365,7 @@ export function TrainingSection() {
               {trainingSteps.map((step) => (
                 <li key={step.title}>
                   <strong>{step.title}</strong>
-                  <span>{step.body}</span>
+                  <span>{tidy(step.body)}</span>
                 </li>
               ))}
               <li>
@@ -415,7 +415,8 @@ export function CompareSection() {
                 />
                 {card.title}
               </strong>
-              <span>{card.body}</span>
+              <span>{tidy(card.body)}</span>
+              <span className="mlm-muted">{tidy(card.detail)}</span>
             </div>
           ))}
         </div>
@@ -559,7 +560,7 @@ export function VersionsSection() {
                 <Tag color={statusTag[v.status]}>{v.statusLabel}</Tag>
                 <span className="mlm-muted">{v.when}</span>
               </div>
-              <p>{v.summary}</p>
+              <p>{tidy(v.summary)}</p>
               {v.criteria.length > 0 && (
                 <ul className="mlm-criteria">
                   {v.criteria.map((c) => (
@@ -569,7 +570,7 @@ export function VersionsSection() {
                       ) : (
                         <CloseCircleFilled className="mlm-bad" aria-label="미달" />
                       )}
-                      <span>{c.text}</span>
+                      <span>{tidy(c.text)}</span>
                       <span className="mlm-criteria-result">{c.result}</span>
                     </li>
                   ))}
@@ -577,7 +578,7 @@ export function VersionsSection() {
               )}
               <ul className="mlm-notes">
                 {v.notes.map((note) => (
-                  <li key={note}>{note}</li>
+                  <li key={note}>{tidy(note)}</li>
                 ))}
               </ul>
             </div>
@@ -680,7 +681,7 @@ export function LimitsSection() {
             />
             <ul className="mlm-notes mlm-gap">
               {shadowCheck.notes.map((note) => (
-                <li key={note}>{note}</li>
+                <li key={note}>{tidy(note)}</li>
               ))}
             </ul>
           </div>

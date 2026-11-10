@@ -2,6 +2,18 @@ import { BulbOutlined } from '@ant-design/icons'
 import type { ReactNode } from 'react'
 import type { Thought } from './mlModelRecord'
 
+const NO_BREAK_SPACE = String.fromCharCode(0xa0)
+const WORD_JOINER = String.fromCharCode(0x2060)
+
+// 가운뎃점 · 화살표 · 줄표가 줄 맨 앞에 오지 않게 앞 단어에 붙이고, "30%로"처럼 % 뒤 조사를 떼지 않는다
+// (한글 단어 중간 끊김은 CSS keep-all이 막는다)
+export function tidy(text: ReactNode): ReactNode {
+  if (typeof text !== 'string') return text
+  return text
+    .replace(/ (·|→|—) /g, `${NO_BREAK_SPACE}$1 `)
+    .replace(/%(?=[가-힣])/g, `%${WORD_JOINER}`)
+}
+
 /** 섹션마다 "왜 이렇게 했나"를 남기는 노란 상자 */
 export function ThoughtBox({ items }: { items: Thought[] }) {
   return (
@@ -13,9 +25,9 @@ export function ThoughtBox({ items }: { items: Thought[] }) {
         {items.map((item) => (
           <li key={item.head}>
             {/* 머리말이 문장(마침표)이 아니면 본문과 붙어 읽히지 않게 줄표로 잇는다 */}
-            <strong>{item.head}</strong>
+            <strong>{tidy(item.head)}</strong>
             {item.head.endsWith('.') ? ' ' : ' — '}
-            {item.body}
+            {tidy(item.body)}
           </li>
         ))}
       </ul>
@@ -24,7 +36,7 @@ export function ThoughtBox({ items }: { items: Thought[] }) {
 }
 
 export function SourceLine({ text }: { text: string }) {
-  return <p className="mlm-source">출처: {text}</p>
+  return <p className="mlm-source">출처: {tidy(text)}</p>
 }
 
 export type BarRow = {
@@ -53,7 +65,7 @@ export function Bars({
       {rows.map((row, index) => (
         <div className="mlm-bar-row" key={index}>
           <span className={row.strong ? 'mlm-bar-label is-strong' : 'mlm-bar-label'}>
-            {row.label}
+            {tidy(row.label)}
           </span>
           <span className="mlm-bar-track" aria-hidden="true">
             <span
