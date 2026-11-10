@@ -15,6 +15,21 @@ export function autoSuspendedLoginIds(groups: OperatorAccessAccountGroup[]) {
   )
 }
 
+/**
+ * 목록 API를 마지막 쪽까지 읽는다. 중간에 멈추면 뒤쪽 계정이 셈에서 빠져 처리할 일이 0건으로 보인다 (PR #774 리뷰).
+ * 서버 합계와 실제 줄 수가 어긋나 빈 쪽이 오면 거기서 멈춘다(무한 반복 방지).
+ */
+export async function readAllPages<T>(
+  load: (page: number) => Promise<{ items: T[]; last: boolean }>,
+): Promise<T[]> {
+  const all: T[] = []
+  for (let page = 0; ; page += 1) {
+    const { items, last } = await load(page)
+    all.push(...items)
+    if (last || items.length === 0) return all
+  }
+}
+
 export function countStillSuspended(suspended: Set<string>, inactiveLoginIds: Iterable<string>) {
   let count = 0
   for (const loginId of new Set(inactiveLoginIds)) if (suspended.has(loginId)) count += 1

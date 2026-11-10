@@ -34,11 +34,13 @@ import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestB
 import {
   aiStatusView,
   attentionItems,
+  chartDayLabel,
   insiderStatusView,
   operatorAccessView,
   ruleStatusView,
   seoulToday,
   todoCounting,
+  todoFailed,
   todoTotal,
   type HomeTone,
   type TodoGroup,
@@ -177,8 +179,6 @@ function Bars({ rows, label }: { rows: BarRow[]; label: string }) {
   )
 }
 
-const weekday = ['일', '월', '화', '수', '목', '금', '토']
-
 /** 사장님 계정 접근 거부 — 최근 7일 날짜별 · 많이 막힌 경로 (#515, #746 요약 API) */
 function AccessCharts({
   summary,
@@ -190,12 +190,10 @@ function AccessCharts({
   loading: boolean
 }) {
   const days: BarRow[] = (summary?.daily ?? []).map((day) => {
-    const [, month, date] = day.date.split('-').map(Number)
-    const dayName = weekday[new Date(`${day.date}T00:00:00+09:00`).getUTCDay()]
     const isToday = day.date === today
     return {
       key: day.date,
-      label: isToday ? '오늘' : `${month}.${date} (${dayName})`,
+      label: chartDayLabel(day.date, today),
       count: day.count,
       strong: isToday,
     }
@@ -343,6 +341,8 @@ export function AdminHomePage() {
   ]
   const total = todoTotal(groups)
   const counting = todoCounting(groups)
+  // 하나라도 못 불러왔으면 0건이어도 "없음"이라고 하지 않는다
+  const incomplete = todoFailed(groups)
   const attention = attentionItems(groups)
 
   const summary = data?.operatorAccess.status === 'fulfilled' ? data.operatorAccess.value : null
@@ -430,11 +430,13 @@ export function AdminHomePage() {
             )}
           </h2>
           <p>
-            {total > 0
-              ? '아래 칸에서 바로 처리 화면으로 이동합니다.'
-              : counting
-                ? '처리할 일을 세는 중입니다.'
-                : '지금 처리할 일이 없습니다.'}
+            {incomplete
+              ? '일부 건수를 불러오지 못했습니다. 새로고침해 주세요.'
+              : total > 0
+                ? '아래 칸에서 바로 처리 화면으로 이동합니다.'
+                : counting
+                  ? '처리할 일을 세는 중입니다.'
+                  : '지금 처리할 일이 없습니다.'}
           </p>
           {users !== null && merchants !== null && (
             // 정지 · 중지 계정을 포함한 전체 수라 목록도 전체 상태로 연다 (목록 기본은 사용 중)
@@ -454,9 +456,12 @@ export function AdminHomePage() {
         </div>
       </section>
 
-      <div className={`ah-attention${attention.length > 0 ? ' is-open' : ''}`} role="status">
+      <div
+        className={`ah-attention${attention.length > 0 || incomplete ? ' is-open' : ''}`}
+        role="status"
+      >
         <span className="ah-attention-label">
-          {attention.length > 0 ? (
+          {attention.length > 0 || incomplete ? (
             <ExclamationCircleOutlined aria-hidden="true" />
           ) : (
             <CheckOutlined aria-hidden="true" />
@@ -472,7 +477,11 @@ export function AdminHomePage() {
           ))
         ) : (
           <span className="ah-attention-none">
-            {counting ? '세는 중입니다.' : '먼저 확인할 일이 없습니다.'}
+            {incomplete
+              ? '일부 건수를 불러오지 못해 확인할 일을 모두 셀 수 없습니다.'
+              : counting
+                ? '세는 중입니다.'
+                : '먼저 확인할 일이 없습니다.'}
           </span>
         )}
       </div>
@@ -481,7 +490,11 @@ export function AdminHomePage() {
         <div className="ah-board-heading">
           <h2 id="ah-board-title">처리할 일</h2>
           {total > 0 ? (
-            <span className="ah-board-total is-open">{number(total)}건</span>
+            <span className="ah-board-total is-open">
+              {number(total)}건{incomplete && ' 이상'}
+            </span>
+          ) : incomplete ? (
+            <span className="ah-board-total is-error">일부 불러오기 실패</span>
           ) : counting ? null : (
             <span className="ah-board-total">
               <CheckOutlined aria-hidden="true" /> 모두 처리됨

@@ -278,6 +278,10 @@
   font-size: var(--dw-text-secondary);
   font-weight: 650;
 }
+.ah-board-total.is-error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
 .ah-board-total.is-open {
   background: #fef3c7;
   color: #b45309;

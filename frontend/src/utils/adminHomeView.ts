@@ -58,6 +58,18 @@ export function insiderStatusView(
   return { tone: 'ok', label: '이상 없음', detail: '열린 내부자 경보 · 사건이 없습니다' }
 }
 
+const weekday = ['일', '월', '화', '수', '목', '금', '토']
+
+/**
+ * 차트 날짜 칸 이름 — 오늘이면 "오늘", 아니면 "11.9 (월)".
+ * 날짜만 있는 값(한국 날짜)이라 UTC 자정으로 읽고 UTC 요일을 쓴다. 한국 자정으로 만들면 UTC로는 전날이다 (PR #774 리뷰)
+ */
+export function chartDayLabel(date: string, today: string) {
+  if (date === today) return '오늘'
+  const [, month, day] = date.split('-').map(Number)
+  return `${month}.${day} (${weekday[new Date(`${date}T00:00:00Z`).getUTCDay()]})`
+}
+
 /** 오늘 날짜(한국 시간, YYYY-MM-DD) */
 export function seoulToday(now: Date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(now)
@@ -103,6 +115,11 @@ export function todoTotal(groups: TodoGroup[]) {
       ),
     0,
   )
+}
+
+/** 불러오지 못한 칸이 있는지 — 있으면 "모두 처리됨"을 보이지 않는다 (PR #774 리뷰) */
+export function todoFailed(groups: TodoGroup[]) {
+  return groups.some((group) => group.items.some((item) => item.count === 'error'))
 }
 
 /** 아직 세는 칸이 있는지 */

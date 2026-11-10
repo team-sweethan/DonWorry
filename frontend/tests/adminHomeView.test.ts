@@ -5,14 +5,20 @@ import type { OperatorAccessAccountGroup, OperatorAccessDetection } from '../src
 import {
   aiStatusView,
   attentionItems,
+  chartDayLabel,
   insiderStatusView,
   operatorAccessView,
   ruleStatusView,
   seoulToday,
   todoCounting,
+  todoFailed,
   todoTotal,
 } from '../src/utils/adminHomeView.ts'
-import { autoSuspendedLoginIds, countStillSuspended } from '../src/utils/autoSuspendedOperators.ts'
+import {
+  autoSuspendedLoginIds,
+  countStillSuspended,
+  readAllPages,
+} from '../src/utils/autoSuspendedOperators.ts'
 
 const ai = (switchOn: boolean, configEnabled: boolean): AiSwitchStatus => ({
   switchOn,
@@ -146,4 +152,34 @@ test('확인 필요 줄: 남은 일만, 보안 항목을 먼저 보인다', () =
       ['룰 끄기', 2, false],
     ],
   )
+})
+
+test('차트 요일은 한국 날짜 그대로다 — 11월 9일은 월요일 (PR #774 리뷰)', () => {
+  assert.equal(chartDayLabel('2026-11-09', '2026-11-10'), '11.9 (월)')
+  assert.equal(chartDayLabel('2026-11-08', '2026-11-10'), '11.8 (일)')
+  assert.equal(chartDayLabel('2026-11-10', '2026-11-10'), '오늘')
+})
+
+test('불러오지 못한 칸이 있으면 실패로 본다 — 0건이어도 모두 처리됨이 아니다 (PR #774 리뷰)', () => {
+  const ok = { title: 'A', items: [{ label: 'a', to: '/a', count: 0 }] }
+  const failed = { title: 'B', items: [{ label: 'b', to: '/b', count: 'error' as const }] }
+  assert.equal(todoFailed([ok]), false)
+  assert.equal(todoFailed([ok, failed]), true)
+  assert.equal(todoTotal([ok, failed]), 0)
+})
+
+test('목록은 마지막 쪽까지 읽는다 — 10쪽을 넘어도 빠지지 않는다 (PR #774 리뷰)', async () => {
+  const seen: number[] = []
+  const all = await readAllPages(async (page) => {
+    seen.push(page)
+    return { items: [`owner_${page}`], last: page === 11 }
+  })
+  assert.equal(all.length, 12)
+  assert.equal(all.at(-1), 'owner_11')
+  // 서버 합계가 어긋나 빈 쪽이 오면 멈춘다
+  const stopped = await readAllPages(async (page) => ({
+    items: page < 2 ? ['x'] : [],
+    last: false,
+  }))
+  assert.equal(stopped.length, 2)
 })
