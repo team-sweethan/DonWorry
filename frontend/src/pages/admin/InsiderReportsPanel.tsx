@@ -121,6 +121,8 @@ function LoginAttackFacts({ login }: { login: InsiderReportLoginAttack }) {
 function ReportBody({ body }: { body: InsiderReportBody }) {
   const { facts, narrative } = body
   const { access } = facts
+  // 로그인으로만 걸린 사건(#770) — 경보 근거 접근 기록이 하나도 없다
+  const loginOnly = Boolean(facts.loginAttack) && access.total === 0
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Descriptions size="small" column={2} bordered styles={{ label: { whiteSpace: 'nowrap' } }}>
@@ -176,41 +178,50 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
         />
       </div>
 
-      <div>
-        <Typography.Text strong>접근 종류별</Typography.Text>
-        <Table<InsiderReportAccessType>
-          rowKey="type"
-          size="small"
-          pagination={false}
-          dataSource={access.byType}
-          locale={{ emptyText: <ListEmpty title="경보 근거로 묶인 접근 기록이 없습니다." /> }}
-          columns={[
-            { ...oneLine, title: '종류', dataIndex: 'label' },
-            { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
-            { ...oneLine, title: '거부', dataIndex: 'denied', align: 'right' },
-            {
-              ...oneLine,
-              title: '행 수',
-              dataIndex: 'items',
-              align: 'right',
-              render: (value: number) => (value > 0 ? value : '-'),
-            },
-            { ...oneLine, title: '사건', dataIndex: 'cases', align: 'right' },
-          ]}
-        />
-        {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
-        {facts.alerts.some((alert) => isExportBlockRule(alert.ruleCode)) && (
-          <Typography.Text type="secondary">
-            막힌 내보내기 시도는 위 [걸린 규칙]의 SEC-INS-05 줄에 있고, 이 표의 숫자에는 세지
-            않습니다.
-          </Typography.Text>
-        )}
-      </div>
-
-      {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다 */}
-      {facts.baseline && <Baseline baseline={facts.baseline} />}
-
+      {/* 탈취 의심(#770)은 관리자가 가장 먼저 볼 사실이라 걸린 규칙 바로 아래 */}
       {facts.loginAttack && <LoginAttackFacts login={facts.loginAttack} />}
+
+      {loginOnly ? (
+        <Typography.Text type="secondary">
+          이 사건은 로그인으로 걸려 경보 근거가 된 접근 기록이 없습니다. 위 [탈취 의심 로그인]을
+          보세요.
+        </Typography.Text>
+      ) : (
+        <div>
+          <Typography.Text strong>접근 종류별</Typography.Text>
+          <Table<InsiderReportAccessType>
+            rowKey="type"
+            size="small"
+            pagination={false}
+            dataSource={access.byType}
+            locale={{ emptyText: <ListEmpty title="경보 근거로 묶인 접근 기록이 없습니다." /> }}
+            columns={[
+              { ...oneLine, title: '종류', dataIndex: 'label' },
+              { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
+              { ...oneLine, title: '거부', dataIndex: 'denied', align: 'right' },
+              {
+                ...oneLine,
+                title: '행 수',
+                dataIndex: 'items',
+                align: 'right',
+                render: (value: number) => (value > 0 ? value : '-'),
+              },
+              { ...oneLine, title: '사건', dataIndex: 'cases', align: 'right' },
+            ]}
+          />
+          {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
+          {facts.alerts.some((alert) => isExportBlockRule(alert.ruleCode)) && (
+            <Typography.Text type="secondary">
+              막힌 내보내기 시도는 위 [걸린 규칙]의 SEC-INS-05 줄에 있고, 이 표의 숫자에는 세지
+              않습니다.
+            </Typography.Text>
+          )}
+        </div>
+      )}
+
+      {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다.
+          근거 접근 기록이 없는 탈취 의심 사건은 비교할 "이번" 값이 없어 숨긴다 (#770) */}
+      {facts.baseline && !loginOnly && <Baseline baseline={facts.baseline} />}
 
       <div>
         <Space size="small" style={{ marginBottom: 4 }}>

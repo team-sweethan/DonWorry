@@ -27,3 +27,9 @@ export function displayRuleText(text: string): string {
 export function isExportBlockRule(ruleCode: string): boolean {
   return displayRuleCode(ruleCode) === 'SEC-INS-05'
 }
+
+// 로그인으로 걸리는 경보(SEC-INS-10)와 그 차단(SEC-INS-05) — 근거 접근 기록이 비어 있을 수 있다 (#770)
+export function isLoginBasedRule(ruleCode: string): boolean {
+  const code = displayRuleCode(ruleCode)
+  return code === 'SEC-INS-10' || code === 'SEC-INS-05'
+}

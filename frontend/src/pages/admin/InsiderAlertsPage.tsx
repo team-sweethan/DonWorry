@@ -75,7 +75,7 @@ function AlertRow({
       </div>
       {open && (
         <div id={bodyId} className="ia-row-evidence">
-          <EvidenceLog alertId={alert.alertId} />
+          <EvidenceLog alertId={alert.alertId} ruleCode={alert.ruleCode} />
         </div>
       )}
     </li>

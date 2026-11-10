@@ -365,7 +365,11 @@ export function InsiderCaseDrawer({
                         pagination={false}
                         dataSource={detail.alerts}
                         expandable={{
-                          expandedRowRender: (row) => <EvidenceLog alertId={row.alertId} />,
+                          expandedRowRender: (row) => (
+                            <EvidenceLog alertId={row.alertId} ruleCode={row.ruleCode} />
+                          ),
+                          // 로그인으로 걸린 경보(#770)는 근거 접근 기록이 없어 펼치지 않는다
+                          rowExpandable: (row) => displayRuleCode(row.ruleCode) !== 'SEC-INS-10',
                         }}
                         columns={[
                           { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
