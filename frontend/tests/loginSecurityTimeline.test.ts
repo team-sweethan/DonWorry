@@ -156,6 +156,7 @@ test('mergeAttempts_whenNewResponsePushesOutUnplayedAttempt_keepsIt', () => {
   const merged = mergeAttempts([unplayed, shownOld], newer, {
     viewNowMs: Date.parse(at('07:00:01.800')),
     keepShown: 40,
+    oldestMs: Date.parse(at('06:50:04.000')),
   })
 
   assert.ok(merged.some((a) => attemptKey(a) === attemptKey(unplayed)))
@@ -165,6 +166,20 @@ test('mergeAttempts_whenNewResponsePushesOutUnplayedAttempt_keepsIt', () => {
     merged.map((a) => a.occurredAt),
     [...merged.map((a) => a.occurredAt)].sort().reverse(),
   )
+})
+
+// 새 시도가 없어도 10분이 지난 줄은 버퍼에서 빠진다 — 남기면 오래된 실패 · 탈취 의심이 "최근 10분"으로 계속 보인다 (#791 Codex 2차 리뷰)
+test('mergeAttempts_whenShownAttemptOlderThanLookback_dropsIt', () => {
+  const expired = attempt(at('06:49:59.000'), '기타 브라우저', false)
+  const recent = attempt(at('06:55:00.000'), '기타 브라우저', false)
+
+  const merged = mergeAttempts([recent, expired], [], {
+    viewNowMs: Date.parse(at('06:59:57.800')),
+    keepShown: 40,
+    oldestMs: Date.parse(at('06:50:00.000')),
+  })
+
+  assert.deepEqual(merged.map(attemptKey), [attemptKey(recent)])
 })
 
 // 2초마다 한꺼번에 받은 시도도 일어난 간격(0.4초)대로 레이더에 닿는다 — 이미 날린 시도는 다시 날리지 않는다

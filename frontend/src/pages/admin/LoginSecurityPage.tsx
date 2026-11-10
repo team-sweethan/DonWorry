@@ -37,6 +37,8 @@ const POLL_MS = 2_000
 const VIEW_TICK_MS = 250
 // 실시간 시도 줄 수 — 서버가 한 번에 주는 최대치(MAX_ATTEMPTS)와 같다
 const FEED_ROWS = 40
+// 실시간 시도를 남기는 기간 — 서버 ATTEMPT_LOOKBACK(10분)과 같다
+const FEED_LOOKBACK_MS = 10 * 60_000
 
 const stateClass: Record<LoginSecurityState, string> = {
   NORMAL: 'is-normal',
@@ -416,7 +418,10 @@ function AttemptFeed({
   viewNow: number
   incidentByAttempt: Map<string, Incident>
 }) {
-  const visible = attempts.filter((a) => ms(a.occurredAt) <= viewNow).slice(0, FEED_ROWS)
+  // 화면 시계 기준 최근 10분만 — 자동 갱신이 멈춰 버퍼가 그대로여도 지난 줄이 "최근 10분"으로 남지 않게
+  const visible = attempts
+    .filter((a) => ms(a.occurredAt) <= viewNow && ms(a.occurredAt) > viewNow - FEED_LOOKBACK_MS)
+    .slice(0, FEED_ROWS)
   const isFresh = (a: LoginSecurityAttempt) => viewNow - ms(a.occurredAt) <= 1_500
   return (
     <section className="ls-feed ca-panel-box" aria-labelledby="ls-feed-heading">
@@ -487,6 +492,7 @@ export function LoginSecurityPage() {
         attempts: mergeAttempts(latestRef.current?.attempts ?? [], received.attempts, {
           viewNowMs: view,
           keepShown: FEED_ROWS,
+          oldestMs: ms(received.generatedAt) - FEED_LOOKBACK_MS,
         }),
       }
       latestRef.current = d

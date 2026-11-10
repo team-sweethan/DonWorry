@@ -137,16 +137,19 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
  * 최근 시도 버퍼 (#791 Codex 리뷰) — 서버는 최근 40건만 주므로, 2초에 40건이 넘으면 화면 시계가 아직 닿지 않은 시도가
  * 새 응답에서 밀려나 한 번도 안 보인다. 새 응답과 합치고(같은 줄은 새 값 — 탈취 의심 표시가 늦게 붙을 수 있다),
  * 아직 안 보인 줄은 모두, 이미 보인 줄은 최신 keepShown개만 남긴다. 최신이 앞
+ * oldestMs(서버 ATTEMPT_LOOKBACK, 10분 전)보다 오래된 줄은 버린다 — 새 시도가 없을 때 지난 기록이 "최근 10분"에 남지 않게 (#791 Codex 2차 리뷰)
  */
 export function mergeAttempts(
   buffer: LoginSecurityAttempt[],
   incoming: LoginSecurityAttempt[],
-  opts: { viewNowMs: number; keepShown: number },
+  opts: { viewNowMs: number; keepShown: number; oldestMs: number },
 ): LoginSecurityAttempt[] {
   const byKey = new Map<string, LoginSecurityAttempt>()
   for (const a of buffer) byKey.set(attemptKey(a), a)
   for (const a of incoming) byKey.set(attemptKey(a), a)
-  const all = [...byKey.values()].sort((a, b) => ms(b.occurredAt) - ms(a.occurredAt))
+  const all = [...byKey.values()]
+    .filter((a) => ms(a.occurredAt) > opts.oldestMs)
+    .sort((a, b) => ms(b.occurredAt) - ms(a.occurredAt))
   const pending = all.filter((a) => ms(a.occurredAt) > opts.viewNowMs)
   const shown = all.filter((a) => ms(a.occurredAt) <= opts.viewNowMs).slice(0, opts.keepShown)
   return [...pending, ...shown]
