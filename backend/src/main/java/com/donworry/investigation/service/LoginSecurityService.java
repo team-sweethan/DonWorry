@@ -23,6 +23,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -58,8 +59,7 @@ public class LoginSecurityService {
         LoginTrafficCount recent = traffic.count(now.minus(criteria.window()), now);
         Map<Long, String> names = staffDirectory.securityStaff().stream()
                 .collect(Collectors.toMap(SecurityStaffEntry::userId, SecurityStaffEntry::displayName, (a, b) -> a));
-        List<InsiderAlertEntry> alerts =
-                alertReader.findAlertsOpenedBetween(LOGIN_RULES, now.minus(ALERT_LOOKBACK), now);
+        List<InsiderAlertEntry> alerts = loginAlerts(now);
         // 사람당 열린 내부자 사건은 1개 (#670 uk_insider_cases_open)
         Map<Long, Long> openCases = insiderCases.findByStatusOrderByIdAsc(InsiderCaseStatus.OPEN).stream()
                 .collect(Collectors.toMap(InsiderCase::getStaffId, InsiderCase::getId, (a, b) -> a));
@@ -102,6 +102,19 @@ public class LoginSecurityService {
                                 .build())
                         .toList())
                 .build();
+    }
+
+    // INS-05(내보내기 차단)는 같은 직원에게 INS-10(탈취 의심)이 있을 때만 — 다른 내부자 경보로 막힌 반출은 이 화면 몫이 아니다 (#770 중간 점검)
+    private List<InsiderAlertEntry> loginAlerts(Instant now) {
+        List<InsiderAlertEntry> found =
+                alertReader.findAlertsOpenedBetween(LOGIN_RULES, now.minus(ALERT_LOOKBACK), now);
+        Set<Long> suspected = found.stream()
+                .filter(a -> a.rule() == InsiderRule.INS_10)
+                .map(InsiderAlertEntry::staffId)
+                .collect(Collectors.toSet());
+        return found.stream()
+                .filter(a -> a.rule() == InsiderRule.INS_10 || suspected.contains(a.staffId()))
+                .toList();
     }
 
     // 주의는 화면 안내용이다 — 시도가 적을 때 오타 몇 번으로 띠가 바뀌지 않게 기준 시도 수의 절반부터 본다
