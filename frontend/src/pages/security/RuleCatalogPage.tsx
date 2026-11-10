@@ -61,14 +61,14 @@ export function RuleCatalogPage() {
   const [policies, setPolicies] = useState<FdsRulePolicy[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedTab, setSelectedTab] = useState<RuleCatalogTab>('account')
+  const [chosenTab, setChosenTab] = useState<RuleCatalogTab>('account')
   const policyReloadSequence = useRef(0)
-  const showLoading = useMinimumLoadingIndicator(loading && rules.length === 0)
+  const initialLoading = loading && rules.length === 0
+  // 스피너는 0.3초 뒤에 뜬다. 그 사이에도 본문을 그리지 않아야 빈 본문 → 스피너 → 본문으로 두 번 바뀌지 않는다 (경보 상세와 같은 방식)
+  const showLoading = useMinimumLoadingIndicator(initialLoading)
   const isAdmin = user?.role === 'ADMIN'
-
-  useEffect(() => {
-    if (!isAdmin) setSelectedTab('all')
-  }, [isAdmin])
+  // 관리자가 아니면 고를 수 있는 탭이 결제 룰(all) 하나뿐이다. effect로 바꾸면 첫 화면이 한 번 더 그려지므로 렌더 중에 정한다
+  const selectedTab: RuleCatalogTab = isAdmin ? chosenTab : 'all'
 
   useEffect(() => {
     let active = true
@@ -118,19 +118,17 @@ export function RuleCatalogPage() {
             : '가맹점 결제의 이상 징후를 찾는 결제 룰을 확인합니다.'
         }
       />
-      {!loading && !error && (
+      {!loading && !showLoading && !error && (
         <RuleCatalogTabs
           selectedTab={selectedTab}
           paymentRuleCount={rules.length}
           accountRuleCount={accountRules.length}
           isAdmin={isAdmin}
-          onSelect={setSelectedTab}
+          onSelect={setChosenTab}
         />
       )}
-      {showLoading ? (
-        <div className="dw-rule-loading">
-          <Spin />
-        </div>
+      {initialLoading || showLoading ? (
+        <div className="dw-rule-loading">{showLoading && <Spin />}</div>
       ) : error ? (
         <Alert type="error" showIcon message={error} />
       ) : selectedTab === 'account' && isAdmin ? (
