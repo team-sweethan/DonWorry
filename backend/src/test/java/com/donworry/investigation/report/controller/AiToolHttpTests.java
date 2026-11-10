@@ -50,6 +50,7 @@ class AiToolHttpTests {
     static final String FDS_EVIDENCE = "/internal/ai/tools/get_fds_evidence";
     static final String PAYMENT_HISTORY = "/internal/ai/tools/get_payment_history";
     static final String DECISION_BASIS = "/internal/ai/tools/get_decision_basis";
+    static final String LINKED_PAYMENTS = "/internal/ai/tools/find_linked_payments";
 
     static final Instant LINKED_AT = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
@@ -238,6 +239,22 @@ class AiToolHttpTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lookbackDays").value(90));
         mvc.perform(get(PAYMENT_HISTORY).param("caseId", caseId).param("lookbackDays", "60"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 앞뒤 시간을 안 보내면 1시간이다 — ai-server 보고서 기본 조회는 시간 없이 부른다
+    // 질문 넓혀 보기는 nearbyHours=6 · 24, 그 밖은 400 (#751). 인자 이름은 ai-server와 같은 계약이다
+    @Test
+    void linkedPaymentsTool_nearbyHours_defaultsOneHourAndAcceptsAllowed() throws Exception {
+        String caseId = openCase().getId().toString();
+
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nearbyWindowMinutes").value(60));
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId).param("nearbyHours", "24"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nearbyWindowMinutes").value(1440));
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId).param("nearbyHours", "2"))
                 .andExpect(status().isBadRequest());
     }
 

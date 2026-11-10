@@ -7,6 +7,7 @@ import type {
   NormalBasis,
   PaymentSignals,
   ReportBody,
+  ReportFact,
   ReportRuleHitDetail,
   SimilarCaseItem,
   TraceStep,
@@ -443,18 +444,21 @@ export function summaryLines(body: ReportBody): SummaryLine[] {
     const links: SummaryLink[] = []
     for (const id of sentence.factIds) {
       const fact = facts.get(id)
-      const link =
-        fact?.topic === 'signals'
-          ? fact.paymentId
-            ? { target: paymentCardId(fact.paymentId), label: `결제 ${fact.paymentId} 접속 정보` }
-            : null
-          : fact
-            ? TOPIC_CARDS[fact.topic]
-            : null
+      const link = fact ? reportFactLink(fact) : null
       if (link && !links.some((l) => l.target === link.target)) links.push(link)
     }
     return { text: sentence.text, links }
   })
+}
+
+// 보고서 사실 하나 → 그 사실이 있는 카드. 접속 정보(signals)는 결제 표의 그 결제 줄로 간다
+// 요약 문장 링크(#559)와 질문 답 근거(#753)가 같이 쓴다
+export function reportFactLink(fact: Pick<ReportFact, 'topic' | 'paymentId'>): SummaryLink | null {
+  if (fact.topic === 'signals')
+    return fact.paymentId
+      ? { target: paymentCardId(fact.paymentId), label: `결제 ${fact.paymentId} 접속 정보` }
+      : null
+  return TOPIC_CARDS[fact.topic] ?? null
 }
 
 // 예전 영문 규칙 코드 → R 코드 — ai-server evidence._ALIASES와 같은 표

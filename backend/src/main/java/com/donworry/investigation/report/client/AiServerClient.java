@@ -2,12 +2,17 @@ package com.donworry.investigation.report.client;
 
 import com.donworry.investigation.report.dto.AiInvestigationRequest;
 import com.donworry.investigation.report.dto.AiInvestigationResult;
+import com.donworry.investigation.report.dto.AiQuestionRequest;
+import com.donworry.investigation.report.dto.AiQuestionResult;
 import com.donworry.investigation.report.dto.MlFraudScoreRequest;
 import com.donworry.investigation.report.dto.MlFraudScoreResponse;
 import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpTimeoutException;
+import java.time.Duration;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -19,7 +24,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 // ai-server 조사 접수 · 상태 조회 (ADR-0009 결정 1) — 연결 실패 · 5xx는 RestClientException으로 던진다
-// ML 채점(score)만은 예외 대신 결과 종류(MlScoreOutcome)로 돌려준다 (#414)
+// ML 채점(score) · 사건 질문(ask)은 예외 대신 결과 종류(MlScoreOutcome · AiQuestionOutcome)로 돌려준다 (#414 · ADR-0086)
 @Component
 @EnableConfigurationProperties(AiServerProperties.class)
 public class AiServerClient {
@@ -27,17 +32,29 @@ public class AiServerClient {
     // ai-server(app/client/spring.py)와 같은 헤더 이름
     public static final String API_KEY_HEADER = "X-Internal-Api-Key";
 
+    // 사건 질문은 동기 호출이라 조사 접수보다 오래 기다린다 (ADR-0086 6절)
+    static final Duration QUESTION_READ_TIMEOUT = Duration.ofSeconds(30);
+
+    private static final Set<String> ANSWERED_KINDS = Set.of("ANSWER", "NOT_IN_REPORT");
+    private static final Set<String> DECLINED_KINDS = Set.of("DECLINED_DECISION", "DECLINED_SCOPE");
+
     private final RestClient rest;
+    private final RestClient questionRest;
 
     public AiServerClient(AiServerProperties properties) {
+        this.rest = restClient(properties, properties.readTimeout());
+        this.questionRest = restClient(properties, QUESTION_READ_TIMEOUT);
+    }
+
+    private static RestClient restClient(AiServerProperties properties, Duration readTimeout) {
         // JDK 기본값은 HTTP/2 업그레이드(Upgrade: h2c) 요청 — ai-server(uvicorn)는 이를 400으로 거절해 HTTP/1.1로 고정한다
         HttpClient http = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(properties.connectTimeout())
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(http);
-        factory.setReadTimeout(properties.readTimeout());
-        this.rest = RestClient.builder()
+        factory.setReadTimeout(readTimeout);
+        return RestClient.builder()
                 .baseUrl(properties.baseUrl())
                 .defaultHeader(API_KEY_HEADER, properties.apiKey())
                 .requestFactory(factory)
@@ -64,6 +81,52 @@ public class AiServerClient {
         } catch (HttpClientErrorException.NotFound e) {
             return Optional.empty();
         }
+    }
+
+    // 사건 질문 (ADR-0086 6절) — 예외를 던지지 않는다. 답을 못 만든 것 · 호출 실패 · 응답 이상은 모두 Failed
+    // 다른 질문의 답이거나 상태와 답 종류가 맞지 않으면 저장하지 않게 Failed로 바꾼다
+    public AiQuestionOutcome ask(AiQuestionRequest request) {
+        AiQuestionResult result;
+        try {
+            result = questionRest
+                    .post()
+                    .uri("/questions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(AiQuestionResult.class);
+        } catch (RestClientResponseException e) {
+            return new AiQuestionOutcome.Failed("HTTP_" + e.getStatusCode().value(), "ai-server 응답 오류");
+        } catch (ResourceAccessException e) {
+            return isReadTimeout(e)
+                    ? new AiQuestionOutcome.Failed("TIMEOUT", "ai-server 응답 시간 초과")
+                    : new AiQuestionOutcome.Failed("CONNECTION_FAILED", "ai-server 연결 실패");
+        } catch (RestClientException e) {
+            return new AiQuestionOutcome.Failed("RESPONSE_INVALID", "응답을 읽지 못함");
+        }
+        return checked(request, result);
+    }
+
+    private static AiQuestionOutcome checked(AiQuestionRequest request, AiQuestionResult result) {
+        if (result == null) {
+            return new AiQuestionOutcome.Failed("RESPONSE_INVALID", "응답 본문 없음");
+        }
+        if (!Objects.equals(request.questionId(), result.questionId())) {
+            return new AiQuestionOutcome.Failed("RESPONSE_MISMATCH", "다른 질문의 답");
+        }
+        if ("FAILED".equals(result.status())) {
+            var error = result.error();
+            String code = error == null ? null : error.get("code");
+            String reason = error == null ? null : error.get("reason");
+            return new AiQuestionOutcome.Failed(
+                    code == null ? "AI_FAILED" : code, reason == null ? "답을 만들지 못함" : reason);
+        }
+        boolean kindMatches = ("ANSWERED".equals(result.status()) && ANSWERED_KINDS.contains(result.kind()))
+                || ("DECLINED".equals(result.status()) && DECLINED_KINDS.contains(result.kind()));
+        if (!kindMatches || result.sentences() == null || result.sentences().isEmpty()) {
+            return new AiQuestionOutcome.Failed("RESPONSE_INVALID", "상태 · 답 종류 · 문장이 맞지 않음");
+        }
+        return new AiQuestionOutcome.Answered(result);
     }
 
     // ML Shadow 채점 (#414) — 설계 8절 표대로 나눠 돌려주고 예외를 던지지 않는다
@@ -101,16 +164,22 @@ public class AiServerClient {
         return new MlScoreOutcome.Rejected(MlScoreOutcome.REQUEST_REJECTED);
     }
 
-    // JDK에서는 연결 시간 초과가 응답 시간 초과의 하위 타입이라 먼저 본다
     private static MlScoreOutcome classifyIoFailure(ResourceAccessException e) {
+        return isReadTimeout(e)
+                ? new MlScoreOutcome.Retryable(MlScoreOutcome.TIMEOUT)
+                : new MlScoreOutcome.Unavailable("CONNECTION_FAILED");
+    }
+
+    // JDK에서는 연결 시간 초과가 응답 시간 초과의 하위 타입이라 먼저 본다
+    private static boolean isReadTimeout(ResourceAccessException e) {
         for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
             if (cause instanceof HttpConnectTimeoutException) {
-                break;
+                return false;
             }
             if (cause instanceof HttpTimeoutException) {
-                return new MlScoreOutcome.Retryable(MlScoreOutcome.TIMEOUT);
+                return true;
             }
         }
-        return new MlScoreOutcome.Unavailable("CONNECTION_FAILED");
+        return false;
     }
 }
