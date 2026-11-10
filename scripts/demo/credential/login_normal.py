@@ -9,7 +9,7 @@
 직원의 "평소 브라우저" 기록도 함께 쌓인다(기본 Edge · Windows). 시연에서 탈취 역할 브라우저는 이것과 다른 종류로 쓴다.
 가끔 비밀번호 오타(실패 한 번 뒤 성공)를 넣는다. Ctrl+C로 멈춘다.
 
-  uv run scripts/demo/login_normal.py --account hanjiwoo:비밀번호 --account parkseoyeon:비밀번호
+  uv run scripts/demo/credential/login_normal.py --account hanjiwoo:비밀번호 --account parkseoyeon:비밀번호
 
 uv run이면 rich로 꾸민 화면(흐린 기록 + 아래 상태 줄)이 나온다. rich가 없으면 줄 출력으로 돌아간다.
 """

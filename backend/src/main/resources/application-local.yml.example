@@ -27,7 +27,7 @@ spring:
 # donworry.payment.webhook.allow-local-targets: true
 # fds:
 #   demo-error:
-#     enabled: true            # scripts/demo/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.
+#     enabled: true            # scripts/demo/legacy/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.
 # ai:
 #   server:
 #     enabled: true            # 고정 보고서 대신 ai-server에 조사를 맡김 (기본 꺼짐)

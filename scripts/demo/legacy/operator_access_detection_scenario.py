@@ -2,7 +2,7 @@
 """Run the local OUT_OF_ROLE threshold scenario for boss after starting backend on localhost:8081.
 
 Repeat --path to rotate through several admin APIs, which shows up as a multi-feature probe on the detail screen:
-  python3 scripts/demo/operator_access_detection_scenario.py \
+  python3 scripts/demo/legacy/operator_access_detection_scenario.py \
     --path /api/admin/users --path /api/admin/merchants --path /api/admin/merchant-applications \
     --path /api/admin/case-assignments --path /api/fds/operator-access-detections
 """

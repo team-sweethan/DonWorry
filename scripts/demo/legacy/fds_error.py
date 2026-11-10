@@ -108,7 +108,7 @@ def main() -> int:
     payment_id = data.get("paymentId")
     print(f"FDS ERROR 결제 생성: paymentId={payment_id}, scenario={args.scenario}, status={data.get('paymentStatus')}")
     if args.scenario.startswith("TRANSIENT_"):
-        print(f"재평가: py scripts/demo/fds_reevaluate.py {payment_id}")
+        print(f"재평가: py scripts/demo/legacy/fds_reevaluate.py {payment_id}")
     else:
         print("비일시 평가 처리 실패는 P2 분석 후 수동 검토 필요 상태가 됩니다.")
     return 0

@@ -177,7 +177,7 @@ DonWorry/
 ├── ai-server/                       # FastAPI 조사 서버
 │   └── app/                         # API·서비스·에이전트·LLM 연동
 ├── docs/                            # 업무·설계·개발 문서
-├── scripts/demo/                    # 가맹점 서명 결제 등 시연 도구
+├── scripts/demo/                    # 시연 도구 (용도별 폴더, scripts/demo/README.md)
 ├── ops/vm/                          # VM 배포·백업·복구
 ├── .github/                         # CI·이슈·PR 템플릿
 ├── docker-compose.yml               # 개발용 MariaDB
