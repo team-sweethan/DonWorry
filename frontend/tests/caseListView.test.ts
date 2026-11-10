@@ -8,6 +8,7 @@ import {
   elapsedLabel,
   isQuickConditionOn,
   isRestrictedCase,
+  listPage,
   newCaseIds,
   quickConditionCount,
   sortCases,
@@ -163,4 +164,15 @@ test('새 줄은 이전 목록에 없던 사건이고, 첫 조회에는 추측�
   const after = [make({ caseId: '1' }), make({ caseId: '2' })]
   assert.deepEqual(newCaseIds(before, after), ['2'])
   assert.deepEqual(newCaseIds(null, after), [])
+})
+
+test('선택한 사건이 있으면 그 사건의 페이지를, 없으면 주소의 페이지를 보인다 (#760)', () => {
+  const ids = Array.from({ length: 45 }, (_, i) => String(i + 1))
+  assert.equal(listPage(ids, '21', 1, 20), 2)
+  assert.equal(listPage(ids, '41', 1, 20), 3)
+  assert.equal(listPage(ids, null, 2, 20), 2)
+  // 목록에 없는 사건이면 주소의 페이지, 목록이 줄었으면 마지막 페이지
+  assert.equal(listPage(ids, '99', 2, 20), 2)
+  assert.equal(listPage(ids, null, 9, 20), 3)
+  assert.equal(listPage([], null, 3, 20), 1)
 })

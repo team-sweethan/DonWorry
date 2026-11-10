@@ -16,10 +16,12 @@ import {
 } from './caseLabels'
 import { CodeTag } from './CodeTag'
 
-type Loaded = { caseId: string; detail: CaseDetail | null | 'error' | 'forbidden' }
+type Loaded = { key: string; detail: CaseDetail | null | 'error' | 'forbidden' }
 
 type Props = {
   caseId: string | null
+  /** 바뀌면 같은 사건도 다시 조회한다 — 목록 새로고침 · [요약 보기] 다시 누름 */
+  reloadKey: string
   merchantName: string | undefined
   /** 목록 순서의 앞뒤 사건. 누를 때만 그 사건을 조회한다 */
   prev: string | null
@@ -36,6 +38,7 @@ type Props = {
  */
 export function CaseSummaryDrawer({
   caseId,
+  reloadKey,
   merchantName,
   prev,
   next,
@@ -44,22 +47,23 @@ export function CaseSummaryDrawer({
   onClose,
 }: Props) {
   const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const key = caseId ? `${caseId}|${reloadKey}` : null
   useEffect(() => {
-    if (!caseId) return
+    if (!caseId || !key) return
     let alive = true
     getCase(caseId)
       .then((detail) => {
-        if (alive) setLoaded({ caseId, detail })
+        if (alive) setLoaded({ key, detail })
       })
       .catch((error: unknown) => {
-        if (alive) setLoaded({ caseId, detail: isCaseAssigneeOnly(error) ? 'forbidden' : 'error' })
+        if (alive) setLoaded({ key, detail: isCaseAssigneeOnly(error) ? 'forbidden' : 'error' })
       })
     return () => {
       alive = false
     }
-  }, [caseId])
-  // 다른 사건으로 옮기면 이전 사건 내용을 바로 숨긴다
-  const current = loaded?.caseId === caseId ? loaded.detail : undefined
+  }, [caseId, key])
+  // 다른 사건으로 옮기거나 다시 조회하면 이전 내용을 바로 숨겨 오래된 상태를 최신처럼 보이지 않게 한다
+  const current = loaded?.key === key ? loaded.detail : undefined
 
   return (
     <Drawer

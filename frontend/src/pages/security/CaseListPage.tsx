@@ -71,6 +71,7 @@ import {
   elapsedLabel,
   isQuickConditionOn,
   isRestrictedCase,
+  listPage,
   newCaseIds,
   quickConditionCount,
   quickConditions,
@@ -168,7 +169,6 @@ export function CaseListPage() {
     window.history.replaceState(window.history.state, '', location.pathname + caseListSearch(next))
   }
   // 미리보기를 연 줄은 주소에 남긴다. 페이지는 그대로 둔다
-  const select = (caseId: string | null) => setQuery({ selected: caseId, page: query.page })
   const [refreshKey, setRefreshKey] = useState(0)
   // 어떤 요청(새로고침)에 대한 응답인지 함께 저장해 늦게 온 응답이 덮어쓰지 않게 한다.
   // failed: 조회 실패. 빈 목록과 구분해 "처리할 Case 없음"으로 오인하지 않게 하고, 직전 목록은 유지한다.
@@ -194,7 +194,8 @@ export function CaseListPage() {
 
   // 새 Case · 상태 변화를 건수로 감지한다 (#553). 고른 범위의 건수만 본다 (#640)
   const watch = useCaseListWatch((added) => {
-    setPendingChange((prev) => ({ added: (prev?.added ?? 0) + added }))
+    // added는 마지막으로 반영한 목록 대비 전체 증가분이다. 더하지 않고 바꾼다 (#760 Codex 리뷰)
+    setPendingChange({ added })
   }, scope)
   const { listLoaded } = watch
   const refresh = () => {
@@ -263,9 +264,15 @@ export function CaseListPage() {
       ),
     [cases, query, merchantNames],
   )
-  // 목록이 줄어 주소의 페이지가 없어지면 마지막 페이지를 보여 준다
-  const page = Math.min(query.page, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)))
   const selectedId = query.selected
+  const filteredIds = filtered.map((c) => c.caseId)
+  const page = listPage(filteredIds, selectedId, query.page, PAGE_SIZE)
+  // 고른 사건이 있는 페이지를 같이 남겨, 선택을 풀어도 보던 페이지에 머문다
+  const select = (caseId: string | null) =>
+    setQuery({
+      selected: caseId,
+      page: listPage(filteredIds, caseId, page, PAGE_SIZE),
+    })
   // 상세 · 요약의 이전 · 다음 이동 순서 (#759) — 지금 조건 · 정렬 그대로, 열 수 없는 남의 진행 중 사건은 뺀다
   const queueOrder = useMemo(
     () =>
@@ -275,12 +282,8 @@ export function CaseListPage() {
         .slice(0, CASE_LIST_ORDER_LIMIT),
     [filtered, myId],
   )
-  // 다른 페이지의 사건으로 옮겨 가면 그 페이지를 연다
-  const selectCase = (caseId: string | null) => {
-    if (caseId === null) return select(null)
-    const index = filtered.findIndex((c) => c.caseId === caseId)
-    setQuery({ selected: caseId, page: index < 0 ? query.page : Math.floor(index / PAGE_SIZE) + 1 })
-  }
+  // 다른 페이지의 사건을 고르면 그 페이지가 열린다 (listPage)
+  const selectCase = (caseId: string | null) => select(caseId)
   // 상세의 "목록으로"가 지금 조건 · 연 줄의 목록으로 돌아오게 주소와 순서를 넘긴다
   const openCase = (caseId: string) =>
     navigate(`/security/cases/${caseId}`, {
@@ -293,9 +296,12 @@ export function CaseListPage() {
   const [motionPaused, setMotionPaused] = useState(false)
   // 오른쪽 요약 (#759). 직원이 [요약 보기]를 누를 때만 연다
   const [summaryId, setSummaryId] = useState<string | null>(null)
+  // [요약 보기]를 다시 누르면 같은 사건이어도 다시 조회한다
+  const [summaryNonce, setSummaryNonce] = useState(0)
   const summaryIndex = summaryId ? queueOrder.indexOf(summaryId) : -1
   const openSummary = (caseId: string) => {
     setSummaryId(caseId)
+    setSummaryNonce((n) => n + 1)
     selectCase(caseId)
   }
   const restrictedById = (caseId: string) => {
@@ -823,6 +829,8 @@ export function CaseListPage() {
       </Card>
       <CaseSummaryDrawer
         caseId={summaryId}
+        // 새로고침 · [목록에 반영]처럼 직원이 목록을 갱신하면 열린 요약도 다시 조회한다 (#760 Codex 리뷰)
+        reloadKey={`${refreshKey}-${summaryNonce}`}
         merchantName={
           summaryId
             ? merchantNames.get(filtered.find((c) => c.caseId === summaryId)?.merchantId ?? '')

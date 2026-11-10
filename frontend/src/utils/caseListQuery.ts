@@ -167,6 +167,8 @@ export function caseListStateFor(state: unknown, caseId: string): CaseListReturn
   const at = path.indexOf('?')
   const params = new URLSearchParams(at < 0 ? '' : path.slice(at + 1))
   params.set('case', caseId)
+  // 옮겨 간 사건이 다른 페이지에 있을 수 있다. 페이지는 목록이 선택한 사건 위치로 다시 정한다
+  params.delete('page')
   const order =
     typeof state === 'object' && state !== null && 'caseListOrder' in state
       ? state.caseListOrder

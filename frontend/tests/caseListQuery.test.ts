@@ -155,7 +155,11 @@ test('상세의 이전 · 다음 사건은 목록 순서를 따르고, 순서에
 })
 
 test('이전 · 다음으로 옮기면 순서는 그대로, 목록으로 돌아갈 때 옮겨 간 줄이 선택된다 (#759)', () => {
-  const state = { caseListReturn: '/security/cases?sort=risk&case=5', caseListOrder: ['5', '9'] }
+  const state = {
+    caseListReturn: '/security/cases?sort=risk&page=1&case=5',
+    caseListOrder: ['5', '9'],
+  }
+  // 옮겨 간 사건이 다른 페이지일 수 있어 페이지는 빼고, 목록이 선택한 사건 위치로 정한다 (#760 Codex 리뷰)
   assert.deepEqual(caseListStateFor(state, '9'), {
     caseListReturn: '/security/cases?sort=risk&case=9',
     caseListOrder: ['5', '9'],

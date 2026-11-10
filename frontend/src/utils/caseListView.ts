@@ -122,6 +122,22 @@ export function isRestrictedCase(c: CaseSummary, myId: number | null) {
   return c.status !== 'CLOSED' && (myId === null || c.assigneeStaffId !== String(myId))
 }
 
+/**
+ * 보여 줄 페이지. 선택한 사건이 목록에 있으면 그 사건이 있는 페이지다 — 상세에서 이전 · 다음으로
+ * 다른 페이지의 사건까지 옮겨 간 뒤 돌아와도 그 줄이 보인다 (#760 Codex 리뷰).
+ * 없으면 주소의 페이지, 목록이 줄어 그 페이지가 없어졌으면 마지막 페이지다.
+ */
+export function listPage(
+  ids: string[],
+  selected: string | null,
+  requested: number,
+  pageSize: number,
+) {
+  const index = selected ? ids.indexOf(selected) : -1
+  if (index >= 0) return Math.floor(index / pageSize) + 1
+  return Math.min(requested, Math.max(1, Math.ceil(ids.length / pageSize)))
+}
+
 /** 다시 불러온 목록에서 새로 생긴 사건 — 첫 조회에는 추측하지 않는다 */
 export function newCaseIds(previous: CaseSummary[] | null, current: CaseSummary[]) {
   if (previous === null) return []
