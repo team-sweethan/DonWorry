@@ -1,9 +1,11 @@
+import { CheckOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { FinanceMoney } from './FinanceMoney'
 import { useCallback, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import {
   Alert,
   Button,
+  Descriptions,
   Drawer,
   Form,
   Input,
@@ -75,6 +77,7 @@ export function FinanceExpenseManager({
   revision: number
   onChanged: () => void
 }) {
+  const [detail, setDetail] = useState<ExpenseRow | null>(null)
   const [tab, setTab] = useState('balance')
   const [period, setPeriod] = useState(() => ({
     from: dayjs(today).subtract(30, 'day').format('YYYY-MM-DD'),
@@ -155,7 +158,10 @@ export function FinanceExpenseManager({
       className="finance-drawer"
       title="잔액·지출 설정"
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        setDetail(null)
+        onClose()
+      }}
       closable={!busy}
       maskClosable={!busy}
       width="min(1100px, 100vw)"
@@ -280,7 +286,23 @@ export function FinanceExpenseManager({
                         </>
                       ),
                     },
-                    { title: '항목', dataIndex: 'title' },
+                    {
+                      title: '지출명',
+                      render: (_, row) => (
+                        <Button
+                          type="link"
+                          style={{
+                            padding: 0,
+                            height: 'auto',
+                            whiteSpace: 'normal',
+                            textAlign: 'left',
+                          }}
+                          onClick={() => setDetail(row)}
+                        >
+                          {row.title}
+                        </Button>
+                      ),
+                    },
                     {
                       title: '종류',
                       render: (_, row) => (row.kind === 'ONEOFF' ? '일회성' : '정기'),
@@ -314,7 +336,12 @@ export function FinanceExpenseManager({
                               description={`${row.title} ${money(row.amount)} · 미래 예정액에 다시 포함하지 않습니다.`}
                               onConfirm={() => complete(row)}
                             >
-                              <Button size="small" disabled={busy}>
+                              <Button
+                                type="primary"
+                                size="small"
+                                icon={<CheckOutlined />}
+                                disabled={busy}
+                              >
                                 지출 완료
                               </Button>
                             </Popconfirm>
@@ -322,6 +349,8 @@ export function FinanceExpenseManager({
                               <>
                                 <Button
                                   size="small"
+                                  type="text"
+                                  icon={<EditOutlined />}
                                   disabled={busy}
                                   onClick={() => edit(row.expense!)}
                                 >
@@ -333,7 +362,13 @@ export function FinanceExpenseManager({
                                     perform('지출 삭제', () => deletePlannedExpense(row.id))
                                   }
                                 >
-                                  <Button size="small" danger disabled={busy}>
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<DeleteOutlined />}
+                                    danger
+                                    disabled={busy}
+                                  >
                                     삭제
                                   </Button>
                                 </Popconfirm>
@@ -348,6 +383,59 @@ export function FinanceExpenseManager({
             ))}
         </>
       )}
+      <Modal
+        title="지출 상세"
+        open={detail !== null && open}
+        onCancel={() => setDetail(null)}
+        footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
+      >
+        {detail && (
+          <Descriptions
+            column={1}
+            size="small"
+            items={[
+              { key: 'title', label: '지출명', children: detail.title },
+              {
+                key: 'kind',
+                label: '종류',
+                children: detail.kind === 'ONEOFF' ? '일회성 지출' : '정기 지출',
+              },
+              {
+                key: 'amount',
+                label: '금액',
+                children: <FinanceMoney value={detail.amount} compact={false} />,
+              },
+              {
+                key: 'category',
+                label: '분류',
+                children:
+                  categories.find(({ value }) => value === detail.category)?.label ??
+                  detail.category,
+              },
+              { key: 'planned', label: '지출 예정일', children: detail.originalDate },
+              {
+                key: 'status',
+                label: '상태',
+                children: detail.paidAt
+                  ? '지출 완료'
+                  : detail.originalDate < today
+                    ? '연체 예정 · 예측 제외'
+                    : '예정',
+              },
+              { key: 'paid', label: '완료 반영일', children: detail.paidAt ? detail.date : '—' },
+              {
+                key: 'memo',
+                label: '메모',
+                children: (
+                  <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                    {detail.memo || '—'}
+                  </span>
+                ),
+              },
+            ]}
+          />
+        )}
+      </Modal>
       <Modal
         className="finance-dialog"
         title={draft === 'new' ? '일회성 지출 등록' : '일회성 지출 수정'}
