@@ -92,7 +92,10 @@ public class OwnerCashFlowController {
             @RequestAttribute("settlement.ownerMerchant") Long merchant,
             @PathVariable Long id,
             @Valid @RequestBody(required = false) ExpenseCompletionRequest request) {
-        return ok(management.completeExpense(merchant, id, request == null ? null : request.paidDate()));
+        return ok(
+                request == null
+                        ? management.completeExpense(merchant, id)
+                        : management.completeExpense(merchant, id, request.paidDate()));
     }
 
     private <T> ResponseEntity<T> ok(T value) {
