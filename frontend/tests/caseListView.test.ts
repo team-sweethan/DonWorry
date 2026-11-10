@@ -239,3 +239,12 @@ test('레인 폭은 사건 수의 제곱근만큼, 빈 레인도 최소 1칸 몫
     'minmax(168px, 1.00fr) minmax(168px, 5.74fr) minmax(168px, 2.00fr) minmax(168px, 1.00fr)',
   )
 })
+
+test('흐름 보드 레인도 같은 시각이면 표처럼 숫자 순서다 (#760)', () => {
+  const at = hoursAgo(3)
+  const lanes = boardLanes([
+    make({ caseId: '10', status: 'DECISION_PENDING', createdAt: at }),
+    make({ caseId: '9', status: 'DECISION_PENDING', createdAt: at }),
+  ])
+  assert.deepEqual(ids(lanes.decision), ['9', '10'])
+})

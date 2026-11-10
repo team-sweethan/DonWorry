@@ -157,7 +157,11 @@ export function boardLanes(cases: CaseSummary[]) {
     lanes[boardLaneOf[c.status]].push(c)
   }
   for (const key of Object.keys(lanes) as BoardLaneKey[]) {
-    lanes[key].sort((a, b) => created(a) - created(b) || a.caseId.localeCompare(b.caseId))
+    // 같은 시각이면 표(sortCases)와 같은 숫자 순서 — 9가 10보다 앞 (#760 리뷰)
+    lanes[key].sort(
+      (a, b) =>
+        created(a) - created(b) || a.caseId.localeCompare(b.caseId, undefined, { numeric: true }),
+    )
   }
   return lanes
 }

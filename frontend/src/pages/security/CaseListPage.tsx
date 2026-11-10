@@ -107,8 +107,12 @@ const laneStatus: Record<BoardLaneKey, StatusFilter> = {
   action: 'ACTION_PENDING',
   failed: 'ACTION_FAILED',
 }
+// 필터에서 생성됨 · 조사 중 하나만 골라도 접수 · 보고서 준비 레인이 걸린 것으로 본다 (#760 리뷰)
 const laneOfStatus = (status: StatusFilter): BoardLaneKey | null =>
-  (Object.keys(laneStatus) as BoardLaneKey[]).find((lane) => laneStatus[lane] === status) ?? null
+  status === 'OPEN' || status === 'INVESTIGATING'
+    ? 'prepare'
+    : ((Object.keys(laneStatus) as BoardLaneKey[]).find((lane) => laneStatus[lane] === status) ??
+      null)
 
 const reportOptions: Array<{ value: ReportFilter | 'ALL'; label: string }> = [
   { value: 'ALL', label: '보고서 전체' },
@@ -172,9 +176,10 @@ export function CaseListPage() {
   // 목록 조건은 주소 쿼리에 둔다 (#243) — 상세에 갔다 와도 · 새로고침해도 같은 조건으로 열린다
   // 라우터로 들어온 주소(홈 카드 · 뒤로 가기 · 새로고침)가 바뀌면 그 주소의 조건을 다시 읽는다
   const [searchParams] = useSearchParams()
+  // 주소가 바뀔 때만 다시 읽는다 — 렌더마다 새 객체가 되면 아래 목록 계산이 마우스 올림마다 다시 돈다 (#760 리뷰)
+  const parsedQuery = useMemo(() => parseCaseListQuery(searchParams), [searchParams])
   const [edited, setEdited] = useState<{ routerSearch: string; query: CaseListQuery } | null>(null)
-  const query =
-    edited?.routerSearch === location.search ? edited.query : parseCaseListQuery(searchParams)
+  const query = edited?.routerSearch === location.search ? edited.query : parsedQuery
   // 조건을 바꾸면 1페이지로 간다. 방문 기록은 쌓지 않는다 — 뒤로 가기는 이전 화면으로 간다
   // 라우터로 주소를 바꾸면 ServerSession이 세션을 다시 확인하며 본문을 다시 그려 입력 중인 검색어 · 목록이 사라진다.
   // 그래서 브라우저 주소만 바꾸고, 라우터가 쓰는 history.state는 그대로 둔다
@@ -319,14 +324,12 @@ export function CaseListPage() {
     })
   }
   // 상세 · 요약의 이전 · 다음 이동 순서 (#759) — 지금 조건 · 정렬 그대로, 열 수 없는 남의 진행 중 사건은 뺀다
-  const queueOrder = useMemo(
-    () =>
-      filtered
-        .filter((c) => !isRestrictedCase(c, myId))
-        .map((c) => c.caseId)
-        .slice(0, CASE_LIST_ORDER_LIMIT),
+  const fullOrder = useMemo(
+    () => filtered.filter((c) => !isRestrictedCase(c, myId)).map((c) => c.caseId),
     [filtered, myId],
   )
+  // 상세로 넘기는 순서만 history.state 크기 때문에 자른다. 요약 패널은 전체 순서를 쓴다 (#760 리뷰)
+  const queueOrder = useMemo(() => fullOrder.slice(0, CASE_LIST_ORDER_LIMIT), [fullOrder])
   // 다른 페이지의 사건을 고르면 그 페이지가 열린다 (listPage)
   const selectCase = (caseId: string | null) => select(caseId)
   // 상세의 "목록으로"가 지금 조건 · 연 줄의 목록으로 돌아오게 주소와 순서를 넘긴다
@@ -339,14 +342,16 @@ export function CaseListPage() {
     })
   // 움직임 끄기 (#759) — 보안 홈과 같다. 시스템의 움직임 줄이기 설정은 CSS가 따로 끈다
   const [motionPaused, setMotionPaused] = useState(false)
-  // 오른쪽 요약 (#759). 직원이 [요약 보기]를 누를 때만 연다
-  // 시간축 점과 표 줄을 함께 강조한다 (#759)
+  // 흐름 보드 칩과 표 줄을 함께 강조한다 (#759)
   const [hoverId, setHoverId] = useState<string | null>(null)
+  // 오른쪽 요약 (#759). 직원이 [요약 보기]를 누를 때만 연다
   const [summaryId, setSummaryId] = useState<string | null>(null)
   // [요약 보기]를 다시 누르면 같은 사건이어도 다시 조회한다
   const [summaryNonce, setSummaryNonce] = useState(0)
-  const summaryIndex = summaryId ? queueOrder.indexOf(summaryId) : -1
-  // 조건이 바뀌어 연 사건이 목록 순서에서 빠지면 요약을 닫는다 — 이전 · 다음이 막힌 채 남지 않게 (#760 리뷰)
+  const summaryIndex = summaryId ? fullOrder.indexOf(summaryId) : -1
+  // 조건이 바뀌어 연 사건이 목록 순서에서 빠지면 요약을 아예 닫는다. 숨겨만 두면 조건을 되돌렸을 때
+  // 저절로 다시 열려 누르지 않은 열람 기록이 남는다 (#760 리뷰). 렌더 중 상태 맞추기(React 문서의 파생 상태 방식)
+  if (summaryId !== null && summaryIndex < 0) setSummaryId(null)
   const summaryOpenId = summaryIndex >= 0 ? summaryId : null
   const openSummary = (caseId: string) => {
     setSummaryId(caseId)
@@ -591,7 +596,8 @@ export function CaseListPage() {
     if (event.target !== event.currentTarget) return
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      select(selectedId === caseId ? null : caseId)
+      // 마우스 클릭과 같게 — 요약이 열려 있으면 그 사건 요약으로 옮긴다 (#760 리뷰)
+      onRowClick(caseId)
       return
     }
     // O: 상세 열기, S: 오른쪽 요약 — 열 수 있는 사건만
@@ -909,10 +915,10 @@ export function CaseListPage() {
             ? merchantNames.get(cases.find((c) => c.caseId === summaryOpenId)?.merchantId ?? '')
             : undefined
         }
-        prev={summaryIndex > 0 ? queueOrder[summaryIndex - 1] : null}
+        prev={summaryIndex > 0 ? fullOrder[summaryIndex - 1] : null}
         next={
-          summaryIndex >= 0 && summaryIndex < queueOrder.length - 1
-            ? queueOrder[summaryIndex + 1]
+          summaryIndex >= 0 && summaryIndex < fullOrder.length - 1
+            ? fullOrder[summaryIndex + 1]
             : null
         }
         onMove={openSummary}

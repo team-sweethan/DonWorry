@@ -346,7 +346,7 @@
   transform: scaleY(1);
 }
 .case-queue-table .ant-table-tbody > tr.is-urgent > td {
-  background: linear-gradient(90deg, var(--cq-red-soft), transparent 40%);
+  background: none;
 }
 .case-queue-table .ant-table-tbody > tr.is-selected > td:first-child::before {
   background: var(--cq-blue);
@@ -469,7 +469,7 @@
   color: var(--cq-red);
 }
 .case-queue-score.is-deny .case-queue-score-bar i {
-  background: linear-gradient(90deg, #f87171, var(--cq-red));
+  background: var(--cq-red);
   box-shadow: 0 0 6px rgb(220 38 38 / 0.45);
 }
 /* 80점 이상 막대 위로 한 번 지나가는 빛 */
@@ -495,6 +495,8 @@
   align-items: center;
   gap: 5px;
   min-width: 64px;
+  /* "14일 22시간"처럼 길어도 한 줄로 */
+  white-space: nowrap;
   color: #475569;
 }
 .case-queue-elapsed-bar {
@@ -519,7 +521,7 @@
   font-weight: 700;
 }
 .case-queue-elapsed.is-overdue .case-queue-elapsed-bar i {
-  background: repeating-linear-gradient(-45deg, #f87171 0 4px, var(--cq-red) 4px 8px);
+  background: var(--cq-red);
 }
 
 .case-queue-muted {
@@ -885,7 +887,7 @@
   padding: 12px 14px 14px;
   border: 1px solid var(--cq-line);
   border-radius: 10px;
-  background: linear-gradient(180deg, #fbfdff, #fff 70%);
+  background: #fff;
   animation: case-queue-rise 520ms var(--cq-ease) 160ms backwards;
 }
 .case-flow-head {
@@ -989,7 +991,7 @@
 }
 .case-flow-lane.is-failed {
   border-color: #fecaca;
-  background: linear-gradient(180deg, #fff7f7, #fff);
+  background: #f1f5f9;
 }
 .case-flow-lane.is-failed:not(.is-empty) .case-flow-lane-icon {
   animation: case-queue-ping-red 2s ease-out infinite;
@@ -1300,7 +1302,7 @@
   padding: 0 12px;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
-  background: linear-gradient(180deg, #f5f9ff, #eaf2ff);
+  background: #fff;
   color: #1e40af;
   font: inherit;
   font-size: 13px;
@@ -1531,7 +1533,7 @@
   border: 0;
   border-top: 1px solid var(--cq-line);
   border-radius: 0;
-  background: linear-gradient(180deg, #f8fafc, #fff);
+  background: #fff;
 }
 .case-flow-lanes {
   gap: 28px;
@@ -1736,12 +1738,8 @@
     --fill 1.6s var(--cq-ease);
 }
 .case-flow-fill {
-  background: linear-gradient(
-    90deg,
-    #e3eeff 0,
-    #e8f1ff calc(var(--fill, 0%) - 8%),
-    rgb(232 241 255 / 0) var(--fill, 0%)
-  );
+  /* 경과만큼 단색으로 채운다 (그라데이션 없이) */
+  background: linear-gradient(90deg, #e8f1ff var(--fill, 0%), transparent var(--fill, 0%));
 }
 /* 차오르는 끝의 빛 — 지금도 시간이 가고 있다 */
 .case-flow-fill::after {
@@ -1784,7 +1782,7 @@
   background:
     radial-gradient(circle, #2563eb 0 1.8px, rgb(96 165 250 / 0.45) 2.4px, transparent 3.6px)
       repeat-x,
-    linear-gradient(90deg, #dbeafe, #93c5fd) no-repeat;
+    linear-gradient(#bfdbfe, #bfdbfe) no-repeat;
   background-size:
     18px 8px,
     100% 2px;
@@ -1885,7 +1883,7 @@
   padding: 0 7px 0 6px;
   border: 1px solid var(--cq-line);
   border-radius: 5px;
-  background: linear-gradient(90deg, #e3eeff 0, #e8f1ff 45%, rgb(232 241 255 / 0) 55%), #fff;
+  background: linear-gradient(90deg, #e8f1ff 50%, #fff 50%);
   color: var(--cq-text);
   font-size: 11px;
   font-weight: 650;

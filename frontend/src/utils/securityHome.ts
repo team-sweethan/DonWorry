@@ -50,7 +50,6 @@ export function priorityReason(c: CaseSummary, now = Date.now()): PriorityReason
   return 'OTHER'
 }
 
-/** 지금 처리할 사건 — 종료되지 않은 Case를 이유 순, 같은 이유면 오래된 순으로 limit건. */
 /**
  * 확인 우선순 비교 — 이유 순, 같은 이유면 오래된 순. 홈 "먼저 확인할 사건"과 사건 목록 정렬 · 다음 확인이
  * 같은 규칙을 쓴다 (#759). 종료되지 않은 사건끼리 비교한다
@@ -62,6 +61,7 @@ export function comparePriority(a: CaseSummary, b: CaseSummary, now = Date.now()
   )
 }
 
+/** 지금 처리할 사건 — 종료되지 않은 Case를 이유 순, 같은 이유면 오래된 순으로 limit건. */
 export function priorityCases(cases: CaseSummary[], limit = 6, now = Date.now()) {
   return cases
     .filter(isOpen)
