@@ -1,7 +1,7 @@
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, Button, Tag } from 'antd'
 import dayjs from 'dayjs'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   getLoginSecurity,
   type LoginAttemptAccount,
@@ -17,11 +17,23 @@ import { INSIDER_MONITOR_POLL_LIMIT_MS } from '../../utils/insiderMonitorPolling
 import { displayRuleCode, displayRuleText } from '../../utils/ruleDisplayCode'
 import { InsiderCaseDrawer } from './InsiderCasesPage'
 import { SeverityMark } from './InsiderParts'
+import { LoginAttackRadar, type RadarNotice } from './LoginAttackRadar'
+import {
+  attemptKey,
+  buildIncidents,
+  type Incident,
+  type IncidentKind,
+  type Launch,
+  REPLAY_DELAY_MS,
+  scheduleReplay,
+} from './loginSecurityTimeline'
 import './caseAssignmentShared.css'
 import './LoginSecurityPage.css'
 
 // 공격 장면을 따라가도록 자주 읽는다. 멈춤 기준(5분 무조작)은 내부자 관제와 같다
 const POLL_MS = 2_000
+// 화면 시계(서버 시각 기준, 재생 지연만큼 뒤)를 움직이는 간격 — 실시간 시도 줄 · 사건 번호가 레이더 점과 같이 나타난다
+const VIEW_TICK_MS = 250
 
 const stateClass: Record<LoginSecurityState, string> = {
   NORMAL: 'is-normal',
@@ -36,9 +48,17 @@ const accountLabel: Record<LoginAttemptAccount, string> = {
   OPERATOR: '가맹점 계정',
 }
 
+// 사건 종류마다 같은 색 — 그래프 표시선 · 사건 목록 · 실시간 시도 번호가 같은 색을 쓴다
+const incidentColor: Record<IncidentKind, string> = {
+  entry: '#b45309',
+  takeover: '#dc2626',
+  relogin: '#7c3aed',
+  block: '#7f1d1d',
+}
+const circled = (n: number) => '①②③④⑤⑥⑦⑧⑨⑩'[n - 1] ?? `(${n})`
+
 const time = (iso: string) => dayjs(iso).format('HH:mm:ss')
-const attemptKey = (a: LoginSecurityAttempt) =>
-  `${a.occurredAt}-${a.account}-${a.staffId ?? ''}-${a.success}`
+const ms = (iso: string) => new Date(iso).getTime()
 
 function bannerText(d: LoginSecurityDashboard) {
   const recent = `최근 ${d.windowMinutes}분 실패율 ${d.recentFailureRatePercent}% · 시도 ${d.recentAttempts}건`
@@ -56,6 +76,27 @@ function bannerText(d: LoginSecurityDashboard) {
     head: `평소 — ${recent}`,
     sub: `시도 ${d.minAttempts}건 이상 · 실패율 ${d.failureRatePercentThreshold}% 이상이면 경계로 바뀝니다.`,
   }
+}
+
+function noticeOf(i: Incident): RadarNotice {
+  const head = circled(i.n)
+  if (i.kind === 'entry') return { key: i.key, text: `${head} 경계 진입`, tone: 'alert' }
+  if (i.kind === 'takeover')
+    return { key: i.key, text: `${head} 탈취 의심 · ${i.tip[0]}`, tone: 'takeover' }
+  if (i.kind === 'relogin') return { key: i.key, text: `${head} ${i.title}`, tone: 'takeover' }
+  return { key: i.key, text: `${head} ${i.title}`, tone: 'block' }
+}
+
+function NumberMark({ incident }: { incident: Incident }) {
+  return (
+    <span
+      className="ls-num"
+      style={{ background: incidentColor[incident.kind] }}
+      aria-label={`사건 ${incident.n}`}
+    >
+      {incident.n}
+    </span>
+  )
 }
 
 /** 경계까지 — 두 기준을 각각 채워 가는 막대. 둘 다 넘으면 경계 */
@@ -95,14 +136,26 @@ function Gauge({
   )
 }
 
-// 꺾은선 그림 크기(viewBox) — 실제 폭은 칸에 맞춰 늘어난다
+// 꺾은선 그림 크기(viewBox) — 실제 폭은 칸에 맞춰 늘어난다. 위쪽 여백은 사건 번호 자리
 const W = 640
-const H = 200
-const PAD = { left: 34, right: 64, top: 12, bottom: 24 }
+const H = 230
+const PAD = { left: 34, right: 64, top: 40, bottom: 24 }
 
-/** 10초 단위 시도 · 실패 꺾은선 — 같은 단위(건)라 축 하나. 마우스를 올린 칸의 숫자를 위에 보인다 */
-function AttemptLine({ d }: { d: LoginSecurityDashboard }) {
+/**
+ * 10초 단위 시도 · 실패 꺾은선 + 경계 구간 음영 + 사건 번호 표시선 (#788).
+ * 칸에 마우스를 올리면 그 칸 숫자를, 번호 표시선 · 아래 사건 줄에 올리면 그 사건 설명을 보인다.
+ */
+function AttemptLine({
+  d,
+  incidents,
+  onOpenCase,
+}: {
+  d: LoginSecurityDashboard
+  incidents: Incident[]
+  onOpenCase: (id: number) => void
+}) {
   const [hover, setHover] = useState<number | null>(null)
+  const [active, setActive] = useState<string | null>(null)
   const points = d.buckets
   const peak = Math.max(5, ...points.map((p) => p.attempts))
   const yMax = Math.ceil(peak / 5) * 5
@@ -118,15 +171,31 @@ function AttemptLine({ d }: { d: LoginSecurityDashboard }) {
   const shown = hover ?? last
   const at = points[shown]
   const step = points.length > 1 ? plotW / (points.length - 1) : plotW
+  const firstStart = points[0] ? ms(points[0].start) : 0
+  const bucketMs = d.bucketSeconds * 1_000
+  const xt = (iso: string) => x(Math.max(0, Math.min(last, (ms(iso) - firstStart) / bucketMs)))
+
+  // 같은 칸에 몰린 번호는 동그라미만 옆으로 비킨다
+  const markers: { incident: Incident; lineX: number; dotX: number }[] = []
+  for (const incident of incidents) {
+    const lineX = xt(incident.at)
+    const prev = markers.at(-1)
+    const dotX = prev && lineX - prev.lineX < 22 ? prev.dotX + 22 : lineX
+    markers.push({ incident, lineX, dotX: Math.min(W - PAD.right + 20, dotX) })
+  }
+  const tip = markers.find((m) => m.incident.key === active)
+
   return (
     <section className="ls-chart ca-panel-box" aria-labelledby="ls-chart-heading">
       <header className="ls-panel-head">
         <h2 id="ls-chart-heading" className="dw-section-title">
-          로그인 시도 ({d.bucketSeconds}초 단위)
+          로그인 시도 · 실패 ({d.bucketSeconds}초 단위)
         </h2>
         <div className="ls-legend" aria-hidden="true">
           <span className="ls-key is-attempts">시도</span>
           <span className="ls-key is-failures">실패</span>
+          <span className="ls-key is-zone">경계 구간</span>
+          <span className="ls-key is-mark">사건 표시</span>
         </div>
       </header>
       {at && (
@@ -136,71 +205,193 @@ function AttemptLine({ d }: { d: LoginSecurityDashboard }) {
           {hover === null && ' · 가장 최근'}
         </p>
       )}
-      <svg
-        className="ls-svg"
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={`최근 ${d.windowMinutes}분 ${d.bucketSeconds}초 단위 로그인 시도와 실패. 가장 최근 칸 시도 ${points[last]?.attempts ?? 0}건, 실패 ${points[last]?.failures ?? 0}건`}
-        onMouseLeave={() => setHover(null)}
-      >
-        {[0, 0.5, 1].map((r) => (
-          <g key={r}>
-            <line
-              className="ls-grid"
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={y(yMax * r)}
-              y2={y(yMax * r)}
+      <div className="ls-chart-body">
+        <svg
+          className="ls-svg"
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={`최근 ${d.windowMinutes}분 ${d.bucketSeconds}초 단위 로그인 시도와 실패. 가장 최근 칸 시도 ${points[last]?.attempts ?? 0}건, 실패 ${points[last]?.failures ?? 0}건`}
+          onMouseLeave={() => {
+            setHover(null)
+            setActive(null)
+          }}
+        >
+          {d.attackPeriods.map((p) => {
+            const x1 = p.start === null ? x(0) : xt(p.start)
+            const x2 = p.end === null ? x(last) : xt(p.end)
+            return (
+              <rect
+                key={`${p.start ?? 'before'}-${p.end ?? 'now'}`}
+                className="ls-zone"
+                x={x1}
+                y={PAD.top}
+                width={Math.max(0, x2 - x1)}
+                height={plotH}
+              />
+            )
+          })}
+          {[0, 0.5, 1].map((r) => (
+            <g key={r}>
+              <line
+                className="ls-grid"
+                x1={PAD.left}
+                x2={W - PAD.right}
+                y1={y(yMax * r)}
+                y2={y(yMax * r)}
+              />
+              <text className="ls-tick" x={PAD.left - 6} y={y(yMax * r) + 4} textAnchor="end">
+                {Math.round(yMax * r)}
+              </text>
+            </g>
+          ))}
+          {points.map((p, i) =>
+            i % 6 === 0 ? (
+              <text key={p.start} className="ls-tick" x={x(i)} y={H - 6} textAnchor="middle">
+                {dayjs(p.start).format('HH:mm')}
+              </text>
+            ) : null,
+          )}
+          <path className="ls-line is-attempts" d={path((i) => points[i].attempts)} />
+          <path className="ls-line is-failures" d={path((i) => points[i].failures)} />
+          {at && (
+            <>
+              <line
+                className="ls-cursor"
+                x1={x(shown)}
+                x2={x(shown)}
+                y1={PAD.top}
+                y2={PAD.top + plotH}
+              />
+              <circle className="ls-dot is-attempts" cx={x(shown)} cy={y(at.attempts)} r={4} />
+              <circle className="ls-dot is-failures" cx={x(shown)} cy={y(at.failures)} r={4} />
+            </>
+          )}
+          {points[last] && (
+            <>
+              <text className="ls-end" x={x(last) + 8} y={y(points[last].attempts) + 4}>
+                시도 {points[last].attempts}
+              </text>
+              <text className="ls-end" x={x(last) + 8} y={y(points[last].failures) + 16}>
+                실패 {points[last].failures}
+              </text>
+            </>
+          )}
+          {points.map((p, i) => (
+            <rect
+              key={p.start}
+              className="ls-hit"
+              x={x(i) - step / 2}
+              y={PAD.top}
+              width={step}
+              height={plotH}
+              onMouseEnter={() => {
+                setHover(i)
+                setActive(null)
+              }}
             />
-            <text className="ls-tick" x={PAD.left - 6} y={y(yMax * r) + 4} textAnchor="end">
-              {Math.round(yMax * r)}
-            </text>
-          </g>
-        ))}
-        {points.map((p, i) =>
-          i % 6 === 0 ? (
-            <text key={p.start} className="ls-tick" x={x(i)} y={H - 6} textAnchor="middle">
-              {dayjs(p.start).format('HH:mm')}
-            </text>
-          ) : null,
+          ))}
+          {markers.map(({ incident, lineX, dotX }) => {
+            const color = incidentColor[incident.kind]
+            const on = active === incident.key
+            return (
+              <g
+                key={incident.key}
+                className="ls-mark-group"
+                onMouseEnter={() => setActive(incident.key)}
+              >
+                <rect
+                  className="ls-hit"
+                  x={lineX - 8}
+                  y={PAD.top - 32}
+                  width={16}
+                  height={plotH + 32}
+                />
+                <line
+                  x1={lineX}
+                  x2={lineX}
+                  y1={PAD.top - 6}
+                  y2={PAD.top + plotH}
+                  stroke={color}
+                  strokeWidth={on ? 2.4 : 1.6}
+                  strokeDasharray="4 3"
+                />
+                {dotX !== lineX && (
+                  <line
+                    x1={lineX}
+                    x2={dotX}
+                    y1={PAD.top - 6}
+                    y2={PAD.top - 18}
+                    stroke={color}
+                    strokeWidth={1.2}
+                  />
+                )}
+                <circle
+                  cx={dotX}
+                  cy={PAD.top - 20}
+                  r={on ? 11 : 10}
+                  fill={color}
+                  stroke={on ? '#0f172a' : 'none'}
+                  strokeWidth={2}
+                />
+                <text className="ls-mark-num" x={dotX} y={PAD.top - 16} textAnchor="middle">
+                  {incident.n}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+        {tip && (
+          <div
+            className="ls-tip"
+            style={{ left: `${Math.min(82, Math.max(18, (tip.lineX / W) * 100))}%` }}
+          >
+            <strong>
+              {circled(tip.incident.n)} {time(tip.incident.at)} {tip.incident.title}
+            </strong>
+            {tip.incident.tip.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </div>
         )}
-        <path className="ls-line is-attempts" d={path((i) => points[i].attempts)} />
-        <path className="ls-line is-failures" d={path((i) => points[i].failures)} />
-        {at && (
-          <>
-            <line
-              className="ls-cursor"
-              x1={x(shown)}
-              x2={x(shown)}
-              y1={PAD.top}
-              y2={PAD.top + plotH}
-            />
-            <circle className="ls-dot is-attempts" cx={x(shown)} cy={y(at.attempts)} r={4} />
-            <circle className="ls-dot is-failures" cx={x(shown)} cy={y(at.failures)} r={4} />
-          </>
-        )}
-        {points[last] && (
-          <>
-            <text className="ls-end" x={x(last) + 8} y={y(points[last].attempts) + 4}>
-              시도 {points[last].attempts}
-            </text>
-            <text className="ls-end" x={x(last) + 8} y={y(points[last].failures) + 16}>
-              실패 {points[last].failures}
-            </text>
-          </>
-        )}
-        {points.map((p, i) => (
-          <rect
-            key={p.start}
-            className="ls-hit"
-            x={x(i) - step / 2}
-            y={PAD.top}
-            width={step}
-            height={plotH}
-            onMouseEnter={() => setHover(i)}
-          />
-        ))}
-      </svg>
+      </div>
+      {incidents.length === 0 ? (
+        <p className="ls-incident-empty ls-muted">
+          아직 표시할 사건이 없어요. 경계 진입 · 탈취 의심 · 반출 차단이 생기면 번호가 쌓여요.
+        </p>
+      ) : (
+        <ol className="ls-incidents">
+          {incidents.map((incident) => {
+            const caseId = incident.caseId
+            return (
+              <li
+                key={incident.key}
+                className={active === incident.key ? 'is-active' : ''}
+                tabIndex={0}
+                onMouseEnter={() => setActive(incident.key)}
+                onMouseLeave={() => setActive(null)}
+                onFocus={() => setActive(incident.key)}
+                onBlur={() => setActive(null)}
+              >
+                <NumberMark incident={incident} />
+                <span className="ls-time">{time(incident.at)}</span>
+                <span className="ls-incident-text">
+                  <strong>{incident.title}</strong>
+                  <span className="ls-muted">{incident.detail}</span>
+                </span>
+                {caseId !== null && (incident.kind === 'takeover' || incident.kind === 'block') && (
+                  <Button size="small" onClick={() => onOpenCase(caseId)}>
+                    사건 보기
+                  </Button>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      <p className="ls-caption">
+        그래프 한 장으로 "공격 → 경계 → 뚫림 → 막음"을 읽어요. 번호 표시선이나 아래 줄에 마우스를
+        올리면 내용이 뜨고, 아래 목록에서 바로 사건으로 가요.
+      </p>
     </section>
   )
 }
@@ -212,17 +403,18 @@ function attemptText(a: LoginSecurityAttempt) {
   return `${who} ${a.success ? '로그인' : '로그인 실패'}`
 }
 
-/** 실시간 시도 — 최신이 위. 응답 시각 기준 한 번 갱신 간격 안에 들어온 줄은 잠깐 강조한다 */
+/** 실시간 시도 — 최신이 위. 화면 시계까지 일어난 시도만, 막 들어온 줄은 잠깐 강조한다 */
 function AttemptFeed({
   attempts,
-  generatedAt,
+  viewNow,
+  incidentByAttempt,
 }: {
   attempts: LoginSecurityAttempt[]
-  generatedAt: string
+  viewNow: number
+  incidentByAttempt: Map<string, Incident>
 }) {
-  const now = new Date(generatedAt).getTime()
-  const isFresh = (a: LoginSecurityAttempt) =>
-    now - new Date(a.occurredAt).getTime() <= POLL_MS + 1_000
+  const visible = attempts.filter((a) => ms(a.occurredAt) <= viewNow)
+  const isFresh = (a: LoginSecurityAttempt) => viewNow - ms(a.occurredAt) <= 1_500
   return (
     <section className="ls-feed ca-panel-box" aria-labelledby="ls-feed-heading">
       <header className="ls-panel-head">
@@ -231,13 +423,14 @@ function AttemptFeed({
         </h2>
         <span className="ls-muted">최근 10분 · 최신이 위</span>
       </header>
-      {attempts.length === 0 ? (
+      {visible.length === 0 ? (
         <ListEmpty title="최근 10분 로그인 시도가 없습니다." />
       ) : (
-        <ol className="ls-rows" aria-live="polite">
-          {attempts.map((a) => {
+        <ol className="ls-rows">
+          {visible.map((a) => {
             const key = attemptKey(a)
             const tone = a.suspected ? 'is-bad' : a.success ? 'is-good' : 'is-fail'
+            const incident = incidentByAttempt.get(key)
             return (
               <li key={key} className={`${tone}${isFresh(a) ? ' is-fresh' : ''}`}>
                 <span className="ls-time">{time(a.occurredAt)}</span>
@@ -246,6 +439,7 @@ function AttemptFeed({
                 </span>
                 <span className="ls-who">{attemptText(a)}</span>
                 {a.account !== 'UNKNOWN' && <span className="ls-muted">{a.device}</span>}
+                {incident && <NumberMark incident={incident} />}
                 {a.suspected && <Tag color="red">탈취 의심</Tag>}
               </li>
             )
@@ -257,18 +451,53 @@ function AttemptFeed({
 }
 
 export function LoginSecurityPage() {
-  const [data, setData] = useState<LoginSecurityDashboard | null>(null)
+  // latest = 마지막으로 받은 응답, shown = 화면 시계가 따라잡은 응답(상태 띠 · 막대 · 그래프 · 경보)
+  const [latest, setLatest] = useState<LoginSecurityDashboard | null>(null)
+  const [shown, setShown] = useState<LoginSecurityDashboard | null>(null)
+  const [viewNow, setViewNow] = useState(0)
+  const [launches, setLaunches] = useState<Launch[]>([])
+  const [notices, setNotices] = useState<RadarNotice[]>([])
   const [error, setError] = useState(false)
   const [stopped, setStopped] = useState(false)
   const [caseId, setCaseId] = useState<number | null>(null)
   const pollFrom = useRef<number | null>(null)
   const busy = useRef(false)
+  // 브라우저 시계 - 서버 시계, 아직 화면 시계가 못 따라잡은 응답, 이미 날린 시도, 이미 레이더에 띄운 사건
+  const clockOffset = useRef(0)
+  const pending = useRef<LoginSecurityDashboard[]>([])
+  const latestRef = useRef<LoginSecurityDashboard | null>(null)
+  const launched = useRef<Set<string> | null>(null)
+  const noticed = useRef<Set<string> | null>(null)
+  const viewFloor = useRef(0)
 
   const refresh = useCallback(async () => {
     if (busy.current) return
     busy.current = true
     try {
-      setData(await getLoginSecurity())
+      const d = await getLoginSecurity()
+      const nowMs = Date.now()
+      clockOffset.current = nowMs - ms(d.generatedAt)
+      latestRef.current = d
+      if (launched.current === null) {
+        // 처음 열었을 때 이미 있던 시도 · 사건은 날리거나 띄우지 않는다
+        launched.current = new Set(d.attempts.map(attemptKey))
+        noticed.current = new Set(buildIncidents(d).map((i) => i.key))
+        // 처음 받은 응답까지는 바로 보인다 — 화면 시계가 이 시각 앞으로 돌아가 줄이 잠깐 사라지지 않게
+        viewFloor.current = ms(d.generatedAt)
+        setShown(d)
+        setViewNow(viewFloor.current)
+      } else {
+        const next = scheduleReplay(d.attempts, launched.current, {
+          clockOffsetMs: clockOffset.current,
+          nowMs,
+          serverNowMs: ms(d.generatedAt),
+          maxAgeMs: POLL_MS * 3,
+        })
+        launched.current = new Set(d.attempts.map(attemptKey))
+        if (next.length > 0) setLaunches(next)
+        pending.current.push(d)
+      }
+      setLatest(d)
       setError(false)
     } catch {
       setError(true)
@@ -304,18 +533,49 @@ export function LoginSecurityPage() {
     }
   }, [refresh, restart])
 
+  // 화면 시계 — 서버 시각 기준으로 재생 지연만큼 뒤. 따라잡은 응답을 보이고, 새로 보인 사건을 레이더에 띄운다
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const view = Math.max(viewFloor.current, Date.now() - clockOffset.current - REPLAY_DELAY_MS)
+      setViewNow(view)
+      let caught: LoginSecurityDashboard | undefined
+      while (pending.current[0] && ms(pending.current[0].generatedAt) <= view) {
+        caught = pending.current.shift()
+      }
+      if (caught) setShown(caught)
+      const d = latestRef.current
+      const seen = noticed.current
+      if (!d || !seen) return
+      const fresh = buildIncidents(d).filter((i) => ms(i.at) <= view && !seen.has(i.key))
+      if (fresh.length === 0) return
+      fresh.forEach((i) => seen.add(i.key))
+      setNotices(fresh.map(noticeOf))
+    }, VIEW_TICK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
+
   // 사건을 여는 것도 조작이다 — 멈춤 시계를 다시 센다
   const openCase = useCallback((id: number) => {
     pollFrom.current = Date.now()
     setCaseId(id)
   }, [])
 
-  const banner = data ? bannerText(data) : null
+  const incidents = useMemo(
+    () => (latest ? buildIncidents(latest).filter((i) => ms(i.at) <= viewNow) : []),
+    [latest, viewNow],
+  )
+  const incidentByAttempt = useMemo(() => {
+    const map = new Map<string, Incident>()
+    for (const i of incidents) if (i.attemptKey) map.set(i.attemptKey, i)
+    return map
+  }, [incidents])
+
+  const banner = shown ? bannerText(shown) : null
   return (
     <div className="ls-page">
       <PageHeader
         title="로그인 보안"
-        description={`전체 로그인 실패율(계정 · IP 구분 없음)과 탈취 의심 로그인을 봐요. 화면을 보는 동안 ${POLL_MS / 1000}초마다 새로 고치고, ${INSIDER_MONITOR_POLL_LIMIT_MS / 60_000}분 동안 조작이 없으면 멈춰요.`}
+        description={`전체 로그인 실패율(계정 · IP 구분 없음)과 탈취 의심 로그인을 봐요. 화면을 보는 동안 ${POLL_MS / 1000}초마다 새로 고치고, 새 시도는 일어난 간격대로 약 ${Math.round(REPLAY_DELAY_MS / 1000)}초 늦게 보여요. ${INSIDER_MONITOR_POLL_LIMIT_MS / 60_000}분 동안 조작이 없으면 멈춰요.`}
       />
       {stopped && (
         <Alert
@@ -338,57 +598,66 @@ export function LoginSecurityPage() {
           message="로그인 보안 정보를 불러오지 못했습니다. 잠시 뒤 다시 시도해요."
         />
       )}
-      {!data ? (
+      {!shown || !latest ? (
         !error && <ListLoading label="로그인 현황을 불러오는 중" rows={4} columns={1} />
       ) : (
         <>
-          <div className={`ls-banner ${stateClass[data.state]}`} role="status">
+          <div className={`ls-banner ${stateClass[shown.state]}`} role="status">
             <span className="ls-dot-state" aria-hidden="true" />
             <div>
               <strong>{banner?.head}</strong>
               <span>{banner?.sub}</span>
             </div>
-            <span className="ls-muted ls-clock">{time(data.generatedAt)} 갱신</span>
+            <span className="ls-muted ls-clock">{time(shown.generatedAt)} 기준</span>
           </div>
 
-          <div className="ls-top">
-            <section className="ls-progress ca-panel-box" aria-labelledby="ls-progress-heading">
-              <header className="ls-panel-head">
-                <h2 id="ls-progress-heading" className="dw-section-title">
-                  경계까지
-                </h2>
-                <span className="ls-muted">
-                  최근 {data.windowMinutes}분 · 두 기준을 모두 넘으면 경계
-                </span>
-              </header>
-              <div className="ls-gauges">
-                <Gauge
-                  label="로그인 시도"
-                  value={data.recentAttempts}
-                  limit={data.minAttempts}
-                  unit="건"
-                />
-                <Gauge
-                  label="실패율"
-                  value={data.recentFailureRatePercent}
-                  limit={data.failureRatePercentThreshold}
-                  unit="%"
-                />
+          <div className="ls-live">
+            <LoginAttackRadar state={shown.state} launches={launches} notices={notices} />
+            <div className="ls-live-side">
+              <section className="ls-progress ca-panel-box" aria-labelledby="ls-progress-heading">
+                <header className="ls-panel-head">
+                  <h2 id="ls-progress-heading" className="dw-section-title">
+                    경계까지
+                  </h2>
+                  <span className="ls-muted">
+                    최근 {shown.windowMinutes}분 · 두 기준을 모두 넘으면 경계
+                  </span>
+                </header>
+                <div className="ls-gauges">
+                  <Gauge
+                    label="로그인 시도"
+                    value={shown.recentAttempts}
+                    limit={shown.minAttempts}
+                    unit="건"
+                  />
+                  <Gauge
+                    label="실패율"
+                    value={shown.recentFailureRatePercent}
+                    limit={shown.failureRatePercentThreshold}
+                    unit="%"
+                  />
+                </div>
+              </section>
+              <div className="ls-kpis">
+                <div className="ls-kpi">
+                  <small>없는 아이디로 시도 (최근 {shown.windowMinutes}분)</small>
+                  <strong>{shown.recentUnknownAccountFailures}건</strong>
+                </div>
+                <div className={`ls-kpi${shown.suspectedTakeoverCount > 0 ? ' is-hot' : ''}`}>
+                  <small>탈취 의심 (24시간)</small>
+                  <strong>{shown.suspectedTakeoverCount}건</strong>
+                </div>
               </div>
-            </section>
-            <div className="ls-kpi">
-              <small>없는 아이디로 시도 (최근 {data.windowMinutes}분)</small>
-              <strong>{data.recentUnknownAccountFailures}건</strong>
-            </div>
-            <div className={`ls-kpi${data.suspectedTakeoverCount > 0 ? ' is-hot' : ''}`}>
-              <small>탈취 의심 (24시간)</small>
-              <strong>{data.suspectedTakeoverCount}건</strong>
             </div>
           </div>
 
           <div className="ls-columns">
-            <AttemptLine d={data} />
-            <AttemptFeed attempts={data.attempts} generatedAt={data.generatedAt} />
+            <AttemptLine d={shown} incidents={incidents} onOpenCase={openCase} />
+            <AttemptFeed
+              attempts={latest.attempts}
+              viewNow={viewNow}
+              incidentByAttempt={incidentByAttempt}
+            />
           </div>
 
           <section className="ca-panel-box" aria-labelledby="ls-alerts-heading">
@@ -398,11 +667,11 @@ export function LoginSecurityPage() {
               </h2>
               <span className="ls-muted">최근 24시간</span>
             </header>
-            {data.alerts.length === 0 ? (
+            {shown.alerts.length === 0 ? (
               <ListEmpty title="최근 24시간 탈취 의심 경보가 없습니다." />
             ) : (
               <ul className="ls-rows ls-alert-rows">
-                {data.alerts.map((alert) => {
+                {shown.alerts.map((alert) => {
                   const linkedCase = alert.insiderCaseId
                   return (
                     <li key={alert.alertId} className={alert.open ? 'is-bad' : ''}>

@@ -13,16 +13,19 @@ import com.donworry.fds.api.InsiderAlertSeverity;
 import com.donworry.fds.api.InsiderRule;
 import com.donworry.identity.api.LoginAttackCriteria;
 import com.donworry.identity.api.LoginAttempt;
+import com.donworry.identity.api.LoginTrafficBucket;
 import com.donworry.identity.api.LoginTrafficCount;
 import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.investigation.dto.LoginSecurityAlertResponse;
 import com.donworry.investigation.dto.LoginSecurityAttemptResponse;
+import com.donworry.investigation.dto.LoginSecurityPeriodResponse;
 import com.donworry.investigation.entity.InsiderCaseAlert;
 import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,6 +114,67 @@ class LoginSecurityServiceTests {
                         tuple("Chrome · Windows", true),
                         tuple("Edge · Windows", false),
                         tuple("기타 브라우저 · 기타 운영체제", true));
+    }
+
+    // 그래프 ① 경계 진입은 실패가 기준(5분 30건 · 30%)을 처음 넘은 초다 — 10초 칸으로 어림하면 발표 설명과 시각이 어긋난다 (#788)
+    @Test
+    void dashboard_whenAttackStartsWithinRange_returnsPeriodFromCrossingSecond() {
+        perSecond(failuresEverySecond(at("06:58:00"), 40));
+
+        var response = service.dashboard(NOW);
+
+        assertThat(response.attackPeriods()).containsExactly(new LoginSecurityPeriodResponse(at("06:58:29"), null));
+    }
+
+    // 기준 아래로 내려간 초에 구간을 닫는다 — 닫지 않으면 끝난 공격이 계속 경계 음영으로 남는다
+    @Test
+    void dashboard_whenAttackEnded_returnsClosedPeriod() {
+        List<LoginTrafficBucket> buckets = new ArrayList<>(failuresEverySecond(at("06:56:00"), 40));
+        buckets.add(LoginTrafficBucket.builder()
+                .start(at("06:57:00"))
+                .attempts(100)
+                .failures(0)
+                .unknownAccountFailures(0)
+                .build());
+        perSecond(buckets);
+
+        var response = service.dashboard(NOW);
+
+        assertThat(response.attackPeriods())
+                .containsExactly(new LoginSecurityPeriodResponse(at("06:56:29"), at("06:57:00")));
+    }
+
+    // 그래프 범위(06:55:10부터) 앞에서 이미 경계였으면 진입 시각이 없다 — 범위 첫 초를 진입으로 찍으면 가짜 ①이 생긴다
+    @Test
+    void dashboard_whenAttackStartedBeforeRange_doesNotInventEntryTime() {
+        perSecond(failuresEverySecond(at("06:54:00"), 40));
+
+        var response = service.dashboard(NOW);
+
+        assertThat(response.attackPeriods()).containsExactly(new LoginSecurityPeriodResponse(null, at("06:59:10")));
+    }
+
+    // 1초 칸 집계만 대역으로 돌려준다 — 꺾은선(10초 칸) 호출은 빈 목록
+    private void perSecond(List<LoginTrafficBucket> buckets) {
+        when(traffic.countPerBucket(any(), any(), any()))
+                .thenAnswer(call -> Duration.ofSeconds(1).equals(call.getArgument(2)) ? buckets : List.of());
+    }
+
+    private static List<LoginTrafficBucket> failuresEverySecond(Instant from, int count) {
+        List<LoginTrafficBucket> buckets = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            buckets.add(LoginTrafficBucket.builder()
+                    .start(from.plusSeconds(i))
+                    .attempts(1)
+                    .failures(1)
+                    .unknownAccountFailures(1)
+                    .build());
+        }
+        return buckets;
+    }
+
+    private static Instant at(String utcTime) {
+        return Instant.parse("2026-11-10T" + utcTime + "Z");
     }
 
     private static LoginAttempt attempt(Instant at, String device) {

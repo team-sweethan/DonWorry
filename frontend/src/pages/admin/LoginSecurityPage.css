@@ -91,18 +91,107 @@
   }
 }
 
-/* 경계까지 + 숫자 두 개 */
-.ls-top {
+/* 레이더 | 경계까지 + 숫자 두 개 (#788) */
+.ls-live {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--dw-space-3);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--dw-space-4);
   align-items: stretch;
+}
+.ls-live-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-3);
+  min-width: 0;
+}
+.ls-kpis {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dw-space-3);
 }
 .ls-gauges {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--dw-space-4);
   padding: 0 16px 14px;
+}
+
+/* 레이더 — 관제 칸이라 어둡게. 색은 LoginAttackRadar 그림과 같다 */
+.ls-radar {
+  position: relative;
+  overflow: hidden;
+  min-height: 360px;
+  background: #070d22;
+  border: 1px solid #1b2547;
+  border-radius: var(--dw-radius-panel);
+}
+.ls-radar-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+}
+.ls-radar-title,
+.ls-radar-rate,
+.ls-radar-foot {
+  position: absolute;
+  color: #aab4d4;
+  font-size: var(--dw-text-caption);
+  pointer-events: none;
+}
+.ls-radar-title {
+  top: 12px;
+  left: 14px;
+  color: #e6ebff;
+  font-weight: 600;
+}
+.ls-radar-rate {
+  top: 10px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.ls-radar-rate strong {
+  color: #fff;
+  font-size: var(--dw-text-number-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ls-radar-foot {
+  right: 14px;
+  bottom: 10px;
+  left: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.ls-radar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.ls-radar-legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  content: '';
+}
+.ls-radar-legend .is-unknown::before {
+  background: #ff5d5d;
+}
+.ls-radar-legend .is-fail::before {
+  background: #ff9f43;
+}
+.ls-radar-legend .is-ok::before {
+  background: #4ade80;
+}
+.ls-radar-legend .is-suspected::before {
+  background: #ffe066;
 }
 .ls-gauge-text {
   display: flex;
@@ -192,6 +281,102 @@
 }
 .ls-key.is-failures::before {
   background: #dc2626;
+}
+.ls-key.is-zone::before {
+  height: 10px;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid #fecaca;
+}
+.ls-key.is-mark::before {
+  width: 2px;
+  height: 11px;
+  background: #334155;
+}
+
+/* 경계 구간 · 사건 번호 표시선 · 설명 상자 (#788) */
+.ls-chart-body {
+  position: relative;
+}
+.ls-zone {
+  fill: rgba(220, 38, 38, 0.1);
+}
+.ls-mark-group {
+  cursor: pointer;
+}
+.ls-mark-num {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.ls-tip {
+  position: absolute;
+  top: 36px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 280px;
+  padding: 9px 12px;
+  color: #f8fafc;
+  font-size: var(--dw-text-caption);
+  line-height: 1.5;
+  background: #0f172a;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ls-tip strong {
+  font-size: var(--dw-text-secondary);
+}
+.ls-num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 50%;
+}
+.ls-incidents {
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+.ls-incidents li {
+  display: grid;
+  grid-template-columns: 20px 64px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 4px;
+  border-top: 1px solid var(--dw-border);
+  border-radius: var(--dw-radius-control);
+  font-size: var(--dw-text-secondary);
+}
+.ls-incidents li.is-active,
+.ls-incidents li:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+.ls-incident-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.ls-incident-empty {
+  margin: 0;
+  padding: 10px 16px;
+}
+.ls-caption {
+  margin: 0;
+  padding: 10px 16px 14px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  border-top: 1px solid var(--dw-border);
 }
 .ls-readout {
   margin: 0 16px;
@@ -308,18 +493,16 @@
 }
 
 @media (max-width: 1100px) {
-  .ls-top {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .ls-progress {
-    grid-column: 1 / -1;
-  }
+  .ls-live,
   .ls-columns {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 600px) {
-  .ls-gauges {
-    grid-template-columns: minmax(0, 1fr);
+  .ls-incidents li {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+  }
+  .ls-incidents .ls-time {
+    display: none;
   }
 }

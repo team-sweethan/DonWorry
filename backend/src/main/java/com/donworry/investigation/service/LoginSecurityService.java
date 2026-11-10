@@ -13,12 +13,14 @@ import com.donworry.identity.api.SecurityStaffEntry;
 import com.donworry.investigation.dto.LoginSecurityAlertResponse;
 import com.donworry.investigation.dto.LoginSecurityAttemptResponse;
 import com.donworry.investigation.dto.LoginSecurityBucketResponse;
+import com.donworry.investigation.dto.LoginSecurityPeriodResponse;
 import com.donworry.investigation.dto.LoginSecurityResponse;
 import com.donworry.investigation.dto.LoginSecurityState;
 import com.donworry.investigation.entity.InsiderCaseAlert;
 import com.donworry.investigation.repository.InsiderCaseAlertRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class LoginSecurityService {
     // 꺾은선 칸 길이(구간은 탐지 window) · 실시간 시도 줄 수와 범위 · 경보 목록 범위
     static final Duration BUCKET = Duration.ofSeconds(10);
+    // 경계 구간을 셀 칸 — 화면이 시:분:초로 보이므로 1초 (#788)
+    static final Duration PERIOD_STEP = Duration.ofSeconds(1);
     static final int MAX_ATTEMPTS = 40;
     static final Duration ATTEMPT_LOOKBACK = Duration.ofMinutes(10);
     static final Duration ALERT_LOOKBACK = Duration.ofHours(24);
@@ -84,6 +88,7 @@ public class LoginSecurityService {
                         .count())
                 .bucketSeconds((int) BUCKET.toSeconds())
                 .buckets(buckets(now, criteria.window()))
+                .attackPeriods(attackPeriods(now, criteria))
                 .attempts(traffic.findRecentAttempts(now.minus(ATTEMPT_LOOKBACK), now, MAX_ATTEMPTS).stream()
                         .map(a -> attempt(a, names, alerts))
                         .toList())
@@ -151,10 +156,64 @@ public class LoginSecurityService {
                 : LoginSecurityState.NORMAL;
     }
 
+    // 꺾은선 범위의 끝 — 지금 칸의 끝(10초 단위, UTC). 시작은 여기서 window만큼 앞
+    private static Instant chartEnd(Instant now) {
+        long step = BUCKET.toMillis();
+        return Instant.ofEpochMilli(Math.floorDiv(now.toEpochMilli(), step) * step + step);
+    }
+
+    // 꺾은선 범위 안 경계 구간 (#788). 범위 첫 초부터 지금 초까지 초마다 "그 초까지 window 동안" 시도 · 실패를 탐지 기준으로 판정한다
+    // 범위 첫 초를 판정하려면 window만큼 앞 기록이 필요하고, 첫 초가 진입인지 알려면 그 1초 앞도 판정해야 해서 window + 1초 앞부터 센다
+    // 한계: 초 단위 칸이라 상태 띠(정확한 (now - window, now] 구간)와 경계선에서 최대 1초 어긋날 수 있다
+    private List<LoginSecurityPeriodResponse> attackPeriods(Instant now, LoginAttackCriteria criteria) {
+        int windowSteps = (int) criteria.window().dividedBy(PERIOD_STEP);
+        Instant rangeStart = chartEnd(now).minus(criteria.window());
+        Instant from = rangeStart.minus(criteria.window()).minus(PERIOD_STEP);
+        Instant to = now.truncatedTo(ChronoUnit.SECONDS).plus(PERIOD_STEP);
+        int steps = (int) Duration.between(from, to).dividedBy(PERIOD_STEP);
+        long[] attempts = new long[steps];
+        long[] failures = new long[steps];
+        for (LoginTrafficBucket b : traffic.countPerBucket(from, to, PERIOD_STEP)) {
+            int i = (int) Duration.between(from, b.start()).dividedBy(PERIOD_STEP);
+            if (i < 0 || i >= steps) continue;
+            attempts[i] = b.attempts();
+            failures[i] = b.failures();
+        }
+        // 누적합 — sum[i]는 0 ~ i-1 칸의 합
+        long[] attemptSum = new long[steps + 1];
+        long[] failureSum = new long[steps + 1];
+        for (int i = 0; i < steps; i++) {
+            attemptSum[i + 1] = attemptSum[i] + attempts[i];
+            failureSum[i + 1] = failureSum[i] + failures[i];
+        }
+        int first = windowSteps + 1;
+        List<LoginSecurityPeriodResponse> periods = new ArrayList<>();
+        boolean inAttack = underAttack(criteria, attemptSum, failureSum, first - 1, windowSteps);
+        Instant start = null;
+        for (int i = first; i < steps; i++) {
+            boolean attack = underAttack(criteria, attemptSum, failureSum, i, windowSteps);
+            Instant at = from.plus(PERIOD_STEP.multipliedBy(i));
+            if (attack && !inAttack) start = at;
+            if (!attack && inAttack) {
+                periods.add(new LoginSecurityPeriodResponse(start, at));
+                start = null;
+            }
+            inAttack = attack;
+        }
+        if (inAttack) periods.add(new LoginSecurityPeriodResponse(start, null));
+        return periods;
+    }
+
+    // i번째 초까지 window 칸(i - windowSteps + 1 ~ i)이 경계 기준을 넘는지
+    private static boolean underAttack(
+            LoginAttackCriteria criteria, long[] attemptSum, long[] failureSum, int i, int windowSteps) {
+        int lo = Math.max(0, i - windowSteps + 1);
+        return criteria.isUnderAttack(attemptSum[i + 1] - attemptSum[lo], failureSum[i + 1] - failureSum[lo]);
+    }
+
     // 지금 칸을 포함해 탐지 구간(window)만큼 BUCKET 칸. 빈 칸은 0으로 채운다. 칸 경계는 10초 단위(UTC)에 맞춘다
     private List<LoginSecurityBucketResponse> buckets(Instant now, Duration window) {
-        long step = BUCKET.toMillis();
-        Instant end = Instant.ofEpochMilli(Math.floorDiv(now.toEpochMilli(), step) * step + step);
+        Instant end = chartEnd(now);
         Instant start = end.minus(window);
         Map<Instant, LoginTrafficBucket> counted = traffic.countPerBucket(start, end, BUCKET).stream()
                 .collect(Collectors.toMap(LoginTrafficBucket::start, Function.identity(), (a, b) -> a));

@@ -44,6 +44,15 @@ export type LoginSecurityAlert = {
   insiderCaseId: number | null
 }
 
+/**
+ * 경계 구간 (#788) — 서버가 1초 단위로 센다.
+ * start null = 그래프 범위 앞에서 이미 경계(진입 시각 모름), end null = 아직 경계 중
+ */
+export type LoginSecurityPeriod = {
+  start: string | null
+  end: string | null
+}
+
 export type LoginSecurityDashboard = {
   generatedAt: string
   state: LoginSecurityState
@@ -58,6 +67,8 @@ export type LoginSecurityDashboard = {
   suspectedTakeoverCount: number
   bucketSeconds: number
   buckets: LoginSecurityBucket[]
+  /** buckets 범위 안 경계 구간, 시각 오름차순 */
+  attackPeriods: LoginSecurityPeriod[]
   /** 최근 시도 최신순 */
   attempts: LoginSecurityAttempt[]
   alerts: LoginSecurityAlert[]
