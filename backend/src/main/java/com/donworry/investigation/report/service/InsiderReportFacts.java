@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.Builder;
 
 // 해제 검토 보고서 본문 (#675) — 사실은 코드가 세고, 설명은 걸린 규칙에 맞춘 고정 문장(AI 미사용)
 // 고객 번호 · 세션 번호 · IP · 원문은 값으로 넣지 않는다. 고객은 "서로 다른 몇 명"만 센다
@@ -37,6 +38,17 @@ final class InsiderReportFacts {
 
     // 평소 기간 [from, to) — 한국 0시 경계, 날짜 정확히 30개. 그 안의 기록에서 근거 기록은 이미 빠져 있다
     record Baseline(Instant from, Instant to, List<StaffAccessRecorded> events) {}
+
+    // SEC-INS-10 로그인 사실 (#770) — 탈취 의심 로그인과 그 앞뒤. 브라우저 · 운영체제 이름만 담고 IP는 넣지 않는다
+    // firstExportAttemptSeconds = 로그인 뒤 첫 거래 내역 내보내기 시도까지 초(없으면 null)
+    @Builder
+    record LoginAttack(
+            Instant loginAt,
+            String device,
+            List<String> usualDevices,
+            long failuresBeforeLogin,
+            int accessAfterLogin,
+            Long firstExportAttemptSeconds) {}
 
     // 평소 대비 항목 — 평소와 이번을 같은 방법으로 센다
     private enum Measure {
@@ -67,6 +79,7 @@ final class InsiderReportFacts {
             List<StaffAccessRecorded> events,
             Map<Long, String> caseCustomers,
             Baseline baseline,
+            LoginAttack loginAttack,
             Instant now) {
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("insiderCaseId", insiderCase.getId());
@@ -78,6 +91,7 @@ final class InsiderReportFacts {
         facts.put("alerts", alerts.stream().map(InsiderReportFacts::alertRow).toList());
         facts.put("access", access(events, caseCustomers));
         facts.put("baseline", baseline(baseline, events));
+        if (loginAttack != null) facts.put("loginAttack", loginAttack(loginAttack));
 
         Set<InsiderRule> rules =
                 alerts.stream().map(InsiderCaseAlert::getRuleCode).collect(Collectors.toSet());
@@ -104,6 +118,17 @@ final class InsiderReportFacts {
         row.put("severity", alert.getSeverity().name());
         row.put("summary", alert.getSummary());
         row.put("raisedAt", alert.getRaisedAt().toString());
+        return row;
+    }
+
+    private static Map<String, Object> loginAttack(LoginAttack login) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("loginAt", login.loginAt().toString());
+        row.put("device", login.device());
+        row.put("usualDevices", login.usualDevices());
+        row.put("failuresBeforeLogin", login.failuresBeforeLogin());
+        row.put("accessAfterLogin", login.accessAfterLogin());
+        row.put("firstExportAttemptSeconds", login.firstExportAttemptSeconds());
         return row;
     }
 
@@ -267,12 +292,20 @@ final class InsiderReportFacts {
         if (rules.contains(InsiderRule.INS_07)) {
             normal.add("처음 보는 브라우저로 로그인한 직후의 행동이라, 본인이 아닐 가능성(계정 도용)도 함께 확인해야 합니다.");
         }
+        if (rules.contains(InsiderRule.INS_10)) {
+            normal.add(
+                    "로그인 실패가 몰린 시간(로그인 공격 경계)에 처음 보는 브라우저로 들어온 로그인입니다. 다른 사이트에서 유출된 비밀번호로 다른 사람이 들어왔을 수 있으니, 그 시각에 본인이 로그인했는지 직접 확인하세요.");
+        }
         if (rules.contains(InsiderRule.INS_08) || rules.contains(InsiderRule.INS_09)) {
             normal.add("거래 목록을 많이 보거나 여러 고객을 검색한 것은 가맹점 문의 · 차지백 처리처럼 담당 사건과 이어진 업무였다면 설명될 수 있습니다.");
         }
 
         List<String> released = new ArrayList<>();
         released.add("정지를 풀면 이 직원은 다시 고객정보 화면을 쓸 수 있습니다. 같은 행동이 반복되면 규칙이 다시 경보를 띄웁니다.");
+        if (rules.contains(InsiderRule.INS_10)) {
+            released.add(
+                    "본인이 아니었다면 정지만 풀지 말고 [사용자 관리]의 [비밀번호 초기화]로 임시 비밀번호를 본인에게 직접 전달하세요. 비밀번호를 그대로 두면 같은 유출 비밀번호로 다시 들어올 수 있습니다.");
+        }
         if (rules.contains(InsiderRule.INS_05)) {
             released.add("차단된 내보내기는 실행되지 않았습니다. 막힌 시도로는 파일이 만들어지지 않았습니다.");
         }

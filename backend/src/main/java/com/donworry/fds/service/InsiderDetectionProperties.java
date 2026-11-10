@@ -18,6 +18,8 @@ public record InsiderDetectionProperties(
         // INS-07 높음: 처음 보는 브라우저로 로그인한 뒤 이 시간 안 원문 열람 · 비교할 지난 성공 로그인 기간 (#643)
         @DefaultValue("30m") Duration ins07AfterLogin,
         @DefaultValue("30d") Duration ins07Lookback,
+        // INS-10 높음(#770): 로그인 공격 중 성공한 로그인의 브라우저 · 운영체제를 비교할 지난 성공 로그인 기간
+        @DefaultValue("30d") Duration ins10Lookback,
         // INS-08 주의: 이 시간 안 거래 목록 · 내보내기 행 합계가 N 이상이고 담당 사건과 이어진 행 비율이 이 값 미만
         // 높음(#651): 같은 조건에서 행 합계가 이 값 이상 — 높음부터 내보내기가 막힌다(주의에 머물며 계속 빼가지 못하게)
         @DefaultValue("1h") Duration ins08Window,

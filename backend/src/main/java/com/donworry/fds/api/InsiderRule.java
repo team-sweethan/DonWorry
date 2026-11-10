@@ -1,6 +1,6 @@
 package com.donworry.fds.api;
 
-// 내부자 탐지 규칙 (#516, ADR-0082) — INS-07 · 08 · 09는 6b(#643), INS-05는 7b(#651)
+// 내부자 탐지 규칙 (#516, ADR-0082) — INS-07 · 08 · 09는 6b(#643), INS-05는 7b(#651), INS-10은 #770
 // code = 화면 · 응답 · 경보 문장에 보이는 표시 코드(SEC-INS-0x, #664). 저장은 enum 이름(INS_0x) 그대로
 public enum InsiderRule {
     INS_01("SEC-INS-01", "담당 밖 접근 반복"),
@@ -11,7 +11,9 @@ public enum InsiderRule {
     INS_07("SEC-INS-07", "처음 보는 브라우저 로그인 직후 전화번호 열람"),
     // 거래 목록 조회와 허용된 내보내기를 함께 센다 (#651)
     INS_08("SEC-INS-08", "업무 대비 거래 목록 · 내보내기 대량 조회"),
-    INS_09("SEC-INS-09", "담당 무관 고객 반복 검색");
+    INS_09("SEC-INS-09", "담당 무관 고객 반복 검색"),
+    // 접근 기록이 아니라 P1 로그인 공격 알림(StaffLoginUnderAttack)이 연다 (#770). 근거 줄 없음
+    INS_10("SEC-INS-10", "로그인 공격 중 처음 보는 브라우저 로그인");
 
     private final String code;
     private final String label;

@@ -6,6 +6,7 @@ import com.donworry.fds.api.InsiderAlertEvidenceReader;
 import com.donworry.fds.api.InsiderAlertMonitorReader;
 import com.donworry.fds.api.InsiderAlertRaised;
 import com.donworry.fds.api.InsiderAlertReader;
+import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.dto.CloseInsiderAlertRequest;
 import com.donworry.fds.dto.InsiderAlertDetailResponse;
 import com.donworry.fds.dto.InsiderAlertEvidenceResponse;
@@ -26,6 +27,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -69,6 +71,12 @@ public class InsiderAlertService
         return evidence.findAccessEventIdsOf(alertIds);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Instant> firstEventAt(Long alertId) {
+        return alerts.findById(alertId).map(InsiderAlert::getFirstEventAt);
+    }
+
     // 주의 경보는 사건을 열지 않으므로 뺀다 — 알림을 보내는 조건(isRaisedToOthers)과 같다
     @Override
     @Transactional(readOnly = true)
@@ -103,6 +111,16 @@ public class InsiderAlertService
                 .toList();
     }
 
+    // 로그인 보안 대시보드 (#770) — ADMIN 확인은 부르는 쪽(P3)이 한다
+    @Override
+    @Transactional(readOnly = true)
+    public List<InsiderAlertEntry> findAlertsOpenedBetween(Collection<InsiderRule> rules, Instant from, Instant to) {
+        if (rules.isEmpty()) return List.of();
+        return alerts.findByRuleCodeInAndCreatedAtBetweenOrderByCreatedAtDescIdDesc(rules, from, to).stream()
+                .map(InsiderAlertService::toEntry)
+                .toList();
+    }
+
     private static InsiderAlertEntry toEntry(InsiderAlert alert) {
         return InsiderAlertEntry.builder()
                 .alertId(alert.getId())
@@ -113,6 +131,8 @@ public class InsiderAlertService
                 .summary(alert.getSummary())
                 .createdAt(alert.getCreatedAt())
                 .closedAt(alert.getClosedAt())
+                .firstEventAt(alert.getFirstEventAt())
+                .lastEventAt(alert.getLastEventAt())
                 .build();
     }
 

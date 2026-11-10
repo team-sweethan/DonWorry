@@ -158,6 +158,22 @@ export type InsiderReportFacts = {
   }
   /** 평소(30일) 대비 (#749). 이 칸이 생기기 전에 만든 판에는 없다 */
   baseline?: InsiderReportBaseline
+  /** SEC-INS-10 탈취 의심 로그인 사실 (#770). INS-10이 없는 사건 · 이전 판에는 없다 */
+  loginAttack?: InsiderReportLoginAttack
+}
+
+/** 탈취 의심 로그인과 그 앞뒤 — 브라우저 · 운영체제 이름만, IP 없음 */
+export type InsiderReportLoginAttack = {
+  loginAt: string
+  device: string
+  /** 그 로그인 전 30일 성공 로그인의 브라우저 · 운영체제(겹침 없이) */
+  usualDevices: string[]
+  /** 그 로그인 전 1시간 이 계정의 로그인 실패 */
+  failuresBeforeLogin: number
+  /** 그 로그인부터 보고서를 만들 때까지 접근 기록 수 */
+  accessAfterLogin: number
+  /** 로그인 뒤 첫 거래 내역 내보내기 시도까지 초, 없으면 null */
+  firstExportAttemptSeconds: number | null
 }
 
 /** 평소(30일) 대비 한 항목 — 평소와 이번을 같은 방법으로 센 값 */

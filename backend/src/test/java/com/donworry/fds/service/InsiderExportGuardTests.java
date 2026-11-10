@@ -22,15 +22,22 @@ import com.donworry.fds.entity.InsiderAlertStatus;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
+import com.donworry.identity.api.LoginAttackCriteria;
+import com.donworry.identity.api.LoginTrafficCount;
+import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockReason;
+import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,17 +54,22 @@ class InsiderExportGuardTests {
     private final InsiderAlertEvidenceRepository evidence = mock(InsiderAlertEvidenceRepository.class);
     private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
     private final StaffAccountLocker locker = mock(StaffAccountLocker.class);
+    private final StaffLoginReader loginReader = mock(StaffLoginReader.class);
+    private final LoginTrafficReader traffic = mock(LoginTrafficReader.class);
     // 경보 저장은 실제 탐지 서비스로 — INS-05 등급 · 근거 · 이벤트가 실제 규칙대로 만들어지는지 본다
     private final InsiderDetectionService detection = new InsiderDetectionService(
             alerts,
             evidence,
             mock(StaffAccessReader.class),
             publisher,
-            InsiderDetectionProperties.builder().build(),
-            mock(StaffLoginReader.class),
+            InsiderDetectionProperties.builder()
+                    .ins10Lookback(Duration.ofDays(30))
+                    .build(),
+            loginReader,
             mock(StaffCaseScopeReader.class),
             locker,
-            mock(FdsRulePolicyRepository.class));
+            mock(FdsRulePolicyRepository.class),
+            traffic);
     private final InsiderExportGuardService guard = new InsiderExportGuardService(detection, locker);
 
     // 이 직원에게 열려 있는 경보 — 등급 조건 조회도 실제 쿼리처럼 이 목록에서 답한다
@@ -156,6 +168,44 @@ class InsiderExportGuardTests {
         var order = inOrder(alerts, locker);
         order.verify(alerts).lockDetectionState(STAFF);
         order.verify(locker).lockBySystem(STAFF, StaffLockReason.INSIDER_EXPORT_BLOCKED, 20L);
+    }
+
+    // 로그인 직후 탈취 의심 판정(비동기 알림)이 끝나기 전에 내보내기를 눌러도 막는다 (#777 Codex 보안 리뷰)
+    // — 판정을 기다리면 자동화된 공격 도구가 로그인 성공 직후 거래 내역을 통째로 받아 간다
+    @Test
+    void allowExport_whenLoginUnderAttackNotYetProcessed_blocksAndRaisesIns10() {
+        // 문지기는 지금 시각 기준 최근 로그인을 본다
+        Instant now = Instant.now();
+        StaffLogin usual = staffLogin(UUID.randomUUID(), now.minus(Duration.ofDays(2)), "Edge · Windows");
+        StaffLogin attacker = staffLogin(UUID.randomUUID(), now.minusSeconds(3), "기타 브라우저 · 기타 운영체제");
+        when(loginReader.findSuccessfulLogins(eq(STAFF), any(), any()))
+                .thenAnswer(call -> Stream.of(usual, attacker)
+                        .filter(l -> !l.occurredAt().isBefore(call.getArgument(1))
+                                && l.occurredAt().isBefore(call.getArgument(2)))
+                        .toList());
+        when(loginReader.findLogin(attacker.loginReference())).thenReturn(Optional.of(attacker));
+        when(traffic.criteria()).thenReturn(new LoginAttackCriteria(Duration.ofMinutes(5), 30, 0.3));
+        when(traffic.count(any(), any())).thenReturn(new LoginTrafficCount(40, 30, 28));
+        when(alerts.save(any())).thenAnswer(call -> {
+            InsiderAlert saved = call.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 30L + open.size());
+            open.add(saved);
+            return saved;
+        });
+
+        assertThat(guard.allowExport(STAFF)).isFalse();
+
+        assertThat(open).extracting(InsiderAlert::getRuleCode).containsExactly(InsiderRule.INS_10, InsiderRule.INS_05);
+        verify(locker).lockBySystem(eq(STAFF), eq(StaffLockReason.INSIDER_EXPORT_BLOCKED), any());
+    }
+
+    private static StaffLogin staffLogin(UUID reference, Instant at, String device) {
+        return StaffLogin.builder()
+                .staffId(STAFF)
+                .loginReference(reference)
+                .occurredAt(at)
+                .device(device)
+                .build();
     }
 
     private void savedAs(Long id) {

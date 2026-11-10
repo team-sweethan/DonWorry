@@ -23,6 +23,7 @@ import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
 import com.donworry.identity.api.CurrentStaff;
+import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.MerchantDirectoryEntry;
 import com.donworry.identity.api.MerchantDirectoryReader;
 import com.donworry.identity.api.SecurityStaffDirectory;
@@ -36,6 +37,7 @@ import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
+import com.donworry.identity.api.StaffLoginUnderAttack;
 import com.donworry.identity.api.StaffSummary;
 import java.time.Duration;
 import java.time.Instant;
@@ -75,6 +77,7 @@ class InsiderDetectionServiceTests {
             .ins03CautionRawViews(3)
             .ins07AfterLogin(Duration.ofMinutes(30))
             .ins07Lookback(Duration.ofDays(30))
+            .ins10Lookback(Duration.ofDays(30))
             .ins08Window(Duration.ofHours(1))
             .ins08CautionRows(1000)
             .ins08HighRows(3000)
@@ -94,7 +97,8 @@ class InsiderDetectionServiceTests {
             loginReader,
             scopeReader,
             mock(StaffAccountLocker.class),
-            rulePolicies);
+            rulePolicies,
+            mock(LoginTrafficReader.class));
     // 규칙 켜짐 · 꺼짐 줄 (#685). 비어 있으면 모든 규칙이 켜진 것
     private final List<FdsRulePolicy> policyRows = new ArrayList<>();
 
@@ -120,6 +124,11 @@ class InsiderDetectionServiceTests {
                                 && a.getRuleCode() == invocation.getArgument(1)
                                 && a.isOpen())
                         .findFirst());
+        when(alerts.findByStaffIdAndRuleCode(anyLong(), any()))
+                .thenAnswer(invocation -> savedAlerts.stream()
+                        .filter(a -> a.getStaffId().equals(invocation.getArgument(0))
+                                && a.getRuleCode() == invocation.getArgument(1))
+                        .toList());
         when(alerts.findByStaffIdAndStatus(anyLong(), eq(InsiderAlertStatus.OPEN)))
                 .thenAnswer(invocation -> savedAlerts.stream()
                         .filter(a -> a.getStaffId().equals(invocation.getArgument(0)) && a.isOpen())
@@ -264,6 +273,106 @@ class InsiderDetectionServiceTests {
         pastLogins(login(LOGIN, T0, "Chrome · macOS"));
 
         service.detect(given(rawView(1L, 501L, T0.plusSeconds(5 * 60))));
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 로그인 공격 중 처음 보는 브라우저로 들어온 뚫린 계정을 높음으로 올리지 않으면 거래 내역을 통째로 내보낸다 (#770)
+    @Test
+    void detectLoginUnderAttack_whenUnseenBrowser_raisesHighIns10Alert() {
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_10);
+            assertThat(a.getSeverity()).isEqualTo(InsiderAlertSeverity.HIGH);
+            assertThat(a.getFirstEventAt()).isEqualTo(T0);
+            assertThat(a.getSummary()).contains("기타 브라우저 · 기타 운영체제");
+        });
+        assertThat(savedEvidence).isEmpty();
+        ArgumentCaptor<InsiderAlertRaised> raised = ArgumentCaptor.forClass(InsiderAlertRaised.class);
+        verify(publisher).publishEvent(raised.capture());
+        assertThat(raised.getValue().rule()).isEqualTo(InsiderRule.INS_10);
+        assertThat(raised.getValue().severity()).isEqualTo(InsiderAlertSeverity.HIGH);
+    }
+
+    // 공격 중이어도 평소 브라우저로 들어온 진짜 직원을 높음으로 올리면 내보내기에서 정지된다 (#770)
+    @Test
+    void detectLoginUnderAttack_whenUsualBrowser_raisesNothing() {
+        loggedIn(T0, "Edge · Windows");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts).isEmpty();
+    }
+
+    // 예전에 INS-10으로 걸린 로그인의 브라우저를 평소 브라우저로 치면 공격자가 같은 브라우저로 다시 와서 통과한다 (#770 결정 A)
+    @Test
+    void detectLoginUnderAttack_whenBrowserSeenOnlyInFlaggedLogin_stillRaises() {
+        Instant flaggedAt = T0.minus(Duration.ofDays(1));
+        InsiderAlert earlier = InsiderAlert.open(
+                STAFF, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, "지난 공격", flaggedAt, flaggedAt, flaggedAt);
+        earlier.close(1L, "관리자", "정지 해제 · 비밀번호 초기화", flaggedAt.plusSeconds(600));
+        savedAlerts.add(earlier);
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(
+                login(OTHER_LOGIN, flaggedAt, "기타 브라우저 · 기타 운영체제"),
+                login(UUID.randomUUID(), T0.minus(Duration.ofDays(3)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts)
+                .filteredOn(InsiderAlert::isOpen)
+                .singleElement()
+                .satisfies(a -> assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_10));
+    }
+
+    // 한 경보에 합쳐진 중간 로그인이 판정 · 정지 해제 뒤 다시 판정되면 새 로그인 없이 계정이 또 정지된다 (#777 Codex 리뷰)
+    @Test
+    void detectLoginUnderAttack_whenLoginMergedIntoClosedAlert_doesNotReopen() {
+        Instant first = T0.minusSeconds(120);
+        Instant last = T0.plusSeconds(120);
+        Instant closedAt = T0.plusSeconds(1800);
+        InsiderAlert merged = InsiderAlert.open(
+                STAFF, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, "공격 중 로그인 세 번", first, last, first);
+        merged.close(1L, "관리자", "정지 해제 · 비밀번호 초기화", closedAt);
+        savedAlerts.add(merged);
+        when(alerts.findLastClosedAt(STAFF, InsiderRule.INS_10)).thenReturn(closedAt);
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(
+                login(OTHER_LOGIN, first, "기타 브라우저 · 기타 운영체제"),
+                login(UUID.randomUUID(), T0.minus(Duration.ofDays(3)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts).filteredOn(InsiderAlert::isOpen).isEmpty();
+    }
+
+    // 지난 로그인이 없는 신규 직원 계정이 공격 중에 뚫려도 울리지 않으면 놓친다 (#770 결정 4)
+    @Test
+    void detectLoginUnderAttack_whenNoPriorLogins_raises() {
+        loggedIn(T0, "Chrome · Windows");
+        pastLogins(login(LOGIN, T0, "Chrome · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts).singleElement().satisfies(a -> {
+            assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_10);
+            assertThat(a.getSummary()).contains("로그인 기록 없음");
+        });
+    }
+
+    // 관리자가 끈 INS-10이 계속 높음을 열면 내보내기 차단 · 정지가 이어진다 (#770)
+    @Test
+    void detectLoginUnderAttack_whenRuleDisabled_raisesNothing() {
+        policyRows.add(policy(InsiderRule.INS_10, false, T0.minusSeconds(60)));
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
 
         assertThat(savedAlerts).isEmpty();
     }
@@ -666,6 +775,17 @@ class InsiderDetectionServiceTests {
     // 원문 열람 기록의 세션(LOGIN)이 이 시각 · 브라우저로 로그인했다
     private void loggedIn(Instant at, String device) {
         when(loginReader.findLogin(LOGIN)).thenReturn(Optional.of(login(LOGIN, at, device)));
+    }
+
+    // 로그인 공격 중 LOGIN 세션이 성공했다는 P1 알림
+    private static StaffLoginUnderAttack underAttack() {
+        return StaffLoginUnderAttack.builder()
+                .staffId(STAFF)
+                .loginReference(LOGIN)
+                .loggedInAt(T0)
+                .attemptCount(40)
+                .failureCount(30)
+                .build();
     }
 
     private void pastLogins(StaffLogin... logins) {

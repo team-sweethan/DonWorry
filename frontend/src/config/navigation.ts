@@ -122,6 +122,8 @@ export const adminNavigation = {
             { label: '사건', path: '/admin/insider-cases', badge: 'insiderCases' },
           ],
         },
+        // 크리덴셜 스터핑 (#770) — 전체 로그인 실패율 · 탈취 의심
+        { label: '로그인 보안', path: '/admin/login-security' },
         // 사장님 계정 403 탐지 (#515). 배지는 자동 정지 뒤 아직 정지 상태인 사장님 계정 수
         {
           label: '계정 접근 이상 탐지',

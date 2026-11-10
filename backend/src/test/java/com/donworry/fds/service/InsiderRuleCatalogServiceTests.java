@@ -32,6 +32,7 @@ class InsiderRuleCatalogServiceTests {
             .ins03CautionRawViews(3)
             .ins07AfterLogin(Duration.ofMinutes(30))
             .ins07Lookback(Duration.ofDays(30))
+            .ins10Lookback(Duration.ofDays(30))
             .ins08Window(Duration.ofHours(1))
             .ins08CautionRows(1000)
             .ins08HighRows(3000)
@@ -61,7 +62,8 @@ class InsiderRuleCatalogServiceTests {
         Map<String, FdsRuleCatalogEntry> cards = service.ruleCatalog().stream()
                 .collect(Collectors.toMap(FdsRuleCatalogEntry::ruleCode, Function.identity()));
 
-        assertThat(cards).containsOnlyKeys("INS_01", "INS_03", "INS_05", "INS_06", "INS_07", "INS_08", "INS_09");
+        assertThat(cards)
+                .containsOnlyKeys("INS_01", "INS_03", "INS_05", "INS_06", "INS_07", "INS_08", "INS_09", "INS_10");
         assertThat(cards.get("INS_03").recentMatchCount()).isEqualTo(2);
         assertThat(cards.get("INS_03").dailyMatchCounts()).containsExactly(1L, 0L, 0L, 0L, 0L, 0L, 1L);
         assertThat(cards.get("INS_03").lastMatchedAt()).isEqualTo(Instant.parse("2026-11-08T01:00:00Z"));

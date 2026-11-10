@@ -22,6 +22,9 @@ import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.identity.api.StaffLoginEvent;
+import com.donworry.identity.api.StaffLoginEventType;
+import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.InsiderCase;
 import com.donworry.investigation.entity.InsiderCaseAlert;
@@ -99,6 +102,9 @@ class InsiderReportServiceTests {
     @Mock
     SecurityStaffGuard guard;
 
+    @Mock
+    StaffLoginReader loginReader;
+
     // 저장된 판 — 저장소 대역이 이 목록을 읽고 쓴다
     private final List<InsiderReport> saved = new ArrayList<>();
 
@@ -116,7 +122,8 @@ class InsiderReportServiceTests {
                 accessReader,
                 staffDirectory,
                 locker,
-                guard);
+                guard,
+                loginReader);
         lenient()
                 .when(reports.existsByInsiderCaseIdAndTriggerType(anyLong(), any()))
                 .thenAnswer(call -> saved.stream()
@@ -436,6 +443,38 @@ class InsiderReportServiceTests {
                 .extracting(InsiderReport::getReportVersion, InsiderReport::getTriggerType)
                 .containsExactly(
                         tuple(1, InsiderReportTrigger.CASE_OPENED), tuple(2, InsiderReportTrigger.EXPORT_BLOCKED));
+    }
+
+    // 탈취 의심 경보가 처리되기 전에 같은 직원이 평소 브라우저로 다시 로그인해도, 보고서는 경보가 탐지한 로그인을 적는다
+    // (경보 처리 시각 직전 로그인을 고르면 정상 로그인이 탈취 의심으로 남는다 — #777 Codex 리뷰)
+    @Test
+    void loginAttack_whenStaffLogsInAgainBeforeAlertIsProcessed_reportsDetectedLogin() {
+        Instant detected = T0.minusSeconds(60);
+        Instant usualLater = T0.minusSeconds(20);
+        givenAlerts(alert(700L, InsiderRule.INS_10));
+        givenAccess();
+        when(evidenceReader.firstEventAt(700L)).thenReturn(Optional.of(detected));
+        List<StaffLoginEvent> logins =
+                List.of(loginEvent(detected, "기타 브라우저 · 기타 운영체제"), loginEvent(usualLater, "Edge · Windows"));
+        when(loginReader.findLoginEvents(eq(STAFF_ID), any(), any()))
+                .thenAnswer(call -> logins.stream()
+                        .filter(e -> !e.occurredAt().isBefore(call.getArgument(1))
+                                && !e.occurredAt().isAfter(call.getArgument(2)))
+                        .toList());
+
+        service.generate(opened(700L));
+
+        Map<String, Object> login = asMap(facts(saved.getFirst()).get("loginAttack"));
+        assertThat(login.get("device")).isEqualTo("기타 브라우저 · 기타 운영체제");
+    }
+
+    private static StaffLoginEvent loginEvent(Instant at, String device) {
+        return StaffLoginEvent.builder()
+                .staffId(STAFF_ID)
+                .eventType(StaffLoginEventType.LOGIN_SUCCESS)
+                .occurredAt(at)
+                .device(device)
+                .build();
     }
 
     private InsiderReport store(InsiderReport report) {

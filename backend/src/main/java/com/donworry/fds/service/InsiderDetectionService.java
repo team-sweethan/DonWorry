@@ -12,6 +12,9 @@ import com.donworry.fds.entity.InsiderAlertStatus;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.fds.repository.InsiderAlertEvidenceRepository;
 import com.donworry.fds.repository.InsiderAlertRepository;
+import com.donworry.identity.api.LoginAttackCriteria;
+import com.donworry.identity.api.LoginTrafficCount;
+import com.donworry.identity.api.LoginTrafficReader;
 import com.donworry.identity.api.StaffAccessDenyReason;
 import com.donworry.identity.api.StaffAccessReader;
 import com.donworry.identity.api.StaffAccessRecorded;
@@ -21,6 +24,7 @@ import com.donworry.identity.api.StaffAccountLocker;
 import com.donworry.identity.api.StaffLockReason;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
+import com.donworry.identity.api.StaffLoginUnderAttack;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -28,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -60,6 +65,9 @@ public class InsiderDetectionService {
     // 열려 있으면 내보내기를 막는 경보 등급 (#651) — 주의는 기록 · 관리자 확인만, 높음부터 차단 · 정지
     private static final Set<InsiderAlertSeverity> EXPORT_BLOCKING =
             Set.of(InsiderAlertSeverity.HIGH, InsiderAlertSeverity.CRITICAL);
+    // 내보내기 전 동기 판정이 보는 최근 로그인 범위 (#777) — 비동기 INS-10 판정은 보통 몇 초 안에 끝나고,
+    // 재전달은 서버 재시작 뒤에 온다. 세션 비활동 만료(30분)보다 넉넉히 둔다
+    static final Duration PENDING_LOGIN_LOOKBACK = Duration.ofHours(1);
 
     private final InsiderAlertRepository alerts;
     private final InsiderAlertEvidenceRepository evidence;
@@ -70,6 +78,7 @@ public class InsiderDetectionService {
     private final StaffCaseScopeReader scopeReader;
     private final StaffAccountLocker locker;
     private final FdsRulePolicyRepository rulePolicies;
+    private final LoginTrafficReader traffic;
 
     @Transactional
     public void detect(StaffAccessRecorded event) {
@@ -238,6 +247,74 @@ public class InsiderDetectionService {
                 InsiderAlertSeverity.HIGH,
                 "처음 보는 브라우저(%s)로 로그인 %d분 뒤 전화번호 열람".formatted(login.device(), minutes),
                 List.of(event));
+    }
+
+    // INS-10 로그인 공격 중 처음 보는 브라우저 (#770) — P1이 "전체 로그인 실패율 경계 중 보안 직원 로그인 성공"을 알리면
+    // 그 로그인의 브라우저 · 운영체제가 지난 기간 성공 로그인에 없을 때 높음. 높음이라 내보내기는 INS-05가 막고 계정을 정지한다
+    // INS-07과 달리 비교할 로그인이 없어도(신규 직원) 울린다 — 공격 중에는 신규 계정도 탈취 대상이다 (11/10 결정)
+    // 예전에 INS-10으로 걸린 로그인은 비교에서 뺀다 — 걸렸던 공격자 브라우저가 다음에 "평소 브라우저"가 되지 않게 (11/10 결정 A)
+    // 근거 줄은 없다(근거 표는 접근 기록 번호만 받는다). 경보 시각 = 걸린 로그인 시각이라 그 시각으로 걸린 로그인을 찾는다
+    // 한계: 열린 경보가 갱신되면 처음 · 마지막 로그인 시각만 남아, 그 사이에 걸린 로그인은 비교에서 빠지지 않는다
+    // 관리자가 INS-10을 이 로그인 뒤에 닫았으면 다시 판정하지 않는다 (#777 Codex 리뷰) — 한 경보에 합쳐진 중간 로그인이
+    // 판정 · 정지 해제 뒤 내보내기 전 판정에서 다시 걸려, 새 로그인 없이 계정이 또 정지되지 않게. INS-07과 같은 방식
+    @Transactional
+    public void detectLoginUnderAttack(StaffLoginUnderAttack event) {
+        Long staffId = event.staffId();
+        if (staffId == null || event.loginReference() == null) return;
+        alerts.lockDetectionState(staffId);
+        StaffLogin login = loginReader.findLogin(event.loginReference()).orElse(null);
+        if (login == null || !staffId.equals(login.staffId())) return;
+        Instant loginAt = login.occurredAt();
+        if (!ruleSwitches().counts(InsiderRule.INS_10, loginAt)) return;
+        Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_10);
+        if (lastClosed != null && !lastClosed.isBefore(loginAt)) return;
+
+        Set<Instant> flagged = alerts.findByStaffIdAndRuleCode(staffId, InsiderRule.INS_10).stream()
+                .flatMap(a -> Stream.of(a.getFirstEventAt(), a.getLastEventAt()))
+                .collect(Collectors.toSet());
+        // 같은 알림이 다시 와도 한 번만 — 이 로그인으로 이미 열렸거나 관리자가 닫았으면 그대로 둔다
+        if (flagged.contains(loginAt)) return;
+        List<StaffLogin> before =
+                loginReader.findSuccessfulLogins(staffId, loginAt.minus(properties.ins10Lookback()), loginAt).stream()
+                        .filter(l -> !event.loginReference().equals(l.loginReference()))
+                        .filter(l -> !flagged.contains(l.occurredAt()))
+                        .toList();
+        if (before.stream().anyMatch(l -> Objects.equals(login.device(), l.device()))) return;
+
+        String summary = "로그인 공격 중(최근 시도 %d건 · 실패 %d건) 처음 보는 브라우저(%s)로 로그인%s"
+                .formatted(
+                        event.attemptCount(),
+                        event.failureCount(),
+                        login.device(),
+                        before.isEmpty()
+                                ? " · 지난 %d일 로그인 기록 없음"
+                                        .formatted(properties.ins10Lookback().toDays())
+                                : "");
+        raise(staffId, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, summary, List.of(), loginAt, loginAt);
+    }
+
+    // 내보내기 전 INS-10 동기 판정 (#777 Codex 보안 리뷰) — P1 알림은 커밋 뒤 비동기로 와서, 로그인 직후 바로 내보내면
+    // 경보가 열리기 전에 빠져나간다. 문지기가 경보를 보기 전에 이 직원의 최근 성공 로그인 중 공격 중에 성공한 것을 여기서 판정한다
+    // P1 경계 판단과 같은 구간 · 기준으로 그 로그인 시각의 공격 여부를 다시 센다. 이미 판정한 로그인 · 꺼진 규칙은 detectLoginUnderAttack이 건너뛴다
+    // 비동기 판정과 겹쳐도 직원 잠금 · 같은 로그인 시각 확인으로 경보는 한 번만 열린다. 실패하면 예외 — 내보내기는 진행되지 않는다(fail closed)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void detectPendingLoginUnderAttack(Long staffId, Instant now) {
+        List<StaffLogin> recent =
+                loginReader.findSuccessfulLogins(staffId, now.minus(PENDING_LOGIN_LOOKBACK), now.plusSeconds(1));
+        if (recent.isEmpty()) return;
+        LoginAttackCriteria criteria = traffic.criteria();
+        for (StaffLogin login : recent) {
+            Instant at = login.occurredAt();
+            LoginTrafficCount count = traffic.count(at.minus(criteria.window()), at);
+            if (!criteria.isUnderAttack(count.attempts(), count.failures())) continue;
+            detectLoginUnderAttack(StaffLoginUnderAttack.builder()
+                    .staffId(staffId)
+                    .loginReference(login.loginReference())
+                    .loggedInAt(at)
+                    .attemptCount(count.attempts())
+                    .failureCount(count.failures())
+                    .build());
+        }
     }
 
     // INS-08 업무 대비 대량 조회 — 거래 목록 · 내보내기로 많이 가져갔는데 담당 사건과 이어진 행이 적으면 주의, 아주 많으면 높음

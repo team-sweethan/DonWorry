@@ -21,6 +21,9 @@ class InsiderExportGuardService implements InsiderExportGuard {
 
     @Override
     public boolean allowExport(Long staffId) {
+        // 로그인 직후 아직 판정 전인 탈취 의심(INS-10)을 먼저 확정한다 (#777 Codex 보안 리뷰) — 비동기 판정을 기다리지 않는다.
+        // 실패하면 예외로 끝나 내보내기는 진행되지 않는다
+        detection.detectPendingLoginUnderAttack(staffId, Instant.now());
         // 사전 확인은 새 트랜잭션에서 — 호출 쪽의 오래된 스냅샷으로 "경보 없음"을 보고 통과시키지 않는다 (Codex 리뷰)
         if (!detection.hasExportBlockingAlert(staffId)) return true;
         try {

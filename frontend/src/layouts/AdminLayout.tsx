@@ -10,6 +10,7 @@ import {
   FormOutlined,
   HomeOutlined,
   KeyOutlined,
+  LoginOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SafetyOutlined,
@@ -91,6 +92,7 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/fds/rules': <ControlOutlined />,
   '/admin/case-assignments': <UserSwitchOutlined />,
   '/admin/insider-monitor': <AlertOutlined />,
+  '/admin/login-security': <LoginOutlined />,
   '/admin/raw-view-reviews': <EyeOutlined />,
 }
 

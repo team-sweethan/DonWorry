@@ -9,10 +9,12 @@ import {
   type InsiderReportBaseline,
   type InsiderReportBaselineRow,
   type InsiderReportBody,
+  type InsiderReportLoginAttack,
 } from '../../api/insiderCases'
 import { displayRuleCode, displayRuleText, isExportBlockRule } from '../../utils/ruleDisplayCode'
 import { dateTime } from '../security/case/caseLabels'
 import { errorText } from './caseAssignmentForm'
+import { RuleCell } from './InsiderParts'
 
 const severityLabel: Record<InsiderAlertSeverity, string> = {
   CAUTION: '주의',
@@ -86,10 +88,41 @@ function Baseline({ baseline }: { baseline: InsiderReportBaseline }) {
   )
 }
 
+/** SEC-INS-10 탈취 의심 로그인 (#770) — 로그인 공격 중 처음 보는 브라우저로 들어온 로그인과 그 앞뒤 */
+function LoginAttackFacts({ login }: { login: InsiderReportLoginAttack }) {
+  return (
+    <div>
+      <Typography.Text strong>탈취 의심 로그인</Typography.Text>
+      <Descriptions size="small" column={1} bordered styles={{ label: { whiteSpace: 'nowrap' } }}>
+        <Descriptions.Item label="로그인">
+          {dateTime(login.loginAt)} · {login.device}
+        </Descriptions.Item>
+        <Descriptions.Item label="평소 브라우저 (30일)">
+          {login.usualDevices.length > 0
+            ? login.usualDevices.join(', ')
+            : '지난 30일 성공 로그인 기록 없음'}
+        </Descriptions.Item>
+        <Descriptions.Item label="로그인 전 1시간 실패">
+          {login.failuresBeforeLogin === 0
+            ? '0회 — 한 번에 맞힘'
+            : `${login.failuresBeforeLogin}회`}
+        </Descriptions.Item>
+        <Descriptions.Item label="로그인 뒤 접근">
+          {login.accessAfterLogin}건
+          {login.firstExportAttemptSeconds !== null &&
+            ` · ${login.firstExportAttemptSeconds}초 뒤 거래 내역 내보내기 시도`}
+        </Descriptions.Item>
+      </Descriptions>
+    </div>
+  )
+}
+
 /** 한 판의 본문 — 사실(코드가 셈) · 고정 설명 · 한계. 추천 문장은 없다 */
 function ReportBody({ body }: { body: InsiderReportBody }) {
   const { facts, narrative } = body
   const { access } = facts
+  // 로그인으로만 걸린 사건(#770) — 경보 근거 접근 기록이 하나도 없다
+  const loginOnly = Boolean(facts.loginAttack) && access.total === 0
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Descriptions size="small" column={2} bordered styles={{ label: { whiteSpace: 'nowrap' } }}>
@@ -123,9 +156,11 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
           columns={[
             { ...oneLine, title: '시각', dataIndex: 'raisedAt', render: dateTime },
             {
-              ...oneLine,
               title: '규칙',
-              render: (_, row) => `${displayRuleCode(row.ruleCode)} ${row.ruleLabel}`,
+              onHeaderCell: oneLine.onHeaderCell,
+              render: (_, row) => (
+                <RuleCell code={displayRuleCode(row.ruleCode)} label={row.ruleLabel} />
+              ),
             },
             {
               ...oneLine,
@@ -133,44 +168,60 @@ function ReportBody({ body }: { body: InsiderReportBody }) {
               dataIndex: 'severity',
               render: (value: InsiderAlertSeverity) => severityLabel[value],
             },
-            { title: '내용', dataIndex: 'summary', render: displayRuleText },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Typography.Text strong>접근 종류별</Typography.Text>
-        <Table<InsiderReportAccessType>
-          rowKey="type"
-          size="small"
-          pagination={false}
-          dataSource={access.byType}
-          locale={{ emptyText: <ListEmpty title="경보 근거로 묶인 접근 기록이 없습니다." /> }}
-          columns={[
-            { ...oneLine, title: '종류', dataIndex: 'label' },
-            { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
-            { ...oneLine, title: '거부', dataIndex: 'denied', align: 'right' },
             {
-              ...oneLine,
-              title: '행 수',
-              dataIndex: 'items',
-              align: 'right',
-              render: (value: number) => (value > 0 ? value : '-'),
+              title: '내용',
+              dataIndex: 'summary',
+              onCell: () => ({ style: { minWidth: 220 } }),
+              render: displayRuleText,
             },
-            { ...oneLine, title: '사건', dataIndex: 'cases', align: 'right' },
           ]}
         />
-        {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
-        {facts.alerts.some((alert) => isExportBlockRule(alert.ruleCode)) && (
-          <Typography.Text type="secondary">
-            막힌 내보내기 시도는 위 [걸린 규칙]의 SEC-INS-05 줄에 있고, 이 표의 숫자에는 세지
-            않습니다.
-          </Typography.Text>
-        )}
       </div>
 
-      {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다 */}
-      {facts.baseline && <Baseline baseline={facts.baseline} />}
+      {/* 탈취 의심(#770)은 관리자가 가장 먼저 볼 사실이라 걸린 규칙 바로 아래 */}
+      {facts.loginAttack && <LoginAttackFacts login={facts.loginAttack} />}
+
+      {loginOnly ? (
+        <Typography.Text type="secondary">
+          이 사건은 로그인으로 걸려 경보 근거가 된 접근 기록이 없습니다. 위 [탈취 의심 로그인]을
+          보세요.
+        </Typography.Text>
+      ) : (
+        <div>
+          <Typography.Text strong>접근 종류별</Typography.Text>
+          <Table<InsiderReportAccessType>
+            rowKey="type"
+            size="small"
+            pagination={false}
+            dataSource={access.byType}
+            locale={{ emptyText: <ListEmpty title="경보 근거로 묶인 접근 기록이 없습니다." /> }}
+            columns={[
+              { ...oneLine, title: '종류', dataIndex: 'label' },
+              { ...oneLine, title: '허용', dataIndex: 'allowed', align: 'right' },
+              { ...oneLine, title: '거부', dataIndex: 'denied', align: 'right' },
+              {
+                ...oneLine,
+                title: '행 수',
+                dataIndex: 'items',
+                align: 'right',
+                render: (value: number) => (value > 0 ? value : '-'),
+              },
+              { ...oneLine, title: '사건', dataIndex: 'cases', align: 'right' },
+            ]}
+          />
+          {/* 차단 경보의 근거는 원인 경보의 기록만이라, 막힌 내보내기 시도는 이 표의 거부에 들어가지 않는다 (#675) */}
+          {facts.alerts.some((alert) => isExportBlockRule(alert.ruleCode)) && (
+            <Typography.Text type="secondary">
+              막힌 내보내기 시도는 위 [걸린 규칙]의 SEC-INS-05 줄에 있고, 이 표의 숫자에는 세지
+              않습니다.
+            </Typography.Text>
+          )}
+        </div>
+      )}
+
+      {/* #749 전에 만든 판에는 평소 대비가 없다 — 판은 고치지 않으므로 그대로 둔다.
+          근거 접근 기록이 없는 탈취 의심 사건은 비교할 "이번" 값이 없어 숨긴다 (#770) */}
+      {facts.baseline && !loginOnly && <Baseline baseline={facts.baseline} />}
 
       <div>
         <Space size="small" style={{ marginBottom: 4 }}>

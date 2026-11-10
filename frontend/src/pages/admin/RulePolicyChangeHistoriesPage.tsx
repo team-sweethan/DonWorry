@@ -33,6 +33,7 @@ const ruleNames: Record<string, string> = {
   INS_07: '처음 보는 브라우저 로그인 직후 전화번호 열람',
   INS_08: '업무 대비 거래 목록 · 내보내기 대량 조회',
   INS_09: '담당 무관 고객 반복 검색',
+  INS_10: '로그인 공격 중 처음 보는 브라우저 로그인',
 }
 
 function ruleName(ruleCode: string) {

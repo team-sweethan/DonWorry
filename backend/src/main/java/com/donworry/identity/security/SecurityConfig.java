@@ -382,6 +382,8 @@ public class SecurityConfig {
                                 // 내부자 관제 한 화면 (#679). 직원 로그인 IP · 접근 기록을 모아 보여 주므로 관리자만
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-monitor/staff"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/insider-monitor/staff/{staffId}/timeline"),
+                                // 로그인 보안 대시보드 (#770). 전체 로그인 실패율 · 직원 로그인 · 탈취 의심 경보라 관리자만
+                                paths.matcher(HttpMethod.GET, "/api/admin/login-security"),
                                 // AI 조사 다시 켜기 (#626, ADR-0083) — 가이드라인 "재개승인", 끈 사람이 아닌 책임자가 한다
                                 paths.matcher(HttpMethod.POST, "/api/ai-switch/resume"))
                         .access((authentication, context) -> {

@@ -2,7 +2,7 @@
 
 - **상태:** 채택 — 실험(#536, `spike/insider-on-dev`)으로 흐름 검증, 합의 1 ~ 7 정함(11/08, #656). 4 ~ 7은 사용자 결정이고 담당 확인이 남았다: 4 P1 주환 · 5 · 6 P5 시은 · 7 P2 정후
 - **날짜:** 2026-11-06 (채택 2026-11-08)
-- **관련:** #600 (이 ADR) · #604 (허용 기록 트랜잭션) · #643 (합의 3 · INS-07 · 08 · 09) · #656 (합의 5 · 6 · 7) · #685 (규칙 켜기 · 끄기, 3.2절) · #730 (내보내기 담당 범위, 3.1절) · #732 (거래 상세 열람, 3.3절) · #743 (INS-09 기준값, 1절), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
+- **관련:** #600 (이 ADR) · #770 (로그인 공격 경계 · SEC-INS-10, 3.4절 — 11/10 팀 동의) · #604 (허용 기록 트랜잭션) · #643 (합의 3 · INS-07 · 08 · 09) · #656 (합의 5 · 6 · 7) · #685 (규칙 켜기 · 끄기, 3.2절) · #730 (내보내기 담당 범위, 3.1절) · #732 (거래 상세 열람, 3.3절) · #743 (INS-09 기준값, 1절), #536 (실험), #516 (P2 내부자 탐지 — 범위 재정리 대상), #515 · [ADR-0078](0078-operator-account-suspension.md) · [ADR-0079](0079-operator-security-contracts.md) · [ADR-0080](0080-operator-access-denials.md) (사장님 403 탐지), [ADR-0009](0009-ai-investigation-call-structure.md)
 - **영향 받는 담당:** P1 identity, P2 fds, P3 investigation, P4 investigation/report, P5 payment, frontend
 
 ## 배경
@@ -51,9 +51,9 @@
 | 담당 | 소유하는 표 | 공개 경계 (`api/`) | 역할 |
 | --- | --- | --- | --- |
 | P5 payment | `payment_order_contacts` | `CustomerContactReader` · `MaskedContact` | 주문자 연락처 암호문(AES-GCM) + 전화 지문(HMAC) 저장, 가린 값 · 대조 · 전화 원문 제공, 거래 내역 CSV 내보내기 |
-| P1 identity | `staff_access_events` · `staff_account_locks` | `StaffAccessRecorder` · `StaffAccessReader` · `StaffAccessRecorded`(이벤트) · `StaffLoginReader` · `StaffAccountLocker` · `SecurityStaffDirectory` | 직원 접근 기록(허용 · 거부, 원문 없음), 로그인 세션 묶기, 직원 계정 보안 정지 · 해제 |
-| P2 fds | `insider_alerts` · `insider_alert_evidences` · `insider_detection_states` | `InsiderAlertRaised`(이벤트) · `InsiderAlertReader` · `InsiderAlertCloser` · `InsiderAlertEvidenceReader` · `InsiderAlertMonitorReader` · `InsiderExportGuard` · `StaffCaseScopeReader`(질문지) | 접근 기록 수신 → 규칙 판단 → 경보, 경보 중 내보내기 차단 |
-| P3 investigation | `security_cases.assignee_staff_id` · `case_assignment_locks` · `case_assignment_requests` · `raw_view_reviews` · `insider_cases` · `insider_case_alerts` | (내부) | FDS 사건 자동 배정 · 담당 변경, 열린 사건은 담당자만, 원문 열람 사후 검토, 내부자 사건 · 관리자 판정, 관제 조회(여러 모듈 데이터를 합치는 위층) |
+| P1 identity | `staff_access_events` · `staff_account_locks` | `StaffAccessRecorder` · `StaffAccessReader` · `StaffAccessRecorded`(이벤트) · `StaffLoginReader` · `StaffAccountLocker` · `SecurityStaffDirectory` · `StaffLoginUnderAttack`(이벤트, #770) · `LoginTrafficReader`(#770) | 직원 접근 기록(허용 · 거부, 원문 없음), 로그인 세션 묶기, 직원 계정 보안 정지 · 해제, 로그인 공격 경계 판단(3.4절) |
+| P2 fds | `insider_alerts` · `insider_alert_evidences` · `insider_detection_states` | `InsiderAlertRaised`(이벤트) · `InsiderAlertReader` · `InsiderAlertCloser` · `InsiderAlertEvidenceReader` · `InsiderAlertMonitorReader` · `InsiderExportGuard` · `StaffCaseScopeReader`(질문지) | 접근 기록 · 로그인 공격 알림 수신 → 규칙 판단 → 경보, 경보 중 내보내기 차단 |
+| P3 investigation | `security_cases.assignee_staff_id` · `case_assignment_locks` · `case_assignment_requests` · `raw_view_reviews` · `insider_cases` · `insider_case_alerts` | (내부) | FDS 사건 자동 배정 · 담당 변경, 열린 사건은 담당자만, 원문 열람 사후 검토, 내부자 사건 · 관리자 판정, 관제 · 로그인 보안 대시보드 조회(여러 모듈 데이터를 합치는 위층) |
 | P4 investigation/report | `ai_insider_reports` | (내부) | 내부자 사건 해제 검토 보고서 — 사실은 코드가 계산, 서술은 고정 문장(AI 서술은 후속), `report_version` 누적 |
 
 접근 기록을 P1에 두는 이유: 기록 주체가 로그인 세션(`SessionUser.loginReference`)이고, 정지 기록과 같은 계정 경계에 있다.
@@ -63,17 +63,18 @@ P1은 다른 모듈을 import하지 않으므로(`allowedDependencies = {}`) pay
 
 ```
 payment ──(StaffAccessRecorder 호출)──▶ identity ──(StaffAccessRecorded, 커밋 후)──▶ fds
+identity ──(StaffLoginUnderAttack, 로그인 공격 중 보안 직원 로그인 성공, 커밋 후)──▶ fds   (#770)
 investigation ──(StaffAccessRecorder 호출)──▶ identity
 fds ──(StaffAccountLocker · StaffAccessReader · StaffLoginReader)──▶ identity
 fds ──(InsiderAlertRaised, 높음 이상, 커밋 후)──▶ investigation ──(모듈 안 알림)──▶ investigation/report
 payment ──(InsiderExportGuard 호출, 내보내기 직전 동기 검사)──▶ fds
 investigation ──(CustomerContactReader)──▶ payment
-investigation ──(InsiderAlertReader · Closer · MonitorReader, StaffAccountLocker · StaffLoginReader · StaffAccessReader)──▶ fds · identity
+investigation ──(InsiderAlertReader · Closer · MonitorReader, StaffAccountLocker · StaffLoginReader · StaffAccessReader · LoginTrafficReader)──▶ fds · identity
 fds ··(StaffCaseScopeReader, investigation이 구현)··▶ investigation   ← 실행 중 역방향 동기 호출
 ```
 
-- 이벤트 타입은 의존을 받는 쪽 `api/`에 둔다 (AGENTS.md 4절 · ADR-0012): `StaffAccessRecorded` → identity, `InsiderAlertRaised` → fds
-- 수신은 멱등이다: 같은 접근 기록은 경보 근거 한 줄(`insider_alert_evidences` UNIQUE), 같은 경보는 내부자 사건 한 줄(`insider_case_alerts` PK), 같은 계기는 보고서 한 판(`uk_ai_insider_reports_trigger`)
+- 이벤트 타입은 의존을 받는 쪽 `api/`에 둔다 (AGENTS.md 4절 · ADR-0012): `StaffAccessRecorded` · `StaffLoginUnderAttack` → identity, `InsiderAlertRaised` → fds
+- 수신은 멱등이다: 같은 접근 기록은 경보 근거 한 줄(`insider_alert_evidences` UNIQUE), 같은 로그인 공격 알림은 그 로그인 시각의 INS-10 경보 하나(3.4절), 같은 경보는 내부자 사건 한 줄(`insider_case_alerts` PK), 같은 계기는 보고서 한 판(`uk_ai_insider_reports_trigger`)
 - 사람 · 규칙당 열린 경보 1개, 사람당 열린 내부자 사건 1개, 사람당 열린 정지 1개를 생성 칼럼 UNIQUE로 막는다
 
 **`StaffCaseScopeReader` (합의 3 정함, 11/07 · #643):** "이 직원의 담당 사건 범위"는 P3 데이터지만 P2 규칙(INS-08 · INS-09)이 필요로 한다.
@@ -92,7 +93,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 
 - 허용된 내보내기도 거래 목록 조회와 같은 기준으로 센다(INS-08 행 수 · INS-09 고객 수). 목록 대신 내보내기만 반복하면 대량 조회 경보가 빠지고, 그러면 차단도 걸리지 않기 때문이다
 - 주의에 머문 채 계속 빼가지 못하게 INS-08 · 09에 높음 단계를 둔다: 1시간 안 담당 무관 3,000행(주의 1,000행) · 담당 무관 고객 5명(주의 3명, #743 전에는 30명 · 10명). 값은 `donworry.insider.*`
-- 그 밖의 높음: INS-07(처음 보는 브라우저 직후 원문) · INS-06(서로 다른 종류 경보 겹침)
+- 그 밖의 높음: INS-07(처음 보는 브라우저 직후 원문) · INS-06(서로 다른 종류 경보 겹침) · INS-10(로그인 공격 중 처음 보는 브라우저 로그인, 3.4절)
 - 사전 확인은 호출 쪽 트랜잭션과 떼어(`REQUIRES_NEW`) 지금 확정된 경보를 읽는다. 경보 저장이 실패해도 정지하고, 정지가 실패해도 차단한다
 - 계정 정지를 일으키는 요청이라 POST로 두고, 전역 CSRF 설정과 관계없이 토큰을 검사한다(외부 링크 한 번으로 정지되지 않게, ADR-0036 방식)
 - ADMIN은 내부자 탐지 대상이 아니라 묻지 않는다
@@ -116,7 +117,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 
 | 정한 것 | 내용 |
 | --- | --- |
-| 저장 | P2 `fds_rule_policies`에 `INS_01 · 03 · 06 · 07 · 08 · 09` 6줄(저장 이름 = `InsiderRule` enum 이름, `insider_alerts.rule_code`와 같음). 화면에서는 `SEC-INS-0x`로 보인다 |
+| 저장 | P2 `fds_rule_policies`에 `INS_01 · 03 · 06 · 07 · 08 · 09` 6줄(저장 이름 = `InsiderRule` enum 이름, `insider_alerts.rule_code`와 같음), #770에서 `INS_10` 1줄을 더해 7줄. 화면에서는 `SEC-INS-xx`로 보인다 |
 | 누가 | **관리자만** 끄고 켠다. 보안 직원의 끄기 요청 · 다시 켜기는 403 — 감시 대상이 자기 감시 규칙에 손대지 못하게 한다. 결제 · 사장님 규칙의 절차(보안 직원 요청 → 관리자 승인, [ADR-0042](0042-fds-rule-management.md))는 그대로다 |
 | 누가 보나 | 켜짐 · 꺼짐도 **관리자만** 본다. 보안 직원도 부르는 `GET /api/fds/rule-policies`는 보안 직원에게 `INS_0x` 줄을 빼고 준다 — 꺼진 규칙을 알면 그 규칙에 걸리는 행동만 골라 감시를 피할 수 있다 (#688 Codex 보안 리뷰) |
 | INS-05 | **끌 수 없다.** 정책 줄을 두지 않아 끄기 · 켜기 주소가 404다. 카드에는 "항상 켜짐"으로 보인다. 탐지가 아니라 3.1의 마지막 방어 장치이고, 앞 규칙을 끄면 높음 경보가 안 생겨 자연히 덜 걸린다 |
@@ -146,6 +147,27 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 - 상세는 GET이라 외부 링크로 거부 기록을 쌓게 할 수 있다. 목록 GET과 같은 이유(`SameSite=Lax`라 직원이 직접 눌러야 함)로 받아들인다
 - 남는 빈틈(이 절 범위 밖): FDS 경보 상세는 담당과 관계없이 열리고 마스킹 카드 등이 보이며 열람 기록이 없다
 
+### 3.4 로그인 공격 경계와 탈취 의심 (SEC-INS-10, 11/10 · #770 — 팀 동의)
+
+**배경:** 크리덴셜 스터핑은 다른 곳에서 유출된 아이디 · 비밀번호 목록을 계정마다 한두 번씩 넣는다. 계정별 실패 잠금은 걸리지 않고, 비밀번호를 재사용한 직원 계정은 한 번에 뚫린다. 뚫린 보안 직원 계정은 정상 권한으로 고객정보를 본다 — 이 ADR이 다루는 "권한 안 조회"가 계정 탈취로 시작되는 경우다.
+
+**결정:** 로그인을 막지 않고, 공격 중에 **처음 보는 브라우저로 성공한 보안 직원 로그인**만 탈취 의심으로 올려 기존 내부자 체계(INS-05 차단 · 정지 · 내부자 사건 · 판정)에 잇는다.
+
+| 단계 | 담당 | 정한 것 |
+| --- | --- | --- |
+| 경계 판단 | P1 `LoginAttackCheck` | 보안 직원 로그인이 **성공할 때만** 최근 5분 전체 로그인 시도(성공 + 실패, 계정 · IP 구분 없음)를 센다. 시도 30건 이상이고 실패 30% 이상이면 공격 중. 기준값은 `security.login-attack.*`(window · min-attempts · failure-ratio). 경계 상태는 저장하지 않고 매번 센다 — 공격이 멈추면 5분 뒤 저절로 풀린다. 집계 · 알림이 실패해도 로그인은 성공한다(로그만) |
+| 알림 | identity.api `StaffLoginUnderAttack` | 직원 번호 · 로그인 번호 · 시각 · 시도 · 실패 수. 로그인에는 트랜잭션이 없어 알림 전용 `REQUIRES_NEW` 안에서 보낸다(커밋 뒤 전달) |
+| 탈취 의심 | P2 INS-10 | 그 로그인의 브라우저 · 운영체제(`UserAgentDevice`, 버전 없음)가 지난 30일 성공 로그인(`donworry.insider.ins10-lookback`)에 없으면 **높음**. INS-07과 달리 비교할 로그인이 없는 신규 직원도 울린다. 예전에 INS-10으로 걸린 로그인(경보의 처음 · 마지막 시각과 같은 로그인)은 평소 브라우저로 치지 않는다 — 걸렸던 공격자 브라우저로 다시 와도 통과하지 못하게. 같은 로그인 시각의 INS-10이 이미 있으면 다시 열지 않는다(재전달 멱등). 관리자가 INS-10을 그 로그인 뒤에 닫았으면 다시 판정하지 않는다 — 한 경보에 합쳐진 중간 로그인이 판정 뒤 다시 걸리지 않게 |
+| 근거 | P2 | 근거 줄을 두지 않는다. `insider_alert_evidences`는 접근 기록 번호(NOT NULL)만 받는데 로그인은 접근 기록이 아니다. 사실은 경보 문장과 해제 검토 보고서의 로그인 사실(P4, 로그인 시각 · 브라우저 · 평소 브라우저 · 로그인 전 실패 · 첫 내보내기까지 초)로 보인다 |
+| 이후 | 기존 | 높음이라 `InsiderAlertRaised` → 내부자 사건, 내보내기를 누르면 INS-05 차단 · 정지 · 세션 종료(3.1절). 판정은 관리자가 하고, 본인이 아니었으면 정지 해제와 함께 기존 [비밀번호 초기화]로 임시 비밀번호를 본인에게 전달한다 |
+| 내보내기 전 판정 | P2 문지기 | 알림은 비동기라 로그인 직후 바로 내보내면 INS-10이 열리기 전에 빠져나간다(#777 Codex 보안 리뷰). 문지기는 경보를 보기 전에 그 직원의 최근 1시간 성공 로그인 중 공격 중에 성공한 것을 그 자리에서 INS-10으로 판정한다(같은 기준 · 같은 판정 코드, 이미 판정한 로그인은 건너뜀). 판정이 실패하면 내보내기도 진행되지 않는다(fail closed) |
+| 대시보드 | P3 | `GET /api/admin/login-security`(ADMIN) — 상태(평소 · 주의 · 경계), 경계까지(시도 · 실패율 대비 기준), 최근 5분 10초 칸 시도 · 실패, 최근 시도(없는 아이디 · 보안 직원 이름 · 다른 계정은 종류만, IP · 시도한 아이디 없음), 24시간 INS-10과 그 직원의 INS-05. 최근 시도의 탈취 의심 표시는 INS-10 경보의 처음 · 마지막 로그인 시각과 같은 로그인에만 붙는다(#777). 경보의 [사건 보기]는 그 경보가 묶인 사건이다. "주의"는 화면 안내용(실패율 기준 이상 · 시도 15 ~ 29건)으로 탐지에 쓰지 않는다 |
+
+- IP는 판단에 쓰지 않는다. 공격자는 IP를 바꿔 가며 넣고, 배포 서버는 학원 정문 프록시 뒤라 밖에서 온 요청 IP가 하나로 찍힐 수 있다
+- 대상은 보안 직원만이다. 관리자 · 사장님 계정은 이 절 범위 밖이다
+- 2차 인증(경계 중 처음 보는 브라우저에 이메일 확인 코드 등)은 추후다. 이 절의 판단 지점(INS-10)에 얹으면 된다
+- 막지 못하는 것: 시도가 30건이 되기 전에 맞힌 로그인, 실패율이 오르지 않을 만큼 천천히 넣는 공격(INS-07 · 08이 맡음), 피해자와 같은 브라우저 · 운영체제로 위장한 로그인, 내보내기 없이 담당 사건 고객을 1건씩 보는 것(판정 전까지 계정이 살아 있음 — "0건"은 대량 반출 기준). 열린 INS-10이 여러 번 갱신되면 처음 · 마지막 로그인 시각만 남아 그 사이 걸린 로그인은 평소 브라우저 판단에서 빠지지 않는다
+
 ### 4. 기록 방식
 
 - 접근 **거부** 기록: 독립 트랜잭션(`REQUIRES_NEW`). 기록이 실패해도 원래 거부 응답은 바꾸지 않는다 (ADR-0080과 같은 방식)
@@ -156,7 +178,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - 이벤트 `StaffAccessRecorded`는 커밋 후 전달된다
   - 커밋 뒤 응답 전송이 실패하면(네트워크 끊김) "기록 있음 · 수신 없음"이 남는다. DB 커밋과 전송은 묶을 수 없어 받아들인다
 - 원문 응답(`contact-raw-view`)은 `Cache-Control: no-store`
-- IP는 접근 기록에 복사하지 않는다. 필요하면 `login_histories`에서 읽는다
+- IP는 접근 기록에 복사하지 않는다. 필요하면 `login_histories`에서 읽는다. 로그인 공격 경계(3.4절)도 IP를 쓰지 않는다
 - 규칙 표시 코드 (#664): 화면 · 응답 · 경보 문장에는 `SEC-INS-0x`(번호 그대로)로 보이고, 저장 이름은 `InsiderRule` enum `INS_0x` 그대로다. 이 문서의 `INS-0x`는 같은 규칙을 가리킨다. 그 전에 저장된 경보 문장 · 보고서의 `INS-0x`는 화면에서 `SEC-INS-0x`로 바꿔 보인다. 사장님 계정 규칙도 화면에서만 `SEC-OP-01`(`SEC_OPERATOR_OUT_OF_ROLE_REPEAT`) · `SEC-OP-02`(`SEC_OPERATOR_PERMISSION_MISSING_REPEAT`)로 보인다
 
 ### 5. 직원 계정 보안 정지 (합의 4 정함, 11/07 · #647 → [ADR-0084](0084-staff-account-security-suspension.md))
@@ -190,7 +212,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - 지금 CHECK(`ck_payment_order_contacts_orderer` · `ck_payment_order_contacts_phone`)는 암호문 없이 지문만 남는 행을 거부한다. 파기 표시 칸 · CHECK 변경은 P5 새 마이그레이션으로 한다
   - "열린 사건" 확인은 payment가 investigation을 부를 수 없어(`allowedDependencies`) 방향을 정해야 한다. 후보: investigation이 `payment.api` 파기 창구를 부르기 / `payment.api` 질문지를 investigation이 구현(3절 `StaffCaseScopeReader` 방식)
 
-### 8. 관리자 메뉴 (합의 7 정함, 11/08 · #656, 계정 자리 고침 · #659, 2단 · 탭 · 접근 감시 개정 · 11/09 · #719)
+### 8. 관리자 메뉴 (합의 7 정함, 11/08 · #656, 계정 자리 고침 · #659, 2단 · 탭 · 접근 감시 개정 · 11/09 · #719, 로그인 보안 추가 · 11/10 · #770)
 
 관리자 메뉴는 **관리자가 하는 일별 큰 묶음 › 메뉴 2단**이다. 같은 대상을 다르게 보는 화면은 메뉴 하나로 합치고 본문 위 **탭**으로 나눠 본다. 보안 직원 · 사장님 메뉴는 지금 2단 그대로다.
 
@@ -200,6 +222,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 직원 관리     사건 담당 [담당 현황 · 변경 요청]
               원문 열람 검토
 접근 감시     내부자 보안 [관제 · 경보 · 사건]
+              로그인 보안 (#770)
               계정 접근 이상 탐지 (#515)
 시스템 설정   계정 관리
               탐지 룰 [룰 목록 · 변경 요청 · 변경 이력]
@@ -208,6 +231,7 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 
 - 묶음 기준: **직원 관리**는 직원이 한 일을 사람이 처리하는 업무(사건 배정 · 원문 열람 사후 검토), **접근 감시**는 시스템이 찾아낸 이상 접근(직원 · 사장님 계정)이다
 - 사장님 403 탐지(#515)와 내부자 보안은 "접근 감시" 한 묶음에 둔다 (11/09 P2 피드백). 대상이 다른 두 체계라는 점은 메뉴를 따로 두어 지킨다 — 표 · 흐름 분리(1 · 2절)는 그대로다
+- 로그인 보안(#770)은 시스템이 찾아낸 이상 로그인이라 "접근 감시"에 둔다. 경보 · 사건은 내부자 보안 탭과 같은 것을 쓰고, 이 메뉴는 전체 로그인 실패율과 탈취 의심을 한 화면에 모은다
 
 - `[ ]` 안은 탭이다. 탭마다 주소는 그대로이고(`/admin/fds/rule-change-requests` 등), 메뉴는 첫 탭 주소로 들어간다. 메뉴 배지는 탭 배지의 합, 탭마다 자기 건수를 보인다. 상세 같은 하위 주소에서는 탭 줄을 보이지 않는다
 - 11/09 개정 이유: 3단은 메뉴 15개에 묶음 제목이 11개라 제목이 메뉴만큼 많았다. 2단 + 탭으로 메뉴 10개 · 제목 4개가 된다
@@ -277,6 +301,16 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 | INS-09 운영값 10 · 30명 유지, 시연만 서버 실행 옵션으로 낮춤 (#743 검토) | 배포 서버에서 시연하려면 서버 설정을 바꾸고 다시 띄워야 하고, 10명은 측정 근거도 없이 경보 전 9명까지 열어 둔다 |
 | INS-09 높음 6명 (#743 검토) | 5명과 정상 업무 영향 차이가 작고, 검색만 반복하는 시연 흐름이 한 번 더 길어진다 |
 | INS-08도 시연 가능한 값(수백 행)으로 낮춤 (#743 검토) | 거래 내역을 몇 쪽 넘긴 정상 직원도 울리고 높음은 단독으로 내보내기를 막는다. 시연하려면 데이터를 수백 건 이상 넣어야 한다 |
+| 실패가 몰린 IP를 막음 (#770 검토) | 공격자는 IP를 바꿔 가며 넣는다. 배포 서버는 학원 정문 프록시 뒤라 밖의 요청이 한 IP로 찍힐 수 있어, 막으면 정상 사용자까지 막힌다 |
+| 공격 중에는 모든 로그인을 막거나 늦춤 (#770 검토) | 공격자가 실패만 쏟아 넣어도 직원 전체가 일하지 못한다(공격자가 원하는 대로 서비스를 멈출 수 있음). 처음 보는 브라우저로 성공한 로그인만 고르면 평소 브라우저 직원은 그대로 일한다 |
+| 경계 상태를 표에 저장(켜짐 · 꺼짐 · 시작 시각) (#770 검토) | 켜고 끄는 시점 · 서버 여러 대 동기화 · 재시작 복구가 필요하다. 로그인 성공 순간에 최근 5분을 세면 같은 판단을 저장 없이 한다 |
+| 같은 IP에서 실패 뒤 성공을 신호로 (#770 검토) | 공격 도구는 IP를 돌리고, 위 프록시 문제로 오탐이 많다 |
+| 2차 인증(이메일 코드 · 앱 OTP)을 지금 만듦 (#770 검토) | 반쯤 로그인한 상태 · 세션 · CSRF를 손볼 곳이 많아 1.5 ~ 3일이 걸리고, 배포 서버 메일 발송을 확인하지 못했다. 추후 이 절의 판단 지점에 얹는다 |
+| 탈취 의심이면 내보내기를 기다리지 않고 즉시 정지 (#770 검토) | 새 노트북으로 바꾼 진짜 직원도 공격 중에 들어오면 바로 막힌다. 높음 경보 → 내보내기 차단(3.1절)으로 대량 반출은 막고, 판정은 관리자가 한다 |
+| 판정 때 "다음 로그인에서 비밀번호 변경"만 걸고 정지 해제 (#770 검토) | 공격자도 옛 비밀번호를 알아 먼저 들어와 자기 비밀번호로 바꿀 수 있다. 기존 [비밀번호 초기화](임시 비밀번호를 본인에게 직접 전달)를 쓴다 |
+| 근거 표에 로그인 기록 번호 칸 추가 (#770 검토) | P2 표 칸 · 근거 조회 · 화면이 함께 바뀐다. 로그인 사실은 보고서 사실 묶음과 경보 문장으로 충분하다 |
+| INS-07처럼 비교할 로그인이 없으면 울리지 않음 (#770 검토) | 로그인 기록이 없는 신규 직원 계정이 공격 중에 뚫려도 놓친다. 공격 중이라는 조건이 이미 붙어 오탐이 적다 |
+| 대시보드를 1분 막대로 (#770 처음 구현) | 짧은 공격(수십 초)은 막대 한두 개에 몰려 변화가 보이지 않았다. 10초 칸 꺾은선 · 경계까지 막대 · 최근 시도 기록으로 바꿈 |
 
 ## 영향
 
@@ -288,11 +322,12 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
   - #685: `GET /api/fds/insider-detections/rule-catalog`(ADMIN) 추가. 기존 `PUT /api/fds/rules/{ruleCode}/active` · `POST …/disable-requests`가 `INS_0x`도 받는다(보안 직원은 403 — 대소문자가 다른 입력도 DB 정본 코드로 검사, `INS_05`는 404). `GET /api/fds/rule-policies`는 보안 직원 응답에서 `INS_0x` 줄을 뺀다. P2 api `FdsRuleCatalogEntry`에 `@Builder`만 더함(모양 그대로)
   - #730: 보안 직원의 `POST /api/payment-transactions/export`가 담당 범위 밖 · 고객 조건 없음이면 403 `PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE`. identity.api `StaffAccessDenyReason`에 `EXPORT_OUT_OF_SCOPE` 추가(DB 칸은 값 제한 없는 `VARCHAR(40)`이라 마이그레이션 없음). INS-01 경보 요약이 "담당 밖 사건 · 고객 N개"로 바뀜. ADMIN 권한 · 응답은 그대로
   - #732: `GET /api/payment-transactions` 응답에서 `cardDisplayLabel` · `ipCountryCode` · `maskedIpAddress` · `maskedDeviceId` · `maskedBuyerEmail` 삭제, `GET /api/payment-transactions/{paymentId}`(없으면 404 `PAYMENT_TRANSACTION_NOT_FOUND`) 추가. identity.api `StaffAccessType`에 `TRANSACTION_DETAIL_VIEW` 추가(`VARCHAR(40)`, 마이그레이션 없음). 보안 직원의 담당 범위 밖 상세는 403 `PAYMENT_TRANSACTION_OUT_OF_SCOPE`, `StaffAccessDenyReason`에 `TRANSACTION_DETAIL_OUT_OF_SCOPE` 추가(INS-01이 셈). 목록 응답에 `detailAllowed` 추가
+  - #770: `GET /api/admin/login-security`(ADMIN) 추가. identity.api 이벤트 `StaffLoginUnderAttack`(→ fds) · 읽기 창구 `LoginTrafficReader` · `LoginAttackCriteria` · `LoginTrafficCount` · `LoginTrafficBucket` · `LoginAttempt` 추가, fds.api `InsiderRule.INS_10` · `InsiderAlertMonitorReader.findAlertsOpenedBetween` 추가. 로그인 API 모양은 그대로(보안 직원 로그인 성공 뒤 집계 하나가 더해짐). 새 모듈 의존 없음
   - #659: `GET /api/admin/users`의 기본 정렬이 최근 계정순 → 관리자 · 보안 직원 · 사장님 순(같은 역할은 최근 계정순)으로 바뀜. 요청 · 응답 모양은 그대로
-- DB: 새 표 12개 + `security_cases` 칸 2개 + `staff_access_events` 칸 2개 + `insider_cases` 칸 4개. 표마다 소유 담당 마이그레이션으로 만들고 [`docs/erd/`](../erd/README.md)에 적는다. 다른 담당 표 사이는 논리 참조만. 주문자 암호문 파기(2차)는 `payment_order_contacts` CHECK 변경 마이그레이션이 필요하다(7절). #685: `fds_rule_policies`에 내부자 규칙 6줄(P2 마이그레이션, 칸 변경 없음)
-- 화면: 관리자 메뉴 3단 재배치(8절, 조각 8 전 별도 PR · #659, [계정 관리]는 "시스템 설정 › 계정"으로 옮기고 목록 기본은 사용 중 계정) — 내부자 경보 · 사건 · 관제 · 원문 열람 검토는 "직원 관리 › 보안", 사건 담당은 "직원 관리 › 사건", 보안 직원 사건 상세(담당 표시 · 주문자 정보 카드 · 담당 변경 요청), 거래 목록 CSV 내보내기. #603: 경보 상세(차단 후보 · R07 근거) · [차단 목록]의 이메일 가림, 경보 상세 차단 등록이 원문 없이 동작. #628: 경보 상세 "카드 식별값" 줄 삭제, 차단 후보 · R02 · R03 · R07 근거 · [차단 목록]의 IP · 기기 ID 가림. #685: [탐지 룰 목록] 계정 룰 탭에 내부자 규칙 카드 7개(INS-05는 스위치 없이 "항상 켜짐"), 룰 변경 이력의 `INS_0x`도 `SEC-INS-0x`로 보임. #730: [거래 내역] CSV 내보내기 버튼은 가맹점 + 고객 번호가 걸렸을 때만 열림 · 범위 밖 안내, 관리자 경보 · 관제 화면 거부 이유 "담당 아닌 고객 내보내기", 해제 검토 보고서의 INS-01 확인 문장. #732: [거래 내역] 줄 펼치기 없앰 · 줄을 누르면 거래 상세 페이지(`/security/transactions/{paymentId}`), 상세에서 경보 상세 · 사건 · 이 고객 거래 내역으로 이동, 담당 사건 고객 줄만 누를 수 있음, 범위 밖 주소는 "이 결제는 볼 수 없습니다" 안내, 사건에 묶인 결제는 주문자 정보 안내 링크. 관리자 경보 · 관제 화면 접근 종류 "거래 상세 열기" · 거부 이유 "담당 아닌 고객 거래 상세", [탐지 룰 목록] SEC-INS-01 카드 문구
-- 테스트: 기존 "누구나 판정" 전제 테스트가 "열린 사건은 담당자만"으로 바뀐다. 실험 기준 mariaDbTest 42~43건 실패를 해당 조각 PR에서 고친다. #603: 이메일 가림 규칙을 P5와 같은 예시로 검사(`FdsIdentifierMaskingTests`), 상세 · 차단 목록 · 근거 조회 응답에 원문이 없는지 검사. #628: IP · 기기 ID 규칙도 P5와 같은 예시로 검사, 상세 응답 전체 · 새 근거 저장 · 예전 근거 조회 · 차단 목록 응답에 IP · 기기 ID · 카드 토큰 원문이 없는지 검사. #685: 꺼진 규칙 · 다시 켠 규칙 · INS-06 끄기의 탐지, 보안 직원의 내부자 규칙 변경 거절, INS-05 정책 줄 없음(마이그레이션 전체 검사), 7일 적중 집계, 카드 조회 권한(역할 권한표). #730: 범위 밖 · 고객 조건 없음 · 범위 안 내보내기(단위), 주문번호만 내보내기 거부 기록(MariaDB), 범위 밖 내보내기 거부 반복의 INS-01. #732: 상세 열람 기록 · 없는 결제 404 · 기록 실패 시 상세 미전송(MariaDB) · 목록 응답에 5칸 없음 · CSV 15칸 유지 · 범위 밖 상세 거부 기록 · 관리자 범위 검사 없음 · 목록 `detailAllowed` · 담당 밖 상세 거부 반복의 INS-01 · 역할 권한표
-- 설정: `donworry.pii.encryption-key` · `hmac-key`(운영 비밀값), `donworry.insider.*` 기준값, 주문자 원문 보관 기간(2차). #743: `ins09-caution-customers` 3 · `ins09-high-customers` 5 — [탐지 룰 목록] SEC-INS-09 카드 문구도 설정값을 읽어 함께 바뀜, API · DB 변경 없음
+- DB: 새 표 12개 + `security_cases` 칸 2개 + `staff_access_events` 칸 2개 + `insider_cases` 칸 4개. 표마다 소유 담당 마이그레이션으로 만들고 [`docs/erd/`](../erd/README.md)에 적는다. 다른 담당 표 사이는 논리 참조만. 주문자 암호문 파기(2차)는 `payment_order_contacts` CHECK 변경 마이그레이션이 필요하다(7절). #685: `fds_rule_policies`에 내부자 규칙 6줄(P2 마이그레이션, 칸 변경 없음). #770: `INS_10` 1줄(P2 마이그레이션). `login_histories`는 기존 시각 색인(`idx_login_histories_retention`)을 써서 바꾸지 않음
+- 화면: 관리자 메뉴 3단 재배치(8절, 조각 8 전 별도 PR · #659, [계정 관리]는 "시스템 설정 › 계정"으로 옮기고 목록 기본은 사용 중 계정) — 내부자 경보 · 사건 · 관제 · 원문 열람 검토는 "직원 관리 › 보안", 사건 담당은 "직원 관리 › 사건", 보안 직원 사건 상세(담당 표시 · 주문자 정보 카드 · 담당 변경 요청), 거래 목록 CSV 내보내기. #603: 경보 상세(차단 후보 · R07 근거) · [차단 목록]의 이메일 가림, 경보 상세 차단 등록이 원문 없이 동작. #628: 경보 상세 "카드 식별값" 줄 삭제, 차단 후보 · R02 · R03 · R07 근거 · [차단 목록]의 IP · 기기 ID 가림. #685: [탐지 룰 목록] 계정 룰 탭에 내부자 규칙 카드 7개(INS-05는 스위치 없이 "항상 켜짐"), 룰 변경 이력의 `INS_0x`도 `SEC-INS-0x`로 보임. #730: [거래 내역] CSV 내보내기 버튼은 가맹점 + 고객 번호가 걸렸을 때만 열림 · 범위 밖 안내, 관리자 경보 · 관제 화면 거부 이유 "담당 아닌 고객 내보내기", 해제 검토 보고서의 INS-01 확인 문장. #732: [거래 내역] 줄 펼치기 없앰 · 줄을 누르면 거래 상세 페이지(`/security/transactions/{paymentId}`), 상세에서 경보 상세 · 사건 · 이 고객 거래 내역으로 이동, 담당 사건 고객 줄만 누를 수 있음, 범위 밖 주소는 "이 결제는 볼 수 없습니다" 안내, 사건에 묶인 결제는 주문자 정보 안내 링크. 관리자 경보 · 관제 화면 접근 종류 "거래 상세 열기" · 거부 이유 "담당 아닌 고객 거래 상세", [탐지 룰 목록] SEC-INS-01 카드 문구. #770: "접근 감시 › 로그인 보안" 화면(2초 갱신, 5분 무조작 멈춤), [탐지 룰 목록] SEC-INS-10 카드, 룰 변경 이력 이름, 해제 검토 보고서 [탈취 의심 로그인] · INS-10 고정 문장(비밀번호 초기화 안내), 사건 서랍 · 보고서의 경보 표 규칙 칸 두 줄, SEC-INS-10 줄은 근거 펼치기 없음
+- 테스트: 기존 "누구나 판정" 전제 테스트가 "열린 사건은 담당자만"으로 바뀐다. 실험 기준 mariaDbTest 42~43건 실패를 해당 조각 PR에서 고친다. #603: 이메일 가림 규칙을 P5와 같은 예시로 검사(`FdsIdentifierMaskingTests`), 상세 · 차단 목록 · 근거 조회 응답에 원문이 없는지 검사. #628: IP · 기기 ID 규칙도 P5와 같은 예시로 검사, 상세 응답 전체 · 새 근거 저장 · 예전 근거 조회 · 차단 목록 응답에 IP · 기기 ID · 카드 토큰 원문이 없는지 검사. #685: 꺼진 규칙 · 다시 켠 규칙 · INS-06 끄기의 탐지, 보안 직원의 내부자 규칙 변경 거절, INS-05 정책 줄 없음(마이그레이션 전체 검사), 7일 적중 집계, 카드 조회 권한(역할 권한표). #730: 범위 밖 · 고객 조건 없음 · 범위 안 내보내기(단위), 주문번호만 내보내기 거부 기록(MariaDB), 범위 밖 내보내기 거부 반복의 INS-01. #732: 상세 열람 기록 · 없는 결제 404 · 기록 실패 시 상세 미전송(MariaDB) · 목록 응답에 5칸 없음 · CSV 15칸 유지 · 범위 밖 상세 거부 기록 · 관리자 범위 검사 없음 · 목록 `detailAllowed` · 담당 밖 상세 거부 반복의 INS-01 · 역할 권한표. #770: 실패율 기준 이상 · 시도 부족 · 집계 실패 시 로그인 유지(단위), INS-10 처음 보는 브라우저 · 평소 브라우저 · 걸렸던 브라우저 · 신규 직원 · 규칙 꺼짐(단위), 로그인 → INS-10 → 내보내기 차단 · 정지 사슬(MariaDB), 칸 나누기 집계 SQL(MariaDB), 대시보드 역할 권한표, 관리자 메뉴 구조
+- 설정: `donworry.pii.encryption-key` · `hmac-key`(운영 비밀값), `donworry.insider.*` 기준값, 주문자 원문 보관 기간(2차). #770: `security.login-attack.window` 5m · `min-attempts` 30 · `failure-ratio` 0.3, `donworry.insider.ins10-lookback` 30d. #743: `ins09-caution-customers` 3 · `ins09-high-customers` 5 — [탐지 룰 목록] SEC-INS-09 카드 문구도 설정값을 읽어 함께 바뀜, API · DB 변경 없음
 - 문서: #516 범위 재정리, ERD, CakeShop 연동 문서(주문자 칸 "보내기 권장")
 
 ## 검증
@@ -316,3 +351,4 @@ fds가 investigation을 import할 수 없어 fds.api에 질문지 인터페이�
 | 5 주문자 칸 | 선택 유지 + 보내기 권장 (11/08, #656). P5 확인 필요 | 7절 |
 | 6 주문자 원문 보관 | 540일 + 열린 사건이면 종료까지 연장, 파기 배치 2차 (11/08, #656). P5 확인 필요 | 7절 |
 | 7 관리자 메뉴 | 대상별 3단으로 재배치, 403 탐지와 묶지 않음 (11/08, #656). 2단 + 탭 · "접근 감시" 묶음으로 개정, 탐지 룰 탭 합치기 포함 (11/09, #719). P2 확인함 (11/09) | 8절 |
+| 8 로그인 공격 경계 · SEC-INS-10 | 로그인 막지 않음 · 공격 중 처음 보는 브라우저 성공만 높음 · 대시보드 (11/10, #770, 사용자 결정). **11/10 팀 동의** — P1 주환(경계 판단 · 알림 · 권한) · P2 정후(INS-10 · 정책 줄) · P3 수민(대시보드 API) | 3.4절 |
