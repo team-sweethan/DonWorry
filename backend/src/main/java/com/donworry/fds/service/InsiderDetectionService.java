@@ -255,6 +255,8 @@ public class InsiderDetectionService {
     // 예전에 INS-10으로 걸린 로그인은 비교에서 뺀다 — 걸렸던 공격자 브라우저가 다음에 "평소 브라우저"가 되지 않게 (11/10 결정 A)
     // 근거 줄은 없다(근거 표는 접근 기록 번호만 받는다). 경보 시각 = 걸린 로그인 시각이라 그 시각으로 걸린 로그인을 찾는다
     // 한계: 열린 경보가 갱신되면 처음 · 마지막 로그인 시각만 남아, 그 사이에 걸린 로그인은 비교에서 빠지지 않는다
+    // 관리자가 INS-10을 이 로그인 뒤에 닫았으면 다시 판정하지 않는다 (#777 Codex 리뷰) — 한 경보에 합쳐진 중간 로그인이
+    // 판정 · 정지 해제 뒤 내보내기 전 판정에서 다시 걸려, 새 로그인 없이 계정이 또 정지되지 않게. INS-07과 같은 방식
     @Transactional
     public void detectLoginUnderAttack(StaffLoginUnderAttack event) {
         Long staffId = event.staffId();
@@ -264,6 +266,8 @@ public class InsiderDetectionService {
         if (login == null || !staffId.equals(login.staffId())) return;
         Instant loginAt = login.occurredAt();
         if (!ruleSwitches().counts(InsiderRule.INS_10, loginAt)) return;
+        Instant lastClosed = alerts.findLastClosedAt(staffId, InsiderRule.INS_10);
+        if (lastClosed != null && !lastClosed.isBefore(loginAt)) return;
 
         Set<Instant> flagged = alerts.findByStaffIdAndRuleCode(staffId, InsiderRule.INS_10).stream()
                 .flatMap(a -> Stream.of(a.getFirstEventAt(), a.getLastEventAt()))

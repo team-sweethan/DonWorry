@@ -330,6 +330,27 @@ class InsiderDetectionServiceTests {
                 .satisfies(a -> assertThat(a.getRuleCode()).isEqualTo(InsiderRule.INS_10));
     }
 
+    // 한 경보에 합쳐진 중간 로그인이 판정 · 정지 해제 뒤 다시 판정되면 새 로그인 없이 계정이 또 정지된다 (#777 Codex 리뷰)
+    @Test
+    void detectLoginUnderAttack_whenLoginMergedIntoClosedAlert_doesNotReopen() {
+        Instant first = T0.minusSeconds(120);
+        Instant last = T0.plusSeconds(120);
+        Instant closedAt = T0.plusSeconds(1800);
+        InsiderAlert merged = InsiderAlert.open(
+                STAFF, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, "공격 중 로그인 세 번", first, last, first);
+        merged.close(1L, "관리자", "정지 해제 · 비밀번호 초기화", closedAt);
+        savedAlerts.add(merged);
+        when(alerts.findLastClosedAt(STAFF, InsiderRule.INS_10)).thenReturn(closedAt);
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(
+                login(OTHER_LOGIN, first, "기타 브라우저 · 기타 운영체제"),
+                login(UUID.randomUUID(), T0.minus(Duration.ofDays(3)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        assertThat(savedAlerts).filteredOn(InsiderAlert::isOpen).isEmpty();
+    }
+
     // 지난 로그인이 없는 신규 직원 계정이 공격 중에 뚫려도 울리지 않으면 놓친다 (#770 결정 4)
     @Test
     void detectLoginUnderAttack_whenNoPriorLogins_raises() {
