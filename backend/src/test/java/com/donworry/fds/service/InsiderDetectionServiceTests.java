@@ -35,6 +35,7 @@ import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.api.StaffAccessResult;
 import com.donworry.identity.api.StaffAccessType;
 import com.donworry.identity.api.StaffAccountLocker;
+import com.donworry.identity.api.StaffLockReason;
 import com.donworry.identity.api.StaffLogin;
 import com.donworry.identity.api.StaffLoginReader;
 import com.donworry.identity.api.StaffLoginUnderAttack;
@@ -88,6 +89,7 @@ class InsiderDetectionServiceTests {
             .scopeClosedLookback(Duration.ofDays(30))
             .build();
     private final FdsRulePolicyRepository rulePolicies = mock(FdsRulePolicyRepository.class);
+    private final StaffAccountLocker locker = mock(StaffAccountLocker.class);
     private final InsiderDetectionService service = new InsiderDetectionService(
             alerts,
             evidence,
@@ -96,7 +98,7 @@ class InsiderDetectionServiceTests {
             properties,
             loginReader,
             scopeReader,
-            mock(StaffAccountLocker.class),
+            locker,
             rulePolicies,
             mock(LoginTrafficReader.class));
     // 규칙 켜짐 · 꺼짐 줄 (#685). 비어 있으면 모든 규칙이 켜진 것
@@ -296,6 +298,18 @@ class InsiderDetectionServiceTests {
         verify(publisher).publishEvent(raised.capture());
         assertThat(raised.getValue().rule()).isEqualTo(InsiderRule.INS_10);
         assertThat(raised.getValue().severity()).isEqualTo(InsiderAlertSeverity.HIGH);
+    }
+
+    // 탈취 의심 로그인은 내보내기를 기다리지 않고 그 경보를 근거로 바로 정지한다 — 빠지면 뚫린 계정이 판정 전까지 고객정보를 본다 (#790)
+    @Test
+    void detectLoginUnderAttack_whenUnseenBrowser_locksStaffAccount() {
+        loggedIn(T0, "기타 브라우저 · 기타 운영체제");
+        pastLogins(login(OTHER_LOGIN, T0.minus(Duration.ofDays(2)), "Edge · Windows"));
+
+        service.detectLoginUnderAttack(underAttack());
+
+        Long alertId = savedAlerts.getFirst().getId();
+        verify(locker).lockBySystem(STAFF, StaffLockReason.LOGIN_TAKEOVER_SUSPECTED, alertId);
     }
 
     // 공격 중이어도 평소 브라우저로 들어온 진짜 직원을 높음으로 올리면 내보내기에서 정지된다 (#770)

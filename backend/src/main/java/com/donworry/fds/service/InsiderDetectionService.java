@@ -255,6 +255,7 @@ public class InsiderDetectionService {
     // 예전에 INS-10으로 걸린 로그인은 비교에서 뺀다 — 걸렸던 공격자 브라우저가 다음에 "평소 브라우저"가 되지 않게 (11/10 결정 A)
     // 근거 줄은 없다(근거 표는 접근 기록 번호만 받는다). 경보 시각 = 걸린 로그인 시각이라 그 시각으로 걸린 로그인을 찾는다
     // 한계: 열린 경보가 갱신되면 처음 · 마지막 로그인 시각만 남아, 그 사이에 걸린 로그인은 비교에서 빠지지 않는다
+    // 걸리면 높음 경보와 함께 계정을 바로 정지한다 (#790) — 판정은 관리자, 본인이 아니었으면 비밀번호 초기화
     // 관리자가 INS-10을 이 로그인 뒤에 닫았으면 다시 판정하지 않는다 (#777 Codex 리뷰) — 한 경보에 합쳐진 중간 로그인이
     // 판정 · 정지 해제 뒤 내보내기 전 판정에서 다시 걸려, 새 로그인 없이 계정이 또 정지되지 않게. INS-07과 같은 방식
     @Transactional
@@ -290,7 +291,16 @@ public class InsiderDetectionService {
                                 ? " · 지난 %d일 로그인 기록 없음"
                                         .formatted(properties.ins10Lookback().toDays())
                                 : "");
-        raise(staffId, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, summary, List.of(), loginAt, loginAt);
+        Long alertId = raise(
+                        staffId, InsiderRule.INS_10, InsiderAlertSeverity.HIGH, summary, List.of(), loginAt, loginAt)
+                .getId();
+        // 탈취 의심은 내보내기를 기다리지 않고 바로 정지 · 세션 끊기 (#790, 2차 인증 전까지) — 직원 잠금을 잡은 채로 한다(raiseExportBlock과 같은 순서)
+        // 정지는 P1이 따로 커밋한다. 실패해도 경보는 남긴다 — 높음 경보라 내보내기는 문지기가 막는다
+        try {
+            locker.lockBySystem(staffId, StaffLockReason.LOGIN_TAKEOVER_SUSPECTED, alertId);
+        } catch (RuntimeException e) {
+            log.error("INS-10 계정 정지 실패 — 경보는 열림 staffId={} alertId={}", staffId, alertId, e);
+        }
     }
 
     // 내보내기 전 INS-10 동기 판정 (#777 Codex 보안 리뷰) — P1 알림은 커밋 뒤 비동기로 와서, 로그인 직후 바로 내보내면

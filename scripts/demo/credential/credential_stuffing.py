@@ -7,7 +7,7 @@
 
 실제 로그인 화면과 같은 API(`POST /api/auth/login`, CSRF 포함)로 들어간다. IP는 흉내 내지 않는다.
 비밀번호를 재사용한 직원 계정은 파일에 적지 않고 실행할 때 --reused로 목록 중간에 끼운다.
-그 계정이 맞으면 "적중"을 띄우고 멈춘다 — 조작자가 그 계정으로 브라우저에서 이어 간다.
+그 계정이 맞으면 "적중"을 띄우고 멈춘다 — 서버는 탈취 의심으로 그 계정을 바로 정지한다(#790). 조작자가 브라우저로 들어가 막히는 것을 보인다.
 
   uv run scripts/demo/credential/credential_stuffing.py --reused dohyun.lee:비밀번호
   uv run scripts/demo/credential/credential_stuffing.py --base-url https://서버주소 --reused dohyun.lee:비밀번호 --reused-at 50
@@ -139,9 +139,9 @@ def run_rich(client: Client, rows, args, base: str) -> str | None:
         console.print(Panel(
             Align.center(Text.assemble(
                 ('적중  ', f'bold {OK}'), (f' {hit} ', f'bold black on {OK}'), ('\n\n', ''),
-                ('다른 사이트와 같은 비밀번호를 쓰던 계정 · 세션 쿠키 확보\n', 'white'),
+                ('다른 사이트와 같은 비밀번호를 쓰던 계정 · 로그인 성공\n', 'white'),
                 (f'시도 {counts["tried"]}건 · 실패 {counts["failed"]}건 · 맞힌 계정 1개\n\n', DIM),
-                ('→ 이제 이 계정으로 브라우저에서 로그인해 이어 갑니다', f'bold {WARN}'))),
+                ('→ 이 계정으로 브라우저에서 들어가 봅니다 (서버가 바로 정지했는지)', f'bold {WARN}'))),
             border_style=OK, padding=(1, 2)))
     else:
         console.print(Panel(f'시도 {counts["tried"]}건 · 맞힌 계정 0개', border_style=LINE))
@@ -176,7 +176,7 @@ def run_plain(client: Client, rows, args, base: str) -> str | None:
     print(f'{bold}{"─" * 40}{reset}')
     if hit:
         print(f'{bold}결과: 시도 {failures + 1}건 · 실패 {failures}건 · 적중 계정 1개 ({hit}){reset}')
-        print(f'{yellow}→ 이제 이 계정으로 브라우저에서 로그인해 이어 갑니다{reset}')
+        print(f'{yellow}→ 이 계정으로 브라우저에서 들어가 봅니다 (서버가 바로 정지했는지){reset}')
     else:
         print(f'{bold}결과: 시도 {failures}건 · 적중 계정 0개{reset}')
     return hit

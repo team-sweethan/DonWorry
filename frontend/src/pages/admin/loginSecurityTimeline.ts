@@ -91,11 +91,12 @@ export function buildIncidents(d: LoginSecurityDashboard): Incident[] {
           key: `takeover-${alert.alertId}`,
           kind: 'takeover',
           at: alert.createdAt,
-          title: '탈취 의심 · 높음',
+          // 탈취 의심이면 서버가 바로 정지 · 세션을 끊는다 (#790)
+          title: '탈취 의심 · 계정 정지',
           detail: `${name} · 처음 보는 브라우저 (${code})`,
           tip: [
             `${name} · ${detected ? browserOf(detected.device) : '처음 보는 브라우저'}`,
-            `경계 중 로그인 성공 (${code})`,
+            `경계 중 로그인 성공 → 바로 정지 · 세션 끊김 (${code})`,
           ],
           caseId: alert.insiderCaseId,
           attemptKey: detected ? attemptKey(detected) : null,

@@ -31,7 +31,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.annotation.DirtiesContext;
 import tools.jackson.databind.json.JsonMapper;
 
-// #770 크리덴셜 스터핑 — 실제 로그인 HTTP부터 P1 실패율 알림, P2 SEC-INS-10 높음, 내보내기 차단(INS-05) · 정지 · 세션 끊김까지
+// #770 크리덴셜 스터핑 — 실제 로그인 HTTP부터 P1 실패율 알림, P2 SEC-INS-10 높음, 바로 정지 · 세션 끊김까지 (#790)
 // 실패율은 전체 계정 기준이라 넣은 실패 줄을 테스트가 끝나면 지운다. 남기면 뒤 테스트의 보안 직원 로그인이 걸린다 (mariaDbTest는 차례로 돈다)
 @Tag("mariadb")
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -98,9 +98,10 @@ class LoginUnderAttackFlowMariaDbTests {
         jdbc.update("DELETE FROM platform_users WHERE user_id=?", staffId);
     }
 
-    // 알림 → 경보 → 차단 사슬이 끊기면 공격자가 뚫은 계정으로 거래 내역을 내보내고, 시연의 "빼낸 데이터 0건"이 거짓이 된다
+    // 알림 → 경보 → 정지 사슬이 끊기면 공격자가 뚫은 계정으로 고객정보를 보고 거래 내역을 내보낸다
+    // 탈취 의심이면 내보내기를 기다리지 않고 바로 정지 · 세션 끊김이라, 내보내기는 차단(403) 전에 로그인 끊김(401)이다 (#790)
     @Test
-    void loginUnderAttackFlow_thenExport_blocksAndSuspends() throws Exception {
+    void loginUnderAttackFlow_suspendsAndCutsSessionBeforeExport() throws Exception {
         jdbc.update(
                 "INSERT INTO login_histories(user_id,event_type,occurred_at,client_ip,user_agent,login_reference)"
                         + " VALUES (?,'LOGIN_SUCCESS',UTC_TIMESTAMP(6) - INTERVAL 2 DAY,'10.0.0.1',?,?)",
@@ -132,19 +133,22 @@ class LoginUnderAttackFlowMariaDbTests {
                                 staffId)
                         .contains("HIGH"));
 
-        var export = HttpCsrfTestSupport.send(
-                attacker,
-                HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/payment-transactions/export"))
-                        .POST(HttpRequest.BodyPublishers.noBody()));
-        assertThat(export.statusCode()).as(export.body()).isEqualTo(403);
-        assertThat(export.body()).contains("INSIDER_EXPORT_BLOCKED");
-        assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, staffId))
-                .isEqualTo("SUSPENDED");
+        await().atMost(WAIT)
+                .until(() -> "SUSPENDED"
+                        .equals(jdbc.queryForObject(
+                                "SELECT status FROM platform_users WHERE user_id=?", String.class, staffId)));
+        assertThat(jdbc.queryForList(
+                        "SELECT reason_code FROM staff_account_locks WHERE staff_id=? AND status='OPEN'",
+                        String.class,
+                        staffId))
+                .containsExactly("LOGIN_TAKEOVER_SUSPECTED");
+
         var after = attacker.send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/payment-transactions"))
                         .GET()
                         .build(),
                 HttpResponse.BodyHandlers.discarding());
+        // 세션이 끊겼으니 거래 목록 · 내보내기 모두 로그인부터 다시 해야 한다
         assertThat(after.statusCode()).isEqualTo(401);
     }
 }
