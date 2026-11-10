@@ -24,6 +24,8 @@ import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
 import { useCaseAssignmentRequestBadge } from '../hooks/useCaseAssignmentRequestBadge'
 import { useInsiderAlertBadge } from '../hooks/useInsiderAlertBadge'
 import { useInsiderCaseBadge } from '../hooks/useInsiderCaseBadge'
+import { useOperatorAccessBadge } from '../hooks/useOperatorAccessBadge'
+import { useApplicationReviewBadge } from '../hooks/useApplicationReviewBadge'
 import { useRawViewReviewBadge } from '../hooks/useRawViewReviewBadge'
 import { LandingPage } from '../pages/public/LandingPage'
 import { landingEntry } from './landingEntry'
@@ -271,6 +273,16 @@ export function ServerSession() {
       ? user.userId
       : null,
   )
+  const merchantApplications = useApplicationReviewBadge(
+    status === 'authenticated' && user?.role === 'ADMIN' && !user.passwordChangeRequired
+      ? user.userId
+      : null,
+  )
+  const operatorAccessSuspensions = useOperatorAccessBadge(
+    status === 'authenticated' && user?.role === 'ADMIN' && !user.passwordChangeRequired
+      ? user.userId
+      : null,
+  )
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({
@@ -327,6 +339,8 @@ export function ServerSession() {
         rawViewReviews,
         insiderAlerts,
         insiderCases,
+        operatorAccessSuspensions,
+        merchantApplications,
       }}
       header={
         <header className="dw-header">

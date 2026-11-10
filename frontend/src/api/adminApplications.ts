@@ -71,6 +71,9 @@ export function getApplications(
   if (mailAttention) query.set('mailAttention', 'true')
   return api<ApplicationPage>(`/admin/merchant-applications?${query}`, { cache: 'no-store' })
 }
+/** 이메일 확인이 끝나 관리자 검토를 기다리는 이용 신청 수 — 사이드바 배지 · 관리자 홈 */
+export const getReviewPendingApplicationCount = () =>
+  getApplications(0, '', 'REVIEW_PENDING').then((page) => page.totalElements)
 export const getApplication = (id: number) =>
   api<ApplicationDetail>(`/admin/merchant-applications/${id}`, { cache: 'no-store' })
 function review(id: number, action: string, body: unknown) {

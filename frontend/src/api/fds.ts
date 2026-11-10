@@ -1,4 +1,6 @@
+import { getUsers } from './adminAccounts.ts'
 import { api } from './client.ts'
+import { autoSuspendedLoginIds, countStillSuspended } from '../utils/autoSuspendedOperators.ts'
 
 export type FdsResult = 'ALLOW' | 'REVIEW' | 'DENY' | 'ERROR'
 export type FdsRuleHitOutcome = 'MATCH' | 'NO_MATCH' | 'UNAVAILABLE'
@@ -368,6 +370,28 @@ export function getOperatorAccessAccounts(
     `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
+}
+
+// 배지 · 홈에서 한 번에 셀 때 넘겨 볼 최대 쪽 수. 자동 정지 계정은 많지 않아 넉넉하다
+const COUNT_MAX_PAGES = 10
+
+/** 탐지로 자동 정지된 뒤 아직 정지(INACTIVE) 상태인 사장님 계정 수 — 계정 접근 이상 탐지 배지 */
+export async function getAutoSuspendedOperatorCount() {
+  const groups: OperatorAccessAccountGroup[] = []
+  for (let page = 0; page < COUNT_MAX_PAGES; page += 1) {
+    const result = await getOperatorAccessAccounts(page, 'HIGH')
+    groups.push(...result.content)
+    if (page + 1 >= result.totalPages) break
+  }
+  const suspended = autoSuspendedLoginIds(groups)
+  if (suspended.size === 0) return 0
+  const inactive: string[] = []
+  for (let page = 0; page < COUNT_MAX_PAGES; page += 1) {
+    const result = await getUsers(page, '', 'OPERATOR', 'INACTIVE')
+    inactive.push(...result.items.map((user) => user.loginId))
+    if ((page + 1) * result.size >= result.totalElements) break
+  }
+  return countStillSuspended(suspended, inactive)
 }
 
 export function getOperatorAccessSummary() {
