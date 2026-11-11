@@ -245,6 +245,16 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(secondPage.path("hasNext").asBoolean()).isFalse();
     }
 
+    // 최신순은 결제 번호가 아니라 결제 시각 기준이다 — 늦은 시각 결제가 먼저 저장돼 번호가 작아도 위에 온다 (#797)
+    @Test
+    void list_whenSavedOutOfTimeOrder_returnsLatestCreatedFirst() throws Exception {
+        long newer = payment(merchantId, prefix + "-a", now.minus(Duration.ofMinutes(10)), false);
+        long older = payment(merchantId, prefix + "-b", now.minus(Duration.ofHours(1)), false);
+        assertThat(newer).isLessThan(older);
+
+        assertThat(ids(json(PATH + "?merchantId=" + merchantId))).containsExactly(newer, older);
+    }
+
     // 대소문자만 다른 주문번호 · 고객 번호는 다른 주문 · 고객이다 — DB 기본 비교(_ci)에 섞이지 않고 정확히 일치만 나온다
     @Test
     void list_whenRefsDifferOnlyByCase_matchesExactly() throws Exception {
