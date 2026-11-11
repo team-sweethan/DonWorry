@@ -416,6 +416,19 @@ UNIQUE(merchant_id, order_ref), 요청행 복합 FK를 위한 UNIQUE(payment_ord
 
 기존 조회·거절·완료 API의 원래 시각을 대체하지 않는다. 주문·키 구조는 과거 데이터 자동 편입 없이 도입됐으며, 접수 트랜잭션은 같은 가맹점/주문번호의 미편입 과거 결제를 찾으면 `LEGACY_ORDER_EXISTS`로 막는다. `idx_payments_merchant_order(merchant_id, order_ref)`는 비고유 인덱스다. 이 ALTER는 기존 결제의 주문번호 중복 데이터를 삭제하거나 UNIQUE로 강제하지 않는다.
 
+#### payments 조회 인덱스 (#797, 2026-11-11)
+
+현재 스키마 근거: [인덱스 SQL](../../backend/src/main/resources/db/migration/V20261111_104259__add_payments_created_at_indexes.sql). 컬럼 · 데이터 변경은 없다.
+
+보안 직원 거래 내역(`GET /api/payment-transactions` · CSV 내보내기)은 기간(`created_at`) 조건을 걸고 결제 시각 최신순(`created_at desc, payment_id desc`)으로 정렬한다.
+
+| 인덱스 | 쓰는 조회 |
+| --- | --- |
+| `idx_payments_created(created_at)` | 가맹점을 고르지 않은 처음 화면 |
+| `idx_payments_merchant_created(merchant_id, created_at)` | 가맹점을 고른 화면 |
+
+하나만 두면 다른 쪽 조회는 기간 안의 결제를 전부 읽고 정렬한다. 로컬 측정(가맹점 5곳에 고르게 나뉜 결제, 최근 7일 첫 20건 + 전체 건수, 2026-11-11)에서 100만 건 기준으로 처음 화면은 528ms → 45ms, 가맹점을 고른 화면은 565ms → 13ms였다.
+
 ### #602 P5 주문자 연락처 (2026-11-06)
 
 [승인·도입 기록](history.md#602-p5-주문자-연락처-2026-11-06).

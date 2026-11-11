@@ -28,6 +28,12 @@
   text-decoration: underline;
 }
 
+/* 결제 시각: 초까지 한 줄로, 숫자 폭을 맞춰 위아래 줄을 견주기 쉽게 한다 (#797) */
+.dw-tx-table .tx-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 줄을 누르면 거래 상세로 간다 (#732) */
 .dw-tx-table .tx-row {
   cursor: pointer;
