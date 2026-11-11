@@ -34,6 +34,12 @@ export function FinanceFailure({ error, onRetry }: { error: unknown; onRetry: ()
     />
   )
 }
+/** 기간을 바꿔 다시 조회하는 동안 이전 기간 숫자가 흐리게 남아 있음을 알린다. 빠른 응답에는 보이지 않는다. */
+export const FinanceStaleNotice = () => (
+  <div className="finance-stale-notice dw-loading-reveal" role="status" aria-live="polite">
+    새 기간을 조회하고 있어요. 흐린 숫자는 이전 기간 기준입니다.
+  </div>
+)
 export const FinanceLoading = () => (
   <div role="status" aria-live="polite">
     <p>서버에서 최신 자금 정보를 조회하고 있습니다.</p>

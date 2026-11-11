@@ -18,6 +18,7 @@ import { LoginPage } from '../pages/auth/LoginPage'
 import { loginWithPreferences } from './loginPreferences'
 import { recordForbiddenFrontendRoute } from '../api/auth'
 import { LatestLogin } from './LatestLogin'
+import { sessionBody } from './sessionBody'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
@@ -28,6 +29,7 @@ import { useOperatorAccessBadge } from '../hooks/useOperatorAccessBadge'
 import { useApplicationReviewBadge } from '../hooks/useApplicationReviewBadge'
 import { useRawViewReviewBadge } from '../hooks/useRawViewReviewBadge'
 import { LandingPage } from '../pages/public/LandingPage'
+import { preloadFinanceScreens } from '../pages/owner/financePreload'
 import { landingEntry } from './landingEntry'
 import { screenResultHome } from './screenResultHome'
 
@@ -46,9 +48,10 @@ function useSessionCheck() {
   return { ...auth, key }
 }
 
-function CheckingSession() {
+/** quiet: 메뉴 이동 재확인. 빠른 응답에는 카드가 보이지 않고 늦을 때만 서서히 나타난다 (#803) */
+function CheckingSession({ quiet = false }: { quiet?: boolean }) {
   return (
-    <div className="dw-error-view" role="status">
+    <div className={`dw-error-view${quiet ? ' dw-loading-reveal' : ''}`} role="status">
       <Spin size="large" />
       <p>로그인 상태를 확인하고 있습니다.</p>
     </div>
@@ -283,6 +286,12 @@ export function ServerSession() {
       ? user.userId
       : null,
   )
+  // 사장님 메뉴에 들어오면 정산 화면 코드를 미리 받아 둔다. 처음 정산 메뉴를 열 때 코드 로딩 단계를 건너뛴다 (#803)
+  const preloadFinance =
+    status === 'authenticated' && user?.role === 'OPERATOR' && !user.passwordChangeRequired
+  useEffect(() => {
+    if (preloadFinance) preloadFinanceScreens()
+  }, [preloadFinance])
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({
@@ -300,13 +309,18 @@ export function ServerSession() {
     void store.check(key)
   }
   // 확인 중 · 오류에는 본문만 가린다. 확인된 사용자면 메뉴 · 헤더는 유지한다.
-  const body = !checked ? (
-    <CheckingSession />
-  ) : error === 'unavailable' ? (
-    <SessionError retry={retry} />
-  ) : error === 'forbidden' ? (
-    <ScreenResult kind="403" homePath={screenResultHome(user)} />
-  ) : undefined
+  // 메뉴 이동 재확인 중에도 본문은 확인 뒤에 그린다. 확인 카드만 빠른 응답에 보이지 않게 한다 (sessionBody, #803)
+  const cover = sessionBody({ status, user, error }, checked)
+  const body =
+    cover === 'checking' ? (
+      <CheckingSession />
+    ) : cover === 'rechecking' ? (
+      <CheckingSession quiet />
+    ) : cover === 'unavailable' ? (
+      <SessionError retry={retry} />
+    ) : cover === 'forbidden' ? (
+      <ScreenResult kind="403" homePath={screenResultHome(user)} />
+    ) : undefined
   if (status !== 'authenticated' || !user) return body ?? login
   if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
     return <Navigate to="/account/password" replace />

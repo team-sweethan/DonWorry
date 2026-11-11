@@ -22,3 +22,37 @@
   cursor: pointer;
   font-weight: 600;
 }
+
+/*
+ * 다시 조회하는 동안 남겨 둔 이전 결과 (#803)
+ * 조회 중에는 이전 결과를 누를 수 없다 — 마우스 · 키보드 모두 inert로 막는다 (FinanceConnected · SettlementPrototype).
+ * 새로고침 · 기간 선택 · 안내는 그대로 쓸 수 있다.
+ * 기간이 바뀐 조회에서만 이전 숫자를 흐리게 한다. 0.2초 뒤에 시작해 빠른 응답에는 번쩍이지 않는다.
+ * 조회 중이 아닐 때는 아무 속성도 덧붙이지 않아 각 영역의 기존 transition을 덮지 않는다.
+ */
+.finance-result > .ant-alert {
+  margin: 16px 0;
+}
+.finance-result.is-stale > :not(.stl-prototype),
+.finance-result.is-stale
+  > .stl-prototype
+  > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
+  opacity: 0.45;
+  transition: opacity 160ms ease-out 200ms;
+}
+.finance-stale-notice {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--finance-stale-bg, #f6f1e4);
+  color: var(--finance-stale-text, #5f5444);
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .finance-result.is-stale > :not(.stl-prototype),
+  .finance-result.is-stale
+    > .stl-prototype
+    > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
+    transition-duration: 1ms;
+  }
+}

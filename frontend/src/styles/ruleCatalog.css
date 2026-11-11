@@ -517,10 +517,9 @@
   fill: #2563eb;
 }
 
-.dw-rule-loading {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
+/* 룰 카드 모양 로딩 자리 — 실제 카드 머리 부분과 같은 안쪽 여백 */
+.dw-rule-card.dw-rule-card-loading .ant-card-body {
+  padding: 22px;
 }
 
 .dw-rule-empty-state {

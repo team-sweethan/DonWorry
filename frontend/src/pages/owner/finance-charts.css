@@ -109,7 +109,7 @@
   color: #756b5b;
 }
 .finance-trend-scroll:focus-visible {
-  outline: 2px solid #ad7c18;
+  outline: 2px solid #886211;
   outline-offset: 4px;
 }
 
@@ -127,7 +127,7 @@
   position: absolute;
   top: 20px;
   bottom: 34px;
-  border-left: 2px dashed #ad7c18;
+  border-left: 2px dashed #886211;
 }
 .finance-chart-cursor > span {
   position: absolute;

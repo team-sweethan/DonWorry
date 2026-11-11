@@ -163,7 +163,9 @@ function SummaryStrip({
             <span className="dw-caption">{`사장님 계정 ${summary.accountCount}개에서`}</span>
           </>
         ) : (
-          <span className="dw-caption">{failed ? '불러오지 못했어요' : '불러오는 중'}</span>
+          <span className={`dw-caption${failed ? '' : ' dw-loading-reveal'}`}>
+            {failed ? '불러오지 못했어요' : '불러오는 중'}
+          </span>
         )}
       </div>
     </section>

@@ -95,11 +95,13 @@ export function RuleChangeRequestsPage() {
             <p>요청 사유를 확인한 뒤 승인하거나 반려합니다.</p>
           </div>
           <span className="dw-rule-records-count">
-            {result
-              ? `${result.totalElements.toLocaleString('ko-KR')}건`
-              : error
-                ? '조회 실패'
-                : '불러오는 중'}
+            {result ? (
+              `${result.totalElements.toLocaleString('ko-KR')}건`
+            ) : error ? (
+              '조회 실패'
+            ) : (
+              <span className="dw-loading-reveal">불러오는 중</span>
+            )}
           </span>
         </div>
         <Tabs

@@ -279,7 +279,8 @@ export function ManagementLayout({
             <PageTabs groups={groups} badges={badges} />
             {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
             <ScreenErrorBoundary key={location.pathname}>
-              {children ?? <Outlet />}
+              {/* 경로가 바뀔 때마다 새로 그려져 본문이 짧게 서서히 나타난다 (loadingTransition.css) */}
+              <div className="dw-route-view">{children ?? <Outlet />}</div>
             </ScreenErrorBoundary>
           </div>
         </main>

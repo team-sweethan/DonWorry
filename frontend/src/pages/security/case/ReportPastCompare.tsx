@@ -224,7 +224,7 @@ function PastHead({
   const similarity =
     item.similarity === 'SAME_CUSTOMER' ? '같은 고객' : `같은 규칙 ${item.sharedRules.length}개`
   let state: ReactNode = null
-  if (past.status === 'loading') state = '불러오는 중…'
+  if (past.status === 'loading') state = <span className="dw-loading-reveal">불러오는 중…</span>
   else if (past.status === 'error') state = '불러오지 못함'
   else if (past.status === 'forbidden') state = '열람 권한 없음'
   else if (past.status === 'missing') state = '사건을 찾지 못함'

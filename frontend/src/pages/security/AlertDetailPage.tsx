@@ -34,7 +34,6 @@ import {
 } from '../../api/paymentOperations'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
-import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { customerPart } from '../../utils/caseRules'
 import { ResultTag } from './alert/AlertTags'
 import { scoreToX } from './alert/scoreScale'
@@ -297,7 +296,6 @@ export function AlertDetailPage() {
     `${detail?.evaluation.evaluationId ?? ''}-${scorePlay}`,
   )
   const initialDetailLoading = loading && detail === null
-  const showInitialDetailLoading = useMinimumLoadingIndicator(initialDetailLoading)
 
   useEffect(() => {
     if (!id) return
@@ -388,8 +386,13 @@ export function AlertDetailPage() {
     }
   }, [id])
 
-  if (initialDetailLoading || showInitialDetailLoading) {
-    return <div className="dw-alert-detail-loading">{showInitialDetailLoading && <Spin />}</div>
+  if (initialDetailLoading) {
+    // 빠른 응답에는 스피너가 보이지 않고 늦을 때만 서서히 나타난다 (loadingTransition.css)
+    return (
+      <div className="dw-alert-detail-loading">
+        <Spin />
+      </div>
+    )
   }
   if (notFound) return <ScreenResult kind="404" />
   if (!detail || error)

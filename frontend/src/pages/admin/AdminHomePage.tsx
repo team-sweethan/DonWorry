@@ -430,13 +430,15 @@ export function AdminHomePage() {
             )}
           </h2>
           <p>
-            {incomplete
-              ? '일부 건수를 불러오지 못했습니다. 새로고침해 주세요.'
-              : total > 0
-                ? '아래 칸에서 바로 처리 화면으로 이동합니다.'
-                : counting
-                  ? '처리할 일을 세는 중입니다.'
-                  : '지금 처리할 일이 없습니다.'}
+            {incomplete ? (
+              '일부 건수를 불러오지 못했습니다. 새로고침해 주세요.'
+            ) : total > 0 ? (
+              '아래 칸에서 바로 처리 화면으로 이동합니다.'
+            ) : counting ? (
+              <span className="dw-loading-reveal">처리할 일을 세는 중입니다.</span>
+            ) : (
+              '지금 처리할 일이 없습니다.'
+            )}
           </p>
           {users !== null && merchants !== null && (
             // 정지 · 중지 계정을 포함한 전체 수라 목록도 전체 상태로 연다 (목록 기본은 사용 중)
@@ -477,11 +479,13 @@ export function AdminHomePage() {
           ))
         ) : (
           <span className="ah-attention-none">
-            {incomplete
-              ? '일부 건수를 불러오지 못해 확인할 일을 모두 셀 수 없습니다.'
-              : counting
-                ? '세는 중입니다.'
-                : '먼저 확인할 일이 없습니다.'}
+            {incomplete ? (
+              '일부 건수를 불러오지 못해 확인할 일을 모두 셀 수 없습니다.'
+            ) : counting ? (
+              <span className="dw-loading-reveal">세는 중입니다.</span>
+            ) : (
+              '먼저 확인할 일이 없습니다.'
+            )}
           </span>
         )}
       </div>
