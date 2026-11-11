@@ -1,4 +1,4 @@
-import { Alert, Spin, Tabs } from 'antd'
+import { Alert, Card, Skeleton, Tabs } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import {
   getFdsRuleCatalog,
@@ -10,13 +10,15 @@ import {
 } from '../../api/fds'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
-import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestBadge'
 import { RuleCard } from './RuleCard'
 
 import { AccountRuleOverview, PaymentRuleOverview } from './RuleOverview'
 
 type RuleCatalogTab = 'payment' | 'account' | 'all'
+
+const withCount = (label: string, count: number | null) =>
+  count === null ? label : `${label} ${count}`
 
 function RuleCatalogTabs({
   selectedTab,
@@ -26,8 +28,9 @@ function RuleCatalogTabs({
   onSelect,
 }: {
   selectedTab: RuleCatalogTab
-  paymentRuleCount: number
-  accountRuleCount: number
+  /** 불러오는 동안은 null — 탭은 먼저 그리고 개수만 나중에 채운다 */
+  paymentRuleCount: number | null
+  accountRuleCount: number | null
   isAdmin: boolean
   onSelect: (tab: RuleCatalogTab) => void
 }) {
@@ -39,18 +42,36 @@ function RuleCatalogTabs({
       items={[
         ...(isAdmin
           ? [
-              { key: 'account', label: `계정 룰 ${accountRuleCount}` },
-              { key: 'payment', label: `결제 룰 ${paymentRuleCount}` },
+              { key: 'account', label: withCount('계정 룰', accountRuleCount) },
+              { key: 'payment', label: withCount('결제 룰', paymentRuleCount) },
             ]
           : []),
         {
           key: 'all',
           label: isAdmin
-            ? `전체 ${paymentRuleCount + accountRuleCount}`
-            : `결제 룰 ${paymentRuleCount}`,
+            ? withCount(
+                '전체',
+                paymentRuleCount === null || accountRuleCount === null
+                  ? null
+                  : paymentRuleCount + accountRuleCount,
+              )
+            : withCount('결제 룰', paymentRuleCount),
         },
       ]}
     />
+  )
+}
+
+/** 룰 카드 자리. 빠른 응답에는 보이지 않고 늦을 때만 서서히 나타난다 (loadingTransition.css) */
+function RuleCatalogLoading() {
+  return (
+    <section className="dw-rule-grid" role="status" aria-label="탐지 룰 목록을 불러오는 중">
+      {Array.from({ length: 6 }, (_, index) => (
+        <Card className="dw-rule-card dw-rule-card-loading" key={index} aria-hidden="true">
+          <Skeleton active title={{ width: '45%' }} paragraph={{ rows: 3 }} />
+        </Card>
+      ))}
+    </section>
   )
 }
 
@@ -64,8 +85,6 @@ export function RuleCatalogPage() {
   const [chosenTab, setChosenTab] = useState<RuleCatalogTab>('account')
   const policyReloadSequence = useRef(0)
   const initialLoading = loading && rules.length === 0
-  // 스피너는 0.3초 뒤에 뜬다. 그 사이에도 본문을 그리지 않아야 빈 본문 → 스피너 → 본문으로 두 번 바뀌지 않는다 (경보 상세와 같은 방식)
-  const showLoading = useMinimumLoadingIndicator(initialLoading)
   const isAdmin = user?.role === 'ADMIN'
   // 관리자가 아니면 고를 수 있는 탭이 결제 룰(all) 하나뿐이다. effect로 바꾸면 첫 화면이 한 번 더 그려지므로 렌더 중에 정한다
   const selectedTab: RuleCatalogTab = isAdmin ? chosenTab : 'all'
@@ -118,17 +137,18 @@ export function RuleCatalogPage() {
             : '가맹점 결제의 이상 징후를 찾는 결제 룰을 확인합니다.'
         }
       />
-      {!loading && !showLoading && !error && (
+      {/* 탭은 처음부터 그려 둬서 목록이 도착할 때 아래 내용이 밀리지 않게 한다 */}
+      {!error && (
         <RuleCatalogTabs
           selectedTab={selectedTab}
-          paymentRuleCount={rules.length}
-          accountRuleCount={accountRules.length}
+          paymentRuleCount={loading ? null : rules.length}
+          accountRuleCount={loading ? null : accountRules.length}
           isAdmin={isAdmin}
           onSelect={setChosenTab}
         />
       )}
-      {initialLoading || showLoading ? (
-        <div className="dw-rule-loading">{showLoading && <Spin />}</div>
+      {initialLoading ? (
+        <RuleCatalogLoading />
       ) : error ? (
         <Alert type="error" showIcon message={error} />
       ) : selectedTab === 'account' && isAdmin ? (

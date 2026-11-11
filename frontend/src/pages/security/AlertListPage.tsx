@@ -13,7 +13,6 @@ import {
   type FdsResult,
 } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
-import { useMinimumLoadingIndicator } from '../../hooks/useMinimumLoadingIndicator'
 import { WATCH_LIMIT_MS, WATCH_MS } from '../../utils/caseListWatch'
 import { customerPart } from '../../utils/caseRules'
 import { AlertScoreField, type AlertFilter } from './alert/AlertScoreField'
@@ -173,7 +172,6 @@ export function AlertListPage() {
   const shownIds = useRef<Set<number>>(new Set())
   const freshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialListLoading = listLoading && evaluationPage === null
-  const showInitialListSkeleton = useMinimumLoadingIndicator(initialListLoading)
 
   const cancelScheduledSearch = () => {
     if (searchTimer.current === null) return
@@ -829,10 +827,9 @@ export function AlertListPage() {
           onOpen={openAlert}
         />
         {error && <Alert type="error" showIcon message={error} className="dw-alert-load-error" />}
-        {evaluationPage === null || showInitialListSkeleton ? (
-          <div className="dw-alert-list-loading">
-            {showInitialListSkeleton && <AlertListSkeleton />}
-          </div>
+        {evaluationPage === null ? (
+          // 빠른 응답에는 로딩 자리가 보이지 않고 늦을 때만 서서히 나타난다 (loadingTransition.css)
+          <div className="dw-alert-list-loading">{initialListLoading && <AlertListSkeleton />}</div>
         ) : (
           <Table
             className="dw-alert-table"
