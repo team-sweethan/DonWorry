@@ -295,8 +295,8 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       {changingPeriod && <FinanceStaleNotice />}
       {result && view && (
         <div
-          // 새 결과가 도착할 때마다 기존(dev)처럼 안쪽 상태를 새로 시작한다. 기다리는 동안에는 이전 결과를 그대로 둔다
-          key={forecast.lastSuccess ?? 'first'}
+          // 같은 기간 새로고침은 보던 상태(선택 등)를 유지하고, 다른 기간 결과가 오면 새로 시작한다
+          key={`${result.from}:${result.to}`}
           className={`finance-result${forecast.status === 'loading' ? ' is-busy' : ''}${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={forecast.status === 'loading'}
         >
@@ -496,9 +496,8 @@ function ConnectedSettlements() {
       {resource.status === 'error' && <FinanceFailure error={resource.error} onRetry={refresh} />}
       {shown && (
         <div
-          // 새 결과가 도착할 때마다 기존(dev)처럼 필터 · 검색 · 페이지 · 보기 · 상세 창을 새로 시작한다.
-          // 기다리는 동안에는 이전 결과를 그대로 두어 화면이 비지 않게만 한다
-          key={resource.lastSuccess ?? 'first'}
+          // 같은 기간 새로고침은 보던 보기 · 페이지 · 검색 · 필터를 유지하고, 다른 기간 결과가 오면 새로 시작한다
+          key={`${shown.report.from}:${shown.report.to}`}
           className={`finance-result${resource.status === 'loading' ? ' is-busy' : ''}${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={resource.status === 'loading'}
         >
