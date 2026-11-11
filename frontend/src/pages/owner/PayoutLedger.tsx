@@ -4,6 +4,7 @@ import { Button, Empty, Modal, Pagination, Tag } from 'antd'
 import type { SettlementReport } from '../../api/finance'
 import { koreanTime } from './financeView'
 import './payout-ledger.css'
+import { latestSelection } from './latestSelection'
 
 export type PayoutSummaryData = Pick<
   SettlementReport,
@@ -76,15 +77,12 @@ export function PayoutSummary({
     </>
   )
 }
-export function PayoutLedger({
-  payouts,
-  pending = false,
-}: {
-  payouts: SettlementReport['payouts']
-  pending?: boolean
-}) {
+export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts'] }) {
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<SettlementReport['payouts'][number] | null>(null)
+  // 같은 기간을 새로고침해도 열린 지급 명세는 최신 결과에서 다시 찾는다. 없으면 닫는다 (#803 리뷰)
+  const shownDetail = latestSelection(payouts, detail, (p) => p.payoutId)
+  if (detail !== null && shownDetail === null) setDetail(null)
   const ordered = [...payouts].sort(
     (a, b) => b.payoutDate.localeCompare(a.payoutDate) || b.payoutId - a.payoutId,
   )
@@ -155,45 +153,45 @@ export function PayoutLedger({
       )}
       <Modal
         title="일별 지급 명세"
-        open={detail !== null && !pending}
+        open={shownDetail !== null}
         onCancel={() => setDetail(null)}
         footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
       >
-        {detail && (
+        {shownDetail && (
           <div className="payout-statement">
-            <Tag color={detail.origin === 'LEGACY_BACKFILL' ? 'blue' : 'green'}>
-              {detail.origin === 'LEGACY_BACKFILL' ? '과거 정산 이관 기록' : '지급 확정'}
+            <Tag color={shownDetail.origin === 'LEGACY_BACKFILL' ? 'blue' : 'green'}>
+              {shownDetail.origin === 'LEGACY_BACKFILL' ? '과거 정산 이관 기록' : '지급 확정'}
             </Tag>
             <h2>
-              {detail.payoutDate} 지급 #{detail.payoutId}
+              {shownDetail.payoutDate} 지급 #{shownDetail.payoutId}
             </h2>
             <p>
-              {koreanTime(detail.completedAt)}{' '}
-              {detail.origin === 'LEGACY_BACKFILL' ? '기록 기준' : '확정'}
+              {koreanTime(shownDetail.completedAt)}{' '}
+              {shownDetail.origin === 'LEGACY_BACKFILL' ? '기록 기준' : '확정'}
             </p>
             <dl>
               <dt>환불 차감 전 지급액</dt>
               <dd>
-                <FinanceMoney value={detail.settlementAmount} />
+                <FinanceMoney value={shownDetail.settlementAmount} />
               </dd>
               <dt>환불 회수 차감</dt>
               <dd className="payout-deduction">
-                <FinanceMoney value={-detail.refundDeductionAmount} />
+                <FinanceMoney value={-shownDetail.refundDeductionAmount} />
               </dd>
               <dt>실제 지급액</dt>
               <dd className="payout-actual">
-                <FinanceMoney value={detail.payoutAmount} />
+                <FinanceMoney value={shownDetail.payoutAmount} />
               </dd>
             </dl>
             <p>
-              {detail.payoutAmount === 0
-                ? detail.refundDeductionAmount > 0
+              {shownDetail.payoutAmount === 0
+                ? shownDetail.refundDeductionAmount > 0
                   ? '이번 정산금이 환불 회수에 모두 반영되어 입금으로 간주하는 금액은 0원입니다.'
                   : '지급 대상 순정산금이 0원이므로 실제 지급액도 0원입니다.'
                 : '환불 회수 후 이 금액이 입금된 것으로 간주합니다.'}{' '}
               이미 확정된 과거 지급 기록은 변경하지 않습니다.
             </p>
-            {detail.origin === 'LEGACY_BACKFILL' && (
+            {shownDetail.origin === 'LEGACY_BACKFILL' && (
               <p>
                 과거 여러 정산을 날짜별로 묶어 이관한 금액이며, 당시에도 하루 한 번 지급했다는
                 의미는 아닙니다.

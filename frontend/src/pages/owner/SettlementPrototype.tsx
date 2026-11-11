@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Button, Descriptions, Input, Modal, Pagination, Select } from 'antd'
 import { PageHeader } from '../../components/common/PageHeader'
+import { latestSelection } from './latestSelection'
 import './settlement-prototype.css'
 
 type Status = 'done' | 'sch' | 'can'
@@ -195,6 +196,12 @@ export function SettlementPrototype({
   const data =
     actualEntries ??
     (busyDemo ? [...entries.filter((e) => key(e.date) !== key(today)), ...busyEntries] : entries)
+  // 같은 기간을 새로고침해도 열린 상세는 최신 결과에서 같은 항목을 다시 찾아 보여 준다.
+  // 새 결과에 그 항목이 없으면 닫는다 (#803 리뷰: 목록과 상세가 서로 다른 정보를 보이지 않게)
+  const shownDetail = latestSelection(data, detail, (e) => e.id)
+  const shownExpenseDetail = latestSelection(expenses, expenseDetail, (e) => e.id)
+  if (detail !== null && shownDetail === null) setDetail(null)
+  if (expenseDetail !== null && shownExpenseDetail === null) setExpenseDetail(null)
   const openList = () => {
     setDateOnly(true)
     setReportType(
@@ -776,7 +783,6 @@ export function SettlementPrototype({
           </div>
           {reportType === 'payout' && payoutData ? (
             <PayoutLedger
-              pending={resultsPending}
               key={`${dateOnly ? dateInput(selectedDate) : rangeStart}/${rangeEnd}/${query}`}
               payouts={payoutRows}
             />
@@ -921,20 +927,22 @@ export function SettlementPrototype({
       )}
       <Modal
         title="주문별 정산 상세"
-        open={detail !== null && !resultsPending}
+        open={shownDetail !== null}
         onCancel={() => setDetail(null)}
         footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
       >
-        {detail && (
+        {shownDetail && (
           <div className="stl-order-modal">
-            <h3>{detail.orderId ?? detail.id}</h3>
-            <span className={`stl-chip stl-${detail.status}`}>{labels[detail.status]}</span>
-            {detail.orderItems?.length ? (
+            <h3>{shownDetail.orderId ?? shownDetail.id}</h3>
+            <span className={`stl-chip stl-${shownDetail.status}`}>
+              {labels[shownDetail.status]}
+            </span>
+            {shownDetail.orderItems?.length ? (
               <section className="stl-order-products" aria-label="주문 상품 전체 목록">
                 <div className="stl-order-products-heading">
                   <h4>주문 상품</h4>
                   <span>
-                    {detail.orderItems.length}종 · 총 {orderQuantity(detail.orderItems)}개
+                    {shownDetail.orderItems.length}종 · 총 {orderQuantity(shownDetail.orderItems)}개
                   </span>
                 </div>
                 <div className="stl-order-products-columns">
@@ -942,7 +950,7 @@ export function SettlementPrototype({
                   <span>수량</span>
                 </div>
                 <ul>
-                  {detail.orderItems.map((product, index) => (
+                  {shownDetail.orderItems.map((product, index) => (
                     <li key={index}>
                       <span>{product.productName}</span>
                       <b>{product.quantity}개</b>
@@ -956,24 +964,24 @@ export function SettlementPrototype({
             <dl>
               <dt>매입 원금</dt>
               <dd>
-                <FinanceMoney value={detail.gross} />
+                <FinanceMoney value={shownDetail.gross} />
               </dd>
               <dt>{preview ? '카드 수수료 (예시 2%)' : '카드 수수료'}</dt>
               <dd>
-                −<FinanceMoney value={cardFee(detail)} />
+                −<FinanceMoney value={cardFee(shownDetail)} />
               </dd>
               <dt>{preview ? 'PG 수수료 (예시 1%)' : 'PG 수수료'}</dt>
               <dd>
-                −<FinanceMoney value={pgFee(detail)} />
+                −<FinanceMoney value={pgFee(shownDetail)} />
               </dd>
               <dt>원 순정산금 (환불 회수 전)</dt>
               <dd>
                 <b>
-                  <FinanceMoney value={net(detail)} />
+                  <FinanceMoney value={net(shownDetail)} />
                 </b>
               </dd>
               <dt>정산일</dt>
-              <dd>{detail.dateLabel ?? stamp(detail.date)}</dd>
+              <dd>{shownDetail.dateLabel ?? stamp(shownDetail.date)}</dd>
             </dl>
             <p>
               주문별 원 정산금입니다. 실제 입금 간주 금액과 환불 회수는 일별 지급 내역에서
@@ -985,33 +993,33 @@ export function SettlementPrototype({
       </Modal>
       <Modal
         title="지출 상세"
-        open={expenseDetail !== null && !resultsPending}
+        open={shownExpenseDetail !== null}
         onCancel={() => setExpenseDetail(null)}
         footer={<Button onClick={() => setExpenseDetail(null)}>닫기</Button>}
       >
-        {expenseDetail && (
+        {shownExpenseDetail && (
           <Descriptions
             column={1}
             items={[
-              { key: 'title', label: '지출명', children: expenseDetail.title },
+              { key: 'title', label: '지출명', children: shownExpenseDetail.title },
               {
                 key: 'amount',
                 label: '금액',
-                children: <FinanceMoney value={expenseDetail.amount} compact={false} />,
+                children: <FinanceMoney value={shownExpenseDetail.amount} compact={false} />,
               },
-              { key: 'date', label: '캘린더 반영일', children: expenseDetail.date },
+              { key: 'date', label: '캘린더 반영일', children: shownExpenseDetail.date },
               {
                 key: 'originalDate',
                 label: '지출 예정일',
-                children: expenseDetail.originalDate ?? expenseDetail.date,
+                children: shownExpenseDetail.originalDate ?? shownExpenseDetail.date,
               },
-              { key: 'status', label: '종류·상태', children: expenseDetail.note ?? '—' },
+              { key: 'status', label: '종류·상태', children: shownExpenseDetail.note ?? '—' },
               {
                 key: 'memo',
                 label: '메모',
                 children: (
                   <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-                    {expenseDetail.memo || '—'}
+                    {shownExpenseDetail.memo || '—'}
                   </span>
                 ),
               },

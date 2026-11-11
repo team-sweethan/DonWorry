@@ -297,7 +297,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         <div
           // 같은 기간 새로고침은 보던 상태(선택 등)를 유지하고, 다른 기간 결과가 오면 새로 시작한다
           key={`${result.from}:${result.to}`}
-          className={`finance-result${forecast.status === 'loading' ? ' is-busy' : ''}${changingPeriod ? ' is-stale' : ''}`}
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={forecast.status === 'loading'}
           inert={forecast.status === 'loading'}
         >
@@ -499,7 +499,7 @@ function ConnectedSettlements() {
         <div
           // 같은 기간 새로고침은 보던 보기 · 페이지 · 검색 · 필터를 유지하고, 다른 기간 결과가 오면 새로 시작한다
           key={`${shown.report.from}:${shown.report.to}`}
-          className={`finance-result${resource.status === 'loading' ? ' is-busy' : ''}${changingPeriod ? ' is-stale' : ''}`}
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={resource.status === 'loading'}
         >
           <SettlementPrototype
