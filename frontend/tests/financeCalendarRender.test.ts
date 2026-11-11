@@ -116,3 +116,38 @@ test('payout calendar and ledger render zero-cash recovery without showing origi
     await server.close()
   }
 })
+
+// 다른 기간을 조회하는 동안 이전 결과는 키보드로도 조작할 수 없고 기간 선택은 계속 사용할 수 있다.
+test('settlement_whenPeriodChanges_makesPreviousResultsInertWithoutBlockingPeriodControls', async () => {
+  const server = await createServer({
+    server: { middlewareMode: true, ws: false, hmr: false, watch: null },
+    appType: 'custom',
+  })
+  try {
+    const { SettlementPrototype } = await server.ssrLoadModule(
+      '/src/pages/owner/SettlementPrototype.tsx',
+    )
+    const render = (resultsPending: boolean) =>
+      renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(SettlementPrototype, {
+            todayValue: '2026-11-02',
+            period: { from: '2026-11-01', to: '2026-11-03' },
+            actualEntries: [],
+            resultsPending,
+            periodControls: createElement('button', { id: 'change-period' }, '기간 변경'),
+          }),
+        ),
+      )
+    const pending = render(true)
+    assert.match(pending, /<section[^>]*class="finance-card"[^>]*inert=""/)
+    assert.match(pending, /<div[^>]*class="stl-calendar-layout"[^>]*inert=""/)
+    assert.match(pending, /<button id="change-period">기간 변경<\/button>/)
+    assert.doesNotMatch(pending, /<div[^>]*class="stl-prototype"[^>]*inert/)
+    assert.doesNotMatch(render(false), /\sinert=/)
+  } finally {
+    await server.close()
+  }
+})

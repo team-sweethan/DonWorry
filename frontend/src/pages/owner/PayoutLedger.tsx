@@ -76,7 +76,13 @@ export function PayoutSummary({
     </>
   )
 }
-export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts'] }) {
+export function PayoutLedger({
+  payouts,
+  pending = false,
+}: {
+  payouts: SettlementReport['payouts']
+  pending?: boolean
+}) {
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<SettlementReport['payouts'][number] | null>(null)
   const ordered = [...payouts].sort(
@@ -149,7 +155,7 @@ export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts']
       )}
       <Modal
         title="일별 지급 명세"
-        open={detail !== null}
+        open={detail !== null && !pending}
         onCancel={() => setDetail(null)}
         footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
       >

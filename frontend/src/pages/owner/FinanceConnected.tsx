@@ -299,6 +299,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           key={`${result.from}:${result.to}`}
           className={`finance-result${forecast.status === 'loading' ? ' is-busy' : ''}${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={forecast.status === 'loading'}
+          inert={forecast.status === 'loading'}
         >
           {!result.batchEnabled && (
             <Alert
@@ -502,6 +503,7 @@ function ConnectedSettlements() {
           aria-busy={resource.status === 'loading'}
         >
           <SettlementPrototype
+            resultsPending={resource.status === 'loading'}
             todayValue={today}
             period={period}
             onPeriodChange={setPeriod}

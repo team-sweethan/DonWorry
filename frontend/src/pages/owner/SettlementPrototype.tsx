@@ -76,6 +76,7 @@ export function SettlementPrototype({
   onPeriodChange,
   graphDate,
   onGraphDateChange,
+  resultsPending = false,
 }: {
   todayValue?: string
   previewAmountScale?: number
@@ -90,6 +91,7 @@ export function SettlementPrototype({
   graphDate?: string
   onGraphDateChange?: (date: string) => void
   onPeriodChange?: (period: { from: string; to: string }) => void
+  resultsPending?: boolean
 }) {
   const [previewToday] = useState(() => new Date())
   const today = todayValue ? new Date(todayValue + 'T12:00:00') : previewToday
@@ -284,8 +286,15 @@ export function SettlementPrototype({
         actions={
           <div className="finance-header-actions">
             {headerActions}
-            <FinanceGuide page="settlement" />
-            <div className="stl-switch" role="tablist" aria-label="보기 방식">
+            <span inert={resultsPending}>
+              <FinanceGuide page="settlement" />
+            </span>
+            <div
+              className="stl-switch"
+              role="tablist"
+              aria-label="보기 방식"
+              inert={resultsPending}
+            >
               {(['cal', 'list'] as const).map((v) => (
                 <button
                   key={v}
@@ -392,7 +401,7 @@ export function SettlementPrototype({
         />
       )}
       {payoutData && <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />}
-      <section className="finance-card" style={{ marginBottom: 20 }}>
+      <section className="finance-card" style={{ marginBottom: 20 }} inert={resultsPending}>
         <h2>날짜별 지급·정산 예정 금액</h2>
         {payoutData && monthSummary && (
           <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
@@ -424,7 +433,7 @@ export function SettlementPrototype({
         />
       </section>
       {view === 'cal' ? (
-        <div className="stl-calendar-layout">
+        <div className="stl-calendar-layout" inert={resultsPending}>
           <section className="stl-panel stl-calendar-panel">
             <div className="stl-calendar-header">
               <div className="stl-month">
@@ -646,7 +655,7 @@ export function SettlementPrototype({
           </section>
         </div>
       ) : (
-        <section ref={reportRef} className="stl-panel stl-report">
+        <section ref={reportRef} className="stl-panel stl-report" inert={resultsPending}>
           <div className="stl-list-heading">
             <Button onClick={() => setView('cal')}>← 캘린더로 돌아가기</Button>
             <h2>
@@ -767,6 +776,7 @@ export function SettlementPrototype({
           </div>
           {reportType === 'payout' && payoutData ? (
             <PayoutLedger
+              pending={resultsPending}
               key={`${dateOnly ? dateInput(selectedDate) : rangeStart}/${rangeEnd}/${query}`}
               payouts={payoutRows}
             />
@@ -911,7 +921,7 @@ export function SettlementPrototype({
       )}
       <Modal
         title="주문별 정산 상세"
-        open={detail !== null}
+        open={detail !== null && !resultsPending}
         onCancel={() => setDetail(null)}
         footer={<Button onClick={() => setDetail(null)}>닫기</Button>}
       >
@@ -975,7 +985,7 @@ export function SettlementPrototype({
       </Modal>
       <Modal
         title="지출 상세"
-        open={expenseDetail !== null}
+        open={expenseDetail !== null && !resultsPending}
         onCancel={() => setExpenseDetail(null)}
         footer={<Button onClick={() => setExpenseDetail(null)}>닫기</Button>}
       >
