@@ -48,9 +48,10 @@ function useSessionCheck() {
   return { ...auth, key }
 }
 
-function CheckingSession() {
+/** quiet: 메뉴 이동 재확인. 빠른 응답에는 카드가 보이지 않고 늦을 때만 서서히 나타난다 (#803) */
+function CheckingSession({ quiet = false }: { quiet?: boolean }) {
   return (
-    <div className="dw-error-view" role="status">
+    <div className={`dw-error-view${quiet ? ' dw-loading-reveal' : ''}`} role="status">
       <Spin size="large" />
       <p>로그인 상태를 확인하고 있습니다.</p>
     </div>
@@ -308,18 +309,20 @@ export function ServerSession() {
     void store.check(key)
   }
   // 확인 중 · 오류에는 본문만 가린다. 확인된 사용자면 메뉴 · 헤더는 유지한다.
-  // 이미 확인된 사용자의 메뉴 이동 재확인은 가리지 않는다 (sessionBody, #803)
+  // 메뉴 이동 재확인 중에도 본문은 확인 뒤에 그린다. 확인 카드만 빠른 응답에 보이지 않게 한다 (sessionBody, #803)
   const cover = sessionBody({ status, user, error }, checked)
   const body =
     cover === 'checking' ? (
       <CheckingSession />
+    ) : cover === 'rechecking' ? (
+      <CheckingSession quiet />
     ) : cover === 'unavailable' ? (
       <SessionError retry={retry} />
     ) : cover === 'forbidden' ? (
       <ScreenResult kind="403" homePath={screenResultHome(user)} />
     ) : undefined
   if (status !== 'authenticated' || !user) return body ?? login
-  if (!body && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
+  if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
     return <Navigate to="/account/password" replace />
   }
   const navigation = sessionNavigation(user)
