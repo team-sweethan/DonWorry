@@ -26,16 +26,11 @@
 /*
  * 다시 조회하는 동안 남겨 둔 이전 결과 (#803)
  * 기간이 바뀐 조회에서만 흐리게 하고 누르지 못하게 한다. 제목 · 기간 선택 · 안내는 그대로 쓸 수 있다.
- * 흐려지는 것도 0.2초 뒤에 시작해 빠른 응답에는 번쩍이지 않는다. 결과가 오면 지연 없이 돌아온다.
+ * 흐려지는 것도 0.2초 뒤에 시작해 빠른 응답에는 번쩍이지 않는다. 결과가 오면 바로 돌아온다.
+ * 흐린 상태가 아닐 때는 아무 속성도 덧붙이지 않아 각 영역의 기존 transition을 덮지 않는다.
  */
 .finance-result > .ant-alert {
   margin: 16px 0;
-}
-.finance-result > :not(.stl-prototype),
-.finance-result
-  > .stl-prototype
-  > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
-  transition: opacity 120ms ease-out;
 }
 .finance-result.is-stale > :not(.stl-prototype),
 .finance-result.is-stale

@@ -278,7 +278,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         />
       )}
       {settings.status === 'error' && <FinanceFailure error={settings.error} onRetry={refresh} />}
-      {settings.status === 'loading' && setting === undefined && <FinanceLoading />}
+      {settings.status === 'loading' && !setting && <FinanceLoading />}
       {settings.status === 'success' && setting === null && !savedInitialBalance && (
         <InitialBalance
           today={today}
