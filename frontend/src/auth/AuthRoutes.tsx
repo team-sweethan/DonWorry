@@ -18,6 +18,7 @@ import { LoginPage } from '../pages/auth/LoginPage'
 import { loginWithPreferences } from './loginPreferences'
 import { recordForbiddenFrontendRoute } from '../api/auth'
 import { LatestLogin } from './LatestLogin'
+import { sessionBody } from './sessionBody'
 import { loginDestination, requiresLogin, type LoginRedirectState } from './loginRedirect'
 import { useSecurityCaseBadge } from '../hooks/useSecurityCaseBadge'
 import { useRuleChangeRequestBadge } from '../hooks/useRuleChangeRequestBadge'
@@ -307,15 +308,18 @@ export function ServerSession() {
     void store.check(key)
   }
   // 확인 중 · 오류에는 본문만 가린다. 확인된 사용자면 메뉴 · 헤더는 유지한다.
-  const body = !checked ? (
-    <CheckingSession />
-  ) : error === 'unavailable' ? (
-    <SessionError retry={retry} />
-  ) : error === 'forbidden' ? (
-    <ScreenResult kind="403" homePath={screenResultHome(user)} />
-  ) : undefined
+  // 이미 확인된 사용자의 메뉴 이동 재확인은 가리지 않는다 (sessionBody, #803)
+  const cover = sessionBody({ status, user, error }, checked)
+  const body =
+    cover === 'checking' ? (
+      <CheckingSession />
+    ) : cover === 'unavailable' ? (
+      <SessionError retry={retry} />
+    ) : cover === 'forbidden' ? (
+      <ScreenResult kind="403" homePath={screenResultHome(user)} />
+    ) : undefined
   if (status !== 'authenticated' || !user) return body ?? login
-  if (checked && !error && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
+  if (!body && user.passwordChangeRequired && !isAccountPasswordPath(pathname)) {
     return <Navigate to="/account/password" replace />
   }
   const navigation = sessionNavigation(user)
