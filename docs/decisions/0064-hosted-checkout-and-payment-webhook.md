@@ -198,8 +198,8 @@
 - [x] 운영 `notifyUrl`은 https만 허용하고 내부 주소(루프백 · 사설 · 링크 로컬 · 미지정 · 멀티캐스트 · IPv6 고유 로컬 · 100.64/10)를 막는다 — 세션 생성 때(IP로 적힌 주소)와 보내기 직전(이름 풀이 결과 전부) 두 번 본다. 로컬 개발은 `donworry.payment.webhook.allow-local-targets=true`(#402 PR②, `PaymentWebhookTargetPolicy`). 이름 풀이와 연결 사이에 주소가 바뀌는 경우(DNS rebinding)는 막지 않는다 — 한계
 - [ ] 가맹점이 등록한 주소만 쓰게 할지(가맹점 설정)
 - [x] 웹훅 재전송 한도와 운영에서 실패를 보는 방법 — 상태마다 약 24시간(293회) 뒤 그 상태는 그만두고 조회 배치에 맡긴다. 운영은 `notify_attempts > 0 AND next_notify_at IS NULL`과 WARN 로그로 본다(3절, 2026-11-03 #455). 중단된 세션을 다시 보내는 운영 수단은 #191 범위
-- [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다
-- [ ] 결제창 `Referrer-Policy`: 지금은 따로 설정하지 않는다. 브라우저 기본값(`strict-origin-when-cross-origin`)이라 다른 출처로는 출처만 나가고 세션 키가 든 경로는 나가지 않는다. `no-referrer`로 더 좁힐지는 선택
+- [x] 운영 프록시가 `/checkout`을 다른 사이트 iframe에 띄우는 것을 막지 않는지: 같은 `nginx.conf`에 `X-Frame-Options`·`frame-ancestors`가 없어 막지 않는다(2026-11-02). 백엔드의 Spring Security 기본 `X-Frame-Options`는 API 응답에만 붙고 결제창 화면(nginx 정적 파일)에는 붙지 않는다. 2026-11-11 #801: `nginx.conf`가 화면 응답에 보안 헤더를 붙이면서 결제창 외 화면은 `X-Frame-Options: DENY`·`frame-ancestors 'none'`으로 끼워 넣기를 막는다. 결제창(`/checkout/*`)만 의도적으로 제한하지 않는다(가맹점마다 출처가 달라 고정 목록을 두지 않음)
+- [ ] 결제창 `Referrer-Policy`: 브라우저 기본값과 같은 `strict-origin-when-cross-origin`을 쓴다(2026-11-11 #801부터 `nginx.conf`에 명시). 다른 출처로는 출처만 나가고 세션 키가 든 경로는 나가지 않는다. `no-referrer`로 더 좁힐지는 선택
 - [ ] 결제 접수 기한(10분)이 지난 뒤 늦게 승인된 결제를 누가 취소하는지
 - [ ] 고객 취소(환불) 연결은 ADR-0058(환불 후에도 `CAPTURED` 유지, 취소 작업으로 표현)에 맞춰 별도 결정. 그때 웹훅이 환불을 어떻게 알릴지 정한다
 - [ ] 결제창 결제는 IP 국가(`ipCountryCode`)를 아직 산출하지 않아 FDS R05(고위험 국가)가 적용되지 않는다(`null` 전달). 서버 GeoIP DB와 신뢰 프록시 국가 헤더 중 출처를 정하고 ADR로 남긴다 — #434 (PR #425 Codex 보안 리뷰)
