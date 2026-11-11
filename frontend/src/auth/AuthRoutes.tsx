@@ -28,6 +28,7 @@ import { useOperatorAccessBadge } from '../hooks/useOperatorAccessBadge'
 import { useApplicationReviewBadge } from '../hooks/useApplicationReviewBadge'
 import { useRawViewReviewBadge } from '../hooks/useRawViewReviewBadge'
 import { LandingPage } from '../pages/public/LandingPage'
+import { preloadFinanceScreens } from '../pages/owner/financePreload'
 import { landingEntry } from './landingEntry'
 import { screenResultHome } from './screenResultHome'
 
@@ -283,6 +284,12 @@ export function ServerSession() {
       ? user.userId
       : null,
   )
+  // 사장님 메뉴에 들어오면 정산 화면 코드를 미리 받아 둔다. 처음 정산 메뉴를 열 때 코드 로딩 단계를 건너뛴다 (#803)
+  const preloadFinance =
+    status === 'authenticated' && user?.role === 'OPERATOR' && !user.passwordChangeRequired
+  useEffect(() => {
+    if (preloadFinance) preloadFinanceScreens()
+  }, [preloadFinance])
   // Navigate는 state가 바뀌면 다시 이동하므로 같은 값이면 같은 객체를 넘긴다.
   const loginState = useMemo<LoginRedirectState>(
     () => ({

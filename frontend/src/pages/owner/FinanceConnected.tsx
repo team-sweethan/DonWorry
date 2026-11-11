@@ -23,6 +23,7 @@ import {
   FinanceLoading,
   FinancePeriodControl,
   FinanceRefresh,
+  FinanceStaleNotice,
 } from './FinanceControls'
 import {
   MAX_FINANCE_AMOUNT,
@@ -153,7 +154,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
   const refresh = useCallback(() => setRevision((n) => n + 1), [])
   const settingsLoad = useCallback((signal: AbortSignal) => getCashFlowSettings(signal), [])
   const settings = useFinanceResource(`settings:${today}:${revision}`, settingsLoad)
-  const setting = settings.status === 'success' ? settings.data : undefined
+  // 새로고침 동안에도 마지막 설정을 유지해 예측 화면이 비었다 다시 그려지지 않게 한다 (#803)
+  const setting =
+    settings.status === 'success'
+      ? settings.data
+      : settings.status === 'loading'
+        ? settings.stale
+        : undefined
   const valid =
     validFinancePeriod(period) &&
     period.to <= dayjs(today).add(365, 'day').format('YYYY-MM-DD') &&
@@ -170,7 +177,18 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
     load,
     valid && !!setting,
   )
-  const result = forecast.status === 'success' ? forecast.data.forecast : null
+  // 다시 조회하는 동안 마지막 예측을 남긴다. 기간이 바뀐 조회면 흐리게 하고 조작을 막는다.
+  const shownForecast =
+    forecast.status === 'success'
+      ? forecast.data
+      : forecast.status === 'loading'
+        ? forecast.stale
+        : undefined
+  const changingPeriod =
+    forecast.status === 'loading' &&
+    !!shownForecast &&
+    (shownForecast.forecast.from !== period.from || shownForecast.forecast.to !== period.to)
+  const result = shownForecast?.forecast ?? null
   const excludedIncome = result
     ? [
         { label: '일정 미정', amount: result.undatedIncome },
@@ -180,7 +198,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         .filter(({ amount }) => amount !== 0)
         .map(({ label, amount }) => `${label} ${money(amount)}`)
     : []
-  const view = forecast.status === 'success' ? forecast.data.view : null
+  const view = shownForecast?.view ?? null
   const active = result?.days.find((d) => d.date === details)
   const preset = (days: number) =>
     setPeriod({
@@ -258,7 +276,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         />
       )}
       {settings.status === 'error' && <FinanceFailure error={settings.error} onRetry={refresh} />}
-      {settings.status === 'loading' && <FinanceLoading />}
+      {settings.status === 'loading' && setting === undefined && <FinanceLoading />}
       {settings.status === 'success' && setting === null && !savedInitialBalance && (
         <InitialBalance
           today={today}
@@ -269,9 +287,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         />
       )}
       {forecast.status === 'error' && <FinanceFailure error={forecast.error} onRetry={refresh} />}
-      {forecast.status === 'loading' && <FinanceLoading />}
+      {forecast.status === 'loading' && !shownForecast && <FinanceLoading />}
+      {changingPeriod && <FinanceStaleNotice />}
       {result && view && (
-        <>
+        <div
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
+          aria-busy={forecast.status === 'loading'}
+        >
           {!result.batchEnabled && (
             <Alert
               type="warning"
@@ -326,7 +348,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               </ul>
             </details>
           )}
-        </>
+        </div>
       )}
       <FinanceExpenseManager
         open={manage}
@@ -403,6 +425,18 @@ function ConnectedSettlements() {
     [monthFrom, today],
   )
   const month = useFinanceResource(`month:${today}:${revision}`, monthLoad)
+  // 다시 조회하는 동안에는 마지막 결과를 그대로 두어 화면이 비었다 다시 그려지지 않게 한다 (#803).
+  // 기간이 바뀐 조회라면 이전 기간의 숫자이므로 흐리게 하고 조작을 막는다. 같은 기간 새로고침은 버튼 로딩만 보인다.
+  const shown =
+    resource.status === 'success'
+      ? resource.data
+      : resource.status === 'loading'
+        ? resource.stale
+        : undefined
+  const changingPeriod =
+    resource.status === 'loading' &&
+    !!shown &&
+    (shown.report.from !== period.from || shown.report.to !== period.to)
   const mismatch =
     resource.status === 'success' &&
     month.status === 'success' &&
@@ -437,12 +471,17 @@ function ConnectedSettlements() {
   )
   return (
     <div className="finance-preview finance-connected">
-      {resource.status !== 'success' && (
+      {!shown && (
         <>
           <PageHeader
             title="정산 내역"
             description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
-            actions={actions}
+            actions={
+              <div className="finance-header-actions">
+                {actions}
+                <FinanceGuide page="settlement" />
+              </div>
+            }
           />
           {periodControls}
         </>
@@ -452,10 +491,13 @@ function ConnectedSettlements() {
           <Alert type="warning" message="올바른 날짜로 최대 366일을 선택해 주세요." />
         </>
       )}
-      {resource.status === 'loading' && <FinanceLoading />}
+      {resource.status === 'loading' && !shown && <FinanceLoading />}
       {resource.status === 'error' && <FinanceFailure error={resource.error} onRetry={refresh} />}
-      {resource.status === 'success' && (
-        <>
+      {shown && (
+        <div
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
+          aria-busy={resource.status === 'loading'}
+        >
           <SettlementPrototype
             todayValue={today}
             period={period}
@@ -463,19 +505,22 @@ function ConnectedSettlements() {
             graphDate={graphDate}
             onGraphDateChange={setGraphDate}
             headerActions={actions}
-            actualEntries={resource.data.entries}
-            payoutReport={resource.data.report}
+            actualEntries={shown.entries}
+            payoutReport={shown.report}
             periodControls={periodControls}
             notice={
-              resource.data.report.undatedAmount > 0 ? (
-                <Alert
-                  type="info"
-                  message={`일정이 없는 예정 정산 ${money(resource.data.report.undatedAmount)}`}
-                  description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
-                />
-              ) : undefined
+              <>
+                {changingPeriod && <FinanceStaleNotice />}
+                {shown.report.undatedAmount > 0 && (
+                  <Alert
+                    type="info"
+                    message={`일정이 없는 예정 정산 ${money(shown.report.undatedAmount)}`}
+                    description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
+                  />
+                )}
+              </>
             }
-            expenses={resource.data.expenses.map((e) => ({
+            expenses={shown.expenses.map((e) => ({
               id: e.key,
               date: e.date,
               title: e.title,
@@ -498,12 +543,12 @@ function ConnectedSettlements() {
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>
                 ) : (
-                  <span>이번 달 지급액 조회 중</span>
+                  <span className="dw-loading-reveal">이번 달 지급액 조회 중</span>
                 )}
               </>
             }
           />
-        </>
+        </div>
       )}
     </div>
   )

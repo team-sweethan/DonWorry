@@ -22,3 +22,43 @@
   cursor: pointer;
   font-weight: 600;
 }
+
+/*
+ * 다시 조회하는 동안 남겨 둔 이전 결과 (#803)
+ * 기간이 바뀐 조회에서만 흐리게 하고 누르지 못하게 한다. 제목 · 기간 선택 · 안내는 그대로 쓸 수 있다.
+ * 흐려지는 것도 0.2초 뒤에 시작해 빠른 응답에는 번쩍이지 않는다. 결과가 오면 지연 없이 돌아온다.
+ */
+.finance-result > .ant-alert {
+  margin: 16px 0;
+}
+.finance-result > :not(.stl-prototype),
+.finance-result
+  > .stl-prototype
+  > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
+  transition: opacity 120ms ease-out;
+}
+.finance-result.is-stale > :not(.stl-prototype),
+.finance-result.is-stale
+  > .stl-prototype
+  > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 160ms ease-out 200ms;
+}
+.finance-stale-notice {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--finance-stale-bg, #f6f1e4);
+  color: var(--finance-stale-text, #5f5444);
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .finance-result.is-stale > :not(.stl-prototype),
+  .finance-result.is-stale
+    > .stl-prototype
+    > :not(.dw-page-header):not(.finance-period):not(.finance-stale-notice) {
+    transition-duration: 1ms;
+  }
+}
