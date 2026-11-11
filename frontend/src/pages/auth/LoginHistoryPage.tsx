@@ -58,7 +58,13 @@ export function LoginHistoryTable({ userId }: { userId?: number }) {
           loading={!current}
           dataSource={current?.data?.items ?? []}
           scroll={{ x: 720 }}
-          locale={{ emptyText: current ? emptyLoginMessage : '이력을 불러오고 있습니다.' }}
+          locale={{
+            emptyText: current ? (
+              emptyLoginMessage
+            ) : (
+              <span className="dw-loading-reveal">이력을 불러오고 있습니다.</span>
+            ),
+          }}
           pagination={{
             current: page + 1,
             pageSize: 20,

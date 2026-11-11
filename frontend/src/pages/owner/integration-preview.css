@@ -15,8 +15,8 @@
   margin: 0;
   padding: 16px 18px;
   overflow-x: auto;
-  color: #e2e8f0;
-  background: #0f172a;
+  color: #624718;
+  background: #fff8e7;
   border-radius: 8px;
   font:
     13px/1.7 ui-monospace,
@@ -32,7 +32,7 @@
   gap: 16px;
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid #e7e1d5;
 }
 
 .dw-integration-cautions {

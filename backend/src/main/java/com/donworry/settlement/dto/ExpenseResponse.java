@@ -13,7 +13,8 @@ public record ExpenseResponse(
         Long amount,
         String category,
         String memo,
-        Instant paidAt) {
+        Instant paidAt,
+        Instant updatedAt) {
     public static ExpenseResponse from(PlannedExpense e) {
         return ExpenseResponse.builder()
                 .expenseId(e.getExpenseId())
@@ -23,6 +24,7 @@ public record ExpenseResponse(
                 .category(e.getCategory().name())
                 .memo(e.getMemo())
                 .paidAt(e.getPaidAt())
+                .updatedAt(e.getUpdatedAt())
                 .build();
     }
 }

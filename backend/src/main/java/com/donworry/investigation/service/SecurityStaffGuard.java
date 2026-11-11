@@ -13,6 +13,7 @@ public class SecurityStaffGuard {
 
     // identity.api가 내보내는 역할 이름 (ADR-0020)
     private static final String SECURITY_STAFF = "SECURITY_STAFF";
+    private static final String ADMIN = "ADMIN";
 
     private final CurrentStaff currentStaff;
 
@@ -25,5 +26,16 @@ public class SecurityStaffGuard {
             throw new InvestigationException(InvestigationErrorCode.SECURITY_STAFF_ONLY);
         }
         return staff.userId();
+    }
+
+    // 사건 담당 배정 · 변경처럼 관리자만 하는 동작 (#608). 보안 직원은 막는다 — 자기 담당을 스스로 바꾸지 못하게
+    public StaffSummary requireAdmin() {
+        StaffSummary staff = currentStaff
+                .findCurrent()
+                .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.LOGIN_REQUIRED));
+        if (!ADMIN.equals(staff.role())) {
+            throw new InvestigationException(InvestigationErrorCode.ADMIN_ONLY);
+        }
+        return staff;
     }
 }

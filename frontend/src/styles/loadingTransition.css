@@ -1,0 +1,93 @@
+/*
+ * 관리 화면 로딩 전환 (#803)
+ *
+ * 로컬처럼 응답이 빠르면 로딩 표시가 1~3프레임만 보였다 사라져 화면이 번쩍인다.
+ * 로딩 표시는 0.2초 동안 투명하게 자리만 잡고, 그보다 오래 걸릴 때만 서서히 보인다.
+ * 최소 표시 시간은 두지 않는다 — 응답이 오면 바로 내용으로 바꾼다.
+ *
+ * 화면마다 로딩 코드를 고치지 않고 antd 로딩 부품(Skeleton · Spin · Table loading)에 한 번에 건다.
+ * 버튼 안 로딩(.ant-btn-loading-icon)은 누른 즉시 반응해야 하므로 대상이 아니다.
+ * 공개 화면(로그인 전)은 범위 밖이라 .admin-viewport 안에만 적용한다.
+ */
+
+:root {
+  --dw-loading-reveal-delay: 200ms;
+  --dw-loading-reveal-duration: 160ms;
+  --dw-content-enter-duration: 140ms;
+}
+
+@keyframes dw-loading-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Table loading 때 본문을 흐리게 하는 효과도 같은 시점에 시작한다 */
+@keyframes dw-loading-dim {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.5;
+  }
+}
+
+@keyframes dw-content-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.admin-viewport .ant-skeleton,
+.admin-viewport .ant-spin-spinning,
+.admin-viewport .dw-loading-reveal {
+  animation: dw-loading-reveal var(--dw-loading-reveal-duration) ease-out
+    var(--dw-loading-reveal-delay) both;
+}
+
+.admin-viewport .ant-spin-blur {
+  animation: dw-loading-dim var(--dw-loading-reveal-duration) ease-out
+    var(--dw-loading-reveal-delay) both;
+}
+
+.admin-viewport .ant-spin-blur::after {
+  animation: dw-loading-overlay var(--dw-loading-reveal-duration) ease-out
+    var(--dw-loading-reveal-delay) both;
+}
+
+@keyframes dw-loading-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.4;
+  }
+}
+
+/*
+ * 내용이 들어올 때 짧게 서서히 나타난다.
+ * - 화면 전환: 경로가 바뀌면 본문(.dw-route-view)이 새로 그려지며 한 번 나타난다
+ * - 표 행: 새로 받은 행만 나타난다 (같은 행의 재조회는 그대로 둔다)
+ * :where()로 우선순위를 0으로 둬서 화면별 애니메이션(새 경보 행 등)이 항상 이긴다.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  :where(.admin-viewport .dw-route-view),
+  :where(.admin-viewport .ant-table-tbody > tr.ant-table-row),
+  :where(.admin-viewport .dw-content-enter) {
+    /* backwards: 끝난 뒤에는 효과가 남지 않아 쌓임 순서(z-index) 등 기존 배치에 영향을 주지 않는다 */
+    animation: dw-content-enter var(--dw-content-enter-duration) ease-out backwards;
+  }
+}
+
+/* 동작 줄이기: 서서히 나타나는 효과는 없애고, 빠른 응답에 로딩 표시가 번쩍이지 않게 지연만 남긴다 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dw-loading-reveal-duration: 1ms;
+  }
+}

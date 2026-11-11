@@ -29,6 +29,7 @@ public class CaseLinkService {
     private final CasePaymentRepository casePaymentRepository;
     private final CaseHistoryRepository caseHistoryRepository;
     private final CaseStatusService caseStatusService;
+    private final CaseAssignmentService caseAssignmentService;
     private final ApplicationEventPublisher events;
 
     // 같은 결제가 다시 와도 이미 연결된 Case를 돌려주고 아무것도 바꾸지 않는다 (AGENTS 4절 멱등)
@@ -36,6 +37,9 @@ public class CaseLinkService {
     public Long link(HeldPayment heldPayment) {
         // 잠금 조회를 트랜잭션의 첫 조회로 둔다 — 일반 조회가 먼저면 그 시점 스냅숏이 고정돼
         // 잠금을 기다린 뒤 MariaDB가 "Record has changed since last read"로 실패한다 (innodb_snapshot_isolation)
+        // 배정 잠금이 맨 앞이다 (#608): 새 사건인지는 병합 후보를 읽어야 알 수 있고, 배정 건수는 잠금 뒤 스냅숏으로 세야
+        // 동시에 생긴 사건이 한 직원에게 몰리지 않는다. 그래서 HELD 결제의 사건 연결은 모두 한 줄로 선다
+        caseAssignmentService.lock();
         Instant now = Instant.now();
         SecurityCase securityCase = findMergeTarget(heldPayment, now).orElse(null);
 
@@ -50,6 +54,8 @@ public class CaseLinkService {
                     heldPayment.merchantId(), heldPayment.customerRef(), CaseType.PAYMENT_FRAUD, now));
             caseHistoryRepository.save(CaseHistory.bySystem(
                     securityCase, CaseHistoryEventType.CASE_CREATED, Map.of("caseId", securityCase.getId()), now));
+            // 새 사건만 담당을 정한다. 병합된 사건은 처음 담당이 그대로 맡는다
+            caseAssignmentService.assignNew(securityCase, now);
         } else {
             securityCase.increaseEvidenceVersion();
         }

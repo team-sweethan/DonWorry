@@ -37,6 +37,7 @@ public class AuthService {
     private final MerchantLockService merchantLocks;
     private final LoginAttemptService loginAttempts;
     private final LoginHistoryService loginHistories;
+    private final LoginAttackCheck loginAttackCheck;
 
     public MeResponse login(LoginRequest input, HttpServletRequest request, HttpServletResponse response) {
         String loginId = input.loginId().trim().toLowerCase(Locale.ROOT);
@@ -123,6 +124,8 @@ public class AuthService {
             var authentication = UsernamePasswordAuthenticationToken.authenticated(user, null, result.getAuthorities());
             userSessionService.establishAuthentication(authentication, request, response);
             loginHistories.success(user, request);
+            // 방금 남긴 성공 이력까지 넣어 센다. 실패해도 로그인은 그대로 성공한다
+            loginAttackCheck.afterLogin(user);
             log.info("로그인 성공 loginId={}", logLoginId);
             return MeResponse.from(user);
         } catch (BadCredentialsException | DisabledException exception) {

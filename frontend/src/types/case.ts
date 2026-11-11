@@ -28,6 +28,12 @@ export type CaseHistoryEventType =
   | 'CASE_STATUS_CHANGED'
   /** 고객이 HELD 결제 승인을 직접 취소함(P5 확인 뒤 반영, #382). eventData에 paymentId · casePaymentId · cancellationId · completedAt */
   | 'PAYMENT_CANCELED_BY_CUSTOMER'
+  /** 담당 배정 · 변경 (#608). eventData에 assigneeName · reason(AUTO_LEAST_OPEN · ADMIN_REASSIGN · HANDOVER · REQUEST_APPROVED), 관리자 변경이면 changeReason · memo */
+  | 'CASE_ASSIGNED'
+  /** 담당자의 담당 변경 요청 (#608). eventData에 requestId · reason */
+  | 'CASE_ASSIGNMENT_REQUESTED'
+  /** 관리자의 변경 요청 거절 (#608). eventData에 requestId · memo */
+  | 'CASE_ASSIGNMENT_REQUEST_REJECTED'
   | 'CASE_CLOSED'
 
 // ── 엔터티 (설계 3.9) ──
@@ -40,6 +46,9 @@ export type SecurityCase = {
   evidenceVersion: number
   createdAt: string
   closedAt: string | null
+  /** 담당 보안 직원 (#608). 미배정이면 둘 다 null */
+  assigneeStaffId: string | null
+  assigneeName: string | null
 }
 
 /**
@@ -122,7 +131,9 @@ export type CaseHistory = {
 }
 
 // ── AI 보고서 (기획 2.7 표준 구성) — report_body 키 표기는 P4와 확정 전 ──
-export type AiRecommendation = 'ACCEPT_REVIEW' | 'REJECT_REVIEW' | 'NEEDS_CHECK'
+// 판정 권고(승인 취소 검토 · 추가 확인 · 매입 진행 검토)는 #644에서 뺐다 (ADR-0009 결정 13)
+// 예전 보고서에는 recommendation · reason · basis.rule · verdict · recommendation.summary 값이 남아 있지만
+// 화면은 읽지 않는다 — 타입에서 지워 읽는 코드가 생기지 않게 한다
 
 // 판정 근거 (#501) — ai-server app/schemas/report.py의 DecisionBasis와 같게 둔다
 // level: 고위험 징후(HIGH_RISK) · 주의 징후(CAUTION), normalReason이 null이면 정상 사유 없음
@@ -134,6 +145,8 @@ export type BasisSignal = {
   level: 'HIGH_RISK' | 'CAUTION'
   normalReason: string | null
   countedIn?: string | null
+  // 판정 전에 확인할 것 (#591) — 징후마다 코드 사전 문장. 없으면 예전 보고서 · 모르는 규칙
+  checkBefore?: string | null
 }
 
 export type NormalBasis = {
@@ -143,14 +156,9 @@ export type NormalBasis = {
   explains: string[]
 }
 
-export type BasisRule =
-  'HIGH_RISK_WITH_OTHERS' | 'HIGH_RISK_ONLY' | 'CAUTION_ONLY' | 'ALL_EXPLAINED'
-
 export type DecisionBasis = {
   signals: BasisSignal[]
   normals: NormalBasis[]
-  rule: BasisRule
-  recommendation: AiRecommendation
 }
 
 // 적중 규칙 하나 — FDS 조회 기록 값 그대로, evidenceId는 evidence 목록의 같은 ID 줄
@@ -164,7 +172,7 @@ export type ReportRuleHitDetail = {
   observed?: string | null
 }
 
-// verdict · reason · ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
+// ruleHitDetails는 #288에서 추가 — 그 전에 저장된 보고서에는 없어 선택 항목이다
 // 사실 번호별 원래 사실 (#548) — evidenceId는 그 사실을 가져온 조회 기록(evidence 줄)
 // paymentId는 접속 정보처럼 결제 하나의 사실일 때만 있다 (#559)
 export type ReportFact = {
@@ -173,6 +181,15 @@ export type ReportFact = {
   text: string
   evidenceId: string
   paymentId?: string | null
+  // 눈여겨볼 사실인지 (#591) — 코드가 정한다. 요약 "더 보기" 표시 · 안전망 줄에 쓴다
+  notable?: boolean
+}
+
+// 조사 범위 3칸 (#591) — 조회 기록으로 코드가 나눈다
+export type InvestigationScope = {
+  checked: string[]
+  withheld: string[]
+  unavailable: string[]
 }
 
 export type ReportBody = {
@@ -197,12 +214,10 @@ export type ReportBody = {
     ruleHits: string[]
     // 위험 근거 · 정상 정황(AI 문장)은 #548에서 없앴다 — 예전 보고서에 남아 있어도 보여 주지 않는다
     unknowns: string[]
-    recommendation: AiRecommendation
-    reason?: string
     ruleHitDetails?: ReportRuleHitDetail[]
     // 카드 · 기기 · 접속 국가 (#346) — 없으면(undefined) 예전 보고서, null이면 FDS 평가 없음
     signals?: PaymentSignals | null
-    // 판정 근거 · 기준표 판정 (#501) — 없으면 그 전 보고서
+    // 징후 · 정상 근거 · 확인할 것 (#501) — 없으면 그 전 보고서
     basis?: DecisionBasis | null
   }>
   // kind: 점 색 구분 (#310). 그 전에 만든 보고서에는 없다
@@ -210,7 +225,8 @@ export type ReportBody = {
   // 사실 번호 목록 (#548) — 요약 링크가 번호의 주제로 표 카드를 찾는다. 종합 분석 · 주제별 문장은 없앴다
   facts?: ReportFact[]
   additionalChecks: string[]
-  recommendation: { summary: string; limitations: string[] }
+  // 한계 줄 — 권고 요약(summary)은 #644에서 뺐다. scope가 없는 보고서는 이 줄로 조사 범위를 대신한다
+  recommendation: { limitations: string[] }
   evidence: Array<{
     toolName: string
     source: string
@@ -218,9 +234,6 @@ export type ReportBody = {
     retrievedAt: string
     dataVersion: string
   }>
-  // headline은 결론 한 줄 — #532부터 코드가 기준표 판정으로 쓴다(그 전 보고서는 AI 문장)
-  // overallRecommendation은 결제별 권고로 코드가 계산
-  verdict?: { headline: string; overallRecommendation: AiRecommendation }
   // 조사 과정 기록 (#294) — 그 전에 저장된 보고서에는 없다
   investigationTrace?: InvestigationTrace
   // 비슷한 과거 사건 (#296) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
@@ -229,6 +242,36 @@ export type ReportBody = {
   paymentHistory?: PaymentHistory | null
   // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   linkedPayments?: LinkedPayments | null
+  // 아래 3칸은 #591 — 예전 보고서 · 고정 보고서(AI 끔)에는 없다
+  // 사건 개요 한 줄 (코드가 씀). 없는 예전 보고서는 overview 숫자로 화면이 만든다 (결론 한 줄 verdict.headline은 권고 문장이라 쓰지 않는다, #644)
+  caseOverview?: string | null
+  // 안전망 — AI가 끝내 빠뜨린 눈여겨볼 사실 번호. "시스템이 덧붙임"으로 보여 준다
+  summaryAppended?: string[]
+  // 없으면 recommendation.limitations로 대신한다
+  scope?: InvestigationScope | null
+  // 주문 정보 (#634) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
+  orderContext?: OrderContext | null
+}
+
+// 사건 결제 하나의 주문 정보 (#634) — 가맹점이 결제 준비 때 보낸 값 (P5)
+// provided=false면 결제 준비 기록이 없어 나머지 칸이 비어 있다 ("주문 정보 없음")
+// 주문자 이름 · 전화는 오지 않는다. 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로만 온다 (ADR-0082)
+// orderRef · orderName은 가맹점이 쓴 글자라 AI는 보지 않았다 — 화면 표에만 보인다
+export type OrderPayment = {
+  paymentId: string
+  provided: boolean
+  orderRef: string | null
+  orderName: string | null
+  orderGroup: number | null
+  // 주문 생성 → 결제 요청까지 걸린 초. 가맹점 시계 기준이라 음수일 수 있다
+  orderToPaymentSeconds: number | null
+  ordererProvided: boolean
+  ordererPhoneGroup: number | null
+  pickupDiffers: boolean | null
+}
+
+export type OrderContext = {
+  payments: OrderPayment[]
 }
 
 // 같은 카드 · 기기 · IP를 쓴 같은 가맹점 다른 고객 결제 (#352) — 건수 · 고객 수 · 판정만 온다
@@ -240,10 +283,21 @@ export type LinkedMatch = {
   paymentCount: number
   resultCounts: Array<{ result: string; count: number }>
   declinedCount: number
+  // 그중 사건 결제 앞뒤 nearbyWindowMinutes 안의 결제 (#637). 예전 보고서에는 없다
+  nearby?: LinkedNearby | null
+}
+
+// 사건 결제 앞뒤 시간 안의 다른 고객 결제 (#637) — 몰렸는지(공격) 흩어졌는지(공용 와이파이 등) 보는 숫자
+export type LinkedNearby = {
+  otherCustomerCount: number
+  paymentCount: number
+  resultCounts: Array<{ result: string; count: number }>
+  declinedCount: number
 }
 
 export type LinkedPayments = {
   lookbackDays: number
+  nearbyWindowMinutes?: number | null
   card: LinkedMatch
   device: LinkedMatch
   ip: LinkedMatch
@@ -266,6 +320,8 @@ export type PaymentHistoryItem = {
   amount: number | null
   paymentStatus: string | null
   requestedAt: string | null
+  // 징후 · 정상 근거 계산이 본 30일 기본 조회에 든 결제인지 (#591) — 표의 30일 경계선. 없으면 예전 보고서
+  inBasis?: boolean | null
 }
 
 // payments는 최근 순 최대 20건, statusCounts는 그 안에서 코드가 센 값. 기간 안에 더 있으면 truncated
@@ -319,6 +375,8 @@ export type InvestigationTrace = {
   steps: TraceStep[]
   // 프롬프트 지문 (#581) — AI 보고서만 채운다. 고정 · 예전 보고서에는 없다 (화면 표시는 나중)
   promptFingerprint?: string | null
+  // 고정 보고서를 만든 이유 (#626, ADR-0083) — 설정 꺼짐 · 긴급정지. AI 보고서 · 그 전 고정 보고서에는 없다
+  fixedReason?: 'CONFIG_OFF' | 'ADMIN_STOPPED' | null
 }
 
 export type AiReport = {
@@ -342,8 +400,14 @@ export type CaseSummary = SecurityCase & {
   decidedCount: number
 }
 
+/** 상세에만 오는 담당 정보 (#608). assignmentChangePending이 true면 관리자가 처리할 때까지 판정만 막힌다 */
+export type CaseDetailCase = SecurityCase & {
+  assignedAt: string | null
+  assignmentChangePending: boolean
+}
+
 export type CaseDetail = {
-  securityCase: SecurityCase
+  securityCase: CaseDetailCase
   payments: CasePayment[]
   reports: AiReport[]
   decisions: PaymentDecision[]
@@ -356,4 +420,37 @@ export type SubmitDecisionsRequest = {
   evidenceVersion: number
   reportId: string | null
   decisions: Array<{ casePaymentId: string; decision: Decision; reason: string }>
+}
+
+// ── 보고서 뒤 사건 질문 · 답 (#753, ADR-0086) — #752 응답 모양. ID만 숫자로 와서 api가 문자열로 바꾼다 ──
+// RUNNING: 답 기다리는 중 (2분 넘으면 서버가 FAILED로 보낸다) / DECLINED: 판정 · 범위 밖 질문을 고정 문장으로 거절
+export type ReportQuestionStatus = 'RUNNING' | 'ANSWERED' | 'DECLINED' | 'FAILED'
+// ANSWER: 사실로 답함 / NOT_IN_REPORT: 보고서와 허용 조회로 알 수 없음
+// DECLINED_DECISION: 판정 · 권고 질문 / DECLINED_SCOPE: 사건 밖 · 개인정보 질문
+export type ReportQuestionKind = 'ANSWER' | 'NOT_IN_REPORT' | 'DECLINED_DECISION' | 'DECLINED_SCOPE'
+
+// 답이 인용한 사실 원문. source: REPORT(보고서 사실) · PAYMENT(보고서 결제 표) · COMPUTED(코드 계산)
+// · ADDED(이번에 새로 조회) · PREVIOUS(앞 질문에서 새로 조회한 값). 새로 조회한 값만 toolName · retrievedAt이 있다
+export type QuestionFact = {
+  id: string
+  text: string
+  source: 'REPORT' | 'PAYMENT' | 'COMPUTED' | 'ADDED' | 'PREVIOUS'
+  paymentId?: string | null
+  toolName?: string | null
+  retrievedAt?: string | null
+}
+
+export type ReportQuestion = {
+  questionId: string
+  question: string
+  status: ReportQuestionStatus
+  // 실패 · 진행 중이면 null
+  kind: ReportQuestionKind | null
+  // 문장마다 근거 사실 번호 — 코드 고정 문장(거절 · 모름)은 빈 목록
+  sentences: Array<{ text: string; facts: string[] }>
+  // 판정 질문 거절 때 그 보고서의 확인할 것 전체
+  checks: string[]
+  facts: QuestionFact[]
+  askedAt: string
+  answeredAt: string | null
 }

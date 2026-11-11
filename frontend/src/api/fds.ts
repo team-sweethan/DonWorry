@@ -33,13 +33,15 @@ export type FdsEvaluationDetail = {
     thresholdSnapshot: string | null
   }>
   history: FdsEvaluationSummary[]
+  // 원문은 받지 않는다 (#603 · #628). displayValue는 카드 표시값(없으면 null) · 가린 이메일 · IP · 기기 ID,
+  // blocked는 서버가 대조한 차단 여부
   blocklistCandidates: Array<{
     identifierType: FdsBlocklistEntry['identifierType']
-    identifierValue: string
-    displayLabel: string | null
+    displayValue: string | null
+    blocked: boolean
   }>
+  // 카드 토큰은 받지 않는다 (#628). 사람이 볼 값은 표시값이다
   cardIdentifier: {
-    cardToken: string
     cardDisplayLabel: string | null
   } | null
   failureAnalysis: {
@@ -121,7 +123,8 @@ export type FdsRulePolicyChangeHistoryPage = {
 export type FdsBlocklistEntry = {
   entryId: number
   identifierType: 'CARD_TOKEN' | 'DEVICE_ID' | 'BUYER_REF' | 'IP_ADDRESS' | 'BUYER_EMAIL'
-  identifierValue: string
+  // 이메일 · IP · 기기 ID는 가린 값, 카드는 null(표시값은 displayLabel) (#603 · #628)
+  identifierValue: string | null
   displayLabel: string | null
   reason: string
   deactivationReason: string | null
@@ -137,11 +140,42 @@ export type OperatorAccessDetection = {
   sourceEventId: number | null
   loginId: string
   affiliation: string
+  ruleCode: string
   ruleName: string
   riskLevel: 'HIGH' | 'LOW'
   eventCount: number
   actionStatus: string
+  /** 고위험 탐지 상세를 처음 열어 확인한 시각 — 저위험은 null */
+  reviewedAt: string | null
   occurredAt: string
+  /** 막힌 경로 "GET /api/admin/users" — 없으면 null */
+  blockedPath: string | null
+}
+/** 목록 위 요약 — 최근 7일(한국 날짜) 거부 요청 */
+export type OperatorAccessSummary = {
+  deniedCount: number
+  accountCount: number
+  daily: Array<{ date: string; count: number }>
+  topPaths: Array<{ httpMethod: string; path: string; count: number }>
+}
+/** 계정별 보기 한 묶음 — signals는 최근 것부터 최대 5건, 전체 건수는 detectionCount */
+export type OperatorAccessAccountGroup = {
+  loginId: string
+  affiliation: string
+  riskLevel: 'HIGH' | 'LOW'
+  detectionCount: number
+  eventCount: number
+  lastOccurredAt: string
+  signals: OperatorAccessDetection[]
+}
+export type OperatorAccessAccountPage = {
+  content: OperatorAccessAccountGroup[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  highRiskCount: number
+  lowRiskCount: number
 }
 export type OperatorAccessDetectionPage = {
   content: OperatorAccessDetection[]
@@ -223,6 +257,13 @@ export function getOperatorAccessRuleCatalog() {
   })
 }
 
+// 내부자 규칙 카드 (#685) — 관리자만. ruleCode는 저장 이름(INS_0x)이라 끄기 · 켜기 주소에 그대로 쓴다
+export function getInsiderRuleCatalog() {
+  return api<FdsRuleCatalogEntry[]>('/fds/insider-detections/rule-catalog', {
+    cache: 'no-store',
+  })
+}
+
 export function getFdsRulePolicies() {
   return api<FdsRulePolicy[]>('/fds/rule-policies', { cache: 'no-store' })
 }
@@ -293,25 +334,65 @@ export function deactivateFdsBlocklistEntry(entryId: number, reason: string) {
   })
 }
 
-export function getFdsBlocklistStatus(
-  identifierType: FdsBlocklistEntry['identifierType'],
-  identifierValue: string,
+// 경보 상세의 차단 후보 등록. 식별값은 보내지 않고 서버가 평가에서 찾는다 (#603)
+export function addFdsBlocklistEntryFromEvaluation(
+  evaluationId: number,
+  input: { identifierType: FdsBlocklistEntry['identifierType']; reason: string },
 ) {
-  const query = new URLSearchParams({ identifierType, identifierValue })
-  return api<{ blocked: boolean }>(`/fds/blocklist/status?${query}`, { cache: 'no-store' })
+  return api<void>(`/fds/evaluations/${evaluationId}/blocklist-entries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
 }
 
-export function getOperatorAccessDetections(page = 0, risk = 'ALL', search = '') {
+export function getOperatorAccessDetections(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+) {
   return api<OperatorAccessDetectionPage>(
-    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search })}`,
+    `/fds/operator-access-detections?${new URLSearchParams({ page: String(page), size: '10', risk, search, rule, loginId })}`,
     { cache: 'no-store' },
   )
+}
+
+export function getOperatorAccessAccounts(
+  page = 0,
+  risk = 'ALL',
+  search = '',
+  rule = '',
+  loginId = '',
+  size = 10,
+) {
+  return api<OperatorAccessAccountPage>(
+    `/fds/operator-access-detections/accounts?${new URLSearchParams({ page: String(page), size: String(size), risk, search, rule, loginId })}`,
+    { cache: 'no-store' },
+  )
+}
+
+/** 아직 상세를 열어 확인하지 않은 고위험 계정 접근 탐지 수 — 관리자 사이드바 배지. */
+export function getUnreviewedOperatorAccessDetectionCount() {
+  return api<number>('/fds/operator-access-detections/unreviewed-count', { cache: 'no-store' })
+}
+
+export function getOperatorAccessSummary() {
+  return api<OperatorAccessSummary>('/fds/operator-access-detections/summary', {
+    cache: 'no-store',
+  })
 }
 
 export function getOperatorAccessDetection(detectionId: number) {
   return api<OperatorAccessDetectionDetail>(`/fds/operator-access-detections/${detectionId}`, {
     cache: 'no-store',
   })
+}
+
+/** 고위험 탐지 상세를 열면 확인 시각만 기록한다. 계정 자동 정지 상태에는 영향을 주지 않는다. */
+export function reviewOperatorAccessDetection(detectionId: number) {
+  return api<void>(`/fds/operator-access-detections/${detectionId}/review`, { method: 'POST' })
 }
 
 export function getLowRiskOperatorAccessDetection(eventId: number) {

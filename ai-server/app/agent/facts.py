@@ -11,7 +11,6 @@ from app.agent.assemble import (
     similar_outcome,
     split_history,
 )
-from app.agent.evidence import payment_links
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.report import FactItem
@@ -21,7 +20,10 @@ from app.schemas.tools import (
     HistoryPayment,
     LinkedMatch,
     LinkedPaymentsTool,
+    OrderContextTool,
+    OrderPayment,
     PaymentHistoryTool,
+    ResultCount,
     Signals,
     SimilarCasesTool,
 )
@@ -182,21 +184,44 @@ def _linked_rank(match: LinkedMatch) -> int:
     return NOTABLE if match.paymentCount > 0 else NOTHING
 
 
-def _linked_line(owner: str, kind: str, match: LinkedMatch, days: int) -> str:
+def _counts_text(customers: int, payments: int, results: list[ResultCount], declined: int) -> str:
+    text = f"다른 고객 {customers}명 · 결제 {payments}건"
+    judged = " · ".join(f"{FDS_RESULT_KO.get(c.result, c.result)} {c.count}건" for c in results)
+    if judged:
+        text += f" (FDS 판정 {judged})"
+    return text + f", 카드사 거절 {declined}건"
+
+
+# 60분 → "1시간", 90분 → "90분"
+def _window_text(minutes: int) -> str:
+    return f"{minutes // 60}시간" if minutes % 60 == 0 else f"{minutes}분"
+
+
+# window: 사건 결제 앞뒤 몇 분을 따로 셌는지 (#637)
+# 예전 Spring 응답이면 None이라 그 구절을 붙이지 않는다
+def _linked_line(
+    owner: str, kind: str, match: LinkedMatch, days: int, window: int | None = None
+) -> str:
     if not match.provided:
         return f"{owner} · 같은 {kind}: {kind} 정보를 가맹점이 보내지 않아 찾지 못함"
     if match.paymentCount == 0:
         return f"{owner} · 같은 {kind}: 최근 {days}일 다른 고객 결제 없음"
-    results = " · ".join(
-        f"{FDS_RESULT_KO.get(c.result, c.result)} {c.count}건" for c in match.resultCounts
+    line = f"{owner} · 같은 {kind}: 최근 {days}일 " + _counts_text(
+        match.otherCustomerCount, match.paymentCount, match.resultCounts, match.declinedCount
     )
-    line = (
-        f"{owner} · 같은 {kind}: 최근 {days}일 다른 고객 {match.otherCustomerCount}명 · "
-        f"결제 {match.paymentCount}건"
+    near = match.nearby
+    if window is None or near is None:
+        return line
+    # 30일 합계와 나란히 — 몰렸는지(공격) 흩어졌는지(공용 와이파이 등)는 직원이 본다
+    if near.paymentCount == 0:
+        return line + f" / 그중 이 결제 앞뒤 {_window_text(window)} 안: 없음"
+    return (
+        line
+        + f" / 그중 이 결제 앞뒤 {_window_text(window)} 안: "
+        + _counts_text(
+            near.otherCustomerCount, near.paymentCount, near.resultCounts, near.declinedCount
+        )
     )
-    if results:
-        line += f" (FDS 판정 {results})"
-    return line + f", 카드사 거절 {match.declinedCount}건"
 
 
 # 결제별 칸이 있으면 결제마다, 없으면(예전 Spring) 사건 전체 값으로 쓴다 (#533)
@@ -211,14 +236,13 @@ def _linked(records: list[ToolRecord]) -> list[Line]:
     matches: list[tuple[str, str, LinkedMatch]] = []
     if linked.payments:
         for links in linked.payments:
-            own = payment_links(linked, links.paymentId)
-            assert own is not None
+            own = (links.card, links.device, links.ip)
             owner = _name(names, links.paymentId)
             matches += [(owner, kind, m) for (kind, _), m in zip(_KINDS, own, strict=True)]
     else:
         matches = [("사건 결제 전체", kind, getattr(linked, attr)) for kind, attr in _KINDS]
     return [
-        (_linked_line(owner, kind, m, days), seq, None, _linked_rank(m))
+        (_linked_line(owner, kind, m, days, linked.nearbyWindowMinutes), seq, None, _linked_rank(m))
         for owner, kind, m in matches
     ]
 
@@ -273,11 +297,84 @@ def _similar(records: list[ToolRecord]) -> list[Line]:
     return [(line, seq, None, PLAIN) for line in lines]
 
 
+# 주문 → 결제 걸린 시간 — "40초" · "3분" · "2시간". 가맹점 시계 기준이라 음수면 그대로 말한다
+def _elapsed(seconds: int) -> str:
+    if seconds < 0:
+        return "주문 시각이 결제 요청보다 늦게 기록됨(가맹점 시각 기준)"
+    if seconds < 120:
+        return f"주문 {seconds}초 뒤 결제"
+    if seconds < 7200:
+        return f"주문 {seconds // 60}분 뒤 결제"
+    return f"주문 {seconds // 3600}시간 뒤 결제"
+
+
+def _pickup(differs: bool | None) -> str:
+    if differs is None:
+        return "픽업자 정보 없음"
+    return "픽업자가 주문자와 다름" if differs else "픽업자가 주문자와 같음"
+
+
+def _order_line(owner: str, p: OrderPayment) -> str:
+    parts = []
+    if p.orderToPaymentSeconds is not None:
+        parts.append(_elapsed(p.orderToPaymentSeconds))
+    parts.append("주문자 연락처 있음" if p.ordererProvided else "주문자 연락처 없음")
+    parts.append(_pickup(p.pickupDiffers))
+    return f"{owner}: " + " · ".join(parts)
+
+
+# 주문 정보 (#634) — 주문번호 · 상품명은 쓰지 않는다 (가맹점 글자, 프롬프트 주입 차단)
+# 같은 주문 · 같은 주문자 전화인지는 사건 안 묶음 번호로 코드가 센다
+# 같은 주문 결제 여러 건은 나눠 낸 결제가 아니라 재결제다 (#672)
+# — P5는 앞 시도가 거절 · 차단됐을 때만 같은 주문을 다시 받는다
+# 이름 · 전화 원문은 처음부터 없다
+def _order(records: list[ToolRecord]) -> list[Line]:
+    found = _latest(records, OrderContextTool)
+    if found is None:
+        return []
+    order, seq = found
+    assert isinstance(order, OrderContextTool)
+    names = payment_names(records)
+    provided = [p for p in order.payments if p.provided]
+    lines: list[Line] = []
+    if len(provided) >= 2:
+        groups = {p.orderGroup for p in provided}
+        if len(groups) < len(provided):
+            text = (
+                f"사건 결제 {len(provided)}건이 주문 {len(groups)}개에서 나옴"
+                "(같은 주문을 다시 결제)"
+            )
+            lines.append((text, seq, None, NOTABLE))
+        else:
+            lines.append((f"사건 결제 {len(provided)}건이 모두 다른 주문", seq, None, PLAIN))
+        phones = [p.ordererPhoneGroup for p in provided if p.ordererPhoneGroup is not None]
+        if len(phones) >= 2:
+            distinct = len(set(phones))
+            if distinct == 1:
+                lines.append(
+                    (f"주문자 전화를 받은 결제 {len(phones)}건 모두 같은 번호", seq, None, PLAIN)
+                )
+            else:
+                text = f"주문자 전화를 받은 결제 {len(phones)}건에 서로 다른 번호 {distinct}개"
+                lines.append((text, seq, None, NOTABLE))
+    for p in order.payments:
+        owner = _name(names, p.paymentId)
+        if not p.provided:
+            lines.append(
+                (f"{owner}: 주문 정보 없음(결제 준비 기록 없음)", seq, p.paymentId, NOTHING)
+            )
+            continue
+        rank = NOTABLE if p.pickupDiffers else PLAIN
+        lines.append((_order_line(owner, p), seq, p.paymentId, rank))
+    return lines
+
+
 FACT_TOPICS: tuple[FactTopic, ...] = (
     FactTopic("history", "이력", "get_payment_history", _history),
     FactTopic("linked", "연결", "find_linked_payments", _linked),
     FactTopic("signals", "접속", "get_fds_evidence", _signals),
     FactTopic("similar", "과거", "find_similar_cases", _similar),
+    FactTopic("order", "주문", "get_order_context", _order),
 )
 
 
@@ -304,7 +401,12 @@ def prompt_facts(facts: list[Fact], payment_ids: list[str]) -> str:
 def report_facts(facts: list[Fact]) -> list[FactItem]:
     return [
         FactItem(
-            id=f.id, topic=f.topic, text=f.text, evidenceId=f.evidence_id, paymentId=f.payment_id
+            id=f.id,
+            topic=f.topic,
+            text=f.text,
+            evidenceId=f.evidence_id,
+            paymentId=f.payment_id,
+            notable=f.rank == NOTABLE,
         )
         for f in facts
     ]

@@ -91,6 +91,11 @@ export function customerNeedsMerchant(query: TransactionListQuery) {
   return query.customerRef !== '' && query.merchantId === null
 }
 
+// 내보내기는 가맹점 + 고객 번호로 거른 조건에서만 연다 — 담당 사건 고객인지는 서버가 본다 (#730, ADR-0082 3.1)
+export function exportNeedsCustomer(query: TransactionListQuery) {
+  return query.merchantId === null || query.customerRef === ''
+}
+
 // 기본값을 뺀 쿼리 문자열. 조건이 모두 기본값이면 빈 문자열이다
 export function transactionListSearch(query: Partial<TransactionListQuery>) {
   const q = { ...defaultTransactionListQuery, ...query }

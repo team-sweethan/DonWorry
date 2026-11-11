@@ -11,6 +11,32 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class BalanceExpenseTests {
+    @Test
+    void completeExpense_recordsPastDateWithinBalancePeriodAndPreservesFirstCompletion() {
+        var settings = mock(CashFlowSettingRepository.class);
+        var costs = mock(PlannedExpenseRepository.class);
+        var zone = ZoneId.of("Asia/Seoul");
+        var today = LocalDate.now(zone);
+        var paidDate = today.minusDays(3);
+        var value = org.springframework.beans.BeanUtils.instantiateClass(CashFlowSetting.class);
+        ReflectionTestUtils.setField(value, "openingBalance", 1000L);
+        ReflectionTestUtils.setField(value, "baseDate", paidDate);
+        when(settings.findByMerchantId(1L)).thenReturn(Optional.of(value));
+        var expense = PlannedExpense.planned(1L, "재료", today, 100L, ExpenseCategory.MATERIAL, null, Instant.now());
+        when(costs.findOwnedForUpdate(10L, 1L)).thenReturn(Optional.of(expense));
+        var service = new CashFlowManagementService(settings, costs);
+
+        assertThatIllegalArgumentException().isThrownBy(() -> service.completeExpense(1L, 10L, paidDate.minusDays(1)));
+        assertThatIllegalArgumentException().isThrownBy(() -> service.completeExpense(1L, 10L, today.plusDays(1)));
+        assertThat(expense.getPaidAt()).isNull();
+        service.completeExpense(1L, 10L, paidDate);
+        service.completeExpense(1L, 10L, today);
+
+        assertThat(expense.getPaidAt()).isEqualTo(paidDate.atStartOfDay(zone).toInstant());
+        assertThat(expense.getExpenseDate()).isEqualTo(today);
+        assertThat(expense.getUpdatedAt()).isAfter(expense.getPaidAt());
+    }
+
     // 이미 삭제된 지출은 재삭제 성공으로 응답하지 않고 없는 지출과 동일하게 처리한다.
     @Test
     void deleteExpense_whenAlreadyDeleted_returnsNotFound() {

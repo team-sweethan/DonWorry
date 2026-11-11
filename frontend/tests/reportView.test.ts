@@ -17,27 +17,30 @@ import {
   decisionProgress,
   latestReadableBody,
   markSignals,
-  recommendationSource,
-  reportRecommendationSource,
   signalTag,
-  verdictLines,
   elapsedText,
   hasReadableReport,
   liveCurrentTask,
   pickReport,
-  reportHeadline,
   ruleEvidenceRows,
   similarOutcomeTags,
   topRiskScore,
   traceProviderLabel,
-  isCodeReason,
-  recommendationSummaryTitle,
   signalRecordText,
   signalRuleRecord,
-  summaryBoxLines,
   summaryLines,
-  verdictCardTitle,
   mlReportLine,
+  overviewText,
+  summaryFold,
+  checkRows,
+  checkSignals,
+  compareColumn,
+  legacyReportText,
+  pastCompareRows,
+  checkSignalRecord,
+  nowDecisionText,
+  caseNormalNotes,
+  normalsUnchecked,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -55,7 +58,7 @@ const body = (over: Partial<ReportBody> = {}): ReportBody => ({
   paymentAnalyses: [],
   timeline: [],
   additionalChecks: [],
-  recommendation: { summary: '추가 확인 후 판정하세요.', limitations: [] },
+  recommendation: { limitations: [] },
   evidence: [],
   ...over,
 })
@@ -71,15 +74,22 @@ const report = (reportVersion: number, evidenceVersion: number): AiReport => ({
   completedAt: '2026-10-29T01:02:00Z',
 })
 
-// 새 보고서는 AI 결론 한 줄을 결론 카드에 그대로 보여 준다
-test('reportHeadline_withVerdict_returnsHeadline', () => {
-  const withVerdict = body({
+// 예전 보고서의 결론 한 줄(verdict.headline)은 판정 권고 문장이다 (#644) — 개요가 없으면 결제 건수 · 합계로 대신한다
+// 저장된 예전 본문은 타입에 없는 키(verdict · recommendation)를 그대로 갖고 온다
+test('overviewText_whenOldBodyHasVerdictHeadline_usesPaymentCountInstead', () => {
+  const old = {
+    ...body(),
     verdict: {
-      headline: '고객 본인 확인이 필요해 보입니다.',
-      overallRecommendation: 'NEEDS_CHECK',
+      headline: '승인 취소 검토 — 정상 사유 없는 징후: 거절 후 재시도',
+      overallRecommendation: 'REJECT_REVIEW',
     },
-  })
-  assert.equal(reportHeadline(withVerdict), '고객 본인 확인이 필요해 보입니다.')
+  } as ReportBody
+  assert.equal(overviewText(old), '결제 1건 · 합계 520,000원')
+  // 코드가 쓴 개요가 있으면 그것을 쓴다
+  assert.equal(
+    overviewText({ ...old, caseOverview: '고객 abc의 결제 1건이 보류됐습니다.' }),
+    '고객 abc의 결제 1건이 보류됐습니다.',
+  )
 })
 
 // 점수를 조회하지 못한 결제(null)는 0으로 세지 않고 아는 점수 중 최댓값을 쓴다
@@ -118,7 +128,6 @@ test('ruleEvidenceRows_withDetails_keepsScoreAndEvidenceId', () => {
     riskScore: 60,
     ruleHits: ['고액'],
     unknowns: [],
-    recommendation: 'NEEDS_CHECK',
     ruleHitDetails: [
       { code: 'R01', name: '고액', appliedScore: 35, evidenceId: 'E-2' },
       { code: 'R04', name: '반복 결제', appliedScore: null, evidenceId: 'E-2' },
@@ -284,7 +293,7 @@ const signal = (key: string, label: string, over: Partial<BasisSignal> = {}): Ba
   ...over,
 })
 
-// 1011번 사건과 같은 판정 근거
+// 1011번 사건과 같은 징후 · 정상 근거
 const basis1011: DecisionBasis = {
   signals: [
     signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
@@ -300,8 +309,6 @@ const basis1011: DecisionBasis = {
       explains: [],
     },
   ],
-  rule: 'HIGH_RISK_WITH_OTHERS',
-  recommendation: 'REJECT_REVIEW',
 }
 
 const analysis = (paymentId: string, basis?: DecisionBasis | null) => ({
@@ -311,19 +318,7 @@ const analysis = (paymentId: string, basis?: DecisionBasis | null) => ({
   riskScore: 50,
   ruleHits: [],
   unknowns: [],
-  recommendation: basis?.recommendation ?? ('NEEDS_CHECK' as const),
   basis,
-})
-
-test('recommendationSource_withBasis_isRuleTableElseOldAiRecommendation', () => {
-  assert.equal(recommendationSource(analysis('1', basis1011)), '기준표 판정')
-  assert.equal(recommendationSource(analysis('1')), 'AI 권고')
-  assert.equal(recommendationSource(null), 'AI 권고')
-  // 결제 하나라도 예전 형식이면 종합 권고는 AI 권고로 둔다
-  const mixed = body({ paymentAnalyses: [analysis('1', basis1011), analysis('2')] })
-  assert.equal(reportRecommendationSource(mixed), 'AI 권고')
-  const all = body({ paymentAnalyses: [analysis('1', basis1011)] })
-  assert.equal(reportRecommendationSource(all), '기준표 판정')
 })
 
 test('signalTag_countedInOrNormalReason_isNotOpen', () => {
@@ -432,6 +427,10 @@ const caseDetail = (over: Partial<CaseDetail> = {}): CaseDetail => ({
     evidenceVersion: 1,
     createdAt: '2026-05-21T11:16:00Z',
     closedAt: null,
+    assigneeStaffId: null,
+    assigneeName: null,
+    assignedAt: null,
+    assignmentChangePending: false,
   },
   payments: [payment('1')],
   reports: [report(1, 1)],
@@ -454,26 +453,6 @@ test('compareReport_evidenceAdvancedWhileNewReportRunning_flagsMismatch', () => 
   assert.equal(picked?.evidenceMismatch, true)
   assert.equal(compareReport(caseDetail())?.evidenceMismatch, false)
   assert.equal(compareReport(caseDetail({ reports: [] })), null)
-})
-
-// 결론(verdict)이 생기기 전 단일 결제 보고서도 결제별 권고를 보여 준다
-test('verdictLines_oldSinglePaymentWithoutVerdict_showsPaymentRecommendation', () => {
-  const old = body({ paymentAnalyses: [analysis('1')] })
-  assert.deepEqual(verdictLines(old), {
-    overall: null,
-    payments: [{ paymentId: '1', recommendation: 'NEEDS_CHECK' }],
-  })
-  // 결론이 있는 단일 결제는 종합 권고만 (같은 내용을 두 번 쓰지 않는다)
-  const single = body({
-    paymentAnalyses: [analysis('1', basis1011)],
-    verdict: { headline: '한 줄', overallRecommendation: 'REJECT_REVIEW' },
-  })
-  assert.deepEqual(verdictLines(single), { overall: 'REJECT_REVIEW', payments: [] })
-  const two = body({
-    paymentAnalyses: [analysis('1', basis1011), analysis('2')],
-    verdict: { headline: '한 줄', overallRecommendation: 'REJECT_REVIEW' },
-  })
-  assert.equal(verdictLines(two).payments.length, 2)
 })
 
 // 3건 중 1건만 판정했으면 판정 끝이 아니다. 고객이 취소한 결제는 남은 건수에서 뺀다
@@ -534,65 +513,6 @@ test('compareSignals_pastJpNowThVn_pairsOneCountryDiffersOnce', () => {
       [null, '해외 접속 (VN)', 'ONLY'],
     ],
   )
-})
-
-// ── 코드 문장과 AI 문장 구분 (#543) ──
-// #532부터 결론 한 줄 · 권고 요약 · 결제별 이유는 기준표(코드)가 쓴다. AI 이름표 아래에 두지 않는다
-
-// 결론 카드 · 상세 정보 제목 — 기준표 보고서면 기준표, 예전 보고서는 AI 이름 그대로
-test('verdictCardTitle_ruleTableReport_isRuleTableElseAiSummary', () => {
-  const ruleTable = body({
-    paymentAnalyses: [{ ...analysis('1', basis1011), reason: '적중한 징후가 없습니다.' }],
-  })
-  const old = body({ paymentAnalyses: [analysis('1')] })
-  assert.equal(verdictCardTitle(ruleTable), '기준표 판정')
-  assert.equal(verdictCardTitle(old), 'AI 조사 요약')
-  assert.equal(recommendationSummaryTitle(ruleTable), '권고 요약 (기준표)')
-  assert.equal(recommendationSummaryTitle(old), 'AI 권고 원문')
-})
-
-// #501 ~ #532 사이 보고서는 판정 근거가 있어도 결론 · 권고 요약 · 이유를 AI가 썼다 (#546 Codex 리뷰)
-// 판정 근거 유무가 아니라 문장을 코드가 썼는지로 제목을 정한다 — 결제별 이유로 알아본다
-test('verdictCardTitle_basisButAiWrittenReport_isAiTitle', () => {
-  const aiWritten = body({
-    paymentAnalyses: [
-      {
-        ...analysis('1', basis1011),
-        reason: '처음 쓰는 카드로 고액 결제가 있어 확인이 필요합니다.',
-      },
-    ],
-  })
-  assert.equal(verdictCardTitle(aiWritten), 'AI 조사 요약')
-  assert.equal(recommendationSummaryTitle(aiWritten), 'AI 권고 원문')
-})
-
-// 코드가 쓴 이유는 ai-server verdict_text의 정해진 시작 말로 알아본다
-// #501 ~ #532 사이 보고서는 판정 근거가 있어도 이유를 AI가 썼다 — 그 문장은 AI 칸에 그대로 둔다
-test('isCodeReason_codeSentences_trueOldAiReason_false', () => {
-  for (const reason of [
-    '고위험 징후를 포함해 정상 사유가 없는 징후가 겹칩니다: 같은 카드를 다른 고객이 사용 · 신규 카드',
-    '정상 사유가 없는 고위험 징후가 있습니다: 거절 후 재시도',
-    '정상 사유가 없는 주의 징후가 있습니다: 고액 결제 · 단시간 반복 결제',
-    '모든 징후에 정상 사유가 있습니다: 고액 결제(최근 30일 비슷한 금액의 결제 5건 매입 완료)',
-    '적중한 징후가 없습니다.',
-    'FDS 평가 결과를 확인하지 못했습니다.',
-  ]) {
-    assert.equal(isCodeReason(reason), true, reason)
-  }
-  assert.equal(isCodeReason('처음 쓰는 카드로 이어진 결제라 본인 확인이 필요합니다.'), false)
-  assert.equal(isCodeReason(undefined), false)
-})
-
-// 조사 요약 박스(AI 해석)에는 AI 문장만 — 코드 이유는 "왜 이 판정인가요?"로 옮긴다
-test('summaryBoxLines_codeReasonMovedOut_oldAiReasonKept', () => {
-  const summary = ['고액 결제와 단시간 반복 결제 규칙에 적중한 결제입니다.']
-  const code = {
-    ...analysis('1', basis1011),
-    reason: '정상 사유가 없는 주의 징후가 있습니다: 고액 결제',
-  }
-  const oldAi = { ...analysis('1', basis1011), reason: '처음 쓰는 카드라 본인 확인이 필요합니다.' }
-  assert.deepEqual(summaryBoxLines(summary, code), summary)
-  assert.deepEqual(summaryBoxLines(summary, oldAi), [...summary, oldAi.reason])
 })
 
 // 규칙 징후 줄에 FDS 기록(점수 · 증거 번호)을 붙인다 — 아래 위험 근거의 규칙 줄과 겹치지 않게
@@ -677,7 +597,7 @@ test('summaryLinks_mapsFactsToCards_once: 근거 번호의 주제로 표 카드�
         ['report-history', '고객 최근 결제'],
         ['report-payment-12', '결제 12 접속 정보'],
       ],
-      [['report-linked', '같은 카드 · 기기 · IP']],
+      [['report-linked', '다른 손님과 겹치는 것']],
     ],
   )
   // #559 전 보고서는 링크 없이 문장만
@@ -703,5 +623,215 @@ test('summaryLines_fixedReportEmptySummaryFacts_keepsSummary: 근거 번호 목�
       ['조사 대상 결제 1건에서 FDS 규칙 적중이 확인되었습니다.', 0],
       ['직원은 판정 근거를 확인하세요.', 0],
     ],
+  )
+})
+
+// 요약이 4문장 이상이면 숨은 문장 속 눈여겨볼 사실 수를 센다 (#591) — 보이는 문장에 이미 나온 사실은 빼고
+test('summaryFold_fourOrMoreSentences_countsHiddenNotableFacts', () => {
+  const sentences = [
+    { text: '첫 문장', factIds: ['이력-1'] },
+    { text: '둘째 문장', factIds: ['연결-1'] },
+    { text: '셋째 문장', factIds: ['접속-1'] },
+    { text: '넷째 문장', factIds: ['연결-1', '연결-2'] },
+    { text: '다섯째 문장', factIds: ['이력-2'] },
+  ]
+  const fact = (id: string, notable: boolean) => ({
+    id,
+    topic: 'linked',
+    text: id,
+    evidenceId: 'E',
+    notable,
+  })
+  const folded = summaryFold(
+    body({
+      summary: sentences.map((s) => s.text),
+      summaryFacts: sentences,
+      facts: [
+        fact('이력-1', false),
+        fact('연결-1', true),
+        fact('접속-1', false),
+        fact('연결-2', true),
+        fact('이력-2', false),
+      ],
+    }),
+  )
+
+  assert.deepEqual(folded, { hidden: 2, hiddenNotable: 1 })
+})
+
+// 결론 표 재현용 결제 — 고액 결제(R01) 징후 하나, normalReason으로 정상 사유 여부를 정한다 (#591 Codex 리뷰)
+const highAmountPayment = (
+  paymentId: string,
+  normalReason: string | null,
+): ReportBody['paymentAnalyses'][number] => ({
+  paymentId,
+  amount: 600_000,
+  requestedAt: '2026-10-29T01:00:00Z',
+  riskScore: 60,
+  ruleHits: ['R01'],
+  unknowns: [],
+  basis: {
+    signals: [
+      {
+        key: 'R01',
+        label: '고액 결제',
+        detail: null,
+        level: 'CAUTION',
+        normalReason,
+        checkBefore: '구매 목적 확인',
+      },
+    ],
+    normals: [],
+  },
+})
+
+// 같은 징후가 한 결제에서만 설명되면 다른 결제의 확인할 것이 남는다 (#591 Codex 리뷰 P1)
+test('checkRows_sameSignalExplainedInOnlyOnePayment_keepsUncheckedRow', () => {
+  const report = body({
+    paymentAnalyses: [
+      highAmountPayment('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료'),
+      highAmountPayment('12', null),
+    ],
+  })
+
+  assert.deepEqual(checkRows(report), [{ id: 'R01', row: 1 }])
+})
+
+// ── 새 보고서 화면 (#644 PR 3) ──
+
+const paymentWith = (
+  paymentId: string,
+  signals: BasisSignal[],
+): ReportBody['paymentAnalyses'][number] => ({
+  paymentId,
+  amount: 89_000,
+  requestedAt: '2026-10-27T12:00:00Z',
+  riskScore: 70,
+  ruleHits: [],
+  unknowns: [],
+  basis: { signals, normals: [] },
+})
+
+// 같은 징후가 두 결제에 있으면 카드 한 장에 두 결제 번호를 모두 적는다 — 빠지면 직원이 한 결제만 확인하고 판정한다
+test('checkSignals_sameSignalInTwoPayments_listsBothPaymentIds', () => {
+  const report = body({
+    paymentAnalyses: [
+      highAmountPayment('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료'),
+      highAmountPayment('12', null),
+    ],
+  })
+
+  const [card] = checkSignals(report) ?? []
+  assert.deepEqual(
+    [card.key, card.paymentIds, card.openPaymentIds, card.mixed],
+    ['R01', ['11', '12'], ['12'], true],
+  )
+})
+
+// 지난 사건에만 있던 징후도 줄을 만들고, 지금 사건과 다른 칸으로 표시한다
+test('pastCompareRows_signalOnlyInPastCase_addsRowAndMarksDiff', () => {
+  const now = body({ paymentAnalyses: [paymentWith('1', [signal('R03', '신규 카드')])] })
+  const past = body({
+    paymentAnalyses: [
+      paymentWith('2', [
+        signal('R03', '신규 카드'),
+        signal('LINKED_CARD', '같은 카드를 다른 고객이 사용', { level: 'HIGH_RISK' }),
+      ]),
+    ],
+  })
+
+  const rows = pastCompareRows([compareColumn(now), compareColumn(past)])
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.cells.map((c) => c.kind), r.diff]),
+    [
+      ['R03', ['OPEN', 'OPEN'], [false, false]],
+      ['LINKED_CARD', ['NONE', 'OPEN'], [false, true]],
+    ],
+  )
+})
+
+// 징후 정리가 없는 옛 보고서는 "없음"이 아니라 모름으로 두고, 다른 칸으로 표시하지 않는다
+test('pastCompareRows_pastOldReportWithoutBasis_marksColumnUnknown', () => {
+  const now = body({ paymentAnalyses: [paymentWith('1', [signal('R03', '신규 카드')])] })
+  const oldPast = body({ paymentAnalyses: [{ ...paymentWith('2', []), basis: undefined }] })
+
+  assert.equal(compareColumn(oldPast), null)
+  const rows = pastCompareRows([compareColumn(now), compareColumn(oldPast)])
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.cells.map((c) => c.kind), r.diff]),
+    [['R03', ['OPEN', 'UNKNOWN'], [false, false]]],
+  )
+})
+
+// PR 2(#650) 전에 저장된 보고서의 "판정 기준표 · 권고" 글자는 화면에서 새 이름으로 보인다
+test('legacyReportText_oldBasisWords_showsNewNames', () => {
+  assert.equal(legacyReportText('판정 기준표 (Spring 계산)'), '징후 · 정상 근거 (Spring 계산)')
+  assert.equal(
+    legacyReportText('판정 기준표를 받지 못한 결제는 권고를 추가 확인으로 두었습니다.'),
+    '징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요.',
+  )
+  assert.equal(legacyReportText('고객 최근 30일 결제'), '고객 최근 30일 결제')
+})
+
+// 같은 규칙이 두 결제에 걸리고 앞 결제만 정상 사유가 있으면, 카드는 뒤 결제 값을 보여 주므로 점수 · 증거도 뒤 결제 것이어야 한다 (#652 Codex 리뷰)
+test('checkSignalRecord_firstPaymentExplained_usesShownPaymentRecord', () => {
+  const withRecord = (paymentId: string, normalReason: string | null, score: number) => ({
+    ...highAmountPayment(paymentId, normalReason),
+    ruleHitDetails: [
+      { code: 'R01', name: '고액 결제', appliedScore: score, evidenceId: `E-${paymentId}` },
+    ],
+  })
+  const report = body({
+    paymentAnalyses: [
+      withRecord('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료', 20),
+      withRecord('12', null, 30),
+    ],
+  })
+
+  const [card] = checkSignals(report) ?? []
+  assert.deepEqual(checkSignalRecord(report, card), { appliedScore: 30, evidenceId: 'E-12' })
+})
+
+// 일부 결제만 판정한 사건은 비교 표에서 "판정 끝"이 아니다 (#652 Codex 리뷰, CaseFlowTests.decidePartially_keepsWaiting…)
+test('nowDecisionText_partiallyDecided_isNotDone', () => {
+  assert.equal(
+    nowDecisionText({ decided: 1, remaining: 1, done: false }),
+    '일부 판정 · 남은 결제 1건',
+  )
+  assert.equal(nowDecisionText({ decided: 0, remaining: 2, done: false }), '판정 전')
+  assert.equal(nowDecisionText({ decided: 2, remaining: 0, done: true }), '판정 끝')
+})
+
+// 같은 이름의 정상 근거가 결제 A(징후 없음) · B(고액 결제 설명)에 있으면 결제별로 나눠 말한다 — 첫 결제 설명만 보이면 왼쪽 징후 카드와 어긋난다 (#652 Codex 리뷰)
+test('caseNormalNotes_sameNormalExplainsOnlyOnePayment_saysWhichPayment', () => {
+  const similar = (explains: string[]) => ({
+    key: 'SIMILAR_AMOUNT',
+    label: '최근 30일 비슷한 금액의 결제 2건 매입 완료',
+    canExplain: ['고액 결제'],
+    explains,
+  })
+  const withNormal = (paymentId: string, explains: string[]) => ({
+    ...paymentWith(paymentId, []),
+    basis: { signals: [], normals: [similar(explains)] },
+  })
+  const report = body({ paymentAnalyses: [withNormal('11', []), withNormal('12', ['고액 결제'])] })
+
+  assert.deepEqual(caseNormalNotes(report), [
+    {
+      label: '최근 30일 비슷한 금액의 결제 2건 매입 완료',
+      note: '결제 12: 고액 결제 징후의 정상 사유입니다. 결제 11: 그 징후가 없어 정상 사유가 되지 않습니다.',
+    },
+  ])
+})
+
+// 고객 결제 이력 조회가 실패한 보고서는 정상 근거를 "찾지 못함"이 아니라 "확인하지 못함"으로 — 이력을 다 봤다고 오해하지 않게 (#652 Codex 리뷰)
+test('normalsUnchecked_paymentHistoryLookupFailed_isNotNotFound', () => {
+  const withBasis = { ...paymentWith('11', []), basis: { signals: [], normals: [] } }
+  const history = { lookbackDays: 30, payments: [], statusCounts: [], truncated: false }
+
+  assert.equal(normalsUnchecked(body({ paymentAnalyses: [withBasis], paymentHistory: null })), true)
+  assert.equal(
+    normalsUnchecked(body({ paymentAnalyses: [withBasis], paymentHistory: history })),
+    false,
   )
 })

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Card, Space, Spin, Tag } from 'antd'
 import { getIntegration, integrationLabels, type IntegrationInfo } from '../../api/integration'
+import { formatKstDateTime } from '../../utils/format'
 
 export function IntegrationStatusSummary({ merchantId }: { merchantId: number }) {
   const [revision, setRevision] = useState(0)
@@ -44,7 +45,10 @@ export function IntegrationStatusSummary({ merchantId }: { merchantId: number })
             {integrationLabels[data.status]}
           </Tag>
           <span>가맹점 코드: {data.merchantCode}</span>
-          <span>연결 확인 (UTC): {data.connectedAt?.replace('T', ' ') ?? '기록 없음'}</span>
+          <span>
+            연결 확인 (한국 시간):{' '}
+            {data.connectedAt ? formatKstDateTime(data.connectedAt) : '기록 없음'}
+          </span>
         </Space>
       ) : (
         <Spin />

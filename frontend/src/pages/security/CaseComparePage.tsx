@@ -2,10 +2,11 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Spin, Tag, Typography } from 'antd'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getCase } from '../../api/cases'
+import { getCase, isCaseAssigneeOnly } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { BasisSignal, CaseDetail, ReportBody } from '../../types/case'
+import { caseListReturnPath } from '../../utils/caseListQuery'
 import { won } from '../../utils/format'
 import {
   caseNormals,
@@ -14,14 +15,13 @@ import {
   compareRowKey,
   compareSignals,
   decisionProgress,
-  reportRecommendationSource,
   topRiskScore,
-  verdictLines,
   type CompareReport,
   type CompareRow,
 } from '../../utils/reportView'
 import { Group, NormalRow, SignalRow } from './case/BasisCard'
-import { dateTime, decisionLabel, recommendationLabel } from './case/caseLabels'
+import { CaseForbidden } from './case/CaseForbidden'
+import { dateTime, decisionLabel } from './case/caseLabels'
 import { CodeTag } from './case/CodeTag'
 
 // 비슷한 사건 나란히 보기 (#501) — 왼쪽 판정이 끝난 과거 사건, 오른쪽 지금 판정할 사건
@@ -44,7 +44,7 @@ export function CaseComparePage() {
   const scope = `${id}:${pastId}`
   const [loaded, setLoaded] = useState<{
     scope: string
-    result: { now: Side; past: Side } | null | 'error'
+    result: { now: Side; past: Side } | null | 'error' | 'forbidden'
   } | null>(null)
   useEffect(() => {
     let alive = true
@@ -54,8 +54,13 @@ export function CaseComparePage() {
         const result = now && past ? { now: side(now), past: side(past) } : null
         setLoaded({ scope: `${id}:${pastId}`, result })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!alive) return
+        // 지금 사건의 담당이 아니면 (#612). 과거 사건은 종료돼 누구나 연다
+        if (isCaseAssigneeOnly(error)) {
+          setLoaded({ scope: `${id}:${pastId}`, result: 'forbidden' })
+          return
+        }
         message.error('사건을 불러오지 못했습니다. 잠시 후 다시 시도하세요.')
         setLoaded({ scope: `${id}:${pastId}`, result: 'error' })
       })
@@ -66,6 +71,7 @@ export function CaseComparePage() {
   const result = loaded?.scope === scope ? loaded.result : undefined
 
   if (result === undefined) return <Spin style={{ display: 'block', margin: '120px auto' }} />
+  if (result === 'forbidden') return <CaseForbidden listPath={caseListReturnPath(listReturn)} />
   if (result === 'error') return <ScreenResult kind="500" />
   if (result === null) return <ScreenResult kind="404" />
 
@@ -109,7 +115,7 @@ export function CaseComparePage() {
             type="info"
             showIcon
             message={`${pastSignals === null ? '과거' : '지금'} 사건이 예전 보고서라 징후 정리가 없습니다.`}
-            description="판정 근거가 생기기 전에 만든 보고서입니다. 아래 기준표 판정 · 직원 판정만 비교하세요."
+            description="징후 목록이 생기기 전에 만든 보고서입니다. 아래 직원 판정만 비교하세요."
           />
         ) : (
           <>
@@ -130,9 +136,7 @@ export function CaseComparePage() {
             </Group>
           </>
         )}
-        <Group title="검토 권고" note="기준표 판정 · 예전 보고서는 AI 권고" color="#1E3A8A">
-          <Pair past={<Verdict body={past.body} />} now={<Verdict body={now.body} />} />
-        </Group>
+        {/* 판정 권고 줄은 #644에서 뺐다 — 지난 사건은 직원 판정 · 사유로 비교한다 (ADR-0009 결정 13) */}
         <Group title="보안 직원 최종 판정" note="판정 사유는 직원이 직접 적은 내용" color="#0F172A">
           <Pair
             past={<Decisions side={past} />}
@@ -273,33 +277,6 @@ function Normals({ body }: { body: ReportBody | null }) {
   return normals.map((n) => <NormalRow key={n.label} n={n} note={false} />)
 }
 
-// 결론이 없는 예전 단일 결제 보고서도 결제별 권고를 보여 준다 (verdictLines, #501 리뷰)
-function Verdict({ body }: { body: ReportBody | null }) {
-  if (!body) return <div style={emptyCell}>AI 보고서 없음 (직접 조사)</div>
-  const source = reportRecommendationSource(body)
-  const lines = verdictLines(body)
-  return (
-    <div style={{ ...headStyle, border: '1px solid #E2E8F0', gap: 6 }}>
-      {lines.overall && (
-        <span style={{ fontSize: 14, fontWeight: 700 }}>
-          {source} · {recommendationLabel[lines.overall].label}
-        </span>
-      )}
-      {lines.payments.map((p) => (
-        <span
-          key={p.paymentId}
-          style={
-            lines.overall ? { fontSize: 13, color: '#475569' } : { fontSize: 14, fontWeight: 700 }
-          }
-        >
-          {lines.overall ? '' : `${source} · `}결제 {p.paymentId} ·{' '}
-          {recommendationLabel[p.recommendation].label}
-        </span>
-      ))}
-    </div>
-  )
-}
-
 // 보고서가 사건의 지금 증거보다 앞선 버전으로 만들어졌으면 알린다 (#501 리뷰)
 function MismatchNote({ side }: { side: Side }) {
   if (!side.report?.evidenceMismatch) return null
@@ -308,7 +285,7 @@ function MismatchNote({ side }: { side: Side }) {
       type="warning"
       showIcon
       message={`이 보고서는 증거 v${side.report.evidenceVersion} 기준입니다.`}
-      description={`사건은 지금 증거 v${side.detail.securityCase.evidenceVersion}이라, 나중에 합쳐진 결제는 이 보고서에서 조사하지 않았습니다. 징후 · 권고는 그 전 결제 기준으로 보세요.`}
+      description={`사건은 지금 증거 v${side.detail.securityCase.evidenceVersion}이라, 나중에 합쳐진 결제는 이 보고서에서 조사하지 않았습니다. 징후는 그 전 결제 기준으로 보세요.`}
     />
   )
 }

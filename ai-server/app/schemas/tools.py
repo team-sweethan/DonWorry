@@ -2,9 +2,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from app.schemas.report import DecisionBasis, OrderPayment
+
 # Spring AI Tool API 응답 — #254 CasePaymentsToolResponse · FdsEvidenceToolResponse ·
 # #296 SimilarCasesToolResponse · #338 PaymentHistoryToolResponse ·
-# #352 LinkedPaymentsToolResponse와 같게 둔다
+# #352 LinkedPaymentsToolResponse · #618 DecisionBasisToolResponse ·
+# #634 OrderContextToolResponse와 같게 둔다
 # 못 찾은 값은 null이고 missingPaymentIds에 들어온다. 추측해서 채우지 않는다
 
 
@@ -122,6 +125,16 @@ class ResultCount(BaseModel):
     count: int
 
 
+# 사건 결제 요청 시각 앞뒤 nearbyWindowMinutes 안의 다른 고객 결제 (#637)
+# 칸 뜻은 LinkedMatch와 같다
+# 공격은 짧은 시간에 몰리고 공용 와이파이는 한 달에 흩어진다 — 30일 합계만으로는 둘이 같아 보인다
+class LinkedNearby(BaseModel):
+    otherCustomerCount: int
+    paymentCount: int
+    resultCounts: list[ResultCount]
+    declinedCount: int
+
+
 # provided=False면 이 사건 결제가 그 값을 보내지 않아 비교하지 않았다는 뜻 ("정보 없음")
 class LinkedMatch(BaseModel):
     provided: bool
@@ -129,6 +142,8 @@ class LinkedMatch(BaseModel):
     paymentCount: int
     resultCounts: list[ResultCount]
     declinedCount: int
+    # 예전 Spring 응답에는 없다 (#637)
+    nearby: LinkedNearby | None = None
 
 
 # 사건 결제 하나의 연결 결제 — 그 결제의 카드 · 기기 · IP로 센 값 (#533)
@@ -145,6 +160,8 @@ class LinkedPaymentsTool(BaseModel):
     source: str
     retrievedAt: str
     lookbackDays: int
+    # 각 칸 nearby가 센 "사건 결제 앞뒤" 시간 (#637). 예전 Spring 응답에는 없다
+    nearbyWindowMinutes: int | None = None
     # card · device · ip는 사건 전체 — 화면 카드 · 고정 보고서가 쓴다
     card: LinkedMatch
     device: LinkedMatch
@@ -153,7 +170,43 @@ class LinkedPaymentsTool(BaseModel):
     payments: list[PaymentLinks] | None = None
 
 
+# 사건 결제의 주문 정보 (#634) — 결제 한 줄(OrderPayment)은 보고서와 같은 모양이라 report.py에 둔다
+# orderRef · orderName은 가맹점이 쓴 글자라 AI 입력에서 뺀다 (tools.llm_content)
+# 보고서 표에만 코드가 싣는다
+class OrderContextTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    payments: list[OrderPayment]
+
+
+class PaymentBasis(BaseModel):
+    paymentId: str
+    basis: DecisionBasis
+
+
+# 결제별 징후 · 정상 근거 (#618) — Spring이 계산한다 (ADR-0009 결정 7 · 11)
+# 기준표 칸 · 권고는 #644에서 뺐다 (결정 13) — 옛 Spring이 보내도 모델에 없어 버린다
+# ai-server는 그대로 보고서에 싣고 바꾸지 않는다. 금액 · FDS 근거를 모르는 결제는 목록에 없다
+class DecisionBasisTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    payments: list[PaymentBasis]
+
+    def for_payment(self, payment_id: str) -> DecisionBasis | None:
+        return next((p.basis for p in self.payments if p.paymentId == payment_id), None)
+
+
 # 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다
 ToolResult = (
-    CasePaymentsTool | FdsEvidenceTool | SimilarCasesTool | PaymentHistoryTool | LinkedPaymentsTool
+    CasePaymentsTool
+    | FdsEvidenceTool
+    | SimilarCasesTool
+    | PaymentHistoryTool
+    | LinkedPaymentsTool
+    | OrderContextTool
+    | DecisionBasisTool
 )

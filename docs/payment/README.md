@@ -14,6 +14,8 @@
 
 | 문서 | 목적 |
 | --- | --- |
+| [쇼핑몰 결제 연동 안내](merchant-checkout-guide.md) | **고객사(쇼핑몰 개발자)용.** 결제 준비 → 결제창 → 결과 조회 → 웹훅 → 취소 → 테스트 방법. 사장님 '시크릿 키 발급' 화면에서 연결 (#799) |
+| [#602 주문자 · 픽업자 연락처](602-order-contacts.md) | 결제 준비 요청의 선택 칸 4개, 암호문 · 전화 지문 저장(`payment_order_contacts`), 키 `donworry.pii.*`. 열람은 조각 5 (ADR-0082) |
 | [ADR-0064 호스팅 결제창·웹훅](../decisions/0064-hosted-checkout-and-payment-webhook.md) | #402 결제 준비 `POST /api/payment-sessions`, 결제창 공개 API·화면 `/checkout/:sessionKey` 구현(PR ① #425). 웹훅 서명기 #449 · 발송 #451, 재전송 한도(약 24시간 뒤 중단) #455. 4절 · 4-1 개정 #492(`HELD`는 가맹점에 "결제 확인 중", 진행은 가맹점 선택, 사후 거절 손실은 가맹점 부담). CakeShop 연동은 CakeShop 저장소 |
 | [#383 CAPTURED 전액 환불 조사](383-captured-refund.md) | P6 성공 전달 방향 확인·P5 모의 환불 기반 구현. 실제 P6 연결·활성화 후속 |
 | [#382 HELD 고객 승인 취소 조사](382-held-cancellation.md) | P5 모의 실행·직원 조치 차단, P3 수신부·Case 정책 연결, **HELD 고객 승인 취소 운영 활성화**(15절). CAPTURED 환불은 #383 |

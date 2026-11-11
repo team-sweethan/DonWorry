@@ -6,11 +6,13 @@ import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
 import com.donworry.payment.dto.PaymentSessionResponse;
+import com.donworry.payment.entity.PaymentOrderContact;
 import com.donworry.payment.entity.PaymentRequest;
 import com.donworry.payment.entity.PaymentRiskSignals;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentSessionStatus;
 import com.donworry.payment.entity.PaymentStatus;
+import com.donworry.payment.repository.PaymentOrderContactRepository;
 import com.donworry.payment.repository.PaymentRequestRepository;
 import com.donworry.payment.repository.PaymentSessionRepository;
 import java.net.URI;
@@ -50,6 +52,8 @@ public class PaymentSessionService {
     private final PaymentWebhookTargetPolicy webhookTargets;
     private final TransactionTemplate transactions;
     private final String checkoutBaseUrl;
+    private final PaymentOrderContactRepository contacts;
+    private final CustomerContactProtector contactProtector;
 
     public PaymentSessionService(
             PaymentSessionRepository sessions,
@@ -59,7 +63,9 @@ public class PaymentSessionService {
             TenantReader tenants,
             PaymentWebhookTargetPolicy webhookTargets,
             PlatformTransactionManager transactionManager,
-            @Value("${donworry.applications.public-base-url:http://localhost:5173}") String checkoutBaseUrl) {
+            @Value("${donworry.applications.public-base-url:http://localhost:5173}") String checkoutBaseUrl,
+            PaymentOrderContactRepository contacts,
+            CustomerContactProtector contactProtector) {
         this.sessions = sessions;
         this.requests = requests;
         this.flow = flow;
@@ -68,6 +74,8 @@ public class PaymentSessionService {
         this.webhookTargets = webhookTargets;
         this.transactions = new TransactionTemplate(transactionManager);
         this.checkoutBaseUrl = checkoutBaseUrl.replaceAll("/+$", "");
+        this.contacts = contacts;
+        this.contactProtector = contactProtector;
     }
 
     // 같은 멱등 키·같은 내용이면 같은 세션을 돌려준다. 다른 내용이면 409.
@@ -92,9 +100,17 @@ public class PaymentSessionService {
         // 구매자 이메일은 결제 때 FDS 입력(PaymentRiskSignals)과 같은 규칙으로 검사한다.
         // 세션에 고정되어 구매자가 고칠 수 없으므로 잘못된 값은 결제 때 500이 아니라 여기서 400으로 막는다
         if (body.buyerEmail() != null && !validBuyerEmail(body.buyerEmail())) throw invalid();
+        // 주문자 · 픽업자 형식도 세션에 고정되므로 여기서 400으로 막는다 (#602)
+        CustomerContactProtector.NormalizedContact contact;
+        try {
+            contact = CustomerContactProtector.normalize(
+                    body.ordererName(), body.ordererPhone(), body.pickupName(), body.pickupPhone());
+        } catch (IllegalArgumentException e) {
+            throw invalid();
+        }
 
         var existing = sessions.findByMerchantIdAndRequestKey(merchantId, requestKey);
-        if (existing.isPresent()) return reuse(existing.get(), body);
+        if (existing.isPresent()) return reuse(existing.get(), body, contact);
 
         Instant now = Instant.now();
         Instant expiresAt = body.orderCreatedAt().plus(REQUEST_WINDOW);
@@ -116,12 +132,27 @@ public class PaymentSessionService {
                 .expiresAt(expiresAt)
                 .createdAt(now)
                 .build();
+        // 암호화는 트랜잭션 밖에서 미리 한다. 세션과 연락처는 같은 트랜잭션으로 저장해 하나만 남지 않게 한다
+        var protectedContact = contactProtector.protect(merchantId, contact);
         try {
-            return toResponse(transactions.execute(status -> sessions.save(session)));
+            return toResponse(transactions.execute(status -> {
+                var saved = sessions.save(session);
+                protectedContact.ifPresent(p -> contacts.save(PaymentOrderContact.of(
+                        saved.getSessionId(),
+                        merchantId,
+                        p.ordererNameEnc(),
+                        p.ordererPhoneEnc(),
+                        p.ordererPhoneHmac(),
+                        p.pickupDiffers(),
+                        p.requestDigest(),
+                        p.keyId(),
+                        now)));
+                return saved;
+            }));
         } catch (DataIntegrityViolationException race) {
             // 같은 키를 동시에 보낸 경우 먼저 저장된 세션을 다시 읽는다.
             return sessions.findByMerchantIdAndRequestKey(merchantId, requestKey)
-                    .map(saved -> reuse(saved, body))
+                    .map(saved -> reuse(saved, body, contact))
                     .orElseThrow(() -> race);
         }
     }
@@ -134,10 +165,17 @@ public class PaymentSessionService {
         String merchantName = tenants.findById(session.getMerchantId())
                 .map(TenantSummary::name)
                 .orElse("가맹점");
+        // 끝 4자리는 결제 때 FDS로 넘기는 표시값과 같은 값이다(추가 카드는 이 결제 시도의 값, #766)
+        String internalCustomer = internalCustomer(session);
         var cards = Arrays.stream(CheckoutMockCard.values())
-                .map(card -> new CheckoutResponses.Card(
-                        card.name(), card.label(), card.masked(), card.issuerCountry(), card.color()))
+                .filter(card -> !card.added())
+                .map(card -> card(card, internalCustomer, session))
                 .toList();
+        var addable = Arrays.stream(CheckoutMockCard.values())
+                .filter(CheckoutMockCard::added)
+                .findFirst()
+                .map(card -> card(card, internalCustomer, session))
+                .orElse(null);
         return new CheckoutResponses.Session(
                 merchantName,
                 session.getOrderRef(),
@@ -149,6 +187,7 @@ public class PaymentSessionService {
                         && session.expired(Instant.now())
                         && admitted.isEmpty(),
                 cards,
+                addable,
                 finishedResult(session, admitted),
                 cancelUrl(session),
                 origin(session.getSuccessUrl()));
@@ -160,7 +199,7 @@ public class PaymentSessionService {
         if (session.getPaymentId() != null) return result(session);
         // 카드 목록 · 만료 · 가맹점 정지는 새 접수만 막는다. 같은 결제 시도(attemptKey)가 이미 접수됐으면
         // 평가 · 승인 · 세션 연결 중에 멈춘 것이라 기한이 지났어도 이어서 처리한다 (PR #425 리뷰)
-        // 지금은 없는 카드(C · D, #582)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
+        // 지금은 없는 카드(C · D, #582 · 누리카드 1173인 B, #766)로 접수된 시도를 같은 화면에서 다시 눌러도 재개된다 (PR #587 리뷰)
         if (admittedPaymentId(session).isEmpty()) {
             CheckoutMockCard.from(body.card()).orElseThrow(this::invalid);
             if (session.expired(Instant.now()))
@@ -175,16 +214,16 @@ public class PaymentSessionService {
         var fixed = Objects.requireNonNull(transactions.execute(status -> {
             var locked = sessions.findByIdForUpdate(session.getSessionId()).orElseThrow();
             locked.fixAttempt(body.card(), body.deviceId(), ipAddress, Instant.now());
-            // 지금은 없는 카드(C · D, #582)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
+            // 지금은 없는 카드(C · D, #582 · 누리카드 1173인 B, #766)로 고정만 되고 접수되지 않았으면 이번에 고른 카드로 바꾼다.
             // 접수된 요청이 없어 같은 시도 키에 다른 신호가 남지 않는다. 그대로 두면 만료까지 계속 400 (PR #587 리뷰)
             if (CheckoutMockCard.from(locked.getSubmittedCard()).isEmpty()
                     && admittedPaymentId(locked).isEmpty()) locked.replaceRemovedCard(body.card());
             return locked;
         }));
         if (fixed.getPaymentId() != null) return result(fixed);
-        String internalCustomer = session.getMerchantId() + ":" + session.getCustomerRef();
+        String internalCustomer = internalCustomer(session);
         // 이미 접수된 시도를 이어 갈 때는 접수 때 저장한 위험 신호를 그대로 보낸다. 카드 이름이 바뀌었거나(#582)
-        // 지금은 없는 카드(C · D)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
+        // 지금은 없는 카드(C · D · B)로 접수됐어도 같은 시도로 재개된다 — 새로 만들면 표시값이 달라 키 충돌이 난다 (PR #587 리뷰)
         var signals = requests.findByMerchantIdAndIdempotencyKey(session.getMerchantId(), session.getAttemptKey())
                 .map(PaymentRequest::riskSignals)
                 .orElseGet(() -> newRiskSignals(fixed, internalCustomer));
@@ -211,11 +250,25 @@ public class PaymentSessionService {
         var card = CheckoutMockCard.from(fixed.getSubmittedCard()).orElseThrow(this::invalid);
         return new PaymentRiskSignals(
                 fixed.getSubmittedDeviceId(),
-                card.token(internalCustomer),
-                card.displayLabel(),
+                card.token(internalCustomer, fixed.getAttemptKey()),
+                card.displayLabel(internalCustomer, fixed.getAttemptKey()),
                 null,
                 fixed.getSubmittedIp(),
                 fixed.getBuyerEmail());
+    }
+
+    // FDS 고객 키. 가맹점이 달라도 고객 참조가 겹치지 않게 가맹점 번호를 붙인다
+    private static String internalCustomer(PaymentSession session) {
+        return session.getMerchantId() + ":" + session.getCustomerRef();
+    }
+
+    private static CheckoutResponses.Card card(CheckoutMockCard card, String internalCustomer, PaymentSession session) {
+        return new CheckoutResponses.Card(
+                card.name(),
+                card.label(),
+                card.masked(internalCustomer, session.getAttemptKey()),
+                card.issuerCountry(),
+                card.color());
     }
 
     public CheckoutResponses.Result result(String sessionKey) {
@@ -270,19 +323,33 @@ public class PaymentSessionService {
         return new CheckoutResponses.Result(status, authorized, false, url);
     }
 
-    private PaymentSessionResponse reuse(PaymentSession session, PaymentSessionCreateRequest body) {
-        if (!session.sameRequest(
-                body.orderRef(),
-                body.customerRef(),
-                body.amount(),
-                body.orderCreatedAt(),
-                body.orderName(),
-                body.buyerEmail(),
-                body.successUrl(),
-                body.failUrl(),
-                body.notifyUrl()))
+    private PaymentSessionResponse reuse(
+            PaymentSession session,
+            PaymentSessionCreateRequest body,
+            CustomerContactProtector.NormalizedContact contact) {
+        if (!sameContact(session, contact)
+                || !session.sameRequest(
+                        body.orderRef(),
+                        body.customerRef(),
+                        body.amount(),
+                        body.orderCreatedAt(),
+                        body.orderName(),
+                        body.buyerEmail(),
+                        body.successUrl(),
+                        body.failUrl(),
+                        body.notifyUrl()))
             throw new PaymentHttpException(409, "IDEMPOTENCY_KEY_CONFLICT", "같은 요청 키에 다른 내용이 있습니다.");
         return toResponse(session);
+    }
+
+    // 암호문은 매번 달라 비교할 수 없고 픽업자 원문도 없으므로 저장해 둔 요청 지문으로 비교한다.
+    // 키가 없으면 연락처를 저장하지 않았으니 비교하지 않는다
+    private boolean sameContact(PaymentSession session, CustomerContactProtector.NormalizedContact contact) {
+        if (!contactProtector.available()) return true;
+        String stored = contacts.findById(session.getSessionId())
+                .map(PaymentOrderContact::getRequestDigest)
+                .orElse(null);
+        return Objects.equals(contactProtector.requestDigestOrNull(contact), stored);
     }
 
     private PaymentSessionResponse toResponse(PaymentSession session) {

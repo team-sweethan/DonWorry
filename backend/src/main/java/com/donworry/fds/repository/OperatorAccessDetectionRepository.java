@@ -5,13 +5,26 @@ import com.donworry.fds.entity.OperatorAccessDetectionActionStatus;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface OperatorAccessDetectionRepository extends JpaRepository<OperatorAccessDetection, Long> {
+    long countByReviewedAtIsNull();
+
     List<OperatorAccessDetection> findByDetectedAtGreaterThanEqual(Instant detectedAt);
 
     List<OperatorAccessDetection> findTop100ByActionStatusOrderByDetectedAtAsc(
             OperatorAccessDetectionActionStatus actionStatus);
+
+    @Modifying
+    @Query("""
+            UPDATE OperatorAccessDetection detection
+            SET detection.reviewedAt = :reviewedAt
+            WHERE detection.id = :detectionId
+              AND detection.reviewedAt IS NULL
+            """)
+    int reviewIfUnreviewed(@Param("detectionId") Long detectionId, @Param("reviewedAt") Instant reviewedAt);
 
     @Query(value = """
             SELECT detection.operator_access_detection_id AS detectionId,
@@ -20,17 +33,9 @@ public interface OperatorAccessDetectionRepository extends JpaRepository<Operato
                    detection.rule_code AS ruleCode,
                    detection.event_count AS eventCount,
                    detection.action_status AS actionStatus,
+                   detection.reviewed_at AS reviewedAt,
                    detection.detected_at AS occurredAt
             FROM fds_operator_access_detections detection
-            WHERE NOT EXISTS (
-                SELECT 1
-                FROM fds_operator_access_detections newer
-                WHERE newer.user_id = detection.user_id
-                  AND newer.rule_code = detection.rule_code
-                  AND (newer.detected_at > detection.detected_at
-                       OR (newer.detected_at = detection.detected_at
-                           AND newer.operator_access_detection_id > detection.operator_access_detection_id))
-            )
             """, nativeQuery = true)
     List<OperatorAccessHighRiskSignalProjection> findLatestSignals();
 }

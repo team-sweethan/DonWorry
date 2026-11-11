@@ -1,13 +1,16 @@
 package com.donworry.investigation.service;
 
+import com.donworry.identity.api.StaffAccessType;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.ActionHandoff;
+import com.donworry.investigation.entity.AssignmentRequestStatus;
 import com.donworry.investigation.entity.CaseHistory;
 import com.donworry.investigation.entity.CaseHistoryEventType;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.PaymentDecision;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.ActionHandoffRepository;
+import com.donworry.investigation.repository.CaseAssignmentRequestRepository;
 import com.donworry.investigation.repository.CaseHistoryRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
@@ -41,6 +44,8 @@ public class CaseDecisionService {
     private final ApplicationEventPublisher events;
     private final SecurityStaffGuard securityStaffGuard;
     private final CustomerVoidReader customerVoidReader;
+    private final CaseAssignmentRequestRepository assignmentRequestRepository;
+    private final CaseAccessGuard caseAccessGuard;
 
     // P5 호출은 커밋 뒤 HandoffRequested 리스너가 한다 — 판정 저장이 롤백되면 인계 요청도 나가지 않는다
     @Transactional
@@ -53,6 +58,13 @@ public class CaseDecisionService {
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
         if (securityCase.isClosed()) {
             throw new InvestigationException(InvestigationErrorCode.CASE_CLOSED);
+        }
+        // 열린 사건은 담당자만 판정한다 (#612). 대기 요청 검사보다 먼저 — 담당이 아닌 직원에게 요청 상태를 알리지 않게
+        caseAccessGuard.requireAccess(securityCase, staffId, StaffAccessType.CASE_DECISION);
+        // 담당 변경 요청이 대기 중이면 판정만 막는다 (#608) — 바뀌기 전 담당이 판정하지 않게
+        // 요청 생성도 같은 사건 행 잠금을 먼저 잡으므로, 잠금 뒤 이 조회는 끼어든 요청까지 본다
+        if (assignmentRequestRepository.existsByCaseIdAndStatus(caseId, AssignmentRequestStatus.PENDING)) {
+            throw new InvestigationException(InvestigationErrorCode.ASSIGNMENT_CHANGE_PENDING);
         }
         if (request.evidenceVersion() != securityCase.getEvidenceVersion()) {
             throw new InvestigationException(InvestigationErrorCode.EVIDENCE_VERSION_CONFLICT);

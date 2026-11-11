@@ -1,0 +1,508 @@
+/* 관리자 [접근 감시 › 로그인 보안] (#770) — 상태 띠 · 경계까지 막대 · 10초 꺾은선 + 실시간 시도 · 탈취 의심 경보.
+   상태 색은 내부자 관제와 같은 말투: 평소 초록 · 주의 노랑 · 경계 빨강. 색만으로 구분하지 않게 띠 · 줄에 글자를 함께 쓴다.
+   꺾은선 두 계열(시도 파랑 · 실패 빨강)은 dataviz 검증 스크립트로 색약 구분 · 대비를 확인했다 */
+
+.ls-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-4);
+}
+.ls-muted {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ls-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 14px 16px 10px;
+}
+.ls-panel-head h2 {
+  margin: 0;
+}
+
+/* 상태 띠 */
+.ls-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dw-space-3);
+  padding: var(--dw-space-3) var(--dw-space-4);
+  border: 1px solid;
+  border-radius: var(--dw-radius-panel);
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+.ls-banner > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.ls-banner strong {
+  font-size: var(--dw-text-heading);
+}
+.ls-banner span {
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+}
+.ls-banner .ls-clock {
+  flex: none;
+  white-space: nowrap;
+}
+.ls-dot-state {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 7px;
+  border-radius: 50%;
+}
+.ls-banner.is-normal {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.ls-banner.is-normal .ls-dot-state {
+  background: #16a34a;
+}
+.ls-banner.is-caution {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.ls-banner.is-caution .ls-dot-state {
+  background: #d97706;
+}
+.ls-banner.is-attack {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.ls-banner.is-attack .ls-dot-state {
+  background: #dc2626;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ls-banner.is-attack .ls-dot-state {
+    animation: ls-pulse 1.2s ease-in-out infinite;
+  }
+}
+@keyframes ls-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* 레이더 | 경계까지 + 숫자 두 개 (#788) */
+.ls-live {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--dw-space-4);
+  align-items: stretch;
+}
+.ls-live-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dw-space-3);
+  min-width: 0;
+}
+.ls-kpis {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--dw-space-3);
+}
+.ls-gauges {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--dw-space-4);
+  padding: 0 16px 14px;
+}
+
+/* 레이더 — 관제 칸이라 어둡게. 색은 LoginAttackRadar 그림과 같다 */
+.ls-radar {
+  position: relative;
+  overflow: hidden;
+  min-height: 360px;
+  background: #070d22;
+  border: 1px solid #1b2547;
+  border-radius: var(--dw-radius-panel);
+}
+.ls-radar-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+}
+.ls-radar-title,
+.ls-radar-rate,
+.ls-radar-foot {
+  position: absolute;
+  color: #aab4d4;
+  font-size: var(--dw-text-caption);
+  pointer-events: none;
+}
+.ls-radar-title {
+  top: 12px;
+  left: 14px;
+  color: #e6ebff;
+  font-weight: 600;
+}
+.ls-radar-rate {
+  top: 10px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.ls-radar-rate strong {
+  color: #fff;
+  font-size: var(--dw-text-number-sm);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.ls-radar-foot {
+  right: 14px;
+  bottom: 10px;
+  left: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 14px;
+}
+.ls-radar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.ls-radar-legend span::before {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  content: '';
+}
+.ls-radar-legend .is-unknown::before {
+  background: #ff5d5d;
+}
+.ls-radar-legend .is-fail::before {
+  background: #ff9f43;
+}
+.ls-radar-legend .is-ok::before {
+  background: #4ade80;
+}
+.ls-radar-legend .is-suspected::before {
+  background: #ffe066;
+}
+.ls-gauge-text {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+}
+.ls-gauge-text strong {
+  color: #0f172a;
+  font-size: var(--dw-text-heading);
+  font-variant-numeric: tabular-nums;
+}
+.ls-gauge-text small {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  font-weight: 400;
+}
+.ls-gauge-track {
+  height: 10px;
+  margin-top: 6px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+.ls-gauge-fill {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+.ls-gauge.is-reached .ls-gauge-fill {
+  background: #dc2626;
+}
+.ls-gauge.is-reached .ls-gauge-text strong {
+  color: #b91c1c;
+}
+.ls-kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--dw-space-3) var(--dw-space-4);
+  background: #fff;
+  border: 1px solid var(--dw-border);
+  border-radius: var(--dw-radius-panel);
+}
+.ls-kpi small {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.ls-kpi strong {
+  font-size: var(--dw-text-number-sm);
+  font-variant-numeric: tabular-nums;
+}
+.ls-kpi.is-hot {
+  border-color: #fecaca;
+}
+.ls-kpi.is-hot strong {
+  color: #b91c1c;
+}
+
+/* 꺾은선 + 실시간 시도 */
+.ls-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--dw-space-4);
+  align-items: stretch;
+}
+.ls-legend {
+  display: flex;
+  gap: 12px;
+  color: #475569;
+  font-size: var(--dw-text-caption);
+}
+.ls-key::before {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+  content: '';
+}
+.ls-key.is-attempts::before {
+  background: #2563eb;
+}
+.ls-key.is-failures::before {
+  background: #dc2626;
+}
+.ls-key.is-zone::before {
+  height: 10px;
+  background: rgba(220, 38, 38, 0.12);
+  border: 1px solid #fecaca;
+}
+.ls-key.is-mark::before {
+  width: 2px;
+  height: 11px;
+  background: #334155;
+}
+
+/* 경계 구간 · 사건 번호 표시선 · 설명 상자 (#788) */
+.ls-chart-body {
+  position: relative;
+}
+.ls-zone {
+  fill: rgba(220, 38, 38, 0.1);
+}
+.ls-mark-group {
+  cursor: pointer;
+}
+.ls-mark-num {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.ls-tip {
+  position: absolute;
+  top: 36px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 280px;
+  padding: 9px 12px;
+  color: #f8fafc;
+  font-size: var(--dw-text-caption);
+  line-height: 1.5;
+  background: #0f172a;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ls-tip strong {
+  font-size: var(--dw-text-secondary);
+}
+.ls-num {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 50%;
+}
+.ls-incidents {
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+.ls-incidents li {
+  display: grid;
+  grid-template-columns: 20px 64px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 4px;
+  border-top: 1px solid var(--dw-border);
+  border-radius: var(--dw-radius-control);
+  font-size: var(--dw-text-secondary);
+}
+.ls-incidents li.is-active,
+.ls-incidents li:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+.ls-incident-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.ls-incident-empty {
+  margin: 0;
+  padding: 10px 16px;
+}
+.ls-caption {
+  margin: 0;
+  padding: 10px 16px 14px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+  border-top: 1px solid var(--dw-border);
+}
+.ls-readout {
+  margin: 0 16px;
+  color: #475569;
+  font-size: var(--dw-text-caption);
+  font-variant-numeric: tabular-nums;
+}
+.ls-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  padding: 0 8px 8px;
+}
+.ls-grid {
+  stroke: #e2e8f0;
+  stroke-width: 1;
+}
+.ls-tick {
+  fill: #64748b;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ls-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.ls-line.is-attempts {
+  stroke: #2563eb;
+}
+.ls-line.is-failures {
+  stroke: #dc2626;
+}
+.ls-cursor {
+  stroke: #94a3b8;
+  stroke-dasharray: 3 3;
+}
+.ls-dot {
+  stroke: #fff;
+  stroke-width: 2;
+}
+.ls-dot.is-attempts {
+  fill: #2563eb;
+}
+.ls-dot.is-failures {
+  fill: #dc2626;
+}
+.ls-end {
+  fill: #334155;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ls-hit {
+  fill: transparent;
+}
+
+.ls-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0 12px 12px;
+  list-style: none;
+}
+.ls-feed .ls-rows {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.ls-rows li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 4px 8px;
+  border-radius: var(--dw-radius-control);
+  font-size: var(--dw-text-secondary);
+}
+.ls-rows li.is-good {
+  background: #f0fdf4;
+}
+.ls-rows li.is-fail .ls-mark {
+  color: #b91c1c;
+}
+.ls-rows li.is-good .ls-mark {
+  color: #15803d;
+}
+.ls-rows li.is-bad {
+  background: #fef2f2;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ls-rows li.is-fresh {
+    animation: ls-in 0.6s ease-out;
+  }
+}
+@keyframes ls-in {
+  from {
+    background: #fde68a;
+    transform: translateY(-3px);
+  }
+}
+.ls-time {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.ls-who {
+  font-weight: 600;
+}
+.ls-alert-text {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .ls-live,
+  .ls-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .ls-incidents li {
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+  }
+  .ls-incidents .ls-time {
+    display: none;
+  }
+}

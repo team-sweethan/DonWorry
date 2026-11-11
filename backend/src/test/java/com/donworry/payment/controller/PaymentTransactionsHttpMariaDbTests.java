@@ -3,6 +3,7 @@ package com.donworry.payment.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.donworry.MariaDbTestContainerConfig;
+import com.donworry.identity.api.StaffAccessRecorded;
 import com.donworry.identity.service.UserSessionService;
 import com.donworry.payment.entity.Payment;
 import com.donworry.payment.entity.PaymentEvaluationSnapshot;
@@ -46,6 +47,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Import(MariaDbTestContainerConfig.class)
 class PaymentTransactionsHttpMariaDbTests {
     private static final String PATH = "/api/payment-transactions";
+    // 목록에서 빠지고 상세에만 있는 칸 (#732)
+    private static final List<String> DETAIL_ONLY_FIELDS =
+            List.of("cardDisplayLabel", "ipCountryCode", "maskedIpAddress", "maskedDeviceId", "maskedBuyerEmail");
 
     @LocalServerPort
     int port;
@@ -101,6 +105,21 @@ class PaymentTransactionsHttpMariaDbTests {
                 jdbc.queryForList("SELECT user_id FROM platform_users WHERE login_id LIKE ?", Long.class, prefix + "%");
         for (Long id : ids) {
             sessions.expireAll(id);
+            // 조회 기록(#615)은 직원 · 가맹점 FK라 계정 · 가맹점보다 먼저 지운다
+            jdbc.update("DELETE FROM staff_access_events WHERE staff_id=?", id);
+            jdbc.update(
+                    "DELETE FROM EVENT_PUBLICATION WHERE EVENT_TYPE=? AND JSON_VALUE(SERIALIZED_EVENT,'$.staffId')=?",
+                    StaffAccessRecorded.class.getName(),
+                    id);
+            // 내보내기 차단(#651)이 남긴 경보 · 정지 기록 · 계정 변경 이력
+            jdbc.update(
+                    "DELETE e FROM insider_alert_evidences e JOIN insider_alerts a ON a.alert_id = e.alert_id"
+                            + " WHERE a.staff_id=?",
+                    id);
+            jdbc.update("DELETE FROM insider_alerts WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM insider_detection_states WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM staff_account_locks WHERE staff_id=?", id);
+            jdbc.update("DELETE FROM admin_change_histories WHERE target_user_id=?", id);
             jdbc.update("DELETE FROM operator_access_denials WHERE user_id=?", id);
             jdbc.update("DELETE FROM login_histories WHERE user_id=?", id);
             jdbc.update("DELETE FROM user_permissions WHERE user_id=?", id);
@@ -128,7 +147,8 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(json(path).path("totalElements").asLong()).isEqualTo(1);
     }
 
-    // 카드 토큰 · IP · 기기 ID · 이메일 원문과 승인 참조는 응답 어디에도 없고, 표시값 · 국가 · 가린 값만 나간다
+    // 카드 토큰 · IP · 기기 ID · 이메일 원문과 승인 참조는 응답 어디에도 없다.
+    // 표시값 · 국가 · 가린 값은 목록에서 빠지고 1건 상세에서만 나간다 (#732)
     @Test
     void list_whenSignalsStored_neverExposesRawIdentifiers() throws Exception {
         var signals = PaymentRiskSignals.builder()
@@ -156,11 +176,25 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(item.path("fdsResult").asString()).isEqualTo("REVIEW");
         assertThat(item.path("evaluationId").asLong()).isEqualTo(363L);
         assertThat(item.path("attemptNo").asLong()).isEqualTo(1L);
-        assertThat(item.path("cardDisplayLabel").asString()).isEqualTo("신한 ****1234");
-        assertThat(item.path("ipCountryCode").asString()).isEqualTo("KR");
-        assertThat(item.path("maskedIpAddress").asString()).isEqualTo("211.234.*.*");
-        assertThat(item.path("maskedDeviceId").asString()).isEqualTo("dev-7f3a…");
-        assertThat(item.path("maskedBuyerEmail").asString()).isEqualTo("ch***@gmail.com");
+        for (String field : DETAIL_ONLY_FIELDS)
+            assertThat(item.has(field)).as(field).isFalse();
+
+        // 담당 범위 검사 없이 여는 관리자로 상세를 확인한다
+        var detail = send(user("admin", "ADMIN", null), "GET", PATH + "/" + id);
+        assertThat(detail.statusCode()).as(detail.body()).isEqualTo(200);
+        assertThat(detail.body())
+                .doesNotContain(
+                        "tok_secret_card_363",
+                        "211.234.10.5",
+                        "dev-7f3a9c21-raw-device",
+                        "chk990727@gmail.com",
+                        "SECRET_AUTHORIZATION");
+        var body = mapper.readTree(detail.body());
+        assertThat(body.path("cardDisplayLabel").asString()).isEqualTo("신한 ****1234");
+        assertThat(body.path("ipCountryCode").asString()).isEqualTo("KR");
+        assertThat(body.path("maskedIpAddress").asString()).isEqualTo("211.234.*.*");
+        assertThat(body.path("maskedDeviceId").asString()).isEqualTo("dev-7f3a…");
+        assertThat(body.path("maskedBuyerEmail").asString()).isEqualTo("ch***@gmail.com");
     }
 
     // 요청 기록이 없는 결제도 빠지지 않고, 신호 칸은 비어서 나온다
@@ -172,8 +206,13 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(items.size()).isEqualTo(1);
         var item = items.get(0);
         assertThat(item.path("paymentId").asLong()).isEqualTo(id);
-        for (String field : List.of("attemptNo", "fdsResult", "evaluationId", "cardDisplayLabel", "maskedIpAddress"))
+        for (String field : List.of("attemptNo", "fdsResult", "evaluationId"))
             assertThat(item.path(field).isNull()).as(field).isTrue();
+
+        var detail = mapper.readTree(
+                send(user("admin", "ADMIN", null), "GET", PATH + "/" + id).body());
+        for (String field : List.of("cardDisplayLabel", "maskedIpAddress"))
+            assertThat(detail.path(field).isNull()).as(field).isTrue();
     }
 
     // 기본 최근 7일 · 최신순 · 가맹점 · 고객 · 상태 · 주문번호 · 기간 · 페이지가 섞이지 않고 맞게 걸린다
@@ -206,6 +245,16 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(secondPage.path("hasNext").asBoolean()).isFalse();
     }
 
+    // 최신순은 결제 번호가 아니라 결제 시각 기준이다 — 늦은 시각 결제가 먼저 저장돼 번호가 작아도 위에 온다 (#797)
+    @Test
+    void list_whenSavedOutOfTimeOrder_returnsLatestCreatedFirst() throws Exception {
+        long newer = payment(merchantId, prefix + "-a", now.minus(Duration.ofMinutes(10)), false);
+        long older = payment(merchantId, prefix + "-b", now.minus(Duration.ofHours(1)), false);
+        assertThat(newer).isLessThan(older);
+
+        assertThat(ids(json(PATH + "?merchantId=" + merchantId))).containsExactly(newer, older);
+    }
+
     // 대소문자만 다른 주문번호 · 고객 번호는 다른 주문 · 고객이다 — DB 기본 비교(_ci)에 섞이지 않고 정확히 일치만 나온다
     @Test
     void list_whenRefsDifferOnlyByCase_matchesExactly() throws Exception {
@@ -218,6 +267,143 @@ class PaymentTransactionsHttpMariaDbTests {
         assertThat(ids(json(base + "&orderRef=ord-a-" + prefix))).containsExactly(lower);
         assertThat(ids(json(base + "&customerRef=Cust-" + prefix))).containsExactly(upper);
         assertThat(ids(json(base + "&customerRef=cust-" + prefix))).containsExactly(lower);
+    }
+
+    // 숫자 고객 번호 검색은 고객 번호 · 거른 가맹점 · 내보낸 건수와 함께 기록된다 (INS-09 재료, #615)
+    @Test
+    void list_whenNumericCustomerRefSearched_recordsCountMerchantAndRef() throws Exception {
+        String customerRef = "7" + merchantId;
+        long id = payment(merchantId, customerRef, now.minus(Duration.ofHours(1)), false);
+        payment(merchantId, "8" + merchantId, now.minus(Duration.ofHours(2)), false);
+
+        var page = json(PATH + "?merchantId=" + merchantId + "&customerRef=" + customerRef);
+
+        assertThat(ids(page)).containsExactly(id);
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("actor_role")).isEqualTo("SECURITY_STAFF");
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_LIST_VIEW");
+            assertThat(e.get("result")).isEqualTo("ALLOWED");
+            assertThat(((Number) e.get("merchant_id")).longValue()).isEqualTo(merchantId);
+            assertThat(e.get("customer_ref")).isEqualTo(customerRef);
+            assertThat(((Number) e.get("item_count")).intValue()).isEqualTo(1);
+        });
+    }
+
+    // 숫자가 아닌 검색어는 막지 않고 목록을 주되, 검색어 원문은 기록에 남기지 않는다. ADMIN 조회도 기록한다 (#615)
+    @Test
+    void list_whenSearchTermNotNumeric_returnsListAndRecordsWithoutRef() throws Exception {
+        String term = "Cust-" + prefix;
+        long id = payment(merchantId, term, now.minus(Duration.ofHours(1)), false);
+        var admin = user("admin", "ADMIN", null);
+
+        var response = send(admin, "GET", PATH + "?merchantId=" + merchantId + "&customerRef=" + term);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+        assertThat(ids(mapper.readTree(response.body()))).containsExactly(id);
+        assertThat(accessEvents("admin")).singleElement().satisfies(e -> {
+            assertThat(e.get("actor_role")).isEqualTo("ADMIN");
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_LIST_VIEW");
+            assertThat(e.get("customer_ref")).isNull();
+            assertThat(((Number) e.get("merchant_id")).longValue()).isEqualTo(merchantId);
+            assertThat(((Number) e.get("item_count")).intValue()).isEqualTo(1);
+        });
+    }
+
+    // 없는 가맹점으로 걸러도 지금처럼 빈 목록이 나오고, 기록은 가맹점 없이 남는다 — 기록 표 FK로 503이 되지 않는다 (#615)
+    @Test
+    void list_whenMerchantFilterUnknown_returnsEmptyAndRecordsWithoutMerchant() throws Exception {
+        long unknown = merchantId + 1_000_000;
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM merchants WHERE merchant_id=?", Long.class, unknown))
+                .isZero();
+
+        var page = json(PATH + "?merchantId=" + unknown);
+
+        assertThat(page.path("items").size()).isZero();
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("merchant_id")).isNull();
+            assertThat(((Number) e.get("item_count")).intValue()).isZero();
+        });
+    }
+
+    // 높음 내부자 경보가 열린 보안 직원의 내보내기는 파일 없이 403이다. 응답 트랜잭션이 롤백돼도
+    // 계정 정지 · 위험 경보(INS-05) · 거부 기록은 남고, 그 세션은 끊긴다 (#651)
+    @Test
+    void export_whenStaffHasOpenInsiderAlert_blocksAndKeepsSuspension() throws Exception {
+        payment(merchantId, prefix + "-cust", now.minus(Duration.ofHours(1)), false);
+        long staffId = jdbc.queryForObject(
+                "SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "staff");
+        jdbc.update(
+                "INSERT INTO insider_alerts(staff_id,rule_code,severity,status,summary,first_event_at,last_event_at,created_at,updated_at)"
+                        + " VALUES (?,'INS_08','HIGH','OPEN','테스트 경보',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
+                staffId);
+
+        // 내보내기는 POST + CSRF 토큰 (Codex 리뷰) — 화면처럼 쿠키의 토큰을 헤더로 보낸다
+        var response = com.donworry.HttpCsrfTestSupport.send(
+                staff,
+                HttpRequest.newBuilder(
+                                URI.create("http://localhost:" + port + PATH + "/export?merchantId=" + merchantId))
+                        .POST(HttpRequest.BodyPublishers.noBody()));
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(403);
+        assertThat(response.body()).contains("INSIDER_EXPORT_BLOCKED").doesNotContain(prefix + "-cust");
+        assertThat(jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, staffId))
+                .isEqualTo("SUSPENDED");
+        assertThat(jdbc.queryForList(
+                        "SELECT reason_code FROM staff_account_locks WHERE staff_id=? AND status='OPEN'",
+                        String.class,
+                        staffId))
+                .containsExactly("INSIDER_EXPORT_BLOCKED");
+        assertThat(jdbc.queryForList(
+                        "SELECT severity FROM insider_alerts WHERE staff_id=? AND rule_code='INS_05' AND status='OPEN'",
+                        String.class,
+                        staffId))
+                .containsExactly("CRITICAL");
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_EXPORT");
+            assertThat(e.get("result")).isEqualTo("DENIED");
+            assertThat(e.get("deny_reason")).isEqualTo("INSIDER_ALERT_OPEN");
+        });
+        assertThat(send(staff, "GET", PATH).statusCode()).isEqualTo(401);
+    }
+
+    // 주문번호로만 찾아 내보내면 기록에 고객 번호가 남지 않아 INS-08 · 09가 세지 못했다 (#712 재현)
+    // 이제 고객 조건이 없으면 파일 없이 거부하고 거부 기록을 남긴다. 거부만으로 계정을 정지하지는 않는다 (#730)
+    @Test
+    void export_whenSearchedByOrderRefOnly_isDeniedAndRecorded() throws Exception {
+        String orderRef = prefix + "-ord";
+        payment(merchantId, "9" + merchantId, orderRef, now.minus(Duration.ofHours(1)));
+
+        var response = export("merchantId=" + merchantId + "&orderRef=" + orderRef);
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(403);
+        assertThat(response.body()).contains("PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE");
+        assertThat(accessEvents("staff")).singleElement().satisfies(e -> {
+            assertThat(e.get("access_type")).isEqualTo("TRANSACTION_EXPORT");
+            assertThat(e.get("result")).isEqualTo("DENIED");
+            assertThat(e.get("deny_reason")).isEqualTo("EXPORT_OUT_OF_SCOPE");
+        });
+        assertThat(accountStatus(staffId())).isEqualTo("ACTIVE");
+    }
+
+    private long staffId() {
+        return jdbc.queryForObject("SELECT user_id FROM platform_users WHERE login_id=?", Long.class, prefix + "staff");
+    }
+
+    private HttpResponse<String> export(String filter) throws Exception {
+        return com.donworry.HttpCsrfTestSupport.send(
+                staff,
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + PATH + "/export?" + filter))
+                        .POST(HttpRequest.BodyPublishers.noBody()));
+    }
+
+    private String accountStatus(long staffId) {
+        return jdbc.queryForObject("SELECT status FROM platform_users WHERE user_id=?", String.class, staffId);
+    }
+
+    private List<Map<String, Object>> accessEvents(String suffix) {
+        return jdbc.queryForList(
+                "SELECT e.* FROM staff_access_events e JOIN platform_users u ON u.user_id = e.staff_id WHERE u.login_id=?",
+                prefix + suffix);
     }
 
     private List<Long> ids(JsonNode page) {

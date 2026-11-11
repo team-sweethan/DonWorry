@@ -52,7 +52,8 @@ public class OwnerCashFlowController {
     public ResponseEntity<CashFlowSettingResponse> settings(
             @RequestAttribute("settlement.ownerMerchant") Long merchant,
             @Valid @RequestBody CashFlowSettingRequest request) {
-        return ok(management.saveSettings(merchant, request.openingBalance(), request.baseDate()));
+        return ok(management.saveSettings(
+                merchant, request.openingBalance(), request.baseDate(), request.minimumOperatingFunds()));
     }
 
     @GetMapping("/expenses")
@@ -88,8 +89,13 @@ public class OwnerCashFlowController {
 
     @PutMapping("/expenses/{id}/completion")
     public ResponseEntity<ExpenseResponse> complete(
-            @RequestAttribute("settlement.ownerMerchant") Long merchant, @PathVariable Long id) {
-        return ok(management.completeExpense(merchant, id));
+            @RequestAttribute("settlement.ownerMerchant") Long merchant,
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) ExpenseCompletionRequest request) {
+        return ok(
+                request == null
+                        ? management.completeExpense(merchant, id)
+                        : management.completeExpense(merchant, id, request.paidDate()));
     }
 
     private <T> ResponseEntity<T> ok(T value) {

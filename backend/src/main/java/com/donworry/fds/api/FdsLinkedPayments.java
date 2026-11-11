@@ -15,17 +15,36 @@ public record FdsLinkedPayments(Match card, Match device, Match ip, List<Payment
     // provided: 이 사건 결제가 그 값을 하나라도 보냈는지 — false면 비교하지 않았다는 뜻이다 ("정보 없음")
     // resultCounts는 다른 결제마다 최신 판정(최신 비오류 평가) 하나씩 센 값, declinedCount는 카드사 거절 결제 수
     // 건수 칸이 모두 int라 순서를 바꿔도 컴파일된다 — builder로 이름을 붙여 만든다 (02-code.md @Builder)
+    // nearby: 위 결제 중 사건 결제 요청 시각 앞뒤 nearbyWindow 안의 것만 다시 센 값 (#637)
+    // 공격은 짧은 시간에 몰리고 공용 와이파이는 한 달에 흩어진다 — 30일 합계만으로는 둘이 같아 보인다
     @Builder
     public record Match(
             boolean provided,
             int otherCustomerCount,
             int paymentCount,
             Map<FdsResult, Integer> resultCounts,
-            int declinedCount) {
+            int declinedCount,
+            Nearby nearby) {
 
         public static Match notProvided() {
             return Match.builder()
                     .provided(false)
+                    .otherCustomerCount(0)
+                    .paymentCount(0)
+                    .resultCounts(Map.of())
+                    .declinedCount(0)
+                    .nearby(Nearby.none())
+                    .build();
+        }
+    }
+
+    // 사건 결제 앞뒤 시간 안의 다른 고객 결제 (#637) — 칸 뜻은 Match와 같다
+    @Builder
+    public record Nearby(
+            int otherCustomerCount, int paymentCount, Map<FdsResult, Integer> resultCounts, int declinedCount) {
+
+        public static Nearby none() {
+            return Nearby.builder()
                     .otherCustomerCount(0)
                     .paymentCount(0)
                     .resultCounts(Map.of())

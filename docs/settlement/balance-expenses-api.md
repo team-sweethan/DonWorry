@@ -7,7 +7,7 @@
 
 | 테이블 | 주요 컬럼·제약 |
 | --- | --- |
-| cash_flow_settings | setting_id BIGINT PK, merchant_id BIGINT UNIQUE 논리 참조, opening_balance BIGINT(0 이상), base_date DATE, created_at/updated_at UTC DATETIME(6) |
+| cash_flow_settings | setting_id BIGINT PK, merchant_id BIGINT UNIQUE 논리 참조, opening_balance BIGINT(0 이상), base_date DATE, minimum_operating_funds BIGINT(기본값 0, 0 이상), created_at/updated_at UTC DATETIME(6) |
 | planned_expenses | expense_id BIGINT PK, merchant_id BIGINT 논리 참조, title VARCHAR(100), expense_date DATE(예정일), amount BIGINT(양수), category VARCHAR(30), memo VARCHAR(500) NULL, paid_at UTC DATETIME(6) NULL, created_at/updated_at UTC DATETIME(6), deleted_at UTC DATETIME(6) NULL |
 
 금액 상한은 JavaScript 안전 정수 9007199254740991원이다. 가맹점 FK는 만들지 않는다. 최초 잔액은 설정 후 수정하지 않는다.
@@ -22,17 +22,17 @@ CurrentStaff의 OPERATOR·FINANCE_VIEW·가맹점 ID를 검증한다. 요청 가
 
 | 메서드 | 경로 | 동작 |
 | --- | --- | --- |
-| GET | /settings | 최초 잔액·기준일, 미설정 404 |
-| PUT | /settings | openingBalance/baseDate. 최초 기준일은 한국 시간 오늘. 같은 내용 재전달은 허용, 다른 내용은 409 SETTLEMENT_SETTING_IMMUTABLE |
+| GET | /settings | 최초 잔액·기준일과 최소 운영 자금, 미설정 404 |
+| PUT | /settings | openingBalance/baseDate와 선택 항목 minimumOperatingFunds. 최초 기준일은 한국 시간 오늘. 최초 잔액과 기준일 변경은 409 SETTLEMENT_SETTING_IMMUTABLE. 최소 운영 자금은 수정 가능하며 생략하면 기존 값을 유지한다. |
 | GET | /expenses?from=&to= | 한국 날짜 양 끝 포함 최대 366일. 미완료는 예정일, 완료는 실제 완료일로 조회 |
 | POST | /expenses | title/expenseDate/amount/category/memo. 최초 잔액 설정 후 기준일 이후 예정 지출 생성 |
 | PUT | /expenses/{id} | 미완료 지출 수정 |
 | DELETE | /expenses/{id} | 미완료 지출 소프트 삭제 |
-| PUT | /expenses/{id}/completion | 서버 현재 시각으로 완료. 반복 요청은 원래 시각 보존. 삭제 건은 404 |
+| PUT | /expenses/{id}/completion | 본문 생략 시 오늘로 완료. `paidDate`를 보내면 한국 시간 시작 잔액 기준일~오늘 범위에서 실제 지출일을 기록한다. 반복 요청은 최초 기록을 보존한다. 삭제 건은 404 |
 
 없는 지출·다른 가맹점 지출은 404, 완료 지출 수정·삭제는 409다. 예정일이 지나도 자동 완료하지 않는다.
-완료 시각은 서버가 기록하며 클라이언트가 paidAt을 지정하지 않는다. 실제 은행 출금 확인이 아닌 사장님 수동 기록이다.
-완료 취소·과거 실제 지출 시각 소급·수정 이력 원장·정기 지출·보유 잔액 계산·예측·화면 교체는 후속이다.
+과거 실제 지출일은 한국 시간 하루 시작을 `paidAt`으로 저장해 해당 날짜에 반영하고, `updatedAt`에는 서버 기록 시각을 저장한다. 예정일은 유지한다. 실제 은행 출금 확인과는 별개의 사장님 수동 기록이다.
+완료 취소와 정기 지출 실제 지출일 소급은 지원 범위 밖이다.
 새 POST는 별도 지출을 생성한다. 생성 요청 재전송의 멱등 키는 이번 계약에 없다. 완료 PUT은 멱등이다.
 
 ## 검증

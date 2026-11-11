@@ -1,26 +1,16 @@
 import { useState } from 'react'
-import { Alert, Button, Card, Input, Radio, Space, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Input, Radio, Space, Typography } from 'antd'
 import { useFeedback } from '../../../components/common/Feedback'
 import type {
-  AiReport,
   CasePayment,
   Decision,
   PaymentDecision,
   SubmitDecisionsRequest,
 } from '../../../types/case'
-import {
-  OPPOSE_MIN_REASON,
-  analysisFor,
-  decidedAnalysis,
-  decidedOpposition,
-  decisionBlocker,
-  isOpposing,
-  reasonLength,
-} from '../../../utils/caseDetailView'
+import { decisionBlocker } from '../../../utils/caseDetailView'
 import type { DecisionMode } from '../../../utils/caseRules'
 import { won } from '../../../utils/format'
-import { recommendationSource, sourceWith } from '../../../utils/reportView'
-import { dateTime, decisionLabel, recommendationLabel } from './caseLabels'
+import { dateTime, decisionLabel } from './caseLabels'
 import { CodeTag } from './CodeTag'
 
 type Draft = { decision?: Decision; reason: string }
@@ -28,19 +18,17 @@ type Draft = { decision?: Decision; reason: string }
 /**
  * 결제별 ACCEPT / REJECT 판정 (기획 2.8). 전체 선택은 편의 기능이고 저장은 결제별로 된다.
  * 확정된 판정은 MVP에서 정정하지 않으므로 잠근다.
+ * AI 보고서는 판정 권고를 내지 않는다 (#644, ADR-0009 결정 13) — 권고와 반대일 때 사유를 길게 쓰게 하던 규칙도 없앴다.
  */
 export function DecisionPanel({
   payments,
   decisions,
-  reports,
   mode,
   evidenceVersion,
   onSubmit,
 }: {
   payments: CasePayment[]
   decisions: PaymentDecision[]
-  // 확정된 판정의 "기준표 판정과 다름"을 그 판정의 기준 보고서로 계산한다
-  reports: AiReport[]
   mode: DecisionMode
   evidenceVersion: number
   /** 저장 성공 여부. 오류 안내는 호출한 쪽이 한다. */
@@ -62,26 +50,14 @@ export function DecisionPanel({
       return next
     })
 
-  // 판정할 결제의 권고(기준표 판정 · 예전 AI 권고)는 판정 기준 보고서에서 가져온다 (수동 판정이면 없음)
-  const baseReport = mode.kind === 'normal' ? mode.report : null
-  const analysisOf = (p: CasePayment) => analysisFor(baseReport, p.paymentId)
-  const opposingOf = (p: CasePayment) =>
-    isOpposing(analysisOf(p)?.recommendation ?? null, draftOf(p.casePaymentId).decision)
-
   const selected = undecided.filter((p) => draftOf(p.casePaymentId).decision)
-  const blocker = decisionBlocker(
-    undecided.map((p) => ({
-      ...draftOf(p.casePaymentId),
-      recommendation: analysisOf(p)?.recommendation ?? null,
-    })),
-  )
+  const blocker = decisionBlocker(undecided.map((p) => draftOf(p.casePaymentId)))
 
   const submit = () => {
     const accept = selected.filter((p) => draftOf(p.casePaymentId).decision === 'ACCEPT').length
-    const opposing = selected.filter(opposingOf).length
     confirmDanger({
       title: `결제 ${selected.length}건의 판정을 확정할까요?`,
-      content: `ACCEPT ${accept}건(매입 요청) · REJECT ${selected.length - accept}건(승인 취소 요청)${opposing ? ` · 그중 권고와 반대 ${opposing}건` : ''}. 확정한 판정은 변경할 수 없습니다.`,
+      content: `매입 요청 ${accept}건 · 승인 취소 요청 ${selected.length - accept}건. 확정한 판정은 변경할 수 없습니다.`,
       onConfirm: async () => {
         const saved = await onSubmit({
           evidenceVersion,
@@ -104,10 +80,10 @@ export function DecisionPanel({
         editable && (
           <Space size={6}>
             <Button size="small" onClick={() => setAll('ACCEPT')}>
-              전체 ACCEPT
+              전체 매입 요청
             </Button>
             <Button size="small" onClick={() => setAll('REJECT')}>
-              전체 REJECT
+              전체 승인 취소 요청
             </Button>
           </Space>
         )
@@ -134,30 +110,13 @@ export function DecisionPanel({
         {payments.map((p) => {
           const decided = decisionOf(p.casePaymentId)
           const draft = draftOf(p.casePaymentId)
-          const analysis = decided ? null : analysisOf(p)
-          const opposing = !decided && opposingOf(p)
-          const decidedAgainst = decided ? decidedOpposition(decided, p.paymentId, reports) : null
-          // 판정 전은 지금 기준 보고서, 판정 후는 그 판정의 기준 보고서로 앞말을 고른다 (#501)
-          const source = recommendationSource(
-            decided ? decidedAnalysis(decided, p.paymentId, reports) : analysis,
-          )
           return (
             <div key={p.casePaymentId} style={rowBox}>
+              {/* FDS 점수 · 규칙은 결제 표 한 곳에만 둔다 (#648) — 여기서는 어느 결제인지만 */}
               <Space size={8} wrap style={{ marginBottom: 8 }}>
                 <strong>결제 {p.paymentId}</strong>
                 <span>{p.amount === null ? '-' : won(p.amount)}</span>
-                <span style={{ color: '#64748b' }}>FDS {p.riskScore ?? '-'}점</span>
-                {analysis && (
-                  <span style={{ color: '#64748b' }}>
-                    {source} <CodeTag value={recommendationLabel[analysis.recommendation]} />
-                  </span>
-                )}
               </Space>
-              {analysis?.reason && (
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 8 }}>
-                  {analysis.reason}
-                </Typography.Paragraph>
-              )}
               {p.customerCanceledAt && (
                 <Alert
                   type="info"
@@ -174,11 +133,6 @@ export function DecisionPanel({
                 <div style={{ fontSize: 13 }}>
                   <Space size={4} wrap>
                     <CodeTag value={decisionLabel[decided.decision]} />
-                    {decidedAgainst && (
-                      <Tag color="orange">
-                        {sourceWith[source]} 다름 ({recommendationLabel[decidedAgainst].label})
-                      </Tag>
-                    )}
                   </Space>
                   <div style={{ marginTop: 6 }}>{decided.reason}</div>
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -188,18 +142,21 @@ export function DecisionPanel({
                 </div>
               ) : p.customerCanceledAt ? null : (
                 <>
+                  {/* 두 선택을 조금 띄우고 고른 쪽을 초록 / 빨강으로 (#648) — 확정 전에 무엇을 골랐는지 한눈에 */}
                   <Radio.Group
+                    className="dw-decision-choice"
                     disabled={!editable}
                     value={draft.decision}
                     onChange={(e) => update(p.casePaymentId, { decision: e.target.value })}
-                    optionType="button"
-                    buttonStyle="solid"
                     size="small"
-                    options={[
-                      { value: 'ACCEPT', label: 'ACCEPT · 매입 허용' },
-                      { value: 'REJECT', label: 'REJECT · 매입 거부' },
-                    ]}
-                  />
+                  >
+                    <Radio.Button value="ACCEPT" className="dw-choice-accept">
+                      매입 요청
+                    </Radio.Button>
+                    <Radio.Button value="REJECT" className="dw-choice-reject">
+                      승인 취소 요청
+                    </Radio.Button>
+                  </Radio.Group>
                   <Input.TextArea
                     aria-label={`${p.paymentId} 판정 사유`}
                     disabled={!editable}
@@ -210,39 +167,21 @@ export function DecisionPanel({
                     }
                     autoSize={{ minRows: 2, maxRows: 4 }}
                     maxLength={500}
-                    status={
-                      opposing && reasonLength(draft.reason) < OPPOSE_MIN_REASON
-                        ? 'warning'
-                        : undefined
-                    }
                     style={{ marginTop: 8 }}
                   />
-                  {opposing && analysis && (
-                    <Alert
-                      type="warning"
-                      showIcon
-                      style={{ marginTop: 8, fontSize: 12, padding: '6px 10px' }}
-                      message={`${sourceWith[source]} 반대되는 판정입니다 (${recommendationLabel[analysis.recommendation].label}). 직접 확인한 근거를 ${OPPOSE_MIN_REASON}자 이상 적어 주세요 — 지금 ${reasonLength(draft.reason)} / ${OPPOSE_MIN_REASON}자 (공백 제외)`}
-                    />
-                  )}
                 </>
               )}
             </div>
           )
         })}
         {editable && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <Button type="primary" disabled={blocker !== null} onClick={submit}>
               판정 확정 ({selected.length}건)
             </Button>
             {blocker === 'MISSING_REASON' && (
               <Typography.Text type="danger" style={{ fontSize: 12 }}>
                 판정을 고른 결제에 사유를 입력하세요.
-              </Typography.Text>
-            )}
-            {blocker === 'SHORT_OPPOSING_REASON' && (
-              <Typography.Text type="danger" style={{ fontSize: 12 }}>
-                권고와 반대인 판정은 사유를 {OPPOSE_MIN_REASON}자 이상(공백 제외) 입력하세요.
               </Typography.Text>
             )}
           </div>

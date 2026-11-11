@@ -7,6 +7,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import lombok.Builder;
 
 // Case 상세 — 화면 CaseDetail과 같은 모양. 결제 금액 · FDS 점수 · 보고서는 소유 담당에서 조회한 값이다
 public record CaseDetailResponse(
@@ -17,6 +18,9 @@ public record CaseDetailResponse(
         List<HandoffResponse> handoffs,
         List<HistoryResponse> history) {
 
+    // assigneeStaffId · assigneeName · assignedAt: 담당 보안 직원 (#608), 미배정이면 null
+    // assignmentChangePending: 담당 변경 요청 대기 중 — 이 동안 판정은 거부된다
+    @Builder
     public record SecurityCaseResponse(
             Long caseId,
             Long merchantId,
@@ -26,19 +30,29 @@ public record CaseDetailResponse(
             int evidenceVersion,
             Instant createdAt,
             Instant mergeUntil,
-            Instant closedAt) {
+            Instant closedAt,
+            Long assigneeStaffId,
+            String assigneeName,
+            Instant assignedAt,
+            boolean assignmentChangePending) {
 
-        public static SecurityCaseResponse from(SecurityCase securityCase, Instant mergeUntil) {
-            return new SecurityCaseResponse(
-                    securityCase.getId(),
-                    securityCase.getMerchantId(),
-                    securityCase.getCustomerRef(),
-                    securityCase.getCaseType().name(),
-                    securityCase.getStatus().name(),
-                    securityCase.getEvidenceVersion(),
-                    securityCase.getCreatedAt(),
-                    mergeUntil,
-                    securityCase.getClosedAt());
+        public static SecurityCaseResponse from(
+                SecurityCase securityCase, Instant mergeUntil, String assigneeName, boolean assignmentChangePending) {
+            return SecurityCaseResponse.builder()
+                    .caseId(securityCase.getId())
+                    .merchantId(securityCase.getMerchantId())
+                    .customerRef(securityCase.getCustomerRef())
+                    .caseType(securityCase.getCaseType().name())
+                    .status(securityCase.getStatus().name())
+                    .evidenceVersion(securityCase.getEvidenceVersion())
+                    .createdAt(securityCase.getCreatedAt())
+                    .mergeUntil(mergeUntil)
+                    .closedAt(securityCase.getClosedAt())
+                    .assigneeStaffId(securityCase.getAssigneeStaffId())
+                    .assigneeName(assigneeName)
+                    .assignedAt(securityCase.getAssignedAt())
+                    .assignmentChangePending(assignmentChangePending)
+                    .build();
         }
     }
 

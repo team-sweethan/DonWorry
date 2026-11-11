@@ -49,6 +49,8 @@ class AiToolHttpTests {
     static final String CASE_PAYMENTS = "/internal/ai/tools/get_case_payments";
     static final String FDS_EVIDENCE = "/internal/ai/tools/get_fds_evidence";
     static final String PAYMENT_HISTORY = "/internal/ai/tools/get_payment_history";
+    static final String DECISION_BASIS = "/internal/ai/tools/get_decision_basis";
+    static final String LINKED_PAYMENTS = "/internal/ai/tools/find_linked_payments";
 
     static final Instant LINKED_AT = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
@@ -105,6 +107,32 @@ class AiToolHttpTests {
                 .andExpect(jsonPath("$.payments[0].ruleHits[0].name").value("고액 결제"))
                 .andExpect(jsonPath("$.payments[0].ruleHits[0].appliedScore").value(35))
                 .andExpect(jsonPath("$.missingPaymentIds").isEmpty());
+    }
+
+    // 결제별 징후 · 정상 근거가 보고서 basis와 같은 키로 나간다 (#618) — ai-server가 그대로 싣는 계약
+    // 기준표 칸 · 권고는 나가지 않는다 (#644, ADR-0009 결정 13)
+    // 예전 영문 규칙 코드(HIGH_AMOUNT)도 같은 징후(R01 고액 결제)로 읽는다
+    @Test
+    void getDecisionBasis_responseHasSignalsAndNormalsOnly() throws Exception {
+        SecurityCase securityCase = openCase();
+        long paymentId = link(securityCase);
+        givenInfo(info(paymentId, 600_000L, 65));
+
+        mvc.perform(get(DECISION_BASIS).param("caseId", securityCase.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.caseId").value(securityCase.getId().toString()))
+                .andExpect(jsonPath("$.evidenceVersion").value(1))
+                .andExpect(jsonPath("$.source").value("P4"))
+                .andExpect(jsonPath("$.retrievedAt").isNotEmpty())
+                .andExpect(jsonPath("$.payments[0].paymentId").value(String.valueOf(paymentId)))
+                .andExpect(jsonPath("$.payments[0].basis.rule").doesNotExist())
+                .andExpect(jsonPath("$.payments[0].basis.recommendation").doesNotExist())
+                .andExpect(jsonPath("$.payments[0].basis.signals[0].key").value("R01"))
+                .andExpect(jsonPath("$.payments[0].basis.signals[0].label").value("고액 결제"))
+                .andExpect(jsonPath("$.payments[0].basis.signals[0].level").value("CAUTION"))
+                .andExpect(
+                        jsonPath("$.payments[0].basis.signals[0].checkBefore").isNotEmpty())
+                .andExpect(jsonPath("$.payments[0].basis.normals").isArray());
     }
 
     // 적중 룰의 기준값 · 실제값은 정리한 문장만 나가고 원본 JSON은 나가지 않는다 (#326)
@@ -211,6 +239,22 @@ class AiToolHttpTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lookbackDays").value(90));
         mvc.perform(get(PAYMENT_HISTORY).param("caseId", caseId).param("lookbackDays", "60"))
+                .andExpect(status().isBadRequest());
+    }
+
+    // 앞뒤 시간을 안 보내면 1시간이다 — ai-server 보고서 기본 조회는 시간 없이 부른다
+    // 질문 넓혀 보기는 nearbyHours=6 · 24, 그 밖은 400 (#751). 인자 이름은 ai-server와 같은 계약이다
+    @Test
+    void linkedPaymentsTool_nearbyHours_defaultsOneHourAndAcceptsAllowed() throws Exception {
+        String caseId = openCase().getId().toString();
+
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nearbyWindowMinutes").value(60));
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId).param("nearbyHours", "24"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nearbyWindowMinutes").value(1440));
+        mvc.perform(get(LINKED_PAYMENTS).param("caseId", caseId).param("nearbyHours", "2"))
                 .andExpect(status().isBadRequest());
     }
 

@@ -19,6 +19,25 @@
   --dw-header-height: 56px;
   --dw-sidebar-width: 220px;
   --dw-content-padding: 32px;
+  /* 글자 크기 단계 (#713). 화면 CSS는 px 대신 이 이름을 쓴다.
+     시연 화면에서 읽기 쉽게 일반 업무 화면보다 한 단계 크게 둔다. antd 기본 글자(15px)는 ManagementLayout이 정한다 */
+  --dw-text-page-title: 26px;
+  --dw-text-number: 32px;
+  --dw-text-number-sm: 26px;
+  --dw-text-heading: 18px;
+  --dw-text-body: 15px;
+  --dw-text-secondary: 14px;
+  --dw-text-caption: 13px;
+  /* 간격 · 모서리 단계 (#735). tokens.ts의 spacing · radius와 같은 값이다. 화면 CSS는 px 대신 이 이름을 쓴다 */
+  --dw-space-1: 4px;
+  --dw-space-2: 8px;
+  --dw-space-3: 12px;
+  --dw-space-4: 16px;
+  --dw-space-5: 24px;
+  --dw-space-6: 32px;
+  --dw-space-7: 48px;
+  --dw-radius-control: 6px;
+  --dw-radius-panel: 10px;
 }
 *,
 *::before,
@@ -77,7 +96,7 @@ textarea {
   line-height: 1.6;
 }
 
-/* Admin: 원본 시안 고정 규격, 1280px 미만은 가로 스크롤.
+/* 기본은 원본 시안의 1280px 규격. 좁은 화면은 아래 screen 미디어쿼리에서 덮는다.
    헤더·사이드바는 fixed가 아닌 sticky — fixed면 가로 스크롤 시 헤더 오른쪽(로그아웃)이 잘린 채 남는다. */
 .admin-viewport {
   display: grid;
@@ -95,21 +114,14 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--dw-border);
-  background: white;
+  border-bottom: 1px solid;
 }
 .dw-brand {
-  width: var(--dw-sidebar-width);
-  flex: 0 0 var(--dw-sidebar-width);
   height: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-left: 28px;
   color: #13204a;
-  font-size: 23px;
   font-weight: 800;
-  letter-spacing: -1.2px;
   text-decoration: none;
 }
 .dw-header-center {
@@ -132,10 +144,8 @@ textarea {
 .dw-role-pill {
   padding: 4px 8px;
   border-radius: 4px;
-  background: #eff6ff;
-  color: #2563eb;
   font-weight: 700;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   white-space: nowrap;
 }
 .dw-header .ant-btn {
@@ -171,8 +181,6 @@ textarea {
   height: 28px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: #eff6ff;
-  color: #2563eb;
 }
 .dw-account-chevron {
   color: #64748b;
@@ -205,49 +213,26 @@ textarea {
   position: sticky;
   top: var(--dw-header-height);
   height: calc(100vh - var(--dw-header-height));
-  background: var(--dw-sidebar);
   display: flex;
   flex-direction: column;
-  color: #e2e8f0;
   overflow-y: auto;
   z-index: 90;
-  padding: 22px 12px 16px;
-}
-.dw-nav-group {
-  margin-bottom: 21px;
 }
 .dw-nav-heading {
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #95a5ca;
-  margin: 0 12px 8px;
 }
 .dw-nav-link {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 13px;
-  border-radius: 5px;
-  color: #c8d5ee;
   text-decoration: none;
-  font-size: 13px;
+  font-size: var(--dw-text-secondary);
   font-weight: 550;
   transition:
     background 0.15s,
     color 0.15s;
-}
-.dw-nav-link:hover {
-  color: white;
-  background: #20366b;
-}
-.dw-nav-link.active {
-  color: white;
-  background: #24387a;
-  box-shadow: inset 3px 0 0 #e2bc66;
-  font-weight: 650;
 }
 .dw-nav-badge {
   margin-left: auto;
@@ -257,7 +242,7 @@ textarea {
   border-radius: 10px;
   background: #fbbf24;
   color: #1e293b;
-  font-size: 11px;
+  font-size: var(--dw-text-caption);
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -267,9 +252,23 @@ textarea {
   padding: var(--dw-content-padding);
   background: var(--dw-canvas);
 }
+/* 본문 배경도 역할마다 다르다 (#713). 값은 아래 역할별 바깥 틀의 --shell-canvas */
+.admin-viewport[data-role] .dw-main {
+  background: var(--shell-canvas);
+}
 .dw-container {
   max-width: 1720px;
   margin: 0 auto;
+}
+/* 관리자 · 보안 직원 본문 폭 (#735). 상위 탭 줄 · 페이지 제목 · 본문이 같은 바깥 틀(.dw-container)을 쓰므로
+   폭은 여기 한 곳에서만 정한다. 화면별 wrapper에서 다시 좁히지 않는다 (탭을 옮겨도 폭 · 좌우 기준선이 같게).
+   1920 창에서도 양옆이 크게 비지 않고, 1440 이하에서는 사용 가능한 폭을 그대로 채운다 */
+.admin-viewport[data-role='admin'] .dw-container,
+.admin-viewport[data-role='security'] .dw-container {
+  max-width: var(--dw-page-width);
+}
+[data-role='owner'] .dw-container {
+  max-width: 1400px;
 }
 .dw-page-header {
   display: flex;
@@ -281,16 +280,29 @@ textarea {
 }
 .dw-page-title {
   margin: 0 0 6px;
-  font-size: 24px;
+  font-size: var(--dw-text-page-title);
   font-weight: 750;
   letter-spacing: -0.7px;
   line-height: 1.35;
   color: #0f172a;
 }
+/* 제목 앞 역할 색 선 (#713). 제목을 flex로 바꾸지 않고 덧붙여 화면별 제목 덮어쓰기와 부딪히지 않게 한다.
+   높이는 글자 크기 기준이라 제목을 28px로 키운 화면에서도 맞는다. */
+.admin-viewport[data-role] .dw-page-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 0.8em;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--shell-strong);
+  vertical-align: -0.06em;
+}
+/* 본문 배경 위 작은 회색 글자는 #64748b면 4.5:1에 못 미친다 (#713) */
 .dw-page-description {
   margin: 0;
-  font-size: 13px;
-  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  color: #5f6b7f;
   line-height: 1.5;
 }
 .dw-page-actions {
@@ -300,9 +312,18 @@ textarea {
   flex-shrink: 0;
 }
 .dw-section-title {
-  font-size: 16px;
+  font-size: var(--dw-text-heading);
   font-weight: 750;
   letter-spacing: -0.3px;
+}
+/* 글자 크기 단계를 화면 코드에서 쓸 때 (#713) */
+.dw-caption {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.dw-number-sm {
+  font-size: var(--dw-text-number-sm);
+  font-weight: 700;
 }
 .dw-panel {
   border: 1px solid var(--dw-border);
@@ -475,10 +496,106 @@ textarea {
   justify-content: flex-end;
   margin-top: 1px;
 }
-.dw-section-grid {
+/* Case 상세 (#648) — 왼쪽 본문 · 오른쪽 판정 칸 고정. 본문 폭이 좁으면(1280px 화면 등) 한 줄로 쌓고
+   판정 칸을 결제 표 바로 아래에 둔다. 사이드바 접힘과 본문 내부 스크롤에 맞춰 본문 폭으로 나눈다 */
+.dw-case-layout-wrap {
+  container-type: inline-size;
+}
+.dw-case-layout {
   display: grid;
-  grid-template-columns: 1.25fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'pay side'
+    'main side';
   gap: 20px;
+  align-items: start;
+}
+.dw-case-pay {
+  grid-area: pay;
+  min-width: 0;
+}
+.dw-case-main {
+  grid-area: main;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.dw-case-side {
+  grid-area: side;
+  position: sticky;
+  top: calc(var(--dw-header-height) + 16px);
+  max-height: calc(100vh - var(--dw-header-height) - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@container (max-width: 1039px) {
+  .dw-case-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'pay'
+      'side'
+      'main';
+  }
+  .dw-case-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+/* 판정 선택 (#648) — ACCEPT · REJECT를 붙이지 않고 조금 띄운다. 고른 쪽은 초록(매입) / 빨강(거부) */
+.dw-decision-choice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.dw-decision-choice .ant-radio-button-wrapper {
+  border-radius: 6px;
+  border-inline-start-width: 1px;
+}
+.dw-decision-choice .ant-radio-button-wrapper::before {
+  display: none;
+}
+.dw-decision-choice
+  .dw-choice-accept.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #15803d;
+  font-weight: 700;
+}
+.dw-decision-choice
+  .dw-choice-reject.ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled) {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 700;
+}
+.dw-case-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 32px;
+}
+.dw-case-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.dw-case-fact-label {
+  color: #64748b;
+  font-size: 12px;
+}
+.dw-case-fact-value {
+  color: #0f172a;
+  font-weight: 600;
+}
+.dw-case-fact-sub {
+  color: #64748b;
+  font-weight: 400;
 }
 .dw-info-list {
   display: grid;
@@ -519,19 +636,56 @@ textarea {
   padding: 24px 16px 32px;
   text-align: center;
 }
+/* 동전이가 없는 빈 목록의 아이콘. 바깥 틀 밖(공개 화면)에서는 파랑으로 보인다 (#713) */
+.dw-list-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--shell-tint, #eaf2ff);
+  color: var(--shell-ink, #1e4f94);
+  font-size: 22px;
+}
 .dw-list-empty h2 {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: #0f172a;
-  font-size: 18px;
+  font-size: var(--dw-text-heading);
   font-weight: 700;
 }
 .dw-list-empty p {
+  max-width: 60ch;
   margin: 0;
-  color: #64748b;
-  font-size: 14px;
+  color: #5f6b7f;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.6;
 }
 .dw-list-empty-action {
   margin-top: 12px;
+}
+/* 처음 불러오는 동안의 표 모양 자리 (ListLoading) */
+.dw-list-loading {
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+}
+.dw-list-loading-row {
+  display: grid;
+  gap: 16px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  border-top: 1px solid #f0f0f0;
+}
+.dw-list-loading-row:first-child {
+  border-top: 0;
+}
+.dw-list-loading .ant-skeleton.ant-skeleton-element {
+  display: block;
+}
+/* 본문 위 안내 줄(Alert) 아래 여백 (#713). 화면마다 inline으로 주지 않는다 */
+.dw-page-alert {
+  margin-bottom: 16px;
 }
 /* 로그인은 작은 화면에서도 가로 스크롤 없이 표시한다. */
 .dw-login-shell {
@@ -708,13 +862,17 @@ textarea {
   color: #64748b;
 }
 
-/* ── 역할별 바깥 틀 (#399) ──────────────────────────────────────────
-   헤더 · 사이드바 · 메뉴 강조만 역할마다 다르게 한다.
-   업무 화면 본문, 대표 색(--dw-primary), 버튼은 건드리지 않는다.
-   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 금색 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
+/* ── 역할별 바깥 틀 (#399) — 관리 화면 틀은 항상 data-role이 붙는다. 색 · 간격은 여기서만 정한다 ──────────────────────────────────────────
+   헤더 · 사이드바 · 메뉴 강조를 역할마다 다르게 한다.
+   #713: 시연 때 처음 보는 사람이 역할을 구분하도록 본문 배경 · 제목 앞 선 · 선택된 탭 · 안내 칸까지 역할 색을 넣는다.
+   대표 색(--dw-primary, antd colorPrimary)과 버튼 · 링크 파랑, 상태 색(위험 · 대기 · 완료)은 세 역할 공통이다.
+   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 보라 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
 .admin-viewport[data-role] {
   --dw-header-height: 64px;
   --dw-sidebar-width: 236px;
+  /* 본문 최대 폭 · 안쪽 생성 폼 폭 (#735) */
+  --dw-page-width: 1520px;
+  --dw-form-width: 640px;
   --shell-sidebar: #172554;
   --shell-text: #c9d6f0;
   --shell-muted: #a1b3d7;
@@ -727,18 +885,29 @@ textarea {
   --shell-ink: #1e4f94;
   --shell-header: #f8faff;
   --shell-header-line: #dce5f4;
+  /* 본문 배경 · 제목 앞 선 · 선택된 탭 글자와 밑줄 · 옅은 안내 칸 */
+  --shell-canvas: #f5f7fb;
+  --shell-strong: #2563eb;
+  --shell-tab: #2563eb;
+  --shell-panel: #f5f8ff;
+  --shell-panel-line: #dce7f8;
 }
 .admin-viewport[data-role='admin'] {
   --shell-sidebar: #24272e;
   --shell-text: #d6d8df;
   --shell-muted: #a7abb6;
-  --shell-active: #3a372f;
-  --shell-active-text: #ffe2a1;
-  --shell-accent: #e9bd65;
-  --shell-tint: #f8f1e2;
-  --shell-ink: #6f4c12;
-  --shell-header: #fffdfa;
-  --shell-header-line: #e8e1d5;
+  --shell-active: #3a3350;
+  --shell-active-text: #e6dcff;
+  --shell-accent: #a78bfa;
+  --shell-tint: #efe9fd;
+  --shell-ink: #5b35b0;
+  --shell-header: #fdfcff;
+  --shell-header-line: #e4def2;
+  --shell-canvas: #f5f4f9;
+  --shell-strong: #7c3aed;
+  --shell-tab: #6d28d9;
+  --shell-panel: #f8f6fd;
+  --shell-panel-line: #e4dcf5;
 }
 .admin-viewport[data-role='owner'] {
   --shell-sidebar: #fffcf5;
@@ -754,6 +923,84 @@ textarea {
   --shell-ink: #6f4c0f;
   --shell-header: #fffefa;
   --shell-header-line: #ebe3d2;
+  --shell-canvas: #faf8f2;
+  --shell-strong: #a8740f;
+  --shell-tab: #8a5f0c;
+  --shell-panel: #fbf6ea;
+  --shell-panel-line: #ebe3d2;
+}
+
+/* 상태 태그 — 관리 화면 세 역할 공통 (Linear 참고, 이용 신청 시안 A).
+   색 이름이 있는 태그(상태)는 바탕 없이 아이콘 + 글자. 색 뜻: 대기 점선 원(노랑) · 완료 체크(초록) · 위험 느낌표(빨강) ·
+   진행 반쯤 찬 원(파랑) · 시작 전 빈 원(color="default") · 보라는 점.
+   색을 안 준 태그와 color="#hex" 태그는 상태가 아니라 이름표라 옅은 회색 바탕 그대로 둔다.
+   사장님 홈 연동 칸(.oh-section-heading, #721)은 알약 모양을 일부러 쓰므로 아이콘 규칙에서 뺀다. */
+.admin-viewport[data-role] .ant-tag:not(.oh-section-heading .ant-tag) {
+  margin-inline-end: 6px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 5px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.admin-viewport[data-role]
+  .ant-tag[class*='ant-tag-']:not(
+    .ant-tag-has-color,
+    .ant-tag-hidden,
+    .oh-section-heading .ant-tag
+  ) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.admin-viewport[data-role]
+  .ant-tag[class*='ant-tag-']:not(
+    .ant-tag-has-color,
+    .ant-tag-hidden,
+    .oh-section-heading .ant-tag
+  )::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: var(--tag-icon, none) center / contain no-repeat;
+}
+.admin-viewport[data-role] .ant-tag-default {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%2394a3b8' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-gold, .ant-tag-orange, .ant-tag-yellow, .ant-tag-warning) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%23d97706' stroke-width='1.5' stroke-dasharray='2.2 1.6'/%3E%3Ccircle cx='7' cy='7' r='2' fill='%23d97706'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-green, .ant-tag-lime, .ant-tag-success) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='6.25' fill='%2316a34a'/%3E%3Cpath d='M4.3 7.2l1.8 1.8 3.6-3.8' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] :is(.ant-tag-red, .ant-tag-volcano, .ant-tag-magenta, .ant-tag-error) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='6.25' fill='%23dc2626'/%3E%3Cpath d='M7 3.9v3.6' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3Ccircle cx='7' cy='9.9' r='0.95' fill='white'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role]
+  :is(.ant-tag-blue, .ant-tag-geekblue, .ant-tag-cyan, .ant-tag-processing) {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='5.5' fill='none' stroke='%232563eb' stroke-width='1.5'/%3E%3Cpath d='M7 3.5a3.5 3.5 0 0 1 0 7z' fill='%232563eb'/%3E%3C/svg%3E");
+}
+.admin-viewport[data-role] .ant-tag-purple {
+  --tag-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='3.5' fill='%237c3aed'/%3E%3C/svg%3E");
+}
+
+/* 선택된 탭 — antd는 글자 · 밑줄 모두 colorPrimary라, 둘 다 같이 역할 색으로 덮는다 (#713).
+   모달처럼 바깥 틀 밖(포털)에 그려지는 탭은 그대로 파랑이다. */
+.admin-viewport[data-role] .ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--shell-tab);
+}
+.admin-viewport[data-role] .ant-tabs .ant-tabs-ink-bar {
+  background: var(--shell-tab);
 }
 
 /* 헤더 */
@@ -854,6 +1101,52 @@ textarea {
 }
 .admin-viewport[data-role='owner'] .dw-nav-link.active .dw-nav-icon {
   color: var(--shell-ink);
+}
+
+/* 탭으로 합친 메뉴의 본문 위 탭 줄 (ADR-0082 8절). 선택 색은 화면 안 antd 탭과 같은 --shell-tab (#713) */
+.dw-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--dw-border);
+}
+.dw-page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: #475569;
+  font-size: var(--dw-text-secondary);
+  font-weight: 550;
+  text-decoration: none;
+}
+.dw-page-tab:hover {
+  color: var(--shell-tab, #2563eb);
+}
+.dw-page-tab.active {
+  border-bottom-color: var(--shell-tab, #2563eb);
+  color: var(--shell-tab, #2563eb);
+  font-weight: 700;
+}
+.dw-page-tab:focus-visible {
+  outline: 2px solid var(--shell-tab, #2563eb);
+  outline-offset: -2px;
+}
+.dw-page-tab-badge {
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #fbbf24;
+  color: #1e293b;
+  font-size: var(--dw-text-caption);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 
 /* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
@@ -1004,47 +1297,6 @@ textarea {
   outline: none;
 }
 
-/* 휴대폰 폭: 기존에 휴대폰 배치를 지원하는 화면(이용 신청 · 사장님 홈)에서만 메뉴를 가로로 접는다 */
-@media (max-width: 760px) {
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand {
-    padding: 0;
-    gap: 8px;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-context {
-    margin-left: 0;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-header-tools {
-    min-width: 0;
-    max-width: 100%;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-sidebar {
-    padding: 10px 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--shell-line);
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-owner-note {
-    display: none;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-group {
-    margin: 0;
-    flex-shrink: 0;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link {
-    width: auto;
-    margin: 0;
-    gap: 8px;
-    white-space: nowrap;
-  }
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-nav-link.active {
-    box-shadow: inset 0 -3px 0 var(--shell-accent);
-  }
-}
-@media (max-width: 400px) {
-  /* 아주 좁은 폭에서는 로고 글자를 빼고 화면 이름을 남긴다 */
-  .admin-viewport[data-role]:is(.application-review-viewport, :has(.oh-home)) .dw-brand-wordmark {
-    display: none;
-  }
-}
 @media (max-height: 820px) {
   /* 노트북 화면처럼 세로가 짧으면 메뉴가 먼저 보이게 마스코트를 뺀다 */
   .dw-owner-note-mascot {
@@ -1080,4 +1332,172 @@ textarea {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* 넓은 화면과 인쇄에서는 래퍼가 기존 flex 배치에 상자를 추가하지 않는다. */
+.dw-report-scroll {
+  display: contents;
+}
+
+/* 기존 유동 폭 화면은 스크롤바 gutter로 가용 폭이 1280px보다 작아져도 늘리지 않는다. */
+@media screen and (width >= 1280px) {
+  .admin-viewport:has(.oh-home, .ah-home, .application-review) {
+    min-width: 0;
+  }
+}
+
+/* #703: 가로 스크롤은 업무 본문 안에 둔다. */
+@media screen and (width < 1280px) {
+  .admin-viewport[data-role] {
+    min-width: 0;
+    --dw-content-padding: 24px;
+  }
+  .admin-viewport[data-role] .dw-header-center {
+    min-width: 0;
+  }
+  .admin-viewport[data-role] .dw-last-login {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-main:not(:has(.dw-report-print)) {
+    overflow-x: auto;
+  }
+  /* 판정 줄은 스크롤 영역의 형제로 남겨 viewport 기준 sticky를 유지한다. */
+  .dw-report-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .dw-report-scroll > * {
+    min-width: 960px;
+  }
+  .admin-viewport[data-role] .dw-page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .admin-viewport[data-role] .dw-page-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .admin-viewport[data-role] .ant-space-horizontal {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role] .ant-table-wrapper {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .admin-viewport[data-role] .ant-table-content {
+    overflow-x: auto;
+  }
+  .admin-viewport[data-role] .ant-table-content > table {
+    min-width: 640px;
+  }
+  /* 거래 내역·Case·보고서는 열 사이 관계를 유지한다. 표의 기존 스크롤도 그대로 둔다. */
+  .admin-viewport[data-role] .dw-container:has(.dw-tx-table, .dw-case-layout-wrap) {
+    min-width: 960px;
+  }
+  /* main이 가로 스크롤 영역이라 판정 칸 sticky가 창을 따라오지 못한다.
+     사이드바를 접어 본문이 1040px을 넘어도 펼친 상태와 같이 한 줄로 쌓는다. */
+  .admin-viewport[data-role] .dw-case-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'pay'
+      'side'
+      'main';
+  }
+  .admin-viewport[data-role] .dw-case-side {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media screen and (width <= 760px) {
+  .admin-viewport[data-role] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    --dw-content-padding: 16px;
+  }
+  .admin-viewport[data-role] .dw-header {
+    position: static;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-brand {
+    flex: 0 0 auto;
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    padding: 0;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-brand-context {
+    margin-left: 0;
+  }
+  .admin-viewport[data-role] .dw-header-center {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-header-tools {
+    min-width: 0;
+    max-width: 100%;
+    padding: 0;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .admin-viewport[data-role] .dw-account-menu .dw-user-name {
+    max-width: 110px;
+  }
+  .admin-viewport[data-role] .dw-sidebar {
+    position: static;
+    height: auto;
+    min-width: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--shell-line);
+  }
+  .admin-viewport[data-role] .dw-sidebar nav {
+    display: flex;
+    gap: 8px;
+  }
+  .admin-viewport[data-role] .dw-nav-group {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+    margin: 0;
+  }
+  .admin-viewport[data-role] .dw-nav-heading,
+  .admin-viewport[data-role] .dw-sidebar-top,
+  .admin-viewport[data-role] .dw-owner-note {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-nav-link {
+    width: auto;
+    margin: 0;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .admin-viewport[data-role] .dw-nav-link.active {
+    box-shadow: inset 0 -3px 0 var(--shell-accent);
+  }
+  .admin-viewport[data-role] .dw-main {
+    padding: 24px 16px;
+  }
+  .admin-viewport[data-role] .dw-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-viewport[data-role] .ant-card-head-title {
+    white-space: normal;
+  }
+  .admin-viewport[data-role] .ant-card-head-wrapper {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }

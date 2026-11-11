@@ -85,5 +85,83 @@
     },
     "device": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
     "ip": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0}
+  },
+  "decisionBasis": {
+    "caseId": "201",
+    "evidenceVersion": 1,
+    "source": "P4",
+    "retrievedAt": "2026-10-27T12:10:00Z",
+    "payments": [
+      {
+        "paymentId": "9301",
+        "basis": {
+          "signals": [
+            {
+              "key": "R08",
+              "label": "거절 후 재시도",
+              "detail": null,
+              "level": "HIGH_RISK",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "카드사에 거절 사유 확인"
+            },
+            {
+              "key": "R03",
+              "label": "신규 카드",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "새로 추가한 본인 카드인지 카드사에 승인 내역 확인"
+            },
+            {
+              "key": "LINKED_CARD",
+              "label": "이 사건 결제 중 같은 카드를 다른 고객이 사용",
+              "detail": "최근 30일 다른 고객 여러 명 · 그 결제 중 카드사 거절 있음",
+              "level": "HIGH_RISK",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "가족처럼 카드를 함께 쓰는 사이인지 확인"
+            }
+          ],
+          "normals": []
+        }
+      },
+      {
+        "paymentId": "9302",
+        "basis": {
+          "signals": [
+            {
+              "key": "R08",
+              "label": "거절 후 재시도",
+              "detail": null,
+              "level": "HIGH_RISK",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "카드사에 거절 사유 확인"
+            },
+            {
+              "key": "R04",
+              "label": "단시간 반복 결제",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": "거절 후 재시도",
+              "checkBefore": "한 주문을 나눠 낸 결제인지 주문 내역 확인"
+            },
+            {
+              "key": "LINKED_CARD",
+              "label": "이 사건 결제 중 같은 카드를 다른 고객이 사용",
+              "detail": "최근 30일 다른 고객 여러 명 · 그 결제 중 카드사 거절 있음",
+              "level": "HIGH_RISK",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "가족처럼 카드를 함께 쓰는 사이인지 확인"
+            }
+          ],
+          "normals": []
+        }
+      }
+    ]
   }
 }

@@ -4,6 +4,7 @@ import com.donworry.fds.api.FdsRuleChangeRequestPage;
 import com.donworry.fds.api.FdsRuleChangeRequestStatus;
 import com.donworry.fds.api.FdsRulePolicyChangeHistoryPage;
 import com.donworry.fds.api.FdsRulePolicySummary;
+import com.donworry.fds.api.InsiderRule;
 import com.donworry.fds.entity.FdsRuleChangeRequest;
 import com.donworry.fds.entity.FdsRulePolicyChangeHistory;
 import com.donworry.fds.repository.FdsRuleChangeRequestRepository;
@@ -11,6 +12,7 @@ import com.donworry.fds.repository.FdsRulePolicyChangeHistoryRepository;
 import com.donworry.fds.repository.FdsRulePolicyRepository;
 import com.donworry.identity.api.CurrentStaff;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -29,8 +31,11 @@ public class FdsRuleManagementService {
     private final FdsRulePolicyChangeHistoryRepository histories;
     private final CurrentStaff currentStaff;
 
+    // 내부자 규칙의 켜짐 · 꺼짐은 관리자에게만 준다 (#688 Codex 보안 리뷰) — 감시 대상인 보안 직원이 꺼진 규칙을 골라 피하지 못하게
     public List<FdsRulePolicySummary> policies() {
+        boolean admin = "ADMIN".equals(requireCurrent().role());
         return policies.findAll().stream()
+                .filter(policy -> admin || !isInsiderRule(policy.getRuleCode()))
                 .map(policy -> new FdsRulePolicySummary(
                         policy.getRuleCode(),
                         policy.isActive(),
@@ -42,6 +47,7 @@ public class FdsRuleManagementService {
     public void requestDisable(String ruleCode, String reason) {
         var actor = requireRole("SECURITY_STAFF");
         var policy = policyForUpdate(ruleCode);
+        rejectInsiderRule(policy);
         if (!policy.isActive()) throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 꺼진 룰입니다.");
         if (requests.existsByRuleCodeAndStatus(ruleCode, FdsRuleChangeRequest.Status.PENDING)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 승인 대기 중인 요청이 있습니다.");
@@ -57,6 +63,7 @@ public class FdsRuleManagementService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "권한이 없습니다.");
         }
         var policy = policyForUpdate(ruleCode);
+        if ("SECURITY_STAFF".equals(actor.role())) rejectInsiderRule(policy);
         if ("SECURITY_STAFF".equals(actor.role()) && policy.isActive()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 켜진 룰입니다.");
         }
@@ -148,6 +155,19 @@ public class FdsRuleManagementService {
             histories.save(FdsRulePolicyChangeHistory.approvedDisable(
                     request, actor.userId(), displayName(actor), reviewedAt));
         }
+    }
+
+    // 내부자 규칙은 보안 직원 본인을 감시한다 — 끄기 요청 · 다시 켜기 모두 관리자만 한다 (#685, ADR-0082)
+    // 입력 문자열이 아니라 DB에서 찾은 정본 코드로 본다 (#688 Codex 리뷰) — DB 비교는 대소문자를 가리지 않아 ins_03으로도 INS_03이 잡힌다
+    private void rejectInsiderRule(com.donworry.fds.entity.FdsRulePolicy policy) {
+        if (isInsiderRule(policy.getRuleCode())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "내부자 규칙은 관리자만 바꿀 수 있습니다.");
+        }
+    }
+
+    // 저장된 정본 코드(INS_0x)로만 부른다
+    private static boolean isInsiderRule(String storedRuleCode) {
+        return Arrays.stream(InsiderRule.values()).anyMatch(rule -> rule.name().equals(storedRuleCode));
     }
 
     private com.donworry.identity.api.StaffSummary requireRole(String role) {

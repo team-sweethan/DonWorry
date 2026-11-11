@@ -1,3 +1,4 @@
+import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
 import { useCallback, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -22,6 +23,7 @@ import {
   FinanceLoading,
   FinancePeriodControl,
   FinanceRefresh,
+  FinanceStaleNotice,
 } from './FinanceControls'
 import {
   MAX_FINANCE_AMOUNT,
@@ -72,8 +74,9 @@ function InitialBalance({
         오늘 지급된 정산·완료 지출을 시작 잔액에 중복 포함하지 마세요.
       </p>
       {error !== null && <Alert type="error" message={financeErrorMessage(error)} />}
-      <Form<{ openingBalance: number }>
+      <Form<{ openingBalance: number; minimumOperatingFunds: number }>
         layout="vertical"
+        initialValues={{ minimumOperatingFunds: 0 }}
         disabled={busy}
         onFinish={async (value) => {
           if (busy) return
@@ -82,6 +85,7 @@ function InitialBalance({
           try {
             const saved = await saveCashFlowSettings({
               openingBalance: value.openingBalance,
+              minimumOperatingFunds: value.minimumOperatingFunds,
               baseDate: today,
             })
             onSaved(saved)
@@ -112,8 +116,25 @@ function InitialBalance({
             disabled={busy}
           />
         </Form.Item>
+        <Form.Item
+          name="minimumOperatingFunds"
+          label="최소 운영 자금 (원)"
+          extra="예상 마감 잔액이 이 금액보다 낮으면 경고해요. 잔액·지출 설정에서 변경할 수 있어요."
+          rules={[{ required: true }, { type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
+        >
+          <InputNumber
+            aria-label="최소 운영 자금"
+            className="finance-money-input"
+            formatter={formatWonInput}
+            parser={parseWonInput}
+            suffix="원"
+            min={0}
+            max={MAX_FINANCE_AMOUNT}
+            precision={0}
+          />
+        </Form.Item>
         <Button type="primary" htmlType="submit" loading={busy}>
-          최초 잔액 저장
+          잔액 설정 저장
         </Button>
       </Form>
     </section>
@@ -133,7 +154,15 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
   const refresh = useCallback(() => setRevision((n) => n + 1), [])
   const settingsLoad = useCallback((signal: AbortSignal) => getCashFlowSettings(signal), [])
   const settings = useFinanceResource(`settings:${today}:${revision}`, settingsLoad)
-  const setting = settings.status === 'success' ? settings.data : undefined
+  // 새로고침 동안에도 마지막 설정을 유지해 예측 화면이 비었다 다시 그려지지 않게 한다 (#803)
+  const setting =
+    settings.status === 'success'
+      ? settings.data
+      : settings.status === 'loading'
+        ? settings.stale
+        : undefined
+  // 설정을 바꾸는 창과 그 버튼은 지금처럼 새로 받은 설정으로만 연다
+  const freshSetting = settings.status === 'success' ? settings.data : undefined
   const valid =
     validFinancePeriod(period) &&
     period.to <= dayjs(today).add(365, 'day').format('YYYY-MM-DD') &&
@@ -150,9 +179,31 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
     load,
     valid && !!setting,
   )
-  const result = forecast.status === 'success' ? forecast.data.forecast : null
-  const view = forecast.status === 'success' ? forecast.data.view : null
-  const active = result?.days.find((d) => d.date === details)
+  // 다시 조회하는 동안 마지막 예측을 남긴다. 기간이 바뀐 조회면 흐리게 하고 조작을 막는다.
+  const shownForecast =
+    forecast.status === 'success'
+      ? forecast.data
+      : forecast.status === 'loading'
+        ? forecast.stale
+        : undefined
+  const changingPeriod =
+    forecast.status === 'loading' &&
+    !!shownForecast &&
+    (shownForecast.forecast.from !== period.from || shownForecast.forecast.to !== period.to)
+  const result = shownForecast?.forecast ?? null
+  const excludedIncome = result
+    ? [
+        { label: '일정 미정', amount: result.undatedIncome },
+        { label: '지난 배치 미완료', amount: result.overdueIncome },
+        { label: '취소', amount: result.canceledIncome },
+      ]
+        .filter(({ amount }) => amount !== 0)
+        .map(({ label, amount }) => `${label} ${money(amount)}`)
+    : []
+  const view = shownForecast?.view ?? null
+  // 계산 내역 창은 기존(dev)처럼 조회가 끝난 결과에서만 연다. 다시 조회하는 동안에는 잠시 닫혔다가 결과가 오면 다시 열린다
+  const active =
+    forecast.status === 'success' ? result?.days.find((d) => d.date === details) : undefined
   const preset = (days: number) =>
     setPeriod({
       from: today,
@@ -166,20 +217,24 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         title="자금 현황"
         description="실제 완료 기록과 등록한 정산·지출로 앞으로의 잔액을 확인합니다."
         actions={
-          <FinanceRefresh
-            at={forecast.lastSuccess ?? settings.lastSuccess}
-            loading={settings.status === 'loading' || forecast.status === 'loading'}
-            onRefresh={refresh}
-          />
+          <div className="finance-header-actions">
+            <FinanceGuide page="funds" />
+            <FinanceRefresh
+              at={forecast.lastSuccess ?? settings.lastSuccess}
+              loading={settings.status === 'loading' || forecast.status === 'loading'}
+              onRefresh={refresh}
+            />
+          </div>
         }
       />
       <Alert
         type="info"
         showIcon
         message="지급·지출 기록으로 계산한 잔액"
+        className="finance-intro-alert"
         description="은행 계좌를 조회하는 기능이 아닙니다. 환불 회수를 차감한 실제 지급액만 입금으로 간주하고, 실제 지출 완료 기록을 현재 잔액에서 차감합니다."
       />
-      <div className="finance-period">
+      <div className="finance-period" data-guide="finance-period">
         <Button onClick={() => preset(7)}>앞으로 7일</Button>
         <Button onClick={() => preset(30)}>앞으로 30일</Button>
         <Button
@@ -200,7 +255,12 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         min={setting?.baseDate}
         max={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
         actions={
-          <Button type="primary" disabled={!setting} onClick={() => setManage(true)}>
+          <Button
+            data-guide="finance-settings"
+            type="primary"
+            disabled={!freshSetting}
+            onClick={() => setManage(true)}
+          >
             잔액·지출 설정
           </Button>
         }
@@ -220,7 +280,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         />
       )}
       {settings.status === 'error' && <FinanceFailure error={settings.error} onRetry={refresh} />}
-      {settings.status === 'loading' && <FinanceLoading />}
+      {settings.status === 'loading' && !setting && <FinanceLoading />}
       {settings.status === 'success' && setting === null && !savedInitialBalance && (
         <InitialBalance
           today={today}
@@ -231,9 +291,16 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
         />
       )}
       {forecast.status === 'error' && <FinanceFailure error={forecast.error} onRetry={refresh} />}
-      {forecast.status === 'loading' && <FinanceLoading />}
+      {forecast.status === 'loading' && !shownForecast && <FinanceLoading />}
+      {changingPeriod && <FinanceStaleNotice />}
       {result && view && (
-        <>
+        <div
+          // 같은 기간 새로고침은 보던 상태(선택 등)를 유지하고, 다른 기간 결과가 오면 새로 시작한다
+          key={`${result.from}:${result.to}`}
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
+          aria-busy={forecast.status === 'loading'}
+          inert={forecast.status === 'loading'}
+        >
           {!result.batchEnabled && (
             <Alert
               type="warning"
@@ -241,11 +308,13 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               description="예상 유입은 서버에 설정된 배치가 실행된다는 가정입니다. 실제 지급을 보장하지 않습니다."
             />
           )}
-          <Alert
-            type="info"
-            message="예측에서 제외한 정산"
-            description={`일정 미정 ${money(result.undatedIncome)} · 지난 배치 미완료 ${money(result.overdueIncome)} · 취소 ${money(result.canceledIncome)}. 지난 예정일의 미완료 지출은 자동 차감하거나 오늘로 이월하지 않습니다.`}
-          />
+          {excludedIncome.length > 0 && (
+            <Alert
+              type="info"
+              message="예측에서 제외한 정산"
+              description={excludedIncome.join(' · ')}
+            />
+          )}
           <CashFlowOverview
             {...view}
             graphDate={graphDate}
@@ -286,12 +355,12 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
               </ul>
             </details>
           )}
-        </>
+        </div>
       )}
       <FinanceExpenseManager
         open={manage}
         onClose={() => setManage(false)}
-        settings={setting ?? undefined}
+        settings={freshSetting ?? undefined}
         today={today}
         revision={revision}
         onChanged={refresh}
@@ -363,6 +432,18 @@ function ConnectedSettlements() {
     [monthFrom, today],
   )
   const month = useFinanceResource(`month:${today}:${revision}`, monthLoad)
+  // 다시 조회하는 동안에는 마지막 결과를 그대로 두어 화면이 비었다 다시 그려지지 않게 한다 (#803).
+  // 기간이 바뀐 조회라면 이전 기간의 숫자이므로 흐리게 하고 조작을 막는다. 같은 기간 새로고침은 버튼 로딩만 보인다.
+  const shown =
+    resource.status === 'success'
+      ? resource.data
+      : resource.status === 'loading'
+        ? resource.stale
+        : undefined
+  const changingPeriod =
+    resource.status === 'loading' &&
+    !!shown &&
+    (shown.report.from !== period.from || shown.report.to !== period.to)
   const mismatch =
     resource.status === 'success' &&
     month.status === 'success' &&
@@ -397,11 +478,11 @@ function ConnectedSettlements() {
   )
   return (
     <div className="finance-preview finance-connected">
-      {resource.status !== 'success' && (
+      {!shown && (
         <>
           <PageHeader
             title="정산 내역"
-            description="매입일 기준 영업일 D+3 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
             actions={actions}
           />
           {periodControls}
@@ -412,35 +493,48 @@ function ConnectedSettlements() {
           <Alert type="warning" message="올바른 날짜로 최대 366일을 선택해 주세요." />
         </>
       )}
-      {resource.status === 'loading' && <FinanceLoading />}
+      {resource.status === 'loading' && !shown && <FinanceLoading />}
       {resource.status === 'error' && <FinanceFailure error={resource.error} onRetry={refresh} />}
-      {resource.status === 'success' && (
-        <>
+      {shown && (
+        <div
+          // 같은 기간 새로고침은 보던 보기 · 페이지 · 검색 · 필터를 유지하고, 다른 기간 결과가 오면 새로 시작한다
+          key={`${shown.report.from}:${shown.report.to}`}
+          className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
+          aria-busy={resource.status === 'loading'}
+        >
           <SettlementPrototype
+            resultsPending={resource.status === 'loading'}
             todayValue={today}
             period={period}
             onPeriodChange={setPeriod}
             graphDate={graphDate}
             onGraphDateChange={setGraphDate}
             headerActions={actions}
-            actualEntries={resource.data.entries}
-            payoutReport={resource.data.report}
+            actualEntries={shown.entries}
+            payoutReport={shown.report}
             periodControls={periodControls}
             notice={
-              resource.data.report.undatedAmount > 0 ? (
-                <Alert
-                  type="info"
-                  message={`일정이 없는 예정 정산 ${money(resource.data.report.undatedAmount)}`}
-                  description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
-                />
-              ) : undefined
+              <>
+                {changingPeriod && <FinanceStaleNotice />}
+                {shown.report.undatedAmount > 0 && (
+                  <Alert
+                    type="info"
+                    message={`일정이 없는 예정 정산 ${money(shown.report.undatedAmount)}`}
+                    description="날짜 미정 금액은 달력과 기간 합계에 임의로 포함하지 않습니다."
+                  />
+                )}
+              </>
             }
-            expenses={resource.data.expenses.map((e) => ({
+            expenses={shown.expenses.map((e) => ({
               id: e.key,
               date: e.date,
               title: e.title,
               amount: e.amount,
-              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '실제 완료' : '예정'}`,
+              memo: e.memo,
+              originalDate: e.originalDate,
+              paidAt: e.paidAt,
+              updatedAt: e.expense?.updatedAt,
+              note: `${e.kind === 'ONEOFF' ? '일회성' : '정기'} 지출 · ${e.paidAt ? '지출 완료' : '예정'}`,
             }))}
             monthSummary={
               <>
@@ -448,23 +542,18 @@ function ConnectedSettlements() {
                 {mismatch ? (
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
-                  <>
-                    <strong className="stl-value">
-                      <FinanceMoney value={month.data.paidAmount} />
-                    </strong>
-                    <p>
-                      {monthFrom}~{today} · 별도 조회
-                    </p>
-                  </>
+                  <strong>
+                    <FinanceMoney value={month.data.paidAmount} />
+                  </strong>
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>
                 ) : (
-                  <span>이번 달 지급액 조회 중</span>
+                  <span className="dw-loading-reveal">이번 달 지급액 조회 중</span>
                 )}
               </>
             }
           />
-        </>
+        </div>
       )}
     </div>
   )

@@ -1,81 +1,125 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { Card, Collapse, Descriptions, Table, Tag, Typography } from 'antd'
+import { Alert, Collapse, Descriptions, Table, Typography } from 'antd'
 import { getMlShadowScores } from '../../../api/mlShadowScores'
-import type { AiRecommendation, ReportBody } from '../../../types/case'
+import type { ReportBody } from '../../../types/case'
 import {
-  isCodeReason,
-  mlReportLine,
-  recommendationSource,
-  recommendationSummaryTitle,
-  reportHeadline,
-  reportRecommendationSource,
-  ruleEvidenceRows,
-  signalTexts,
-  paymentCardId,
-  summaryBoxLines,
-  summaryLines,
-  topRiskScore,
-  verdictCardTitle,
-  verdictLines,
-  type RecommendationSource,
-  type SummaryLine,
+  caseNormals,
+  caseSignalId,
+  caseSignals,
+  checkRows,
+  checkSignals,
+  durationText,
+  fixedReportNotice,
+  legacyReportText,
+  traceProviderLabel,
 } from '../../../utils/reportView'
 import { customerPart } from '../../../utils/caseRules'
 import {
-  mlCell,
   mlScoresRequestKey,
   mlScoresView,
   type LoadedMlScores,
   type MlScores,
 } from '../../../utils/transactionList'
 import { won } from '../../../utils/format'
-import { dateTime, recommendationLabel } from './caseLabels'
-import { SummaryBox, SummaryLinks, WhyCard } from './BasisCard'
+import { goToCard } from './goToCard'
+import { dateTime } from './caseLabels'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
+import { OrderContextCard } from './OrderContextCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
-import { SimilarCasesCard } from './SimilarCasesCard'
+import { ReportChecks } from './ReportChecks'
+import { ReportOverview } from './ReportOverview'
+import { ReportPastCompare, type NowProgress } from './ReportPastCompare'
+import { ReportSection } from './ReportSection'
 
-// AI 보고서 전문. 결론 → 결제별 판정 근거 → 비슷한 과거 사건 → 고객 최근 결제 → 같은 카드 · 기기 · IP 결제 → 경위 · 확인할 것 → 상세 정보 순서
-// AI 요약 문장 끝 링크가 표 카드로 이동한다 — 카드 id는 summaryLines의 target과 같다 (#559)
-// 판정 근거(basis)가 있는 결제는 조사 요약 → 왜 이 판정인가요? 순서 (#501)
-// 코드(기준표)가 쓴 문장은 기준표 칸에, AI 문장은 AI 칸에만 둔다 (#543). AI는 판단하지 않고 사실만 전달한다 (#548)
-
-type PaymentAnalysis = ReportBody['paymentAnalyses'][number]
+// AI 보고서 전문 (#644 PR 3): ① 무슨 일인가 → ② 확인할 것 → ③ 지난 사건과 비교 → ④ 근거 자료 → ⑤ 조사 범위(접음)
+// 직원이 묻는 순서대로 — 무슨 일인가, 무엇을 확인하나, 지난 사건은 어떻게 판정했나, 근거 자료
+// 판정 권고는 #644에서 뺐다 — 보고서는 자료와 확인할 것만, 판정은 보안 직원 (ADR-0009 결정 13)
+// 정보마다 자리는 하나: 징후는 ②에만, 결제별 점수 · 규칙은 ① 결제 표에만, AI 문장은 ① 한눈에 보기에만 (#543)
+// AI 요약 문장 끝 링크가 근거 자료 카드로 이동한다 — 카드 id는 summaryLines의 target과 같다 (#559)
 
 // refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
+// onDecide — 판정할 수 있는 Case일 때만 온다 (끝난 Case는 판정하러 가기를 보여 주지 않는다)
+// progress — 지금 사건 판정 진행 (decisionProgress). onDecide 유무로 판정 끝을 정하면 일부 판정 사건이 "판정 끝"으로 보였다 (#652 Codex 리뷰)
 export function ReportFull({
   body,
   label,
   refreshKey,
+  progress,
+  onDecide,
 }: {
   body: ReportBody
   label: string
   refreshKey: number
+  progress: NowProgress
+  onDecide?: () => void
 }) {
-  // 결제 1건 사건은 긴 요약을 결제 카드의 조사 요약에만 둔다 (화면안 #501)
-  const single = body.paymentAnalyses.length === 1 && !!body.paymentAnalyses[0].basis
-  const summary = summaryLines(body)
   const ml = useMlScores(
     body.paymentAnalyses.map((p) => p.paymentId),
     refreshKey,
   )
+  // 판정 전에 확인할 것 체크 — 화면에서만 기억한다 (보고서 버전을 바꾸면 화면이 새로 그려져 비워진다)
+  const [checked, setChecked] = useState<string[]>([])
+  const toggle = (id: string) =>
+    setChecked((now) => (now.includes(id) ? now.filter((x) => x !== id) : [...now, id]))
+  const signals = caseSignals(body)
+  // 한눈에 보기 밑줄용 — 결제가 여러 건이면 사건 전체 징후 · 정상 근거로 긋는다
+  const marks = signals ? { signals, normals: caseNormals(body) } : null
+  const fixedNotice = fixedReportNotice(body.investigationTrace)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <VerdictCard body={body} label={label} summary={single ? [] : summary} />
-      {body.paymentAnalyses.map((p) => (
-        <div key={p.paymentId} id={paymentCardId(p.paymentId)} style={anchorStyle}>
-          <PaymentEvidence
-            analysis={p}
-            summary={single ? summary : []}
-            ml={mlReportLine(mlCell(p.paymentId, ml))}
+      <div className="dw-report-scroll">
+        {fixedNotice && <Alert type="info" showIcon message={fixedNotice} />}
+        <ReportOverview body={body} label={label} ml={ml} marks={marks} />
+        <ReportChecks body={body} checked={checked} onToggle={toggle} />
+        {body.similarCases !== undefined && (
+          <ReportPastCompare
+            body={body}
+            similar={body.similarCases}
+            progress={progress}
+            refreshKey={refreshKey}
           />
-        </div>
-      ))}
-      {body.similarCases !== undefined && (
-        <div id="report-similar" style={anchorStyle}>
-          <SimilarCasesCard similar={body.similarCases} caseId={String(body.overview.caseId)} />
-        </div>
-      )}
+        )}
+        <EvidenceSection body={body} />
+        <Collapse
+          items={[
+            {
+              key: 'scope',
+              label: <b>⑤ 조사 범위 · 한계 · 보고서 정보</b>,
+              // 접어 둬도 내용을 미리 그려 인쇄 때 펼쳐 찍는다 (#623, reportPrint.css)
+              forceRender: true,
+              children: <ScopeBody body={body} />,
+            },
+          ]}
+        />
+      </div>
+      <DecisionBar body={body} checked={checked} onDecide={onDecide} />
+    </div>
+  )
+}
+
+// ④ 근거 자료 — 조회 결과 카드 그대로. 카드가 하나도 없는 예전 보고서는 구역을 그리지 않는다
+const EVIDENCE_CARDS = [
+  { id: 'report-history', label: '고객 최근 결제', key: 'paymentHistory' },
+  { id: 'report-linked', label: '같은 카드 · 기기 · IP', key: 'linkedPayments' },
+  { id: 'report-order', label: '주문 정보', key: 'orderContext' },
+] as const
+
+function EvidenceSection({ body }: { body: ReportBody }) {
+  const cards = EVIDENCE_CARDS.filter((c) => body[c.key] !== undefined)
+  if (cards.length === 0) return null
+  return (
+    <ReportSection no="④" title="근거 자료" by="lookup">
+      <nav
+        aria-label="근거 자료로 이동"
+        className="dw-no-print"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+      >
+        {cards.map((c) => (
+          <button key={c.id} type="button" onClick={() => goToCard(c.id)} style={chipStyle}>
+            {c.label}
+          </button>
+        ))}
+      </nav>
       {body.paymentHistory !== undefined && (
         <div id="report-history" style={anchorStyle}>
           <PaymentHistoryCard history={body.paymentHistory} />
@@ -86,172 +130,169 @@ export function ReportFull({
           <LinkedPaymentsCard linked={body.linkedPayments} />
         </div>
       )}
-      <div className="dw-section-grid">
-        <Card title={<CardTitle title="사건 경위" note="시간순" />} style={cardStyle}>
-          <Timeline items={body.timeline} />
-        </Card>
-        {/* "AI가 아직 모르는 것"은 판정 근거의 징후와 겹쳐 보여 주지 않는다 (#548) */}
-        <Card title={<CardTitle title="판정 전에 확인할 것" />} style={cardStyle}>
-          <SubTitle>먼저 해 볼 것</SubTitle>
-          <Checklist items={body.additionalChecks} color="#94A3B8" />
-        </Card>
-      </div>
-      <Collapse
-        items={[
-          {
-            key: 'more',
-            label: '상세 근거와 보고서 정보 펼치기',
-            children: <MoreInfo body={body} />,
-          },
-        ]}
-      />
+      {body.orderContext !== undefined && (
+        <div id="report-order" style={anchorStyle}>
+          <OrderContextCard order={body.orderContext} />
+        </div>
+      )}
+    </ReportSection>
+  )
+}
+
+// 화면 아래 고정 줄 — 확인 n/전체 · 남은 징후 이름 · [판정하러 가기]. 권고는 없다
+function DecisionBar({
+  body,
+  checked,
+  onDecide,
+}: {
+  body: ReportBody
+  checked: string[]
+  onDecide?: () => void
+}) {
+  const rows = checkRows(body)
+  if (rows.length === 0 && !onDecide) return null
+  const names = new Map((checkSignals(body) ?? []).map((s) => [caseSignalId(s), s.label]))
+  const left = rows.filter((r) => !checked.includes(r.id)).map((r) => names.get(r.id) ?? r.id)
+  return (
+    // 화면 아래 고정이라 인쇄하면 쪽마다 겹친다 — 찍지 않는다 (#623)
+    <div className="dw-no-print" style={barStyle}>
+      {rows.length > 0 && (
+        <>
+          <span style={{ fontSize: 14 }}>
+            확인 <b>{rows.length - left.length}</b> / {rows.length} 완료
+          </span>
+          <span style={{ fontSize: 13, color: left.length ? '#92400E' : '#166534' }}>
+            {left.length ? `남은 확인 · ${left.join(' · ')}` : '확인할 것을 모두 체크했습니다'}
+          </span>
+        </>
+      )}
+      <span style={{ fontSize: 12.5, color: '#64748B' }}>판정은 보안 직원이 합니다</span>
+      {onDecide && (
+        <button type="button" onClick={onDecide} style={barButtonStyle}>
+          판정하러 가기
+        </button>
+      )}
     </div>
   )
 }
 
-// 결론 카드. 큰 숫자는 FDS 점수 최댓값 그대로이며 사기 확률이 아니다
-// summary: 결제가 여러 건일 때만 넘긴다 — 1건이면 결제 카드의 조사 요약에 있다
-function VerdictCard({
-  body,
-  label,
-  summary,
-}: {
-  body: ReportBody
-  label: string
-  summary: SummaryLine[]
-}) {
-  const headline = reportHeadline(body)
-  const source = reportRecommendationSource(body)
-  const title = verdictCardTitle(body)
-  const lines = verdictLines(body)
-  const score = topRiskScore(body.paymentAnalyses.map((p) => p.riskScore))
+// ⑤ 조사 범위 · 한계 — 조회한 것 / 일부러 보지 않은 것 / 확인할 방법이 없는 것 (#591) + 보고서 정보
+// 칸이 없는 예전 · 고정 보고서는 한계 문장 목록을 그대로 보여 준다
+// PR 2(#650) 전 보고서의 "판정 기준표" 글자는 화면에서만 새 이름으로 (legacyReportText)
+function ScopeBody({ body }: { body: ReportBody }) {
+  const scope = body.scope
+  const trace = body.investigationTrace
+  const limitations = body.recommendation.limitations.map(legacyReportText)
   return (
-    <section style={verdictStyle}>
-      <div style={{ textAlign: 'center' }}>
-        <ScoreGauge score={score} dark />
-      </div>
-      <div>
-        <div style={{ fontSize: 12, color: '#93C5FD', fontWeight: 700 }}>
-          {label} · {title}
-        </div>
-        {headline ? (
-          <div style={{ fontSize: 22, fontWeight: 800, margin: '6px 0 8px', lineHeight: 1.4 }}>
-            {headline}
-          </div>
-        ) : (
-          <div style={{ fontSize: 15, fontWeight: 700, margin: '6px 0 8px', lineHeight: 1.5 }}>
-            결론 항목이 생기기 전 보고서입니다. 아래 요약과 근거를 확인하세요.
-          </div>
-        )}
-        {summary.length > 0 && (
-          <p style={{ fontSize: 14, color: '#C8D5EE', lineHeight: 1.75, margin: 0 }}>
-            {/* 결론은 기준표, 아래 요약은 AI 문장이라 앞에 표시한다 (#543) */}
-            {title === '기준표 판정' && (
-              <span style={{ color: '#D8B4FE', fontWeight: 700 }}>AI 해석 · </span>
-            )}
-            {summary.map((line, i) => (
-              <span key={i}>
-                {i > 0 && ' '}
-                {line.text}
-                <SummaryLinks links={line.links} color="#C4B5FD" />
-              </span>
-            ))}
-          </p>
-        )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          {lines.overall && <RecChip rec={lines.overall} text={source} strong />}
-          {/* 결제가 하나면 종합 칩과 같은 내용이라 다시 보여 주지 않는다 (verdictLines) */}
-          {lines.payments.map((p) => (
-            <RecChip key={p.paymentId} rec={p.recommendation} text={`결제 ${p.paymentId}`} />
-          ))}
-          {body.additionalChecks[0] && (
-            <span style={{ ...chipStyle, background: '#1E3A8A', color: '#BFDBFE' }}>
-              ☎ {body.additionalChecks[0]}
-            </span>
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// 결제 하나의 판정 · 근거 — 판정 근거가 있으면 조사 요약 · 왜 이 판정인가요?
-function PaymentEvidence({
-  analysis: p,
-  summary,
-  ml,
-}: {
-  analysis: PaymentAnalysis
-  summary: SummaryLine[]
-  ml: string
-}) {
-  const source = recommendationSource(p)
-  return (
-    <Card
-      style={cardStyle}
-      title={
-        <span style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="dw-section-title">결제 {p.paymentId}</span>
-          <span style={{ fontWeight: 500 }}>{won(p.amount)}</span>
-          <span style={{ color: '#64748b', fontWeight: 500 }}>
-            {p.riskScore === null ? 'FDS 점수 모름' : `FDS ${p.riskScore}점`}
-          </span>
-        </span>
-      }
-      extra={<RecTag rec={p.recommendation} source={source} />}
-    >
-      {p.signals !== undefined && <SignalLine signals={p.signals} />}
-      {p.basis ? (
-        <>
-          <SummaryBox
-            lines={summaryBoxLines(
-              summary.map((l) => l.text),
-              p,
-            )}
-            basis={p.basis}
-            links={summary.map((l) => l.links)}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {scope ? (
+        <div style={scopeGridStyle}>
+          <ScopeColumn
+            title="조회한 것"
+            color="#166534"
+            items={scope.checked.map(legacyReportText)}
+            mark="✓ "
           />
-          <WhyCard
-            basis={p.basis}
-            reason={isCodeReason(p.reason) ? p.reason : undefined}
-            details={p.ruleHitDetails}
+          <ScopeColumn
+            title="일부러 보지 않은 것"
+            color="#1E3A8A"
+            items={scope.withheld}
+            note="개인정보 보호를 위해 AI에 넘기지 않습니다."
           />
-          <MlLine text={ml} />
-        </>
+          <ScopeColumn
+            title="확인할 방법이 없는 것"
+            color="#92400E"
+            items={scope.unavailable}
+            note="FDS 점수는 부정거래 확률이 아닙니다."
+          />
+        </div>
       ) : (
-        <>
-          {p.reason && (
-            <p style={{ fontSize: 14, lineHeight: 1.7, margin: '0 0 14px' }}>
-              <AiTag /> {p.reason}
-            </p>
-          )}
-          <MlLine text={ml} />
-          <RuleCompare analysis={p} />
-        </>
+        <Bullets items={limitations} />
       )}
-    </Card>
+      {trace && (
+        <div style={{ fontSize: 12, color: '#64748B' }}>
+          어떻게 만들었나 · {traceProviderLabel(trace)} · 조사 단계 {trace.steps.length}개 ·{' '}
+          {durationText(trace.durationMs)} · 자세한 과정은 위 [조사 과정] 탭
+        </div>
+      )}
+      <MoreInfo body={body} limitations={limitations} />
+    </div>
   )
 }
 
-// 예전 보고서(판정 근거 없음)의 적중 규칙 — 예전 AI 문장(위험 근거 · 정상 정황)은 보여 주지 않는다 (#548)
-function RuleCompare({ analysis: p }: { analysis: PaymentAnalysis }) {
-  const rules = ruleEvidenceRows(p)
+function ScopeColumn({
+  title,
+  color,
+  items,
+  mark = '',
+  note,
+}: {
+  title: string
+  color: string
+  items: string[]
+  mark?: string
+  note?: string
+}) {
   return (
-    <div style={{ ...sideStyle, background: '#FEF2F2', border: '1px solid #FECACA' }}>
-      <SideTitle color="#991B1B" title="⚠ 적중 규칙" count={rules.length} />
-      {rules.map((r, i) => (
-        <Item
-          key={`rule-${i}`}
-          title={r.appliedScore === null ? r.name : `${r.name} (+${r.appliedScore}점)`}
-        >
-          {r.criterion && r.observed && (
-            <span style={{ display: 'block', fontSize: 12.5, color: '#7F1D1D' }}>
-              기준 {r.criterion} · 이번 {r.observed}
-            </span>
-          )}
-          FDS 기록{r.evidenceId && ` · 증거 ${r.evidenceId}`}
-        </Item>
-      ))}
+    <div
+      style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, lineHeight: 1.7 }}
+    >
+      <div style={{ fontWeight: 700, color }}>
+        {title} {items.length > 0 && items.length}
+      </div>
+      {items.length === 0 ? (
+        <span style={{ color: '#94A3B8' }}>없음</span>
+      ) : (
+        items.map((item) => (
+          <div key={item}>
+            {mark}
+            {item}
+          </div>
+        ))
+      )}
+      {note && <div style={{ color: '#64748B' }}>{note}</div>}
+    </div>
+  )
+}
+
+// 보고서 정보 — 사건 개요 · 조사 한계(범위 칸이 있을 때, 없으면 위에 이미 보임) · 증거 추적
+function MoreInfo({ body, limitations }: { body: ReportBody; limitations: string[] }) {
+  const { overview } = body
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Descriptions size="small" column={2} colon={false} title="사건 개요">
+        <Descriptions.Item label="Case">{overview.caseId}</Descriptions.Item>
+        <Descriptions.Item label="가맹점">{overview.merchantId}</Descriptions.Item>
+        <Descriptions.Item label="고객">{customerPart(overview.customerRef)}</Descriptions.Item>
+        <Descriptions.Item label="대상 거래">{overview.paymentCount}건</Descriptions.Item>
+        <Descriptions.Item label="총액">{won(overview.totalAmount)}</Descriptions.Item>
+        <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
+      </Descriptions>
+      {body.scope && (
+        <div>
+          <SubTitle>조사 한계</SubTitle>
+          <Bullets items={limitations} />
+        </div>
+      )}
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        최종 판정은 직원이 결제별로 합니다.
+      </Typography.Text>
+      <div>
+        <SubTitle>증거 추적 정보</SubTitle>
+        <Table
+          size="small"
+          rowKey="evidenceId"
+          pagination={false}
+          dataSource={body.evidence}
+          columns={[
+            { title: '증거 ID', dataIndex: 'evidenceId', width: 110 },
+            { title: 'Tool', dataIndex: 'toolName' },
+            { title: '출처', dataIndex: 'source', width: 80 },
+            { title: '조회 시각', dataIndex: 'retrievedAt', width: 140, render: dateTime },
+            { title: '데이터 버전', dataIndex: 'dataVersion', width: 100 },
+          ]}
+        />
+      </div>
     </div>
   )
 }
@@ -280,71 +321,6 @@ function useMlScores(paymentIds: string[], refreshKey: number): MlScores {
     }
   }, [ids, key])
   return mlScoresView(loaded, paymentIds, refreshKey)
-}
-
-// ML 참고 위험도 한 줄 — 판정(기준표)과 섞이지 않게 회색 점선 칸
-function MlLine({ text }: { text: string }) {
-  return <div style={mlLineStyle}>{text}</div>
-}
-
-function SignalLine({ signals }: { signals: PaymentAnalysis['signals'] }) {
-  return (
-    <div style={signalLineStyle}>
-      {signals ? (
-        signalTexts(signals).map((text) => (
-          <span key={text.label}>
-            <span style={{ color: '#94A3B8' }}>{text.label}</span>{' '}
-            <span style={{ fontWeight: 600, color: text.missing ? '#94A3B8' : '#0F172A' }}>
-              {text.value}
-            </span>
-          </span>
-        ))
-      ) : (
-        <span style={{ color: '#94A3B8' }}>카드 · 기기 · 접속 국가 정보 없음 (FDS 평가 없음)</span>
-      )}
-    </div>
-  )
-}
-
-function MoreInfo({ body }: { body: ReportBody }) {
-  const { overview } = body
-  const ruleTable = reportRecommendationSource(body) === '기준표 판정'
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Descriptions size="small" column={2} colon={false} title="사건 개요">
-        <Descriptions.Item label="Case">{overview.caseId}</Descriptions.Item>
-        <Descriptions.Item label="가맹점">{overview.merchantId}</Descriptions.Item>
-        <Descriptions.Item label="고객">{customerPart(overview.customerRef)}</Descriptions.Item>
-        <Descriptions.Item label="대상 거래">{overview.paymentCount}건</Descriptions.Item>
-        <Descriptions.Item label="총액">{won(overview.totalAmount)}</Descriptions.Item>
-        <Descriptions.Item label="조사 기준">{dateTime(overview.investigatedAt)}</Descriptions.Item>
-      </Descriptions>
-      <div>
-        <SubTitle>{recommendationSummaryTitle(body)}</SubTitle>
-        <p style={{ fontSize: 13, margin: '0 0 6px' }}>{body.recommendation.summary}</p>
-        <Bullets items={body.recommendation.limitations} />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {ruleTable ? '기준표 판정은' : 'AI 권고는'} 참고용이며 최종 판정은 직원이 결제별로 합니다.
-        </Typography.Text>
-      </div>
-      <div>
-        <SubTitle>증거 추적 정보</SubTitle>
-        <Table
-          size="small"
-          rowKey="evidenceId"
-          pagination={false}
-          dataSource={body.evidence}
-          columns={[
-            { title: '증거 ID', dataIndex: 'evidenceId', width: 110 },
-            { title: 'Tool', dataIndex: 'toolName' },
-            { title: '출처', dataIndex: 'source', width: 80 },
-            { title: '조회 시각', dataIndex: 'retrievedAt', width: 140, render: dateTime },
-            { title: '데이터 버전', dataIndex: 'dataVersion', width: 100 },
-          ]}
-        />
-      </div>
-    </div>
-  )
 }
 
 // 반원 게이지. 색은 FDS 판정 구간 (0~49 ALLOW · 50~79 REVIEW · 80~ DENY)
@@ -392,79 +368,6 @@ export function ScoreGauge({ score, dark = false }: { score: number | null; dark
   )
 }
 
-const recColor: Record<AiRecommendation, CSSProperties> = {
-  REJECT_REVIEW: { background: '#7F1D1D', color: '#FECACA' },
-  ACCEPT_REVIEW: { background: '#14532D', color: '#BBF7D0' },
-  NEEDS_CHECK: { background: '#78350F', color: '#FDE68A' },
-}
-
-const recLight: Record<AiRecommendation, CSSProperties> = {
-  REJECT_REVIEW: { background: '#FEE2E2', color: '#991B1B' },
-  ACCEPT_REVIEW: { background: '#DCFCE7', color: '#166534' },
-  NEEDS_CHECK: { background: '#FEF3C7', color: '#92400E' },
-}
-
-function RecChip({ rec, text, strong }: { rec: AiRecommendation; text: string; strong?: boolean }) {
-  return (
-    <span
-      style={{
-        ...chipStyle,
-        ...recColor[rec],
-        outline: strong ? '1px solid currentColor' : undefined,
-      }}
-    >
-      {text} · {recommendationLabel[rec].label}
-    </span>
-  )
-}
-
-// 결제 카드 오른쪽 위 판정 꼬리표 — "기준표 판정 · 승인 취소 검토"
-function RecTag({ rec, source }: { rec: AiRecommendation; source: RecommendationSource }) {
-  return (
-    <span style={{ ...chipStyle, ...recLight[rec], border: '1px solid currentColor' }}>
-      {source} · {recommendationLabel[rec].label}
-    </span>
-  )
-}
-
-function AiTag() {
-  return (
-    <Tag color="purple" style={{ marginInlineEnd: 0, fontSize: 11 }}>
-      AI 해석
-    </Tag>
-  )
-}
-
-function CardTitle({ title, note, ai }: { title: string; note?: string; ai?: boolean }) {
-  return (
-    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-      <span className="dw-section-title">{title}</span>
-      {ai && <AiTag />}
-      {note && <span style={{ color: '#94A3B8', fontSize: 12, fontWeight: 500 }}>{note}</span>}
-    </span>
-  )
-}
-
-function SideTitle({ title, count, color }: { title: string; count: number; color: string }) {
-  return (
-    <h4
-      style={{ margin: '0 0 10px', fontSize: 14, display: 'flex', justifyContent: 'space-between' }}
-    >
-      <span style={{ color }}>{title}</span>
-      <span style={{ color: '#94A3B8', fontSize: 12, fontWeight: 500 }}>{count}개</span>
-    </h4>
-  )
-}
-
-function Item({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div style={itemStyle}>
-      <b style={{ display: 'block', fontSize: 13.5 }}>{title}</b>
-      <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{children}</div>
-    </div>
-  )
-}
-
 function SubTitle({ children, top }: { children: ReactNode; top?: boolean }) {
   return (
     <div
@@ -480,52 +383,6 @@ function SubTitle({ children, top }: { children: ReactNode; top?: boolean }) {
   )
 }
 
-function Checklist({ items, color }: { items: string[]; color: string }) {
-  if (items.length === 0) return <Typography.Text type="secondary">없음</Typography.Text>
-  return items.map((item, i) => (
-    <div
-      key={i}
-      style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, lineHeight: 1.7 }}
-    >
-      <i
-        style={{
-          flex: '0 0 12px',
-          height: 12,
-          marginTop: 5,
-          border: `2px solid ${color}`,
-          borderRadius: 3,
-        }}
-      />
-      <span>{item}</span>
-    </div>
-  ))
-}
-
-function Timeline({ items }: { items: ReportBody['timeline'] }) {
-  if (items.length === 0) return <Typography.Text type="secondary">없음</Typography.Text>
-  return (
-    <ol
-      style={{
-        margin: 0,
-        padding: '0 0 0 18px',
-        listStyle: 'none',
-        borderLeft: '2px solid #E2E8F0',
-      }}
-    >
-      {items.map((t, i) => (
-        <li
-          key={i}
-          style={{ position: 'relative', fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}
-        >
-          <span style={{ ...dotStyle, ...timelineDot[t.kind ?? 'OTHER'] }} />
-          <span style={{ color: '#64748b', marginRight: 8 }}>{dateTime(t.at)}</span>
-          {t.event}
-        </li>
-      ))}
-    </ol>
-  )
-}
-
 function Bullets({ items }: { items: string[] }) {
   if (items.length === 0) return <Typography.Text type="secondary">없음</Typography.Text>
   return (
@@ -537,70 +394,46 @@ function Bullets({ items }: { items: string[] }) {
   )
 }
 
-const cardStyle: CSSProperties = { borderColor: '#E2E8F0' }
-// 요약 링크로 이동할 카드 — 둥근 모서리를 맞춰 강조 테두리가 카드 모양을 따른다 (#559)
+// 근거 자료 카드 — 둥근 모서리를 맞춰 이동 강조 테두리가 카드 모양을 따른다 (#559)
 const anchorStyle: CSSProperties = { borderRadius: 8, scrollMarginTop: 80 }
-const signalLineStyle: CSSProperties = {
+const chipStyle: CSSProperties = {
+  minHeight: 32,
+  padding: '0 12px',
+  borderRadius: 16,
+  border: '1px solid #CBD5E1',
+  background: '#fff',
+  color: '#1E3A8A',
+  fontSize: 13,
+  cursor: 'pointer',
+}
+const barStyle: CSSProperties = {
+  position: 'sticky',
+  bottom: 0,
+  zIndex: 5,
+  background: '#fff',
+  border: '1px solid #CBD5E1',
+  borderRadius: 12,
+  boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.08)',
+  padding: '10px 16px',
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 16,
-  fontSize: 13,
-  margin: '0 0 12px',
-  padding: '8px 12px',
-  background: '#F8FAFC',
-  borderRadius: 8,
+  alignItems: 'center',
+  gap: 12,
 }
-const verdictStyle: CSSProperties = {
-  background: 'radial-gradient(ellipse at top right, #284D91, transparent 60%), #172554',
+const barButtonStyle: CSSProperties = {
+  marginLeft: 'auto',
+  height: 44,
+  padding: '0 18px',
+  borderRadius: 8,
+  border: 'none',
+  background: '#2563EB',
   color: '#fff',
-  borderRadius: 14,
-  padding: '22px 26px',
-  display: 'grid',
-  gridTemplateColumns: '170px 1fr',
-  gap: 26,
-  alignItems: 'center',
-}
-const chipStyle: CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  padding: '6px 11px',
-  borderRadius: 7,
-  fontSize: 12.5,
+  fontSize: 14,
   fontWeight: 700,
+  cursor: 'pointer',
 }
-const sideStyle: CSSProperties = { borderRadius: 12, padding: '16px 18px' }
-const mlLineStyle: CSSProperties = {
-  fontSize: 13,
-  color: '#475569',
-  background: '#F8FAFC',
-  border: '1px dashed #CBD5E1',
-  borderRadius: 8,
-  padding: '8px 12px',
-  marginBottom: 16,
-}
-const itemStyle: CSSProperties = {
-  background: '#fff',
-  borderRadius: 8,
-  padding: '10px 12px',
-  marginBottom: 8,
-  lineHeight: 1.55,
-}
-const dotStyle: CSSProperties = {
-  position: 'absolute',
-  left: -24,
-  top: 6,
-  width: 10,
-  height: 10,
-  borderRadius: '50%',
-  background: '#fff',
-  // 색은 timelineDot이 정한다 — border 한 줄 묶음과 섞으면 색 덮어쓰기가 안 될 수 있다
-  borderWidth: 2,
-  borderStyle: 'solid',
-}
-// 사건 경위 점 색 (#310) — 결제(매입 보류) 주황 · 사건 생성 파랑, 종류가 없는 예전 보고서는 회색
-const timelineDot: Record<'PAYMENT' | 'CASE' | 'OTHER', CSSProperties> = {
-  PAYMENT: { borderColor: '#D97706', background: '#FEF3C7' },
-  CASE: { borderColor: '#2563EB', background: '#2563EB' },
-  OTHER: { borderColor: '#94A3B8' },
+const scopeGridStyle: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: 16,
 }

@@ -18,6 +18,7 @@ spring:
 #       V1: "개발용_마스터_키_Base64"
 
 # 로컬 시연용 (docs/demo/local-demo.md 2 · 3절) — 필요할 때 주석을 풀어 쓴다
+# 아래 payment.http.enabled · ai.server.enabled는 테스트(./gradlew check)에는 적용되지 않는다 — build.gradle이 테스트에서 끈다 (#374)
 # payment:
 #   http:
 #     enabled: true            # CakeShop 서명 결제 API 켜기 (기본 꺼짐)
@@ -26,8 +27,13 @@ spring:
 # donworry.payment.webhook.allow-local-targets: true
 # fds:
 #   demo-error:
-#     enabled: true            # scripts/demo/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.
+#     enabled: true            # scripts/demo/legacy/fds_error.py 전용. 다음 FDS 평가 한 건만 ERROR로 만든다.
 # ai:
 #   server:
 #     enabled: true            # 고정 보고서 대신 ai-server에 조사를 맡김 (기본 꺼짐)
 #     api-key: "내AI서버키"       # ai-server/.env의 AI_SERVER_INTERNAL_API_KEY와 같은 값
+
+# 주문자 연락처 암호화 · 지문 키 (#602). 각각 `openssl rand -base64 32`로 서로 다르게 만든다
+# 같은 개발 DB를 쓰는 동안 바꾸지 않는다(바꾸면 기존 암호문을 못 읽는다). 비우면 연락처를 저장하지 않는다
+# donworry.pii.encryption-key: ""
+# donworry.pii.hmac-key: ""

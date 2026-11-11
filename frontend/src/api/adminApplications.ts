@@ -1,10 +1,11 @@
+import { formatKstDateTime } from '../utils/format.ts'
 import { api, ApiError } from './client.ts'
 import type { AdminMerchant } from './adminMerchants.ts'
 import type { MailStatus } from './merchantApplications.ts'
 export type ApplicationStatus =
   'EMAIL_VERIFICATION_PENDING' | 'REVIEW_PENDING' | 'APPROVED' | 'REJECTED'
 export const applicationLabels: Record<ApplicationStatus, string> = {
-  EMAIL_VERIFICATION_PENDING: '이메일 미확인',
+  EMAIL_VERIFICATION_PENDING: '이메일 확인 전',
   REVIEW_PENDING: '검토 대기',
   APPROVED: '승인 완료',
   REJECTED: '반려',
@@ -70,6 +71,9 @@ export function getApplications(
   if (mailAttention) query.set('mailAttention', 'true')
   return api<ApplicationPage>(`/admin/merchant-applications?${query}`, { cache: 'no-store' })
 }
+/** 이메일 확인이 끝나 관리자 검토를 기다리는 이용 신청 수 — 사이드바 배지 · 관리자 홈 */
+export const getReviewPendingApplicationCount = () =>
+  getApplications(0, '', 'REVIEW_PENDING').then((page) => page.totalElements)
 export const getApplication = (id: number) =>
   api<ApplicationDetail>(`/admin/merchant-applications/${id}`, { cache: 'no-store' })
 function review(id: number, action: string, body: unknown) {
@@ -91,20 +95,13 @@ export function reviewError(error: unknown) {
 export function reviewMailMessage(result: ReviewResult) {
   const action =
     result.status === 'APPROVED'
-      ? '승인과 계정 발급이 완료되었습니다.'
+      ? '승인했고, 사장님 계정 발급이 완료되었습니다.'
       : '반려 처리가 완료되었습니다.'
   return result.mailStatus === 'SENT'
-    ? `${action} 안내 메일을 발송했습니다. 실제 수신 여부는 수신함에서 확인해야 합니다.`
-    : `${action} 안내 메일의 발송 완료는 확인되지 않았습니다. 검토 결과와 발급된 계정은 유지됩니다.`
+    ? `${action} 사장님에게 메일을 보냈습니다. 실제 도착은 사장님 메일함에서 확인해야 합니다.`
+    : `${action} 다만 사장님에게 메일이 나갔는지는 확인되지 않았습니다. 아래 ‘사장님에게 보낸 메일’에서 다시 보낼 수 있습니다. 처리 결과와 사장님 계정은 유지됩니다.`
 }
-export const formatApplicationTime = (value: string | null) =>
-  value
-    ? new Intl.DateTimeFormat('ko-KR', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'Asia/Seoul',
-      }).format(new Date(value.endsWith('Z') || /[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`))
-    : '—'
+export const formatApplicationTime = (value: string | null) => formatKstDateTime(value)
 export const formatBusinessNumber = (value: string) =>
   value.replace(/^(\d{3})(\d{2})(\d{5})$/, '$1-$2-$3')
 
@@ -138,15 +135,15 @@ export function resendApplicationMail(id: number, expectedDeliveryId: number) {
   )
 }
 export const mailStatusLabels: Record<MailStatus, string> = {
-  PENDING: '발송 처리 중',
-  SENT: 'SMTP 수락',
+  PENDING: '보내는 중',
+  SENT: '발송됨',
   FAILED: '발송 실패',
-  UNKNOWN: '결과 불확실',
+  UNKNOWN: '결과 확인 안 됨',
 }
 export const mailKindLabels: Record<MailItem['kind'], string> = {
-  EMAIL_VERIFICATION: '이메일 확인',
-  APPROVAL: '승인·첫 비밀번호 설정',
-  REJECTION: '반려 사유',
+  EMAIL_VERIFICATION: '이메일 확인 메일',
+  APPROVAL: '승인·첫 비밀번호 설정 메일',
+  REJECTION: '반려 사유 메일',
 }
 export const resendBlockedMessages: Record<string, string> = {
   FEATURE_DISABLED: '현재 신청 기능이 중지되어 있습니다.',

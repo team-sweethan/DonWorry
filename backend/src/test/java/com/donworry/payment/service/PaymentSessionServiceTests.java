@@ -14,10 +14,12 @@ import com.donworry.identity.api.TenantSummary;
 import com.donworry.payment.dto.CheckoutResponses;
 import com.donworry.payment.dto.MerchantPaymentResponse;
 import com.donworry.payment.dto.PaymentSessionCreateRequest;
+import com.donworry.payment.entity.PaymentOrderContact;
 import com.donworry.payment.entity.PaymentRequest;
 import com.donworry.payment.entity.PaymentRiskSignals;
 import com.donworry.payment.entity.PaymentSession;
 import com.donworry.payment.entity.PaymentStatus;
+import com.donworry.payment.repository.PaymentOrderContactRepository;
 import com.donworry.payment.repository.PaymentRequestRepository;
 import com.donworry.payment.repository.PaymentSessionRepository;
 import java.math.BigDecimal;
@@ -25,8 +27,10 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 class PaymentSessionServiceTests {
@@ -40,15 +44,10 @@ class PaymentSessionServiceTests {
     private final PaymentRequestFlowService flow = mock(PaymentRequestFlowService.class);
     private final MerchantPaymentQueryService query = mock(MerchantPaymentQueryService.class);
     private final TenantReader tenants = mock(TenantReader.class);
-    private final PaymentSessionService service = new PaymentSessionService(
-            sessions,
-            requests,
-            flow,
-            query,
-            tenants,
-            new PaymentWebhookTargetPolicy(false),
-            mock(PlatformTransactionManager.class),
-            "http://pay.test/");
+    private final PaymentOrderContactRepository contacts = mock(PaymentOrderContactRepository.class);
+    private final CustomerContactProtector protector = new CustomerContactProtector(
+            CustomerContactProtectorTests.ENCRYPTION_KEY, CustomerContactProtectorTests.HMAC_KEY);
+    private final PaymentSessionService service = service(protector);
 
     @Test
     void create_savesSessionAndReturnsHostedCheckoutUrl() {
@@ -92,8 +91,7 @@ class PaymentSessionServiceTests {
         Instant created = recent();
         when(sessions.findByMerchantIdAndRequestKey(MERCHANT_ID, UUID.fromString(KEY)))
                 .thenReturn(Optional.of(session(created)));
-        var changed =
-                new PaymentSessionCreateRequest("ORD-1", "42", 99_000L, created, "딸기 케이크", null, SUCCESS, FAIL, null);
+        var changed = requestBuilder(created).amount(99_000L).build();
 
         assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, changed))
                 .isInstanceOfSatisfying(
@@ -169,12 +167,110 @@ class PaymentSessionServiceTests {
                         e -> assertThat(e.getStatus()).isEqualTo(404));
     }
 
+    // 주문자 · 픽업자 원문은 DB에 남지 않는다 — 암호문 · 전화 지문 · "주문자와 다름"만 저장한다 (#602)
+    @Test
+    void create_withContact_storesNoRawNameOrPhone() {
+        newSessionSavedWithId(31L);
+
+        service.create(MERCHANT_ID, KEY, withContact(recent()));
+
+        var saved = ArgumentCaptor.forClass(PaymentOrderContact.class);
+        verify(contacts).save(saved.capture());
+        var row = saved.getValue();
+        assertThat(row.getSessionId()).isEqualTo(31L);
+        assertThat(row.getPickupDiffers()).isTrue();
+        var stored = String.join(
+                "|",
+                row.getOrdererNameEnc(),
+                row.getOrdererPhoneEnc(),
+                row.getOrdererPhoneHmac(),
+                row.getRequestDigest());
+        for (var raw : new String[] {"김민수", "이영희", "01012345678", "010-1234-5678", "01098765432", "5678"}) {
+            assertThat(stored).as(raw).doesNotContain(raw);
+        }
+    }
+
+    // 키 설정이 없어도 결제 준비는 성공한다. 연락처만 저장하지 않는다
+    @Test
+    void create_withoutKeys_succeedsWithoutContact() {
+        newSessionSavedWithId(32L);
+        var withoutKeys = service(new CustomerContactProtector("", ""));
+
+        var response = withoutKeys.create(MERCHANT_ID, KEY, withContact(recent()));
+
+        assertThat(response.sessionKey()).matches("pss_[0-9a-f]{32}");
+        verify(contacts, never()).save(any());
+    }
+
+    // 같은 요청 키로 연락처만 바꿔 보내면 저장된 주문자와 어긋나므로 409로 막는다
+    @Test
+    void create_sameKeyDifferentContact_returns409() {
+        Instant created = recent();
+        storedSessionWithContact(created);
+        var changed = requestBuilder(created)
+                .ordererName("김민수")
+                .ordererPhone("010-1111-2222")
+                .pickupName("이영희")
+                .pickupPhone("010-9876-5432")
+                .build();
+
+        assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, changed))
+                .isInstanceOfSatisfying(
+                        PaymentHttpException.class, e -> assertThat(e.getCode()).isEqualTo("IDEMPOTENCY_KEY_CONFLICT"));
+    }
+
+    // 가맹점이 같은 내용으로 재시도하면(하이픈 · 공백 차이 포함) 같은 세션을 돌려준다
+    @Test
+    void create_sameKeySameContact_returnsSameSession() {
+        Instant created = recent();
+        var session = storedSessionWithContact(created);
+        var retried = requestBuilder(created)
+                .ordererName(" 김민수 ")
+                .ordererPhone("01012345678")
+                .pickupName("이영희")
+                .pickupPhone("010 9876 5432")
+                .build();
+
+        var response = service.create(MERCHANT_ID, KEY, retried);
+
+        assertThat(response.sessionKey()).isEqualTo(session.getSessionKey());
+        verify(sessions, never()).save(any());
+    }
+
+    // 형식이 틀린 주문자 번호는 세션에 고정되기 전에 400으로 막는다
+    @Test
+    void create_invalidOrdererPhone_returns400() {
+        for (var phone : new String[] {"+82-10-1234-5678", "1234", "010-1234-567a", ""}) {
+            var body = requestBuilder(recent()).ordererPhone(phone).build();
+            assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
+                    .as(phone)
+                    .isInstanceOfSatisfying(
+                            PaymentHttpException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(400));
+        }
+        verify(sessions, never()).save(any());
+    }
+
+    // 요청 로그에 이메일 · 이름 · 전화가 남지 않는다
+    @Test
+    void toString_excludesContacts() {
+        var text = requestBuilder(recent())
+                .buyerEmail("buyer@example.test")
+                .ordererName("김민수")
+                .ordererPhone("010-1234-5678")
+                .pickupName("이영희")
+                .pickupPhone("010-9876-5432")
+                .build()
+                .toString();
+
+        assertThat(text).doesNotContain("buyer@example.test", "김민수", "1234-5678", "이영희", "9876");
+    }
+
     // 구매자 이메일은 세션에 고정되므로 FDS 입력과 같은 규칙으로 만들 때 거절한다 (PR #425 리뷰)
     @Test
     void create_invalidBuyerEmail_isBadRequest() {
         for (String email : new String[] {"", "not-an-email", " buyer@example.test"}) {
-            var body = new PaymentSessionCreateRequest(
-                    "ORD-1", "42", 52_000L, recent(), "딸기 케이크", email, SUCCESS, FAIL, null);
+            var body = requestBuilder(recent()).buyerEmail(email).build();
             assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
                     .as(email)
                     .isInstanceOfSatisfying(
@@ -190,8 +286,7 @@ class PaymentSessionServiceTests {
         for (String notifyUrl : new String[] {
             "http://shop.test/hooks/donworry", "https://127.0.0.1/hook", "https://10.1.2.3/hook", "https://[::1]/hook"
         }) {
-            var body = new PaymentSessionCreateRequest(
-                    "ORD-1", "42", 52_000L, recent(), "딸기 케이크", null, SUCCESS, FAIL, notifyUrl);
+            var body = requestBuilder(recent()).notifyUrl(notifyUrl).build();
             assertThatThrownBy(() -> service.create(MERCHANT_ID, KEY, body))
                     .as(notifyUrl)
                     .isInstanceOfSatisfying(
@@ -201,13 +296,14 @@ class PaymentSessionServiceTests {
         verify(sessions, never()).save(any());
     }
 
-    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드는 목록에서 뺐다. 그 코드로 결제하면 시도를 고정하지 않고 400 (#582)
+    // 동작하지 않던 C(한도 초과) · D(해외 발급) 카드(#582)와 누리카드 1173(B, #766)은 목록에서 뺐다.
+    // 그 코드로 새로 결제하면 시도를 고정하지 않고 400
     @Test
     void pay_removedCardCode_isBadRequestWithoutFixingAttempt() {
         var session = session(recent());
         when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
 
-        for (var code : new String[] {"C", "D"}) {
+        for (var code : new String[] {"B", "C", "D"}) {
             assertThatThrownBy(() -> service.pay(
                             session.getSessionKey(),
                             new CheckoutResponses.PayRequest(code, "abcdef12"),
@@ -219,9 +315,58 @@ class PaymentSessionServiceTests {
         }
         verify(flow, never()).submit(any());
         assertThat(session.attemptFixed()).isFalse();
-        assertThat(CheckoutMockCard.values())
-                .extracting(CheckoutMockCard::label)
-                .containsExactly("한빛카드", "누리카드");
+    }
+
+    // 결제창은 한빛카드 한 장을 보이고, [카드 추가]로 쓸 이 결제창의 누리카드를 따로 내려 준다 (#766, ADR-0064 2-1절)
+    @Test
+    void open_showsOneBasicCardAndThisSessionsAddableCard() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+
+        var view = service.open(session.getSessionKey());
+
+        assertThat(view.cards())
+                .extracting(CheckoutResponses.Card::code, CheckoutResponses.Card::label, CheckoutResponses.Card::masked)
+                .containsExactly(Tuple.tuple("A", "한빛카드", "**** 4821"));
+        assertThat(view.addableCard().code()).isEqualTo("N");
+        assertThat(view.addableCard().label()).isEqualTo("누리카드");
+        assertThat(view.addableCard().masked())
+                .matches("[*]{4} [0-9]{4}")
+                .isNotIn("**** 4821", "**** 1173")
+                .isEqualTo(CheckoutMockCard.N.masked(MERCHANT_ID + ":42", session.getAttemptKey()));
+    }
+
+    // 추가 카드로 결제하면 결제창에 보인 끝 4자리 그대로 FDS 표시값이 되고, 토큰은 이 결제 시도의 값이다.
+    // 다시 눌러도 같은 값이라 같은 시도로 이어지고, 다른 결제창의 추가 카드와는 다른 카드다 (#766)
+    @Test
+    void pay_addedCard_sendsShownLabelAndAttemptToken() {
+        var session = session(recent());
+        when(sessions.findBySessionKey(session.getSessionKey())).thenReturn(Optional.of(session));
+        when(sessions.findByIdForUpdate(any())).thenReturn(Optional.of(session));
+        when(tenants.findById(MERCHANT_ID))
+                .thenReturn(Optional.of(new TenantSummary(MERCHANT_ID, "CakeShop", "ACTIVE", BigDecimal.ONE)));
+        when(flow.submit(any()))
+                .thenThrow(new IllegalStateException("evaluation failed"))
+                .thenReturn(new PaymentRequestAdmission(101L, 1L, UUID.randomUUID(), false));
+        when(query.findPayment(MERCHANT_ID, 101L)).thenReturn(Optional.of(payment(PaymentStatus.HELD, true, null)));
+        String shown = service.open(session.getSessionKey()).addableCard().masked();
+
+        assertThatThrownBy(() -> service.pay(
+                        session.getSessionKey(), new CheckoutResponses.PayRequest("N", "abcdef12"), "203.0.113.10"))
+                .isInstanceOf(IllegalStateException.class);
+        service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10");
+
+        var commands = ArgumentCaptor.forClass(PaymentRequestCommand.class);
+        verify(flow, times(2)).submit(commands.capture());
+        String customer = MERCHANT_ID + ":42";
+        assertThat(commands.getAllValues()).allSatisfy(command -> {
+            assertThat(command.riskSignals().cardDisplayLabel()).isEqualTo("누리카드 " + shown);
+            assertThat(command.riskSignals().cardToken())
+                    .isEqualTo(CheckoutMockCard.N.token(customer, session.getAttemptKey()))
+                    .isNotEqualTo(CheckoutMockCard.A.token(customer, null))
+                    .isNotEqualTo(CheckoutMockCard.N.token(customer, UUID.randomUUID()));
+        });
+        assertThat(session.getSubmittedCard()).isEqualTo("N");
     }
 
     // 세션을 만든 뒤 가맹점이 정지되면 아직 접수하지 않은 결제를 시작하지 않는다 (PR #425 리뷰)
@@ -259,7 +404,7 @@ class PaymentSessionServiceTests {
                         session.getSessionKey(), new CheckoutResponses.PayRequest("A", "abcdef12"), "203.0.113.10"))
                 .isInstanceOf(IllegalStateException.class);
         var result =
-                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("B", "99999999"), "198.51.100.7");
+                service.pay(session.getSessionKey(), new CheckoutResponses.PayRequest("N", "99999999"), "198.51.100.7");
 
         assertThat(result.redirectUrl()).startsWith(SUCCESS);
         var commands = ArgumentCaptor.forClass(PaymentRequestCommand.class);
@@ -401,11 +546,85 @@ class PaymentSessionServiceTests {
     }
 
     private static PaymentSessionCreateRequest request(Instant created, String successUrl) {
-        return new PaymentSessionCreateRequest("ORD-1", "42", 52_000L, created, "딸기 케이크", null, successUrl, FAIL, null);
+        return requestBuilder(created).successUrl(successUrl).build();
+    }
+
+    private static PaymentSessionCreateRequest.PaymentSessionCreateRequestBuilder requestBuilder(Instant created) {
+        return PaymentSessionCreateRequest.builder()
+                .orderRef("ORD-1")
+                .customerRef("42")
+                .amount(52_000L)
+                .orderCreatedAt(created)
+                .orderName("딸기 케이크")
+                .successUrl(SUCCESS)
+                .failUrl(FAIL);
+    }
+
+    private static PaymentSessionCreateRequest withContact(Instant created) {
+        return requestBuilder(created)
+                .ordererName("김민수")
+                .ordererPhone("010-1234-5678")
+                .pickupName("이영희")
+                .pickupPhone("010-9876-5432")
+                .build();
+    }
+
+    private PaymentSessionService service(CustomerContactProtector contactProtector) {
+        return new PaymentSessionService(
+                sessions,
+                requests,
+                flow,
+                query,
+                tenants,
+                new PaymentWebhookTargetPolicy(false),
+                mock(PlatformTransactionManager.class),
+                "http://pay.test/",
+                contacts,
+                contactProtector);
+    }
+
+    private void newSessionSavedWithId(long sessionId) {
+        when(sessions.findByMerchantIdAndRequestKey(MERCHANT_ID, UUID.fromString(KEY)))
+                .thenReturn(Optional.empty());
+        when(sessions.save(any())).thenAnswer(invocation -> {
+            PaymentSession saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "sessionId", sessionId);
+            return saved;
+        });
     }
 
     private static PaymentSession session(Instant created) {
         return session(created, SUCCESS, FAIL, "ORD-1");
+    }
+
+    // 원래 요청(withContact)으로 저장된 세션과 연락처
+    private PaymentSession storedSessionWithContact(Instant created) {
+        var session = session(created);
+        ReflectionTestUtils.setField(session, "sessionId", 33L);
+        when(sessions.findByMerchantIdAndRequestKey(MERCHANT_ID, UUID.fromString(KEY)))
+                .thenReturn(Optional.of(session));
+        var original = withContact(created);
+        var stored = protector
+                .protect(
+                        MERCHANT_ID,
+                        CustomerContactProtector.normalize(
+                                original.ordererName(),
+                                original.ordererPhone(),
+                                original.pickupName(),
+                                original.pickupPhone()))
+                .orElseThrow();
+        when(contacts.findById(33L))
+                .thenReturn(Optional.of(PaymentOrderContact.of(
+                        33L,
+                        MERCHANT_ID,
+                        stored.ordererNameEnc(),
+                        stored.ordererPhoneEnc(),
+                        stored.ordererPhoneHmac(),
+                        stored.pickupDiffers(),
+                        stored.requestDigest(),
+                        stored.keyId(),
+                        created)));
+        return session;
     }
 
     private static PaymentSession session(Instant created, String successUrl, String failUrl, String orderRef) {

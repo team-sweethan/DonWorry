@@ -9,7 +9,16 @@ import {
 
 const parse = (query: string) => parseAdminUserListQuery(new URLSearchParams(query))
 
-test('홈에서 지정한 필터를 해제한 주소는 새로고침해도 전체 조건을 유지한다', () => {
+// 목록 기본은 사용 중 계정만 — 처음 연 목록에 정지 · 중지 계정이 섞이지 않게 (#659)
+test('parseAdminUserListQuery_noStatus_defaultsToActive', () => {
+  for (const query of ['', 'keyword=kim&role=OPERATOR', 'status=UNKNOWN']) {
+    assert.equal(parse(query).status, 'ACTIVE')
+  }
+  assert.equal(adminUserListParams(parse('')).toString(), '')
+})
+
+// "전체 상태"로 바꾼 뒤 새로고침 · 뒤로가기를 해도 사용 중으로 돌아가 정지 계정이 사라진 것처럼 보이지 않게 (#659)
+test('adminUserListParams_clearedStatus_staysAllAfterReload', () => {
   const initial = parse('status=ACTIVE&passwordChangeRequired=true')
   assert.equal(initial.status, 'ACTIVE')
   assert.equal(initial.passwordChangeRequired, true)
@@ -18,7 +27,7 @@ test('홈에서 지정한 필터를 해제한 주소는 새로고침해도 전�
     status: undefined,
     passwordChangeRequired: undefined,
   })
-  assert.equal(cleared.toString(), '')
+  assert.equal(cleared.toString(), 'status=ALL')
   const reloaded = parseAdminUserListQuery(cleared)
   assert.equal(reloaded.status, undefined)
   assert.equal(reloaded.passwordChangeRequired, undefined)
@@ -97,4 +106,10 @@ test('페이지 번호만 있으면 검색 조건이 없는 목록으로 본다'
     isAdminUserListFiltered({ page: 1, keyword: '', passwordChangeRequired: true }),
     true,
   )
+})
+
+test('보안 정지(SUSPENDED) 필터는 주소에 저장했다가 다시 읽어도 유지된다', () => {
+  const params = adminUserListParams({ page: 1, keyword: '', status: 'SUSPENDED' })
+  assert.equal(params.toString(), 'status=SUSPENDED')
+  assert.equal(parseAdminUserListQuery(params).status, 'SUSPENDED')
 })

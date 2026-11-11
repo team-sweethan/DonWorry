@@ -1,0 +1,21 @@
+.home-preview-badge {
+  color: #445b83;
+  padding: 10px 18px;
+  font-size: 14px;
+}
+.home-preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border: 1px dashed #bacde9;
+  border-radius: 10px;
+  background: #f3f7ff;
+}
+.home-preview-controls > a {
+  margin-left: auto;
+  color: #2857a1;
+  font-size: 14px;
+}

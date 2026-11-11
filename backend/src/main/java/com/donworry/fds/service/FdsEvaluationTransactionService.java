@@ -166,8 +166,10 @@ class FdsEvaluationTransactionService {
                 newDevice,
                 25,
                 "{\"requiresPriorApproved\":true}",
-                "{\"deviceId\":" + json(request.deviceId()) + ",\"approvedHistoryCount\":" + approvedHistory.size()
-                        + "}");
+                // 근거에는 가린 값만 둔다 (#628). 비교는 위 newDevice가 원문으로 한다
+                "{\"" + FdsIdentifierMasking.MASKED_DEVICE_KEY + "\":"
+                        + json(FdsIdentifierMasking.deviceId(request.deviceId()))
+                        + ",\"approvedHistoryCount\":" + approvedHistory.size() + "}");
         addRuleHit(
                 evaluation,
                 "R03",
@@ -175,8 +177,9 @@ class FdsEvaluationTransactionService {
                 newCard,
                 25,
                 "{\"requiresPriorApproved\":true}",
-                "{\"cardToken\":" + json(request.cardToken()) + ",\"approvedHistoryCount\":" + approvedHistory.size()
-                        + "}");
+                // 카드 토큰 대신 표시값을 둔다 (#628)
+                "{\"" + FdsIdentifierMasking.CARD_DISPLAY_LABEL_KEY + "\":" + json(request.cardDisplayLabel())
+                        + ",\"approvedHistoryCount\":" + approvedHistory.size() + "}");
         addRuleHit(
                 evaluation,
                 "R05",
@@ -202,11 +205,14 @@ class FdsEvaluationTransactionService {
                 100,
                 "{\"active\":true}",
                 "{\"buyerRef\":" + json(request.customerRef())
-                        + ",\"deviceId\":" + json(request.deviceId())
-                        + ",\"cardToken\":" + json(request.cardToken())
-                        + ",\"cardDisplayLabel\":" + json(request.cardDisplayLabel())
-                        + ",\"ipAddress\":" + json(request.ipAddress())
-                        + ",\"buyerEmail\":" + json(request.buyerEmail())
+                        // 근거에는 원문을 복사하지 않는다 (#603 · #628). 대조는 위 blockedIdentifierTypes가 원문으로 한다
+                        + ",\"" + FdsIdentifierMasking.MASKED_DEVICE_KEY + "\":"
+                        + json(FdsIdentifierMasking.deviceId(request.deviceId()))
+                        + ",\"" + FdsIdentifierMasking.CARD_DISPLAY_LABEL_KEY + "\":" + json(request.cardDisplayLabel())
+                        + ",\"" + FdsIdentifierMasking.MASKED_IP_KEY + "\":"
+                        + json(FdsIdentifierMasking.ipAddress(request.ipAddress()))
+                        + ",\"" + FdsIdentifierMasking.MASKED_EMAIL_KEY + "\":"
+                        + json(FdsIdentifierMasking.email(request.buyerEmail()))
                         + ",\"matchedIdentifierTypes\":" + json(blockedIdentifierTypes) + "}");
         evaluation.addRuleHit(
                 "R08",

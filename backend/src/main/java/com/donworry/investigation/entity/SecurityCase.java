@@ -46,6 +46,11 @@ public class SecurityCase {
 
     private Instant closedAt;
 
+    // 담당 보안 직원 (P1 platform_users 논리 참조, #608). 직원이 없을 때 만든 사건 · 기능 도입 전 사건은 null(미배정)
+    private Long assigneeStaffId;
+
+    private Instant assignedAt;
+
     @Builder(access = AccessLevel.PRIVATE)
     private SecurityCase(Long merchantId, String customerRef, CaseType caseType, Instant createdAt) {
         this.merchantId = Objects.requireNonNull(merchantId, "merchantId");
@@ -87,6 +92,13 @@ public class SecurityCase {
         requireNotClosed();
         this.status = CaseStatus.CLOSED;
         this.closedAt = Objects.requireNonNull(now, "now").truncatedTo(ChronoUnit.MICROS);
+    }
+
+    // 자동 배정 · 담당 변경 공통. 종료된 사건은 담당을 바꾸지 않는다 — 판정한 직원 기록과 담당이 어긋나지 않게
+    public void assignTo(Long staffId, Instant now) {
+        requireNotClosed();
+        this.assigneeStaffId = Objects.requireNonNull(staffId, "staffId");
+        this.assignedAt = Objects.requireNonNull(now, "now").truncatedTo(ChronoUnit.MICROS);
     }
 
     public boolean isClosed() {

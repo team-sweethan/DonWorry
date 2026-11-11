@@ -46,7 +46,11 @@ export function ReportTrace({ trace }: { trace: InvestigationTrace | undefined }
         <Alert
           type="info"
           showIcon
-          message="AI 서버가 꺼진 상태에서 만든 고정 문장 보고서입니다. AI가 조사하지 않았습니다."
+          message={
+            trace.fixedReason === 'ADMIN_STOPPED'
+              ? 'AI 조사 긴급정지 중에 만든 고정 문장 보고서입니다. AI가 조사하지 않았습니다.'
+              : 'AI 서버가 꺼진 상태에서 만든 고정 문장 보고서입니다. AI가 조사하지 않았습니다.'
+          }
         />
       )}
       <Card

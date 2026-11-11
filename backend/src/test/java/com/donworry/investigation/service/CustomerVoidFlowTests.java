@@ -15,9 +15,11 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.CasePaymentResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
+import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.CustomerVoidReader.CustomerVoid;
 import java.time.Instant;
 import java.util.HashMap;
@@ -53,6 +55,9 @@ import tools.jackson.databind.json.JsonMapper;
 class CustomerVoidFlowTests {
 
     static final long MERCHANT_ID = 1L;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
 
     @Autowired
     MockMvc mvc;
@@ -316,6 +321,10 @@ class CustomerVoidFlowTests {
                 .paymentId();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, MERCHANT_ID, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        // 판정은 담당 보안 직원(7번)이 한다 (#612). 고객 취소로 이미 종료된 사건은 담당을 바꾸지 않는다
+        if (!securityCaseRepository.findById(caseId).orElseThrow().isClosed()) {
+            CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
+        }
         return new Held(paymentId, caseId);
     }
 

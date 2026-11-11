@@ -7,6 +7,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,10 +21,33 @@ public class OperatorAccessDetectionController {
     @GetMapping
     public OperatorAccessDetectionResponses.Page list(
             @RequestParam(defaultValue = "ALL") String risk,
+            @RequestParam(required = false) String rule,
+            @RequestParam(required = false) String loginId,
             @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        return service.list(risk, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return service.list(risk, rule, loginId, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+    }
+
+    @GetMapping("/accounts")
+    public OperatorAccessDetectionResponses.AccountPage accounts(
+            @RequestParam(defaultValue = "ALL") String risk,
+            @RequestParam(required = false) String rule,
+            @RequestParam(required = false) String loginId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return service.accounts(risk, rule, loginId, search, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+    }
+
+    @GetMapping("/summary")
+    public OperatorAccessDetectionResponses.Summary summary() {
+        return service.summary();
+    }
+
+    @GetMapping("/unreviewed-count")
+    public long unreviewedCount() {
+        return service.unreviewedCount();
     }
 
     @GetMapping("/rule-catalog")
@@ -39,5 +63,10 @@ public class OperatorAccessDetectionController {
     @GetMapping("/{detectionId}")
     public OperatorAccessDetectionResponses.Detail detail(@PathVariable Long detectionId) {
         return service.detail(detectionId);
+    }
+
+    @PostMapping("/{detectionId}/review")
+    public void review(@PathVariable Long detectionId) {
+        service.review(detectionId);
     }
 }

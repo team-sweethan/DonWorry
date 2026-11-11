@@ -1,34 +1,34 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from app.agent.evidence import decision_basis
 from app.agent.tools import ToolRecord
-from app.agent.verdict_text import headline, payment_reason, recommendation_summary
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
     FactItem,
     FactSentenceItem,
+    InvestigationScope,
     InvestigationTrace,
     LinkedPayments,
+    OrderContext,
     Overview,
     PaymentAnalysis,
     PaymentHistory,
     PaymentSignals,
-    Recommendation,
     ReportBody,
     ReportRecommendation,
     RuleHitDetail,
     SimilarCases,
     TimelineItem,
-    Verdict,
 )
 from app.schemas.tools import (
     CasePayment,
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
     HistoryPayment,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
 )
@@ -38,7 +38,8 @@ from app.schemas.tools import (
 # "AI 권고는 참고용…"은 넣지 않는다 (#355)
 # 보고서 전문 화면이 항상 같은 안내를 보여 줘 두 번 나왔다
 ALWAYS_LIMITATIONS = (
-    "로그인 기록 · 주문 정보는 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
+    # 주문 정보는 #634부터 조회한다 — 로그인 기록만 남는다
+    "로그인 기록은 이번 조사에서 확인하지 않았습니다 (조회 도구 미제공).",
     "FDS 점수는 부정거래 확률이 아닙니다.",
     # 화면의 "AI가 아직 모르는 것" 칸을 없애 늘 같은 안내는 한계 줄로 옮겼다 (#548)
     "구매자 본인의 결제 의사는 확인할 방법이 없습니다.",
@@ -131,12 +132,117 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
 
 
 LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
+ORDER_UNAVAILABLE = "주문 정보를 조회하지 못했습니다."
 # 다른 고객 결제를 찾았을 때 — AI가 "다른 고객 결제 이력은 알 수 없었다"고 쓰던 자리 (#355, Case 12)
 LINKED_PRIVACY = (
     "같은 카드 · 기기 · IP를 쓴 다른 고객 결제는 건수 · 판정만 보고, "
     "개별 결제 내용은 보지 않았습니다 (다른 고객 정보 보호)."
 )
 MOCK_LIMITATION = "mock 조사입니다(Qwen 미사용). AI 문장은 고정 문장입니다."
+# 징후 · 정상 근거는 Spring이 계산한다 (#618) — 못 받은 결제는 징후 칸이 비어 한계 줄로 알린다
+# 판정 권고는 만들지 않는다 (#644, ADR-0009 결정 13)
+BASIS_UNAVAILABLE = "징후 · 정상 근거를 받지 못한 결제가 있습니다. FDS 규칙 · 점수로 확인해 주세요."
+
+# 조사 범위 3칸 (#591) — 화면 ⑤ 조사 범위. 문장 목록 limitations는 다른 화면이 읽어 그대로 둔다
+SCOPE_CHECKED = {
+    "get_case_payments": "사건 결제 목록",
+    "get_fds_evidence": "결제별 FDS 근거",
+    "find_similar_cases": "비슷한 과거 사건",
+    "find_linked_payments": "같은 카드 · 기기 · IP 결제",
+    "get_order_context": "주문 정보 (주문자 이름 · 전화 제외)",
+    "get_decision_basis": "징후 · 정상 근거 (Spring 계산)",
+}
+SCOPE_ALWAYS_UNAVAILABLE = (
+    "로그인 기록 (조회 도구 없음)",
+    "구매자 본인의 결제 의사",
+)
+SCOPE_LINKED_WITHHELD = (
+    "같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 개별 내용 (건수 · 판정만 봄, 다른 고객 정보 보호)"
+)
+
+
+# 고객 이력은 기간으로 이름을 붙인다 — AI가 넓힌 90일은 따로 보이게
+def _checked_title(record: ToolRecord) -> str | None:
+    if isinstance(record.result, PaymentHistoryTool):
+        days = record.result.lookbackDays
+        return f"고객 최근 결제 ({days}일)" + ("" if record.filled_by_system else " · AI 추가 조사")
+    return SCOPE_CHECKED.get(record.tool_name)
+
+
+# limitations 줄을 3칸으로 나눈다 — 무엇을 봤는지는 조회 기록이 정확히 안다 (#355)
+def investigation_scope(records: list[ToolRecord], limitations: list[str]) -> InvestigationScope:
+    checked = _unique([t for t in (_checked_title(r) for r in records) if t])
+    withheld = [SCOPE_LINKED_WITHHELD] if LINKED_PRIVACY in limitations else []
+    skipped = {MOCK_LIMITATION, LINKED_PRIVACY}
+    unavailable = list(SCOPE_ALWAYS_UNAVAILABLE) + [
+        line for line in limitations if line not in skipped
+    ]
+    return InvestigationScope(checked=checked, withheld=withheld, unavailable=_unique(unavailable))
+
+
+_KST = timezone(timedelta(hours=9))
+
+
+def _kst(at: datetime) -> str:
+    return at.astimezone(_KST).strftime("%m/%d %H:%M")
+
+
+# 결제 시각 범위 — 같은 날이면 뒤쪽은 시각만 ("11/05 15:57~16:05")
+def _time_range(times: list[datetime]) -> str:
+    if not times:
+        return "시각 모름"
+    first, last = _kst(times[0]), _kst(times[-1])
+    if first == last:
+        return first
+    return f"{first}~{last[6:]}" if first[:5] == last[:5] else f"{first}~{last}"
+
+
+# 사건 개요 한 줄 (#591) — 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태
+# 모두 Tool 기록 값 — 판단 문구는 쓰지 않는다 (판정은 보안 직원이 한다)
+def case_overview(
+    customer_ref: str, case_payments: CasePaymentsTool, fds: dict[str, FdsPayment]
+) -> str:
+    payments = case_payments.payments
+    times = sorted(t for t in (_at(p.requestedAt) for p in payments) if t)
+    amounts = [p.amount for p in payments]
+    if len(payments) == 1:
+        money = "금액 모름" if amounts[0] is None else f"{amounts[0]:,}원"
+    elif None in amounts:
+        money = "합계 금액 일부 모름"
+    else:
+        money = f"합계 {sum(a for a in amounts if a is not None):,}원"
+    subject = f"고객 {customer_ref}의 결제 {len(payments)}건({money}, {_time_range(times)})"
+    rules = _unique(
+        [rule.name for p in payments if p.paymentId in fds for rule in fds[p.paymentId].ruleHits]
+    )
+    counts: dict[str, int] = {}
+    for p in payments:
+        status = PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름")
+        counts[status] = counts.get(status, 0) + 1
+    held = PAYMENT_STATUS_KO["HELD"]
+    if rules and list(counts) == [held]:
+        return f"{subject}이 {' · '.join(rules)} 규칙에 걸려 {held}된 사건입니다."
+    now = " · ".join(f"{status} {n}건" for status, n in counts.items())
+    if rules:
+        return f"{subject}이 {' · '.join(rules)} 규칙에 걸린 사건입니다 (지금 상태: {now})."
+    return f"{subject}에 대한 사건입니다 (지금 상태: {now})."
+
+
+# 표의 결제마다 징후 · 정상 근거 계산이 본 30일 기본 조회에 들었는지 (#591)
+# 날짜로 다시 세지 않고 실제 조회 결과로 본다 — 정상 근거 계산과 어긋나지 않게
+def _report_history(
+    history: PaymentHistoryTool | None, basis_history: PaymentHistoryTool | None
+) -> PaymentHistory | None:
+    if history is None:
+        return None
+    report = PaymentHistory.model_validate(
+        history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
+    )
+    if basis_history is not None:
+        base_ids = {p.paymentId for p in basis_history.payments}
+        for item in report.payments:
+            item.inBasis = item.paymentId in base_ids
+    return report
 
 
 def similar_outcome(accept: int, reject: int) -> str:
@@ -147,14 +253,6 @@ def similar_outcome(accept: int, reject: int) -> str:
 
 def _unique(items: list[str]) -> list[str]:
     return list(dict.fromkeys(items))
-
-
-def overall_recommendation(recommendations: list[Recommendation]) -> Recommendation:
-    if "REJECT_REVIEW" in recommendations:
-        return "REJECT_REVIEW"
-    if recommendations and all(r == "ACCEPT_REVIEW" for r in recommendations):
-        return "ACCEPT_REVIEW"
-    return "NEEDS_CHECK"
 
 
 CASE_CREATED_EVENT = "사건 자동 생성 · AI 조사 시작"
@@ -203,10 +301,13 @@ def assemble_report(
     history: PaymentHistoryTool | None = None,
     linked: LinkedPaymentsTool | None = None,
     basis_history: PaymentHistoryTool | None = None,
+    summary_appended: list[str] | None = None,
+    basis_tool: DecisionBasisTool | None = None,
+    order: OrderContextTool | None = None,
 ) -> ReportBody:
-    # 기준표는 코드가 늘 하는 기본 조회(30일)로만 계산한다 — AI가 90일을 불렀는지에 따라
-    # 같은 사건의 권고가 달라지지 않게 (#581). 표 · 사실은 history(마지막 조회)를 쓴다
-    # 기본 조회가 실패하면 90일 결과로 대신하지 않고 이력 없이 계산한다
+    # 징후 · 정상 근거는 Spring이 30일 기본 조회로 계산해 준다 (#618)
+    # AI가 90일을 불렀는지와 상관없이
+    # 같은 사건엔 같은 근거 (#581). 표 · 사실은 history(마지막 조회), 30일 표시는 basis_history
     analyses: list[PaymentAnalysis] = []
     timeline: list[TimelineItem] = []
     # 한계 줄은 조회 기록으로 코드만 쓴다 — 무엇을 봤는지는 AI보다 코드가 정확히 안다 (#355)
@@ -219,6 +320,8 @@ def assemble_report(
         limitations.append(LINKED_UNAVAILABLE)
     elif any(m.provided and m.paymentCount > 0 for m in (linked.card, linked.device, linked.ip)):
         limitations.append(LINKED_PRIVACY)
+    if order is None:
+        limitations.append(ORDER_UNAVAILABLE)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -232,12 +335,10 @@ def assemble_report(
             checks.append(f"결제 {payment.paymentId}의 결제 정보 확인")
             continue
         evidence = fds.get(payment.paymentId)
-        # 권고는 AI가 아니라 판정 기준표가 정한다 (#501)
-        basis = (
-            decision_basis(payment, evidence, case_payments, basis_history, linked)
-            if evidence is not None
-            else None
-        )
+        # 징후 · 정상 근거는 AI가 아니라 Spring이 계산해 준 값 그대로 (#501, #618)
+        basis = basis_tool.for_payment(payment.paymentId) if basis_tool else None
+        if basis is None and evidence is not None and BASIS_UNAVAILABLE not in limitations:
+            limitations.append(BASIS_UNAVAILABLE)
         # 모르는 사실은 코드가 쓴다 (#548) — AI는 조사한 사실만 전달한다
         unknowns = [ALWAYS_UNKNOWN]
         if evidence is None or evidence.riskScore is None:
@@ -250,8 +351,6 @@ def assemble_report(
                 riskScore=evidence.riskScore if evidence else None,
                 ruleHits=[rule.code for rule in evidence.ruleHits] if evidence else [],
                 unknowns=_unique(unknowns),
-                recommendation=basis.recommendation if basis else "NEEDS_CHECK",
-                reason=payment_reason(basis),
                 ruleHitDetails=[
                     RuleHitDetail(
                         code=rule.code,
@@ -295,7 +394,6 @@ def assemble_report(
         facts=facts,
         additionalChecks=_unique(checks),
         recommendation=ReportRecommendation(
-            summary=recommendation_summary(analyses),
             limitations=_unique(limitations + list(ALWAYS_LIMITATIONS)),
         ),
         evidence=[
@@ -308,24 +406,23 @@ def assemble_report(
             )
             for seq, record in enumerate(records, start=1)
         ],
-        verdict=Verdict(
-            headline=headline(analyses),
-            overallRecommendation=overall_recommendation([a.recommendation for a in analyses]),
-        ),
         investigationTrace=trace,
         similarCases=SimilarCases.model_validate(
             {"cases": [c.model_dump() for c in similar.cases], "totalMatched": similar.totalMatched}
         )
         if similar is not None
         else None,
-        paymentHistory=PaymentHistory.model_validate(
-            history.model_dump(include={"lookbackDays", "payments", "statusCounts", "truncated"})
-        )
-        if history is not None
-        else None,
+        paymentHistory=_report_history(history, basis_history),
         linkedPayments=LinkedPayments.model_validate(
-            linked.model_dump(include={"lookbackDays", "card", "device", "ip"})
+            linked.model_dump(
+                include={"lookbackDays", "nearbyWindowMinutes", "card", "device", "ip"}
+            )
         )
         if linked is not None
         else None,
+        caseOverview=case_overview(context.customer_ref, case_payments, fds),
+        summaryAppended=list(summary_appended or []),
+        scope=investigation_scope(records, limitations),
+        # 주문 정보 (#634) — Tool 응답 한 줄씩 그대로. 주문번호 · 상품명은 표에만 (AI는 보지 않았다)
+        orderContext=OrderContext(payments=order.payments) if order is not None else None,
     )

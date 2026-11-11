@@ -7,4 +7,5 @@ import java.time.LocalDate;
 
 public record CashFlowSettingRequest(
         @NotNull @Min(0) @Max(9007199254740991L) Long openingBalance,
-        @NotNull LocalDate baseDate) {}
+        @NotNull LocalDate baseDate,
+        @Min(0) @Max(9007199254740991L) Long minimumOperatingFunds) {}

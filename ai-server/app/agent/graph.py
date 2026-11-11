@@ -12,22 +12,29 @@ from app.agent import prompts, trace
 from app.agent.assemble import analyzable, assemble_report
 from app.agent.facts import fact_catalog, prompt_facts, report_facts
 from app.agent.llm import LlmClient
-from app.agent.narrative import Narrative, narrative_schema, validate_narrative
+from app.agent.narrative import (
+    Narrative,
+    missing_notable,
+    narrative_schema,
+    validate_narrative,
+)
 from app.agent.tools import EXTRA_TOOLS, ExtraTool, ToolBox, ToolRecord, llm_content
 from app.config import Settings
 from app.schemas.case_context import CaseContext
 from app.schemas.report import FactSentenceItem, ReportBody, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
     ToolResult,
 )
 
-# 조사 Agent — 기본 조회 5개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
+# 조사 Agent — 기본 조회 6개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
 # 흐름: 기본 조회 → 추가 조사(추가 도구가 있을 때만) → 사실 문장 쓰기(형식 검사 · 고쳐 쓰기) → 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
 # 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
@@ -44,6 +51,8 @@ class AgentState(TypedDict, total=False):
     write_messages: list[BaseMessage]
     repairs: int
     narrative: Narrative | None
+    # 안전망으로 요약 뒤에 덧붙일 눈여겨볼 사실 번호 (#591)
+    summary_appended: list[str]
     report: ReportBody | None
     failure: dict[str, str] | None
     next: str
@@ -78,11 +87,21 @@ def _latest_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     return found[-1] if found else None
 
 
-# 코드가 한 기본 조회의 고객 이력(30일) — 기준표 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
+# 코드가 한 기본 조회의 고객 이력(30일) — 정상 근거 계산용, AI 추가 조사(90일)는 빼고 본다 (#581)
 def _base_history(records: list[ToolRecord]) -> PaymentHistoryTool | None:
     found = [
         r.result for r in records if r.filled_by_system and isinstance(r.result, PaymentHistoryTool)
     ]
+    return found[-1] if found else None
+
+
+def _latest_basis(records: list[ToolRecord]) -> DecisionBasisTool | None:
+    found = [r.result for r in records if isinstance(r.result, DecisionBasisTool)]
+    return found[-1] if found else None
+
+
+def _latest_order(records: list[ToolRecord]) -> OrderContextTool | None:
+    found = [r.result for r in records if isinstance(r.result, OrderContextTool)]
     return found[-1] if found else None
 
 
@@ -116,7 +135,8 @@ def build_graph(
         return extras[name].title if name in extras else trace.tool_title(name)
 
     # 기본 조회: 결제 목록 + 모든 결제의 FDS 근거 + 비슷한 과거 사건(#296) + 고객 최근 결제(#338)
-    # + 같은 카드 · 기기 · IP를 쓴 다른 결제(#352). 결제 목록 · FDS 조회 실패는 조사 실패로 올린다
+    # + 같은 카드 · 기기 · IP를 쓴 다른 결제(#352) + 주문 정보(#634)
+    # 결제 목록 · FDS 조회 실패는 조사 실패로 올린다
     def base(state: AgentState) -> AgentState:
         records: list[ToolRecord] = []
         steps = list(state["trace"])
@@ -145,6 +165,14 @@ def build_graph(
             "같은 카드 · 기기 · IP 결제",
             records,
             steps,
+        )
+        _reference_lookup(
+            "get_order_context", toolbox.get_order_context, "주문 정보", records, steps
+        )
+        # 징후 · 정상 근거는 Spring이 계산한다 (#618) — 맨 뒤에 둬 앞 조회의 증거 번호가 바뀌지 않게
+        # 못 받으면 결제의 징후 칸이 비고 한계 줄로 알린다 (판정 권고는 만들지 않음, #644)
+        _reference_lookup(
+            "get_decision_basis", toolbox.get_decision_basis, "징후 · 정상 근거", records, steps
         )
         ready = _ready_to_write(records, steps)
         if ready["next"] != "write" or not extra_tools:
@@ -294,6 +322,22 @@ def build_graph(
                 "next": "write",
                 "trace": written("형식 검사 실패 → 다시 쓰기", trace.retry_reason(errors)),
             }
+        # 안전망 (#591) — 남은 오류가 눈여겨볼 사실 빠짐뿐이면 실패 대신 코드가 그 사실을 덧붙인다
+        # 몰래 고치지 않는다: 보고서 · 화면 · 조사 과정에 "시스템이 덧붙임"으로 남긴다 (#548 개정)
+        # 숫자 · 형식 오류가 하나라도 남으면 그대로 실패한다
+        rescued, _ = validate_narrative(raw, facts, payment_ids, allow_missing_notable=True)
+        if rescued is not None:
+            appended = missing_notable(rescued, facts)
+            return {
+                "narrative": rescued,
+                "summary_appended": appended,
+                "write_messages": messages,
+                "next": "assemble",
+                "trace": written(
+                    f"눈여겨볼 사실만 빠짐 → 요약에 빠진 사실 {len(appended)}개를 시스템이 덧붙임",
+                    trace.retry_reason(errors),
+                ),
+            }
         reason = f"형식 검사 {settings.agent_max_repairs + 1}회 실패: {'; '.join(errors)}"
         return {
             "failure": {"code": "NARRATIVE_INVALID", "reason": reason},
@@ -326,6 +370,9 @@ def build_graph(
             _latest_history(records),
             _latest_linked(records),
             _base_history(records),
+            state.get("summary_appended") or [],
+            _latest_basis(records),
+            _latest_order(records),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -412,6 +459,7 @@ BASE_TOOL_NAMES = (
     "find_similar_cases",
     "get_payment_history",
     "find_linked_payments",
+    "get_order_context",
 )
 
 

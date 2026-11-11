@@ -2,6 +2,7 @@ import type {
   ActionHandoff,
   AiReport,
   CaseDetail,
+  CaseDetailCase,
   CaseHistory,
   CasePayment,
   CaseStatus,
@@ -10,10 +11,11 @@ import type {
   PaymentDecision,
   ReportBody,
   ReportProgress,
-  SecurityCase,
   SubmitDecisionsRequest,
-} from '../types/case'
-import { api, ApiError } from './client'
+} from '../types/case.ts'
+import type { AssignmentChangeReason } from './caseAssignments.ts'
+import type { ScopedCaseCounts } from '../utils/caseBadge.ts'
+import { api, ApiError } from './client.ts'
 
 /**
  * P3 Case 조회·판정 API (`/api/security-cases`, #98).
@@ -31,11 +33,16 @@ export class CaseVersionConflictError extends Error {
 
 // 백엔드 응답 모양 — ID만 숫자이고 나머지는 화면 타입과 같다
 type Id = number
-type ServerSecurityCase = Omit<SecurityCase, 'caseId' | 'merchantId'> & {
+type ServerSecurityCase = Omit<CaseDetailCase, 'caseId' | 'merchantId' | 'assigneeStaffId'> & {
   caseId: Id
   merchantId: Id
+  assigneeStaffId: Id | null
 }
-type ServerSummary = Omit<CaseSummary, 'caseId' | 'merchantId'> & { caseId: Id; merchantId: Id }
+type ServerSummary = Omit<CaseSummary, 'caseId' | 'merchantId' | 'assigneeStaffId'> & {
+  caseId: Id
+  merchantId: Id
+  assigneeStaffId: Id | null
+}
 type ServerPayment = Omit<CasePayment, 'casePaymentId' | 'paymentId'> & {
   casePaymentId: Id
   paymentId: Id
@@ -82,16 +89,25 @@ const strOrNull = (id: Id | null) => (id === null ? null : String(id))
  */
 export async function getCases(): Promise<CaseSummary[]> {
   const cases = await api<ServerSummary[]>('/security-cases', { cache: 'no-store' })
-  return cases.map((c) => ({ ...c, caseId: str(c.caseId), merchantId: str(c.merchantId) }))
+  // 담당 ID도 문자열로 바꿔야 화면이 로그인 사용자와 같은 방식으로 비교한다 (#608)
+  return cases.map((c) => ({
+    ...c,
+    caseId: str(c.caseId),
+    merchantId: str(c.merchantId),
+    assigneeStaffId: strOrNull(c.assigneeStaffId),
+  }))
 }
 
-/** 사이드바 배지용 상태별 건수 (#224). 목록과 달리 결제 · 보고서를 읽지 않아 가볍다. 모든 상태가 키로 온다. */
-export async function getCaseCounts(): Promise<Record<CaseStatus, number>> {
-  const { statusCounts } = await api<{ statusCounts: Record<CaseStatus, number> }>(
-    '/security-cases/counts',
-    { cache: 'no-store' },
-  )
-  return statusCounts
+/**
+ * 사이드바 배지 · 자동 갱신용 상태별 건수 (#224). 목록과 달리 결제 · 보고서를 읽지 않아 가볍다. 모든 상태가 키로 온다.
+ * MINE은 로그인한 직원이 담당인 Case만, ALL은 모든 직원의 Case다 (#640).
+ */
+export async function getCaseCounts(): Promise<ScopedCaseCounts> {
+  const { statusCounts, myStatusCounts } = await api<{
+    statusCounts: Record<CaseStatus, number>
+    myStatusCounts: Record<CaseStatus, number>
+  }>('/security-cases/counts', { cache: 'no-store' })
+  return { ALL: statusCounts, MINE: myStatusCounts }
 }
 
 /** 결제 ID → 연결된 Case (#309). 경보 화면이 Case로 이동할 때 쓴다. Case가 없는 결제는 결과에 없다. 한 번에 1~100개. */
@@ -136,6 +152,19 @@ export async function getReportProgress(caseId: string, reportId: string): Promi
   return api<ReportProgress>(`/security-cases/${caseId}/reports/${reportId}/progress`, {
     cache: 'no-store',
   })
+}
+
+// AI 보고서 인쇄 · PDF 저장 창을 연 기록 (#623, P4) — 서버가 직원 접근 기록(REPORT_PRINT)에 남긴다
+export async function recordReportPrint(caseId: string, reportId: string): Promise<void> {
+  await api<void>(`/security-cases/${caseId}/reports/${reportId}/print`, { method: 'POST' })
+}
+
+/**
+ * 진행 중인 사건을 담당이 아닌 직원이 열었을 때 403(INV_028) (#612). 서버가 거부를 접근 기록에 남긴다.
+ * 판정 · 재확인 · 보고서 요청 · 진행 조회도 같은 코드로 거부된다.
+ */
+export function isCaseAssigneeOnly(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403 && error.code === 'INV_028'
 }
 
 export async function getCase(caseId: string): Promise<CaseDetail | null> {
@@ -192,6 +221,24 @@ export async function requestReport(caseId: string): Promise<CaseDetail> {
   return toDetail(await api<ServerDetail>(`/security-cases/${caseId}/reports`, { method: 'POST' }))
 }
 
+/**
+ * 담당자 본인의 담당 변경 요청 (#608). 새 담당은 관리자가 승인할 때 정한다.
+ * 담당이 아니면 403(INV_018), 이미 대기 요청이 있으면 409(INV_019), 기타인데 메모가 없으면 400(INV_026).
+ */
+export async function requestAssignmentChange(
+  caseId: string,
+  reason: AssignmentChangeReason,
+  memo: string,
+): Promise<CaseDetail> {
+  return toDetail(
+    await api<ServerDetail>(`/security-cases/${caseId}/assignment-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, memo: memo.trim() || null }),
+    }),
+  )
+}
+
 function fetchDetail(caseId: string) {
   return api<ServerDetail>(`/security-cases/${caseId}`, { cache: 'no-store' })
 }
@@ -202,6 +249,7 @@ function toDetail(detail: ServerDetail): CaseDetail {
       ...detail.securityCase,
       caseId: str(detail.securityCase.caseId),
       merchantId: str(detail.securityCase.merchantId),
+      assigneeStaffId: strOrNull(detail.securityCase.assigneeStaffId),
     },
     payments: detail.payments.map((p) => ({
       ...p,

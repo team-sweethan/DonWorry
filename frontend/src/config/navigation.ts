@@ -3,9 +3,27 @@ import type { AuthUser } from '../types/auth.ts'
 export type Role = 'security' | 'owner'
 export type Permission = 'FDS_VIEW' | 'FINANCE_VIEW'
 /** 메뉴 옆 숫자 배지 이름. 숫자는 레이아웃 바깥(역할별 훅)에서 받아 그리기만 한다. */
-export type NavBadge = 'securityCaseActions' | 'ruleChangeRequests'
-export type NavItem = { label: string; path: string; permission?: Permission; badge?: NavBadge }
-export type NavGroup = { title: string; items: NavItem[] }
+export type NavBadge =
+  | 'securityCaseActions'
+  | 'ruleChangeRequests'
+  | 'caseAssignmentRequests'
+  | 'rawViewReviews'
+  | 'insiderAlerts'
+  | 'insiderCases'
+  | 'operatorAccessSuspensions'
+  | 'merchantApplications'
+/** 한 메뉴 안에서 본문 위 탭으로 나눠 보는 화면 (ADR-0082 8절). 주소는 화면마다 그대로 둔다. */
+export type NavTab = { label: string; path: string; badge?: NavBadge }
+/** tabs가 있으면 path는 첫 탭 주소이고, 메뉴 배지는 탭 배지의 합이다. */
+export type NavItem = {
+  label: string
+  path: string
+  permission?: Permission
+  badge?: NavBadge
+  tabs?: NavTab[]
+}
+/** title이 없는 그룹은 묶음 제목 없이 메뉴만 보인다 (관리자 홈). */
+export type NavGroup = { title?: string; items: NavItem[] }
 
 export const roles: Record<Role, { label: string }> = {
   security: { label: '보안 직원' },
@@ -23,12 +41,18 @@ export const navByRole: Record<Role, NavGroup[]> = {
         { label: '경보', path: '/security/alerts' },
         { label: '탐지 룰 목록', path: '/security/rules' },
         { label: '차단 목록', path: '/security/blocklist' },
+        // ML 그림자 채점 모델의 실험 기록 (#778, ADR-0061)
+        { label: 'ML 모델', path: '/security/ml-model' },
       ],
     },
     // 업무 흐름 순서 — 탐지(경보) → 조사(Case · 판정) → 조치(결제별 매입 · 취소) (#314)
     {
       title: '조사',
-      items: [{ label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' }],
+      items: [
+        { label: 'Case 목록', path: '/security/cases', badge: 'securityCaseActions' },
+        // AI 조사 긴급정지 (#626, ADR-0083) — 보안 직원은 정지만, 다시 켜기는 관리자
+        { label: 'AI 조사 긴급정지', path: '/security/ai-switch' },
+      ],
     },
     { title: '조치', items: [{ label: '조치 내역', path: '/security/actions' }] },
   ],
@@ -43,7 +67,7 @@ export const navByRole: Record<Role, NavGroup[]> = {
       items: [
         { label: '정산 내역', path: '/owner/settlements', permission: 'FINANCE_VIEW' },
         { label: '자금 현황', path: '/owner/funds', permission: 'FINANCE_VIEW' },
-        { label: '연계 대출 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
+        { label: '운영자금 상품', path: '/owner/loans', permission: 'FINANCE_VIEW' },
       ],
     },
     // 홈과 키 관리는 권한 코드 없이도 사장님이면 사용할 수 있다 (#354).
@@ -54,27 +78,82 @@ export const navByRole: Record<Role, NavGroup[]> = {
 export const adminNavigation = {
   label: '관리자',
   landing: '/admin/home',
+  // 큰 묶음 › 메뉴 2단. 같은 대상을 다루는 화면은 한 메뉴의 탭으로 합친다 (ADR-0082 8절)
   groups: [
-    { title: '개요', items: [{ label: '홈', path: '/admin/home' }] },
+    { items: [{ label: '홈', path: '/admin/home' }] },
     {
-      title: '관리',
+      title: '가맹점 관리',
       items: [
-        { label: '이용 신청', path: '/admin/applications' },
-        { label: '계정 관리', path: '/admin/users' },
-        { label: '가맹점 관리', path: '/admin/merchants' },
+        // 배지는 이메일 확인이 끝나 검토를 기다리는 신청 수
+        { label: '이용 신청', path: '/admin/applications', badge: 'merchantApplications' },
+        { label: '가맹점 목록', path: '/admin/merchants' },
+      ],
+    },
+    // 직원이 한 일을 사람이 처리 — 사건 배정 · 원문 열람 사후 검토 (ADR-0082 8절)
+    {
+      title: '직원 관리',
+      items: [
+        // FDS 사건 담당 (#608) — 관리자는 사건 상세가 아니라 담당 배정만 본다 (ADR-0065)
+        {
+          label: '사건 담당',
+          path: '/admin/case-assignments',
+          tabs: [
+            { label: '담당 현황', path: '/admin/case-assignments' },
+            {
+              label: '변경 요청',
+              path: '/admin/case-assignment-requests',
+              badge: 'caseAssignmentRequests',
+            },
+          ],
+        },
+        // 원문 열람 사후 검토 (#619). 관리자는 원문을 보지 않는다
+        { label: '전화번호 열람 검토', path: '/admin/raw-view-reviews', badge: 'rawViewReviews' },
+      ],
+    },
+    // 시스템이 찾아낸 이상 접근 — 직원(내부자) · 사장님 계정 (ADR-0082 8절)
+    {
+      title: '접근 감시',
+      items: [
+        // 내부자 관제 · 경보 · 사건 (#679 · #516 · #670)
+        {
+          label: '내부자 보안',
+          path: '/admin/insider-monitor',
+          tabs: [
+            { label: '관제', path: '/admin/insider-monitor' },
+            { label: '경보', path: '/admin/insider-alerts', badge: 'insiderAlerts' },
+            { label: '사건', path: '/admin/insider-cases', badge: 'insiderCases' },
+          ],
+        },
+        // 크리덴셜 스터핑 (#770) — 전체 로그인 실패율 · 탈취 의심
+        { label: '로그인 보안', path: '/admin/login-security' },
+        // 사장님 계정 403 탐지 (#515). 배지는 자동 정지 뒤 아직 정지 상태인 사장님 계정 수
+        {
+          label: '계정 접근 이상 탐지',
+          path: '/admin/fds/operator-access-detections',
+          badge: 'operatorAccessSuspensions',
+        },
       ],
     },
     {
-      title: '탐지',
+      title: '시스템 설정',
       items: [
-        { label: '탐지 룰 목록', path: '/admin/fds/rules' },
-        { label: '계정 접근 이상 탐지', path: '/admin/fds/operator-access-detections' },
+        // 계정은 사장님 · 보안 직원 · 관리자에 걸친 회사 전체 일 — 한 화면에서 역할 · 상태 필터로 나눠 본다
+        { label: '계정 관리', path: '/admin/users' },
         {
-          label: '룰 변경 요청',
-          path: '/admin/fds/rule-change-requests',
-          badge: 'ruleChangeRequests',
+          label: '탐지 룰',
+          path: '/admin/fds/rules',
+          tabs: [
+            { label: '룰 목록', path: '/admin/fds/rules' },
+            {
+              label: '변경 요청',
+              path: '/admin/fds/rule-change-requests',
+              badge: 'ruleChangeRequests',
+            },
+            { label: '변경 이력', path: '/admin/fds/rule-policy-change-histories' },
+          ],
         },
-        { label: '룰 변경 이력', path: '/admin/fds/rule-policy-change-histories' },
+        // AI 조사 긴급정지 (#626, ADR-0083) — 정지 · 다시 켜기 · 변경 기록
+        { label: 'AI 조사 긴급정지', path: '/admin/ai-switch' },
       ],
     },
   ] satisfies NavGroup[],
@@ -132,10 +211,24 @@ export function canOpenPath(user: AuthUser, pathname: string) {
   if (pathname !== base && !pathname.startsWith(base + '/')) return false
   const guarded = sessionMenus[user.role].groups
     .flatMap((group) => group.items)
-    .find(
-      (item) =>
-        pathname === item.path || (item.path !== base && pathname.startsWith(item.path + '/')),
+    .find((item) =>
+      navItemPaths(item).some(
+        (path) => pathname === path || (path !== base && pathname.startsWith(path + '/')),
+      ),
     )
   if (!guarded?.permission) return true
   return groups.some((group) => group.items.some((item) => item.path === guarded.path))
+}
+
+/** 메뉴 하나가 여는 주소들. 탭으로 합친 메뉴는 탭 주소 전부다. */
+export function navItemPaths(item: NavItem) {
+  return item.tabs ? item.tabs.map((tab) => tab.path) : [item.path]
+}
+
+/** 지금 주소가 탭 주소와 같으면 그 메뉴를 돌려준다. 상세 같은 하위 주소에서는 탭을 보이지 않는다. */
+export function findTabbedItem(groups: NavGroup[], pathname: string) {
+  const path = pathname.replace(/\/+$/, '')
+  return groups
+    .flatMap((group) => group.items)
+    .find((item) => item.tabs?.some((tab) => tab.path === path))
 }

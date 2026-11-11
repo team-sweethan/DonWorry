@@ -1,5 +1,6 @@
 package com.donworry.investigation.service;
 
+import com.donworry.identity.api.SecurityStaffDirectory;
 import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.AiReportResponse;
@@ -12,12 +13,14 @@ import com.donworry.investigation.dto.CaseDetailResponse.SecurityCaseResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
 import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.HandoffListItemResponse;
+import com.donworry.investigation.entity.AssignmentRequestStatus;
 import com.donworry.investigation.entity.CaseHistory;
 import com.donworry.investigation.entity.CaseHistoryEventType;
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseStatus;
 import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.repository.ActionHandoffRepository;
+import com.donworry.investigation.repository.CaseAssignmentRequestRepository;
 import com.donworry.investigation.repository.CaseHistoryRepository;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.CaseStatusCount;
@@ -34,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +57,8 @@ public class CaseQueryService {
     private final CaseHistoryRepository caseHistoryRepository;
     private final PaymentInfoReader paymentInfoReader;
     private final ReportGateway reportGateway;
+    private final SecurityStaffDirectory staffDirectory;
+    private final CaseAssignmentRequestRepository assignmentRequestRepository;
 
     // 보안 직원(merchant_id 없음)은 모든 가맹점 Case를 본다. 화면에서 가맹점을 고르면 그 가맹점만 거른다
     // 이건 표시 필터일 뿐 인가가 아니다 — 역할 · 가맹점 권한 검사는 identity 공개 계약이 생긴 뒤 붙인다
@@ -61,21 +67,53 @@ public class CaseQueryService {
         List<SecurityCase> cases = merchantId == null
                 ? securityCaseRepository.findAllByOrderByCreatedAtDesc()
                 : securityCaseRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId);
-        return cases.stream().map(this::summary).toList();
+        if (cases.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, String> names = staffNames();
+        // Case마다 따로 조회하지 않고 결제 · 평가 · 보고서 상태 · 판정 수를 목록 전체에 한 번씩 읽는다
+        List<Long> caseIds = cases.stream().map(SecurityCase::getId).toList();
+        Map<Long, List<CasePayment>> paymentsByCase = casePaymentRepository.findBySecurityCaseIdIn(caseIds).stream()
+                .sorted(Comparator.comparing(CasePayment::getLinkedAt).thenComparing(CasePayment::getId))
+                .collect(Collectors.groupingBy(
+                        casePayment -> casePayment.getSecurityCase().getId(), Collectors.toList()));
+        Map<Long, PaymentInfo> infos = paymentInfoReader.findAll(paymentsByCase.values().stream()
+                .flatMap(List::stream)
+                .map(CasePayment::getPaymentId)
+                .toList());
+        Map<Long, String> reportStatuses = reportGateway.latestStatuses(caseIds);
+        Map<Long, Long> decidedCounts = new HashMap<>();
+        paymentDecisionRepository.countByCaseIdIn(caseIds).forEach(row -> decidedCounts.put(row.caseId(), row.count()));
+        return cases.stream()
+                .map(securityCase -> summary(
+                        securityCase,
+                        paymentsByCase.getOrDefault(securityCase.getId(), List.of()),
+                        infos,
+                        reportStatuses.get(securityCase.getId()),
+                        decidedCounts.getOrDefault(securityCase.getId(), 0L),
+                        names))
+                .toList();
     }
 
-    // 사이드바 배지용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
-    // 화면이 키 유무를 따지지 않게 없는 상태도 0으로 채운다
+    // 사이드바 배지 · 화면 자동 갱신용 — 목록과 달리 Case마다 결제 · FDS · 보고서를 조회하지 않는다 (#224)
+    // 모든 직원 건수와 함께 staffId가 담당인 건수를 보낸다. 배지 · 홈은 내 건수를 쓴다 (#640)
     @Transactional(readOnly = true)
-    public CaseCountsResponse counts() {
+    public CaseCountsResponse counts(Long staffId) {
+        return new CaseCountsResponse(
+                byStatus(securityCaseRepository.countByStatus()),
+                byStatus(securityCaseRepository.countByStatusForAssignee(staffId)));
+    }
+
+    // 화면이 키 유무를 따지지 않게 없는 상태도 0으로 채운다
+    private static Map<String, Long> byStatus(List<CaseStatusCount> rows) {
         Map<String, Long> counts = new LinkedHashMap<>();
         for (CaseStatus status : CaseStatus.values()) {
             counts.put(status.name(), 0L);
         }
-        for (CaseStatusCount row : securityCaseRepository.countByStatus()) {
+        for (CaseStatusCount row : rows) {
             counts.put(row.status().name(), row.count());
         }
-        return new CaseCountsResponse(counts);
+        return counts;
     }
 
     // 결제 ID → 연결된 Case (#309) — 경보 화면이 Case로 이동할 때 쓴다. P2는 P3를 부를 수 없어 화면이 이 API를 부른다
@@ -126,17 +164,28 @@ public class CaseQueryService {
                 .toList();
     }
 
+    // 판정 · 재확인 · 보고서 요청 뒤 돌려주는 상세. 화면 진입 열람은 CaseDetailViewService (담당 판단 · 열람 기록)
     @Transactional(readOnly = true)
     public CaseDetailResponse detail(Long caseId) {
         SecurityCase securityCase = securityCaseRepository
                 .findById(caseId)
                 .orElseThrow(() -> new InvestigationException(InvestigationErrorCode.CASE_NOT_FOUND));
+        return build(securityCase);
+    }
+
+    // 트랜잭션은 부르는 쪽이 연다 — 열람 기록과 같은 읽기 · 쓰기 트랜잭션에서도 쓰려고 readOnly를 여기 두지 않는다
+    CaseDetailResponse build(SecurityCase securityCase) {
+        Long caseId = securityCase.getId();
         List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
         Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         List<CaseHistory> histories = caseHistoryRepository.findBySecurityCaseIdOrderByCreatedAtAscIdAsc(caseId);
         Map<Long, Instant> customerCanceled = customerCanceledAt(histories, "casePaymentId");
         return new CaseDetailResponse(
-                SecurityCaseResponse.from(securityCase, InvestigationRules.mergeDeadline(securityCase.getCreatedAt())),
+                SecurityCaseResponse.from(
+                        securityCase,
+                        InvestigationRules.mergeDeadline(securityCase.getCreatedAt()),
+                        staffNames().get(securityCase.getAssigneeStaffId()),
+                        assignmentRequestRepository.existsByCaseIdAndStatus(caseId, AssignmentRequestStatus.PENDING)),
                 casePayments.stream()
                         .map(casePayment -> payment(
                                 casePayment,
@@ -156,27 +205,41 @@ public class CaseQueryService {
                 histories.stream().map(HistoryResponse::from).toList());
     }
 
-    private CaseSummaryResponse summary(SecurityCase securityCase) {
+    private CaseSummaryResponse summary(
+            SecurityCase securityCase,
+            List<CasePayment> casePayments,
+            Map<Long, PaymentInfo> infos,
+            String latestReportStatus,
+            long decidedCount,
+            Map<Long, String> staffNames) {
         Long caseId = securityCase.getId();
-        List<CasePayment> casePayments = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId);
-        Map<Long, PaymentInfo> infos = paymentInfos(casePayments);
         List<Optional<PaymentInfo>> payments = casePayments.stream()
                 .map(casePayment -> Optional.ofNullable(infos.get(casePayment.getPaymentId())))
                 .toList();
-        return new CaseSummaryResponse(
-                caseId,
-                securityCase.getMerchantId(),
-                securityCase.getCustomerRef(),
-                securityCase.getCaseType().name(),
-                securityCase.getStatus().name(),
-                securityCase.getEvidenceVersion(),
-                securityCase.getCreatedAt(),
-                securityCase.getClosedAt(),
-                payments.size(),
-                totalAmount(payments),
-                maxRiskScore(payments),
-                reportGateway.latest(caseId).map(ReportSnapshot::status).orElse(null),
-                (int) paymentDecisionRepository.countByCasePaymentSecurityCaseId(caseId));
+        return CaseSummaryResponse.builder()
+                .caseId(caseId)
+                .merchantId(securityCase.getMerchantId())
+                .customerRef(securityCase.getCustomerRef())
+                .caseType(securityCase.getCaseType().name())
+                .status(securityCase.getStatus().name())
+                .evidenceVersion(securityCase.getEvidenceVersion())
+                .createdAt(securityCase.getCreatedAt())
+                .closedAt(securityCase.getClosedAt())
+                .paymentCount(payments.size())
+                .totalAmount(totalAmount(payments))
+                .maxRiskScore(maxRiskScore(payments))
+                .latestReportStatus(latestReportStatus)
+                .decidedCount((int) decidedCount)
+                .assigneeStaffId(securityCase.getAssigneeStaffId())
+                .assigneeName(staffNames.get(securityCase.getAssigneeStaffId()))
+                .build();
+    }
+
+    // 담당자 이름표 — 목록 한 번에 한 번만 읽는다 (보안 직원은 몇 명뿐). 정지 직원 이름도 들어 있다
+    private Map<Long, String> staffNames() {
+        Map<Long, String> names = new HashMap<>();
+        staffDirectory.securityStaff().forEach(entry -> names.put(entry.userId(), entry.displayName()));
+        return names;
     }
 
     // 금액을 모르는 결제가 있으면 합계도 모른다 (null). 빠진 금액을 0으로 치지 않는다

@@ -101,6 +101,42 @@ class RoleApiMatrixTests {
             route("POST", "/api/admin/merchant-applications/1/reject", ADMIN),
             route("GET", "/api/admin/merchant-applications/1/mail-deliveries", ADMIN),
             route("POST", "/api/admin/merchant-applications/1/mail-resends", ADMIN),
+            // 관리자만: FDS 사건 담당 현황 · 변경 · 요청 처리 (#608). 보안 직원은 자기 담당을 바꾸지 못한다
+            route("GET", "/api/admin/case-assignments", ADMIN),
+            route("GET", "/api/admin/case-assignments/staff/1/cases", ADMIN),
+            route("POST", "/api/admin/case-assignments/cases/1/reassign", ADMIN),
+            route("POST", "/api/admin/case-assignments/staff/1/handover", ADMIN),
+            route("POST", "/api/admin/case-assignments/backfill", ADMIN),
+            route("GET", "/api/admin/case-assignments/requests", ADMIN),
+            route("GET", "/api/admin/case-assignments/requests/pending-count", ADMIN),
+            route("POST", "/api/admin/case-assignments/requests/1/approve", ADMIN),
+            route("POST", "/api/admin/case-assignments/requests/1/reject", ADMIN),
+            // 관리자만: 주문자 전화 원문 열람 사후 검토 (#619)
+            route("GET", "/api/admin/raw-view-reviews", ADMIN),
+            route("GET", "/api/admin/raw-view-reviews/pending-count", ADMIN),
+            route("POST", "/api/admin/raw-view-reviews/1/review", ADMIN),
+            // 관리자만: 내부자 경보 (#516)
+            route("GET", "/api/admin/insider-alerts", ADMIN),
+            route("GET", "/api/admin/insider-alerts/open-count", ADMIN),
+            // AI 조사 긴급정지 (#626, ADR-0083): 조회 · 끄기는 보안 직원 + 관리자, 다시 켜기는 관리자만
+            route("GET", "/api/ai-switch", STAFF_OR_ADMIN),
+            route("POST", "/api/ai-switch/stop", STAFF_OR_ADMIN),
+            route("POST", "/api/ai-switch/resume", ADMIN),
+            route("GET", "/api/admin/insider-alerts/1", ADMIN),
+            route("POST", "/api/admin/insider-alerts/1/close", ADMIN),
+            // 관리자만: 내부자 사건 판정 · 징계 사건 정지 해제 (#670)
+            route("GET", "/api/admin/insider-cases", ADMIN),
+            route("GET", "/api/admin/insider-cases/open-count", ADMIN),
+            route("GET", "/api/admin/insider-cases/1", ADMIN),
+            route("POST", "/api/admin/insider-cases/1/decision", ADMIN),
+            route("POST", "/api/admin/insider-cases/1/lock-release", ADMIN),
+            route("GET", "/api/admin/insider-cases/1/reports", ADMIN),
+            route("GET", "/api/admin/insider-monitor/staff", ADMIN),
+            route("GET", "/api/admin/insider-monitor/staff/1/timeline", ADMIN),
+            // 관리자만: 로그인 보안 대시보드 (#770) — 전체 로그인 현황이 보안 직원 · 사장님에게 보이면 안 된다
+            route("GET", "/api/admin/login-security", ADMIN),
+            // 관리자만: 내부자 규칙 카드 (#685) — 감시 기준값이 감시 대상(보안 직원)에게 보이면 안 된다
+            route("GET", "/api/fds/insider-detections/rule-catalog", ADMIN),
             // 보안 직원 + 관리자: 가맹점 목록 · FDS · 결제 운영 조회. 세부 수정 권한은 FDS 서비스가 다시 확인한다
             route("GET", "/api/merchants", STAFF_OR_ADMIN),
             route("GET", "/api/fds/evaluations", STAFF_OR_ADMIN),
@@ -115,9 +151,13 @@ class RoleApiMatrixTests {
             route("GET", "/api/fds/blocklist/status", STAFF_OR_ADMIN),
             route("POST", "/api/fds/blocklist", STAFF_OR_ADMIN),
             route("PUT", "/api/fds/blocklist/1/deactivate", STAFF_OR_ADMIN),
+            route("POST", "/api/fds/evaluations/1/blocklist-entries", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations", STAFF_OR_ADMIN),
             route("GET", "/api/payment-operations/1", STAFF_OR_ADMIN),
             route("GET", "/api/payment-transactions", STAFF_OR_ADMIN),
+            // 거래 상세 1건 (#732)
+            route("GET", "/api/payment-transactions/1", STAFF_OR_ADMIN),
+            route("POST", "/api/payment-transactions/export", STAFF_OR_ADMIN),
             // 보안 직원만: FDS 복구 실행 · Case 조회 · 판정 · 보고서 (ADMIN 제외, ADR-0065)
             route("POST", "/api/payment-operations/1/fds-reevaluations", STAFF),
             route("POST", "/api/payment-operations/1/fds-recovery-deliveries", STAFF),
@@ -129,7 +169,14 @@ class RoleApiMatrixTests {
             route("POST", "/api/security-cases/1/decisions", STAFF),
             route("POST", "/api/security-cases/1/handoffs/2/recheck", STAFF),
             route("POST", "/api/security-cases/1/reports", STAFF),
+            route("POST", "/api/security-cases/1/assignment-requests", STAFF),
+            route("GET", "/api/security-cases/1/payments/2/contact", STAFF),
+            route("POST", "/api/security-cases/1/payments/2/contact-match", STAFF),
+            route("POST", "/api/security-cases/1/payments/2/contact-raw-view", STAFF),
             route("GET", "/api/security-cases/1/reports/2/progress", STAFF),
+            route("POST", "/api/security-cases/1/reports/2/print", STAFF),
+            route("POST", "/api/security-cases/1/reports/2/questions", STAFF),
+            route("GET", "/api/security-cases/1/reports/2/questions", STAFF),
             route("GET", "/api/ml-shadow-scores", STAFF),
             // 사장님 (세션 가맹점): 연동 키는 권한 없이, 보안 조치 결과는 FDS_VIEW, 정산은 FINANCE_VIEW
             route("GET", "/api/owner/integration", OWNER),
@@ -215,7 +262,9 @@ class RoleApiMatrixTests {
                 new Route(HttpMethod.DELETE, "/api/fds/blocklist/1", STAFF_OR_ADMIN),
                 new Route(HttpMethod.GET, "/api/fds/evaluations/1/new-feature", STAFF_OR_ADMIN),
                 new Route(HttpMethod.POST, "/api/owner/integration/new-feature", OWNER),
-                new Route(HttpMethod.GET, "/api/auth/login-histories/new-feature", LOGGED_IN));
+                new Route(HttpMethod.GET, "/api/auth/login-histories/new-feature", LOGGED_IN),
+                // 내보내기는 POST만 (#651 Codex 리뷰) — GET이 열리면 외부 링크로 문지기 · 계정 정지를 일으킬 수 있다
+                new Route(HttpMethod.GET, "/api/payment-transactions/export", STAFF_OR_ADMIN));
         List<String> opened = new ArrayList<>();
         for (Route route : unregistered) {
             for (Persona persona : route.allowed()) {

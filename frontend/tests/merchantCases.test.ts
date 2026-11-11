@@ -46,8 +46,7 @@ test('상세는 결제 ID를 문자열로 바꾸고 판정·결제 상태를 그
       displayStatus: 'CLOSED',
       createdAt: '2026-10-26T00:00:00Z',
       closedAt: '2026-10-26T01:00:00Z',
-      summary: null,
-      directInvestigation: true,
+      summary: ['사건 처리가 종료됐습니다. 각 결제의 실제 처리 결과를 확인해 주세요.'],
       payments: [
         {
           paymentId: 99,
@@ -55,7 +54,6 @@ test('상세는 결제 ID를 문자열로 바꾸고 판정·결제 상태를 그
           requestedAt: null,
           paymentStatus: 'VOIDED',
           decision: 'REJECT',
-          aiRecommendation: null,
           customerCanceled: false,
         },
       ],
@@ -64,6 +62,9 @@ test('상세는 결제 ID를 문자열로 바꾸고 판정·결제 상태를 그
   const detail = await getMerchantCase('12')
   assert.ok(detail)
   assert.equal(detail.caseId, '12')
+  assert.deepEqual(detail.summary, [
+    '사건 처리가 종료됐습니다. 각 결제의 실제 처리 결과를 확인해 주세요.',
+  ])
   assert.equal(detail.payments[0].paymentId, '99')
   assert.equal(detail.payments[0].decision, 'REJECT')
   assert.equal(detail.payments[0].paymentStatus, 'VOIDED')

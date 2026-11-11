@@ -1,3 +1,4 @@
+import { ConfigProvider } from 'antd'
 import { RouteLayout, RouteErrorPage } from './RouteLayout'
 import {
   AdminApplicationsPage,
@@ -21,12 +22,22 @@ import { AlertDetailPage } from '../pages/security/AlertDetailPage'
 import { AlertListPage } from '../pages/security/AlertListPage'
 import { RuleCatalogPage } from '../pages/security/RuleCatalogPage'
 import { BlocklistPage } from '../pages/security/BlocklistPage'
+import { MlModelPage } from '../pages/security/MlModelPage'
+import { TransactionDetailPage } from '../pages/security/TransactionDetailPage'
 import { TransactionListPage } from '../pages/security/TransactionListPage'
 import { RuleChangeRequestsPage } from '../pages/admin/RuleChangeRequestsPage'
 import { RulePolicyChangeHistoriesPage } from '../pages/admin/RulePolicyChangeHistoriesPage'
 import { OperatorAccessDetectionsPage } from '../pages/admin/OperatorAccessDetectionsPage'
 import { OperatorAccessDetectionDetailPage } from '../pages/admin/OperatorAccessDetectionDetailPage'
 import { AdminHomePage } from '../pages/admin/AdminHomePage'
+import { CaseAssignmentsPage } from '../pages/admin/CaseAssignmentsPage'
+import { CaseAssignmentRequestsPage } from '../pages/admin/CaseAssignmentRequestsPage'
+import { InsiderAlertsPage } from '../pages/admin/InsiderAlertsPage'
+import { InsiderCasesPage } from '../pages/admin/InsiderCasesPage'
+import { InsiderMonitorPage } from '../pages/admin/InsiderMonitorPage'
+import { LoginSecurityPage } from '../pages/admin/LoginSecurityPage'
+import { AiSwitchPage } from '../pages/admin/AiSwitchPage'
+import { RawViewReviewsPage } from '../pages/admin/RawViewReviewsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
 import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
@@ -47,6 +58,15 @@ import {
 import { SettlementRoute, LoanProductsRoute } from '../pages/owner/SettlementRoute'
 
 // 업무·계정 화면은 서버 세션으로 보호하고 정산 시연 화면은 개발 환경에서만 제공한다.
+const ownerWarmTheme = {
+  token: {
+    colorPrimary: '#886211',
+    colorLink: '#886211',
+    colorBorderSecondary: '#e7e1d5',
+    colorFillAlter: '#fffaf0',
+  },
+}
+
 export const router = createBrowserRouter([
   {
     element: <RouteLayout />,
@@ -187,6 +207,46 @@ export const router = createBrowserRouter([
                 handle: { title: '가맹점 상세' },
                 element: <AdminMerchantDetailPage />,
               },
+              {
+                path: 'case-assignments',
+                handle: { title: '사건 담당 현황' },
+                element: <CaseAssignmentsPage />,
+              },
+              {
+                path: 'case-assignment-requests',
+                handle: { title: '담당 변경 요청' },
+                element: <CaseAssignmentRequestsPage />,
+              },
+              {
+                path: 'raw-view-reviews',
+                handle: { title: '전화번호 열람 검토' },
+                element: <RawViewReviewsPage />,
+              },
+              {
+                path: 'insider-alerts',
+                handle: { title: '내부자 경보' },
+                element: <InsiderAlertsPage />,
+              },
+              {
+                path: 'insider-cases',
+                handle: { title: '내부자 사건' },
+                element: <InsiderCasesPage />,
+              },
+              {
+                path: 'insider-monitor',
+                handle: { title: '내부자 관제' },
+                element: <InsiderMonitorPage />,
+              },
+              {
+                path: 'login-security',
+                handle: { title: '로그인 보안' },
+                element: <LoginSecurityPage />,
+              },
+              {
+                path: 'ai-switch',
+                handle: { title: 'AI 조사 긴급정지' },
+                element: <AiSwitchPage />,
+              },
               { path: 'users', handle: { title: '계정 관리' }, element: <AdminUsersPage /> },
               {
                 path: 'users/new',
@@ -219,6 +279,11 @@ export const router = createBrowserRouter([
                 element: <CaseComparePage />,
               },
               { path: 'actions', handle: { title: '조치 이력' }, element: <ActionHistoryPage /> },
+              {
+                path: 'ai-switch',
+                handle: { title: 'AI 조사 긴급정지' },
+                element: <AiSwitchPage />,
+              },
               { path: 'alerts', handle: { title: '탐지 알림' }, element: <AlertListPage /> },
               {
                 path: 'alerts/:id',
@@ -227,10 +292,16 @@ export const router = createBrowserRouter([
               },
               { path: 'rules', handle: { title: '탐지 규칙' }, element: <RuleCatalogPage /> },
               { path: 'blocklist', handle: { title: '차단 목록' }, element: <BlocklistPage /> },
+              { path: 'ml-model', handle: { title: 'ML 모델' }, element: <MlModelPage /> },
               {
                 path: 'transactions',
                 handle: { title: '거래 내역' },
                 element: <TransactionListPage />,
+              },
+              {
+                path: 'transactions/:paymentId',
+                handle: { title: '거래 상세' },
+                element: <TransactionDetailPage />,
               },
               { path: '*', element: <ScreenResult kind="404" homePath="/security" /> },
             ],
@@ -238,23 +309,39 @@ export const router = createBrowserRouter([
           {
             path: '/owner',
             children: [
-              { index: true, handle: { title: '사장님 홈' }, element: <OwnerHomePage /> },
+              {
+                index: true,
+                handle: { title: '사장님 홈' },
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <OwnerHomePage />
+                  </ConfigProvider>
+                ),
+              },
               {
                 path: 'actions',
                 handle: { title: '조치 결과' },
-                element: <MerchantCaseListPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <MerchantCaseListPage />
+                  </ConfigProvider>
+                ),
               },
               {
                 path: 'actions/:id',
                 handle: { title: '조치 결과 상세' },
-                element: <MerchantCaseDetailPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <MerchantCaseDetailPage />
+                  </ConfigProvider>
+                ),
               },
               // 정산 상세 API 연동 전에는 HTML 프로토타입의 예시 화면을 제공한다.
               { path: 'settlements', handle: { title: '정산 내역' }, element: <SettlementRoute /> },
               { path: 'funds', handle: { title: '자금 현황' }, element: <SettlementRoute /> },
               {
                 path: 'loans',
-                handle: { title: '연계 대출 상품' },
+                handle: { title: '운영자금 상품' },
                 element: <LoanProductsRoute />,
               },
               { path: 'funds/loans', element: <Navigate to="/owner/loans" replace /> },
@@ -262,7 +349,11 @@ export const router = createBrowserRouter([
               {
                 path: 'integration',
                 handle: { title: '시크릿 키 발급' },
-                element: <IntegrationPreviewPage />,
+                element: (
+                  <ConfigProvider theme={ownerWarmTheme}>
+                    <IntegrationPreviewPage />
+                  </ConfigProvider>
+                ),
               },
               { path: '*', element: <ScreenResult kind="404" homePath="/owner" /> },
             ],

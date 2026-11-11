@@ -1,0 +1,459 @@
+/* 폭 · 바깥 상자 · 노란 상자 · 날짜는 caseAssignmentShared.css (변경 요청과 같이 쓴다) */
+/* 관리자 [사건 담당 › 담당 현황] — 보안팀 사무실. 직원 한 명 = 책상 하나(동전이), 책상을 누르면 아래에 사건이 열린다.
+   참고한 패턴: AI 에이전트 대시보드의 "가상 사무실" 보기(에이전트마다 자리 하나, 일감이 자리 위에 보임), Gather 같은 가상 오피스.
+   색 규칙: 정상은 회색 글자로 조용히, 빨강은 "정지인데 사건이 남음" 한 경우만, 다음 차례만 역할 색 */
+.ca-board-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 16px 20px 12px;
+}
+.ca-board-head h2 {
+  margin: 0;
+}
+
+/* ── 보안팀 사무실 — 직원 한 명 = 책상 하나, 동전이가 앉아 있다 ── */
+.ca-office {
+  padding: 4px 20px 24px;
+}
+.ca-desks {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 56px 20px 20px;
+  overflow: hidden;
+  border: 1px solid #e7e0d2;
+  border-radius: var(--dw-radius-panel);
+  /* 위 40px는 벽 + 걸레받이, 그 아래는 옅은 나무 바닥(가로 판자) */
+  background:
+    linear-gradient(#f6f1e7 0 40px, #e2d6c1 40px 44px, transparent 44px),
+    repeating-linear-gradient(0deg, #faf6ee 0 27px, #efe6d6 27px 28px);
+  list-style: none;
+}
+/* 벽에 걸린 창문 두 개 — 장식 */
+.ca-desks::before,
+.ca-desks::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  width: 64px;
+  height: 24px;
+  border: 3px solid #d8cbb3;
+  border-radius: 4px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 calc(50% - 1.5px),
+      #d8cbb3 0 calc(50% + 1.5px),
+      transparent 0
+    ),
+    #e3eefb;
+  pointer-events: none;
+}
+.ca-desks::before {
+  left: 24px;
+}
+.ca-desks::after {
+  right: 24px;
+}
+.ca-desk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+.ca-desk:hover {
+  background: #ffffffb3;
+  transform: translateY(-2px);
+}
+.ca-desk:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+}
+.ca-desk.is-open {
+  border-color: var(--shell-strong);
+  background: #fff;
+  box-shadow: 0 6px 18px #5b35b01f;
+}
+
+/* 장면: 동전이(뒤) → 책상(앞). 책상이 동전이 아랫부분을 가려 앉아 있는 것처럼 보인다 */
+.ca-desk-scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 156px;
+  height: 128px;
+  justify-content: flex-end;
+}
+.ca-desk-mascot {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: transform 200ms ease;
+}
+.ca-desk:hover .ca-desk-mascot {
+  transform: translateX(-50%) translateY(-3px) rotate(-3deg);
+}
+.ca-desk-table {
+  position: relative;
+  z-index: 1;
+  width: 156px;
+  height: 34px;
+  border-radius: 6px 6px 4px 4px;
+  background: linear-gradient(#e9d3ae 0 9px, #cfae7d 9px);
+  box-shadow: 0 3px 0 #b8925e;
+}
+/* 서류 더미 — 맡은 사건 수만큼 (10장까지) */
+.ca-desk-papers {
+  position: absolute;
+  bottom: 26px;
+  left: 12px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  width: 34px;
+}
+.ca-desk-sheet {
+  width: 30px;
+  height: 4px;
+  margin-top: -1px;
+  border: 1px solid #cbd5e1;
+  border-radius: 1px;
+  background: #fff;
+}
+.ca-desk-sheet:nth-child(odd) {
+  transform: translateX(1px) rotate(-2deg);
+}
+.ca-desk-sheet:nth-child(even) {
+  transform: translateX(-1px) rotate(1.5deg);
+}
+.ca-desk-more {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ca-desk-warn {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+/* 모니터 */
+.ca-desk-monitor {
+  position: absolute;
+  right: 12px;
+  bottom: 26px;
+  width: 34px;
+  height: 24px;
+  border: 3px solid #334155;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #c4b5fd, #ede9fe);
+}
+.ca-desk-monitor::after {
+  content: '';
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: #334155;
+  transform: translateX(-50%);
+}
+/* 말풍선 — 다음 새 사건을 받을 직원 */
+.ca-desk-bubble {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  z-index: 2;
+  padding: 3px 8px;
+  border: 1.5px solid var(--shell-ink);
+  border-radius: 10px 10px 10px 2px;
+  background: #fff;
+  color: var(--shell-ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  animation: ca-bob 2.4s ease-in-out infinite;
+}
+@keyframes ca-bob {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+/* 정지 — 빈 의자, 책상 불 꺼짐 */
+.ca-desk-chair {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  width: 54px;
+  height: 64px;
+  border: 3px solid #94a3b8;
+  border-radius: 14px 14px 6px 6px;
+  background: #e2e8f0;
+  transform: translateX(-50%);
+}
+.ca-desk.is-inactive .ca-desk-table,
+.ca-desk.is-inactive .ca-desk-monitor {
+  filter: grayscale(1);
+  opacity: 0.65;
+}
+.ca-desk.is-inactive .ca-desk-monitor {
+  background: #475569;
+}
+/* 내부자 조사 중 — 칸막이 뒤, 흐리게 */
+.ca-desk.is-insider .ca-desk-mascot {
+  filter: grayscale(0.7);
+  opacity: 0.6;
+}
+.ca-desk-partition {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  z-index: 1;
+  width: 112px;
+  height: 52px;
+  border: 2px solid #94a3b8;
+  border-radius: 6px 6px 0 0;
+  background: repeating-linear-gradient(45deg, #e2e8f0cc 0 6px, #f1f5f9cc 6px 12px);
+  transform: translateX(-50%);
+}
+
+/* 명패 */
+.ca-desk-plate {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 6px;
+}
+.ca-desk-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ca-desk-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.ca-desk-note {
+  color: #64748b;
+  font-size: 12px;
+}
+.ca-desk:is(.is-inactive, .is-insider) .ca-desk-name {
+  color: #64748b;
+}
+/* 정지인데 사건이 남음 — 이 화면의 유일한 빨강 */
+.ca-desk.is-danger .ca-desk-count,
+.ca-desk.is-danger .ca-desk-note {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* 입구 바구니 — 담당자 없는 사건 */
+.ca-inbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+}
+.ca-inbox-tray {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 30px;
+  border: 3px solid #b45309;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+.ca-inbox-tray > span {
+  position: absolute;
+  left: 4px;
+  width: 30px;
+  height: 4px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+}
+.ca-inbox-tray > span:nth-child(1) {
+  top: -2px;
+  transform: rotate(-6deg);
+}
+.ca-inbox-tray > span:nth-child(2) {
+  top: 3px;
+  transform: rotate(4deg);
+}
+.ca-inbox-tray > span:nth-child(3) {
+  top: 8px;
+}
+.ca-inbox-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+/* 열린 책상 아래 사건 */
+.ca-desk-detail {
+  margin-top: 16px;
+}
+.ca-hint {
+  margin: 14px 4px 0;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ca-desk,
+  .ca-desk-mascot {
+    transition: none;
+  }
+  .ca-desk-bubble,
+  .ca-desk-request .anticon {
+    animation: none;
+  }
+}
+
+/* 새 사건 배정 칸 */
+.ca-state {
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+.ca-state.is-off {
+  color: #64748b;
+}
+.ca-state.is-next {
+  color: var(--shell-ink);
+  font-weight: 600;
+}
+.ca-state.is-danger {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+/* 열린 책상의 사건 */
+.ca-cases {
+  padding: 0 20px 20px;
+}
+.ca-cases-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+.ca-cases .ant-table {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.ca-cases .ant-table-container {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.ca-modal-from {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+@media (max-width: 640px) {
+  .ca-office,
+  .ca-cases {
+    padding-inline: 12px;
+  }
+  .ca-desks {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    padding: 12px;
+  }
+}
+
+.ca-request-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.ca-desk-request {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: var(--dw-text-secondary);
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 120ms ease;
+}
+.ca-desk-request:hover {
+  background: #fde68a;
+  color: #78350f;
+}
+.ca-desk-request:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+}
+.ca-desk-request .anticon {
+  color: #d97706;
+  animation: ca-ring 2.4s ease-in-out infinite;
+}
+@keyframes ca-ring {
+  0%,
+  80%,
+  100% {
+    transform: rotate(0);
+  }
+  85% {
+    transform: rotate(14deg);
+  }
+  90% {
+    transform: rotate(-12deg);
+  }
+  95% {
+    transform: rotate(6deg);
+  }
+}
+.ca-desk-detail {
+  scroll-margin-top: 24px;
+}
+.ca-desk-detail:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 3px;
+}

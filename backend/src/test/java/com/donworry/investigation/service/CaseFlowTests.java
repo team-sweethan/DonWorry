@@ -12,6 +12,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.CasePayment;
@@ -178,6 +179,7 @@ class CaseFlowTests {
         SecurityCase securityCase =
                 securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
         casePaymentRepository.save(CasePayment.link(securityCase, System.nanoTime(), Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, securityCase.getId(), STAFF_ID);
         assertThat(reportGateway.findByCase(securityCase.getId())).isEmpty();
 
         perform(post("/api/security-cases/{caseId}/reports", securityCase.getId())
@@ -241,9 +243,10 @@ class CaseFlowTests {
             assertThat(report.evidenceVersion()).isEqualTo(1);
             assertThat(report.reportBody()).containsKeys("overview", "summary", "paymentAnalyses", "evidence");
         });
+        // 새 사건은 만들 때 담당을 정한다 (#608) — 시드 보안 직원(demo 보안직원)이 활성이라 배정 이력이 남는다
         assertThat(detail.history())
                 .extracting(CaseDetailResponse.HistoryResponse::eventType)
-                .containsExactly("CASE_CREATED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
+                .containsExactly("CASE_CREATED", "CASE_ASSIGNED", "PAYMENT_LINKED", "CASE_STATUS_CHANGED");
     }
 
     // 같은 고객의 두 번째 HELD 결제는 같은 Case에 병합되고 증거 버전 · 보고서 버전이 오른다
@@ -546,7 +549,7 @@ class CaseFlowTests {
     // 다른 테스트와 DB를 같이 쓰므로 절대값이 아니라 전후 차이로 본다
     @Test
     void counts_includesEveryStatusAndNewDecisionPendingCase() throws Exception {
-        Map<String, Long> before = caseQueryService.counts().statusCounts();
+        Map<String, Long> before = caseQueryService.counts(STAFF_ID).statusCounts();
         createHeld(customer(), 300_000L, 65);
 
         assertThat(before)
@@ -556,6 +559,26 @@ class CaseFlowTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 1))
                 .andExpect(jsonPath("$.statusCounts.ACTION_FAILED").value(before.get("ACTION_FAILED")));
+    }
+
+    // 내 건수는 로그인한 직원이 담당인 Case만 세고, 모든 직원 건수에는 남의 Case도 그대로 들어간다 (#640)
+    // 다른 테스트와 DB를 같이 쓰므로 이 테스트만 쓰는 직원 ID로 본다
+    @Test
+    void counts_myStatusCounts_onlyLoggedInStaffCases() throws Exception {
+        long me = System.nanoTime();
+        long other = me + 1;
+        Map<String, Long> before = caseQueryService.counts(me).statusCounts();
+        loginAs(me, "SECURITY_STAFF");
+        createHeld(customer(), 300_000L, 65);
+        loginAs(other, "SECURITY_STAFF");
+        createHeld(customer(), 200_000L, 60);
+        loginAs(me, "SECURITY_STAFF");
+
+        perform(get("/api/security-cases/counts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myStatusCounts.DECISION_PENDING").value(1))
+                .andExpect(jsonPath("$.myStatusCounts.CLOSED").value(0))
+                .andExpect(jsonPath("$.statusCounts.DECISION_PENDING").value(before.get("DECISION_PENDING") + 2));
     }
 
     // 결제 ID → 연결된 Case (#309) — 연결된 결제만 결제 ID 순으로 오고, Case가 없는 결제는 빠진다
@@ -650,6 +673,7 @@ class CaseFlowTests {
         Long paymentId = System.nanoTime();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, STAFF_ID);
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         caseDecisionService.decide(
                 caseId,
@@ -686,6 +710,52 @@ class CaseFlowTests {
                         .value(72));
     }
 
+    // 목록은 보고서 상태 · 판정 수를 한 번에 읽는다 — Case마다 따로 읽은 값과 같아야 한다
+    @Test
+    void list_batchedReportStatusAndDecidedCount_matchPerCaseValues() throws Exception {
+        String customer = customer();
+        Held merged = createHeld(customer, 300_000L, 65);
+        createHeld(customer, 500_000L, 72);
+        // 병합된 Case는 보고서가 버전별로 2개 이상이어야 최신 버전 고르기를 검증한다
+        assertThat(reportGateway.findByCase(merged.caseId())).hasSizeGreaterThan(1);
+        Held decided = createHeld(customer(), 200_000L, 60);
+        CaseDetailResponse detail = caseQueryService.detail(decided.caseId());
+        perform(decide(
+                        decided.caseId(),
+                        1,
+                        latestReportId(detail),
+                        List.of(item(detail.payments().getFirst().casePaymentId(), "ACCEPT"))))
+                .andExpect(status().isOk());
+        SecurityCase noReport =
+                securityCaseRepository.save(SecurityCase.open(1L, customer(), CaseType.PAYMENT_FRAUD, Instant.now()));
+        casePaymentRepository.save(CasePayment.link(noReport, System.nanoTime(), Instant.now()));
+
+        List<Long> ids = List.of(merged.caseId(), decided.caseId(), noReport.getId());
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> ids.contains(summary.caseId()))
+                .hasSize(3)
+                .allSatisfy(summary -> {
+                    assertThat(summary.latestReportStatus())
+                            .isEqualTo(reportGateway
+                                    .latest(summary.caseId())
+                                    .map(ReportGateway.ReportSnapshot::status)
+                                    .orElse(null));
+                    assertThat(summary.decidedCount())
+                            .isEqualTo(caseQueryService
+                                    .detail(summary.caseId())
+                                    .decisions()
+                                    .size());
+                });
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(decided.caseId()))
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.decidedCount()).isEqualTo(1));
+        assertThat(caseQueryService.list(null))
+                .filteredOn(summary -> summary.caseId().equals(noReport.getId()))
+                .singleElement()
+                .satisfies(summary -> assertThat(summary.latestReportStatus()).isNull());
+    }
+
     // 결제 정보를 조회하지 못한 결제가 있으면 합계 · 최고 점수는 일부 값이 아니라 null이다
     @Test
     void list_missingPaymentInfo_returnsNullTotalAmount() {
@@ -713,6 +783,11 @@ class CaseFlowTests {
                 .paymentId();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        // 판정 흐름은 담당자가 한다 (#612) — 로그인 직원(없으면 기본 직원)을 담당으로 둔다
+        CaseAssigneeTestSupport.assign(
+                securityCaseRepository,
+                caseId,
+                currentStaff.findCurrent().map(StaffSummary::userId).orElse(STAFF_ID));
         return new Held(paymentId, caseId);
     }
 

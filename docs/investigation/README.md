@@ -22,14 +22,14 @@ P5 HELD 결제 ─(PaymentHeld 이벤트)→ Case 생성 · 30분 병합 → P4 
 
 ## 2. 현재 구현 — 실제 연동과 목업
 
-| 연결 | 상대 | 경계 | 상태 |
-| --- | --- | --- | --- |
-| HELD 결제 수신 | P5 | `payment.api.PaymentHeld` 이벤트 → `PaymentHeldListener` | 실제 (#159) |
-| 결제 금액 · 상태 · 시각 | P5 | `payment.api.PaymentReader` ([ADR-0026](../decisions/0026-payment-read-api.md)) | 실제 (#163 1단계) |
-| FDS 점수 · 판정 · 적중 룰 | P2 | `fds.api.FdsEvidenceReader` ([ADR-0034](../decisions/0034-fds-evidence-read-contract.md)) | 실제 (#163 1단계) |
-| 금융 조치 요청 · 결과 | P5 | `PaymentActionRequester` 동기 호출, `PaymentActionResult` 이벤트 ([ADR-0027](../decisions/0027-payment-actions.md)) | 실제 (#161) |
-| 로그인 사용자 | P1 | `identity.api.CurrentStaff` ([ADR-0020](../decisions/0020-identity-public-read-contracts.md)) | 실제 (#160 · #205) |
-| AI 보고서 요청 · 조회 | P4 | `service.ReportGateway` → `report.service.AiReportService` ([ADR-0009](../decisions/0009-ai-investigation-call-structure.md)) | 실제 (#250 · #253) |
+| 연결                      | 상대 | 경계                                                                                                                          | 상태               |
+| ------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| HELD 결제 수신            | P5   | `payment.api.PaymentHeld` 이벤트 → `PaymentHeldListener`                                                                      | 실제 (#159)        |
+| 결제 금액 · 상태 · 시각   | P5   | `payment.api.PaymentReader` ([ADR-0026](../decisions/0026-payment-read-api.md))                                               | 실제 (#163 1단계)  |
+| FDS 점수 · 판정 · 적중 룰 | P2   | `fds.api.FdsEvidenceReader` ([ADR-0034](../decisions/0034-fds-evidence-read-contract.md))                                     | 실제 (#163 1단계)  |
+| 금융 조치 요청 · 결과     | P5   | `PaymentActionRequester` 동기 호출, `PaymentActionResult` 이벤트 ([ADR-0027](../decisions/0027-payment-actions.md))           | 실제 (#161)        |
+| 로그인 사용자             | P1   | `identity.api.CurrentStaff` ([ADR-0020](../decisions/0020-identity-public-read-contracts.md))                                 | 실제 (#160 · #205) |
+| AI 보고서 요청 · 조회     | P4   | `service.ReportGateway` → `report.service.AiReportService` ([ADR-0009](../decisions/0009-ai-investigation-call-structure.md)) | 실제 (#250 · #253) |
 
 AI 보고서는 P4가 `ai_reports`에 버전별로 저장한다. `ai.server.enabled`가 꺼져 있으면(기본) 결제 근거로 고정 문장 보고서(`FixedReportGenerator`)를 만들고, 켜져 있으면 ai-server(Qwen)에 비동기로 맡긴다. 보고서가 끝나면 P4가 Case 상태를 다시 계산한다(`AiReportFinishedListener`). 세부 규칙은 ADR-0009와 P4 코드를 본다.
 결제 · FDS 조회는 `PaymentFdsInfoReader`가 합친다. 한쪽을 못 찾으면 그쪽 값만 `null`이고, 조회 오류는 숨기지 않고 그대로 던진다.
@@ -43,16 +43,16 @@ Case HTTP 인가는 `SecurityConfig`와 기존 Guard가 이중 검사한다 (#40
 
 위에서부터 먼저 맞는 줄이 이긴다.
 
-| 순서 | 조건 | 다음 상태 |
-| --- | --- | --- |
-| 1 | 이미 `CLOSED` | `CLOSED` 유지 — 종료 뒤의 금융 결과로 다시 열지 않는다 |
-| 1-1 | 모든 결제를 고객이 직접 승인 취소함(#382) | `CLOSED` — `CASE_CLOSED` 이력에 `reason: CUSTOMER_CANCELED` |
-| 2 | 인계 중 하나라도 `FAILED` | `ACTION_FAILED` |
-| 3 | 모든 결제 판정 + 모든 인계 `ACCEPTED`(실제 매입 · 취소 완료) | `CLOSED` |
-| 4 | 모든 결제 판정 (인계 대기 중) | `ACTION_PENDING` |
-| 5 | 미판정 결제 있음 + 최신 보고서가 현재 증거 버전보다 낮거나 생성 중 | `INVESTIGATING` |
-| 6 | 미판정 결제 있음 + 보고서 없음 | `OPEN` |
-| 7 | 미판정 결제 있음 + 현재 증거 버전 보고서 완료(`SUCCEEDED` 또는 `FAILED`) | `DECISION_PENDING` |
+| 순서 | 조건                                                                     | 다음 상태                                                   |
+| ---- | ------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| 1    | 이미 `CLOSED`                                                            | `CLOSED` 유지 — 종료 뒤의 금융 결과로 다시 열지 않는다      |
+| 1-1  | 모든 결제를 고객이 직접 승인 취소함(#382)                                | `CLOSED` — `CASE_CLOSED` 이력에 `reason: CUSTOMER_CANCELED` |
+| 2    | 인계 중 하나라도 `FAILED`                                                | `ACTION_FAILED`                                             |
+| 3    | 모든 결제 판정 + 모든 인계 `ACCEPTED`(실제 매입 · 취소 완료)             | `CLOSED`                                                    |
+| 4    | 모든 결제 판정 (인계 대기 중)                                            | `ACTION_PENDING`                                            |
+| 5    | 미판정 결제 있음 + 최신 보고서가 현재 증거 버전보다 낮거나 생성 중       | `INVESTIGATING`                                             |
+| 6    | 미판정 결제 있음 + 보고서 없음                                           | `OPEN`                                                      |
+| 7    | 미판정 결제 있음 + 현재 증거 버전 보고서 완료(`SUCCEEDED` 또는 `FAILED`) | `DECISION_PENDING`                                          |
 
 - 보고서 `FAILED`도 "완료"로 본다. 직원이 수동 판정(`reportId = null`)할 수 있어야 하기 때문이다(정본 02 §2.5).
 - 시간이 지났다고 `FAILED` · `CLOSED`로 바꾸지 않는다. 오래 대기한 인계는 24시간 SLA 경고와 "인계 상태 다시 확인"으로 처리한다(#158).
@@ -100,7 +100,7 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 - 반영 경로 두 가지, 둘 다 `cancellationId` 기준으로 한 번만 기록한다.
   1. 이벤트 수신(`PaymentCustomerVoidListener`) — 결제가 아직 Case에 없거나 P5 원본과 다르면 예외로 끝나 publication이 미완료로 남는다.
   2. 결제 연결 커밋 직후(`CaseEvidenceChanged` → `reflectCase`) — 취소가 연결보다 먼저 확정된 경우를 잡는다.
-  취소가 연결 커밋 전에 확정되면 2가, 뒤에 확정되면 1이 반영한다.
+     취소가 연결 커밋 전에 확정되면 2가, 뒤에 확정되면 1이 반영한다.
 - 정책(2026-11-02 결정)
   - 모든 결제가 고객 취소 → Case `CLOSED`(사유 `CUSTOMER_CANCELED`)
   - 일부만 취소 → 그 결제만 판정 대상에서 빼고 나머지로 계속
@@ -113,25 +113,25 @@ HELD 결제가 오면 `CaseIntakeService.receive` → `CaseLinkService.link`가 
 
 ## 6. API
 
-| 경로 | 쓰는 사람 | 용도 |
-| --- | --- | --- |
-| `GET /api/security-cases` | 보안 직원 | Case 목록 |
-| `GET /api/security-cases/counts` | 보안 직원 | 상태별 Case 건수 — 사이드바 처리 필요 배지 (#224) |
-| `GET /api/security-cases/payment-links?paymentIds=` | 보안 직원 | 결제 ID(1~100개) → 연결된 Case. P2 경보 화면에서 Case로 이동 (#309) |
-| `GET /api/security-cases/handoffs` | 보안 직원 | 조치 내역 — 판정한 결제마다 인계 한 줄 (#314) |
-| `GET /api/security-cases/{caseId}` | 보안 직원 | Case 상세 (결제 · 보고서 · 판정 · 인계 · 이력) |
-| `POST /api/security-cases/{caseId}/decisions` | 보안 직원 | 결제별 판정 |
-| `POST /api/security-cases/{caseId}/reports` | 보안 직원 | 현재 버전 보고서가 없을 때 다시 요청 |
-| `POST /api/security-cases/{caseId}/handoffs/{handoffId}/recheck` | 보안 직원 | 인계 상태 다시 확인 |
-| `GET /api/merchant/security-cases` | 사장님(`FDS_VIEW`) | 내 가맹점 Case 목록 · 요약 지표 (#205) |
-| `GET /api/merchant/security-cases/{caseId}` | 사장님(`FDS_VIEW`) | 핵심 요약 · 결제별 판정과 실제 결제 상태 (#205) |
+| 경로                                                             | 쓰는 사람          | 용도                                                                               |
+| ---------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| `GET /api/security-cases`                                        | 보안 직원          | Case 목록                                                                          |
+| `GET /api/security-cases/counts`                                 | 보안 직원          | 상태별 Case 건수 — 사이드바 처리 필요 배지 (#224)                                  |
+| `GET /api/security-cases/payment-links?paymentIds=`              | 보안 직원          | 결제 ID(1~100개) → 연결된 Case. P2 경보 화면에서 Case로 이동 (#309)                |
+| `GET /api/security-cases/handoffs`                               | 보안 직원          | 조치 내역 — 판정한 결제마다 인계 한 줄 (#314)                                      |
+| `GET /api/security-cases/{caseId}`                               | 보안 직원          | Case 상세 (결제 · 보고서 · 판정 · 인계 · 이력)                                     |
+| `POST /api/security-cases/{caseId}/decisions`                    | 보안 직원          | 결제별 판정                                                                        |
+| `POST /api/security-cases/{caseId}/reports`                      | 보안 직원          | 현재 버전 보고서가 없을 때 다시 요청                                               |
+| `POST /api/security-cases/{caseId}/handoffs/{handoffId}/recheck` | 보안 직원          | 인계 상태 다시 확인                                                                |
+| `GET /api/merchant/security-cases`                               | 사장님(`FDS_VIEW`) | 내 가맹점 Case 목록 · 요약 지표 (#205)                                             |
+| `GET /api/merchant/security-cases/{caseId}`                      | 사장님(`FDS_VIEW`) | 상태 기반 처리 안내 · 결제별 판정과 실제 결제 상태 (내부 AI 요약·조사 방식 비공개) |
 
 - 오류는 `code`가 있는 problem 응답이다(`INV_001`~`INV_015`). 코드별 의미와 상태는 ADR-0019와 `InvestigationErrorCode`를 본다.
 - 고객사 API는 가맹점을 세션으로만 정하고, 다른 가맹점 Case는 `INV_001` 404로 답한다. 적중 규칙 · 점수 · 판정 사유 같은 내부 근거는 보내지 않는다.
 
 ## 7. 목업 범위
 
-- P3 결제 · FDS 조회와 금융 조치에는 목업이 없다. 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 `MockPaymentInfoStore` · `MockFinancialActionGateway`는 #163 2단계에서 지웠다. HELD Case는 실제 결제의 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 로컬에서는 `scripts/demo/cakeshop_pay.py`로 만든다 ([로컬 시연 가이드](../demo/local-demo.md)).
+- P3 결제 · FDS 조회와 금융 조치에는 목업이 없다. 시연 HELD 결제 API(`POST /api/demo/held-payments`)와 `MockPaymentInfoStore` · `MockFinancialActionGateway`는 #163 2단계에서 지웠다. HELD Case는 실제 결제의 P5 HELD 이벤트(`PaymentHeldListener`)로만 생긴다. 로컬에서는 `scripts/demo/legacy/cakeshop_pay.py`로 만든다 ([로컬 시연 가이드](../demo/local-demo.md)).
 - 테스트는 같은 역할의 대역 `TestPaymentInfoStore` · `TestFinancialActionGateway`(테스트 소스)를 `@Import`해 쓴다. 실제 P5 · P2 연결은 `PaymentActionFlowTests` · `PaymentFdsInfoReaderTests` · `PaymentFdsInfoFlowTests`가 본다.
 - AI 보고서는 목업이 아니다(#250에서 `MockReportGateway`를 P4 `AiReportService`로 바꿨다). ai-server를 켜지 않은 로컬의 고정 문장 보고서도 실제 결제 근거로 만들고 DB에 저장한다.
 - 담당 전체의 목업 현황은 Notion [목업 데이터 · 연동 현황](https://www.notion.so/401ee45ba5e181a7b9f0ee51e9578999)을 본다.

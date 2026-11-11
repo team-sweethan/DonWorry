@@ -1,5 +1,10 @@
 package com.donworry.payment.controller;
 
+import com.donworry.payment.service.ExportOutOfScopeException;
+import com.donworry.payment.service.ExportTooLargeException;
+import com.donworry.payment.service.InsiderExportBlockedException;
+import com.donworry.payment.service.PaymentTransactionNotFoundException;
+import com.donworry.payment.service.TransactionDetailOutOfScopeException;
 import java.time.DateTimeException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.CacheControl;
@@ -27,6 +32,43 @@ public class PaymentTransactionsExceptionHandler extends ResponseEntityException
     @ExceptionHandler({IllegalArgumentException.class, DateTimeException.class})
     ResponseEntity<Object> invalid(Exception e) {
         return problem(400, "PAYMENT_TRANSACTIONS_INVALID_QUERY", "조회 조건을 확인해주세요. 기간은 최대 31일입니다.");
+    }
+
+    @ExceptionHandler(PaymentTransactionNotFoundException.class)
+    ResponseEntity<Object> notFound(PaymentTransactionNotFoundException e) {
+        return problem(404, "PAYMENT_TRANSACTION_NOT_FOUND", "결제를 찾을 수 없습니다.");
+    }
+
+    // 범위 밖은 업무 안내다 (#732) — 내보내기 범위 밖(#730)과 같은 결
+    @ExceptionHandler(TransactionDetailOutOfScopeException.class)
+    ResponseEntity<Object> detailOutOfScope(TransactionDetailOutOfScopeException e) {
+        return problem(
+                403,
+                "PAYMENT_TRANSACTION_OUT_OF_SCOPE",
+                "담당 사건 고객의 결제만 상세를 볼 수 있습니다. 사건 상세의 [이 고객 거래 내역 보기]에서 열어 주세요.");
+    }
+
+    @ExceptionHandler(ExportTooLargeException.class)
+    ResponseEntity<Object> tooLarge(ExportTooLargeException e) {
+        return problem(
+                400,
+                "PAYMENT_TRANSACTIONS_EXPORT_TOO_LARGE",
+                "내보낼 거래가 %,d행을 넘습니다. 기간 · 가맹점 조건을 좁혀 주세요.".formatted(e.maxRows()));
+    }
+
+    // 계정은 이미 정지 · 로그아웃됐다. 의심받는 사람에게 탐지 내용을 알리지 않게 문구는 중립으로 둔다 (#651)
+    @ExceptionHandler(InsiderExportBlockedException.class)
+    ResponseEntity<Object> insiderBlocked(InsiderExportBlockedException e) {
+        return problem(403, "INSIDER_EXPORT_BLOCKED", "보안 확인이 필요해 계정 사용이 일시 정지되었습니다. 관리자에게 문의해 주세요.");
+    }
+
+    // 범위 밖은 업무 안내다 — 정지가 아니라 무엇을 하면 되는지 알려 준다 (#730)
+    @ExceptionHandler(ExportOutOfScopeException.class)
+    ResponseEntity<Object> outOfScope(ExportOutOfScopeException e) {
+        return problem(
+                403,
+                "PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE",
+                "담당 사건 고객의 거래만 내보낼 수 있습니다. 사건 상세의 [이 고객 거래 내역 보기]에서 내보내 주세요.");
     }
 
     @ExceptionHandler({DataAccessException.class, CannotCreateTransactionException.class})

@@ -1,0 +1,642 @@
+.security-home {
+  --home-blue: #2563eb;
+  --home-muted: #5f6b7f;
+}
+.security-home-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.security-home-refresh > span {
+  color: var(--home-muted);
+  font-size: 13px;
+}
+.security-home-hero {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1.6fr);
+  gap: 24px;
+  padding: 24px;
+  margin-bottom: 14px;
+  border: 1px solid #d8e4f5;
+  border-radius: var(--dw-radius-panel);
+  background: linear-gradient(115deg, #edf4ff, #f8fbff 65%, #fff);
+}
+.security-home-summary h2 {
+  margin: 14px 0 10px;
+  color: #172b4d;
+  font-size: clamp(23px, 2.2vw, 32px);
+  line-height: 1.4;
+  letter-spacing: -0.9px;
+}
+.security-home-summary h2 > span {
+  display: inline-block;
+  margin-left: 6px;
+  color: #1d4ed8;
+}
+.security-home-summary p {
+  margin: 0 0 22px;
+  color: var(--home-muted);
+  line-height: 1.6;
+}
+.security-home-notice {
+  margin-bottom: 16px;
+}
+.security-home-queue .dw-table-toolbar {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.security-home-case {
+  display: grid;
+  gap: 4px;
+}
+.security-home-case > strong {
+  color: #243858;
+  font-size: 15px;
+}
+.security-home-case > span {
+  color: var(--home-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.security-home-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 40px 16px;
+  color: var(--home-muted);
+}
+.security-home-empty > .anticon {
+  margin-bottom: 4px;
+  color: #718cb8;
+  font-size: 30px;
+}
+.security-home-empty strong {
+  color: #334155;
+  font-size: 16px;
+}
+.security-home-empty > span:last-child {
+  font-size: 14px;
+}
+.security-home-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.security-home-count {
+  font-variant-numeric: tabular-nums;
+}
+.security-home-enter {
+  animation: security-home-enter 400ms ease-out backwards;
+}
+.security-home-overview {
+  animation-delay: 80ms;
+}
+.security-home-queue {
+  animation-delay: 200ms;
+}
+.security-home-new-case > td {
+  animation: security-home-arrival 1000ms ease-out;
+}
+@keyframes security-home-enter {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes security-home-arrival {
+  from {
+    background-color: #e5efff;
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@media (width <= 1100px) {
+  .security-home-hero {
+    gap: 24px;
+    padding: 24px;
+  }
+}
+@media (width <= 760px) {
+  .security-home-hero {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .security-home-refresh {
+    flex-wrap: wrap;
+  }
+}
+
+.security-home-summary {
+  align-self: center;
+}
+.security-home-summary h2 {
+  margin-top: 18px;
+}
+.security-home-summary h2 > .security-home-total-label {
+  display: block;
+  margin: 0 0 6px;
+  color: #425878;
+  font-size: 17px;
+  font-weight: 550;
+  letter-spacing: -0.3px;
+}
+.security-home-summary h2 > .security-home-total {
+  margin: 0;
+  color: #1c4386;
+  font-size: clamp(40px, 3.5vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -2px;
+}
+.security-home-total small {
+  margin-left: 8px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.security-home-empty > .anticon {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+  border: 1px solid #d5e2f6;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e8f0ff, #f8fbff);
+  box-shadow: 0 0 0 10px #f4f7fc;
+  animation: security-home-empty-enter 800ms ease-out;
+}
+
+@keyframes security-home-empty-enter {
+  from {
+    box-shadow: 0 0 0 0 #e2ecff;
+  }
+  to {
+    box-shadow: 0 0 0 10px #f4f7fc;
+  }
+}
+
+.security-home-workflow {
+  align-self: center;
+  min-width: 0;
+  padding: 0 0 0 24px;
+  border-left: 1px solid #dce5f2;
+}
+.security-home-workflow-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.security-home-workflow-heading strong {
+  color: #334155;
+  font-size: 14px;
+}
+.security-home-workflow-heading > span {
+  color: var(--home-muted);
+  font-size: 11px;
+}
+.security-home-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.security-home-stage {
+  --stage-color: #64748b;
+  --stage-tint: #f2f5f9;
+  position: relative;
+  min-width: 0;
+  text-align: center;
+}
+.security-home-stage.is-prepare.is-running {
+  --stage-color: #386bc5;
+  --stage-tint: #edf3ff;
+}
+.security-home-stage.is-decision:not(.is-empty) {
+  --stage-color: #9a6b16;
+  --stage-tint: #fff6e5;
+}
+.security-home-stage.is-finance.is-running {
+  --stage-color: #357f79;
+  --stage-tint: #eaf5f3;
+}
+.security-home-stage.is-empty {
+  --stage-color: #7c8a9f;
+  --stage-tint: #f5f7fa;
+}
+.security-home-stage:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 24px;
+  left: calc(50% + 30px);
+  width: calc(100% - 40px);
+  height: 1px;
+  background: #d4dfed;
+}
+.security-home-guide-link {
+  position: absolute;
+  z-index: 1;
+  top: 23px;
+  left: calc(50% + 30px);
+  width: calc(100% - 40px);
+  height: 3px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.security-home-guide-link > i {
+  display: block;
+  width: 32px;
+  height: 100%;
+  opacity: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, #6695df 65%, #386bc5);
+}
+.security-home-workflow.is-guide-active .security-home-guide-link > i {
+  animation: security-home-guide-handoff 3s ease-in-out infinite;
+}
+.security-home-stage-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border: 1px solid color-mix(in srgb, var(--stage-color) 15%, transparent);
+  border-radius: 50%;
+  background: var(--stage-tint);
+  color: var(--stage-color);
+  font-size: 21px;
+}
+.security-home-stage-order {
+  display: block;
+  margin-bottom: 5px;
+  color: #7a889c;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 1px;
+}
+.security-home-stage h3 {
+  min-height: 20px;
+  margin: 0;
+  color: #42536c;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.security-home-stage-count {
+  margin: 4px 0 8px;
+  color: var(--stage-color);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.security-home-stage-count small {
+  margin-left: 4px;
+  color: var(--home-muted);
+  font-size: 12px;
+  font-weight: 450;
+}
+.security-home-stage p {
+  min-height: 36px;
+  margin: 0;
+  color: var(--home-muted);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+@keyframes security-home-guide-handoff {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(400%);
+    opacity: 0;
+  }
+}
+.security-home.is-motion-paused .security-home-guide-link > i {
+  animation-play-state: paused !important;
+}
+@media (width <= 1100px) {
+  .security-home-hero {
+    grid-template-columns: 1fr;
+  }
+  .security-home-workflow {
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid #dce5f2;
+  }
+}
+@media (width <= 760px) {
+  .security-home-workflow {
+    padding: 16px 0 0;
+  }
+  .security-home-stages {
+    gap: 12px;
+  }
+  .security-home-stage-icon {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
+  .security-home-stage:not(:last-child)::after {
+    top: 22px;
+    left: calc(50% + 28px);
+    width: calc(100% - 44px);
+  }
+  .security-home-guide-link {
+    top: 21px;
+    left: calc(50% + 28px);
+    width: calc(100% - 44px);
+  }
+  .security-home-stage p {
+    font-size: 11px;
+  }
+  .security-home-stage-count {
+    font-size: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .security-home:not(.is-motion-forced) *,
+  .security-home:not(.is-motion-forced) *::before,
+  .security-home:not(.is-motion-forced) *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@media print {
+  .security-home *,
+  .security-home *::before,
+  .security-home *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+.security-home-unavailable {
+  color: var(--home-muted);
+  line-height: 1.6;
+}
+
+.security-home-overdue {
+  color: #b94a16;
+  font-weight: 650;
+}
+
+.security-home-summary .security-home-summary-scope {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.security-home-attention {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border: 1px solid #e0e6ef;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+.security-home-attention-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #4a5870;
+  font-weight: 600;
+}
+.security-home-attention button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font: inherit;
+  color: var(--home-muted);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.security-home-attention button:disabled {
+  cursor: default;
+}
+.security-home-attention button .anticon {
+  font-size: 10px;
+}
+.security-home-attention .is-red {
+  color: #a72c36;
+}
+.security-home-attention .is-amber {
+  color: #9a6b16;
+}
+.security-home-attention .is-orange {
+  color: #ad4d1f;
+}
+.security-home-attention button:focus-visible {
+  outline: 3px solid #7ba5f0;
+  outline-offset: 3px;
+}
+
+.security-home-open .anticon {
+  transition: transform 150ms ease;
+}
+
+/* 위험도 · 경과 시간 그래프. 둘 다 파랑 한 계열 — 진할수록 높은 점수 · 오래된 사건 */
+.security-home-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+  animation-delay: 140ms;
+}
+.security-home-chart {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid #e0e6ef;
+  border-radius: var(--dw-radius-panel);
+  background: #fff;
+}
+.security-home-chart h3 {
+  margin: 0;
+  color: #243858;
+  font-size: 15px;
+}
+.security-home-chart > p {
+  margin: 2px 0 14px;
+  color: var(--home-muted);
+  font-size: 13px;
+}
+.security-home-chart > small {
+  display: block;
+  margin-top: 12px;
+  color: var(--home-muted);
+  font-size: 12px;
+}
+.security-home-bars {
+  display: grid;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.security-home-bars li > button,
+.security-home-bars li > div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+}
+.security-home-bars li > button {
+  cursor: pointer;
+}
+.security-home-bars li > button:hover {
+  background: #f3f7fd;
+}
+.security-home-bars li > button:focus-visible {
+  outline: 3px solid #7ba5f0;
+  outline-offset: 1px;
+}
+.security-home-bar-label {
+  color: #42536c;
+}
+.security-home-bar-track {
+  height: 16px;
+}
+.security-home-bar-track > i {
+  position: relative;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  transition: width 400ms ease-out;
+  /* 처음 나타날 때 왼쪽에서 자라고, 줄마다 조금씩 늦게 시작한다. 이후 건수 변화는 width 전환으로 반영 */
+  animation: security-home-bar-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) var(--bar-delay, 0ms)
+    backwards;
+}
+/* 다 자란 뒤에는 옅은 빛이 막대를 따라 계속 지나간다. 줄마다 시작을 어긋나게 해 한꺼번에 깜빡이지 않게 한다 */
+.security-home-bar-track > i::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0%) 30%,
+    rgb(255 255 255 / 45%) 50%,
+    rgb(255 255 255 / 0%) 70%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  animation: security-home-bar-sheen 3.6s ease-in-out calc(var(--bar-delay, 0ms) + 900ms) infinite;
+}
+.security-home.is-motion-paused .security-home-bar-track > i::after {
+  animation-play-state: paused;
+}
+/* 조회 중 · 실패 · 자동 갱신 중단에서는 업무 흐름 안내처럼 멈춘다 */
+.security-home[data-flow-active='false'] .security-home-bar-track > i::after {
+  animation: none;
+  opacity: 0;
+}
+.security-home-bar-value {
+  animation: security-home-bar-value 400ms ease-out 500ms backwards;
+}
+@keyframes security-home-bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes security-home-bar-value {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes security-home-bar-sheen {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+.security-home-bar-value {
+  color: #243858;
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.security-home-bar-track > .is-risk-deny {
+  background: #1c3f86;
+}
+.security-home-bar-track > .is-risk-review {
+  background: #3f6fc8;
+}
+.security-home-bar-track > .is-risk-low {
+  background: #8eaee3;
+}
+.security-home-bar-track > .is-none {
+  background: #c9d1dc;
+}
+.security-home-bar-track > .is-age-1 {
+  background: #b9cdee;
+}
+.security-home-bar-track > .is-age-2 {
+  background: #8eaee3;
+}
+.security-home-bar-track > .is-age-3 {
+  background: #3f6fc8;
+}
+.security-home-bar-track > .is-age-4 {
+  background: #1c3f86;
+}
+.security-home-bars li.is-exceeded .security-home-bar-label,
+.security-home-bars li.is-exceeded .security-home-bar-value {
+  color: #1c3f86;
+  font-weight: 700;
+}
+@media (width <= 760px) {
+  .security-home-charts {
+    grid-template-columns: 1fr;
+  }
+  .security-home-bars li > button,
+  .security-home-bars li > div {
+    grid-template-columns: 76px minmax(0, 1fr) 44px;
+  }
+}

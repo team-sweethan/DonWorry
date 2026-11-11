@@ -271,6 +271,62 @@ class FdsEvaluationServiceTests {
     }
 
     @Test
+    // 차단 목록의 이메일과 같은 결제는 R07로 막는다. 근거에는 원문이 아닌 가린 값만 남기므로 대조가 원문으로 되는지 지킨다 (#603)
+    void evaluate_whenBuyerEmailBlocked_matchesR07() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+        var blocklistEvaluator = blocklistEvaluator();
+        org.mockito.Mockito.doReturn(List.of(blocklistEntry))
+                .when(blocklistEntries)
+                .findByIdentifierTypeAndIdentifierValue("BUYER_EMAIL", "hong-gildong@example.test");
+        when(blocklistEntry.isActiveAt(requestedAt)).thenReturn(true);
+
+        var result = blocklistEvaluator.evaluate(request(1L, 10_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        assertThat(result.result()).isEqualTo(FdsResult.DENY);
+        assertThat(r07(evaluationCaptor.getValue()).getObservedValue())
+                .contains("\"matchedIdentifierTypes\":[\"BUYER_EMAIL\"]");
+    }
+
+    @Test
+    // R07 근거에 이메일 원문을 복사하지 않고 가린 값만 저장한다 (#603, ADR-0082 원문 비복사)
+    void evaluate_withBuyerEmail_storesMaskedEmailInR07Evidence() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        blocklistEvaluator().evaluate(request(1L, 10_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        assertThat(r07(evaluationCaptor.getValue()).getObservedValue())
+                .contains("\"maskedBuyerEmail\":\"ho***@example.test\"")
+                .doesNotContain("hong-gildong@example.test");
+    }
+
+    @Test
+    // 새 평가의 R02 · R03 · R07 근거에 IP · 기기 ID 원문과 카드 토큰을 저장하지 않는다. 대조는 원문으로 따로 한다 (#628)
+    void evaluate_withIdentifiers_storesMaskedValuesInEvidence() {
+        var requestedAt = Instant.parse("2026-10-22T01:00:00Z");
+
+        blocklistEvaluator().evaluate(request(1L, 10_000L, requestedAt));
+
+        verify(evaluationRepository).saveAndFlush(evaluationCaptor.capture());
+        var observed = evaluationCaptor.getValue().getRuleHits().stream()
+                .filter(hit -> List.of("R02", "R03", "R07").contains(hit.getRuleCode()))
+                .collect(java.util.stream.Collectors.toMap(
+                        com.donworry.fds.entity.FdsRuleHit::getRuleCode,
+                        com.donworry.fds.entity.FdsRuleHit::getObservedValue));
+        assertThat(observed).hasSize(3);
+        assertThat(observed.values())
+                .allSatisfy(value ->
+                        assertThat(value).doesNotContain("device-test-1", "card-token-test-1", "203.0.113.10"));
+        assertThat(observed.get("R02")).contains("\"maskedDeviceId\":\"device-t…\"");
+        assertThat(observed.get("R03")).contains("\"cardDisplayLabel\":\"VISA •••• 1\"");
+        assertThat(observed.get("R07"))
+                .contains("\"maskedDeviceId\":\"device-t…\"")
+                .contains("\"maskedIpAddress\":\"203.0.*.*\"")
+                .contains("\"cardDisplayLabel\":\"VISA •••• 1\"");
+    }
+
+    @Test
     // 같은 요청 ID로 재호출하면 기존 평가 결과를 반환한다.
     void evaluate_existingRequestId_returnsStoredEvaluation() {
         var request = request(1L, 150_000L, Instant.parse("2026-10-22T01:00:00Z"));
@@ -540,6 +596,36 @@ class FdsEvaluationServiceTests {
                 request(paymentId, customerRef, 1_000L, requestedAt, cardToken), FdsResult.ALLOW, 0, requestedAt);
         evaluation.recordAuthorizationResult("DECLINED");
         return evaluation;
+    }
+
+    // 차단 목록이 비어 있는 평가기. 테스트가 필요한 식별값만 차단으로 바꾼다
+    private FdsEvaluationTransactionService blocklistEvaluator() {
+        when(evaluationRepository.findByEvaluationRequestId(any())).thenReturn(Optional.empty());
+        when(evaluationRepository.findByMerchantIdAndCustomerRefAndPaymentRequestedAtBetween(
+                        any(), any(), any(), any()))
+                .thenReturn(List.of());
+        when(evaluationRepository.findByMerchantIdAndCustomerRef(any(), any())).thenReturn(List.of());
+        when(blocklistEntries.findByIdentifierTypeAndIdentifierValue(
+                        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(List.of());
+        when(evaluationRepository.saveAndFlush(any(FdsEvaluation.class))).thenAnswer(invocation -> {
+            var evaluation = invocation.getArgument(0, FdsEvaluation.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(evaluation, "evaluationId", 1L);
+            return evaluation;
+        });
+        return new FdsEvaluationTransactionService(
+                evaluationRepository,
+                null,
+                blocklistEntries,
+                null,
+                JsonMapper.builder().build());
+    }
+
+    private static com.donworry.fds.entity.FdsRuleHit r07(FdsEvaluation evaluation) {
+        return evaluation.getRuleHits().stream()
+                .filter(hit -> hit.getRuleCode().equals("R07"))
+                .findFirst()
+                .orElseThrow();
     }
 
     private FdsEvaluationRequest request(Long paymentId, long amount, Instant requestedAt) {

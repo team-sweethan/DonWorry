@@ -7,8 +7,10 @@ import {
   type FdsRuleChangeRequest,
   type FdsRuleChangeRequestPage,
 } from '../../api/fds'
+import { ListEmpty } from '../../components/common/ListEmpty'
 import { PageHeader } from '../../components/common/PageHeader'
 import { refreshRuleChangeRequestBadge } from '../../hooks/useRuleChangeRequestBadge'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 
 const tabs: Array<{ key: FdsRuleChangeRequest['status']; label: string }> = [
   { key: 'PENDING', label: '승인 대기' },
@@ -80,13 +82,28 @@ export function RuleChangeRequestsPage() {
     }
   }
   return (
-    <>
+    <div className="dw-rule-management-page">
       <PageHeader
         title="룰 변경 요청"
         description="결제·계정 룰을 끄기 위한 요청을 검토하고 처리합니다."
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
-      <Card>
+      {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
+      <Card className="dw-rule-records">
+        <div className="dw-rule-records-heading">
+          <div>
+            <h2>룰 끄기 요청</h2>
+            <p>요청 사유를 확인한 뒤 승인하거나 반려합니다.</p>
+          </div>
+          <span className="dw-rule-records-count">
+            {result ? (
+              `${result.totalElements.toLocaleString('ko-KR')}건`
+            ) : error ? (
+              '조회 실패'
+            ) : (
+              <span className="dw-loading-reveal">불러오는 중</span>
+            )}
+          </span>
+        </div>
         <Tabs
           activeKey={status}
           onChange={(key) => {
@@ -101,37 +118,87 @@ export function RuleChangeRequestsPage() {
         />
         <Table
           rowKey="requestId"
-          size="small"
           pagination={false}
+          scroll={{ x: 1080 }}
+          loading={result === null && error === null}
+          locale={{
+            emptyText: (
+              <ListEmpty
+                title={
+                  error
+                    ? '요청 목록을 확인할 수 없습니다.'
+                    : `${tabs.find((tab) => tab.key === status)?.label} 요청이 없습니다.`
+                }
+              />
+            ),
+          }}
           dataSource={result?.content ?? []}
           columns={[
-            { title: '요청 ID', dataIndex: 'requestId', width: 100 },
             {
-              title: '탐지 룰 코드',
+              title: '탐지 룰',
               dataIndex: 'ruleCode',
-              render: (value: string) => <Tag>{value}</Tag>,
+              width: 200,
+              render: (value: string, request: FdsRuleChangeRequest) => (
+                <div className="dw-rule-record-cell">
+                  <strong>{displayRuleCode(value)}</strong>
+                  <span>
+                    <RuleTypeTag ruleCode={value} /> · 요청 #{request.requestId}
+                  </span>
+                </div>
+              ),
             },
             {
-              title: '구분',
-              dataIndex: 'ruleCode',
-              render: (value: string) => <RuleTypeTag ruleCode={value} />,
+              title: '요청자 · 시각',
+              dataIndex: 'requestedByName',
+              width: 170,
+              render: (value: string, request: FdsRuleChangeRequest) => (
+                <div className="dw-rule-record-cell">
+                  <strong>{value}</strong>
+                  <span>{formatDate(request.requestedAt)}</span>
+                </div>
+              ),
             },
-            { title: '요청자', dataIndex: 'requestedByName' },
-            { title: '요청 사유', dataIndex: 'reason', ellipsis: true },
-            { title: '요청 시각', dataIndex: 'requestedAt', render: formatDate },
+            {
+              title: '요청 사유',
+              dataIndex: 'reason',
+              width: 260,
+              render: (value: string) => <div className="dw-rule-record-reason">{value}</div>,
+            },
             {
               title: '상태',
+              width: 110,
               dataIndex: 'status',
               render: (value: FdsRuleChangeRequest['status']) => <StatusTag status={value} />,
             },
             {
-              title: '처리자',
+              title: '처리자 · 시각',
               dataIndex: 'reviewedByName',
-              render: (value: string | null) => value ?? '—',
+              width: 170,
+              render: (value: string | null, request: FdsRuleChangeRequest) => (
+                <div className="dw-rule-record-cell">
+                  <strong>{value ?? '—'}</strong>
+                  {request.reviewedAt && <span>{formatDate(request.reviewedAt)}</span>}
+                </div>
+              ),
             },
-            { title: '처리 시각', dataIndex: 'reviewedAt', render: formatDate },
+            {
+              title: '상세',
+              width: 90,
+              render: (_, request: FdsRuleChangeRequest) => (
+                <Button
+                  size="small"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setSelectedRequest(request)
+                  }}
+                >
+                  요청 보기
+                </Button>
+              ),
+            },
             {
               title: '처리',
+              width: 150,
               render: (_, request: FdsRuleChangeRequest) =>
                 status === 'PENDING' ? (
                   <Space size={6} wrap>
@@ -184,6 +251,8 @@ export function RuleChangeRequestsPage() {
       </Card>
       <Modal
         title="룰 끄기 요청 상세"
+        className="dw-rule-detail-modal"
+        width={640}
         open={selectedRequest !== null}
         footer={<Button onClick={() => setSelectedRequest(null)}>닫기</Button>}
         onCancel={() => setSelectedRequest(null)}
@@ -192,7 +261,7 @@ export function RuleChangeRequestsPage() {
           <Descriptions column={1} size="small">
             <Descriptions.Item label="요청 ID">{selectedRequest.requestId}</Descriptions.Item>
             <Descriptions.Item label="탐지 룰 코드">
-              <Tag>{selectedRequest.ruleCode}</Tag>
+              <Tag>{displayRuleCode(selectedRequest.ruleCode)}</Tag>
               <RuleTypeTag ruleCode={selectedRequest.ruleCode} />
             </Descriptions.Item>
             <Descriptions.Item label="요청자">{selectedRequest.requestedByName}</Descriptions.Item>
@@ -213,6 +282,6 @@ export function RuleChangeRequestsPage() {
           </Descriptions>
         )}
       </Modal>
-    </>
+    </div>
   )
 }

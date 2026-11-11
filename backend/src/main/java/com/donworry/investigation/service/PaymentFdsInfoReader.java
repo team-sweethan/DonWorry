@@ -34,8 +34,9 @@ class PaymentFdsInfoReader implements PaymentInfoReader {
         // P2는 평가가 있는 결제만 돌려준다. 빠진 결제는 평가 없음이다
         Map<Long, FdsPaymentEvidence> evidences = fdsEvidenceReader.findLatestByPaymentIds(ids).stream()
                 .collect(Collectors.toMap(FdsPaymentEvidence::paymentId, Function.identity()));
+        Map<Long, PaymentSummary> payments = paymentReader.findAllById(ids);
         for (Long id : ids) {
-            Optional<PaymentSummary> payment = paymentReader.findById(id);
+            Optional<PaymentSummary> payment = Optional.ofNullable(payments.get(id));
             FdsPaymentEvidence evidence = evidences.get(id);
             if (payment.isPresent() || evidence != null) {
                 found.put(id, info(id, payment, evidence));

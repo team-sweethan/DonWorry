@@ -5,10 +5,12 @@
 | 파일 | job 이름 (필수 검사 이름) | 검사 | 상세 |
 | --- | --- | --- | --- |
 | `backend.yml` | `backend` | (PR) migration 검사 → `./gradlew check` → `./gradlew mariaDbTest` | [03](../../docs/ci/03-backend.md) |
-| `frontend.yml` | `frontend` | `npm ci` → oxlint → Prettier `--check` → `tsc` + 빌드 | [04](../../docs/ci/04-frontend.md) |
+| `frontend.yml` | `frontend` | `npm ci` → oxlint → Prettier `--check` → `npm run test` → `tsc` + 빌드 | [04](../../docs/ci/04-frontend.md) |
 | `ai-server.yml` | `ai-server` | `uv sync --locked` → ruff → pytest | [05](../../docs/ci/05-ai-server-and-docs.md) |
 | `docs.yml` | `docs` (필수 아님) | Markdown 상대 링크 검사 | [05](../../docs/ci/05-ai-server-and-docs.md) |
 | `notion-sync.yml` | `notion-sync` (필수 아님) | Issue · PR · ADR을 Notion 자동 페이지에 기록 (검사 아님) | [07](../../docs/ci/07-notion-sync.md) |
+| `vm-images.yml` | `release-checks` · `backend-test` · `frontend-test` · `ai-test` · `images` (필수 아님) | `main` 대상 PR · push · 수동 실행. 릴리스 스크립트 검사와 세 서비스 검사 뒤 이미지 빌드. GHCR 발행 · `prod` marker 게시는 `main` push이면서 `DONWORRY_RELEASE_ENABLED == 'true'`일 때만 | [08](../../docs/ci/08-vm-release-marker.md) |
+| `vm-release.yml` | `consumer-checks` (필수 아님) | `ops/vm/**` 변경 시. VM 업데이트 스크립트 단위 테스트와 격리된 MariaDB 백업 · 복원 검사 | [VM 업데이트 CD](../../ops/vm/README.md) |
 
 워크플로를 고칠 때 주의할 점
 

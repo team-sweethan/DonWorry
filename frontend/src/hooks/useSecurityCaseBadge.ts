@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { useLocation } from 'react-router-dom'
 import { getCaseCounts } from '../api/cases'
-import { createCaseBadgeStore, type CaseCounts } from '../utils/caseBadge'
+import { createCaseBadgeStore, type ScopedCaseCounts } from '../utils/caseBadge'
 
 const store = createCaseBadgeStore(getCaseCounts)
 
@@ -11,12 +11,12 @@ export function refreshCaseBadge() {
 }
 
 /** 홈 · 목록 자동 반영(#553)이 받은 건수로 배지를 맞춘다. 요청을 따로 보내지 않는다. */
-export function applyCaseBadgeCounts(counts: CaseCounts) {
+export function applyCaseBadgeCounts(counts: ScopedCaseCounts) {
   store.apply(counts)
 }
 
 /**
- * 보안 직원 사이드바 "Case 목록" 처리 필요 건수 (#224). 보안 직원이 아니면 userId에 null을 넘긴다.
+ * 보안 직원 사이드바 "Case 목록" 처리 필요 건수 (#224). 내가 담당인 Case만 센다 (#640). 보안 직원이 아니면 userId에 null을 넘긴다.
  * 메뉴 이동과 탭 복귀 때 다시 센다. 타이머 주기 조회는 하지 않는다 (utils/caseBadge.ts 설명).
  */
 export function useSecurityCaseBadge(userId: number | null) {

@@ -9,6 +9,7 @@
 3. **시크릿 키 발급** 화면에서 비밀번호를 확인한 뒤 키를 발급한다. 가맹점 코드와 Base64 키를 쇼핑몰 **서버** 설정에 보관한다. 브라우저 코드·Git·메일·이슈·로그에 키를 넣지 않는다.
 4. 아래 스크립트 또는 같은 서명을 구현한 쇼핑몰 서버로 연결 확인 요청을 보낸다.
 5. 204를 받으면 돈워리 화면을 새로고침해 **연동 완료**를 확인한다. 이후 키 원문은 다시 볼 수 없다. 가맹점이 사용 중(ACTIVE)이면 신규 결제를 요청할 수 있다.
+6. 결제를 받는 방법(결제창 · 결과 조회 · 웹훅)은 [결제 연동 안내](../payment/merchant-checkout-guide.md)를 따른다.
 
 키를 재발급하면 이전 키는 즉시 폐기되고 신규 결제가 중단된다. 새 키를 서버에 반영하고 연결 확인을 다시 마쳐야 한다. 이미 접수한 결제·픽업 업무 자체를 취소하는 동작은 아니다. 관리자가 키를 폐기한 경우에도 새 발급과 연결 확인이 필요하다.
 
@@ -65,7 +66,7 @@
 Python 3 표준 라이브러리만 필요하다. 저장소 루트에서 실행한다. Spring의 결제 검증에는 `payment.http.enabled=true`가 필요하다. 연결 확인 API는 이 설정 없이도 제공한다. 새 가맹점은 서버에 암호화 마스터 키가 준비되어 있어야 한다([ADR-0052](../decisions/0052-merchant-key-management.md)). 기존 CAKESHOP은 동일 키 이전 후 CONNECTED이므로 다시 발급하지 않는다.
 
 ```bash
-python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP
+python3 scripts/demo/merchant/merchant_connect.py --merchant-code YOURSHOP
 ```
 
 화면에서 복사한 키를 숨김 입력 프롬프트에 붙여 넣는다. 키를 명령 인자나 셸 기록에 넣지 않는다. `--base-url http://localhost:8081`로 로컬 서버 주소를 지정할 수 있으며 원격 서버는 HTTPS만 허용한다. 리다이렉트는 따라가지 않는다.
@@ -73,7 +74,7 @@ python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP
 배포 서버를 확인할 때는 `YOURSHOP`을 **화면에 표시된 실제 가맹점 코드**로, 주소를 해당 환경의 돈워리 API 주소로 바꾼다.
 
 ```bash
-python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP --base-url https://YOUR-DONWORRY-API-HOST
+python3 scripts/demo/merchant/merchant_connect.py --merchant-code YOURSHOP --base-url https://YOUR-DONWORRY-API-HOST
 ```
 
 스크립트는 `User-Agent: DonWorry-Merchant-Connect/1.0`을 지정한다. 연결 확인의 기대 결과는 HTTP 204와 종료 코드 0이다. 실패하면 위 오류 표에 따라 코드·키의 조합, 대상 환경, 서버 시각과 응답을 확인한다. 스크립트는 응답 원문을 출력하지 않으므로 Cloudflare 상세 원인은 배포 환경에서 확인한다.
@@ -81,13 +82,13 @@ python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP --base-url htt
 연결 확인 후 **실제 1,000원 테스트 결제 기록**을 추가하려면:
 
 ```bash
-python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP --payment
+python3 scripts/demo/merchant/merchant_connect.py --merchant-code YOURSHOP --payment
 ```
 
 연결 확인 전 차단을 검사하려면 새 키를 발급한 직후 아래를 먼저 실행한다. 기대값은 403 `MERCHANT_AUTH_006`, 스크립트 종료 코드 1이다.
 
 ```bash
-python3 scripts/demo/merchant_connect.py --merchant-code YOURSHOP --payment-only
+python3 scripts/demo/merchant/merchant_connect.py --merchant-code YOURSHOP --payment-only
 ```
 
 `--payment`와 `--payment-only`는 함께 쓰지 않는다. 테스트 대상 환경에서만 결제를 만든다. 200·202는 HTTP 처리 결과이며 실제 승인·매입 성공과 같지 않다. 스크립트는 `paymentId`·`paymentStatus`를 표시한다. 202면 결제 조회로 최종 상태를 확인한다. 실제 연동 코드는 결제 응답이 불명확할 때 **같은 Idempotency-Key·같은 본문**으로 새 시각·nonce·서명을 만들어 조회·재시도해야 한다. 이 스크립트는 실행마다 새 주문과 멱등 키를 만들므로 응답 유실 후 무작정 재실행하지 않는다.

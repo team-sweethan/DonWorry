@@ -10,6 +10,7 @@ import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.api.FdsRuleCatalogEntry;
 import com.donworry.fds.api.FdsRuleHitOutcome;
 import com.donworry.fds.entity.FdsEvaluation;
+import com.donworry.fds.repository.FdsBlocklistEntryRepository;
 import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.fds.repository.FdsFailureAnalysisRepository;
 import java.time.Instant;
@@ -99,11 +100,15 @@ public class FdsEvaluationQueryService {
 
     private final FdsEvaluationRepository evaluationRepository;
     private final FdsFailureAnalysisRepository failureAnalysisRepository;
+    private final FdsBlocklistEntryRepository blocklistEntries;
 
     public FdsEvaluationQueryService(
-            FdsEvaluationRepository evaluationRepository, FdsFailureAnalysisRepository failureAnalysisRepository) {
+            FdsEvaluationRepository evaluationRepository,
+            FdsFailureAnalysisRepository failureAnalysisRepository,
+            FdsBlocklistEntryRepository blocklistEntries) {
         this.evaluationRepository = evaluationRepository;
         this.failureAnalysisRepository = failureAnalysisRepository;
+        this.blocklistEntries = blocklistEntries;
     }
 
     public FdsEvaluationPage list(FdsResult result, boolean attentionOnly, String search, int page, int size) {
@@ -189,22 +194,40 @@ public class FdsEvaluationQueryService {
                         hit.getRuleNameSnapshot(),
                         hit.getOutcome(),
                         hit.getAppliedScore(),
-                        hit.getObservedValue(),
+                        FdsIdentifierMasking.ruleEvidence(hit.getObservedValue(), evaluation.getCardDisplayLabel()),
                         hit.getThresholdSnapshot()))
                 .toList();
         var history = evaluationRepository.findByPaymentIdOrderByEvaluatedAtDesc(evaluation.getPaymentId()).stream()
                 .map(this::summary)
                 .toList();
         var blocklistCandidates = new ArrayList<FdsBlocklistCandidate>();
+        var now = Instant.now();
+        // 카드는 표시값만, 없으면 비워 둔다 — 토큰을 대신 보내지 않는다 (#628)
         addBlocklistCandidate(
-                blocklistCandidates, "CARD_TOKEN", evaluation.getCardToken(), evaluation.getCardDisplayLabel());
-        addBlocklistCandidate(blocklistCandidates, "BUYER_REF", evaluation.getCustomerRef(), null);
-        addBlocklistCandidate(blocklistCandidates, "DEVICE_ID", evaluation.getDeviceId(), null);
-        addBlocklistCandidate(blocklistCandidates, "IP_ADDRESS", evaluation.getIpAddress(), null);
-        addBlocklistCandidate(blocklistCandidates, "BUYER_EMAIL", evaluation.getBuyerEmail(), null);
+                blocklistCandidates, "CARD_TOKEN", evaluation.getCardToken(), evaluation.getCardDisplayLabel(), now);
+        addBlocklistCandidate(
+                blocklistCandidates, "BUYER_REF", evaluation.getCustomerRef(), evaluation.getCustomerRef(), now);
+        addBlocklistCandidate(
+                blocklistCandidates,
+                "DEVICE_ID",
+                evaluation.getDeviceId(),
+                FdsIdentifierMasking.deviceId(evaluation.getDeviceId()),
+                now);
+        addBlocklistCandidate(
+                blocklistCandidates,
+                "IP_ADDRESS",
+                evaluation.getIpAddress(),
+                FdsIdentifierMasking.ipAddress(evaluation.getIpAddress()),
+                now);
+        addBlocklistCandidate(
+                blocklistCandidates,
+                "BUYER_EMAIL",
+                evaluation.getBuyerEmail(),
+                FdsIdentifierMasking.email(evaluation.getBuyerEmail()),
+                now);
         var cardIdentifier = evaluation.getCardToken() == null
                 ? null
-                : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardToken(), evaluation.getCardDisplayLabel());
+                : new FdsEvaluationDetail.CardIdentifier(evaluation.getCardDisplayLabel());
         var failureAnalysis = failureAnalysisRepository
                 .findByEvaluationRequestId(evaluation.getEvaluationRequestId())
                 .map(analysis -> new FdsFailureAnalysisDetail(
@@ -219,10 +242,13 @@ public class FdsEvaluationQueryService {
                 failureAnalysis);
     }
 
+    // value(원문)는 차단 여부 대조에만 쓰고 응답에는 displayValue만 담는다
     private void addBlocklistCandidate(
-            List<FdsBlocklistCandidate> candidates, String type, String value, String displayLabel) {
+            List<FdsBlocklistCandidate> candidates, String type, String value, String displayValue, Instant at) {
         if (value != null) {
-            candidates.add(new FdsBlocklistCandidate(type, value, displayLabel));
+            var blocked = blocklistEntries.findByIdentifierTypeAndIdentifierValue(type, value).stream()
+                    .anyMatch(entry -> entry.isActiveAt(at));
+            candidates.add(new FdsBlocklistCandidate(type, displayValue, blocked));
         }
     }
 

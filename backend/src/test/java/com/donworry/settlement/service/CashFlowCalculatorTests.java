@@ -12,6 +12,20 @@ class CashFlowCalculatorTests {
     private final CashFlowCalculator calculator = new CashFlowCalculator();
     private final LocalDate start = LocalDate.of(2026, 11, 2);
 
+    @Test
+    void positiveBalanceBelowMinimumWarnsWithoutChangingBalances() {
+        var result = calculator.calculate(
+                BigDecimal.valueOf(100),
+                start,
+                start,
+                start.plusDays(2),
+                List.of(movement(1, 1, 30, "PLANNED"), movement(2, 2, 10, "PLANNED")),
+                100);
+        assertThat(result.days()).extracting(Day::closingBalance).containsExactly(100L, 70L, 60L);
+        assertThat(result.firstShortageDate()).isEqualTo(start.plusDays(1));
+        assertThat(result.maximumShortage()).isEqualTo(40);
+    }
+
     private Movement movement(long id, int offset, long amount, String kind) {
         return Movement.builder()
                 .source(kind.equals("PAID") || kind.equals("PLANNED") ? "EXPENSE" : "SETTLEMENT")

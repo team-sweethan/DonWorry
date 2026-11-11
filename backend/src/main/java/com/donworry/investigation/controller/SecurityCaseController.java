@@ -1,5 +1,6 @@
 package com.donworry.investigation.controller;
 
+import com.donworry.investigation.dto.AssignmentChangeSubmitRequest;
 import com.donworry.investigation.dto.CaseCountsResponse;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CasePaymentLinkResponse;
@@ -7,7 +8,9 @@ import com.donworry.investigation.dto.CaseSummaryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.dto.HandoffListItemResponse;
 import com.donworry.investigation.service.CaseDecisionService;
+import com.donworry.investigation.service.CaseDetailViewService;
 import com.donworry.investigation.service.CaseQueryService;
+import com.donworry.investigation.service.CaseReassignmentService;
 import com.donworry.investigation.service.CaseReportService;
 import com.donworry.investigation.service.HandoffRecheckService;
 import com.donworry.investigation.service.SecurityStaffGuard;
@@ -23,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 // 보안 직원 Case API — 모든 경로는 로그인한 보안 직원만 쓴다 (ADR-0019)
-// 조회 · 보고서 재요청은 여기서 확인하고, 판정 · 다시 확인은 서비스가 판정 직원을 정하면서 확인한다
+// 목록 · 건수 조회는 여기서 확인하고, 사건 하나를 다루는 상세 · 판정 · 다시 확인 · 보고서 재요청은 서비스가 담당 판단과 함께 확인한다
 @RestController
 @RequestMapping("/api/security-cases")
 @RequiredArgsConstructor
@@ -34,6 +37,8 @@ public class SecurityCaseController {
     private final CaseReportService caseReportService;
     private final HandoffRecheckService handoffRecheckService;
     private final SecurityStaffGuard securityStaffGuard;
+    private final CaseReassignmentService caseReassignmentService;
+    private final CaseDetailViewService caseDetailViewService;
 
     // 실제 P5 결제 · P2 평가 근거를 내보내므로 보안 직원만 본다. 보안 직원은 모든 가맹점 Case를 보므로 merchantId는 표시 필터다
     @GetMapping
@@ -43,10 +48,10 @@ public class SecurityCaseController {
     }
 
     // 사이드바 배지용 상태별 건수. 사용자 동작(메뉴 이동 · 탭 복귀 · 판정) 때만 부른다 — 타이머로 부르면 세션 무활동 만료가 오지 않는다
+    // 내 건수는 요청 값이 아니라 로그인 세션 직원으로 센다 (#640)
     @GetMapping("/counts")
     public CaseCountsResponse counts() {
-        securityStaffGuard.requireSecurityStaffId();
-        return caseQueryService.counts();
+        return caseQueryService.counts(securityStaffGuard.requireSecurityStaffId());
     }
 
     // 결제 ID(여러 개) → 연결된 Case. 경보 화면이 Case로 이동할 때 쓴다 (#309)
@@ -63,10 +68,10 @@ public class SecurityCaseController {
         return caseQueryService.handoffs();
     }
 
+    // 상세 화면 진입 — 열린 사건은 담당자만, 열람을 기록하지 못하면 상세를 내보내지 않는다 (#612)
     @GetMapping("/{caseId}")
     public CaseDetailResponse detail(@PathVariable Long caseId) {
-        securityStaffGuard.requireSecurityStaffId();
-        return caseQueryService.detail(caseId);
+        return caseDetailViewService.view(caseId);
     }
 
     // 판정 커밋 뒤 인계 결과까지 반영된 상세를 돌려준다
@@ -86,8 +91,15 @@ public class SecurityCaseController {
     // 현재 증거 버전 보고서가 없을 때만 다시 요청하고, 반영된 상세를 돌려준다
     @PostMapping("/{caseId}/reports")
     public CaseDetailResponse requestReport(@PathVariable Long caseId) {
-        securityStaffGuard.requireSecurityStaffId();
         caseReportService.requestMissing(caseId);
+        return caseQueryService.detail(caseId);
+    }
+
+    // 담당자 본인의 담당 변경 요청 (#608). 대기 중에는 판정만 막힌다. 반영된 상세를 돌려준다
+    @PostMapping("/{caseId}/assignment-requests")
+    public CaseDetailResponse requestAssignmentChange(
+            @PathVariable Long caseId, @Valid @RequestBody AssignmentChangeSubmitRequest body) {
+        caseReassignmentService.request(caseId, body);
         return caseQueryService.detail(caseId);
     }
 }

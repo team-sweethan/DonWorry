@@ -15,6 +15,7 @@ import type {
 import { dateTime } from '../security/case/caseLabels'
 import { CodeTag } from '../security/case/CodeTag'
 import { merchantCaseStatusLabel } from './ownerLabels'
+import './merchant-case-list.css'
 
 /**
  * 고객사 "보안 조치 결과" 목록 (fds 정본 02 §2.12 ②, #205).
@@ -59,6 +60,7 @@ export function MerchantCaseListPage() {
     {
       title: 'Case ID',
       dataIndex: 'caseId',
+      className: 'merchant-case-id-cell',
       width: 120,
       render: (id: string) => (
         <Button
@@ -133,7 +135,7 @@ export function MerchantCaseListPage() {
           color="#B91C1C"
         />
       </div>
-      <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
+      <Card className="dw-table-card merchant-case-list" style={{ borderColor: '#e7e1d5' }}>
         <div className="dw-table-toolbar">
           <div>
             <h3>이상 거래 Case</h3>

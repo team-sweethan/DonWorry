@@ -146,5 +146,57 @@
       ],
       "declinedCount": 1
     }
+  },
+  "decisionBasis": {
+    "caseId": "206",
+    "evidenceVersion": 1,
+    "source": "P4",
+    "retrievedAt": "2026-11-03T13:10:00Z",
+    "payments": [
+      {
+        "paymentId": "9701",
+        "basis": {
+          "signals": [
+            {
+              "key": "R04",
+              "label": "단시간 반복 결제",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "한 주문을 나눠 낸 결제인지 주문 내역 확인"
+            },
+            {
+              "key": "R02",
+              "label": "신규 단말기",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "고객이 최근 기기를 바꿨는지 가맹점에 확인"
+            },
+            {
+              "key": "LINKED_IP",
+              "label": "이 사건 결제 중 같은 IP를 다른 고객이 사용",
+              "detail": "최근 30일 다른 고객 여러 명 · 그 결제 중 카드사 거절 있음",
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "매장 · 회사 같은 공용 와이파이인지 가맹점에 문의"
+            }
+          ],
+          "normals": [
+            {
+              "key": "SIMILAR_AMOUNT",
+              "label": "최근 30일 비슷한 금액의 결제 5건 매입 완료",
+              "canExplain": [
+                "고액 결제"
+              ],
+              "explains": []
+            }
+          ]
+        }
+      }
+    ]
   }
 }

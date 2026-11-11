@@ -1,25 +1,20 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Tag } from 'antd'
-import type {
-  BasisSignal,
-  DecisionBasis,
-  NormalBasis,
-  ReportRuleHitDetail,
-} from '../../../types/case'
+import type { BasisSignal, DecisionBasis, NormalBasis } from '../../../types/case'
 import {
-  BASIS_RULE_ROWS,
-  basisGroups,
   markSignals,
   normalNote,
-  signalRecordText,
-  signalRuleRecord,
   signalTag,
   type MarkKind,
+  type SummaryFold,
   type SummaryLink,
 } from '../../../utils/reportView'
+import { goToCard } from './goToCard'
+// 접힌 문장(dw-print-only)을 화면에서 숨기는 규칙 — 보고서 인쇄와 같이 쓴다 (#623)
+import './reportPrint.css'
 
-// 판정 근거 화면 (#501) — 조사 요약(AI 해석)과 "왜 이 판정인가요?"(기준표 판정 근거)
-// 코드가 쓴 판정 이유는 조사 요약이 아니라 "왜 이 판정인가요?"에 둔다 (#543)
+// 징후 · 정상 근거 부품 (#501) — 보고서 "한눈에 보기"(AI 문장)와 비교 화면의 징후 · 정상 근거 줄
+// 판정 권고 · 기준표 칸 · 판정 이유는 #644에서 뺐다 (ADR-0009 결정 13). 결제별 근거 카드도 #644 PR 3에서 ② 확인할 것으로 합쳤다
 
 // 고위험 빨강 · 주의 노랑 · 정상 초록 — 밑줄과 근거 칸이 같은 색을 쓴다
 const levelTone: Record<MarkKind, { bg: string; border: string; text: string; line: string }> = {
@@ -28,30 +23,40 @@ const levelTone: Record<MarkKind, { bg: string; border: string; text: string; li
   NORMAL: { bg: '#F0FDF4', border: '#BBF7D0', text: '#14532D', line: '#16A34A' },
 }
 
-// 조사 요약 — AI가 근거를 이어 설명한 문장. 징후 이름이 그대로 나오면 같은 색 밑줄
+// 한눈에 보기 (#644, 전 "조사 요약") — AI가 자료 여러 개를 이어 설명한 문장. 징후 이름이 그대로 나오면 같은 색 밑줄
 // links: 문장 끝 표 링크 (#559) — 밑줄과 뜻이 겹치지 않게 글자 링크로 둔다
+// 문장은 점 목록으로, fold가 있으면 처음 몇 문장만 보이고 [더 보기] (#591)
+// 번호 대신 점 — 판정 순서처럼 읽히지 않게
+// appended: 안전망 — AI가 빠뜨려 시스템이 덧붙인 사실. 접지 않고 늘 보인다
 export function SummaryBox({
   lines,
   basis,
   links = [],
+  fold,
+  appended = [],
 }: {
   lines: string[]
-  basis: DecisionBasis
+  basis: Pick<DecisionBasis, 'signals' | 'normals'> | null
   links?: SummaryLink[][]
+  fold?: SummaryFold
+  appended?: string[]
 }) {
-  if (lines.length === 0) return null
+  const [open, setOpen] = useState(false)
+  if (lines.length === 0 && appended.length === 0) return null
+  const folded = !!fold && fold.hidden > 0 && !open
+  // 접힌 문장도 그려 두고 화면에서만 숨긴다 — 인쇄는 모두 펼쳐 찍는다 (#623, reportPrint.css)
+  const visible = folded ? lines.length - fold.hidden : lines.length
   return (
     <div style={summaryStyle}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#581C87' }}>조사 요약</h3>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#581C87' }}>한눈에 보기</h3>
         <Tag color="purple" style={{ marginInlineEnd: 0 }}>
-          AI 해석 · 근거를 이어 설명한 것이며 판정이 아닙니다
+          AI가 씀 · 자료 여러 개를 함께 봐야 보이는 것 · 판정이 아닙니다
         </Tag>
       </div>
-      <p style={{ margin: 0, fontSize: 16, lineHeight: 1.85, color: '#1E1B4B' }}>
+      <ul style={listStyle}>
         {lines.map((line, i) => (
-          <span key={i}>
-            {i > 0 && ' '}
+          <li key={i} className={i < visible ? undefined : 'dw-print-only'}>
             {markSignals(line, basis).map((part, j) =>
               part.mark ? (
                 <span key={j} style={{ borderBottom: `3px solid ${levelTone[part.mark].line}` }}>
@@ -62,11 +67,40 @@ export function SummaryBox({
               ),
             )}
             <SummaryLinks links={links[i] ?? []} color="#6D28D9" />
-          </span>
+          </li>
         ))}
-      </p>
+      </ul>
+      {fold && fold.hidden > 0 && (
+        <button
+          type="button"
+          className="dw-no-print"
+          onClick={() => setOpen(!open)}
+          style={moreStyle}
+        >
+          {open ? (
+            '접기'
+          ) : (
+            <>
+              더 보기 · {fold.hidden}문장 남음
+              {fold.hiddenNotable > 0 && (
+                <b style={{ color: '#92400E' }}> · 눈여겨볼 사실 {fold.hiddenNotable}개 포함</b>
+              )}
+            </>
+          )}
+        </button>
+      )}
+      {appended.length > 0 && (
+        <div style={appendedStyle}>
+          <b>⚠ 요약에 빠진 사실 (시스템이 덧붙임)</b>
+          <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+            {appended.map((text, i) => (
+              <li key={i}>{text}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: '#6B21A8' }}>
-        밑줄 색은 아래 근거와 같은 색입니다. 빨강 고위험 징후 · 노랑 주의 징후 · 초록 정상 거래 근거
+        밑줄 색은 아래 확인할 것과 같은 색입니다. 빨강 고위험 징후 · 노랑 주의 징후 · 초록 정상 근거
       </div>
     </div>
   )
@@ -84,82 +118,6 @@ export function SummaryLinks({ links, color }: { links: SummaryLink[]; color: st
       › {link.label}
     </button>
   ))
-}
-
-function goToCard(target: string) {
-  const card = document.getElementById(target)
-  if (!card) return
-  card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  card.animate([{ boxShadow: '0 0 0 3px #A78BFA' }, { boxShadow: '0 0 0 0 transparent' }], {
-    duration: 1600,
-  })
-}
-
-// 왜 이 판정인가요? — 판정 이유 · 고위험 징후 · 주의 징후 · 정상 거래 근거 · 판정 기준표
-// reason: 코드가 쓴 판정 이유 (#532), details: FDS 규칙 기록 — 규칙 징후 줄에 점수 · 증거 번호를 붙인다 (#543)
-export function WhyCard({
-  basis,
-  reason,
-  details,
-}: {
-  basis: DecisionBasis
-  reason?: string
-  details?: ReportRuleHitDetail[]
-}) {
-  const { highRisk, caution } = basisGroups(basis)
-  const row = (s: BasisSignal) => {
-    const record = signalRuleRecord(s, details)
-    return <SignalRow key={s.key} s={s} record={record ? signalRecordText(record) : undefined} />
-  }
-  return (
-    <div style={whyStyle}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1E3A8A' }}>
-          왜 이 판정인가요?
-        </h3>
-        <span style={{ fontSize: 12, color: '#475569' }}>
-          돈워리 판정 기준표로 정리했습니다. 같은 근거면 언제나 같은 판정이 나옵니다.
-        </span>
-      </div>
-      {reason && (
-        <div style={{ fontSize: 14, color: '#1E3A8A' }}>
-          <b>판정 이유</b> · {reason}
-        </div>
-      )}
-      <Group title="고위험 징후" note="정상 고객에게는 거의 나타나지 않는 신호" color="#991B1B">
-        {highRisk.length === 0 ? <None /> : highRisk.map(row)}
-      </Group>
-      <Group title="주의 징후" note="정상 고객에게도 나타날 수 있는 신호" color="#92400E">
-        {caution.length === 0 ? <None /> : caution.map(row)}
-      </Group>
-      <Group title="정상 거래 근거" note="이 고객의 평소 거래와 맞는 점" color="#166534">
-        {basis.normals.length === 0 ? (
-          <None text="확인된 정상 거래 근거가 없습니다." />
-        ) : (
-          basis.normals.map((n) => <NormalRow key={n.key} n={n} />)
-        )}
-      </Group>
-      <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1E3A8A', marginBottom: 8 }}>
-          판정 기준표
-        </div>
-        <div style={ruleGridStyle}>
-          {BASIS_RULE_ROWS.map((row) => {
-            const hit = row.rule === basis.rule
-            return (
-              <div key={row.rule} style={hit ? ruleHitStyle(basis) : ruleStyle}>
-                {hit && <b>✓ 이 결제 </b>}
-                {row.text}
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ fontSize: 12, color: '#475569', marginTop: 8 }}>
-          기준표 판정은 참고용입니다. 최종 판정은 보안 직원이 근거를 확인한 뒤 합니다.
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // 징후 한 줄 — 비교 화면도 같은 모양을 쓴다. record: "+30점 · 증거 E-…" (FDS 규칙 징후만)
@@ -238,21 +196,6 @@ export function Group({
   )
 }
 
-function None({ text = '없음' }: { text?: string }) {
-  return <span style={{ fontSize: 13, color: '#94A3B8' }}>{text}</span>
-}
-
-// 걸린 칸 색은 그 칸의 판정 색 — 승인 취소 빨강 · 추가 확인 노랑 · 매입 진행 초록
-function ruleHitStyle(basis: DecisionBasis): CSSProperties {
-  const tone =
-    basis.recommendation === 'REJECT_REVIEW'
-      ? { bg: '#FEE2E2', border: '#B91C1C', text: '#7F1D1D' }
-      : basis.recommendation === 'ACCEPT_REVIEW'
-        ? { bg: '#DCFCE7', border: '#15803D', text: '#14532D' }
-        : { bg: '#FEF3C7', border: '#B45309', text: '#78350F' }
-  return { ...ruleStyle, background: tone.bg, border: `2px solid ${tone.border}`, color: tone.text }
-}
-
 const linkStyle: CSSProperties = {
   background: 'none',
   border: 'none',
@@ -266,21 +209,40 @@ const summaryStyle: CSSProperties = {
   background: '#FAF5FF',
   border: '1px solid #E9D5FF',
   borderRadius: 12,
-  padding: '18px 20px',
+  padding: '14px 18px',
   display: 'flex',
   flexDirection: 'column',
-  gap: 10,
-  marginBottom: 16,
+  gap: 8,
 }
-const whyStyle: CSSProperties = {
-  border: '2px solid #1D4ED8',
-  borderRadius: 12,
-  padding: '18px 20px',
+const listStyle: CSSProperties = {
+  margin: 0,
+  paddingLeft: 20,
+  fontSize: 14.5,
+  lineHeight: 1.7,
+  color: '#1E1B4B',
   display: 'flex',
   flexDirection: 'column',
-  gap: 16,
-  background: '#F8FAFF',
-  marginBottom: 16,
+  gap: 6,
+}
+const moreStyle: CSSProperties = {
+  alignSelf: 'flex-start',
+  minHeight: 40,
+  padding: '0 14px',
+  border: '1px solid #D8B4FE',
+  background: '#fff',
+  borderRadius: 8,
+  fontSize: 14,
+  color: '#581C87',
+  cursor: 'pointer',
+}
+const appendedStyle: CSSProperties = {
+  fontSize: 14,
+  lineHeight: 1.65,
+  color: '#78350F',
+  background: '#FFFBEB',
+  border: '1px solid #FDE68A',
+  borderRadius: 8,
+  padding: '8px 12px',
 }
 const rowStyle: CSSProperties = {
   display: 'flex',
@@ -297,17 +259,4 @@ const pillStyle: CSSProperties = {
   padding: '3px 8px',
   borderRadius: 6,
   background: '#FFFFFF',
-}
-const ruleGridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-  gap: 8,
-  fontSize: 13,
-}
-const ruleStyle: CSSProperties = {
-  border: '1px solid #E2E8F0',
-  background: '#FFFFFF',
-  color: '#475569',
-  borderRadius: 8,
-  padding: '8px 10px',
 }

@@ -1,13 +1,19 @@
 package com.donworry.fds.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.donworry.fds.api.FdsEvaluationRequest;
+import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.dto.CreateFdsBlocklistEntryRequest;
+import com.donworry.fds.dto.FdsBlocklistPageResponse;
 import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.entity.FdsBlocklistEntry;
+import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsBlocklistEntryRepository;
+import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
 import java.util.Optional;
@@ -28,6 +34,9 @@ class FdsBlocklistServiceTests {
 
     @Mock
     CurrentStaff currentStaff;
+
+    @Mock
+    FdsEvaluationRepository evaluations;
 
     @Test
     // 보안 직원이 등록한 카드 토큰은 활성 차단 목록 항목으로 저장한다.
@@ -147,13 +156,118 @@ class FdsBlocklistServiceTests {
 
         assertThat(result.content()).singleElement().satisfies(item -> {
             assertThat(item.identifierType()).isEqualTo("DEVICE_ID");
-            assertThat(item.identifierValue()).isEqualTo("device-1");
+            // 기기 ID는 가린 값으로 나간다 (#628). 8자 이하라 절반만
+            assertThat(item.identifierValue()).isEqualTo("devi…");
         });
         verify(entries, never()).findInactiveAtWithSearch(any(), any(), any());
     }
 
+    @Test
+    // 경보 상세에서 등록하면 화면이 모르는 원문을 평가에서 찾아 저장한다. 가린 값이 들어가면 실제 결제와 대조되지 않는다 (#603)
+    void addFromEvaluation_withBuyerEmail_savesRawValueFromEvaluation() {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
+        when(evaluations.findById(7L)).thenReturn(Optional.of(evaluationWithEmail("hong@example.test")));
+        when(entries.findByIdentifierTypeAndIdentifierValue("BUYER_EMAIL", "hong@example.test"))
+                .thenReturn(java.util.List.of());
+        var saved = ArgumentCaptor.forClass(FdsBlocklistEntry.class);
+
+        service().addFromEvaluation(7L, CreateFdsBlocklistEntryRequest.IdentifierType.BUYER_EMAIL, " 도용 의심 ");
+
+        verify(entries).save(saved.capture());
+        assertThat(saved.getValue().getIdentifierType()).isEqualTo("BUYER_EMAIL");
+        assertThat(saved.getValue().getIdentifierValue()).isEqualTo("hong@example.test");
+        assertThat(saved.getValue().getReason()).isEqualTo("도용 의심");
+    }
+
+    @Test
+    // 평가에서 바로 등록하는 길도 보안 직원만 쓸 수 있다. 관리자는 조회만 한다
+    void addFromEvaluation_whenNotSecurityStaff_throwsForbidden() {
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("ADMIN")));
+
+        var exception = org.assertj.core.api.Assertions.catchThrowable(() ->
+                service().addFromEvaluation(7L, CreateFdsBlocklistEntryRequest.IdentifierType.BUYER_EMAIL, "도용 의심"));
+
+        assertThat(exception).isInstanceOf(ResponseStatusException.class);
+        assertThat(((ResponseStatusException) exception).getStatusCode().value())
+                .isEqualTo(403);
+        verify(entries, never()).save(any());
+    }
+
+    @Test
+    // [차단 목록] 화면에 이메일 원문을 보내지 않는다 (#603, ISMS-P 2.6.3)
+    void list_withBuyerEmailEntry_returnsMaskedValue() {
+        var entry = FdsBlocklistEntry.active("BUYER_EMAIL", "hong@example.test", "도용 의심", java.time.Instant.now());
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("ADMIN")));
+        when(entries.findActiveAtWithSearch(any(), eq("hong"), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(entry), PageRequest.of(0, 10), 1));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, "hong");
+
+        assertThat(result.content())
+                .singleElement()
+                .satisfies(item -> assertThat(item.identifierValue()).isEqualTo("ho***@example.test"));
+    }
+
+    @Test
+    // [차단 목록] 응답에 IP · 기기 ID 원문과 카드 토큰이 없다. 카드는 화면이 표시값(displayLabel)을 쓴다 (#628, ISMS-P 2.6.3)
+    void list_withIpDeviceCardEntries_returnsMaskedOrNoRawValue() {
+        var at = java.time.Instant.now();
+        var ip = FdsBlocklistEntry.active("IP_ADDRESS", "203.0.113.10", "도용 의심", at);
+        var device = FdsBlocklistEntry.active("DEVICE_ID", "dev-7f3a9c21-abcd", "도용 의심", at);
+        var card = FdsBlocklistEntry.active("CARD_TOKEN", "tok_secret_card", "VISA •••• 4242", "도용 의심", at);
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("ADMIN")));
+        when(entries.findActiveAtWithSearch(any(), eq(""), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(ip, device, card), PageRequest.of(0, 10), 3));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, "");
+
+        assertThat(result.content())
+                .extracting(
+                        FdsBlocklistPageResponse.Item::identifierType,
+                        FdsBlocklistPageResponse.Item::identifierValue,
+                        FdsBlocklistPageResponse.Item::displayLabel)
+                .containsExactly(
+                        tuple("IP_ADDRESS", "203.0.*.*", null),
+                        tuple("DEVICE_ID", "dev-7f3a…", null),
+                        tuple("CARD_TOKEN", null, "VISA •••• 4242"));
+    }
+
+    @Test
+    // 식별값은 전체 일치로만 찾으므로, 등록 가능한 길이(255자)의 값 전체를 검색어로 받아야 한다 (#629 Codex 리뷰)
+    void list_whenSearchIsFullIdentifierLongerThan100_returnsEntry() {
+        var longDeviceId = "d".repeat(255);
+        var entry = FdsBlocklistEntry.active("DEVICE_ID", longDeviceId, "사기 결제 확인", java.time.Instant.now());
+        when(currentStaff.findCurrent()).thenReturn(Optional.of(staff("SECURITY_STAFF")));
+        when(entries.findActiveAtWithSearch(any(), eq(longDeviceId), any()))
+                .thenReturn(new PageImpl<>(java.util.List.of(entry), PageRequest.of(0, 10), 1));
+
+        var result = service().list(0, 10, FdsBlocklistStatusFilter.ACTIVE, longDeviceId);
+
+        assertThat(result.content())
+                .singleElement()
+                .satisfies(item -> assertThat(item.identifierType()).isEqualTo("DEVICE_ID"));
+    }
+
+    private FdsEvaluation evaluationWithEmail(String buyerEmail) {
+        var requestedAt = java.time.Instant.parse("2026-11-07T01:00:00Z");
+        var request = new FdsEvaluationRequest(
+                java.util.UUID.randomUUID(),
+                101L,
+                1L,
+                "hong-gildong",
+                150_000L,
+                requestedAt,
+                "device-1",
+                "card-token-1",
+                "VISA •••• 4242",
+                "KR",
+                "203.0.113.10",
+                buyerEmail);
+        return FdsEvaluation.completed(request, FdsResult.DENY, 100, requestedAt.plusSeconds(1));
+    }
+
     private FdsBlocklistService service() {
-        return new FdsBlocklistService(entries, currentStaff);
+        return new FdsBlocklistService(entries, currentStaff, evaluations);
     }
 
     private StaffSummary staff(String role) {

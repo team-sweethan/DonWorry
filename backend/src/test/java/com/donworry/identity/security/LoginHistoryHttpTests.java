@@ -36,7 +36,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Tag("mariadb")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+// 시계를 한 시각에 고정하고 테스트마다 로그인 실패를 쌓아 전체 실패율이 로그인 공격 경계(#770)를 넘는다.
+// 탈취 의심이면 바로 정지 · 세션 끊김(#790)이라, 이력 조회와 무관한 정지가 끼지 않게 이 클래스에서는 경계를 끈다
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = "security.login-attack.min-attempts=1000000")
 @Import(MariaDbTestContainerConfig.class)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @ExtendWith(OutputCaptureExtension.class)

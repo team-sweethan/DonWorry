@@ -2,6 +2,7 @@ package com.donworry.investigation.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.investigation.entity.ActionHandoff;
@@ -17,6 +18,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.service.InvestigationRules;
 import jakarta.persistence.EntityManager;
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
@@ -112,6 +114,31 @@ class InvestigationRepositoryTests {
                 NOW.minus(InvestigationRules.MERGE_WINDOW));
 
         assertThat(candidates).extracting(SecurityCase::getId).containsExactly(target.getId());
+    }
+
+    // 담당 범위(#643, 내부자 탐지 INS-08 · 09) — 내 열린 사건과 기간 안에 닫힌 사건만. 지난 사건 · 남의 사건 · 미배정은 빠진다
+    @Test
+    void findScopeOfAssignee_openAndRecentlyClosedOnly() {
+        long staffId = System.nanoTime();
+        SecurityCase open = saveCase(1L, "1:scope-open", NOW);
+        open.assignTo(staffId, NOW);
+        SecurityCase recentClosed = saveCase(1L, "1:scope-recent", NOW.minus(Duration.ofDays(20)));
+        recentClosed.assignTo(staffId, NOW.minus(Duration.ofDays(20)));
+        recentClosed.close(NOW.minus(Duration.ofDays(10)));
+        SecurityCase oldClosed = saveCase(1L, "1:scope-old", NOW.minus(Duration.ofDays(60)));
+        oldClosed.assignTo(staffId, NOW.minus(Duration.ofDays(60)));
+        oldClosed.close(NOW.minus(Duration.ofDays(40)));
+        saveCase(2L, "2:scope-other", NOW).assignTo(staffId + 1, NOW);
+        saveCase(2L, "2:scope-unassigned", NOW);
+        entityManager.flush();
+
+        var scope = securityCaseRepository.findScopeOfAssignee(staffId, NOW.minus(Duration.ofDays(30)));
+
+        assertThat(scope)
+                .extracting(
+                        SecurityCaseRepository.AssigneeCaseScope::getMerchantId,
+                        SecurityCaseRepository.AssigneeCaseScope::getCustomerRef)
+                .containsExactlyInAnyOrder(tuple(1L, "1:scope-open"), tuple(1L, "1:scope-recent"));
     }
 
     // 같은 결제를 두 Case에 연결하면 DB가 막는다

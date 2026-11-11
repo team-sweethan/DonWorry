@@ -20,5 +20,30 @@
       {"paymentId": "9102", "riskScore": null, "fdsResult": null, "ruleHits": []}
     ],
     "missingPaymentIds": ["9101", "9102"]
+  },
+  "decisionBasis": {
+    "caseId": "102",
+    "evidenceVersion": 1,
+    "source": "P4",
+    "retrievedAt": "2026-10-27T13:00:00Z",
+    "payments": [
+      {
+        "paymentId": "9101",
+        "basis": {
+          "signals": [
+            {
+              "key": "FDS_UNCONFIRMED",
+              "label": "FDS 평가 결과 미확인",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "FDS 평가가 왜 없었는지 평가 기록 확인"
+            }
+          ],
+          "normals": []
+        }
+      }
+    ]
   }
 }

@@ -8,6 +8,7 @@ import lombok.Builder;
 public record CashFlowForecastResponse(
         LocalDate baseDate,
         long openingBalance,
+        long minimumOperatingFunds,
         Instant asOf,
         LocalDate from,
         LocalDate to,

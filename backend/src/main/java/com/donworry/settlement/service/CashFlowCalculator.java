@@ -30,6 +30,16 @@ public class CashFlowCalculator {
 
     public Result calculate(
             BigDecimal opening, LocalDate start, LocalDate from, LocalDate to, List<Movement> movements) {
+        return calculate(opening, start, from, to, movements, 0);
+    }
+
+    public Result calculate(
+            BigDecimal opening,
+            LocalDate start,
+            LocalDate from,
+            LocalDate to,
+            List<Movement> movements,
+            long minimumOperatingFunds) {
         CashFlowManagementService.validatePeriod(from, to);
         if (start.isAfter(from)) throw new IllegalArgumentException("계산 시작일이 조회 시작일보다 늦습니다.");
         var grouped = new TreeMap<LocalDate, List<Movement>>();
@@ -84,8 +94,8 @@ public class CashFlowCalculator {
         var shortages = new ArrayList<Shortage>();
         long lowest = days.stream().mapToLong(Day::closingBalance).min().orElse(periodOpening);
         for (var day : days) {
-            if (day.closingBalance() >= 0) continue;
-            long amount = subtract(0, day.closingBalance());
+            if (day.closingBalance() >= minimumOperatingFunds) continue;
+            long amount = subtract(minimumOperatingFunds, day.closingBalance());
             var last = shortages.isEmpty() ? null : shortages.getLast();
             if (last != null && last.to().plusDays(1).equals(day.date())) {
                 shortages.set(

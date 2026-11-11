@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,6 +30,7 @@ public class AdminAccountService {
     private final UserPermissionRepository permissions;
     private final MerchantRepository merchants;
     private final AdminChangeHistoryService histories;
+    private final StaffAccountLockRepository staffLocks;
     private final AccountLockService locks;
     private final MerchantLockService merchantLocks;
     private final UserSessionService sessions;
@@ -60,10 +60,19 @@ public class AdminAccountService {
             predicates.add(cb.or(
                     cb.like(cb.lower(root.get("loginId")), pattern, '!'),
                     cb.like(cb.lower(root.get("displayName")), pattern, '!')));
+            // 기본 정렬: 관리자 → 보안 직원 → 사장님, 같은 역할은 최근 계정부터 (#659).
+            // 역할 이름 순서(ADMIN · OPERATOR · SECURITY_STAFF)와 달라 순서를 직접 정한다. 개수 조회에는 붙이지 않는다
+            if (query != null && !Long.class.equals(query.getResultType())) {
+                var roleOrder = cb.<UserRole, Integer>selectCase(root.get("role"))
+                        .when(UserRole.ADMIN, 0)
+                        .when(UserRole.SECURITY_STAFF, 1)
+                        .otherwise(2);
+                query.orderBy(cb.asc(roleOrder), cb.desc(root.get("userId")));
+            }
             return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
-        var result = users.findAll(
-                filter, PageRequest.of(page, size, Sort.by("userId").descending()));
+        // 정렬은 위 조건에서 정한다. Pageable에 정렬을 넣으면 그 정렬로 덮어쓴다
+        var result = users.findAll(filter, PageRequest.of(page, size));
         return new AdminUserPageResponse(responses(result.getContent()), page, size, result.getTotalElements());
     }
 
@@ -127,6 +136,9 @@ public class AdminAccountService {
             UserStatus next = status(input.status());
             if (actor.userId().equals(id) && next == UserStatus.INACTIVE)
                 throw new AccountManagementException(AuthErrorCode.ADMIN_SELF_DISABLE);
+            // 보안 정지는 조사 판정(StaffAccountLocker.release)으로만 푼다 — [활성] · [정지] 버튼 옆문을 막는다 (ADR-0084)
+            if (staffLocks.existsByStaffIdAndStatus(id, StaffAccountLockStatus.OPEN))
+                throw new AccountManagementException(AuthErrorCode.ADMIN_USER_SECURITY_SUSPENDED);
             if (user.getStatus() == next) return false;
             String previous = user.getStatus().name();
             user.changeStatus(next);

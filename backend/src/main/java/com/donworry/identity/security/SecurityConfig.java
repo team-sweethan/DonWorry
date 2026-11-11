@@ -50,7 +50,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityContextRepository securityContextRepository() {
-        return new HttpSessionSecurityContextRepository();
+        return new ConcurrentSafeSecurityContextRepository(new HttpSessionSecurityContextRepository());
     }
 
     @Bean
@@ -117,8 +117,11 @@ public class SecurityConfig {
             SecurityContextRepository securityContextRepository, CookieCsrfTokenRepository csrfTokenRepository) {
         var contextLogout = new SecurityContextLogoutHandler();
         contextLogout.setSecurityContextRepository(securityContextRepository);
+        // 세션 무효화는 겹친 로그아웃을 견디는 처리기가 맡는다 (#610)
+        contextLogout.setInvalidateHttpSession(false);
         return new CompositeLogoutHandler(
                 new CsrfLogoutHandler(csrfTokenRepository),
+                new ConcurrentSafeSessionLogoutHandler(),
                 contextLogout,
                 new CookieClearingLogoutHandler(SESSION_COOKIE));
     }
@@ -145,6 +148,9 @@ public class SecurityConfig {
                         .matcher(HttpMethod.POST, "/api/payment-operations/{paymentId}/fds-recovery-deliveries"));
         var demoFdsErrorPost =
                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/demo/fds-errors/next");
+        // 거래 내역 CSV 내보내기 (#651) — 경보 중이면 계정 정지까지 일으키므로 전역 CSRF 설정과 관계없이 보호한다 (ADR-0036 방식)
+        var transactionExportPost =
+                PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/payment-transactions/export");
         var integrationRoutes = new OrRequestMatcher(
                 PathPatternRequestMatcher.withDefaults().matcher("/api/owner/integration/**"),
                 PathPatternRequestMatcher.withDefaults().matcher("/api/admin/merchants/{id}/integration/**"));
@@ -180,6 +186,7 @@ public class SecurityConfig {
                                 || applicationPosts.matches(request)
                                 || fdsRecoveryPosts.matches(request)
                                 || demoFdsErrorPost.matches(request)
+                                || transactionExportPost.matches(request)
                                 || (csrfEnabled && CsrfFilter.DEFAULT_CSRF_MATCHER.matches(request)))
                         // CakeShop HMAC은 MerchantSecurityConfiguration, AI 서버는 AiServerSecurityConfiguration이
                         // 따로 처리한다. 이 체인에 새 CSRF 예외를 추가하지 않는다 (ADR-0063).
@@ -221,7 +228,14 @@ public class SecurityConfig {
                                 PathPatternRequestMatcher.withDefaults()
                                         .matcher(HttpMethod.GET, "/api/payment-transactions"),
                                 PathPatternRequestMatcher.withDefaults()
-                                        .matcher(HttpMethod.HEAD, "/api/payment-transactions"))
+                                        .matcher(HttpMethod.HEAD, "/api/payment-transactions"),
+                                // 거래 상세 1건 (#732) — 숫자 번호만. GET /export가 여기에 걸려 열리면 안 된다(내보내기는 POST만). HEAD는 열지 않는다
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.GET, "/api/payment-transactions/{paymentId:[0-9]+}"),
+                                // 거래 내역 CSV 내보내기 (#651) — POST만(CSRF 토큰 필수). GET이면 외부 링크 한 번으로
+                                // 문지기 · 계정 정지를 탈 수 있다 (Codex 리뷰)
+                                PathPatternRequestMatcher.withDefaults()
+                                        .matcher(HttpMethod.POST, "/api/payment-transactions/export"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -281,7 +295,19 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/blocklist/status"),
                                 paths.matcher(HttpMethod.POST, "/api/fds/blocklist"),
-                                paths.matcher(HttpMethod.PUT, "/api/fds/blocklist/{entryId}/deactivate"))
+                                paths.matcher(HttpMethod.PUT, "/api/fds/blocklist/{entryId}/deactivate"),
+                                // 경보 상세 차단 후보 등록 (#603). 등록 자체는 FdsBlocklistService가 SECURITY_STAFF만 허용
+                                paths.matcher(HttpMethod.POST, "/api/fds/evaluations/{evaluationId}/blocklist-entries"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && (user.role() == UserRole.SECURITY_STAFF || user.role() == UserRole.ADMIN));
+                        })
+                        // AI 조사 긴급정지 조회 · 끄기 (#626, ADR-0083) — 이상을 먼저 보는 보안 직원도 바로 끈다. 다시 켜기는 아래 ADMIN 규칙
+                        .requestMatchers(
+                                paths.matcher(HttpMethod.GET, "/api/ai-switch"),
+                                paths.matcher(HttpMethod.POST, "/api/ai-switch/stop"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -291,8 +317,21 @@ public class SecurityConfig {
                         .requestMatchers(
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/rule-catalog"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/summary"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/unreviewed-count"),
+                                paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/accounts"),
+                                // 내부자 규칙 카드 (#685). 감시 기준값이 보여 감시 대상인 보안 직원에게 열지 않는다
+                                paths.matcher(HttpMethod.GET, "/api/fds/insider-detections/rule-catalog"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/low/{eventId}"),
                                 paths.matcher(HttpMethod.GET, "/api/fds/operator-access-detections/{detectionId}"))
+                        .access((authentication, context) -> {
+                            var current = authentication.get();
+                            return new AuthorizationDecision(current.isAuthenticated()
+                                    && current.getPrincipal() instanceof SessionUser user
+                                    && user.role() == UserRole.ADMIN);
+                        })
+                        .requestMatchers(paths.matcher(
+                                HttpMethod.POST, "/api/fds/operator-access-detections/{detectionId}/review"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -319,7 +358,43 @@ public class SecurityConfig {
                                 paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/approve"),
                                 paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/reject"),
                                 paths.matcher(HttpMethod.GET, "/api/admin/merchant-applications/{id}/mail-deliveries"),
-                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"))
+                                paths.matcher(HttpMethod.POST, "/api/admin/merchant-applications/{id}/mail-resends"),
+                                // FDS 사건 담당 현황 · 변경 · 미배정 배정 · 변경 요청 처리 (#608). 사건 상세는 열지 않는다 (ADR-0065)
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/staff/{staffId}/cases"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/cases/{caseId}/reassign"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/staff/{staffId}/handover"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/case-assignments/backfill"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/requests"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/case-assignments/requests/pending-count"),
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/approve"),
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/admin/case-assignments/requests/{requestId}/reject"),
+                                // 주문자 전화 원문 열람 사후 검토 (#619). 원문 · 사건 상세는 열지 않는다
+                                paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/raw-view-reviews/pending-count"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/raw-view-reviews/{reviewId}/review"),
+                                // 내부자 경보 (#516). 근거는 기록 종류 · 사건 번호만, 원문은 열지 않는다
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/open-count"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-alerts/{alertId}"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-alerts/{alertId}/close"),
+                                // 내부자 사건 판정 · 징계 사건 정지 해제 (#670). 판정 · 해제는 관리자만 — 보안 직원이 자기 사건을 닫지 못하게
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases/open-count"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases/{insiderCaseId}"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-cases/{insiderCaseId}/decision"),
+                                paths.matcher(HttpMethod.POST, "/api/admin/insider-cases/{insiderCaseId}/lock-release"),
+                                // 내부자 사건 해제 검토 보고서 (#675). 조사 대상 직원 기록이라 관리자만
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-cases/{insiderCaseId}/reports"),
+                                // 내부자 관제 한 화면 (#679). 직원 로그인 IP · 접근 기록을 모아 보여 주므로 관리자만
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-monitor/staff"),
+                                paths.matcher(HttpMethod.GET, "/api/admin/insider-monitor/staff/{staffId}/timeline"),
+                                // 로그인 보안 대시보드 (#770). 전체 로그인 실패율 · 직원 로그인 · 탈취 의심 경보라 관리자만
+                                paths.matcher(HttpMethod.GET, "/api/admin/login-security"),
+                                // AI 조사 다시 켜기 (#626, ADR-0083) — 가이드라인 "재개승인", 끈 사람이 아닌 책임자가 한다
+                                paths.matcher(HttpMethod.POST, "/api/ai-switch/resume"))
                         .access((authentication, context) -> {
                             var current = authentication.get();
                             return new AuthorizationDecision(current.isAuthenticated()
@@ -360,8 +435,26 @@ public class SecurityConfig {
                                 paths.matcher(
                                         HttpMethod.POST, "/api/security-cases/{caseId}/handoffs/{handoffId}/recheck"),
                                 paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports"),
+                                // 담당자 본인의 담당 변경 요청 (#608)
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/assignment-requests"),
+                                // 사건 결제 1건의 주문자 정보 — 가린 값 · 대조 · 전화 원문 (#619). 담당 · 열린 사건은 서비스가 확인
+                                paths.matcher(
+                                        HttpMethod.GET, "/api/security-cases/{caseId}/payments/{paymentId}/contact"),
+                                paths.matcher(
+                                        HttpMethod.POST,
+                                        "/api/security-cases/{caseId}/payments/{paymentId}/contact-match"),
+                                paths.matcher(
+                                        HttpMethod.POST,
+                                        "/api/security-cases/{caseId}/payments/{paymentId}/contact-raw-view"),
                                 paths.matcher(
                                         HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/progress"),
+                                // AI 보고서 인쇄 · PDF 저장 기록 (#623). 담당 · 열린 사건은 서비스가 확인
+                                paths.matcher(HttpMethod.POST, "/api/security-cases/{caseId}/reports/{reportId}/print"),
+                                // AI 보고서 뒤 사건 질문 · 내 질문 목록 (#752, ADR-0086). 담당 · 열린 사건은 서비스가 확인
+                                paths.matcher(
+                                        HttpMethod.POST, "/api/security-cases/{caseId}/reports/{reportId}/questions"),
+                                paths.matcher(
+                                        HttpMethod.GET, "/api/security-cases/{caseId}/reports/{reportId}/questions"),
                                 // 거래 내역 "ML 참고" 칸 (#441) — 옆 사건 칸(payment-links)과 같은 규칙 (ADR-0067)
                                 paths.matcher(HttpMethod.GET, "/api/ml-shadow-scores"))
                         .access((authentication, context) -> {
@@ -405,7 +498,9 @@ public class SecurityConfig {
                 .requestCache(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout.logoutRequestMatcher(
                                 PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/api/auth/logout"))
-                        .invalidateHttpSession(true)
+                        // 기본 무효화 대신 겹친 로그아웃을 견디는 처리기를 쓴다 (#610)
+                        .invalidateHttpSession(false)
+                        .addLogoutHandler(new ConcurrentSafeSessionLogoutHandler())
                         .clearAuthentication(true)
                         .deleteCookies(SESSION_COOKIE)
                         .logoutSuccessHandler((request, response, authentication) -> {

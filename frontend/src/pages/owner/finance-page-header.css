@@ -1,8 +1,16 @@
 /* P6 세 화면은 제목·설명·오른쪽 액션의 간격을 공유한다. */
+.finance-intro-alert.ant-alert-with-description {
+  padding-block: 10px;
+}
+
+.finance-intro-alert.ant-alert-with-description .ant-alert-message {
+  margin-bottom: 2px;
+}
+
 .finance-preview,
 .loan-products {
   max-width: 1400px;
-  margin: 12px auto;
+  margin: 0 auto;
 }
 .finance-preview .dw-page-header,
 .loan-products .dw-page-header {
@@ -10,14 +18,6 @@
   gap: 24px;
   margin-bottom: 20px;
   min-height: unset;
-}
-.finance-preview .dw-page-header .dw-page-title,
-.loan-products .dw-page-header .dw-page-title {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: -0.7px;
-  margin: 0 0 8px;
 }
 .finance-preview .dw-page-header .dw-page-description,
 .loan-products .dw-page-header .dw-page-description {
@@ -48,6 +48,13 @@
   width: min(100%, 380px);
   max-width: 100%;
   font-variant-numeric: tabular-nums;
+}
+.finance-minimum-funds-form {
+  margin-block: 16px;
+  padding: 16px;
+  border: 1px solid #e7e1d5;
+  border-radius: 8px;
+  background: #fffaf0;
 }
 .finance-money-input .ant-input-number {
   width: 100%;
@@ -80,11 +87,22 @@
   gap: 12px;
   flex-wrap: wrap;
   margin-top: 20px;
+  margin-bottom: 10px;
   padding: 0 24px 0 20px;
 }
 .stl-detail .stl-preview-heading h3 {
   margin: 0;
   line-height: 28px;
+}
+.stl-preview-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.stl-preview-label small {
+  color: #756b5b;
+  font-size: 12px;
 }
 .stl-preview-heading .stl-expense-heading {
   margin-top: 0;
@@ -110,7 +128,7 @@
 }
 .finance-period .finance-period-presets .ant-btn:hover {
   background: #f7ecd2;
-  border-color: #ad7c18;
+  border-color: #886211;
   color: #47320e;
 }
 .finance-trend-detail label {
@@ -122,8 +140,8 @@
 .finance-dialog .ant-input:hover,
 .finance-drawer .ant-input:focus,
 .finance-drawer .ant-input:hover {
-  border-color: #ad7c18;
-  box-shadow: 0 0 0 2px #ad7c181a;
+  border-color: #886211;
+  box-shadow: 0 0 0 2px #8862111a;
 }
 .stl-more-button.ant-btn {
   height: 28px;
@@ -168,4 +186,79 @@
   font-size: 16px;
   font-weight: 700;
   border-radius: 8px;
+}
+
+@media screen and (width < 1280px) {
+  .finance-surface .finance-preview .dw-page-header,
+  .finance-surface .loan-products .dw-page-header {
+    flex-wrap: wrap;
+  }
+  .finance-surface .finance-chart-grid,
+  .finance-surface .finance-bottom-grid,
+  .finance-surface .stl-calendar-layout,
+  .finance-surface .loan-product-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .finance-metrics,
+  .finance-surface .stl-stats,
+  .finance-surface .stl-report-summary,
+  .finance-surface .payout-summary-grid,
+  .finance-surface .cashflow-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .finance-surface .finance-preview .ant-space,
+  .finance-surface .finance-preview .ant-space-item {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+@media screen and (width <= 760px) {
+  .finance-surface .finance-metrics,
+  .finance-surface .stl-stats,
+  .finance-surface .stl-report-summary,
+  .finance-surface .payout-summary-grid,
+  .finance-surface .cashflow-summary-grid,
+  .finance-surface .cashflow-evidence,
+  .finance-surface .loan-product-grid,
+  .finance-surface .recovery-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .finance-intro,
+  .finance-surface .loan-page-head,
+  .finance-surface .cashflow-loan-card,
+  .finance-surface .stl-calendar-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .finance-surface .finance-period,
+  .finance-surface .finance-connected .finance-period label,
+  .finance-surface .finance-header-actions,
+  .finance-surface .finance-period-actions,
+  .finance-surface .finance-period-presets,
+  .finance-surface .cashflow-equation,
+  .finance-surface .cashflow-section-head {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .finance-surface .finance-period input {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .finance-surface .finance-period-actions {
+    margin-left: 0;
+  }
+  .finance-surface .finance-nav {
+    overflow-x: auto;
+  }
+  .finance-surface .finance-nav button {
+    flex-shrink: 0;
+  }
+  .finance-surface .finance-recurring-amount-row,
+  .finance-surface .loan-products dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .loan-products dd {
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
 }

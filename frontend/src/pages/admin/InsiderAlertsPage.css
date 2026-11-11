@@ -1,0 +1,140 @@
+/* 관리자 [내부자 › 경보] — 직원별 묶음. 묶음 머리(이름 · 가장 높은 등급 · 건수 · 관제로) 아래 경보 줄, 줄마다 근거를 그 자리에서 펼친다 */
+
+.ia-tabs .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+.ia-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ia-groups-caption {
+  margin: 0 2px;
+}
+.ia-empty {
+  padding: 24px 16px;
+}
+
+.ia-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ia-group-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.ia-group-who .ip-staff-link {
+  font-size: 15px;
+}
+.ia-group-monitor {
+  font-size: var(--dw-text-secondary);
+  white-space: nowrap;
+}
+
+.ia-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ia-row + .ia-row {
+  border-top: 1px solid #f1f5f9;
+}
+/* 시각 · 규칙과 내용 · 등급 · 근거 · 처리 — 넓은 화면은 한 줄, 좁으면 접혀 내려간다 */
+.ia-row-main {
+  display: grid;
+  /* 처리 칸은 상한을 둔다 — 긴 닫기 메모(200자)가 규칙 · 내용 칸을 밀어내지 않게, 칸 안에서 줄바꿈 */
+  grid-template-columns: 128px minmax(0, 1fr) 64px 92px minmax(120px, 260px);
+  align-items: center;
+  gap: 8px 16px;
+  padding: 10px 16px;
+}
+.ia-row-time {
+  color: #64748b;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ia-row-rule {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ia-row-summary {
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+.ia-evidence-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #475569;
+  font: inherit;
+  font-size: var(--dw-text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ia-evidence-toggle:hover {
+  color: #1e293b;
+}
+.ia-evidence-toggle:focus-visible {
+  outline: 2px solid var(--shell-strong);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.ia-row-action {
+  justify-self: end;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.ia-row-evidence {
+  padding: 0 16px 12px 160px;
+}
+
+/* 닫기 창 — 어떤 직원의 어떤 경보인지 */
+.ia-modal-target {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+@media (max-width: 860px) {
+  .ia-row-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ia-row-time {
+    grid-column: 1 / -1;
+  }
+  .ia-row-rule {
+    grid-column: 1 / -1;
+  }
+  .ia-row-action {
+    grid-column: 1 / -1;
+    justify-self: start;
+    text-align: left;
+  }
+  .ia-row-evidence {
+    padding-left: 16px;
+  }
+}
+
+/* 관제에서 온 직원 묶음 — 역할 색 테두리로 강조 */
+.ia-group.is-focused {
+  border-color: var(--shell-strong);
+  box-shadow: 0 4px 14px #5b35b01f;
+}

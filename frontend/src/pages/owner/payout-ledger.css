@@ -15,7 +15,7 @@
 }
 .payout-stat {
   border: 1px solid #dcd2bf;
-  border-top: 4px solid #ad7c18;
+  border-top: 4px solid #886211;
   background: #fff;
   border-radius: 10px;
   padding: 20px;
@@ -58,6 +58,9 @@
 }
 .payout-stat-original > strong {
   color: #1d4ed8;
+}
+.payout-stat-before-deduction > strong {
+  color: #70490f;
 }
 .payout-stat-deduction {
   border-top-color: #e87929;
@@ -107,6 +110,26 @@
 }
 .payout-policy-note strong {
   color: #886211;
+}
+.payout-policy-note.payout-current-recovery,
+.payout-policy-note.payout-month-summary {
+  justify-content: flex-start;
+  gap: 4px 24px;
+}
+.payout-current-recovery > small {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: inherit;
+}
+.payout-current-recovery > strong,
+.payout-month-summary > strong {
+  min-width: 0;
+  max-width: 100%;
+}
+.payout-month-summary > strong {
+  font: inherit;
+  font-weight: 700;
+  color: #624718;
 }
 .payout-current-recovery > span {
   color: #78350f;

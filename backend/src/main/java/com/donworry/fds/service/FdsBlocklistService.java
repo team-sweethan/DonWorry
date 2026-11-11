@@ -6,6 +6,7 @@ import com.donworry.fds.dto.FdsBlocklistStatusFilter;
 import com.donworry.fds.dto.FdsBlocklistStatusResponse;
 import com.donworry.fds.entity.FdsBlocklistEntry;
 import com.donworry.fds.repository.FdsBlocklistEntryRepository;
+import com.donworry.fds.repository.FdsEvaluationRepository;
 import com.donworry.identity.api.CurrentStaff;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class FdsBlocklistService {
     private final FdsBlocklistEntryRepository entries;
     private final CurrentStaff currentStaff;
+    private final FdsEvaluationRepository evaluations;
 
     public FdsBlocklistPageResponse list(int page, int size, FdsBlocklistStatusFilter status, String search) {
         requireViewer();
@@ -34,7 +36,7 @@ public class FdsBlocklistService {
                 result.map(entry -> new FdsBlocklistPageResponse.Item(
                                 entry.getBlocklistEntryId(),
                                 entry.getIdentifierType(),
-                                entry.getIdentifierValue(),
+                                displayValue(entry),
                                 entry.getDisplayLabel(),
                                 entry.getReason(),
                                 entry.getDeactivationReason(),
@@ -49,13 +51,16 @@ public class FdsBlocklistService {
                 result.getTotalPages());
     }
 
+    // 식별값은 전체 일치로만 찾으므로 등록 가능한 최대 길이(CreateFdsBlocklistEntryRequest 255자)까지 받는다 (#629)
+    private static final int MAX_SEARCH_LENGTH = 255;
+
     private String normalizeSearch(String search) {
         if (search == null) {
             return "";
         }
         var normalized = search.strip();
-        if (normalized.codePointCount(0, normalized.length()) > 100) {
-            throw new IllegalArgumentException("search must be at most 100 characters");
+        if (normalized.codePointCount(0, normalized.length()) > MAX_SEARCH_LENGTH) {
+            throw new IllegalArgumentException("search must be at most " + MAX_SEARCH_LENGTH + " characters");
         }
         return normalized;
     }
@@ -71,8 +76,41 @@ public class FdsBlocklistService {
     @Transactional
     public void add(CreateFdsBlocklistEntryRequest request) {
         requireRole("SECURITY_STAFF");
-        var type = request.identifierType().name();
-        var value = normalizeValue(request.identifierType(), request.identifierValue());
+        register(
+                request.identifierType(),
+                normalizeValue(request.identifierType(), request.identifierValue()),
+                request.displayLabel(),
+                request.reason());
+    }
+
+    // 경보 상세의 차단 후보 등록. 화면은 원문을 모르므로 서버가 평가에서 값을 찾는다 (#603)
+    @Transactional
+    public void addFromEvaluation(
+            Long evaluationId, CreateFdsBlocklistEntryRequest.IdentifierType identifierType, String reason) {
+        requireRole("SECURITY_STAFF");
+        var evaluation = evaluations.findById(evaluationId).orElseThrow(FdsEvaluationNotFoundException::new);
+        var value = switch (identifierType) {
+            case CARD_TOKEN -> evaluation.getCardToken();
+            case DEVICE_ID -> evaluation.getDeviceId();
+            case BUYER_REF -> evaluation.getCustomerRef();
+            case IP_ADDRESS -> evaluation.getIpAddress();
+            case BUYER_EMAIL -> evaluation.getBuyerEmail();
+        };
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "이 평가에는 해당 식별값이 없습니다.");
+        }
+        var displayLabel = identifierType == CreateFdsBlocklistEntryRequest.IdentifierType.CARD_TOKEN
+                ? evaluation.getCardDisplayLabel()
+                : null;
+        register(identifierType, normalizeValue(identifierType, value), displayLabel, reason);
+    }
+
+    private void register(
+            CreateFdsBlocklistEntryRequest.IdentifierType identifierType,
+            String value,
+            String displayLabel,
+            String reason) {
+        var type = identifierType.name();
         var existing = entries.findByIdentifierTypeAndIdentifierValue(type, value).stream()
                 .findFirst();
         if (existing.isPresent()) {
@@ -80,17 +118,26 @@ public class FdsBlocklistService {
             if (entry.isActiveAt(Instant.now())) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "이미 등록된 차단 식별값입니다.");
             }
-            entry.reactivate(
-                    optionalDisplayLabel(request.displayLabel()),
-                    request.reason().trim());
+            entry.reactivate(optionalDisplayLabel(displayLabel), reason.trim());
             return;
         }
         entries.save(FdsBlocklistEntry.active(
-                type,
-                value,
-                optionalDisplayLabel(request.displayLabel()),
-                request.reason().trim(),
-                Instant.now()));
+                type, value, optionalDisplayLabel(displayLabel), reason.trim(), Instant.now()));
+    }
+
+    // 목록 화면에 이메일 · IP · 기기 ID 원문을 보내지 않고, 카드 토큰은 빼고 표시값(displayLabel)만 쓴다 (#603 · #628)
+    // 검색 · 해제는 서버의 원문과 항목 ID로 그대로 된다. 고객 번호는 가리지 않는다 (#628 하지 않는 것)
+    private String displayValue(FdsBlocklistEntry entry) {
+        var value = entry.getIdentifierValue();
+        // 모르는 종류는 원문 대신 가림 표시로 막는다 — 예외로 목록 전체가 실패하지 않게 한다
+        return switch (entry.getIdentifierType()) {
+            case "BUYER_EMAIL" -> FdsIdentifierMasking.email(value);
+            case "IP_ADDRESS" -> FdsIdentifierMasking.ipAddress(value);
+            case "DEVICE_ID" -> FdsIdentifierMasking.deviceId(value);
+            case "CARD_TOKEN" -> null;
+            case "BUYER_REF" -> value;
+            default -> FdsIdentifierMasking.HIDDEN;
+        };
     }
 
     @Transactional

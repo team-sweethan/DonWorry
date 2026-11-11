@@ -9,8 +9,10 @@ from app.agent.tools import StaticToolBox, ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     LinkedPaymentsTool,
+    OrderContextTool,
     PaymentHistoryTool,
     SimilarCasesTool,
 )
@@ -20,9 +22,13 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 def toolbox(name: str) -> StaticToolBox:
     data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+    # 징후 · 정상 근거는 Spring이 계산한다 (#618) — 샘플의 decisionBasis를 그대로 돌려준다
     return StaticToolBox(
         CasePaymentsTool.model_validate(data["casePayments"]),
         FdsEvidenceTool.model_validate(data["fdsEvidence"]),
+        basis=DecisionBasisTool.model_validate(data["decisionBasis"])
+        if "decisionBasis" in data
+        else None,
     )
 
 
@@ -43,6 +49,7 @@ _TOOL_NAMES: dict[type, str] = {
     SimilarCasesTool: "find_similar_cases",
     PaymentHistoryTool: "get_payment_history",
     LinkedPaymentsTool: "find_linked_payments",
+    OrderContextTool: "get_order_context",
 }
 
 

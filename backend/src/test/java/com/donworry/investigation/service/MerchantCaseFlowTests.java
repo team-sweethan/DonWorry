@@ -11,6 +11,7 @@ import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.SessionUserTestSupport;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
@@ -48,6 +49,38 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureMockMvc
 @Import({MariaDbTestContainerConfig.class, TestPaymentInfoStore.class, TestFinancialActionGateway.class})
 class MerchantCaseFlowTests {
+
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    ReportGateway reportGateway;
+
+    @Test
+    void detail_internalReportTextNeverReachesMerchantResponse() throws Exception {
+        Held held = createHeld(merchantId, customer(), 300_000L, 65);
+        String internalOnly = "INTERNAL_ONLY_203.0.113.5_다른고객16명_FDS차단3건_직원메모";
+        org.mockito.Mockito.doReturn(Optional.of(new ReportGateway.ReportSnapshot(
+                        999L,
+                        held.caseId(),
+                        1,
+                        1,
+                        "SUCCEEDED",
+                        Map.of("summary", List.of(internalOnly)),
+                        Instant.now(),
+                        Instant.now())))
+                .when(reportGateway)
+                .latest(held.caseId());
+        loginAsOwner(merchantId);
+        // 사건 생성·보고서 완료 처리의 호출은 제외하고 이번 사장님 조회만 검사한다.
+        org.mockito.Mockito.clearInvocations(reportGateway);
+        String response = perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary[0]").value("결제를 확인하고 있습니다. 아직 처리 결과가 확정되지 않았습니다."))
+                .andExpect(jsonPath("$.directInvestigation").doesNotExist())
+                .andReturn()
+                .getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        org.assertj.core.api.Assertions.assertThat(response).doesNotContain(internalOnly);
+        org.mockito.Mockito.verify(reportGateway, org.mockito.Mockito.never()).latest(held.caseId());
+    }
 
     private static final AtomicLong MERCHANT_IDS = new AtomicLong(2_000_000_000L + System.nanoTime() % 1_000_000L);
 
@@ -113,7 +146,8 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.cases[0].maxRiskScore").doesNotExist());
     }
 
-    // 상세는 보고서 핵심 요약 · 결제별 AI 결론 · 직원 판정 · P5 결제 상태를 따로 보내고, 내부 근거는 보내지 않는다
+    // 상세는 상태 기반 처리 안내 · 직원 판정 · P5 결제 상태만 보내고 내부 근거는 보내지 않는다
+    // 결제별 AI 권고 칸은 응답에 없다 — 보고서에 판정 권고를 만들지 않고, 옛 보고서에 남은 값도 내보내지 않는다 (#644, ADR-0009 결정 13)
     @Test
     void detail_beforeAndAfterDecision_separatesDecisionAndPaymentStatus() throws Exception {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);
@@ -122,13 +156,13 @@ class MerchantCaseFlowTests {
         perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayStatus").value("INVESTIGATING"))
-                .andExpect(jsonPath("$.summary.length()").value(2))
-                .andExpect(jsonPath("$.directInvestigation").value(false))
+                .andExpect(jsonPath("$.summary[0]").value("결제를 확인하고 있습니다. 아직 처리 결과가 확정되지 않았습니다."))
+                .andExpect(jsonPath("$.directInvestigation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].paymentId").value(held.paymentId()))
                 .andExpect(jsonPath("$.payments[0].amount").value(300_000))
                 .andExpect(jsonPath("$.payments[0].paymentStatus").value("HELD"))
                 .andExpect(jsonPath("$.payments[0].decision").doesNotExist())
-                .andExpect(jsonPath("$.payments[0].aiRecommendation").value("NEEDS_CHECK"))
+                .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].riskScore").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].ruleHits").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].casePaymentId").doesNotExist())
@@ -160,12 +194,13 @@ class MerchantCaseFlowTests {
                 .andExpect(jsonPath("$.handoffs").doesNotExist());
     }
 
-    // AI 보고서가 최종 실패해 직원이 직접 조사하고 판정한 Case는 요약 없이 직접 조사로 표시된다
+    // 보고서 실패 뒤 직접 판정해도 조사 방식은 공개하지 않고 처리 결과만 보낸다
     @Test
-    void detail_manualDecision_marksDirectInvestigation() throws Exception {
+    void detail_manualDecision_returnsOnlyProcessingResults() throws Exception {
         // P5 payments에 없는 결제라 결제 정보가 비고, 목 보고서는 최종 실패(FAILED)가 된다
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(System.nanoTime(), merchantId, customer(), 100_000L, "AUTH", null, Instant.now()));
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
         loginAs(7L, "SECURITY_STAFF", null, List.of());
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         perform(decide(caseId, 1, null, detail.payments().getFirst().casePaymentId(), "ACCEPT"))
@@ -174,14 +209,14 @@ class MerchantCaseFlowTests {
         loginAsOwner(merchantId);
         perform(get("/api/merchant/security-cases/{caseId}", caseId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary").doesNotExist())
-                .andExpect(jsonPath("$.directInvestigation").value(true))
+                .andExpect(jsonPath("$.summary").isArray())
+                .andExpect(jsonPath("$.directInvestigation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].decision").value("ACCEPT"))
                 .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist())
                 .andExpect(jsonPath("$.payments[0].amount").doesNotExist());
     }
 
-    // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약 · AI 결론을 내보내지 않는다 (PR #207 리뷰)
+    // 결제가 병합돼 증거 버전이 올랐는데 새 보고서가 아직 없으면 이전 버전 요약을 내보내지 않는다 (PR #207 리뷰)
     @Test
     void detail_evidenceChangedBeforeNewReport_hidesOldSummary() throws Exception {
         Held held = createHeld(merchantId, customer(), 300_000L, 65);
@@ -192,7 +227,7 @@ class MerchantCaseFlowTests {
         loginAsOwner(merchantId);
         perform(get("/api/merchant/security-cases/{caseId}", held.caseId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary").doesNotExist())
+                .andExpect(jsonPath("$.summary").isArray())
                 .andExpect(jsonPath("$.payments[0].aiRecommendation").doesNotExist());
     }
 
@@ -303,6 +338,8 @@ class MerchantCaseFlowTests {
                 .paymentId();
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, merchantId, customerRef, amount, "TEST-AUTH-" + paymentId, null, now));
+        // 판정은 담당 보안 직원(7번)이 한다 (#612)
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
         return new Held(paymentId, caseId);
     }
 

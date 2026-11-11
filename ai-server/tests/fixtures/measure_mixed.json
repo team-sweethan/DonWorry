@@ -51,5 +51,48 @@
     "card": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
     "device": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
     "ip": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0}
+  },
+  "decisionBasis": {
+    "caseId": "203",
+    "evidenceVersion": 1,
+    "source": "P4",
+    "retrievedAt": "2026-10-27T15:05:00Z",
+    "payments": [
+      {
+        "paymentId": "9501",
+        "basis": {
+          "signals": [
+            {
+              "key": "R05",
+              "label": "고위험 국가 IP",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "해외 체류 · VPN 사용 등 접속 경위 확인"
+            },
+            {
+              "key": "R02",
+              "label": "신규 단말기",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": null,
+              "countedIn": null,
+              "checkBefore": "고객이 최근 기기를 바꿨는지 가맹점에 확인"
+            }
+          ],
+          "normals": [
+            {
+              "key": "SIMILAR_AMOUNT",
+              "label": "최근 30일 비슷한 금액의 결제 2건 매입 완료",
+              "canExplain": [
+                "고액 결제"
+              ],
+              "explains": []
+            }
+          ]
+        }
+      }
+    ]
   }
 }

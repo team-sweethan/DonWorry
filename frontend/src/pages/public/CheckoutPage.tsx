@@ -44,6 +44,9 @@ export function CheckoutPage() {
   const { sessionKey = '' } = useParams()
   const [session, setSession] = useState<CheckoutSession | null>(null)
   const [card, setCard] = useState('A')
+  // [카드 추가] 모의 등록 (#766). 가상 카드사에서 등록했다고 가정하고 이 결제창에서만 쓴다(카드번호는 받지 않음)
+  const [registering, setRegistering] = useState(false)
+  const [cardAdded, setCardAdded] = useState(false)
   const [phase, setPhase] = useState<
     'loading' | 'ready' | 'paying' | 'waiting' | 'leaving' | 'error'
   >('loading')
@@ -181,7 +184,10 @@ export function CheckoutPage() {
             <fieldset className="checkout-cards" disabled={phase === 'paying'}>
               <legend>결제 카드</legend>
               <p className="checkout-muted">시연용 가상 카드입니다. 실제로 청구되지 않습니다.</p>
-              {session.cards.map((option) => (
+              {(cardAdded && session.addableCard
+                ? [...session.cards, session.addableCard]
+                : session.cards
+              ).map((option) => (
                 <label key={option.code} className="checkout-card">
                   <input
                     type="radio"
@@ -204,6 +210,45 @@ export function CheckoutPage() {
                   </span>
                 </label>
               ))}
+              {session.addableCard &&
+                !cardAdded &&
+                (registering ? (
+                  <div className="checkout-register" role="group" aria-label="카드 추가">
+                    <b>{session.addableCard.label} 등록 (모의)</b>
+                    <span className="checkout-muted">
+                      가상 카드사에서 새 카드를 등록했다고 가정합니다. 카드번호는 입력하지 않습니다.
+                    </span>
+                    <div className="checkout-register__actions">
+                      <button
+                        type="button"
+                        className="checkout-pay"
+                        onClick={() => {
+                          if (!session.addableCard) return
+                          setCardAdded(true)
+                          setRegistering(false)
+                          setCard(session.addableCard.code)
+                        }}
+                      >
+                        등록
+                      </button>
+                      <button
+                        type="button"
+                        className="checkout-cancel"
+                        onClick={() => setRegistering(false)}
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="checkout-add"
+                    onClick={() => setRegistering(true)}
+                  >
+                    + 카드 추가
+                  </button>
+                ))}
             </fieldset>
             <p className="checkout-note">
               결제 보안 확인을 위해 접속 IP와 기기 정보가 사용됩니다. 카드번호는 쇼핑몰에 전달되지

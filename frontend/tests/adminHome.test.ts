@@ -25,6 +25,13 @@ test('관리자 현황은 전체 건수를 쓰고 최신 승인 대기 요청은
     if (url.pathname.endsWith('rule-policies')) {
       return Response.json([{ active: true }, { active: false }, { active: false }])
     }
+    // 운영 상태 줄 — AI 조사 상태 · 사장님 계정 접근 이상 요약
+    if (url.pathname.endsWith('ai-switch')) {
+      return Response.json({ configEnabled: true, switchOn: false, aiActive: false, histories: [] })
+    }
+    if (url.pathname.endsWith('operator-access-detections/summary')) {
+      return Response.json({ deniedCount: 9, accountCount: 2, daily: [], topPaths: [] })
+    }
     assert.equal(url.searchParams.get('keyword'), '')
     assert.equal(url.searchParams.has('role'), false)
     // 임시 비밀번호 미변경은 사용 중 계정만 센다.
@@ -37,7 +44,7 @@ test('관리자 현황은 전체 건수를 쓰고 최신 승인 대기 요청은
     return Response.json({ totalElements: url.pathname.endsWith('users') ? 47 : 31, items: [] })
   }
   const result = await getAdminHome()
-  assert.equal(paths.length, 5)
+  assert.equal(paths.length, 7)
   assert.deepEqual(result.requests, {
     status: 'fulfilled',
     value: { count: 23, recent: [23, 22, 21, 20, 19].map((requestId) => ({ requestId })) },
@@ -46,6 +53,11 @@ test('관리자 현황은 전체 건수를 쓰고 최신 승인 대기 요청은
   assert.deepEqual(result.users, { status: 'fulfilled', value: 47 })
   assert.deepEqual(result.merchants, { status: 'fulfilled', value: 31 })
   assert.deepEqual(result.passwordPendingUsers, { status: 'fulfilled', value: 3 })
+  assert.equal(result.aiSwitch.status === 'fulfilled' && result.aiSwitch.value.switchOn, false)
+  assert.equal(
+    result.operatorAccess.status === 'fulfilled' && result.operatorAccess.value.deniedCount,
+    9,
+  )
 })
 
 test('부분 실패를 0건과 구분하고 재조회 성공으로 복구한다', async () => {

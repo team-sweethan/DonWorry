@@ -248,12 +248,14 @@ export function SettlementLineChart({
 export type BalancePoint = { date: string; balance: number; income?: number; expense?: number }
 export function CashBalanceChart({
   points,
+  minimumOperatingFunds = 0,
   onSelect,
   selectedDate,
   minSelectableDate,
   maxSelectableDate,
 }: {
   points: BalancePoint[]
+  minimumOperatingFunds?: number
   selectedDate?: string
   minSelectableDate?: string
   maxSelectableDate?: string
@@ -272,7 +274,11 @@ export function CashBalanceChart({
   } = useCenteredChart(points.length, activeIndex, active?.date)
   if (!points.length) return <Empty description="조회 내역이 없습니다." />
   const low = Math.min(0, ...points.map((p) => Math.min(p.balance, -(p.expense ?? 0)))),
-    high = Math.max(1, ...points.map((p) => Math.max(p.balance, p.income ?? 0))),
+    high = Math.max(
+      1,
+      minimumOperatingFunds,
+      ...points.map((p) => Math.max(p.balance, p.income ?? 0)),
+    ),
     span = high - low || 1
   const y = (v: number) => 16 + ((high - v) * 230) / span
   const selectDate = (date: string) => {
@@ -317,16 +323,16 @@ export function CashBalanceChart({
           <line
             x1="64"
             x2={width - 16}
-            y1={y(0)}
-            y2={y(0)}
+            y1={y(minimumOperatingFunds)}
+            y2={y(minimumOperatingFunds)}
             stroke="#f59e0b"
             strokeDasharray="5 5"
           />
           <rect
             x="64"
-            y={y(0)}
+            y={y(minimumOperatingFunds)}
             width={width - 80}
-            height={Math.max(0, 246 - y(0))}
+            height={Math.max(0, 246 - y(minimumOperatingFunds))}
             fill="#fef2f2"
           />
           {points.map((p, i) => (
@@ -369,7 +375,7 @@ export function CashBalanceChart({
                 cx={x(i)}
                 cy={y(p.balance)}
                 r={p.date === active.date ? 6 : 4}
-                fill={p.balance < 0 ? '#ea580c' : '#614b2e'}
+                fill={p.balance < minimumOperatingFunds ? '#ea580c' : '#614b2e'}
                 onClick={() => selectDate(p.date)}
                 role="button"
                 tabIndex={0}

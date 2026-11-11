@@ -95,6 +95,19 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+// 본문을 JSON이 아니라 파일(Blob)로 받는다 — 거래 내역 CSV 내보내기 (#651). 세션 · 오류 처리는 api와 같다
+// text()로 읽으면 브라우저가 UTF-8 BOM을 지워 엑셀에서 한글이 깨진다
+export async function apiBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const finish = sessionActivity.beginRequest(false)
+  const timeout = AbortSignal.timeout(SESSION_REQUEST_GRACE_MS)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
+  try {
+    return await request<Blob>(path, { ...init, signal }, false, 'blob')
+  } finally {
+    finish()
+  }
+}
+
 // 공개 신청 요청은 업무 세션 활동·만료 알림을 발생시키지 않는다. CSRF 교환은 공유한다.
 export async function publicApi<T>(path: string, init?: RequestInit): Promise<T> {
   const timeout = AbortSignal.timeout(SESSION_REQUEST_GRACE_MS)
@@ -102,7 +115,12 @@ export async function publicApi<T>(path: string, init?: RequestInit): Promise<T>
   return request<T>(path, { ...init, signal }, true)
 }
 
-async function request<T>(path: string, init?: RequestInit, publicRequest = false): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  publicRequest = false,
+  body: 'json' | 'blob' = 'json',
+): Promise<T> {
   const activityId = sessionActivity.getSnapshot()?.id
   const generation = sessionGeneration
   const version = readSessionVersion()
@@ -180,6 +198,7 @@ async function request<T>(path: string, init?: RequestInit, publicRequest = fals
     if (path === '/auth/me') recordActivity()
     return undefined as T
   }
+  if (body === 'blob') return (await res.blob()) as T
   const text = await res.text()
   const result = text ? (JSON.parse(text) as T) : (undefined as T)
   if (path === '/auth/me') {

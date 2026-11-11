@@ -6,11 +6,13 @@ import static org.mockito.BDDMockito.given;
 import com.donworry.MariaDbTestContainerConfig;
 import com.donworry.identity.api.CurrentStaff;
 import com.donworry.identity.api.StaffSummary;
+import com.donworry.investigation.CaseAssigneeTestSupport;
 import com.donworry.investigation.dto.CaseDetailResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.AiReportResponse;
 import com.donworry.investigation.dto.CaseDetailResponse.HistoryResponse;
 import com.donworry.investigation.dto.DecisionSubmitRequest;
 import com.donworry.investigation.entity.Decision;
+import com.donworry.investigation.repository.SecurityCaseRepository;
 import com.donworry.investigation.service.CaseDecisionService;
 import com.donworry.investigation.service.CaseIntakeService;
 import com.donworry.investigation.service.CaseQueryService;
@@ -49,6 +51,9 @@ class PaymentActionFlowTests {
 
     @MockitoBean
     CurrentStaff currentStaff;
+
+    @Autowired
+    SecurityCaseRepository securityCaseRepository;
 
     @Autowired
     CaseIntakeService caseIntakeService;
@@ -121,6 +126,8 @@ class PaymentActionFlowTests {
         });
         Long caseId = caseIntakeService.receive(
                 new HeldPayment(paymentId, 1L, customerRef, 150_000L, "AUTH", null, Instant.now()));
+        // 판정은 담당 보안 직원(7번)이 한다 (#612)
+        CaseAssigneeTestSupport.assign(securityCaseRepository, caseId, 7L);
         CaseDetailResponse detail = caseQueryService.detail(caseId);
         // 목 보고서는 P3 목 결제 정보가 없으면 최종 실패로 남는다 — 그때는 보고서 없이 수동 판정한다
         AiReportResponse report = detail.reports().getLast();

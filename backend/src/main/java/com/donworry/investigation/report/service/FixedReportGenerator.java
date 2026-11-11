@@ -2,8 +2,12 @@ package com.donworry.investigation.report.service;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse.Basis;
+import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.RuleCriterionFormatter.Criterion;
@@ -13,13 +17,20 @@ import com.donworry.investigation.service.PaymentInfoReader;
 import com.donworry.investigation.service.PaymentInfoReader.PaymentInfo;
 import com.donworry.investigation.service.PaymentInfoReader.RuleHit;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -54,12 +65,14 @@ class FixedReportGenerator {
     private final PaymentHistoryFinder paymentHistoryFinder;
     private final PaymentSignalReader paymentSignalReader;
     private final LinkedPaymentFinder linkedPaymentFinder;
+    private final OrderContextFinder orderContextFinder;
 
     // 연결 결제 중 하나라도 조회하지 못하거나 금액 · 요청 시각 · 점수가 비면 빈 값 — 증거가 빠진 보고서를 판정 근거로 쓰지 않는다
     // 조회 오류는 숨기지 않고 던진다 — 호출자가 시도 실패로 센다
     // 커밋 뒤 리스너에서 불리므로 끝난 트랜잭션에 합류하지 않게 새 읽기 트랜잭션을 연다
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public Optional<Map<String, Object>> generate(Long caseId, int reportVersion, int evidenceVersion, Instant now) {
+    public Optional<Map<String, Object>> generate(
+            Long caseId, int reportVersion, int evidenceVersion, Instant now, FixedReportReason reason) {
         SecurityCase securityCase = securityCaseRepository.findById(caseId).orElseThrow();
         List<Long> paymentIds = casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(caseId).stream()
                 .map(CasePayment::getPaymentId)
@@ -79,9 +92,11 @@ class FixedReportGenerator {
                 similarOrNull(caseId),
                 historyOrNull(caseId, now),
                 linkedOrNull(caseId, now),
+                orderOrNull(caseId, now),
                 reportVersion,
                 evidenceVersion,
-                now));
+                now,
+                reason));
     }
 
     // 비슷한 사건은 참고 자료라 조회에 실패해도 보고서는 만든다 — 값 없음(null)으로 남겨 화면이 "조회하지 못함"을 보여 준다
@@ -115,6 +130,16 @@ class FixedReportGenerator {
         }
     }
 
+    // 주문 정보도 참고 자료라 조회에 실패해도 보고서는 만든다 (#634)
+    private OrderContextToolResponse orderOrNull(Long caseId, Instant now) {
+        try {
+            return orderContextFinder.find(caseId, now);
+        } catch (RuntimeException e) {
+            log.warn("주문 정보 조회 실패 caseId={}", caseId, e);
+            return null;
+        }
+    }
+
     private static boolean hasEvidence(PaymentInfo payment) {
         return payment != null
                 && payment.amount() != null
@@ -129,14 +154,32 @@ class FixedReportGenerator {
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
             int reportVersion,
             int evidenceVersion,
-            Instant now) {
+            Instant now,
+            FixedReportReason reason) {
         long totalAmount = payments.stream().mapToLong(PaymentInfo::amount).sum();
         String dataVersion = "evidence v" + evidenceVersion;
         List<Map<String, Object>> analyses = new ArrayList<>();
         String fdsEvidenceId = evidenceId(securityCase.getId(), reportVersion, 2);
-        for (PaymentInfo payment : payments) {
+        // AI가 꺼져도 AI 보고서와 같은 징후 · 정상 근거를 싣는다 (#618) — 고객 이력은 30일 기본 조회, 실패하면 없이 계산
+        // 판정 권고는 만들지 않는다 (#644, ADR-0009 결정 13)
+        List<CasePaymentsToolResponse.Payment> casePayments = payments.stream()
+                .map(p -> CasePaymentsToolResponse.Payment.builder()
+                        .paymentId(String.valueOf(p.paymentId()))
+                        .amount(p.amount())
+                        .paymentStatus(p.paymentStatus())
+                        .requestedAt(p.requestedAt())
+                        .build())
+                .toList();
+        for (int i = 0; i < payments.size(); i++) {
+            PaymentInfo payment = payments.get(i);
+            // 같은 카드 · 기기 · IP 조회가 실패하면 고위험 징후를 확인하지 못했으니 근거를 싣지 않는다 (#618 Codex 리뷰)
+            Basis basis = linked == null
+                    ? null
+                    : DecisionBasisCalculator.basis(
+                            casePayments.get(i), fdsPayment(payment, signals), casePayments, history, linked);
             // 위험 · 정상 근거 칸은 없다 — AI 보고서와 같은 모양 (#548)
             Map<String, Object> analysis = new HashMap<>(Map.ofEntries(
                     Map.entry("paymentId", payment.paymentId()),
@@ -147,8 +190,6 @@ class FixedReportGenerator {
                             "ruleHits",
                             payment.ruleHits().stream().map(RuleHit::code).toList()),
                     Map.entry("unknowns", List.of("고객 본인의 결제 의사")),
-                    Map.entry("recommendation", "NEEDS_CHECK"),
-                    Map.entry("reason", "규칙 적중 외에 판단할 근거가 없어 추가 확인이 필요합니다."),
                     Map.entry(
                             "ruleHitDetails",
                             payment.ruleHits().stream()
@@ -156,6 +197,7 @@ class FixedReportGenerator {
                                     .toList())));
             // 카드 · 기기 · 접속 국가 (#346) — ai-server와 같은 키. 평가가 없으면 null
             analysis.put("signals", signalsOf(signals.get(payment.paymentId())));
+            analysis.put("basis", basis);
             analyses.add(analysis);
         }
         Map<String, Object> body = new HashMap<>(Map.ofEntries(
@@ -174,35 +216,46 @@ class FixedReportGenerator {
                         "summary",
                         List.of(
                                 "조사 대상 결제 " + payments.size() + "건에서 FDS 규칙 적중이 확인되었습니다.",
-                                "직원은 판정 근거와 결제 기록을 확인한 뒤 판정해 주세요.")),
+                                "직원은 징후와 결제 기록을 확인한 뒤 판정해 주세요.")),
                 Map.entry("paymentAnalyses", analyses),
                 Map.entry("timeline", timeline(securityCase, payments)),
                 // 고정 보고서는 AI가 조사한 사실 · 요약 근거 번호가 없다 (#548, #559)
                 Map.entry("summaryFacts", List.of()),
                 Map.entry("facts", List.of()),
                 Map.entry("additionalChecks", List.of("고객 본인 확인 필요 여부")),
-                Map.entry(
-                        "recommendation",
-                        Map.of(
-                                "summary",
-                                "추가 확인 후 결제별로 판정할 것을 권고합니다.",
-                                "limitations",
-                                List.of("고정 문장 보고서입니다(AI 연결 전). FDS 점수는 부정거래 확률이 아닙니다."))),
+                // 키 이름은 예전 그대로(화면 계약) — 권고 요약은 #644에서 뺐고 한계 줄만 둔다
+                Map.entry("recommendation", Map.of("limitations", List.of(reason.limitation))),
                 Map.entry(
                         "evidence",
-                        evidenceList(securityCase.getId(), similar, history, linked, reportVersion, now, dataVersion)),
-                Map.entry(
-                        "verdict",
-                        Map.of(
-                                "headline",
-                                "FDS 규칙에 걸린 결제라 고객 본인 확인 후 판정이 필요합니다.",
-                                "overallRecommendation",
-                                "NEEDS_CHECK")),
-                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked))));
+                        evidenceList(
+                                securityCase.getId(),
+                                similar,
+                                history,
+                                linked,
+                                order,
+                                reportVersion,
+                                now,
+                                dataVersion)),
+                Map.entry("investigationTrace", fixedTrace(payments.size(), similar, history, linked, order, reason))));
+        body.put("caseOverview", caseOverview(securityCase.getCustomerRef(), payments));
         body.put("similarCases", similar == null ? null : similarCases(similar));
         body.put("paymentHistory", history == null ? null : paymentHistory(history));
         body.put("linkedPayments", linked == null ? null : linkedPayments(linked));
+        body.put("orderContext", order == null ? null : orderContext(order));
         return body;
+    }
+
+    // 징후 계산 입력 — AI Tool get_fds_evidence와 같은 모양 (기준 · 실제 문장 포함)
+    private static FdsEvidenceToolResponse.Payment fdsPayment(PaymentInfo payment, Map<Long, Signals> signals) {
+        return FdsEvidenceToolResponse.Payment.builder()
+                .paymentId(String.valueOf(payment.paymentId()))
+                .riskScore(payment.riskScore())
+                .fdsResult(payment.fdsResult())
+                .ruleHits(payment.ruleHits().stream()
+                        .map(AiToolService::toolRuleHit)
+                        .toList())
+                .signals(signals.get(payment.paymentId()))
+                .build();
     }
 
     // 사건 경위 (#310) — ai-server와 같은 모양. 결제 줄 → 사건 생성 줄을 실제 시각순으로, 같은 시각이면 결제 먼저 (안정 정렬)
@@ -236,6 +289,7 @@ class FixedReportGenerator {
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
             LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
             int reportVersion,
             Instant now,
             String dataVersion) {
@@ -271,6 +325,16 @@ class FixedReportGenerator {
                     5,
                     linked.retrievedAt(),
                     "evidence v" + linked.evidenceVersion()));
+        }
+        if (order != null) {
+            list.add(evidence(
+                    "get_order_context",
+                    order.source(),
+                    caseId,
+                    reportVersion,
+                    6,
+                    order.retrievedAt(),
+                    "evidence v" + order.evidenceVersion()));
         }
         return list;
     }
@@ -318,24 +382,67 @@ class FixedReportGenerator {
     }
 
     // 같은 카드 · 기기 · IP를 쓴 다른 결제 (#352) — ai-server와 같은 키. 숫자만 옮기고 해석하지 않는다
+    // nearby · nearbyWindowMinutes: 그중 사건 결제 앞뒤 시간 안의 결제 (#637)
     private static Map<String, Object> linkedPayments(LinkedPaymentsToolResponse linked) {
         return Map.of(
                 "lookbackDays", linked.lookbackDays(),
+                "nearbyWindowMinutes", linked.nearbyWindowMinutes(),
                 "card", linkedMatch(linked.card()),
                 "device", linkedMatch(linked.device()),
                 "ip", linkedMatch(linked.ip()));
     }
 
     private static Map<String, Object> linkedMatch(LinkedPaymentsToolResponse.Match match) {
+        Map<String, Object> body = new LinkedHashMap<>(linkedCounts(
+                match.otherCustomerCount(), match.paymentCount(), match.resultCounts(), match.declinedCount()));
+        body.put("provided", match.provided());
+        // LinkedPaymentFinder는 늘 채운다 — 비어 있으면 키를 빼서 화면이 예전 보고서처럼 그 줄을 그리지 않게 한다
+        if (match.nearby() != null) {
+            LinkedPaymentsToolResponse.Nearby near = match.nearby();
+            body.put(
+                    "nearby",
+                    linkedCounts(
+                            near.otherCustomerCount(), near.paymentCount(), near.resultCounts(), near.declinedCount()));
+        }
+        return body;
+    }
+
+    private static Map<String, Object> linkedCounts(
+            int otherCustomerCount,
+            int paymentCount,
+            List<LinkedPaymentsToolResponse.ResultCount> resultCounts,
+            int declinedCount) {
         return Map.of(
-                "provided", match.provided(),
-                "otherCustomerCount", match.otherCustomerCount(),
-                "paymentCount", match.paymentCount(),
+                "otherCustomerCount", otherCustomerCount,
+                "paymentCount", paymentCount,
                 "resultCounts",
-                        match.resultCounts().stream()
+                        resultCounts.stream()
                                 .map(c -> Map.<String, Object>of("result", c.result(), "count", c.count()))
                                 .toList(),
-                "declinedCount", match.declinedCount());
+                "declinedCount", declinedCount);
+    }
+
+    // 주문 정보 (#634) — ai-server와 같은 키. 묶음 번호 · 다름 여부만 옮기고 해석하지 않는다
+    // 주문자 이름 · 전화는 처음부터 받지 않는다. 주문번호 · 상품명은 직원 화면 표에만 쓰인다
+    private static Map<String, Object> orderContext(OrderContextToolResponse order) {
+        return Map.of(
+                "payments",
+                order.payments().stream()
+                        .map(p -> {
+                            // 주문 정보가 없는 결제는 칸이 비어 있어 null을 받는 HashMap을 쓴다
+                            Map<String, Object> payment = new HashMap<>();
+                            payment.put("paymentId", p.paymentId());
+                            payment.put("provided", p.provided());
+                            payment.put("orderRef", p.orderRef());
+                            payment.put("orderName", p.orderName());
+                            payment.put("orderGroup", p.orderGroup());
+                            payment.put("orderToPaymentSeconds", p.orderToPaymentSeconds());
+                            payment.put("ordererProvided", p.ordererProvided());
+                            payment.put("ordererPhoneGroup", p.ordererPhoneGroup());
+                            payment.put("pickupDiffers", p.pickupDiffers());
+                            return payment;
+                        })
+                        .toList());
     }
 
     // 비슷한 과거 사건 (#296) — ai-server와 같은 키. 사실 값만 옮기고 해석하지 않는다
@@ -358,14 +465,79 @@ class FixedReportGenerator {
                 similar.totalMatched());
     }
 
+    private static final DateTimeFormatter KST_MINUTE =
+            DateTimeFormatter.ofPattern("MM/dd HH:mm").withZone(ZoneId.of("Asia/Seoul"));
+    private static final String HELD_KO = PAYMENT_STATUS_KO.get("HELD");
+
+    // 사건 개요 한 줄 (ADR-0083 결정 6) — ai-server assemble.py case_overview와 같은 문장이라 고정 · AI 보고서의 결론 첫 줄이 같은 모양이다
+    // 고객 · 결제 건수(금액 · 시각) · 걸린 규칙 · 지금 상태. 모두 조회 값이고 판단 문구는 쓰지 않는다 (판정은 보안 직원이 한다)
+    static String caseOverview(String customerRef, List<PaymentInfo> payments) {
+        List<Instant> times = payments.stream()
+                .map(PaymentInfo::requestedAt)
+                .filter(Objects::nonNull)
+                .sorted()
+                .toList();
+        String money;
+        if (payments.size() == 1) {
+            Long amount = payments.getFirst().amount();
+            money = amount == null ? "금액 모름" : String.format(Locale.ROOT, "%,d원", amount);
+        } else if (payments.stream().anyMatch(p -> p.amount() == null)) {
+            money = "합계 금액 일부 모름";
+        } else {
+            money = String.format(
+                    Locale.ROOT,
+                    "합계 %,d원",
+                    payments.stream().mapToLong(PaymentInfo::amount).sum());
+        }
+        String subject = "고객 " + customerRef + "의 결제 " + payments.size() + "건(" + money + ", " + timeRange(times) + ")";
+        LinkedHashSet<String> rules = new LinkedHashSet<>();
+        payments.forEach(p -> p.ruleHits().forEach(rule -> rules.add(rule.name())));
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (PaymentInfo payment : payments) {
+            String status = PAYMENT_STATUS_KO.getOrDefault(
+                    payment.paymentStatus() == null ? "" : payment.paymentStatus(), "상태 모름");
+            counts.merge(status, 1, Integer::sum);
+        }
+        String ruleNames = String.join(" · ", rules);
+        if (!rules.isEmpty() && counts.keySet().equals(Set.of(HELD_KO))) {
+            return subject + "이 " + ruleNames + " 규칙에 걸려 " + HELD_KO + "된 사건입니다.";
+        }
+        String now = counts.entrySet().stream()
+                .map(e -> e.getKey() + " " + e.getValue() + "건")
+                .collect(Collectors.joining(" · "));
+        if (!rules.isEmpty()) {
+            return subject + "이 " + ruleNames + " 규칙에 걸린 사건입니다 (지금 상태: " + now + ").";
+        }
+        return subject + "에 대한 사건입니다 (지금 상태: " + now + ").";
+    }
+
+    // 결제 시각 범위 — 같은 날이면 뒤쪽은 시각만 ("11/05 15:57~16:05"). assemble.py _time_range와 같다
+    private static String timeRange(List<Instant> times) {
+        if (times.isEmpty()) {
+            return "시각 모름";
+        }
+        String first = KST_MINUTE.format(times.getFirst());
+        String last = KST_MINUTE.format(times.getLast());
+        if (first.equals(last)) {
+            return first;
+        }
+        return first.substring(0, 5).equals(last.substring(0, 5))
+                ? first + "~" + last.substring(6)
+                : first + "~" + last;
+    }
+
     // 조사 과정 기록 (#294) — AI가 조사하지 않았으므로 FIXED와 시스템 단계만 남긴다. 키는 ai-server InvestigationTrace와 같다
     private static Map<String, Object> fixedTrace(
             int paymentCount,
             SimilarCasesToolResponse similar,
             PaymentHistoryToolResponse history,
-            LinkedPaymentsToolResponse linked) {
+            LinkedPaymentsToolResponse linked,
+            OrderContextToolResponse order,
+            FixedReportReason reason) {
         Map<String, Object> trace = new HashMap<>();
         trace.put("provider", "FIXED");
+        // 왜 고정인지 (ADR-0083 결정 6) — 버전마다 남아 다시 켠 뒤에도 구분된다. 예전 보고서 · AI 보고서에는 없는 선택 칸
+        trace.put("fixedReason", reason.name());
         trace.put("model", "fixed");
         trace.put("durationMs", null);
         trace.put(
@@ -393,6 +565,7 @@ class FixedReportGenerator {
                                 "같은 카드 · 기기 · IP 결제 조회",
                                 "같은 가맹점 최근 " + LinkedPaymentFinder.LOOKBACK_DAYS + "일, 다른 고객 결제",
                                 linked == null ? "조회 실패" : linkedSummary(linked)),
+                        traceStep("TOOL", "주문 정보 조회", "이 사건 결제의 주문 정보", order == null ? "조회 실패" : orderSummary(order)),
                         traceStep("ASSEMBLE", "고정 문장 보고서 조립", null, "AI 서버가 꺼져 정해진 문장으로 조립")));
         return trace;
     }
@@ -401,6 +574,14 @@ class FixedReportGenerator {
     private static String linkedSummary(LinkedPaymentsToolResponse linked) {
         return "카드 " + matchSummary(linked.card()) + " · 기기 " + matchSummary(linked.device()) + " · IP "
                 + matchSummary(linked.ip());
+    }
+
+    // "결제 3건 중 주문 정보 2건" — ai-server trace 요약과 같은 말
+    static String orderSummary(OrderContextToolResponse order) {
+        long provided = order.payments().stream()
+                .filter(OrderContextToolResponse.Payment::provided)
+                .count();
+        return "결제 " + order.payments().size() + "건 중 주문 정보 " + provided + "건";
     }
 
     private static String matchSummary(LinkedPaymentsToolResponse.Match match) {

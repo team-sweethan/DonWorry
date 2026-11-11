@@ -1,8 +1,10 @@
 package com.donworry.investigation.report.controller;
 
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
 import com.donworry.investigation.report.service.AiToolService;
@@ -51,8 +53,22 @@ public class AiToolController {
     }
 
     // 같은 가맹점 · 최근 30일에 같은 카드 · 기기 · IP를 쓴 다른 고객 결제의 건수 · 고객 수 · 판정 (#352)
+    // nearbyHours: 사건 결제 앞뒤 몇 시간을 따로 셀지. 안 보내면 1(보고서 기본), 질문 넓혀 보기는 6 · 24 (#751). 그 밖은 400
     @GetMapping("/find_linked_payments")
-    public LinkedPaymentsToolResponse linkedPayments(@RequestParam Long caseId) {
-        return aiToolService.linkedPayments(caseId);
+    public LinkedPaymentsToolResponse linkedPayments(
+            @RequestParam Long caseId, @RequestParam(defaultValue = "1") int nearbyHours) {
+        return aiToolService.linkedPayments(caseId, nearbyHours);
+    }
+
+    // 사건 결제마다 가맹점이 결제 준비 때 보낸 주문 정보 (#634) — 주문자 이름 · 전화 원문은 없고 묶음 번호만
+    @GetMapping("/get_order_context")
+    public OrderContextToolResponse orderContext(@RequestParam Long caseId) {
+        return aiToolService.orderContext(caseId);
+    }
+
+    // 결제별 징후 · 정상 근거 (#618) — Spring이 계산한다. ai-server는 그대로 싣는다 (기준표 칸 · 권고는 #644에서 뺌)
+    @GetMapping("/get_decision_basis")
+    public DecisionBasisToolResponse decisionBasis(@RequestParam Long caseId) {
+        return aiToolService.decisionBasis(caseId);
     }
 }

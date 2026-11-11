@@ -1,3 +1,4 @@
+import { formatKstDateTime } from '../../utils/format'
 import { DirectoryDetailSkeleton, DirectoryTableSkeleton } from './DirectoryLoading'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -127,7 +128,7 @@ export function AdminMerchantsPage() {
           />
         </Space>
         {current?.error && (
-          <Alert type="error" showIcon message={current.error} style={{ marginBottom: 16 }} />
+          <Alert type="error" showIcon message={current.error} className="dw-page-alert" />
         )}
         <Table<AdminMerchant>
           rowKey="merchantId"
@@ -231,8 +232,8 @@ export function AdminCreateMerchantPage() {
         description="가맹점을 만든 뒤 사장님 계정을 연결할 수 있습니다."
         actions={<Link to={withQuery('/admin/merchants', listQuery)}>목록으로</Link>}
       />
-      <Card className="directory-surface" style={{ maxWidth: 640 }}>
-        {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} />}
+      <Card className="directory-surface" style={{ maxWidth: 'var(--dw-form-width)' }}>
+        {error && <Alert type="error" showIcon message={error} className="dw-page-alert" />}
         <Form<MerchantForm>
           form={form}
           layout="vertical"
@@ -365,7 +366,7 @@ export function AdminMerchantDetailPage() {
           type="error"
           showIcon
           message={current?.error ?? '올바른 가맹점 주소가 아닙니다.'}
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
         />
       )}
       {!invalidId && !current && <DirectoryDetailSkeleton kind="merchant" />}
@@ -384,8 +385,8 @@ export function AdminMerchantDetailPage() {
               },
               {
                 key: 'created',
-                label: '등록 시각 (UTC)',
-                children: merchant.createdAt.replace('T', ' '),
+                label: '등록 시각 (한국 시간)',
+                children: formatKstDateTime(merchant.createdAt),
               },
             ]}
           />

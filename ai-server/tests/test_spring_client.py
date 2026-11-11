@@ -68,3 +68,51 @@ def test_get_payment_history_sends_lookback_days_only_for_90_tool() -> None:
     assert [r.url.path for r in seen] == ["/internal/ai/tools/get_payment_history"] * 2
     assert dict(seen[0].url.params) == {"caseId": "205"}
     assert dict(seen[1].url.params) == {"caseId": "205", "lookbackDays": "90"}
+
+
+# 징후 · 정상 근거 (#618) — Spring DecisionBasisToolResponse 모양(null 칸 포함)을 그대로 읽는다
+# 기준표 칸 · 권고가 없는 새 응답(#644)을 읽어야 한다 — 못 읽으면 결제마다 징후 칸이 빈다
+def test_springClient_decisionBasis_parsesWithoutRuleAndRecommendation() -> None:
+    seen: list[httpx.Request] = []
+    spring = {
+        "caseId": "101",
+        "evidenceVersion": 2,
+        "source": "P4",
+        "retrievedAt": "2026-11-07T12:00:00.123456Z",
+        "payments": [
+            {
+                "paymentId": "9001",
+                "basis": {
+                    "signals": [
+                        {
+                            "key": "R01",
+                            "label": "고액 결제",
+                            "detail": None,
+                            "level": "CAUTION",
+                            "normalReason": None,
+                            "countedIn": None,
+                            "checkBefore": "고객의 평소 결제 금액과 비교",
+                        }
+                    ],
+                    "normals": [],
+                },
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=spring)
+
+    client = SpringToolClient("http://spring", "secret", transport=httpx.MockTransport(handler))
+
+    result = client.get_decision_basis("101")
+
+    assert seen[0].method == "GET"
+    assert seen[0].url.path == "/internal/ai/tools/get_decision_basis"
+    assert seen[0].url.params["caseId"] == "101"
+    basis = result.for_payment("9001")
+    assert basis is not None
+    assert list(basis.model_dump()) == ["signals", "normals"]
+    assert basis.signals[0].checkBefore == "고객의 평소 결제 금액과 비교"
+    assert result.for_payment("9002") is None

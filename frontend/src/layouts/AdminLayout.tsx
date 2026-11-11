@@ -5,28 +5,46 @@ import {
   BankOutlined,
   ControlOutlined,
   CreditCardOutlined,
+  ExperimentOutlined,
+  EyeOutlined,
   FileSearchOutlined,
   FormOutlined,
   HomeOutlined,
   KeyOutlined,
+  LoginOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  PoweroffOutlined,
   SafetyOutlined,
   SecurityScanOutlined,
   ShopOutlined,
   StopOutlined,
   TeamOutlined,
+  UserSwitchOutlined,
   WalletOutlined,
 } from '@ant-design/icons'
-import { Tooltip } from 'antd'
+import { ConfigProvider, Tooltip, type ThemeConfig } from 'antd'
 import { BrandMark, Mascot } from '../components/brand/BrandMark'
 import { useState, type ReactNode } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import type { NavBadge, NavGroup } from '../config/navigation'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import {
+  findTabbedItem,
+  navItemPaths,
+  type NavBadge,
+  type NavGroup,
+  type NavItem,
+} from '../config/navigation'
 import { ScreenErrorBoundary } from '../components/common/ScreenErrorBoundary'
+import { tokens } from '../styles/tokens'
 
 export type ManagementRole = 'admin' | 'security' | 'owner'
+
+/** 관리 화면은 시연 화면에서 읽기 쉽게 antd 기본 글자를 한 단계 키운다 (#713). 공개 화면 · 로그인은 그대로 */
+const managementTheme: ThemeConfig = { token: { fontSize: tokens.typography.managementBody } }
+/** 관리자 · 보안 직원 화면은 antd Card 모서리를 직접 만든 바깥 상자(--dw-radius-panel)와 맞춘다 (#735). 사장님 화면은 그대로 */
+const staffTheme: ThemeConfig = {
+  ...managementTheme,
+  components: { Card: { borderRadiusLG: tokens.radius.panel } },
+}
 
 /** 역할별 바깥 틀 이름 · 아이콘. 색은 global.css의 [data-role]에서 정한다. */
 const appearance: Record<ManagementRole, { title: string; icon: ReactNode }> = {
@@ -60,6 +78,7 @@ const menuIcons: Record<string, ReactNode> = {
   '/security/alerts': <AlertOutlined />,
   '/security/rules': <ControlOutlined />,
   '/security/blocklist': <StopOutlined />,
+  '/security/ml-model': <ExperimentOutlined />,
   '/security/cases': <FileSearchOutlined />,
   '/security/actions': <SafetyOutlined />,
   '/owner': <HomeOutlined />,
@@ -73,10 +92,26 @@ const menuIcons: Record<string, ReactNode> = {
   '/admin/users': <TeamOutlined />,
   '/admin/merchants': <ShopOutlined />,
   '/admin/fds/rules': <ControlOutlined />,
-  '/admin/fds/rule-change-requests': <PoweroffOutlined />,
+  '/admin/case-assignments': <UserSwitchOutlined />,
+  '/admin/insider-monitor': <AlertOutlined />,
+  '/admin/login-security': <LoginOutlined />,
+  '/admin/raw-view-reviews': <EyeOutlined />,
 }
 
 type NavBadges = Partial<Record<NavBadge, number | null>>
+
+/** 탭으로 합친 메뉴는 탭 배지를 더한다. 모두 0건 · 아직 모름(null)이면 null — 배지를 숨긴다 */
+function badgeCount(badges: NavBadges, item: { badge?: NavBadge; tabs?: { badge?: NavBadge }[] }) {
+  const keys = item.tabs ? item.tabs.map((tab) => tab.badge) : [item.badge]
+  const total = keys.reduce((sum, key) => sum + (key ? (badges[key] ?? 0) : 0), 0)
+  return total > 0 ? total : null
+}
+
+function isMenuActive(item: NavItem, pathname: string) {
+  return navItemPaths(item).some(
+    (path) => pathname === path || (path !== '/owner' && pathname.startsWith(path + '/')),
+  )
+}
 
 // 사이드바 접힘 상태는 브라우저별로 기억한다 (#537)
 const SIDEBAR_COLLAPSED_KEY = 'donworry.ui.sidebarCollapsed'
@@ -130,23 +165,22 @@ function Sidebar({
       </div>
       <nav id="dw-main-nav">
         {groups.map((group) => (
-          <div className="dw-nav-group" key={group.title}>
-            <div className="dw-nav-heading">{group.title}</div>
+          <div className="dw-nav-group" key={group.title ?? group.items[0]?.path}>
+            {group.title && <div className="dw-nav-heading">{group.title}</div>}
             {group.items.map((item) => {
-              // 0건 · 아직 모름(null)이면 숨긴다
-              const count = item.badge ? badges[item.badge] : null
+              const count = badgeCount(badges, item)
               // 접힌 상태에서만 아이콘 옆 말풍선으로 메뉴 이름(과 처리 필요 건수)을 보여 준다
               const tip = collapsed
                 ? `${item.label}${count ? ` · 처리 필요 ${count}건` : ''}`
                 : undefined
+              // NavLink는 자기 주소일 때만 aria-current를 붙인다. 탭 · 하위 주소에서도 지금 메뉴로 읽히게 직접 붙인다
+              const active = isMenuActive(item, location.pathname)
               return (
                 <Tooltip key={item.path} title={tip} placement="right">
-                  <NavLink
+                  <Link
                     to={item.path}
-                    end
-                    className={({ isActive }) =>
-                      `dw-nav-link${isActive || (item.path !== '/owner' && location.pathname.startsWith(item.path + '/')) ? ' active' : ''}`
-                    }
+                    className={`dw-nav-link${active ? ' active' : ''}`}
+                    aria-current={active ? 'page' : undefined}
                   >
                     <span className="dw-nav-icon" aria-hidden="true">
                       {menuIcons[item.path] ?? <AppstoreOutlined />}
@@ -157,7 +191,7 @@ function Sidebar({
                         {count > 99 ? '99+' : count}
                       </span>
                     ) : null}
-                  </NavLink>
+                  </Link>
                 </Tooltip>
               )
             })}
@@ -174,19 +208,47 @@ function Sidebar({
   )
 }
 
+/** 탭으로 합친 메뉴의 화면이면 본문 위에 탭 줄을 둔다. 탭마다 주소가 따로라 링크로 옮겨 다닌다 */
+function PageTabs({ groups, badges = {} }: { groups: NavGroup[]; badges?: NavBadges }) {
+  const location = useLocation()
+  const item = findTabbedItem(groups, location.pathname)
+  if (!item?.tabs) return null
+  return (
+    <nav className="dw-page-tabs" aria-label={`${item.label} 화면`}>
+      {item.tabs.map((tab) => {
+        const count = badgeCount(badges, tab)
+        return (
+          <NavLink
+            key={tab.path}
+            to={tab.path}
+            end
+            className={({ isActive }) => `dw-page-tab${isActive ? ' active' : ''}`}
+          >
+            {tab.label}
+            {/* 메뉴 배지 클래스를 쓰면 사이드바를 접을 때 점으로 바뀌는 규칙이 탭에도 걸린다 */}
+            {count ? (
+              <span className="dw-page-tab-badge" aria-label={`처리 필요 ${count}건`}>
+                {count > 99 ? '99+' : count}
+              </span>
+            ) : null}
+          </NavLink>
+        )
+      })}
+    </nav>
+  )
+}
+
 export function ManagementLayout({
   role,
   header,
   groups,
   badges,
-  responsive = false,
   children,
 }: {
   role: ManagementRole
   header: ReactNode
   groups: NavGroup[]
   badges?: NavBadges
-  responsive?: boolean
   children?: ReactNode
 }) {
   const location = useLocation()
@@ -197,28 +259,32 @@ export function ManagementLayout({
     saveSidebarCollapsed(next)
   }
   return (
-    <div
-      className={`admin-viewport${responsive ? ' application-review-viewport' : ''}${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
-      data-role={role}
-    >
-      <a href="#main" className="dw-skip-link">
-        본문으로 바로 가기
-      </a>
-      {header}
-      <Sidebar
-        groups={groups}
-        badges={badges}
-        collapsed={sidebarCollapsed}
-        onToggle={toggleSidebar}
-      />
-      <main className="dw-main" id="main" tabIndex={-1}>
-        <div className="dw-container">
-          {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
-          <ScreenErrorBoundary key={location.pathname}>
-            {children ?? <Outlet />}
-          </ScreenErrorBoundary>
-        </div>
-      </main>
-    </div>
+    <ConfigProvider theme={role === 'owner' ? managementTheme : staffTheme}>
+      <div
+        className={`admin-viewport${sidebarCollapsed ? ' is-sidebar-collapsed' : ''}`}
+        data-role={role}
+      >
+        <a href="#main" className="dw-skip-link">
+          본문으로 바로 가기
+        </a>
+        {header}
+        <Sidebar
+          groups={groups}
+          badges={badges}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+        />
+        <main className="dw-main" id="main" tabIndex={-1}>
+          <div className="dw-container">
+            <PageTabs groups={groups} badges={badges} />
+            {/* 경로가 바뀌면 오류 상태를 초기화 — 다른 메뉴로 이동하면 정상 화면이 다시 보인다 */}
+            <ScreenErrorBoundary key={location.pathname}>
+              {/* 경로가 바뀔 때마다 새로 그려져 본문이 짧게 서서히 나타난다 (loadingTransition.css) */}
+              <div className="dw-route-view">{children ?? <Outlet />}</div>
+            </ScreenErrorBoundary>
+          </div>
+        </main>
+      </div>
+    </ConfigProvider>
   )
 }

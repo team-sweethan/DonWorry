@@ -15,11 +15,13 @@ public record FdsEvidenceToolResponse(
         List<String> missingPaymentIds) {
 
     // signals: 카드 · 기기 · 접속 국가 요약 (#346). FDS 평가가 없으면 null
+    @Builder
     public record Payment(
             String paymentId, Integer riskScore, String fdsResult, List<RuleHit> ruleHits, Signals signals) {}
 
     // 카드는 마스킹 표시값, IP는 국가 코드만 — 원문(카드 토큰 · IP 주소 · 기기 ID · 이메일)은 없다
     // *Provided는 가맹점이 그 값을 보냈는지 여부 (#346)
+    @Builder
     public record Signals(
             String cardDisplayLabel,
             boolean cardProvided,

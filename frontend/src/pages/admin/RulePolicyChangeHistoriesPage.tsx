@@ -1,10 +1,12 @@
-import { Alert, Card, Descriptions, Input, Modal, Pagination, Table, Tag } from 'antd'
+import { Alert, Button, Card, Descriptions, Input, Modal, Pagination, Table, Tag } from 'antd'
 import { useEffect, useState } from 'react'
 import {
   getFdsRulePolicyChangeHistories,
   type FdsRulePolicyChangeHistory,
   type FdsRulePolicyChangeHistoryPage,
 } from '../../api/fds'
+import { ListEmpty } from '../../components/common/ListEmpty'
+import { displayRuleCode } from '../../utils/ruleDisplayCode'
 import { PageHeader } from '../../components/common/PageHeader'
 
 function formatDate(value: string) {
@@ -24,6 +26,14 @@ const ruleNames: Record<string, string> = {
   R08: '거절 후 재시도',
   SEC_OPERATOR_OUT_OF_ROLE_REPEAT: '역할 범위 밖 API 반복 호출',
   SEC_OPERATOR_PERMISSION_MISSING_REPEAT: '권한 부족 API 반복 호출',
+  // 내부자 규칙 (#685) — 백엔드 InsiderRule 이름과 같게. INS_05는 끌 수 없어 이력에 나오지 않는다
+  INS_01: '담당 밖 접근 반복',
+  INS_03: '전화번호 열람 집중',
+  INS_06: '경보 겹침',
+  INS_07: '처음 보는 브라우저 로그인 직후 전화번호 열람',
+  INS_08: '업무 대비 거래 목록 · 내보내기 대량 조회',
+  INS_09: '담당 무관 고객 반복 검색',
+  INS_10: '로그인 공격 중 처음 보는 브라우저 로그인',
 }
 
 function ruleName(ruleCode: string) {
@@ -37,7 +47,7 @@ function searchValue(value: string) {
 }
 
 function RuleTypeTag({ ruleCode }: { ruleCode: string }) {
-  const accountRule = ruleCode.startsWith('SEC_')
+  const accountRule = ruleCode.startsWith('SEC_') || ruleCode.startsWith('INS_')
   return <Tag color={accountRule ? 'purple' : 'blue'}>{accountRule ? '계정 룰' : '결제 룰'}</Tag>
 }
 
@@ -63,7 +73,7 @@ export function RulePolicyChangeHistoriesPage() {
   }, [page, search])
 
   return (
-    <>
+    <div className="dw-rule-management-page">
       <PageHeader
         title="룰 변경 이력"
         description="결제·계정 룰의 실제 켜기·끄기 변경 기록입니다."
@@ -73,33 +83,72 @@ export function RulePolicyChangeHistoriesPage() {
           type="error"
           showIcon
           message="룰 변경 이력을 불러오지 못했습니다."
-          style={{ marginBottom: 16 }}
+          className="dw-page-alert"
         />
       )}
-      <Card>
-        <Input.Search
-          allowClear
-          placeholder="룰명, 요청자, 변경자 검색"
-          style={{ maxWidth: 320, marginBottom: 16 }}
-          onSearch={(value) => {
-            setSearch(searchValue(value))
-            setPage(0)
-          }}
-        />
+      <Card className="dw-rule-records">
+        <div className="dw-rule-records-heading">
+          <div>
+            <h2>룰 적용 기록</h2>
+            <p>변경한 룰과 처리자, 변경 경위를 함께 확인합니다.</p>
+          </div>
+          <span className="dw-rule-records-count">
+            {result ? (
+              `${result.totalElements.toLocaleString('ko-KR')}건`
+            ) : error ? (
+              '조회 실패'
+            ) : (
+              <span className="dw-loading-reveal">불러오는 중</span>
+            )}
+          </span>
+        </div>
+        <div className="dw-rule-records-toolbar">
+          <Input.Search
+            allowClear
+            placeholder="룰명, 요청자, 변경자 검색"
+            className="dw-rule-records-search"
+            onSearch={(value) => {
+              setSearch(searchValue(value))
+              setPage(0)
+            }}
+          />
+        </div>
         <Table
           rowKey="historyId"
-          size="small"
           pagination={false}
+          scroll={{ x: 1000 }}
+          loading={result === null && !error}
+          locale={{
+            emptyText: (
+              <ListEmpty
+                title={
+                  error
+                    ? '변경 이력을 확인할 수 없습니다.'
+                    : search
+                      ? '검색 조건에 맞는 변경 이력이 없습니다.'
+                      : '룰 변경 이력이 없습니다.'
+                }
+              />
+            ),
+          }}
           dataSource={result?.content ?? []}
           columns={[
-            { title: '룰', dataIndex: 'ruleCode', render: ruleName },
             {
-              title: '구분',
+              title: '탐지 룰',
               dataIndex: 'ruleCode',
-              render: (value: string) => <RuleTypeTag ruleCode={value} />,
+              width: 320,
+              render: (value: string) => (
+                <div className="dw-rule-record-cell">
+                  <strong>{ruleName(value)}</strong>
+                  <span>
+                    {displayRuleCode(value)} · <RuleTypeTag ruleCode={value} />
+                  </span>
+                </div>
+              ),
             },
             {
               title: '변경',
+              width: 90,
               dataIndex: 'action',
               render: (value: 'ENABLED' | 'DISABLED') => (
                 <Tag color={value === 'ENABLED' ? 'green' : 'red'}>
@@ -108,19 +157,44 @@ export function RulePolicyChangeHistoriesPage() {
               ),
             },
             {
-              title: '변경 정보',
+              title: '변경자 · 경위',
+              width: 220,
               dataIndex: 'source',
               render: (
                 value: FdsRulePolicyChangeHistory['source'],
                 history: FdsRulePolicyChangeHistory,
-              ) => `${sourceLabel(value)} · ${history.changedByName}`,
+              ) => (
+                <div className="dw-rule-record-cell">
+                  <strong>{history.changedByName}</strong>
+                  <span>{sourceLabel(value)}</span>
+                </div>
+              ),
             },
             {
-              title: '요청 정보',
+              title: '요청자',
+              width: 140,
               dataIndex: 'requestedByName',
               render: (value: string | null) => value ?? '—',
             },
-            { title: '변경 시각', dataIndex: 'changedAt', render: formatDate },
+            { title: '변경 시각', dataIndex: 'changedAt', width: 170, render: formatDate },
+            {
+              title: '요청 사유',
+              width: 110,
+              render: (_, history: FdsRulePolicyChangeHistory) =>
+                history.requestReason ? (
+                  <Button
+                    size="small"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setSelected(history)
+                    }}
+                  >
+                    사유 보기
+                  </Button>
+                ) : (
+                  '—'
+                ),
+            },
           ]}
           onRow={(history) =>
             history.requestReason
@@ -142,6 +216,8 @@ export function RulePolicyChangeHistoriesPage() {
       </Card>
       <Modal
         title="룰 변경 요청 사유"
+        className="dw-rule-detail-modal"
+        width={640}
         open={selected !== null}
         footer={null}
         onCancel={() => setSelected(null)}
@@ -164,6 +240,6 @@ export function RulePolicyChangeHistoriesPage() {
           </Descriptions>
         )}
       </Modal>
-    </>
+    </div>
   )
 }

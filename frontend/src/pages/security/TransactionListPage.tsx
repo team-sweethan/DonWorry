@@ -1,6 +1,7 @@
-import { DownOutlined, InfoCircleOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   Alert,
+  App,
   Badge,
   Button,
   Card,
@@ -16,14 +17,15 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
 import { ApiError } from '../../api/client'
 import { getMerchantDirectory, type MerchantDirectoryEntry } from '../../api/merchants'
 import { getMlShadowScores } from '../../api/mlShadowScores'
-import { getPaymentTransactions } from '../../api/paymentTransactions'
+import { exportPaymentTransactionsCsv, getPaymentTransactions } from '../../api/paymentTransactions'
+import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
-import type { FdsResult, PaymentStatus } from '../../types/case'
+import type { PaymentStatus } from '../../types/case'
 import type { PaymentTransaction, PaymentTransactionPage } from '../../types/paymentTransaction'
 import {
   MAX_PERIOD_DAYS,
@@ -31,6 +33,7 @@ import {
   caseCell,
   customerNeedsMerchant,
   defaultTransactionListQuery,
+  exportNeedsCustomer,
   merchantChange,
   mlCell,
   parseTransactionListQuery,
@@ -43,57 +46,41 @@ import {
 } from '../../utils/transactionList'
 import { customerPart } from '../../utils/caseRules'
 import { paymentStatusLabel } from './case/caseLabels'
+import { HelpTitle } from './transaction/HelpTitle'
+import { copyable, fdsResultText, transactionHelp as help } from './transaction/transactionDisplay'
 import './TransactionListPage.css'
-
-// 경보 화면과 같은 판정이지만, 처음 보는 직원도 읽게 한국어로 쓴다
-const fdsResultText: Record<FdsResult, { label: string; color: string }> = {
-  ALLOW: { label: '통과', color: 'green' },
-  REVIEW: { label: '검토', color: 'gold' },
-  DENY: { label: '차단', color: 'red' },
-  ERROR: { label: '평가 오류', color: 'default' },
-}
 
 const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((status) => ({
   value: status,
   label: paymentStatusLabel[status].label,
 }))
 
-// 처음 보는 직원이 칸 뜻을 알 수 있게 제목 옆 ⓘ에 설명을 둔다
-const help = {
-  order: '가맹점이 손님 영수증에 찍은 번호예요. 가맹점에 문의할 때 이 번호로 찾아요.',
-  customer:
-    '가맹점이 손님마다 붙인 번호예요. 이름 대신 이 번호로 같은 손님의 결제를 모아 봐요. 이메일은 줄을 펼치면 보여요.',
-  device: '결제한 기기의 식별값 앞부분만 보여요. 개인정보 보호를 위해 나머지는 가렸어요.',
-  ip: '결제한 나라와 IP 앞부분이에요. 별표(*)는 가린 부분이에요.',
-  // 판정처럼 읽히지 않게 "높음 · 위험" 대신 기준 이상만 표시한다 (#441, ADR-0061)
-  ml: 'ML이 매긴 참고 점수예요. 실제 사기 확률이 아니라 시연용 학습 데이터에서 나온 점수라서, 결제 결과는 바뀌지 않아요. 학습 때 정한 기준 이상이면 한 번 더 볼 만한 결제로 표시해요. 기준값은 점수에 마우스를 올리면 보여요.',
-}
-
-function HelpTitle({ label, text }: { label: string; text: string }) {
-  return (
-    <span>
-      {label}{' '}
-      <Tooltip title={text}>
-        <InfoCircleOutlined aria-label={`${label} 설명`} style={{ color: 'rgba(0, 0, 0, 0.45)' }} />
-      </Tooltip>
-    </span>
-  )
-}
-
-// 가맹점에 전달하거나 검색칸에 붙여 넣을 때 쓰는 번호는 복사 버튼을 단다
-const copyable = (text: string) => ({ text, tooltips: ['복사', '복사됨'] })
-
-const missing = <Typography.Text type="secondary">정보 없음</Typography.Text>
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
+// 목록은 초까지 — 같은 분에 결제가 몰리면 분까지만으로는 최신순인지 알아볼 수 없다 (#797)
+const paidAt = (iso: string) => dayjs(iso).format('MM/DD HH:mm:ss')
 
-// IPv6는 가린 값(예: 0:0:*)만 보면 고장처럼 보여서 화면에서만 종류를 앞에 붙인다 (#539)
-const ipText = (masked: string | null) => (masked?.includes(':') ? `IPv6 · ${masked}` : masked)
+// 줄을 누르면 거래 상세로 간다 (#732). 줄 안의 버튼 · 링크 · 복사 단추를 누른 것은 제 동작만 한다
+const ownsClick = (target: EventTarget) =>
+  target instanceof Element && target.closest('button, a, input, [role="button"]') !== null
 
 type Loaded = { key: string; page: PaymentTransactionPage | null; error: string | null }
+
+// 받은 파일을 브라우저 다운로드로 넘긴다 — 서버가 이미 UTF-8 BOM을 붙였다
+function saveFile(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(url)
+}
 
 export function TransactionListPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { message, modal } = App.useApp()
+  const { store } = useAuth()
+  const [exporting, setExporting] = useState(false)
   // 조건은 주소 쿼리에 둔다 (#243 방식) — 경보 · 사건으로 갔다가 뒤로 와도 같은 조건으로 열린다
   const [searchParams] = useSearchParams()
   const [edited, setEdited] = useState<{
@@ -126,7 +113,44 @@ export function TransactionListPage() {
   // 가맹점 없이 고객 번호만 넣으면 다른 가맹점의 같은 번호와 섞여서 조회하지 않고 안내한다 (#462)
   const needsMerchant = customerNeedsMerchant(query)
   const blocked = tooLong || needsMerchant
+  // 내보내기는 담당 사건 고객만 (#730) — 가맹점 + 고객 번호를 걸어야 버튼이 열린다. 범위 판정은 서버가 한다
+  const exportLocked = exportNeedsCustomer(query)
   const apiSearch = transactionApiParams(query).toString()
+  // CSV 내보내기 (#651) — 화면과 같은 조건. 차단되면 계정이 이미 정지 · 로그아웃된 상태라 안내 뒤 로그인 화면으로 보낸다
+  // 안내 문구는 서버가 준 중립 문구를 그대로 쓴다 (탐지 내용을 알리지 않음)
+  const exportCsv = () => {
+    setExporting(true)
+    exportPaymentTransactionsCsv(new URLSearchParams(apiSearch))
+      .then((blob) => {
+        saveFile(blob, `거래내역_${dayjs().format('YYYYMMDD_HHmm')}.csv`)
+        message.success('CSV 파일을 내려받았습니다.')
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiError && error.code === 'INSIDER_EXPORT_BLOCKED') {
+          modal.error({
+            title: '계정 사용이 정지되었습니다',
+            content: error.detail ?? '관리자에게 문의해 주세요.',
+            okText: '확인',
+            onOk: () => store.expire(),
+          })
+          return
+        }
+        // 담당 사건 범위 밖 고객 (#730) — 정지가 아니라 업무 안내라 경고로 보여 준다
+        if (
+          error instanceof ApiError &&
+          error.code === 'PAYMENT_TRANSACTIONS_EXPORT_OUT_OF_SCOPE'
+        ) {
+          message.warning(error.detail ?? '담당 사건 고객의 거래만 내보낼 수 있습니다.')
+          return
+        }
+        if (error instanceof ApiError && error.code === 'PAYMENT_TRANSACTIONS_EXPORT_TOO_LARGE') {
+          message.warning(error.detail ?? '내보낼 거래가 너무 많습니다. 조건을 좁혀 주세요.')
+          return
+        }
+        message.error('CSV 파일을 내려받지 못했습니다. 잠시 후 다시 시도해 주세요.')
+      })
+      .finally(() => setExporting(false))
+  }
   // 어떤 요청에 대한 응답인지 함께 저장해 늦게 온 응답이 새 조건의 화면을 덮지 않게 한다
   const requestKey = `${apiSearch}#${refreshKey}`
 
@@ -210,19 +234,26 @@ export function TransactionListPage() {
   const caseLinks: CaseLinks = links?.key === requestKey ? links.links : { status: 'loading' }
   const mlScores: MlScores = ml?.key === requestKey ? ml.scores : { status: 'loading' }
 
-  const merchantNames = new Map(
-    (merchants ?? []).map((merchant) => [merchant.merchantId, merchant.displayName]),
-  )
   const openAlert = (evaluationId: string) => navigate(`/security/alerts/${evaluationId}`)
   const openCase = (caseId: string) => navigate(`/security/cases/${caseId}`)
+  const detailPath = (paymentId: string) => `/security/transactions/${paymentId}`
 
   // 목록을 훑을 때 보는 칸만 한 줄에 둔다 — "얼마 → 어떻게 됐나 → 왜(판정) → 사건 → 누구" 순서 (#445)
   const columns: ColumnsType<PaymentTransaction> = [
     {
       title: '결제 시각',
       dataIndex: 'createdAt',
-      width: 100,
-      render: (value: string) => time(value),
+      width: 130,
+      className: 'tx-time',
+      // 키보드로도 상세에 갈 수 있게 시각은 링크로 둔다. 담당 사건 고객이 아닌 결제는 글자만 (#732)
+      render: (value: string, t) =>
+        t.detailAllowed ? (
+          <Link className="tx-detail-link" to={detailPath(t.paymentId)}>
+            {paidAt(value)}
+          </Link>
+        ) : (
+          paidAt(value)
+        ),
     },
     {
       title: '금액',
@@ -369,51 +400,6 @@ export function TransactionListPage() {
     },
   ]
 
-  // 특정 결제를 깊게 볼 때만 필요한 값은 줄을 펼쳐 본다 (#445). 가맹점 문의용 주문번호 복사는 여기에 둔다
-  // 주문 정보 / 결제 환경 두 묶음으로 나누고 라벨 폭을 맞춘다 (#539)
-  const renderDetail = (t: PaymentTransaction) => (
-    <div className="tx-detail">
-      <section aria-label="주문 정보">
-        <p className="tx-detail-title">주문 정보</p>
-        <dl className="tx-detail-list">
-          <dt>
-            <HelpTitle label="주문번호" text={help.order} />
-          </dt>
-          <dd>
-            <Typography.Text code copyable={copyable(t.orderRef)}>
-              {t.orderRef}
-            </Typography.Text>
-            {t.attemptNo !== null && t.attemptNo > 1 && (
-              <Typography.Text type="secondary"> {t.attemptNo}번째 시도</Typography.Text>
-            )}
-          </dd>
-          <dt>가맹점</dt>
-          <dd>{merchantNames.get(t.merchantId) ?? `가맹점 #${t.merchantId}`}</dd>
-          <dt>이메일</dt>
-          <dd>{t.maskedBuyerEmail ?? missing}</dd>
-        </dl>
-      </section>
-      <section aria-label="결제 환경">
-        <p className="tx-detail-title">결제 환경</p>
-        <dl className="tx-detail-list">
-          <dt>카드</dt>
-          <dd>{t.cardDisplayLabel ?? missing}</dd>
-          <dt>
-            <HelpTitle label="접속" text={help.ip} />
-          </dt>
-          <dd>
-            {[t.ipCountryCode, ipText(t.maskedIpAddress)].filter((v) => v !== null).join(' · ') ||
-              missing}
-          </dd>
-          <dt>
-            <HelpTitle label="기기" text={help.device} />
-          </dt>
-          <dd>{t.maskedDeviceId ? <code>{t.maskedDeviceId}</code> : missing}</dd>
-        </dl>
-      </section>
-    </div>
-  )
-
   const periodText = query.from
     ? `${query.from} ~ ${query.to} (한국 시간)`
     : page
@@ -424,7 +410,7 @@ export function TransactionListPage() {
     <div>
       <PageHeader
         title="거래 내역"
-        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
+        description="사건에 걸리지 않은 결제까지 모든 결제를 최신순으로 보여 줍니다. 담당 사건 고객의 결제는 줄을 눌러 상세를 볼 수 있고, 판정 · 사건을 누르면 경보 · 사건 상세로 갑니다."
       />
       <Card className="dw-table-card">
         <div className="dw-table-toolbar">
@@ -490,6 +476,25 @@ export function TransactionListPage() {
             <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
               새로고침
             </Button>
+            <Tooltip
+              title={
+                exportLocked
+                  ? '담당 사건 고객의 거래만 내보낼 수 있어요. 사건 상세의 [이 고객 거래 내역 보기]로 들어오거나 가맹점과 고객 번호로 걸러 주세요.'
+                  : undefined
+              }
+            >
+              {/* 꺼진 버튼은 마우스 이벤트가 없어 툴팁이 안 떠서 감싼다 */}
+              <span>
+                <Button
+                  icon={<DownloadOutlined />}
+                  loading={exporting}
+                  disabled={blocked || exportLocked}
+                  onClick={exportCsv}
+                >
+                  CSV 내보내기
+                </Button>
+              </span>
+            </Tooltip>
           </Space>
         </div>
         {tooLong && (
@@ -514,23 +519,19 @@ export function TransactionListPage() {
           dataSource={page?.items ?? []}
           loading={loading}
           size="middle"
-          // 아이콘(▸)을 눌러야 펼친다 — 줄을 눌러 펼치면 경보 · 사건 링크를 누를 때도 같이 펼쳐진다
-          expandable={{
-            expandedRowRender: renderDetail,
-            columnWidth: 48,
-            // ⊕/⊖는 더하기 · 빼기처럼 보여서 꺾쇠(▸ 닫힘 · ▾ 열림)로 바꾼다 (#539)
-            expandIcon: ({ expanded, onExpand, record }) => (
-              <Button
-                type="text"
-                size="small"
-                aria-label={expanded ? '상세 접기' : '상세 펼치기'}
-                aria-expanded={expanded}
-                icon={expanded ? <DownOutlined /> : <RightOutlined />}
-                onClick={(event) => onExpand(record, event)}
-              />
-            ),
-          }}
-          scroll={{ x: 920 }}
+          // 줄을 누르면 상세 (#732) — 펼치기 대신 1건씩 열어 열람 기록이 남게 한다
+          // 담당 사건 고객의 결제만 누를 수 있다 — 나머지 줄은 눌러도 아무 일이 없다(서버도 막는다)
+          onRow={(t) =>
+            t.detailAllowed
+              ? {
+                  className: 'tx-row',
+                  onClick: (event) => {
+                    if (!ownsClick(event.target)) navigate(detailPath(t.paymentId))
+                  },
+                }
+              : {}
+          }
+          scroll={{ x: 950 }}
           pagination={{
             current: query.page,
             pageSize: TRANSACTION_PAGE_SIZE,

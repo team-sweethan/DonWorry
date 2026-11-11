@@ -7,6 +7,7 @@ import jakarta.persistence.EntityManager;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -16,15 +17,36 @@ public class PaymentTransactionsRepository {
     private final EntityManager entityManager;
     // 요청 기록 없는 결제도 "모든 결제"에 남도록 left join. payment_requests는 결제당 최대 1행이라 행이 늘지 않는다
     private static final String FROM = " from Payment p left join PaymentRequest r on r.paymentId = p.paymentId ";
+    // 결제 시각 최신순, 같은 시각이면 나중에 저장된 결제가 먼저 (#797). 결제 번호 순서는 동시 저장 때 시각 순서와 어긋날 수 있다
+    // 색인: 전체 가맹점은 idx_payments_created, 가맹점을 고르면 idx_payments_merchant_created
+    private static final String LATEST_FIRST = " order by p.createdAt desc, p.paymentId desc";
 
     public List<PaymentTransactionRow> findPage(PaymentTransactionsQueryRequest query) {
-        // payment_id는 생성 순서와 같고 PK라 created_at 색인 없이도 최신순 정렬이 싸다
-        var rows = entityManager.createQuery(
-                "select p, r" + FROM + where(query) + " order by p.paymentId desc", Object[].class);
+        var rows = entityManager.createQuery("select p, r" + FROM + where(query) + LATEST_FIRST, Object[].class);
         parameters(query).forEach(rows::setParameter);
         return rows.setFirstResult(query.page() * query.size()).setMaxResults(query.size()).getResultList().stream()
                 .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]))
                 .toList();
+    }
+
+    // CSV 내보내기 (#651) — 쪽 나눔 없이 최신순으로 limit행까지. 호출 쪽은 상한 + 1로 불러 넘침을 판단한다
+    public List<PaymentTransactionRow> findForExport(PaymentTransactionsQueryRequest query, int limit) {
+        var rows = entityManager.createQuery("select p, r" + FROM + where(query) + LATEST_FIRST, Object[].class);
+        parameters(query).forEach(rows::setParameter);
+        return rows.setMaxResults(limit).getResultList().stream()
+                .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]))
+                .toList();
+    }
+
+    // 거래 상세 1건 (#732) — 기간 조건 없이 결제 번호로만 찾는다
+    public Optional<PaymentTransactionRow> findById(Long paymentId) {
+        return entityManager
+                .createQuery("select p, r" + FROM + " where p.paymentId = :paymentId", Object[].class)
+                .setParameter("paymentId", paymentId)
+                .getResultList()
+                .stream()
+                .findFirst()
+                .map(row -> new PaymentTransactionRow((Payment) row[0], (PaymentRequest) row[1]));
     }
 
     public long count(PaymentTransactionsQueryRequest query) {

@@ -1,7 +1,6 @@
 import dayjs from 'dayjs'
 import type {
   ActionType,
-  AiRecommendation,
   CaseHistoryEventType,
   CaseStatus,
   Decision,
@@ -53,8 +52,8 @@ export const fdsResultLabel: Record<FdsResult, Label> = {
 }
 
 export const decisionLabel: Record<Decision, Label> = {
-  ACCEPT: { label: 'ACCEPT · 매입 허용', color: 'green' },
-  REJECT: { label: 'REJECT · 매입 거부', color: 'red' },
+  ACCEPT: { label: '매입 요청', color: 'green' },
+  REJECT: { label: '승인 취소 요청', color: 'red' },
 }
 
 /** 완료 기반 (ADR-0027) — ACCEPTED는 실제 매입·취소 완료, FAILED는 확정 거절이다. */
@@ -64,32 +63,12 @@ export const handoffStatusLabel: Record<HandoffStatus, Label> = {
   FAILED: { label: '금융 처리 실패', color: 'red' },
 }
 
-/** P5 거절 코드 → 직원이 읽는 문구 (#169). 목록에 없는 코드는 코드 그대로 보여준다. */
-export const handoffErrorLabel: Record<string, string> = {
-  PAYMENT_NOT_FOUND: 'P5에 결제가 없습니다.',
-  PAYMENT_NOT_HELD: '결제가 이미 보류 상태가 아닙니다.',
-  PAYMENT_NOT_AUTHORIZED: '승인 정보가 없는 결제입니다.',
-  IDEMPOTENCY_KEY_CONFLICT: '같은 요청 키로 다른 조치가 접수되어 있습니다. P3에 확인을 요청하세요.',
-  PAYMENT_ACTION_CONFLICT: '이 결제에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
-  DECISION_ACTION_CONFLICT: '이 판정에 이미 다른 조치가 있습니다. P3에 확인을 요청하세요.',
-  VOID_DECLINED: '승인 취소가 거절되었습니다. P5에 확인을 요청하세요.',
-  // 고객 취소(#382) — 직원 조치가 실패한 것이 아니라 고객이 먼저 승인을 취소해 실행되지 않은 것이다
-  PAYMENT_CANCELED_BY_CUSTOMER: '고객이 승인을 취소해 실행되지 않았습니다.',
-  PAYMENT_CANCELLATION_IN_PROGRESS: '고객 승인 취소가 진행 중이라 실행하지 않았습니다.',
-  PAYMENT_CANCELLATION_REVIEW_REQUIRED:
-    '고객 승인 취소가 실패해 확인이 필요합니다. P5에 확인을 요청하세요.',
-}
+// P5 거절 코드 문구는 Case 이력 문구(테스트는 dayjs 없이 돈다)와 함께 쓰려고 utils로 옮겼다 (#666)
+export { handoffErrorLabel } from '../../../utils/handoffErrorText'
 
 export const actionTypeLabel: Record<ActionType, string> = {
-  CAPTURE: 'CAPTURE · 매입 요청 (P6)',
-  VOID: 'VOID · 승인 취소 요청 (P5)',
-}
-
-// 권고 이름 (#501) — 앞말(기준표 판정 · AI 권고)은 reportView.recommendationSource가 고른다
-export const recommendationLabel: Record<AiRecommendation, Label> = {
-  ACCEPT_REVIEW: { label: '매입 진행 검토', color: 'green' },
-  REJECT_REVIEW: { label: '승인 취소 검토', color: 'red' },
-  NEEDS_CHECK: { label: '추가 확인', color: 'gold' },
+  CAPTURE: '매입 처리 (P6)',
+  VOID: '승인 취소 처리 (P5)',
 }
 
 export const historyEventLabel: Record<CaseHistoryEventType, string> = {
@@ -103,6 +82,9 @@ export const historyEventLabel: Record<CaseHistoryEventType, string> = {
   HANDOFF_COMPLETION_RECORDED: '실제 완료 시각 확인',
   CASE_STATUS_CHANGED: 'Case 상태 변경',
   PAYMENT_CANCELED_BY_CUSTOMER: '고객 승인 취소',
+  CASE_ASSIGNED: '담당 배정',
+  CASE_ASSIGNMENT_REQUESTED: '담당 변경 요청',
+  CASE_ASSIGNMENT_REQUEST_REJECTED: '담당 변경 요청 거절',
   CASE_CLOSED: 'Case 종료',
 }
 

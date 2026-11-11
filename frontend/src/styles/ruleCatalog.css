@@ -3,254 +3,118 @@
 }
 
 .dw-rule-tabs {
-  margin-bottom: 16px;
-  border-color: #e2e8f0;
+  margin-bottom: var(--dw-space-5);
 }
 
-.dw-rule-tabs .ant-card-body {
-  min-height: 46px;
-  padding: 0;
-}
-
-.dw-rule-tab-list {
-  display: flex;
-  align-items: stretch;
-  gap: 4px;
-  height: 46px;
-  padding: 0 12px;
-}
-
-.dw-rule-tab-list button {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #64748b;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 10px;
-}
-
-.dw-rule-tab-list button.is-active {
-  border-bottom-color: #2563eb;
-  color: #1d4ed8;
-  font-weight: 700;
+.dw-rule-tabs .ant-tabs-nav {
+  margin-bottom: 0;
 }
 
 .dw-rule-overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  margin-bottom: 20px;
+  gap: var(--dw-space-5);
+  margin-bottom: var(--dw-space-5);
 }
 
-.dw-rule-overview,
-.dw-rule-account-notice,
-.dw-rule-section-header,
-.dw-rule-card {
-  border-color: #e2e8f0;
-}
-
-.dw-rule-overview .ant-card-head,
-.dw-rule-account-notice .ant-card-head,
-.dw-rule-section-header .ant-card-head {
-  min-height: 54px;
-}
-
-.dw-rule-overview .ant-card-head-title,
-.dw-rule-account-notice .ant-card-head-title {
-  font-size: 15.5px;
-  font-weight: 750;
-}
-
-.dw-rule-overview .ant-typography {
-  margin-bottom: 12px;
-  font-size: 12.5px;
-  line-height: 1.65;
-}
-
-.dw-rule-overview {
-  margin-bottom: 16px;
-  border-color: #dbe5f1;
-}
-
-.dw-rule-overview .ant-card-body {
-  padding: 18px 20px;
-}
-
-.dw-rule-overview-heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 13px;
-}
-
-.dw-rule-overview-heading > div {
-  display: grid;
-  gap: 3px;
-}
-
-.dw-rule-overview-heading strong {
-  color: #0f172a;
-  font-size: 15px;
-}
-
-.dw-rule-overview-heading .ant-typography,
-.dw-rule-overview-heading > span {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.dw-rule-score-scale {
-  display: flex;
-  height: 26px;
-  overflow: hidden;
-  border-radius: 7px;
-  margin-bottom: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 26px;
-  text-align: center;
-}
-
-.dw-rule-score-scale span {
-  display: block;
-}
-
-.dw-rule-score-allow {
-  width: 50%;
-  background: #bbf7d0;
-  color: #166534;
-}
-
-.dw-rule-score-review {
-  width: 30%;
-  background: #fde68a;
-  color: #92400e;
-}
-
-.dw-rule-score-deny {
-  width: 20%;
-  background: #fecaca;
-  color: #991b1b;
-}
-
-.dw-rule-examples {
-  color: #334155;
-  font-size: 12.5px;
-  line-height: 1.75;
-}
-
-.dw-rule-examples p {
-  margin: 0;
-}
-
-.dw-rule-overview-examples {
-  display: flex;
-  gap: 4px;
-  color: #475569;
-  font-size: 12px;
-  flex-direction: column;
-}
-
-.dw-rule-overview-examples strong {
-  color: #0f172a;
-}
-
-.dw-rule-account-overview {
-  min-height: 156px;
-  margin-bottom: 16px;
-  border-color: #dbe5f1;
-}
-
-.dw-rule-account-overview .ant-card-body {
-  padding: 18px 20px;
-}
-
-.dw-rule-account-overview .ant-tag {
-  margin: 0;
-  border: 0;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.dw-account-rule-placeholders {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.dw-account-rule-placeholders > div {
-  display: grid;
-  min-height: 64px;
-  gap: 4px;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 11px 12px;
-}
-
-.dw-account-rule-placeholders strong {
-  color: #334155;
-  font-size: 12px;
-}
-
-.dw-account-rule-placeholders span {
-  color: #64748b;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.dw-rule-scope-tag {
-  margin-left: 6px;
-  border: 0;
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.dw-rule-account-notice .ant-typography {
-  margin-bottom: 14px;
-  font-size: 12.5px;
-  line-height: 1.7;
-}
-
-.dw-rule-account-detail,
 .dw-rule-note {
   border: 1px dashed #cbd5e1;
   border-radius: 6px;
   background: #f8fafc;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
   line-height: 1.65;
-}
-
-.dw-rule-account-detail {
-  padding: 10px 12px;
-}
-
-.dw-rule-section-header {
-  margin-bottom: 16px;
 }
 
 .dw-rule-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 20px;
+  align-items: start;
 }
 
 .dw-rule-card {
-  min-height: 326px;
+  overflow: hidden;
 }
 
 .dw-rule-card .ant-card-body {
+  padding: 0;
+}
+
+.dw-rule-card-summary {
+  display: block;
+  padding: 22px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.dw-rule-card-summary::-webkit-details-marker {
+  display: none;
+}
+.dw-rule-card-summary:hover {
+  background: #ffffff40;
+}
+.dw-rule-card-summary:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+.dw-rule-card-account .dw-rule-card-summary:focus-visible {
+  outline-color: #7c3aed;
+}
+.dw-rule-card-expand {
   display: flex;
-  height: 100%;
-  min-height: 292px;
-  flex-direction: column;
-  padding: 18px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+.dw-rule-collapse-label {
+  display: none;
+}
+.dw-rule-disclosure[open] .dw-rule-collapse-label {
+  display: inline;
+}
+.dw-rule-disclosure[open] .dw-rule-expand-label {
+  display: none;
+}
+.dw-rule-disclosure[open] .dw-rule-card-expand > .anticon {
+  rotate: 180deg;
+}
+.dw-rule-card-detail {
+  padding: 0 22px 22px;
+}
+.dw-rule-card-note {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-left: 2px solid #cbd5e1;
+  color: #475569;
+  font-size: var(--dw-text-caption);
+  line-height: 1.65;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.dw-rule-card > .ant-card-body > .ant-alert {
+  margin: 16px 16px 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dw-rule-card-expand > .anticon {
+    transition: rotate 160ms ease-out;
+  }
+  .dw-rule-disclosure[open] .dw-rule-card-detail {
+    animation: rule-detail-reveal 180ms ease-out;
+  }
+}
+@keyframes rule-detail-reveal {
+  from {
+    opacity: 0.6;
+    translate: 0 -3px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
 }
 
 .dw-rule-card-top {
@@ -282,6 +146,12 @@
   color: #1d4ed8;
 }
 
+/* 결제 룰 카드는 파랑 그라데이션을 계정 룰보다 조금 진하게 둔다. 구분은 색으로 한다 (결제 파랑 · 계정 보라, #713 · #742) */
+.dw-rule-card-payment {
+  border-color: #b5cbf3;
+  background: linear-gradient(180deg, #d8e6ff 0%, #ecf3ff 40%, #fff 78%);
+}
+
 .dw-rule-card-account .dw-rule-code {
   background: #f3e8ff;
   color: #7e22ce;
@@ -305,7 +175,7 @@
 
 .dw-rule-group {
   margin-left: 0;
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
 }
 
 .dw-rule-status-active {
@@ -357,16 +227,27 @@
 }
 
 .dw-rule-card h2 {
-  margin: 12px 0;
+  margin: 16px 0 20px;
   color: #0f172a;
-  font-size: 17px;
+  font-size: 18px;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
   letter-spacing: -0.3px;
 }
 
-/* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다. */
+/* 계정 룰은 결제 룰과 같은 카드 구조를 쓰되, 보안 영역임을 인디고 계열로 구분한다.
+   관리자 화면 배경이 보라라서 테두리를 한 단계 진하게 둔다 (#713). */
 .dw-rule-card-account {
-  border-color: #ddd6fe;
-  background: linear-gradient(180deg, #fafaff 0%, #fff 38%);
+  border-color: #b8a6fb;
+  background: linear-gradient(180deg, #eee9ff 0%, #f8f6ff 32%, #fff 60%);
+}
+
+/* 꺼진 룰은 종류와 상관없이 회색 카드로 둔다. 위 그라데이션보다 뒤에 둬야 덮인다 (#713) */
+.dw-rule-card-inactive.dw-rule-card-payment,
+.dw-rule-card-inactive.dw-rule-card-account {
+  border-color: #dbe3ee;
+  background: #f8fafc;
 }
 
 .dw-rule-card-account .dw-rule-code {
@@ -403,26 +284,39 @@
 
 .dw-rule-definition {
   display: grid;
-  gap: 8px;
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
+  gap: 16px;
+  margin: 0 0 22px;
+  font-size: var(--dw-text-secondary);
+  line-height: 1.7;
 }
 
 .dw-rule-definition > div {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  gap: 8px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .dw-rule-definition dt {
   color: #64748b;
+  font-size: var(--dw-text-caption);
   font-weight: 600;
 }
 
 .dw-rule-definition dd {
   margin: 0;
   color: #0f172a;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.dw-rule-example {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.dw-rule-example dd {
+  color: #475569;
 }
 
 .dw-rule-definition .dw-rule-muted {
@@ -436,7 +330,7 @@
   gap: 8px;
   margin-top: auto;
   border-top: 1px dashed #dbe4ee;
-  padding-top: 11px;
+  padding-top: 16px;
 }
 
 .dw-rule-frequency > div {
@@ -447,7 +341,7 @@
 .dw-rule-frequency span,
 .dw-rule-frequency small {
   color: #64748b;
-  font-size: 10.5px;
+  font-size: var(--dw-text-caption);
 }
 
 .dw-rule-frequency strong {
@@ -463,7 +357,7 @@
   min-height: 36px;
   margin: 0;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
   font-weight: 700;
 }
 
@@ -524,7 +418,7 @@
 .dw-rule-frequency .dw-rule-policy-switch .ant-switch-inner {
   position: relative;
   padding-inline: 0;
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
   font-weight: 800;
   line-height: 36px;
 }
@@ -572,6 +466,22 @@
   border-radius: 7px;
 }
 
+/* 끌 수 없는 규칙 (#685, SEC-INS-05) — 스위치 자리에 같은 폭으로 둔다 */
+.dw-rule-frequency .dw-rule-always-on {
+  grid-column: 1 / -1;
+  display: flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0 0;
+  border: 0;
+  border-radius: 9px;
+  background: #f3e8ff;
+  color: #6b21a8;
+  font-size: var(--dw-text-caption);
+  font-weight: 800;
+}
+
 .dw-rule-disable-pending {
   grid-column: 2;
   justify-self: end;
@@ -581,7 +491,7 @@
   border-radius: 999px;
   background: #fef3c7;
   color: #92400e;
-  font-size: 12px;
+  font-size: var(--dw-text-caption);
   font-weight: 700;
   line-height: 32px;
   padding: 0 13px;
@@ -607,10 +517,9 @@
   fill: #2563eb;
 }
 
-.dw-rule-loading {
-  display: grid;
-  min-height: 240px;
-  place-items: center;
+/* 룰 카드 모양 로딩 자리 — 실제 카드 머리 부분과 같은 안쪽 여백 */
+.dw-rule-card.dw-rule-card-loading .ant-card-body {
+  padding: 22px;
 }
 
 .dw-rule-empty-state {
@@ -643,29 +552,146 @@
   padding: 11px 14px;
 }
 
-@media (max-width: 1380px) {
-  .dw-rule-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1000px) {
-  .dw-rule-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .dw-rule-overview-grid {
     grid-template-columns: 1fr;
   }
+}
 
-  .dw-rule-overview-heading,
-  .dw-rule-overview-examples {
-    align-items: start;
-    flex-direction: column;
-    gap: 8px;
+.dw-rule-records {
+  border-color: #e2e8f0;
+  border-radius: var(--dw-radius-panel);
+}
+
+.dw-rule-records > .ant-card-body {
+  padding: 22px 24px;
+}
+
+.dw-rule-records-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.dw-rule-records-heading h2 {
+  margin: 0 0 4px;
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.dw-rule-records-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+}
+
+.dw-rule-records-count {
+  flex-shrink: 0;
+  color: #64748b;
+  font-size: var(--dw-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dw-rule-records-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dw-rule-records-search {
+  width: 100%;
+  max-width: 360px;
+}
+
+.dw-rule-records .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.dw-rule-records .ant-table-tbody > tr > td {
+  padding: 16px;
+  vertical-align: top;
+}
+
+.dw-rule-record-cell {
+  display: grid;
+  gap: 6px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dw-rule-record-cell strong {
+  color: #0f172a;
+  font-size: var(--dw-text-secondary);
+  font-weight: 600;
+}
+
+.dw-rule-record-cell > span {
+  color: #64748b;
+  font-size: var(--dw-text-caption);
+}
+
+.dw-rule-record-reason {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: #334155;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dw-rule-detail-modal .ant-descriptions {
+  margin-top: 20px;
+}
+
+.dw-rule-detail-modal .ant-descriptions-item-label {
+  min-width: 100px;
+  color: #64748b;
+}
+
+@media (max-width: 640px) {
+  .dw-rule-card-summary,
+  .dw-rule-records > .ant-card-body {
+    padding: 18px;
   }
 
-  .dw-account-rule-placeholders {
-    grid-template-columns: 1fr;
+  .dw-rule-records-heading {
+    flex-wrap: wrap;
   }
+  .dw-rule-card-detail {
+    padding: 0 18px 18px;
+  }
+}
+
+/* 결제 룰 카드의 사용 중 · 꺼짐을 멀리서도 구분한다. 사용 중은 파랑 꽉 찬 표시, 꺼짐은 회색 점선 표시.
+   관리 화면 공통 태그 규칙(global.css .admin-viewport[data-role] .ant-tag)이 바탕을 회색으로 덮으므로
+   그보다 구체적인 선택자로 둔다. 관리자 스위치도 꺼짐일 때 진한 회색으로 둬 켜짐(파랑)과 바로 갈린다.
+   계정 룰 카드는 기존 색을 유지한다 */
+.admin-viewport[data-role] .dw-rule-card.dw-rule-card-payment .ant-tag.dw-rule-status-active {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+}
+
+.admin-viewport[data-role] .dw-rule-card.dw-rule-card-payment .ant-tag.dw-rule-status-inactive {
+  border: 1px dashed #94a3b8;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.dw-rule-card.dw-rule-card-payment
+  .dw-rule-frequency
+  .dw-rule-policy-switch:not(.ant-switch-checked) {
+  background: #64748b;
+}
+
+.dw-rule-card.dw-rule-card-payment
+  .dw-rule-frequency
+  .dw-rule-policy-switch:not(.ant-switch-checked):hover {
+  background: #475569;
 }

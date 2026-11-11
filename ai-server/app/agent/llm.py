@@ -124,7 +124,15 @@ class MockLlmClient:
 
     # 받은 사실 번호를 모두 단 고정 문장 — 숫자를 쓰지 않아 숫자 검사에 걸리지 않는다 (#548, #559)
     # 모두 다는 이유: 눈여겨볼 사실이 빠지면 형식 검사가 돌려보낸다 (#568)
+    # 질문 답 형식(kind가 있음, ADR-0086)이면 첫 사실 하나를 단 고정 답
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
+        if "kind" in schema["properties"]:
+            ids = schema["properties"]["sentences"]["items"]["properties"]["facts"]["items"]["enum"]
+            sentence = {
+                "text": "mock 질문 답이라 보고서 사실 하나를 고정 문장으로 전달합니다.",
+                "facts": ids[:1],
+            }
+            return json.dumps({"kind": "ANSWER", "sentences": [sentence]}, ensure_ascii=False)
         ids = schema["properties"]["summary"]["items"]["properties"]["facts"]["items"]["enum"]
         return json.dumps(
             {

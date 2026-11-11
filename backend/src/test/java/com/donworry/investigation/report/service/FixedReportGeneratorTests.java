@@ -1,15 +1,19 @@
 package com.donworry.investigation.report.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.when;
 
 import com.donworry.investigation.entity.CasePayment;
 import com.donworry.investigation.entity.CaseType;
 import com.donworry.investigation.entity.SecurityCase;
+import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse.Signals;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Match;
+import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.Nearby;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse.ResultCount;
+import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse.StatusCount;
 import com.donworry.investigation.report.dto.SimilarCasesToolResponse;
@@ -59,6 +63,53 @@ class FixedReportGeneratorTests {
     @Mock
     LinkedPaymentFinder linkedPaymentFinder;
 
+    @Mock
+    OrderContextFinder orderContextFinder;
+
+    // 긴급정지 중에 만든 고정 보고서는 조사 과정에 그 이유와 한계 문장을 남긴다 — "AI 연결 전"으로 오해하지 않게 (ADR-0083 결정 6)
+    @Test
+    @SuppressWarnings("unchecked")
+    void generate_whenStoppedByAdmin_marksFixedReasonInTrace() {
+        FixedReportGenerator generator = generatorForCase7();
+
+        Map<String, Object> body = generator
+                .generate(7L, 1, 1, NOW, FixedReportReason.ADMIN_STOPPED)
+                .orElseThrow();
+
+        assertThat((Map<String, Object>) body.get("investigationTrace"))
+                .containsEntry("provider", "FIXED")
+                .containsEntry("fixedReason", "ADMIN_STOPPED");
+        assertThat((List<String>) ((Map<String, Object>) body.get("recommendation")).get("limitations"))
+                .containsExactly(FixedReportReason.ADMIN_STOPPED.limitation);
+    }
+
+    // 고정 보고서 개요 한 줄은 ai-server와 같은 문장이다 — ai-server test_case_overview_multiple_payments_matches_tool_values와 같은 입력 ·
+    // 기대값
+    @Test
+    void generate_caseOverview_matchesAiServerSentence() {
+        List<PaymentInfo> payments = List.of(
+                new PaymentInfo(
+                        15L,
+                        600_000L,
+                        "HELD",
+                        Instant.parse("2026-10-27T12:00:00Z"),
+                        60,
+                        "REVIEW",
+                        List.of(new RuleHit("R01", "고액 결제", 30), new RuleHit("R02", "처음 쓰는 카드", 20))),
+                new PaymentInfo(
+                        16L,
+                        170_000L,
+                        "HELD",
+                        Instant.parse("2026-10-27T12:07:00Z"),
+                        45,
+                        "REVIEW",
+                        List.of(new RuleHit("R03", "단시간 반복 결제", 25), new RuleHit("R01", "고액 결제", 30))));
+
+        assertThat(FixedReportGenerator.caseOverview("customer-1", payments))
+                .isEqualTo("고객 customer-1의 결제 2건(합계 770,000원, 10/27 21:00~21:07)이 "
+                        + "고액 결제 · 처음 쓰는 카드 · 단시간 반복 결제 규칙에 걸려 매입 보류된 사건입니다.");
+    }
+
     // 고정 문장 보고서는 확인하지 않은 정상 근거를 넣지 않고 새 칸(결론 · 이유 · 규칙 근거)을 채운다
     @Test
     void generate_withEvidence_omitsUncheckedNormalEvidenceAndFillsNewKeys() {
@@ -79,15 +130,18 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         assertThat(analysis.containsKey("riskEvidence") || analysis.containsKey("normalEvidence"))
                 .isFalse();
         assertThat((List<?>) body.get("summaryFacts")).isEmpty();
-        assertThat(analysis.get("reason")).isInstanceOf(String.class);
+        assertThat(analysis.containsKey("recommendation") || analysis.containsKey("reason"))
+                .isFalse();
         // 기준값 · 실제값이 없는 규칙은 criterion · observed가 null — AI 보고서와 같은 모양 (#326)
         Map<String, Object> expectedRule =
                 new HashMap<>(Map.of("code", "R01", "name", "고액 결제", "appliedScore", 30, "evidenceId", "E-7-v1-02"));
@@ -119,9 +173,11 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body.get("timeline"))
                 .isEqualTo(List.of(
@@ -156,9 +212,11 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> trace = (Map<?, ?>) body.get("investigationTrace");
         assertThat(trace.get("provider")).isEqualTo("FIXED");
@@ -183,7 +241,8 @@ class FixedReportGeneratorTests {
                                 "3", "SAME_CUSTOMER", List.of(new SharedRule("R01", "고액 결제")), NOW, 1, 1)),
                         4));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> similar = (Map<?, ?>) body.get("similarCases");
         assertThat(similar.get("totalMatched")).isEqualTo(4);
@@ -205,11 +264,12 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(similarCaseFinder.find(7L)).thenThrow(new IllegalStateException("P2 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("similarCases");
         assertThat(body.get("similarCases")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         // 조회하지 못한 자료는 증거 추적 표에 조회한 것처럼 남기지 않는다 (#296 리뷰)
         assertThat(evidenceOf(body, "find_similar_cases")).isEmpty();
         assertThat(evidenceOf(body, "get_fds_evidence")).hasSize(1);
@@ -236,7 +296,8 @@ class FixedReportGeneratorTests {
                         .truncated(false)
                         .build());
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> history = (Map<?, ?>) body.get("paymentHistory");
         assertThat(history.get("lookbackDays")).isEqualTo(30);
@@ -258,11 +319,12 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(paymentHistoryFinder.find(7L, NOW, 30)).thenThrow(new IllegalStateException("P5 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("paymentHistory");
         assertThat(body.get("paymentHistory")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         assertThat(evidenceOf(body, "get_payment_history")).isEmpty();
     }
 
@@ -273,7 +335,8 @@ class FixedReportGeneratorTests {
         when(paymentSignalReader.findAll(List.of(3L)))
                 .thenReturn(Map.of(3L, new Signals("신한 ****1234", true, true, null, false)));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
         Map<String, Object> expected = new HashMap<>();
@@ -295,6 +358,12 @@ class FixedReportGeneratorTests {
                 .paymentCount(3)
                 .resultCounts(List.of(new ResultCount("REVIEW", 2), new ResultCount("DENY", 1)))
                 .declinedCount(1)
+                .nearby(Nearby.builder()
+                        .otherCustomerCount(1)
+                        .paymentCount(1)
+                        .resultCounts(List.of(new ResultCount("DENY", 1)))
+                        .declinedCount(0)
+                        .build())
                 .build();
         Match noOther = Match.builder()
                 .provided(true)
@@ -317,23 +386,37 @@ class FixedReportGeneratorTests {
                         .source("P2")
                         .retrievedAt(NOW)
                         .lookbackDays(30)
+                        .nearbyWindowMinutes(60)
                         .card(cardMatch)
                         .device(noOther)
                         .ip(notProvided)
                         .build());
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         Map<?, ?> linked = (Map<?, ?>) body.get("linkedPayments");
         assertThat(linked.get("lookbackDays")).isEqualTo(30);
+        // 사건 결제 앞뒤 1시간 숫자도 ai-server와 같은 키로 옮긴다 (#637)
+        assertThat(linked.get("nearbyWindowMinutes")).isEqualTo(60);
         assertThat(linked.get("card"))
                 .isEqualTo(Map.of(
-                        "provided", true,
-                        "otherCustomerCount", 2,
-                        "paymentCount", 3,
+                        "provided",
+                        true,
+                        "otherCustomerCount",
+                        2,
+                        "paymentCount",
+                        3,
                         "resultCounts",
-                                List.of(Map.of("result", "REVIEW", "count", 2), Map.of("result", "DENY", "count", 1)),
-                        "declinedCount", 1));
+                        List.of(Map.of("result", "REVIEW", "count", 2), Map.of("result", "DENY", "count", 1)),
+                        "declinedCount",
+                        1,
+                        "nearby",
+                        Map.of(
+                                "otherCustomerCount", 1,
+                                "paymentCount", 1,
+                                "resultCounts", List.of(Map.of("result", "DENY", "count", 1)),
+                                "declinedCount", 0)));
         assertThat(((Map<?, ?>) linked.get("ip")).get("provided")).isEqualTo(false);
         assertThat(evidenceOf(body, "find_linked_payments")).singleElement().satisfies(e -> {
             assertThat(e.get("source")).isEqualTo("P2");
@@ -347,12 +430,58 @@ class FixedReportGeneratorTests {
         FixedReportGenerator generator = generatorForCase7();
         when(linkedPaymentFinder.find(7L, NOW)).thenThrow(new IllegalStateException("P2 조회 실패"));
 
-        Map<String, Object> body = generator.generate(7L, 1, 1, NOW).orElseThrow();
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
 
         assertThat(body).containsKey("linkedPayments");
         assertThat(body.get("linkedPayments")).isNull();
-        assertThat(body.get("verdict")).isNotNull();
+        assertThat((List<?>) body.get("paymentAnalyses")).isNotEmpty();
         assertThat(evidenceOf(body, "find_linked_payments")).isEmpty();
+    }
+
+    // 고정 보고서의 주문 정보는 AI 도구와 같은 계산으로 만든다 (#634)
+    @Test
+    void generate_withOrderContext_matchesAiToolCalculation() {
+        FixedReportGenerator generator = generatorForCase7();
+        when(orderContextFinder.find(7L, NOW))
+                .thenReturn(OrderContextToolResponse.builder()
+                        .caseId("7")
+                        .evidenceVersion(1)
+                        .source("P5")
+                        .retrievedAt(NOW)
+                        .payments(List.of(OrderContextToolResponse.Payment.builder()
+                                .paymentId("3")
+                                .provided(true)
+                                .orderRef("order-3")
+                                .orderName("딸기 케이크")
+                                .orderGroup(1)
+                                .orderToPaymentSeconds(42L)
+                                .ordererProvided(true)
+                                .ordererPhoneGroup(1)
+                                .pickupDiffers(true)
+                                .build()))
+                        .build());
+
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
+
+        // AI 보고서(ai-server)가 Tool 응답을 그대로 옮기는 것과 같은 키 · 같은 값
+        Map<?, ?> order = (Map<?, ?>) body.get("orderContext");
+        Map<String, Object> expected = new HashMap<>();
+        expected.put("paymentId", "3");
+        expected.put("provided", true);
+        expected.put("orderRef", "order-3");
+        expected.put("orderName", "딸기 케이크");
+        expected.put("orderGroup", 1);
+        expected.put("orderToPaymentSeconds", 42L);
+        expected.put("ordererProvided", true);
+        expected.put("ordererPhoneGroup", 1);
+        expected.put("pickupDiffers", true);
+        assertThat(order.get("payments")).isEqualTo(List.of(expected));
+        assertThat(evidenceOf(body, "get_order_context")).singleElement().satisfies(e -> {
+            assertThat(e.get("source")).isEqualTo("P5");
+            assertThat(e.get("dataVersion")).isEqualTo("evidence v1");
+        });
     }
 
     private static List<Map<?, ?>> evidenceOf(Map<String, Object> body, String toolName) {
@@ -383,6 +512,133 @@ class FixedReportGeneratorTests {
                 similarCaseFinder,
                 paymentHistoryFinder,
                 paymentSignalReader,
-                linkedPaymentFinder);
+                linkedPaymentFinder,
+                orderContextFinder);
+    }
+
+    // AI 서버가 꺼져도 고정 보고서가 AI 보고서와 같은 징후를 싣는다 (#618)
+    // 판정 권고(결제별 권고 · 이유 · 기준표 칸 · 결론 · 권고 요약)는 만들지 않는다 (#644, ADR-0009 결정 13)
+    @Test
+    void generate_fixedReport_hasNoRecommendationKeys() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L,
+                                600_000L,
+                                "HELD",
+                                NOW,
+                                90,
+                                "REVIEW",
+                                List.of(
+                                        new RuleHit("R06", "카드 테스팅", 40),
+                                        new RuleHit("R01", "고액 결제", 30),
+                                        new RuleHit("R02", "신규 단말기", 20)))));
+        // 실제 조회는 연결 결제가 없어도 null이 아니라 "없음" 응답을 준다 — null은 조회 실패다
+        when(linkedPaymentFinder.find(7L, NOW)).thenReturn(noLinks(NOW));
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder,
+                orderContextFinder);
+
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
+
+        Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
+        DecisionBasisToolResponse.Basis basis = (DecisionBasisToolResponse.Basis) analysis.get("basis");
+        assertThat(basis.signals())
+                .extracting(DecisionBasisToolResponse.Signal::key, DecisionBasisToolResponse.Signal::level)
+                .containsExactly(tuple("R06", "HIGH_RISK"), tuple("R01", "CAUTION"), tuple("R02", "CAUTION"));
+        assertThat(analysis.containsKey("recommendation") || analysis.containsKey("reason"))
+                .isFalse();
+        assertThat(body).doesNotContainKey("verdict");
+        assertThat(List.copyOf(((Map<?, ?>) body.get("recommendation")).keySet()))
+                .isEqualTo(List.of("limitations"));
+    }
+
+    // 같은 카드 · 기기 · IP 조회가 실패하면 징후 · 정상 근거를 싣지 않는다 (#618 Codex 리뷰)
+    // "연결 징후 없음"으로 계산하면 고위험 징후를 확인하지 못했는데도 고액에 정상 사유만 붙은 근거가 나간다
+    @Test
+    void generate_linkedLookupFails_leavesBasisEmpty() {
+        SecurityCase securityCase = SecurityCase.open(1L, "customer-1", CaseType.PAYMENT_FRAUD, NOW);
+        ReflectionTestUtils.setField(securityCase, "id", 7L);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(securityCase));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(securityCase, 3L, NOW)));
+        when(paymentInfoReader.findAll(List.of(3L)))
+                .thenReturn(Map.of(
+                        3L,
+                        new PaymentInfo(
+                                3L, 600_000L, "HELD", NOW, 60, "REVIEW", List.of(new RuleHit("R01", "고액 결제", 30)))));
+        when(paymentHistoryFinder.find(7L, NOW, PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS))
+                .thenReturn(usualHistory(NOW));
+        when(linkedPaymentFinder.find(7L, NOW)).thenThrow(new IllegalStateException("조회 실패"));
+        FixedReportGenerator generator = new FixedReportGenerator(
+                securityCaseRepository,
+                casePaymentRepository,
+                paymentInfoReader,
+                similarCaseFinder,
+                paymentHistoryFinder,
+                paymentSignalReader,
+                linkedPaymentFinder,
+                orderContextFinder);
+
+        Map<String, Object> body =
+                generator.generate(7L, 1, 1, NOW, FixedReportReason.CONFIG_OFF).orElseThrow();
+
+        Map<?, ?> analysis = (Map<?, ?>) ((List<?>) body.get("paymentAnalyses")).getFirst();
+        assertThat(analysis.get("basis")).isNull();
+        assertThat(analysis.containsKey("recommendation")).isFalse();
+    }
+
+    // 사건 며칠 전 비슷한 금액 매입 완료 2건 — 고액 결제의 정상 사유가 된다
+    static PaymentHistoryToolResponse usualHistory(Instant now) {
+        return PaymentHistoryToolResponse.builder()
+                .caseId("7")
+                .evidenceVersion(1)
+                .source("P5")
+                .retrievedAt(now)
+                .lookbackDays(PaymentHistoryFinder.DEFAULT_LOOKBACK_DAYS)
+                .payments(List.of(
+                        PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId("90")
+                                .amount(580_000L)
+                                .paymentStatus("CAPTURED")
+                                .requestedAt(now.minusSeconds(3 * 86_400))
+                                .build(),
+                        PaymentHistoryToolResponse.Payment.builder()
+                                .paymentId("91")
+                                .amount(620_000L)
+                                .paymentStatus("CAPTURED")
+                                .requestedAt(now.minusSeconds(5 * 86_400))
+                                .build()))
+                .statusCounts(List.of(new StatusCount("CAPTURED", 2)))
+                .truncated(false)
+                .build();
+    }
+
+    static LinkedPaymentsToolResponse noLinks(Instant now) {
+        Match none = Match.builder().provided(true).resultCounts(List.of()).build();
+        return LinkedPaymentsToolResponse.builder()
+                .caseId("7")
+                .evidenceVersion(1)
+                .source("P2")
+                .retrievedAt(now)
+                .lookbackDays(LinkedPaymentFinder.LOOKBACK_DAYS)
+                .card(none)
+                .device(none)
+                .ip(none)
+                .payments(List.of())
+                .build();
     }
 }

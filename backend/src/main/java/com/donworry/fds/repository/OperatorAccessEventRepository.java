@@ -12,6 +12,38 @@ import org.springframework.data.jpa.repository.Query;
 public interface OperatorAccessEventRepository extends JpaRepository<OperatorAccessEvent, Long> {
     Optional<OperatorAccessEvent> findByIdentityEventId(Long identityEventId);
 
+    // 요약 집계 (목록 위 요약 띠 · 순위). from은 UTC "yyyy-MM-dd HH:mm:ss.SSSSSS" — occurred_at 인덱스로 범위만 읽는다.
+    // 한국 날짜는 고정 +9시간으로 묶는다 (한국은 서머타임이 없다)
+    @Query(value = """
+            SELECT DATE(DATE_ADD(occurred_at, INTERVAL 9 HOUR)) AS day,
+                   COUNT(*) AS deniedCount
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            GROUP BY DATE(DATE_ADD(occurred_at, INTERVAL 9 HOUR))
+            """, nativeQuery = true)
+    List<OperatorAccessDailyCountProjection> countDailySince(String from);
+
+    // 경로 속 숫자 구간은 {id}로 바꿔 같은 기능 경로로 묶는다 (/users/12 · /users/13 → /users/{id}).
+    // 자르지 않고 모두 돌려준다 — 화면이 기능 이름으로 합친 뒤 순위를 정해야 순위 · 횟수가 맞다.
+    // 묶인 경로 수는 API 경로 수 정도라 작다
+    @Query(value = """
+            SELECT http_method AS httpMethod,
+                   REGEXP_REPLACE(path, '/[0-9]+(?=/|$)', '/{id}') AS path,
+                   COUNT(*) AS deniedCount
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            GROUP BY http_method, REGEXP_REPLACE(path, '/[0-9]+(?=/|$)', '/{id}')
+            ORDER BY deniedCount DESC, path, http_method
+            """, nativeQuery = true)
+    List<OperatorAccessPathCountProjection> countPathsSince(String from);
+
+    @Query(value = """
+            SELECT COUNT(DISTINCT user_id)
+            FROM fds_operator_access_events
+            WHERE occurred_at >= CAST(:from AS DATETIME(6))
+            """, nativeQuery = true)
+    long countAccountsSince(String from);
+
     List<OperatorAccessEvent> findByUserIdAndDeniedTypeAndOccurredAtBetweenOrderByOccurredAtAsc(
             Long userId, OperatorAccessDeniedType deniedType, Instant from, Instant to);
 

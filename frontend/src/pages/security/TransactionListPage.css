@@ -28,31 +28,20 @@
   text-decoration: underline;
 }
 
-/* 펼친 상세: 두 묶음, 라벨 폭 고정 */
-.tx-detail {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 40px;
-  padding: 4px 0;
+/* 결제 시각: 초까지 한 줄로, 숫자 폭을 맞춰 위아래 줄을 견주기 쉽게 한다 (#797) */
+.dw-tx-table .tx-time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.tx-detail-title {
-  margin: 0 0 8px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 600;
+
+/* 줄을 누르면 거래 상세로 간다 (#732) */
+.dw-tx-table .tx-row {
+  cursor: pointer;
 }
-.tx-detail-list {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 8px 12px;
-  margin: 0;
-  font-size: 13px;
+.dw-tx-table .tx-detail-link {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
 }
-.tx-detail-list dt {
-  color: #64748b;
-}
-.tx-detail-list dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
+.dw-tx-table .tx-row:hover .tx-detail-link {
+  text-decoration: underline;
 }

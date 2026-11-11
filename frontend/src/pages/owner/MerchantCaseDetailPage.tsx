@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Alert, App, Button, Card, Descriptions, Space, Spin, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Descriptions, Space, Spin, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getMerchantCase } from '../../api/merchantCases'
@@ -9,7 +9,7 @@ import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
 import type { MerchantCaseDetail, MerchantPaymentResult } from '../../types/merchantCase'
 import { won } from '../../utils/format'
-import { dateTime, paymentStatusLabel, recommendationLabel } from '../security/case/caseLabels'
+import { dateTime, paymentStatusLabel } from '../security/case/caseLabels'
 import { CodeTag } from '../security/case/CodeTag'
 import { isApplyingDecision, merchantCaseStatusLabel, merchantDecisionLabel } from './ownerLabels'
 
@@ -109,14 +109,7 @@ export function MerchantCaseDetailPage() {
         </Space>
       ),
     },
-    {
-      // 보안 검토 권고 (#501) — 기준표 판정 · 예전 AI 권고 모두 같은 이름으로 보여 준다
-      title: '검토 권고',
-      dataIndex: 'aiRecommendation',
-      width: 130,
-      render: (v: MerchantPaymentResult['aiRecommendation']) =>
-        v ? <CodeTag value={recommendationLabel[v]} /> : '-',
-    },
+    // AI 검토 권고 칸은 #644에서 뺐다 — 판정은 보안 담당자가 한다 (ADR-0009 결정 13)
   ]
 
   return (
@@ -135,7 +128,7 @@ export function MerchantCaseDetailPage() {
           </>
         }
       />
-      <Card style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
+      <Card style={{ marginBottom: 16, borderColor: '#e7e1d5' }}>
         <Descriptions column={{ xs: 1, sm: 2, lg: 4 }} size="small">
           <Descriptions.Item label="상태">
             <CodeTag value={merchantCaseStatusLabel[result.displayStatus]} />
@@ -147,33 +140,20 @@ export function MerchantCaseDetailPage() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
-      <Card title="조사 결과 요약" style={{ marginBottom: 16, borderColor: '#E2E8F0' }}>
-        {result.directInvestigation && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: result.summary ? 12 : 0 }}
-            message="보안 담당자 직접 조사"
-            description="AI 보고서 없이 보안 담당자가 직접 조사해 판정한 결제가 있습니다."
-          />
-        )}
-        {result.summary ? (
+      <Card title="처리 안내" style={{ marginBottom: 16, borderColor: '#e7e1d5' }}>
+        {result.summary?.length ? (
           <ul style={{ margin: 0, paddingLeft: 20 }}>
             {result.summary.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>
         ) : (
-          !result.directInvestigation && (
-            <Typography.Text type="secondary">
-              {result.displayStatus === 'INVESTIGATING'
-                ? '조사 중입니다. 결과가 나오면 이곳에 요약이 표시됩니다.'
-                : '표시할 조사 요약이 없습니다.'}
-            </Typography.Text>
-          )
+          <Typography.Text type="secondary">
+            현재 처리 상태는 아래 결제별 결과에서 확인해 주세요.
+          </Typography.Text>
         )}
       </Card>
-      <Card className="dw-table-card" style={{ borderColor: '#E2E8F0' }}>
+      <Card className="dw-table-card" style={{ borderColor: '#e7e1d5' }}>
         <div className="dw-table-toolbar">
           <div>
             <h3>결제별 결과</h3>

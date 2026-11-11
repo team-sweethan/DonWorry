@@ -66,5 +66,41 @@
     "card": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
     "device": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0},
     "ip": {"provided": true, "otherCustomerCount": 0, "paymentCount": 0, "resultCounts": [], "declinedCount": 0}
+  },
+  "decisionBasis": {
+    "caseId": "202",
+    "evidenceVersion": 1,
+    "source": "P4",
+    "retrievedAt": "2026-10-27T10:05:00Z",
+    "payments": [
+      {
+        "paymentId": "9401",
+        "basis": {
+          "signals": [
+            {
+              "key": "R01",
+              "label": "고액 결제",
+              "detail": null,
+              "level": "CAUTION",
+              "normalReason": "최근 30일 비슷한 금액의 결제 2건 매입 완료",
+              "countedIn": null,
+              "checkBefore": "고객의 평소 결제 금액과 비교 · 단체 주문 같은 구매 목적 확인"
+            }
+          ],
+          "normals": [
+            {
+              "key": "SIMILAR_AMOUNT",
+              "label": "최근 30일 비슷한 금액의 결제 2건 매입 완료",
+              "canExplain": [
+                "고액 결제"
+              ],
+              "explains": [
+                "고액 결제"
+              ]
+            }
+          ]
+        }
+      }
+    ]
   }
 }
