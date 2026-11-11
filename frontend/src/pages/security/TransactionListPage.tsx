@@ -56,6 +56,8 @@ const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((
 }))
 
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
+// 목록은 초까지 — 같은 분에 결제가 몰리면 분까지만으로는 최신순인지 알아볼 수 없다 (#797)
+const paidAt = (iso: string) => dayjs(iso).format('MM/DD HH:mm:ss')
 
 // 줄을 누르면 거래 상세로 간다 (#732). 줄 안의 버튼 · 링크 · 복사 단추를 누른 것은 제 동작만 한다
 const ownsClick = (target: EventTarget) =>
@@ -241,15 +243,16 @@ export function TransactionListPage() {
     {
       title: '결제 시각',
       dataIndex: 'createdAt',
-      width: 100,
+      width: 130,
+      className: 'tx-time',
       // 키보드로도 상세에 갈 수 있게 시각은 링크로 둔다. 담당 사건 고객이 아닌 결제는 글자만 (#732)
       render: (value: string, t) =>
         t.detailAllowed ? (
           <Link className="tx-detail-link" to={detailPath(t.paymentId)}>
-            {time(value)}
+            {paidAt(value)}
           </Link>
         ) : (
-          time(value)
+          paidAt(value)
         ),
     },
     {
@@ -528,7 +531,7 @@ export function TransactionListPage() {
                 }
               : {}
           }
-          scroll={{ x: 920 }}
+          scroll={{ x: 950 }}
           pagination={{
             current: query.page,
             pageSize: TRANSACTION_PAGE_SIZE,
