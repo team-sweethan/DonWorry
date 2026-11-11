@@ -93,11 +93,13 @@ export function RulePolicyChangeHistoriesPage() {
             <p>변경한 룰과 처리자, 변경 경위를 함께 확인합니다.</p>
           </div>
           <span className="dw-rule-records-count">
-            {result
-              ? `${result.totalElements.toLocaleString('ko-KR')}건`
-              : error
-                ? '조회 실패'
-                : '불러오는 중'}
+            {result ? (
+              `${result.totalElements.toLocaleString('ko-KR')}건`
+            ) : error ? (
+              '조회 실패'
+            ) : (
+              <span className="dw-loading-reveal">불러오는 중</span>
+            )}
           </span>
         </div>
         <div className="dw-rule-records-toolbar">

@@ -32,7 +32,7 @@ export function LatestLogin() {
   return (
     <span className="dw-last-login" role="status">
       {!current ? (
-        '로그인 기록 확인 중…'
+        <span className="dw-loading-reveal">로그인 기록 확인 중…</span>
       ) : current.failed ? (
         <>
           로그인 기록 조회 실패{' '}
