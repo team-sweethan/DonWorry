@@ -51,7 +51,7 @@ const ownerGuides: Record<IntegrationStatus, { message: string; description: str
   CONNECTED: {
     message: '쇼핑몰 연동이 완료되었습니다',
     description:
-      '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다.',
+      '연동 완료 상태에서는 키 원문이 숨겨집니다. 가맹점이 사용 중이면 신규 결제를 요청할 수 있습니다. 결제를 받는 방법은 아래 결제 연동 안내를 참고해 주세요.',
   },
 }
 const failure = (error: unknown) =>
@@ -317,13 +317,22 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
                 메일·메신저로 보내지 마세요.
               </Typography.Paragraph>
               <Typography.Paragraph>
-                <a
-                  href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/identity/354-merchant-integration.md"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  쇼핑몰 개발자 연동 안내
-                </a>
+                <Space split="·" wrap>
+                  <a
+                    href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/identity/354-merchant-integration.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    쇼핑몰 개발자 연동 안내
+                  </a>
+                  <a
+                    href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/payment/merchant-checkout-guide.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    결제 연동 안내 (결제창 · 결과 확인 · 알림)
+                  </a>
+                </Space>
               </Typography.Paragraph>
             </>
           )}
