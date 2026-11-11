@@ -128,7 +128,7 @@
 }
 .finance-period .finance-period-presets .ant-btn:hover {
   background: #f7ecd2;
-  border-color: #ad7c18;
+  border-color: #886211;
   color: #47320e;
 }
 .finance-trend-detail label {
@@ -140,8 +140,8 @@
 .finance-dialog .ant-input:hover,
 .finance-drawer .ant-input:focus,
 .finance-drawer .ant-input:hover {
-  border-color: #ad7c18;
-  box-shadow: 0 0 0 2px #ad7c181a;
+  border-color: #886211;
+  box-shadow: 0 0 0 2px #8862111a;
 }
 .stl-more-button.ant-btn {
   height: 28px;
