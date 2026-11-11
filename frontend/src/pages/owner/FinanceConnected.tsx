@@ -293,6 +293,8 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       {changingPeriod && <FinanceStaleNotice />}
       {result && view && (
         <div
+          // 다른 기간의 결과가 오면 기존처럼 안쪽 상태(선택 · 펼침 등)를 새로 시작한다. 같은 기간 새로고침은 유지한다.
+          key={`${result.from}:${result.to}`}
           className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={forecast.status === 'loading'}
         >
@@ -492,6 +494,8 @@ function ConnectedSettlements() {
       {resource.status === 'error' && <FinanceFailure error={resource.error} onRetry={refresh} />}
       {shown && (
         <div
+          // 다른 기간의 결과가 오면 기존처럼 안쪽 상태(페이지 · 달력 월 · 상세 창 등)를 새로 시작한다. 같은 기간 새로고침은 유지한다.
+          key={`${shown.report.from}:${shown.report.to}`}
           className={`finance-result${changingPeriod ? ' is-stale' : ''}`}
           aria-busy={resource.status === 'loading'}
         >
