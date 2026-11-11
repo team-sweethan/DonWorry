@@ -12,7 +12,9 @@ export function sessionBody(
   state: Pick<AuthState, 'status' | 'user' | 'error'>,
   checked: boolean,
 ): SessionBody {
-  const rechecking = !checked && state.status === 'authenticated' && state.user !== null
+  // 직전 확인이 오류(403 · 서버 오류)였다면 지금처럼 확인이 끝날 때까지 가린다
+  const rechecking =
+    !checked && state.status === 'authenticated' && state.user !== null && state.error === null
   if (!checked && !rechecking) return 'checking'
   return state.error
 }

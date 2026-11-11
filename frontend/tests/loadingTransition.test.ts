@@ -42,6 +42,8 @@ test('loadingTransition_whenRouteChanges_fadesInWithoutOverridingPageAnimations'
   assert.match(css, /:where\(\.admin-viewport \.dw-route-view\)/)
   assert.match(css, /:where\(\.admin-viewport \.ant-table-tbody > tr\.ant-table-row\)/)
   assert.match(css, /prefers-reduced-motion: no-preference/)
+  // 끝난 뒤 효과가 남으면 본문이 새 쌓임 맥락이 되어 z-index 배치가 바뀐다
+  assert.match(css, /dw-content-enter var\(--dw-content-enter-duration\) ease-out backwards/)
 })
 
 // 다시 조회하는 동안 마지막 성공 데이터를 넘겨 화면을 비우지 않는다.

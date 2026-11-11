@@ -80,7 +80,8 @@
   :where(.admin-viewport .dw-route-view),
   :where(.admin-viewport .ant-table-tbody > tr.ant-table-row),
   :where(.admin-viewport .dw-content-enter) {
-    animation: dw-content-enter var(--dw-content-enter-duration) ease-out both;
+    /* backwards: 끝난 뒤에는 효과가 남지 않아 쌓임 순서(z-index) 등 기존 배치에 영향을 주지 않는다 */
+    animation: dw-content-enter var(--dw-content-enter-duration) ease-out backwards;
   }
 }
 

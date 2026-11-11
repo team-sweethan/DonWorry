@@ -37,3 +37,15 @@ test('sessionBody_whenCheckFails_showsFailureInsteadOfBody', () => {
   )
   assert.equal(sessionBody({ status: 'authenticated', user, error: null }, true), null)
 })
+
+// 직전 확인이 오류였다면 다음 이동에서도 지금처럼 확인이 끝날 때까지 가린다 (이전 오류 화면이 잠깐 보이지 않게).
+test('sessionBody_whenPreviousCheckFailed_coversBodyUntilRechecked', () => {
+  assert.equal(
+    sessionBody({ status: 'authenticated', user, error: 'unavailable' }, false),
+    'checking',
+  )
+  assert.equal(
+    sessionBody({ status: 'authenticated', user, error: 'forbidden' }, false),
+    'checking',
+  )
+})

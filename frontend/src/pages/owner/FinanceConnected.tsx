@@ -161,6 +161,8 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       : settings.status === 'loading'
         ? settings.stale
         : undefined
+  // 설정을 바꾸는 창과 그 버튼은 지금처럼 새로 받은 설정으로만 연다
+  const freshSetting = settings.status === 'success' ? settings.data : undefined
   const valid =
     validFinancePeriod(period) &&
     period.to <= dayjs(today).add(365, 'day').format('YYYY-MM-DD') &&
@@ -254,7 +256,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           <Button
             data-guide="finance-settings"
             type="primary"
-            disabled={!setting}
+            disabled={!freshSetting}
             onClick={() => setManage(true)}
           >
             잔액·지출 설정
@@ -353,7 +355,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       <FinanceExpenseManager
         open={manage}
         onClose={() => setManage(false)}
-        settings={setting ?? undefined}
+        settings={freshSetting ?? undefined}
         today={today}
         revision={revision}
         onChanged={refresh}
@@ -476,12 +478,7 @@ function ConnectedSettlements() {
           <PageHeader
             title="정산 내역"
             description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
-            actions={
-              <div className="finance-header-actions">
-                {actions}
-                <FinanceGuide page="settlement" />
-              </div>
-            }
+            actions={actions}
           />
           {periodControls}
         </>
