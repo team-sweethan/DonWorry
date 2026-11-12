@@ -543,7 +543,7 @@ function ConnectedSettlements() {
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
                   <strong>
-                    <FinanceMoney value={month.data.paidAmount} />
+                    <FinanceMoney value={month.data.paidAmount} countUp />
                   </strong>
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>

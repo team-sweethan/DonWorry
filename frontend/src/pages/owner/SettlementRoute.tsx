@@ -6,6 +6,9 @@ import koKR from 'antd/es/locale/ko_KR'
 import { PageHeader } from '../../components/common/PageHeader'
 import { loadFinanceConnected } from './financePreload'
 import './finance-page-header.css'
+import '../../styles/ownerMotion.css'
+import './owner-finance-motion.css'
+import './owner-finance-skin.css'
 
 // 정산 코드가 공용 라우터의 초기 번들에 포함되지 않도록 경계를 둔다.
 const FinancePreview = lazy(() =>

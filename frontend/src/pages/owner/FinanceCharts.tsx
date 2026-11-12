@@ -1,5 +1,6 @@
 import { FinanceMoney } from './FinanceMoney'
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { Button, DatePicker, Empty } from 'antd'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ko'
@@ -7,6 +8,7 @@ import { settlementSeries } from './settlementChart'
 import type { SettlementDay } from './settlementChart'
 import { koreanToday } from './financeView'
 import './finance-charts.css'
+import '../../styles/ownerMotion.css'
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 const axisWon = (value: number) =>
   `${new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 }).format(value)}원`
@@ -40,6 +42,8 @@ function useCenteredChart(count: number, selectedIndex: number, selectedDate?: s
     },
   }
 }
+
+const motionDelay = (ms: number) => ({ '--ow-delay': `${ms}ms` }) as CSSProperties
 
 export function SettlementLineChart({
   todayValue,
@@ -156,8 +160,25 @@ export function SettlementLineChart({
               </text>
             </g>
           )}
-          <polyline points={paths('completed')} fill="none" stroke="#16a34a" strokeWidth="3" />
-          <polyline points={paths('scheduled')} fill="none" stroke="#2563eb" strokeWidth="3" />
+          {/* 처음 그려질 때 선이 왼쪽부터 그려진다 (styles/ownerMotion.css) */}
+          <polyline
+            points={paths('completed')}
+            fill="none"
+            stroke="#16a34a"
+            strokeWidth="3"
+            pathLength={1}
+            className="ow-draw"
+            style={motionDelay(200)}
+          />
+          <polyline
+            points={paths('scheduled')}
+            fill="none"
+            stroke="#2563eb"
+            strokeWidth="3"
+            pathLength={1}
+            className="ow-draw"
+            style={motionDelay(350)}
+          />
           {data.map((d, i) => (
             <g key={d.date}>
               {(['completed', 'scheduled'] as const).map(
@@ -344,6 +365,8 @@ export function CashBalanceChart({
                 height={Math.max(0, y(0) - y(p.income ?? 0))}
                 rx="2"
                 fill="#22c55e"
+                className="ow-grow-y"
+                style={motionDelay(150 + Math.min(i, 30) * 25)}
               >
                 <title>
                   {p.date} 정산 유입 {won(p.income ?? 0)}
@@ -356,6 +379,8 @@ export function CashBalanceChart({
                 height={Math.max(0, y(-(p.expense ?? 0)) - y(0))}
                 rx="2"
                 fill="#f87171"
+                className="ow-grow-down"
+                style={motionDelay(180 + Math.min(i, 30) * 25)}
               >
                 <title>
                   {p.date} 지출 {won(p.expense ?? 0)}
@@ -368,6 +393,9 @@ export function CashBalanceChart({
             fill="none"
             stroke="#614b2e"
             strokeWidth="3"
+            pathLength={1}
+            className="ow-draw"
+            style={motionDelay(500)}
           />
           {points.map((p, i) => (
             <g key={p.date}>

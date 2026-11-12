@@ -29,6 +29,7 @@ import type {
 } from '../../api/integration'
 import { useAuth } from '../../auth/useAuth'
 import { IntegrationCredentials } from './IntegrationCredentials'
+import { OwnerConnectionHero } from './OwnerConnectionHero'
 import './integration-preview.css'
 
 const actionLabels: Record<string, string> = {
@@ -230,6 +231,7 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
         !error && <Spin />
       ) : (
         <>
+          {!admin && <OwnerConnectionHero status={data.status} />}
           <Descriptions
             column={1}
             items={[

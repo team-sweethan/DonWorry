@@ -40,7 +40,6 @@ import { AiSwitchPage } from '../pages/admin/AiSwitchPage'
 import { RawViewReviewsPage } from '../pages/admin/RawViewReviewsPage'
 import { IntegrationPreviewPage } from '../pages/owner/IntegrationPreviewPage'
 import { OwnerHomePage } from '../pages/owner/OwnerHomePage'
-import { MerchantCaseDetailPage } from '../pages/owner/MerchantCaseDetailPage'
 import { MerchantCaseListPage } from '../pages/owner/MerchantCaseListPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
 import { LoginHistoryScreen } from '../pages/auth/LoginHistoryPage'
@@ -332,7 +331,8 @@ export const router = createBrowserRouter([
                 handle: { title: '조치 결과 상세' },
                 element: (
                   <ConfigProvider theme={ownerWarmTheme}>
-                    <MerchantCaseDetailPage />
+                    {/* 상세 주소로 들어와도 같은 화면에서 그 사건을 펼쳐 보여준다 */}
+                    <MerchantCaseListPage />
                   </ConfigProvider>
                 ),
               },

@@ -1,0 +1,158 @@
+/*
+ * 사장님 화면 시연용 움직임.
+ *
+ * - 요소가 처음 그려질 때 한 번만 재생한다. 새로고침 · 조회 갱신은 같은 요소를 다시 그리지 않으므로 반복되지 않는다
+ * - 각 요소는 style="--ow-delay: 120ms"로 순서를 준다
+ * - 동작 줄이기 설정이면 모두 끄고 최종 상태를 바로 보여준다
+ * - backwards: 끝난 뒤에는 효과가 남지 않아 쌓임 순서 등 기존 배치에 영향을 주지 않는다
+ */
+:root {
+  --ow-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ow-ease-pop: cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes ow-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ow-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ow-grow-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes ow-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes ow-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ow-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes ow-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+@keyframes ow-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ow-rise {
+    animation: ow-rise 0.6s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  .ow-slide-in {
+    animation: ow-slide-in 0.42s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  .ow-grow-y {
+    transform-origin: bottom;
+    animation: ow-grow-y 0.7s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  /* 0원 선 아래로 자라는 막대(지출) */
+  .ow-grow-down {
+    transform-origin: top;
+    animation: ow-grow-y 0.7s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  /* SVG 막대는 자기 상자를 기준으로 자란다 */
+  svg .ow-grow-y,
+  svg .ow-grow-down {
+    transform-box: fill-box;
+  }
+  .ow-grow-x {
+    transform-origin: left;
+    animation: ow-grow-x 0.6s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  /* pathLength="1"인 선을 처음부터 끝까지 그린다 */
+  .ow-draw {
+    stroke-dasharray: 1;
+    animation: ow-draw 1.2s cubic-bezier(0.4, 0, 0.2, 1) var(--ow-delay, 0ms) backwards;
+  }
+  .ow-pop {
+    animation: ow-pop 0.45s var(--ow-ease-pop) var(--ow-delay, 0ms) backwards;
+  }
+  .ow-nudge {
+    animation: ow-nudge 0.9s ease-in-out 1.8s 2;
+  }
+}
+
+/* 굴러가는 숫자 (RollingNumber) — 자리마다 0~9 띠를 위로 올려 목표 숫자에서 멈춘다 */
+.rn {
+  display: inline-block;
+}
+.rn-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.rn-visual {
+  display: inline-flex;
+  align-items: flex-end;
+  line-height: 1.2em;
+  font-variant-numeric: tabular-nums;
+}
+.rn-col {
+  display: inline-block;
+  height: 1.2em;
+  overflow: hidden;
+}
+.rn-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(var(--rn-to, 0) * -1.2em));
+}
+.rn-strip > span {
+  height: 1.2em;
+  line-height: 1.2em;
+  text-align: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rn-strip {
+    transition: transform 0.95s cubic-bezier(0.2, 0.9, 0.2, 1) var(--rn-delay, 0ms);
+  }
+}

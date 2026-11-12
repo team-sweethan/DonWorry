@@ -174,7 +174,7 @@ export function CashFlowOverview({
           <section className={`cashflow-surface cashflow-stat-${index}`} key={label}>
             <span>{label}</span>
             <strong>
-              <FinanceMoney value={Number(amount)} />
+              <FinanceMoney value={Number(amount)} countUp />
             </strong>
             <small>{note}</small>
             {index === 0 && balanceCalculation && (
@@ -259,19 +259,19 @@ export function CashFlowOverview({
           <div>
             <small>기간 내 최대 부족액</small>
             <b>
-              <FinanceMoney value={maximumShortage} />
+              <FinanceMoney value={maximumShortage} countUp />
             </b>
           </div>
           <div>
             <small>기간 말 예상 잔액</small>
             <b>
-              <FinanceMoney value={days.at(-1)!.closing} />
+              <FinanceMoney value={days.at(-1)!.closing} countUp />
             </b>
           </div>
           <div>
             <small>기간 시작 잔액</small>
             <b>
-              <FinanceMoney value={days[0].opening} />
+              <FinanceMoney value={days[0].opening} countUp />
             </b>
           </div>
         </div>

@@ -517,7 +517,7 @@ export function SettlementPrototype({
             >
               <span>이날 정산금 합계</span>
               <b>
-                <FinanceMoney value={sum(daily.filter((e) => e.status !== 'can'))} />
+                <FinanceMoney value={sum(daily.filter((e) => e.status !== 'can'))} countUp />
               </b>
             </div>
             <div className="stl-summary-actions">
@@ -651,14 +651,14 @@ export function SettlementPrototype({
               <div>
                 <small>주문별 순정산금 (환불 회수 전)</small>
                 <strong>
-                  <FinanceMoney value={sum(rows.filter((e) => e.status !== 'can'))} />
+                  <FinanceMoney value={sum(rows.filter((e) => e.status !== 'can'))} countUp />
                 </strong>
                 <span>{rows.length}건 · 취소 금액 제외</span>
               </div>
               <div>
                 <small>조회된 지출 금액 (예정·완료 포함)</small>
                 <strong className="stl-expense-heading">
-                  <FinanceMoney value={expenseRows.reduce((n, e) => n + e.amount, 0)} />
+                  <FinanceMoney value={expenseRows.reduce((n, e) => n + e.amount, 0)} countUp />
                 </strong>
                 <span>{expenseRows.length}건 · 등록한 일회성·정기 지출</span>
               </div>

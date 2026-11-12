@@ -1,0 +1,160 @@
+/* 시크릿 키 화면의 연결 그림 */
+.och {
+  margin-bottom: 20px;
+  padding: 24px 20px 20px;
+  border: 1px solid #ebe3d2;
+  border-radius: 16px;
+  background: #fffaf0;
+  color: #30291f;
+}
+.och.is-connected {
+  border-color: #cfe6d6;
+  background: #f5fbf6;
+}
+.och-picture {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.och-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 110px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.och-node > svg,
+.och-node > b {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  padding: 15px;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: #f6efdf;
+  color: #5c4012;
+}
+.och-node.is-donworry > b {
+  padding: 0;
+  background: #30291f;
+  color: #f6e8c6;
+  font-size: 24px;
+  font-weight: 800;
+}
+.och-wire {
+  position: absolute;
+  top: 22px;
+  left: 110px;
+  width: calc(100% - 220px);
+  height: 20px;
+  overflow: visible;
+}
+.och-line-wait {
+  fill: none;
+  stroke: #d6ccb6;
+  stroke-width: 2.5;
+  stroke-dasharray: 6 8;
+  vector-effect: non-scaling-stroke;
+}
+.is-waiting .och-line-wait {
+  stroke: #a8740f;
+}
+.och-line-done {
+  fill: none;
+  stroke: #15803d;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+.och-check {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 2;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #15803d;
+  box-shadow: 0 0 0 6px #f5fbf6;
+  color: #fff;
+}
+.och-check svg {
+  width: 22px;
+  height: 22px;
+}
+.och-headline {
+  margin: 18px 0 0;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+}
+.och-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 560px;
+  margin: 16px auto 0;
+  padding: 0;
+  list-style: none;
+}
+.och-steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #8f8573;
+  font-size: 13px;
+}
+.och-steps li.is-done,
+.och-steps li.is-current {
+  color: #30291f;
+}
+.och-steps li.is-current {
+  font-weight: 700;
+}
+.och-track {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #ebe3d2;
+}
+.och-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #30291f;
+}
+.is-done .och-track span {
+  width: 100%;
+}
+.is-connected .is-done .och-track span {
+  background: #15803d;
+}
+.is-current .och-track span {
+  width: 35%;
+  background: #a8740f;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .is-waiting .och-line-wait {
+    animation: ow-flow 0.9s linear infinite;
+  }
+}
+@media (max-width: 520px) {
+  .och-node {
+    width: 84px;
+  }
+  .och-wire {
+    left: 84px;
+    width: calc(100% - 168px);
+  }
+}

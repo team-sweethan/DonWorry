@@ -57,7 +57,7 @@ export function PayoutSummary({
             <section key={variant} className={'payout-stat payout-stat-' + variant}>
               <span>{label}</span>
               <strong>
-                <FinanceMoney value={value} />
+                <FinanceMoney value={value} countUp />
               </strong>
               <small>{note}</small>
             </section>
