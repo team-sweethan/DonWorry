@@ -16,7 +16,19 @@ security:
   demo-api:
     # 인증 없는 시연용 API를 운영에서 막는다 (#392, 시작 검사도 거절)
     enabled: false
+  # 11/18 서버 시연 기간 임시 (#807) — 시연 뒤 되돌림. 기본값 5m은 application.yml (#770)
+  login-attack:
+    window: 1m
 
 donworry:
   applications:
     enabled: ${DONWORRY_APPLICATIONS_ENABLED:false}
+  # 11/18 서버 시연 기간 임시 (#807) — 시연 뒤 되돌림. 기본값 3 · 5명은 application.yml (ADR-0082)
+  insider:
+    ins09-caution-customers: 1
+    ins09-high-customers: 1
+
+# CakeShop 픽업 · 주문 상품 수신 (#334) — 서버에서 켬 (#807, P6 확인)
+settlement:
+  pickup-http:
+    enabled: true
