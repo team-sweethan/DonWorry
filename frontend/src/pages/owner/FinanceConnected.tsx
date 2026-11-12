@@ -17,6 +17,7 @@ import {
 import type { CashFlowSettings } from '../../api/finance'
 import { CashFlowOverview } from './CashFlowOverview'
 import { SettlementPrototype } from './SettlementPrototype'
+import { SettlementPeriodControl } from './SettlementPeriodControl'
 import { FinanceExpenseManager } from './FinanceExpenseManager'
 import {
   FinanceFailure,
@@ -456,25 +457,7 @@ function ConnectedSettlements() {
     />
   )
   const periodControls = (
-    <FinancePeriodControl
-      value={period}
-      onChange={setPeriod}
-      presets={
-        <>
-          <Button onClick={() => setPeriod({ from: today, to: today })}>오늘</Button>
-          <Button
-            onClick={() =>
-              setPeriod({
-                from: dayjs(today).startOf('month').format('YYYY-MM-DD'),
-                to: dayjs(today).endOf('month').format('YYYY-MM-DD'),
-              })
-            }
-          >
-            이번 달
-          </Button>
-        </>
-      }
-    />
+    <SettlementPeriodControl value={period} onChange={setPeriod} today={today} />
   )
   return (
     <div className="finance-preview finance-connected">
@@ -482,7 +465,7 @@ function ConnectedSettlements() {
         <>
           <PageHeader
             title="정산 내역"
-            description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            description="들어온 돈부터 앞으로의 정산까지, 한눈에 확인하세요."
             actions={actions}
           />
           {periodControls}

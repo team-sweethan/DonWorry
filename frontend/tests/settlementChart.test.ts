@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { settlementDays, settlementSeries } from '../src/pages/owner/settlementChart.ts'
+import { matchesSettlementStatus } from '../src/pages/owner/settlementStatus.ts'
+
+// 예정일 지남은 오늘 이전의 미완료 정산만 포함하며 완료·취소·오늘 예정은 포함하지 않는다.
+test('settlementStatus_whenOverdueRequested_keepsOnlyPastScheduledEntries', () => {
+  const today = '2026-11-12'
+  assert.equal(matchesSettlementStatus('sch', '2026-11-11', 'overdue', today), true)
+  assert.equal(matchesSettlementStatus('sch', today, 'overdue', today), false)
+  assert.equal(matchesSettlementStatus('sch', '2026-11-13', 'overdue', today), false)
+  assert.equal(matchesSettlementStatus('done', '2026-11-11', 'overdue', today), false)
+  assert.equal(matchesSettlementStatus('can', '2026-11-11', 'overdue', today), false)
+  assert.equal(matchesSettlementStatus('sch', '2026-11-11', 'sch', today), true)
+  assert.equal(matchesSettlementStatus('done', '2026-11-11', 'all', today), true)
+})
 
 test('settlementChart_whenAtLastFourDigitYear_stopsAtSelectedEnd', () => {
   assert.deepEqual(

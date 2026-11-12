@@ -1,0 +1,267 @@
+/* 날짜별 지급 · 정산 예정 막대 그래프 (SettlementBars) */
+.sbc {
+  --sbc-ink: #30291f;
+  --sbc-muted: #6b6454;
+  --sbc-faint: #8f8573;
+  --sbc-line: #ebe3d2;
+  --sbc-done: #30291f;
+  --sbc-sch: #c99a2e;
+  --sbc-late: #c2410c;
+  color: var(--sbc-ink);
+  font-variant-numeric: tabular-nums;
+}
+.sbc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.sbc-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sbc-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.sbc-legend small {
+  color: var(--sbc-faint);
+  font-size: 12px;
+}
+.sbc-legend .is-done,
+.sbc-bar.is-done {
+  background: var(--sbc-done);
+}
+.sbc-legend .is-sch,
+.sbc-bar.is-sch {
+  background: var(--sbc-sch);
+}
+/* 예정일 지남 — 색만으로 구분하지 않도록 빗금 */
+.sbc-legend .is-late,
+.sbc-bar.is-late {
+  background: repeating-linear-gradient(-45deg, var(--sbc-late) 0 3px, #f6c9a8 3px 6px);
+}
+
+/* 축 + 가로 스크롤 영역 */
+.sbc-frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+}
+.sbc-axis {
+  position: relative;
+  height: 190px;
+  margin-top: 50px;
+}
+.sbc-axis span {
+  position: absolute;
+  right: 8px;
+  color: var(--sbc-faint);
+  font-size: 11px;
+  line-height: 1;
+  transform: translateY(50%);
+  white-space: nowrap;
+}
+.sbc-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-color: #d6ccb6 transparent;
+  scrollbar-width: thin;
+}
+.sbc-plot {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--sbc-count), minmax(30px, 1fr));
+  min-width: calc(var(--sbc-count) * 30px);
+  padding-top: 50px;
+}
+.sbc-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--sbc-line);
+  pointer-events: none;
+}
+
+/* 날짜 한 칸 */
+.sbc-col {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.sbc-col:hover {
+  background: #fdf9ef;
+}
+.sbc-col.is-on {
+  background: #f8edcf;
+}
+.sbc-col:focus-visible {
+  outline: 2px solid #a8740f;
+  outline-offset: -2px;
+}
+.sbc-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 190px;
+  border-bottom: 1px solid var(--sbc-line);
+}
+.sbc-bar {
+  width: min(9px, 34%);
+  min-height: 0;
+  border-radius: 3px 3px 0 0;
+}
+.sbc-col:not(.is-on) .sbc-bar {
+  opacity: 0.88;
+}
+/* 오늘 — 세로 점선 */
+.sbc-col.is-today::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 40px;
+  left: 50%;
+  border-left: 1px dashed #b8aea0;
+  pointer-events: none;
+}
+.sbc-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 40px;
+  padding-top: 6px;
+  color: var(--sbc-muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.sbc-day small {
+  color: var(--sbc-faint);
+  font-size: 10px;
+}
+.sbc-col.is-sun .sbc-day {
+  color: #b91c1c;
+}
+.sbc-col.is-sat .sbc-day {
+  color: #8a5f0c;
+}
+.sbc-col.is-on .sbc-day {
+  color: var(--sbc-ink);
+  font-weight: 800;
+}
+.sbc-col.is-today .sbc-day small {
+  color: var(--sbc-ink);
+  font-weight: 700;
+}
+
+/* 고른 날짜 위 금액 말풍선 */
+.sbc-tip {
+  position: absolute;
+  bottom: calc(40px + 190px + 4px);
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--sbc-ink);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.sbc-tip em {
+  color: #f6d98a;
+  font-style: normal;
+}
+.sbc-col:first-of-type .sbc-tip {
+  left: 0;
+  transform: none;
+  animation: none;
+}
+.sbc-col:last-of-type .sbc-tip {
+  left: auto;
+  right: 0;
+  transform: none;
+  animation: none;
+}
+@keyframes sbc-tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sbc-tip {
+    animation: sbc-tip-in 0.18s ease-out;
+  }
+}
+
+/* 고른 날짜 줄 */
+.sbc-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: #faf6ec;
+  font-size: 13px;
+}
+.sbc-detail-date {
+  font-size: 15px;
+}
+.sbc-detail b {
+  margin-left: 4px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.sbc-detail b.is-sch {
+  color: #8a5f0c;
+}
+.sbc-detail b.is-late {
+  color: var(--sbc-late);
+}
+.sbc-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+.sbc-note {
+  margin: 10px 0 0;
+  color: var(--sbc-faint);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.sbc-note.is-late {
+  color: #b45309;
+}
+@media (max-width: 640px) {
+  .sbc-actions {
+    margin-left: 0;
+  }
+}

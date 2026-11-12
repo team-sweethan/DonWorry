@@ -4,7 +4,9 @@ import { Button, Empty, Modal, Pagination, Tag } from 'antd'
 import type { SettlementReport } from '../../api/finance'
 import { koreanTime } from './financeView'
 import './payout-ledger.css'
+import './settlement-experience.css'
 import { latestSelection } from './latestSelection'
+import { ArrowRightOutlined, CheckOutlined } from '@ant-design/icons'
 
 export type PayoutSummaryData = Pick<
   SettlementReport,
@@ -17,64 +19,149 @@ export type PayoutSummaryData = Pick<
 export function PayoutSummary({
   data,
   scheduledAmount,
+  nextScheduled,
+  onScheduledSelect,
+  resultsPending = false,
+  todayValue,
 }: {
   data: PayoutSummaryData
   scheduledAmount: number
+  nextScheduled?: { date: string; amount: number; count: number }
+  onScheduledSelect?: (date: string) => void
+  resultsPending?: boolean
+  todayValue?: string
 }) {
   return (
-    <>
-      <section aria-labelledby="payout-summary-title">
-        <h2 id="payout-summary-title" className="payout-summary-title">
-          조회 기간 정산 요약
-        </h2>
-        <div className="payout-summary-grid">
-          {[
-            {
-              label: '실제 지급액',
-              value: data.paidAmount,
-              note: '지급일 기준 · 환불 회수 차감 후',
-              variant: 'paid',
-            },
-            {
-              label: '정산 예정금',
-              value: scheduledAmount,
-              note: '예정일 기준 · 환불 회수 차감 전',
-              variant: 'original',
-            },
-            {
-              label: '환불 차감 전 지급액',
-              value: data.paidSettlementAmount,
-              note: '지급일 기준 · 환불 회수 차감 전',
-              variant: 'before-deduction',
-            },
-            {
-              label: '환불 회수 차감액',
-              value: data.refundDeductionAmount,
-              note: '선택 기간에 지급하면서 차감한 금액',
-              variant: 'deduction',
-            },
-          ].map(({ label, value, note, variant }) => (
-            <section key={variant} className={'payout-stat payout-stat-' + variant}>
-              <span>{label}</span>
-              <strong>
-                <FinanceMoney value={value} countUp />
-              </strong>
-              <small>{note}</small>
-            </section>
-          ))}
-        </div>
-        <p className="payout-summary-formula">
-          실제 지급액 = 환불 차감 전 지급액 − 환불 회수 차감액
-        </p>
-      </section>
-      <div className="payout-policy-note payout-current-recovery">
-        <span>현재 미회수 환불액</span>
-        <strong>
-          <FinanceMoney value={data.outstandingRecoveryAmount} />
-        </strong>
-        <small>조회 기간과 별개로, 현재 남아 있는 환불 회수 잔액</small>
+    <section
+      className="stl-overview ow-rise"
+      aria-labelledby="payout-summary-title"
+      inert={resultsPending}
+    >
+      <div className="stl-section-heading">
+        <h2 id="payout-summary-title">조회 기간 정산 요약</h2>
+        <span>지급 기록 기준</span>
       </div>
-    </>
+      <div className="stl-overview-grid">
+        <div className="stl-paid-hero">
+          <div className="stl-hero-eyebrow">
+            <span>
+              <CheckOutlined /> 지급 완료
+            </span>
+            <small>{data.payouts.length}건의 지급 기록</small>
+          </div>
+          <p>조회 기간에 지급된 금액</p>
+          <strong className="stl-hero-amount">
+            <FinanceMoney value={data.paidAmount} compact={false} countUp />
+          </strong>
+          <small className="stl-hero-footnote">
+            환불 회수 차감 후 금액 · 은행 이체 조회와는 별개
+          </small>
+          <div className="stl-settlement-art" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+        </div>
+        <div className="stl-upcoming">
+          {nextScheduled ? (
+            <>
+              <div className="stl-date-tile" aria-hidden="true">
+                <span>{Number(nextScheduled.date.slice(5, 7))}월</span>
+                <b>{Number(nextScheduled.date.slice(8))}</b>
+              </div>
+              <h3>
+                {nextScheduled.date === todayValue
+                  ? '오늘'
+                  : `${Number(nextScheduled.date.slice(5, 7))}월 ${Number(nextScheduled.date.slice(8))}일`}{' '}
+                <span>정산 예정</span>
+              </h3>
+              <strong className="stl-upcoming-amount">
+                <FinanceMoney value={nextScheduled.amount} compact={false} countUp />
+              </strong>
+              <div className="stl-upcoming-meta">
+                <p>조회 기간 내 가장 가까운 예정일 · 주문 {nextScheduled.count}건</p>
+                <Button
+                  type="text"
+                  className="stl-upcoming-action"
+                  onClick={() => onScheduledSelect?.(nextScheduled.date)}
+                >
+                  예정 내역 확인 <ArrowRightOutlined />
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3>다가오는 정산이 없어요</h3>
+              <p>선택한 기간에 오늘 이후의 정산 예정 내역이 없습니다.</p>
+            </>
+          )}
+          <div className="stl-scheduled-total">
+            <span>조회 기간 내 미완료 정산금</span>
+            <b>
+              <FinanceMoney value={scheduledAmount} />
+            </b>
+          </div>
+          <small>환불 회수 차감 전 금액 · 실제 지급액은 달라질 수 있어요.</small>
+        </div>
+      </div>
+      <details className="stl-calculation-details">
+        <summary>
+          지급액은 어떻게 계산되나요?<span>차감 내역 보기</span>
+        </summary>
+        <div className="stl-payment-equation" aria-label="실제 지급액 계산">
+          <div>
+            <span>환불 차감 전 지급액</span>
+            <b>
+              <FinanceMoney value={data.paidSettlementAmount} />
+            </b>
+          </div>
+          <span className="stl-equation-sign" aria-label="빼기">
+            −
+          </span>
+          <div className="stl-equation-deduction">
+            <span>환불 회수 차감액</span>
+            <b>
+              <FinanceMoney value={data.refundDeductionAmount} />
+            </b>
+          </div>
+          <span className="stl-equation-sign" aria-label="같음">
+            =
+          </span>
+          <div>
+            <span>실제 지급액</span>
+            <b>
+              <FinanceMoney value={data.paidAmount} />
+            </b>
+          </div>
+        </div>
+        {data.outstandingRecoveryAmount === 0 && (
+          <p className="stl-calculation-note">
+            현재 미회수 환불액 0원 · 남아 있는 환불 회수 잔액이 없어요.
+          </p>
+        )}
+      </details>
+      {data.outstandingRecoveryAmount > 0 && (
+        <div
+          className={`stl-recovery-strip${data.outstandingRecoveryAmount > 0 ? ' has-recovery' : ''}`}
+        >
+          <span>
+            현재 미회수 환불액{' '}
+            <b>
+              <FinanceMoney value={data.outstandingRecoveryAmount} />
+            </b>
+          </span>
+          <small>
+            {data.outstandingRecoveryAmount > 0
+              ? '조회 기간과 별개인 현재 잔액 · 이후 정산에서 회수될 수 있어요.'
+              : '현재 남아 있는 환불 회수 잔액이 없어요.'}
+          </small>
+        </div>
+      )}
+    </section>
   )
 }
 export function PayoutLedger({ payouts }: { payouts: SettlementReport['payouts'] }) {

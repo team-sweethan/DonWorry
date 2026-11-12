@@ -183,9 +183,274 @@
   font-weight: 800;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  /* 캘린더의 정산 표시가 날짜 칸 안에서 살짝 떠오른다 (달을 바꿀 때도 새 달에 한 번) */
-  .finance-surface .stl-day .stl-chip {
-    animation: ow-rise 0.45s var(--ow-ease-out) 0.25s backwards;
+/* ── 정산 내역 개편: 흐름 그래프를 캘린더 위로 ── */
+.finance-surface .stl-trend {
+  margin: 16px 0 20px;
+}
+.finance-surface .stl-trend h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+/* 작은 캘린더 — 날짜 고르기 전용. 금액은 그래프 · 날짜 패널이 맡고, 칸에는 종류 점만 찍는다 */
+.finance-surface .stl-calendar-layout {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  align-items: start;
+}
+.finance-surface .stl-calendar-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 0;
+}
+.finance-surface .stl-month {
+  justify-content: space-between;
+}
+.finance-surface .stl-month b {
+  min-width: 0;
+  flex: 1;
+  font-size: 16px;
+  text-align: left;
+  order: -1;
+}
+.finance-surface .stl-month button {
+  min-width: 30px;
+  height: 30px;
+  border-color: var(--fs-line);
+  border-radius: 8px;
+  color: var(--fs-muted);
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.finance-surface .stl-month button:hover:not(:disabled) {
+  border-color: #c9b98f;
+  color: var(--fs-ink);
+}
+.finance-surface .stl-legend {
+  gap: 10px;
+  font-size: 11px;
+}
+.finance-surface .stl-legend i.stl-dot {
+  margin-right: 4px;
+}
+.finance-surface .stl-calendar {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  padding: 0 10px 12px;
+}
+.finance-surface .stl-weekday {
+  padding: 4px 0 6px;
+  background: transparent;
+  font-size: 11px;
+  text-align: center;
+}
+.finance-surface .stl-day {
+  position: relative;
+  min-height: 0;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  /* 들어오는 돈이 많은 날일수록 진하다 (--stl-heat 0~1) */
+  background: color-mix(in srgb, #f3d98f calc(var(--stl-heat, 0) * 75%), #fff);
+}
+.finance-surface .stl-day:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px #c9b98f;
+}
+.finance-surface .stl-day.stl-out {
+  background: transparent;
+  opacity: 0.4;
+}
+.finance-surface .stl-day:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+.finance-surface .stl-day[aria-pressed='true'] {
+  background: var(--fs-ink);
+  box-shadow: none;
+}
+.finance-surface .stl-day[aria-pressed='true'] .stl-day-number {
+  color: #fff;
+}
+.finance-surface .stl-day-number {
+  width: auto;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+/* 오늘 — 숫자 아래 밑줄 */
+.finance-surface .stl-today .stl-day-number {
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+.finance-surface .stl-dots {
+  display: flex;
+  gap: 3px;
+  height: 5px;
+}
+.finance-surface .stl-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.finance-surface .stl-dot-done {
+  background: #30291f;
+}
+.finance-surface .stl-dot-sch {
+  background: #c99a2e;
+}
+.finance-surface .stl-dot-can {
+  background: #b8aea0;
+}
+.finance-surface .stl-dot-expense {
+  border-radius: 1px;
+  background: #c2410c;
+}
+.finance-surface .stl-day[aria-pressed='true'] .stl-dot-done {
+  background: #fff;
+}
+
+/* 날짜 패널 */
+.finance-surface .stl-detail {
+  position: sticky;
+  top: calc(var(--dw-header-height, 56px) + 16px);
+  align-self: start;
+}
+.finance-surface .stl-total b {
+  font-size: 24px;
+  font-weight: 800;
+}
+.finance-surface .stl-mix {
+  margin: 0 20px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--fs-line);
+}
+.finance-surface .stl-mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fs-soft);
+}
+.finance-surface .stl-mix ul {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.finance-surface .stl-mix li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fs-muted);
+}
+.finance-surface .stl-mix li b {
+  margin-left: auto;
+  color: var(--fs-ink);
+  font-weight: 700;
+}
+.finance-surface .stl-mix i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.finance-surface .stl-mix-done {
+  background: #30291f;
+}
+.finance-surface .stl-mix-sch {
+  background: #c99a2e;
+}
+.finance-surface .stl-mix-can {
+  background: #b8aea0;
+}
+.finance-surface .stl-mix-expense {
+  background: #c2410c;
+}
+.finance-surface .stl-more-button.ant-btn {
+  color: #8a5f0c;
+  font-weight: 600;
+}
+.finance-surface .stl-settlement-preview {
+  transition: background-color 0.15s ease;
+}
+.finance-surface .stl-settlement-preview:hover {
+  background: var(--fs-hover);
+}
+
+@keyframes stl-day-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
   }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stl-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* 달을 바꾸면 왼쪽 위에서 오른쪽 아래로 칸이 빠르게 채워진다 */
+  .finance-surface .stl-day-in {
+    animation: stl-day-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) var(--ow-delay, 0ms) backwards;
+  }
+  /* 캘린더 ↔ 목록을 오가면 새 화면이 살짝 올라오며 바뀐다 */
+  .finance-surface .stl-report,
+  .finance-surface .stl-calendar-layout {
+    animation: stl-panel-in 0.26s ease-out;
+  }
+  /* 날짜를 바꾸면 패널 내용이 살짝 올라오며 바뀐다 */
+  .finance-surface .stl-detail-body {
+    animation: stl-panel-in 0.22s ease-out;
+  }
+  .finance-surface .stl-day {
+    transition:
+      background-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+}
+
+/* 좁은 화면 — 작은 캘린더와 날짜 패널을 위아래로 쌓는다 (패널 고정도 푼다) */
+@media (max-width: 900px) {
+  .finance-surface .stl-calendar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .stl-detail {
+    position: static;
+  }
+}
+
+.finance-surface .stl-day-amount {
+  color: var(--fs-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.finance-surface .stl-day[aria-pressed='true'] .stl-day-amount {
+  color: #f6e3b4;
 }
