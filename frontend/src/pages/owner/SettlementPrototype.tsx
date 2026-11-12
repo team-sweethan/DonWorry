@@ -1,5 +1,6 @@
 import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
+import { calendarAmount } from './financeAmount'
 import { financeTotal, matchesFinanceQuery, chartMonthPeriod } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
 import type { PayoutSummaryData } from './PayoutLedger'
@@ -30,7 +31,6 @@ const labels: Record<Status, string> = {
   can: '정산 취소',
 }
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
-const shortWon = new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 })
 const weekdays = ['일', '월', '화', '수', '목', '금', '토']
 /** 캘린더 칸은 좁아서 짧은 이름을 쓴다. 색만으로 구분하지 않도록 글자를 남긴다 */
 const shortLabels: Record<Status, string> = { done: '완료', sch: '예정', can: '취소' }
@@ -122,6 +122,7 @@ export function SettlementPrototype({
     setExpensePage(1)
   }
   const reportRef = useRef<HTMLElement>(null)
+  const dayDetailRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (view === 'list')
       reportRef.current?.scrollIntoView({
@@ -296,7 +297,12 @@ export function SettlementPrototype({
       },
       ...(['sch', 'can'] as const).map((s) => {
         const es = inPeriod.filter((e) => e.status === s && key(e.date) === key(d))
-        return { key: s, label: shortLabels[s], amount: sum(es), has: es.length > 0 }
+        return {
+          key: s,
+          label: s === 'sch' && dateInput(d) < dateInput(today) ? '지급 대기' : shortLabels[s],
+          amount: sum(es),
+          has: es.length > 0,
+        }
       }),
       (() => {
         const es = scopedExpenses.filter((e) => e.date === dateInput(d))
@@ -316,6 +322,16 @@ export function SettlementPrototype({
     )
   const dailyPayouts = scopedPayouts.filter((p) => p.payoutDate === dateInput(selectedDate))
   const dailyScheduledAmount = sum(daily.filter((e) => e.status === 'sch'))
+  const hasPaidRecord = payoutData
+    ? dailyPayouts.length > 0
+    : daily.some((e) => e.status === 'done')
+  const scheduledFirst = dailyScheduledAmount > 0 && !hasPaidRecord
+  const calendarOrders = scheduledFirst ? daily.filter((e) => e.status === 'sch') : daily
+  const openCalendarOrders = () => {
+    openList()
+    setReportType('settlement')
+    setFilter(scheduledFirst ? 'sch' : 'all')
+  }
   const payoutRows = scopedPayouts.filter(
     (p) =>
       (!dateOnly || p.payoutDate === dateInput(selectedDate)) &&
@@ -421,7 +437,6 @@ export function SettlementPrototype({
         <PayoutSummary
           data={payoutData}
           todayValue={dateInput(today)}
-          scheduledAmount={sum(byStatus('sch'))}
           resultsPending={resultsPending}
           nextScheduled={
             nextScheduledDate
@@ -475,15 +490,18 @@ export function SettlementPrototype({
       >
         <div className="stl-section-heading stl-trend-heading">
           <div>
-            <span className="stl-eyebrow">SETTLEMENT FLOW</span>
-            <h2>날짜별로 보는 정산 흐름</h2>
-            <p>지급된 금액과 예정된 금액을 비교해 보세요.</p>
+            <h2>날짜별 정산</h2>
+            <p>막대를 선택하면 그날의 지급액과 예정액을 확인할 수 있어요.</p>
           </div>
+          {payoutData && monthSummary && (
+            <details className="stl-month-context">
+              <summary>이번 달 누적 지급액</summary>
+              <div>{monthSummary}</div>
+            </details>
+          )}
         </div>
-        {payoutData && monthSummary && (
-          <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
-        )}
         <SettlementBars
+          onCalendarSelect={() => setView('cal')}
           onOverdueSelect={() => {
             setDateOnly(false)
             setFilter('overdue')
@@ -522,9 +540,6 @@ export function SettlementPrototype({
             setView('list')
           }}
         />
-        <Button className="stl-calendar-link" type="text" onClick={() => setView('cal')}>
-          선택한 날짜를 캘린더로 보기 →
-        </Button>
       </section>
       <div
         id="stl-view-cal"
@@ -567,6 +582,10 @@ export function SettlementPrototype({
                 예정
               </span>
               <span>
+                <i className="stl-dot stl-dot-waiting" />
+                지급 대기
+              </span>
+              <span>
                 <i className="stl-dot stl-dot-can" />
                 취소
               </span>
@@ -600,79 +619,148 @@ export function SettlementPrototype({
                   aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일${summary ? `, ${summary}` : ''}`}
                   title={summary || undefined}
                   aria-pressed={key(d) === key(selectedDate)}
-                  onClick={() => setSelected(d)}
+                  aria-controls="stl-selected-day-detail"
+                  onClick={() => {
+                    setSelected(d)
+                    if (window.matchMedia('(max-width: 1100px)').matches)
+                      dayDetailRef.current?.scrollIntoView({
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                          ? 'instant'
+                          : 'smooth',
+                        block: 'start',
+                      })
+                  }}
                   className={`stl-day stl-day-in ${d.getMonth() !== month.getMonth() ? 'stl-out' : ''} ${key(d) === key(today) ? 'stl-today' : ''}`}
                 >
-                  <span className={`stl-day-number stl-week-${d.getDay()}`}>{d.getDate()}</span>
-                  {/* 그날 들어오는 돈(지급 + 예정)을 짧게 한 줄. 0원 지급일도 0으로 보인다 */}
-                  {kinds.some((k) => k.key === 'done' || k.key === 'sch') && (
-                    <span className="stl-day-amount" aria-hidden="true">
-                      {shortWon.format(inflows.get(key(d)) ?? 0)}
+                  <span className="stl-day-top">
+                    <span className={`stl-day-number stl-week-${d.getDay()}`}>{d.getDate()}</span>
+                    <span className="stl-day-markers" aria-hidden="true">
+                      {key(d) === key(today) && <small>오늘</small>}
+                      {kinds.some((k) => k.key === 'expense') && (
+                        <i className="stl-dot stl-dot-expense" />
+                      )}
                     </span>
-                  )}
-                  <span className="stl-dots" aria-hidden="true">
-                    {kinds.map((k) => (
-                      <i key={k.key} className={`stl-dot stl-dot-${k.key}`} />
-                    ))}
+                  </span>
+                  <span className="stl-day-money-lines" aria-hidden="true">
+                    {kinds
+                      .filter((k) => k.key !== 'expense')
+                      .map((k) => (
+                        <span
+                          key={k.key}
+                          className={`stl-day-money-line stl-kind-${k.key}${k.key === 'sch' && dateInput(d) < dateInput(today) ? ' is-waiting' : ''}`}
+                        >
+                          <small>
+                            {k.label === '지급 대기'
+                              ? '대기'
+                              : k.key === 'done'
+                                ? payoutData
+                                  ? '지급'
+                                  : '완료'
+                                : k.label}
+                          </small>
+                          <b>{calendarAmount(k.amount)}</b>
+                        </span>
+                      ))}
                   </span>
                 </button>
               )
             })}
           </div>
+          <div className="stl-calendar-caption">
+            금액은 반올림해 표시해요.<span>날짜를 누르면 정확한 금액을 볼 수 있어요.</span>
+          </div>
         </section>
-        <section className="stl-panel stl-detail">
-          <h2>
-            {selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 (
-            {weekdays[selectedDate.getDay()]})<small>주문 {daily.length}건</small>
-          </h2>
+        <section
+          id="stl-selected-day-detail"
+          ref={dayDetailRef}
+          className="stl-panel stl-detail"
+          aria-labelledby="stl-selected-day-title"
+        >
+          <div className="stl-selected-heading">
+            <div className="stl-detail-date-badge" aria-hidden="true">
+              <span>{selectedDate.getMonth() + 1}월</span>
+              <b>{selectedDate.getDate()}</b>
+            </div>
+            <div>
+              <span className="stl-selected-label">선택한 날짜</span>
+              <h2 id="stl-selected-day-title">
+                {selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 (
+                {weekdays[selectedDate.getDay()]})
+              </h2>
+            </div>
+          </div>
           {/* 날짜를 바꾸면 패널 내용이 새로 그려져 살짝 올라오며 바뀐다 */}
           <div key={key(selectedDate)} className="stl-detail-body">
-            <div className="stl-day-money">
-              <div
-                className="stl-total"
-                title={
-                  payoutData
-                    ? '환불 회수 차감 후 실제 지급 기록의 합계입니다. 은행 이체 조회와는 별개입니다.'
-                    : '수수료 차감 후 주문별 정산금 합계입니다.'
-                }
-              >
-                <span>{payoutData ? '이날 실제 지급액' : '이날 정산금 합계'}</span>
-                <b>
-                  <FinanceMoney
-                    value={
-                      payoutData
-                        ? dailyPayouts.reduce((n, p) => n + p.payoutAmount, 0)
-                        : sum(daily.filter((e) => e.status !== 'can'))
-                    }
-                    countUp
-                  />
-                </b>
-              </div>
+            <div className={`stl-day-money${scheduledFirst ? ' is-scheduled-first' : ''}`}>
+              {!scheduledFirst && (
+                <div
+                  className="stl-total"
+                  title={
+                    payoutData
+                      ? '환불 회수 차감 후 실제 지급 기록의 합계입니다. 은행 이체 조회와는 별개입니다.'
+                      : '수수료 차감 후 주문별 정산금 합계입니다.'
+                  }
+                >
+                  <span>{payoutData ? '이날 실제 지급액' : '이날 정산금 합계'}</span>
+                  <b>
+                    <FinanceMoney
+                      value={
+                        payoutData
+                          ? dailyPayouts.reduce((n, p) => n + p.payoutAmount, 0)
+                          : sum(daily.filter((e) => e.status !== 'can'))
+                      }
+                      compact={false}
+                    />
+                  </b>
+                  {payoutData && (
+                    <small className="stl-paid-day-caption">
+                      {dailyPayouts.length
+                        ? `지급 기록 ${dailyPayouts.length}건`
+                        : '지급 완료 내역 없음'}
+                    </small>
+                  )}
+                  {dailyPayouts.length > 0 && (
+                    <Button
+                      className="stl-payout-link"
+                      type="text"
+                      size="small"
+                      onClick={() => {
+                        openList()
+                        setReportType('payout')
+                      }}
+                    >
+                      지급 명세 보기 →
+                    </Button>
+                  )}
+                </div>
+              )}
               {dailyScheduledAmount > 0 && (
                 <div
                   className={`stl-day-scheduled${dateInput(selectedDate) < dateInput(today) ? ' is-overdue' : ''}`}
                 >
                   <span>
                     {dateInput(selectedDate) < dateInput(today)
-                      ? '예정일 지난 정산금'
+                      ? '지급 대기 금액'
                       : '이날 정산 예정금'}
                   </span>
                   <b>
-                    <FinanceMoney value={dailyScheduledAmount} countUp />
+                    <FinanceMoney value={dailyScheduledAmount} compact={false} />
                   </b>
-                  <small>환불 회수 차감 전</small>
+                  <small>
+                    주문 {daily.filter((e) => e.status === 'sch').length}건의 정산금 합계
+                  </small>
                 </div>
               )}
             </div>
+            {scheduledFirst && (
+              <p className="stl-day-status-note">
+                {dateInput(selectedDate) < dateInput(today)
+                  ? '정산 예정일 이후 아직 지급 완료된 내역이 없습니다.'
+                  : '아직 지급 완료된 내역이 없습니다.'}
+              </p>
+            )}
             <DayMix
               parts={[
-                {
-                  key: 'done',
-                  label: payoutData ? '지급 완료' : '정산 완료',
-                  amount: payoutData
-                    ? dailyPayouts.reduce((n, p) => n + p.payoutAmount, 0)
-                    : sum(daily.filter((e) => e.status === 'done')),
-                },
                 {
                   key: 'can',
                   label: '정산 취소',
@@ -680,67 +768,68 @@ export function SettlementPrototype({
                 },
               ]}
             />
-            <div className="stl-summary-actions">
-              <Button type="primary" block onClick={openList}>
-                이날 정산 내역 보기 · {daily.length + dailyPayouts.length}건
-              </Button>
-              <p>주문번호 검색 · 상태별 조회 · 20건씩 보기</p>
-            </div>
             <div className="stl-preview-heading">
               <div className="stl-preview-label">
-                <h3>주문별 정산 · {daily.length}건</h3>
-                <small>최신순, 최대 2건</small>
+                <h3>
+                  {scheduledFirst
+                    ? dateInput(selectedDate) < dateInput(today)
+                      ? '지급 대기 주문'
+                      : '정산 예정 주문'
+                    : '이날 주문'}
+                </h3>
+                <small>
+                  {calendarOrders.length}건 중 {Math.min(calendarOrders.length, 2)}건 표시
+                </small>
               </div>
-              <Button
-                size="small"
-                type="text"
-                className="stl-more-button"
-                aria-label="주문별 정산 전체 내역"
-                onClick={() => {
-                  openList()
-                  setReportType('settlement')
-                }}
-              >
-                {daily.length}건 모두 보기 <span aria-hidden="true">→</span>
-              </Button>
             </div>
-            {daily.slice(0, 2).map((e) => (
+            {calendarOrders.slice(0, 2).map((e) => (
               <article key={e.id} className="stl-settlement-preview">
                 <div className="stl-detail-title">
-                  <b className="stl-preview-order-id" title={e.orderId ?? String(e.id)}>
-                    {e.orderId && e.orderId.length > 16
-                      ? `${e.orderId.slice(0, 12)}…`
-                      : (e.orderId ?? e.id)}
-                  </b>
-                  <span className={`stl-chip stl-${e.status}`}>{labels[e.status]}</span>
-                </div>
-                {e.orderItems?.length ? (
-                  <div className="stl-order-product-summary">
-                    <p>{orderSummary(e.orderItems)}</p>
-                    <small>
-                      {e.orderItems.length}종 · 총 {orderQuantity(e.orderItems)}개
+                  <div className="stl-order-identity">
+                    <b className="stl-product-title">
+                      {e.orderItems?.length ? orderSummary(e.orderItems) : '주문 상품 정보 없음'}
+                    </b>
+                    <small className="stl-preview-order-id" title={e.orderId ?? String(e.id)}>
+                      주문번호 {e.orderId ?? e.id}
                     </small>
                   </div>
-                ) : null}
+                  <span className={`stl-chip stl-${e.status}`}>
+                    {e.status === 'sch' && dateInput(e.date) < dateInput(today)
+                      ? '지급 대기'
+                      : labels[e.status]}
+                  </span>
+                </div>
                 <div className="stl-detail-title">
-                  <b>
-                    <FinanceMoney value={net(e)} />
-                  </b>
+                  <div className="stl-order-net">
+                    <small>이 주문의 정산금</small>
+                    <b>
+                      <FinanceMoney value={net(e)} compact={false} />
+                    </b>
+                  </div>
                   <Button
                     size="small"
+                    type="text"
                     className="stl-preview-detail-button"
                     onClick={() => setDetail(e)}
                   >
-                    상세 보기 <span aria-hidden="true">›</span>
+                    주문 상세 <span aria-hidden="true">›</span>
                   </Button>
                 </div>
               </article>
             ))}
-            {daily.length > 2 && (
-              <p className="stl-preview-note">
-                외 {daily.length - 2}건은 전체 보기에서 확인하세요.
-              </p>
+            {!calendarOrders.length && (
+              <p className="stl-preview-note">이날 조회된 주문별 정산 내역이 없습니다.</p>
             )}
+            <div className="stl-summary-actions">
+              <Button
+                type="primary"
+                block
+                disabled={!calendarOrders.length}
+                onClick={openCalendarOrders}
+              >
+                주문 {calendarOrders.length}건 전체 보기 <span aria-hidden="true">→</span>
+              </Button>
+            </div>
             <details className="stl-day-expenses">
               <summary>
                 이날 지출도 함께 보기 <span>{dailyExpenses.length}건</span>
@@ -942,7 +1031,7 @@ export function SettlementPrototype({
                     {status === 'all'
                       ? '전체'
                       : status === 'overdue'
-                        ? '예정일 지남'
+                        ? '지급 대기'
                         : labels[status]}{' '}
                     <span>
                       {
@@ -961,7 +1050,11 @@ export function SettlementPrototype({
               </div>
               <div className="stl-report-caption">
                 <b>정산 내역 {rows.length}건</b>
-                <span>금액은 수수료 차감 후 기준 · 원금·수수료는 상세 보기</span>
+                <span>
+                  {filter === 'overdue'
+                    ? '정산 예정일 이후 아직 지급되지 않은 주문입니다.'
+                    : '금액은 수수료 차감 후 기준 · 원금·수수료는 상세 보기'}
+                </span>
               </div>
               <div className="stl-table-scroll">
                 <table className="stl-readable-table">
@@ -1231,7 +1324,7 @@ function ReportPagination({
   )
 }
 
-/** 날짜 패널 — 그날 돈의 구성(지급 완료 · 정산 예정 · 정산 취소 · 지출)을 막대 하나와 금액으로. 0원인 칸은 그리지 않는다 */
+// 날짜 상세에서 취소 금액 등 보조 항목을 표시한다.
 function DayMix({ parts }: { parts: { key: string; label: string; amount: number }[] }) {
   const shown = parts.filter((p) => p.amount > 0)
   if (!shown.length) return null

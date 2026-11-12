@@ -53,15 +53,15 @@
   flex-wrap: wrap;
   gap: 12px 20px;
   margin: 0 0 20px;
-  padding: 16px 18px;
-  border: 1px solid #f0d7bf;
+  padding: 10px 14px;
+  border: 1px solid #e5d7b6;
   border-radius: 12px;
-  background: #fff7ee;
-  color: #9a4c20;
+  background: #faf6eb;
+  color: #816024;
 }
 .sbc-overdue-notice > div {
-  display: grid;
-  grid-template-columns: auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 6px 14px;
   min-width: 0;
@@ -70,19 +70,52 @@
   font-size: 12px;
 }
 .sbc-overdue-notice strong {
-  font-size: 22px;
+  font-size: 18px;
   letter-spacing: -0.5px;
+}
+.sbc-overdue-notice > div > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.stl-month-context {
+  position: relative;
+  color: #81735b;
+  font-size: 11px;
+}
+.stl-month-context > summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.stl-month-context > div {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  width: 260px;
+  max-width: 75vw;
+  padding: 16px;
+  border: 1px solid #e8dfce;
+  border-radius: 10px;
+  background: #fffdf8;
+  box-shadow: 0 6px 20px #5c451012;
+}
+.stl-month-context strong {
+  color: #62543e;
+  font-size: 18px;
 }
 .sbc-overdue-notice small {
   grid-column: 1 / -1;
-  color: #846a54;
+  color: #81735b;
   font-size: 11px;
   line-height: 1.6;
 }
 .sbc-overdue-notice .ant-btn {
-  border-color: #e3c4a1;
+  border-color: #dfcfaa;
   background: #fffdf9;
-  color: #9a4c20;
+  color: #816024;
   font-size: 12px;
 }
 .stl-calculation-details .stl-payment-equation {
@@ -263,6 +296,9 @@
 }
 .stl-upcoming {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
   padding: 22px 26px;
   border: 1px solid #e7ddc8;
@@ -366,20 +402,45 @@
 .stl-upcoming-meta > p {
   margin: 0;
 }
-.stl-scheduled-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid #e8ddc1;
-  font-size: 12px;
+.stl-equation-deduction.is-zero b {
+  color: #756b5b;
 }
-.stl-scheduled-total b {
-  max-width: 100%;
-  font-size: 14px;
+.stl-calculation-details .stl-calculation-note {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.stl-refund-help {
+  margin: 0 18px 16px;
+  border-top: 1px dashed #e8dfce;
+  padding-top: 12px;
+}
+.stl-refund-help > summary {
+  color: #886211;
+  font-size: 12px;
+  cursor: pointer;
+}
+.stl-refund-help > summary:focus-visible {
+  outline: 2px solid #886211;
+  outline-offset: 3px;
+}
+.stl-refund-help > div {
+  max-width: 760px;
+  color: #756b5b;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.stl-refund-help p {
+  margin: 12px 0;
+}
+.stl-refund-example {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f5efdf;
+  color: #735525;
+}
+.stl-refund-help small {
+  display: block;
+  font-size: 11px;
 }
 .stl-payment-equation {
   display: grid;
@@ -473,14 +534,257 @@
   align-content: start;
 }
 .finance-surface .stl-prototype .stl-day {
-  height: 76px;
-  gap: 8px;
+  height: 90px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: 11px;
+  background: color-mix(in srgb, #ecd49a calc(var(--stl-heat, 0) * 45%), #fdfbf6);
+}
+.finance-surface .stl-prototype .stl-day.stl-out {
+  background: transparent;
+}
+.finance-surface .stl-prototype .stl-day[aria-pressed='true'] {
+  background: #332d24;
+  box-shadow: inset 0 0 0 1px #9b8048;
+}
+.stl-day-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  min-height: 15px;
+}
+.stl-day-markers {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stl-day-markers small {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f0e4c5;
+  color: #876424;
+  font-size: 9px;
+  line-height: 1.4;
+}
+.stl-day-money-lines {
+  display: grid;
+  gap: 3px;
+}
+.stl-day-money-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  color: #4c4030;
+  font-size: 11px;
+  line-height: 1.25;
+}
+.stl-day-money-line small {
+  flex-shrink: 0;
+  color: #8c806b;
+  font-size: 9px;
+}
+.stl-day-money-line b {
+  min-width: 0;
+  font-weight: 650;
+  white-space: nowrap;
+  letter-spacing: -0.3px;
+}
+.stl-day-money-line.stl-kind-sch {
+  color: #8a6518;
+}
+.stl-day-money-line.stl-kind-can {
+  color: #9a9080;
+}
+.stl-day-money-line.is-waiting small {
+  color: #9b7531;
+}
+.stl-day[aria-pressed='true'] .stl-day-money-line {
+  color: #fff6e0;
+}
+.stl-day[aria-pressed='true'] .stl-day-money-line small {
+  color: #cdbd9c;
+}
+.stl-day[aria-pressed='true'] .stl-kind-sch {
+  color: #edcd80;
+}
+.stl-day[aria-pressed='true'] .stl-day-markers small {
+  background: #6c5833;
+  color: #f8e3ab;
+}
+.stl-day[aria-pressed='true'] .stl-kind-can {
+  color: #b8aa8e;
+}
+.finance-surface .stl-dot-waiting {
+  background: repeating-linear-gradient(-45deg, #a57d38 0 2px, #eee1c7 2px 4px);
+}
+.stl-calendar-caption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 24px 20px;
+  color: #8b806c;
+  font-size: 11px;
+}
+.stl-calendar-caption > span {
+  color: #a09581;
+}
+.stl-selected-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #eee6d8;
+}
+.stl-detail-date-badge {
+  position: relative;
+  display: grid;
+  width: 42px;
+  flex-shrink: 0;
+  border: 1px solid #decdab;
+  border-radius: 8px;
+  background: #fffcf5;
+  text-align: center;
+  overflow: hidden;
+  box-shadow: 0 2px 0 #eee4cf;
+}
+.stl-detail-date-badge > span {
+  background: #f1e7ce;
+  color: #8a6b32;
+  font-size: 9px;
+  line-height: 16px;
+}
+.stl-detail-date-badge > b {
+  color: #5c4830;
+  font-size: 21px;
+  line-height: 28px;
+}
+.stl-selected-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #91836b;
+  font-size: 10px;
+}
+.stl-selected-label::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: #b08a3a;
+}
+.finance-surface .stl-prototype .stl-selected-heading h2 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 16px;
+}
+.stl-selected-count {
+  margin-left: auto;
+  color: #81735b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.stl-paid-day-caption {
+  color: #91836f;
+  font-size: 10px;
+}
+.finance-surface .stl-prototype .stl-day-money .stl-total,
+.stl-day-scheduled {
+  padding: 20px;
+  gap: 9px;
+}
+.stl-day-scheduled.is-overdue {
+  background: #f6f0df;
+  color: #8a6b32;
+}
+.stl-prototype .stl-detail .stl-chip {
+  font-size: 10px;
+  border-radius: 5px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.stl-prototype .stl-detail .stl-chip.stl-sch {
+  background: #f7ecd0;
+  color: #8a6518;
+}
+.stl-prototype .stl-detail .stl-preview-heading {
+  margin: 18px 20px 12px;
+  padding: 0;
+}
+.stl-prototype .stl-detail .stl-preview-label h3 {
+  font-size: 13px;
+}
+.stl-prototype .stl-detail .stl-preview-label > small {
+  color: #a0937c;
+  font-size: 10px;
+}
+.stl-prototype .stl-detail article.stl-settlement-preview {
+  margin: 0 14px 8px;
+  padding: 14px;
+  border: 1px solid #efe9dd;
+  border-radius: 10px;
+  background: #fffdf9;
+}
+.stl-order-identity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.stl-order-identity .stl-product-title {
+  color: #43392b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.stl-prototype .stl-order-identity .stl-preview-order-id {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #a0937c;
+  font-size: 10px;
+  font-weight: 400;
+}
+.stl-prototype .stl-settlement-preview .stl-detail-title {
+  align-items: flex-start;
+  gap: 12px;
+}
+.stl-prototype .stl-settlement-preview .stl-detail-title + .stl-detail-title {
+  align-items: center;
+  margin-top: 12px;
+}
+.stl-prototype .stl-detail .stl-preview-detail-button {
+  color: #8a6518;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.stl-prototype .stl-detail .stl-summary-actions {
+  margin: 16px 20px 18px;
+  padding: 0;
+}
+.stl-prototype .stl-detail .stl-summary-actions .ant-btn {
+  height: 38px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.stl-prototype .stl-detail .stl-preview-note {
+  margin: 10px 20px;
+  font-size: 10px;
+  color: #9b8d74;
 }
 .finance-surface .stl-prototype .stl-day-amount {
   font-size: 12px;
 }
 .finance-surface .stl-prototype .stl-detail {
   overflow: hidden;
+  scroll-margin-top: calc(var(--dw-header-height, 56px) + 16px);
 }
 .finance-surface .stl-prototype .stl-total {
   margin: 0;
@@ -492,6 +796,45 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   background: #fcfaf5;
   border-bottom: 1px solid #f0e9da;
+}
+.finance-surface .stl-prototype .stl-day-money.is-scheduled-first {
+  grid-template-columns: minmax(0, 1fr);
+}
+.stl-day-money.is-scheduled-first .stl-day-scheduled {
+  padding: 22px 24px;
+}
+.stl-day-money.is-scheduled-first .stl-day-scheduled > b {
+  font-size: 32px;
+}
+.stl-day-money.is-scheduled-first .stl-day-scheduled > small {
+  font-size: 12px;
+  color: #8a7040;
+}
+.stl-day-status-note {
+  margin: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid #eee6d8;
+  color: #91836b;
+  font-size: 11px;
+}
+.stl-order-net {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.stl-order-net > small {
+  color: #a0937c;
+  font-size: 10px;
+}
+.stl-order-net > b {
+  color: #43392b;
+  font-size: 15px;
+}
+.stl-prototype .stl-detail .stl-payout-link {
+  height: auto;
+  padding: 0;
+  color: #886211;
+  font-size: 11px;
 }
 .finance-surface .stl-prototype .stl-day-money .stl-total {
   display: flex;
@@ -524,11 +867,11 @@
   color: #817663;
 }
 .stl-day-scheduled.is-overdue {
-  background: #fff2e8;
-  color: #b45328;
+  background: #f6f0df;
+  color: #8a6b32;
 }
 .finance-surface .stl-prototype .stl-total b {
-  font-size: 32px;
+  font-size: 28px;
 }
 .stl-prototype .stl-mix {
   border-bottom-style: dashed;
@@ -544,7 +887,81 @@
   background: linear-gradient(#e7c56d, #bd8d26);
 }
 .stl-prototype .sbc-col.is-on {
-  background: linear-gradient(#f6e8c500, #f6e8c5);
+  background: transparent;
+}
+.stl-prototype .sbc-col.is-on .sbc-day {
+  border-radius: 7px;
+  background: transparent;
+  color: #60400d;
+}
+.stl-prototype .sbc-col.is-on .sbc-day small {
+  color: #8a6518;
+}
+.stl-prototype .sbc-col.is-on .sbc-bar {
+  opacity: 1;
+}
+.stl-prototype .sbc-frame {
+  border-top: 1px solid #eee8dc;
+  background: linear-gradient(#fcfaf6, #fff);
+  border-radius: 12px 12px 0 0;
+}
+.sbc .sbc-bars {
+  position: relative;
+  gap: 3px;
+}
+.sbc .sbc-bar {
+  width: min(22px, 34%);
+  border-radius: 4px 4px 0 0;
+}
+.sbc-empty-mark {
+  position: absolute;
+  bottom: 2px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #d9d0be;
+}
+.sbc-footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 12px;
+}
+.sbc-footer > .ant-btn {
+  padding: 4px 0;
+  height: auto;
+  color: #886211;
+  font-size: 11px;
+}
+.sbc-policy {
+  flex: 1;
+  min-width: min(240px, 100%);
+  color: #81735b;
+  font-size: 11px;
+}
+.sbc-policy > summary {
+  cursor: pointer;
+}
+.sbc-policy p {
+  max-width: 760px;
+  margin: 10px 0 0;
+  line-height: 1.8;
+}
+.sbc-policy > summary:focus-visible,
+.stl-month-context > summary:focus-visible {
+  outline: 2px solid #886211;
+  outline-offset: 3px;
+}
+.sbc .sbc-date-step {
+  width: 22px;
+  min-width: 22px;
+  height: 28px;
+  padding: 0;
+  color: #8a7040;
+  font-size: 10px;
 }
 .stl-prototype .sbc-detail {
   display: grid;
@@ -624,6 +1041,18 @@
   color: #81735b;
   font-size: 11px;
 }
+.sbc-focus-metrics > div > span::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: #544734;
+}
+.sbc-focus-metrics > div + div > span::before {
+  background: #c99a2e;
+}
 .sbc-focus-metrics strong {
   min-width: 0;
   color: #30291f;
@@ -635,7 +1064,7 @@
   color: #8a5f0c;
 }
 .sbc-focus-metrics strong.is-late {
-  color: #b45328;
+  color: #98702e;
 }
 .stl-prototype .sbc-actions {
   margin: 0;
@@ -646,7 +1075,34 @@
   border-radius: 9px;
   font-size: 12px;
 }
-@media (max-width: 680px) {
+@container (min-width: 920px) {
+  .stl-prototype .sbc-detail {
+    grid-template-columns: minmax(310px, 1fr) minmax(260px, 1.2fr) auto;
+    gap: 24px;
+  }
+  .sbc-focus-main {
+    display: contents;
+  }
+  .sbc-focus-date-row {
+    margin: 0;
+    gap: 5px;
+  }
+  .sbc-focus-label {
+    flex-basis: 100%;
+    margin: 0 0 3px;
+  }
+  .sbc-focus-metrics {
+    max-width: none;
+  }
+  .sbc .sbc-focus-date {
+    width: 132px;
+    padding-inline: 5px;
+  }
+  .sbc .sbc-focus-date input {
+    font-size: 13px;
+  }
+}
+@container (max-width: 680px) {
   .stl-prototype .sbc-detail {
     grid-template-columns: minmax(0, 1fr);
     gap: 18px;
@@ -701,7 +1157,27 @@
     transform: translateY(-5px) rotate(5deg);
   }
 }
+@keyframes stl-selected-halo {
+  0% {
+    box-shadow: 0 0 0 0 #b08a3a60;
+  }
+  100% {
+    box-shadow: 0 0 0 5px #b08a3a00;
+  }
+}
 @media (prefers-reduced-motion: no-preference) {
+  .stl-selected-label::before {
+    animation: stl-selected-halo 2.4s ease-out infinite;
+  }
+  .finance-surface .stl-prototype .stl-day {
+    transition:
+      background-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+  .finance-surface .stl-prototype .stl-day:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
   .stl-settlement-art::after {
     content: '';
     position: absolute;
@@ -810,8 +1286,20 @@
     gap: 3px;
   }
   .finance-surface .stl-prototype .stl-day {
-    height: 62px;
-    gap: 5px;
+    height: 86px;
+    gap: 6px;
+    padding: 7px 6px;
+  }
+  .stl-day-money-line {
+    font-size: 10px;
+    justify-content: flex-start;
+  }
+  .stl-day-money-line small {
+    display: none;
+  }
+  .stl-day-markers small {
+    padding-inline: 2px;
+    font-size: 8px;
   }
   .finance-surface .stl-prototype .stl-day-amount {
     font-size: 10px;

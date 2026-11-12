@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { financeAmount } from '../src/pages/owner/financeAmount.ts'
+import { financeAmount, calendarAmount } from '../src/pages/owner/financeAmount.ts'
+
+// 달력의 만 원 단위는 정수로 반올림하고 오차가 있으면 약을 붙인다.
+test('calendarAmount_whenRounded_keepsUnitsShortAndMarksApproximation', () => {
+  assert.equal(calendarAmount(6938000), '약 694만')
+  assert.equal(calendarAmount(6940000), '694만')
+  assert.equal(calendarAmount(33283200), '약 3328만')
+  assert.equal(calendarAmount(100000), '10만')
+  assert.equal(calendarAmount(0), '0원')
+  assert.equal(calendarAmount(9999), '9,999원')
+  assert.equal(calendarAmount(10000), '1만')
+  assert.equal(calendarAmount(99995000), '약 1억')
+  assert.equal(calendarAmount(159000000), '약 1.6억')
+  assert.equal(calendarAmount(160000000), '1.6억')
+  assert.equal(calendarAmount(-6938000), '약 -694만')
+  assert.throws(() => calendarAmount(Number.MAX_SAFE_INTEGER + 1), RangeError)
+})
 
 test('financeAmount preserves exact won amounts below ten million', () => {
   for (const value of [0, -10001, 2186880, 9999999]) {

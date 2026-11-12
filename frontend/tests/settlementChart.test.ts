@@ -1,7 +1,44 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { settlementDays, settlementSeries } from '../src/pages/owner/settlementChart.ts'
+import {
+  settlementDays,
+  settlementSeries,
+  settlementChartWindow,
+  settlementChartScale,
+} from '../src/pages/owner/settlementChart.ts'
 import { matchesSettlementStatus } from '../src/pages/owner/settlementStatus.ts'
+
+// 앞뒤의 빈 날짜만 접고, 중간의 0원 날짜·0원 지급 기록·선택한 날짜는 보존한다.
+test('settlementChartWindow_whenEdgesAreEmpty_preservesTimeSpacingAndZeroPayout', () => {
+  const days = settlementDays('2026-11-01', '2026-11-30', [
+    { date: '2026-11-05', amount: 100, kind: 'COMPLETED' },
+    { date: '2026-11-08', amount: 0, kind: 'COMPLETED' },
+    { date: '2026-11-10', amount: 200, kind: 'SCHEDULED' },
+  ])
+  const focused = settlementChartWindow(days, '2026-11-06', '2026-11-06')
+  assert.equal(focused[0].date, '2026-11-04')
+  assert.equal(focused.at(-1)!.date, '2026-11-11')
+  assert.equal(focused.find((d) => d.date === '2026-11-07')!.completedAmount, 0)
+  assert.equal(focused.find((d) => d.date === '2026-11-08')!.hasPayout, true)
+  const selectedOutside = settlementChartWindow(days, '2026-11-25', '2026-11-06')
+  assert.equal(selectedOutside.at(-1)!.date, '2026-11-26')
+  assert.equal(selectedOutside.find((d) => d.date === '2026-11-25')?.scheduledAmount, 0)
+  const zeroOnly = settlementDays('2026-11-01', '2026-11-10', [
+    { date: '2026-11-05', amount: 0, kind: 'COMPLETED' },
+  ])
+  assert.equal(settlementChartWindow(zeroOnly, '2026-11-05', '2026-11-05').length, 3)
+  assert.deepEqual(settlementChartWindow([], '', '2026-11-06'), [])
+  const emptyDays = settlementDays('2026-11-01', '2026-11-30', [])
+  assert.deepEqual(settlementChartWindow(emptyDays, '2026-11-06', '2026-11-06'), emptyDays)
+})
+
+// 3,328만 원의 막대에 5,000만 원 눈금을 쓰지 않고, 같은 0원 기준에서 상단 여백을 줄인다.
+test('settlementChartScale_whenMaximumBetweenTicks_usesCloserCeilingWithZeroBaseline', () => {
+  assert.deepEqual(settlementChartScale(33283200), { step: 10000000, ceiling: 40000000 })
+  assert.deepEqual(settlementChartScale(0), { step: 1, ceiling: 1 })
+  assert.deepEqual(settlementChartScale(1), { step: 1, ceiling: 1 })
+  assert.deepEqual(settlementChartScale(100), { step: 25, ceiling: 100 })
+})
 
 // 예정일 지남은 오늘 이전의 미완료 정산만 포함하며 완료·취소·오늘 예정은 포함하지 않는다.
 test('settlementStatus_whenOverdueRequested_keepsOnlyPastScheduledEntries', () => {

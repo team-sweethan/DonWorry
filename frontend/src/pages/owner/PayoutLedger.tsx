@@ -18,14 +18,12 @@ export type PayoutSummaryData = Pick<
 >
 export function PayoutSummary({
   data,
-  scheduledAmount,
   nextScheduled,
   onScheduledSelect,
   resultsPending = false,
   todayValue,
 }: {
   data: PayoutSummaryData
-  scheduledAmount: number
   nextScheduled?: { date: string; amount: number; count: number }
   onScheduledSelect?: (date: string) => void
   resultsPending?: boolean
@@ -54,7 +52,14 @@ export function PayoutSummary({
             <FinanceMoney value={data.paidAmount} compact={false} countUp />
           </strong>
           <small className="stl-hero-footnote">
-            환불 회수 차감 후 금액 · 은행 이체 조회와는 별개
+            {data.refundDeductionAmount > 0 ? (
+              <>
+                정산 후 환불된 주문의 정산금{' '}
+                <FinanceMoney value={data.refundDeductionAmount} compact={false} /> 차감
+              </>
+            ) : (
+              '정산 후 환불로 차감된 금액 없음'
+            )}
           </small>
           <div className="stl-settlement-art" aria-hidden="true">
             <i />
@@ -83,7 +88,7 @@ export function PayoutSummary({
                 <FinanceMoney value={nextScheduled.amount} compact={false} countUp />
               </strong>
               <div className="stl-upcoming-meta">
-                <p>조회 기간 내 가장 가까운 예정일 · 주문 {nextScheduled.count}건</p>
+                <p>주문 {nextScheduled.count}건의 정산 예정액</p>
                 <Button
                   type="text"
                   className="stl-upcoming-action"
@@ -99,13 +104,6 @@ export function PayoutSummary({
               <p>선택한 기간에 오늘 이후의 정산 예정 내역이 없습니다.</p>
             </>
           )}
-          <div className="stl-scheduled-total">
-            <span>조회 기간 내 미완료 정산금</span>
-            <b>
-              <FinanceMoney value={scheduledAmount} />
-            </b>
-          </div>
-          <small>환불 회수 차감 전 금액 · 실제 지급액은 달라질 수 있어요.</small>
         </div>
       </div>
       <details className="stl-calculation-details">
@@ -114,18 +112,20 @@ export function PayoutSummary({
         </summary>
         <div className="stl-payment-equation" aria-label="실제 지급액 계산">
           <div>
-            <span>환불 차감 전 지급액</span>
+            <span>차감 전 지급액</span>
             <b>
-              <FinanceMoney value={data.paidSettlementAmount} />
+              <FinanceMoney value={data.paidSettlementAmount} compact={false} />
             </b>
           </div>
           <span className="stl-equation-sign" aria-label="빼기">
             −
           </span>
-          <div className="stl-equation-deduction">
-            <span>환불 회수 차감액</span>
+          <div
+            className={`stl-equation-deduction${data.refundDeductionAmount === 0 ? ' is-zero' : ''}`}
+          >
+            <span>정산 후 환불 차감</span>
             <b>
-              <FinanceMoney value={data.refundDeductionAmount} />
+              <FinanceMoney value={data.refundDeductionAmount} compact={false} />
             </b>
           </div>
           <span className="stl-equation-sign" aria-label="같음">
@@ -134,15 +134,32 @@ export function PayoutSummary({
           <div>
             <span>실제 지급액</span>
             <b>
-              <FinanceMoney value={data.paidAmount} />
+              <FinanceMoney value={data.paidAmount} compact={false} />
             </b>
           </div>
         </div>
-        {data.outstandingRecoveryAmount === 0 && (
-          <p className="stl-calculation-note">
-            현재 미회수 환불액 0원 · 남아 있는 환불 회수 잔액이 없어요.
-          </p>
-        )}
+        <p className="stl-calculation-note">
+          {data.refundDeductionAmount === 0
+            ? '이번 기간에는 정산 후 환불로 차감한 금액이 없습니다.'
+            : '이전에 정산된 주문이 고객에게 환불되어, 해당 주문의 정산금을 이번 지급에서 차감했습니다.'}
+        </p>
+        <details className="stl-refund-help">
+          <summary>환불 차감이란?</summary>
+          <div>
+            <p>
+              사장님께 이미 정산된 주문이 나중에 고객에게 환불되면, 그 주문으로 받은 정산금을 다음
+              정산에서 뺍니다.
+            </p>
+            <p className="stl-refund-example">
+              예시 · 다음 정산금 10만 원 − 이전에 정산받은 환불 주문의 정산금 3만 원 = 실제 지급액
+              7만 원
+            </p>
+            <small>
+              고객에게 돌려주는 결제금액과 차감하는 정산금은 다릅니다. 이 화면은 돈워리의 지급
+              기록이며 은행의 실제 이체 내역은 조회하지 않습니다.
+            </small>
+          </div>
+        </details>
       </details>
       {data.outstandingRecoveryAmount > 0 && (
         <div
