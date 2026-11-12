@@ -408,37 +408,6 @@ export function SettlementPrototype({
         />
       )}
       {payoutData && <PayoutSummary data={payoutData} scheduledAmount={sum(byStatus('sch'))} />}
-      <section className="finance-card" style={{ marginBottom: 20 }} inert={resultsPending}>
-        <h2>날짜별 지급·정산 예정 금액</h2>
-        {payoutData && monthSummary && (
-          <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
-        )}
-        <SettlementLineChart
-          payoutMode={!!payoutData}
-          todayValue={dateInput(today)}
-          days={chartDays}
-          selectedDate={graphDate ?? localGraphDate}
-          onDateChange={(date) => {
-            setLocalGraphDate(date)
-            onGraphDateChange?.(date)
-            if (date < rangeStart || date > rangeEnd) {
-              const next = chartMonthPeriod(date)
-              changePeriod(next.from, next.to)
-            }
-          }}
-          onSelect={(date) => {
-            setSelected(new Date(date + 'T00:00:00'))
-            setDateOnly(true)
-            setPage(1)
-            setQuery('')
-            setFilter('all')
-            setReportType(
-              scopedPayouts.some((p) => p.payoutDate === date) ? 'payout' : 'settlement',
-            )
-            setView('list')
-          }}
-        />
-      </section>
       {view === 'cal' ? (
         <div className="stl-calendar-layout" inert={resultsPending}>
           <section className="stl-panel stl-calendar-panel">
@@ -925,6 +894,37 @@ export function SettlementPrototype({
           )}
         </section>
       )}
+      <section className="finance-card" style={{ marginTop: 20 }} inert={resultsPending}>
+        <h2>날짜별 지급·정산 예정 금액</h2>
+        {payoutData && monthSummary && (
+          <div className="payout-policy-note payout-month-summary">{monthSummary}</div>
+        )}
+        <SettlementLineChart
+          payoutMode={!!payoutData}
+          todayValue={dateInput(today)}
+          days={chartDays}
+          selectedDate={graphDate ?? localGraphDate}
+          onDateChange={(date) => {
+            setLocalGraphDate(date)
+            onGraphDateChange?.(date)
+            if (date < rangeStart || date > rangeEnd) {
+              const next = chartMonthPeriod(date)
+              changePeriod(next.from, next.to)
+            }
+          }}
+          onSelect={(date) => {
+            setSelected(new Date(date + 'T00:00:00'))
+            setDateOnly(true)
+            setPage(1)
+            setQuery('')
+            setFilter('all')
+            setReportType(
+              scopedPayouts.some((p) => p.payoutDate === date) ? 'payout' : 'settlement',
+            )
+            setView('list')
+          }}
+        />
+      </section>
       <Modal
         title="주문별 정산 상세"
         open={shownDetail !== null}
