@@ -4,6 +4,8 @@ import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -11,13 +13,28 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 @ConditionalOnProperty(name = "settlement.completion.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "donworry.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 public class SettlementCompletionScheduler {
     private final SettlementCompletionBatchService batch;
+    private final CashFlowBatchSchedule schedule;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void recoverOnStartup() {
+        try {
+            schedule.startupCutoff(Instant.now()).ifPresent(this::runAt);
+        } catch (RuntimeException ex) {
+            log.error("merchant payout startup recovery failed", ex);
+        }
+    }
 
     // 한국 시간 매일 03시가 기본이다. 검증 후 명시적으로 활성화한다.
     @Scheduled(cron = "${settlement.completion.cron:0 0 3 * * *}", zone = "Asia/Seoul")
     public void run() {
-        var result = batch.run(Instant.now());
+        runAt(Instant.now());
+    }
+
+    private void runAt(Instant cutoff) {
+        var result = batch.run(cutoff);
         log.info(
                 "merchant payout batch: cutoff={}, scanned={}, completed={}, skipped={}, failed={}",
                 result.cutoff(),

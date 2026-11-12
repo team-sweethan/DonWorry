@@ -3,6 +3,15 @@
   padding-block: 10px;
 }
 
+.finance-intro-alert.ant-alert-info {
+  background: #fffbef;
+  border-color: #efdfad;
+}
+
+.finance-intro-alert.ant-alert-info .ant-alert-icon {
+  color: #8b6519;
+}
+
 .finance-intro-alert.ant-alert-with-description .ant-alert-message {
   margin-bottom: 2px;
 }

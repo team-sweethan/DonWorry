@@ -6,6 +6,25 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class CashFlowBatchScheduleTests {
+    @Test
+    void startupRecoversAtLastScheduledTimeWithoutPayingEarly() {
+        var schedule = new CashFlowBatchSchedule("0 0 3 * * *", true);
+        var scheduledAt = Instant.parse("2026-11-11T18:00:00Z");
+
+        assertThat(schedule.startupCutoff(scheduledAt.minusSeconds(1))).isEmpty();
+        assertThat(schedule.startupCutoff(scheduledAt)).contains(scheduledAt);
+        assertThat(schedule.startupCutoff(scheduledAt.plusSeconds(3600))).contains(scheduledAt);
+    }
+
+    @Test
+    void startupHonorsCustomScheduleAndDisabledBatch() {
+        var now = Instant.parse("2026-11-12T05:00:00Z");
+        assertThat(new CashFlowBatchSchedule("0 0 5 * * MON", true).startupCutoff(now))
+                .contains(Instant.parse("2026-11-08T20:00:00Z"));
+        assertThat(new CashFlowBatchSchedule("0 0 3 * * *", false).startupCutoff(now))
+                .isEmpty();
+        assertThat(new CashFlowBatchSchedule("-", true).startupCutoff(now)).isEmpty();
+    }
     // 03시 정각은 그 배치에 포함하고 1마이크로초 뒤면 다음 날 배치에 반영한다.
     @Test
     void projectedAt_whenAroundKoreanThreeAM_usesInclusiveNextBatch() {
