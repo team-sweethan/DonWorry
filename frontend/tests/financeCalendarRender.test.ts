@@ -73,10 +73,10 @@ test('settlement calendar selects and highlights Korean today across the UTC dat
       html,
       /class="stl-day-scheduled"><span>이날 정산 예정금<\/span><b><span[^>]*aria-label="200원"/,
     )
-    // 첫 화면에는 흐름만 펼치고, 달력은 날짜 선택을 보존한 채 숨긴다.
-    assert.match(html, /id="stl-tab-flow"[^>]*aria-selected="true"/)
-    assert.match(html, /id="stl-view-cal"[^>]*hidden=""/)
-    assert.doesNotMatch(html, /id="stl-view-flow"[^>]*hidden/)
+    // 첫 화면은 캘린더다. 흐름 그래프는 날짜 선택을 보존한 채 숨긴다.
+    assert.match(html, /id="stl-tab-cal"[^>]*aria-selected="true"/)
+    assert.match(html, /id="stl-view-flow"[^>]*hidden=""/)
+    assert.doesNotMatch(html, /id="stl-view-cal"[^>]*hidden/)
     assert.doesNotMatch(html, /id="stl-view-list"/)
   } finally {
     t.mock.timers.reset()
@@ -275,9 +275,16 @@ test('settlementCalendar_whenPaidAndScheduledShareDate_showsSeparateAmounts', as
     )
     const cell = html.match(/<button[^>]*aria-label="11월 2일,[^"]*"[\s\S]*?<\/button>/)?.[0]
     assert.ok(cell)
-    assert.match(cell, /stl-kind-done"><small>지급<\/small><b>약 694만<\/b>/)
-    assert.match(cell, /stl-kind-sch"><small>예정<\/small><b>20만<\/b>/)
-    assert.doesNotMatch(cell, /<b>약 714만<\/b>/)
+    // 지급과 정산 예정은 칩을 따로 두고 더하지 않는다
+    assert.match(
+      cell,
+      /class="stl-chip stl-done"[^>]*><span>지급<\/span> <span[^>]*aria-label="6,938,000원"/,
+    )
+    assert.match(
+      cell,
+      /class="stl-chip stl-sch"[^>]*><span>정산 예정<\/span> <span[^>]*aria-label="200,000원"/,
+    )
+    assert.doesNotMatch(cell, /7,138,000원/)
     assert.match(cell, /aria-controls="stl-selected-day-detail"/)
     assert.match(cell, /지급 6,938,000원/)
     const detail = html.slice(

@@ -340,10 +340,6 @@
   font-size: 17px;
   font-weight: 700;
 }
-.stl-prototype .stl-report .stl-readable-table .stl-chip.stl-sch {
-  background: #f7ecd0;
-  color: #8a6518;
-}
 .stl-prototype .stl-report .stl-readable-table td:last-child .ant-btn {
   min-height: 36px;
   border-radius: 7px;
@@ -733,113 +729,30 @@
   border-radius: 8px;
   background: #f7f2e7;
 }
+/* 캘린더 — 큰 달력 칸에 종류별 색 칩(이름 + 금액). 기본 모양은 settlement-prototype.css(dev)를 따른다 */
 .finance-surface .stl-prototype .stl-calendar-layout {
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   gap: 20px;
   align-items: start;
 }
-.finance-surface .stl-prototype .stl-calendar-panel {
-  align-self: start;
+/* 정산 예정(파랑)과 지급 대기(주황)는 캘린더 · 상세 목록 · 날짜 패널 · 주문 상세에서 같은 색을 쓴다 */
+.stl-prototype .stl-chip.stl-waiting,
+.stl-prototype .stl-legend i.stl-waiting {
+  background: #fef3c7;
+  color: #92400e;
 }
-.finance-surface .stl-prototype .stl-calendar-header {
-  padding: 24px 24px 16px;
-}
-.finance-surface .stl-prototype .stl-calendar {
-  padding: 0 18px 20px;
-  gap: 5px;
-  flex: none;
-  grid-template-rows: none;
-  grid-auto-rows: auto;
-  align-content: start;
-}
-.finance-surface .stl-prototype .stl-day {
-  height: 90px;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 7px;
-  padding: 9px 10px;
-  border-radius: 11px;
-  background: color-mix(in srgb, #ecd49a calc(var(--stl-heat, 0) * 45%), #fdfbf6);
-}
-.finance-surface .stl-prototype .stl-day.stl-out {
-  background: transparent;
-}
-.finance-surface .stl-prototype .stl-day[aria-pressed='true'] {
-  background: #332d24;
-  box-shadow: inset 0 0 0 1px #9b8048;
-}
-.stl-day-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 3px;
-  min-height: 15px;
-}
-.stl-day-markers {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.stl-day-markers small {
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: #f0e4c5;
-  color: #876424;
-  font-size: 9px;
-  line-height: 1.4;
-}
-.stl-day-money-lines {
-  display: grid;
-  gap: 3px;
-}
-.stl-day-money-line {
+.stl-prototype .stl-calendar .stl-chip {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 4px;
-  min-width: 0;
-  color: #4c4030;
-  font-size: 11px;
-  line-height: 1.25;
+  flex-wrap: wrap;
+  column-gap: 4px;
+  white-space: normal;
 }
-.stl-day-money-line small {
-  flex-shrink: 0;
-  color: #8c806b;
-  font-size: 9px;
+.stl-prototype .stl-calendar .stl-chip > span:first-child {
+  flex: 0 0 100%;
 }
-.stl-day-money-line b {
-  min-width: 0;
-  font-weight: 650;
-  white-space: nowrap;
-  letter-spacing: -0.3px;
-}
-.stl-day-money-line.stl-kind-sch {
-  color: #8a6518;
-}
-.stl-day-money-line.stl-kind-can {
-  color: #9a9080;
-}
-.stl-day-money-line.is-waiting small {
-  color: #9b7531;
-}
-.stl-day[aria-pressed='true'] .stl-day-money-line {
-  color: #fff6e0;
-}
-.stl-day[aria-pressed='true'] .stl-day-money-line small {
-  color: #cdbd9c;
-}
-.stl-day[aria-pressed='true'] .stl-kind-sch {
-  color: #edcd80;
-}
-.stl-day[aria-pressed='true'] .stl-day-markers small {
-  background: #6c5833;
-  color: #f8e3ab;
-}
-.stl-day[aria-pressed='true'] .stl-kind-can {
-  color: #b8aa8e;
-}
-.finance-surface .stl-dot-waiting {
-  background: repeating-linear-gradient(-45deg, #a57d38 0 2px, #eee1c7 2px 4px);
+.stl-prototype .stl-legend i.stl-can {
+  text-decoration: none;
 }
 .stl-calendar-caption {
   display: flex;
@@ -928,10 +841,6 @@
   border-radius: 5px;
   padding: 3px 7px;
   white-space: nowrap;
-}
-.stl-prototype .stl-detail .stl-chip.stl-sch {
-  background: #f7ecd0;
-  color: #8a6518;
 }
 .stl-prototype .stl-detail .stl-preview-heading {
   margin: 18px 20px 12px;
@@ -1388,15 +1297,6 @@
   .stl-selected-label::before {
     animation: stl-selected-halo 2.4s ease-out infinite;
   }
-  .finance-surface .stl-prototype .stl-day {
-    transition:
-      background-color 160ms ease,
-      box-shadow 160ms ease,
-      transform 160ms ease;
-  }
-  .finance-surface .stl-prototype .stl-day:hover:not(:disabled) {
-    transform: translateY(-2px);
-  }
   .stl-settlement-art::after {
     content: '';
     position: absolute;
@@ -1513,29 +1413,6 @@
   }
   .stl-interaction-hint {
     display: none;
-  }
-  .finance-surface .stl-prototype .stl-calendar-header {
-    padding: 18px 14px 12px;
-  }
-  .finance-surface .stl-prototype .stl-calendar {
-    padding: 0 8px 14px;
-    gap: 3px;
-  }
-  .finance-surface .stl-prototype .stl-day {
-    height: 86px;
-    gap: 6px;
-    padding: 7px 6px;
-  }
-  .stl-day-money-line {
-    font-size: 10px;
-    justify-content: flex-start;
-  }
-  .stl-day-money-line small {
-    display: none;
-  }
-  .stl-day-markers small {
-    padding-inline: 2px;
-    font-size: 8px;
   }
   .finance-surface .stl-prototype .stl-day-amount {
     font-size: 10px;

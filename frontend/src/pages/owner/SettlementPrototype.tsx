@@ -1,6 +1,5 @@
 import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
-import { calendarAmount } from './financeAmount'
 import { settlementListSummary } from './settlementListSummary'
 import { financeTotal, matchesFinanceQuery, chartMonthPeriod } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
@@ -36,6 +35,11 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 const weekdays = ['일', '월', '화', '수', '목', '금', '토']
 /** 캘린더 칸은 좁아서 짧은 이름을 쓴다. 색만으로 구분하지 않도록 글자를 남긴다 */
 const shortLabels: Record<Status, string> = { done: '완료', sch: '예정', can: '취소' }
+/** 정산 상태 칩 — 예정일이 지났는데 아직 지급 안 된 예정은 "지급 대기"로 색을 나눈다 (정산 예정 파랑 · 지급 대기 주황) */
+const statusChip = (status: Status, date: string, today: string) =>
+  status === 'sch' && date < today
+    ? { className: 'stl-chip stl-waiting', label: '지급 대기' }
+    : { className: `stl-chip stl-${status}`, label: labels[status] }
 const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
 const stamp = (d: Date | null) =>
   d
@@ -109,7 +113,7 @@ export function SettlementPrototype({
       ? new Date(period.from + 'T00:00:00')
       : new Date(today.getFullYear(), today.getMonth(), 1)
   const [localGraphDate, setLocalGraphDate] = useState('')
-  const [view, setView] = useState<'flow' | 'cal' | 'list'>('flow')
+  const [view, setView] = useState<'flow' | 'cal' | 'list'>('cal')
   const [filter, setFilter] = useState<SettlementStatusFilter>('all')
   const [dateOnly, setDateOnly] = useState(false)
   const [query, setQuery] = useState('')
@@ -272,18 +276,6 @@ export function SettlementPrototype({
     { length: calendarCellCount },
     (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
   )
-  // 캘린더 칸 바탕 진하기: 그날 들어오는 돈(지급 완료 + 정산 예정 · 완료)이 이 달에서 가장 많은 날을 1로 본다
-  const dayInflow = (d: Date) =>
-    scopedPayouts
-      .filter((p) => p.payoutDate === dateInput(d))
-      .reduce((n, p) => n + p.payoutAmount, 0) +
-    sum(
-      inPeriod.filter(
-        (e) => key(e.date) === key(d) && e.status !== 'can' && (!payoutData || e.status !== 'done'),
-      ),
-    )
-  const inflows = new Map(days.map((d) => [key(d), dayInflow(d)]))
-  const maxInflow = Math.max(1, ...inflows.values())
   /** 그날 있는 돈의 종류와 금액 — 지급(실제 지급 또는 정산 완료) · 예정 · 취소 · 지출. 0원인 종류는 뺀다 */
   const dayKinds = (d: Date) =>
     [
@@ -584,25 +576,26 @@ export function SettlementPrototype({
             </div>
             <div className="stl-legend">
               <span>
-                <i className="stl-dot stl-dot-done" />
+                <i className="stl-done" />
                 {payoutData ? '지급' : '정산 완료'}
               </span>
               <span>
-                <i className="stl-dot stl-dot-sch" />
-                예정
+                <i className="stl-sch" />
+                정산 예정
               </span>
               <span>
-                <i className="stl-dot stl-dot-waiting" />
+                <i className="stl-waiting" />
                 지급 대기
               </span>
               <span>
-                <i className="stl-dot stl-dot-can" />
-                취소
+                <i className="stl-can" />
+                정산 취소
               </span>
               <span>
-                <i className="stl-dot stl-dot-expense" />
+                <i className="stl-expense" />
                 지출
               </span>
+              <span>예정 금액은 환불 회수 차감 전</span>
             </div>
           </div>
           {/* 달을 바꾸면 새로 그려져 칸이 대각선 물결처럼 채워진다 (styles: owner-finance-skin.css) */}
@@ -621,7 +614,6 @@ export function SettlementPrototype({
                   key={key(d)}
                   style={
                     {
-                      '--stl-heat': (inflows.get(key(d)) ?? 0) / maxInflow,
                       '--ow-delay': `${(Math.floor(index / 7) + (index % 7)) * 18}ms`,
                     } as React.CSSProperties
                   }
@@ -642,42 +634,34 @@ export function SettlementPrototype({
                   }}
                   className={`stl-day stl-day-in ${d.getMonth() !== month.getMonth() ? 'stl-out' : ''} ${key(d) === key(today) ? 'stl-today' : ''}`}
                 >
-                  <span className="stl-day-top">
-                    <span className={`stl-day-number stl-week-${d.getDay()}`}>{d.getDate()}</span>
-                    <span className="stl-day-markers" aria-hidden="true">
-                      {key(d) === key(today) && <small>오늘</small>}
-                      {kinds.some((k) => k.key === 'expense') && (
-                        <i className="stl-dot stl-dot-expense" />
-                      )}
-                    </span>
-                  </span>
-                  <span className="stl-day-money-lines" aria-hidden="true">
-                    {kinds
-                      .filter((k) => k.key !== 'expense')
-                      .map((k) => (
-                        <span
-                          key={k.key}
-                          className={`stl-day-money-line stl-kind-${k.key}${k.key === 'sch' && dateInput(d) < dateInput(today) ? ' is-waiting' : ''}`}
-                        >
-                          <small>
-                            {k.label === '지급 대기'
-                              ? '대기'
-                              : k.key === 'done'
-                                ? payoutData
-                                  ? '지급'
-                                  : '완료'
-                                : k.label}
-                          </small>
-                          <b>{calendarAmount(k.amount)}</b>
-                        </span>
-                      ))}
-                  </span>
+                  <span className={`stl-day-number stl-week-${d.getDay()}`}>{d.getDate()}</span>
+                  {/* 종류별 색 칩 — 이름과 금액을 함께 쓴다. 큰 금액은 FinanceMoney가 줄여 쓰고 정확한 금액은 말풍선 · 날짜 패널에 둔다 */}
+                  {kinds.map((k) => {
+                    const waiting = k.key === 'sch' && dateInput(d) < dateInput(today)
+                    return (
+                      <span
+                        key={k.key}
+                        className={`stl-chip stl-${waiting ? 'waiting' : k.key}`}
+                        aria-hidden="true"
+                      >
+                        <span>
+                          {k.key === 'sch' && !waiting
+                            ? labels.sch
+                            : k.key === 'can'
+                              ? labels.can
+                              : k.label}
+                        </span>{' '}
+                        <FinanceMoney value={k.key === 'expense' ? -k.amount : k.amount} />
+                      </span>
+                    )
+                  })}
                 </button>
               )
             })}
           </div>
           <div className="stl-calendar-caption">
-            금액은 반올림해 표시해요.<span>날짜를 누르면 정확한 금액을 볼 수 있어요.</span>
+            ‘약’이 붙은 금액은 반올림한 값이에요.
+            <span>날짜를 누르면 정확한 금액을 볼 수 있어요.</span>
           </div>
         </section>
         <section
@@ -803,10 +787,10 @@ export function SettlementPrototype({
                       주문번호 {e.orderId ?? e.id}
                     </small>
                   </div>
-                  <span className={`stl-chip stl-${e.status}`}>
-                    {e.status === 'sch' && dateInput(e.date) < dateInput(today)
-                      ? '지급 대기'
-                      : labels[e.status]}
+                  <span
+                    className={statusChip(e.status, dateInput(e.date), dateInput(today)).className}
+                  >
+                    {statusChip(e.status, dateInput(e.date), dateInput(today)).label}
                   </span>
                 </div>
                 <div className="stl-detail-title">
@@ -1130,10 +1114,12 @@ export function SettlementPrototype({
                           </small>
                         </td>
                         <td>
-                          <span className={'stl-chip stl-' + e.status}>
-                            {e.status === 'sch' && dateInput(e.date) < dateInput(today)
-                              ? '지급 대기'
-                              : labels[e.status]}
+                          <span
+                            className={
+                              statusChip(e.status, dateInput(e.date), dateInput(today)).className
+                            }
+                          >
+                            {statusChip(e.status, dateInput(e.date), dateInput(today)).label}
                           </span>
                         </td>
                         <td className="stl-money-cell">
@@ -1225,8 +1211,13 @@ export function SettlementPrototype({
         {shownDetail && (
           <div className="stl-order-modal">
             <h3>{shownDetail.orderId ?? shownDetail.id}</h3>
-            <span className={`stl-chip stl-${shownDetail.status}`}>
-              {labels[shownDetail.status]}
+            <span
+              className={
+                statusChip(shownDetail.status, dateInput(shownDetail.date), dateInput(today))
+                  .className
+              }
+            >
+              {statusChip(shownDetail.status, dateInput(shownDetail.date), dateInput(today)).label}
             </span>
             {shownDetail.orderItems?.length ? (
               <section className="stl-order-products" aria-label="주문 상품 전체 목록">
