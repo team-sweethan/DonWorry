@@ -377,6 +377,20 @@
 .mct-outcome.is-off {
   color: var(--mc-muted);
 }
+.mct-decision {
+  display: block;
+  margin-top: 2px;
+  color: var(--mc-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.mct-payments-caption {
+  caption-side: bottom;
+  padding-top: 8px;
+  color: var(--mc-faint);
+  font-size: 12px;
+  text-align: left;
+}
 .mct-pay-link {
   margin-left: 10px;
   color: #8a5f0c;

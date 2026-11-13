@@ -5,6 +5,7 @@ import {
   caseConclusion,
   conclusionSentence,
   heldMoney,
+  paymentDecisionNote,
   paymentOutcome,
   paymentProgress,
   resultSummary,
@@ -167,4 +168,24 @@ test('목록 결과 칸은 결과별 건수를 짧게 쓴다', () => {
   ])
   assert.equal(resultSummary(c), '정상 2 · 취소 1')
   assert.equal(resultSummary(caseConclusion([payment({}), payment({})])), '확인 중 2')
+})
+
+// 판정과 실제 결제 상태가 어긋난 결제도 결제마다 판정이 보여야 한다 (dev 상세의 두 칸 정보 유지)
+test('결제별 담당자 판정은 결과와 따로 보여준다', () => {
+  assert.equal(
+    paymentDecisionNote(payment({ decision: 'ACCEPT', paymentStatus: 'EXPIRED' })),
+    '담당자: 정상 처리 결정',
+  )
+  assert.equal(
+    paymentDecisionNote(payment({ decision: 'REJECT', paymentStatus: 'CAPTURED' })),
+    '담당자: 취소 결정',
+  )
+  assert.equal(paymentDecisionNote(payment({ paymentStatus: 'EXPIRED' })), '담당자 판정 없이 끝남')
+  // 아직 확인 중이거나 상태를 모르면 결과 칸이 이미 말해 주므로 붙이지 않는다
+  assert.equal(paymentDecisionNote(payment({ paymentStatus: 'HELD' })), null)
+  assert.equal(paymentDecisionNote(payment({ paymentStatus: null })), null)
+  assert.equal(
+    paymentDecisionNote(payment({ customerCanceled: true, paymentStatus: 'VOIDED' })),
+    null,
+  )
 })

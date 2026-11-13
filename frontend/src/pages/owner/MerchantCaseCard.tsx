@@ -8,6 +8,7 @@ import {
   caseConclusion,
   caseStatus,
   conclusionSentence,
+  paymentDecisionNote,
   paymentOutcome,
   resultSummary,
 } from './merchantCaseProgress'
@@ -75,6 +76,11 @@ function Detail({
       </p>
       {detail.payments.length > 0 ? (
         <table className="mct-payments">
+          {/* 표의 첫 자식이어야 한다. 화면에서는 CSS(caption-side)로 표 아래에 보인다 */}
+          <caption className="mct-payments-caption">
+            담당자 결정과 실제 결제 결과는 다를 수 있어요. 실제로 처리된 결과는 결과 칸을 기준으로
+            봐 주세요.
+          </caption>
           <thead>
             <tr>
               <th scope="col">금액</th>
@@ -87,6 +93,7 @@ function Detail({
             {detail.payments.map((p) => {
               const outcome = paymentOutcome(p)
               const off = outcome.tone === 'danger' || outcome.label === '고객 취소'
+              const decisionNote = paymentDecisionNote(p)
               return (
                 <tr key={p.paymentId}>
                   <td className={`mct-money${off ? ' is-struck' : ''}`}>
@@ -104,6 +111,7 @@ function Detail({
                         정산 내역 보기
                       </Link>
                     )}
+                    {decisionNote && <span className="mct-decision">{decisionNote}</span>}
                   </td>
                 </tr>
               )

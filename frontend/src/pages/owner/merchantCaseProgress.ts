@@ -150,6 +150,17 @@ export function paymentOutcome(p: MerchantPaymentResult) {
   return { label: outcomeLabel(p, progress), tone: progress.tone }
 }
 
+/**
+ * 결제 한 건의 담당자 판정 — 결과 칸 아래 작게 붙인다.
+ * 판정과 실제 결제 상태(P5)는 따로 오므로, "정상 결정 → 승인 만료"처럼 어긋난 결제도 결제마다 보이게 한다 (#205).
+ * 아직 확인 중(HELD · 상태 모름)이면 결과 칸이 이미 말해 주므로 붙이지 않는다.
+ */
+export function paymentDecisionNote(p: MerchantPaymentResult): string | null {
+  if (p.decision) return `담당자: ${decisionLabel(p.decision)}`
+  if (p.customerCanceled || p.paymentStatus === null || p.paymentStatus === 'HELD') return null
+  return '담당자 판정 없이 끝남'
+}
+
 /** 결론 줄에 쓰는 짧은 결과 이름 — 마지막 단계 이름을 쓰되 진행 중은 하나로 묶는다 */
 function outcomeLabel(p: MerchantPaymentResult, progress: PaymentProgress) {
   if (p.paymentStatus === null && !p.customerCanceled) return '확인 불가'
