@@ -1,10 +1,21 @@
-import { ArrowRightOutlined, ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
+import {
+  ArrowRightOutlined,
+  CheckOutlined,
+  FileSearchOutlined,
+  LinkOutlined,
+  ReloadOutlined,
+  SafetyCertificateOutlined,
+  WalletOutlined,
+} from '@ant-design/icons'
 import { Button, Skeleton } from 'antd'
 import { useCallback, useState } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { useAuth } from '../../auth/useAuth'
+import { useCountUp } from '../../hooks/useCountUp'
+import type { SettlementReport } from '../../api/finance'
+import { PageHeader } from '../../components/common/PageHeader'
 import { useOwnerIntegration } from '../../hooks/useOwnerIntegration'
 import { getCashFlowForecast, getCashFlowSettings, getSettlementReport } from '../../api/finance'
 import { getMerchantCases } from '../../api/merchantCases'
@@ -13,27 +24,18 @@ import { sessionNavigation } from '../../config/navigation'
 import { formatKstDateTime } from '../../utils/format'
 import { useFinanceResource, useKoreanToday } from './useFinanceResource'
 import type { FinanceResource } from './useFinanceResource'
-import { OwnerWeekTiles } from './OwnerWeekTiles'
 import { OwnerConnectSteps } from './OwnerConnectSteps'
 import { StatusMark } from './StatusMark'
-import {
-  flowDays,
-  hasBusinessHistory,
-  homeAttentionStatus,
-  homeTodos,
-  nextIncomeDay,
-  upcomingIncome,
-} from './ownerHomeView'
-import { monthDay, weekday } from './ownerHomeView'
+import { hasBusinessHistory, homeAttentionStatus, homeTodos } from './ownerHomeView'
 import type { HomeAttentionStatus } from './ownerHomeView'
 import './OwnerHomePage.css'
 import '../../styles/ownerMotion.css'
 
 const menuDescriptions: Record<string, string> = {
-  '/owner/actions': '보류된 결제의 처리 결과',
-  '/owner/settlements': '정산 내역과 실제 지급',
-  '/owner/funds': '잔액 예측과 지출 관리',
-  '/owner/loans': '운영자금 상품 안내',
+  '/owner/actions': '보류된 결제의 처리 결과를 확인하세요.',
+  '/owner/settlements': '정산 내역과 실제 지급을 확인하세요.',
+  '/owner/funds': '앞으로의 잔액과 예정된 지출을 살펴보세요.',
+  '/owner/loans': '운영에 필요한 자금 상품을 살펴보세요.',
 }
 
 /** 다시 조회하는 동안에도 마지막 결과를 남겨 화면이 비었다 채워지지 않게 한다 (#803). */
@@ -113,7 +115,6 @@ function OwnerHome({ user }: { user: User }) {
   const forecastData = shown(forecast)
   const monthData = shown(month)
   const caseData = shown(cases)
-  const days = forecastData ? flowDays(forecastData) : null
   const needsOpeningBalance = finance && settings.status === 'success' && settings.data === null
   const todos = homeTodos({
     today,
@@ -138,26 +139,22 @@ function OwnerHome({ user }: { user: User }) {
 
   return (
     <div className="oh-home">
-      <header className="oh-hero ow-rise" style={delay(0)}>
-        <div>
-          <p className="oh-date">{todayLabel(today)}</p>
-          <h1>
-            {data && !connected
-              ? `${user.displayName}님, 반가워요`
-              : `${user.displayName}님, 안녕하세요`}
-          </h1>
-          {data && !connected && (
-            <p className="oh-hero-sub">
-              쇼핑몰을 연결하면 이상한 결제를 돈워리가 먼저 멈추고 알려 드려요.
-            </p>
-          )}
-        </div>
-        {state.kind !== 'error' && (
-          <Button icon={<ReloadOutlined />} loading={busy} onClick={refreshAll}>
-            새로고침
-          </Button>
-        )}
-      </header>
+      <PageHeader
+        title="홈"
+        description={
+          data && !connected
+            ? `${user.displayName}님, 반가워요. 쇼핑몰을 연결하면 이상한 결제를 돈워리가 먼저 멈추고 알려 드려요.`
+            : `${user.displayName}님, ${todayLabel(today)} · 오늘 확인할 것과 돈 흐름을 정리했어요.`
+        }
+        // 오류일 때는 상자 안의 다시 시도 버튼 하나만 둔다
+        actions={
+          state.kind !== 'error' && (
+            <Button icon={<ReloadOutlined />} loading={busy} onClick={refreshAll}>
+              새로고침
+            </Button>
+          )
+        }
+      />
 
       {state.kind === 'loading' && (
         <section className="oh-panel" role="status" aria-label="연동 상태를 불러오는 중">
@@ -180,130 +177,98 @@ function OwnerHome({ user }: { user: User }) {
       {data && !connected && (
         <OwnerConnectSteps data={data} busy={integrationBusy} onRefresh={() => void refresh()} />
       )}
+      {connected && data && (
+        <section
+          className="oh-connection ow-rise"
+          style={delay(60)}
+          aria-labelledby="oh-connection-title"
+        >
+          <span className="oh-connection-icon" aria-hidden="true">
+            <CheckOutlined />
+          </span>
+          <div className="oh-connection-copy">
+            <span className="oh-eyebrow">
+              <LinkOutlined aria-hidden="true" /> 쇼핑몰 연동
+              <span className="oh-live" aria-hidden="true" />
+              <span className="oh-live-text">연결됨</span>
+            </span>
+            <h2 id="oh-connection-title">쇼핑몰 연동이 완료되었습니다</h2>
+            <dl className="oh-details">
+              <div>
+                <dt>가맹점 코드</dt>
+                <dd className="oh-code">{data.merchantCode}</dd>
+              </div>
+              {data.connectedAt && (
+                <div>
+                  <dt>연결 확인 (한국 시간)</dt>
+                  <dd>{formatKstDateTime(data.connectedAt)}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+          <Link className="oh-secondary-link" to="/owner/integration">
+            시크릿 키 관리 <ArrowRightOutlined />
+          </Link>
+        </section>
+      )}
 
       {showBusiness && finance && (
         <TodoStrip todos={todos} status={attentionStatus} onRetry={refreshAll} />
       )}
 
-      {showBusiness && finance && (
-        <section className="oh-money" aria-label="금액 요약">
-          <MoneyCard
-            dark
-            style={delay(140)}
-            label="이번 달 받은 돈"
-            to="/owner/settlements"
-            value={monthData?.paidAmount}
-            failed={month.status === 'error'}
-            onRetry={refreshAll}
-            foot={
-              monthData
-                ? `${dayjs(today).month() + 1}월 1일부터 · 지급 ${monthData.payouts.length}회`
-                : `${dayjs(today).month() + 1}월 1일부터 오늘까지`
-            }
-          />
-          <MoneyCard
-            style={delay(200)}
-            label="앞으로 7일 정산 예정금"
-            accent
-            to="/owner/settlements"
-            value={days ? upcomingIncome(days, today) : undefined}
-            failed={forecast.status === 'error' || settings.status === 'error'}
-            onRetry={refreshAll}
-            setup={needsOpeningBalance}
-            foot={(() => {
-              const next = days ? nextIncomeDay(days, today) : null
-              return next
-                ? `다음 정산 예정 ${monthDay(next.date)}(${weekday(next.date)}) · 수수료 뺀 금액`
-                : '정산 예정 · 수수료 뺀 금액'
-            })()}
-          />
-          <MoneyCard
-            style={delay(260)}
-            label="계산된 현재 잔액"
-            to="/owner/funds"
-            value={forecastData?.currentBalance}
-            failed={forecast.status === 'error' || settings.status === 'error'}
-            onRetry={refreshAll}
-            setup={needsOpeningBalance}
-            foot="입력·기록 기준 · 은행 잔액이 아니에요"
-          />
-        </section>
-      )}
-
-      {showBusiness && finance && (
-        <section className="oh-panel ow-rise" style={delay(320)} aria-labelledby="oh-week-title">
-          <div className="oh-panel-head">
-            <h2 id="oh-week-title">앞으로 7일 잔액</h2>
-            <span>날짜를 누르면 계산 근거를 보여 줘요</span>
-          </div>
-          {days && forecastData ? (
-            <OwnerWeekTiles
-              key={`${forecastData.from}:${forecastData.to}`}
-              days={days}
-              minimum={forecastData.minimumOperatingFunds ?? 0}
-              today={today}
+      {/* 홈 요약은 두 개만 — 이번 달 받은 돈(정산)과 보류된 결제(보안). 잔액 예측은 자금 현황 메뉴에서 본다 */}
+      {showBusiness && (finance || fds) && (
+        <section className="oh-money" aria-label="요약">
+          {finance && (
+            <MoneyCard
+              style={delay(140)}
+              label="이번 달 받은 돈"
+              to="/owner/settlements"
+              value={monthData?.paidAmount}
+              failed={month.status === 'error'}
+              onRetry={refreshAll}
+              foot={
+                monthData
+                  ? `${dayjs(today).month() + 1}월 1일부터 · 지급 ${monthData.payouts.length}회`
+                  : `${dayjs(today).month() + 1}월 1일부터 오늘까지`
+              }
+              aside={monthData && <PayoutBars payouts={monthData.payouts} today={today} />}
             />
-          ) : needsOpeningBalance ? (
-            <div className="oh-empty">
-              <p>시작 잔액을 한 번 입력하면 앞으로 7일 잔액을 계산해 드려요.</p>
-              <Link to="/owner/funds">
-                잔액 입력하러 가기 <ArrowRightOutlined />
-              </Link>
-            </div>
-          ) : forecast.status === 'error' || settings.status === 'error' ? (
-            <Failure onRetry={refreshAll} what="앞으로 7일 잔액" />
-          ) : (
-            <div role="status" aria-label="앞으로 7일 잔액을 불러오는 중">
-              <Skeleton active paragraph={{ rows: 2 }} />
-            </div>
           )}
-        </section>
-      )}
-
-      {((showBusiness && fds) || connected) && (
-        <div className={`oh-row${showBusiness && fds && connected ? '' : ' is-single'}`}>
-          {showBusiness && fds && (
-            <SecuritySummary
+          {fds && (
+            <SecurityCard
               resource={cases}
               data={caseData?.overview}
               onRetry={refreshAll}
-              style={delay(400)}
+              style={delay(200)}
             />
           )}
-          {connected && data && (
-            <section
-              className="oh-panel oh-connected ow-rise"
-              style={delay(460)}
-              aria-labelledby="oh-connection-title"
-            >
-              <div className="oh-panel-head">
-                <h2 id="oh-connection-title">쇼핑몰 연동</h2>
-              </div>
-              <p className="oh-connected-state">
-                <span className="oh-live-dot ow-pop" style={delay(800)} aria-hidden="true" />
-                쇼핑몰 연동이 완료되었습니다
-              </p>
-              <p className="oh-muted">
-                가맹점 코드 <span className="oh-code">{data.merchantCode}</span>
-                {data.connectedAt && ` · ${formatKstDateTime(data.connectedAt)} 연결 확인`}
-              </p>
-              <Link className="oh-more" to="/owner/integration">
-                시크릿 키 관리 <ArrowRightOutlined />
-              </Link>
-            </section>
-          )}
-        </div>
+        </section>
       )}
 
       {menus.length ? (
-        <nav className="oh-quick ow-rise" style={delay(520)} aria-label="바로 가기">
-          {menus.map((item) => (
-            <Link key={item.path} to={item.path}>
-              <strong>{item.label}</strong>
-              <span>{menuDescriptions[item.path]}</span>
-            </Link>
-          ))}
-        </nav>
+        <section
+          className="oh-menu-section ow-rise"
+          style={delay(520)}
+          aria-labelledby="oh-menu-title"
+        >
+          <div className="oh-section-heading">
+            <h2 id="oh-menu-title">이용 메뉴</h2>
+            <span>내 계정에서 이용할 수 있는 메뉴</span>
+          </div>
+          <div className="oh-menu-grid">
+            {menus.map((item) => (
+              <Link key={item.path} className="oh-menu-card" to={item.path}>
+                <span className="oh-menu-icon" aria-hidden="true">
+                  {item.path === '/owner/actions' ? <FileSearchOutlined /> : <WalletOutlined />}
+                </span>
+                <h3>{item.label}</h3>
+                <p>{menuDescriptions[item.path]}</p>
+                <ArrowRightOutlined className="oh-menu-arrow" aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
+        </section>
       ) : (
         <div className="oh-no-menus ow-rise" style={delay(200)}>
           <SafetyCertificateOutlined aria-hidden="true" />
@@ -388,17 +353,6 @@ function TodoStrip({
   )
 }
 
-function Failure({ onRetry, what }: { onRetry: () => void; what: string }) {
-  return (
-    <div className="oh-failure" role="status">
-      <span>{what}을 불러오지 못했어요. 0원이 아니라 확인되지 않은 상태예요.</span>
-      <Button size="small" onClick={onRetry}>
-        다시 시도
-      </Button>
-    </div>
-  )
-}
-
 function MoneyCard({
   label,
   value,
@@ -407,9 +361,8 @@ function MoneyCard({
   failed,
   setup,
   onRetry,
-  dark,
-  accent,
   style,
+  aside,
 }: {
   label: string
   value: number | undefined
@@ -418,11 +371,12 @@ function MoneyCard({
   failed: boolean
   setup?: boolean
   onRetry: () => void
-  dark?: boolean
-  accent?: boolean
   style: CSSProperties
+  /** 오른쪽 작은 그림 (실제 데이터로만 그린다) */
+  aside?: ReactNode
 }) {
-  const className = `oh-money-card ow-rise${dark ? ' is-dark' : ''}${accent ? ' is-accent' : ''}`
+  const className = 'oh-money-card ow-rise'
+  const counted = useCountUp(value, 900, 150)
   if (failed && value === undefined)
     return (
       <div className={className} style={style}>
@@ -448,26 +402,30 @@ function MoneyCard({
     )
   return (
     <Link
-      className={className}
+      className={`${className} is-split`}
       style={style}
       to={to}
       aria-label={value === undefined ? label : `${label} ${value.toLocaleString('ko-KR')}원`}
     >
-      <span className="oh-money-label">{label}</span>
-      {value === undefined ? (
-        <Skeleton.Input active size="large" className="oh-money-skeleton" />
-      ) : (
-        <div className="oh-money-value">
-          {value.toLocaleString('ko-KR')}
-          <span>원</span>
-        </div>
-      )}
-      <span className="oh-money-foot">{foot}</span>
+      <span className="oh-money-main">
+        <span className="oh-money-label">{label}</span>
+        {value === undefined ? (
+          <Skeleton.Input active size="large" className="oh-money-skeleton" />
+        ) : (
+          <span className="oh-money-value" aria-hidden="true">
+            {(counted ?? value).toLocaleString('ko-KR')}
+            <span>원</span>
+          </span>
+        )}
+        <span className="oh-money-foot">{foot}</span>
+      </span>
+      {aside}
     </Link>
   )
 }
 
-function SecuritySummary({
+/** 보류된 결제 한 장 — 지금 조사 중인 사건 수를 크게, 지금까지의 결정 건수는 작게 */
+function SecurityCard({
   resource,
   data,
   onRetry,
@@ -478,82 +436,136 @@ function SecuritySummary({
   onRetry: () => void
   style: CSSProperties
 }) {
-  const decided = data ? data.acceptDecisionCount + data.rejectDecisionCount : 0
-  let body: ReactNode
+  const label = '보류된 결제'
   if (!data)
-    body =
-      resource.status === 'error' ? (
-        <Failure onRetry={onRetry} what="결제 보안 현황" />
-      ) : (
-        <div role="status" aria-label="결제 보안 현황을 불러오는 중">
-          <Skeleton active paragraph={{ rows: 2 }} title={false} />
+    return resource.status === 'error' ? (
+      <div className="oh-money-card ow-rise" style={style}>
+        <span className="oh-money-label">{label}</span>
+        <div className="oh-money-failed">
+          불러오지 못했어요
+          <Button size="small" onClick={onRetry}>
+            다시 시도
+          </Button>
         </div>
-      )
-  else
-    body = (
-      <>
-        <div className="oh-decision-bar" aria-hidden="true">
-          {decided === 0 ? (
-            <span className="oh-decision-empty" />
-          ) : (
-            <>
-              <span
-                className="is-accept ow-grow-x"
-                style={{ flex: data.acceptDecisionCount, ...delay(700) }}
-              />
-              <span
-                className="is-reject ow-grow-x"
-                style={{ flex: data.rejectDecisionCount, ...delay(820) }}
-              />
-            </>
-          )}
-        </div>
-        <dl className="oh-decisions">
-          <div>
-            <dt>
-              <StatusMark tone="success" size={14} />
-              정상 처리 결정
-            </dt>
-            <dd>
-              {data.acceptDecisionCount.toLocaleString('ko-KR')}
-              <span>건</span>
-            </dd>
-          </div>
-          <div>
-            <dt>
-              <StatusMark tone="danger" size={14} />
-              취소 결정
-            </dt>
-            <dd>
-              {data.rejectDecisionCount.toLocaleString('ko-KR')}
-              <span>건</span>
-            </dd>
-          </div>
-          <div>
-            <dt>
-              <StatusMark tone="progress" size={14} />
-              조사 중 사건
-            </dt>
-            <dd>
-              {data.investigatingCount.toLocaleString('ko-KR')}
-              <span>건</span>
-            </dd>
-          </div>
-        </dl>
-        {data.investigatingCount > 0 && (
-          <p className="oh-security-context">담당자가 확인 중이에요. 사장님이 하실 일은 없어요.</p>
-        )}
-      </>
-    )
-  return (
-    <section className="oh-panel oh-security ow-rise" style={style} aria-labelledby="oh-sec-title">
-      <div className="oh-panel-head">
-        <h2 id="oh-sec-title">보류된 결제 처리 결과</h2>
-        <Link className="oh-more" to="/owner/actions">
-          조치 결과 보기 <ArrowRightOutlined />
-        </Link>
+        <span className="oh-money-foot">확인되지 않은 건수는 0건으로 보여 드리지 않아요</span>
       </div>
-      {body}
-    </section>
+    ) : (
+      <div
+        className="oh-money-card ow-rise"
+        style={style}
+        role="status"
+        aria-label={`${label}을 불러오는 중`}
+      >
+        <span className="oh-money-label">{label}</span>
+        <Skeleton.Input active size="large" className="oh-money-skeleton" />
+      </div>
+    )
+  return <SecurityCardReady data={data} label={label} style={style} />
+}
+
+function SecurityCardReady({
+  data,
+  label,
+  style,
+}: {
+  data: MerchantCaseOverview
+  label: string
+  style: CSSProperties
+}) {
+  const counted = useCountUp(data.investigatingCount, 700, 150)
+  const checking = data.investigatingCount > 0
+  return (
+    <Link
+      className="oh-money-card is-split ow-rise"
+      style={style}
+      to="/owner/actions"
+      aria-label={`${label}, 담당자 확인 중 ${data.investigatingCount}건, 정상 처리 결정 ${data.acceptDecisionCount}건, 취소 결정 ${data.rejectDecisionCount}건`}
+    >
+      <span className="oh-money-main">
+        <span className="oh-money-label">
+          {label} · {checking ? '담당자 확인 중' : '확인 중인 결제 없음'}
+          {checking && <span className="oh-live is-checking" aria-hidden="true" />}
+        </span>
+        <span className="oh-money-value" aria-hidden="true">
+          {(counted ?? data.investigatingCount).toLocaleString('ko-KR')}
+          <span>건</span>
+        </span>
+        <span className="oh-money-foot">
+          지금까지 정상 처리 {data.acceptDecisionCount.toLocaleString('ko-KR')}건 · 취소{' '}
+          {data.rejectDecisionCount.toLocaleString('ko-KR')}건
+        </span>
+      </span>
+      <DecisionRing accept={data.acceptDecisionCount} reject={data.rejectDecisionCount} />
+    </Link>
+  )
+}
+
+/**
+ * 이번 달 1일부터 오늘까지 날짜별 실제 지급 막대. 지급이 없는 날은 바닥 선만 남긴다.
+ * 금액은 카드 숫자와 접근성 이름이 말해 주므로 그림은 읽기 프로그램에서 숨긴다.
+ */
+function PayoutBars({ payouts, today }: { payouts: SettlementReport['payouts']; today: string }) {
+  const start = dayjs(today).startOf('month')
+  const count = dayjs(today).date()
+  const byDate = new Map<string, number>()
+  for (const p of payouts)
+    byDate.set(p.payoutDate, (byDate.get(p.payoutDate) ?? 0) + p.payoutAmount)
+  const days = Array.from({ length: count }, (_, i) => {
+    const date = start.add(i, 'day').format('YYYY-MM-DD')
+    return { date, amount: Math.max(0, byDate.get(date) ?? 0) }
+  })
+  const max = Math.max(1, ...days.map((d) => d.amount))
+  return (
+    <span className="oh-bars" aria-hidden="true">
+      {days.map((d, i) => (
+        <span
+          key={d.date}
+          className={`oh-bar ow-grow-y${d.date === today ? ' is-today' : ''}${d.amount ? '' : ' is-empty'}`}
+          style={
+            {
+              height: d.amount ? `${Math.max(8, (d.amount / max) * 100)}%` : undefined,
+              '--ow-delay': `${300 + i * 22}ms`,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
+  )
+}
+
+/** 지금까지의 담당자 결정 비율 — 정상(초록) · 취소(빨강). 결정이 없으면 회색 고리만 */
+function DecisionRing({ accept, reject }: { accept: number; reject: number }) {
+  const total = accept + reject
+  const acceptLength = total ? (accept / total) * 100 : 0
+  return (
+    <span className="oh-ring" aria-hidden="true">
+      <svg viewBox="0 0 64 64">
+        <circle className="oh-ring-track" cx="32" cy="32" r="26" pathLength="100" />
+        {total > 0 && (
+          <>
+            <circle
+              className="oh-ring-seg is-accept"
+              cx="32"
+              cy="32"
+              r="26"
+              pathLength="100"
+              style={{ strokeDasharray: `${acceptLength} 100` }}
+            />
+            <circle
+              className="oh-ring-seg is-reject"
+              cx="32"
+              cy="32"
+              r="26"
+              pathLength="100"
+              style={{
+                strokeDasharray: `${100 - acceptLength} 100`,
+                strokeDashoffset: -acceptLength,
+              }}
+            />
+          </>
+        )}
+      </svg>
+      <SafetyCertificateOutlined className="oh-ring-icon" />
+    </span>
   )
 }

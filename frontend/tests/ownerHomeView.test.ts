@@ -2,13 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { CashFlowDay, CashFlowForecast } from '../src/api/finance.ts'
 import {
-  flowDays,
   hasBusinessHistory,
   homeAttentionStatus,
   homeTodos,
-  nextIncomeDay,
-  shortWon,
-  upcomingIncome,
 } from '../src/pages/owner/ownerHomeView.ts'
 
 const day = (date: string, patch: Partial<CashFlowDay> = {}): CashFlowDay => ({
@@ -35,43 +31,6 @@ const forecast = (days: CashFlowDay[], patch: Partial<CashFlowForecast> = {}) =>
     currentBalance: 1_000_000,
     ...patch,
   }) as CashFlowForecast
-
-test('앞으로 들어올 돈에는 이미 지급된 돈을 넣지 않는다', () => {
-  const days = flowDays(
-    forecast([
-      day('2026-11-12', { completedIncome: 300_000, scheduledIncome: 50_000 }),
-      day('2026-11-13', { scheduledIncome: 200_000, expectedIncome: 10_000 }),
-    ]),
-  )
-  assert.equal(upcomingIncome(days, '2026-11-12'), 260_000)
-  // 그래프 막대는 그날 들어온 돈 전체를 보여준다
-  assert.equal(days[0]?.income, 350_000)
-})
-
-test('다음 입금일은 오늘 이후 아직 들어오지 않은 정산이 있는 첫날이다', () => {
-  const days = flowDays(
-    forecast([
-      day('2026-11-12', { completedIncome: 300_000 }),
-      day('2026-11-13'),
-      day('2026-11-14', { scheduledIncome: 1_284_500 }),
-    ]),
-  )
-  assert.equal(nextIncomeDay(days, '2026-11-12')?.date, '2026-11-14')
-})
-
-test('최소 운영 자금이 없으면 0원 기준으로 부족을 판단한다', () => {
-  const days = flowDays(
-    forecast([day('2026-11-12', { closingBalance: -1 })], { minimumOperatingFunds: undefined }),
-  )
-  assert.equal(days[0]?.belowMinimum, true)
-})
-
-test('날짜 칸 금액은 짧게 쓰고, 만 원 미만은 원 단위로 쓴다', () => {
-  assert.equal(shortWon(4_380_000), '438만')
-  assert.equal(shortWon(1_284_500), '128.5만')
-  assert.equal(shortWon(-860_000), '-86만')
-  assert.equal(shortWon(9_500), '9,500원')
-})
 
 test('연결 전 홈은 결제 기록이 있을 때만 돈 · 보안 영역을 보인다', () => {
   const empty = { payouts: [], entries: [] } as never

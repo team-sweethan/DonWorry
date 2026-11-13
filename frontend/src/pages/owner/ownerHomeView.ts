@@ -1,64 +1,11 @@
 /**
  * 사장님 홈 요약 계산.
- * 화면 그림과 분리해 둔 이유: 서로 기준이 다른 금액(지급 완료 · 예정 · 계산 잔액)을 섞지 않는지,
- * 조회 실패를 0원으로 바꾸지 않는지를 테스트로 확인하기 위해서다.
+ * 화면 그림과 분리해 둔 이유: 조회 실패를 0원 · 할 일 없음으로 바꾸지 않는지를 테스트로 확인하기 위해서다.
  * 테스트가 Node 타입 제거로 불러오므로 import에 `.ts`를 붙인다 (tests/README.md).
  */
 import type { CashFlowForecast, SettlementReport } from '../../api/finance.ts'
 import type { MerchantCaseOverview } from '../../types/merchantCase.ts'
 import type { StatusTone } from './statusTone.ts'
-
-export type FlowDay = {
-  date: string
-  /** 그날 들어올 정산 (완료 + 예정 + 예상) */
-  income: number
-  /** 아직 들어오지 않은 정산 (예정 + 예상). 이미 지급된 돈은 "받은 돈"에 들어간다 */
-  pendingIncome: number
-  /** 그날 나갈 지출 (완료 + 예정) */
-  expense: number
-  openingBalance: number
-  closingBalance: number
-  belowMinimum: boolean
-  expenseTitles: string[]
-}
-
-export function flowDays(forecast: CashFlowForecast): FlowDay[] {
-  // 최소 운영 자금을 정하지 않았으면 0원으로 본다 (자금 현황 화면과 같다)
-  const minimum = forecast.minimumOperatingFunds ?? 0
-  return forecast.days.map((day) => ({
-    date: day.date,
-    income: day.completedIncome + day.scheduledIncome + day.expectedIncome,
-    pendingIncome: day.scheduledIncome + day.expectedIncome,
-    expense: day.paidExpenses + day.plannedExpenses,
-    openingBalance: day.openingBalance,
-    closingBalance: day.closingBalance,
-    belowMinimum: day.closingBalance < minimum,
-    expenseTitles: day.movements
-      .filter((m) => m.source === 'EXPENSE' || m.source === 'RECURRING_EXPENSE')
-      .map((m) => m.title),
-  }))
-}
-
-/** 오늘부터 아직 들어오지 않은 정산 합계. 이미 완료된 지급은 "받은 돈"에 들어가므로 뺀다. */
-export function upcomingIncome(days: FlowDay[], today: string) {
-  return days.filter((d) => d.date >= today).reduce((sum, d) => sum + d.pendingIncome, 0)
-}
-
-export function nextIncomeDay(days: FlowDay[], today: string) {
-  return days.find((d) => d.date >= today && d.pendingIncome > 0) ?? null
-}
-
-const compactFormat = new Intl.NumberFormat('ko-KR', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-})
-
-/** 날짜 카드용 짧은 금액 (438만 · 1.2억). 정확한 금액은 근거 줄과 읽기 프로그램에 따로 준다. */
-export function shortWon(value: number) {
-  return Math.abs(value) < 10_000
-    ? `${value.toLocaleString('ko-KR')}원`
-    : compactFormat.format(value)
-}
 
 /**
  * 연결 전 홈에서 돈 · 보안 영역을 보일지.
@@ -152,7 +99,7 @@ export function homeTodos(input: TodoInput): HomeTodo[] {
       tone: 'warning',
       title: '자동 지급이 꺼져 있어요',
       detail:
-        '앞으로 7일 잔액은 정산 예정금이 예정대로 지급된다고 가정한 계산이에요. 실제 지급 여부는 정산 내역에서 확인해 주세요',
+        '잔액 부족 예측은 정산 예정금이 예정대로 지급된다고 가정한 계산이에요. 실제 지급 여부는 정산 내역에서 확인해 주세요',
       to: '/owner/settlements',
     })
   if (f?.firstShortageDate) {
