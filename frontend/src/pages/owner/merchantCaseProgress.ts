@@ -152,6 +152,7 @@ export function paymentOutcome(p: MerchantPaymentResult) {
 
 /** 결론 줄에 쓰는 짧은 결과 이름 — 마지막 단계 이름을 쓰되 진행 중은 하나로 묶는다 */
 function outcomeLabel(p: MerchantPaymentResult, progress: PaymentProgress) {
+  if (p.paymentStatus === null && !p.customerCanceled) return '확인 불가'
   const last = progress.steps[progress.steps.length - 1]
   if (!last || last.state === 'todo' || last.state === 'current')
     return progress.tone === 'progress' && !p.decision ? '확인 중' : '반영 중'

@@ -64,6 +64,11 @@ test('결제 상태를 모르면 완료로 채우지 않는다', () => {
   const p = paymentProgress(payment({ decision: 'ACCEPT', paymentStatus: null }))
   assert.equal(p.steps[3]?.state, 'todo')
   assert.equal(p.result, '결제 상태를 확인하지 못했어요')
+  assert.equal(paymentOutcome(payment({ paymentStatus: null })).label, '확인 불가')
+  assert.equal(
+    paymentOutcome(payment({ decision: 'ACCEPT', paymentStatus: null })).label,
+    '확인 불가',
+  )
 })
 
 test('판정 없이 끝난 결제는 판정 칸을 건너뛴 것으로 보여준다', () => {

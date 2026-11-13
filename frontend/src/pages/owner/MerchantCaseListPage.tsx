@@ -13,7 +13,8 @@ import type {
   MerchantCaseStatus,
 } from '../../types/merchantCase'
 import { MerchantCaseRowItem } from './MerchantCaseCard'
-import { caseStatus, heldMoney } from './merchantCaseProgress'
+import { merchantCasePaymentSummary } from './merchantCaseView'
+import { caseStatus } from './merchantCaseProgress'
 import { StatusMark } from './StatusMark'
 import { RollingNumber } from './RollingNumber'
 import { MerchantCaseProcess } from './MerchantCaseProcess'
@@ -108,20 +109,16 @@ export function MerchantCaseListPage() {
     target?.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' })
   }, [listReady, linkedId])
 
-  // 맨 위 문장 · 필터 금액: 진행 중 사건 상세가 모두 오면 아직 보류 중인 결제만 세고 더한다
-  const activeDetails = active.map((c) => details.get(c.caseId).detail)
-  const buckets =
-    active.length > 0 && activeDetails.every((d) => d !== null)
-      ? heldMoney(activeDetails as NonNullable<(typeof activeDetails)[number]>[])
-      : null
-  const heldCount = buckets
-    ? buckets.reduce((n, b) => n + b.count, 0)
-    : active.reduce((n, c) => n + c.paymentCount, 0)
-  const heldTotal = buckets ? buckets.reduce((n, b) => n + b.amount, 0) : null
-  const stillHeld = active.length > 0 && heldCount > 0
+  const loading = result?.refreshKey !== refreshKey
+  const summary = merchantCasePaymentSummary(
+    active,
+    active.map((c) => details.get(c.caseId)),
+    loading ? 'loading' : result?.failed ? 'error' : 'ready',
+  )
+  const { buckets, heldCount, heldTotal } = summary
+  const stillHeld = summary.kind === 'held'
 
   if (result?.forbidden) return <ScreenResult kind="403" homePath="/owner" />
-  const loading = result?.refreshKey !== refreshKey
 
   // 목록 거르기: 상태 필터. 이미 받은 목록만 거르고 API를 더 부르지 않는다
   // 사건 번호는 화면에 보이지 않는다 — 차례로 붙는 내부 번호라 번호 차이로 플랫폼 전체 사건 수를 짐작할 수 있다
@@ -204,7 +201,15 @@ export function MerchantCaseListPage() {
         <>
           <section className="mcl-hero" aria-live="polite">
             <p className="mcl-hero-line">
-              {stillHeld ? (
+              {summary.kind === 'unknown' ? (
+                '일부 결제의 상태를 확인하지 못했어요'
+              ) : summary.kind === 'unavailable' ? (
+                '최신 결제 상태를 확인하지 못했어요'
+              ) : summary.kind === 'loading' ? (
+                '최신 결제 상태를 확인하고 있어요'
+              ) : summary.kind === 'pending' ? (
+                '아직 처리가 끝나지 않은 결제가 있어요'
+              ) : stillHeld ? (
                 <>
                   아직 처리가 끝나지 않은 결제가{' '}
                   {/* 시연 연출: 자리마다 숫자가 굴러가 멈춘 뒤 형광펜이 한 번 그어진다 (동작 줄이기면 둘 다 없음) */}
@@ -225,13 +230,19 @@ export function MerchantCaseListPage() {
               )}
             </p>
             <p className="mcl-hero-sub">
-              {stillHeld
-                ? '끝날 때까지 이 돈은 정산되지 않아요. 사장님이 하실 일은 없어요.'
-                : cases.length === 0
-                  ? '이상한 결제가 생기면 돈워리가 먼저 멈추고 여기에 알려 드려요.'
-                  : active.length > 0
-                    ? '진행 중인 사건의 결제는 모두 처리됐고, 사건을 마무리하고 있어요.'
-                    : '멈췄던 결제는 모두 확인이 끝났어요.'}
+              {summary.kind === 'unknown' || summary.kind === 'unavailable'
+                ? '처리 완료 여부를 확정할 수 없어요. 새로고침하거나 사건을 펼쳐 결제별 상태를 확인해 주세요.'
+                : summary.kind === 'loading'
+                  ? '결제별 최신 상태를 확인한 뒤 건수와 금액을 보여드려요.'
+                  : summary.kind === 'pending'
+                    ? '일부 결제가 처리 중이에요. 사건을 펼쳐 결제별 상태를 확인해 주세요.'
+                    : stillHeld
+                      ? '끝날 때까지 이 돈은 정산되지 않아요. 사장님이 하실 일은 없어요.'
+                      : cases.length === 0
+                        ? '이상한 결제가 생기면 돈워리가 먼저 멈추고 여기에 알려 드려요.'
+                        : active.length > 0
+                          ? '진행 중인 사건의 결제는 모두 처리됐고, 사건을 마무리하고 있어요.'
+                          : '멈췄던 결제는 모두 확인이 끝났어요.'}
               {cases.length > 0 && (
                 <span className="mcl-hero-stats">
                   지금까지 정상 처리 결정 {list.overview.acceptDecisionCount}건 · 취소 결정{' '}

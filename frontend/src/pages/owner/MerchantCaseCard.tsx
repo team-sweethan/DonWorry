@@ -153,7 +153,12 @@ function Body({
       </div>
     )
   return (
-    <div className={state.stale ? 'is-stale' : undefined} aria-busy={state.stale}>
+    <div className={state.stale ? 'is-stale' : undefined} aria-busy={state.stale && !state.failed}>
+      {state.stale && !state.failed && (
+        <p className="mct-detail mct-note" role="status">
+          최신 내용을 불러오고 있어요. 아래는 이전에 조회한 내용이에요.
+        </p>
+      )}
       {state.failed && (
         <div className="mct-detail mct-failed" role="status">
           <span>최신 내용을 불러오지 못했어요. 아래는 마지막으로 불러온 내용이에요.</span>
@@ -194,11 +199,16 @@ export function MerchantCaseRowItem({
   /** 정산 권한이 있으면 매입 완료 결제에 정산 내역 링크를 단다 */
   settlementLink: boolean
 }) {
-  const detail = state.detail
-  const status = detail?.displayStatus ?? row?.displayStatus
-  const createdAt = detail?.createdAt ?? row?.createdAt
-  const paymentCount = detail?.payments.length ?? row?.paymentCount
-  const conclusion = detail ? caseConclusion(detail.payments) : null
+  const detail = state.status === 'ready' && !state.stale && !state.failed ? state.detail : null
+  const status = row?.displayStatus ?? detail?.displayStatus
+  const createdAt = row?.createdAt ?? detail?.createdAt
+  const paymentCount = row?.paymentCount ?? detail?.payments.length
+  const conclusion =
+    detail &&
+    (!row ||
+      (detail.displayStatus === row.displayStatus && detail.payments.length === row.paymentCount))
+      ? caseConclusion(detail.payments)
+      : null
   const bodyId = `case-${caseId}-body`
   return (
     <div className={`mct-row${open ? ' is-open' : ''}`}>
