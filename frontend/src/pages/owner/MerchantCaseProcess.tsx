@@ -3,11 +3,13 @@ import type { CSSProperties } from 'react'
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 const delay = (ms: number) => ({ '--ow-delay': `${ms}ms` }) as CSSProperties
 
-/** 상세를 다 받았으면 보류 중 결제 건수 · 금액, 아직이면 사건 수만 */
-const stageValue = (money: { count: number; amount: number } | null, cases: number) =>
+/** 상세를 다 받았으면 보류 중 결제 건수 · 금액, 아직이면 사건 수만. 금액을 모르는 결제가 섞이면(null) 건수만 */
+const stageValue = (money: { count: number; amount: number | null } | null, cases: number) =>
   money
     ? money.count > 0
-      ? `${money.count}건 · ${won(money.amount)}`
+      ? money.amount === null
+        ? `${money.count}건 · 금액 일부 확인 불가`
+        : `${money.count}건 · ${won(money.amount)}`
       : '없음'
     : cases > 0
       ? `사건 ${cases}건`
@@ -37,8 +39,8 @@ export function MerchantCaseProcess({
   closedCases,
 }: {
   newToday: number
-  checking: { count: number; amount: number } | null
-  applying: { count: number; amount: number } | null
+  checking: { count: number; amount: number | null } | null
+  applying: { count: number; amount: number | null } | null
   /** 금액을 아직 모를 때 쓰는 사건 수 */
   checkingCases: number
   applyingCases: number

@@ -14,7 +14,7 @@ import type {
 } from '../../types/merchantCase'
 import { MerchantCaseRowItem } from './MerchantCaseCard'
 import { merchantCasePaymentSummary } from './merchantCaseView'
-import { caseStatus } from './merchantCaseProgress'
+import { caseStatus, heldAmount } from './merchantCaseProgress'
 import { StatusMark } from './StatusMark'
 import { RollingNumber } from './RollingNumber'
 import { MerchantCaseProcess } from './MerchantCaseProcess'
@@ -128,12 +128,13 @@ export function MerchantCaseListPage() {
     PROCESSING: cases.filter((c) => c.displayStatus === 'PROCESSING').length,
     CLOSED: finished.length,
   }
-  const filterMoney: Partial<Record<CaseFilter, number>> = buckets
-    ? {
-        INVESTIGATING: buckets[0]!.amount,
-        PROCESSING: buckets[1]!.amount + buckets[2]!.amount,
-      }
-    : {}
+  // 금액을 모르는 결제가 섞인 묶음은 금액을 붙이지 않는다 (확인된 금액만 더한 값을 합계처럼 보이지 않게)
+  const checkingAmount = buckets ? heldAmount([buckets[0]!]) : null
+  const applyingAmount = buckets ? heldAmount([buckets[1]!, buckets[2]!]) : null
+  const filterMoney: Partial<Record<CaseFilter, number>> = {
+    ...(checkingAmount !== null && { INVESTIGATING: checkingAmount }),
+    ...(applyingAmount !== null && { PROCESSING: applyingAmount }),
+  }
   const activeShown = active.filter((c) => filter === 'ALL' || c.displayStatus === filter)
   const finishedShown = filter === 'ALL' || filter === 'CLOSED' ? finished : []
   const today = kstDate(now)
@@ -253,13 +254,10 @@ export function MerchantCaseListPage() {
             {cases.length > 0 && (
               <MerchantCaseProcess
                 newToday={cases.filter((c) => now - utc(c.createdAt) < DAY).length}
-                checking={buckets ? buckets[0]! : null}
+                checking={buckets ? { count: buckets[0]!.count, amount: checkingAmount } : null}
                 applying={
                   buckets
-                    ? {
-                        count: buckets[1]!.count + buckets[2]!.count,
-                        amount: buckets[1]!.amount + buckets[2]!.amount,
-                      }
+                    ? { count: buckets[1]!.count + buckets[2]!.count, amount: applyingAmount }
                     : null
                 }
                 checkingCases={counts.INVESTIGATING}

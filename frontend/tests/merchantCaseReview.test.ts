@@ -77,6 +77,15 @@ test('merchantCasePaymentSummary_keepsUnknownAndPendingSeparateFromCompletedPaym
   assert.equal(heldSummary.kind, 'held')
   assert.equal(heldSummary.heldCount, 1)
   assert.equal(heldSummary.heldTotal, 77777)
+  // 금액을 모르는 보류 결제가 있으면 맨 위 문장에 금액을 쓰지 않고 건수만 쓴다
+  const unknownHeld = {
+    ...detail,
+    payments: [{ ...detail.payments[0], paymentStatus: 'HELD' as const, amount: null }],
+  }
+  const unknownSummary = merchantCasePaymentSummary([row], [ready({ detail: unknownHeld })])
+  assert.equal(unknownSummary.kind, 'held')
+  assert.equal(unknownSummary.heldCount, 1)
+  assert.equal(unknownSummary.heldTotal, null)
 })
 
 // 직전 상세와 실패 뒤 보존한 상세는 모두 최신 결과로 계산하지 않는다.

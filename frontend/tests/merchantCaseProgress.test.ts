@@ -3,7 +3,9 @@ import { test } from 'node:test'
 import type { MerchantPaymentResult } from '../src/types/merchantCase.ts'
 import {
   caseConclusion,
+  conclusionAmountText,
   conclusionSentence,
+  heldAmount,
   heldMoney,
   paymentDecisionNote,
   paymentOutcome,
@@ -188,4 +190,41 @@ test('결제별 담당자 판정은 결과와 따로 보여준다', () => {
     paymentDecisionNote(payment({ customerCanceled: true, paymentStatus: 'VOIDED' })),
     null,
   )
+})
+
+// 금액을 모르는 결제(amount null)가 섞이면 확인된 금액만 더한 값을 사건 총액처럼 보이지 않는다 (PR #809 리뷰)
+test('사건 금액 칸은 금액을 모르는 결제를 확정 합계와 구분한다', () => {
+  const known = payment({ amount: 58_000, decision: 'ACCEPT', paymentStatus: 'CAPTURED' })
+  const unknown = payment({ amount: null, decision: 'ACCEPT', paymentStatus: 'CAPTURED' })
+  assert.equal(conclusionAmountText(caseConclusion([known, known])), '116,000원')
+  assert.equal(conclusionAmountText(caseConclusion([unknown, unknown])), '확인 불가')
+  assert.equal(conclusionAmountText(caseConclusion([known, unknown])), '58,000원 외 1건 확인 불가')
+  assert.equal(conclusionAmountText(caseConclusion([])), '—')
+  // 결론 문장도 금액을 모르는 결제가 섞인 묶음은 건수만 쓴다
+  const mixed = caseConclusion([
+    known,
+    unknown,
+    payment({ amount: 420_000, decision: 'REJECT', paymentStatus: 'VOIDED' }),
+  ])
+  assert.equal(
+    conclusionSentence(mixed),
+    '2건은 정상 매입됐고, 1건 420,000원은 매입 전에 승인이 취소됐어요',
+  )
+})
+
+test('보류 금액 합계는 금액을 모르는 결제를 0원으로 더하지 않는다', () => {
+  const buckets = heldMoney([
+    { payments: [payment({ amount: 189_000 }), payment({ amount: null })] },
+  ])
+  assert.deepEqual(
+    buckets.map((b) => [b.key, b.count, b.amount, b.unknownCount]),
+    [
+      ['checking', 2, 189_000, 1],
+      ['accepting', 0, 0, 0],
+      ['rejecting', 0, 0, 0],
+    ],
+  )
+  assert.equal(heldAmount(buckets), null)
+  assert.equal(heldAmount(buckets.slice(1)), 0)
+  assert.equal(heldAmount(heldMoney([{ payments: [payment({ amount: 189_000 })] }])), 189_000)
 })

@@ -1,6 +1,6 @@
 import type { MerchantCaseDetail, MerchantCaseRow } from '../../types/merchantCase.ts'
 import type { HeldMoney } from './merchantCaseProgress.ts'
-import { heldMoney } from './merchantCaseProgress.ts'
+import { heldAmount, heldMoney } from './merchantCaseProgress.ts'
 
 export type CaseDetailEntry = {
   key: string
@@ -78,6 +78,6 @@ export function merchantCasePaymentSummary(
     kind: heldCount ? 'held' : 'complete',
     buckets,
     heldCount,
-    heldTotal: buckets?.reduce((sum, bucket) => sum + bucket.amount, 0) ?? null,
+    heldTotal: buckets ? heldAmount(buckets) : null,
   }
 }

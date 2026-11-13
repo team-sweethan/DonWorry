@@ -7,6 +7,7 @@ import { dateTime } from '../security/case/caseLabels'
 import {
   caseConclusion,
   caseStatus,
+  conclusionAmountText,
   conclusionSentence,
   paymentDecisionNote,
   paymentOutcome,
@@ -238,7 +239,7 @@ export function MerchantCaseRowItem({
         </span>
         <span className="mct-date">{createdAt ? dateTime(createdAt) : ''}</span>
         <span className="mct-num">{paymentCount !== undefined ? `${paymentCount}건` : ''}</span>
-        <span className="mct-money">{conclusion ? won(conclusion.totalAmount) : '—'}</span>
+        <span className="mct-money">{conclusion ? conclusionAmountText(conclusion) : '—'}</span>
         <span className="mct-result">{conclusion ? resultSummary(conclusion) : '—'}</span>
         <DownOutlined className="mct-chevron" aria-hidden="true" />
       </button>

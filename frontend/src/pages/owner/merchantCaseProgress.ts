@@ -115,8 +115,14 @@ export type CaseConclusion = {
   paymentCount: number
   totalAmount: number
   unknownAmountCount: number
-  /** 결과별 묶음. 같은 결과끼리 건수와 금액을 더한다. 화면에 순서대로 쓴다 */
-  groups: { result: string; tone: StatusTone; count: number; amount: number }[]
+  /** 결과별 묶음. 같은 결과끼리 건수와 금액을 더한다. 화면에 순서대로 쓴다. unknownCount는 금액을 모르는 결제 수 */
+  groups: {
+    result: string
+    tone: StatusTone
+    count: number
+    amount: number
+    unknownCount: number
+  }[]
 }
 
 /** 상세 맨 위 한 줄 결론. 결제별 진행 단계와 같은 판단(paymentProgress)으로 묶는다. */
@@ -127,10 +133,18 @@ export function caseConclusion(payments: MerchantPaymentResult[]): CaseConclusio
   for (const p of payments) {
     const progress = paymentProgress(p)
     const label = outcomeLabel(p, progress)
-    const group = groups.get(label) ?? { result: label, tone: progress.tone, count: 0, amount: 0 }
+    const group = groups.get(label) ?? {
+      result: label,
+      tone: progress.tone,
+      count: 0,
+      amount: 0,
+      unknownCount: 0,
+    }
     group.count += 1
-    if (p.amount === null) unknownAmountCount += 1
-    else {
+    if (p.amount === null) {
+      unknownAmountCount += 1
+      group.unknownCount += 1
+    } else {
       group.amount += p.amount
       totalAmount += p.amount
     }
@@ -187,8 +201,19 @@ const phrase = (label: string, last: boolean) => {
 const wonText = (n: number) => `${n.toLocaleString('ko-KR')}원`
 
 /**
+ * 사건 줄 "금액" 칸. 금액을 모르는 결제(amount null)가 섞이면 확인된 금액만 더한 값을 사건 총액처럼 쓰지 않는다.
+ * 모두 모르면 "확인 불가", 일부만 모르면 확인된 합계에 "외 N건 확인 불가"를 붙인다.
+ */
+export function conclusionAmountText(c: CaseConclusion) {
+  if (c.paymentCount === 0) return '—'
+  if (c.unknownAmountCount === 0) return wonText(c.totalAmount)
+  if (c.unknownAmountCount === c.paymentCount) return '확인 불가'
+  return `${wonText(c.totalAmount)} 외 ${c.unknownAmountCount}건 확인 불가`
+}
+
+/**
  * 사건 결론을 한 문장으로. 예) "2건 116,000원은 정상 매입됐고, 1건 420,000원은 매입 전에 승인이 취소됐어요"
- * 결과가 하나뿐이면 "결제 2건 모두 정상 매입됐어요". 금액을 모르는 묶음은 건수만 쓴다.
+ * 결과가 하나뿐이면 "결제 2건 모두 정상 매입됐어요". 금액을 모르는 결제가 하나라도 섞인 묶음은 건수만 쓴다.
  */
 export function conclusionSentence(c: CaseConclusion) {
   if (c.groups.length === 0) return ''
@@ -197,7 +222,7 @@ export function conclusionSentence(c: CaseConclusion) {
   return c.groups
     .map((g, i) => {
       const last = i === c.groups.length - 1
-      const amount = g.amount > 0 ? ` ${wonText(g.amount)}` : ''
+      const amount = g.amount > 0 && g.unknownCount === 0 ? ` ${wonText(g.amount)}` : ''
       return `${g.count}건${amount}은 ${phrase(g.result, last)}`
     })
     .join(', ')
@@ -207,26 +232,36 @@ export type HeldMoney = {
   key: 'checking' | 'accepting' | 'rejecting'
   label: string
   count: number
+  /** 금액을 아는 결제만 더한 값. unknownCount가 0일 때만 합계로 쓴다 */
   amount: number
+  unknownCount: number
 }[]
+
+/** 묶음들의 금액 합계. 금액을 모르는 결제가 하나라도 있으면 null — 건수만 보여준다 */
+export function heldAmount(buckets: HeldMoney): number | null {
+  return buckets.some((b) => b.unknownCount > 0)
+    ? null
+    : buckets.reduce((sum, b) => sum + b.amount, 0)
+}
 
 /**
  * 아직 처리가 끝나지 않은(결제 상태가 HELD인) 돈이 어디로 가는 중인지.
  * 담당자 확인 중 · 정상 결정 후 매입 진행 중 · 취소 결정 후 취소 진행 중으로 나눈다.
- * 이미 매입 · 취소가 끝난 결제와 고객이 직접 취소한 결제는 넣지 않는다. 금액을 모르는 결제는 건수만 센다.
+ * 이미 매입 · 취소가 끝난 결제와 고객이 직접 취소한 결제는 넣지 않는다. 금액을 모르는 결제는 unknownCount로 따로 센다(0원으로 더하지 않는다).
  */
 export function heldMoney(details: { payments: MerchantPaymentResult[] }[]): HeldMoney {
   const buckets: HeldMoney = [
-    { key: 'checking', label: '담당자 확인 중', count: 0, amount: 0 },
-    { key: 'accepting', label: '정상 결정 · 매입 진행 중', count: 0, amount: 0 },
-    { key: 'rejecting', label: '취소 결정 · 취소 진행 중', count: 0, amount: 0 },
+    { key: 'checking', label: '담당자 확인 중', count: 0, amount: 0, unknownCount: 0 },
+    { key: 'accepting', label: '정상 결정 · 매입 진행 중', count: 0, amount: 0, unknownCount: 0 },
+    { key: 'rejecting', label: '취소 결정 · 취소 진행 중', count: 0, amount: 0, unknownCount: 0 },
   ]
   for (const d of details)
     for (const p of d.payments) {
       if (p.paymentStatus !== 'HELD' || p.customerCanceled) continue
       const bucket = buckets[p.decision === 'ACCEPT' ? 1 : p.decision === 'REJECT' ? 2 : 0]!
       bucket.count += 1
-      bucket.amount += p.amount ?? 0
+      if (p.amount === null) bucket.unknownCount += 1
+      else bucket.amount += p.amount
     }
   return buckets
 }
