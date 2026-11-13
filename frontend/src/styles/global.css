@@ -865,32 +865,31 @@ textarea {
 /* ── 역할별 바깥 틀 (#399) — 관리 화면 틀은 항상 data-role이 붙는다. 색 · 간격은 여기서만 정한다 ──────────────────────────────────────────
    헤더 · 사이드바 · 메뉴 강조를 역할마다 다르게 한다.
    #713: 시연 때 처음 보는 사람이 역할을 구분하도록 본문 배경 · 제목 앞 선 · 선택된 탭 · 안내 칸까지 역할 색을 넣는다.
-   대표 색(--dw-primary, antd colorPrimary)과 버튼 · 링크 파랑, 상태 색(위험 · 대기 · 완료)은 세 역할 공통이다.
-   보안 직원: 네이비 + 파랑 (관제) / 관리자: 차콜 + 보라 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
+   보안 직원 화면의 대표 색과 버튼은 채도를 낮춘 파랑을 쓴다. 상태 색(위험 · 대기 · 완료)은 세 역할 공통이다.
+   보안 직원: 스틸 블루 (관제) / 관리자: 차콜 + 보라 (운영 콘솔) / 사장님: 크림 + 금색 (랜딩 톤) */
 .admin-viewport[data-role] {
   --dw-header-height: 64px;
   --dw-sidebar-width: 236px;
   /* 본문 최대 폭 · 안쪽 생성 폼 폭 (#735) */
   --dw-page-width: 1520px;
   --dw-form-width: 640px;
-  --shell-sidebar: #172554;
-  --shell-text: #c9d6f0;
-  --shell-muted: #a1b3d7;
+  --shell-sidebar: #203858;
+  --shell-text: #dce7f2;
+  --shell-muted: #acbfd3;
   --shell-line: #ffffff1f;
   --shell-hover: #ffffff12;
-  --shell-active: #244681;
-  --shell-active-text: #fff;
-  --shell-accent: #80b7ff;
-  --shell-tint: #eaf2ff;
-  --shell-ink: #1e4f94;
-  --shell-header: #f8faff;
-  --shell-header-line: #dce5f4;
-  /* 본문 배경 · 제목 앞 선 · 선택된 탭 글자와 밑줄 · 옅은 안내 칸 */
-  --shell-canvas: #f5f7fb;
-  --shell-strong: #2563eb;
-  --shell-tab: #2563eb;
-  --shell-panel: #f5f8ff;
-  --shell-panel-line: #dce7f8;
+  --shell-active: #355779;
+  --shell-active-text: #f3f7fc;
+  --shell-accent: #90b4d8;
+  --shell-tint: #e7eff8;
+  --shell-ink: #365f88;
+  --shell-header: #f7f9fc;
+  --shell-header-line: #d9e3ee;
+  --shell-canvas: #f2f5f9;
+  --shell-strong: #4978a8;
+  --shell-tab: #3f6e9d;
+  --shell-panel: #eff4fa;
+  --shell-panel-line: #d5e1ee;
 }
 .admin-viewport[data-role='admin'] {
   --shell-sidebar: #24272e;
@@ -908,6 +907,10 @@ textarea {
   --shell-tab: #6d28d9;
   --shell-panel: #f8f6fd;
   --shell-panel-line: #e4dcf5;
+}
+.admin-viewport[data-role='security'] {
+  --dw-primary: #466f99;
+  --dw-accent: #7099bf;
 }
 .admin-viewport[data-role='owner'] {
   --shell-sidebar: #fffcf5;
@@ -1149,34 +1152,22 @@ textarea {
   text-align: center;
 }
 
-/* 사장님 사이드바 아래 안내 — 다른 역할에서는 숨긴다 */
-.dw-owner-note {
-  display: none;
+/* 사장님 메뉴는 크림색 본문과 구분한다. 계정 캡슐 · 본문의 색은 그대로 둔다. */
+.admin-viewport[data-role='owner'] .dw-sidebar > nav {
+  --shell-sidebar: #383129;
+  --shell-text: #f1e9dc;
+  --shell-muted: #cabeaa;
+  --shell-line: #ffffff24;
+  --shell-hover: #ffffff10;
+  --shell-active-text: #fff8eb;
+  background: var(--shell-sidebar);
 }
-.admin-viewport[data-role='owner'] .dw-owner-note {
-  display: block;
-  margin: auto 4px 0;
-  padding: 16px 14px;
-  border-radius: 12px;
-  background: #fbf3df;
-  text-align: center;
+.admin-viewport[data-role='owner'] .dw-sidebar > nav .dw-nav-link.active {
+  background: var(--shell-canvas);
+  color: var(--shell-ink);
 }
-.dw-owner-note-mascot {
-  display: block;
-  margin: 0 auto 8px;
-}
-.dw-owner-note strong {
-  display: block;
-  color: #463b29;
-  font-size: 13px;
-  font-weight: 700;
-}
-.dw-owner-note p {
-  margin: 4px 0 0;
-  color: var(--shell-muted);
-  font-size: 12px;
-  line-height: 1.6;
-  word-break: keep-all;
+.admin-viewport[data-role='owner'] .dw-sidebar > nav .dw-nav-link.active .dw-nav-icon {
+  color: var(--shell-ink);
 }
 
 /* 사이드바 접기 버튼 (#537) */
@@ -1261,9 +1252,6 @@ textarea {
     font-size: 0;
     line-height: 0;
   }
-  .admin-viewport[data-role].is-sidebar-collapsed .dw-owner-note {
-    display: none;
-  }
 }
 @media (max-width: 760px) {
   .dw-sidebar-top {
@@ -1272,6 +1260,749 @@ textarea {
 }
 @media (prefers-reduced-motion: reduce) {
   .admin-viewport[data-role] {
+    transition: none;
+  }
+}
+
+/* 공통 틀: 색상 토큰은 유지하고 브랜드 · 프로필 · 메뉴의 위계를 정리한다. */
+.dw-sidebar-identity {
+  --shell-text: var(--shell-ink);
+  --shell-muted: #64748b;
+  --shell-line: var(--shell-header-line);
+  --shell-hover: var(--shell-tint);
+  --shell-active: var(--shell-tint);
+  --shell-active-text: var(--shell-ink);
+  --shell-accent: var(--shell-ink);
+  flex-shrink: 0;
+  margin: -8px -12px 14px;
+  padding: 8px 12px 14px;
+  border-radius: 23px 0 0 16px;
+  background: var(--shell-header);
+  color: var(--shell-text);
+  overflow: clip;
+}
+.dw-sidebar-identity .dw-profile {
+  margin-bottom: 0;
+  padding: 4px 0 0;
+  border: 0;
+}
+.admin-viewport[data-role] .dw-sidebar-identity .dw-sidebar-top {
+  min-height: 48px;
+  margin-bottom: 4px;
+}
+.dw-sidebar-identity .dw-brand-wordmark {
+  font-size: 22px;
+  letter-spacing: -1px;
+}
+.admin-viewport[data-role] .dw-sidebar-top {
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  min-height: 56px;
+  margin: 0 0 20px;
+}
+.admin-viewport[data-role] .dw-sidebar .dw-brand {
+  min-width: 0;
+  padding: 0 8px;
+  color: var(--shell-text);
+}
+.dw-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  flex-shrink: 0;
+  margin: 0 8px 24px;
+  padding: 16px 0;
+  border-block: 1px solid var(--shell-line);
+}
+.dw-profile-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.dw-profile-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dw-profile-heading .dw-header-round,
+.dw-island-actions .dw-header-round {
+  flex-shrink: 0;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  border-color: var(--shell-line);
+  background: transparent;
+  color: var(--shell-text);
+  box-shadow: none;
+}
+.admin-viewport[data-role].is-headerless {
+  --dw-header-height: 0px;
+  grid-template-rows: 0 minmax(0, 1fr);
+}
+.admin-viewport[data-role] .dw-profile .dw-brand-context {
+  margin: 0;
+  color: var(--shell-text);
+  font-size: 13px;
+}
+.dw-profile .dw-account-menu {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 3px;
+  width: 100%;
+  height: auto;
+  padding: 8px 6px;
+  border-radius: 10px;
+  color: var(--shell-text);
+  text-align: left;
+  background: var(--shell-hover);
+}
+.dw-profile .dw-account-menu .dw-account-avatar {
+  grid-row: 1 / 3;
+}
+.dw-profile .dw-account-menu .dw-user-name {
+  grid-column: 2;
+  max-width: 100%;
+  font-size: 13px;
+}
+.dw-profile .dw-account-menu .dw-role-pill {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+.dw-profile .dw-account-menu .dw-account-chevron {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  color: var(--shell-muted);
+}
+.dw-profile-login .dw-last-login {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dw-profile-avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--shell-active);
+  color: var(--shell-active-text);
+  font-weight: 700;
+}
+.dw-profile-details {
+  min-width: 0;
+}
+.dw-profile-hello,
+.dw-profile-role {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dw-profile-role {
+  color: var(--shell-muted);
+  font-size: 12px;
+}
+.admin-viewport[data-role] .dw-brand-context {
+  margin-left: 24px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  gap: 10px;
+  font-size: 14px;
+}
+.admin-viewport[data-role] .dw-nav-link {
+  min-height: 44px;
+  border-radius: 5px;
+}
+@media screen and (width > 760px) {
+  .admin-viewport[data-role] {
+    margin: 16px;
+    min-height: calc(100vh - 32px);
+    border: 1px solid var(--shell-header-line);
+    border-radius: 24px;
+    background: var(--shell-canvas);
+  }
+  .admin-viewport[data-role] .dw-header {
+    grid-column: 2;
+    grid-row: 1;
+    top: 16px;
+    border-radius: 0 23px 0 0;
+  }
+  .admin-viewport[data-role] .dw-sidebar {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    top: 0;
+    height: calc(100vh - 34px);
+    padding-top: 8px;
+    padding-bottom: 0;
+    border-radius: 23px 0 0 23px;
+    border-right: 0;
+    background: var(--shell-canvas);
+    overflow: hidden;
+    scrollbar-width: none;
+    scrollbar-gutter: auto;
+  }
+  .admin-viewport[data-role] .dw-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-sidebar-identity {
+    margin-bottom: 0;
+    border-radius: 23px 0 0 0;
+    background: var(--shell-canvas);
+  }
+  /* 밝은 프로필 아래에서 메뉴 면이 시작되고, 본문 쪽 위 모서리만 크게 둥글린다. */
+  .admin-viewport[data-role] .dw-sidebar > nav {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+    margin-inline: -12px;
+    padding: 24px 12px 16px;
+    border-radius: 0 40px 24px 23px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    scrollbar-gutter: auto;
+    background:
+      radial-gradient(
+        ellipse at top left,
+        color-mix(in srgb, var(--shell-text) 7%, transparent),
+        transparent 65%
+      ),
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--shell-text) 3%, transparent),
+        transparent 70%
+      ),
+      var(--shell-sidebar);
+    box-shadow:
+      inset 1px 0 0 color-mix(in srgb, var(--shell-text) 12%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--shell-text) 10%, transparent);
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-group {
+    flex-shrink: 0;
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav::-webkit-scrollbar {
+    display: none;
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-icon {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-text) 6%, transparent);
+    font-size: 15px;
+    opacity: 1;
+    transition:
+      transform 240ms var(--dw-shell-ease),
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-link:hover .dw-nav-icon {
+    background: color-mix(in srgb, var(--shell-text) 10%, transparent);
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-link.active .dw-nav-icon {
+    background: var(--shell-tint);
+    color: var(--shell-ink);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-ink) 10%, transparent);
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-heading {
+    margin-bottom: 8px;
+    font-size: 11px;
+    line-height: 18px;
+    letter-spacing: 0.04em;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-sidebar > nav {
+    border-top-right-radius: 24px;
+  }
+  /* 선택 메뉴와 본문을 같은 면으로 잇고, 연결부 위아래는 오목하게 둥글린다. */
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active {
+    position: relative;
+    z-index: 1;
+    width: calc(100% + 12px);
+    padding-right: 24px;
+    border-radius: 14px 0 0 14px;
+    background: var(--shell-canvas);
+    color: var(--shell-ink);
+    box-shadow: none;
+    font-weight: 700;
+  }
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active::before,
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    width: 18px;
+    height: 18px;
+    pointer-events: none;
+  }
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active::before {
+    top: -18px;
+    background: radial-gradient(circle at top left, transparent 18px, var(--shell-canvas) 18.5px);
+  }
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active::after {
+    bottom: -18px;
+    background: radial-gradient(
+      circle at bottom left,
+      transparent 18px,
+      var(--shell-canvas) 18.5px
+    );
+  }
+  .admin-viewport[data-role] .dw-sidebar .dw-nav-link.active .dw-nav-icon {
+    color: inherit;
+    opacity: 1;
+  }
+  .admin-viewport[data-role] .dw-main {
+    grid-column: 2;
+    grid-row: 2;
+    border-radius: 24px 0 23px 0;
+  }
+  .admin-viewport[data-role].is-headerless .dw-main {
+    border-radius: 0 23px 23px 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-sidebar-top {
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-brand {
+    padding: 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-brand-wordmark,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-profile .dw-brand-context,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-profile-details,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-sidebar .dw-profile-login,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-account-menu .dw-user-name,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-account-menu .dw-role-pill,
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-account-menu .dw-account-chevron {
+    display: none;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-profile {
+    margin-inline: 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-profile-account {
+    justify-content: center;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-profile-heading {
+    justify-content: center;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-account-menu {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0;
+  }
+  .admin-viewport[data-role].is-sidebar-collapsed .dw-nav-link.active {
+    padding-right: 12px;
+  }
+}
+
+/* 공통 틀의 움직임: 메뉴 배경은 하나의 면으로 이동하고 버튼은 짧게 반응한다. */
+.admin-viewport[data-role] {
+  --dw-shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dw-content-enter-duration: 220ms;
+}
+.dw-nav-highlight {
+  display: none;
+}
+.admin-viewport[data-role] .dw-nav-link,
+.admin-viewport[data-role] .dw-sidebar-toggle,
+.admin-viewport[data-role] .dw-profile .ant-btn {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms var(--dw-shell-ease);
+}
+.dw-sidebar-toggle-glyph,
+.dw-sidebar .dw-brand > svg,
+.dw-sidebar .dw-nav-icon,
+.dw-profile .dw-account-chevron {
+  transition: transform 240ms var(--dw-shell-ease);
+}
+.admin-viewport.is-sidebar-collapsed .dw-sidebar-toggle-glyph {
+  transform: rotate(180deg);
+}
+.dw-profile .dw-account-menu[aria-expanded='true'] .dw-account-chevron {
+  transform: rotate(180deg);
+}
+.admin-viewport[data-role] .dw-sidebar-toggle:active,
+.admin-viewport[data-role] .dw-profile .ant-btn:active {
+  transform: scale(0.96);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dw-sidebar .dw-brand:hover > svg {
+    transform: translateY(-1px) rotate(-4deg);
+  }
+  .dw-sidebar .dw-nav-link:not(.active):hover .dw-nav-icon {
+    transform: translateX(2px);
+  }
+  .admin-viewport[data-role] .dw-profile .dw-account-menu:hover {
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--shell-ink) 10%, transparent);
+  }
+}
+@keyframes dw-shell-label-enter {
+  from {
+    opacity: 0;
+    translate: -4px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes dw-nav-surface-on {
+  from {
+    opacity: 0.35;
+    scale: 0.985 1;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+@keyframes dw-nav-icon-on {
+  from {
+    opacity: 0.55;
+    scale: 0.92;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+@media screen and (width > 760px) {
+  .admin-viewport[data-role] {
+    transition: grid-template-columns 320ms var(--dw-shell-ease);
+  }
+  .admin-viewport[data-role]:not(.is-sidebar-collapsed) .dw-sidebar-identity .dw-sidebar-top {
+    min-width: calc(var(--dw-sidebar-width) - 24px);
+  }
+  .admin-viewport[data-role]:not(.is-sidebar-collapsed) .dw-sidebar-identity .dw-profile {
+    min-width: calc(var(--dw-sidebar-width) - 40px);
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav {
+    position: relative;
+    isolation: isolate;
+    transition: border-radius 320ms var(--dw-shell-ease);
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-link {
+    position: relative;
+    z-index: 1;
+  }
+  .admin-viewport[data-role] .dw-nav-highlight {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 12px;
+    width: calc(100% - 12px);
+    border-radius: 14px 0 0 14px;
+    pointer-events: none;
+    transition:
+      transform 360ms var(--dw-shell-ease),
+      height 240ms var(--dw-shell-ease);
+  }
+  .admin-viewport[data-role] .dw-nav-highlight-surface {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--shell-canvas);
+    transform-origin: right center;
+    animation: dw-nav-surface-on 420ms ease-out backwards;
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-link.active .dw-nav-icon {
+    animation: dw-nav-icon-on 360ms var(--dw-shell-ease) backwards;
+  }
+  .admin-viewport[data-role] .dw-nav-highlight-surface::before,
+  .admin-viewport[data-role] .dw-nav-highlight-surface::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    width: 18px;
+    height: 18px;
+  }
+  .admin-viewport[data-role] .dw-nav-highlight-surface::before {
+    top: -18px;
+    background: radial-gradient(circle at top left, transparent 18px, var(--shell-canvas) 18.5px);
+  }
+  .admin-viewport[data-role] .dw-nav-highlight-surface::after {
+    bottom: -18px;
+    background: radial-gradient(
+      circle at bottom left,
+      transparent 18px,
+      var(--shell-canvas) 18.5px
+    );
+  }
+  .admin-viewport[data-role] .dw-sidebar > nav[data-highlight-ready='true'] .dw-nav-link.active {
+    background: transparent;
+  }
+  .admin-viewport[data-role]
+    .dw-sidebar
+    > nav[data-highlight-ready='true']
+    .dw-nav-link.active::before,
+  .admin-viewport[data-role]
+    .dw-sidebar
+    > nav[data-highlight-ready='true']
+    .dw-nav-link.active::after {
+    display: none;
+  }
+  .admin-viewport[data-role]:not(.is-sidebar-collapsed)
+    :is(.dw-brand-wordmark, .dw-profile-details, .dw-nav-label) {
+    animation: dw-shell-label-enter 200ms var(--dw-shell-ease) 60ms backwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-viewport[data-role] {
+    --dw-content-enter-duration: 1ms;
+  }
+  .admin-viewport[data-role] .dw-nav-highlight-surface,
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-link.active .dw-nav-icon {
+    animation: none;
+  }
+  .admin-viewport[data-role],
+  .admin-viewport[data-role] .dw-sidebar > nav,
+  .admin-viewport[data-role] .dw-nav-highlight,
+  .admin-viewport[data-role] .dw-nav-link,
+  .admin-viewport[data-role] .dw-sidebar-toggle,
+  .admin-viewport[data-role] .dw-sidebar-toggle-glyph,
+  .admin-viewport[data-role] .dw-brand > svg,
+  .admin-viewport[data-role] .dw-nav-icon,
+  .admin-viewport[data-role] .dw-sidebar > nav .dw-nav-icon,
+  .admin-viewport[data-role] .dw-profile .ant-btn,
+  .admin-viewport[data-role] .dw-account-chevron {
+    transition: none;
+  }
+  .admin-viewport[data-role]:not(.is-sidebar-collapsed)
+    :is(.dw-brand-wordmark, .dw-profile-details, .dw-nav-label) {
+    animation: none;
+  }
+  .admin-viewport[data-role] .dw-sidebar :is(.dw-brand, .dw-nav-link):hover :is(svg, .dw-nav-icon),
+  .admin-viewport[data-role] .dw-sidebar-toggle:active,
+  .admin-viewport[data-role] .dw-profile .ant-btn:active {
+    transform: none;
+  }
+}
+
+/* 상단 중앙 계정 캡슐: 접힌 높이는 본문에 예약하고 상세 내용만 아래로 펼친다. */
+.admin-viewport[data-role].has-profile-island .dw-main {
+  padding-top: calc(var(--dw-content-padding) + 64px);
+}
+.dw-profile-island {
+  --shell-text: var(--shell-ink);
+  --shell-muted: #64748b;
+  --shell-line: var(--shell-header-line);
+  position: fixed;
+  z-index: 120;
+  top: 24px;
+  left: 50%;
+  width: min(276px, calc(100vw - 32px));
+  translate: -50% 0;
+  border: 1px solid var(--shell-header-line);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--shell-header) 96%, transparent);
+  color: var(--shell-ink);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--shell-ink) 10%, transparent);
+  backdrop-filter: blur(16px);
+  transition:
+    width 320ms var(--dw-shell-ease),
+    border-radius 320ms var(--dw-shell-ease),
+    box-shadow 240ms ease;
+}
+.dw-profile-island.is-open {
+  width: min(360px, calc(100vw - 32px));
+  border-radius: 24px;
+  box-shadow: 0 14px 40px color-mix(in srgb, var(--shell-ink) 16%, transparent);
+}
+.dw-island-summary {
+  display: flex;
+  align-items: center;
+}
+.dw-island-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 12px 0 10px;
+  border-left: 1px solid var(--shell-header-line);
+}
+.dw-island-trigger {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.dw-island-trigger:focus-visible,
+.dw-island-account-links a:focus-visible {
+  outline: 2px solid var(--shell-ink);
+  outline-offset: 3px;
+}
+.admin-viewport[data-role] .dw-profile-island .dw-brand-context {
+  flex-shrink: 0;
+  margin: 0;
+  gap: 6px;
+  font-size: 12px;
+}
+.dw-island-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--shell-tint);
+  font-size: 12px;
+  font-weight: 700;
+}
+.dw-island-space-icon {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--shell-header);
+  border-radius: 6px;
+  background: var(--shell-tint);
+  font-size: 10px;
+}
+.dw-island-person {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 160px;
+  text-align: left;
+}
+.dw-island-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 650;
+}
+.dw-island-role {
+  color: var(--shell-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.dw-island-chevron {
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: transform 280ms var(--dw-shell-ease);
+}
+.is-open .dw-island-chevron {
+  transform: rotate(180deg);
+}
+.dw-island-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 320ms var(--dw-shell-ease),
+    opacity 180ms ease,
+    visibility 0s 320ms;
+}
+.is-open .dw-island-panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.dw-island-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.dw-island-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 16px;
+  padding: 12px 0 16px;
+  border-top: 1px solid var(--shell-header-line);
+}
+.dw-island-details .dw-last-login {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.dw-island-details .dw-login-ip {
+  color: var(--shell-ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dw-island-account-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dw-island-account-links a {
+  padding: 8px 12px;
+  border: 1px solid var(--shell-header-line);
+  border-radius: 10px;
+  color: var(--shell-ink);
+  font-size: 12px;
+  text-decoration: none;
+  transition: background-color 180ms ease;
+}
+.dw-island-account-links a:hover {
+  background: var(--shell-tint);
+}
+@media screen and (width <= 760px) {
+  .dw-profile-island {
+    top: 12px;
+  }
+  .admin-viewport[data-role] .dw-sidebar-identity {
+    display: none;
+  }
+}
+@media print {
+  .dw-profile-island {
+    display: none;
+  }
+  .admin-viewport[data-role].has-profile-island .dw-main {
+    padding-top: var(--dw-content-padding);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dw-profile-island,
+  .dw-island-panel,
+  .dw-island-chevron,
+  .dw-island-account-links a {
     transition: none;
   }
 }
@@ -1295,13 +2026,6 @@ textarea {
 }
 .dw-main:focus {
   outline: none;
-}
-
-@media (max-height: 820px) {
-  /* 노트북 화면처럼 세로가 짧으면 메뉴가 먼저 보이게 마스코트를 뺀다 */
-  .dw-owner-note-mascot {
-    display: none;
-  }
 }
 
 .dw-input-checks {
@@ -1355,7 +2079,7 @@ textarea {
   .admin-viewport[data-role] .dw-header-center {
     min-width: 0;
   }
-  .admin-viewport[data-role] .dw-last-login {
+  .admin-viewport[data-role] .dw-header .dw-last-login {
     display: none;
   }
   .admin-viewport[data-role] .dw-main:not(:has(.dw-report-print)) {
@@ -1417,6 +2141,9 @@ textarea {
 }
 
 @media screen and (width <= 760px) {
+  .admin-viewport[data-role].is-headerless {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
   .admin-viewport[data-role] {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto 1fr;
@@ -1474,8 +2201,7 @@ textarea {
     margin: 0;
   }
   .admin-viewport[data-role] .dw-nav-heading,
-  .admin-viewport[data-role] .dw-sidebar-top,
-  .admin-viewport[data-role] .dw-owner-note {
+  .admin-viewport[data-role] .dw-sidebar-top {
     display: none;
   }
   .admin-viewport[data-role] .dw-nav-link {
@@ -1487,6 +2213,25 @@ textarea {
   .admin-viewport[data-role] .dw-nav-link.active {
     box-shadow: inset 0 -3px 0 var(--shell-accent);
   }
+  .admin-viewport[data-role] .dw-profile {
+    margin: 0 0 12px;
+    padding: 8px 0 12px;
+    border-top: 0;
+  }
+  .admin-viewport[data-role] .dw-sidebar-identity {
+    margin-top: -10px;
+    border-radius: 0 0 0 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .admin-viewport[data-role] .dw-sidebar-identity .dw-profile {
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+  .admin-viewport[data-role] .dw-profile-account {
+    max-width: 320px;
+  }
+
   .admin-viewport[data-role] .dw-main {
     padding: 24px 16px;
   }

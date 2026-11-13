@@ -685,14 +685,14 @@ a.oh-money-card:hover .oh-bar:not(.is-empty):not(.is-today) {
   height: 84px;
   place-items: center;
 }
-.oh-ring svg {
+.oh-ring > svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);
 }
-.oh-ring circle {
+.oh-ring > svg circle {
   fill: none;
   stroke-width: 7;
 }

@@ -41,7 +41,10 @@ export function LatestLogin() {
           </Button>
         </>
       ) : current.value ? (
-        `마지막 로그인: ${loginTime(current.value.occurredAt, true)} (${current.value.clientIp ?? '확인 불가'})`
+        <>
+          <span>마지막 로그인: {loginTime(current.value.occurredAt, true)}</span>
+          <span className="dw-login-ip">IP: {current.value.clientIp ?? '확인 불가'}</span>
+        </>
       ) : (
         emptyLatestLoginMessage
       )}
