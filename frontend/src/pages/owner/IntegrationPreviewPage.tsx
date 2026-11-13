@@ -1,3 +1,4 @@
+import { ReloadOutlined, SafetyCertificateOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import { formatKstDateTime } from '../../utils/format'
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -28,6 +29,7 @@ import type {
   KeyResult,
 } from '../../api/integration'
 import { useAuth } from '../../auth/useAuth'
+import { IntegrationKeyActions } from './IntegrationKeyActions'
 import { IntegrationCredentials } from './IntegrationCredentials'
 import { OwnerConnectionHero } from './OwnerConnectionHero'
 import './integration-preview.css'
@@ -42,12 +44,12 @@ const ownerGuides: Record<IntegrationStatus, { message: string; description: str
   NO_KEY: {
     message: '시크릿 키 발급이 필요합니다',
     description:
-      '키를 발급해 가맹점 코드와 시크릿 키를 모두 쇼핑몰 서버에 설정한 뒤 연결 확인을 진행해 주세요. 키가 없으면 신규 결제를 요청할 수 없습니다.',
+      '시크릿 키는 쇼핑몰 서버와 돈워리를 연결하는 비밀 키예요. 먼저 키를 발급하고 가맹점 코드와 함께 쇼핑몰 서버에 설정해 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없어요.',
   },
   PENDING_CONNECTION: {
     message: '쇼핑몰 연결 확인이 필요합니다',
     description:
-      '가맹점 코드와 시크릿 키를 모두 쇼핑몰 서버에 설정한 뒤 서명된 연결 확인 요청을 보내 주세요. 연결 확인 전에는 신규 결제를 요청할 수 없습니다. 완료 후 새로고침하면 상태가 갱신됩니다.',
+      '가맹점 코드와 시크릿 키를 쇼핑몰 서버에 설정한 뒤, 서버에서 서명된 연결 확인 요청을 보내 주세요. 이후 ‘상태 새로고침’으로 결과를 확인할 수 있어요. 연결 확인 전에는 신규 결제를 요청할 수 없어요.',
   },
   CONNECTED: {
     message: '쇼핑몰 연동이 완료되었습니다',
@@ -64,13 +66,13 @@ type Confirmation = { action: KeyAction | 'revoke'; version: number }
 export function IntegrationPreviewPage() {
   const { user } = useAuth()
   return (
-    <>
+    <div className="owner-integration-page">
       <PageHeader
-        title="시크릿 키 발급"
-        description="쇼핑몰 서버에서 사용할 시크릿 키를 발급하고 관리합니다."
+        title="쇼핑몰 연결"
+        description="연결 상태를 확인하고, 쇼핑몰 서버에 필요한 시크릿 키를 관리하세요."
       />
       <IntegrationPanel key={user?.userId} />
-    </>
+    </div>
   )
 }
 
@@ -209,12 +211,50 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
       }
     }
   }
+  const historyTable = data ? (
+    <Table
+      rowKey="historyId"
+      size="small"
+      style={{ marginTop: 24 }}
+      dataSource={data.histories}
+      scroll={{ x: 600 }}
+      pagination={{
+        disabled: busy,
+        current: page + 1,
+        pageSize: 20,
+        total: data.totalElements,
+        showSizeChanger: false,
+        onChange: (p) => {
+          setKey(null)
+          setPassword('')
+          setReason('')
+          setConfirmation(null)
+          setPage(p - 1)
+        },
+      }}
+      columns={[
+        {
+          title: '시각 (한국 시간)',
+          dataIndex: 'createdAt',
+          render: (v: string) => formatKstDateTime(v),
+        },
+        { title: '작업', dataIndex: 'action', render: (v: string) => actionLabels[v] ?? v },
+        {
+          title: '실행 계정 ID',
+          dataIndex: 'actorUserId',
+          render: (v: number | null) => v ?? '시스템',
+        },
+        { title: '사유', dataIndex: 'reason' },
+      ]}
+    />
+  ) : null
   return (
     <Card
-      title={admin ? '쇼핑몰 연동 관리' : '내 연동 정보'}
+      className={admin ? undefined : 'owner-integration-panel'}
+      title={admin ? '쇼핑몰 연동 관리' : '내 쇼핑몰 연결'}
       extra={
-        <Button disabled={busy} onClick={refresh}>
-          새로고침
+        <Button icon={admin ? undefined : <ReloadOutlined />} disabled={busy} onClick={refresh}>
+          {admin ? '새로고침' : '상태 새로고침'}
         </Button>
       }
     >
@@ -231,15 +271,31 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
         !error && <Spin />
       ) : (
         <>
-          {!admin && <OwnerConnectionHero status={data.status} />}
+          {!admin && (
+            <OwnerConnectionHero
+              status={data.status}
+              description={ownerGuides[data.status].description}
+            />
+          )}
           <Descriptions
-            column={1}
+            className={admin ? undefined : 'owner-integration-details'}
+            column={admin ? 1 : { xs: 1, md: 2 }}
             items={[
               {
                 key: 'code',
                 label: '가맹점 코드',
                 children: (
-                  <Typography.Text code copyable={{ text: data.merchantCode }}>
+                  <Typography.Text
+                    code
+                    copyable={
+                      admin
+                        ? { text: data.merchantCode }
+                        : {
+                            text: data.merchantCode,
+                            tooltips: ['가맹점 코드 복사', '복사했어요'],
+                          }
+                    }
+                  >
                     {data.merchantCode}
                   </Typography.Text>
                 ),
@@ -285,40 +341,54 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
             </>
           ) : (
             <>
-              <Alert
-                type="info"
-                showIcon
-                message={ownerGuides[data.status].message}
-                description={ownerGuides[data.status].description}
-                style={{ margin: '16px 0' }}
-              />
-              <Space wrap>
-                <Button
-                  type="primary"
-                  disabled={busy || needsRefresh || data.status !== 'NO_KEY'}
-                  onClick={() => open('issue')}
-                >
-                  시크릿 키 발급
-                </Button>
-                <Button
-                  disabled={busy || needsRefresh || data.status !== 'PENDING_CONNECTION'}
-                  onClick={() => open('reveal')}
-                >
-                  다시 보기
-                </Button>
-                <Button
-                  danger
-                  disabled={busy || needsRefresh || data.status === 'NO_KEY'}
-                  onClick={() => open('reissue')}
-                >
-                  재발급
-                </Button>
-              </Space>
-              <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
-                키를 발급·조회·재발급할 때마다 비밀번호를 확인합니다. 키는 쇼핑몰 서버에만 보관하고
-                메일·메신저로 보내지 마세요.
+              <div className="owner-integration-next">
+                <div>
+                  <span className="owner-integration-next-label">
+                    {data.status === 'CONNECTED' ? '연결 후 안내' : '지금 할 일'}
+                  </span>
+                  <h3>
+                    {data.status === 'NO_KEY'
+                      ? '시크릿 키를 먼저 발급해 주세요'
+                      : data.status === 'PENDING_CONNECTION'
+                        ? '발급한 정보를 쇼핑몰 서버에 설정해 주세요'
+                        : '결제 연동 방법을 확인해 보세요'}
+                  </h3>
+                </div>
+                <div className="owner-integration-primary-actions">
+                  <IntegrationKeyActions
+                    status={data.status}
+                    disabled={busy || needsRefresh}
+                    onAction={open}
+                  />
+                  {data.status === 'CONNECTED' && (
+                    <Button
+                      type="primary"
+                      href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/payment/merchant-checkout-guide.md"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      결제 연동 안내 <ArrowRightOutlined />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <Typography.Paragraph className="owner-integration-safety" type="secondary">
+                <SafetyCertificateOutlined aria-hidden /> 키 발급·확인·재발급에는 현재 비밀번호가
+                필요해요. 시크릿 키는 쇼핑몰 서버에만 보관하고, 메일·메신저로 보내지 마세요.
               </Typography.Paragraph>
-              <Typography.Paragraph>
+              {data.status === 'CONNECTED' && (
+                <Typography.Paragraph className="owner-integration-key-note">
+                  연결 완료 후에는 기존 키 원문을 다시 볼 수 없어 ‘키 다시 보기’가 비활성화돼요.
+                </Typography.Paragraph>
+              )}
+              {data.status !== 'NO_KEY' && (
+                <Typography.Paragraph className="owner-integration-key-note">
+                  재발급하면 이전 키는 즉시 사용할 수 없어요. 새 키를 쇼핑몰 서버에 설정하고 연결
+                  확인을 마칠 때까지 신규 결제 요청이 중단돼요.
+                </Typography.Paragraph>
+              )}
+              <Typography.Paragraph className="owner-integration-resources">
+                <span>연동 방법이 필요하다면</span>
                 <Space split="·" wrap>
                   <a
                     href="https://github.com/team-sweethan/DonWorry/blob/dev/docs/identity/354-merchant-integration.md"
@@ -338,41 +408,17 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
               </Typography.Paragraph>
             </>
           )}
-          <Table
-            rowKey="historyId"
-            size="small"
-            style={{ marginTop: 24 }}
-            dataSource={data.histories}
-            scroll={{ x: 600 }}
-            pagination={{
-              disabled: busy,
-              current: page + 1,
-              pageSize: 20,
-              total: data.totalElements,
-              showSizeChanger: false,
-              onChange: (p) => {
-                setKey(null)
-                setPassword('')
-                setReason('')
-                setConfirmation(null)
-                setPage(p - 1)
-              },
-            }}
-            columns={[
-              {
-                title: '시각 (한국 시간)',
-                dataIndex: 'createdAt',
-                render: (v: string) => formatKstDateTime(v),
-              },
-              { title: '작업', dataIndex: 'action', render: (v: string) => actionLabels[v] ?? v },
-              {
-                title: '실행 계정 ID',
-                dataIndex: 'actorUserId',
-                render: (v: number | null) => v ?? '시스템',
-              },
-              { title: '사유', dataIndex: 'reason' },
-            ]}
-          />
+          {admin ? (
+            historyTable
+          ) : (
+            <details className="owner-integration-history">
+              <summary>
+                <span>키 관리 기록</span>
+                <small>{data.totalElements}건 · 발급·재발급·폐기 내역</small>
+              </summary>
+              {historyTable}
+            </details>
+          )}
         </>
       )}
       <Modal
@@ -386,7 +432,17 @@ export function IntegrationPanel({ merchantId }: { merchantId?: number }) {
                 ? '비밀번호 확인 후 키 보기'
                 : '비밀번호 확인 후 키 발급'
         }
-        okText="확인"
+        okText={
+          admin
+            ? '확인'
+            : confirmation?.action === 'revoke'
+              ? '키 폐기'
+              : confirmation?.action === 'reissue'
+                ? '재발급하기'
+                : confirmation?.action === 'reveal'
+                  ? '키 보기'
+                  : '발급하기'
+        }
         cancelText="취소"
         confirmLoading={busy}
         closable={!busy}

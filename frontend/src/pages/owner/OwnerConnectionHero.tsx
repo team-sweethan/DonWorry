@@ -1,3 +1,4 @@
+import { Mascot } from '../../components/brand/BrandMark'
 import type { CSSProperties } from 'react'
 import type { IntegrationStatus } from '../../api/integration'
 import './owner-connection-hero.css'
@@ -21,7 +22,13 @@ const delay = (ms: number) => ({ '--ow-delay': `${ms}ms` }) as CSSProperties
  * 서버가 돌려준 연동 상태만 그린다. 연결 완료 표시는 서버 상태가 CONNECTED일 때만 나온다 —
  * 화면에서 먼저 완료로 보이지 않는다. 기다리는 동안 선이 흐르는 것은 "확인 대기"를 뜻한다.
  */
-export function OwnerConnectionHero({ status }: { status: IntegrationStatus }) {
+export function OwnerConnectionHero({
+  status,
+  description,
+}: {
+  status: IntegrationStatus
+  description?: string
+}) {
   const current = stepIndex[status]
   const connected = status === 'CONNECTED'
   return (
@@ -29,6 +36,19 @@ export function OwnerConnectionHero({ status }: { status: IntegrationStatus }) {
       className={`och${connected ? ' is-connected' : ''}${status === 'PENDING_CONNECTION' ? ' is-waiting' : ''}`}
       aria-label="쇼핑몰 연결 상태"
     >
+      <div className="och-copy">
+        <span className="och-eyebrow">
+          {connected
+            ? '연결 확인 완료'
+            : status === 'NO_KEY'
+              ? '연결을 시작해 볼까요?'
+              : '다음은 쇼핑몰 서버 설정이에요'}
+        </span>
+        <h2 className="och-headline" role="status">
+          {headline[status]}
+        </h2>
+        {description && <p className="och-description">{description}</p>}
+      </div>
       <div className="och-picture" aria-hidden="true">
         <span className="och-node">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -52,13 +72,12 @@ export function OwnerConnectionHero({ status }: { status: IntegrationStatus }) {
           </span>
         )}
         <span className="och-node is-donworry">
-          <b>D</b>
+          <span className="och-mascot">
+            <Mascot size={82} className="dw-mascot-float" />
+          </span>
           <span>돈워리</span>
         </span>
       </div>
-      <p className="och-headline" role="status">
-        {headline[status]}
-      </p>
       <ol className="och-steps" aria-label="연결 순서">
         {steps.map((label, i) => {
           const state = i < current ? 'is-done' : i === current ? 'is-current' : ''
@@ -67,7 +86,11 @@ export function OwnerConnectionHero({ status }: { status: IntegrationStatus }) {
               <span className="och-track">
                 <span className="ow-grow-x" style={delay(200 + i * 160)} />
               </span>
-              {i + 1}. {label}
+              <span className="och-step-label">
+                <b>{i < current ? '✓' : i + 1}</b>
+                {label}
+                {i === current && <small>지금 할 일</small>}
+              </span>
             </li>
           )
         })}

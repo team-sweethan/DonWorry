@@ -1,5 +1,5 @@
-import { ArrowRightOutlined, CalendarOutlined } from '@ant-design/icons'
-import { DatePicker } from 'antd'
+import { CalendarOutlined } from '@ant-design/icons'
+import { TwoClickPeriodPicker } from './TwoClickPeriodPicker'
 import dayjs from 'dayjs'
 import type { FinancePeriod } from './financeView'
 import './settlement-period-control.css'
@@ -38,19 +38,11 @@ export function SettlementPeriodControl({
           </button>
         ))}
       </div>
-      <DatePicker.RangePicker
+      <TwoClickPeriodPicker
         className="stl-period-range"
-        aria-labelledby="stl-period-label"
-        value={[dayjs(value.from), dayjs(value.to)]}
-        format="YYYY.MM.DD"
-        allowClear={false}
-        separator={<ArrowRightOutlined />}
-        placeholder={['시작일', '종료일']}
-        disabledDate={(date, { from }) => !!from && Math.abs(date.diff(from, 'day')) > 365}
-        onChange={(dates) => {
-          if (dates?.[0] && dates[1])
-            onChange({ from: dates[0].format('YYYY-MM-DD'), to: dates[1].format('YYYY-MM-DD') })
-        }}
+        value={value}
+        onChange={onChange}
+        label="정산 조회 기간 선택"
       />
     </div>
   )

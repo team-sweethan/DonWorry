@@ -241,9 +241,26 @@ test('fundsNoticesAndPeriodControl_keepWarningsAndAmountsWhileSimplifyingEntry',
     assert.match(control, /7일간/)
     assert.match(control, /aria-label="이전 기간 보기"[^>]*disabled=""/)
     assert.match(control, /aria-label="다음 기간 보기"/)
-    assert.match(control, /readonly=""/i)
-    assert.match(control, /value="2026\.11\.13"/)
-    assert.match(control, /value="2026\.11\.19"/)
+    assert.match(
+      control,
+      /aria-label="자금 예측 기간 선택"[^>]*aria-haspopup="dialog"[^>]*aria-expanded="false"/,
+    )
+    assert.match(control, /2026\.11\.13/)
+    assert.match(control, /2026\.11\.19/)
+    assert.doesNotMatch(control, /<input/)
+    const { SettlementPeriodControl } = await server.ssrLoadModule(
+      '/src/pages/owner/SettlementPeriodControl.tsx',
+    )
+    const settlement = renderToStaticMarkup(
+      createElement(SettlementPeriodControl, {
+        value: { from: '2026-11-13', to: '2026-11-19' },
+        today: '2026-11-13',
+        onChange: () => {},
+      }),
+    )
+    assert.match(settlement, /aria-label="정산 조회 기간 선택"[^>]*aria-haspopup="dialog"/)
+    assert.match(settlement, /two-click-period-trigger/)
+    assert.doesNotMatch(settlement, /<input/)
   } finally {
     await server.close()
   }
