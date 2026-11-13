@@ -1984,7 +1984,11 @@ textarea {
 }
 @media screen and (width <= 760px) {
   .dw-profile-island {
-    top: 12px;
+    position: relative;
+    top: auto;
+    left: auto;
+    translate: none;
+    margin: 12px auto;
   }
   .admin-viewport[data-role] .dw-sidebar-identity {
     display: none;
@@ -2143,6 +2147,12 @@ textarea {
 @media screen and (width <= 760px) {
   .admin-viewport[data-role].is-headerless {
     grid-template-rows: auto minmax(0, 1fr);
+  }
+  .admin-viewport[data-role].is-headerless.has-profile-island {
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .admin-viewport[data-role].has-profile-island .dw-main {
+    padding-top: 24px;
   }
   .admin-viewport[data-role] {
     grid-template-columns: minmax(0, 1fr);
