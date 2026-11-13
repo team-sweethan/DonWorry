@@ -1,6 +1,7 @@
 import { FinanceGuide } from './FinanceGuide'
 import { FinanceMoney } from './FinanceMoney'
 import { calendarAmount } from './financeAmount'
+import { settlementListSummary } from './settlementListSummary'
 import { financeTotal, matchesFinanceQuery, chartMonthPeriod } from './financeView'
 import { PayoutSummary, PayoutLedger } from './PayoutLedger'
 import type { PayoutSummaryData } from './PayoutLedger'
@@ -13,7 +14,8 @@ import { matchesSettlementStatus } from './settlementStatus'
 import type { SettlementStatusFilter } from './settlementStatus'
 import { useState, useRef, useEffect } from 'react'
 import { SettlementPeriodControl } from './SettlementPeriodControl'
-import { Alert, Button, Descriptions, Input, Modal, Pagination, Select } from 'antd'
+import { Alert, Button, DatePicker, Descriptions, Input, Modal, Pagination, Select } from 'antd'
+import dayjs from 'dayjs'
 import { PageHeader } from '../../components/common/PageHeader'
 import { latestSelection } from './latestSelection'
 import './settlement-prototype.css'
@@ -114,7 +116,9 @@ export function SettlementPrototype({
   const [sort, setSort] = useState('date')
   const [page, setPage] = useState(1)
   const [expensePage, setExpensePage] = useState(1)
-  const [reportType, setReportType] = useState<'payout' | 'settlement' | 'expense'>('payout')
+  const [reportType, setReportType] = useState<'payout' | 'settlement' | 'expense'>(
+    payoutReport || actualEntries === undefined ? 'payout' : 'settlement',
+  )
   const changeReportType = (next: 'payout' | 'settlement' | 'expense') => {
     setReportType(next)
     setQuery('')
@@ -367,6 +371,12 @@ export function SettlementPrototype({
   const settlementPage = Math.min(page, Math.max(1, Math.ceil(rows.length / 20)))
   const currentExpensePage = Math.min(expensePage, Math.max(1, Math.ceil(expenseRows.length / 20)))
   const visibleRows = rows.slice((settlementPage - 1) * 20, settlementPage * 20)
+  const listSummary = settlementListSummary(
+    reportType,
+    payoutRows.map((p) => p.payoutAmount),
+    rows.map((e) => ({ amount: net(e), status: e.status })),
+    expenseRows.map((e) => e.amount),
+  )
   const move = (offset: number) =>
     setMonth(new Date(month.getFullYear(), month.getMonth() + offset, 1))
   return (
@@ -894,34 +904,27 @@ export function SettlementPrototype({
           inert={resultsPending}
         >
           <div className="stl-list-heading">
-            <Button onClick={() => setView('cal')}>← 캘린더로 돌아가기</Button>
+            <Button type="text" size="small" onClick={() => setView('cal')}>
+              ← 캘린더로 돌아가기
+            </Button>
             <h2>
               {dateOnly
-                ? selectedDate.getMonth() +
-                  1 +
-                  '월 ' +
-                  selectedDate.getDate() +
-                  '일 주문·지급·지출 내역'
-                : '전체 주문·지급·지출 내역'}
+                ? selectedDate.getMonth() + 1 + '월 ' + selectedDate.getDate() + '일 상세 내역'
+                : '상세 내역'}
             </h2>
-            <p>
-              {dateOnly ? dateInput(selectedDate) : rangeStart + ' ~ ' + rangeEnd} · 정산금과 지출을
-              구분해 확인하세요. 주문별 원 정산금을 실제 입금액에 더하지 않습니다.
-            </p>
+            <p>{dateOnly ? dateInput(selectedDate) : rangeStart + ' ~ ' + rangeEnd} 기준</p>
             <div className="stl-report-summary">
               <div>
-                <small>주문별 순정산금 (환불 회수 전)</small>
+                <small>{listSummary.label}</small>
                 <strong>
-                  <FinanceMoney value={sum(rows.filter((e) => e.status !== 'can'))} countUp />
+                  <FinanceMoney value={listSummary.amount} compact={false} />
                 </strong>
-                <span>{rows.length}건 · 취소 금액 제외</span>
+                <span>{listSummary.note}</span>
               </div>
               <div>
-                <small>조회된 지출 금액 (예정·완료 포함)</small>
-                <strong className="stl-expense-heading">
-                  <FinanceMoney value={expenseRows.reduce((n, e) => n + e.amount, 0)} countUp />
-                </strong>
-                <span>{expenseRows.length}건 · 등록한 일회성·정기 지출</span>
+                <small>조회 결과</small>
+                <strong>{listSummary.count.toLocaleString('ko-KR')}건</strong>
+                <span>현재 검색·필터 기준</span>
               </div>
             </div>
             <div className="stl-report-kind" role="tablist" aria-label="주문·지급·지출 내역 종류">
@@ -949,11 +952,55 @@ export function SettlementPrototype({
                 지출 내역 <span>{expenseRows.length}</span>
               </button>
             </div>
+            <div className="stl-list-date-filter" role="group" aria-label="상세 목록 날짜 필터">
+              <span>조회 날짜</span>
+              <Button
+                aria-pressed={!dateOnly}
+                onClick={() => {
+                  setDateOnly(false)
+                  setPage(1)
+                  setExpensePage(1)
+                }}
+              >
+                전체 기간
+              </Button>
+              <DatePicker
+                aria-label="상세 목록 날짜 선택"
+                value={dateOnly ? dayjs(dateInput(selectedDate)) : null}
+                format="YYYY.MM.DD"
+                placeholder="날짜를 골라 하루만 보기"
+                minDate={validPeriod ? dayjs(rangeStart) : undefined}
+                maxDate={validPeriod ? dayjs(rangeEnd) : undefined}
+                onChange={(date) => {
+                  setDateOnly(!!date)
+                  setPage(1)
+                  setExpensePage(1)
+                  if (date) {
+                    const picked = new Date(date.format('YYYY-MM-DD') + 'T12:00:00')
+                    setSelected(picked)
+                    setMonth(new Date(picked.getFullYear(), picked.getMonth(), 1))
+                  }
+                }}
+              />
+              <small>
+                {reportType === 'payout'
+                  ? '지급일 기준'
+                  : reportType === 'settlement'
+                    ? '정산일 기준'
+                    : '지출 반영일 기준'}
+              </small>
+            </div>
             <div className="stl-search">
               <Input
                 size="large"
                 allowClear
-                aria-label={reportType === 'payout' ? '지급 번호 검색' : '주문번호·지출명 검색'}
+                aria-label={
+                  reportType === 'payout'
+                    ? '지급 번호 검색'
+                    : reportType === 'settlement'
+                      ? '주문번호 검색'
+                      : '지출명 검색'
+                }
                 placeholder={
                   reportType === 'payout'
                     ? '지급 번호로 검색'
@@ -985,18 +1032,6 @@ export function SettlementPrototype({
                   ]}
                 />
               )}
-              {dateOnly && (
-                <Button
-                  size="large"
-                  onClick={() => {
-                    setDateOnly(false)
-                    setPage(1)
-                    setExpensePage(1)
-                  }}
-                >
-                  선택 기간 전체 보기
-                </Button>
-              )}
               {query && (
                 <Button
                   size="large"
@@ -1019,6 +1054,7 @@ export function SettlementPrototype({
           ) : reportType === 'settlement' ? (
             <>
               <div className="stl-tabs" aria-label="정산 상태 필터">
+                <span className="stl-filter-label">정산 상태</span>
                 {(['all', 'sch', 'overdue', 'done', 'can'] as const).map((status) => (
                   <button
                     key={status}
@@ -1053,7 +1089,7 @@ export function SettlementPrototype({
                 <span>
                   {filter === 'overdue'
                     ? '정산 예정일 이후 아직 지급되지 않은 주문입니다.'
-                    : '금액은 수수료 차감 후 기준 · 원금·수수료는 상세 보기'}
+                    : '수수료 차감 후 · 정산 후 환불 차감 전'}
                 </span>
               </div>
               <div className="stl-table-scroll">
@@ -1063,7 +1099,7 @@ export function SettlementPrototype({
                       <th>주문 정보</th>
                       <th>정산일</th>
                       <th>상태</th>
-                      <th className="stl-money-cell">순정산금 (회수 전)</th>
+                      <th className="stl-money-cell">주문 정산금</th>
                       <th>상세</th>
                     </tr>
                   </thead>
@@ -1071,12 +1107,16 @@ export function SettlementPrototype({
                     {visibleRows.map((e) => (
                       <tr key={e.id}>
                         <td>
-                          <b>{e.orderId ?? e.id}</b>
+                          <b>
+                            {e.orderItems?.length
+                              ? orderSummary(e.orderItems)
+                              : '주문 상품 정보 없음'}
+                          </b>
+                          <small className="stl-table-order-id" title={e.orderId ?? e.id}>
+                            주문번호 {e.orderId ?? e.id}
+                          </small>
                           {e.orderItems?.length ? (
                             <>
-                              <small className="stl-order-product-name">
-                                {orderSummary(e.orderItems)}
-                              </small>
                               <small>
                                 {e.orderItems.length}종 · 총 {orderQuantity(e.orderItems)}개
                               </small>
@@ -1090,11 +1130,15 @@ export function SettlementPrototype({
                           </small>
                         </td>
                         <td>
-                          <span className={'stl-chip stl-' + e.status}>{labels[e.status]}</span>
+                          <span className={'stl-chip stl-' + e.status}>
+                            {e.status === 'sch' && dateInput(e.date) < dateInput(today)
+                              ? '지급 대기'
+                              : labels[e.status]}
+                          </span>
                         </td>
                         <td className="stl-money-cell">
                           <strong>
-                            <FinanceMoney value={net(e)} />
+                            <FinanceMoney value={net(e)} compact={false} />
                           </strong>
                         </td>
                         <td>
@@ -1145,7 +1189,7 @@ export function SettlementPrototype({
                           </td>
                           <td className="stl-money-cell stl-expense-heading">
                             <strong>
-                              <FinanceMoney value={-e.amount} />
+                              <FinanceMoney value={-e.amount} compact={false} />
                             </strong>
                           </td>
                           <td>

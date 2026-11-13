@@ -2,6 +2,13 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { financeAmount, calendarAmount } from '../src/pages/owner/financeAmount.ts'
 
+// 차감액 0에 마이너스를 붙여도 음수처럼 보이지 않게 한다.
+test('financeAmount_whenNegativeZero_displaysZeroWithoutMinus', () => {
+  assert.equal(financeAmount(-0).text, '0원')
+  assert.equal(financeAmount(-0, false).exact, '0원')
+  assert.equal(calendarAmount(-0), '0원')
+})
+
 // 달력의 만 원 단위는 정수로 반올림하고 오차가 있으면 약을 붙인다.
 test('calendarAmount_whenRounded_keepsUnitsShortAndMarksApproximation', () => {
   assert.equal(calendarAmount(6938000), '약 694만')

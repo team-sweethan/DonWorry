@@ -189,9 +189,25 @@ test('payout calendar and ledger render zero-cash recovery without showing origi
     // 하루 주문 정산금 97,000원을 실제 지급 0원과 혼동하지 않도록 상세의 대표 금액도 지급액이다.
     assert.match(html, /이날 실제 지급액<\/span><b><span[^>]*aria-label="0원"/)
     const ledger = renderToStaticMarkup(createElement(PayoutLedger, { payouts: [payout] }))
-    assert.match(ledger, /지급 #99/)
+    assert.match(ledger, /지급번호 #99/)
     assert.match(ledger, /환불 회수로 전액 상계/)
     assert.match(ledger, /지급 상세/)
+    const largeLedger = renderToStaticMarkup(
+      createElement(PayoutLedger, {
+        payouts: [
+          {
+            ...payout,
+            settlementAmount: 123456789,
+            refundDeductionAmount: 0,
+            payoutAmount: 123456789,
+          },
+        ],
+      }),
+    )
+    assert.match(largeLedger, /finance-money__text">123,456,789원<\/span>/)
+    assert.doesNotMatch(largeLedger, /약 1억/)
+    assert.doesNotMatch(largeLedger, /-0원/)
+    assert.match(largeLedger, /payout-deduction is-zero/)
   } finally {
     await server.close()
   }
