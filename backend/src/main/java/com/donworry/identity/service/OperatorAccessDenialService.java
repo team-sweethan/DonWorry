@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +50,8 @@ public class OperatorAccessDenialService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordForbiddenFrontendRoute(Long userId, String path, HttpServletRequest request) {
         if (!OperatorAccessRoutes.isOperatorForbiddenFrontendPath(path)) return;
-        record(userId, OperatorAccessDeniedType.OUT_OF_ROLE, request.getMethod(), path, clientIps.clientIp(request));
+        // 이 POST는 화면 경로 접근을 서버에 신고하는 수단일 뿐, 감사 대상은 읽기 전용 화면 접근이다.
+        record(userId, OperatorAccessDeniedType.OUT_OF_ROLE, HttpMethod.GET.name(), path, clientIps.clientIp(request));
     }
 
     private void record(
