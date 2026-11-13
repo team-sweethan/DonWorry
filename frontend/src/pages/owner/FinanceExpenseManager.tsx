@@ -63,6 +63,8 @@ const categories = [
   { value: 'OTHER', label: '기타' },
 ]
 export function FinanceExpenseManager({
+  activeTab,
+  onTabChange,
   open,
   onClose,
   settings,
@@ -70,6 +72,8 @@ export function FinanceExpenseManager({
   revision,
   onChanged,
 }: {
+  activeTab?: string
+  onTabChange?: (tab: string) => void
   open: boolean
   onClose: () => void
   settings: CashFlowSettings | undefined
@@ -81,7 +85,8 @@ export function FinanceExpenseManager({
     null,
   )
   const [detail, setDetail] = useState<ExpenseRow | null>(null)
-  const [tab, setTab] = useState('balance')
+  const [internalTab, setTab] = useState('balance')
+  const tab = activeTab ?? internalTab
   const [period, setPeriod] = useState(() => ({
     from: dayjs(today).subtract(30, 'day').format('YYYY-MM-DD'),
     to: dayjs(today).add(30, 'day').format('YYYY-MM-DD'),
@@ -169,7 +174,10 @@ export function FinanceExpenseManager({
       {error !== null && <Alert type="error" showIcon message={financeErrorMessage(error)} />}
       <Tabs
         activeKey={tab}
-        onChange={setTab}
+        onChange={(value) => {
+          setTab(value)
+          onTabChange?.(value)
+        }}
         items={[
           { key: 'balance', label: '최초 잔액' },
           { key: 'expenses', label: '지출 내역·완료 처리' },
@@ -181,7 +189,7 @@ export function FinanceExpenseManager({
       ) : tab === 'balance' ? (
         <section className="finance-card">
           <h2>
-            최초 시작 잔액 <FinanceMoney value={settings.openingBalance} />
+            처음 입력한 잔액 <FinanceMoney value={settings.openingBalance} />
           </h2>
           <p>기준일: {settings.baseDate} 하루 시작 시점</p>
           <Tag>서버 저장 완료 · 수정 불가</Tag>
@@ -199,7 +207,7 @@ export function FinanceExpenseManager({
             <Form.Item
               name="amount"
               label={<strong>최소 운영 자금 (원)</strong>}
-              extra="예상 마감 잔액이 이 금액보다 낮으면 경고해요. 이 기준은 언제든 변경할 수 있어요."
+              extra="지출 뒤에도 남겨두고 싶은 잔액이에요. 하루 끝 예상 잔액이 이 기준보다 낮으면 알려드려요. 이 기준은 언제든 바꿀 수 있어요."
               rules={[{ required: true, type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
             >
               <InputNumber
