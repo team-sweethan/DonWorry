@@ -487,7 +487,7 @@
   .dw-signin-device.is-opening::before {
     animation: dw-signin-frame-reveal var(--dw-open-time) step-end both;
   }
-  /* 손잡이는 넘어오던 면이 다 걷힌 뒤 화면이 켜진 것처럼 나타난다. */
+  /* 손잡이는 따로 한 박자 늦게 뜨지 않고, 화면 내용(content-rise)과 같은 때 · 같은 곡선으로 함께 나타난다. */
   .dw-signin-device.is-opening::after {
     animation: dw-signin-handle-on var(--dw-open-time) linear both;
   }
@@ -587,8 +587,9 @@
 /* 다 넘어온 뒷면은 한 번에 꺼지지 않고, 같은 바탕의 왼쪽 칸이 비치게 서서히 걷힌다. */
 @keyframes dw-signin-handle-on {
   0%,
-  86% {
+  60% {
     opacity: 0;
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
   }
   100% {
     opacity: 1;
