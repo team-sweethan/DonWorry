@@ -7,7 +7,7 @@ import type { CaseDetailEntry, CaseDetailState } from './merchantCaseView'
 export type { CaseDetailState } from './merchantCaseView'
 
 /**
- * 펼친 사건들의 상세를 한곳에서 부른다. 진행 중 사건은 처음부터 펼쳐져 있어 맨 위 합계 문장에도 쓴다.
+ * 사건들의 상세를 한곳에서 부른다. 진행 중 사건은 접혀 있어도 불러 줄 금액 · 결과와 맨 위 합계 문장에 쓴다.
  * 접힌 사건은 부르지 않는다. 새로고침(refreshKey)이나 사건별 다시 시도 때만 다시 부른다.
  */
 export function useMerchantCaseDetails(ids: string[], refreshKey: number) {

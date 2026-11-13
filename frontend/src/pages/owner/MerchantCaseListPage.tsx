@@ -44,7 +44,7 @@ const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
  * 개수가 붙은 필터 한 줄 + 열이 고정된 목록으로 위아래 비교가 되게 한다. 움직임은 상호작용(펼치기 · 필터)에만 둔다.
  * - 맨 위 한 문장으로 "아직 안 끝난 돈"을 답한다 (이 화면에서 숫자를 세는 연출은 여기 한 곳)
  * - 진행 중 사건은 상세를 불러 줄에 금액 · 결과를 채운다 (보통 몇 건). 끝난 사건은 펼칠 때만 부른다
- * - 한 번에 한 사건만 펼친다. /owner/actions/:id 로 들어오면 그 사건을 펼친 채 그 자리로 이동한다
+ * - 처음에는 모두 접혀 있고 한 번에 한 사건만 펼친다. /owner/actions/:id 로 들어오면 그 사건을 펼친 채 그 자리로 이동한다
  * 로그인한 사장님 가맹점의 사건만 서버가 돌려준다. 화면의 메뉴 권한은 편의이고 인가는 서버가 한다.
  */
 export function MerchantCaseListPage() {
@@ -93,7 +93,8 @@ export function MerchantCaseListPage() {
   // 주소로 연 끝난 사건이 "더 보기" 뒤에 있으면 거기까지 보여준다
   const linkedIndex = finished.findIndex((c) => c.caseId === linkedId)
   const limit = Math.max(finishedLimit, linkedIndex + 1)
-  const openId = picked === undefined ? (linkedId ?? active[0]?.caseId ?? null) : picked
+  // 메뉴로 들어오면 모두 접힌 채 시작한다. 주소로 특정 사건(/owner/actions/:id)을 열었을 때만 그 사건을 펼친다
+  const openId = picked === undefined ? (linkedId ?? null) : picked
   const detailIds = [
     ...active.map((c) => c.caseId),
     ...(openId && !active.some((c) => c.caseId === openId) ? [openId] : []),
