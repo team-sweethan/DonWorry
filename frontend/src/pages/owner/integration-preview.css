@@ -46,3 +46,220 @@
   max-width: none !important;
   padding-right: 16px;
 }
+/* 사장님 연동 화면에만 적용한다. 관리자 연동 패널은 기존 구성을 유지한다. */
+.owner-integration-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  color: #423724;
+}
+.owner-integration-page .dw-page-header {
+  margin-bottom: 22px;
+}
+.owner-integration-page .dw-page-description {
+  font-size: 13px;
+  color: #87775b;
+  line-height: 1.8;
+}
+.owner-integration-panel.ant-card {
+  border: 1px solid #e8dfcd;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fffefb;
+}
+.owner-integration-panel > .ant-card-head {
+  min-height: 58px;
+  padding-inline: 24px;
+  border-bottom-color: #eee6d7;
+}
+.owner-integration-panel .ant-card-head-title {
+  color: #665333;
+  font-size: 14px;
+  font-weight: 650;
+}
+.owner-integration-panel .ant-card-extra .ant-btn {
+  border-color: #e2d7c1;
+  background: #fffefa;
+  color: #887044;
+  font-size: 12px;
+  height: 33px;
+  border-radius: 8px;
+}
+.owner-integration-panel > .ant-card-body {
+  padding: 22px 24px;
+}
+.owner-integration-details {
+  border: 1px solid #ece4d4;
+  border-radius: 12px;
+  padding: 17px 20px 3px;
+  background: #fff;
+}
+.owner-integration-details .ant-descriptions-item-label {
+  font-size: 12px;
+  color: #97866b;
+}
+.owner-integration-details .ant-descriptions-item-content {
+  font-size: 13px;
+  color: #625033;
+}
+.owner-integration-details .ant-typography code {
+  background: #f8f2e5;
+  border-color: #e9dcbf;
+  color: #8c692c;
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.owner-integration-details .ant-typography-copy {
+  color: #a3864a;
+  margin-left: 7px;
+}
+.owner-integration-details .ant-tag {
+  border-radius: 6px;
+  font-size: 11px;
+}
+.owner-integration-next {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px 0 12px;
+}
+.owner-integration-next-label {
+  color: #ad8a45;
+  font-size: 11px;
+  font-weight: 650;
+}
+.owner-integration-next h3 {
+  color: #57462c;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 6px 0 0;
+  letter-spacing: -0.3px;
+}
+.owner-integration-next .ant-btn {
+  border-radius: 9px;
+  min-height: 40px;
+  padding-inline: 17px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.owner-integration-safety.ant-typography {
+  color: #97876c;
+  font-size: 11px;
+  line-height: 1.9;
+  margin: 0 0 18px;
+}
+.owner-integration-safety .anticon {
+  margin-right: 5px;
+  color: #b49a60;
+}
+.owner-integration-advanced {
+  border: 1px solid #ece2d0;
+  border-radius: 9px;
+  padding: 11px 14px;
+  margin-bottom: 18px;
+  background: #fffcf6;
+}
+.owner-integration-advanced > summary {
+  cursor: pointer;
+  color: #9a8052;
+  font-size: 12px;
+  font-weight: 600;
+}
+.owner-integration-advanced > p {
+  color: #927c58;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+.owner-integration-advanced .ant-btn {
+  border-radius: 7px;
+  font-size: 12px;
+}
+.owner-integration-resources.ant-typography {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0;
+  padding: 15px 0 0;
+  border-top: 1px solid #eee6d7;
+  color: #9b8969;
+  font-size: 11px;
+}
+.owner-integration-resources a {
+  color: #a38342;
+}
+.owner-integration-history {
+  border-top: 1px solid #eee6d7;
+  margin-top: 18px;
+}
+.owner-integration-history > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  cursor: pointer;
+  padding-top: 16px;
+  color: #796445;
+  font-size: 12px;
+  font-weight: 650;
+}
+.owner-integration-history > summary small {
+  color: #a49375;
+  font-size: 11px;
+  font-weight: 400;
+}
+.owner-integration-history:not([open]) > :not(summary),
+.owner-integration-advanced:not([open]) > :not(summary) {
+  display: none;
+}
+.owner-integration-history .ant-table {
+  font-size: 12px;
+}
+.owner-integration-panel summary:focus-visible {
+  outline: 2px solid #ac8d46;
+  outline-offset: 4px;
+}
+@media (max-width: 700px) {
+  .owner-integration-panel > .ant-card-head {
+    padding-inline: 16px;
+  }
+  .owner-integration-panel > .ant-card-body {
+    padding: 16px;
+  }
+  .owner-integration-details {
+    padding: 14px 14px 0;
+  }
+  .owner-integration-next {
+    align-items: stretch;
+  }
+  .owner-integration-next > .ant-space {
+    width: 100%;
+  }
+  .owner-integration-next .ant-btn {
+    width: 100%;
+  }
+}
+.owner-integration-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.owner-integration-key-note.ant-typography {
+  color: #9b8057;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 12px;
+}
+@media (max-width: 700px) {
+  .owner-integration-primary-actions {
+    width: 100%;
+  }
+  .owner-integration-key-actions {
+    width: 100%;
+  }
+}

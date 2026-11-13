@@ -2,6 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { financeAmount } from '../src/pages/owner/financeAmount.ts'
 
+// 차감액 0에 마이너스를 붙여도 음수처럼 보이지 않게 한다.
+test('financeAmount_whenNegativeZero_displaysZeroWithoutMinus', () => {
+  assert.equal(financeAmount(-0).text, '0원')
+  assert.equal(financeAmount(-0, false).exact, '0원')
+})
+
 test('financeAmount preserves exact won amounts below ten million', () => {
   for (const value of [0, -10001, 2186880, 9999999]) {
     assert.deepEqual(financeAmount(value), {

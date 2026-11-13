@@ -98,7 +98,7 @@ try {
         scenario.home
           ? fixture.textContent.includes('쇼핑몰 연동이 완료되었습니다')
           : scenario.expectedApi
-            ? fixture.textContent.includes('이상 거래 Case')
+            ? fixture.textContent.includes('아직 멈춘 결제가 없어요')
             : // Ant Design의 403 숫자는 SVG여서 textContent에 포함되지 않는다.
               fixture.textContent.includes('접근 권한이 없습니다'),
       )

@@ -5,12 +5,13 @@ import { createRoot } from 'react-dom/client'
 import { App, Button, ConfigProvider, Segmented } from 'antd'
 import koKR from 'antd/locale/ko_KR'
 import { MemoryRouter } from 'react-router-dom'
-import { ManagementBrand, ManagementLayout } from '../../layouts/AdminLayout'
+import { ManagementLayout } from '../../layouts/AdminLayout'
 import { navByRole } from '../../config/navigation'
 import { SecurityHomeDashboard } from '../../pages/security/SecurityHomePage'
 import { antdTheme } from '../../styles/theme'
 import { sampleHomeCases } from './fixtures'
 import '../../styles/global.css'
+import '../../styles/loadingTransition.css'
 import './preview.css'
 
 if (!import.meta.env.DEV) throw new Error('개발 서버에서만 사용하는 샘플 화면입니다.')
@@ -28,15 +29,16 @@ export function Preview() {
   return (
     <ManagementLayout
       role="security"
+      home="/security/home"
+      profile={{
+        name: 'demo 보안직원',
+        roleLabel: '보안 직원',
+        latestLogin: <span className="dw-last-login">마지막 로그인: 11. 13. 14:48 (샘플)</span>,
+      }}
       groups={navByRole.security}
-      header={
-        <header className="dw-header">
-          <ManagementBrand role="security" home="/security/home" />
-          <strong className="home-preview-badge">샘플 미리보기 · 실제 업무 데이터 아님</strong>
-        </header>
-      }
     >
       <div className="home-preview-controls">
+        <strong className="home-preview-badge">샘플 미리보기 · 실제 업무 데이터 아님</strong>
         <Segmented
           value={scenario}
           options={[

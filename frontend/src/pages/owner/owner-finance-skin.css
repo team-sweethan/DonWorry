@@ -1,0 +1,326 @@
+/*
+ * 정산 내역 · 자금 현황 겉모습을 사장님 홈과 같은 말투로 맞춘다 (사장님 화면 개편).
+ * 기존 화면 CSS는 그대로 두고, .finance-surface를 앞에 붙여 이 파일이 이기게 한다.
+ * 배치 · 계산 · 표 구조는 바꾸지 않는다. 색 · 모서리 · 숫자 크기 · 탭 모양만 바꾼다.
+ */
+.finance-surface {
+  --fs-ink: #30291f;
+  --fs-muted: #6b6454;
+  --fs-line: #ebe3d2;
+  --fs-soft: #f0e9da;
+  --fs-gold: #8a5f0c;
+  --fs-gold-strong: #a8740f;
+  --fs-hover: #fdf8ec;
+  --fs-selected: #fbf3df;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 겉 상자: 둥글고 얇은 선 */
+.finance-surface .finance-card,
+.finance-surface .stl-panel,
+.finance-surface .cashflow-surface {
+  border-color: var(--fs-line);
+  border-radius: 16px;
+}
+.finance-surface .stl-prototype,
+.finance-surface .finance-card h2,
+.finance-surface .stl-panel h2 {
+  color: var(--fs-ink);
+}
+
+/* 캘린더 · 목록 전환: 선택한 쪽이 진하게 */
+.finance-surface .stl-switch {
+  padding: 3px;
+  gap: 2px;
+  border-color: var(--fs-line);
+  border-radius: 10px;
+  background: #fff;
+}
+.finance-surface .stl-switch button {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 7px;
+  color: var(--fs-muted);
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+.finance-surface .stl-switch button[aria-selected='true'] {
+  background: var(--fs-ink);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 지급 요약 카드: 실제 지급액은 진한 카드, 나머지는 흰 카드. 색 띠 대신 숫자 색으로 구분한다 */
+.finance-surface .payout-summary-title {
+  margin-top: 24px;
+  color: var(--fs-ink);
+  font-size: 17px;
+}
+.finance-surface .payout-stat {
+  border: 1px solid var(--fs-line);
+  border-radius: 16px;
+  padding: 22px 24px;
+  gap: 6px;
+  transition: border-color 0.14s ease;
+}
+.finance-surface .payout-stat > span {
+  color: var(--fs-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.finance-surface .payout-stat > strong {
+  color: var(--fs-ink);
+  font-size: 32px;
+  letter-spacing: -0.02em;
+}
+.finance-surface .payout-stat-paid {
+  border-color: var(--fs-ink);
+  background: var(--fs-ink);
+}
+.finance-surface .payout-stat-paid > span {
+  color: #e9dcbc;
+}
+.finance-surface .payout-stat-paid > strong {
+  color: #fff;
+}
+.finance-surface .payout-stat-paid > small {
+  color: #d6c9a8;
+}
+.finance-surface .payout-stat-original > strong {
+  color: var(--fs-gold);
+}
+.finance-surface .payout-stat-deduction > strong {
+  color: #c2410c;
+}
+.finance-surface .payout-current-recovery {
+  border-radius: 14px;
+}
+
+/* 캘린더 */
+.finance-surface .stl-day {
+  border-color: var(--fs-soft);
+  transition: background-color 0.14s ease;
+}
+.finance-surface .stl-day:hover {
+  background: var(--fs-hover);
+}
+.finance-surface .stl-day[aria-pressed='true'] {
+  background: var(--fs-selected);
+  box-shadow: inset 0 0 0 2px var(--fs-gold-strong);
+}
+.finance-surface .stl-today .stl-day-number {
+  background: var(--fs-ink);
+}
+.finance-surface .stl-chip {
+  border-radius: 6px;
+}
+.finance-surface .stl-total b {
+  color: var(--fs-ink);
+}
+
+/* 내역 종류 탭: 밑줄 탭 (조치 결과 목록과 같다) */
+.finance-surface .stl-report-kind {
+  gap: 20px;
+  padding: 0;
+  border-bottom: 1px solid var(--fs-line);
+  border-radius: 0;
+  background: transparent;
+}
+.finance-surface .stl-report-kind button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 2px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--fs-muted);
+  font-weight: 500;
+  transition:
+    color 0.14s ease,
+    border-color 0.18s ease;
+}
+.finance-surface .stl-report-kind button:hover {
+  color: var(--fs-ink);
+}
+.finance-surface .stl-report-kind button[aria-selected='true'] {
+  border-bottom-color: var(--fs-gold-strong);
+  background: transparent;
+  box-shadow: none;
+  color: var(--fs-ink);
+  font-weight: 700;
+}
+.finance-surface .stl-report-kind span {
+  padding: 0;
+  margin-left: 4px;
+  background: transparent;
+  color: var(--fs-muted);
+  font-weight: 500;
+}
+.finance-surface .stl-report-summary strong {
+  color: var(--fs-ink);
+  font-size: 26px;
+  font-weight: 800;
+}
+
+/* 표 */
+.finance-surface .stl-readable-table th {
+  color: var(--fs-muted);
+  font-weight: 600;
+}
+.finance-surface .stl-readable-table tbody tr {
+  transition: background-color 0.14s ease;
+}
+.finance-surface .stl-readable-table tbody tr:hover {
+  background: var(--fs-hover);
+}
+
+/* 자금 현황 판정 상자 */
+.finance-surface .cashflow-verdict {
+  border-radius: 18px;
+}
+.finance-surface .cashflow-verdict-facts b {
+  font-size: 24px;
+  font-weight: 800;
+}
+
+/* ── 정산 내역 개편: 흐름 그래프를 캘린더 위로 ── */
+.finance-surface .stl-trend {
+  margin: 16px 0 20px;
+}
+.finance-surface .stl-trend h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+/* 날짜 패널 */
+.finance-surface .stl-detail {
+  position: sticky;
+  top: calc(var(--dw-header-height, 56px) + 16px);
+  align-self: start;
+}
+.finance-surface .stl-total b {
+  font-size: 24px;
+  font-weight: 800;
+}
+.finance-surface .stl-mix {
+  margin: 0 20px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--fs-line);
+}
+.finance-surface .stl-mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--fs-soft);
+}
+.finance-surface .stl-mix ul {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.finance-surface .stl-mix li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fs-muted);
+}
+.finance-surface .stl-mix li b {
+  margin-left: auto;
+  color: var(--fs-ink);
+  font-weight: 700;
+}
+.finance-surface .stl-mix i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.finance-surface .stl-mix-done {
+  background: #30291f;
+}
+.finance-surface .stl-mix-sch {
+  background: #c99a2e;
+}
+.finance-surface .stl-mix-can {
+  background: #b8aea0;
+}
+.finance-surface .stl-mix-expense {
+  background: #c2410c;
+}
+.finance-surface .stl-more-button.ant-btn {
+  color: #8a5f0c;
+  font-weight: 600;
+}
+.finance-surface .stl-settlement-preview {
+  transition: background-color 0.15s ease;
+}
+.finance-surface .stl-settlement-preview:hover {
+  background: var(--fs-hover);
+}
+
+@keyframes stl-day-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stl-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* 달을 바꾸면 왼쪽 위에서 오른쪽 아래로 칸이 빠르게 채워진다 */
+  .finance-surface .stl-day-in {
+    animation: stl-day-in 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) var(--ow-delay, 0ms) backwards;
+  }
+  /* 캘린더 ↔ 목록을 오가면 새 화면이 살짝 올라오며 바뀐다 */
+  .finance-surface .stl-report,
+  .finance-surface .stl-calendar-layout {
+    animation: stl-panel-in 0.26s ease-out;
+  }
+  /* 날짜를 바꾸면 패널 내용이 살짝 올라오며 바뀐다 */
+  .finance-surface .stl-detail-body {
+    animation: stl-panel-in 0.22s ease-out;
+  }
+  .finance-surface .stl-day {
+    transition:
+      background-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+}
+
+/* 좁은 화면 — 작은 캘린더와 날짜 패널을 위아래로 쌓는다 (패널 고정도 푼다) */
+@media (max-width: 900px) {
+  .finance-surface .stl-calendar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finance-surface .stl-detail {
+    position: static;
+  }
+}
+
+.finance-surface .stl-day-amount {
+  color: var(--fs-ink);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+.finance-surface .stl-day[aria-pressed='true'] .stl-day-amount {
+  color: #f6e3b4;
+}

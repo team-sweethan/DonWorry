@@ -1,3 +1,609 @@
-.merchant-case-list .ant-table.ant-table-middle .ant-table-container tr > .merchant-case-id-cell {
-  padding-inline-start: 20px;
+/*
+ * 사장님 조치 결과 — 개수 붙은 필터 한 줄 + 열이 고정된 목록.
+ * 참고: Stripe 결제 목록(필터 개수 · 금액 열), PayPal 분쟁 센터 · 스마트스토어 클레임 관리(고정 열 표).
+ * 움직임은 상호작용에만 — 줄 펼치기(높이 · 투명도 0.22초), 필터 · 줄 상태 변화(0.15초). 들어올 때 연출은 없다.
+ */
+.mcl-page {
+  --mc-ink: #30291f;
+  --mc-text: #4f4a3f;
+  --mc-muted: #6b6454;
+  --mc-faint: #8f8573;
+  --mc-line: #ebe3d2;
+  --mc-soft: #f3eee3;
+  --mc-live: #a16207;
+  --mc-hover: #fdf9ef;
+  --mc-open: #fcf7ea;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--mc-ink);
+  font-variant-numeric: tabular-nums;
+}
+.mcl-page .dw-page-header {
+  margin-bottom: 0;
+}
+.mcl-page p,
+.mcl-page h2 {
+  margin: 0;
+}
+
+/* 맨 위 한 문장 */
+.mcl-hero-line {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+}
+.mcl-hero-line strong {
+  font-weight: 800;
+}
+/* 숫자 아래 형광펜 — 숫자가 다 굴러간 뒤 왼쪽에서 오른쪽으로 한 번 그어진다 */
+.mcl-mark {
+  padding: 0 3px;
+  background-image: linear-gradient(#f6e3b4, #f6e3b4);
+  background-position: 0 88%;
+  background-repeat: no-repeat;
+  background-size: 100% 0.36em;
+}
+@keyframes mcl-mark {
+  from {
+    background-size: 0 0.36em;
+  }
+  to {
+    background-size: 100% 0.36em;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mcl-mark {
+    animation: mcl-mark 0.6s cubic-bezier(0.4, 0, 0.2, 1) 1.25s backwards;
+  }
+}
+.mcl-hero-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  margin-top: 4px !important;
+  color: var(--mc-muted);
+  font-size: 14px;
+}
+.mcl-hero-stats {
+  color: var(--mc-faint);
+}
+.mcl-why {
+  margin-top: 8px;
+  color: var(--mc-text);
+  font-size: 13px;
+}
+.mcl-why summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: #8a5f0c;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mcl-why summary:focus-visible {
+  outline: 2px solid var(--mc-live);
+  outline-offset: 2px;
+}
+.mcl-why ul {
+  margin: 4px 0 0;
+  padding: 12px 16px 12px 32px;
+  border-radius: 10px;
+  background: #faf6ec;
+  line-height: 1.7;
+}
+
+/* 목록 상자 */
+.mcl-board {
+  overflow: hidden;
+  border: 1px solid var(--mc-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.mcl-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--mc-line);
+}
+
+/* 필터 — 개수(와 진행 중이면 금액)가 붙은 한 줄 */
+.mcl-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mcl-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--mc-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--mc-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.mcl-filters button:hover {
+  border-color: #d9c79c;
+}
+.mcl-filters button.is-on {
+  border-color: var(--mc-ink);
+  background: var(--mc-ink);
+  color: #fff;
+}
+.mcl-filters button:focus-visible {
+  outline: 2px solid var(--mc-live);
+  outline-offset: 2px;
+}
+.mcl-filter-name {
+  font-weight: 600;
+}
+.mcl-filter-count {
+  color: var(--mc-faint);
+}
+.mcl-filter-money {
+  padding-left: 6px;
+  border-left: 1px solid var(--mc-line);
+  font-weight: 700;
+}
+.mcl-filters button.is-on .mcl-filter-count,
+.mcl-filters button.is-on .mcl-filter-money {
+  border-color: #6b6454;
+  color: #e9dcbc;
+}
+.mcl-filters button.is-on .ow-status-mark * {
+  stroke: #fff;
+}
+.mcl-filters button.is-on .ow-status-mark path[fill] {
+  fill: #fff;
+}
+
+/* 표 — 머리와 줄이 같은 열을 쓴다 */
+.mcl-scroll {
+  overflow-x: auto;
+}
+.mcl-table {
+  min-width: 680px;
+}
+.mct-cols {
+  display: grid;
+  grid-template-columns: 150px 150px 56px 120px minmax(120px, 1fr) 20px;
+  gap: 16px;
+  align-items: center;
+  padding: 0 20px;
+}
+.mcl-thead {
+  min-height: 38px;
+  border-bottom: 1px solid var(--mc-line);
+  background: #fcfaf5;
+  color: var(--mc-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mct-money,
+.mct-num {
+  text-align: right;
+}
+.mcl-group {
+  padding: 14px 20px 6px;
+  color: var(--mc-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mcl-anchor {
+  scroll-margin-top: calc(var(--dw-header-height, 56px) + 16px);
+}
+
+/* 사건 줄 */
+.mct-row {
+  border-bottom: 1px solid var(--mc-soft);
+}
+.mct-row-head {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  background: transparent;
+  color: var(--mc-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.mct-row-head:hover {
+  background: var(--mc-hover);
+}
+.mct-row-head:focus-visible {
+  outline: 2px solid var(--mc-live);
+  outline-offset: -2px;
+}
+.mct-row.is-open .mct-row-head {
+  background: var(--mc-open);
+}
+.mct-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mct-new {
+  margin-left: 2px;
+  color: var(--mc-live);
+  font-size: 12px;
+  font-weight: 700;
+}
+.mct-row-head .mct-money {
+  font-size: 15px;
+  font-weight: 800;
+}
+.mct-date {
+  color: var(--mc-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.mct-result {
+  overflow: hidden;
+  color: var(--mc-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mct-chevron {
+  justify-self: end;
+  color: var(--mc-faint);
+  font-size: 11px;
+  transition: transform 0.22s ease;
+}
+.mct-row.is-open .mct-chevron {
+  transform: rotate(180deg);
+}
+
+/* 펼치기 — 높이가 0에서 내용만큼 부드럽게 열린다 */
+.mct-row-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  background: var(--mc-open);
+}
+.mct-row-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+@keyframes mct-open {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .mct-row-body {
+    animation: mct-open 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+/* 펼친 내용 */
+.mct-detail {
+  padding: 4px 20px 18px 42px;
+}
+.mct-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.mct-steps li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.mct-steps li + li::before {
+  content: '→';
+  margin: 0 12px;
+  color: var(--mc-faint);
+}
+.mct-when {
+  color: var(--mc-faint);
+}
+.mct-what {
+  font-weight: 600;
+}
+.mct-steps li.is-now .mct-when,
+.mct-steps li.is-now .mct-what {
+  color: var(--mc-live);
+}
+.mct-note {
+  margin-top: 8px !important;
+  color: var(--mc-text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.mct-payments {
+  width: 100%;
+  max-width: 680px;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mct-payments th {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--mc-line);
+  color: var(--mc-faint);
+  font-weight: 600;
+  text-align: left;
+}
+.mct-payments td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px dashed var(--mc-line);
+  color: var(--mc-text);
+}
+.mct-payments th:first-child,
+.mct-payments td.mct-money {
+  width: 110px;
+  text-align: right;
+}
+.mct-payments td.mct-money {
+  color: var(--mc-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+.mct-payments td.mct-money.is-struck {
+  color: var(--mc-faint);
+  text-decoration: line-through;
+}
+.mct-outcome {
+  font-weight: 600;
+}
+.mct-outcome.is-live {
+  color: var(--mc-live);
+}
+.mct-outcome.is-off {
+  color: var(--mc-muted);
+}
+.mct-decision {
+  display: block;
+  margin-top: 2px;
+  color: var(--mc-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.mct-payments-caption {
+  caption-side: bottom;
+  padding-top: 8px;
+  color: var(--mc-faint);
+  font-size: 12px;
+  text-align: left;
+}
+.mct-pay-link {
+  margin-left: 10px;
+  color: #8a5f0c;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mct-pay-link:hover {
+  color: #5c4012;
+}
+.mct-guide {
+  margin: 12px 0 0;
+  padding: 0 0 0 18px;
+  color: var(--mc-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.mct-failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: var(--mc-muted);
+  font-size: 14px;
+}
+.is-stale {
+  opacity: 0.6;
+}
+
+/* 아래쪽 */
+.mcl-no-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 24px 20px !important;
+  color: var(--mc-muted);
+  font-size: 14px;
+}
+.mcl-no-match button {
+  border: 0;
+  background: transparent;
+  color: #8a5f0c;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mcl-more {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-top: 1px solid var(--mc-soft);
+  background: #fff;
+  color: #8a5f0c;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mcl-more:hover {
+  background: var(--mc-hover);
+}
+.mcl-foot {
+  padding: 10px 20px 12px !important;
+  border-top: 1px solid var(--mc-soft);
+  color: var(--mc-faint);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .mcl-hero-line {
+    font-size: 19px;
+  }
+  .mct-detail {
+    padding-left: 20px;
+  }
+}
+
+/* 처리 과정 보드 — 결제 멈춤 → 담당자 확인 → 결정 반영 → 끝남 */
+.mcp {
+  position: relative;
+  margin-top: 4px;
+  padding: 20px 24px 18px;
+  border: 1px solid var(--mc-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.mcp-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* 첫 점 가운데에서 마지막 점 가운데까지 잇는 선 */
+.mcp-track {
+  position: absolute;
+  top: 34px;
+  /* 왼쪽: 바깥 여백 24 + 점 반지름 15. 오른쪽: 마지막 칸 너비(안쪽 폭 - 칸 사이 48)/4 에서 점 반지름 · 여백 차이 */
+  left: 39px;
+  right: calc((100% - 48px) / 4 - 3px);
+  height: 2px;
+  background: var(--mc-soft);
+}
+.mcp-fill {
+  display: block;
+  height: 100%;
+  background: var(--mc-ink);
+  transform-origin: left;
+}
+.mcp-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+}
+.mcp-node {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 8px;
+  place-items: center;
+  border: 2px solid var(--mc-ink);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--mc-ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+.mcp-step.is-live .mcp-node {
+  border-color: var(--mc-live);
+  background: var(--mc-live);
+  color: #fff;
+}
+.mcp-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.mcp-value {
+  color: var(--mc-ink);
+  font-size: 15px;
+  font-weight: 800;
+}
+.mcp-step.is-live .mcp-value {
+  color: var(--mc-live);
+}
+.mcp-desc {
+  color: var(--mc-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@keyframes mcp-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes mcp-node-on {
+  from {
+    opacity: 0.35;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes mcp-ripple {
+  from {
+    box-shadow: 0 0 0 0 rgba(161, 98, 7, 0.45);
+  }
+  to {
+    box-shadow: 0 0 0 12px rgba(161, 98, 7, 0);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* 선이 왼쪽에서 오른쪽으로 한 번 그어지고, 선이 닿는 차례로 점이 켜진다 */
+  .mcp-fill {
+    animation: mcp-draw 1.1s cubic-bezier(0.4, 0, 0.2, 1) 0.15s backwards;
+  }
+  .mcp-node {
+    animation: mcp-node-on 0.35s cubic-bezier(0.3, 1.5, 0.5, 1) calc(var(--ow-delay, 0ms) + 0.15s)
+      backwards;
+  }
+  /* 지금 결제가 머물러 있는 단계는 물결이 두 번 퍼지고 멈춘다 (계속 깜빡이지 않게) */
+  .mcp-step.is-live .mcp-node {
+    animation:
+      mcp-node-on 0.35s cubic-bezier(0.3, 1.5, 0.5, 1) calc(var(--ow-delay, 0ms) + 0.15s) backwards,
+      mcp-ripple 1.1s ease-out 1.5s 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .mcp-steps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .mcp-track {
+    display: none;
+  }
+  .mcp-step {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    column-gap: 12px;
+  }
+  .mcp-node {
+    grid-row: span 3;
+    margin: 0;
+  }
 }

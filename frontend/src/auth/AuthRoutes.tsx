@@ -1,7 +1,6 @@
 import { SessionExpiryModal } from './SessionExpiryModal'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Dropdown, Result, Space, Spin } from 'antd'
-import { DownOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
+import { Alert, Button, Result, Space, Spin, Tooltip } from 'antd'
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './useAuth'
 import {
@@ -11,7 +10,7 @@ import {
   sessionNavigation,
 } from '../config/navigation'
 import type { AuthUser } from '../types/auth'
-import { ManagementBrand, ManagementLayout, type ManagementRole } from '../layouts/AdminLayout'
+import { ManagementLayout, type ManagementRole } from '../layouts/AdminLayout'
 import { ScreenResult } from '../components/common/ScreenResult'
 import { useFeedback } from '../components/common/Feedback'
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -73,13 +72,31 @@ function SessionError({ retry }: { retry: () => void }) {
   )
 }
 
-export function LogoutButton() {
+/** compact: 사이드바 프로필의 아이콘 버튼. 이름은 말풍선과 화면 낭독기로 알린다 */
+export function LogoutButton({ compact = false }: { compact?: boolean }) {
   const { store, loggingOut } = useAuth()
   const navigate = useNavigate()
   const { toast } = useFeedback()
-  return (
+  const button = (
     <Button
-      icon={<LogoutOutlined />}
+      icon={
+        <svg
+          width="1em"
+          height="1em"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M10 4H4v16h6M14 8l4 4-4 4M9 12h9" />
+        </svg>
+      }
+      shape={compact ? 'circle' : undefined}
+      className={compact ? 'dw-header-round' : undefined}
+      aria-label={compact ? '로그아웃' : undefined}
       loading={loggingOut}
       onClick={async () => {
         try {
@@ -90,9 +107,10 @@ export function LogoutButton() {
         }
       }}
     >
-      로그아웃
+      {compact ? null : '로그아웃'}
     </Button>
   )
+  return compact ? <Tooltip title="로그아웃">{button}</Tooltip> : button
 }
 
 function AccountActions() {
@@ -108,31 +126,14 @@ function AccountActions() {
   )
 }
 
-function AccountMenu({ user, roleLabel }: { user: AuthUser; roleLabel: string }) {
-  const items = [
-    { key: 'password', label: <NavLink to="/account/password">비밀번호 변경</NavLink> },
-    ...(!user.passwordChangeRequired
-      ? [{ key: 'history', label: <NavLink to="/account/login-history">내 로그인 이력</NavLink> }]
-      : []),
-  ]
+function AccountLinks({ user }: { user: AuthUser }) {
   return (
-    <Dropdown menu={{ items }} trigger={['click']} placement="bottomRight" autoFocus>
-      <Button
-        type="text"
-        className="dw-account-menu"
-        aria-label={`${user.displayName} 계정 메뉴`}
-        aria-haspopup="menu"
-      >
-        <span className="dw-account-avatar" aria-hidden="true">
-          <UserOutlined />
-        </span>
-        <span className="dw-user-name" title={user.displayName}>
-          {user.displayName}
-        </span>
-        <span className="dw-role-pill">{roleLabel}</span>
-        <DownOutlined className="dw-account-chevron" />
-      </Button>
-    </Dropdown>
+    <nav className="dw-island-account-links" aria-label="내 계정">
+      <NavLink to="/account/password">비밀번호 변경</NavLink>
+      {!user.passwordChangeRequired && (
+        <NavLink to="/account/login-history">내 로그인 이력</NavLink>
+      )}
+    </nav>
   )
 }
 
@@ -345,6 +346,14 @@ export function ServerSession() {
   return (
     <ManagementLayout
       role={role}
+      home={home}
+      profile={{
+        name: user.displayName,
+        roleLabel: navigation.label,
+        account: <AccountLinks user={user} />,
+        latestLogin: !user.passwordChangeRequired ? <LatestLogin key={user.userId} /> : undefined,
+        actions: <LogoutButton compact />,
+      }}
       groups={navigation.groups}
       badges={{
         securityCaseActions: caseActions,
@@ -356,17 +365,6 @@ export function ServerSession() {
         operatorAccessSuspensions,
         merchantApplications,
       }}
-      header={
-        <header className="dw-header">
-          <ManagementBrand role={role} home={home} />
-          <div className="dw-header-center" />
-          <div className="dw-header-tools">
-            {!user.passwordChangeRequired && <LatestLogin key={user.userId} />}
-            <AccountMenu user={user} roleLabel={navigation.label} />
-            <LogoutButton />
-          </div>
-        </header>
-      }
     >
       <SessionExpiryModal />
       {/* 모달을 children으로 넘기면 레이아웃의 Outlet 대체가 막히므로 정상 화면은 여기서 직접 그린다 */}

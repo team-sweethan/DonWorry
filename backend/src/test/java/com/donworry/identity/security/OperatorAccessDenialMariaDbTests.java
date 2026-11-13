@@ -194,7 +194,7 @@ class OperatorAccessDenialMariaDbTests {
         assertThat(response.statusCode()).isEqualTo(204);
         var event = onlyEvent();
         assertThat(event.deniedType()).isEqualTo(OperatorAccessDeniedType.OUT_OF_ROLE);
-        assertThat(event.httpMethod()).isEqualTo("POST");
+        assertThat(event.httpMethod()).isEqualTo("GET");
         assertThat(event.path()).isEqualTo("/security/rules");
         assertStored(event);
     }

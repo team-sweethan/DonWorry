@@ -1,6 +1,12 @@
 .stl-prototype {
   color: #0f172a;
 }
+.stl-settlement-policy {
+  margin: -8px 0 16px;
+  color: #6b6454;
+  font-size: 12px;
+  line-height: 1.6;
+}
 .stl-prototype button {
   font: inherit;
   cursor: pointer;

@@ -15,13 +15,15 @@ import {
   saveCashFlowSettings,
 } from '../../api/finance'
 import type { CashFlowSettings } from '../../api/finance'
+import { FundsForecastNotices } from './FundsForecastNotices'
+import { FundsPeriodControl } from './FundsPeriodControl'
 import { CashFlowOverview } from './CashFlowOverview'
 import { SettlementPrototype } from './SettlementPrototype'
+import { SettlementPeriodControl } from './SettlementPeriodControl'
 import { FinanceExpenseManager } from './FinanceExpenseManager'
 import {
   FinanceFailure,
   FinanceLoading,
-  FinancePeriodControl,
   FinanceRefresh,
   FinanceStaleNotice,
 } from './FinanceControls'
@@ -68,7 +70,7 @@ function InitialBalance({
   const [error, setError] = useState<unknown>(null)
   return (
     <section className="finance-card finance-opening-setup">
-      <h2>최초 시작 잔액 설정</h2>
+      <h2>시작 잔액 설정</h2>
       <p>
         {today} 하루 시작 시점의 금액을 한 번 입력하세요. 저장한 기준일과 잔액은 변경할 수 없습니다.
         오늘 지급된 정산·완료 지출을 시작 잔액에 중복 포함하지 마세요.
@@ -96,8 +98,8 @@ function InitialBalance({
           }
         }}
       >
-        <Form.Item label="최초 기준일">
-          <input aria-label="최초 기준일" type="date" value={today} disabled />
+        <Form.Item label="잔액 기준일">
+          <input aria-label="잔액 기준일" type="date" value={today} disabled />
         </Form.Item>
         <Form.Item
           name="openingBalance"
@@ -105,7 +107,7 @@ function InitialBalance({
           rules={[{ required: true }, { type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
         >
           <InputNumber
-            aria-label="최초 시작 잔액"
+            aria-label="시작 잔액"
             className="finance-money-input"
             formatter={formatWonInput}
             parser={parseWonInput}
@@ -119,7 +121,7 @@ function InitialBalance({
         <Form.Item
           name="minimumOperatingFunds"
           label="최소 운영 자금 (원)"
-          extra="예상 마감 잔액이 이 금액보다 낮으면 경고해요. 잔액·지출 설정에서 변경할 수 있어요."
+          extra="지출 뒤에도 남겨두고 싶은 잔액이에요. 하루 끝 예상 잔액이 이 기준보다 낮으면 알려드려요."
           rules={[{ required: true }, { type: 'integer', min: 0, max: MAX_FINANCE_AMOUNT }]}
         >
           <InputNumber
@@ -150,6 +152,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
   const [revision, setRevision] = useState(0)
   const [savedInitialBalance, setSavedInitialBalance] = useState<CashFlowSettings | null>(null)
   const [manage, setManage] = useState(false)
+  const [manageTab, setManageTab] = useState('balance')
   const [details, setDetails] = useState<string | null>(null)
   const refresh = useCallback(() => setRevision((n) => n + 1), [])
   const settingsLoad = useCallback((signal: AbortSignal) => getCashFlowSettings(signal), [])
@@ -193,29 +196,20 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
   const result = shownForecast?.forecast ?? null
   const excludedIncome = result
     ? [
-        { label: '일정 미정', amount: result.undatedIncome },
-        { label: '지난 배치 미완료', amount: result.overdueIncome },
-        { label: '취소', amount: result.canceledIncome },
-      ]
-        .filter(({ amount }) => amount !== 0)
-        .map(({ label, amount }) => `${label} ${money(amount)}`)
+        { label: '정산 예정일 미정', amount: result.undatedIncome },
+        { label: '예정일 이후 지급 대기', amount: result.overdueIncome },
+        { label: '취소된 주문', amount: result.canceledIncome },
+      ].filter(({ amount }) => amount !== 0)
     : []
   const view = shownForecast?.view ?? null
   // 계산 내역 창은 기존(dev)처럼 조회가 끝난 결과에서만 연다. 다시 조회하는 동안에는 잠시 닫혔다가 결과가 오면 다시 열린다
   const active =
     forecast.status === 'success' ? result?.days.find((d) => d.date === details) : undefined
-  const preset = (days: number) =>
-    setPeriod({
-      from: today,
-      to: dayjs(today)
-        .add(days - 1, 'day')
-        .format('YYYY-MM-DD'),
-    })
   return (
-    <div className="finance-preview finance-connected">
+    <div className="finance-preview finance-connected funds-page">
       <PageHeader
         title="자금 현황"
-        description="실제 완료 기록과 등록한 정산·지출로 앞으로의 잔액을 확인합니다."
+        description="등록한 지출을 감당할 돈이 있는지, 부족한 날은 언제인지 미리 확인하세요."
         actions={
           <div className="finance-header-actions">
             <FinanceGuide page="funds" />
@@ -227,29 +221,12 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           </div>
         }
       />
-      <Alert
-        type="info"
-        showIcon
-        message="지급·지출 기록으로 계산한 잔액"
-        className="finance-intro-alert"
-        description="은행 계좌를 조회하는 기능이 아닙니다. 환불 회수를 차감한 실제 지급액만 입금으로 간주하고, 실제 지출 완료 기록을 현재 잔액에서 차감합니다."
-      />
-      <div className="finance-period" data-guide="finance-period">
-        <Button onClick={() => preset(7)}>앞으로 7일</Button>
-        <Button onClick={() => preset(30)}>앞으로 30일</Button>
-        <Button
-          onClick={() => {
-            const next = dayjs(today).add(1, 'month')
-            setPeriod({
-              from: next.startOf('month').format('YYYY-MM-DD'),
-              to: next.endOf('month').format('YYYY-MM-DD'),
-            })
-          }}
-        >
-          다음 달 예측
-        </Button>
-      </div>
-      <FinancePeriodControl
+      <p className="funds-account-note">
+        <span aria-hidden="true">ⓘ</span> 은행 잔액이 아닌, 입력한 시작 잔액과 지급·지출 기록으로
+        계산한 금액이에요.
+      </p>
+      <FundsPeriodControl
+        today={today}
         value={period}
         onChange={setPeriod}
         min={setting?.baseDate}
@@ -268,7 +245,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
       {!valid && (
         <Alert
           type="warning"
-          message="잔액 기준일 이후 최대 366일, 종료일은 오늘+365일 이내로 선택해 주세요."
+          message="잔액 기준일부터 최대 366일을 선택할 수 있어요. 마지막 날은 오늘부터 365일 이내로 골라주세요."
         />
       )}
       {savedInitialBalance && (
@@ -301,20 +278,6 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
           aria-busy={forecast.status === 'loading'}
           inert={forecast.status === 'loading'}
         >
-          {!result.batchEnabled && (
-            <Alert
-              type="warning"
-              message="자동 정산 배치가 비활성 상태입니다"
-              description="예상 유입은 서버에 설정된 배치가 실행된다는 가정입니다. 실제 지급을 보장하지 않습니다."
-            />
-          )}
-          {excludedIncome.length > 0 && (
-            <Alert
-              type="info"
-              message="예측에서 제외한 정산"
-              description={excludedIncome.join(' · ')}
-            />
-          )}
           <CashFlowOverview
             {...view}
             graphDate={graphDate}
@@ -335,6 +298,14 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
             summary={result}
             capturedAt={result.asOf}
             ownerScope={ownerScope}
+            onManageExpenses={
+              freshSetting
+                ? () => {
+                    setManageTab('expenses')
+                    setManage(true)
+                  }
+                : undefined
+            }
             onDetails={setDetails}
           />
           {result.carryForwardMovements.length > 0 && (
@@ -349,15 +320,18 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
                     {m.date} · {m.title} · <FinanceMoney value={m.amount} /> ·{' '}
                     {movementLabel(m.classification)} #{m.referenceId}
                     {m.refundDeductionAmount > 0 &&
-                      ` · 원 정산금 ${money(m.settlementAmount)} − 환불 회수 ${money(m.refundDeductionAmount)}`}
+                      ` · 차감 전 정산금 ${money(m.settlementAmount)} − 정산 후 환불 차감 ${money(m.refundDeductionAmount)}`}
                   </li>
                 ))}
               </ul>
             </details>
           )}
+          <FundsForecastNotices batchEnabled={result.batchEnabled} excluded={excludedIncome} />
         </div>
       )}
       <FinanceExpenseManager
+        activeTab={manageTab}
+        onTabChange={setManageTab}
         open={manage}
         onClose={() => setManage(false)}
         settings={freshSetting ?? undefined}
@@ -382,7 +356,7 @@ function ConnectedFunds({ ownerScope }: { ownerScope: string }) {
                 {m.refundDeductionAmount > 0 && (
                   <small className="payout-deduction">
                     {' '}
-                    · 원 정산금 <FinanceMoney value={m.settlementAmount} /> − 환불 회수{' '}
+                    · 차감 전 정산금 <FinanceMoney value={m.settlementAmount} /> − 정산 후 환불 차감{' '}
                     <FinanceMoney value={m.refundDeductionAmount} /> = 유입{' '}
                     <FinanceMoney value={m.amount} />
                   </small>
@@ -456,25 +430,7 @@ function ConnectedSettlements() {
     />
   )
   const periodControls = (
-    <FinancePeriodControl
-      value={period}
-      onChange={setPeriod}
-      presets={
-        <>
-          <Button onClick={() => setPeriod({ from: today, to: today })}>오늘</Button>
-          <Button
-            onClick={() =>
-              setPeriod({
-                from: dayjs(today).startOf('month').format('YYYY-MM-DD'),
-                to: dayjs(today).endOf('month').format('YYYY-MM-DD'),
-              })
-            }
-          >
-            이번 달
-          </Button>
-        </>
-      }
-    />
+    <SettlementPeriodControl value={period} onChange={setPeriod} today={today} />
   )
   return (
     <div className="finance-preview finance-connected">
@@ -482,7 +438,7 @@ function ConnectedSettlements() {
         <>
           <PageHeader
             title="정산 내역"
-            description="매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다."
+            description="들어온 돈부터 앞으로의 정산까지, 한눈에 확인하세요."
             actions={actions}
           />
           {periodControls}
@@ -543,7 +499,7 @@ function ConnectedSettlements() {
                   <span>내역 조회와 이번 달 지급액의 금액이 달라졌습니다. 새로고침해 주세요.</span>
                 ) : month.status === 'success' ? (
                   <strong>
-                    <FinanceMoney value={month.data.paidAmount} />
+                    <FinanceMoney value={month.data.paidAmount} countUp />
                   </strong>
                 ) : month.status === 'error' ? (
                   <span>이번 달 지급액 조회 실패 · 새로고침해 주세요.</span>

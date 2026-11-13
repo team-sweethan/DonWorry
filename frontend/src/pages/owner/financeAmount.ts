@@ -1,6 +1,6 @@
 export function financeAmount(value: number, compact = true) {
   if (!Number.isSafeInteger(value)) throw new RangeError('원 단위 금액은 안전한 정수여야 합니다.')
-  const exact = value.toLocaleString('ko-KR') + '원'
+  const exact = (value === 0 ? 0 : value).toLocaleString('ko-KR') + '원'
   const amount = BigInt(value)
   const absolute = amount < 0n ? -amount : amount
   if (!compact || absolute < 10000000n) return { exact, text: exact, abbreviated: false }
