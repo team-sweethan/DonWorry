@@ -219,3 +219,28 @@ test('기준일이 미래여서 예측하지 못하는 상태를 정상이나 �
     'future',
   )
 })
+
+// 자동 지급 배치가 꺼져 있으면 예정 유입을 더한 예측만으로 "미달일 없음"을 보여주지 않는다 (PR #809 리뷰)
+test('자동 지급이 꺼져 있으면 예측 가정을 할 일로 먼저 알린다', () => {
+  const paused = homeTodos({
+    today: '2026-11-12',
+    forecast: forecast([day('2026-11-14', { scheduledIncome: 1_284_500 })], {
+      batchEnabled: false,
+    }),
+    needsOpeningBalance: false,
+    cases: null,
+  })
+  assert.deepEqual(
+    paused.map((t) => [t.key, t.tone, t.to]),
+    [['payout-paused', 'warning', '/owner/settlements']],
+  )
+  const running = homeTodos({
+    today: '2026-11-12',
+    forecast: forecast([day('2026-11-14', { scheduledIncome: 1_284_500 })], {
+      batchEnabled: true,
+    }),
+    needsOpeningBalance: false,
+    cases: null,
+  })
+  assert.deepEqual(running, [])
+})

@@ -132,7 +132,7 @@ export function homeAttentionStatus({
   return forecast.status === 'success' ? 'ready' : 'loading'
 }
 
-// 상단은 잔액 설정과 부족 경고에 집중한다. 조사 진행은 보안 요약, 예정금은 금액 카드에서 안내한다.
+// 상단은 잔액 설정 · 자동 지급 중지 · 부족 경고에 집중한다. 조사 진행은 보안 요약, 예정금은 금액 카드에서 안내한다.
 export function homeTodos(input: TodoInput): HomeTodo[] {
   const todos: HomeTodo[] = []
   if (input.needsOpeningBalance)
@@ -144,6 +144,17 @@ export function homeTodos(input: TodoInput): HomeTodo[] {
       to: '/owner/funds',
     })
   const f = input.forecast
+  // 자동 지급 배치가 꺼져 있어도 서버 예측은 예정 정산금이 들어온다고 가정한다.
+  // 그 가정을 숨긴 채 "미달일 없음"을 보여주지 않도록 먼저 알린다 (자금 현황 FundsForecastNotices와 같은 안내)
+  if (f?.batchEnabled === false)
+    todos.push({
+      key: 'payout-paused',
+      tone: 'warning',
+      title: '자동 지급이 꺼져 있어요',
+      detail:
+        '앞으로 7일 잔액은 정산 예정금이 예정대로 지급된다고 가정한 계산이에요. 실제 지급 여부는 정산 내역에서 확인해 주세요',
+      to: '/owner/settlements',
+    })
   if (f?.firstShortageDate) {
     const day = f.days.find((d) => d.date === f.firstShortageDate)
     const spend = day ? day.paidExpenses + day.plannedExpenses : 0
