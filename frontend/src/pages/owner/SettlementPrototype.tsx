@@ -385,6 +385,9 @@ export function SettlementPrototype({
           </div>
         }
       />
+      <p className="stl-settlement-policy">
+        정산 예정일: 매입일 기준 D+3 영업일 (주말·공휴일 제외)
+      </p>
       {periodControls}
       {preview && (
         <SettlementPeriodControl
