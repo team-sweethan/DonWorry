@@ -6,6 +6,9 @@ import koKR from 'antd/es/locale/ko_KR'
 import { PageHeader } from '../../components/common/PageHeader'
 import { loadFinanceConnected } from './financePreload'
 import './finance-page-header.css'
+import '../../styles/ownerMotion.css'
+import './owner-finance-motion.css'
+import './owner-finance-skin.css'
 
 // 정산 코드가 공용 라우터의 초기 번들에 포함되지 않도록 경계를 둔다.
 const FinancePreview = lazy(() =>
@@ -28,7 +31,7 @@ function FinanceRouteFallback({ funds }: { funds: boolean }) {
         description={
           funds
             ? '실제 완료 기록과 등록한 정산·지출로 앞으로의 잔액을 확인합니다.'
-            : '매입일 기준 영업일 D+3(주말·한국 공휴일 제외) 정산과 환불 차감 후 실제 지급액을 확인합니다.'
+            : '들어온 돈부터 앞으로의 정산까지, 한눈에 확인하세요.'
         }
       />
       <div role="status" aria-label="정산 화면을 불러오는 중">

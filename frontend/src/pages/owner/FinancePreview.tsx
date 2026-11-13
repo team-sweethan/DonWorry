@@ -10,6 +10,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { useAuth } from '../../auth/useAuth'
 import { PageHeader } from '../../components/common/PageHeader'
 import { SettlementPrototype } from './SettlementPrototype'
+import { FundsPeriodControl } from './FundsPeriodControl'
 import { CashFlowOverview } from './CashFlowOverview'
 import { RecurringExpensePanel } from './RecurringExpensePanel'
 import { MAX_PREVIEW_EXPENSE } from './recurringExpenses'
@@ -208,7 +209,7 @@ export function FinancePreview() {
         <>
           <PageHeader
             title="자금 현황"
-            description="오늘 계산 잔액을 확인하고, 예정 정산과 미래 지출로 앞으로의 잔액을 예측합니다."
+            description="등록한 지출을 감당할 돈이 있는지, 부족한 날은 언제인지 미리 확인하세요."
             actions={
               <div className="finance-header-actions">
                 <FinanceGuide page="funds" />
@@ -286,45 +287,21 @@ export function FinancePreview() {
                   action={<Button onClick={() => manage('expenses')}>확인하기</Button>}
                 />
               )}
-              <div className="finance-period" data-guide="finance-period">
-                <Button onClick={() => preset(7)}>앞으로 7일</Button>
-                <Button onClick={() => preset(30)}>앞으로 30일</Button>
-                <Button
-                  onClick={() => {
-                    const next = dayjs(today).add(1, 'month')
-                    setStart(next.startOf('month').format('YYYY-MM-DD'))
-                    setEnd(next.endOf('month').format('YYYY-MM-DD'))
-                  }}
-                >
-                  다음 달 예측
-                </Button>
-                <label>
-                  조회 시작일
-                  <input
-                    type="date"
-                    value={start}
-                    min={today}
-                    max={end}
-                    onChange={(e) => setStart(e.target.value)}
-                  />
-                </label>
-                <span>~</span>
-                <label>
-                  조회 종료일
-                  <input
-                    type="date"
-                    value={end}
-                    min={start}
-                    max={dayjs(start).add(365, 'day').format('YYYY-MM-DD')}
-                    onChange={(e) => setEnd(e.target.value)}
-                  />
-                </label>
-                <div className="finance-period-actions">
+              <FundsPeriodControl
+                today={today}
+                value={{ from: start, to: end }}
+                min={today}
+                max={dayjs(today).add(365, 'day').format('YYYY-MM-DD')}
+                onChange={({ from, to }) => {
+                  setStart(from)
+                  setEnd(to)
+                }}
+                actions={
                   <Button data-guide="finance-settings" type="primary" onClick={() => manage()}>
                     잔액·지출 설정
                   </Button>
-                </div>
-              </div>
+                }
+              />
               {!result.valid && (
                 <Alert
                   type="warning"
@@ -372,6 +349,7 @@ export function FinancePreview() {
                   amount: e.amount,
                   note: e.kind === 'RECURRING' ? '정기 지출 예정' : '일회성 지출 예정',
                 }))}
+                onManageExpenses={() => manage('expenses')}
                 onDetails={(date) => {
                   setSelected(date)
                   setPanel('daily')

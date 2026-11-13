@@ -1,0 +1,187 @@
+.two-click-period-trigger {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 7px 12px;
+  border: 1px solid #e4dbc8;
+  border-radius: 9px;
+  background: #fff;
+  color: #675331;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.two-click-period-trigger > .anticon {
+  color: #aa9569;
+  font-size: 12px;
+}
+.two-click-period-trigger:hover {
+  border-color: #b49755;
+  background: #fffdf7;
+}
+.two-click-period-trigger:focus-visible,
+.two-click-calendar button:focus-visible {
+  outline: 2px solid #ad8d44;
+  outline-offset: 2px;
+}
+.funds-range-navigation .two-click-period-trigger {
+  flex: 1;
+  border: 0;
+  min-width: 0;
+  padding: 5px 7px;
+  gap: 8px;
+  font-size: 13px;
+}
+.two-click-period-popover .ant-popover-inner {
+  padding: 0;
+  border: 1px solid #e5d8bd;
+  border-radius: 14px;
+  box-shadow: 0 10px 32px #66502b20;
+  overflow: hidden;
+}
+.two-click-calendar {
+  width: min(326px, calc(100vw - 28px));
+  color: #645132;
+}
+.two-click-steps {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  background: #fcfaf4;
+  border-bottom: 1px solid #eee3cf;
+}
+.two-click-steps > div {
+  flex: 1;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #e8dfce;
+  background: #fffefa;
+  border-radius: 8px;
+}
+.two-click-steps .is-current {
+  border-color: #be9d50;
+  background: #fff4da;
+}
+.two-click-steps span {
+  display: block;
+  color: #9d8351;
+  font-size: 10px;
+}
+.two-click-steps b {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.two-click-steps > .anticon {
+  color: #c0ad85;
+  font-size: 11px;
+}
+.two-click-month {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 12px 8px;
+}
+.two-click-month strong {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+}
+.two-click-month button {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #9c8557;
+  font-size: 12px;
+  cursor: pointer;
+}
+.two-click-month button:hover:not(:disabled) {
+  background: #f6eedb;
+}
+.two-click-month button:disabled {
+  color: #d9d1c3;
+  cursor: not-allowed;
+}
+.two-click-calendar .ant-picker-calendar-mini {
+  background: #fffefa;
+}
+.two-click-calendar .ant-picker-panel {
+  border-top: 0;
+}
+.two-click-calendar .ant-picker-content th {
+  color: #958365;
+  font-size: 11px;
+}
+.two-click-calendar .ant-picker-content td {
+  padding: 3px 0;
+}
+.two-click-day {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 32px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.two-click-calendar .ant-picker-cell:not(.ant-picker-cell-disabled):hover .two-click-day {
+  background: #f4ead0;
+}
+.two-click-day.is-range {
+  background: #faf0d9;
+  border-radius: 0;
+}
+.two-click-calendar .two-click-day.is-start,
+.two-click-calendar .two-click-day.is-end {
+  background: #ac8536;
+  color: white;
+  font-weight: 700;
+}
+.two-click-calendar .ant-picker-cell-disabled .two-click-day {
+  opacity: 0.38;
+}
+.two-click-help {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 13px;
+  border-top: 1px solid #eee4d1;
+  background: #fcfaf5;
+}
+.two-click-help > span {
+  font-size: 11px;
+  color: #977d4b;
+  line-height: 1.6;
+}
+.two-click-help > div {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.two-click-help button {
+  border: 1px solid #e6dac2;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 11px;
+  color: #8c7547;
+  background: #fffefa;
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .funds-range-navigation .two-click-period-trigger {
+    gap: 5px;
+    font-size: 12px;
+    padding-inline: 2px;
+  }
+}

@@ -1,0 +1,1991 @@
+/* 자금 화면 전용: 자금 예보 → 짧은 요약 → 선택한 날짜의 계산 근거. */
+.funds-page .funds-account-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #766d5e;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: -4px 0 20px;
+}
+.finance-surface .finance-period.funds-period,
+.finance-period.funds-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e8dfcf;
+  border-radius: 14px;
+  background: #fffdf8;
+  margin: 20px 0 24px;
+}
+.funds-period-label {
+  display: flex;
+  gap: 8px;
+  color: #6a5b40;
+  font-size: 13px;
+  font-weight: 650;
+}
+.funds-presets {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #f1ede3;
+}
+.funds-presets button {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #716650;
+  padding: 8px 11px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.funds-presets button[aria-pressed='true'] {
+  background: #342d23;
+  color: #fff9eb;
+  box-shadow: 0 2px 4px #30291f14;
+}
+.funds-presets button:hover:not([aria-pressed='true']):not(:disabled) {
+  background: #e6dfd0;
+  color: #30291f;
+}
+.funds-presets button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.funds-period .ant-picker {
+  min-height: 38px;
+  background: transparent;
+  border-color: #e1d6c3;
+  border-radius: 8px;
+}
+.funds-period .ant-picker-input > input {
+  font-size: 13px;
+}
+.funds-period-actions {
+  margin-left: auto;
+}
+.funds-period-actions .ant-btn {
+  height: 38px;
+  border-radius: 8px;
+  font-weight: 650;
+}
+.funds-experience.cashflow-overview {
+  gap: 22px;
+}
+.funds-experience .cashflow-overview-toolbar p {
+  margin: 0;
+}
+.funds-experience .cashflow-overview-toolbar > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+.funds-experience .cashflow-eyebrow {
+  font-size: 12px;
+  color: #977a39;
+}
+.funds-hero-grid {
+  display: grid;
+  grid-template-columns: 1.08fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+.funds-balance-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 26px 30px;
+  border: 1px solid #62533b;
+  border-radius: 20px;
+  color: #fff9ed;
+  background: radial-gradient(ellipse at 100% 100%, #685637, transparent 75%), #30291f;
+  min-width: 0;
+}
+.funds-balance-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #e9d6a8;
+  font-size: 12px;
+}
+.funds-balance-top > span:first-child {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 650;
+}
+.funds-record-badge {
+  border: 1px solid #b49b5a66;
+  border-radius: 20px;
+  padding: 4px 9px;
+  font-size: 10px;
+}
+.funds-balance-card > p {
+  font-size: 14px;
+  color: #d7cdbb;
+  margin: 26px 0 10px;
+}
+.funds-balance-amount {
+  display: block;
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 750;
+  letter-spacing: -1.6px;
+  line-height: 1.25;
+  max-width: 100%;
+}
+.funds-balance-caption {
+  display: block;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 12px;
+  color: #d0c4af;
+  max-width: 85%;
+}
+.funds-balance-card .cashflow-balance-basis {
+  color: #ddd0b9;
+  margin-top: 25px;
+  position: relative;
+  z-index: 1;
+}
+.funds-balance-card .cashflow-balance-basis summary {
+  color: #dfcc9c;
+  font-size: 11px;
+  width: fit-content;
+}
+.funds-balance-card .cashflow-balance-basis p {
+  padding: 10px 12px;
+  background: #30291fe8;
+  border-radius: 8px;
+}
+.funds-balance-art {
+  position: absolute;
+  width: 48%;
+  right: -10px;
+  bottom: -4px;
+  color: #d9bc75;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: linear-gradient(90deg, transparent, black 35%);
+}
+.finance-surface .funds-experience .funds-status-card,
+.funds-experience .funds-status-card {
+  border-radius: 20px;
+  padding: 24px 26px;
+  background: linear-gradient(120deg, #fffefa, #fcf4dd);
+  border-color: #e8d9b9;
+  min-width: 0;
+}
+.funds-experience .funds-status-card.cashflow-verdict-warning {
+  background: linear-gradient(120deg, #fffdf8, #fbecdf);
+  border-color: #ebd3bc;
+}
+.funds-experience .funds-status-card .funds-status-label {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #886211;
+  font-weight: 650;
+}
+.funds-experience .funds-status-card.cashflow-verdict-warning .funds-status-label {
+  color: #a4532c;
+}
+.funds-status-main {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin: 22px 0;
+}
+.funds-date-tile {
+  flex-shrink: 0;
+  width: 46px;
+  display: grid;
+  text-align: center;
+  border: 1px solid #e0cfa7;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fffdf7;
+  box-shadow: 0 3px 0 #d9c7a329;
+}
+.funds-date-tile span {
+  background: #eadcb8;
+  padding: 3px 0;
+  font-size: 10px;
+  color: #80612c;
+}
+.funds-date-tile b {
+  font-size: 23px;
+  line-height: 32px;
+  color: #59482c;
+}
+.funds-experience .funds-status-main h2 {
+  margin: 0;
+  font-size: clamp(17px, 1.65vw, 22px);
+  line-height: 1.4;
+  letter-spacing: -0.5px;
+}
+.funds-status-main p {
+  font-size: 12px;
+  color: #80725a;
+  margin: 6px 0 0;
+  line-height: 1.6;
+}
+.funds-status-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.funds-status-amount > span {
+  font-size: 12px;
+  color: #776747;
+}
+.funds-status-amount strong {
+  font-size: clamp(23px, 2.2vw, 30px);
+  color: #886211;
+  letter-spacing: -0.8px;
+  min-width: 0;
+}
+.cashflow-verdict-warning .funds-status-amount strong {
+  color: #ab592f;
+}
+.funds-status-bottom {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1px solid #e6d7b8;
+  padding-top: 14px;
+  margin-top: 16px;
+  font-size: 11px;
+  color: #7c705b;
+}
+.funds-status-bottom .cashflow-reason-link {
+  margin: 0;
+  font-size: 12px;
+  border: 0;
+  color: #95622d;
+  min-height: 28px;
+}
+.funds-period-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid #e7e0d4;
+  background: #fff;
+  border-radius: 16px;
+  padding: 21px 0;
+}
+.funds-period-metrics section {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 0 24px;
+  min-width: 0;
+}
+.funds-period-metrics section + section {
+  border-left: 1px solid #eee7da;
+}
+.funds-period-metrics section > span {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-size: 12px;
+  color: #7b705d;
+}
+.funds-period-metrics strong {
+  font-size: clamp(19px, 1.85vw, 25px);
+  color: #30291f;
+  letter-spacing: -0.6px;
+}
+.funds-period-metrics small {
+  font-size: 11px;
+  color: #8a8171;
+  line-height: 1.6;
+}
+.funds-period-metrics section:first-child .anticon {
+  color: #348362;
+}
+.funds-period-metrics section:nth-child(2) .anticon {
+  color: #b87758;
+}
+.funds-experience .cashflow-surface {
+  border-color: #e9e0d1;
+  border-radius: 18px;
+  padding: 24px 26px;
+}
+.funds-experience .cashflow-section-head h2 {
+  font-size: 19px;
+  letter-spacing: -0.5px;
+}
+.funds-experience .cashflow-section-head p {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.funds-experience .cashflow-section-head .ant-btn {
+  border-radius: 8px;
+  min-height: 34px;
+  font-size: 12px;
+}
+.funds-experience .cashflow-chart-legend {
+  gap: 12px 20px;
+  font-size: 11px;
+  margin: 16px 0 12px;
+}
+.funds-trend .finance-chart-focus {
+  font-size: 11px;
+  margin: 0 0 12px;
+}
+.funds-trend .finance-chart-focus > .funds-chart-unit {
+  margin-left: 0;
+}
+.funds-trend .finance-chart-focus > span {
+  font-size: 11px;
+}
+.funds-trend .finance-trend-scroll {
+  overflow-x: auto;
+  border-radius: 8px;
+  scrollbar-width: thin;
+  padding-bottom: 8px;
+}
+.funds-trend .finance-chart-fixed-axis {
+  width: 60px;
+  background: linear-gradient(90deg, #fff 80%, #ffffff00);
+}
+.funds-trend .finance-chart-fixed-axis span {
+  font-size: 10px;
+}
+.funds-chart-day {
+  cursor: pointer;
+  outline: none;
+}
+.funds-chart-day:hover > rect {
+  fill: #d9c89e;
+  fill-opacity: 0.14;
+}
+.funds-chart-day:focus-visible > rect {
+  fill: #d9c89e;
+  fill-opacity: 0.2;
+  stroke: #a88943;
+  stroke-width: 1;
+}
+.funds-trend .finance-trend-detail {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid #e8dcc6;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 12px;
+  background: #fcfaf4;
+}
+.funds-trend .finance-trend-detail .funds-date-navigation {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.funds-trend .finance-trend-detail .ant-picker {
+  width: 142px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-inline: 4px;
+}
+.funds-trend .finance-trend-detail .ant-picker-input > input {
+  font-weight: 650;
+  font-size: 13px;
+}
+.funds-selected-values {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.funds-selected-values > div {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border-left: 1px solid #e8dcc6;
+  padding-left: 18px;
+}
+.funds-selected-values span:not(.finance-money, .finance-money__text) {
+  color: #897d65;
+  font-size: 11px;
+}
+.funds-selected-values b {
+  font-size: 17px;
+  letter-spacing: -0.4px;
+}
+.funds-selected-values > div:last-child b {
+  color: #886211;
+}
+.funds-selected-values > div:last-child b.cashflow-negative {
+  color: #ad602f;
+}
+.funds-trend .finance-trend-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.funds-experience #funds-day-evidence {
+  scroll-margin-top: 90px;
+}
+.funds-experience .cashflow-equation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  border: 1px solid #ece4d5;
+  padding: 22px;
+  background: #fcfaf5;
+}
+.funds-experience .cashflow-equation > div {
+  min-width: 0;
+}
+.funds-experience .cashflow-equation b {
+  font-size: 19px;
+}
+.funds-experience .cashflow-equation > div:last-child b {
+  color: #8b641a;
+}
+.funds-experience .cashflow-equation > div:last-child .cashflow-negative {
+  color: #b46837;
+}
+.funds-experience .cashflow-equation small {
+  font-size: 11px;
+}
+.funds-experience .cashflow-sources b {
+  font-size: 14px;
+  font-weight: 600;
+}
+.funds-experience .cashflow-sources strong {
+  font-size: 14px;
+}
+.funds-experience .cashflow-evidence > div {
+  min-width: 0;
+}
+.funds-experience .cashflow-loan-card {
+  background: #f1ebdc;
+  color: #594a2b;
+  border-color: #e2d5b9;
+  border-radius: 16px;
+  padding: 22px 26px;
+}
+.finance-surface .funds-experience .cashflow-loan-card h2,
+.funds-experience .cashflow-loan-card h2 {
+  color: #594a2b;
+  font-size: 25px;
+}
+.funds-experience .cashflow-loan-card small,
+.funds-experience .cashflow-loan-card p {
+  color: #7d6c4d;
+  font-size: 12px;
+}
+.funds-experience .cashflow-loan-card .ant-btn {
+  background: #fffdf6;
+  border-color: #d6c39b;
+  color: #785b25;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.funds-presets button:focus-visible,
+.funds-experience summary:focus-visible,
+.funds-experience button:focus-visible {
+  outline: 2px solid #a68742;
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .funds-art-flow {
+    animation: funds-track-flow 4s linear infinite;
+  }
+  .funds-art-dot {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: funds-point-pulse 2.4s ease-in-out infinite;
+  }
+  .funds-point-halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: funds-point-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .funds-selected-values {
+    animation: funds-selection-in 0.24s ease-out;
+  }
+  .funds-hero-grid > section {
+    animation: funds-selection-in 0.5s ease-out backwards;
+  }
+  .funds-hero-grid > section:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .funds-chart-selected {
+    transition:
+      x 0.25s ease-out,
+      width 0.25s ease-out;
+  }
+}
+@keyframes funds-track-flow {
+  to {
+    stroke-dashoffset: -378;
+  }
+}
+@keyframes funds-point-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.3);
+  }
+}
+@keyframes funds-selection-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 1100px) {
+  .funds-trend .finance-trend-detail .funds-date-navigation {
+    flex: 1;
+  }
+  .funds-trend .funds-selected-values {
+    order: 3;
+    flex-basis: 100%;
+  }
+  .funds-selected-values > div:first-child {
+    border: 0;
+    padding-left: 0;
+  }
+  .funds-hero-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .funds-balance-card {
+    padding: 24px;
+  }
+}
+@media (max-width: 760px) {
+  .funds-hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .funds-balance-card {
+    padding: 23px;
+  }
+  .funds-balance-caption {
+    max-width: 100%;
+  }
+  .funds-balance-art {
+    width: 42%;
+    opacity: 0.7;
+  }
+  .funds-period .ant-picker-range {
+    width: 100%;
+  }
+  .funds-period .funds-period-actions {
+    margin-left: auto;
+  }
+  .funds-period-metrics {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 18px;
+  }
+  .funds-period-metrics section {
+    padding: 16px 0;
+    gap: 8px;
+  }
+  .funds-period-metrics section + section {
+    border-left: 0;
+    border-top: 1px solid #eee7da;
+  }
+  .funds-experience .cashflow-surface {
+    padding: 20px 16px;
+  }
+  .funds-experience .cashflow-equation {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 18px 12px;
+    padding: 16px;
+  }
+  .funds-experience .cashflow-equation > span:nth-child(4) {
+    display: none;
+  }
+  .funds-experience .cashflow-equation > div:nth-child(5) small::before {
+    content: '− ';
+  }
+  .funds-trend .finance-chart-focus > span {
+    margin-left: 0;
+  }
+  .funds-trend .finance-chart-focus {
+    gap: 5px;
+  }
+  .funds-experience .cashflow-loan-card {
+    padding: 20px;
+  }
+}
+@media (max-width: 430px) {
+  .funds-selected-values {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 14px;
+  }
+  .funds-selected-values > div {
+    padding-left: 12px;
+  }
+  .funds-selected-values > div:last-child {
+    grid-column: 1/-1;
+    border-left: 0;
+    border-top: 1px solid #e8dcc6;
+    padding: 12px 0 0;
+  }
+}
+.funds-period-basis {
+  color: #7d7058;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.funds-period-basis summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.funds-period-basis p {
+  margin: 7px 0 0;
+}
+
+/* 기본 화면은 잔액·부족 여부·그래프에 집중하고, 세부 근거는 요청할 때 펼친다. */
+.funds-forecast-caption {
+  display: block;
+  color: #8d7e60;
+  font-size: 10px;
+  margin-bottom: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.funds-next-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 14px;
+}
+.funds-next-actions .ant-btn {
+  border-radius: 8px;
+  font-size: 12px;
+  height: 34px;
+}
+.funds-next-actions .ant-btn-text {
+  color: #8c7242;
+  margin-left: auto;
+}
+.funds-period-summary {
+  border: 1px solid #e6dece;
+  border-radius: 12px;
+  background: #fffdf8;
+}
+.funds-period-summary > summary {
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: #62553d;
+  font-size: 13px;
+}
+.funds-period-summary > summary small {
+  color: #8e8065;
+  font-size: 11px;
+  margin-left: auto;
+}
+.funds-period-summary > summary::after {
+  content: '＋';
+  font-size: 14px;
+}
+.funds-period-summary[open] > summary::after {
+  content: '−';
+}
+.funds-period-summary .funds-period-metrics {
+  border: 0;
+  border-top: 1px solid #ece4d4;
+  border-radius: 0 0 12px 12px;
+}
+.funds-experience .funds-day-details {
+  padding: 0;
+}
+.funds-day-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 17px 22px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #716044;
+}
+.funds-day-summary b {
+  color: #423626;
+  font-variant-numeric: tabular-nums;
+}
+.funds-day-summary > span:not(:first-child) {
+  font-size: 12px;
+  color: #99742d;
+}
+.funds-disclosure-open,
+.funds-day-details[open] > summary .funds-disclosure-closed {
+  display: none;
+}
+.funds-day-details[open] > summary .funds-disclosure-open {
+  display: inline;
+}
+.funds-day-details[open] {
+  padding: 0 24px 24px;
+}
+.funds-day-details[open] > summary {
+  margin: 0 -24px 20px;
+  border-bottom: 1px solid #eee5d4;
+}
+.funds-experience .funds-refund-details {
+  margin: 0;
+  padding: 0 18px;
+  border-radius: 12px;
+}
+.funds-refund-details > summary {
+  padding: 14px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #877249;
+}
+.funds-refund-details > summary > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.funds-refund-details > summary > span:last-child {
+  font-size: 11px;
+}
+.funds-chart-help summary {
+  cursor: pointer;
+  width: fit-content;
+  color: #8b7a57;
+}
+.funds-chart-help p {
+  margin: 8px 0 0;
+}
+.funds-experience .cashflow-section-head > strong {
+  margin-left: auto;
+}
+@media (max-width: 760px) {
+  .funds-day-summary {
+    padding: 16px;
+    font-size: 12px;
+  }
+  .funds-day-details[open] {
+    padding: 0 16px 16px;
+  }
+  .funds-day-details[open] > summary {
+    margin: 0 -16px 16px;
+  }
+  .funds-experience .funds-day-details:not([open]) {
+    padding: 0;
+  }
+  .funds-next-actions .ant-btn-text {
+    margin-left: 0;
+  }
+  .funds-period-summary > summary small {
+    display: none;
+  }
+}
+.funds-experience details:not([open]) > :not(summary) {
+  display: none;
+}
+.funds-reconcile-note {
+  border: 1px solid #e7d1b0;
+  background: #fff9ee;
+  color: #9d6430;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  margin: 0;
+}
+
+/* 잔액과 하루 입출금은 단위가 같아도 크기가 달라, 서로 다른 영역에서 비교한다. */
+.funds-chart-readout {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 22px 0 18px;
+}
+.funds-chart-readout > div {
+  min-width: 0;
+}
+.funds-chart-readout > div > span {
+  display: block;
+  font-size: 12px;
+  color: #85765a;
+  margin-bottom: 7px;
+}
+.funds-chart-readout strong {
+  display: block;
+  font-size: clamp(25px, 2.8vw, 36px);
+  color: #4b3b23;
+  letter-spacing: -1.1px;
+  line-height: 1.2;
+}
+.funds-chart-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 20px;
+  padding: 7px 11px;
+  color: #69734e;
+  background: #f1f4e9;
+  font-size: 11px;
+}
+.funds-chart-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #829759;
+}
+.funds-chart-status.is-low {
+  background: #fcf0e3;
+  color: #ae6539;
+}
+.funds-chart-status.is-low i {
+  background: #c17e4b;
+}
+.funds-chart-lane-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 7px;
+  color: #8b7e67;
+  font-size: 10px;
+}
+.funds-chart-lane-label b {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #796748;
+  font-size: 11px;
+  font-weight: 600;
+}
+.funds-line-key {
+  width: 15px;
+  height: 3px;
+  border-radius: 2px;
+  background: #614b2e;
+}
+.funds-trend .finance-chart-fixed-axis.funds-split-axis {
+  height: 312px;
+  margin-bottom: -312px;
+}
+.funds-chart-navigation-hint {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 16px;
+  font-size: 10px;
+  color: #92856f;
+}
+.funds-chart-navigation-hint > span:first-child {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.funds-income-key,
+.funds-expense-key {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: #54a687;
+}
+.funds-expense-key {
+  background: #da8e74;
+  margin-left: 9px;
+}
+.funds-trend .funds-selected-values {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.funds-trend .funds-selected-values > div:last-child b {
+  color: #6a5140;
+}
+.funds-trend .funds-selected-values > div:first-child b {
+  color: #347c60;
+}
+.funds-trend .funds-date-navigation .ant-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid #e8dfce;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+.funds-trend .funds-date-navigation .ant-btn:disabled {
+  opacity: 0.45;
+}
+.funds-trend .funds-date-navigation .ant-btn svg {
+  width: 12px;
+  height: 12px;
+  aspect-ratio: auto;
+}
+.funds-trend .finance-trend-detail .funds-date-navigation {
+  gap: 6px;
+}
+.funds-balance-flow {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .funds-balance-flow {
+    opacity: 0.85;
+    animation: funds-line-travel 5s linear infinite;
+  }
+  .funds-chart-readout strong {
+    animation: funds-selection-in 0.22s ease-out;
+  }
+}
+@keyframes funds-line-travel {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+@media (max-width: 430px) {
+  .funds-trend .funds-selected-values > div:last-child {
+    grid-column: auto;
+    padding: 0 0 0 12px;
+    border-top: 0;
+    border-left: 1px solid #e8dcc6;
+  }
+  .funds-chart-status {
+    font-size: 10px;
+  }
+}
+.funds-chart-readout .funds-weather-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  background: #fcf8ed;
+  border: 1px solid #eee2c7;
+  border-radius: 12px;
+}
+.funds-weather-status > div {
+  display: grid;
+  gap: 3px;
+}
+.funds-weather-status b {
+  color: #ae8128;
+  font-size: 15px;
+}
+.funds-weather-status span {
+  color: #8e7c5b;
+  font-size: 10px;
+}
+.funds-chart-readout .funds-weather-status.is-rain {
+  background: #f4f3f7;
+  border-color: #e0dce7;
+}
+.funds-weather-status.is-rain b {
+  color: #7b7389;
+}
+.funds-weather-status.is-cloud b {
+  color: #8e836d;
+}
+.funds-trend svg.funds-weather-icon {
+  display: block;
+  width: 40px;
+  height: 36px;
+  aspect-ratio: 40/36;
+  overflow: visible;
+  flex-shrink: 0;
+}
+.funds-weather-marker,
+.funds-chart-today {
+  pointer-events: none;
+}
+.funds-weather-marker {
+  opacity: 0.9;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .funds-weather-icon .funds-sun {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: funds-sun-turn 24s linear infinite;
+  }
+  .funds-weather-icon .funds-cloud {
+    animation: funds-cloud-drift 4s ease-in-out infinite;
+  }
+  .funds-weather-icon .funds-raindrops path {
+    animation: funds-rain-fall 1.3s linear infinite;
+  }
+  .funds-weather-icon .funds-raindrops path:nth-child(2) {
+    animation-delay: -0.5s;
+  }
+  .funds-weather-icon .funds-raindrops path:nth-child(3) {
+    animation-delay: -0.9s;
+  }
+}
+@keyframes funds-sun-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes funds-cloud-drift {
+  0%,
+  100% {
+    transform: translateX(-1px);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+@keyframes funds-rain-fall {
+  0% {
+    transform: translate(1px, -2px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-1px, 4px);
+    opacity: 0;
+  }
+}
+/* 그래프 가까이에 목적과 읽는 법을 붙여, 선과 막대의 역할을 구분한다. */
+.funds-chart-lane-label {
+  align-items: center;
+  margin: 0 0 6px;
+}
+.funds-lane-heading b {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #584a33;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.funds-lane-heading em {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #eee4cb;
+  color: #9b7936;
+  font-size: 11px;
+  font-style: normal;
+  flex-shrink: 0;
+}
+.funds-lane-heading p {
+  margin: 5px 0 0 28px;
+  color: #877b67;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.funds-trend .finance-chart-fixed-axis.funds-split-axis {
+  height: 346px;
+  margin-bottom: -346px;
+}
+.funds-flow-caption {
+  position: sticky;
+  left: 76px;
+  width: calc(100% - 92px);
+  height: 0;
+  transform: translateY(217px);
+  z-index: 2;
+  pointer-events: none;
+}
+.funds-flow-caption b {
+  font-size: 13px;
+}
+.funds-flow-caption p {
+  font-size: 10px;
+  margin-top: 3px;
+}
+.funds-caption-income {
+  color: #348362;
+  font-weight: 600;
+}
+.funds-caption-expense {
+  color: #b87758;
+  font-weight: 600;
+}
+.funds-chart-navigation-hint {
+  line-height: 1.6;
+}
+@media (max-width: 700px) {
+  .funds-lane-heading b {
+    font-size: 12px;
+    gap: 6px;
+  }
+  .funds-lane-heading p {
+    font-size: 10px;
+    margin-left: 26px;
+  }
+  .funds-flow-caption p {
+    margin-left: 0;
+  }
+  .funds-chart-lane-label > span {
+    margin-left: 26px;
+  }
+}
+.funds-scale-options {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: #f1ede3;
+  border-radius: 8px;
+}
+.funds-scale-options button {
+  font: inherit;
+  font-size: 11px;
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: transparent;
+  color: #8a7a5f;
+  cursor: pointer;
+}
+.funds-scale-options button[aria-pressed='true'] {
+  color: #6b5129;
+  background: white;
+  box-shadow: 0 1px 3px #40301415;
+  font-weight: 650;
+}
+.funds-scale-options button:focus-visible {
+  outline: 2px solid #a88944;
+  outline-offset: 2px;
+}
+.funds-scale-context {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  margin: 12px 0 5px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #938366;
+}
+.funds-scale-context > span:first-child {
+  color: #a07935;
+}
+.funds-safe-emblem {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid #e4d6b2;
+  background: #f7edcf;
+  color: #a4863d;
+  font-size: 23px;
+}
+.funds-flow-zoom-badge {
+  margin-left: auto;
+  font-size: 9px;
+  color: #9b773a;
+  font-weight: 500;
+  padding: 2px 6px;
+  border: 1px solid #e5d9bf;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .funds-flow-zoom-badge {
+    display: none;
+  }
+}
+/* 예보가 첫 화면의 중심이며, 현재·기간 요약은 그 아래에서 짧게 확인한다. */
+.funds-quick-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr) auto;
+  align-items: start;
+  gap: 20px;
+  border: 1px solid #e5ddcc;
+  border-radius: 14px;
+  padding: 20px 22px;
+  background: #fffdf8;
+}
+.funds-quick-cell {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.funds-quick-cell + .funds-quick-cell {
+  border-left: 1px solid #e9e0cf;
+  padding-left: 20px;
+}
+.funds-quick-cell > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #88795e;
+  font-size: 11px;
+}
+.funds-quick-cell > strong {
+  font-size: clamp(19px, 1.9vw, 24px);
+  font-weight: 750;
+  color: #4f4029;
+  letter-spacing: -0.6px;
+}
+.funds-quick-cell small {
+  color: #96886f;
+  font-size: 10px;
+  line-height: 1.6;
+}
+.funds-quick-status > span {
+  color: #7f8556;
+}
+.funds-quick-status > b {
+  color: #615b3e;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.funds-quick-status.is-shortage > span,
+.funds-quick-status.is-shortage > b,
+.funds-quick-status.is-shortage > small {
+  color: #ae693c;
+}
+.funds-quick-summary.cashflow-verdict-warning {
+  border-color: #e6c7a4;
+  background: #fffbf3;
+}
+.funds-quick-basis {
+  color: #8b7958;
+  font-size: 10px;
+}
+.funds-quick-basis > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.funds-quick-basis p {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 8px 0 0;
+}
+.funds-quick-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.funds-quick-actions .ant-btn {
+  height: 32px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+.funds-quick-actions .ant-btn-text {
+  color: #95733b;
+}
+.funds-quick-reason {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  width: fit-content;
+  padding: 0;
+  color: #a17136;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+@media (max-width: 1100px) {
+  .funds-quick-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+  .funds-quick-actions {
+    grid-column: 1/-1;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}
+@media (max-width: 700px) {
+  .funds-quick-summary {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px;
+    gap: 14px;
+  }
+  .funds-quick-cell + .funds-quick-cell {
+    border-left: 0;
+    border-top: 1px solid #e9e0cf;
+    padding: 14px 0 0;
+  }
+  .funds-quick-cell > strong {
+    font-size: 21px;
+  }
+  .funds-quick-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+/* 결론을 먼저 읽고, 근거 금액은 그다음에 비교한다. */
+.funds-experience .funds-quick-summary {
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #fffdf9;
+}
+.funds-experience .funds-quick-summary .funds-quick-cell {
+  padding: 20px 24px;
+  align-content: start;
+}
+.funds-experience .funds-quick-summary .funds-quick-cell + .funds-quick-cell {
+  border-left: 1px solid #e9e0cf;
+}
+.funds-experience .funds-quick-summary .funds-quick-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border-left: 4px solid #729475;
+  background: linear-gradient(115deg, #f1f6ed, #fafaf2);
+}
+.funds-decision-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #cbdbc4;
+  background: #e6efdf;
+  color: #62835c;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.funds-decision-copy {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+.funds-decision-copy > span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #65805b;
+}
+.funds-decision-copy > b {
+  color: #375e40;
+  font-size: clamp(17px, 1.55vw, 21px);
+  letter-spacing: -0.5px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+.funds-decision-copy > small {
+  color: #819075;
+}
+.funds-experience .funds-quick-summary .funds-quick-cell > strong {
+  font-size: clamp(18px, 1.5vw, 21px);
+}
+.funds-experience .funds-quick-summary .funds-quick-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 4px;
+}
+.funds-quick-status:not(.is-shortage) .funds-quick-actions .ant-btn-default {
+  color: #496a41;
+  background: #fffef9;
+  border-color: #bdcfb4;
+  font-weight: 650;
+}
+.funds-experience .funds-quick-summary .funds-quick-status.is-shortage {
+  border-left-color: #bd8856;
+  background: linear-gradient(115deg, #fcf0df, #fffaf0);
+}
+.funds-quick-status.is-shortage .funds-decision-icon {
+  background: #fae8c8;
+  border-color: #e7ca9c;
+  color: #b27b3e;
+}
+.funds-quick-status.is-shortage .funds-decision-copy > b,
+.funds-quick-status.is-shortage .funds-decision-copy > span {
+  color: #a66931;
+}
+@media (max-width: 1100px) {
+  .funds-experience .funds-quick-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .funds-experience .funds-quick-summary .funds-quick-status {
+    grid-column: 1/-1;
+    border-bottom: 1px solid #e0e5d6;
+  }
+  .funds-experience .funds-quick-summary .funds-quick-cell:nth-child(2) {
+    border-left: 0;
+  }
+}
+@media (max-width: 600px) {
+  .funds-experience .funds-quick-summary .funds-quick-cell {
+    padding: 16px;
+  }
+  .funds-experience .funds-quick-summary .funds-quick-status {
+    gap: 10px;
+  }
+  .funds-decision-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 20px;
+  }
+  .funds-decision-copy > b {
+    font-size: 17px;
+  }
+  .funds-experience .funds-quick-summary .funds-quick-cell + .funds-quick-cell {
+    border-top: 0;
+  }
+}
+/* 같은 동전이 마스코트로 사장님 화면의 친근함을 유지한다. */
+.funds-experience .funds-decision-icon {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.funds-decision-icon > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.funds-mascot-check {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  border: 1px solid #d6dfca;
+  background: #fffef8;
+  color: #72936b;
+  font-size: 15px;
+  box-shadow: 0 2px 6px #5b643518;
+}
+.funds-quick-status.is-shortage .funds-mascot-check {
+  color: #ba8246;
+  border-color: #e8d6b3;
+}
+.funds-quick-status.is-shortage .funds-decision-icon {
+  border: 0;
+  background: none;
+}
+.funds-decision-copy > span,
+.funds-quick-cell > span {
+  font-size: 12px;
+}
+.funds-quick-cell small,
+.funds-quick-basis {
+  font-size: 11px;
+}
+.funds-assumption-note {
+  color: #837654 !important;
+}
+.funds-forecast-notices {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 20px;
+  border: 1px solid #e8ddc6;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fffdf7;
+  color: #6e5b39;
+}
+.funds-payment-caution {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: #fcf6e9;
+}
+.funds-notice-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: #f5e8c9;
+  color: #a07d36;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.funds-payment-caution > div {
+  flex: 1;
+  min-width: 0;
+}
+.funds-payment-caution strong {
+  color: #836131;
+  font-size: 13px;
+}
+.funds-payment-caution p {
+  color: #8a7b61;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 3px 0 0;
+}
+.funds-payment-caution > a {
+  color: #9c7736;
+  font-size: 12px;
+  white-space: nowrap;
+  padding: 8px 0 8px 8px;
+}
+.funds-excluded-details {
+  border-top: 1px solid #eee6d6;
+}
+.funds-excluded-details:first-child {
+  border-top: 0;
+}
+.funds-excluded-details > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 18px;
+  cursor: pointer;
+}
+.funds-excluded-details > summary > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+.funds-excluded-details b {
+  color: #77674a;
+  font-size: 12px;
+}
+.funds-excluded-details small {
+  color: #978972;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.funds-excluded-count {
+  margin-left: auto;
+  color: #a18854;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.funds-excluded-count::after {
+  content: ' ＋';
+}
+.funds-excluded-details[open] .funds-excluded-count::after {
+  content: ' −';
+}
+.funds-excluded-body {
+  border-top: 1px dashed #e9dfca;
+  padding: 0 18px 14px 59px;
+}
+.funds-excluded-body ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.funds-excluded-body li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0e8d9;
+  font-size: 12px;
+}
+.funds-excluded-body strong {
+  color: #77603c;
+  font-size: 13px;
+}
+.funds-excluded-body p {
+  color: #9a8c74;
+  font-size: 11px;
+  margin: 12px 0 0;
+  line-height: 1.7;
+}
+.funds-forecast-notices summary:focus-visible,
+.funds-forecast-notices a:focus-visible {
+  outline: 2px solid #a98c49;
+  outline-offset: -3px;
+}
+/* 입력 두 개의 테두리를 없애 하나의 기간 선택기로 읽히게 한다. */
+.finance-surface .funds-period.funds-period-refined,
+.funds-period.funds-period-refined {
+  padding: 12px 14px;
+  gap: 12px;
+}
+.funds-period-refined .funds-period-label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.funds-period-refined .funds-presets button {
+  min-height: 38px;
+  padding: 8px 13px;
+}
+.funds-range-navigation {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid #e7dcc5;
+  border-radius: 12px;
+  background: #fff;
+}
+.funds-range-navigation > .ant-btn {
+  display: inline-flex;
+  width: 30px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  align-items: center;
+  color: #9f8550;
+  border-radius: 8px;
+}
+.funds-range-navigation > .ant-btn:disabled {
+  color: #d2c9b7;
+}
+.funds-period .funds-range-picker.ant-picker {
+  flex: 1;
+  width: 254px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 3px 7px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+.finance-surface .finance-connected .funds-period .ant-picker-input > input,
+.funds-period.funds-period-refined .ant-picker-input > input {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 3px 0;
+  color: #625031;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: none;
+}
+.funds-period .ant-picker-input > input:focus {
+  box-shadow: none;
+}
+.funds-period-duration {
+  padding: 4px 7px;
+  font-size: 10px;
+  color: #a98a46;
+  background: #fbf4e4;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.funds-range-navigation:focus-within {
+  border-color: #b49a5d;
+  box-shadow: 0 0 0 3px #cfb47114;
+}
+.funds-period-calendar .ant-picker-panel-container {
+  border: 1px solid #e8dcc3;
+  border-radius: 14px;
+  box-shadow: 0 10px 36px #594a3020;
+}
+.funds-period-calendar .ant-picker-presets {
+  background: #fcfaf3;
+}
+.funds-period-calendar .ant-picker-presets li {
+  border-radius: 7px;
+  font-size: 13px;
+  padding: 8px 12px !important;
+}
+.funds-period-calendar .ant-picker-cell-inner {
+  border-radius: 6px;
+}
+.funds-calendar-tip {
+  display: block;
+  padding: 5px 2px;
+  color: #8f7c55;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.funds-period-calendar .ant-picker-footer {
+  line-height: 1.6;
+}
+.funds-period-calendar .ant-picker-footer-extra {
+  padding: 8px 14px;
+}
+@media (max-width: 800px) {
+  .funds-range-navigation {
+    flex: 1 1 100%;
+  }
+  .funds-period .funds-range-picker.ant-picker {
+    width: auto;
+  }
+  .funds-period-calendar .ant-picker-panels > .ant-picker-panel:last-child {
+    display: none;
+  }
+  .funds-period-calendar .ant-picker-panels > .ant-picker-panel:only-child {
+    display: block;
+  }
+  .funds-period-calendar .ant-picker-presets {
+    min-width: 80px;
+  }
+  .funds-period-calendar .ant-picker-panel-container {
+    max-width: calc(100vw - 16px);
+  }
+}
+@media (max-width: 600px) {
+  .funds-experience .funds-decision-icon {
+    width: 60px;
+    height: 60px;
+  }
+  .funds-payment-caution {
+    align-items: flex-start;
+    padding: 12px 14px;
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+  .funds-payment-caution > div {
+    flex-basis: calc(100% - 42px);
+  }
+  .funds-payment-caution > a {
+    margin-left: 38px;
+    padding: 0;
+  }
+  .funds-excluded-details > summary {
+    padding: 12px 14px;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+  .funds-excluded-count {
+    margin-left: 38px;
+  }
+  .funds-excluded-body {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  .funds-range-navigation {
+    gap: 2px;
+  }
+  .funds-range-navigation > .ant-btn {
+    width: 26px;
+    min-width: 26px;
+  }
+  .funds-period-duration {
+    padding-inline: 5px;
+  }
+  .funds-period-calendar .ant-picker-presets {
+    display: none;
+  }
+}
+.funds-trend .finance-trend-note,
+.funds-chart-navigation-hint,
+.funds-experience .cashflow-muted,
+.funds-experience .cashflow-footnote {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.funds-scale-context {
+  font-size: 11px;
+}
+@media (max-width: 800px) {
+  .funds-period-calendar .ant-picker-panel:first-child .ant-picker-header-next-btn,
+  .funds-period-calendar .ant-picker-panel:first-child .ant-picker-header-super-next-btn {
+    visibility: visible !important;
+  }
+}
+/* 보조 안내는 화면 하단에 두고, 상품 탐색은 명확한 버튼으로 제공한다. */
+.funds-page .finance-result > .funds-forecast-notices {
+  margin: 24px 0 0;
+}
+.funds-experience .funds-quick-actions .funds-loan-action.ant-btn {
+  color: #805d21;
+  background: #fff6df;
+  border: 1px solid #d9c18a;
+  font-size: 12px;
+  font-weight: 700;
+  height: 34px;
+  padding: 0 13px;
+  box-shadow: 0 1px 2px #9c7a3510;
+}
+.funds-experience .funds-quick-actions .funds-loan-action.ant-btn:hover {
+  color: #684714;
+  background: #faedc8;
+  border-color: #b99a54;
+}
+.funds-calendar-selection {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fcfaf4;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eadfc9;
+}
+.funds-calendar-selection > button {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e7decd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fffefa;
+}
+.funds-calendar-selection > button.is-current {
+  border-color: #ba9a50;
+  background: #fff6df;
+  box-shadow: 0 0 0 2px #d2b36b14;
+}
+.funds-calendar-selection span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: #97815a;
+}
+.funds-calendar-selection i {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  font-style: normal;
+  background: #ede4cf;
+  color: #ac8a42;
+  border-radius: 50%;
+}
+.funds-calendar-selection .is-current i {
+  background: #ac873a;
+  color: #fff;
+}
+.funds-calendar-selection b {
+  display: block;
+  font-size: 13px;
+  color: #705834;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin-top: 7px;
+}
+.funds-calendar-selection > .anticon {
+  color: #c3b496;
+  font-size: 12px;
+}
+.funds-calendar-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0;
+}
+.funds-calendar-footer .funds-calendar-tip {
+  padding: 0;
+  font-size: 12px;
+}
+.funds-calendar-tip b {
+  color: #8f6c2b;
+  font-weight: 650;
+}
+.funds-calendar-footer button {
+  color: #9c8b6e;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.funds-calendar-footer button:hover {
+  color: #6e5730;
+  background: #f3ecdd;
+}
+.funds-period-calendar .ant-picker-cell-in-view.ant-picker-cell-in-range::before {
+  background: #f6edd8;
+}
+.funds-period-calendar .ant-picker-cell-inner {
+  min-width: 30px;
+  height: 30px;
+  line-height: 30px;
+  font-size: 13px;
+}
+.funds-period-calendar .ant-picker-content td {
+  padding: 4px 0;
+}
+.funds-period-calendar .ant-picker-cell-range-start .ant-picker-cell-inner,
+.funds-period-calendar .ant-picker-cell-range-end .ant-picker-cell-inner {
+  font-weight: 700;
+}
+.funds-period-calendar .ant-picker-ok .ant-btn {
+  height: 38px;
+  font-size: 13px;
+  font-weight: 650;
+  padding: 0 18px;
+  border-radius: 8px;
+}
+.funds-period-calendar .ant-picker-ranges {
+  padding: 10px 14px;
+}
+.funds-period-calendar .ant-picker-header {
+  height: 44px;
+  align-items: center;
+}
+.funds-period-calendar .ant-picker-header-view {
+  font-size: 14px;
+  font-weight: 650;
+}
+@media (max-width: 600px) {
+  .funds-calendar-selection {
+    padding: 10px;
+    gap: 7px;
+  }
+  .funds-calendar-selection > button {
+    padding: 9px;
+  }
+  .funds-calendar-selection b {
+    font-size: 12px;
+  }
+  .funds-calendar-footer {
+    gap: 5px;
+  }
+  .funds-calendar-footer .funds-calendar-tip {
+    font-size: 11px;
+  }
+}
+.funds-calendar-selection > button {
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.funds-calendar-selection > button:hover {
+  border-color: #baa26b;
+}
+.funds-calendar-selection > button:focus-visible,
+.funds-calendar-footer button:focus-visible {
+  outline: 2px solid #b09047;
+  outline-offset: 2px;
+}

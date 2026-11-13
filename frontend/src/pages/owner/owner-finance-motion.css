@@ -1,0 +1,42 @@
+/*
+ * 정산 내역 · 자금 현황 · 운영자금 상품의 시연용 등장 (사장님 화면 개편).
+ * 화면 코드는 건드리지 않고 겉 구조에만 순서 있는 등장을 건다. 움직임 규칙은 styles/ownerMotion.css와 같다.
+ * - 페이지 바로 아래 묶음이 위에서부터 차례로 올라온다
+ * - 기간을 바꿔 결과가 새로 그려질 때(.finance-result)는 요약 카드만 차례로 나타난다
+ * - 같은 기간 새로고침은 같은 요소를 다시 그리지 않으므로 반복되지 않는다
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .finance-surface .finance-connected > *,
+  .finance-surface .loan-products > *,
+  .finance-surface .cashflow-summary-grid > *,
+  .finance-surface .payout-summary-grid > * {
+    animation: ow-rise 0.55s var(--ow-ease-out) var(--ow-delay, 0ms) backwards;
+  }
+  .finance-surface :is(.finance-connected, .loan-products) > :nth-child(2) {
+    --ow-delay: 60ms;
+  }
+  .finance-surface :is(.finance-connected, .loan-products) > :nth-child(3) {
+    --ow-delay: 120ms;
+  }
+  .finance-surface :is(.finance-connected, .loan-products) > :nth-child(4) {
+    --ow-delay: 180ms;
+  }
+  .finance-surface :is(.finance-connected, .loan-products) > :nth-child(5) {
+    --ow-delay: 240ms;
+  }
+  .finance-surface :is(.finance-connected, .loan-products) > :nth-child(n + 6) {
+    --ow-delay: 300ms;
+  }
+  .finance-surface :is(.cashflow-summary-grid, .payout-summary-grid) > :nth-child(1) {
+    --ow-delay: 260ms;
+  }
+  .finance-surface :is(.cashflow-summary-grid, .payout-summary-grid) > :nth-child(2) {
+    --ow-delay: 330ms;
+  }
+  .finance-surface :is(.cashflow-summary-grid, .payout-summary-grid) > :nth-child(3) {
+    --ow-delay: 400ms;
+  }
+  .finance-surface :is(.cashflow-summary-grid, .payout-summary-grid) > :nth-child(n + 4) {
+    --ow-delay: 470ms;
+  }
+}

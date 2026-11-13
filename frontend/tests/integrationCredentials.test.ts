@@ -7,6 +7,7 @@ import { createServer } from 'vite'
 // 키 보기에는 가맹점 코드와 키, 개별 복사 및 두 값 설정 후 연결 확인 안내를 함께 표시한다.
 test('integrationCredentials_whenShowingKey_includesMerchantCodeAndSetupSteps', async () => {
   const server = await createServer({
+    cacheDir: 'node_modules/.vite-integration-credentials-test',
     server: { middlewareMode: true, ws: false, hmr: false, watch: null },
     appType: 'custom',
   })

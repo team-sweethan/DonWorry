@@ -1,187 +1,541 @@
+/* 사장님 홈 — 따뜻한 밝은 톤, 위에서 아래로 "할 일 → 돈 → 7일 → 보안·연동" */
+.oh-home {
+  --oh-ink: #30291f;
+  --oh-muted: #6b6454;
+  --oh-line: #ebe3d2;
+  --oh-soft: #f0e9da;
+  --oh-gold: #8a5f0c;
+  --oh-gold-strong: #a8740f;
+  --oh-low: #b45309;
+  --oh-low-bg: #fff6ea;
+  --oh-hover: #fdf8ec;
+  --oh-selected: #fbf3df;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--oh-ink);
+  font-variant-numeric: tabular-nums;
+}
+.oh-home h1,
+.oh-home h2,
+.oh-home h3,
+.oh-home p {
+  margin: 0;
+}
+
+/* 매일 여는 홈은 기다리지 않고 읽을 수 있게 짧게 등장한다. */
+@keyframes oh-home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .oh-home .ow-rise {
+    animation-name: oh-home-enter;
+    animation-duration: 0.28s;
+    animation-delay: 0s;
+  }
+  .oh-home .ow-grow-x,
+  .oh-home .ow-pop {
+    animation-duration: 0.18s;
+    animation-delay: 0s;
+  }
+  .oh-home .oh-money-card:nth-child(2) {
+    animation-delay: 0.045s;
+  }
+  .oh-home a.oh-money-card {
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease,
+      transform 0.18s var(--ow-ease-out);
+  }
+  .oh-home .oh-more .anticon,
+  .oh-home .oh-primary-link .anticon,
+  .oh-home .oh-todo-arrow {
+    transition: transform 0.18s var(--ow-ease-out);
+  }
+  .oh-home .oh-more:is(:hover, :focus-visible) .anticon,
+  .oh-home .oh-primary-link:is(:hover, :focus-visible) .anticon,
+  .oh-home .oh-todos a:is(:hover, :focus-visible) .oh-todo-arrow {
+    transform: translateX(3px);
+  }
+  .oh-home a.oh-money-card:focus-visible {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px #30291f12;
+  }
+  .oh-home a.oh-money-card:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
+  .oh-home a.oh-money-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px #30291f12;
+  }
+  .oh-home a.oh-money-card:active {
+    transform: translateY(1px);
+    box-shadow: none;
+  }
+}
+
+.oh-attention-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 16px 20px;
+  color: var(--oh-muted);
+  font-size: 14px;
+}
+
+/* 페이지 머리 — 관리 화면 공통 PageHeader */
 .oh-home .dw-page-header {
-  margin-bottom: 28px;
+  margin-bottom: 6px;
 }
+
+/* 연동 완료 — 맨 위 한 장. 연결 전에는 3단계 목록(oh-connect)이 대신 나온다 */
 .oh-connection {
-  padding: 28px 32px;
-  border: 1px solid #e7e1d5;
-  border-radius: 18px;
-  background: linear-gradient(120deg, #fff8e7, #fff 70%);
-}
-.oh-connection.is-connected {
-  border-color: #d5e9e2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 20px;
+  padding: 22px 28px;
+  border: 1px solid #d5e9e2;
+  border-radius: 16px;
   background: linear-gradient(120deg, #f0faf6, #fff 70%);
 }
-.oh-connection.is-no-key {
-  border-color: #f2cdc3;
-  background: linear-gradient(120deg, #fff0eb, #fff 70%);
+.oh-connection-icon {
+  display: grid;
+  flex: 0 0 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: #def3e9;
+  color: #168465;
+  font-size: 20px;
 }
-.is-no-key .oh-connection-icon,
-.is-no-key .oh-section-heading .ant-tag {
-  color: #9f4335;
-  background: #ffe4dc;
-  border-color: #f2cdc3;
-}
-.oh-section-heading {
+.oh-connection-copy {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 24px;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
 }
 .oh-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 650;
-}
-.oh-section-heading .ant-tag {
-  margin: 0;
-  padding: 2px 10px;
-  border-radius: 20px;
-}
-.oh-connection.is-connected .oh-section-heading .ant-tag {
-  color: #166534;
-  background: #dcfce7;
-  border-color: #86efac;
-}
-.oh-connection-main {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.oh-connection-icon {
-  display: grid;
-  flex: 0 0 56px;
-  height: 56px;
-  place-items: center;
-  border-radius: 16px;
-  color: #886211;
-  background: #fff1ce;
-  font-size: 26px;
-}
-.is-connected .oh-connection-icon {
-  color: #168465;
-  background: #def3e9;
-}
-.oh-connection-copy {
-  flex: 1;
-  min-width: 0;
+  gap: 6px;
+  color: var(--oh-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 .oh-connection h2 {
-  margin: 0 0 10px;
-  font-size: 23px;
-  letter-spacing: -0.6px;
-  line-height: 1.45;
-  color: #172b46;
-}
-.oh-connection p {
-  max-width: 620px;
-  margin: 0;
-  color: #52647c;
-  line-height: 1.8;
-  font-size: 14px;
-}
-.oh-primary-link {
-  display: inline-flex;
-  flex-shrink: 0;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  min-height: 46px;
-  padding: 12px 20px;
-  border-radius: 10px;
-  color: #fff;
-  background: #886211;
-  font-weight: 650;
-  font-size: 14px;
-  box-shadow: 0 3px 8px #88621118;
-}
-.oh-primary-link:hover {
-  color: #fff;
-  background: #6b4b0a;
-}
-.oh-primary-link:focus-visible,
-.oh-menu-card:focus-visible {
-  outline: 3px solid #886211;
-  outline-offset: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .oh-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px 32px;
-  margin: 26px 0 0 76px;
+  gap: 4px 24px;
+  margin: 4px 0 0;
   font-size: 13px;
 }
 .oh-details > div {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 8px;
 }
 .oh-details dt {
-  color: #64748b;
+  color: var(--oh-muted);
 }
 .oh-details dd {
   margin: 0;
-  color: #334155;
   overflow-wrap: anywhere;
 }
-.oh-merchant-code {
-  font-family: ui-monospace, monospace;
-  font-weight: 650;
+.oh-secondary-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: #886211;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
 }
-.oh-steps {
+.oh-secondary-link:hover {
+  background: #6b4b0a;
+  color: #fff;
+}
+.oh-secondary-link:focus-visible,
+.oh-menu-card:focus-visible {
+  outline: 3px solid #886211;
+  outline-offset: 3px;
+}
+
+/* 공통 상자 */
+.oh-panel {
+  min-width: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--oh-line);
+  border-radius: 16px;
+  background: #fff;
+}
+.oh-panel-head {
   display: flex;
-  gap: 28px;
   flex-wrap: wrap;
-  margin: 26px 0 0;
-  padding: 22px 0 0;
-  list-style: none;
-  border-top: 1px solid #e7e1d5;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-bottom: 16px;
 }
-.oh-steps li {
+.oh-panel-head h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.oh-panel-head > span {
+  color: var(--oh-muted);
+  font-size: 13px;
+}
+.oh-panel-head .oh-more {
+  margin-left: auto;
+}
+.oh-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--oh-gold);
+  font-size: 13px;
+  font-weight: 600;
+}
+.oh-more:hover {
+  color: #5c4012;
+}
+.oh-muted {
+  color: var(--oh-muted);
+  font-size: 13px;
+}
+.oh-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--oh-ink);
+  font-weight: 600;
+}
+.oh-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  color: var(--oh-muted);
+}
+.oh-empty a {
+  color: var(--oh-gold);
+  font-weight: 600;
+}
+.oh-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  color: var(--oh-muted);
+  font-size: 14px;
+}
+.oh-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.oh-error h2 {
+  font-size: 19px;
+}
+.oh-primary-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--oh-ink);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  transition: background-color 0.14s ease;
+}
+.oh-primary-link:hover {
+  background: #4a3f2e;
+  color: #fff;
+}
+
+/* 연결 전 — 3단계 */
+.oh-connect {
+  padding: 24px 26px 10px;
+  border: 1px solid #ead9ad;
+  border-radius: 18px;
+  background: #fffaf0;
+}
+.oh-connect-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-bottom: 8px;
+}
+.oh-connect-head h2 {
+  font-size: 20px;
+  font-weight: 800;
+}
+.oh-connect-head > span {
+  color: var(--oh-muted);
+  font-size: 13px;
+}
+.oh-connect-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.oh-connect-steps li {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+}
+.oh-connect-steps li + li {
+  border-top: 1px solid #efe2c2;
+}
+.oh-connect-mark {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  box-sizing: border-box;
+  border: 2px solid #d6ccb6;
+  border-radius: 50%;
+  background: #fff;
+  color: #8f8573;
+  font-size: 14px;
+  font-weight: 800;
+}
+.oh-connect-mark svg {
+  width: 16px;
+  height: 16px;
+}
+.is-done .oh-connect-mark {
+  border-color: #15803d;
+  background: #15803d;
+  color: #fff;
+}
+.is-current .oh-connect-mark {
+  border-color: var(--oh-ink);
+  background: var(--oh-ink);
+  color: #fff;
+  box-shadow: 0 0 0 5px #f6e8c6;
+}
+.oh-connect-copy {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+}
+.oh-connect-copy h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.is-todo .oh-connect-copy h3,
+.is-done .oh-connect-copy h3 {
+  color: var(--oh-muted);
+  font-weight: 600;
+}
+.oh-connect-copy p {
+  margin-top: 6px !important;
+  color: #4f4a3f;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.oh-connect-copy .oh-connect-later {
+  color: #8f8573;
+  font-size: 13px;
+}
+.oh-connect-tag {
+  color: #15803d;
+  font-size: 12px;
+  font-weight: 700;
+}
+.oh-connect-tag.is-now {
+  color: var(--oh-gold-strong);
+}
+.oh-connect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.oh-step-recheck.ant-btn {
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+/* 할 일 줄 */
+.oh-todos {
+  overflow: hidden;
+  border: 1px solid var(--oh-line);
+  border-radius: 16px;
+  background: #fff;
+}
+.oh-todos ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.oh-todos li + li {
+  border-top: 1px solid var(--oh-soft);
+}
+.oh-todos a {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 62px;
+  padding: 12px 20px;
+  color: var(--oh-ink);
+  transition: background-color 0.14s ease;
+}
+.oh-todos a:hover {
+  background: var(--oh-hover);
+  color: var(--oh-ink);
+}
+.oh-todos li.is-warning a {
+  background: var(--oh-low-bg);
+}
+.oh-todos li.is-warning a:hover {
+  background: #fdeedb;
+}
+.oh-todos .ow-status-mark {
+  flex: none;
+}
+.oh-todo-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+}
+.oh-todo-copy strong {
+  font-size: 15px;
+}
+.oh-todo-copy span {
+  color: var(--oh-muted);
+  font-size: 13px;
+}
+.oh-todo-arrow {
+  color: var(--oh-gold);
+}
+.oh-todos.is-clear {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #64748b;
+  padding: 16px 20px;
+  color: #4f4a3f;
+  font-size: 14px;
+}
+.oh-todos[role='status'] {
+  padding: 16px 20px;
+}
+
+/* 금액 세 개 */
+.oh-money {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+.oh-money-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 128px;
+  padding: 20px 24px;
+  border: 1px solid var(--oh-line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--oh-ink);
+  transition:
+    border-color 0.14s ease,
+    transform 0.14s ease;
+}
+a.oh-money-card:hover {
+  border-color: #d9c79c;
+  color: var(--oh-ink);
+}
+a.oh-money-card:active {
+  transform: translateY(1px);
+}
+.oh-money-label {
+  color: var(--oh-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.oh-money-value {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.oh-money-value span {
+  margin-left: 2px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.oh-money-foot {
+  margin-top: auto;
+  color: var(--oh-muted);
   font-size: 13px;
 }
-.oh-steps li > span {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  background: #f5f1e7;
-  border-radius: 50%;
-  font-size: 12px;
+.oh-money-skeleton.ant-skeleton-element .ant-skeleton-input {
+  min-width: 160px;
+  height: 38px;
 }
-.oh-steps .is-current {
-  color: #886211;
-  font-weight: 650;
+.oh-money-failed,
+.oh-money-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 16px;
+  font-weight: 700;
 }
-.oh-steps .is-current > span {
-  background: #886211;
-  color: #fff;
-}
-.oh-steps .is-done > span {
-  background: #e0f2e9;
-  color: #168465;
-}
+
+/* 이용 메뉴 — 아이콘 · 이름 · 설명 카드 두 줄 */
 .oh-menu-section {
-  margin-top: 36px;
+  margin-top: 8px;
 }
-.oh-menu-section .oh-section-heading {
-  margin-bottom: 16px;
+.oh-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 .oh-section-heading h2 {
-  margin: 0;
   font-size: 17px;
-  color: #1e293b;
+  font-weight: 700;
 }
-.oh-menu-section .oh-section-heading > span {
-  color: #64748b;
+.oh-section-heading > span {
+  color: var(--oh-muted);
   font-size: 12px;
 }
 .oh-menu-grid {
@@ -191,16 +545,19 @@
 }
 .oh-menu-card {
   position: relative;
-  padding: 24px;
-  border: 1px solid #e7e1d5;
-  background: #fff;
+  padding: 22px 24px;
+  border: 1px solid var(--oh-line);
   border-radius: 14px;
-  color: #1e293b;
+  background: #fff;
+  color: var(--oh-ink);
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
 }
 .oh-menu-card:hover {
-  color: #886211;
   border-color: #d8c9a9;
   box-shadow: 0 4px 16px #88621110;
+  color: var(--oh-gold);
 }
 .oh-menu-icon {
   display: inline-grid;
@@ -213,106 +570,222 @@
   font-size: 20px;
 }
 .oh-menu-card h3 {
-  margin: 18px 0 8px;
+  margin: 16px 0 6px !important;
   font-size: 16px;
 }
 .oh-menu-card p {
-  margin: 0;
-  color: #64748b;
+  color: var(--oh-muted);
   font-size: 13px;
-  line-height: 1.8;
+  line-height: 1.7;
 }
 .oh-menu-arrow {
   position: absolute;
-  top: 30px;
+  top: 28px;
   right: 24px;
   color: #756b5b;
 }
 .oh-no-menus {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 24px;
-  border: 1px solid #e7e1d5;
+  gap: 14px;
+  padding: 20px 22px;
+  border: 1px solid var(--oh-line);
   border-radius: 14px;
   background: #fff;
+  color: var(--oh-muted);
 }
 .oh-no-menus > .anticon {
-  color: #756b5b;
-  font-size: 24px;
+  margin-top: 3px;
+  color: var(--oh-gold);
+  font-size: 20px;
 }
 .oh-no-menus h3 {
-  margin: 0 0 8px;
+  margin-bottom: 4px;
+  color: var(--oh-ink);
   font-size: 15px;
-}
-.oh-no-menus p {
-  margin: 0;
-  color: #64748b;
-  line-height: 1.8;
-  font-size: 13px;
 }
 .oh-security-note {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  margin: 24px 0 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.8;
+  color: var(--oh-muted);
+  font-size: 13px;
 }
-.oh-error .ant-btn {
-  margin-top: 20px;
-}
-@media (max-width: 1050px) {
-  .oh-connection-main {
-    flex-wrap: wrap;
-  }
-  .oh-primary-link {
-    margin-left: 76px;
-  }
-}
-@media (max-width: 760px) {
-  .oh-home .dw-page-header {
-    gap: 12px;
-  }
-  .oh-connection {
-    padding: 22px;
-  }
-  .oh-connection h2 {
-    font-size: 20px;
-  }
-  .oh-connection-icon {
-    display: none;
-  }
-  .oh-primary-link {
-    margin-left: 0;
-    width: 100%;
-  }
-  .oh-details {
-    margin-left: 0;
-  }
+
+@media (max-width: 640px) {
   .oh-menu-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .oh-steps {
-    gap: 12px;
+  .oh-connection {
+    padding: 20px;
+  }
+  .oh-money-value {
+    font-size: 28px;
+  }
+  .oh-connect {
+    padding: 20px 18px 6px;
   }
 }
 
-@media screen and (width < 1280px) {
-  .oh-connection-main {
-    flex-wrap: wrap;
+/* 요약 카드 — 왼쪽 숫자 · 오른쪽 작은 그림(실제 데이터) */
+.oh-money-card.is-split {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 20px;
+}
+.oh-money-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.oh-money-main .oh-money-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 이번 달 날짜별 지급 막대 — 오늘은 금색, 지급 없는 날은 바닥 선만 */
+.oh-bars {
+  display: flex;
+  flex: 0 1 46%;
+  align-items: flex-end;
+  align-self: center;
+  gap: 3px;
+  min-width: 120px;
+  height: 84px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--oh-line);
+}
+.oh-bar {
+  flex: 1;
+  min-width: 2px;
+  max-width: 14px;
+  border-radius: 3px 3px 1px 1px;
+  background: #e5d3a6;
+}
+.oh-bar.is-empty {
+  height: 2px;
+  background: var(--oh-soft);
+}
+.oh-bar.is-today {
+  background: #886211;
+}
+a.oh-money-card:hover .oh-bar:not(.is-empty):not(.is-today) {
+  background: #d4bb7c;
+}
+
+/* 담당자 결정 비율 고리 — 가운데 방패 */
+.oh-ring {
+  position: relative;
+  display: grid;
+  flex: 0 0 84px;
+  align-self: center;
+  width: 84px;
+  height: 84px;
+  place-items: center;
+}
+.oh-ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.oh-ring circle {
+  fill: none;
+  stroke-width: 7;
+}
+.oh-ring-track {
+  stroke: var(--oh-soft);
+}
+.oh-ring-seg.is-accept {
+  stroke: #15803d;
+}
+.oh-ring-seg.is-reject {
+  stroke: #b91c1c;
+}
+.oh-ring-icon {
+  color: var(--oh-gold);
+  font-size: 22px;
+}
+
+/* 살아 있는 점 — 연결됨 · 담당자 확인 중 */
+.oh-live {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #15803d;
+}
+.oh-live.is-checking {
+  margin-left: 0;
+  background: #a16207;
+}
+.oh-live-text {
+  color: #15803d;
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .oh-live::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: inherit;
+    animation: oh-live-ping 1.8s ease-out infinite;
   }
-  .oh-primary-link {
-    margin-left: 76px;
+  .oh-ring-seg {
+    animation: oh-ring-draw 1s cubic-bezier(0.4, 0, 0.2, 1) 0.35s backwards;
+  }
+  .oh-ring-icon {
+    animation: ow-pop 0.45s var(--ow-ease-pop) 0.9s backwards;
   }
 }
-@media screen and (width <= 760px) {
-  .oh-primary-link {
-    margin-left: 0;
+@keyframes oh-live-ping {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
   }
-  .oh-details > div,
-  .oh-security-note {
-    flex-wrap: wrap;
+  to {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+@keyframes oh-ring-draw {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* 메뉴 카드 — 올리면 아이콘이 금색으로 차고 화살표가 살짝 나간다 */
+.oh-menu-icon,
+.oh-menu-arrow {
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+.oh-menu-card:hover .oh-menu-icon {
+  background: #886211;
+  color: #fff;
+}
+.oh-menu-card:hover .oh-menu-arrow {
+  color: #886211;
+  transform: translateX(4px);
+}
+
+@media (max-width: 640px) {
+  .oh-bars {
+    flex-basis: 38%;
+    min-width: 90px;
+    height: 64px;
+  }
+  .oh-ring {
+    flex-basis: 64px;
+    width: 64px;
+    height: 64px;
   }
 }

@@ -9,6 +9,31 @@ export type SettlementDay = {
   completedAmount: number
   scheduledAmount: number
 }
+
+export function settlementChartWindow(days: SettlementDay[], selectedDate: string, today: string) {
+  const anchors = days.flatMap((day, index) =>
+    day.hasPayout || day.completedAmount > 0 || day.scheduledAmount > 0 ? [index] : [],
+  )
+  if (!anchors.length) return days
+  for (const date of [selectedDate, today]) {
+    const index = days.findIndex((day) => day.date === date)
+    if (index >= 0) anchors.push(index)
+  }
+  return days.slice(
+    Math.max(0, Math.min(...anchors) - 1),
+    Math.min(days.length, Math.max(...anchors) + 2),
+  )
+}
+
+export function settlementChartScale(maximum: number) {
+  const rough = Math.max(1, maximum) / 4
+  const magnitude = 10 ** Math.floor(Math.log10(rough))
+  const step = Math.max(
+    1,
+    [1, 2, 2.5, 5, 10].map((n) => n * magnitude).find((n) => n >= rough) ?? rough,
+  )
+  return { step, ceiling: Math.max(step, Math.ceil(maximum / step) * step) }
+}
 export function settlementSeries(days: SettlementDay[], today: string) {
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date))
   const completed = sorted.filter((d) => d.hasPayout || d.completedAmount > 0)
