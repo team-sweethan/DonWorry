@@ -550,6 +550,27 @@ def _linked_cases(records: list[ToolRecord]) -> list[Line]:
     return lines
 
 
+# 합계 줄 — AI가 사건 여러 건을 "2건 · 모두 매입 진행"처럼 묶어 쓸 숫자가 사실에 있어야 한다
+# 없으면 문장 검사(인용한 사실에 없는 숫자)에 걸려 다시 쓰기 · 실패가 된다 (로컬 사건 30, 11/15)
+# 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드 · 기기"로 읽히지 않게
+def _linked_cases_total(result: LinkedCasesTool, scope: str) -> str:
+    kinds = [k for k in ("CARD", "DEVICE", "IP") if any(k in c.matchedBy for c in result.cases)]
+    shown = len(result.cases)
+    count = f"{result.totalMatched}건" + (
+        f" (최근 {shown}건만 조회)" if result.totalMatched > shown else ""
+    )
+    payments = sum(c.paymentCount for c in result.cases)
+    outcome = _past_outcome(
+        payments,
+        sum(c.acceptCount for c in result.cases),
+        sum(c.rejectCount for c in result.cases),
+    )
+    return (
+        f"같은 {_kinds_text(kinds)}를 쓴 결제가 든 {scope}: {count}, "
+        f"그 결제 {payments}건의 직원 판정 {outcome}"
+    )
+
+
 def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
     compared = [k for k in result.kinds if k not in result.notProvided]
     missing = [k for k in result.kinds if k in result.notProvided]
@@ -569,16 +590,9 @@ def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
         lines.append(
             (f"같은 {_kinds_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)
         )
-    elif result.totalMatched > len(result.cases):
-        lines.append(
-            (
-                f"같은 {_kinds_text(compared)}를 쓴 결제가 든 {scope} "
-                f"{result.totalMatched}건 중 최근 {len(result.cases)}건만 조회",
-                seq,
-                None,
-                PLAIN,
-            )
-        )
+    else:
+        lines.append((_linked_cases_total(result, scope), seq, None, NOTABLE))
+    # 사건마다 한 줄은 자세한 내용 — 눈여겨볼 사실은 합계 줄 하나라 AI가 모두 옮기지 않아도 된다
     for c in result.cases:
         closed = _kst(c.closedAt).split(" ")[0]
         outcome = _past_outcome(c.paymentCount, c.acceptCount, c.rejectCount)
@@ -588,7 +602,7 @@ def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
                 f"{closed} 종료, 그 결제 {c.paymentCount}건의 직원 판정 {outcome}",
                 seq,
                 None,
-                NOTABLE,
+                PLAIN,
             )
         )
     if missing:

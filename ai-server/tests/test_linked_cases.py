@@ -5,13 +5,15 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage
 
 from app.agent.assemble import LINKED_CASES_UNAVAILABLE
+from app.agent.facts import fact_catalog
 from app.agent.graph import InvestigationOutcome, run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.tools import StaticToolBox
+from app.agent.narrative import validate_narrative
+from app.agent.tools import StaticToolBox, ToolRecord
 from app.config import Settings
 from app.schemas.report import ReportBody
 from app.schemas.tools import LinkedCasesTool
-from tests.fakes import FIXTURES, call, context
+from tests.fakes import FIXTURES, call, context, narrative
 
 # 같은 카드 · 기기 · IP로 열린 지난 사건 (#821, ADR-0009 결정 15)
 # 카드 · 기기는 코드가 기본 조회, IP는 AI가 고르는 추가 조회. AI에는 사건 번호를 주지 않는다
@@ -147,3 +149,26 @@ def test_linked_case_facts_hide_case_ids_and_reasons() -> None:
         assert "888456" not in text
     assert report.linkedCases is not None
     assert [c.caseId for c in report.linkedCases.cases] == [PAST_CASE_ID]
+
+
+# 지난 사건이 여러 건이면 합계 숫자가 사실에 있어야 한다
+# 없으면 AI가 쓴 "2건"이 문장 검사에 걸려 보고서가 실패한다
+# (로컬 사건 30, 11/15: 지난 사건 2건 · 모두 매입 진행 → NARRATIVE_INVALID 3번)
+def test_linked_case_facts_twoCases_allowTotalInSummary() -> None:
+    data = _linked_cases("CARD_DEVICE")
+    second = {**data["cases"][0], "caseId": "29", "closedAt": "2026-11-14T18:10:30Z"}
+    first = {**data["cases"][0], "caseId": "28", "closedAt": "2026-11-14T18:10:01Z"}
+    for c in (first, second):
+        c.update({"acceptCount": 1, "rejectCount": 0})
+    data.update({"cases": [second, first], "totalMatched": 2})
+    record = ToolRecord("find_linked_cases", {}, LinkedCasesTool.model_validate(data), True)
+    facts = fact_catalog(context(DATA["casePayments"]["caseId"], 1), [record])
+    sentence = (
+        "같은 기기를 사용한 다른 고객의 지난 사건 2건이 최근 90일 내 종료되었고, "
+        "모두 매입 진행 판정을 받았습니다."
+    )
+    summary = [{"text": sentence, "facts": ["지난사건-1", "지난사건-2"]}]
+
+    _, errors = validate_narrative(narrative(summary=summary), facts, ["1609"])
+
+    assert not [e for e in errors if "없는 숫자" in e], errors
