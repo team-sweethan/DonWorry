@@ -172,3 +172,33 @@ def test_linked_case_facts_twoCases_allowTotalInSummary() -> None:
     _, errors = validate_narrative(narrative(summary=summary), facts, ["1609"])
 
     assert not [e for e in errors if "없는 숫자" in e], errors
+
+
+def _linked_facts(data: dict[str, Any]) -> list[str]:
+    record = ToolRecord("find_linked_cases", {}, LinkedCasesTool.model_validate(data), True)
+    facts = fact_catalog(context(DATA["casePayments"]["caseId"], 1), [record])
+    return [f.text for f in facts if f.topic == "linkedCases"]
+
+
+# 지난 사건이 1건이면 한 줄 — 합계 줄과 사건 줄을 따로 주면 AI가 "2건"으로 센다
+# (측정 11/15 sample-one)
+def test_linked_case_facts_oneCase_singleLine() -> None:
+    texts = _linked_facts(_linked_cases("CARD_DEVICE"))
+
+    assert len(texts) == 1
+    assert "1건" in texts[0] and "11/10 종료" in texts[0] and "승인 취소 1건" in texts[0]
+
+
+# 여러 건이면 사건 줄은 합계의 일부로 읽히게 "그중"으로 시작하고,
+# 합계 줄의 종류는 "카드나 기기" — "카드 · 기기"는 둘 다 겹친 것으로 읽힌다
+# (측정 11/15 sample-three)
+def test_linked_case_facts_manyCases_casesReadAsPartOfTotal() -> None:
+    data = _linked_cases("CARD_DEVICE")
+    device = {**data["cases"][0], "caseId": "21", "matchedBy": ["CARD"]}
+    data.update({"cases": [data["cases"][0], device], "totalMatched": 2})
+
+    total, *cases = _linked_facts(data)
+
+    assert "카드나 기기" in total and "2건" in total
+    assert len(cases) == 2
+    assert all(text.startswith("그중 한 사건") for text in cases)

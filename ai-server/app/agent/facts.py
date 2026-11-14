@@ -20,6 +20,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     FdsEvidenceTool,
     HistoryPayment,
+    LinkedCase,
     LinkedCasesTool,
     LinkedMatch,
     LinkedPaymentsTool,
@@ -550,25 +551,44 @@ def _linked_cases(records: list[ToolRecord]) -> list[Line]:
     return lines
 
 
-# 합계 줄 — AI가 사건 여러 건을 "2건 · 모두 매입 진행"처럼 묶어 쓸 숫자가 사실에 있어야 한다
-# 없으면 문장 검사(인용한 사실에 없는 숫자)에 걸려 다시 쓰기 · 실패가 된다 (로컬 사건 30, 11/15)
-# 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드 · 기기"로 읽히지 않게
-def _linked_cases_total(result: LinkedCasesTool, scope: str) -> str:
+# 여러 종류 중 하나라도 같았다 — "카드 · 기기"는 둘 다 같은 것으로 읽힌다 (측정 11/15 sample-three)
+def _either_text(kinds: list[str]) -> str:
+    names = [_LINKED_KIND_KO.get(k, k) for k in kinds]
+    return "나 ".join(names)
+
+
+# 사건 한 건 — 종료 날짜 · 겹친 결제 수 · 그 결제에 내린 판정
+def _past_case_text(c: LinkedCase) -> str:
+    closed = _kst(c.closedAt).split(" ")[0]
+    outcome = _past_outcome(c.paymentCount, c.acceptCount, c.rejectCount)
+    return f"{closed} 종료, 그 결제 {c.paymentCount}건의 직원 판정 {outcome}"
+
+
+# 찾은 사건 — 합계와 사건마다 내용을 AI가 다른 사건으로 세지 않게 쓴다 (측정 11/15)
+# 1건이면 한 줄: 합계 줄 + 사건 줄을 따로 주자 "지난 사건 2건"으로 썼다 (sample-one)
+# 여러 건이면 합계 줄(눈여겨볼 사실) 다음 사건 줄은 "그중 한 사건"으로 — 묶어 쓴 건수 · 판정 합계가
+# 사실에 있어야 숫자 검사에 걸리지 않는다 (로컬 사건 30)
+# 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드나 기기"로 읽히지 않게
+def _found_case_lines(result: LinkedCasesTool, scope: str, seq: int) -> list[Line]:
     kinds = [k for k in ("CARD", "DEVICE", "IP") if any(k in c.matchedBy for c in result.cases)]
+    head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}"
     shown = len(result.cases)
-    count = f"{result.totalMatched}건" + (
-        f" (최근 {shown}건만 조회)" if result.totalMatched > shown else ""
-    )
+    more = f" (최근 {shown}건만 조회)" if result.totalMatched > shown else ""
+    if result.totalMatched == 1 and shown == 1:
+        return [(f"{head}: 1건 · {_past_case_text(result.cases[0])}", seq, None, NOTABLE)]
     payments = sum(c.paymentCount for c in result.cases)
     outcome = _past_outcome(
         payments,
         sum(c.acceptCount for c in result.cases),
         sum(c.rejectCount for c in result.cases),
     )
-    return (
-        f"같은 {_kinds_text(kinds)}를 쓴 결제가 든 {scope}: {count}, "
-        f"그 결제 {payments}건의 직원 판정 {outcome}"
-    )
+    total = f"{head}: {result.totalMatched}건{more}, 그 결제 {payments}건의 직원 판정 {outcome}"
+    lines: list[Line] = [(total, seq, None, NOTABLE)]
+    # 사건마다 줄은 자세한 내용 — 눈여겨볼 사실은 합계 줄 하나라 AI가 모두 옮기지 않아도 된다
+    for c in result.cases:
+        line = f"그중 한 사건(같은 {_kinds_text(c.matchedBy)}): {_past_case_text(c)}"
+        lines.append((line, seq, None, PLAIN))
+    return lines
 
 
 def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
@@ -585,26 +605,12 @@ def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
             )
         ]
     scope = f"다른 고객의 지난 사건(최근 {result.lookbackDays}일 안 종료)"
-    lines: list[Line] = []
-    if not result.cases:
-        lines.append(
-            (f"같은 {_kinds_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)
-        )
+    if result.cases:
+        lines = _found_case_lines(result, scope, seq)
     else:
-        lines.append((_linked_cases_total(result, scope), seq, None, NOTABLE))
-    # 사건마다 한 줄은 자세한 내용 — 눈여겨볼 사실은 합계 줄 하나라 AI가 모두 옮기지 않아도 된다
-    for c in result.cases:
-        closed = _kst(c.closedAt).split(" ")[0]
-        outcome = _past_outcome(c.paymentCount, c.acceptCount, c.rejectCount)
-        lines.append(
-            (
-                f"같은 {_kinds_text(c.matchedBy)}를 쓴 결제가 든 {scope}: "
-                f"{closed} 종료, 그 결제 {c.paymentCount}건의 직원 판정 {outcome}",
-                seq,
-                None,
-                PLAIN,
-            )
-        )
+        lines = [
+            (f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)
+        ]
     if missing:
         lines.append(
             (
