@@ -251,6 +251,23 @@ export type ReportBody = {
   scope?: InvestigationScope | null
   // 주문 정보 (#634) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   orderContext?: OrderContext | null
+  // AI 추가 조회 (#817) — 없으면 예전 · 고정 보고서. 화면 표시는 의심 카드 이슈에서
+  extraInvestigations?: ExtraInvestigation[]
+}
+
+// AI가 고른 추가 조회 하나 (#817) — 어느 의심(suspicionKey = basis.signals[].key, 사건 전체면 'CASE') 때문에 무엇을 더 봤는지
+// reason은 코드가 의심 이름 · 조회 · 범위로 만든 문장 (AI 글 아님). FAILED면 evidenceId · retrievedAt · factIds가 비어 있다
+export type ExtraInvestigation = {
+  suspicionKey: string
+  suspicionLabel: string
+  toolName: string
+  title: string
+  args: Record<string, unknown>
+  reason: string
+  status: 'DONE' | 'FAILED'
+  evidenceId?: string | null
+  retrievedAt?: string | null
+  factIds: string[]
 }
 
 // 사건 결제 하나의 주문 정보 (#634) — 가맹점이 결제 준비 때 보낸 값 (P5)

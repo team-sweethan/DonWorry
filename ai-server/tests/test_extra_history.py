@@ -29,7 +29,9 @@ class _Asks90:
         if self._asked:
             return AIMessage(content="조사 완료")
         self._asked = True
-        return AIMessage(content="", tool_calls=[call("get_payment_history_90d", **self._args)])
+        # #817부터 추가 조회마다 어느 의심 때문인지(suspicion)를 고른다 — 사건 전체(CASE)
+        tool_call = call("get_payment_history_90d", suspicion="CASE", **self._args)
+        return AIMessage(content="", tool_calls=[tool_call])
 
     def write_json(self, messages: list[BaseMessage], schema: dict[str, Any]) -> str:
         self.fact_prompts.append(str(messages[1].content))

@@ -16,23 +16,74 @@ from app.schemas.tools import (
     ToolResult,
 )
 
+# 추가 조회마다 AI가 고르는 "어느 의심 때문인지" 인자 (#817)
+# 값은 이번 사건 의심 목록의 번호(의심-N)나 사건 전체(CASE)만
+# 사건마다 목록이 달라 case_spec이 enum을 붙인다
+SUSPICION_ARG = "suspicion"
+CASE_WIDE = "CASE"
+SUSPICION_DESCRIPTION = (
+    "이 조회로 확인하려는 의심. [의심 목록]의 번호(예: 의심-1)를 고른다. "
+    "특정 의심이 아니라 사건 전체를 보려면 CASE."
+)
 
-# 추가 조사 도구 — 기본 조회 6개(코드)를 본 AI가 더 볼 때만 고른다 (#578)
+
+# 추가 조사 도구 — 기본 조회(코드)를 본 AI가 더 볼 때만 고른다 (#578)
 # 읽기 전용만 둔다 (AGENTS.md 6절). caseId 같은 권한 인자는 AI가 아니라 ToolBox가 묶는다
+# check: AI가 준 인자에서 실행할 인자만 남긴다. 허용 값이 아니면 None — 실행하지 않는다 (#817)
+#   주지 않으면 도구 설명에 있는 인자만 남긴다 (AI가 지어낸 case_id 등은 버림)
+# action: 코드가 쓰는 조회 이유의 뒷부분 — 이유 문장은 AI가 쓰지 않는다 (#817 선택 A)
 @dataclass(frozen=True)
 class ExtraTool:
     spec: dict[str, Any]
     title: str
     run: Callable[["ToolBox", dict[str, Any]], ToolResult]
+    check: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None
+    action: Callable[[dict[str, Any]], str] | None = None
 
     @property
     def name(self) -> str:
         return self.spec["function"]["name"]
 
-    # 도구 설명에 없는 인자(예: AI가 지어낸 case_id)는 쓰지도 기록하지도 않는다
-    @property
-    def arg_names(self) -> frozenset[str]:
-        return frozenset(self.spec["function"]["parameters"]["properties"])
+    def allowed_args(self, raw: dict[str, Any]) -> dict[str, Any] | None:
+        if self.check is not None:
+            return self.check(raw)
+        known = self.spec["function"]["parameters"]["properties"]
+        return {k: v for k, v in raw.items() if k in known and k != SUSPICION_ARG}
+
+    def describe(self, args: dict[str, Any]) -> str:
+        return self.action(args) if self.action is not None else f"'{self.title}'(으)로 더"
+
+    # 이번 사건 의심 번호를 enum으로 붙인 도구 설명 — AI가 목록 밖 값을 고르기 어렵게
+    # 그래도 목록 밖 값이 오면 graph가 실행하지 않는다 (OpenAI 도구 고르기는 strict가 아님)
+    def case_spec(self, suspicion_ids: list[str]) -> dict[str, Any]:
+        function = dict(self.spec["function"])
+        parameters = dict(function["parameters"])
+        properties = {
+            **parameters.get("properties", {}),
+            SUSPICION_ARG: {
+                "type": "string",
+                "description": SUSPICION_DESCRIPTION,
+                "enum": [*suspicion_ids, CASE_WIDE],
+            },
+        }
+        required = [r for r in parameters.get("required", []) if r != SUSPICION_ARG]
+        function["parameters"] = {
+            **parameters,
+            "properties": properties,
+            "required": [SUSPICION_ARG, *required],
+        }
+        return {**self.spec, "function": function}
+
+
+def _with_suspicion(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            SUSPICION_ARG: {"type": "string", "description": SUSPICION_DESCRIPTION},
+            **properties,
+        },
+        "required": [SUSPICION_ARG, *required],
+    }
 
 
 # 고객 이력 90일 (#581) — 기본 조회의 30일로 평소 결제를 알 수 없을 때만 넓혀 본다
@@ -42,6 +93,11 @@ HISTORY_90_DAYS = 90
 
 def _history_90(box: "ToolBox", args: dict[str, Any]) -> ToolResult:
     return box.get_payment_history(HISTORY_90_DAYS)
+
+
+# AI가 지어낸 인자(기간 · 사건 번호)는 버린다
+def _no_args(raw: dict[str, Any]) -> dict[str, Any] | None:
+    return {}
 
 
 HISTORY_90 = ExtraTool(
@@ -54,16 +110,70 @@ HISTORY_90 = ExtraTool(
                 "상태별 건수를 본다. "
                 "기본 조회의 고객 최근 결제(30일)에 이번 결제보다 앞선 결제가 없거나 적어서 "
                 "이 고객의 평소 결제를 알 수 없을 때만 부른다. "
-                "30일 결제로 평소 결제를 볼 수 있으면 부르지 않는다. 인자는 없다."
+                "30일 결제로 평소 결제를 볼 수 있으면 부르지 않는다."
             ),
-            "parameters": {"type": "object", "properties": {}},
+            "parameters": _with_suspicion({}, []),
         },
     },
     title="고객 이력 90일 조회",
     run=_history_90,
+    check=_no_args,
+    action=lambda args: "고객 결제 이력을 90일로 넓혀",
 )
 
-EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90,)
+
+# 연결 결제 시간대 넓혀 보기 (#817) — 기본 조회는 30일 전체와 사건 결제 앞뒤 1시간만 센다
+# 허용 시간은 질문 기능(ADR-0086)과 같다
+# Spring이 모르는 시간을 버리고 1시간 값을 주면 조회 실패로 본다
+LINKED_HOURS = frozenset({6, 24})
+
+
+class ToolMismatch(Exception):
+    pass
+
+
+def _linked_hours(raw: dict[str, Any]) -> dict[str, Any] | None:
+    hours = raw.get("hours")
+    if isinstance(hours, int) and not isinstance(hours, bool) and hours in LINKED_HOURS:
+        return {"hours": hours}
+    return None
+
+
+def _linked_window(box: "ToolBox", args: dict[str, Any]) -> ToolResult:
+    result = box.find_linked_payments(args["hours"])
+    if result.nearbyWindowMinutes != args["hours"] * 60:
+        raise ToolMismatch(
+            f"요청 {args['hours']}시간, 응답 {result.nearbyWindowMinutes}분 — 다른 범위를 받음"
+        )
+    return result
+
+
+LINKED_WINDOW = ExtraTool(
+    spec={
+        "type": "function",
+        "function": {
+            "name": "find_linked_payments_window",
+            "description": (
+                "같은 카드 · 기기 · IP를 쓴 다른 고객 결제 중 "
+                "사건 결제 앞뒤 hours시간 안의 건수를 본다 (최근 30일 안, 건수만). "
+                "기본 조회의 같은 카드 · 기기 · IP 결제는 30일 전체와 앞뒤 1시간만 세어 "
+                "그 사이 시간대(몇 시간 · 하루)에 몰렸는지는 알 수 없다. "
+                "같은 카드 · 기기 · IP 결제가 30일 안에 있는데 1시간 밖에 몰렸는지 "
+                "알아야 할 때만 부른다. 30일 안에 그런 결제가 없으면 부르지 않는다. "
+                "hours는 6(반나절) 또는 24(하루)."
+            ),
+            "parameters": _with_suspicion(
+                {"hours": {"type": "integer", "enum": sorted(LINKED_HOURS)}}, ["hours"]
+            ),
+        },
+    },
+    title="같은 카드 · 기기 · IP 시간대 넓혀 보기",
+    run=_linked_window,
+    check=_linked_hours,
+    action=lambda args: f"같은 카드 · 기기 · IP 결제를 사건 결제 앞뒤 {args['hours']}시간으로 넓혀",
+)
+
+EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90, LINKED_WINDOW)
 
 
 # 실제로 한 조회 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
@@ -156,8 +266,10 @@ class StaticToolBox:
         history90: PaymentHistoryTool | None = None,
         basis: DecisionBasisTool | None = None,
         order: OrderContextTool | None = None,
+        linked_windows: dict[int, LinkedPaymentsTool] | None = None,
     ) -> None:
         self._case_payments = case_payments
+        self._linked_windows = linked_windows or {}
         self._fds_evidence = fds_evidence
         self._basis = basis
         self._similar = similar or SimilarCasesTool(
@@ -237,13 +349,20 @@ class StaticToolBox:
             if "decisionBasis" in data
             else None,
             order=OrderContextTool.model_validate(data["order"]) if "order" in data else None,
+            linked_windows={
+                int(hours): LinkedPaymentsTool.model_validate(value)
+                for hours, value in data.get("linkedWindows", {}).items()
+            },
         )
 
     def get_decision_basis(self) -> DecisionBasisTool:
         return self._basis or self._default_basis()
 
     # 시간 인자는 무시한다 — #751 전 Spring처럼 같은 응답을 준다
+    # 샘플에 linkedWindows(시간 → 응답)가 있으면 그 시간은 그 응답을 준다 (#817)
     def find_linked_payments(self, nearby_hours: int | None = None) -> LinkedPaymentsTool:
+        if nearby_hours is not None and nearby_hours in self._linked_windows:
+            return self._linked_windows[nearby_hours]
         return self._linked
 
     def get_order_context(self) -> OrderContextTool:

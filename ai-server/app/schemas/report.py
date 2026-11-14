@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -258,6 +258,26 @@ class InvestigationScope(BaseModel):
     unavailable: list[str]
 
 
+# AI가 고른 추가 조회 하나 (#817) — 어느 의심 때문에 무엇을 더 봤는지
+# suspicionKey: 결제별 징후(basis.signals)의 key, 사건 전체면 CASE
+# 화면은 이 키로 의심 카드에 붙인다
+# reason: 코드가 의심 이름 · 조회 · 범위로 만든 문장 — AI가 쓴 글이 아니다
+# (판단 문구가 섞일 길이 없다)
+# FAILED면 조회 기록이 없어 evidenceId · retrievedAt · factIds가 비어 있다
+class ExtraInvestigation(BaseModel):
+    suspicionKey: str
+    suspicionLabel: str
+    toolName: str
+    title: str
+    args: dict[str, Any]
+    reason: str
+    status: Literal["DONE", "FAILED"]
+    evidenceId: str | None = None
+    retrievedAt: str | None = None
+    # 이 조회에서 나온 사실 번호 (facts의 id)
+    factIds: list[str] = Field(default_factory=list)
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
@@ -286,3 +306,5 @@ class ReportBody(BaseModel):
     scope: InvestigationScope | None = None
     # 주문 정보 (#634) — 조회하지 못했으면 None. 예전 보고서에는 칸이 없다
     orderContext: OrderContext | None = None
+    # AI 추가 조회 (#817) — 선택 칸. 예전 보고서 · 고정 보고서(Spring)에는 없다
+    extraInvestigations: list[ExtraInvestigation] = Field(default_factory=list)

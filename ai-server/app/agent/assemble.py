@@ -4,6 +4,7 @@ from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
+    ExtraInvestigation,
     FactItem,
     FactSentenceItem,
     InvestigationScope,
@@ -166,6 +167,10 @@ def _checked_title(record: ToolRecord) -> str | None:
     if isinstance(record.result, PaymentHistoryTool):
         days = record.result.lookbackDays
         return f"고객 최근 결제 ({days}일)" + ("" if record.filled_by_system else " · AI 추가 조사")
+    # AI가 넓혀 본 연결 결제 (#817) — 기본 조회와 따로 보이게
+    if isinstance(record.result, LinkedPaymentsTool) and not record.filled_by_system:
+        minutes = record.result.nearbyWindowMinutes or 0
+        return f"같은 카드 · 기기 · IP 결제 (사건 결제 앞뒤 {minutes // 60}시간) · AI 추가 조사"
     return SCOPE_CHECKED.get(record.tool_name)
 
 
@@ -304,6 +309,7 @@ def assemble_report(
     summary_appended: list[str] | None = None,
     basis_tool: DecisionBasisTool | None = None,
     order: OrderContextTool | None = None,
+    extra_investigations: list[ExtraInvestigation] | None = None,
 ) -> ReportBody:
     # 징후 · 정상 근거는 Spring이 30일 기본 조회로 계산해 준다 (#618)
     # AI가 90일을 불렀는지와 상관없이
@@ -425,4 +431,5 @@ def assemble_report(
         scope=investigation_scope(records, limitations),
         # 주문 정보 (#634) — Tool 응답 한 줄씩 그대로. 주문번호 · 상품명은 표에만 (AI는 보지 않았다)
         orderContext=OrderContext(payments=order.payments) if order is not None else None,
+        extraInvestigations=list(extra_investigations or []),
     )
