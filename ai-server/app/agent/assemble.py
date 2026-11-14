@@ -4,10 +4,12 @@ from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
 from app.schemas.report import (
     EvidenceItem,
+    ExtraInvestigation,
     FactItem,
     FactSentenceItem,
     InvestigationScope,
     InvestigationTrace,
+    LinkedCases,
     LinkedPayments,
     OrderContext,
     Overview,
@@ -27,6 +29,7 @@ from app.schemas.tools import (
     FdsEvidenceTool,
     FdsPayment,
     HistoryPayment,
+    LinkedCasesTool,
     LinkedPaymentsTool,
     OrderContextTool,
     PaymentHistoryTool,
@@ -133,6 +136,12 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
 
 LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
 ORDER_UNAVAILABLE = "주문 정보를 조회하지 못했습니다."
+LINKED_CASES_UNAVAILABLE = "같은 카드 · 기기로 열린 지난 사건을 조회하지 못했습니다."
+# 조회 상한에 걸려 최근 끝난 사건 일부만 비교했다 — 못 찾았어도 "없음"이 아니다 (#818 Codex 리뷰)
+LINKED_CASES_LIMITED = (
+    "같은 카드 · 기기 · IP로 열린 지난 사건은 최근 끝난 사건 일부만 비교했습니다. "
+    "더 오래된 사건에 있을 수 있습니다."
+)
 # 다른 고객 결제를 찾았을 때 — AI가 "다른 고객 결제 이력은 알 수 없었다"고 쓰던 자리 (#355, Case 12)
 LINKED_PRIVACY = (
     "같은 카드 · 기기 · IP를 쓴 다른 고객 결제는 건수 · 판정만 보고, "
@@ -151,6 +160,7 @@ SCOPE_CHECKED = {
     "find_linked_payments": "같은 카드 · 기기 · IP 결제",
     "get_order_context": "주문 정보 (주문자 이름 · 전화 제외)",
     "get_decision_basis": "징후 · 정상 근거 (Spring 계산)",
+    "find_linked_cases": "같은 카드 · 기기로 열린 지난 사건 (다른 고객 · 종료 90일, 사건 · 판정만)",
 }
 SCOPE_ALWAYS_UNAVAILABLE = (
     "로그인 기록 (조회 도구 없음)",
@@ -166,6 +176,13 @@ def _checked_title(record: ToolRecord) -> str | None:
     if isinstance(record.result, PaymentHistoryTool):
         days = record.result.lookbackDays
         return f"고객 최근 결제 ({days}일)" + ("" if record.filled_by_system else " · AI 추가 조사")
+    # AI가 넓혀 본 연결 결제 (#817) — 기본 조회와 따로 보이게
+    if isinstance(record.result, LinkedPaymentsTool) and not record.filled_by_system:
+        minutes = record.result.nearbyWindowMinutes or 0
+        return f"같은 카드 · 기기 · IP 결제 (사건 결제 앞뒤 {minutes // 60}시간) · AI 추가 조사"
+    # AI가 고른 같은 IP 지난 사건 (#821)
+    if isinstance(record.result, LinkedCasesTool) and not record.filled_by_system:
+        return "같은 IP로 열린 지난 사건 (다른 고객 · 종료 90일) · AI 추가 조사"
     return SCOPE_CHECKED.get(record.tool_name)
 
 
@@ -304,6 +321,9 @@ def assemble_report(
     summary_appended: list[str] | None = None,
     basis_tool: DecisionBasisTool | None = None,
     order: OrderContextTool | None = None,
+    extra_investigations: list[ExtraInvestigation] | None = None,
+    linked_cases: LinkedCasesTool | None = None,
+    linked_cases_by_ip: LinkedCasesTool | None = None,
 ) -> ReportBody:
     # 징후 · 정상 근거는 Spring이 30일 기본 조회로 계산해 준다 (#618)
     # AI가 90일을 불렀는지와 상관없이
@@ -322,6 +342,10 @@ def assemble_report(
         limitations.append(LINKED_PRIVACY)
     if order is None:
         limitations.append(ORDER_UNAVAILABLE)
+    if linked_cases is None:
+        limitations.append(LINKED_CASES_UNAVAILABLE)
+    if any(r is not None and r.limited for r in (linked_cases, linked_cases_by_ip)):
+        limitations.append(LINKED_CASES_LIMITED)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -425,4 +449,17 @@ def assemble_report(
         scope=investigation_scope(records, limitations),
         # 주문 정보 (#634) — Tool 응답 한 줄씩 그대로. 주문번호 · 상품명은 표에만 (AI는 보지 않았다)
         orderContext=OrderContext(payments=order.payments) if order is not None else None,
+        extraInvestigations=list(extra_investigations or []),
+        linkedCases=_report_linked_cases(linked_cases),
+        linkedCasesByIp=_report_linked_cases(linked_cases_by_ip),
+    )
+
+
+def _report_linked_cases(result: LinkedCasesTool | None) -> LinkedCases | None:
+    if result is None:
+        return None
+    return LinkedCases.model_validate(
+        result.model_dump(
+            include={"lookbackDays", "kinds", "notProvided", "cases", "totalMatched", "limited"}
+        )
     )

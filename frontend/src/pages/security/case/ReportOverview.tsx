@@ -18,7 +18,7 @@ import { SummaryBox } from './BasisCard'
 import { dateTime } from './caseLabels'
 import { ReportSection } from './ReportSection'
 
-// ① 무슨 일인가 (#644 PR 3) — 개요 한 줄 · 가로 타임라인 · 결제 표 · 한눈에 보기(AI 문장)
+// ① 무슨 일인가 (#644 PR 3) — 개요 한 줄 · 한눈에 보기(AI 문장, #819에서 위로) · 가로 타임라인 · 결제 표
 // 개요 · 타임라인 · 결제 표는 코드가 채운 칸이고, AI 문장은 한눈에 보기에만 있다 (#543)
 // 결제 표 줄 id는 paymentCardId — 한눈에 보기의 "결제 N 접속 정보" 링크가 이 줄로 온다 (#559)
 
@@ -47,12 +47,7 @@ export function ReportOverview({
           FDS 최고 {score ?? '-'}점 (확률 아님) · 판정은 보안 직원이 합니다
         </span>
       </div>
-      <HorizontalTimeline items={body.timeline} />
-      <PaymentTable payments={body.paymentAnalyses} ml={ml} />
-      <div style={{ fontSize: 12, color: '#64748B' }}>
-        FDS 점수는 걸린 규칙 점수의 합이고 확률이 아닙니다. ML 참고 위험도는 결제 승인에 쓰지 않는
-        참고 값입니다.
-      </div>
+      {/* AI 요약은 개요 바로 아래 (#819, 11/14 사용자 결정) — 사건 요지를 결제 표보다 먼저 읽게 */}
       <SummaryBox
         lines={summary.map((l) => l.text)}
         basis={marks}
@@ -60,6 +55,12 @@ export function ReportOverview({
         fold={summaryFold(body)}
         appended={appendedFactTexts(body)}
       />
+      <HorizontalTimeline items={body.timeline} />
+      <PaymentTable payments={body.paymentAnalyses} ml={ml} />
+      <div style={{ fontSize: 12, color: '#64748B' }}>
+        FDS 점수는 걸린 규칙 점수의 합이고 확률이 아닙니다. ML 참고 위험도는 결제 승인에 쓰지 않는
+        참고 값입니다.
+      </div>
     </ReportSection>
   )
 }

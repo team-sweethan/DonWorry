@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -154,6 +154,42 @@ class SimilarCases(BaseModel):
     totalMatched: int
 
 
+# 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — Tool 기록 값 그대로
+# 사건 번호는 화면 링크용이다 (AI 입력에는 없음)
+# 이번 사건 결제 번호와 그 결제와 겹친 종류
+class LinkedCasePaymentItem(BaseModel):
+    paymentId: str
+    matchedBy: list[Literal["CARD", "DEVICE", "IP"]]
+
+
+# 지난 사건의 겹친 결제 한 건 (#818 Codex 리뷰)
+# 판정과, 이번 사건의 어느 결제와 어떤 종류로 겹쳤는지
+# 의심 카드는 자기 결제 · 자기 종류로 겹친 지난 결제만 센다. 지난 결제 번호는 없다
+class LinkedPastPaymentItem(BaseModel):
+    decision: Literal["ACCEPT", "REJECT"] | None
+    matches: list[LinkedCasePaymentItem]
+
+
+class LinkedCaseItem(BaseModel):
+    caseId: str
+    matchedBy: list[Literal["CARD", "DEVICE", "IP"]]
+    closedAt: str | None
+    paymentCount: int
+    acceptCount: int
+    rejectCount: int
+    pastPayments: list[LinkedPastPaymentItem] = []
+
+
+# limited: 최근 끝난 사건 일부만 비교함 — 못 찾았어도 "없음"이 아니다
+class LinkedCases(BaseModel):
+    lookbackDays: int
+    kinds: list[Literal["CARD", "DEVICE", "IP"]]
+    notProvided: list[Literal["CARD", "DEVICE", "IP"]]
+    cases: list[LinkedCaseItem]
+    totalMatched: int
+    limited: bool = False
+
+
 # 고객 최근 결제 (#338) — Tool 기록 값 그대로 코드가 채운다. 건수 · 금액을 AI가 쓰지 않는다
 class PaymentHistoryItem(BaseModel):
     paymentId: str
@@ -258,6 +294,27 @@ class InvestigationScope(BaseModel):
     unavailable: list[str]
 
 
+# AI가 고른 추가 조회 하나 (#817) — 어느 의심 때문에 무엇을 더 봤는지
+# suspicionKey: 결제별 징후(basis.signals)의 묶음 키 — 화면 caseSignalId와 같다
+# (해외 접속은 key:label, 그 밖은 key). 사건 전체면 CASE
+# 화면은 이 키로 의심 카드에 붙인다
+# reason: 코드가 의심 이름 · 조회 · 범위로 만든 문장 — AI가 쓴 글이 아니다
+# (판단 문구가 섞일 길이 없다)
+# FAILED면 조회 기록이 없어 evidenceId · retrievedAt · factIds가 비어 있다
+class ExtraInvestigation(BaseModel):
+    suspicionKey: str
+    suspicionLabel: str
+    toolName: str
+    title: str
+    args: dict[str, Any]
+    reason: str
+    status: Literal["DONE", "FAILED"]
+    evidenceId: str | None = None
+    retrievedAt: str | None = None
+    # 이 조회에서 나온 사실 번호 (facts의 id)
+    factIds: list[str] = Field(default_factory=list)
+
+
 class ReportBody(BaseModel):
     overview: Overview
     summary: list[str] = Field(min_length=1)
@@ -286,3 +343,10 @@ class ReportBody(BaseModel):
     scope: InvestigationScope | None = None
     # 주문 정보 (#634) — 조회하지 못했으면 None. 예전 보고서에는 칸이 없다
     orderContext: OrderContext | None = None
+    # AI 추가 조회 (#817) — 선택 칸. 예전 보고서 · 고정 보고서(Spring)에는 없다
+    extraInvestigations: list[ExtraInvestigation] = Field(default_factory=list)
+    # 같은 카드 · 기기로 열린 지난 사건 (#821) — 코드 기본 조회
+    # 조회하지 못했으면 None, 예전 보고서에는 칸이 없다
+    linkedCases: LinkedCases | None = None
+    # 같은 IP로 열린 지난 사건 (#821) — AI가 골라 조회했을 때만 있다
+    linkedCasesByIp: LinkedCases | None = None

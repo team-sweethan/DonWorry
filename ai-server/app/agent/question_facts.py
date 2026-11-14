@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
 
-from app.agent.facts import _history, _kst, _linked, _won
+from app.agent.facts import _history, _kst, _won, linked_lines_of
 from app.agent.tools import ToolRecord
 from app.schemas.question import AnswerFact, PreviousTurn
 from app.schemas.report import DecisionBasis, FactItem, RuleHitDetail
@@ -250,7 +250,10 @@ def added_facts(
     start: int,
 ) -> list[AnswerFact]:
     records = [_case_payments(view, result), ToolRecord(tool_name, {}, result)]
-    lines = _history(records) if isinstance(result, PaymentHistoryTool) else _linked(records)
+    if isinstance(result, PaymentHistoryTool):
+        lines = _history(records)
+    else:
+        lines = linked_lines_of(records)
     return [
         AnswerFact(
             id=f"추가-{start + n}",

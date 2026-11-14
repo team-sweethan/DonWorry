@@ -6,6 +6,8 @@ import com.donworry.fds.api.FdsLinkedPayments;
 import com.donworry.fds.api.FdsLinkedPayments.Match;
 import com.donworry.fds.api.FdsLinkedPayments.Nearby;
 import com.donworry.fds.api.FdsLinkedPayments.PaymentMatch;
+import com.donworry.fds.api.FdsPaymentMatchReader;
+import com.donworry.fds.api.FdsPaymentMatches;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
@@ -14,6 +16,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,9 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 // 사건 결제의 평가에서 비교할 값을 모으고, 같은 가맹점 · 기간 안의 평가와 원문으로 맞춘 뒤 숫자만 내보낸다
 // 사건 전체와 사건 결제별로 센다 — 조회는 종류마다 한 번, 결제별 집계는 그 결과를 다시 센다 (#533)
 // 사건 결제 요청 시각 앞뒤 nearbyWindow 안의 결제도 그 결과에서 다시 센다 — 조회를 늘리지 않는다 (#637)
+// 받는 쪽이 넘긴 후보 결제 중 같은 값인 결제 번호를 고르는 창구(FdsPaymentMatchReader)도 같은 비교 규칙으로 여기 둔다 (#821)
 @Service
 @Transactional(readOnly = true)
-public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader {
+public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader, FdsPaymentMatchReader {
 
     private final FdsEvaluationRepository evaluationRepository;
 
@@ -92,6 +96,71 @@ public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader {
                                 ip.forPayment(paymentId, nearbyWindow)))
                         .toList();
         return new FdsLinkedPayments(card.all(nearbyWindow), device.all(nearbyWindow), ip.all(nearbyWindow), payments);
+    }
+
+    // 후보 결제 중 사건 결제와 같은 카드 · 기기 · IP인 것 (#821) — 사건 · 후보 평가를 한 번에 읽고 원문으로 맞춘다
+    // 후보의 고객은 보지 않는다 — 어느 사건 결제를 후보로 넣을지는 받는 쪽이 정한다
+    @Override
+    public FdsPaymentMatches findMatching(
+            Long merchantId, Collection<Long> casePaymentIds, Collection<Long> candidatePaymentIds) {
+        if (merchantId == null || casePaymentIds == null || candidatePaymentIds == null) {
+            throw new IllegalArgumentException("merchantId, casePaymentIds, candidatePaymentIds must not be null");
+        }
+        Set<Long> cases = Set.copyOf(casePaymentIds);
+        Set<Long> candidates =
+                candidatePaymentIds.stream().filter(id -> !cases.contains(id)).collect(Collectors.toUnmodifiableSet());
+        if (candidates.size() > FdsPaymentMatchReader.MAX_CANDIDATES) {
+            throw new IllegalArgumentException(
+                    "candidatePaymentIds must not exceed " + FdsPaymentMatchReader.MAX_CANDIDATES);
+        }
+        Set<Long> all = new LinkedHashSet<>(cases);
+        all.addAll(candidates);
+        List<FdsEvaluation> evaluations = all.isEmpty()
+                ? List.of()
+                : sameMerchant(
+                        evaluationRepository.findByPaymentIdInOrderByPaymentIdAscEvaluatedAtDesc(all), merchantId);
+        List<FdsEvaluation> caseEvaluations = evaluations.stream()
+                .filter(evaluation -> cases.contains(evaluation.getPaymentId()))
+                .toList();
+        List<FdsEvaluation> candidateEvaluations = evaluations.stream()
+                .filter(evaluation -> candidates.contains(evaluation.getPaymentId()))
+                .toList();
+        return new FdsPaymentMatches(
+                matching(caseEvaluations, candidateEvaluations, FdsEvaluation::getCardToken),
+                matching(caseEvaluations, candidateEvaluations, FdsEvaluation::getDeviceId),
+                matching(caseEvaluations, candidateEvaluations, FdsEvaluation::getIpAddress));
+    }
+
+    // 다른 가맹점 평가는 비교할 값의 출처로도, 후보로도 쓰지 않는다
+    private static List<FdsEvaluation> sameMerchant(List<FdsEvaluation> evaluations, Long merchantId) {
+        return evaluations.stream()
+                .filter(evaluation -> merchantId.equals(evaluation.getMerchantId()))
+                .toList();
+    }
+
+    // 재평가로 평가가 여러 개인 결제는 그중 하나라도 같으면 일치로 본다 (같은 결제의 값은 바뀌지 않는다)
+    // 사건 결제마다 같은 값인 후보를 짝지어 돌려준다 — 이미 읽은 평가로 나누기만 해 조회는 한 번이다
+    private static FdsPaymentMatches.Kind matching(
+            List<FdsEvaluation> caseEvaluations,
+            List<FdsEvaluation> candidateEvaluations,
+            Function<FdsEvaluation, String> identifier) {
+        if (values(caseEvaluations, identifier).isEmpty()) {
+            return FdsPaymentMatches.Kind.notProvided();
+        }
+        Map<String, Set<Long>> candidatesByValue = candidateEvaluations.stream()
+                .filter(evaluation -> present(identifier.apply(evaluation)))
+                .collect(Collectors.groupingBy(
+                        identifier, Collectors.mapping(FdsEvaluation::getPaymentId, Collectors.toSet())));
+        Map<Long, Set<Long>> byCasePayment = new HashMap<>();
+        for (FdsEvaluation evaluation : caseEvaluations) {
+            Set<Long> matched = candidatesByValue.get(identifier.apply(evaluation));
+            if (matched != null) {
+                byCasePayment
+                        .computeIfAbsent(evaluation.getPaymentId(), id -> new LinkedHashSet<>())
+                        .addAll(matched);
+            }
+        }
+        return new FdsPaymentMatches.Kind(true, byCasePayment);
     }
 
     // 비교할 값으로 한 번 조회하고, 다른 고객 결제만 남긴다

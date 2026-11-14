@@ -5,6 +5,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.LinkedCasesToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
@@ -45,6 +46,7 @@ public class AiToolService {
     private final PaymentHistoryFinder paymentHistoryFinder;
     private final PaymentSignalReader paymentSignalReader;
     private final LinkedPaymentFinder linkedPaymentFinder;
+    private final LinkedCaseFinder linkedCaseFinder;
     private final OrderContextFinder orderContextFinder;
 
     @Transactional(readOnly = true)
@@ -136,6 +138,11 @@ public class AiToolService {
     // 앞뒤 시간은 1시간(보고서 기본) 또는 6 · 24시간(질문 넓혀 보기, #751) — 검사도 LinkedPaymentFinder가 한다
     public LinkedPaymentsToolResponse linkedPayments(Long caseId, int nearbyHours) {
         return linkedPaymentFinder.find(caseId, Instant.now().truncatedTo(ChronoUnit.MICROS), nearbyHours);
+    }
+
+    // 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — 범위 검사 · 트랜잭션은 LinkedCaseFinder가 한다
+    public LinkedCasesToolResponse linkedCases(Long caseId, String by) {
+        return linkedCaseFinder.find(caseId, by, Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
     // 사건 결제의 주문 정보 (#634) — 고정 보고서와 같은 규칙을 쓰도록 OrderContextFinder에 맡긴다

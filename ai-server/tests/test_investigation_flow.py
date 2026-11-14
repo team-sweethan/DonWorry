@@ -77,6 +77,7 @@ def test_base_lookups_run_by_code_without_ai_choice() -> None:
         ("find_linked_payments", {}, True),
         ("get_order_context", {}, True),
         ("get_decision_basis", {}, True),
+        ("find_linked_cases", {}, True),
     ]
 
 
@@ -111,7 +112,10 @@ def test_base_required_lookup_failure_ends_failed(failing: str) -> None:
 
 # 추가 조회가 실패하면 AI에게는 정해진 문장만 주고, 오류 원문(내부 주소 등)은 로그에만 남긴다
 def test_extra_tool_failure_sends_fixed_message_to_ai(caplog: pytest.LogCaptureFixture) -> None:
-    llm = ScriptedLlm(turns=[[call("look_broken")], None], outputs=[narrative(["9001", "9002"])])
+    llm = ScriptedLlm(
+        turns=[[call("look_broken", suspicion="CASE")], None],
+        outputs=[narrative(["9001", "9002"])],
+    )
 
     with caplog.at_level(logging.WARNING):
         outcome = run_investigation(
@@ -133,7 +137,8 @@ def test_extra_investigation_refuses_base_and_unknown_tools_and_caps_calls() -> 
     llm = ScriptedLlm(
         turns=[
             [call("get_case_payments"), call("approve_payment", payment_id="9001")],
-            [call("look_extra", days=90, case_id="999")],
+            # #817부터 추가 조회마다 어느 의심 때문인지(suspicion)를 고른다 — 사건 전체(CASE)
+            [call("look_extra", suspicion="CASE", days=90, case_id="999")],
         ],
         outputs=[narrative(["9001", "9002"])],
         repeat_last_turn=True,

@@ -8,6 +8,7 @@ from app.schemas.report import InvestigationTrace, TraceStep
 from app.schemas.tools import (
     CasePaymentsTool,
     DecisionBasisTool,
+    LinkedCasesTool,
     LinkedMatch,
     LinkedPaymentsTool,
     OrderContextTool,
@@ -27,6 +28,7 @@ TOOL_TITLES = {
     "find_linked_payments": "같은 카드 · 기기 · IP 결제 조회",
     "get_order_context": "주문 정보 조회",
     "get_decision_basis": "징후 · 정상 근거 조회",
+    "find_linked_cases": "같은 카드 · 기기로 열린 지난 사건 조회",
 }
 
 # 형식 검사 오류 뒤에 붙는 실패한 AI 문장(: "...")을 지운다 — 검사 규칙만 남긴다
@@ -83,6 +85,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
         return "이 사건 결제별 징후 · 정상 근거 (Spring 계산)"
     if name == "get_order_context":
         return "이 사건 결제의 주문 정보"
+    if name == "find_linked_cases":
+        return "같은 가맹점 · 종료 90일 안, 다른 고객 사건"
     payment_ids = args.get("payment_ids") or []
     # AI가 목록 대신 숫자 · 문자열 하나를 줘도 요약은 만든다
     if not isinstance(payment_ids, list):
@@ -96,6 +100,8 @@ def tool_asked(name: str, args: dict[str, Any]) -> str:
 def tool_received(result: ToolResult) -> str:
     if isinstance(result, DecisionBasisTool):
         return f"결제 {len(result.payments)}건의 징후 · 정상 근거"
+    if isinstance(result, LinkedCasesTool):
+        return linked_cases_summary(result)
     if isinstance(result, LinkedPaymentsTool):
         return linked_summary(result)
     if isinstance(result, OrderContextTool):
@@ -120,6 +126,18 @@ def tool_received(result: ToolResult) -> str:
         return f"결제 {len(result.payments)}건{missing}"
     rules = sum(len(p.ruleHits) for p in result.payments)
     return f"FDS 평가 {len(result.payments)}건 · 적중 규칙 {rules}개{missing}"
+
+
+# "지난 사건 2건 · 승인 취소 1건 · 기기 정보 없음" — 사건 번호는 쓰지 않는다 (#821)
+def linked_cases_summary(result: LinkedCasesTool) -> str:
+    head = f"지난 사건 {result.totalMatched}건"
+    if len(result.cases) < result.totalMatched:
+        head += f" 중 {len(result.cases)}건 표시"
+    reject = sum(c.rejectCount for c in result.cases)
+    parts = [head] + ([f"승인 취소 {reject}건"] if reject else [])
+    labels = {"CARD": "카드", "DEVICE": "기기", "IP": "IP"}
+    parts += [f"{labels[k]} 정보 없음" for k in result.notProvided]
+    return " · ".join(parts)
 
 
 # "카드 결제 3건 · 기기 없음 · IP 정보 없음" — Spring 고정 보고서 조사 과정과 같은 말 (#352)

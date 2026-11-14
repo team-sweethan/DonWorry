@@ -251,6 +251,27 @@ export type ReportBody = {
   scope?: InvestigationScope | null
   // 주문 정보 (#634) — 없으면(undefined) 예전 보고서, null이면 조회하지 못함
   orderContext?: OrderContext | null
+  // AI 추가 조회 (#817) — 없으면 예전 · 고정 보고서. 화면 표시는 의심 카드 이슈에서
+  extraInvestigations?: ExtraInvestigation[]
+  // 같은 카드 · 기기로 열린 지난 사건 (#821) — 코드 기본 조회. null = 조회하지 못함, 없음(undefined) = 예전 보고서
+  linkedCases?: LinkedCases | null
+  // 같은 IP로 열린 지난 사건 (#821) — AI가 골라 조회했을 때만
+  linkedCasesByIp?: LinkedCases | null
+}
+
+// AI가 고른 추가 조회 하나 (#817) — 어느 의심(suspicionKey = caseSignalId 값 — 해외 접속은 key:label, 사건 전체면 'CASE') 때문에 무엇을 더 봤는지
+// reason은 코드가 의심 이름 · 조회 · 범위로 만든 문장 (AI 글 아님). FAILED면 evidenceId · retrievedAt · factIds가 비어 있다
+export type ExtraInvestigation = {
+  suspicionKey: string
+  suspicionLabel: string
+  toolName: string
+  title: string
+  args: Record<string, unknown>
+  reason: string
+  status: 'DONE' | 'FAILED'
+  evidenceId?: string | null
+  retrievedAt?: string | null
+  factIds: string[]
 }
 
 // 사건 결제 하나의 주문 정보 (#634) — 가맹점이 결제 준비 때 보낸 값 (P5)
@@ -340,6 +361,38 @@ export type SimilarCaseItem = {
   closedAt: string | null
   acceptCount: number
   rejectCount: number
+}
+
+// 같은 가맹점 다른 고객의 종료 사건 중 이 사건 결제와 같은 카드 · 기기 · IP를 쓴 결제가 든 것 (#821)
+// 결제 수 · 판정 건수는 그 사건 결제 중 겹친 결제만 센 값. 판정 사유 · 고객 번호는 없다
+export type LinkedKind = 'CARD' | 'DEVICE' | 'IP'
+
+export type LinkedCaseItem = {
+  caseId: string
+  matchedBy: LinkedKind[]
+  closedAt: string | null
+  paymentCount: number
+  acceptCount: number
+  rejectCount: number
+  // 이 지난 사건의 겹친 결제 한 건씩 — 판정(없으면 null)과 이번 사건의 어느 결제와 어떤 종류로 겹쳤는지 (지난 결제 번호는 없음)
+  // 의심 카드는 자기 결제 · 자기 종류로 겹친 것만 센다. 없으면(이전 보고서) 카드에 붙이지 않는다
+  pastPayments?: LinkedPastPayment[]
+}
+
+export type LinkedPastPayment = {
+  decision: 'ACCEPT' | 'REJECT' | null
+  matches: Array<{ paymentId: string; matchedBy: LinkedKind[] }>
+}
+
+// kinds: 비교한 종류, notProvided: 그중 사건 결제가 값을 보내지 않아 비교하지 못한 종류
+// limited: 조회 상한에 걸려 최근 끝난 사건 일부만 비교함 — 못 찾았어도 "없음"이 아니다
+export type LinkedCases = {
+  lookbackDays: number
+  kinds: LinkedKind[]
+  notProvided: LinkedKind[]
+  cases: LinkedCaseItem[]
+  totalMatched: number
+  limited?: boolean
 }
 
 // cases는 최대 5건, totalMatched는 5건을 넘는 것까지 센 전체 건수
