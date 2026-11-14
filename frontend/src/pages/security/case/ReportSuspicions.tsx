@@ -8,6 +8,7 @@ import {
   extraResultText,
   extrasBySuspicion,
   isOpenSignal,
+  linkedCasesForSignal,
   paymentCardId,
   reducingFact,
   signalRecordText,
@@ -19,6 +20,7 @@ import {
 } from '../../../utils/reportView'
 import { dateTime } from './caseLabels'
 import { goToCard } from './goToCard'
+import { LinkedCaseList } from './ReportLinkedCases'
 import { ReportSection } from './ReportSection'
 import { SIGNAL_LEVEL } from './signalLevel'
 import './reportPrint.css'
@@ -36,6 +38,12 @@ const LINKED_CARD_TARGET: Record<string, string> = {
   LINKED_CARD: 'report-linked',
   LINKED_DEVICE: 'report-linked',
   LINKED_IP: 'report-linked',
+}
+
+const LINKED_KIND_LABEL: Record<string, string> = {
+  LINKED_CARD: '카드',
+  LINKED_DEVICE: '기기',
+  LINKED_IP: 'IP',
 }
 
 export function ReportSuspicions({
@@ -171,6 +179,8 @@ function SuspicionCard({
     ? '› 같은 카드 · 기기 · IP'
     : `› 결제 ${s.shownPaymentId}`
   const mine = extras?.bySignal.get(caseSignalId(s)) ?? []
+  // 같은 카드 · 기기 · IP 징후에만 — 그 종류로 겹친 지난 사건 (#821)
+  const pastCases = linkedCasesForSignal(body, s.key)
   return (
     <article className={checked ? 'dw-check-done' : undefined} style={cardStyle}>
       <div
@@ -206,6 +216,14 @@ function SuspicionCard({
               {linkLabel}
             </button>
           </div>
+          {pastCases.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{ fontSize: 12.5, color: '#9A3412' }}>
+                이 {LINKED_KIND_LABEL[s.key]}로 열린 지난 사건 (다른 고객)
+              </div>
+              <LinkedCaseList cases={pastCases} compact />
+            </div>
+          )}
         </div>
         <div style={cellStyle}>
           <div style={{ ...labelStyle, color: '#166534' }}>의심을 줄이는 사실</div>

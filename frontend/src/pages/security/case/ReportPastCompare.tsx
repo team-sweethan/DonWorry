@@ -13,6 +13,7 @@ import {
   type PastCell,
 } from '../../../utils/reportView'
 import { dateTime, decisionLabel } from './caseLabels'
+import { LinkedCasesBlock } from './ReportLinkedCases'
 import { ReportSection } from './ReportSection'
 
 // ③ 지난 사건과 비교 (#644 PR 3) — 지금 사건과 비슷한 끝난 사건 2건을 징후 줄로 나란히 놓는다
@@ -78,6 +79,7 @@ export function ReportPastCompare({
           </div>
         </>
       )}
+      <LinkedCasesBlock body={body} />
     </ReportSection>
   )
 }

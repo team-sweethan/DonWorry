@@ -7,6 +7,7 @@ import type {
   CasePayment,
   DecisionBasis,
   ExtraInvestigation,
+  LinkedCases,
   PaymentDecision,
   ReportBody,
   TraceStep,
@@ -44,6 +45,8 @@ import {
   normalsUnchecked,
   extraResultText,
   extrasBySuspicion,
+  linkedCaseGroups,
+  linkedCasesForSignal,
   reducingFact,
   suspicionCards,
 } from '../src/utils/reportView.ts'
@@ -956,4 +959,52 @@ test('reducingFacts_signalWithoutNormalRule_saysNoRuleNotNotFound', () => {
   const fact = reducingFact(report, card)
   assert.equal(fact.kind, 'NO_RULE')
   assert.doesNotMatch(fact.text, /찾아본 것/)
+})
+
+// ── 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) ──
+const pastLinked = (over: Partial<LinkedCases> = {}): LinkedCases => ({
+  lookbackDays: 90,
+  kinds: ['CARD', 'DEVICE'],
+  notProvided: [],
+  cases: [
+    {
+      caseId: '20',
+      matchedBy: ['DEVICE'],
+      closedAt: '2026-11-10T03:00:00Z',
+      paymentCount: 1,
+      acceptCount: 0,
+      rejectCount: 1,
+    },
+  ],
+  totalMatched: 1,
+  ...over,
+})
+
+// 지난 사건 조회가 실패했으면 "없음"이 아니라 "조회하지 못함" — 직원이 확인된 것으로 믿지 않게
+test('linkedCaseGroups_failedLookup_showsNotChecked', () => {
+  const [failed] = linkedCaseGroups(body({ linkedCases: null }))
+  const [none] = linkedCaseGroups(body({ linkedCases: pastLinked({ cases: [], totalMatched: 0 }) }))
+
+  assert.equal(failed.status, 'FAILED')
+  assert.match(failed.text ?? '', /조회하지 못했습니다/)
+  assert.equal(none.status, 'NONE')
+  assert.match(none.text ?? '', /^없음/)
+  assert.deepEqual(linkedCaseGroups(body()), [])
+})
+
+// 같은 기기 징후 카드가 없어도(30일 밖 결제 등) 찾은 지난 사건은 지난 사건 칸에 보인다
+// 카드에는 그 종류로 겹친 사건만 — 기기로 겹친 사건이 같은 카드 징후에 붙지 않는다
+test('linkedCases_withoutSignalCard_stillShownInPastSection', () => {
+  const report = body({ linkedCases: pastLinked() })
+
+  assert.equal(suspicionCards(report)?.open.length ?? 0, 0)
+  assert.deepEqual(
+    linkedCaseGroups(report)[0].cases.map((c) => c.caseId),
+    ['20'],
+  )
+  assert.deepEqual(
+    linkedCasesForSignal(report, 'LINKED_DEVICE').map((c) => c.caseId),
+    ['20'],
+  )
+  assert.deepEqual(linkedCasesForSignal(report, 'LINKED_CARD'), [])
 })
