@@ -179,8 +179,8 @@ function SuspicionCard({
     ? '› 같은 카드 · 기기 · IP'
     : `› 결제 ${s.shownPaymentId}`
   const mine = extras?.bySignal.get(caseSignalId(s)) ?? []
-  // 같은 카드 · 기기 · IP 징후에만 — 그 종류로 겹친 지난 사건 (#821)
-  const pastCases = linkedCasesForSignal(body, s.key)
+  // 같은 카드 · 기기 · IP 징후에만 — 이 의심의 결제와 그 종류로 겹친 지난 사건 (#821)
+  const pastCases = linkedCasesForSignal(body, s)
   return (
     <article className={checked ? 'dw-check-done' : undefined} style={cardStyle}>
       <div

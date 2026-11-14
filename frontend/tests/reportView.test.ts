@@ -974,6 +974,7 @@ const pastLinked = (over: Partial<LinkedCases> = {}): LinkedCases => ({
       paymentCount: 1,
       acceptCount: 0,
       rejectCount: 1,
+      casePayments: [{ paymentId: '1', matchedBy: ['DEVICE'] }],
     },
   ],
   totalMatched: 1,
@@ -1003,8 +1004,32 @@ test('linkedCases_withoutSignalCard_stillShownInPastSection', () => {
     ['20'],
   )
   assert.deepEqual(
-    linkedCasesForSignal(report, 'LINKED_DEVICE').map((c) => c.caseId),
+    linkedCasesForSignal(report, { key: 'LINKED_DEVICE', paymentIds: ['1'] }).map((c) => c.caseId),
     ['20'],
   )
-  assert.deepEqual(linkedCasesForSignal(report, 'LINKED_CARD'), [])
+  assert.deepEqual(linkedCasesForSignal(report, { key: 'LINKED_CARD', paymentIds: ['1'] }), [])
+})
+
+// 결제가 여러 건인 사건 — 다른 결제와 겹친 지난 사건이 이 의심 카드에 붙지 않는다 (#818 Codex 리뷰)
+// 겹친 결제를 모르는 보고서는 카드에 붙이지 않고 지난 사건 칸에만 보인다
+test('linkedCasesForSignal_otherPaymentsPastCase_notAttached', () => {
+  const [past] = pastLinked().cases
+  const onTwo = {
+    ...past,
+    matchedBy: ['CARD' as const],
+    casePayments: [{ paymentId: '2', matchedBy: ['CARD' as const] }],
+  }
+  const report = body({ linkedCases: pastLinked({ cases: [onTwo] }) })
+
+  assert.deepEqual(linkedCasesForSignal(report, { key: 'LINKED_CARD', paymentIds: ['1'] }), [])
+  assert.deepEqual(
+    linkedCasesForSignal(report, { key: 'LINKED_CARD', paymentIds: ['2'] }).map((c) => c.caseId),
+    ['20'],
+  )
+
+  const unknown = body({
+    linkedCases: pastLinked({ cases: [{ ...past, casePayments: undefined }] }),
+  })
+  assert.deepEqual(linkedCasesForSignal(unknown, { key: 'LINKED_DEVICE', paymentIds: ['1'] }), [])
+  assert.equal(linkedCaseGroups(unknown)[0].cases.length, 1)
 })

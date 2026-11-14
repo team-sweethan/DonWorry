@@ -735,13 +735,17 @@ function linkedGroup(key: LinkedCaseGroup['key'], cases: LinkedCases | null): Li
       missingText: null,
     }
   const found = cases.cases.length > 0
+  const searched = `최근 ${cases.lookbackDays}일 안에 끝난 다른 고객 사건의 같은 ${linkedKindsText(compared)}`
+  // 조회 상한에 걸려 일부만 비교했으면 "없음"으로 단정하지 않는다 (#818 Codex 리뷰)
+  const partial = '최근 끝난 사건 일부만 비교했습니다. 더 오래된 사건에 있을 수 있습니다.'
+  const noneText = cases.limited
+    ? `${partial} 그 안에서는 없음 · 찾아본 것: ${searched}`
+    : `없음 · 찾아본 것: ${searched}`
   return {
     key,
     title,
     status: found ? 'FOUND' : 'NONE',
-    text: found
-      ? null
-      : `없음 · 찾아본 것: 최근 ${cases.lookbackDays}일 안에 끝난 다른 고객 사건의 같은 ${linkedKindsText(compared)}`,
+    text: found ? (cases.limited ? partial : null) : noneText,
     cases: cases.cases,
     notListed: cases.totalMatched - cases.cases.length,
     missingText,
@@ -764,11 +768,20 @@ const LINKED_SIGNAL_KIND: Record<string, LinkedKind> = {
   LINKED_IP: 'IP',
 }
 
-export function linkedCasesForSignal(body: ReportBody, signalKey: string): LinkedCaseItem[] {
-  const kind = LINKED_SIGNAL_KIND[signalKey]
+// 이 의심의 결제와 그 종류로 겹친 사건만 — 결제가 여러 건인 사건에서 다른 결제의 지난 사건이 붙지 않게 (#818 Codex 리뷰)
+// 겹친 결제를 모르는 보고서(casePayments 없음)는 카드에 붙이지 않는다
+export function linkedCasesForSignal(
+  body: ReportBody,
+  signal: Pick<CheckSignal, 'key' | 'paymentIds'>,
+): LinkedCaseItem[] {
+  const kind = LINKED_SIGNAL_KIND[signal.key]
   if (!kind) return []
   const source = kind === 'IP' ? body.linkedCasesByIp : body.linkedCases
-  return (source?.cases ?? []).filter((c) => c.matchedBy.includes(kind))
+  return (source?.cases ?? []).filter((c) =>
+    (c.casePayments ?? []).some(
+      (m) => signal.paymentIds.includes(m.paymentId) && m.matchedBy.includes(kind),
+    ),
+  )
 }
 
 // 정상 근거 기준 — Spring DecisionBasisCalculator.EXPLAINS (SIMILAR_AMOUNT → R01) 와 같다. 기준을 바꾸면 여기도 함께

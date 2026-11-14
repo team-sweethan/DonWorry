@@ -374,15 +374,19 @@ export type LinkedCaseItem = {
   paymentCount: number
   acceptCount: number
   rejectCount: number
+  // 이번 사건 결제 중 이 지난 사건과 겹친 결제와 종류 — 의심 카드가 자기 결제의 것만 붙인다. 없으면(이전 보고서) 카드에 붙이지 않는다
+  casePayments?: Array<{ paymentId: string; matchedBy: LinkedKind[] }>
 }
 
 // kinds: 비교한 종류, notProvided: 그중 사건 결제가 값을 보내지 않아 비교하지 못한 종류
+// limited: 조회 상한에 걸려 최근 끝난 사건 일부만 비교함 — 못 찾았어도 "없음"이 아니다
 export type LinkedCases = {
   lookbackDays: number
   kinds: LinkedKind[]
   notProvided: LinkedKind[]
   cases: LinkedCaseItem[]
   totalMatched: number
+  limited?: boolean
 }
 
 // cases는 최대 5건, totalMatched는 5건을 넘는 것까지 센 전체 건수
