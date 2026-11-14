@@ -255,7 +255,7 @@ export type ReportBody = {
   extraInvestigations?: ExtraInvestigation[]
 }
 
-// AI가 고른 추가 조회 하나 (#817) — 어느 의심(suspicionKey = basis.signals[].key, 사건 전체면 'CASE') 때문에 무엇을 더 봤는지
+// AI가 고른 추가 조회 하나 (#817) — 어느 의심(suspicionKey = caseSignalId 값 — 해외 접속은 key:label, 사건 전체면 'CASE') 때문에 무엇을 더 봤는지
 // reason은 코드가 의심 이름 · 조회 · 범위로 만든 문장 (AI 글 아님). FAILED면 evidenceId · retrievedAt · factIds가 비어 있다
 export type ExtraInvestigation = {
   suspicionKey: string

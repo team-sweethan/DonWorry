@@ -259,7 +259,8 @@ class InvestigationScope(BaseModel):
 
 
 # AI가 고른 추가 조회 하나 (#817) — 어느 의심 때문에 무엇을 더 봤는지
-# suspicionKey: 결제별 징후(basis.signals)의 key, 사건 전체면 CASE
+# suspicionKey: 결제별 징후(basis.signals)의 묶음 키 — 화면 caseSignalId와 같다
+# (해외 접속은 key:label, 그 밖은 key). 사건 전체면 CASE
 # 화면은 이 키로 의심 카드에 붙인다
 # reason: 코드가 의심 이름 · 조회 · 범위로 만든 문장 — AI가 쓴 글이 아니다
 # (판단 문구가 섞일 길이 없다)

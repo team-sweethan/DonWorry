@@ -290,3 +290,42 @@ def test_extra_no_suspicions_allows_case_wide_only() -> None:
     [extra] = report.extraInvestigations
     assert (extra.suspicionKey, extra.suspicionLabel, extra.status) == ("CASE", "사건 전체", "DONE")
     assert extra.reason == "사건 전체를 보려고 고객 결제 이력을 90일로 넓혀 봤습니다."
+
+
+# 해외 접속 징후는 국가가 이름에 있다 — 국가가 다른 결제를 한 줄로 묶으면 둘째 결제 국가가 사라진다
+# 화면 caseSignalId와 같은 묶음 키(OVERSEAS는 key:label) — #818 Codex 리뷰 재현
+def _overseas_sample() -> dict[str, Any]:
+    data = _sample()
+    for payment, country in zip(data["decisionBasis"]["payments"], ("US", "JP"), strict=True):
+        payment["basis"]["signals"].append(
+            {
+                "key": "OVERSEAS",
+                "label": f"해외 접속 ({country})",
+                "detail": None,
+                "level": "CAUTION",
+                "normalReason": None,
+            }
+        )
+    return data
+
+
+def test_basis_facts_overseas_split_by_country() -> None:
+    report = _report(_run(_Picks(), _box(_overseas_sample())))
+
+    texts = [f.text for f in report.facts if f.topic == "basis" and "해외 접속" in f.text]
+    assert len(texts) == 2
+    assert texts[0].startswith("징후 '해외 접속 (US)': 첫 번째 결제")
+    assert texts[1].startswith("징후 '해외 접속 (JP)': 두 번째 결제")
+
+
+def test_extra_overseas_suspicion_key_matches_screen_signal_id() -> None:
+    # 의심 번호: 거절 후 재시도 1 · 신규 카드 2 · 같은 카드 3 · 해외(US) 4 · 해외(JP) 5
+    llm = _Picks(call("get_payment_history_90d", suspicion="의심-5"))
+
+    report = _report(_run(llm, _box(_overseas_sample())))
+
+    [extra] = report.extraInvestigations
+    assert (extra.suspicionKey, extra.suspicionLabel) == (
+        "OVERSEAS:해외 접속 (JP)",
+        "해외 접속 (JP)",
+    )

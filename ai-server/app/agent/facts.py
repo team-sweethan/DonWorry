@@ -13,7 +13,7 @@ from app.agent.assemble import (
 )
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
-from app.schemas.report import FactItem
+from app.schemas.report import BasisSignal, FactItem
 from app.schemas.tools import (
     CasePaymentsTool,
     DecisionBasisTool,
@@ -433,6 +433,15 @@ def _order(records: list[ToolRecord]) -> list[Line]:
 # 같은 징후는 결제를 묶어 한 줄. 다른 징후에 이미 센 것(countedIn)은 뺀다
 # 징후를 받지 못했으면(조회 실패 · 연결 조회 실패로 빈 목록) 아무 줄도 쓰지 않는다
 # — "징후 없음"으로 읽히지 않게
+# 징후 묶음 키 — 화면 caseSignalId(reportView.ts)와 같다
+# 해외 접속은 국가가 이름에만 있어 key가 같아도 국가가 다르면 다른 징후다 (#818 Codex 리뷰)
+OVERSEAS = "OVERSEAS"
+
+
+def signal_id(signal: BasisSignal) -> str:
+    return f"{signal.key}:{signal.label}" if signal.key == OVERSEAS else signal.key
+
+
 def _basis(records: list[ToolRecord]) -> list[Line]:
     found = _latest_base(records, DecisionBasisTool)
     if found is None:
@@ -460,7 +469,7 @@ def _basis(records: list[ToolRecord]) -> list[Line]:
                 if single
                 else f"{owner}{detail} {explained}"
             )
-            grouped.setdefault(signal.key, (signal.label, []))[1].append(part)
+            grouped.setdefault(signal_id(signal), (signal.label, []))[1].append(part)
     if not grouped:
         covered = {p.paymentId for p in basis.payments}
         if names and set(names) <= covered:

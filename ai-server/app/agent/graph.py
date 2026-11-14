@@ -10,7 +10,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts, trace
 from app.agent.assemble import analyzable, assemble_report, evidence_id
-from app.agent.facts import fact_catalog, prompt_facts, report_facts
+from app.agent.facts import fact_catalog, prompt_facts, report_facts, signal_id
 from app.agent.llm import LlmClient
 from app.agent.narrative import (
     Narrative,
@@ -158,7 +158,7 @@ def case_suspicions(records: list[ToolRecord]) -> list[Suspicion]:
     for payment in found[-1].payments:
         for signal in payment.basis.signals:
             if not signal.countedIn:
-                grouped.setdefault(signal.key, []).append(signal)
+                grouped.setdefault(signal_id(signal), []).append(signal)
     return [
         Suspicion(
             id=f"의심-{n}",
