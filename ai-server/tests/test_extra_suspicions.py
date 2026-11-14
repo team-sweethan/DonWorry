@@ -146,20 +146,20 @@ def test_extra_linked_window_keeps_base_linked_table_and_facts() -> None:
     assert linked(wide) == linked(plain)
 
 
-# 넓혀 본 결과는 "추가" 사실로 따로 남는다 — 조회 기록 번호와 이어지고 요약 AI에게도 간다
+# 넓혀 본 결과는 "시간대" 사실로 따로 남는다 — 조회 기록 번호와 이어지고 요약 AI에게도 간다
 def test_extra_linked_window_adds_extra_facts_with_evidence() -> None:
     llm = _Picks(_window_call(suspicion=LINKED_CARD, hours=24))
 
     report = _report(_run(llm, _box(_sample())))
 
     extra = [f for f in report.facts if f.topic == "linkedWindow"]
-    assert [f.id for f in extra] == ["추가-1"]
+    assert [f.id for f in extra] == ["시간대-1"]
     assert "앞뒤 24시간 안" in extra[0].text
     assert "결제 4건" in extra[0].text
     assert extra[0].notable
     evidence = {e.evidenceId: e.toolName for e in report.evidence}
     assert evidence[extra[0].evidenceId] == "find_linked_payments_window"
-    assert "추가-1: " in llm.write_prompts[-1]
+    assert "시간대-1: " in llm.write_prompts[-1]
 
 
 # 추가 조사 기록은 화면 의심 카드와의 계약 — 이유는 AI가 보낸 글이 아니라 코드 문장
@@ -185,7 +185,7 @@ def test_extra_investigations_reason_built_by_code_not_ai() -> None:
         "status": "DONE",
         "evidenceId": extra.evidenceId,
         "retrievedAt": DATA["linked"]["retrievedAt"],
-        "factIds": ["추가-1"],
+        "factIds": ["시간대-1"],
     }
     assert extra.evidenceId in {e.evidenceId for e in report.evidence}
     assert ai_reason not in report.model_dump_json()

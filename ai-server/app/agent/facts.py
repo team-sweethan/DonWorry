@@ -255,7 +255,16 @@ def _linked_matches(
 
 # 기본 조회(앞뒤 1시간)만 — AI가 6 · 24시간으로 넓혀 본 결과는 "추가" 주제로 따로 (#817)
 def _linked(records: list[ToolRecord]) -> list[Line]:
-    found = _latest_base(records, LinkedPaymentsTool)
+    return _linked_lines(records, _latest_base(records, LinkedPaymentsTool))
+
+
+# 질문 기능(ADR-0086)의 넓혀 보기 — 질문이 새로 조회한 기록 그대로 사실 줄을 만든다
+# 보고서용 _linked는 기본 조회만 보므로 쓰지 않는다 (#818 Codex 리뷰)
+def linked_lines_of(records: list[ToolRecord]) -> list[Line]:
+    return _linked_lines(records, _latest(records, LinkedPaymentsTool))
+
+
+def _linked_lines(records: list[ToolRecord], found: tuple[object, int] | None) -> list[Line]:
     if found is None:
         return []
     linked, seq = found
@@ -267,7 +276,7 @@ def _linked(records: list[ToolRecord]) -> list[Line]:
     ]
 
 
-# AI가 넓혀 본 연결 결제 (#817) — 앞뒤 6 · 24시간 안 건수만 새 사실이다
+# AI가 넓혀 본 연결 결제 (#817, 시간대-N) — 앞뒤 6 · 24시간 안 건수만 새 사실이다
 # (30일 합계는 기본 조회와 같다)
 # 30일 안에 겹친 결제가 없거나 정보가 없는 칸은 기본 조회 사실에 이미 있어 쓰지 않는다
 def _linked_window(records: list[ToolRecord]) -> list[Line]:
@@ -467,7 +476,8 @@ FACT_TOPICS: tuple[FactTopic, ...] = (
     FactTopic("basis", "징후", "get_decision_basis", _basis),
     FactTopic("history", "이력", "get_payment_history", _history),
     FactTopic("linked", "연결", "find_linked_payments", _linked),
-    FactTopic("linkedWindow", "추가", "find_linked_payments", _linked_window),
+    # 질문 기능의 새 사실 번호(추가-N · 앞-N)와 겹치지 않는 이름 (#818 Codex 리뷰)
+    FactTopic("linkedWindow", "시간대", "find_linked_payments", _linked_window),
     FactTopic("signals", "접속", "get_fds_evidence", _signals),
     FactTopic("similar", "과거", "find_similar_cases", _similar),
     FactTopic("order", "주문", "get_order_context", _order),
