@@ -233,3 +233,17 @@ def test_linked_case_facts_limited_saysPartial() -> None:
 
     assert report.linkedCases is not None and report.linkedCases.limited
     assert LINKED_CASES_LIMITED in report.recommendation.limitations
+
+
+# 지난 사건이 5건을 넘으면 전체 건수는 비교한 종류 전체("카드나 기기")로 쓴다 (#818 Codex 리뷰)
+# 보여 준 5건이 모두 카드라도 나머지는 기기로 겹쳤을 수 있다
+# 겹친 종류 · 판정 합계는 최근 5건 범위로
+def test_linked_case_facts_moreThanShown_totalUsesComparedKinds() -> None:
+    data = _linked_cases("CARD_DEVICE")
+    base = {**data["cases"][0], "matchedBy": ["CARD"]}
+    data.update({"cases": [{**base, "caseId": str(20 + i)} for i in range(5)], "totalMatched": 6})
+
+    total, *_ = _linked_facts(data)
+
+    assert "카드나 기기" in total and "6건" in total
+    assert "그중 최근 5건" in total

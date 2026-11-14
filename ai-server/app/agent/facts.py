@@ -576,10 +576,9 @@ def _past_case_text(c: LinkedCase) -> str:
 # 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드나 기기"로 읽히지 않게
 def _found_case_lines(result: LinkedCasesTool, scope: str, seq: int) -> list[Line]:
     kinds = [k for k in ("CARD", "DEVICE", "IP") if any(k in c.matchedBy for c in result.cases)]
-    head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
     shown = len(result.cases)
-    more = f" (최근 {shown}건만 조회)" if result.totalMatched > shown else ""
     if result.totalMatched == 1 and shown == 1:
+        head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
         return [(f"{head}: 1건 · {_past_case_text(result.cases[0])}", seq, None, NOTABLE)]
     payments = sum(c.paymentCount for c in result.cases)
     outcome = _past_outcome(
@@ -587,7 +586,18 @@ def _found_case_lines(result: LinkedCasesTool, scope: str, seq: int) -> list[Lin
         sum(c.acceptCount for c in result.cases),
         sum(c.rejectCount for c in result.cases),
     )
-    total = f"{head}: {result.totalMatched}건{more}, 그 결제 {payments}건의 직원 판정 {outcome}"
+    if result.totalMatched > shown:
+        # 최근 몇 건만 받았다 — 나머지 사건의 겹친 종류 · 판정은 모른다 (#818 Codex 리뷰)
+        # 전체 건수는 비교한 종류 전체로, 겹친 종류 · 판정 합계는 받은 최근 건 범위로 쓴다
+        compared = [k for k in result.kinds if k not in result.notProvided]
+        head = f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        total = (
+            f"{head}: {result.totalMatched}건, 그중 최근 {shown}건(같은 {_either_text(kinds)})의 "
+            f"결제 {payments}건 직원 판정 {outcome}"
+        )
+    else:
+        head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        total = f"{head}: {result.totalMatched}건, 그 결제 {payments}건의 직원 판정 {outcome}"
     lines: list[Line] = [(total, seq, None, NOTABLE)]
     # 사건마다 줄은 자세한 내용 — 눈여겨볼 사실은 합계 줄 하나라 AI가 모두 옮기지 않아도 된다
     for c in result.cases:

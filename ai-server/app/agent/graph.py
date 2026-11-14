@@ -92,6 +92,15 @@ def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
+# 같은 도구 · 같은 인자로 이미 한 조회 기록의 위치 (#818 Codex 리뷰)
+# AI가 같은 추가 조회를 다른 의심에 또 고를 때 쓴다
+def _same_lookup(records: list[ToolRecord], name: str, args: dict[str, Any]) -> int | None:
+    for index, record in enumerate(records):
+        if record.tool_name == name and record.args == args:
+            return index
+    return None
+
+
 def _latest_case_payments(records: list[ToolRecord]) -> CasePaymentsTool | None:
     found = [r.result for r in records if isinstance(r.result, CasePaymentsTool)]
     return found[-1] if found else None
@@ -359,17 +368,29 @@ def build_graph(
                 used += 1
                 tool = extras[name]
                 suspicion = suspicions.get(raw[SUSPICION_ARG])
-                try:
-                    result = tool.run(toolbox, args)
-                    records.append(ToolRecord(name, args, result))
-                    content = llm_content(result)
-                    received = trace.tool_received(result)
+                # 같은 도구 · 같은 인자로 이미 성공한 조회는 다시 부르지 않고 그 결과를 쓴다
+                # (#818 Codex 리뷰) 다시 부르면 사실은 마지막 조회에서만 만들어
+                # 앞 의심 카드가 "새로 나온 사실 없음"이 되고, 지난 사건처럼 기록마다
+                # 사실을 만드는 도구는 같은 줄이 두 번 생긴다. 호출 한도는 그대로 센다
+                earlier = _same_lookup(records, name, args)
+                if earlier is not None:
+                    content = llm_content(records[earlier].result)
+                    received = "앞서 같은 조회 결과를 다시 씀"
                     done = True
-                except Exception:  # 응답 범위가 요청과 다른 경우 포함 — 그 조회만 빼고 진행한다
-                    log.warning("추가 조회 실패: %s", name, exc_info=True)
-                    content = prompts.EXTRA_TOOL_FAILED
-                    received = "조회 실패 — 없이 진행"
-                    done = False
+                    position = earlier + 1
+                else:
+                    try:
+                        result = tool.run(toolbox, args)
+                        records.append(ToolRecord(name, args, result))
+                        content = llm_content(result)
+                        received = trace.tool_received(result)
+                        done = True
+                    except Exception:  # 응답 범위가 요청과 다른 경우 포함 — 그 조회만 빼고 진행한다
+                        log.warning("추가 조회 실패: %s", name, exc_info=True)
+                        content = prompts.EXTRA_TOOL_FAILED
+                        received = "조회 실패 — 없이 진행"
+                        done = False
+                    position = len(records)
                 asked = extra_reason(suspicion, tool, args, done)
                 done_extras.append(
                     ExtraInvestigation(
@@ -380,8 +401,8 @@ def build_graph(
                         args=args,
                         reason=asked,
                         status="DONE" if done else "FAILED",
-                        evidenceId=evidence_id(context, len(records)) if done else None,
-                        retrievedAt=records[-1].result.retrievedAt if done else None,
+                        evidenceId=evidence_id(context, position) if done else None,
+                        retrievedAt=records[position - 1].result.retrievedAt if done else None,
                     )
                 )
             messages.append(ToolMessage(content=content, name=name, tool_call_id=call_id))

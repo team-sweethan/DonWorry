@@ -329,3 +329,33 @@ def test_extra_overseas_suspicion_key_matches_screen_signal_id() -> None:
         "OVERSEAS:해외 접속 (JP)",
         "해외 접속 (JP)",
     )
+
+
+# 이력 조회 횟수를 센다
+class _CountingBox(_Box):
+    history_asks: list[int | None]
+
+    def get_payment_history(self, lookback_days: int | None = None) -> Any:
+        self.history_asks.append(lookback_days)
+        return super().get_payment_history(lookback_days)
+
+
+# AI가 같은 추가 조회를 의심 두 개에 고르면 두 의심 카드 모두 같은 사실에 잇는다 (#818 Codex 리뷰)
+# 두 번 실행하면 사실은 마지막 조회에서만 만들어 첫 의심 카드가 "새로 나온 사실 없음"이 됐다
+# 같은 도구 · 같은 인자로 이미 성공한 조회는 다시 부르지 않는다
+def test_repeatedExtraLookup_linksSameFactsToBothSuspicions() -> None:
+    box = _CountingBox.from_sample(_sample())
+    box.hours, box.basis_mode, box.history_asks = [], "ok", []
+    llm = _Picks(
+        call("get_payment_history_90d", suspicion="의심-1"),
+        call("get_payment_history_90d", suspicion="의심-2"),
+    )
+
+    report = _report(_run(llm, box))
+
+    first, second = report.extraInvestigations
+    assert (first.status, second.status) == ("DONE", "DONE")
+    assert first.factIds
+    assert first.factIds == second.factIds
+    assert first.evidenceId == second.evidenceId
+    assert box.history_asks.count(90) == 1
