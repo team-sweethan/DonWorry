@@ -33,7 +33,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 // 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — P3 사건 · 판정은 읽기만, 일치 비교는 P2 공개 창구가 원문으로 한다
 // 방식 (나): 다른 고객의 종료 사건 결제 번호를 P2에 넘기고, 그중 같은 값인 결제 번호만 돌려받는다
-// 이번 사건 결제마다 따로 물어, 지난 사건이 이번 사건의 어느 결제와 겹쳤는지 남긴다 (의심 카드는 자기 결제의 것만 붙인다)
+// P2가 이번 사건 결제별로 짝지어 돌려준 값으로, 지난 사건이 이번 사건의 어느 결제와 겹쳤는지 남긴다 (의심 카드는 자기 결제의 것만 붙인다)
 // 지난 판정은 참고 사실이다 — 이번 사건 등급 · 정상 사유를 바꾸지 않는다
 @Component
 @RequiredArgsConstructor
@@ -88,7 +88,10 @@ public class LinkedCaseFinder {
         Map<Long, Long> caseOfPayment = candidates.caseOfPayment();
 
         // 지난 사건마다 겹친 결제 · 종류, 그리고 이번 사건의 어느 결제와 겹쳤는지 (#818 Codex 리뷰)
-        // 이번 사건 결제를 하나씩 P2에 묻는다 — 한 번에 넘기면 어느 결제와 같은 값인지 알 수 없다
+        // P2는 한 번 조회로 이번 사건 결제 → 같은 값인 후보 결제 짝을 돌려준다 (#818 Codex 보안 리뷰)
+        // 결제마다 따로 물으면 결제가 붙을 때마다 새 보고서가 돌아 대형 조회가 결제 수의 제곱으로 는다
+        FdsPaymentMatches matches =
+                fdsPaymentMatchReader.findMatching(current.getMerchantId(), casePaymentIds, caseOfPayment.keySet());
         Map<Long, Set<Long>> matchedPayments = new LinkedHashMap<>();
         Map<Long, Set<String>> matchedBy = new LinkedHashMap<>();
         Map<Long, Map<Long, Set<String>>> overlaps = new LinkedHashMap<>();
@@ -97,16 +100,12 @@ public class LinkedCaseFinder {
             matchedBy.put(c.getId(), new HashSet<>());
             overlaps.put(c.getId(), new LinkedHashMap<>());
         });
-        Set<String> provided = new HashSet<>();
+        // 이번 사건 결제 순서(연결 순)대로 — casePayments 순서가 이 순서다
         for (Long casePaymentId : casePaymentIds) {
-            FdsPaymentMatches matches = fdsPaymentMatchReader.findMatching(
-                    current.getMerchantId(), List.of(casePaymentId), caseOfPayment.keySet());
             for (String kind : kinds) {
-                FdsPaymentMatches.Kind match = MATCH_OF.get(kind).apply(matches);
-                if (match.provided()) {
-                    provided.add(kind);
-                }
-                for (Long paymentId : match.paymentIds()) {
+                Set<Long> sameValue =
+                        MATCH_OF.get(kind).apply(matches).byCasePayment().getOrDefault(casePaymentId, Set.of());
+                for (Long paymentId : sameValue) {
                     Long pastCaseId = caseOfPayment.get(paymentId);
                     if (pastCaseId == null) {
                         continue;
@@ -139,8 +138,9 @@ public class LinkedCaseFinder {
                         decisionOfPayment))
                 .toList();
         // 이번 사건 결제 중 하나라도 값을 보냈으면 비교한 종류다
-        List<String> notProvided =
-                kinds.stream().filter(kind -> !provided.contains(kind)).toList();
+        List<String> notProvided = kinds.stream()
+                .filter(kind -> !MATCH_OF.get(kind).apply(matches).provided())
+                .toList();
         return LinkedCasesToolResponse.builder()
                 .caseId(String.valueOf(caseId))
                 .evidenceVersion(current.getEvidenceVersion())

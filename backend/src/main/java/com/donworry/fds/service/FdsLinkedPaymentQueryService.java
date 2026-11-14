@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -138,19 +139,28 @@ public class FdsLinkedPaymentQueryService implements FdsLinkedPaymentReader, Fds
     }
 
     // 재평가로 평가가 여러 개인 결제는 그중 하나라도 같으면 일치로 본다 (같은 결제의 값은 바뀌지 않는다)
+    // 사건 결제마다 같은 값인 후보를 짝지어 돌려준다 — 이미 읽은 평가로 나누기만 해 조회는 한 번이다
     private static FdsPaymentMatches.Kind matching(
             List<FdsEvaluation> caseEvaluations,
             List<FdsEvaluation> candidateEvaluations,
             Function<FdsEvaluation, String> identifier) {
-        Set<String> values = values(caseEvaluations, identifier);
-        if (values.isEmpty()) {
+        if (values(caseEvaluations, identifier).isEmpty()) {
             return FdsPaymentMatches.Kind.notProvided();
         }
-        Set<Long> matched = candidateEvaluations.stream()
-                .filter(evaluation -> values.contains(identifier.apply(evaluation)))
-                .map(FdsEvaluation::getPaymentId)
-                .collect(Collectors.toSet());
-        return new FdsPaymentMatches.Kind(true, matched);
+        Map<String, Set<Long>> candidatesByValue = candidateEvaluations.stream()
+                .filter(evaluation -> present(identifier.apply(evaluation)))
+                .collect(Collectors.groupingBy(
+                        identifier, Collectors.mapping(FdsEvaluation::getPaymentId, Collectors.toSet())));
+        Map<Long, Set<Long>> byCasePayment = new HashMap<>();
+        for (FdsEvaluation evaluation : caseEvaluations) {
+            Set<Long> matched = candidatesByValue.get(identifier.apply(evaluation));
+            if (matched != null) {
+                byCasePayment
+                        .computeIfAbsent(evaluation.getPaymentId(), id -> new LinkedHashSet<>())
+                        .addAll(matched);
+            }
+        }
+        return new FdsPaymentMatches.Kind(true, byCasePayment);
     }
 
     // 비교할 값으로 한 번 조회하고, 다른 고객 결제만 남긴다

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -25,6 +27,7 @@ import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.LongStream;
@@ -74,7 +77,7 @@ class LinkedCaseFinderTests {
         when(casePaymentRepository.findBySecurityCaseIdIn(List.of(20L))).thenReturn(List.of(matched, other));
         when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(1L)), anyCollection()))
                 .thenReturn(new FdsPaymentMatches(
-                        new Kind(true, Set.of(201L)), new Kind(true, Set.of()), Kind.notProvided()));
+                        new Kind(true, Map.of(1L, Set.of(201L))), new Kind(true, Map.of()), Kind.notProvided()));
         when(paymentDecisionRepository.findByCasePaymentSecurityCaseIdIn(List.of(20L)))
                 .thenReturn(List.of(
                         PaymentDecision.confirm(matched, 3L, null, Decision.REJECT, "직원 메모 원문", 1, CLOSED_AT),
@@ -114,12 +117,9 @@ class LinkedCaseFinderTests {
                                 eq(1L), eq("customer-1"), eq(CaseStatus.CLOSED), any()))
                 .thenReturn(List.of(past));
         when(casePaymentRepository.findBySecurityCaseIdIn(List.of(20L))).thenReturn(List.of(pastPayment));
-        when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(1L)), anyCollection()))
-                .thenReturn(
-                        new FdsPaymentMatches(new Kind(true, Set.of()), new Kind(true, Set.of()), Kind.notProvided()));
-        when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(2L)), anyCollection()))
+        when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(1L, 2L)), anyCollection()))
                 .thenReturn(new FdsPaymentMatches(
-                        new Kind(true, Set.of(201L)), new Kind(true, Set.of()), Kind.notProvided()));
+                        new Kind(true, Map.of(2L, Set.of(201L))), new Kind(true, Map.of()), Kind.notProvided()));
         when(paymentDecisionRepository.findByCasePaymentSecurityCaseIdIn(List.of(20L)))
                 .thenReturn(
                         List.of(PaymentDecision.confirm(pastPayment, 3L, null, Decision.REJECT, "메모", 1, CLOSED_AT)));
@@ -130,6 +130,29 @@ class LinkedCaseFinderTests {
                 .singleElement()
                 .extracting(LinkedCase::casePayments)
                 .isEqualTo(List.of(new CasePaymentMatch("2", List.of("CARD"))));
+    }
+
+    // 이번 사건 결제가 몇 건이든 P2 대형 조회는 한 번 (#818 Codex 보안 리뷰)
+    // 결제마다 물으면 결제가 붙을 때마다 새 보고서가 돌아 조회가 결제 수의 제곱으로 는다 (100건이면 5,050번)
+    @Test
+    void find_manyCasePayments_readsP2Once() {
+        SecurityCase current = securityCase(7L, "customer-1");
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(current));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(LongStream.rangeClosed(1, 3)
+                        .mapToObj(i -> CasePayment.link(current, i, NOW))
+                        .toList());
+        when(securityCaseRepository
+                        .findTop100ByMerchantIdAndCustomerRefNotAndStatusAndClosedAtGreaterThanEqualOrderByClosedAtDesc(
+                                eq(1L), eq("customer-1"), eq(CaseStatus.CLOSED), any()))
+                .thenReturn(List.of());
+        when(fdsPaymentMatchReader.findMatching(eq(1L), anyCollection(), anyCollection()))
+                .thenReturn(
+                        new FdsPaymentMatches(new Kind(true, Map.of()), new Kind(true, Map.of()), Kind.notProvided()));
+
+        finder().find(7L, "CARD_DEVICE", NOW);
+
+        verify(fdsPaymentMatchReader, times(1)).findMatching(eq(1L), eq(List.of(1L, 2L, 3L)), anyCollection());
     }
 
     // 후보가 상한을 넘어 일부만 비교했으면 limited — "없음"이 확인된 것처럼 보이지 않게 (#818 Codex 리뷰)
@@ -157,7 +180,7 @@ class LinkedCaseFinderTests {
                         .toList());
         when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(1L)), eq(Set.of(301L))))
                 .thenReturn(new FdsPaymentMatches(
-                        new Kind(true, Set.of(301L)), new Kind(true, Set.of()), Kind.notProvided()));
+                        new Kind(true, Map.of(1L, Set.of(301L))), new Kind(true, Map.of()), Kind.notProvided()));
         when(paymentDecisionRepository.findByCasePaymentSecurityCaseIdIn(List.of(21L)))
                 .thenReturn(List.of());
 

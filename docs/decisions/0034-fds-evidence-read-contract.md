@@ -41,9 +41,10 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
   - 창 길이는 기간(`since`)처럼 받는 쪽이 정한다. `null` · 음수는 `IllegalArgumentException`. `Match.notProvided()`의 `nearby`는 0으로 채운다(`null` 아님)
   - 이유: 공격은 짧은 시간에 몰리고 공용 와이파이는 한 달에 흩어지는데, 30일 합계만으로는 둘이 같아 보인다 ([ADR-0009](0009-ai-investigation-call-structure.md) `find_linked_payments`)
   - IP 값: 결제창([ADR-0064](0064-hosted-checkout-and-payment-webhook.md)) 흐름에서는 손님 브라우저가 돈워리에 직접 접속하고, P5가 그 접속 IP(`ClientIpResolver`)를 결제 위험 신호로 넘겨 평가 `ip_address`에 남는다 — 가맹점 서버 IP가 아닌 손님 IP다
-- **#821에서 더한 창구 — 추가만 한다 (11/15, 코드는 P4가 고침 · P2 정후 확인 필요).** `fds.api.FdsPaymentMatchReader.findMatching(merchantId, casePaymentIds, candidatePaymentIds)` → `FdsPaymentMatches`(`card` · `device` · `ip` 각각 `Kind`: `provided` · `paymentIds`). 구현은 같은 비교 규칙을 쓰는 `FdsLinkedPaymentQueryService`
+- **#821에서 더한 창구 — 추가만 한다 (11/15, 코드는 P4가 고침 · P2 정후 확인 필요).** `fds.api.FdsPaymentMatchReader.findMatching(merchantId, casePaymentIds, candidatePaymentIds)` → `FdsPaymentMatches`(`card` · `device` · `ip` 각각 `Kind`: `provided` · `byCasePayment` — 사건 결제 번호 → 같은 값인 후보 결제 번호, 합친 목록은 `paymentIds()`). 구현은 같은 비교 규칙을 쓰는 `FdsLinkedPaymentQueryService`
   - 받는 쪽이 넘긴 후보 결제 중 사건 결제와 카드 토큰 · 기기 ID · IP 주소가 원문으로 같은 결제 번호만 돌려준다. 돌려주는 번호는 **넘겨받은 후보의 일부뿐**이고, 고객 번호 · 원문 식별자 칸은 없다. 사건 결제 자신은 후보에서 뺀다
   - 같은 가맹점 평가끼리만 맞춘다(다른 가맹점 평가는 비교 값의 출처로도, 후보로도 쓰지 않음). 재평가로 평가가 여러 개인 결제는 하나라도 같으면 일치. 사건 결제가 값을 보내지 않았으면 `provided = false`(비교 안 함 — "일치 없음"과 다름)
+  - 사건 결제가 여러 건이면 어느 사건 결제와 같은지 짝으로 돌려준다(#818 Codex 리뷰). 받는 쪽이 사건 결제마다 다시 부르지 않게 한 번 조회로 나눠 담는다 — 결제마다 부르면 결제가 붙을 때마다 새 보고서가 돌아 대형 조회가 결제 수의 제곱으로 는다(#818 Codex 보안 리뷰). 짝의 키는 받는 쪽이 넘긴 사건 결제 번호라 새로 나가는 정보가 없다
   - 후보는 한 번에 `MAX_CANDIDATES`(500)까지, 넘으면 `IllegalArgumentException`. 조회는 `findByPaymentIdIn` 한 번(사건 + 후보)이고 쿼리 · 인덱스 · 스키마 변경이 없다
   - 후보를 정하는 것은 받는 쪽 책임이다. P4 `LinkedCaseFinder`는 같은 가맹점 · 다른 고객 · 종료 90일 안 사건(최근 100건)의 결제만 넘긴다 — 이 창구는 후보가 정말 종료 사건 결제인지 확인하지 못한다. 같은 앱 안 Java 호출만 가능하고(HTTP 경로 없음) 호출 모듈은 `allowedDependencies`로 제한된다
   - 이유: AI 보고서가 "같은 카드 · 기기로 전에 열린 사건과 그 판정"을 보여 주려면(#821) 다른 고객 결제가 어느 사건에 속했는지 알아야 한다. 아래 #352 대안(일치 결제 목록을 내보냄)과 달리 받는 쪽이 이미 가진 결제 번호 안에서 "같은지"만 답하므로 받는 쪽이 모르던 결제 번호 · 고객이 새로 나가지 않는다
@@ -66,6 +67,7 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 | (#637) 기존 4인자 메서드를 남기고 5인자를 더함 | 사용처가 P4 하나라 남기면 쓰지 않는 메서드만 늘어난다 |
 | (#821) 방식 (가): `FdsLinkedPayments`에 일치한 다른 고객 결제 번호를 내보내고 받는 쪽이 사건을 찾음 | 사건과 무관한 다른 고객 결제 번호까지 P2 밖으로 나간다(#352에서 버린 이유와 같음). 받는 쪽이 후보를 넘기고 그 안에서 고르면 새로 나가는 정보가 "같은지" 한 가지뿐이다 |
 | (#821) `FdsLinkedPaymentReader`에 메서드를 더함 | 집계(숫자만)와 번호 고르기는 내보내는 정보의 성격이 달라, 한 인터페이스에 두면 "숫자만 나간다"는 기존 설명이 흐려진다. 인터페이스를 나누고 구현만 같은 클래스에 둔다 |
+| (#821) 받는 쪽이 사건 결제마다 따로 불러 짝을 알아냄 | 결제마다 501건 조회가 돌고, 결제가 붙을 때마다 보고서가 새로 돌아 결제 n건이면 n(n+1)/2번 조회한다(100건이면 5,050번, #818 Codex 보안 리뷰). 이미 읽은 평가를 사건 결제별로 나눠 담으면 조회는 한 번이다 |
 | (#821) 후보 상한 없이 받음 | 가맹점 사건이 많아지면 `IN` 목록이 끝없이 커진다. 받는 쪽(최근 100건 사건)이 500을 넘기기 어렵고, 넘으면 받는 쪽이 사건 단위로 자른다 |
 | (#326) P2가 규칙별 숫자를 타입 있는 필드로 풀어서 제공 | 규칙마다 키가 달라 필드가 계속 늘고, 룰을 바꿀 때마다 공개 계약을 고쳐야 한다. 원본 JSON을 주고 받는 쪽이 고른다. |
 
@@ -79,7 +81,7 @@ P2는 `fds.api.FdsEvidenceReader.findLatestByPaymentIds(Collection<Long>)`를 �
 - (#352) 테스트: 다른 고객 수 · 결제 수 · 판정 · 카드사 거절 집계와 원문 미노출, 같은 고객 · 사건 결제 제외, 보내지 않은 값 = 비교 안 함, 재평가 결제 한 번만, 다른 가맹점 · 기간 밖 제외(MariaDB)
 - (#533) API: `FdsLinkedPayments`에 `payments` 칸 추가 (기존 사건 합계 그대로). 사용처 P4 `LinkedPaymentFinder`. DB 변경 · 조회 추가 없음. 테스트: 결제별 집계(단위 · MariaDB)
 - (#637) API: `FdsLinkedPaymentReader.findLinked`에 `nearbyWindow` 인자, `FdsLinkedPayments.Match.nearby` · `Nearby` 추가. 사용처 P4 `LinkedPaymentFinder`(함께 고침). DB 변경 · 조회 추가 없음. 테스트: 앞뒤 1시간 안만 세기(경계 60분 안 · 61분 밖) · 결제별은 그 결제 시각 기준(단위), 기존 MariaDB 테스트는 인자만 추가
-- (#821) API: `FdsPaymentMatchReader` · `FdsPaymentMatches` 추가, 구현 `FdsLinkedPaymentQueryService`(기존 메서드 동작 그대로). 사용처 P4 `LinkedCaseFinder`(AI Tool `find_linked_cases`, [ADR-0009](0009-ai-investigation-call-structure.md)). DB 변경 · 저장소 메서드 추가 없음. 테스트: 후보 중 같은 기기만 · 후보 밖 번호와 원문 미노출, 다른 가맹점 제외, 보내지 않은 값 = 비교 안 함(단위)
+- (#821) API: `FdsPaymentMatchReader` · `FdsPaymentMatches` 추가, 구현 `FdsLinkedPaymentQueryService`(기존 메서드 동작 그대로). 사용처 P4 `LinkedCaseFinder`(AI Tool `find_linked_cases`, [ADR-0009](0009-ai-investigation-call-structure.md)). DB 변경 · 저장소 메서드 추가 없음. 테스트: 후보 중 같은 기기만 · 후보 밖 번호와 원문 미노출, 다른 가맹점 제외, 보내지 않은 값 = 비교 안 함, 사건 결제별 짝(단위)
 - 화면: P3 #163에서 Mock FDS 정보를 실제 공개 조회 결과로 교체할 수 있다.
 - 테스트: 최신 유효 판정 선택, 전체 ERROR 처리, 적중 룰 필터링, 입력 검증을 단위 테스트로 확인한다.
 - 문서: ADR 목록에 계약을 기록한다. Notion 정본에는 구현 확정 뒤 동기화 여부를 P2·P3가 확인한다.

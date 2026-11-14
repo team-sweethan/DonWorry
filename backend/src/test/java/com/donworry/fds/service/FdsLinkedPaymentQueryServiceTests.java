@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -263,6 +264,23 @@ class FdsLinkedPaymentQueryServiceTests {
         assertThat(result.device()).isEqualTo(FdsPaymentMatches.Kind.notProvided());
         assertThat(result.ip()).isEqualTo(FdsPaymentMatches.Kind.notProvided());
         assertThat(result.card().provided()).isTrue();
+    }
+
+    // 사건 결제가 여러 건이면 어느 사건 결제와 같은 값인지 짝으로 돌려준다 — 한 번 조회로 (#818 Codex 보안 리뷰)
+    // 짝이 틀리면 결제 B와 겹친 지난 사건이 결제 A의 의심 카드에 붙는다
+    @Test
+    void findMatching_twoCasePayments_returnsMatchesPerCasePayment() {
+        givenCaseEvaluations(
+                evaluation(100L, CASE_CUSTOMER, "tok_a", "dev_a", FdsResult.REVIEW, AT),
+                evaluation(101L, CASE_CUSTOMER, "tok_b", "dev_b", FdsResult.REVIEW, AT),
+                evaluation(300L, "other-1", null, "dev_a", FdsResult.ALLOW, AT),
+                evaluation(301L, "other-2", null, "dev_b", FdsResult.ALLOW, AT));
+
+        var result = service().findMatching(MERCHANT, List.of(100L, 101L), List.of(300L, 301L));
+
+        assertThat(result.device().byCasePayment()).isEqualTo(Map.of(100L, Set.of(300L), 101L, Set.of(301L)));
+        assertThat(result.device().paymentIds()).containsExactlyInAnyOrder(300L, 301L);
+        assertThat(result.card().byCasePayment()).isEmpty();
     }
 
     private FdsLinkedPaymentQueryService service() {
