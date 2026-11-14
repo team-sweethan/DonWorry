@@ -37,6 +37,8 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "scope",
         "orderContext",
         "extraInvestigations",
+        "linkedCases",
+        "linkedCasesByIp",
     ]
     first = report["paymentAnalyses"][0]
     assert (first["paymentId"], first["amount"], first["riskScore"]) == ("9001", 650000, 65)
@@ -50,6 +52,7 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "find_linked_payments",
         "get_order_context",
         "get_decision_basis",
+        "find_linked_cases",
     ]
     assert [e["source"] for e in report["evidence"]] == [
         "P3·P5",
@@ -59,6 +62,7 @@ def test_mock_flow_builds_report_from_tool_records() -> None:
         "P2",
         "P5",
         "P4",
+        "P3·P2",
     ]
     assert report["evidence"][0]["dataVersion"] == "evidence v2"
     assert "FDS 점수는 부정거래 확률이 아닙니다." in report["recommendation"]["limitations"]

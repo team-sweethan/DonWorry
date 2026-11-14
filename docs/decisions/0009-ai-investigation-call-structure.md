@@ -532,7 +532,8 @@ sequenceDiagram
   - 지난 판정으로 등급 · 정상 사유를 바꿈 — 결정 9 · 11(기본 조회로만 계산) · 결정 8(AI가 판단하지 않음)과 어긋난다
 - **영향:**
   - Spring: `LinkedCaseFinder` · `LinkedCasesToolResponse` · `AiToolService.linkedCases` · `AiToolController`(`/internal/ai/**`라 보안 체인 그대로, ADR-0041). P3 `SecurityCaseRepository`에 종료 사건 후보 조회 1개(읽기 전용). P2 `FdsPaymentMatchReader` 추가(ADR-0034). DB 변경 없음
-  - ai-server · 화면: 기본 조회 · IP 추가 도구 · 사실 주제 · 보고서 칸 · 의심 카드 줄 (구현과 함께 이 절을 채운다)
+  - ai-server: `find_linked_cases`(기본 조회, 징후 계산 뒤에 붙여 앞 조회의 증거 번호 그대로) · 추가 도구 `find_linked_cases_ip`(인자 없음, 응답 범위가 IP가 아니면 실패로 남김) · `llm_content`에서 사건 번호 제외 · 사실 주제 `linkedCases`(`지난사건-N` — 겹친 결제가 든 사건은 눈여겨볼 사실, 없으면 "없음", 비교하지 못한 종류는 따로 한 줄) · 보고서 선택 칸 `linkedCases`(기본, 실패 `null`) · `linkedCasesByIp`(AI가 골랐을 때만) · 한계 줄 "같은 카드 · 기기로 열린 지난 사건을 조회하지 못했습니다." · 조사 범위 · 조사 과정 줄 · 지시문(고르기: 기본 조회 7가지, 요약: 지난 판정을 이번 판정처럼 쓰지 않음)
+  - 화면: `types/case.ts` `LinkedCases` 타입 · 의심 카드 줄 · 지난 사건 칸 (화면 커밋에서)
   - 테스트: P2 후보 중 일치만 · 원문 미노출 · 다른 가맹점 제외 · 보내지 않은 값 = 비교 안 함(단위), 겹친 결제 판정만 · 판정 사유 · 고객 번호 미노출 · 허용 밖 `by`는 읽기 전 400(단위), 후보 조회가 열린 · 같은 고객 · 90일 밖 · 다른 가맹점 사건을 빼는지(MariaDB)
   - AI를 끈 고정 보고서 · 질문 기능(ADR-0086)에는 이번에 넣지 않는다
 

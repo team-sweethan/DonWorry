@@ -20,6 +20,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     FdsEvidenceTool,
     HistoryPayment,
+    LinkedCasesTool,
     LinkedMatch,
     LinkedPaymentsTool,
     OrderContextTool,
@@ -521,6 +522,88 @@ def _basis(records: list[ToolRecord]) -> list[Line]:
     ]
 
 
+_LINKED_KIND_KO = {"CARD": "카드", "DEVICE": "기기", "IP": "IP"}
+
+
+def _kinds_text(kinds: list[str]) -> str:
+    return " · ".join(_LINKED_KIND_KO.get(k, k) for k in kinds)
+
+
+# 겹친 결제에 내린 직원 판정 — 판정이 없는 결제(고객 직접 취소 등)도 센다
+def _past_outcome(payments: int, accept: int, reject: int) -> str:
+    parts = [f"매입 진행 {accept}건"] if accept else []
+    parts += [f"승인 취소 {reject}건"] if reject else []
+    undecided = payments - accept - reject
+    parts += [f"판정 없음 {undecided}건"] if undecided > 0 else []
+    return " · ".join(parts) or "판정 없음"
+
+
+# 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — 기본 조회(카드 · 기기)와 AI가 고른 IP 조회 모두
+# 사건 번호는 쓰지 않는다 — AI에는 건수 · 판정 종류 · 시점만 (11/14 결정)
+# 화면은 보고서 칸의 번호로 링크한다
+# 비교하지 못한 종류는 "없음"과 따로 써서 확인한 것처럼 읽히지 않게 한다
+def _linked_cases(records: list[ToolRecord]) -> list[Line]:
+    lines: list[Line] = []
+    for seq, record in enumerate(records, start=1):
+        if isinstance(record.result, LinkedCasesTool):
+            lines += _linked_case_lines(record.result, seq)
+    return lines
+
+
+def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
+    compared = [k for k in result.kinds if k not in result.notProvided]
+    missing = [k for k in result.kinds if k in result.notProvided]
+    if not compared:
+        kinds = _kinds_text(result.kinds)
+        return [
+            (
+                f"같은 {kinds}로 열린 지난 사건: {kinds} 정보를 가맹점이 보내지 않아 찾지 못함",
+                seq,
+                None,
+                PLAIN,
+            )
+        ]
+    scope = f"다른 고객의 지난 사건(최근 {result.lookbackDays}일 안 종료)"
+    lines: list[Line] = []
+    if not result.cases:
+        lines.append(
+            (f"같은 {_kinds_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)
+        )
+    elif result.totalMatched > len(result.cases):
+        lines.append(
+            (
+                f"같은 {_kinds_text(compared)}를 쓴 결제가 든 {scope} "
+                f"{result.totalMatched}건 중 최근 {len(result.cases)}건만 조회",
+                seq,
+                None,
+                PLAIN,
+            )
+        )
+    for c in result.cases:
+        closed = _kst(c.closedAt).split(" ")[0]
+        outcome = _past_outcome(c.paymentCount, c.acceptCount, c.rejectCount)
+        lines.append(
+            (
+                f"같은 {_kinds_text(c.matchedBy)}를 쓴 결제가 든 {scope}: "
+                f"{closed} 종료, 그 결제 {c.paymentCount}건의 직원 판정 {outcome}",
+                seq,
+                None,
+                NOTABLE,
+            )
+        )
+    if missing:
+        lines.append(
+            (
+                f"{_kinds_text(missing)} 정보를 가맹점이 보내지 않아 같은 {_kinds_text(missing)}의 "
+                "지난 사건은 찾지 못함",
+                seq,
+                None,
+                PLAIN,
+            )
+        )
+    return lines
+
+
 FACT_TOPICS: tuple[FactTopic, ...] = (
     FactTopic("basis", "징후", "get_decision_basis", _basis),
     FactTopic("history", "이력", "get_payment_history", _history),
@@ -530,6 +613,7 @@ FACT_TOPICS: tuple[FactTopic, ...] = (
     FactTopic("signals", "접속", "get_fds_evidence", _signals),
     FactTopic("similar", "과거", "find_similar_cases", _similar),
     FactTopic("order", "주문", "get_order_context", _order),
+    FactTopic("linkedCases", "지난사건", "find_linked_cases", _linked_cases),
 )
 
 

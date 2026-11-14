@@ -21,6 +21,8 @@ from app.agent.narrative import (
 from app.agent.tools import (
     CASE_WIDE,
     EXTRA_TOOLS,
+    LINKED_CASES_BY_DEVICE,
+    LINKED_CASES_BY_IP,
     SUSPICION_ARG,
     ExtraTool,
     ToolBox,
@@ -41,6 +43,7 @@ from app.schemas.tools import (
     DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
+    LinkedCasesTool,
     LinkedPaymentsTool,
     OrderContextTool,
     PaymentHistoryTool,
@@ -48,7 +51,7 @@ from app.schemas.tools import (
     ToolResult,
 )
 
-# 조사 Agent — 기본 조회 6개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
+# 조사 Agent — 기본 조회는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
 # 흐름: 기본 조회 → 추가 조사(추가 도구가 있을 때만) → 사실 문장 쓰기(형식 검사 · 고쳐 쓰기) → 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
 # 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
@@ -123,6 +126,14 @@ def _latest_order(records: list[ToolRecord]) -> OrderContextTool | None:
 
 
 # 기본 조회(앞뒤 1시간)만 — AI가 넓혀 본 6 · 24시간 결과가 표를 덮지 않게 (#817 선택 B)
+# 기본 조회(카드 · 기기)와 AI가 고른 IP 조회를 나눠 보고서 칸에 싣는다 (#821)
+def _linked_cases(records: list[ToolRecord], by: str) -> LinkedCasesTool | None:
+    found = [
+        r.result for r in records if isinstance(r.result, LinkedCasesTool) and r.result.by == by
+    ]
+    return found[-1] if found else None
+
+
 def _base_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
     found = [
         r.result for r in records if r.filled_by_system and isinstance(r.result, LinkedPaymentsTool)
@@ -264,6 +275,16 @@ def build_graph(
         # 못 받으면 결제의 징후 칸이 비고 한계 줄로 알린다 (판정 권고는 만들지 않음, #644)
         _reference_lookup(
             "get_decision_basis", toolbox.get_decision_basis, "징후 · 정상 근거", records, steps
+        )
+        # 같은 카드 · 기기로 열린 지난 사건 (#821) — 모든 사건에서 코드가 본다. IP는 AI가 고른다
+        # 징후 계산 뒤에 붙여 앞 조회의 증거 번호를 바꾸지 않는다
+        # 참고 자료라 실패해도 보고서는 만든다
+        _reference_lookup(
+            "find_linked_cases",
+            lambda: toolbox.find_linked_cases(LINKED_CASES_BY_DEVICE),
+            "같은 카드 · 기기로 열린 지난 사건",
+            records,
+            steps,
         )
         ready = _ready_to_write(records, steps)
         if ready["next"] != "write" or not extra_tools:
@@ -514,6 +535,8 @@ def build_graph(
             _latest_basis(records),
             _latest_order(records),
             extras,
+            _linked_cases(records, LINKED_CASES_BY_DEVICE),
+            _linked_cases(records, LINKED_CASES_BY_IP),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -601,6 +624,7 @@ BASE_TOOL_NAMES = (
     "get_payment_history",
     "find_linked_payments",
     "get_order_context",
+    "find_linked_cases",
 )
 
 

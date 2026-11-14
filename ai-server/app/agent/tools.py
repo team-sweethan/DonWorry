@@ -7,6 +7,8 @@ from app.schemas.tools import (
     CasePaymentsTool,
     DecisionBasisTool,
     FdsEvidenceTool,
+    LinkedCasesTool,
+    LinkedKind,
     LinkedMatch,
     LinkedPaymentsTool,
     OrderContextTool,
@@ -173,7 +175,46 @@ LINKED_WINDOW = ExtraTool(
     action=lambda args: f"같은 카드 · 기기 · IP 결제를 사건 결제 앞뒤 {args['hours']}시간으로 넓혀",
 )
 
-EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90, LINKED_WINDOW)
+# 같은 IP로 열린 지난 사건 (#821) — 카드 · 기기는 코드가 늘 보고(기본 조회), IP는 AI가 볼지 고른다
+# 공용 와이파이(카페 · 회사)면 상관없는 고객 사건이 섞이므로 IP가 의심과 이어질 때만 본다
+# 범위는 AI가 정하지 않는다: 도구에 인자가 없고 IP는 코드가 넣는다
+# (Spring도 CARD_DEVICE · IP만 받음)
+LINKED_CASES_BY_DEVICE = "CARD_DEVICE"
+LINKED_CASES_BY_IP = "IP"
+
+
+def _linked_cases_ip(box: "ToolBox", args: dict[str, Any]) -> ToolResult:
+    result = box.find_linked_cases(LINKED_CASES_BY_IP)
+    if result.by != LINKED_CASES_BY_IP:
+        raise ToolMismatch(f"요청 IP, 응답 {result.by} — 다른 범위를 받음")
+    return result
+
+
+LINKED_CASES_IP = ExtraTool(
+    spec={
+        "type": "function",
+        "function": {
+            "name": "find_linked_cases_ip",
+            "description": (
+                "이 사건 결제와 같은 IP를 쓴 결제가 들어 있는 "
+                "다른 고객의 지난 종료 사건(최근 90일)과 "
+                "그 결제에 내린 직원 판정(매입 진행 · 승인 취소) 건수를 본다. "
+                "같은 카드 · 기기로 열린 지난 사건은 기본 조회에 이미 있다. "
+                "같은 IP는 카페 · 회사 같은 공용 인터넷일 수 있어 상관없는 사건이 섞인다. "
+                "같은 IP를 쓴 다른 고객 결제가 있어 "
+                "그 IP가 의심과 이어지는지 알아야 할 때만 부른다. "
+                "같은 IP 결제가 없거나 IP 정보가 없으면 부르지 않는다."
+            ),
+            "parameters": _with_suspicion({}, []),
+        },
+    },
+    title="같은 IP로 열린 지난 사건 조회",
+    run=_linked_cases_ip,
+    check=_no_args,
+    action=lambda args: "같은 IP로 열린 지난 사건까지 넓혀",
+)
+
+EXTRA_TOOLS: tuple[ExtraTool, ...] = (HISTORY_90, LINKED_WINDOW, LINKED_CASES_IP)
 
 
 # 실제로 한 조회 기록 — 보고서의 사실 값과 증거 추적은 이 기록에서만 만든다
@@ -189,6 +230,7 @@ class ToolRecord:
 # AI에게 돌려줄 도구 응답 — 카드 표시값(카드사 · 끝자리 숫자)은 뺀다 (#346 리뷰)
 # 보고서를 채우는 Tool 기록(ToolRecord)에는 원래 응답을 그대로 둔다
 # 연관 결제(#352) 응답은 처음부터 건수 · 판정만 있어 뺄 것이 없다
+# 같은 카드 · 기기 · IP로 열린 지난 사건(#821)은 사건 번호를 뺀다
 # 주문 정보(#634)는 주문번호 · 상품명을 뺀다 — 가맹점이 쓴 글자라 지시문이 섞일 수 있다
 # (프롬프트 주입 차단)
 # 같은 주문인지는 orderGroup 번호로 안다
@@ -199,6 +241,9 @@ def llm_content(result: ToolResult) -> str:
         )
     if isinstance(result, OrderContextTool):
         return result.model_dump_json(exclude={"payments": {"__all__": {"orderRef", "orderName"}}})
+    if isinstance(result, LinkedCasesTool):
+        # 지난 사건 번호는 화면 링크용 — AI에는 건수 · 판정 종류 · 시점만 준다 (#821, 11/14 결정)
+        return result.model_dump_json(exclude={"cases": {"__all__": {"caseId"}}})
     return result.model_dump_json()
 
 
@@ -222,6 +267,9 @@ class ToolBox(Protocol):
 
     # 결제별 징후 · 정상 근거 (#618) — Spring이 계산한다. AI가 고르는 도구가 아니다
     def get_decision_basis(self) -> DecisionBasisTool: ...
+
+    # 같은 카드 · 기기(CARD_DEVICE, 기본 조회) · IP(AI 추가 조회)로 열린 지난 사건 (#821)
+    def find_linked_cases(self, by: str) -> LinkedCasesTool: ...
 
 
 class SpringToolBox:
@@ -250,6 +298,9 @@ class SpringToolBox:
     def get_decision_basis(self) -> DecisionBasisTool:
         return self._client.get_decision_basis(self._case_id)
 
+    def find_linked_cases(self, by: str) -> LinkedCasesTool:
+        return self._client.find_linked_cases(self._case_id, by)
+
 
 # 미리 받아 둔 응답으로 도구를 흉내 낸다 — payment_ids를 주면 Spring처럼 그 결제만 돌려준다
 class StaticToolBox:
@@ -267,8 +318,10 @@ class StaticToolBox:
         basis: DecisionBasisTool | None = None,
         order: OrderContextTool | None = None,
         linked_windows: dict[int, LinkedPaymentsTool] | None = None,
+        linked_cases: dict[str, LinkedCasesTool] | None = None,
     ) -> None:
         self._case_payments = case_payments
+        self._linked_cases = linked_cases or {}
         self._linked_windows = linked_windows or {}
         self._fds_evidence = fds_evidence
         self._basis = basis
@@ -353,6 +406,10 @@ class StaticToolBox:
                 int(hours): LinkedPaymentsTool.model_validate(value)
                 for hours, value in data.get("linkedWindows", {}).items()
             },
+            linked_cases={
+                by: LinkedCasesTool.model_validate(value)
+                for by, value in data.get("linkedCases", {}).items()
+            },
         )
 
     def get_decision_basis(self) -> DecisionBasisTool:
@@ -367,6 +424,24 @@ class StaticToolBox:
 
     def get_order_context(self) -> OrderContextTool:
         return self._order
+
+    # 샘플에 linkedCases(범위 → 응답)가 없으면 지난 사건 없음 — 비교한 종류는 범위대로 (#821)
+    def find_linked_cases(self, by: str) -> LinkedCasesTool:
+        if by in self._linked_cases:
+            return self._linked_cases[by]
+        kinds: list[LinkedKind] = ["IP"] if by == LINKED_CASES_BY_IP else ["CARD", "DEVICE"]
+        return LinkedCasesTool(
+            caseId=self._case_payments.caseId,
+            evidenceVersion=self._case_payments.evidenceVersion,
+            source="P3·P2",
+            retrievedAt=self._case_payments.retrievedAt,
+            by="IP" if by == LINKED_CASES_BY_IP else "CARD_DEVICE",
+            lookbackDays=90,
+            kinds=kinds,
+            notProvided=[],
+            cases=[],
+            totalMatched=0,
+        )
 
     def find_similar_cases(self) -> SimilarCasesTool:
         return self._similar

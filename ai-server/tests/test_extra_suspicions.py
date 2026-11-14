@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 
 from app.agent.graph import InvestigationOutcome, run_investigation
 from app.agent.llm import MockLlmClient
-from app.agent.tools import StaticToolBox
+from app.agent.tools import EXTRA_TOOLS, StaticToolBox
 from app.config import Settings
 from app.schemas.report import ReportBody
 from app.schemas.tools import DecisionBasisTool, LinkedPaymentsTool
@@ -286,7 +286,7 @@ def test_extra_no_suspicions_allows_case_wide_only() -> None:
 
     for tools in llm.tools:
         enums = [t["function"]["parameters"]["properties"]["suspicion"]["enum"] for t in tools]
-        assert enums == [["CASE"], ["CASE"]]
+        assert enums == [["CASE"]] * len(EXTRA_TOOLS)
     [extra] = report.extraInvestigations
     assert (extra.suspicionKey, extra.suspicionLabel, extra.status) == ("CASE", "사건 전체", "DONE")
     assert extra.reason == "사건 전체를 보려고 고객 결제 이력을 90일로 넓혀 봤습니다."

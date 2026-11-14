@@ -5,6 +5,7 @@ from app.schemas.tools import (
     CasePaymentsTool,
     DecisionBasisTool,
     FdsEvidenceTool,
+    LinkedCasesTool,
     LinkedPaymentsTool,
     OrderContextTool,
     PaymentHistoryTool,
@@ -76,6 +77,15 @@ class SpringToolClient:
         res = self._http.get("/internal/ai/tools/find_linked_payments", params=params)
         res.raise_for_status()
         return LinkedPaymentsTool.model_validate(res.json())
+
+    # 같은 카드 · 기기 · IP를 쓴 결제가 든 지난 종료 사건 (#821)
+    # by: CARD_DEVICE(기본 조회) · IP(AI 추가 조회)
+    def find_linked_cases(self, case_id: str, by: str) -> LinkedCasesTool:
+        res = self._http.get(
+            "/internal/ai/tools/find_linked_cases", params={"caseId": case_id, "by": by}
+        )
+        res.raise_for_status()
+        return LinkedCasesTool.model_validate(res.json())
 
     # 사건 결제마다 가맹점이 결제 준비 때 보낸 주문 정보 (#634) — 주문자 원문 없이 묶음 번호만
     def get_order_context(self, case_id: str) -> OrderContextTool:

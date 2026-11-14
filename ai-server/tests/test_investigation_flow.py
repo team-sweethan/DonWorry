@@ -77,6 +77,7 @@ def test_base_lookups_run_by_code_without_ai_choice() -> None:
         ("find_linked_payments", {}, True),
         ("get_order_context", {}, True),
         ("get_decision_basis", {}, True),
+        ("find_linked_cases", {}, True),
     ]
 
 

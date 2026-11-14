@@ -154,6 +154,25 @@ class SimilarCases(BaseModel):
     totalMatched: int
 
 
+# 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — Tool 기록 값 그대로
+# 사건 번호는 화면 링크용이다 (AI 입력에는 없음)
+class LinkedCaseItem(BaseModel):
+    caseId: str
+    matchedBy: list[Literal["CARD", "DEVICE", "IP"]]
+    closedAt: str | None
+    paymentCount: int
+    acceptCount: int
+    rejectCount: int
+
+
+class LinkedCases(BaseModel):
+    lookbackDays: int
+    kinds: list[Literal["CARD", "DEVICE", "IP"]]
+    notProvided: list[Literal["CARD", "DEVICE", "IP"]]
+    cases: list[LinkedCaseItem]
+    totalMatched: int
+
+
 # 고객 최근 결제 (#338) — Tool 기록 값 그대로 코드가 채운다. 건수 · 금액을 AI가 쓰지 않는다
 class PaymentHistoryItem(BaseModel):
     paymentId: str
@@ -309,3 +328,8 @@ class ReportBody(BaseModel):
     orderContext: OrderContext | None = None
     # AI 추가 조회 (#817) — 선택 칸. 예전 보고서 · 고정 보고서(Spring)에는 없다
     extraInvestigations: list[ExtraInvestigation] = Field(default_factory=list)
+    # 같은 카드 · 기기로 열린 지난 사건 (#821) — 코드 기본 조회
+    # 조회하지 못했으면 None, 예전 보고서에는 칸이 없다
+    linkedCases: LinkedCases | None = None
+    # 같은 IP로 열린 지난 사건 (#821) — AI가 골라 조회했을 때만 있다
+    linkedCasesByIp: LinkedCases | None = None
