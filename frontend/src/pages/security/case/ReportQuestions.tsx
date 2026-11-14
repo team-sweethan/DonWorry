@@ -13,6 +13,7 @@ import {
   QUESTION_DAILY_LIMIT,
   QUESTION_EXAMPLES,
   QUESTION_MAX_LENGTH,
+  QUESTIONS_ID,
   questionsToday,
   sentenceChips,
 } from '../../../utils/reportQuestionView'
@@ -26,16 +27,22 @@ const LIMIT_TICK_MS = 60 * 1000
 // 답은 보고서가 아니다 — 보고서와 모양을 나누고 안내를 늘 보인다. 판정은 보안 직원이 한다
 // 고정 보고서(AI 정지 · 꺼짐 중 생성)는 서버가 받지 않아 칸 대신 한 줄만 보인다 (11/10 결정)
 // 부모가 보고서마다 key로 새로 그린다 — 다른 보고서의 질문 · 입력이 넘어가지 않게
+// draft — 의심 카드 "이 의심에 대해 AI에게 묻기"가 채울 질문 (#819). 입력창에 넣기만 하고 보내기는 직원이 [묻기]
+// seq는 링크를 누를 때마다 커진다 — 같은 질문을 다시 눌러도 다시 채운다
+export type QuestionDraft = { text: string; seq: number }
+
 export function ReportQuestions({
   caseId,
   reportId,
   body,
   evidenceMismatch,
+  draft,
 }: {
   caseId: string
   reportId: string
   body: ReportBody
   evidenceMismatch: boolean
+  draft?: QuestionDraft
 }) {
   if (body.investigationTrace?.provider === 'FIXED')
     return (
@@ -52,6 +59,7 @@ export function ReportQuestions({
       reportId={reportId}
       body={body}
       evidenceMismatch={evidenceMismatch}
+      draft={draft}
     />
   )
 }
@@ -61,17 +69,25 @@ function QuestionPanel({
   reportId,
   body,
   evidenceMismatch,
+  draft,
 }: {
   caseId: string
   reportId: string
   body: ReportBody
   evidenceMismatch: boolean
+  draft?: QuestionDraft
 }) {
   const [questions, setQuestions] = useState<ReportQuestion[] | 'error' | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   // 긴급정지 조회 실패면 잠그지 않는다 — 서버가 503으로 다시 막는다
   const [aiActive, setAiActive] = useState<boolean | null>(null)
   const [text, setText] = useState('')
+  // 새 링크를 누를 때만 입력창을 바꾼다 — [새로고침]으로 다시 그려져도 지난 질문을 다시 채우지 않게 처음 값은 이미 쓴 것으로 둔다
+  const [usedDraft, setUsedDraft] = useState(draft?.seq ?? 0)
+  if (draft && draft.seq !== usedDraft) {
+    setUsedDraft(draft.seq)
+    setText(draft.text)
+  }
   const [pending, setPending] = useState<string | null>(null)
   const [rejected, setRejected] = useState<QuestionRejection | null>(null)
   // 24시간 셈의 기준 시각 — 1분마다 갱신해 창을 벗어난 질문이 빠지면 잠금이 저절로 풀린다 (#765 Codex 리뷰)
@@ -165,7 +181,12 @@ function QuestionPanel({
   }
 
   return (
-    <section className="dw-no-print" style={panelStyle} aria-label="이 사건에 대해 묻기">
+    <section
+      id={QUESTIONS_ID}
+      className="dw-no-print"
+      style={panelStyle}
+      aria-label="이 사건에 대해 묻기"
+    >
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 17, fontWeight: 750, color: '#0F172A' }}>
           이 사건에 대해 묻기

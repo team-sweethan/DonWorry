@@ -6,6 +6,7 @@ import type {
   CaseDetail,
   CasePayment,
   DecisionBasis,
+  ExtraInvestigation,
   PaymentDecision,
   ReportBody,
   TraceStep,
@@ -41,6 +42,10 @@ import {
   nowDecisionText,
   caseNormalNotes,
   normalsUnchecked,
+  extraResultText,
+  extrasBySuspicion,
+  reducingFact,
+  suspicionCards,
 } from '../src/utils/reportView.ts'
 
 const body = (over: Partial<ReportBody> = {}): ReportBody => ({
@@ -834,4 +839,121 @@ test('normalsUnchecked_paymentHistoryLookupFailed_isNotNotFound', () => {
     normalsUnchecked(body({ paymentAnalyses: [withBasis], paymentHistory: history })),
     false,
   )
+})
+
+// ── 의심별 조사 카드 (#819) ──
+
+// 같은 의심이 결제 A에서만 설명되면 카드는 위(정상 사유 없음)에 남는다 — 아래 접는 줄로 내려가면 결제 B를 확인하지 않고 판정한다
+test('suspicionCards_explainedForOnePaymentOnly_staysInOpenCards', () => {
+  const report = body({
+    paymentAnalyses: [
+      highAmountPayment('11', '최근 30일 비슷한 금액의 결제 2건 매입 완료'),
+      highAmountPayment('12', null),
+    ],
+  })
+
+  const cards = suspicionCards(report)
+  assert.deepEqual(
+    [cards?.open.map((s) => s.key), cards?.explained.length, cards?.open[0]?.openPaymentIds],
+    [['R01'], 0, ['12']],
+  )
+})
+
+const extra = (
+  suspicionKey: string,
+  over: Partial<ExtraInvestigation> = {},
+): ExtraInvestigation => ({
+  suspicionKey,
+  suspicionLabel: suspicionKey,
+  toolName: 'get_payment_history_90d',
+  title: '고객 이력 90일 조회',
+  args: {},
+  reason: '고객 결제 이력을 90일로 넓혀 봤습니다.',
+  status: 'DONE',
+  evidenceId: 'E-1-v1-08',
+  retrievedAt: '2026-11-14T13:58:18Z',
+  factIds: [],
+  ...over,
+})
+
+// 사건 전체(CASE)로 고른 조회 · 카드가 없는 의심 키의 조회는 카드 아래 "사건 전체로 넓혀 본 것"에 남는다 — 빠지면 AI가 조사한 사실이 화면에서 사라진다
+test('extrasBySuspicion_caseOrUnknownKey_goesToCaseWideList', () => {
+  const report = body({
+    paymentAnalyses: [highAmountPayment('11', null)],
+    extraInvestigations: [extra('R01'), extra('CASE'), extra('LINKED_DEVICE')],
+  })
+
+  const extras = extrasBySuspicion(report)
+  assert.deepEqual(
+    [extras?.bySignal.get('R01')?.length, extras?.caseWide.map((e) => e.suspicionKey)],
+    [1, ['CASE', 'LINKED_DEVICE']],
+  )
+})
+
+// 해외 접속은 나라별 의심이다 — TH 카드에 VN 조회가 붙으면 다른 나라 사실로 판단한다
+test('extrasBySuspicion_overseasTwoCountries_eachCardGetsOwnLookup', () => {
+  const report = {
+    ...twoCountries(),
+    extraInvestigations: [
+      extra('OVERSEAS:해외 접속 (VN)', { title: 'VN 조회' }),
+      extra('OVERSEAS:해외 접속 (TH)', { title: 'TH 조회' }),
+    ],
+  }
+
+  const extras = extrasBySuspicion(report)
+  assert.deepEqual(
+    [
+      extras?.bySignal.get('OVERSEAS:해외 접속 (TH)')?.map((e) => e.title),
+      extras?.bySignal.get('OVERSEAS:해외 접속 (VN)')?.map((e) => e.title),
+      extras?.caseWide.length,
+    ],
+    [['TH 조회'], ['VN 조회'], 0],
+  )
+})
+
+// 조회 실패는 "새로 나온 사실 없음"이 아니다 — 같게 보이면 직원이 그 범위를 확인했다고 믿는다
+test('extraFacts_failedLookup_showsFailedNotNoNewFacts', () => {
+  const report = body({
+    paymentAnalyses: [highAmountPayment('11', null)],
+    extraInvestigations: [
+      extra('R01', { status: 'FAILED', evidenceId: null, retrievedAt: null }),
+      extra('R01'),
+    ],
+  })
+
+  const [failed, done] = extrasBySuspicion(report)?.bySignal.get('R01') ?? []
+  assert.equal(failed.status, 'FAILED')
+  assert.notEqual(extraResultText(failed), extraResultText(done))
+  assert.match(extraResultText(failed) ?? '', /조회하지 못했습니다/)
+  assert.equal(extraResultText(done), '새로 나온 사실 없음')
+})
+
+// 이력 조회가 실패해 정상 근거를 계산하지 못했으면 "찾지 못함"이 아니라 "확인하지 못함" — 이력을 다 보고 없다고 읽지 않게 (#652 규칙을 카드에서도)
+test('reducingFacts_historyLookupFailed_saysUncheckedNotNotFound', () => {
+  const failed = body({ paymentAnalyses: [highAmountPayment('11', null)], paymentHistory: null })
+  const history = { lookbackDays: 30, payments: [], statusCounts: [], truncated: false }
+  const looked = body({ paymentAnalyses: [highAmountPayment('11', null)], paymentHistory: history })
+
+  const [card] = suspicionCards(failed)?.open ?? []
+  const [same] = suspicionCards(looked)?.open ?? []
+  assert.equal(reducingFact(failed, card).kind, 'UNCHECKED')
+  assert.equal(reducingFact(looked, same).kind, 'NOT_FOUND')
+})
+
+// 정상 근거 기준이 없는 의심(같은 기기 등)에 "찾아본 것: 30일 비슷한 금액"을 붙이면 상관없는 기준으로 찾아본 것처럼 읽힌다
+// 기준은 Spring DecisionBasisCalculator.EXPLAINS (SIMILAR_AMOUNT → R01) 와 같다
+test('reducingFacts_signalWithoutNormalRule_saysNoRuleNotNotFound', () => {
+  const report = body({
+    paymentAnalyses: [
+      paymentWith('11', [
+        signal('LINKED_DEVICE', '같은 기기를 다른 고객이 사용', { level: 'HIGH_RISK' }),
+      ]),
+    ],
+    paymentHistory: null,
+  })
+
+  const [card] = suspicionCards(report)?.open ?? []
+  const fact = reducingFact(report, card)
+  assert.equal(fact.kind, 'NO_RULE')
+  assert.doesNotMatch(fact.text, /찾아본 것/)
 })

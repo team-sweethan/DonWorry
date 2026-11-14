@@ -2,7 +2,13 @@ import assert from 'node:assert/strict'
 import { afterEach, beforeEach, test } from 'node:test'
 import { askQuestion } from '../src/api/reportQuestions.ts'
 import type { QuestionFact, ReportBody, ReportQuestion } from '../src/types/case.ts'
-import { factBadge, factLink, questionsToday } from '../src/utils/reportQuestionView.ts'
+import {
+  askQuestionFor,
+  factBadge,
+  factLink,
+  QUESTION_MAX_LENGTH,
+  questionsToday,
+} from '../src/utils/reportQuestionView.ts'
 
 // 보고서 뒤 사건 질문 칸 (#753, ADR-0086)
 
@@ -158,4 +164,20 @@ test('askQuestion_tooManyOrStoppedResponse_returnsLockReason', async () => {
   respond(500, '서버 오류')
   const failed = await askQuestion('31', '35', '평소 결제는?')
   assert.equal(failed.ok ? null : failed.reason, 'ERROR')
+})
+
+// 의심 카드 묻기 링크 (#819) — 채우는 질문은 판정 질문이 아니고 질문 한도 안이어야 한다 (넘으면 서버가 거절하고, 판정 질문이면 AI가 답하지 않는다)
+test('askQuestion_anySignal_returnsNonDecisionQuestionWithinLimit', () => {
+  const signals = [
+    { key: 'R01', label: '고액 결제' },
+    { key: 'LINKED_DEVICE', label: '같은 기기를 다른 고객이 사용' },
+    { key: 'OVERSEAS', label: '해외 접속 (TH)' },
+    { key: 'R99', label: '모르는 규칙 '.repeat(60) },
+  ]
+
+  for (const s of signals) {
+    const question = askQuestionFor(s)
+    assert.ok(question.length > 0 && question.length <= QUESTION_MAX_LENGTH, s.key)
+    assert.doesNotMatch(question, /승인|취소|판정/, s.key)
+  }
 })

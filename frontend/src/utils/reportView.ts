@@ -3,6 +3,7 @@ import type {
   CaseDetail,
   BasisSignal,
   DecisionBasis,
+  ExtraInvestigation,
   InvestigationTrace,
   NormalBasis,
   PaymentSignals,
@@ -588,6 +589,116 @@ export function checkRows(body: ReportBody): Array<{ id: string; row: number }> 
   return signals.flatMap((s, i) =>
     isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
   )
+}
+
+// ── 의심별 조사 카드 (#819) ──
+// 의심 하나당 카드 한 장: 키우는 사실 · 줄이는 사실 · AI가 넓혀 본 것 · 아직 모르는 것
+// 사실을 의심에 붙이는 것은 코드다 — Spring 징후 문장 · 정상 사유, AI 추가 조회의 의심 키만 쓴다 (AI가 나누지 않음, ADR-0009 결정 8)
+
+// open: 정상 사유가 없는 결제가 하나라도 있는 의심 (결제마다 다르면 여기 — mixed)
+// explained: 모든 결제에서 정상 사유가 있는 의심 · counted: 다른 징후에 이미 센 의심 — 둘은 카드들 아래 접는 줄로
+export type SuspicionCards = {
+  open: CheckSignal[]
+  explained: CheckSignal[]
+  counted: CheckSignal[]
+}
+
+export function suspicionCards(body: ReportBody): SuspicionCards | null {
+  const signals = checkSignals(body)
+  if (!signals) return null
+  const counted = signals.filter((s) => s.countedIn)
+  const cards = signals.filter((s) => !s.countedIn)
+  return {
+    open: cards.filter((s) => s.openPaymentIds.length > 0),
+    explained: cards.filter((s) => s.openPaymentIds.length === 0),
+    counted,
+  }
+}
+
+// AI 추가 조회 한 건 — 새로 나온 사실은 보고서 사실 번호로 찾는다. 이력 90일은 근거 표가 90일로 바뀌어 링크하고,
+// 시간대-N(6 · 24시간)은 근거 표가 1시간 그대로라 링크하지 않는다 (reportFactLink — TOPIC_CARDS에 없음)
+export type ExtraView = {
+  key: string
+  suspicionKey: string
+  suspicionLabel: string
+  title: string
+  reason: string
+  status: ExtraInvestigation['status']
+  evidenceId: string | null
+  retrievedAt: string | null
+  facts: Array<{ id: string; text: string; link: SummaryLink | null }>
+}
+
+export type ExtrasBySuspicion = { bySignal: Map<string, ExtraView[]>; caseWide: ExtraView[] }
+
+// 의심 카드에 붙일 AI 추가 조회 — 카드가 있는 의심 키만 카드로, 사건 전체(CASE) · 키가 맞지 않는 조회는 caseWide로
+// 어느 쪽에도 안 넣으면 AI가 조사한 사실이 화면에서 사라진다. extraInvestigations가 없으면(예전 · 고정 보고서) null
+export function extrasBySuspicion(body: ReportBody): ExtrasBySuspicion | null {
+  const extras = body.extraInvestigations
+  if (!extras) return null
+  const cards = suspicionCards(body)
+  const cardIds = new Set([...(cards?.open ?? []), ...(cards?.explained ?? [])].map(signalId))
+  const facts = new Map((body.facts ?? []).map((f) => [f.id, f]))
+  const bySignal = new Map<string, ExtraView[]>()
+  const caseWide: ExtraView[] = []
+  extras.forEach((e, i) => {
+    const view: ExtraView = {
+      key: `${i}:${e.toolName}`,
+      suspicionKey: e.suspicionKey,
+      suspicionLabel: e.suspicionLabel,
+      title: e.title,
+      reason: e.reason,
+      status: e.status,
+      evidenceId: e.evidenceId ?? null,
+      retrievedAt: e.retrievedAt ?? null,
+      facts: e.factIds.flatMap((id) => {
+        const fact = facts.get(id)
+        return fact ? [{ id, text: fact.text, link: reportFactLink(fact) }] : []
+      }),
+    }
+    if (cardIds.has(e.suspicionKey))
+      bySignal.set(e.suspicionKey, [...(bySignal.get(e.suspicionKey) ?? []), view])
+    else caseWide.push(view)
+  })
+  return { bySignal, caseWide }
+}
+
+// 추가 조회 결과 줄 — 조회 실패를 "새 사실 없음"으로 보이면 직원이 확인했다고 믿는다
+export function extraResultText(extra: Pick<ExtraView, 'status' | 'facts'>): string | null {
+  if (extra.status === 'FAILED') return '조회하지 못했습니다. 이 범위는 확인되지 않았습니다.'
+  return extra.facts.length === 0 ? '새로 나온 사실 없음' : null
+}
+
+// 정상 근거 기준 — Spring DecisionBasisCalculator.EXPLAINS (SIMILAR_AMOUNT → R01) 와 같다. 기준을 바꾸면 여기도 함께
+const NORMAL_SEARCHED_BY_SIGNAL: Record<string, string> = {
+  R01: '최근 30일, 이번 금액의 0.5 ~ 1.5배 결제 중 매입 완료 2건 이상',
+}
+
+export type ReducingKind = 'EXPLAINED' | 'MIXED' | 'UNCHECKED' | 'NOT_FOUND' | 'NO_RULE'
+
+// 의심을 줄이는 사실 — 정상 사유 문장, 못 찾았으면 무엇을 찾아봤는지, 찾을 기준이 없으면 그렇다고
+// 기준이 없는 의심에 "찾아본 것: 30일 비슷한 금액"을 붙이면 상관없는 기준으로 찾아본 것처럼 읽힌다
+// 이력 조회가 실패했으면 "찾지 못함" 대신 "확인하지 못함" (normalsUnchecked — 한계는 그 함수 주석)
+export function reducingFact(
+  body: ReportBody,
+  signal: CheckSignal,
+): { kind: ReducingKind; text: string } {
+  if (signal.mixed)
+    return {
+      kind: 'MIXED',
+      text: `결제 ${signal.openPaymentIds.join(' · ')}만 정상 사유 없음 · 다른 결제는 정상 사유 있음`,
+    }
+  if (signal.openPaymentIds.length === 0)
+    return { kind: 'EXPLAINED', text: `정상 사유 있음 · ${signal.normalReason ?? ''}`.trim() }
+  const searched = NORMAL_SEARCHED_BY_SIGNAL[signal.key]
+  if (!searched)
+    return { kind: 'NO_RULE', text: '자료로 풀 정상 근거 기준 없음 · 직원 확인으로 풉니다' }
+  if (normalsUnchecked(body))
+    return {
+      kind: 'UNCHECKED',
+      text: '확인하지 못함 · 고객 결제 이력 조회가 실패했습니다. 정상 사유가 없다는 뜻이 아닙니다.',
+    }
+  return { kind: 'NOT_FOUND', text: `찾지 못함 · 찾아본 것: ${searched}` }
 }
 
 // ── 지난 사건과 비교 (#644 ③) ──
