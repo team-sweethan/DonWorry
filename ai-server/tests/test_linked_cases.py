@@ -43,10 +43,15 @@ def _linked_cases(by: str, case_id: str = PAST_CASE_ID) -> dict[str, Any]:
                 "paymentCount": 1,
                 "acceptCount": 0,
                 "rejectCount": 1,
-                "casePayments": [
+                "pastPayments": [
                     {
-                        "paymentId": CASE_PAYMENT_ID,
-                        "matchedBy": ["IP"] if by == "IP" else ["DEVICE"],
+                        "decision": "REJECT",
+                        "matches": [
+                            {
+                                "paymentId": CASE_PAYMENT_ID,
+                                "matchedBy": ["IP"] if by == "IP" else ["DEVICE"],
+                            }
+                        ],
                     }
                 ],
             }
@@ -154,11 +159,12 @@ def test_linked_case_facts_hide_case_ids_and_reasons() -> None:
     for text in [*texts, *llm.seen]:
         assert PAST_CASE_ID not in text
         assert "888456" not in text
-        assert "casePayments" not in text
+        assert "pastPayments" not in text
     assert report.linkedCases is not None
     assert [c.caseId for c in report.linkedCases.cases] == [PAST_CASE_ID]
     # 의심 카드가 자기 결제의 지난 사건만 붙이는 칸 — 보고서에는 남는다 (#818 Codex 리뷰)
-    assert [m.paymentId for m in report.linkedCases.cases[0].casePayments] == [CASE_PAYMENT_ID]
+    [past] = report.linkedCases.cases[0].pastPayments
+    assert (past.decision, [m.paymentId for m in past.matches]) == ("REJECT", [CASE_PAYMENT_ID])
 
 
 # 지난 사건이 여러 건이면 합계 숫자가 사실에 있어야 한다

@@ -10,6 +10,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse.CasePaymentMatch;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse.LinkedCase;
+import com.donworry.investigation.report.dto.LinkedCasesToolResponse.PastPayment;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -17,11 +18,13 @@ import com.donworry.investigation.service.InvestigationErrorCode;
 import com.donworry.investigation.service.InvestigationException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -92,15 +95,10 @@ public class LinkedCaseFinder {
         // 결제마다 따로 물으면 결제가 붙을 때마다 새 보고서가 돌아 대형 조회가 결제 수의 제곱으로 는다
         FdsPaymentMatches matches =
                 fdsPaymentMatchReader.findMatching(current.getMerchantId(), casePaymentIds, caseOfPayment.keySet());
-        Map<Long, Set<Long>> matchedPayments = new LinkedHashMap<>();
-        Map<Long, Set<String>> matchedBy = new LinkedHashMap<>();
-        Map<Long, Map<Long, Set<String>>> overlaps = new LinkedHashMap<>();
-        pastCases.forEach(c -> {
-            matchedPayments.put(c.getId(), new HashSet<>());
-            matchedBy.put(c.getId(), new HashSet<>());
-            overlaps.put(c.getId(), new LinkedHashMap<>());
-        });
-        // 이번 사건 결제 순서(연결 순)대로 — casePayments 순서가 이 순서다
+        // 지난 사건마다: 겹친 지난 결제 → (이번 사건 결제 → 겹친 종류). 판정을 결제마다 남겨 의심 카드가 자기 것만 센다
+        Map<Long, Map<Long, Map<Long, Set<String>>>> overlaps = new HashMap<>();
+        Map<Long, Set<String>> matchedBy = new HashMap<>();
+        // 이번 사건 결제 순서(연결 순)대로 — matches 순서가 이 순서다
         for (Long casePaymentId : casePaymentIds) {
             for (String kind : kinds) {
                 Set<Long> sameValue =
@@ -110,17 +108,16 @@ public class LinkedCaseFinder {
                     if (pastCaseId == null) {
                         continue;
                     }
-                    matchedPayments.get(pastCaseId).add(paymentId);
-                    matchedBy.get(pastCaseId).add(kind);
-                    overlaps.get(pastCaseId)
+                    matchedBy.computeIfAbsent(pastCaseId, k -> new HashSet<>()).add(kind);
+                    overlaps.computeIfAbsent(pastCaseId, k -> new TreeMap<>())
+                            .computeIfAbsent(paymentId, k -> new LinkedHashMap<>())
                             .computeIfAbsent(casePaymentId, k -> new HashSet<>())
                             .add(kind);
                 }
             }
         }
-        List<SecurityCase> matched = pastCases.stream()
-                .filter(c -> !matchedPayments.get(c.getId()).isEmpty())
-                .toList();
+        List<SecurityCase> matched =
+                pastCases.stream().filter(c -> overlaps.containsKey(c.getId())).toList();
         List<SecurityCase> shown = matched.stream().limit(MAX_CASES).toList();
         Map<Long, PaymentDecision> decisionOfPayment = shown.isEmpty()
                 ? Map.of()
@@ -131,11 +128,7 @@ public class LinkedCaseFinder {
                         .collect(Collectors.toMap(d -> d.getCasePayment().getPaymentId(), d -> d, (a, b) -> a));
         List<LinkedCase> cases = shown.stream()
                 .map(c -> linkedCase(
-                        c,
-                        inOrder(kinds, matchedBy.get(c.getId())),
-                        matchedPayments.get(c.getId()),
-                        casePaymentMatches(kinds, overlaps.get(c.getId())),
-                        decisionOfPayment))
+                        c, inOrder(kinds, matchedBy.get(c.getId())), kinds, overlaps.get(c.getId()), decisionOfPayment))
                 .toList();
         // 이번 사건 결제 중 하나라도 값을 보냈으면 비교한 종류다
         List<String> notProvided = kinds.stream()
@@ -197,12 +190,22 @@ public class LinkedCaseFinder {
                 .toList();
     }
 
+    // 지난 결제는 결제 번호 순(번호는 싣지 않음). 사건 합계 건수는 이 목록을 그대로 센다
     private static LinkedCase linkedCase(
             SecurityCase pastCase,
             List<String> matchedBy,
-            Set<Long> payments,
-            List<CasePaymentMatch> casePayments,
+            List<String> kinds,
+            Map<Long, Map<Long, Set<String>>> overlapsByPastPayment,
             Map<Long, PaymentDecision> decisionOfPayment) {
+        List<PastPayment> pastPayments = overlapsByPastPayment.entrySet().stream()
+                .map(e -> {
+                    PaymentDecision decision = decisionOfPayment.get(e.getKey());
+                    return new PastPayment(
+                            decision == null ? null : decision.getDecision().name(),
+                            casePaymentMatches(kinds, e.getValue()));
+                })
+                .toList();
+        Set<Long> payments = overlapsByPastPayment.keySet();
         List<Decision> decisions = payments.stream()
                 .map(decisionOfPayment::get)
                 .filter(d -> d != null)
@@ -217,7 +220,7 @@ public class LinkedCaseFinder {
                         decisions.stream().filter(d -> d == Decision.ACCEPT).count())
                 .rejectCount((int)
                         decisions.stream().filter(d -> d == Decision.REJECT).count())
-                .casePayments(casePayments)
+                .pastPayments(pastPayments)
                 .build();
     }
 }

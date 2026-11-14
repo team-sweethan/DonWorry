@@ -974,7 +974,7 @@ const pastLinked = (over: Partial<LinkedCases> = {}): LinkedCases => ({
       paymentCount: 1,
       acceptCount: 0,
       rejectCount: 1,
-      casePayments: [{ paymentId: '1', matchedBy: ['DEVICE'] }],
+      pastPayments: [{ decision: 'REJECT', matches: [{ paymentId: '1', matchedBy: ['DEVICE'] }] }],
     },
   ],
   totalMatched: 1,
@@ -1017,7 +1017,9 @@ test('linkedCasesForSignal_otherPaymentsPastCase_notAttached', () => {
   const onTwo = {
     ...past,
     matchedBy: ['CARD' as const],
-    casePayments: [{ paymentId: '2', matchedBy: ['CARD' as const] }],
+    pastPayments: [
+      { decision: 'REJECT' as const, matches: [{ paymentId: '2', matchedBy: ['CARD' as const] }] },
+    ],
   }
   const report = body({ linkedCases: pastLinked({ cases: [onTwo] }) })
 
@@ -1028,8 +1030,42 @@ test('linkedCasesForSignal_otherPaymentsPastCase_notAttached', () => {
   )
 
   const unknown = body({
-    linkedCases: pastLinked({ cases: [{ ...past, casePayments: undefined }] }),
+    linkedCases: pastLinked({ cases: [{ ...past, pastPayments: undefined }] }),
   })
   assert.deepEqual(linkedCasesForSignal(unknown, { key: 'LINKED_DEVICE', paymentIds: ['1'] }), [])
   assert.equal(linkedCaseGroups(unknown)[0].cases.length, 1)
+})
+
+// 지난 사건 한 건 안에서 결제마다 겹친 종류가 다르면 카드에는 그 종류로 겹친 결제의 판정만 센다 (#818 Codex 리뷰)
+// 사건 합계를 그대로 쓰면 기기로만 겹친 결제의 승인 취소가 같은 카드 의심의 근거로 보인다
+test('linkedCasesForSignal_mixedKindsPastCase_countsOnlyThisSignalsDecisions', () => {
+  const [past] = pastLinked().cases
+  const mixed = {
+    ...past,
+    matchedBy: ['CARD' as const, 'DEVICE' as const],
+    paymentCount: 2,
+    acceptCount: 1,
+    rejectCount: 1,
+    pastPayments: [
+      { decision: 'ACCEPT' as const, matches: [{ paymentId: '1', matchedBy: ['CARD' as const] }] },
+      {
+        decision: 'REJECT' as const,
+        matches: [{ paymentId: '1', matchedBy: ['DEVICE' as const] }],
+      },
+    ],
+  }
+  const report = body({ linkedCases: pastLinked({ cases: [mixed] }) })
+
+  const [card] = linkedCasesForSignal(report, { key: 'LINKED_CARD', paymentIds: ['1'] })
+  const [device] = linkedCasesForSignal(report, { key: 'LINKED_DEVICE', paymentIds: ['1'] })
+
+  assert.deepEqual(
+    [card.matchedBy, card.paymentCount, card.acceptCount, card.rejectCount],
+    [['CARD'], 1, 1, 0],
+  )
+  assert.deepEqual(
+    [device.matchedBy, device.paymentCount, device.acceptCount, device.rejectCount],
+    [['DEVICE'], 1, 0, 1],
+  )
+  assert.equal(linkedCaseGroups(report)[0].cases[0].rejectCount, 1)
 })

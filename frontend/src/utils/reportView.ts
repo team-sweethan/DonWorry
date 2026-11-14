@@ -768,8 +768,9 @@ const LINKED_SIGNAL_KIND: Record<string, LinkedKind> = {
   LINKED_IP: 'IP',
 }
 
-// 이 의심의 결제와 그 종류로 겹친 사건만 — 결제가 여러 건인 사건에서 다른 결제의 지난 사건이 붙지 않게 (#818 Codex 리뷰)
-// 겹친 결제를 모르는 보고서(casePayments 없음)는 카드에 붙이지 않는다
+// 이 의심의 결제와 그 종류로 겹친 지난 결제만 — 사건 고르기도, 결제 수 · 판정 건수도 그 결제들로 (#818 Codex 리뷰)
+// 사건 합계를 쓰면 다른 결제 · 다른 종류로 겹친 결제의 판정(예: 기기로만 겹친 승인 취소)이 이 카드 근거로 보인다
+// 겹친 결제를 모르는 보고서(pastPayments 없음)는 카드에 붙이지 않는다. ③ 칸은 사건 합계 그대로
 export function linkedCasesForSignal(
   body: ReportBody,
   signal: Pick<CheckSignal, 'key' | 'paymentIds'>,
@@ -777,11 +778,21 @@ export function linkedCasesForSignal(
   const kind = LINKED_SIGNAL_KIND[signal.key]
   if (!kind) return []
   const source = kind === 'IP' ? body.linkedCasesByIp : body.linkedCases
-  return (source?.cases ?? []).filter((c) =>
-    (c.casePayments ?? []).some(
-      (m) => signal.paymentIds.includes(m.paymentId) && m.matchedBy.includes(kind),
-    ),
-  )
+  return (source?.cases ?? []).flatMap((c) => {
+    const mine = (c.pastPayments ?? []).filter((p) =>
+      p.matches.some((m) => signal.paymentIds.includes(m.paymentId) && m.matchedBy.includes(kind)),
+    )
+    if (mine.length === 0) return []
+    return [
+      {
+        ...c,
+        matchedBy: [kind],
+        paymentCount: mine.length,
+        acceptCount: mine.filter((p) => p.decision === 'ACCEPT').length,
+        rejectCount: mine.filter((p) => p.decision === 'REJECT').length,
+      },
+    ]
+  })
 }
 
 // 정상 근거 기준 — Spring DecisionBasisCalculator.EXPLAINS (SIMILAR_AMOUNT → R01) 와 같다. 기준을 바꾸면 여기도 함께

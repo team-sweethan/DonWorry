@@ -208,10 +208,17 @@ class DecisionBasisTool(BaseModel):
 LinkedKind = Literal["CARD", "DEVICE", "IP"]
 
 
-# 이번 사건 결제 중 이 지난 사건과 겹친 결제와 그 종류 — 의심 카드가 자기 결제의 것만 붙인다
+# 이번 사건 결제 번호와 그 결제와 겹친 종류
 class LinkedCasePayment(BaseModel):
     paymentId: str
     matchedBy: list[LinkedKind]
+
+
+# 지난 사건의 겹친 결제 한 건 — 판정(없으면 None)과 이번 사건의 어느 결제와 어떤 종류로 겹쳤는지
+# 지난 결제 번호는 없다. 의심 카드가 자기 결제 · 자기 종류로 겹친 것만 센다 (#818 Codex 리뷰)
+class LinkedPastPayment(BaseModel):
+    decision: Literal["ACCEPT", "REJECT"] | None
+    matches: list[LinkedCasePayment]
 
 
 class LinkedCase(BaseModel):
@@ -221,7 +228,7 @@ class LinkedCase(BaseModel):
     paymentCount: int
     acceptCount: int
     rejectCount: int
-    casePayments: list[LinkedCasePayment] = []
+    pastPayments: list[LinkedPastPayment] = []
 
 
 # by: CARD_DEVICE(코드 기본 조회) · IP(AI 추가 조회)

@@ -22,6 +22,7 @@ import com.donworry.investigation.entity.SecurityCase;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse.CasePaymentMatch;
 import com.donworry.investigation.report.dto.LinkedCasesToolResponse.LinkedCase;
+import com.donworry.investigation.report.dto.LinkedCasesToolResponse.PastPayment;
 import com.donworry.investigation.repository.CasePaymentRepository;
 import com.donworry.investigation.repository.PaymentDecisionRepository;
 import com.donworry.investigation.repository.SecurityCaseRepository;
@@ -93,7 +94,8 @@ class LinkedCaseFinderTests {
                         .paymentCount(1)
                         .acceptCount(0)
                         .rejectCount(1)
-                        .casePayments(List.of(new CasePaymentMatch("1", List.of("CARD"))))
+                        .pastPayments(
+                                List.of(new PastPayment("REJECT", List.of(new CasePaymentMatch("1", List.of("CARD"))))))
                         .build());
         assertThat(response.totalMatched()).isEqualTo(1);
         assertThat(response.limited()).isFalse();
@@ -128,8 +130,45 @@ class LinkedCaseFinderTests {
 
         assertThat(response.cases())
                 .singleElement()
-                .extracting(LinkedCase::casePayments)
-                .isEqualTo(List.of(new CasePaymentMatch("2", List.of("CARD"))));
+                .extracting(LinkedCase::pastPayments)
+                .isEqualTo(List.of(new PastPayment("REJECT", List.of(new CasePaymentMatch("2", List.of("CARD"))))));
+    }
+
+    // 지난 사건 한 건 안에서 결제마다 겹친 종류가 다르면 판정도 결제마다 따로 남긴다 (#818 Codex 리뷰)
+    // 합계만 있으면 기기로만 겹친 결제의 승인 취소가 같은 카드 의심 카드의 근거로 붙는다
+    @Test
+    void find_pastCaseMatchedByDifferentKinds_keepsDecisionPerPastPayment() {
+        SecurityCase current = securityCase(7L, "customer-1");
+        SecurityCase past = securityCase(20L, "customer-2");
+        past.close(CLOSED_AT);
+        CasePayment byCard = CasePayment.link(past, 201L, CLOSED_AT);
+        CasePayment byDevice = CasePayment.link(past, 202L, CLOSED_AT);
+        when(securityCaseRepository.findById(7L)).thenReturn(Optional.of(current));
+        when(casePaymentRepository.findBySecurityCaseIdOrderByLinkedAtAsc(7L))
+                .thenReturn(List.of(CasePayment.link(current, 1L, NOW)));
+        when(securityCaseRepository
+                        .findTop100ByMerchantIdAndCustomerRefNotAndStatusAndClosedAtGreaterThanEqualOrderByClosedAtDesc(
+                                eq(1L), eq("customer-1"), eq(CaseStatus.CLOSED), any()))
+                .thenReturn(List.of(past));
+        when(casePaymentRepository.findBySecurityCaseIdIn(List.of(20L))).thenReturn(List.of(byCard, byDevice));
+        when(fdsPaymentMatchReader.findMatching(eq(1L), eq(List.of(1L)), anyCollection()))
+                .thenReturn(new FdsPaymentMatches(
+                        new Kind(true, Map.of(1L, Set.of(201L))),
+                        new Kind(true, Map.of(1L, Set.of(202L))),
+                        Kind.notProvided()));
+        when(paymentDecisionRepository.findByCasePaymentSecurityCaseIdIn(List.of(20L)))
+                .thenReturn(List.of(
+                        PaymentDecision.confirm(byCard, 3L, null, Decision.ACCEPT, "메모", 1, CLOSED_AT),
+                        PaymentDecision.confirm(byDevice, 3L, null, Decision.REJECT, "메모", 1, CLOSED_AT)));
+
+        LinkedCasesToolResponse response = finder().find(7L, "CARD_DEVICE", NOW);
+
+        assertThat(response.cases())
+                .singleElement()
+                .extracting(LinkedCase::pastPayments)
+                .isEqualTo(List.of(
+                        new PastPayment("ACCEPT", List.of(new CasePaymentMatch("1", List.of("CARD")))),
+                        new PastPayment("REJECT", List.of(new CasePaymentMatch("1", List.of("DEVICE"))))));
     }
 
     // 이번 사건 결제가 몇 건이든 P2 대형 조회는 한 번 (#818 Codex 보안 리뷰)
