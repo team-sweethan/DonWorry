@@ -11,6 +11,7 @@ import com.donworry.fds.api.FdsEvaluationRequest;
 import com.donworry.fds.api.FdsLinkedPayments.Match;
 import com.donworry.fds.api.FdsLinkedPayments.Nearby;
 import com.donworry.fds.api.FdsLinkedPayments.PaymentMatch;
+import com.donworry.fds.api.FdsPaymentMatches;
 import com.donworry.fds.api.FdsResult;
 import com.donworry.fds.entity.FdsEvaluation;
 import com.donworry.fds.repository.FdsEvaluationRepository;
@@ -214,6 +215,54 @@ class FdsLinkedPaymentQueryServiceTests {
         assertThat(result.payments())
                 .extracting(p -> p.card().paymentCount(), p -> p.card().nearby().paymentCount())
                 .containsExactly(tuple(1, 0), tuple(1, 1));
+    }
+
+    // 넘겨받은 후보 중 같은 기기인 결제 번호만 돌려준다 — 후보 밖 번호 · 사건 결제 · 원문 · 고객 번호는 나가지 않는다 (#821)
+    @Test
+    void findMatching_sameDeviceCandidate_returnsOnlyMatchedPaymentIds() {
+        var casePayment = evaluation(100L, CASE_CUSTOMER, "tok_case", "dev_shared", FdsResult.REVIEW, AT);
+        givenCaseEvaluations(
+                casePayment,
+                evaluation(300L, "other-1", null, "dev_shared", FdsResult.ALLOW, AT),
+                evaluation(301L, "other-2", null, "dev_other", FdsResult.ALLOW, AT),
+                evaluation(302L, "other-3", null, "dev_shared", FdsResult.ERROR, AT),
+                evaluation(302L, "other-3", null, "dev_shared", FdsResult.DENY, AT),
+                evaluation(999L, "not-candidate", null, "dev_shared", FdsResult.ALLOW, AT));
+
+        var result = service().findMatching(MERCHANT, List.of(100L), List.of(100L, 300L, 301L, 302L));
+
+        assertThat(result.device().provided()).isTrue();
+        assertThat(result.device().paymentIds()).containsExactlyInAnyOrder(300L, 302L);
+        assertThat(result.card().provided()).isTrue();
+        assertThat(result.card().paymentIds()).isEmpty();
+        assertThat(result.toString()).doesNotContain("dev_shared", "tok_case", "other-1", "other-3", CASE_CUSTOMER);
+    }
+
+    // 다른 가맹점 결제는 같은 기기여도 일치로 보지 않는다 (#821)
+    @Test
+    void findMatching_candidateFromOtherMerchant_isNotMatched() {
+        var casePayment = evaluation(100L, CASE_CUSTOMER, "tok_case", "dev_shared", FdsResult.REVIEW, AT);
+        var otherMerchant = evaluation(300L, "other-1", "tok_case", "dev_shared", FdsResult.ALLOW, AT);
+        ReflectionTestUtils.setField(otherMerchant, "merchantId", 2L);
+        givenCaseEvaluations(casePayment, otherMerchant);
+
+        var result = service().findMatching(MERCHANT, List.of(100L), List.of(300L));
+
+        assertThat(result.card().paymentIds()).isEmpty();
+        assertThat(result.device().paymentIds()).isEmpty();
+    }
+
+    // 사건 결제가 기기를 보내지 않았으면 "비교 안 함"이다 — "일치 없음"으로 보이면 확인한 것으로 믿는다 (#821)
+    @Test
+    void findMatching_casePaymentWithoutDevice_marksNotProvided() {
+        var casePayment = evaluation(100L, CASE_CUSTOMER, "tok_case", null, FdsResult.REVIEW, AT);
+        givenCaseEvaluations(casePayment, evaluation(300L, "other-1", null, "dev_x", FdsResult.ALLOW, AT));
+
+        var result = service().findMatching(MERCHANT, List.of(100L), List.of(300L));
+
+        assertThat(result.device()).isEqualTo(FdsPaymentMatches.Kind.notProvided());
+        assertThat(result.ip()).isEqualTo(FdsPaymentMatches.Kind.notProvided());
+        assertThat(result.card().provided()).isTrue();
     }
 
     private FdsLinkedPaymentQueryService service() {
