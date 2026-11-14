@@ -61,9 +61,7 @@ def test_card_label_not_in_ai_facts() -> None:
     for label in ("신한", "1234", "국민", "5678"):
         assert not any(label in text for text in texts)
     first = next(f.text for f in facts if f.topic == "signals")
-    assert first.endswith(
-        "카드 정보 있음 · 기기 정보 있음 · 접속 국가 정보 없음(가맹점이 보내지 않음)"
-    )
+    assert first.endswith("카드 · 기기 식별값 받음 · 접속 국가 정보 없음(가맹점이 보내지 않음)")
 
 
 # 가맹점이 IP를 보내지 않은 결제가 있으면 한계 줄에 남는다 — 직원이 "해외 접속 아님"으로 읽지 않게

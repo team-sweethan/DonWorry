@@ -1,3 +1,4 @@
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -121,19 +122,17 @@ def _name(names: dict[str, str], payment_id: str) -> str:
     return names.get(payment_id, f"결제 {payment_id}")
 
 
-# 이력 첫 줄의 괄호 — 같은 결제를 코드가 나눠 잇는다, AI 추론에 맡기지 않음 (#568)
-# 예: "모두 이번 결제 앞뒤 10분 안 · 그 전 결제 없음"
+# 10분 안 결제가 있는 이력 첫 줄의 괄호 — 같은 결제를 코드가 나눠 잇는다 (#568)
+# AI 추론에 맡기지 않는다
+# 예: "모두 이번 결제 앞뒤 10분 안 · 그 전 결제 없음". 10분 안 결제가 없으면 _previous_line (#820)
 # 이력이 잘렸으면(최근 것만 조회) 못 본 결제가 있으니 "없음" 대신 "조회 못 함" (#568 Codex 리뷰)
 def _split_note(
     subject: str, single: bool, burst: list, earlier: list, later: list, truncated: bool
 ) -> str:
-    unseen = "조회 못 함" if truncated else "없음"
     no_earlier = "그 전 결제는 조회 못 함" if truncated else "그 전 결제 없음"
-    if burst and not earlier and not later:
+    if not earlier and not later:
         return f"모두 {subject} 앞뒤 10분 안 · {no_earlier}"
-    parts = [
-        f"{subject} 앞뒤 10분 안 {len(burst)}건" if burst else f"{subject} 앞뒤 10분 안 {unseen}"
-    ]
+    parts = [f"{subject} 앞뒤 10분 안 {len(burst)}건"]
     parts.append(f"그 전 {len(earlier)}건" if earlier else no_earlier)
     if later:
         parts.append(f"{'뒤' if single else '도중 · 뒤'} {len(later)}건")
@@ -143,6 +142,37 @@ def _split_note(
 def _payment_line(p: HistoryPayment) -> str:
     status = PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름")
     return f"{_kst(p.requestedAt)} {_won(p.amount)} {status}"
+
+
+# "모두 매입 완료" · "매입 완료 4건 · 승인 취소 1건" — 정상 · 의심이 아니라 상태 이름만 (#820)
+def _status_text(payments: list[HistoryPayment]) -> str:
+    counts = Counter(PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름") for p in payments)
+    if len(counts) == 1:
+        return f"모두 {next(iter(counts))}"
+    return " · ".join(f"{status} {count}건" for status, count in counts.most_common())
+
+
+# 10분 안 결제가 없는 이력 첫 줄 — 이 고객이 사건 전에 낸 결제를 앞에 세운다 (#820)
+# "앞뒤 10분 안 없음" 같은 시스템 기준은 쓰지 않는다: 이전 결제가 보이면 그 사이도 이미 본 것이다
+# 사건 뒤 결제는 이 줄의 건수에 넣지 않는다 — 같은 결제를 두 번 세어 읽지 않게 (사건 17)
+def _previous_line(
+    days: int, subject: str, single: bool, earlier: list, history: PaymentHistoryTool
+) -> str:
+    name = f"이 고객의 {'이전 결제' if single else '사건 전 결제'}(최근 {days}일)"
+    if earlier and history.truncated:
+        return (
+            f"{name} 중 조회한 {len(earlier)}건: {_status_text(earlier)} "
+            "(더 오래된 결제는 조회 못 함)"
+        )
+    if earlier:
+        return f"{name} {len(earlier)}건: {_status_text(earlier)}"
+    if history.truncated:
+        after = "뒤" if single else "도중 · 뒤"
+        return (
+            f"{name}: 확인 못 함 (최근 {len(history.payments)}건만 조회했는데 "
+            f"모두 {subject} {after} 결제)"
+        )
+    return f"{name} 없음"
 
 
 def _history(records: list[ToolRecord]) -> list[Line]:
@@ -167,8 +197,12 @@ def _history(records: list[ToolRecord]) -> list[Line]:
     single = len(cases[0].payments) == 1
     subject = "이번 결제" if single else "사건 결제"
     burst, earlier, later = split_history(cases[0], history)
-    note = _split_note(subject, single, burst, earlier, later, history.truncated)
-    lines = [(f"{head} ({note}): {counts}", seq, None, NOTABLE if burst else PLAIN)]
+    if burst:
+        # 연달아 낸 결제가 있을 때만 10분 기준을 쓴다 — 그때는 그 자체가 눈여겨볼 사실이다
+        note = _split_note(subject, single, burst, earlier, later, history.truncated)
+        lines = [(f"{head} ({note}): {counts}", seq, None, NOTABLE)]
+    else:
+        lines = [(_previous_line(days, subject, single, earlier, history), seq, None, PLAIN)]
     for label, group, rank in (
         (f"{subject} 앞뒤 10분 안의 다른 결제", burst, NOTABLE),
         (
@@ -176,7 +210,8 @@ def _history(records: list[ToolRecord]) -> list[Line]:
             earlier,
             PLAIN,
         ),
-        ("이번 결제 뒤 결제" if single else "사건 도중 · 뒤 결제", later, PLAIN),
+        # 사건 뒤 결제는 보고서를 늦게 만들 때만 생기고 판정 근거가 아니다 — AI에게 맨 뒤로 (#820)
+        ("이번 결제 뒤 결제" if single else "사건 도중 · 뒤 결제", later, NOTHING),
     ):
         if group:
             # 건수는 전체, 목록은 최근 몇 건만 (#548 Codex 리뷰)
@@ -315,10 +350,15 @@ def _signal_line(owner: str, signals: Signals | None) -> str:
         code = signals.ipCountryCode
         country = "한국" if code == "KR" else f"해외({code})"
     else:
-        country = "모름" if signals.ipProvided else _NOT_SENT
-    card = "정보 있음" if signals.cardProvided else _NOT_SENT
-    device = "정보 있음" if signals.deviceProvided else _NOT_SENT
-    return f"{owner}: 카드 {card} · 기기 {device} · 접속 국가 {country}"
+        country = "IP로 확인 못 함" if signals.ipProvided else _NOT_SENT
+    # "카드 정보 있음"은 카드 내용이 있다는 뜻으로 읽힌다 — 가맹점이 식별값을 보냈다는 뜻이다 (#820)
+    if signals.cardProvided and signals.deviceProvided:
+        sent = "카드 · 기기 식별값 받음"
+    else:
+        card = "식별값 받음" if signals.cardProvided else _NOT_SENT
+        device = "식별값 받음" if signals.deviceProvided else _NOT_SENT
+        sent = f"카드 {card} · 기기 {device}"
+    return f"{owner}: {sent} · 접속 국가 {country}"
 
 
 # 결제마다 마지막으로 본 FDS 기록 — 보고서에 쓴 값과 같다

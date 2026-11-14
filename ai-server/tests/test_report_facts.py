@@ -186,3 +186,54 @@ def test_fact_catalog_truncatedHistory_doesNotSayNoEarlier() -> None:
 
     assert "없음" not in first
     assert "그 전 결제는 조회 못 함" in first
+
+
+def _history_facts(history) -> list[str]:
+    return [f.text for f in catalog(ONE, history) if f.topic == "history"]
+
+
+# 10분 안 결제가 없으면 이전 결제를 앞에 세우고 "앞뒤 10분 안 없음"을 쓰지 않는다 (#820, 사건 6 · 7)
+# 이 문구가 남으면 요약이 "이번 결제 앞뒤 10분 안에 없으며…"처럼 시스템 기준을 그대로 옮긴다
+def test_historyFacts_onlyEarlierPayments_saysPreviousPaymentsWithoutWindow() -> None:
+    at = datetime.fromisoformat(ONE.payments[0].requestedAt)
+    texts = _history_facts(
+        _history(("8001", 44000, at - timedelta(days=20)), ("8002", 30000, at - timedelta(days=40)))
+    )
+
+    assert texts[0] == "이 고객의 이전 결제(최근 30일) 2건: 모두 매입 완료"
+    assert not any("10분" in text for text in texts)
+
+
+# 잘린 이력의 결제가 모두 사건 뒤면 이전 결제는 "확인 못 함"이다 (#820, 사건 17)
+# 첫 줄에 뒤 결제 건수를 세면 같은 20건이 "20건 + 뒤 20건"으로 읽히고,
+# "없음"이면 처음 온 손님으로 읽힌다
+def test_historyFacts_truncatedOnlyLaterPayments_saysPreviousUnknown() -> None:
+    at = datetime.fromisoformat(ONE.payments[0].requestedAt)
+    history = _history(
+        ("8201", 39000, at + timedelta(days=1)), ("8202", 46000, at + timedelta(days=2))
+    ).model_copy(update={"truncated": True})
+
+    texts = _history_facts(history)
+
+    assert texts[0] == (
+        "이 고객의 이전 결제(최근 30일): 확인 못 함 (최근 2건만 조회했는데 모두 이번 결제 뒤 결제)"
+    )
+    assert not any("10분" in text for text in texts)
+
+
+# 사건 뒤 결제는 이전 결제 건수 · 상태에 섞지 않고 따로 둔다 (#820)
+# 섞이면 처음 온 손님도 뒤에 낸 결제 때문에 이전 결제가 많은 손님처럼 보인다
+def test_historyFacts_laterPayments_keptOutOfPreviousCount() -> None:
+    at = datetime.fromisoformat(ONE.payments[0].requestedAt)
+    history = _history(
+        ("8201", 39000, at + timedelta(days=1)),
+        ("8202", 46000, at + timedelta(days=2)),
+        ("8001", 44000, at - timedelta(days=20)),
+    )
+    voided = history.payments[2].model_copy(update={"paymentStatus": "VOIDED"})
+    history = history.model_copy(update={"payments": [*history.payments[:2], voided]})
+
+    texts = _history_facts(history)
+
+    assert texts[0] == "이 고객의 이전 결제(최근 30일) 1건: 모두 승인 취소"
+    assert any(text.startswith("이번 결제 뒤 결제 2건") for text in texts)
