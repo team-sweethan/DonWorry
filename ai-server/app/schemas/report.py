@@ -156,6 +156,13 @@ class SimilarCases(BaseModel):
 
 # 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — Tool 기록 값 그대로
 # 사건 번호는 화면 링크용이다 (AI 입력에는 없음)
+# 이번 사건 결제 중 이 지난 사건과 겹친 결제 (#818 Codex 리뷰)
+# 의심 카드가 자기 결제의 지난 사건만 붙인다
+class LinkedCasePaymentItem(BaseModel):
+    paymentId: str
+    matchedBy: list[Literal["CARD", "DEVICE", "IP"]]
+
+
 class LinkedCaseItem(BaseModel):
     caseId: str
     matchedBy: list[Literal["CARD", "DEVICE", "IP"]]
@@ -163,14 +170,17 @@ class LinkedCaseItem(BaseModel):
     paymentCount: int
     acceptCount: int
     rejectCount: int
+    casePayments: list[LinkedCasePaymentItem] = []
 
 
+# limited: 최근 끝난 사건 일부만 비교함 — 못 찾았어도 "없음"이 아니다
 class LinkedCases(BaseModel):
     lookbackDays: int
     kinds: list[Literal["CARD", "DEVICE", "IP"]]
     notProvided: list[Literal["CARD", "DEVICE", "IP"]]
     cases: list[LinkedCaseItem]
     totalMatched: int
+    limited: bool = False
 
 
 # 고객 최근 결제 (#338) — Tool 기록 값 그대로 코드가 채운다. 건수 · 금액을 AI가 쓰지 않는다

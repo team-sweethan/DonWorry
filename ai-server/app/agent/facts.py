@@ -557,6 +557,11 @@ def _either_text(kinds: list[str]) -> str:
     return "나 ".join(names)
 
 
+# 조회 상한에 걸려 최근 끝난 사건 일부만 비교했을 때 (#818 Codex 리뷰)
+def _partial(result: LinkedCasesTool) -> str:
+    return " (최근 끝난 사건 일부만 비교)" if result.limited else ""
+
+
 # 사건 한 건 — 종료 날짜 · 겹친 결제 수 · 그 결제에 내린 판정
 def _past_case_text(c: LinkedCase) -> str:
     closed = _kst(c.closedAt).split(" ")[0]
@@ -571,7 +576,7 @@ def _past_case_text(c: LinkedCase) -> str:
 # 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드나 기기"로 읽히지 않게
 def _found_case_lines(result: LinkedCasesTool, scope: str, seq: int) -> list[Line]:
     kinds = [k for k in ("CARD", "DEVICE", "IP") if any(k in c.matchedBy for c in result.cases)]
-    head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}"
+    head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
     shown = len(result.cases)
     more = f" (최근 {shown}건만 조회)" if result.totalMatched > shown else ""
     if result.totalMatched == 1 and shown == 1:
@@ -607,6 +612,11 @@ def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
     scope = f"다른 고객의 지난 사건(최근 {result.lookbackDays}일 안 종료)"
     if result.cases:
         lines = _found_case_lines(result, scope, seq)
+    elif result.limited:
+        # 일부만 비교 — "없음"으로 단정하지 않는다. 확인된 없음(NOTHING)이 아니라 보통 사실로
+        head = f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        line = f"{head}: 그 안에서는 없음"
+        lines = [(line, seq, None, PLAIN)]
     else:
         lines = [
             (f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)

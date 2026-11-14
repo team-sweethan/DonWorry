@@ -4,7 +4,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage
 
-from app.agent.assemble import LINKED_CASES_UNAVAILABLE
+from app.agent.assemble import LINKED_CASES_LIMITED, LINKED_CASES_UNAVAILABLE
 from app.agent.facts import fact_catalog
 from app.agent.graph import InvestigationOutcome, run_investigation
 from app.agent.llm import MockLlmClient
@@ -21,6 +21,7 @@ from tests.fakes import FIXTURES, call, context, narrative
 SETTINGS = Settings(_env_file=None)
 DATA = json.loads((FIXTURES / "measure_reject.json").read_text(encoding="utf-8"))
 PAST_CASE_ID = "777123"
+CASE_PAYMENT_ID = DATA["casePayments"]["payments"][0]["paymentId"]
 
 
 def _linked_cases(by: str, case_id: str = PAST_CASE_ID) -> dict[str, Any]:
@@ -42,6 +43,12 @@ def _linked_cases(by: str, case_id: str = PAST_CASE_ID) -> dict[str, Any]:
                 "paymentCount": 1,
                 "acceptCount": 0,
                 "rejectCount": 1,
+                "casePayments": [
+                    {
+                        "paymentId": CASE_PAYMENT_ID,
+                        "matchedBy": ["IP"] if by == "IP" else ["DEVICE"],
+                    }
+                ],
             }
         ],
         "totalMatched": 1,
@@ -147,8 +154,11 @@ def test_linked_case_facts_hide_case_ids_and_reasons() -> None:
     for text in [*texts, *llm.seen]:
         assert PAST_CASE_ID not in text
         assert "888456" not in text
+        assert "casePayments" not in text
     assert report.linkedCases is not None
     assert [c.caseId for c in report.linkedCases.cases] == [PAST_CASE_ID]
+    # 의심 카드가 자기 결제의 지난 사건만 붙이는 칸 — 보고서에는 남는다 (#818 Codex 리뷰)
+    assert [m.paymentId for m in report.linkedCases.cases[0].casePayments] == [CASE_PAYMENT_ID]
 
 
 # 지난 사건이 여러 건이면 합계 숫자가 사실에 있어야 한다
@@ -202,3 +212,24 @@ def test_linked_case_facts_manyCases_casesReadAsPartOfTotal() -> None:
     assert "카드나 기기" in total and "2건" in total
     assert len(cases) == 2
     assert all(text.startswith("그중 한 사건") for text in cases)
+
+
+# 최근 종료 사건 일부만 비교했으면 "없음"이라고 단정하지 않는다 (#818 Codex 리뷰)
+# 화면과 한계 줄도 같은 뜻으로 — 직원이 확인된 것으로 믿지 않게
+def test_linked_case_facts_limited_saysPartial() -> None:
+    data = _linked_cases("CARD_DEVICE")
+    data.update({"cases": [], "totalMatched": 0, "limited": True})
+
+    [text] = _linked_facts(data)
+
+    assert "일부만 비교" in text
+    assert not text.endswith(": 없음")
+
+    sample = _sample()
+    sample["linkedCases"]["CARD_DEVICE"] = data
+    box = _Box.from_sample(sample)
+    box.asked, box.mode = [], "ok"
+    report = _report(_run(_Picks(), box))
+
+    assert report.linkedCases is not None and report.linkedCases.limited
+    assert LINKED_CASES_LIMITED in report.recommendation.limitations

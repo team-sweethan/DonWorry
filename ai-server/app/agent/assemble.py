@@ -137,6 +137,11 @@ def history_counts(history: PaymentHistoryTool) -> dict[str, int]:
 LINKED_UNAVAILABLE = "같은 카드 · 기기 · IP를 쓴 다른 결제를 조회하지 못했습니다."
 ORDER_UNAVAILABLE = "주문 정보를 조회하지 못했습니다."
 LINKED_CASES_UNAVAILABLE = "같은 카드 · 기기로 열린 지난 사건을 조회하지 못했습니다."
+# 조회 상한에 걸려 최근 끝난 사건 일부만 비교했다 — 못 찾았어도 "없음"이 아니다 (#818 Codex 리뷰)
+LINKED_CASES_LIMITED = (
+    "같은 카드 · 기기 · IP로 열린 지난 사건은 최근 끝난 사건 일부만 비교했습니다. "
+    "더 오래된 사건에 있을 수 있습니다."
+)
 # 다른 고객 결제를 찾았을 때 — AI가 "다른 고객 결제 이력은 알 수 없었다"고 쓰던 자리 (#355, Case 12)
 LINKED_PRIVACY = (
     "같은 카드 · 기기 · IP를 쓴 다른 고객 결제는 건수 · 판정만 보고, "
@@ -339,6 +344,8 @@ def assemble_report(
         limitations.append(ORDER_UNAVAILABLE)
     if linked_cases is None:
         limitations.append(LINKED_CASES_UNAVAILABLE)
+    if any(r is not None and r.limited for r in (linked_cases, linked_cases_by_ip)):
+        limitations.append(LINKED_CASES_LIMITED)
     limitations += missing_signal_limitations(
         fds, [p.paymentId for p in case_payments.payments if analyzable(p)]
     )
@@ -452,5 +459,7 @@ def _report_linked_cases(result: LinkedCasesTool | None) -> LinkedCases | None:
     if result is None:
         return None
     return LinkedCases.model_validate(
-        result.model_dump(include={"lookbackDays", "kinds", "notProvided", "cases", "totalMatched"})
+        result.model_dump(
+            include={"lookbackDays", "kinds", "notProvided", "cases", "totalMatched", "limited"}
+        )
     )

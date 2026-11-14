@@ -243,7 +243,8 @@ def llm_content(result: ToolResult) -> str:
         return result.model_dump_json(exclude={"payments": {"__all__": {"orderRef", "orderName"}}})
     if isinstance(result, LinkedCasesTool):
         # 지난 사건 번호는 화면 링크용 — AI에는 건수 · 판정 종류 · 시점만 준다 (#821, 11/14 결정)
-        return result.model_dump_json(exclude={"cases": {"__all__": {"caseId"}}})
+        # 겹친 이번 사건 결제(casePayments)도 의심 카드 표시용이라 AI 입력을 늘리지 않는다
+        return result.model_dump_json(exclude={"cases": {"__all__": {"caseId", "casePayments"}}})
     return result.model_dump_json()
 
 

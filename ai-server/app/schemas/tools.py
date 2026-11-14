@@ -208,6 +208,12 @@ class DecisionBasisTool(BaseModel):
 LinkedKind = Literal["CARD", "DEVICE", "IP"]
 
 
+# 이번 사건 결제 중 이 지난 사건과 겹친 결제와 그 종류 — 의심 카드가 자기 결제의 것만 붙인다
+class LinkedCasePayment(BaseModel):
+    paymentId: str
+    matchedBy: list[LinkedKind]
+
+
 class LinkedCase(BaseModel):
     caseId: str
     matchedBy: list[LinkedKind]
@@ -215,10 +221,12 @@ class LinkedCase(BaseModel):
     paymentCount: int
     acceptCount: int
     rejectCount: int
+    casePayments: list[LinkedCasePayment] = []
 
 
 # by: CARD_DEVICE(코드 기본 조회) · IP(AI 추가 조회)
 # notProvided: 사건 결제가 값을 보내지 않아 비교하지 못한 종류
+# limited: 조회 상한에 걸려 최근 끝난 사건 일부만 비교함 — cases가 비어도 "없음"이 아니다
 class LinkedCasesTool(BaseModel):
     caseId: str
     evidenceVersion: int
@@ -230,6 +238,7 @@ class LinkedCasesTool(BaseModel):
     notProvided: list[LinkedKind]
     cases: list[LinkedCase]
     totalMatched: int
+    limited: bool = False
 
 
 # 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다
