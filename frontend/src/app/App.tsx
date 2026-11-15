@@ -1,6 +1,7 @@
 import '@ant-design/v5-patch-for-react-19'
 import { App as AntApp, ConfigProvider } from 'antd'
-import koKR from 'antd/locale/ko_KR'
+// antd/locale/ko_KR(CommonJS)은 기본 가져오기가 { default: 로캘 }로 한 겹 감싸져 와 antd가 영어로 돌아간다 (#825)
+import koKR from 'antd/es/locale/ko_KR'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ko'
 import { RouterProvider } from 'react-router-dom'
