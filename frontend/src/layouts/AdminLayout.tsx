@@ -429,6 +429,7 @@ export function ManagementLayout({
   header,
   groups,
   badges,
+  sidebarMode = 'remembered',
   children,
 }: {
   role: ManagementRole
@@ -438,11 +439,17 @@ export function ManagementLayout({
   header?: ReactNode
   groups: NavGroup[]
   badges?: NavBadges
+  /** 공개 화면 예시는 사용자의 저장된 접힘 설정을 읽거나 바꾸지 않는다. */
+  sidebarMode?: 'remembered' | 'expanded'
   children?: ReactNode
 }) {
   const location = useLocation()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const [savedCollapsed, setSidebarCollapsed] = useState(() =>
+    sidebarMode === 'expanded' ? false : readSidebarCollapsed(),
+  )
+  const sidebarCollapsed = sidebarMode === 'expanded' ? false : savedCollapsed
   const toggleSidebar = () => {
+    if (sidebarMode === 'expanded') return
     const next = !sidebarCollapsed
     setSidebarCollapsed(next)
     saveSidebarCollapsed(next)

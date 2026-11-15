@@ -93,3 +93,20 @@
     padding: 14px;
   }
 }
+.landing-preview-error {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  min-height: 280px;
+  padding: 28px;
+  border: 1px solid #e7dfcf;
+  border-radius: 16px;
+  background: #faf8f2;
+  text-align: center;
+}
+.landing-preview-error p {
+  margin: 0;
+  max-width: 500px;
+  color: #586477;
+}

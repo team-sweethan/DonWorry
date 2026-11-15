@@ -26,6 +26,26 @@ test('landingWorkspace_whenRenderingOwnerScreens_preservesPaymentAndFinanceMeani
     assert.doesNotMatch(timeline, /위험 점수|해외 IP/)
     assert.match(timeline, /승인 취소 완료/)
     assert.ok(timeline.indexOf('취소 결정') < timeline.indexOf('승인 취소 완료'))
+    const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    try {
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: { getItem: () => '1' },
+      })
+      assert.doesNotMatch(render('actions'), /is-sidebar-collapsed/)
+      const { ManagementLayout } = await server.ssrLoadModule('/src/layouts/AdminLayout.tsx')
+      const realLayout = renderToStaticMarkup(
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(ManagementLayout, { role: 'owner', groups: [] }, '실제 화면'),
+        ),
+      )
+      assert.match(realLayout, /is-sidebar-collapsed/)
+    } finally {
+      if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage)
+      else Reflect.deleteProperty(globalThis, 'localStorage')
+    }
     const actions = render('actions')
     assert.match(actions, /1,280,000원/)
     assert.match(actions, /담당자 결정과 실제 결제 결과는 다를 수 있어요/)

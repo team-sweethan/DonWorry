@@ -111,6 +111,7 @@ export function LandingWorkspace({ screen }: { screen: LandingScreen }) {
     <div className="landing-workspace" data-screen={screen} aria-hidden="true" inert>
       <ManagementLayout
         role="owner"
+        sidebarMode="expanded"
         home="/owner"
         groups={navByRole.owner}
         profile={{ name: '김사장', roleLabel: '사장님 · 케이크샵 강남점' }}
