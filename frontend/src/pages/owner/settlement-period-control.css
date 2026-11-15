@@ -98,3 +98,50 @@
     width: 100%;
   }
 }
+.stl-period-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.stl-period-arrow {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid #e4dbc8;
+  border-radius: 9px;
+  background: #fff;
+  color: #785313;
+  cursor: pointer;
+}
+.stl-period-arrow:hover:not(:disabled) {
+  background: #fff9eb;
+  border-color: #b69a62;
+}
+.stl-period-arrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.stl-period-arrow:focus-visible {
+  outline: 2px solid #886211;
+  outline-offset: 2px;
+}
+.stl-period-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: #756b5b;
+}
+@media (max-width: 600px) {
+  .stl-period-navigation {
+    width: 100%;
+  }
+  .finance-surface .stl-period-navigation .stl-period-range {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+}
