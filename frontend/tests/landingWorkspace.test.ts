@@ -61,7 +61,13 @@ test('landingWorkspace_whenRenderingOwnerScreens_preservesPaymentAndFinanceMeani
     assert.doesNotMatch(funds, /NaN|Infinity/)
     const { LandingPage } = await server.ssrLoadModule('/src/pages/public/LandingPage.tsx')
     const page = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(LandingPage)))
-    assert.equal([...page.matchAll(/class="dw-journey-label"/g)].length, 3)
+    assert.deepEqual(
+      [...page.matchAll(/class="dw-journey-label"><b>\d<\/b>([^<]+)<\/span>/g)].map(
+        (match) => match[1],
+      ),
+      ['탐지', '보류', 'AI 조사', '담당자 판정', '처리 결과'],
+    )
+    assert.doesNotMatch(page, /보안 담당자도 여기서 신청하나요/)
     assert.match(page, /전체 화면 보기/)
     assert.match(page, /의심 결제는 제가 직접 판정해야 하나요/)
     assert.match(page, /자금 현황은 실제 은행 잔액인가요/)

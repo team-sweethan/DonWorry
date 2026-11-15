@@ -8,7 +8,7 @@ import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from './ApplicationEntry'
 import { HeroGuardian } from './HeroGuardian'
 import { landingScreens, type LandingScreen } from './landingScreens'
-import { HoldPanel, OwnerTimelinePreview, ReportPreview } from './LandingPreview'
+import { DetectPanel, HoldPanel, OwnerTimelinePreview, ReportPreview } from './LandingPreview'
 import { LandingScreenPreview } from './LandingScreenPreview'
 
 import { LandingIntro } from './LandingIntro'
@@ -73,10 +73,6 @@ const faqs = [
       '스팸함을 먼저 확인해 주세요. 이용 신청 화면 아래에서 확인 메일을 다시 받을 수 있어요. 가장 최근에 받은 링크만 쓸 수 있어요.',
   },
   {
-    question: '보안 담당자도 여기서 신청하나요?',
-    answer: '아니요. 이용 신청은 가맹점용이에요. 보안 담당자 계정은 관리자가 따로 만들어 드려요.',
-  },
-  {
     question: '결제 연동도 신청과 함께 되나요?',
     answer:
       '신청과는 따로 진행해요. 승인 후 로그인해서 [시크릿 키 발급]에서 키를 받아 쇼핑몰 서버에 설정해 주세요.',
@@ -85,15 +81,27 @@ const faqs = [
 
 const flow: { label: string; title: string; body: string; panel: ReactNode }[] = [
   {
-    label: '탐지 · 보류',
-    title: '확인이 필요한 결제는 잠시 멈춰요',
-    body: '시스템이 결제를 살펴보고, 확인이 필요하면 매입 전에 보류해요. 위험이 아주 높은 결제는 바로 거절해요.',
+    label: '탐지',
+    title: '결제마다 위험 신호를 살펴봐요',
+    body: '탐지 룰이 결제를 살펴 위험 점수를 매겨요. 확인이 필요한 결제를 골라내고, 위험이 아주 높으면 바로 거절해요.',
+    panel: <DetectPanel />,
+  },
+  {
+    label: '보류',
+    title: '확인이 필요하면 매입 전에 멈춰요',
+    body: '카드 승인은 됐지만 매입은 잠시 보류해요. 보안 담당자가 확인할 시간을 확보해요.',
     panel: <HoldPanel />,
   },
   {
-    label: '담당자 확인',
-    title: '근거는 AI가, 결정은 보안 담당자가',
-    body: 'AI가 결제와 접속 기록을 보고서로 정리해요. 보안 담당자가 근거를 확인하고 정상 처리할지, 취소할지 정해요.',
+    label: 'AI 조사',
+    title: 'AI가 확인할 근거를 정리해요',
+    body: '결제와 접속 기록을 조사 보고서로 묶어요. AI는 근거를 정리하고, 판정은 하지 않아요.',
+    panel: <ReportPreview />,
+  },
+  {
+    label: '담당자 판정',
+    title: '정상 처리할지, 취소할지는 사람이 정해요',
+    body: '보안 담당자가 보고서와 근거를 확인한 뒤 결정해요. 판정 사유도 기록으로 남아요.',
     panel: <ReportPreview decided />,
   },
   {

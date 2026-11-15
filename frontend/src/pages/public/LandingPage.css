@@ -561,7 +561,7 @@
   right: 28px;
   bottom: 24px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
 }
 .dw-journey-progress span {
