@@ -15,7 +15,7 @@ import {
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { getCaseLinksByPayments } from '../../api/cases'
@@ -29,21 +29,25 @@ import type { PaymentStatus } from '../../types/case'
 import type { PaymentTransaction, PaymentTransactionPage } from '../../types/paymentTransaction'
 import {
   MAX_PERIOD_DAYS,
+  PERIOD_PRESET_LABELS,
   TRANSACTION_PAGE_SIZE,
   caseCell,
   customerNeedsMerchant,
   defaultTransactionListQuery,
   exportNeedsCustomer,
+  isBeyondPeriodLimit,
   merchantChange,
   mlCell,
   parseTransactionListQuery,
   periodDays,
+  periodPresets,
   transactionApiParams,
   transactionListSearch,
   type CaseLinks,
   type MlScores,
   type TransactionListQuery,
 } from '../../utils/transactionList'
+import { seoulToday } from '../../utils/adminHomeView'
 import { customerPart } from '../../utils/caseRules'
 import { paymentStatusLabel } from './case/caseLabels'
 import { HelpTitle } from './transaction/HelpTitle'
@@ -58,6 +62,12 @@ const statusOptions = (Object.keys(paymentStatusLabel) as PaymentStatus[]).map((
 const time = (iso: string) => dayjs(iso).format('MM/DD HH:mm')
 // 목록은 초까지 — 같은 분에 결제가 몰리면 분까지만으로는 최신순인지 알아볼 수 없다 (#797)
 const paidAt = (iso: string) => dayjs(iso).format('MM/DD HH:mm:ss')
+
+// 빠른 선택은 누를 때 오늘(한국 날짜)을 다시 읽는다 — 자정을 넘겨 켜 둔 화면도 그날 기준으로 고른다
+function presetRange(index: number): [Dayjs, Dayjs] {
+  const preset = periodPresets(seoulToday(new Date()))[index]
+  return [dayjs(preset.from), dayjs(preset.to)]
+}
 
 // 줄을 누르면 거래 상세로 간다 (#732). 줄 안의 버튼 · 링크 · 복사 단추를 누른 것은 제 동작만 한다
 const ownsClick = (target: EventTarget) =>
@@ -422,6 +432,14 @@ export function TransactionListPage() {
             <DatePicker.RangePicker
               aria-label="기간"
               placeholder={['시작일', '종료일']}
+              presets={PERIOD_PRESET_LABELS.map((label, index) => ({
+                label,
+                value: () => presetRange(index),
+              }))}
+              disabledDate={(date, { from }) =>
+                from !== undefined &&
+                isBeyondPeriodLimit(from.format('YYYY-MM-DD'), date.format('YYYY-MM-DD'))
+              }
               value={query.from ? [dayjs(query.from), dayjs(query.to)] : null}
               onChange={(dates) =>
                 setQuery(

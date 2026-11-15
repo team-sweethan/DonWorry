@@ -142,6 +142,38 @@ export function periodDays(query: TransactionListQuery) {
   return (Date.parse(`${query.to}T00:00:00Z`) - Date.parse(`${query.from}T00:00:00Z`)) / DAY_MS + 1
 }
 
+const addDays = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10)
+
+export const PERIOD_PRESET_LABELS = ['오늘', '최근 7일', '최근 30일', '이번 달', '지난 달'] as const
+
+export type PeriodPreset = {
+  label: (typeof PERIOD_PRESET_LABELS)[number]
+  from: string
+  to: string
+}
+
+// 기간 빠른 선택 (#822). today는 한국 날짜 YYYY-MM-DD — 모두 최대 기간(31일) 안이라 고른 뒤 경고가 뜨지 않는다
+// 순서는 PERIOD_PRESET_LABELS와 같다
+export function periodPresets(today: string): PeriodPreset[] {
+  const monthStart = `${today.slice(0, 8)}01`
+  const lastMonthEnd = addDays(monthStart, -1)
+  return [
+    { label: '오늘', from: today, to: today },
+    { label: '최근 7일', from: addDays(today, -6), to: today },
+    { label: '최근 30일', from: addDays(today, -29), to: today },
+    { label: '이번 달', from: monthStart, to: today },
+    { label: '지난 달', from: `${lastMonthEnd.slice(0, 8)}01`, to: lastMonthEnd },
+  ]
+}
+
+// 시작일을 고른 뒤 고를 수 없는 날 (#822) — 양끝 포함 최대 기간을 넘으면 앞뒤 어느 쪽이든 막는다
+// 고른 뒤 경고를 띄우는 대신 서버가 거절할 기간을 처음부터 못 고르게 한다
+export function isBeyondPeriodLimit(start: string, date: string) {
+  const [from, to] = start <= date ? [start, date] : [date, start]
+  return periodDays({ ...defaultTransactionListQuery, from, to }) > MAX_PERIOD_DAYS
+}
+
 // 서버에 보낼 조건. 한국 날짜는 그날 한국 0시 ~ 다음 날 한국 0시 전 — 브라우저 시간대와 관계없이
 // +09:00을 붙여 밤 결제가 하루 어긋나 빠지지 않게 한다
 export function transactionApiParams(query: TransactionListQuery) {
