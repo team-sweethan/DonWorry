@@ -558,7 +558,7 @@ test('mlReportLine_eachState_saysScoreOrWhyMissing', () => {
   )
   assert.equal(
     mlReportLine({ kind: 'none' }),
-    'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요',
+    'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30 ~ 60초 뒤) ML 채점이 꺼져 있어요',
   )
   assert.equal(
     mlReportLine({ kind: 'failed' }),
