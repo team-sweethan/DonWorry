@@ -28,7 +28,7 @@ export function FundsPeriodControl({
   return (
     <div className="finance-period funds-period funds-period-refined" data-guide="finance-period">
       <span className="funds-period-label">
-        <CalendarOutlined aria-hidden /> 언제까지 볼까요?
+        <CalendarOutlined aria-hidden /> 어느 기간을 볼까요?
       </span>
       <div className="funds-presets" role="group" aria-label="자금 예측 기간 빠른 선택">
         {presets.map(({ label, from, to }) => (
@@ -50,7 +50,13 @@ export function FundsPeriodControl({
           type="text"
           icon={<LeftOutlined />}
           aria-label="이전 기간 보기"
-          title="같은 일수만큼 이전으로"
+          title={
+            previous
+              ? fundsPeriodDays(previous) < days
+                ? `기준일까지 남은 ${fundsPeriodDays(previous)}일 보기`
+                : '같은 일수만큼 이전으로'
+              : '잔액 기준일 이전은 조회할 수 없어요'
+          }
           disabled={!previous}
           onClick={() => {
             if (previous) onChange(previous)
