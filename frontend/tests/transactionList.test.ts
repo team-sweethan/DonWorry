@@ -7,11 +7,15 @@ import {
   customerNeedsMerchant,
   customerTransactionsPath,
   defaultTransactionListQuery,
+  isBeyondPeriodLimit,
+  MAX_PERIOD_DAYS,
   merchantChange,
   mlCell,
   mlScoresRequestKey,
   mlScoresView,
   parseTransactionListQuery,
+  periodDays,
+  periodPresets,
   transactionApiParams,
   transactionListSearch,
 } from '../src/utils/transactionList.ts'
@@ -195,4 +199,51 @@ test('mlScoresView_sameCaseRefreshed_dropsOldFailedResult: 결제 번호가 같�
 
   assert.deepEqual(mlScoresView(before, paymentIds, 0), { status: 'failed' })
   assert.deepEqual(mlScoresView(before, paymentIds, 1), { status: 'loading' })
+})
+
+const preset = (today: string, label: string) =>
+  periodPresets(today).find((entry) => entry.label === label)
+
+// 지난 달 빠른 선택은 해를 넘기고 달마다 다른 말일까지 넣는다 — 말일이 빠지면 그날 결제가 목록에서 사라진다
+test('periodPresets_lastMonth_coversWholePreviousMonth', () => {
+  assert.deepEqual(preset('2027-01-10', '지난 달'), {
+    label: '지난 달',
+    from: '2026-12-01',
+    to: '2026-12-31',
+  })
+  assert.deepEqual(preset('2028-03-01', '지난 달'), {
+    label: '지난 달',
+    from: '2028-02-01',
+    to: '2028-02-29',
+  })
+  assert.deepEqual(preset('2026-03-31', '지난 달'), {
+    label: '지난 달',
+    from: '2026-02-01',
+    to: '2026-02-28',
+  })
+  assert.deepEqual(preset('2026-11-15', '최근 7일'), {
+    label: '최근 7일',
+    from: '2026-11-09',
+    to: '2026-11-15',
+  })
+})
+
+// 어느 날 눌러도 빠른 선택은 최대 기간 안이다 — 넘으면 버튼을 누르자마자 경고가 뜨고 목록이 빈다
+test('periodPresets_onAnyDay_staysWithinMaxPeriod', () => {
+  for (let time = Date.UTC(2026, 0, 1); time <= Date.UTC(2028, 11, 31); time += 86_400_000) {
+    const today = new Date(time).toISOString().slice(0, 10)
+    for (const entry of periodPresets(today)) {
+      const days = periodDays({ ...defaultTransactionListQuery, from: entry.from, to: entry.to })
+      assert.ok(days >= 1 && days <= MAX_PERIOD_DAYS, `${today} ${entry.label} ${days}일`)
+    }
+  }
+})
+
+// 시작일에서 앞뒤로 양끝 포함 31일까지만 고를 수 있다 — 서버가 받는 한도와 같다
+test('isBeyondPeriodLimit_aroundStartDate_allowsExactly31Days', () => {
+  assert.equal(isBeyondPeriodLimit('2026-11-01', '2026-12-01'), false)
+  assert.equal(isBeyondPeriodLimit('2026-11-01', '2026-12-02'), true)
+  assert.equal(isBeyondPeriodLimit('2026-11-01', '2026-10-02'), false)
+  assert.equal(isBeyondPeriodLimit('2026-11-01', '2026-10-01'), true)
+  assert.equal(isBeyondPeriodLimit('2026-11-01', '2026-11-01'), false)
 })
