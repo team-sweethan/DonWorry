@@ -50,7 +50,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  width: min(960px, 100%);
+  width: min(1080px, 100%);
   min-height: 620px;
   padding: 8px;
 }
@@ -434,9 +434,9 @@
    모든 애니메이션의 길이를 같게 두어 함께 끝난다.
    조건을 바꾸면 LoginPage.tsx의 OPEN_MOTION_QUERY도 같이 바꾼다. */
 @media (prefers-reduced-motion: no-preference) and (min-width: 801px) {
-  /* 왼쪽 칸은 경첩(기기 가운데)을 축으로 보는 사람 쪽으로 세운 채 둔다.
+  /* [시험] 반쯤 연 채 멈춤: 왼쪽 칸은 경첩(기기 가운데)을 축으로 보는 사람 쪽으로 세운 채 둔다.
      세운 칸은 자기 테두리를 두르고, 기기 테두리는 오른쪽 절반만 남긴다. */
-  /* 전시대 위 폰처럼 기기 전체를 살짝 뒤로 눕히고(X) 비스듬히 돌린다(Y).
+  /* [시험] 전시대 위 폰처럼 기기 전체를 살짝 뒤로 눕히고(X) 비스듬히 돌린다(Y).
      연출 끝 자세(device-settle 100%)와 같은 값이라 연출이 끝나도 튀지 않는다. */
   /* 답답해 보이지 않게: 기기를 조금 작게 두어 둘레에 여백을 주고, 뒤쪽에 조명처럼 밝은 빛을 깐다.
      바닥 그림자는 넓고 옅게 퍼뜨린다. */
@@ -446,42 +446,16 @@
       radial-gradient(ellipse 55% 60% at 50% 45%, #fffdf8, transparent 70%);
   }
   .dw-signin-device {
-    --dw-half-open: 34deg;
-    --dw-pose-x: 6deg;
-    --dw-pose-y: -13deg;
-    --dw-pose-scale: 0.98;
-    width: min(920px, 100%);
-    min-height: 650px;
+    --dw-half-open: 22deg;
+    --dw-pose-x: 4deg;
+    --dw-pose-y: -7deg;
+    --dw-pose-scale: 1;
     perspective: 2200px;
     transform: perspective(2400px) translateX(0) rotateX(var(--dw-pose-x)) rotateY(var(--dw-pose-y))
       scale(var(--dw-pose-scale));
   }
   .dw-signin-device::before {
     clip-path: inset(-120px -120px -120px 50%);
-    box-shadow:
-      2px 1px 0 #bab6ac,
-      6px 3px 0 #414854,
-      0 40px 80px -30px #0d122266;
-  }
-  /* 측면 버튼은 화면 바깥의 장식이며 입력 영역을 가리지 않는다. */
-  .dw-signin-form::after {
-    content: '';
-    position: absolute;
-    top: 116px;
-    right: -12px;
-    width: 4px;
-    height: 48px;
-    border-radius: 0 3px 3px 0;
-    background: linear-gradient(90deg, #747d8c, #222b39);
-    box-shadow: 0 64px 0 #414854;
-    pointer-events: none;
-  }
-  .dw-signin-hero,
-  .dw-signin-outer-back {
-    box-shadow:
-      -2px 0 0 #bab6ac,
-      -5px 2px 0 #414854,
-      0 34px 60px -28px #0d122266;
   }
   /* 세운 왼쪽 칸은 넘어오던 뒷면(.dw-signin-outer-back)과 똑같은 모양이어야 바뀌는 순간이 안 보인다.
      - 겉: 바깥 모서리 34px, 경첩 쪽은 곧게 (오른쪽 기기 테두리와 이어짐)
@@ -494,6 +468,7 @@
     border-right-width: 4px;
     border-radius: 34px 0 0 34px;
     background: #0d1222;
+    box-shadow: 0 40px 80px -30px #0d122288;
     transform-origin: right center;
     transform: rotateY(var(--dw-half-open));
   }
