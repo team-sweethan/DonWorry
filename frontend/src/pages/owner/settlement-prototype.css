@@ -860,3 +860,24 @@
   background: #59400b;
   border-color: #59400b;
 }
+.stl-calendar-heading {
+  display: grid;
+  gap: 4px;
+}
+.stl-calendar-scope {
+  font-size: 12px;
+  color: #756b5b;
+}
+.stl-calendar-heading .stl-month b {
+  min-width: 0;
+  text-align: left;
+}
+.stl-calendar-browse {
+  display: flex;
+  gap: 6px;
+  margin-left: 8px;
+}
+.stl-calendar-browse button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -7,16 +7,9 @@ import { BrandMark, Mascot } from '../../components/brand/BrandMark'
 import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from './ApplicationEntry'
 import { HeroGuardian } from './HeroGuardian'
-import {
-  DetectPanel,
-  HoldPanel,
-  OwnerCashflowCard,
-  OwnerHeroPreview,
-  OwnerResultCard,
-  OwnerSettlementCard,
-  OwnerTimelinePreview,
-  ReportPreview,
-} from './LandingPreview'
+import { landingScreens, type LandingScreen } from './landingScreens'
+import { DetectPanel, HoldPanel, OwnerTimelinePreview, ReportPreview } from './LandingPreview'
+import { LandingScreenPreview } from './LandingScreenPreview'
 
 import { LandingIntro } from './LandingIntro'
 import { createIntroVisit } from './introPlayback'
@@ -29,9 +22,9 @@ const introVisit = createIntroVisit(
 
 // 첫 화면 요약 — 한 줄에 하나씩, 짧게
 const heroPoints = [
-  { label: '멈춤', text: '의심되는 결제는 매입 전에 보류돼요' },
-  { label: '확인', text: '보안 담당자가 확인하고 처리를 정해요' },
-  { label: '결과', text: '처리가 끝나면 사장님 화면에서 확인해요' },
+  { label: '결제 보안', text: '의심되는 결제는 멈추고, 담당자가 확인해요' },
+  { label: '정산 내역', text: '정산 예정부터 실제 지급까지 살펴봐요' },
+  { label: '자금 현황', text: '예정된 지출을 반영해 앞으로의 잔액을 봐요' },
 ]
 
 // 단계 설명은 실제 신청 흐름(접수 메일 24시간 링크 · 검토 결과 메일 · 승인 메일의 비밀번호 설정 링크)과 맞춘다.
@@ -45,7 +38,10 @@ const steps = [
     title: '승인 후 계정 발급',
     detail: '신청할 때 정한 아이디로 계정이 만들어지고, 비밀번호 설정 링크가 메일로 와요.',
   },
-  { title: '첫 비밀번호 설정', detail: '링크에서 비밀번호를 정하면 바로 로그인할 수 있어요.' },
+  {
+    title: '로그인하고 쇼핑몰 연결',
+    detail: '첫 비밀번호를 정하고 로그인한 뒤, 시크릿 키를 발급받아 쇼핑몰 서버에 설정하세요.',
+  },
 ]
 
 const checklist = [
@@ -57,6 +53,16 @@ const checklist = [
 
 const faqs = [
   {
+    question: '의심 결제는 제가 직접 판정해야 하나요?',
+    answer:
+      '아니요. AI가 근거를 정리하고 보안 담당자가 판정해요. 사장님은 조치 결과에서 담당자의 결정과 실제 결제 결과를 확인할 수 있어요.',
+  },
+  {
+    question: '자금 현황은 실제 은행 잔액인가요?',
+    answer:
+      '은행 계좌를 직접 조회하지 않아요. 입력한 시작 잔액과 실제 지급·완료 지출로 현재 잔액을 계산하고, 예정된 정산과 등록한 지출을 반영해 앞으로의 잔액을 예상해요.',
+  },
+  {
     question: '신청하면 바로 쓸 수 있나요?',
     answer:
       '아니요. 이메일 확인 후 관리자가 검토하고, 승인되면 계정이 만들어져요. 결과는 신청한 이메일로 알려 드려요.',
@@ -67,66 +73,41 @@ const faqs = [
       '스팸함을 먼저 확인해 주세요. 이용 신청 화면 아래에서 확인 메일을 다시 받을 수 있어요. 가장 최근에 받은 링크만 쓸 수 있어요.',
   },
   {
-    question: '보안 담당자도 여기서 신청하나요?',
-    answer: '아니요. 이용 신청은 가맹점용이에요. 보안 담당자 계정은 관리자가 따로 만들어 드려요.',
-  },
-  {
     question: '결제 연동도 신청과 함께 되나요?',
     answer:
       '신청과는 따로 진행해요. 승인 후 로그인해서 [시크릿 키 발급]에서 키를 받아 쇼핑몰 서버에 설정해 주세요.',
   },
 ]
 
-// 정산 · 자금 화면은 앱에서도 아직 시연 화면이라 '준비 중'으로 작게 보여 준다.
-const ownerScreens: { title: string; body: string; soon?: boolean; visual: ReactNode }[] = [
-  {
-    title: '조치 결과',
-    body: '보류된 결제가 정상 처리됐는지, 취소됐는지 결제별로 확인해요.',
-    visual: <OwnerResultCard />,
-  },
-  {
-    title: '정산 내역',
-    body: '언제 얼마가 정산되는지 날짜별로 봐요.',
-    soon: true,
-    visual: <OwnerSettlementCard />,
-  },
-  {
-    title: '자금 현황',
-    body: '예정된 정산과 지출로 앞으로의 잔액을 미리 봐요.',
-    soon: true,
-    visual: <OwnerCashflowCard />,
-  },
-]
-
 const flow: { label: string; title: string; body: string; panel: ReactNode }[] = [
   {
     label: '탐지',
-    title: '결제마다 위험 점수를 매겨요',
-    body: '탐지 룰이 결제 하나하나를 살펴 점수를 매겨요. 확인이 필요한 결제는 골라내고, 위험이 아주 높은 결제는 바로 거절해요.',
+    title: '결제마다 위험 신호를 살펴봐요',
+    body: '탐지 룰이 결제를 살펴 위험 점수를 매겨요. 확인이 필요한 결제를 골라내고, 위험이 아주 높으면 바로 거절해요.',
     panel: <DetectPanel />,
   },
   {
     label: '보류',
     title: '확인이 필요하면 매입 전에 멈춰요',
-    body: '카드 승인은 됐지만 매입은 하지 않고 보류해 두니까, 보안 담당자가 확인할 시간이 생겨요.',
+    body: '카드 승인은 됐지만 매입은 잠시 보류해요. 보안 담당자가 확인할 시간을 확보해요.',
     panel: <HoldPanel />,
   },
   {
-    label: '조사',
-    title: 'AI가 근거를 정리해 둬요',
-    body: '고객의 최근 결제, 접속 국가, 카드·기기 정보, 같은 카드를 쓴 다른 결제, 걸린 탐지 룰을 보고서로 묶어요. 판정은 하지 않아요.',
+    label: 'AI 조사',
+    title: 'AI가 확인할 근거를 정리해요',
+    body: '결제와 접속 기록을 조사 보고서로 묶어요. AI는 근거를 정리하고, 판정은 하지 않아요.',
     panel: <ReportPreview />,
   },
   {
-    label: '판정',
-    title: '보안 담당자가 정상 처리할지, 취소할지 정해요',
-    body: '근거를 확인한 사람이 사유와 함께 결정하고, 그 기록이 남아요.',
+    label: '담당자 판정',
+    title: '정상 처리할지, 취소할지는 사람이 정해요',
+    body: '보안 담당자가 보고서와 근거를 확인한 뒤 결정해요. 판정 사유도 기록으로 남아요.',
     panel: <ReportPreview decided />,
   },
   {
-    label: '결과',
-    title: '처리가 끝나면 사장님도 결과를 확인해요',
-    body: '언제 보류됐고 어떤 결정이 났는지, 내 가게 결제의 처리 과정을 순서대로 봐요.',
+    label: '처리 결과',
+    title: '결정이 실제로 반영됐는지 확인해요',
+    body: '담당자의 결정과 실제 결제 결과를 구분해서 보여 드려요. 사장님은 조치 결과 화면에서 처리 과정을 확인하면 돼요.',
     panel: <OwnerTimelinePreview />,
   },
 ]
@@ -197,7 +178,7 @@ function FlowStory() {
 }
 
 // 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 스크롤·포커스만 옮긴다.
-/** 고정 폭 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다 (예시 앱 880px · 첫 화면 연출 520px). */
+/** 고정 폭 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다 (첫 화면 연출 520px). */
 function FitWidth({
   width,
   className,
@@ -265,6 +246,9 @@ export function LandingPage({ onRetry }: { onRetry?: () => void }) {
 }
 
 function LandingContent({ onRetry }: { onRetry?: () => void }) {
+  const [screen, setScreen] = useState<LandingScreen>('actions')
+  const selectedScreen = landingScreens.find((item) => item.key === screen)!
+
   const main = useRef<HTMLElement>(null)
   const apply = useApplicationConfig()
   const owner = useRef<HTMLElement>(null)
@@ -322,14 +306,17 @@ function LandingContent({ onRetry }: { onRetry?: () => void }) {
           <div className="dw-landing-container dw-landing-hero-inner">
             <div className="dw-landing-hero-copy">
               <p className="dw-landing-chip">
-                <b>FDS</b>가맹점 결제 보안
+                <b>돈워리</b>사장님을 위한 결제 · 자금 관리
               </p>
               <h1 id="landing-title">
-                그 결제, 정말
+                결제는 안전하게,
                 <br />
-                <span className="dw-landing-mark">손님이 한 걸까요?</span>
+                <span className="dw-landing-mark">돈의 흐름은 한눈에.</span>
               </h1>
-              <p className="dw-landing-lead">카드 도용이 의심되는 결제, 그냥 넘어가지 않아요.</p>
+              <p className="dw-landing-lead">
+                의심 결제 확인부터 정산과 자금 관리까지. 가게 운영에 필요한 흐름을 돈워리에서
+                확인하세요.
+              </p>
               <ol className="dw-landing-points">
                 {heroPoints.map((point, index) => (
                   <li key={point.label}>
@@ -361,31 +348,32 @@ function LandingContent({ onRetry }: { onRetry?: () => void }) {
           <div className="dw-landing-container">
             <div className="dw-landing-owner-head">
               <p className="dw-landing-eyebrow">사장님이 쓰는 화면</p>
-              <h2 id="landing-owner-title">보류된 결제의 결과와 돈의 흐름을 한 곳에서</h2>
-              <p>로그인하면 사장님 화면이 열려요. 보안 담당자가 쓰는 내부 화면과는 따로 있어요.</p>
+              <h2 id="landing-owner-title">내 가게의 결제와 정산, 이렇게 보여요</h2>
+              <p>조치 결과 · 정산 내역 · 자금 현황을 눌러 사장님 화면을 미리 살펴보세요.</p>
             </div>
-            <FitWidth width={880} className="dw-landing-owner-preview">
-              <OwnerHeroPreview />
-            </FitWidth>
-            <div className="dw-landing-owner-grid">
-              {ownerScreens.map((screen) => (
-                <article
-                  key={screen.title}
-                  className={`dw-landing-owner-card${screen.soon ? ' is-soon' : ''}`}
+            <div className="dw-landing-screen-tabs" role="group" aria-label="미리 볼 화면 선택">
+              {landingScreens.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  aria-pressed={screen === item.key}
+                  aria-controls="landing-screen"
+                  onClick={() => setScreen(item.key)}
                 >
-                  <div className="dw-landing-owner-copy">
-                    <h3>
-                      {screen.title}
-                      {screen.soon && <span className="dw-landing-soon">준비 중</span>}
-                    </h3>
-                    <p>{screen.body}</p>
-                  </div>
-                  {screen.visual}
-                </article>
+                  {item.title}
+                </button>
               ))}
             </div>
+            <div className="dw-landing-screen-copy" aria-live="polite">
+              <h3>{selectedScreen.text}</h3>
+              <p>{selectedScreen.detail}</p>
+            </div>
+            <div id="landing-screen">
+              <LandingScreenPreview screen={screen} />
+            </div>
             <p className="dw-landing-owner-note">
-              정산 내역과 자금 현황은 결제 연동과 함께 열릴 예정이에요.
+              현재 서비스의 화면 구성에 예시 데이터를 넣었어요. 실제 내역은 로그인 후 확인할 수
+              있어요.
             </p>
           </div>
         </section>
@@ -423,7 +411,7 @@ function LandingContent({ onRetry }: { onRetry?: () => void }) {
             <div className="dw-landing-start-head">
               <div>
                 <p className="dw-landing-eyebrow">이용 절차</p>
-                <h2 id="landing-start-title">이용까지 4단계면 돼요</h2>
+                <h2 id="landing-start-title">신청부터 쇼핑몰 연결까지</h2>
                 <p>가맹점 사장님이나 담당자가 신청하면, 관리자가 확인하고 계정을 만들어 드려요.</p>
               </div>
               <ApplicationEntry config={apply} />
@@ -465,8 +453,8 @@ function LandingContent({ onRetry }: { onRetry?: () => void }) {
             <div className="dw-landing-final-box">
               <Mascot size={150} className="dw-landing-final-mascot dw-mascot-float" />
               <div>
-                <h2 id="landing-final-title">지금 이용을 신청하세요</h2>
-                <p>계정이 있다면 바로 로그인하면 돼요.</p>
+                <h2 id="landing-final-title">내 가게의 돈 흐름을 확인할 준비, 되셨나요?</h2>
+                <p>이용 신청 후 관리자 승인을 받으면 사장님 공간이 열려요.</p>
               </div>
               <div className="dw-landing-cta">
                 <ApplicationEntry config={apply} variant="inverse" />

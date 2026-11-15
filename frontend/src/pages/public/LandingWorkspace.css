@@ -1,0 +1,59 @@
+.landing-workspace-frame {
+  display: block;
+  width: 1280px;
+  height: 820px;
+  border: 1px solid #e7dfcf;
+  border-radius: 18px;
+  background: #faf8f2;
+}
+.landing-workspace {
+  width: 1280px;
+  height: 820px;
+  overflow: hidden;
+}
+.landing-workspace[data-screen='actions'] a[href='/owner/actions'],
+.landing-workspace[data-screen='settlements'] a[href='/owner/settlements'],
+.landing-workspace[data-screen='funds'] a[href='/owner/funds'] {
+  background: var(--shell-canvas);
+  color: var(--shell-ink);
+  font-weight: 700;
+}
+.dw-landing-screen-tabs {
+  display: flex;
+  gap: 12px;
+  margin: 28px 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.dw-landing-screen-tabs button {
+  border: 1px solid #d7d9df;
+  border-radius: 999px;
+  padding: 12px 24px;
+  background: #fff;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.dw-landing-screen-tabs button[aria-pressed='true'] {
+  background: #172554;
+  border-color: #172554;
+  color: #fff;
+}
+.dw-landing-screen-copy {
+  margin: 0 auto 24px;
+  max-width: 700px;
+  text-align: center;
+}
+.dw-landing-screen-copy h3 {
+  margin: 0 0 10px;
+  font-size: clamp(19px, 3vw, 25px);
+}
+.dw-landing-screen-copy p {
+  color: #586477;
+  line-height: 1.8;
+  margin: 0;
+}
+.dw-landing-owner-preview .landing-workspace-frame {
+  box-shadow: 0 24px 64px #17255412;
+}

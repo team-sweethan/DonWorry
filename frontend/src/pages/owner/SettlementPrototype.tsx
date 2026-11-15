@@ -13,6 +13,7 @@ import { matchesSettlementStatus } from './settlementStatus'
 import type { SettlementStatusFilter } from './settlementStatus'
 import { useState, useRef, useEffect } from 'react'
 import { SettlementPeriodControl } from './SettlementPeriodControl'
+import { settlementCalendarNavigation } from './settlementNavigation'
 import { Alert, Button, DatePicker, Descriptions, Input, Modal, Pagination, Select } from 'antd'
 import dayjs from 'dayjs'
 import { PageHeader } from '../../components/common/PageHeader'
@@ -369,8 +370,13 @@ export function SettlementPrototype({
     rows.map((e) => ({ amount: net(e), status: e.status })),
     expenseRows.map((e) => e.amount),
   )
-  const move = (offset: number) =>
-    setMonth(new Date(month.getFullYear(), month.getMonth() + offset, 1))
+  const calendarNavigation = settlementCalendarNavigation(
+    { from: rangeStart, to: rangeEnd },
+    dateInput(month),
+  )
+  const moveCalendar = (date: string | null) => {
+    if (date) setMonth(new Date(date + 'T12:00:00'))
+  }
   return (
     <div className="stl-prototype">
       <PageHeader
@@ -556,26 +562,37 @@ export function SettlementPrototype({
       >
         <section className="stl-panel stl-calendar-panel">
           <div className="stl-calendar-header">
-            <div className="stl-month">
-              <button aria-label="이전 달" onClick={() => move(-1)}>
-                ‹
-              </button>
-              <b>
-                {month.getFullYear()}년 {month.getMonth() + 1}월
-              </b>
-              <button aria-label="다음 달" onClick={() => move(1)}>
-                ›
-              </button>
-              <button
-                disabled={!canSelectToday}
-                title={canSelectToday ? '오늘 보기' : '오늘은 조회 기간 밖입니다.'}
-                onClick={() => {
-                  setMonth(new Date(today.getFullYear(), today.getMonth(), 1))
-                  setSelected(today)
-                }}
-              >
-                오늘
-              </button>
+            <div className="stl-calendar-heading">
+              <span className="stl-calendar-scope">조회 기간 내 달력</span>
+              <div className="stl-month">
+                <b>
+                  {month.getFullYear()}년 {month.getMonth() + 1}월
+                </b>
+                {calendarNavigation.multiple && (
+                  <div
+                    className="stl-calendar-browse"
+                    role="group"
+                    aria-label="조회 기간 내 달력 이동"
+                  >
+                    <button
+                      type="button"
+                      aria-label="조회 기간 내 이전 달"
+                      disabled={!calendarNavigation.previous}
+                      onClick={() => moveCalendar(calendarNavigation.previous)}
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="조회 기간 내 다음 달"
+                      disabled={!calendarNavigation.next}
+                      onClick={() => moveCalendar(calendarNavigation.next)}
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="stl-legend">
               <span>

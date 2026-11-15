@@ -18,7 +18,7 @@ export function fundsPeriodDays(period: FinancePeriod) {
   return dayjs(period.to).diff(dayjs(period.from), 'day') + 1
 }
 
-// 양끝 날짜를 포함한 일수를 유지하며 이동하고, 기존 기준일·조회 상한 밖으로는 이동하지 않는다.
+// 같은 일수로 이동하되, 기준일에 걸치는 이전 기간은 조회 가능한 날짜만 남긴다.
 export function shiftFundsPeriod(
   period: FinancePeriod,
   direction: -1 | 1,
@@ -35,6 +35,7 @@ export function shiftFundsPeriod(
       .add(days * direction, 'day')
       .format('YYYY-MM-DD'),
   }
-  if ((min && next.from < min) || (max && next.to > max)) return null
+  if (direction === -1 && min && next.from < min) next.from = min
+  if (next.from > next.to || (min && next.from < min) || (max && next.to > max)) return null
   return next
 }
