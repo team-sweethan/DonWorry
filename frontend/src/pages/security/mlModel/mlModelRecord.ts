@@ -53,7 +53,7 @@ export const timeline = [
   { when: '11/09', title: 'v4 준비', body: '표본 부족으로 재학습 보류' },
 ]
 
-// ---- ① 데이터 만들기 (README 7 · 8절 · profiles.py · data/*.csv 11/10 집계) ----
+// ---- ① 데이터 만들기 (README 7 · 8절 · generation/profiles.py · data/*.csv 11/10 집계) ----
 
 export const baseDataset = {
   period: '2026-04-01 ~ 08-31 (5개월)',
@@ -691,7 +691,7 @@ export const shadowCheck = {
 export const limitThoughts: Thought[] = [
   {
     head: '합성 성적이 좋은 이유는 우리가 그렇게 만들었기 때문입니다.',
-    body: 'TabFormer의 사기는 "어디서 · 무슨 업종에서"로 드러나는데, 우리 12칸은 손님의 행동 이력만 봅니다. 합성 성적표의 "룰 대비 약 3.8배"는 우리가 설계한 사기 안에서만 맞는 결론입니다.',
+    body: 'TabFormer의 사기는 "어디서 · 무슨 업종에서"로 드러나는데, 우리 12칸은 손님의 행동 이력만 봅니다. 합성 성적표의 "룰 대비 약 3.6배"는 우리가 설계한 사기 안에서만 맞는 결론입니다.',
   },
   {
     head: '그래서 판정에 쓰지 않습니다.',
@@ -706,7 +706,7 @@ export const limitThoughts: Thought[] = [
 export const sources: Record<MlModelTab, string> = {
   overview:
     'fds-ml git 기록 · ADR-0061 · comparisons/reports/rf_v1_vs_v2.md · reports/scorecard.md · reports/tabformer_scorecard.md',
-  data: 'fds-ml README.md 7 · 8 · 13절 · profiles.py · data/transactions.csv · data/v3/*.csv (11/10 집계)',
+  data: 'fds-ml README.md 7 · 8 · 13절 · generation/profiles.py · data/transactions.csv · data/v3/*.csv (11/10 집계)',
   split:
     'fds-ml common/rf_training.py split_and_purge · README 4 · 14절 · 11/10 집계 (저장된 모델의 경계 시각과 같음)',
   training:

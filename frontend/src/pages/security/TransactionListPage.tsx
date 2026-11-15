@@ -326,7 +326,7 @@ export function TransactionListPage() {
           )
         if (cell.kind === 'none')
           return (
-            <Tooltip title="아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요.">
+            <Tooltip title="아직 채점 전이거나(결제 후 약 30 ~ 60초 뒤) ML 채점이 꺼져 있어요.">
               <Typography.Text type="secondary">기록 없음</Typography.Text>
             </Tooltip>
           )

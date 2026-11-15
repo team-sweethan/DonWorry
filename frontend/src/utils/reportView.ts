@@ -501,7 +501,7 @@ export function mlReportLine(cell: MlCell): string {
         cell.aboveThreshold ? '이상' : '미만'
       } (${cell.modelVersion} · 판정에 쓰지 않음)`
     case 'none':
-      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요'
+      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30 ~ 60초 뒤) ML 채점이 꺼져 있어요'
     case 'failed':
       return 'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)'
     case 'skipped':

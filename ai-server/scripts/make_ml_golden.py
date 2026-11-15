@@ -115,7 +115,7 @@ def main() -> int:
         )
 
     golden = {
-        "source": "fds-ml/features.py + models/random_forest_baseline.joblib (n_jobs=1)",
+        "source": "fds-ml/common/features.py + models/random_forest_baseline.joblib (n_jobs=1)",
         "threshold": bundle["threshold"],
         "featureColumns": list(columns),
         "cases": cases,
