@@ -108,12 +108,22 @@ export function ReportPreview({ decided = false }: { decided?: boolean }) {
 }
 
 const ownerSteps = [
-  { title: '취소 결정', detail: '보안 담당자가 매입을 거부했어요', time: '14:52', state: 'done' },
-  { title: '조사 중', detail: '보고서와 근거를 검토하고 있어요', time: '14:40', state: 'done' },
-  { title: '결제 보류', detail: '위험 점수 68 · 해외 IP 고액 결제', time: '14:31', state: 'past' },
+  { title: '결제 보류', detail: '결제가 잠시 멈췄어요', time: '14:31', state: 'past' },
+  {
+    title: '취소 결정',
+    detail: '보안 담당자가 취소하기로 결정했어요',
+    time: '14:52',
+    state: 'past',
+  },
+  {
+    title: '승인 취소 완료',
+    detail: '실제 결제에 취소가 반영됐어요',
+    time: '14:53',
+    state: 'done',
+  },
 ]
 
-/** 5 결과 — 사장님은 내 가게 결제가 어떻게 처리됐는지 본다. 문구는 고객사 화면(ownerLabels)과 맞춘다. */
+/** 사장님에게는 담당자 결정과 실제 금융 처리 완료를 구분해서 보여 준다. */
 export function OwnerTimelinePreview() {
   return (
     <div className="dw-preview-card dw-journey-card" aria-hidden="true">

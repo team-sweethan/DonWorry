@@ -19,6 +19,13 @@ test('landingWorkspace_whenRenderingOwnerScreens_preservesPaymentAndFinanceMeani
       renderToStaticMarkup(
         createElement(MemoryRouter, null, createElement(LandingWorkspace, { screen })),
       )
+    const { OwnerTimelinePreview } = await server.ssrLoadModule(
+      '/src/pages/public/LandingPreview.tsx',
+    )
+    const timeline = renderToStaticMarkup(createElement(OwnerTimelinePreview))
+    assert.doesNotMatch(timeline, /위험 점수|해외 IP/)
+    assert.match(timeline, /승인 취소 완료/)
+    assert.ok(timeline.indexOf('취소 결정') < timeline.indexOf('승인 취소 완료'))
     const actions = render('actions')
     assert.match(actions, /1,280,000원/)
     assert.match(actions, /담당자 결정과 실제 결제 결과는 다를 수 있어요/)
@@ -32,6 +39,15 @@ test('landingWorkspace_whenRenderingOwnerScreens_preservesPaymentAndFinanceMeani
     assert.match(funds, /자금 현황/)
     assert.match(funds, /예상/)
     assert.doesNotMatch(funds, /NaN|Infinity/)
+    const { LandingPage } = await server.ssrLoadModule('/src/pages/public/LandingPage.tsx')
+    const page = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(LandingPage)))
+    assert.equal([...page.matchAll(/class="dw-journey-label"/g)].length, 3)
+    assert.match(page, /전체 화면 보기/)
+    assert.match(page, /의심 결제는 제가 직접 판정해야 하나요/)
+    assert.match(page, /자금 현황은 실제 은행 잔액인가요/)
+    assert.ok(
+      page.indexOf('멈춘 결제는 지금 어떤 상태일까요?') < page.indexOf('id="landing-screen"'),
+    )
   } finally {
     await server.close()
   }

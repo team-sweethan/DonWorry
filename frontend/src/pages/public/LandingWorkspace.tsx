@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { createCache, StyleProvider } from '@ant-design/cssinjs'
 import { PageHeader } from '../../components/common/PageHeader'
 import { navByRole } from '../../config/navigation'
 import { ManagementLayout } from '../../layouts/AdminLayout'
@@ -182,6 +183,7 @@ export function LandingWorkspace({ screen }: { screen: LandingScreen }) {
 // iframe이 데스크톱 뷰포트를 유지하므로 휴대폰에서도 같은 화면을 통째로 축소한다.
 export function LandingWorkspaceFrame({ screen }: { screen: LandingScreen }) {
   const [body, setBody] = useState<HTMLElement | null>(null)
+  const [cache] = useState(createCache)
   const content: ReactNode = <LandingWorkspace screen={screen} />
   return (
     <iframe
@@ -205,7 +207,13 @@ export function LandingWorkspaceFrame({ screen }: { screen: LandingScreen }) {
         setBody(target.body)
       }}
     >
-      {body && createPortal(content, body)}
+      {body &&
+        createPortal(
+          <StyleProvider container={body.ownerDocument.head} cache={cache}>
+            {content}
+          </StyleProvider>,
+          body,
+        )}
     </iframe>
   )
 }

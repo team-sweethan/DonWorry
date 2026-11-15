@@ -467,7 +467,7 @@
   list-style: none;
 }
 .dw-journey-steps > li {
-  min-height: 62vh;
+  min-height: 380px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -561,7 +561,7 @@
   right: 28px;
   bottom: 24px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .dw-journey-progress span {

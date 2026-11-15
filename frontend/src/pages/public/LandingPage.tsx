@@ -1,13 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Alert, Button } from 'antd'
 import { CheckOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
@@ -17,14 +8,11 @@ import { useApplicationConfig } from '../../hooks/useApplicationConfig'
 import { ApplicationEntry } from './ApplicationEntry'
 import { HeroGuardian } from './HeroGuardian'
 import { landingScreens, type LandingScreen } from './landingScreens'
-import { DetectPanel, HoldPanel, OwnerTimelinePreview, ReportPreview } from './LandingPreview'
+import { HoldPanel, OwnerTimelinePreview, ReportPreview } from './LandingPreview'
+import { LandingScreenPreview } from './LandingScreenPreview'
 
 import { LandingIntro } from './LandingIntro'
 import { createIntroVisit } from './introPlayback'
-
-const LandingWorkspace = lazy(() =>
-  import('./LandingWorkspace').then((module) => ({ default: module.LandingWorkspaceFrame })),
-)
 
 const introVisit = createIntroVisit(
   () => window.sessionStorage,
@@ -65,6 +53,16 @@ const checklist = [
 
 const faqs = [
   {
+    question: '의심 결제는 제가 직접 판정해야 하나요?',
+    answer:
+      '아니요. AI가 근거를 정리하고 보안 담당자가 판정해요. 사장님은 조치 결과에서 담당자의 결정과 실제 결제 결과를 확인할 수 있어요.',
+  },
+  {
+    question: '자금 현황은 실제 은행 잔액인가요?',
+    answer:
+      '은행 계좌를 직접 조회하지 않아요. 입력한 시작 잔액과 실제 지급·완료 지출로 현재 잔액을 계산하고, 예정된 정산과 등록한 지출을 반영해 앞으로의 잔액을 예상해요.',
+  },
+  {
     question: '신청하면 바로 쓸 수 있나요?',
     answer:
       '아니요. 이메일 확인 후 관리자가 검토하고, 승인되면 계정이 만들어져요. 결과는 신청한 이메일로 알려 드려요.',
@@ -87,33 +85,21 @@ const faqs = [
 
 const flow: { label: string; title: string; body: string; panel: ReactNode }[] = [
   {
-    label: '탐지',
-    title: '결제마다 위험 점수를 매겨요',
-    body: '탐지 룰이 결제 하나하나를 살펴 점수를 매겨요. 확인이 필요한 결제는 골라내고, 위험이 아주 높은 결제는 바로 거절해요.',
-    panel: <DetectPanel />,
-  },
-  {
-    label: '보류',
-    title: '확인이 필요하면 매입 전에 멈춰요',
-    body: '카드 승인은 됐지만 매입은 하지 않고 보류해 두니까, 보안 담당자가 확인할 시간이 생겨요.',
+    label: '탐지 · 보류',
+    title: '확인이 필요한 결제는 잠시 멈춰요',
+    body: '시스템이 결제를 살펴보고, 확인이 필요하면 매입 전에 보류해요. 위험이 아주 높은 결제는 바로 거절해요.',
     panel: <HoldPanel />,
   },
   {
-    label: '조사',
-    title: 'AI가 근거를 정리해 둬요',
-    body: '고객의 최근 결제, 접속 국가, 카드·기기 정보, 같은 카드를 쓴 다른 결제, 걸린 탐지 룰을 보고서로 묶어요. 판정은 하지 않아요.',
-    panel: <ReportPreview />,
-  },
-  {
-    label: '판정',
-    title: '보안 담당자가 정상 처리할지, 취소할지 정해요',
-    body: '근거를 확인한 사람이 사유와 함께 결정하고, 그 기록이 남아요.',
+    label: '담당자 확인',
+    title: '근거는 AI가, 결정은 보안 담당자가',
+    body: 'AI가 결제와 접속 기록을 보고서로 정리해요. 보안 담당자가 근거를 확인하고 정상 처리할지, 취소할지 정해요.',
     panel: <ReportPreview decided />,
   },
   {
-    label: '결과',
-    title: '처리가 끝나면 사장님도 결과를 확인해요',
-    body: '언제 보류됐고 어떤 결정이 났는지, 내 가게 결제의 처리 과정을 순서대로 봐요.',
+    label: '처리 결과',
+    title: '결정이 실제로 반영됐는지 확인해요',
+    body: '담당자의 결정과 실제 결제 결과를 구분해서 보여 드려요. 사장님은 조치 결과 화면에서 처리 과정을 확인하면 돼요.',
     panel: <OwnerTimelinePreview />,
   },
 ]
@@ -184,7 +170,7 @@ function FlowStory() {
 }
 
 // 해시 이동은 라우터 위치 key를 바꿔 세션 확인을 다시 하므로 주소를 바꾸지 않고 스크롤·포커스만 옮긴다.
-/** 고정 폭 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다 (예시 앱 880px · 첫 화면 연출 520px). */
+/** 고정 폭 화면을 자르지 않고, 들어갈 폭에 맞춰 통째로 줄여 보여 준다 (첫 화면 연출 520px). */
 function FitWidth({
   width,
   className,
@@ -370,16 +356,12 @@ function LandingContent({ onRetry }: { onRetry?: () => void }) {
                 </button>
               ))}
             </div>
-            <div id="landing-screen">
-              <FitWidth width={1280} className="dw-landing-owner-preview">
-                <Suspense fallback={<div style={{ width: 1280, height: 820 }} />}>
-                  <LandingWorkspace screen={screen} />
-                </Suspense>
-              </FitWidth>
-            </div>
             <div className="dw-landing-screen-copy" aria-live="polite">
               <h3>{selectedScreen.text}</h3>
               <p>{selectedScreen.detail}</p>
+            </div>
+            <div id="landing-screen">
+              <LandingScreenPreview screen={screen} />
             </div>
             <p className="dw-landing-owner-note">
               현재 서비스의 화면 구성에 예시 데이터를 넣었어요. 실제 내역은 로그인 후 확인할 수
