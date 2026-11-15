@@ -13,6 +13,7 @@ import {
   type FdsResult,
 } from '../../api/fds'
 import { PageHeader } from '../../components/common/PageHeader'
+import { pickDefaultMerchant } from '../../utils/alertDefaultMerchant'
 import { WATCH_LIMIT_MS, WATCH_MS } from '../../utils/caseListWatch'
 import { customerPart } from '../../utils/caseRules'
 import { AlertScoreField, type AlertFilter } from './alert/AlertScoreField'
@@ -315,10 +316,13 @@ export function AlertListPage() {
     [loadRecent, persistConditions],
   )
 
-  /** 가맹점마다 1건만 조회해 판정별 건수를 받는다. 실패한 가맹점은 건수를 비워 둔다 */
+  /**
+   * 가맹점마다 1건만 조회해 판정별 건수를 받는다. 실패한 가맹점은 건수를 비워 둔다.
+   * 받은 건수를 돌려준다. 그사이 새 조회가 시작됐으면 null이다
+   */
   const loadMerchantCounts = useCallback((list: MerchantDirectoryEntry[]) => {
     const sequence = ++merchantCountSequence.current
-    void Promise.allSettled(
+    return Promise.allSettled(
       list.map((merchant) =>
         getFdsEvaluations({
           attentionOnly: true,
@@ -328,7 +332,7 @@ export function AlertListPage() {
         }),
       ),
     ).then((results) => {
-      if (sequence !== merchantCountSequence.current) return
+      if (sequence !== merchantCountSequence.current) return null
       const next = new Map<number, number>()
       results.forEach((result, index) => {
         if (result.status !== 'fulfilled') return
@@ -336,6 +340,7 @@ export function AlertListPage() {
         next.set(list[index].merchantId, attentionOf(counts))
       })
       setAttentionByMerchant(next)
+      return next
     })
   }, [])
 
@@ -350,28 +355,38 @@ export function AlertListPage() {
           if (sequence !== requestSequence.current) return
           setMerchants(result)
           merchantsRef.current = result
-          loadMerchantCounts(result)
-          const selectedMerchant =
-            result.find((merchant) => merchant.merchantId === preferredMerchantId) ??
-            result.find((merchant) => merchant.status === 'ACTIVE') ??
-            result[0]
-          if (!selectedMerchant) {
-            setListLoading(false)
-            setSummaryLoading(false)
-            setError('선택할 가맹점이 없습니다.')
+          const counts = loadMerchantCounts(result)
+          const openMerchant = (selectedMerchant: MerchantDirectoryEntry | undefined) => {
+            if (!selectedMerchant) {
+              setListLoading(false)
+              setSummaryLoading(false)
+              setError('선택할 가맹점이 없습니다.')
+              return
+            }
+            const current = conditions.current
+            const page = current.merchantId === selectedMerchant.merchantId ? current.page : 0
+            setMerchantId(selectedMerchant.merchantId)
+            conditions.current = {
+              filter: current.filter,
+              query: current.query,
+              merchantId: selectedMerchant.merchantId,
+              page,
+            }
+            persistConditions(conditions.current)
+            load(page, current.filter, current.query, selectedMerchant.merchantId, true)
+          }
+          // 주소에 있는 가맹점은 그대로 연다 (뒤로 가기 · 경보 상세의 "목록으로" · 새로고침)
+          const preferred = result.find((merchant) => merchant.merchantId === preferredMerchantId)
+          if (preferred) {
+            openMerchant(preferred)
             return
           }
-          const current = conditions.current
-          const page = current.merchantId === selectedMerchant.merchantId ? current.page : 0
-          setMerchantId(selectedMerchant.merchantId)
-          conditions.current = {
-            filter: current.filter,
-            query: current.query,
-            merchantId: selectedMerchant.merchantId,
-            page,
-          }
-          persistConditions(conditions.current)
-          load(page, current.filter, current.query, selectedMerchant.merchantId, true)
+          // 처음 열 때는 확인할 경보가 가장 많은 운영 중 가맹점을 연다 (#823). 건수가 오기 전에
+          // 사용자가 가맹점을 고르면 그 조회가 순번을 올리므로 여기서 덮어쓰지 않는다
+          void counts.then((attention) => {
+            if (sequence !== requestSequence.current) return
+            openMerchant(pickDefaultMerchant(result, attention ?? new Map()))
+          })
         })
         .catch(() => {
           if (sequence !== requestSequence.current) return
@@ -487,7 +502,7 @@ export function AlertListPage() {
         loadRecent(current.merchantId!)
         silentCheckCount.current += 1
         if (silentCheckCount.current % MERCHANT_COUNT_EVERY === 0) {
-          loadMerchantCounts(merchantsRef.current)
+          void loadMerchantCounts(merchantsRef.current)
         } else {
           setAttentionByMerchant((previous) =>
             new Map(previous).set(current.merchantId!, attentionOf(response.resultCounts)),
