@@ -50,7 +50,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  width: min(1080px, 100%);
+  width: min(1000px, 100%);
   min-height: 620px;
   padding: 8px;
 }
@@ -446,7 +446,7 @@
       radial-gradient(ellipse 55% 60% at 50% 45%, #fffdf8, transparent 70%);
   }
   .dw-signin-device {
-    --dw-half-open: 22deg;
+    --dw-half-open: 28deg;
     --dw-pose-x: 4deg;
     --dw-pose-y: -7deg;
     --dw-pose-scale: 1;
