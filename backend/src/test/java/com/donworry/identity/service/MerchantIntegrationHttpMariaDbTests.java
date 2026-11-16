@@ -578,7 +578,7 @@ class MerchantIntegrationHttpMariaDbTests {
         // 연동 전의 조회·픽업은 연동 게이트를 통과해 업무 입력 검사까지 도달한다.
         assertThat(merchantSend(secret, "GET", "/api/payments/99999999", "").statusCode())
                 .isEqualTo(404);
-        assertThat(merchantSend(secret, "PUT", "/api/v1/order-fulfillments/99999999/completion", "{}")
+        assertThat(merchantSend(secret, "PUT", "/api/v1/order-fulfillments/99999999/schedule", "{}")
                         .statusCode())
                 .isNotEqualTo(403);
         problem(merchantSend(secret, "POST", "/api/merchant-connections/check", "{}"), 400, "MERCHANT_AUTH_007");

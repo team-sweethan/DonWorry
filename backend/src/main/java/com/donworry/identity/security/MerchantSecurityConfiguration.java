@@ -31,8 +31,7 @@ public class MerchantSecurityConfiguration {
                 paths.matcher("/api/payment-orders"), HttpMethod.GET,
                 paths.matcher("/api/payments/{paymentId}/cancellations"), HttpMethod.POST,
                 paths.matcher("/api/payment-cancellation-requests/{requestKey}"), HttpMethod.GET,
-                paths.matcher("/api/v1/order-fulfillments/{orderId}/schedule"), HttpMethod.PUT,
-                paths.matcher("/api/v1/order-fulfillments/{orderId}/completion"), HttpMethod.PUT);
+                paths.matcher("/api/v1/order-fulfillments/{orderId}/schedule"), HttpMethod.PUT);
         RequestMatcher allowed = request -> routes.entrySet().stream()
                 .anyMatch(route ->
                         route.getKey().matches(request) && route.getValue().matches(request.getMethod()));

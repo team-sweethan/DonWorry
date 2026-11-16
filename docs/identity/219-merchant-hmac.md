@@ -60,7 +60,6 @@ DB 기록 저장이 실패하면 503으로 차단하며 업무 코드를 실행�
 | GET | `/api/payments/{paymentId}` |
 | GET | `/api/payment-orders` |
 | PUT | `/api/v1/order-fulfillments/{orderId}/schedule` |
-| PUT | `/api/v1/order-fulfillments/{orderId}/completion` |
 
 전용 보안 체인이 해당 경로를 모든 메서드로 먼저 선택한다. 경로별 지원하지 않는 메서드는 405이며 `Allow`는 해당 경로의 POST·GET·PUT을 반환한다.
 정해진 메서드만 HMAC 인증을 허용하고 CSRF 예외로 둔다. 직원 체인의 전체 CSRF 설정·다른 업무 경로·`/internal/ai/**`는 바꾸지 않는다.

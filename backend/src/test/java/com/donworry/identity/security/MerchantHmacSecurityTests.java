@@ -296,7 +296,7 @@ class MerchantHmacSecurityTests {
 
     // 두 픽업 경로는 정지 가맹점도 서명과 본문을 확인하고 세션 없이 공개 신원을 제공한다
     @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
+    @ValueSource(strings = "schedule")
     void pickup_whenSigned_allowsInactiveMerchantAndPreservesBody(String action) throws Exception {
         when(merchant.getStatus()).thenReturn(MerchantStatus.INACTIVE);
         String field = "schedule".equals(action) ? "scheduledPickupAt" : "pickedUpAt";
@@ -312,7 +312,7 @@ class MerchantHmacSecurityTests {
 
     // 직원 세션만 있거나 서명이 누락되면 픽업 수신부에 도달하지 않는다
     @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
+    @ValueSource(strings = "schedule")
     void pickup_whenOnlyStaffSession_rejectsWithoutReadingMerchant(String action) throws Exception {
         var session = new MockHttpSession();
         var context = SecurityContextHolder.createEmptyContext();
@@ -333,7 +333,7 @@ class MerchantHmacSecurityTests {
 
     // 픽업 경로의 모든 미지원 메서드는 직원 체인 대신 405와 PUT 허용 헤더를 반환한다
     @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
+    @ValueSource(strings = "schedule")
     void pickup_whenUnsupportedMethod_returnsPutAllowHeader(String action) throws Exception {
         for (String method : List.of("GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS")) {
             mvc.perform(request(
@@ -345,13 +345,12 @@ class MerchantHmacSecurityTests {
         verifyNoInteractions(merchants, nonces);
     }
 
-    // 주문번호·픽업 동작·본문·메서드를 바꾸면 원래 서명을 재사용할 수 없다
+    // 주문번호·본문·메서드를 바꾸면 원래 서명을 재사용할 수 없다
     @Test
     void pickup_whenTampered_rejectsBeforeNonceConsumption() throws Exception {
         String path = "/api/v1/order-fulfillments/ORDER-1/schedule";
         mvc.perform(signed("PUT", path, "{}", 0).content("{ }")).andExpect(status().isUnauthorized());
-        for (String target : List.of(
-                "/api/v1/order-fulfillments/ORDER-2/schedule", "/api/v1/order-fulfillments/ORDER-1/completion")) {
+        for (String target : List.of("/api/v1/order-fulfillments/ORDER-2/schedule")) {
             mvc.perform(signed("PUT", path, "{}", 0).with(r -> {
                         r.setRequestURI(target);
                         return r;
@@ -368,7 +367,7 @@ class MerchantHmacSecurityTests {
 
     // 만료·재사용 서명은 거절하고 새 서명으로 같은 본문을 보내면 업무 처리에 전달한다
     @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
+    @ValueSource(strings = "schedule")
     void pickup_whenExpiredOrReplayed_rejectsButAllowsFreshRetry(String action) throws Exception {
         String path = "/api/v1/order-fulfillments/ORDER-1/" + action;
         mvc.perform(signed("PUT", path, "{}", -301)).andExpect(status().isUnauthorized());
@@ -382,7 +381,7 @@ class MerchantHmacSecurityTests {
 
     // 픽업 nonce 저장 장애는 본문 전달 없이 503으로 차단한다
     @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
+    @ValueSource(strings = "schedule")
     void pickup_whenNonceStorageFails_returnsUnavailable(String action) throws Exception {
         when(nonces.consume(anyLong(), any(), any(), anyLong()))
                 .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db"));
@@ -429,8 +428,7 @@ class MerchantHmacSecurityTests {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }
 
-        @PutMapping({"/api/v1/order-fulfillments/{orderId}/schedule", "/api/v1/order-fulfillments/{orderId}/completion"
-        })
+        @PutMapping({"/api/v1/order-fulfillments/{orderId}/schedule"})
         String pickup(@RequestBody String body) {
             return current.findCurrent().orElseThrow().merchantId() + ":" + body;
         }

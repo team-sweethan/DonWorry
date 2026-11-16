@@ -11,7 +11,6 @@ import com.donworry.settlement.dto.PickupOrderItemRequest;
 import com.donworry.settlement.dto.PickupResponse;
 import com.donworry.settlement.service.OrderFulfillmentService;
 import com.donworry.settlement.service.PickupAccessService;
-import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -90,20 +89,19 @@ class PickupControllerTests {
         verifyNoInteractions(service);
     }
 
-    // 완료 API는 상품 목록 없이 실제 시각만 전달한다.
+    // 기존 완료 경로는 더 이상 시각을 받지 않는다.
     @Test
-    void completion_whenValid_delegatesActualTimeOnly() throws Exception {
+    void completion_isNoLongerMapped() throws Exception {
         var access = mock(PickupAccessService.class);
         when(access.requireMerchant()).thenReturn(7L);
         var service = mock(OrderFulfillmentService.class);
-        when(service.recordCompletion(any(), any(), any())).thenReturn(new PickupResponse("ORDER", "STORED", "LINKED"));
         var mvc = MockMvcBuilders.standaloneSetup(new PickupController(access, service))
                 .setControllerAdvice(new PickupExceptionHandler())
                 .build();
         mvc.perform(put("/api/v1/order-fulfillments/ORDER/completion")
                         .contentType("application/json")
                         .content("{\"pickedUpAt\":\"2026-11-01T06:15:00Z\"}"))
-                .andExpect(status().isOk());
-        verify(service).recordCompletion(7L, "ORDER", Instant.parse("2026-11-01T06:15:00Z"));
+                .andExpect(status().isNotFound());
+        verifyNoInteractions(service);
     }
 }
