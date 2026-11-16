@@ -2,18 +2,54 @@
 
 [← ERD 안내](README.md) · [저장 계약](contracts.md) · [승인·변경 기록](history.md)
 
-기준: `f7db9cd307067dcaa6a71673f0ad02b3115a8754`의 migration 85개. CREATE와 이후 ALTER를 합쳐 물리 FK 54개를 아래 그림과 대조했습니다. 각 FK는 한 선으로 표시합니다. 독립 테이블까지 모두 그리지는 않으며 전체 소유 목록은 [README 2절](README.md#2-테이블-소유)을 봅니다.
+표끼리 어떻게 이어지는지 그림으로 봅니다. 먼저 전체 지도로 큰 흐름을 보고, 담당별 그림에서 표 단위 연결을 봅니다.
 
-논리 참조는 기존 그림의 점선과 아래 표로 정리했습니다. 전체 시스템의 논리 참조·서비스 경로를 모두 검증한 목록은 아닙니다. 실제 DB 적용·애플리케이션 실행 결과는 포함하지 않습니다.
-실제 물리 FK는 CREATE와 이후 ALTER를 확인하고, 담당 간 참조 원칙은 [README 5절](README.md#5-모듈-간-참조-규칙)을 따릅니다.
+## 읽는 법
 
-## 그림과 범례
+- **실선**은 DB에 건 외래 키(물리 FK), **점선**은 ID 값만 저장한 논리 참조입니다. 이 문서만의 약속이며, Mermaid 문법의 [원래 뜻](https://mermaid.js.org/syntax/entityRelationshipDiagram.html#identification)과는 다릅니다.
+- 선의 **왼쪽은 가리켜지는 표, 오른쪽은 ID를 저장한 표**입니다. 선 위 글자는 오른쪽 표의 칸 이름입니다.
+- 끝 기호: `||` 정확히 1 · `|o` / `o|` 0 또는 1 · `o{` 0개 이상. 실선의 기호는 SQL의 UNIQUE · NULL 허용으로 정했고, 서비스가 더 좁게 막는 경우는 따로 적었습니다.
+- 점선(논리 참조)은 DB가 대상의 존재를 보장하지 않습니다. 확인은 소유 담당의 공개 `api/`로 합니다 ([README 5절](README.md#5-모듈-간-참조-규칙)).
 
-실선=물리 FK, 점선=논리 참조는 **이 문서의 표기 약속**입니다. Mermaid 자체의 선 모양은 [식별·비식별 관계 구분](https://mermaid.js.org/syntax/entityRelationshipDiagram.html#identification)이므로 일반 문법의 의미와 구분합니다. 표기 변경은 DB 제약 변경이 아닙니다.
+## 전체 지도
 
-- 왼쪽은 참조 대상, 오른쪽은 ID를 저장한 테이블입니다. 선의 설명은 오른쪽 테이블의 참조 컬럼입니다.
-- `||`는 정확히 1, `|o`/`o|`는 0 또는 1, `o{`는 0 이상입니다. 물리 FK의 최대 수는 해당 FK 컬럼의 UNIQUE/PK를 기준으로 합니다. 서비스가 더 좁게 제한하는 경우와 구분합니다.
-- NULL 허용 FK이면 왼쪽 대상이 없을 수 있습니다. 논리 참조는 ID가 NOT NULL이어도 대상 행이 없을 수 있으므로 NULL 여부만으로 선택성을 판단하지 않습니다. 점선은 업무상 참조 방향을 설명하며 DB의 존재 보장을 뜻하지 않습니다.
+담당 사이에 어떤 ID가 오가는지 업무 흐름 순서로 보여 줍니다. 화살표 끝의 담당이 앞 담당의 ID를 저장합니다. 모두 논리 참조입니다.
+
+### 결제 사건 흐름
+
+```mermaid
+flowchart LR
+    P5["P5 결제<br/>payments"]
+    P2["P2 FDS 평가<br/>fds_evaluations"]
+    P3["P3 사건 · 판정<br/>security_cases · payment_decisions"]
+    P4["P4 AI 보고서<br/>ai_reports"]
+    P5A["P5 결제 조치<br/>payment_actions"]
+    P6["P6 매입 · 정산<br/>captures · settlements"]
+    P5 -- "fds_evaluations.payment_id" --> P2
+    P5 -- "case_payments.payment_id" --> P3
+    P3 -- "ai_reports.case_id" --> P4
+    P4 -- "payment_decisions.report_id" --> P3
+    P3 -- "payment_actions.decision_id" --> P5A
+    P5 -- "captures.payment_id" --> P6
+```
+
+### 내부자 사건 흐름
+
+```mermaid
+flowchart LR
+    P1["P1 직원 접근 기록<br/>staff_access_events"]
+    P2["P2 내부자 경보<br/>insider_alerts"]
+    P3["P3 내부자 사건<br/>insider_cases"]
+    P4["P4 해제 검토 보고서<br/>ai_insider_reports"]
+    P1L["P1 계정 보안 정지<br/>staff_account_locks"]
+    P1 -- "insider_alert_evidences.access_event_id" --> P2
+    P2 -- "insider_case_alerts.alert_id" --> P3
+    P3 -- "ai_insider_reports.insider_case_id" --> P4
+    P2 -- "staff_account_locks.source_alert_id" --> P1L
+    P3 -- "staff_account_locks.release_case_id" --> P1L
+```
+
+가맹점 ID(`merchant_id`)와 직원 ID(`staff_id` 등)는 P1 표를 가리키며 거의 모든 담당이 저장합니다. 그림에서는 생략했고 [맨 아래 표](#그림에-없는-논리-참조)에 모았습니다.
 
 ## P1 계정·접근 기록
 
@@ -81,7 +117,7 @@ erDiagram
 
 ## P3 사건·판정과 P4 보고서
 
-물리 FK 7개와 주요 논리 참조입니다. P3 ↔ P4는 같은 `investigation` 안에서도 논리 참조입니다.
+물리 FK 8개와 주요 논리 참조입니다. P3 ↔ P4는 같은 `investigation` 안에서도 논리 참조입니다.
 
 ```mermaid
 erDiagram
@@ -95,6 +131,8 @@ erDiagram
     insider_alerts ||..o| insider_case_alerts : "alert_id (P2 경보)"
     platform_users ||..o{ insider_cases : "staff_id"
     insider_cases ||..o{ ai_insider_reports : "insider_case_id (P4 해제 검토 보고서)"
+    ai_reports ||--o{ ai_report_questions : "report_id (P4)"
+    security_cases ||..o{ ai_report_questions : "case_id (P4 사건 질문)"
 ```
 
 각 CREATE는 [소유 표](README.md#2-테이블-소유)에 연결되어 있습니다. 담당 변경 요청의 `pending_case_id` UNIQUE는 사건당 **대기 요청** 한 건을 제한하며, 전체 요청 이력이 한 건이라는 뜻은 아닙니다.
@@ -170,7 +208,7 @@ erDiagram
 
 ## 그림에 없는 논리 참조
 
-기존의 긴 문단을 출발 컬럼·대상·조건별로 나눴습니다. FK 없는 참조의 대상 존재 여부는 별도 업무 경로에서 확인해야 합니다.
+위 그림에 그리지 않은 FK 없는 참조입니다. 대상이 실제로 있는지는 DB가 아니라 업무 경로에서 확인합니다.
 
 | 출발 테이블·컬럼 | 참조 대상 | 조건·근거 |
 | --- | --- | --- |
@@ -185,8 +223,15 @@ erDiagram
 | `settlements.payment_id` | `payments` | payment_id UNIQUE. [정산 SQL](../../backend/src/main/resources/db/migration/V20261022_145120__create_settlements_table.sql) |
 | `action_handoffs.target_operation_id` | CAPTURE 성공: `captures.capture_id`; VOID 성공: `payment_actions.action_id` | 결과 종류별로 대상이 다름. [PaymentActionMapping](../../backend/src/main/java/com/donworry/payment/service/PaymentActionMapping.java)의 성공 결과 변환 기준 |
 | `staff_access_events.case_id`, `payment_id`, `login_reference` | `security_cases`, `payments`, `login_histories.login_reference` | 모두 NULL 허용. 로그인 참조는 행 PK가 아니라 같은 로그인 흐름을 묶는 UUID. [저장 계약](contracts.md#604-p1-보안-직원-접근-기록-2026-11-06) |
+| `ai_report_questions.staff_id` | `platform_users` | 질문한 직원. [저장 계약](contracts.md#752-p4-보고서-뒤-사건-질문--답변-2026-11-10) |
 | `ai_insider_reports.trigger_alert_id` | `insider_alerts` | 보고서 생성 계기의 경보. [저장 계약](contracts.md#675-p4-내부자-사건-해제-검토-보고서-2026-11-08) |
 | `payment_actions.decision_id`, `capture_id` | `payment_decisions`, `captures` | 판정 ID는 UNIQUE, capture ID는 CAPTURE 성공 때 저장. [조치 계약](contracts.md#141-p5-직원-조치-저장-설계-초안) |
 | `payment_order_contacts.merchant_id` | `merchants` | P5 연락처 암호화 AAD의 가맹점. [연락처 계약](contracts.md#602-p5-주문자-연락처-2026-11-06) |
 
 새 참조를 구현할 때 이 목록의 누락 여부로 허용·금지를 판단하지 않습니다. SQL·공개 API·채택된 계약을 함께 확인하며, 업무 정책과 소유가 불명확하면 담당자에게 확인합니다.
+
+## 이 문서의 기준
+
+- `7e8a1ab1`(2026-11-16 dev)의 migration 91개에서 `CREATE`와 이후 `ALTER`를 합쳐 물리 FK 55개를 셌고, 담당별 그림에 FK 하나당 실선 하나로 모두 그렸습니다. 다른 표와 연결이 없는 표는 그리지 않았으며 전체 목록은 [README 2절](README.md#2-테이블-소유)에 있습니다.
+- 논리 참조(점선 · 표)는 주요 경로만 모은 것입니다. 시스템의 모든 논리 참조를 검증한 목록은 아닙니다.
+- SQL 파일을 읽은 결과이며 실제 DB 적용 · 앱 실행 결과가 아닙니다. 이전 대조 경위는 [작업 계획](plan.md)에 있습니다.
