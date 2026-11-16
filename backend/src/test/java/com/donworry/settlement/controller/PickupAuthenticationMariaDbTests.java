@@ -84,9 +84,9 @@ class PickupAuthenticationMariaDbTests {
     }
 
     private HttpRequest signed(String path) {
-        String body = path.endsWith("schedule") ? """
+        String body = """
                   {"items":[{"productName":"딸기 케이크","quantity":2}]}
-                  """ : "{\"pickedUpAt\":\"2026-10-27T06:00:00Z\"}";
+                  """;
         String timestamp = Long.toString(Instant.now().getEpochSecond());
         String nonce = UUID.randomUUID().toString();
         var input = new MerchantSignedRequest(
@@ -113,9 +113,6 @@ class PickupAuthenticationMariaDbTests {
         assertThat(send(request).statusCode()).isEqualTo(200);
         assertThat(send(request).statusCode()).isEqualTo(401);
         assertThat(send(signed(path)).statusCode()).isEqualTo(200);
-        assertThat(send(signed("/api/v1/order-fulfillments/" + code + "/completion"))
-                        .statusCode())
-                .isEqualTo(200);
         assertThat(jdbc.queryForObject("SELECT merchant_id FROM order_fulfillments WHERE order_id=?", Long.class, code))
                 .isEqualTo(merchantId);
         assertThat(jdbc.queryForObject(
@@ -137,9 +134,6 @@ class PickupAuthenticationMariaDbTests {
         assertThat(stored).isEqualTo(expected);
         // 매입 뒤 서명된 픽업 정보를 재전달해도 확정한 정산일은 변하지 않는다.
         assertThat(send(signed(path)).statusCode()).isEqualTo(200);
-        assertThat(send(signed("/api/v1/order-fulfillments/" + code + "/completion"))
-                        .statusCode())
-                .isEqualTo(200);
         assertThat(jdbc.queryForObject(
                         "SELECT scheduled_at FROM settlements WHERE payment_id=?",
                         java.time.LocalDateTime.class,
@@ -155,7 +149,7 @@ class PickupAuthenticationMariaDbTests {
                 "INSERT INTO order_fulfillments(merchant_id,order_id,created_at,updated_at) VALUES (?,?,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))",
                 merchantId + 1000000,
                 order);
-        var response = send(signed("/api/v1/order-fulfillments/" + order + "/completion"));
+        var response = send(signed("/api/v1/order-fulfillments/" + order + "/schedule"));
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(jdbc.queryForObject(
                         "SELECT fulfilled_at IS NULL FROM order_fulfillments WHERE order_id=? AND merchant_id=?",
@@ -164,10 +158,10 @@ class PickupAuthenticationMariaDbTests {
                         merchantId + 1000000))
                 .isTrue();
         assertThat(jdbc.queryForObject(
-                        "SELECT fulfilled_at IS NOT NULL FROM order_fulfillments WHERE order_id=? AND merchant_id=?",
-                        Boolean.class,
+                        "SELECT COUNT(*) FROM order_fulfillments WHERE order_id=? AND merchant_id=?",
+                        Integer.class,
                         order,
                         merchantId))
-                .isTrue();
+                .isEqualTo(1);
     }
 }

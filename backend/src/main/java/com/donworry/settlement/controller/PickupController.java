@@ -29,16 +29,6 @@ public class PickupController {
             @Valid @RequestBody PickupScheduleRequest request) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(service.recordSchedule(merchantId, orderId, request.scheduledPickupAt(), request.items()));
-    }
-
-    @PutMapping("/{orderId}/completion")
-    public ResponseEntity<PickupResponse> completion(
-            @RequestAttribute("settlement.pickupMerchant") Long merchantId,
-            @PathVariable String orderId,
-            @Valid @RequestBody PickupCompletionRequest request) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .body(service.recordCompletion(merchantId, orderId, request.pickedUpAt()));
+                .body(service.recordSchedule(merchantId, orderId, null, request.items()));
     }
 }

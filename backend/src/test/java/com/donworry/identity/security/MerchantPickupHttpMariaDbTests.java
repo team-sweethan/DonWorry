@@ -14,8 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.*;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -70,8 +69,7 @@ class MerchantPickupHttpMariaDbTests {
     }
 
     private HttpRequest signed(String path) {
-        String body = "{\"" + (path.endsWith("schedule") ? "scheduledPickupAt" : "pickedUpAt")
-                + "\":\"2026-10-27T06:00:00Z\"}";
+        String body = "{}";
         String timestamp = Long.toString(Instant.now().getEpochSecond());
         String nonce = UUID.randomUUID().toString();
         var input = new MerchantSignedRequest(
@@ -91,10 +89,9 @@ class MerchantPickupHttpMariaDbTests {
     }
 
     // P6 Controller 부재와 P5 비활성에도 실제 PUT 인증·정지 허용·DB nonce 소비를 유지한다
-    @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
-    void pickup_whenControllerAbsent_authenticatesAndPersistsNonce(String action) throws Exception {
-        String path = "/api/v1/order-fulfillments/ORDER-1/" + action;
+    @Test
+    void pickup_whenControllerAbsent_authenticatesAndPersistsNonce() throws Exception {
+        String path = "/api/v1/order-fulfillments/ORDER-1/schedule";
         var unsigned = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
                 .PUT(HttpRequest.BodyPublishers.ofString("{}"))
                 .build();
@@ -119,13 +116,12 @@ class MerchantPickupHttpMariaDbTests {
     }
 
     // 실제 nonce INSERT 실패는 인증 성공이나 단순 Controller 부재로 처리하지 않고 503으로 차단한다
-    @ParameterizedTest
-    @ValueSource(strings = {"schedule", "completion"})
-    void pickup_whenNonceInsertFails_returnsUnavailableWithoutNonce(String action) throws Exception {
+    @Test
+    void pickup_whenNonceInsertFails_returnsUnavailableWithoutNonce() throws Exception {
         doThrow(new DataAccessResourceFailureException("test unavailable"))
                 .when(nonces)
                 .insertNonce(anyLong(), anyString(), anyString());
-        var response = send(signed("/api/v1/order-fulfillments/ORDER-1/" + action));
+        var response = send(signed("/api/v1/order-fulfillments/ORDER-1/schedule"));
         assertThat(response.statusCode()).isEqualTo(503);
         assertThat(response.body()).contains("MERCHANT_AUTH_002");
         assertThat(jdbc.queryForObject(
