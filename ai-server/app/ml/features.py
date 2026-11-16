@@ -1,4 +1,4 @@
-# fds-ml/features.py 복사본 (ruff 표기 정리만 적용) — 학습·운영 Feature의 단일 기준
+# fds-ml/common/features.py 복사본 (ruff 표기 정리만 적용) — 학습·운영 Feature의 단일 기준
 # 계산 규칙을 바꾸면 fds-ml 원본·모델·tests/fixtures/ml_golden.json을 함께 갱신한다
 from __future__ import annotations
 

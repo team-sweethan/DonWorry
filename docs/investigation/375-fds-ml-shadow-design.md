@@ -53,7 +53,7 @@ flowchart LR
 | 재평가 | `FdsReevaluationService`는 ERROR 평가만 재평가한다 (같은 `payment_id`에 새 평가 행) | 결제마다 **처음 나온 비오류 평가**가 곧 최종 Rule 판정이다 |
 | `fds_evaluations` 인덱스 | `(merchant_id, customer_ref, payment_requested_at)` · `(merchant_id, customer_ref, card_token)` 등. `card_token` 단독 인덱스 없음 | 같은 가맹점 안 조회는 기존 인덱스 · 쿼리(`findByMerchantIdAndCardTokenIn...`)로 된다 |
 | P2 공개 조회 선례 | `FdsLinkedPaymentReader`(#352) · `FdsEvidenceReader`(#346)는 카드 토큰 · 기기 ID · IP · 다른 고객 번호 원문을 밖으로 내보내지 않는다 | ML 입력도 원문 대신 별칭으로 받는다 (5절) |
-| 학습 데이터 | `fds-ml/scenarios.py` 도난 카드 시나리오는 **같은 가맹점**의 다른 고객 카드만 고른다 | 같은 카드 조회도 같은 가맹점으로 제한하면 학습과 뜻이 같다 (6절) |
+| 학습 데이터 | `fds-ml/generation/scenarios.py` 도난 카드 시나리오는 **같은 가맹점**의 다른 고객 카드만 고른다 | 같은 카드 조회도 같은 가맹점으로 제한하면 학습과 뜻이 같다 (6절) |
 | Feature 계산 | `features.py`: 고객 전체 이전 이력(건수 · 평균 · 본 적 있는 카드 · 기기), 5분 · 30분 · 24시간 건수, 같은 카드를 앞서 쓴 다른 고객 여부 | 고객 이력은 기간을 자르지 않고 전부 보낸다. 자르면 값이 달라진다 |
 | ai-server 계약 | 이력 2,000건 상한, 대상보다 뒤 시각 · `paymentId` 중복 · 다른 고객 섞임은 422, 모델 없음 503 | P2가 이 조건에 맞는 묶음을 만들어 준다 |
 | 의존 규칙 | investigation은 이미 `fds :: api` 허용 | ADR-0012 · `allowedDependencies` 변경 없음 |
@@ -147,7 +147,7 @@ public record FdsMlTransaction(
 
 ## 6. 결정 4 — 같은 카드 조회는 같은 가맹점 안에서만
 
-- 학습 데이터의 도난 카드는 같은 가맹점 다른 고객 카드에서만 만들어졌다 (`fds-ml/scenarios.py`). 운영도 같은 가맹점으로 제한하면 `cardUsedByOtherCustomer`의 뜻이 학습과 같아진다
+- 학습 데이터의 도난 카드는 같은 가맹점 다른 고객 카드에서만 만들어졌다 (`fds-ml/generation/scenarios.py`). 운영도 같은 가맹점으로 제한하면 `cardUsedByOtherCustomer`의 뜻이 학습과 같아진다
 - 기존 쿼리 · 인덱스로 된다 → **P2 테이블 마이그레이션이 필요 없다**
 - #352 연관 결제 조회 · Rule Engine 이력 조회도 같은 가맹점 기준이다
 - 버린 대안: 가맹점을 넘는 조회 — `card_token` 인덱스 추가(P2 마이그레이션)가 필요하고, 학습에 없던 경우라 모델이 해석할 근거가 없다. 같은 사람이 두 가맹점에서 결제해도 "다른 고객"으로 잡히는 문제(ADR-0061)도 커진다. 필요하면 v2 모델 학습 때 다시 본다

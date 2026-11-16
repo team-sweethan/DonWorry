@@ -9,8 +9,8 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, StateGraph
 
 from app.agent import prompts, trace
-from app.agent.assemble import analyzable, assemble_report
-from app.agent.facts import fact_catalog, prompt_facts, report_facts
+from app.agent.assemble import analyzable, assemble_report, evidence_id
+from app.agent.facts import fact_catalog, prompt_facts, report_facts, signal_id
 from app.agent.llm import LlmClient
 from app.agent.narrative import (
     Narrative,
@@ -18,15 +18,32 @@ from app.agent.narrative import (
     narrative_schema,
     validate_narrative,
 )
-from app.agent.tools import EXTRA_TOOLS, ExtraTool, ToolBox, ToolRecord, llm_content
+from app.agent.tools import (
+    CASE_WIDE,
+    EXTRA_TOOLS,
+    LINKED_CASES_BY_DEVICE,
+    LINKED_CASES_BY_IP,
+    SUSPICION_ARG,
+    ExtraTool,
+    ToolBox,
+    ToolRecord,
+    llm_content,
+)
 from app.config import Settings
 from app.schemas.case_context import CaseContext
-from app.schemas.report import FactSentenceItem, ReportBody, TraceStep
+from app.schemas.report import (
+    BasisSignal,
+    ExtraInvestigation,
+    FactSentenceItem,
+    ReportBody,
+    TraceStep,
+)
 from app.schemas.tools import (
     CasePaymentsTool,
     DecisionBasisTool,
     FdsEvidenceTool,
     FdsPayment,
+    LinkedCasesTool,
     LinkedPaymentsTool,
     OrderContextTool,
     PaymentHistoryTool,
@@ -34,7 +51,7 @@ from app.schemas.tools import (
     ToolResult,
 )
 
-# 조사 Agent — 기본 조회 6개는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
+# 조사 Agent — 기본 조회는 코드가 매번 하고, AI는 그 결과를 보고 추가 조사만 고른다 (#578)
 # 흐름: 기본 조회 → 추가 조사(추가 도구가 있을 때만) → 사실 문장 쓰기(형식 검사 · 고쳐 쓰기) → 조립
 # 단계마다 조사 과정 기록(trace)을 남겨 보고서에 함께 담는다 (#294)
 # 노드가 끝날 때마다 지금까지의 기록을 on_progress로 알린다 — 생성 중 화면 표시용 (#322)
@@ -58,6 +75,9 @@ class AgentState(TypedDict, total=False):
     next: str
     trace: list[TraceStep]
     started: float
+    # 이번 사건 의심 목록 (#817) — 기본 조회의 징후로 코드가 만든다. AI 추가 조회는 이 안에서만
+    suspicions: list["Suspicion"]
+    extras: list[ExtraInvestigation]
 
 
 @dataclass
@@ -70,6 +90,15 @@ class InvestigationOutcome:
 
 def _now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+# 같은 도구 · 같은 인자로 이미 한 조회 기록의 위치 (#818 Codex 리뷰)
+# AI가 같은 추가 조회를 다른 의심에 또 고를 때 쓴다
+def _same_lookup(records: list[ToolRecord], name: str, args: dict[str, Any]) -> int | None:
+    for index, record in enumerate(records):
+        if record.tool_name == name and record.args == args:
+            return index
+    return None
 
 
 def _latest_case_payments(records: list[ToolRecord]) -> CasePaymentsTool | None:
@@ -105,9 +134,91 @@ def _latest_order(records: list[ToolRecord]) -> OrderContextTool | None:
     return found[-1] if found else None
 
 
-def _latest_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
-    found = [r.result for r in records if isinstance(r.result, LinkedPaymentsTool)]
+# 기본 조회(앞뒤 1시간)만 — AI가 넓혀 본 6 · 24시간 결과가 표를 덮지 않게 (#817 선택 B)
+# 기본 조회(카드 · 기기)와 AI가 고른 IP 조회를 나눠 보고서 칸에 싣는다 (#821)
+def _linked_cases(records: list[ToolRecord], by: str) -> LinkedCasesTool | None:
+    found = [
+        r.result for r in records if isinstance(r.result, LinkedCasesTool) and r.result.by == by
+    ]
     return found[-1] if found else None
+
+
+def _base_linked(records: list[ToolRecord]) -> LinkedPaymentsTool | None:
+    found = [
+        r.result for r in records if r.filled_by_system and isinstance(r.result, LinkedPaymentsTool)
+    ]
+    return found[-1] if found else None
+
+
+LEVEL_KO = {"HIGH_RISK": "고위험", "CAUTION": "주의"}
+
+
+# 추가 조회를 고르는 AI에게 보여 줄 의심 하나 (#817)
+# id(의심-N)를 AI가 고르고, 보고서에는 Spring 징후 key · 이름을 남긴다 (화면 의심 카드와 잇는 키)
+@dataclass(frozen=True)
+class Suspicion:
+    id: str
+    key: str
+    label: str
+    level: str
+    payment_count: int
+    explained_count: int
+
+
+# 기본 조회의 징후 · 정상 근거로 의심 목록을 만든다 — 같은 징후는 결제를 묶어 하나
+# 다른 징후에 이미 센 것(countedIn)은 뺀다
+# 징후를 못 받았으면 빈 목록 — 사건 전체(CASE)만 고를 수 있다
+def case_suspicions(records: list[ToolRecord]) -> list[Suspicion]:
+    found = [
+        r.result for r in records if r.filled_by_system and isinstance(r.result, DecisionBasisTool)
+    ]
+    if not found:
+        return []
+    grouped: dict[str, list[BasisSignal]] = {}
+    for payment in found[-1].payments:
+        for signal in payment.basis.signals:
+            if not signal.countedIn:
+                grouped.setdefault(signal_id(signal), []).append(signal)
+    return [
+        Suspicion(
+            id=f"의심-{n}",
+            key=key,
+            label=signals[0].label,
+            level=signals[0].level,
+            payment_count=len(signals),
+            explained_count=sum(1 for s in signals if s.normalReason),
+        )
+        for n, (key, signals) in enumerate(grouped.items(), start=1)
+    ]
+
+
+def _explained_text(s: Suspicion) -> str:
+    if s.explained_count == 0:
+        return "없음"
+    if s.explained_count == s.payment_count:
+        return "있음"
+    return f"{s.explained_count}건만 있음"
+
+
+# [의심 목록] — 이름 · 등급 · 결제 수 · 설명하는 기록 유무. 점수 숫자 · 영문 코드는 넣지 않는다
+# 고르는 AI는 화면에 나가는 글을 쓰지 않는다 — 등급은 무엇을 먼저 볼지 고르는 데만 쓴다
+def _suspicion_lines(suspicions: list[Suspicion]) -> str:
+    if not suspicions:
+        return prompts.EXTRA_NO_SUSPICIONS
+    return "\n".join(
+        f"{s.id}: {s.label} ({LEVEL_KO.get(s.level, '주의')} 징후 · 결제 {s.payment_count}건 · "
+        f"설명하는 기록 {_explained_text(s)})"
+        for s in suspicions
+    )
+
+
+# 조회 이유 — AI가 쓰지 않고 코드가 의심 이름 · 조회 · 범위로 만든다 (#817 선택 A)
+def extra_reason(
+    suspicion: Suspicion | None, tool: ExtraTool, args: dict[str, Any], done: bool
+) -> str:
+    target = f"'{suspicion.label}' 의심을 확인하려고" if suspicion else "사건 전체를 보려고"
+    tail = "봤습니다." if done else "보려 했지만 조회하지 못했습니다."
+    return f"{target} {tool.describe(args)} {tail}"
 
 
 # 결제별 FDS 근거 — 같은 결제를 여러 번 봤으면 마지막 값을 쓴다
@@ -128,8 +239,8 @@ def build_graph(
 ):
     max_calls = settings.agent_max_extra_calls
     extras = {tool.name: tool for tool in extra_tools}
-    specs = [tool.spec for tool in extra_tools]
-    prompt_fingerprint = prompts.fingerprint(specs, max_calls)
+    # 지문은 사건마다 다른 의심 번호(enum)를 뺀 도구 설명으로 잰다
+    prompt_fingerprint = prompts.fingerprint([tool.spec for tool in extra_tools], max_calls)
 
     def title(name: str) -> str:
         return extras[name].title if name in extras else trace.tool_title(name)
@@ -174,22 +285,36 @@ def build_graph(
         _reference_lookup(
             "get_decision_basis", toolbox.get_decision_basis, "징후 · 정상 근거", records, steps
         )
+        # 같은 카드 · 기기로 열린 지난 사건 (#821) — 모든 사건에서 코드가 본다. IP는 AI가 고른다
+        # 징후 계산 뒤에 붙여 앞 조회의 증거 번호를 바꾸지 않는다
+        # 참고 자료라 실패해도 보고서는 만든다
+        _reference_lookup(
+            "find_linked_cases",
+            lambda: toolbox.find_linked_cases(LINKED_CASES_BY_DEVICE),
+            "같은 카드 · 기기로 열린 지난 사건",
+            records,
+            steps,
+        )
         ready = _ready_to_write(records, steps)
         if ready["next"] != "write" or not extra_tools:
             return ready
+        suspicions = case_suspicions(records)
         messages: list[BaseMessage] = [
             SystemMessage(content=prompts.EXTRA_SYSTEM.format(max_calls=max_calls)),
             HumanMessage(
                 content=prompts.EXTRA_START.format(
-                    case_id=context.case_id, results=_base_results(records)
+                    case_id=context.case_id,
+                    suspicions=_suspicion_lines(suspicions),
+                    results=_base_results(records),
                 )
             ),
         ]
-        return {**ready, "messages": messages, "next": "choose"}
+        return {**ready, "messages": messages, "suspicions": suspicions, "next": "choose"}
 
     def choose(state: AgentState) -> AgentState:
         started = time.perf_counter()
-        reply = llm.choose_tools(state["messages"], specs)
+        ids = [s.id for s in state.get("suspicions") or []]
+        reply = llm.choose_tools(state["messages"], [t.case_spec(ids) for t in extra_tools])
         calls = reply.tool_calls if isinstance(reply, AIMessage) else []
         decided = trace.step(
             "DECIDE",
@@ -213,10 +338,14 @@ def build_graph(
         records = list(state["records"])
         used = state["tool_calls_used"]
         steps = list(state["trace"])
+        done_extras = list(state.get("extras") or [])
+        suspicions = {s.id: s for s in state.get("suspicions") or []}
         for call in reply.tool_calls:
             name = call["name"]
             call_id = call.get("id") or name
             started = time.perf_counter()
+            raw = call.get("args") or {}
+            asked: str | None = None
             if used >= max_calls:
                 content = prompts.EXTRA_LIMIT
                 received = "호출 한도를 넘어 실행하지 않음"
@@ -225,19 +354,57 @@ def build_graph(
                 used += 1
                 content = f"허용되지 않은 도구다: {name}"
                 received = "허용되지 않은 도구라 실행하지 않음"
+            elif raw.get(SUSPICION_ARG) not in (*suspicions, CASE_WIDE):
+                # 이번 사건 의심 목록 밖 — 없는 의심을 핑계로 조회하지 않는다 (#817)
+                used += 1
+                content = prompts.EXTRA_BAD_SUSPICION
+                received = "의심 목록 밖이라 실행하지 않음"
+            elif (args := extras[name].allowed_args(raw)) is None:
+                # 허용 값 밖 인자(예: 6 · 24가 아닌 시간) — 지어낸 범위로 조회하지 않는다
+                used += 1
+                content = f"허용되지 않은 인자다: {name}"
+                received = "허용되지 않은 인자라 실행하지 않음"
             else:
                 used += 1
                 tool = extras[name]
-                args = {k: v for k, v in (call.get("args") or {}).items() if k in tool.arg_names}
-                try:
-                    result = tool.run(toolbox, args)
-                    records.append(ToolRecord(name, args, result))
-                    content = llm_content(result)
-                    received = trace.tool_received(result)
-                except Exception:  # 인자 형식 오류 포함 — 그 조회만 빼고 진행한다
-                    log.warning("추가 조회 실패: %s", name, exc_info=True)
-                    content = prompts.EXTRA_TOOL_FAILED
-                    received = "조회 실패 — 없이 진행"
+                suspicion = suspicions.get(raw[SUSPICION_ARG])
+                # 같은 도구 · 같은 인자로 이미 성공한 조회는 다시 부르지 않고 그 결과를 쓴다
+                # (#818 Codex 리뷰) 다시 부르면 사실은 마지막 조회에서만 만들어
+                # 앞 의심 카드가 "새로 나온 사실 없음"이 되고, 지난 사건처럼 기록마다
+                # 사실을 만드는 도구는 같은 줄이 두 번 생긴다. 호출 한도는 그대로 센다
+                earlier = _same_lookup(records, name, args)
+                if earlier is not None:
+                    content = llm_content(records[earlier].result)
+                    received = "앞서 같은 조회 결과를 다시 씀"
+                    done = True
+                    position = earlier + 1
+                else:
+                    try:
+                        result = tool.run(toolbox, args)
+                        records.append(ToolRecord(name, args, result))
+                        content = llm_content(result)
+                        received = trace.tool_received(result)
+                        done = True
+                    except Exception:  # 응답 범위가 요청과 다른 경우 포함 — 그 조회만 빼고 진행한다
+                        log.warning("추가 조회 실패: %s", name, exc_info=True)
+                        content = prompts.EXTRA_TOOL_FAILED
+                        received = "조회 실패 — 없이 진행"
+                        done = False
+                    position = len(records)
+                asked = extra_reason(suspicion, tool, args, done)
+                done_extras.append(
+                    ExtraInvestigation(
+                        suspicionKey=suspicion.key if suspicion else CASE_WIDE,
+                        suspicionLabel=suspicion.label if suspicion else "사건 전체",
+                        toolName=name,
+                        title=tool.title,
+                        args=args,
+                        reason=asked,
+                        status="DONE" if done else "FAILED",
+                        evidenceId=evidence_id(context, position) if done else None,
+                        retrievedAt=records[position - 1].result.retrievedAt if done else None,
+                    )
+                )
             messages.append(ToolMessage(content=content, name=name, tool_call_id=call_id))
             steps.append(
                 trace.step(
@@ -245,10 +412,17 @@ def build_graph(
                     "AI",
                     title(name),
                     duration_ms=trace.elapsed_ms(started),
+                    asked=asked,
                     received=received,
                 )
             )
-        return {"messages": messages, "records": records, "tool_calls_used": used, "trace": steps}
+        return {
+            "messages": messages,
+            "records": records,
+            "tool_calls_used": used,
+            "trace": steps,
+            "extras": done_extras,
+        }
 
     def after_run(state: AgentState) -> str:
         return "write" if state["tool_calls_used"] >= max_calls else "choose"
@@ -356,23 +530,34 @@ def build_graph(
         case_payments = _latest_case_payments(records)
         narrative = state["narrative"]
         assert case_payments is not None and narrative is not None
+        facts = report_facts(fact_catalog(context, records))
+        # 추가 조회마다 그 조회 기록에서 나온 사실 번호 (#817) — 화면 의심 카드가 사실로 잇는다
+        extras = [
+            e.model_copy(update={"factIds": [f.id for f in facts if f.evidenceId == e.evidenceId]})
+            if e.status == "DONE"
+            else e
+            for e in state.get("extras") or []
+        ]
         report = assemble_report(
             context,
             case_payments,
             _fds_by_payment(records),
             [FactSentenceItem(text=s.text, factIds=s.facts) for s in narrative.summary],
             narrative.additionalChecks,
-            report_facts(fact_catalog(context, records)),
+            facts,
             records,
             _now(),
             trace.build_trace(settings, list(state["trace"]), 0, prompt_fingerprint),
             _latest_similar(records),
             _latest_history(records),
-            _latest_linked(records),
+            _base_linked(records),
             _base_history(records),
             state.get("summary_appended") or [],
             _latest_basis(records),
             _latest_order(records),
+            extras,
+            _linked_cases(records, LINKED_CASES_BY_DEVICE),
+            _linked_cases(records, LINKED_CASES_BY_IP),
         )
         # 조립까지 끝난 뒤 걸린 시간을 재서 마지막 단계와 총 시간을 채운다
         steps = [
@@ -460,6 +645,7 @@ BASE_TOOL_NAMES = (
     "get_payment_history",
     "find_linked_payments",
     "get_order_context",
+    "find_linked_cases",
 )
 
 
@@ -498,6 +684,8 @@ def run_investigation(
         "failure": None,
         "trace": [],
         "started": time.perf_counter(),
+        "suspicions": [],
+        "extras": [],
     }
     try:
         final = initial

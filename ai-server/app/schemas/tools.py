@@ -200,6 +200,54 @@ class DecisionBasisTool(BaseModel):
         return next((p.basis for p in self.payments if p.paymentId == payment_id), None)
 
 
+# 같은 카드 · 기기 · IP를 쓴 결제가 든 지난 종료 사건 (#821, ADR-0009 결정 15)
+# 같은 가맹점 · 다른 고객 · 종료 lookbackDays일 안
+# 결제 번호 · 고객 번호 · 판정 사유 글은 Spring이 보내지 않는다
+# caseId는 화면 링크용이다 — AI 입력에서는 뺀다 (tools.llm_content · 사실 문장)
+# 결제 수 · 판정 건수는 그 사건 결제 중 겹친 결제만 센 값
+LinkedKind = Literal["CARD", "DEVICE", "IP"]
+
+
+# 이번 사건 결제 번호와 그 결제와 겹친 종류
+class LinkedCasePayment(BaseModel):
+    paymentId: str
+    matchedBy: list[LinkedKind]
+
+
+# 지난 사건의 겹친 결제 한 건 — 판정(없으면 None)과 이번 사건의 어느 결제와 어떤 종류로 겹쳤는지
+# 지난 결제 번호는 없다. 의심 카드가 자기 결제 · 자기 종류로 겹친 것만 센다 (#818 Codex 리뷰)
+class LinkedPastPayment(BaseModel):
+    decision: Literal["ACCEPT", "REJECT"] | None
+    matches: list[LinkedCasePayment]
+
+
+class LinkedCase(BaseModel):
+    caseId: str
+    matchedBy: list[LinkedKind]
+    closedAt: str | None
+    paymentCount: int
+    acceptCount: int
+    rejectCount: int
+    pastPayments: list[LinkedPastPayment] = []
+
+
+# by: CARD_DEVICE(코드 기본 조회) · IP(AI 추가 조회)
+# notProvided: 사건 결제가 값을 보내지 않아 비교하지 못한 종류
+# limited: 조회 상한에 걸려 최근 끝난 사건 일부만 비교함 — cases가 비어도 "없음"이 아니다
+class LinkedCasesTool(BaseModel):
+    caseId: str
+    evidenceVersion: int
+    source: str
+    retrievedAt: str
+    by: Literal["CARD_DEVICE", "IP"]
+    lookbackDays: int
+    kinds: list[LinkedKind]
+    notProvided: list[LinkedKind]
+    cases: list[LinkedCase]
+    totalMatched: int
+    limited: bool = False
+
+
 # 도구 응답 종류 전체 — Tool 기록 · 조사 과정 요약이 같이 쓴다
 ToolResult = (
     CasePaymentsTool
@@ -209,4 +257,5 @@ ToolResult = (
     | LinkedPaymentsTool
     | OrderContextTool
     | DecisionBasisTool
+    | LinkedCasesTool
 )

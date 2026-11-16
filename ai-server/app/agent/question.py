@@ -23,6 +23,7 @@ from app.agent.question_facts import (
     report_facts,
     shown_text,
 )
+from app.agent.tools import LINKED_HOURS
 from app.config import Settings
 from app.schemas.question import (
     AnswerFact,
@@ -46,7 +47,7 @@ log = logging.getLogger(__name__)
 HISTORY_90 = "get_payment_history_90d"
 LINKED_WINDOW = "find_linked_payments_window"
 HISTORY_90_DAYS = 90
-LINKED_HOURS = frozenset({6, 24})
+# 6 · 24시간 허용 값은 보고서 추가 조회와 같다 (tools.LINKED_HOURS, #817)
 SPECS = [qp.HISTORY_90_SPEC, qp.LINKED_WINDOW_SPEC]
 # 사실 줄의 출처로 남길 Spring Tool 이름
 _SPRING_TOOL = {HISTORY_90: "get_payment_history", LINKED_WINDOW: "find_linked_payments"}

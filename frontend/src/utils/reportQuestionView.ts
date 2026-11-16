@@ -1,4 +1,4 @@
-import type { QuestionFact, ReportBody, ReportQuestion } from '../types/case.ts'
+import type { BasisSignal, QuestionFact, ReportBody, ReportQuestion } from '../types/case.ts'
 import { paymentCardId, reportFactLink, type SummaryLink } from './reportView.ts'
 
 // 보고서 뒤 사건 질문 칸 (#753, ADR-0086) — 근거 칩 · 오늘 질문 수
@@ -6,6 +6,8 @@ import { paymentCardId, reportFactLink, type SummaryLink } from './reportView.ts
 // 서버 한도와 같다 (#752 AiReportQuestionWriter — 직원 · 보고서마다 최근 24시간, 실패 포함)
 export const QUESTION_DAILY_LIMIT = 30
 export const QUESTION_MAX_LENGTH = 300
+// 질문 칸 id — 의심 카드 "이 의심에 대해 AI에게 묻기"가 이 칸으로 이동한다 (#819)
+export const QUESTIONS_ID = 'report-questions'
 const LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000
 
 // 자주 묻는 질문 — 누르면 입력창에 넣기만 한다 (실수로 눌러도 AI를 부르지 않게)
@@ -16,7 +18,32 @@ export const QUESTION_EXAMPLES = [
   '이 고객 평소 결제는?',
   '결제 사이 간격은?',
   '이 결제를 취소할까요?',
+  // 판정 질문에 AI가 답하지 않고 확인할 것을 보여 주는 것을 시연에서 보이려고 둘 다 둔다 (#819, 11/14 사용자)
+  '이 결제를 승인할까요?',
 ] as const
+
+// 의심 카드 "이 의심에 대해 AI에게 묻기" (#819) — 질문 칸에 채우기만 한다. 보내기는 직원이 [묻기]
+// 의심의 사실을 묻는 질문만 둔다. 판정 질문은 넣지 않는다 (판정은 보안 직원)
+const SUSPICION_QUESTIONS: Record<string, string> = {
+  R01: '이 고객이 예전에도 비슷한 금액으로 결제한 적 있나요?',
+  R02: '신규 기기로 한 결제는 언제였나요?',
+  R03: '신규 카드로 한 결제는 언제였나요?',
+  R04: '결제 사이 간격은 어떻게 되나요?',
+  R06: '소액 결제가 몇 번, 얼마 사이에 있었나요?',
+  R07: '차단 목록과 겹친 결제는 어느 결제인가요?',
+  R08: '거절된 결제와 다시 시도한 결제 사이 간격은?',
+  LINKED_CARD: '같은 카드를 쓴 다른 고객 결제는 언제였나요?',
+  LINKED_DEVICE: '같은 기기를 쓴 다른 고객 결제는 언제였나요?',
+  LINKED_IP: '같은 IP를 쓴 다른 고객 결제는 언제였나요?',
+}
+
+export function askQuestionFor(signal: Pick<BasisSignal, 'key' | 'label'>): string {
+  const fixed = SUSPICION_QUESTIONS[signal.key]
+  if (fixed) return fixed
+  // 해외 접속 · 고위험 국가 · 모르는 규칙 — 징후 이름으로 묻는다 (이름이 길어도 질문 한도를 넘지 않게 자른다)
+  const label = signal.label.slice(0, 100)
+  return `'${label}' 징후가 있는 결제는 언제였나요?`
+}
 
 // 근거 사실 → 이동할 보고서 카드. 카드가 없으면(계산값 · 보고서 밖 결제) null
 // 결제 줄은 그 결제가 이 보고서 결제 표에 있을 때만 — 새로 조회한 다른 결제는 보고서에 줄이 없다

@@ -3,7 +3,11 @@ import type {
   CaseDetail,
   BasisSignal,
   DecisionBasis,
+  ExtraInvestigation,
   InvestigationTrace,
+  LinkedCaseItem,
+  LinkedCases,
+  LinkedKind,
   NormalBasis,
   PaymentSignals,
   ReportBody,
@@ -409,6 +413,8 @@ const TOPIC_CARDS: Record<string, SummaryLink> = {
   history: { target: 'report-history', label: '고객 최근 결제' },
   linked: { target: 'report-linked', label: '다른 손님과 겹치는 것' },
   similar: { target: 'report-similar', label: '지난 사건과 비교' },
+  // 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — 같은 칸 아래 묶음
+  linkedCases: { target: 'report-similar', label: '지난 사건과 비교' },
   order: { target: 'report-order', label: '주문 정보' },
 }
 
@@ -495,7 +501,7 @@ export function mlReportLine(cell: MlCell): string {
         cell.aboveThreshold ? '이상' : '미만'
       } (${cell.modelVersion} · 판정에 쓰지 않음)`
     case 'none':
-      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30초 뒤) ML 채점이 꺼져 있어요'
+      return 'ML 참고 위험도 · 아직 채점 전이거나(결제 후 약 30 ~ 60초 뒤) ML 채점이 꺼져 있어요'
     case 'failed':
       return 'ML 참고 위험도 · 채점 중 오류가 났어요 (결제 결과와는 상관없어요)'
     case 'skipped':
@@ -588,6 +594,237 @@ export function checkRows(body: ReportBody): Array<{ id: string; row: number }> 
   return signals.flatMap((s, i) =>
     isOpen(s) && s.checkBefore ? [{ id: signalId(s), row: i + 1 }] : [],
   )
+}
+
+// ── 의심별 조사 카드 (#819) ──
+// 의심 하나당 카드 한 장: 키우는 사실 · 줄이는 사실 · AI가 넓혀 본 것 · 아직 모르는 것
+// 사실을 의심에 붙이는 것은 코드다 — Spring 징후 문장 · 정상 사유, AI 추가 조회의 의심 키만 쓴다 (AI가 나누지 않음, ADR-0009 결정 8)
+
+// open: 정상 사유가 없는 결제가 하나라도 있는 의심 (결제마다 다르면 여기 — mixed)
+// explained: 모든 결제에서 정상 사유가 있는 의심 · counted: 다른 징후에 이미 센 의심 — 둘은 카드들 아래 접는 줄로
+export type SuspicionCards = {
+  open: CheckSignal[]
+  explained: CheckSignal[]
+  counted: CheckSignal[]
+}
+
+export function suspicionCards(body: ReportBody): SuspicionCards | null {
+  const signals = checkSignals(body)
+  if (!signals) return null
+  const counted = signals.filter((s) => s.countedIn)
+  const cards = signals.filter((s) => !s.countedIn)
+  return {
+    open: cards.filter((s) => s.openPaymentIds.length > 0),
+    explained: cards.filter((s) => s.openPaymentIds.length === 0),
+    counted,
+  }
+}
+
+// AI 추가 조회 한 건 — 새로 나온 사실은 보고서 사실 번호로 찾는다. 이력 90일은 근거 표가 90일로 바뀌어 링크하고,
+// 시간대-N(6 · 24시간)은 근거 표가 1시간 그대로라 링크하지 않는다 (reportFactLink — TOPIC_CARDS에 없음)
+export type ExtraView = {
+  key: string
+  suspicionKey: string
+  suspicionLabel: string
+  title: string
+  reason: string
+  status: ExtraInvestigation['status']
+  evidenceId: string | null
+  retrievedAt: string | null
+  facts: Array<{ id: string; text: string; link: SummaryLink | null }>
+}
+
+export type ExtrasBySuspicion = { bySignal: Map<string, ExtraView[]>; caseWide: ExtraView[] }
+
+// 의심 카드에 붙일 AI 추가 조회 — 카드가 있는 의심 키만 카드로, 사건 전체(CASE) · 키가 맞지 않는 조회는 caseWide로
+// 어느 쪽에도 안 넣으면 AI가 조사한 사실이 화면에서 사라진다. extraInvestigations가 없으면(예전 · 고정 보고서) null
+export function extrasBySuspicion(body: ReportBody): ExtrasBySuspicion | null {
+  const extras = body.extraInvestigations
+  if (!extras) return null
+  const cards = suspicionCards(body)
+  const cardIds = new Set([...(cards?.open ?? []), ...(cards?.explained ?? [])].map(signalId))
+  const facts = new Map((body.facts ?? []).map((f) => [f.id, f]))
+  const bySignal = new Map<string, ExtraView[]>()
+  const caseWide: ExtraView[] = []
+  extras.forEach((e, i) => {
+    const view: ExtraView = {
+      key: `${i}:${e.toolName}`,
+      suspicionKey: e.suspicionKey,
+      suspicionLabel: e.suspicionLabel,
+      title: e.title,
+      reason: e.reason,
+      status: e.status,
+      evidenceId: e.evidenceId ?? null,
+      retrievedAt: e.retrievedAt ?? null,
+      facts: e.factIds.flatMap((id) => {
+        const fact = facts.get(id)
+        return fact ? [{ id, text: fact.text, link: reportFactLink(fact) }] : []
+      }),
+    }
+    if (cardIds.has(e.suspicionKey))
+      bySignal.set(e.suspicionKey, [...(bySignal.get(e.suspicionKey) ?? []), view])
+    else caseWide.push(view)
+  })
+  return { bySignal, caseWide }
+}
+
+// 추가 조회 결과 줄 — 조회 실패를 "새 사실 없음"으로 보이면 직원이 확인했다고 믿는다
+export function extraResultText(extra: Pick<ExtraView, 'status' | 'facts'>): string | null {
+  if (extra.status === 'FAILED') return '조회하지 못했습니다. 이 범위는 확인되지 않았습니다.'
+  return extra.facts.length === 0 ? '새로 나온 사실 없음' : null
+}
+
+// ── 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) ──
+// 같은 가맹점 다른 고객의 종료 사건 중 이 사건 결제와 같은 값을 쓴 결제가 든 것 — 참고 자료, 판정은 그 결제에 내린 것만
+
+const LINKED_KIND_TEXT: Record<LinkedKind, string> = { CARD: '카드', DEVICE: '기기', IP: 'IP' }
+
+export function linkedKindsText(kinds: LinkedKind[]): string {
+  return kinds.map((k) => LINKED_KIND_TEXT[k]).join(' · ')
+}
+
+// "승인 취소 1건 · 판정 없음 1건" — 판정이 없는 결제(고객 직접 취소 등)도 센다
+export function linkedCaseOutcome(c: LinkedCaseItem): string {
+  const undecided = c.paymentCount - c.acceptCount - c.rejectCount
+  const parts = [
+    c.acceptCount > 0 ? `매입 진행 ${c.acceptCount}건` : null,
+    c.rejectCount > 0 ? `승인 취소 ${c.rejectCount}건` : null,
+    undecided > 0 ? `판정 없음 ${undecided}건` : null,
+  ].filter((p): p is string => p !== null)
+  return parts.join(' · ') || '판정 없음'
+}
+
+// 한 묶음(기본 조회 카드 · 기기 / AI가 고른 IP)의 표시
+// FAILED: 조회 실패 — "없음"으로 보이면 직원이 확인했다고 믿는다. NOT_COMPARED: 값을 보내지 않아 비교 못 함
+export type LinkedCaseGroup = {
+  key: 'CARD_DEVICE' | 'IP'
+  title: string
+  status: 'FAILED' | 'NOT_COMPARED' | 'NONE' | 'FOUND'
+  text: string | null
+  cases: LinkedCaseItem[]
+  notListed: number
+  missingText: string | null
+}
+
+function linkedGroup(key: LinkedCaseGroup['key'], cases: LinkedCases | null): LinkedCaseGroup {
+  const title =
+    key === 'IP' ? '같은 IP로 열린 지난 사건 · AI 추가 조회' : '같은 카드 · 기기로 열린 지난 사건'
+  if (cases === null)
+    return {
+      key,
+      title,
+      status: 'FAILED',
+      text: '조회하지 못했습니다. 이 범위는 확인되지 않았습니다.',
+      cases: [],
+      notListed: 0,
+      missingText: null,
+    }
+  const compared = cases.kinds.filter((k) => !cases.notProvided.includes(k))
+  const missingText =
+    cases.notProvided.length > 0
+      ? `${linkedKindsText(cases.notProvided)} 정보를 가맹점이 보내지 않아 비교하지 못했습니다.`
+      : null
+  if (compared.length === 0)
+    return {
+      key,
+      title,
+      status: 'NOT_COMPARED',
+      text: missingText,
+      cases: [],
+      notListed: 0,
+      missingText: null,
+    }
+  const found = cases.cases.length > 0
+  const searched = `최근 ${cases.lookbackDays}일 안에 끝난 다른 고객 사건의 같은 ${linkedKindsText(compared)}`
+  // 조회 상한에 걸려 일부만 비교했으면 "없음"으로 단정하지 않는다 (#818 Codex 리뷰)
+  const partial = '최근 끝난 사건 일부만 비교했습니다. 더 오래된 사건에 있을 수 있습니다.'
+  const noneText = cases.limited
+    ? `${partial} 그 안에서는 없음 · 찾아본 것: ${searched}`
+    : `없음 · 찾아본 것: ${searched}`
+  return {
+    key,
+    title,
+    status: found ? 'FOUND' : 'NONE',
+    text: found ? (cases.limited ? partial : null) : noneText,
+    cases: cases.cases,
+    notListed: cases.totalMatched - cases.cases.length,
+    missingText,
+  }
+}
+
+// 예전 보고서(칸 없음)는 빈 목록. IP는 AI가 골라 조회했을 때만 있다 (실패는 AI 추가 조회 줄이 알린다)
+export function linkedCaseGroups(body: ReportBody): LinkedCaseGroup[] {
+  const groups: LinkedCaseGroup[] = []
+  if (body.linkedCases !== undefined) groups.push(linkedGroup('CARD_DEVICE', body.linkedCases))
+  if (body.linkedCasesByIp) groups.push(linkedGroup('IP', body.linkedCasesByIp))
+  return groups
+}
+
+// 의심 카드에 붙일 지난 사건 — 같은 카드 징후엔 카드로 겹친 사건만, 기기 · IP도 같다
+// 징후 카드가 없어도(30일 밖 결제 등) 사건은 "지난 사건과 비교" 칸에 그대로 보인다
+const LINKED_SIGNAL_KIND: Record<string, LinkedKind> = {
+  LINKED_CARD: 'CARD',
+  LINKED_DEVICE: 'DEVICE',
+  LINKED_IP: 'IP',
+}
+
+// 이 의심의 결제와 그 종류로 겹친 지난 결제만 — 사건 고르기도, 결제 수 · 판정 건수도 그 결제들로 (#818 Codex 리뷰)
+// 사건 합계를 쓰면 다른 결제 · 다른 종류로 겹친 결제의 판정(예: 기기로만 겹친 승인 취소)이 이 카드 근거로 보인다
+// 겹친 결제를 모르는 보고서(pastPayments 없음)는 카드에 붙이지 않는다. ③ 칸은 사건 합계 그대로
+export function linkedCasesForSignal(
+  body: ReportBody,
+  signal: Pick<CheckSignal, 'key' | 'paymentIds'>,
+): LinkedCaseItem[] {
+  const kind = LINKED_SIGNAL_KIND[signal.key]
+  if (!kind) return []
+  const source = kind === 'IP' ? body.linkedCasesByIp : body.linkedCases
+  return (source?.cases ?? []).flatMap((c) => {
+    const mine = (c.pastPayments ?? []).filter((p) =>
+      p.matches.some((m) => signal.paymentIds.includes(m.paymentId) && m.matchedBy.includes(kind)),
+    )
+    if (mine.length === 0) return []
+    return [
+      {
+        ...c,
+        matchedBy: [kind],
+        paymentCount: mine.length,
+        acceptCount: mine.filter((p) => p.decision === 'ACCEPT').length,
+        rejectCount: mine.filter((p) => p.decision === 'REJECT').length,
+      },
+    ]
+  })
+}
+
+// 정상 근거 기준 — Spring DecisionBasisCalculator.EXPLAINS (SIMILAR_AMOUNT → R01) 와 같다. 기준을 바꾸면 여기도 함께
+const NORMAL_SEARCHED_BY_SIGNAL: Record<string, string> = {
+  R01: '최근 30일, 이번 금액의 0.5 ~ 1.5배 결제 중 매입 완료 2건 이상',
+}
+
+export type ReducingKind = 'EXPLAINED' | 'MIXED' | 'UNCHECKED' | 'NOT_FOUND' | 'NO_RULE'
+
+// 의심을 줄이는 사실 — 정상 사유 문장, 못 찾았으면 무엇을 찾아봤는지, 찾을 기준이 없으면 그렇다고
+// 기준이 없는 의심에 "찾아본 것: 30일 비슷한 금액"을 붙이면 상관없는 기준으로 찾아본 것처럼 읽힌다
+// 이력 조회가 실패했으면 "찾지 못함" 대신 "확인하지 못함" (normalsUnchecked — 한계는 그 함수 주석)
+export function reducingFact(
+  body: ReportBody,
+  signal: CheckSignal,
+): { kind: ReducingKind; text: string } {
+  if (signal.mixed)
+    return {
+      kind: 'MIXED',
+      text: `결제 ${signal.openPaymentIds.join(' · ')}만 정상 사유 없음 · 다른 결제는 정상 사유 있음`,
+    }
+  if (signal.openPaymentIds.length === 0)
+    return { kind: 'EXPLAINED', text: `정상 사유 있음 · ${signal.normalReason ?? ''}`.trim() }
+  const searched = NORMAL_SEARCHED_BY_SIGNAL[signal.key]
+  if (!searched)
+    return { kind: 'NO_RULE', text: '자료로 풀 정상 근거 기준 없음 · 직원 확인으로 풉니다' }
+  if (normalsUnchecked(body))
+    return {
+      kind: 'UNCHECKED',
+      text: '확인하지 못함 · 고객 결제 이력 조회가 실패했습니다. 정상 사유가 없다는 뜻이 아닙니다.',
+    }
+  return { kind: 'NOT_FOUND', text: `찾지 못함 · 찾아본 것: ${searched}` }
 }
 
 // ── 지난 사건과 비교 (#644 ③) ──

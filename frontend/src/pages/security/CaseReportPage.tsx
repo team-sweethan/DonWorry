@@ -5,16 +5,18 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getCase, isCaseAssigneeOnly } from '../../api/cases'
 import { PageHeader } from '../../components/common/PageHeader'
 import { ScreenResult } from '../../components/common/ScreenResult'
-import type { AiReport, CaseDetail } from '../../types/case'
+import type { AiReport, CaseDetail, ReportBody } from '../../types/case'
 import { caseListReturnPath } from '../../utils/caseListQuery'
 import { customerPart } from '../../utils/caseRules'
+import { QUESTIONS_ID } from '../../utils/reportQuestionView'
 import { decisionProgress, pickReport } from '../../utils/reportView'
 import { CaseForbidden } from './case/CaseForbidden'
 import { dateTime } from './case/caseLabels'
+import { goToCard } from './case/goToCard'
 import { ReportFull } from './case/ReportFull'
 import type { NowProgress } from './case/ReportPastCompare'
 import { ReportPrintMarks } from './case/ReportPrint'
-import { ReportQuestions } from './case/ReportQuestions'
+import { ReportQuestions, type QuestionDraft } from './case/ReportQuestions'
 import { ReportTrace } from './case/ReportTrace'
 
 // AI 보고서 전문 (#292). Case 상세 조회 API를 그대로 쓰고, 판정은 Case 상세에서 한다
@@ -243,24 +245,64 @@ function ReportState({
     )
   }
   if (!report.reportBody) return <Empty description="보고서 내용이 없습니다." />
-  // 버전마다 새로 그린다 — 판정 전에 확인할 것 체크가 다른 버전으로 넘어가지 않게 (#591)
-  // 질문 칸도 보고서마다 새로 그린다 (#753) — 질문은 보고서 하나에 묻는다. [새로고침]이면 목록도 다시 받는다
+  return (
+    <ReportWithQuestions
+      report={report}
+      body={report.reportBody}
+      label={label}
+      refreshKey={refreshKey}
+      progress={progress}
+      evidenceMismatch={evidenceMismatch}
+      onDecide={onDecide}
+    />
+  )
+}
+
+// 버전마다 새로 그린다 — 판정 전에 확인할 것 체크가 다른 버전으로 넘어가지 않게 (#591)
+// 질문 칸도 보고서마다 새로 그린다 (#753) — 질문은 보고서 하나에 묻는다. [새로고침]이면 목록도 다시 받는다
+// 의심 카드 "이 의심에 대해 AI에게 묻기" (#819) — 질문 칸으로 이동하고 질문을 채우기만 한다. 보내기는 직원이 [묻기]
+// 고정 보고서는 질문 칸이 없어 링크를 주지 않는다
+function ReportWithQuestions({
+  report,
+  body,
+  label,
+  refreshKey,
+  progress,
+  evidenceMismatch,
+  onDecide,
+}: {
+  report: AiReport
+  body: ReportBody
+  label: string
+  refreshKey: number
+  progress: NowProgress
+  evidenceMismatch: boolean
+  onDecide?: () => void
+}) {
+  const [draft, setDraft] = useState<QuestionDraft | undefined>(undefined)
+  const askable = body.investigationTrace?.provider !== 'FIXED'
+  const onAsk = (text: string) => {
+    setDraft((now) => ({ text, seq: (now?.seq ?? 0) + 1 }))
+    goToCard(QUESTIONS_ID)
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <ReportFull
         key={report.reportId}
-        body={report.reportBody}
+        body={body}
         label={label}
         refreshKey={refreshKey}
         progress={progress}
         onDecide={onDecide}
+        onAsk={askable ? onAsk : undefined}
       />
       <ReportQuestions
         key={`${report.reportId}:${refreshKey}`}
         caseId={report.caseId}
         reportId={report.reportId}
-        body={report.reportBody}
+        body={body}
         evidenceMismatch={evidenceMismatch}
+        draft={draft}
       />
     </div>
   )

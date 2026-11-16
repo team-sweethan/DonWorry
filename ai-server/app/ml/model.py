@@ -7,7 +7,7 @@ import joblib
 
 from app.ml.features import FEATURE_COLUMNS, build_features
 
-# 학습 코드(fds-ml/train_random_forest.py)가 저장한 dict에서 추론에 쓰는 키
+# 학습 코드(fds-ml/rf_v2/train.py, 공통 common/rf_training.py)가 저장한 dict에서 추론에 쓰는 키
 REQUIRED_KEYS = ("pipeline", "threshold", "feature_columns")
 
 

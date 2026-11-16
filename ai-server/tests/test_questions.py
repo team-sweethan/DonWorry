@@ -220,6 +220,27 @@ def test_answerQuestion_linkedResponseWindowDiffers_treatedAsToolFailure() -> No
     assert result.status == "ANSWERED"
 
 
+# 넓혀 보기에 성공하면 그 결과가 새 사실(추가-N)로 AI에게 간다 — #818 Codex 리뷰 재현
+# (보고서용 연결 사실이 기본 조회만 보게 바뀌어 질문의 넓혀 본 결과가 빠졌다)
+def test_answerQuestion_linkedWindowSucceeds_offersAddedFacts() -> None:
+    box = FakeBox()
+    llm = ScriptedLlm([[call(LINKED_WINDOW, hours=24)], None], [OK])
+
+    result = answer_question(question(), llm, box, SETTINGS)
+
+    assert result.toolCalls[0].status == "OK"
+    added = [fid for fid in _offered_ids(llm) if fid.startswith("추가")]
+    assert added
+
+
+# 보고서 사실 번호는 질문이 새로 붙이는 번호(추가-N · 앞-N)와 겹치지 않는다 — #818 Codex 리뷰
+# 겹치면 질문 답 검사 · 저장에서 보고서 사실이 질문 조회 사실로 덮인다
+def test_reportFactPrefixes_differFromQuestionPrefixes() -> None:
+    from app.agent.facts import FACT_TOPICS
+
+    assert {t.prefix for t in FACT_TOPICS}.isdisjoint({"추가", "앞"})
+
+
 # 보고서 뒤 사건 증거가 바뀌었으면 넓혀 보기를 하지 않는다 — 지금 값과 보고서 값이 섞이지 않게
 def test_answerQuestion_evidenceVersionChanged_doesNotCallTools() -> None:
     box = FakeBox()

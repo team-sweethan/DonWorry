@@ -54,8 +54,9 @@ _TOOL_NAMES: dict[type, str] = {
 
 
 # Tool 응답들을 조회 기록 순서대로 넣어 사실 목록을 만든다 (#548)
+# 코드가 한 기본 조회로 넣는다 — 연결 · 징후 사실은 기본 조회 기록만 본다 (#817)
 def catalog(*results: Any) -> list[Fact]:
-    records = [ToolRecord(_TOOL_NAMES[type(r)], {}, r) for r in results]
+    records = [ToolRecord(_TOOL_NAMES[type(r)], {}, r, True) for r in results]
     return fact_catalog(context(), records)
 
 

@@ -3,6 +3,7 @@ package com.donworry.investigation.report.controller;
 import com.donworry.investigation.report.dto.CasePaymentsToolResponse;
 import com.donworry.investigation.report.dto.DecisionBasisToolResponse;
 import com.donworry.investigation.report.dto.FdsEvidenceToolResponse;
+import com.donworry.investigation.report.dto.LinkedCasesToolResponse;
 import com.donworry.investigation.report.dto.LinkedPaymentsToolResponse;
 import com.donworry.investigation.report.dto.OrderContextToolResponse;
 import com.donworry.investigation.report.dto.PaymentHistoryToolResponse;
@@ -58,6 +59,13 @@ public class AiToolController {
     public LinkedPaymentsToolResponse linkedPayments(
             @RequestParam Long caseId, @RequestParam(defaultValue = "1") int nearbyHours) {
         return aiToolService.linkedPayments(caseId, nearbyHours);
+    }
+
+    // 같은 카드 · 기기 · IP를 쓴 결제가 들어 있는 지난 종료 사건과 그 결제의 판정 (#821)
+    // by: CARD_DEVICE(코드 기본 조회) · IP(AI가 고르는 추가 조회). 그 밖은 400
+    @GetMapping("/find_linked_cases")
+    public LinkedCasesToolResponse linkedCases(@RequestParam Long caseId, @RequestParam String by) {
+        return aiToolService.linkedCases(caseId, by);
     }
 
     // 사건 결제마다 가맹점이 결제 준비 때 보낸 주문 정보 (#634) — 주문자 이름 · 전화 원문은 없고 묶음 번호만

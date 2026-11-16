@@ -26,12 +26,12 @@ import { dateTime } from './caseLabels'
 import { LinkedPaymentsCard } from './LinkedPaymentsCard'
 import { OrderContextCard } from './OrderContextCard'
 import { PaymentHistoryCard } from './PaymentHistoryCard'
-import { ReportChecks } from './ReportChecks'
 import { ReportOverview } from './ReportOverview'
 import { ReportPastCompare, type NowProgress } from './ReportPastCompare'
 import { ReportSection } from './ReportSection'
+import { ReportSuspicions } from './ReportSuspicions'
 
-// AI 보고서 전문 (#644 PR 3): ① 무슨 일인가 → ② 확인할 것 → ③ 지난 사건과 비교 → ④ 근거 자료 → ⑤ 조사 범위(접음)
+// AI 보고서 전문 (#644 PR 3): ① 무슨 일인가 → ② 의심별 조사(#819) → ③ 지난 사건과 비교 → ④ 근거 자료 → ⑤ 조사 범위(접음)
 // 직원이 묻는 순서대로 — 무슨 일인가, 무엇을 확인하나, 지난 사건은 어떻게 판정했나, 근거 자료
 // 판정 권고는 #644에서 뺐다 — 보고서는 자료와 확인할 것만, 판정은 보안 직원 (ADR-0009 결정 13)
 // 정보마다 자리는 하나: 징후는 ②에만, 결제별 점수 · 규칙은 ① 결제 표에만, AI 문장은 ① 한눈에 보기에만 (#543)
@@ -40,18 +40,21 @@ import { ReportSection } from './ReportSection'
 // refreshKey — 화면의 [새로고침] 횟수. 바뀌면 ML 참고 위험도도 다시 조회한다 (#547 Codex 리뷰)
 // onDecide — 판정할 수 있는 Case일 때만 온다 (끝난 Case는 판정하러 가기를 보여 주지 않는다)
 // progress — 지금 사건 판정 진행 (decisionProgress). onDecide 유무로 판정 끝을 정하면 일부 판정 사건이 "판정 끝"으로 보였다 (#652 Codex 리뷰)
+// onAsk — 의심 카드 "이 의심에 대해 AI에게 묻기" (#819). 질문 칸이 있을 때만 온다
 export function ReportFull({
   body,
   label,
   refreshKey,
   progress,
   onDecide,
+  onAsk,
 }: {
   body: ReportBody
   label: string
   refreshKey: number
   progress: NowProgress
   onDecide?: () => void
+  onAsk?: (question: string) => void
 }) {
   const ml = useMlScores(
     body.paymentAnalyses.map((p) => p.paymentId),
@@ -70,7 +73,7 @@ export function ReportFull({
       <div className="dw-report-scroll">
         {fixedNotice && <Alert type="info" showIcon message={fixedNotice} />}
         <ReportOverview body={body} label={label} ml={ml} marks={marks} />
-        <ReportChecks body={body} checked={checked} onToggle={toggle} />
+        <ReportSuspicions body={body} checked={checked} onToggle={toggle} onAsk={onAsk} />
         {body.similarCases !== undefined && (
           <ReportPastCompare
             body={body}

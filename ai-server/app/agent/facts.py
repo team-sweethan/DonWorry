@@ -1,3 +1,4 @@
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -13,11 +14,14 @@ from app.agent.assemble import (
 )
 from app.agent.tools import ToolRecord
 from app.schemas.case_context import CaseContext
-from app.schemas.report import FactItem
+from app.schemas.report import BasisSignal, FactItem
 from app.schemas.tools import (
     CasePaymentsTool,
+    DecisionBasisTool,
     FdsEvidenceTool,
     HistoryPayment,
+    LinkedCase,
+    LinkedCasesTool,
     LinkedMatch,
     LinkedPaymentsTool,
     OrderContextTool,
@@ -49,6 +53,10 @@ class Fact:
 # 무엇을 눈여겨볼지는 AI가 고르지 않고 코드가 정한다 (#568) — 판단 방지
 # NOTABLE: 다른 고객과 겹침 · 연속 결제, NOTHING: 겹친 것 · 결제 · 사건 없음
 NOTABLE, PLAIN, NOTHING = 0, 1, 2
+# LEAD: 사건이 열린 이유(징후, #817) — AI에게 맨 앞에 준다
+# 눈여겨볼 사실처럼 요약에 꼭 넣으라고 검사하지는 않는다 — 사건마다 징후가 2~4개라 다시 쓰기가 는다
+# 지시문으로 요약을 징후에서 시작하게 하고 측정으로 본다 (11/14)
+LEAD = -1
 
 
 # collect가 돌려주는 한 줄 — (사실 문장, 기록 순번, 결제 ID 또는 None, 순서 등급)
@@ -68,6 +76,16 @@ class FactTopic:
 def _latest(records: list[ToolRecord], kind: type) -> tuple[object, int] | None:
     found = [
         (r.result, seq) for seq, r in enumerate(records, start=1) if isinstance(r.result, kind)
+    ]
+    return found[-1] if found else None
+
+
+# 코드가 한 기본 조회만 — AI가 넓혀 본 조회가 기본 표 · 사실을 덮지 않게 (#817 선택 B)
+def _latest_base(records: list[ToolRecord], kind: type) -> tuple[object, int] | None:
+    found = [
+        (r.result, seq)
+        for seq, r in enumerate(records, start=1)
+        if r.filled_by_system and isinstance(r.result, kind)
     ]
     return found[-1] if found else None
 
@@ -106,19 +124,17 @@ def _name(names: dict[str, str], payment_id: str) -> str:
     return names.get(payment_id, f"결제 {payment_id}")
 
 
-# 이력 첫 줄의 괄호 — 같은 결제를 코드가 나눠 잇는다, AI 추론에 맡기지 않음 (#568)
-# 예: "모두 이번 결제 앞뒤 10분 안 · 그 전 결제 없음"
+# 10분 안 결제가 있는 이력 첫 줄의 괄호 — 같은 결제를 코드가 나눠 잇는다 (#568)
+# AI 추론에 맡기지 않는다
+# 예: "모두 이번 결제 앞뒤 10분 안 · 그 전 결제 없음". 10분 안 결제가 없으면 _previous_line (#820)
 # 이력이 잘렸으면(최근 것만 조회) 못 본 결제가 있으니 "없음" 대신 "조회 못 함" (#568 Codex 리뷰)
 def _split_note(
     subject: str, single: bool, burst: list, earlier: list, later: list, truncated: bool
 ) -> str:
-    unseen = "조회 못 함" if truncated else "없음"
     no_earlier = "그 전 결제는 조회 못 함" if truncated else "그 전 결제 없음"
-    if burst and not earlier and not later:
+    if not earlier and not later:
         return f"모두 {subject} 앞뒤 10분 안 · {no_earlier}"
-    parts = [
-        f"{subject} 앞뒤 10분 안 {len(burst)}건" if burst else f"{subject} 앞뒤 10분 안 {unseen}"
-    ]
+    parts = [f"{subject} 앞뒤 10분 안 {len(burst)}건"]
     parts.append(f"그 전 {len(earlier)}건" if earlier else no_earlier)
     if later:
         parts.append(f"{'뒤' if single else '도중 · 뒤'} {len(later)}건")
@@ -128,6 +144,37 @@ def _split_note(
 def _payment_line(p: HistoryPayment) -> str:
     status = PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름")
     return f"{_kst(p.requestedAt)} {_won(p.amount)} {status}"
+
+
+# "모두 매입 완료" · "매입 완료 4건 · 승인 취소 1건" — 정상 · 의심이 아니라 상태 이름만 (#820)
+def _status_text(payments: list[HistoryPayment]) -> str:
+    counts = Counter(PAYMENT_STATUS_KO.get(p.paymentStatus or "", "상태 모름") for p in payments)
+    if len(counts) == 1:
+        return f"모두 {next(iter(counts))}"
+    return " · ".join(f"{status} {count}건" for status, count in counts.most_common())
+
+
+# 10분 안 결제가 없는 이력 첫 줄 — 이 고객이 사건 전에 낸 결제를 앞에 세운다 (#820)
+# "앞뒤 10분 안 없음" 같은 시스템 기준은 쓰지 않는다: 이전 결제가 보이면 그 사이도 이미 본 것이다
+# 사건 뒤 결제는 이 줄의 건수에 넣지 않는다 — 같은 결제를 두 번 세어 읽지 않게 (사건 17)
+def _previous_line(
+    days: int, subject: str, single: bool, earlier: list, history: PaymentHistoryTool
+) -> str:
+    name = f"이 고객의 {'이전 결제' if single else '사건 전 결제'}(최근 {days}일)"
+    if earlier and history.truncated:
+        return (
+            f"{name} 중 조회한 {len(earlier)}건: {_status_text(earlier)} "
+            "(더 오래된 결제는 조회 못 함)"
+        )
+    if earlier:
+        return f"{name} {len(earlier)}건: {_status_text(earlier)}"
+    if history.truncated:
+        after = "뒤" if single else "도중 · 뒤"
+        return (
+            f"{name}: 확인 못 함 (최근 {len(history.payments)}건만 조회했는데 "
+            f"모두 {subject} {after} 결제)"
+        )
+    return f"{name} 없음"
 
 
 def _history(records: list[ToolRecord]) -> list[Line]:
@@ -152,8 +199,12 @@ def _history(records: list[ToolRecord]) -> list[Line]:
     single = len(cases[0].payments) == 1
     subject = "이번 결제" if single else "사건 결제"
     burst, earlier, later = split_history(cases[0], history)
-    note = _split_note(subject, single, burst, earlier, later, history.truncated)
-    lines = [(f"{head} ({note}): {counts}", seq, None, NOTABLE if burst else PLAIN)]
+    if burst:
+        # 연달아 낸 결제가 있을 때만 10분 기준을 쓴다 — 그때는 그 자체가 눈여겨볼 사실이다
+        note = _split_note(subject, single, burst, earlier, later, history.truncated)
+        lines = [(f"{head} ({note}): {counts}", seq, None, NOTABLE)]
+    else:
+        lines = [(_previous_line(days, subject, single, earlier, history), seq, None, PLAIN)]
     for label, group, rank in (
         (f"{subject} 앞뒤 10분 안의 다른 결제", burst, NOTABLE),
         (
@@ -161,7 +212,8 @@ def _history(records: list[ToolRecord]) -> list[Line]:
             earlier,
             PLAIN,
         ),
-        ("이번 결제 뒤 결제" if single else "사건 도중 · 뒤 결제", later, PLAIN),
+        # 사건 뒤 결제는 보고서를 늦게 만들 때만 생기고 판정 근거가 아니다 — AI에게 맨 뒤로 (#820)
+        ("이번 결제 뒤 결제" if single else "사건 도중 · 뒤 결제", later, NOTHING),
     ):
         if group:
             # 건수는 전체, 목록은 최근 몇 건만 (#548 Codex 리뷰)
@@ -225,26 +277,69 @@ def _linked_line(
 
 
 # 결제별 칸이 있으면 결제마다, 없으면(예전 Spring) 사건 전체 값으로 쓴다 (#533)
+def _linked_matches(
+    linked: LinkedPaymentsTool, names: dict[str, str]
+) -> list[tuple[str, str, LinkedMatch]]:
+    if not linked.payments:
+        return [("사건 결제 전체", kind, getattr(linked, attr)) for kind, attr in _KINDS]
+    matches: list[tuple[str, str, LinkedMatch]] = []
+    for links in linked.payments:
+        own = (links.card, links.device, links.ip)
+        owner = _name(names, links.paymentId)
+        matches += [(owner, kind, m) for (kind, _), m in zip(_KINDS, own, strict=True)]
+    return matches
+
+
+# 기본 조회(앞뒤 1시간)만 — AI가 6 · 24시간으로 넓혀 본 결과는 "추가" 주제로 따로 (#817)
 def _linked(records: list[ToolRecord]) -> list[Line]:
-    found = _latest(records, LinkedPaymentsTool)
+    return _linked_lines(records, _latest_base(records, LinkedPaymentsTool))
+
+
+# 질문 기능(ADR-0086)의 넓혀 보기 — 질문이 새로 조회한 기록 그대로 사실 줄을 만든다
+# 보고서용 _linked는 기본 조회만 보므로 쓰지 않는다 (#818 Codex 리뷰)
+def linked_lines_of(records: list[ToolRecord]) -> list[Line]:
+    return _linked_lines(records, _latest(records, LinkedPaymentsTool))
+
+
+def _linked_lines(records: list[ToolRecord], found: tuple[object, int] | None) -> list[Line]:
     if found is None:
         return []
     linked, seq = found
     assert isinstance(linked, LinkedPaymentsTool)
     days = linked.lookbackDays
-    names = payment_names(records)
-    matches: list[tuple[str, str, LinkedMatch]] = []
-    if linked.payments:
-        for links in linked.payments:
-            own = (links.card, links.device, links.ip)
-            owner = _name(names, links.paymentId)
-            matches += [(owner, kind, m) for (kind, _), m in zip(_KINDS, own, strict=True)]
-    else:
-        matches = [("사건 결제 전체", kind, getattr(linked, attr)) for kind, attr in _KINDS]
     return [
         (_linked_line(owner, kind, m, days, linked.nearbyWindowMinutes), seq, None, _linked_rank(m))
-        for owner, kind, m in matches
+        for owner, kind, m in _linked_matches(linked, payment_names(records))
     ]
+
+
+# AI가 넓혀 본 연결 결제 (#817, 시간대-N) — 앞뒤 6 · 24시간 안 건수만 새 사실이다
+# (30일 합계는 기본 조회와 같다)
+# 30일 안에 겹친 결제가 없거나 정보가 없는 칸은 기본 조회 사실에 이미 있어 쓰지 않는다
+def _linked_window(records: list[ToolRecord]) -> list[Line]:
+    names = payment_names(records)
+    lines: list[Line] = []
+    for seq, record in enumerate(records, start=1):
+        linked = record.result
+        if record.filled_by_system or not isinstance(linked, LinkedPaymentsTool):
+            continue
+        window = linked.nearbyWindowMinutes
+        if window is None:
+            continue
+        span = f"앞뒤 {_window_text(window)} 안"
+        for owner, kind, m in _linked_matches(linked, names):
+            near = m.nearby
+            if not m.provided or m.paymentCount == 0 or near is None:
+                continue
+            if near.paymentCount == 0:
+                text = f"{owner} · 같은 {kind}: 이 결제 {span} 다른 고객 결제 없음"
+                lines.append((text, seq, None, NOTHING))
+                continue
+            counts = _counts_text(
+                near.otherCustomerCount, near.paymentCount, near.resultCounts, near.declinedCount
+            )
+            lines.append((f"{owner} · 같은 {kind}: 이 결제 {span} {counts}", seq, None, NOTABLE))
+    return lines
 
 
 _NOT_SENT = "정보 없음(가맹점이 보내지 않음)"
@@ -257,10 +352,15 @@ def _signal_line(owner: str, signals: Signals | None) -> str:
         code = signals.ipCountryCode
         country = "한국" if code == "KR" else f"해외({code})"
     else:
-        country = "모름" if signals.ipProvided else _NOT_SENT
-    card = "정보 있음" if signals.cardProvided else _NOT_SENT
-    device = "정보 있음" if signals.deviceProvided else _NOT_SENT
-    return f"{owner}: 카드 {card} · 기기 {device} · 접속 국가 {country}"
+        country = "IP로 확인 못 함" if signals.ipProvided else _NOT_SENT
+    # "카드 정보 있음"은 카드 내용이 있다는 뜻으로 읽힌다 — 가맹점이 식별값을 보냈다는 뜻이다 (#820)
+    if signals.cardProvided and signals.deviceProvided:
+        sent = "카드 · 기기 식별값 받음"
+    else:
+        card = "식별값 받음" if signals.cardProvided else _NOT_SENT
+        device = "식별값 받음" if signals.deviceProvided else _NOT_SENT
+        sent = f"카드 {card} · 기기 {device}"
+    return f"{owner}: {sent} · 접속 국가 {country}"
 
 
 # 결제마다 마지막으로 본 FDS 기록 — 보고서에 쓴 값과 같다
@@ -369,12 +469,191 @@ def _order(records: list[ToolRecord]) -> list[Line]:
     return lines
 
 
+# 사건이 열린 이유 (#817 선택 D) — Spring이 계산한 결제별 징후를 코드가 사실 문장으로 만든다
+# 요약 AI가 왜 열렸는지 모른 채 사실만 나열하지 않게. 등급(고위험 · 주의) · 점수는 넣지 않는다
+# — 따라 쓰면 판단 문장이 된다. 등급은 화면 징후 표가 보여 준다
+# 같은 징후는 결제를 묶어 한 줄. 다른 징후에 이미 센 것(countedIn)은 뺀다
+# 징후를 받지 못했으면(조회 실패 · 연결 조회 실패로 빈 목록) 아무 줄도 쓰지 않는다
+# — "징후 없음"으로 읽히지 않게
+# 징후 묶음 키 — 화면 caseSignalId(reportView.ts)와 같다
+# 해외 접속은 국가가 이름에만 있어 key가 같아도 국가가 다르면 다른 징후다 (#818 Codex 리뷰)
+OVERSEAS = "OVERSEAS"
+
+
+def signal_id(signal: BasisSignal) -> str:
+    return f"{signal.key}:{signal.label}" if signal.key == OVERSEAS else signal.key
+
+
+def _basis(records: list[ToolRecord]) -> list[Line]:
+    found = _latest_base(records, DecisionBasisTool)
+    if found is None:
+        return []
+    basis, seq = found
+    assert isinstance(basis, DecisionBasisTool)
+    if not basis.payments:
+        return []
+    names = payment_names(records)
+    single = len(names) <= 1
+    grouped: dict[str, tuple[str, list[str]]] = {}
+    for payment in basis.payments:
+        owner = _name(names, payment.paymentId)
+        for signal in payment.basis.signals:
+            if signal.countedIn:
+                continue
+            detail = f" {signal.detail}" if signal.detail else ""
+            explained = (
+                f"(이 징후를 설명하는 기록: {signal.normalReason})"
+                if signal.normalReason
+                else "(이 징후를 설명하는 기록 없음)"
+            )
+            part = (
+                f"{detail.strip()} {explained}".strip()
+                if single
+                else f"{owner}{detail} {explained}"
+            )
+            grouped.setdefault(signal_id(signal), (signal.label, []))[1].append(part)
+    if not grouped:
+        covered = {p.paymentId for p in basis.payments}
+        if names and set(names) <= covered:
+            return [("사건 결제에서 찾은 징후 없음", seq, None, NOTHING)]
+        return []
+    return [
+        (f"징후 '{label}': {' / '.join(parts)}", seq, None, LEAD)
+        for label, parts in grouped.values()
+    ]
+
+
+_LINKED_KIND_KO = {"CARD": "카드", "DEVICE": "기기", "IP": "IP"}
+
+
+def _kinds_text(kinds: list[str]) -> str:
+    return " · ".join(_LINKED_KIND_KO.get(k, k) for k in kinds)
+
+
+# 겹친 결제에 내린 직원 판정 — 판정이 없는 결제(고객 직접 취소 등)도 센다
+def _past_outcome(payments: int, accept: int, reject: int) -> str:
+    parts = [f"매입 진행 {accept}건"] if accept else []
+    parts += [f"승인 취소 {reject}건"] if reject else []
+    undecided = payments - accept - reject
+    parts += [f"판정 없음 {undecided}건"] if undecided > 0 else []
+    return " · ".join(parts) or "판정 없음"
+
+
+# 같은 카드 · 기기 · IP로 열린 지난 사건 (#821) — 기본 조회(카드 · 기기)와 AI가 고른 IP 조회 모두
+# 사건 번호는 쓰지 않는다 — AI에는 건수 · 판정 종류 · 시점만 (11/14 결정)
+# 화면은 보고서 칸의 번호로 링크한다
+# 비교하지 못한 종류는 "없음"과 따로 써서 확인한 것처럼 읽히지 않게 한다
+def _linked_cases(records: list[ToolRecord]) -> list[Line]:
+    lines: list[Line] = []
+    for seq, record in enumerate(records, start=1):
+        if isinstance(record.result, LinkedCasesTool):
+            lines += _linked_case_lines(record.result, seq)
+    return lines
+
+
+# 여러 종류 중 하나라도 같았다 — "카드 · 기기"는 둘 다 같은 것으로 읽힌다 (측정 11/15 sample-three)
+def _either_text(kinds: list[str]) -> str:
+    names = [_LINKED_KIND_KO.get(k, k) for k in kinds]
+    return "나 ".join(names)
+
+
+# 조회 상한에 걸려 최근 끝난 사건 일부만 비교했을 때 (#818 Codex 리뷰)
+def _partial(result: LinkedCasesTool) -> str:
+    return " (최근 끝난 사건 일부만 비교)" if result.limited else ""
+
+
+# 사건 한 건 — 종료 날짜 · 겹친 결제 수 · 그 결제에 내린 판정
+def _past_case_text(c: LinkedCase) -> str:
+    closed = _kst(c.closedAt).split(" ")[0]
+    outcome = _past_outcome(c.paymentCount, c.acceptCount, c.rejectCount)
+    return f"{closed} 종료, 그 결제 {c.paymentCount}건의 직원 판정 {outcome}"
+
+
+# 찾은 사건 — 합계와 사건마다 내용을 AI가 다른 사건으로 세지 않게 쓴다 (측정 11/15)
+# 1건이면 한 줄: 합계 줄 + 사건 줄을 따로 주자 "지난 사건 2건"으로 썼다 (sample-one)
+# 여러 건이면 합계 줄(눈여겨볼 사실) 다음 사건 줄은 "그중 한 사건"으로 — 묶어 쓴 건수 · 판정 합계가
+# 사실에 있어야 숫자 검사에 걸리지 않는다 (로컬 사건 30)
+# 종류는 실제로 겹친 것만 — 기기로만 겹쳤는데 "카드나 기기"로 읽히지 않게
+def _found_case_lines(result: LinkedCasesTool, scope: str, seq: int) -> list[Line]:
+    kinds = [k for k in ("CARD", "DEVICE", "IP") if any(k in c.matchedBy for c in result.cases)]
+    shown = len(result.cases)
+    if result.totalMatched == 1 and shown == 1:
+        head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        return [(f"{head}: 1건 · {_past_case_text(result.cases[0])}", seq, None, NOTABLE)]
+    payments = sum(c.paymentCount for c in result.cases)
+    outcome = _past_outcome(
+        payments,
+        sum(c.acceptCount for c in result.cases),
+        sum(c.rejectCount for c in result.cases),
+    )
+    if result.totalMatched > shown:
+        # 최근 몇 건만 받았다 — 나머지 사건의 겹친 종류 · 판정은 모른다 (#818 Codex 리뷰)
+        # 전체 건수는 비교한 종류 전체로, 겹친 종류 · 판정 합계는 받은 최근 건 범위로 쓴다
+        compared = [k for k in result.kinds if k not in result.notProvided]
+        head = f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        total = (
+            f"{head}: {result.totalMatched}건, 그중 최근 {shown}건(같은 {_either_text(kinds)})의 "
+            f"결제 {payments}건 직원 판정 {outcome}"
+        )
+    else:
+        head = f"같은 {_either_text(kinds)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        total = f"{head}: {result.totalMatched}건, 그 결제 {payments}건의 직원 판정 {outcome}"
+    lines: list[Line] = [(total, seq, None, NOTABLE)]
+    # 사건마다 줄은 자세한 내용 — 눈여겨볼 사실은 합계 줄 하나라 AI가 모두 옮기지 않아도 된다
+    for c in result.cases:
+        line = f"그중 한 사건(같은 {_kinds_text(c.matchedBy)}): {_past_case_text(c)}"
+        lines.append((line, seq, None, PLAIN))
+    return lines
+
+
+def _linked_case_lines(result: LinkedCasesTool, seq: int) -> list[Line]:
+    compared = [k for k in result.kinds if k not in result.notProvided]
+    missing = [k for k in result.kinds if k in result.notProvided]
+    if not compared:
+        kinds = _kinds_text(result.kinds)
+        return [
+            (
+                f"같은 {kinds}로 열린 지난 사건: {kinds} 정보를 가맹점이 보내지 않아 찾지 못함",
+                seq,
+                None,
+                PLAIN,
+            )
+        ]
+    scope = f"다른 고객의 지난 사건(최근 {result.lookbackDays}일 안 종료)"
+    if result.cases:
+        lines = _found_case_lines(result, scope, seq)
+    elif result.limited:
+        # 일부만 비교 — "없음"으로 단정하지 않는다. 확인된 없음(NOTHING)이 아니라 보통 사실로
+        head = f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}{_partial(result)}"
+        line = f"{head}: 그 안에서는 없음"
+        lines = [(line, seq, None, PLAIN)]
+    else:
+        lines = [
+            (f"같은 {_either_text(compared)}를 쓴 결제가 든 {scope}: 없음", seq, None, NOTHING)
+        ]
+    if missing:
+        lines.append(
+            (
+                f"{_kinds_text(missing)} 정보를 가맹점이 보내지 않아 같은 {_kinds_text(missing)}의 "
+                "지난 사건은 찾지 못함",
+                seq,
+                None,
+                PLAIN,
+            )
+        )
+    return lines
+
+
 FACT_TOPICS: tuple[FactTopic, ...] = (
+    FactTopic("basis", "징후", "get_decision_basis", _basis),
     FactTopic("history", "이력", "get_payment_history", _history),
     FactTopic("linked", "연결", "find_linked_payments", _linked),
+    # 질문 기능의 새 사실 번호(추가-N · 앞-N)와 겹치지 않는 이름 (#818 Codex 리뷰)
+    FactTopic("linkedWindow", "시간대", "find_linked_payments", _linked_window),
     FactTopic("signals", "접속", "get_fds_evidence", _signals),
     FactTopic("similar", "과거", "find_similar_cases", _similar),
     FactTopic("order", "주문", "get_order_context", _order),
+    FactTopic("linkedCases", "지난사건", "find_linked_cases", _linked_cases),
 )
 
 

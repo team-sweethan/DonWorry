@@ -27,3 +27,24 @@ test('shiftFundsPeriod_keepsDurationAndDisablesMovesOutsideExistingBounds', () =
   assert.equal(shiftFundsPeriod({ from: '2026-01-01', to: '2027-01-02' }, 1), null)
   assert.equal(shiftFundsPeriod({ from: '2026-11-19', to: '2026-11-13' }, 1), null)
 })
+
+// 기준일 앞에 걸쳐도 조회 가능한 과거 날짜가 남아 있으면 그 구간으로 이동한다.
+test('shiftFundsPeriod_whenPreviousPartlyCrossesBaseDate_returnsRemainingPastDates', () => {
+  const current = { from: '2026-11-13', to: '2026-11-19' }
+  const previous = shiftFundsPeriod(current, -1, '2026-11-10', '2027-11-13')
+  assert.deepEqual(previous, { from: '2026-11-10', to: '2026-11-12' })
+  assert.equal(fundsPeriodDays(previous!), 3)
+  assert.equal(shiftFundsPeriod(previous!, -1, '2026-11-10', '2027-11-13'), null)
+})
+
+// 하루만 남은 과거 날짜와 연도 경계에서도 기준일을 넘어가거나 날짜를 건너뛰지 않는다.
+test('shiftFundsPeriod_whenOneDayOrYearBoundaryRemains_keepsEveryAvailablePastDate', () => {
+  assert.deepEqual(shiftFundsPeriod({ from: '2026-11-11', to: '2026-11-17' }, -1, '2026-11-10'), {
+    from: '2026-11-10',
+    to: '2026-11-10',
+  })
+  assert.deepEqual(shiftFundsPeriod({ from: '2026-01-02', to: '2026-01-08' }, -1, '2025-12-30'), {
+    from: '2025-12-30',
+    to: '2026-01-01',
+  })
+})
