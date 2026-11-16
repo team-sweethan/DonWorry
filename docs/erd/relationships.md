@@ -73,7 +73,7 @@ erDiagram
     merchants |o--o{ admin_change_histories : "target_merchant_id"
 ```
 
-`admin_change_histories.actor_user_id`는 [후속 ALTER](../../backend/src/main/resources/db/migration/V20261104_134638__add_admin_change_history_actor_type.sql)에서 NULL 허용으로 바뀌었습니다. STAFF는 ID 필수, SYSTEM은 ID 없음입니다. 나머지 CREATE는 [소유 표](README.md#2-테이블-소유)에 연결되어 있습니다.
+`admin_change_histories.actor_user_id`는 [후속 ALTER](../../backend/src/main/resources/db/migration/V20261104_134638__add_admin_change_history_actor_type.sql)에서 NULL 허용으로 바뀌었습니다. STAFF는 ID 필수, SYSTEM은 ID 없음입니다. 나머지 CREATE · ALTER는 [migration 폴더](../../backend/src/main/resources/db/migration/)에서 표 이름으로 검색합니다.
 
 ## P1 신청·키 관리
 
@@ -93,7 +93,7 @@ erDiagram
     platform_users |o--o{ merchant_key_histories : "actor_user_id"
 ```
 
-근거: [신청](../../backend/src/main/resources/db/migration/V20261029_140200__create_merchant_applications.sql) · [토큰](../../backend/src/main/resources/db/migration/V20261029_140208__create_application_tokens.sql) · [메일](../../backend/src/main/resources/db/migration/V20261029_140209__create_application_mail_deliveries.sql) · [연동](../../backend/src/main/resources/db/migration/V20261031_151333__create_merchant_integrations.sql) · [키 이력](../../backend/src/main/resources/db/migration/V20261031_151342__create_merchant_key_histories.sql). 신청의 로그인 ID·주소·상태 후속 ALTER는 [소유 표](README.md#2-테이블-소유)를 봅니다. 위 FK의 NULL·UNIQUE는 바꾸지 않습니다.
+근거: [신청](../../backend/src/main/resources/db/migration/V20261029_140200__create_merchant_applications.sql) · [토큰](../../backend/src/main/resources/db/migration/V20261029_140208__create_application_tokens.sql) · [메일](../../backend/src/main/resources/db/migration/V20261029_140209__create_application_mail_deliveries.sql) · [연동](../../backend/src/main/resources/db/migration/V20261031_151333__create_merchant_integrations.sql) · [키 이력](../../backend/src/main/resources/db/migration/V20261031_151342__create_merchant_key_histories.sql). 신청의 로그인 ID·주소·상태 후속 ALTER는 [migration 폴더](../../backend/src/main/resources/db/migration/)에서 `merchant_applications`로 검색합니다. 위 FK의 NULL·UNIQUE는 바꾸지 않습니다.
 
 ## P2 평가·탐지
 
@@ -135,7 +135,7 @@ erDiagram
     security_cases ||..o{ ai_report_questions : "case_id (P4 사건 질문)"
 ```
 
-각 CREATE는 [소유 표](README.md#2-테이블-소유)에 연결되어 있습니다. 담당 변경 요청의 `pending_case_id` UNIQUE는 사건당 **대기 요청** 한 건을 제한하며, 전체 요청 이력이 한 건이라는 뜻은 아닙니다.
+각 CREATE · ALTER는 [migration 폴더](../../backend/src/main/resources/db/migration/)에서 표 이름으로 검색합니다. 담당 변경 요청의 `pending_case_id` UNIQUE는 사건당 **대기 요청** 한 건을 제한하며, 전체 요청 이력이 한 건이라는 뜻은 아닙니다.
 
 ## P5 결제·취소
 
