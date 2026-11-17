@@ -741,8 +741,10 @@
   background: #fef3c7;
   color: #92400e;
 }
+/* finance-money.css의 .stl-day .stl-chip(column)을 덮는다. column + wrap이면 금액이 아랫줄 대신 오른쪽 열로 넘어가 잘린다 (#839) */
 .stl-prototype .stl-calendar .stl-chip {
   display: flex;
+  flex-direction: row;
   align-items: baseline;
   flex-wrap: wrap;
   column-gap: 4px;
