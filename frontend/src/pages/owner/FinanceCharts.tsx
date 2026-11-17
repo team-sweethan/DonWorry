@@ -477,6 +477,7 @@ export function CashBalanceChart({
                     }
                   }
                 }}
+                data-booth-action={p.balance < 0 ? 'shortage-date' : undefined}
                 data-funds-date={p.date}
                 className="funds-chart-day"
               >

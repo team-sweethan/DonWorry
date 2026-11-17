@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useMatches, useNavigationType } from 'react-
 import { ScreenResult } from '../components/common/ScreenResult'
 import { routeTitle, shouldResetScroll, showRouteErrorHome } from '../utils/routeEffects.ts'
 import { RouteTitleOverrideContext } from './routeTitleContext'
+import { BoothTour } from '../booth/BoothTour'
 
 export function RouteLayout() {
   const { pathname } = useLocation()
@@ -23,6 +24,7 @@ export function RouteLayout() {
   return (
     <RouteTitleOverrideContext.Provider value={setTitleOverride}>
       <Outlet />
+      <BoothTour />
     </RouteTitleOverrideContext.Provider>
   )
 }

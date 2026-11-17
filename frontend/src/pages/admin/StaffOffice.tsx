@@ -37,6 +37,7 @@ function Desk({
       <button
         type="button"
         className={`ca-desk is-${state}${open ? ' is-open' : ''}${danger ? ' is-danger' : ''}`}
+        data-booth-action={staff.openCount > 0 ? 'assigned-staff' : undefined}
         aria-pressed={open}
         aria-label={`${staff.displayName}, 맡은 사건 ${staff.openCount}건, ${note}`}
         onClick={onToggle}

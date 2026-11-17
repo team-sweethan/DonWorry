@@ -318,7 +318,11 @@ export function CaseDetailPage() {
         />
       )}
       {/* 사건 정보 한 칸 (#648) — 상태 · 기한 · 담당은 여기 한 곳에만 둔다. 가맹점 · 고객 · 유형은 제목 아래 줄 */}
-      <Card style={{ borderColor: '#E2E8F0', marginBottom: 20 }} styles={{ body: { padding: 16 } }}>
+      <Card
+        className="dw-case-summary"
+        style={{ borderColor: '#E2E8F0', marginBottom: 20 }}
+        styles={{ body: { padding: 16 } }}
+      >
         <div className="dw-case-facts">
           <Fact label="상태">
             <CodeTag value={caseStatusLabel[securityCase.status]} />

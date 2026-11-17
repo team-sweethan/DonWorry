@@ -224,6 +224,7 @@ export function MerchantCaseRowItem({
       <button
         type="button"
         className="mct-cols mct-row-head"
+        data-booth-action={status === 'CLOSED' ? 'completed-case' : undefined}
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={onToggle}

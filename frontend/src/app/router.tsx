@@ -1,5 +1,7 @@
 import { ConfigProvider } from 'antd'
 import { RouteLayout, RouteErrorPage } from './RouteLayout'
+import { BoothStart } from '../booth/BoothTour'
+import { BoothMailPage } from '../booth/BoothMailPage'
 import {
   AdminApplicationsPage,
   AdminApplicationDetailPage,
@@ -98,6 +100,10 @@ export const router = createBrowserRouter([
             },
           ]
         : []),
+      // 부스 시연 시작 주소 (로컬 전용)
+      { path: '/booth', handle: { title: '부스 시연' }, element: <BoothStart /> },
+      { path: '/booth/:role', handle: { title: '부스 시연' }, element: <BoothStart /> },
+      { path: '/booth-mail', handle: { title: '안내 메일' }, element: <BoothMailPage /> },
       { path: '/', handle: { title: '서비스 소개' }, element: <LandingRoute /> },
       {
         path: '/apply',

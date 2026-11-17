@@ -23,6 +23,7 @@ function Desk({
       <button
         type="button"
         className={`im-desk ${stageClass[staff.stage]}${open ? ' is-open' : ''}`}
+        data-booth-action={staff.openAlertCount > 0 ? 'monitored-staff' : undefined}
         aria-pressed={open}
         aria-label={`${staff.staffName}, ${view.label}, ${view.help}${staff.openAlertCount > 0 ? `, 열린 경보 ${staff.openAlertCount}건` : ''}`}
         onClick={onSelect}

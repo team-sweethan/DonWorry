@@ -1,0 +1,256 @@
+/* 부스 시연용 메일함 화면 (로컬 전용). 흔한 웹메일의 뼈대만 따르고 특정 서비스의 색 · 로고는 쓰지 않는다. */
+.booth-mail {
+  min-height: 100vh;
+  font-size: 14px;
+  color: #202124;
+  background: #fff;
+}
+
+.booth-mail-top {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  height: 60px;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booth-mail-brand {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 196px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.booth-mail-search {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  align-items: center;
+  max-width: 620px;
+  height: 40px;
+  padding: 0 16px;
+  color: #6b7280;
+  background: #f1f3f4;
+  border-radius: 8px;
+}
+
+.booth-mail-me {
+  margin-left: auto;
+  color: #4b5563;
+}
+
+.booth-mail-frame {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - 60px);
+}
+
+.booth-mail-side {
+  padding: 16px 12px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.booth-mail-write {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: #374151;
+  border-radius: 6px;
+}
+
+.booth-mail-side ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.booth-mail-side li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  color: #374151;
+  border-radius: 6px;
+}
+
+.booth-mail-side li.is-current {
+  font-weight: 700;
+  color: #111827;
+  background: #eef2f7;
+}
+
+.booth-mail-side li b {
+  margin-left: auto;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.booth-mail-main {
+  min-width: 0;
+  padding: 0 28px 40px;
+}
+
+.booth-mail-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booth-mail-list li {
+  display: grid;
+  grid-template-columns: 20px 120px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  height: 44px;
+  padding: 0 4px;
+  font-weight: 700;
+  border-top: 1px solid #f0f1f3;
+}
+
+.booth-mail-list li:first-child {
+  border-top: 0;
+}
+
+.booth-mail-list-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.booth-mail-list-subject em {
+  font-style: normal;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.booth-mail-list time {
+  font-size: 13px;
+  font-weight: 400;
+  color: #4b5563;
+}
+
+.booth-mail-star {
+  color: #c4c7cc;
+}
+
+.booth-mail-reading {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.booth-mail-message {
+  min-width: 0;
+  padding: 0 20px 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.booth-mail-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  height: 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booth-mail-actions i {
+  width: 1px;
+  height: 12px;
+  background: #d1d5db;
+}
+
+.booth-mail-actions i ~ span {
+  font-weight: 400;
+}
+
+.booth-mail-message h2 {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 20px 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.booth-mail-from {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.booth-mail-from-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.booth-mail-chip {
+  padding: 4px 12px;
+  color: #1f2937;
+  background: #e8f0fe;
+  border-radius: 999px;
+}
+
+.booth-mail-date {
+  padding-bottom: 16px;
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.booth-mail-body p {
+  margin: 0 0 18px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #111827;
+}
+
+.booth-mail-body p:last-child {
+  margin-bottom: 0;
+}
+
+.booth-mail-body .booth-mail-link {
+  color: #1a0dab;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.booth-mail-foot {
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+@media (max-width: 1100px) {
+  .booth-mail-frame {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .booth-mail-side {
+    display: none;
+  }
+
+  .booth-mail-reading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

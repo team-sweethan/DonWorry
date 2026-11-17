@@ -474,6 +474,7 @@ export function SettlementPrototype({
             <button
               key={v}
               id={`stl-tab-${v}`}
+              data-booth-action={v === 'list' ? 'settlement-list' : undefined}
               role="tab"
               aria-selected={view === v}
               aria-controls={`stl-view-${v}`}
@@ -935,6 +936,7 @@ export function SettlementPrototype({
               {payoutData && (
                 <button
                   role="tab"
+                  data-booth-action="payout-kind"
                   aria-selected={reportType === 'payout'}
                   onClick={() => changeReportType('payout')}
                 >

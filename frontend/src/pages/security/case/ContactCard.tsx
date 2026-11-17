@@ -145,6 +145,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
                   <Button
                     size="small"
                     loading={row.loading}
+                    data-booth-action="contact-read"
                     onClick={() => void load(row.paymentId)}
                   >
                     주문자 정보 보기
@@ -159,7 +160,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
               return (
                 <Space size={12}>
                   <span>{row.contact.ordererName ?? '-'}</span>
-                  <span>{row.contact.ordererPhone ?? '-'}</span>
+                  <span data-booth-contact-ready>{row.contact.ordererPhone ?? '-'}</span>
                 </Space>
               )
             },
@@ -182,7 +183,12 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
                   <Button size="small" onClick={() => openMatch(contact)}>
                     전화번호 일치 확인
                   </Button>
-                  <Button size="small" danger onClick={() => openRaw(contact)}>
+                  <Button
+                    size="small"
+                    danger
+                    data-booth-action="contact-form"
+                    onClick={() => openRaw(contact)}
+                  >
                     전체 전화번호 보기
                   </Button>
                 </Space>
@@ -225,6 +231,7 @@ export function ContactCard({ caseId, payments }: { caseId: string; payments: Ca
         )}
       </Modal>
       <Modal
+        className="dw-contact-raw-modal"
         title={rawTarget ? `결제 ${rawTarget.paymentId} 주문자 전체 전화번호` : ''}
         open={rawTarget !== null}
         okText={rawPhone ? '닫기' : '전체 전화번호 보기'}
