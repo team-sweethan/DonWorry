@@ -153,10 +153,10 @@ const ownerSteps: BoothStep[] = [
     id: 'owner-home',
     spots: [
       { sel: '.oh-connection', note: '쇼핑몰이 돈워리와 연결돼 있는지 먼저 보여 줍니다.' },
-      { sel: '.oh-money', note: '들어올 돈과 지금 자금 상태를 숫자로 요약합니다.' },
+      { sel: '.oh-money', note: '이번 달 들어온 정산금과 보류된 결제 건수를 보여 줍니다.' },
       {
-        sel: '.oh-todos a[href="/owner/funds"]',
-        note: '11월 18일 재료 발주로 잔액이 부족해집니다. 지금 확인할 일로 먼저 알려 줍니다.',
+        sel: '.oh-todos[aria-label="지금 확인할 것"]',
+        note: '시작 잔액 설정이나 잔액 부족 등 지금 확인할 사항을 안내합니다.',
       },
     ],
     path: '/owner',
@@ -215,25 +215,27 @@ const ownerSteps: BoothStep[] = [
       {
         sel: '.funds-trend',
         prepare: ['shortage-date'],
-        note: '재료비 250만 원이 먼저 나가 잔액이 부족해지고, 이후 정산금이 들어오는 흐름입니다. 초록은 정산금, 주황은 지출입니다.',
+        note: '날짜별 예상 잔액과 정산금·지출 흐름을 보여 줍니다. 초록은 정산금, 주황은 지출입니다.',
       },
     ],
     path: '/owner/funds',
     core: true,
-    headline: '지출을 넣으면 잔액이 모자랄 날을 미리 알려 드립니다',
+    headline: '지출을 등록하면 잔액이 부족할 날을 미리 알려 드립니다',
     detail: '정산으로 들어올 돈과 나갈 돈을 날짜별로 더하고 뺍니다.',
   },
   {
     id: 'owner-loans',
     spots: [
-      { sel: '.loan-filters', note: '지역과 지원 대상으로 상품을 거릅니다.' },
-      { sel: '.loan-product-card', note: '상품마다 조건을 보고 취급 기관 홈페이지로 이동합니다.' },
+      { sel: '.loan-filters', note: '지역과 지원 대상으로 상품을 조회합니다.' },
+      {
+        sel: '.loan-product-card',
+        note: '상품 세부 정보를 확인하고 취급 기관 홈페이지로 이동할 수 있습니다.',
+      },
     ],
     path: '/owner/loans',
     core: true,
     headline: '부족한 자금을 준비할 수 있도록 운영자금 상품으로 이어집니다',
     detail: '서민금융진흥원 자료입니다. 지역을 고르면 해당 지역과 전국 상품이 함께 나옵니다.',
-    action: '준비된 상품 한 장의 지역 · 조건 · 취급 기관만 짚습니다',
   },
   {
     id: 'owner-actions',

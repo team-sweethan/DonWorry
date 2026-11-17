@@ -82,3 +82,30 @@ test('preparation_waitsForMissingOrDisabledControl', () => {
   )
   assert.equal(clicked.size, 0)
 })
+
+// 실제 부족일이 없는 가맹점에서는 이미 그려진 그래프를 보여 주고 진행한다.
+test('preparation_whenForecastHasNoNegativeBalance_keepsSelectedDate', () => {
+  const clicked = new Set<BoothPreparation>()
+  const find = (selector: string) =>
+    selector === '[data-funds-date][aria-pressed="true"]' ? button : null
+  assert.equal(
+    prepareBoothSpot(['shortage-date'], clicked, find, () =>
+      assert.fail('날짜를 바꾸지 않아야 함'),
+    ),
+    true,
+  )
+  assert.equal(clicked.size, 0)
+})
+
+// 그래프 로딩 중을 부족일 없음으로 처리해서 빈 영역을 짚으면 안 된다.
+test('preparation_whenForecastNotRendered_waitsForActualChart', () => {
+  assert.equal(
+    prepareBoothSpot(
+      ['shortage-date'],
+      new Set(),
+      () => null,
+      () => assert.fail(),
+    ),
+    false,
+  )
+})

@@ -23,6 +23,10 @@ export function prepareBoothSpot(
     if (find(controls[action])) continue
     if (clicked.has(action)) return false
     const control = find(`[data-booth-action="${action}"]`)
+    // 예측 그래프가 그려졌지만 음수 잔액 날짜가 없으면 현재 날짜를 그대로 보여 준다.
+    // 데이터가 아직 오지 않은 상태와 구분해, 부족일이 없는 계정도 다음으로 넘어갈 수 있게 한다.
+    if (!control && action === 'shortage-date' && find('[data-funds-date][aria-pressed="true"]'))
+      continue
     if (!control || control.matches(':disabled, [aria-disabled="true"], .ant-btn-loading'))
       return false
     clicked.add(action)
