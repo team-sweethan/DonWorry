@@ -118,7 +118,15 @@ export function BrandMark({ size = 32, className }: { size?: number; className?:
 }
 
 /** 마스코트 — 방패를 든 동전이 전신. 가로세로 비율은 19:16이다. */
-export function Mascot({ size = 190, className }: { size?: number; className?: string }) {
+export function Mascot({
+  size = 190,
+  className,
+  pose = 'guard',
+}: {
+  size?: number
+  className?: string
+  pose?: 'guard' | 'guide'
+}) {
   const { p, u } = useSvgIds()
   return (
     <svg
@@ -165,6 +173,20 @@ export function Mascot({ size = 190, className }: { size?: number; className?: s
         stroke="#2e2a4f"
         strokeWidth="2.6"
       />
+      {/* 안내 동전이는 빈 손으로 별 지시봉을 든다. 기존 방패 자세는 그대로 둔다. */}
+      {pose === 'guide' && (
+        <g className="dw-guide-baton">
+          <path d="M24 96L8 146" stroke="#2e2a4f" strokeWidth="6" strokeLinecap="round" />
+          <path d="M24 96L8 146" stroke="#f5d98a" strokeWidth="3" strokeLinecap="round" />
+          <path
+            d="M8 140L10.8 146.2L17.5 147L12.5 151.5L13.8 158L8 154.6L2.2 158L3.5 151.5L0 147L5.2 146.2Z"
+            fill="#ffe08a"
+            stroke="#2e2a4f"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+        </g>
+      )}
       {/* 뒷팔 (짧게) */}
       <ellipse
         cx="24"
@@ -229,7 +251,7 @@ export function Mascot({ size = 190, className }: { size?: number; className?: s
       />
       {/* 짧고 동근 눈썹 */}
       <path
-        d="M56 75.5l8 3.2M100 75.5l-8 3.2"
+        d={pose === 'guide' ? 'M56 76q4-4 8-2M92 74q4-2 8 2' : 'M56 75.5l8 3.2M100 75.5l-8 3.2'}
         stroke="#2e2a4f"
         strokeWidth="3.6"
         strokeLinecap="round"
@@ -254,9 +276,9 @@ export function Mascot({ size = 190, className }: { size?: number; className?: s
         strokeWidth="1.5"
         strokeLinecap="round"
       />
-      {/* 아주 작은 へ 입 */}
+      {/* 안내 자세는 미소, 기본 자세는 방패를 끙끙 드는 표정 */}
       <path
-        d="M74.6 103.6l3.4-2.6 3.4 2.6"
+        d={pose === 'guide' ? 'M72 102q6 8 12 0' : 'M74.6 103.6l3.4-2.6 3.4 2.6'}
         fill="none"
         stroke="#2e2a4f"
         strokeWidth="2.4"
@@ -286,14 +308,16 @@ export function Mascot({ size = 190, className }: { size?: number; className?: s
           strokeLinecap="round"
         />
       </g>
-      {/* 땀 */}
-      <path
-        className="dw-sweat"
-        d="M124 44c0 0-5 6-5 9a5 5 0 0 0 10 0c0-3-5-9-5-9z"
-        fill="#bfe3ff"
-        stroke="#2e2a4f"
-        strokeWidth="2"
-      />
+      {/* 방패를 드는 기본 자세에만 땀을 표시한다. */}
+      {pose === 'guard' && (
+        <path
+          className="dw-sweat"
+          d="M124 44c0 0-5 6-5 9a5 5 0 0 0 10 0c0-3-5-9-5-9z"
+          fill="#bfe3ff"
+          stroke="#2e2a4f"
+          strokeWidth="2"
+        />
+      )}
       {/* 큰 방패 */}
       <g transform="translate(24 8) rotate(-8 130 108)">
         <path

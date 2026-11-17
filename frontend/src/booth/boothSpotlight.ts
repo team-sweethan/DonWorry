@@ -1,12 +1,16 @@
 export type BoothBox = { top: number; left: number; width: number; height: number }
 
-// 카드 오른쪽 여백을 가리켜 제목·숫자와 박스 번호를 덜 가린다.
-// 작은 대상에서도 커서가 잘린 박스의 오른쪽·아래 경계를 넘지 않게 한다.
+// 안내 동전이는 가능하면 박스 위 모서리에 앉혀 설명·숫자를 덜 가린다.
+// 위 공간이 부족하면 박스 안으로 옮기고, 작은 대상에서는 몸 크기도 줄인다.
 export function boothPointerPosition(box: BoothBox) {
-  const scale = Math.min(1, box.width / 30, box.height / 36)
+  const widthScale = Math.min(1, box.width / 96)
+  const above = box.top >= 84 * widthScale + 12
+  const scale = above ? widthScale : Math.min(widthScale, box.height / 84)
   return {
-    left: box.left + Math.max(0, box.width - 44 * scale),
-    top: box.top + Math.max(0, Math.min(12 * scale, box.height - 36 * scale)),
+    left: box.left + Math.max(0, box.width - 104 * scale),
+    top: above
+      ? box.top - 80 * scale
+      : box.top + Math.max(0, Math.min(8 * scale, box.height - 84 * scale)),
     scale,
   }
 }

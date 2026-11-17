@@ -102,7 +102,7 @@ test('clipBoothBox_withLargerPublicPadding_expandsAndClipsToViewport', () => {
   })
 })
 
-// 자막 위로 잘린 작은 박스에서도 안내 포인터가 화면·자막 경계를 넘지 않는다.
+// 큰 안내 동전이도 화면·자막 경계를 넘지 않고, 여유가 있으면 박스 위에 놓인다.
 test('boothPointerPosition_staysInsideNormalAndClippedTargets', () => {
   for (const box of [
     { top: 100, left: 100, width: 400, height: 200 },
@@ -111,8 +111,9 @@ test('boothPointerPosition_staysInsideNormalAndClippedTargets', () => {
   ]) {
     const point = boothPointerPosition(box)
     assert.ok(point.scale > 0 && point.scale <= 1)
-    assert.ok(point.left >= box.left && point.top >= box.top)
-    assert.ok(point.left + 30 * point.scale <= box.left + box.width + 0.001)
-    assert.ok(point.top + 36 * point.scale <= box.top + box.height + 0.001)
+    assert.ok(point.left >= box.left && point.top >= 4)
+    assert.ok(point.left + 96 * point.scale <= box.left + box.width + 0.001)
+    assert.ok(point.top + 84 * point.scale <= box.top + box.height + 0.001)
   }
+  assert.ok(boothPointerPosition({ top: 100, left: 100, width: 400, height: 200 }).top < 100)
 })

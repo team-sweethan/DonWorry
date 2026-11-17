@@ -214,8 +214,8 @@ body.dw-booth-open {
   top: 0;
   left: 0;
   z-index: 1095;
-  width: 30px;
-  height: 36px;
+  width: 96px;
+  height: 84px;
   pointer-events: none;
   transform-origin: top left;
   transition:
@@ -223,15 +223,41 @@ body.dw-booth-open {
     opacity 160ms ease;
 }
 
-.dw-booth-pointer svg {
+.dw-booth-guide-hop {
+  width: 96px;
+  height: 84px;
+  transform-origin: center bottom;
+  animation: dw-booth-guide-hop 620ms ease-out both;
+}
+
+.dw-booth-guide-character {
   position: relative;
-  filter: drop-shadow(0 2px 3px rgb(15 23 42 / 35%));
+  display: block;
+  filter: drop-shadow(0 3px 3px rgb(15 23 42 / 18%));
+}
+
+@keyframes dw-booth-guide-hop {
+  0% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  28% {
+    transform: translateY(-12px) rotate(4deg);
+  }
+  56% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  76% {
+    transform: translateY(-4px) rotate(1deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0);
+  }
 }
 
 .dw-booth-pointer-ring {
   position: absolute;
-  top: -14px;
-  left: -14px;
+  top: 58px;
+  left: -12px;
   width: 32px;
   height: 32px;
   border: 2px solid #f59e0b;
@@ -254,6 +280,11 @@ body.dw-booth-open {
 @media (prefers-reduced-motion: reduce) {
   .dw-booth-pointer {
     transition: none;
+  }
+
+  .dw-booth-guide-hop,
+  .dw-booth-guide-character .dw-blink {
+    animation: none;
   }
 
   .dw-booth-pointer-ring {

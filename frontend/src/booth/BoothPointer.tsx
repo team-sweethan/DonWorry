@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Mascot } from '../components/brand/BrandMark'
 import { boothPointerPosition, type BoothBox } from './boothSpotlight'
 
-/** 실제 마우스와 별개인 안내 표시. 다음 대상까지 이동하며 클릭은 그대로 통과시킨다. */
+/** 별 지시봉을 든 안내 동전이. 다음 대상까지 이동하며 클릭은 그대로 통과시킨다. */
 export function BoothPointer({ box, cueKey }: { box: BoothBox | null; cueKey: string }) {
   const next = box ? boothPointerPosition(box) : null
   const [lastPoint, setLastPoint] = useState(next)
@@ -24,16 +25,12 @@ export function BoothPointer({ box, cueKey }: { box: BoothBox | null; cueKey: st
         opacity: box ? 1 : 0,
       }}
     >
-      {box && <span key={cueKey} className="dw-booth-pointer-ring" />}
-      <svg width="30" height="36" viewBox="0 0 30 36" fill="none">
-        <path
-          d="M2 2L25 21L15 22L20 32L14 35L9 24L2 31Z"
-          fill="#F59E0B"
-          stroke="#FFFFFF"
-          strokeWidth="2.5"
-          strokeLinejoin="round"
-        />
-      </svg>
+      {box && (
+        <div key={cueKey} className="dw-booth-guide-hop">
+          <span className="dw-booth-pointer-ring" />
+          <Mascot size={96} pose="guide" className="dw-booth-guide-character" />
+        </div>
+      )}
     </div>
   )
 }
