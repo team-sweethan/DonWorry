@@ -3,7 +3,7 @@ import type { AuthUser } from '../types/auth.ts'
 
 /**
  * 부스 시연용 안내 단계 (로컬 개발 시연용 · 통합 브랜치에 머지하지 않는다).
- * 한 창에서 소개 → 사장님 → 보안 직원 → 관리자 순서로 넘기며 4~5분 안에 설명한다.
+ * 한 창에서 소개 → 사장님 → 보안 직원 → 관리자 순서로 펼치고 스크롤하며 설명한다.
  */
 export type BoothTrack = 'public' | 'owner' | 'security' | 'admin'
 
@@ -38,7 +38,7 @@ export type BoothStep = {
   detail: string
   /** 진행자용 조작 안내 */
   action?: string
-  /** 네 창 전체 4~5분 코스. 나머지는 질문을 받았을 때 [더 보기]에서 펼친다. */
+  /** 한 창 전체 이어 보기의 기본 코스. 나머지는 질문을 받았을 때 [더 보기]에서 펼친다. */
   core?: boolean
   /** 이 단계 안에서 차례로 짚을 곳. [다음]을 누르면 박스가 하나씩 옮겨 간다. */
   spots?: BoothSpot[]
@@ -229,6 +229,11 @@ const ownerSteps: BoothStep[] = [
       { sel: '.loan-filters', note: '지역과 지원 대상으로 상품을 조회합니다.' },
       {
         sel: '.loan-product-card',
+        note: '상품마다 지역과 지원 대상을 확인합니다. 다음은 상품 한 개의 상세 조건입니다.',
+      },
+      {
+        sel: '.booth-loan-modal .ant-modal-content',
+        prepare: ['loan-detail'],
         note: '상품 세부 정보를 확인하고 취급 기관 홈페이지로 이동할 수 있습니다.',
       },
     ],
@@ -306,8 +311,12 @@ function securitySteps(
           note: '발표 시연은 고액 30점 + 신규 카드 25점 = 55점, 매입 보류입니다.',
         },
         {
-          sel: '.dw-rule-grid .dw-rule-card',
-          note: '룰 한 장마다 조건 · 점수 · 최근 7일 적중 빈도가 있습니다.',
+          sel: '.dw-rule-card-payment',
+          note: '결제 탐지 룰을 하나씩 카드로 보여 줍니다. 다음은 이 룰을 펼친 상세입니다.',
+        },
+        {
+          sel: '.dw-rule-card-payment .dw-rule-card-detail',
+          note: '룰을 펼치면 탐지 기준과 점수, 구체적인 예시와 최근 7일 적중 빈도를 확인할 수 있습니다.',
         },
       ],
       path: '/security/rules',

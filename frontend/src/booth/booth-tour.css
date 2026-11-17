@@ -292,3 +292,9 @@ body.dw-booth-open {
     opacity: 0.4;
   }
 }
+
+/* 모달 마지막 줄도 고정 자막 위로 올릴 수 있는 스크롤 여백. */
+.dw-booth-open .ant-modal-wrap:has(.booth-loan-modal),
+.dw-booth-open .ant-modal-wrap:has(.dw-contact-raw-modal) {
+  padding-bottom: calc(var(--dw-booth-height, 160px) + 24px);
+}

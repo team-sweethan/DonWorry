@@ -106,7 +106,9 @@ export function LoanProductsPage() {
                 <p>
                   {product.ofrinstnm} · {product.trgt}
                 </p>
-                <Button onClick={() => setSelected(product)}>지원 조건 보기</Button>
+                <Button data-booth-action="loan-detail" onClick={() => setSelected(product)}>
+                  지원 조건 보기
+                </Button>
               </article>
             ))}
           </div>
@@ -124,6 +126,7 @@ export function LoanProductsPage() {
         )}
       </section>
       <Modal
+        className="booth-loan-modal"
         title={selected?.finprdnm}
         open={selected !== null}
         onCancel={() => setSelected(null)}

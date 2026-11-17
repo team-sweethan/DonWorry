@@ -27,6 +27,7 @@ import {
 import { prepareBoothSpot, type BoothPreparation } from './boothPreparation'
 import { boothPlaybackDelay, scheduleBoothPlayback } from './boothPlayback'
 import { BoothPointer } from './BoothPointer'
+import { advanceBoothScroll, boothVisibleFrame, startBoothScroll } from './boothScroll'
 import './booth-tour.css'
 
 /**
@@ -180,7 +181,7 @@ function sameBox(a: BoothBox | null, b: BoothBox | null) {
 
 /**
  * 짚을 요소의 화면 위치. 화면이 늦게 그려지거나 스크롤 · 애니메이션으로 움직여도 따라가도록 짧은 간격으로 다시 잰다.
- * 요소를 처음 찾으면 한 번만 화면 안으로 끌어온다.
+ * 처음에는 위쪽부터 보여 주고, 다음 동작은 남은 내용을 스크롤한 뒤 다음 박스로 넘긴다.
  */
 function useSpotBox(spot: BoothSpot | null, key: string, padding: number) {
   const sel = spot?.sel ?? null
@@ -190,6 +191,8 @@ function useSpotBox(spot: BoothSpot | null, key: string, padding: number) {
   const fallbackText = spot?.fallback?.text
   const fallbackNote = spot?.fallback?.note
   const preparationKey = (spot?.prepare ?? []).join(',')
+  const nextPart = useRef<(() => boolean) | null>(null)
+  const [part, setPart] = useState(1)
   const [measured, setMeasured] = useState<{
     key: string
     box: BoothBox | null
@@ -198,9 +201,24 @@ function useSpotBox(spot: BoothSpot | null, key: string, padding: number) {
   }>({ key: '', box: null, note: '', waiting: true })
   useEffect(() => {
     if (sel === null) return
-    // 화면이 늦게 그려져 요소가 밀려나면 다시 끌어온다 (진행자가 직접 스크롤해도 계속 되돌리지 않게 몇 번만)
-    let scrolls = 0
+    // 단계별 스크롤 상태는 측정 렌더링과 분리해 같은 구간으로 되돌아가지 않는다.
+    let target: HTMLElement | null = null
     let lastScroll = 0
+    let partNumber = 1
+    const usableBottom = () =>
+      boothViewportBottom(
+        window.innerHeight,
+        document.querySelector<HTMLElement>('aside.dw-booth')?.getBoundingClientRect() ?? null,
+      )
+    nextPart.current = () => {
+      if (!target || Date.now() - lastScroll < 700) return false
+      if (!advanceBoothScroll(target, usableBottom())) return false
+      lastScroll = Date.now()
+      partNumber += 1
+      setPart(partNumber)
+      setMeasured((current) => ({ ...current, waiting: true }))
+      return true
+    }
     const clicked = new Set<BoothPreparation>()
     const preparations = preparationKey ? (preparationKey.split(',') as BoothPreparation[]) : []
     const findVisible = (selector: string) =>
@@ -239,30 +257,39 @@ function useSpotBox(spot: BoothSpot | null, key: string, padding: number) {
       const element = resolved.target
       let box: BoothBox | null = null
       if (element) {
-        const rect = element.getBoundingClientRect()
-        const usable = boothViewportBottom(
-          window.innerHeight,
-          document.querySelector<HTMLElement>('aside.dw-booth')?.getBoundingClientRect() ?? null,
-        )
-        const shown = Math.min(rect.bottom, usable) - Math.max(rect.top, 0)
-        const enough = shown >= Math.min(rect.height, usable) * 0.6
-        if (!enough && scrolls < 4 && Date.now() - lastScroll > 800) {
-          scrolls += 1
+        if (target !== element) {
+          target = element
+          partNumber = 1
+          setPart(1)
+          startBoothScroll(element, usableBottom())
           lastScroll = Date.now()
-          element.scrollIntoView({
-            block: rect.height > usable * 0.6 ? 'start' : 'center',
-            behavior: 'smooth',
-          })
         }
-        box = clipBoothBox(rect, window.innerWidth, usable, padding)
+        const rect = element.getBoundingClientRect()
+        const frame = boothVisibleFrame(element, usableBottom())
+        box = clipBoothBox(
+          {
+            top: Math.max(rect.top, frame.top),
+            bottom: Math.min(rect.bottom, frame.bottom),
+            left: Math.max(rect.left, frame.left),
+            right: Math.min(rect.right, frame.right),
+          },
+          window.innerWidth,
+          usableBottom(),
+          padding,
+        )
       }
       setMeasured((current) =>
         current.key === key &&
         sameBox(current.box, box) &&
         current.note === resolved.note &&
-        current.waiting === resolved.waiting
+        current.waiting === (resolved.waiting || Date.now() - lastScroll < 700)
           ? current
-          : { key, box, note: resolved.note, waiting: resolved.waiting },
+          : {
+              key,
+              box,
+              note: resolved.note,
+              waiting: resolved.waiting || Date.now() - lastScroll < 700,
+            },
       )
     }
     const first = requestAnimationFrame(measure)
@@ -273,13 +300,20 @@ function useSpotBox(spot: BoothSpot | null, key: string, padding: number) {
       // 원문 번호를 요청하지 않고 입력 양식만 보여 준 뒤 다음 박스에서 닫는다.
       if (preparations.includes('contact-form'))
         document.querySelector<HTMLButtonElement>('.dw-contact-raw-modal .ant-modal-close')?.click()
+      nextPart.current = null
+      if (preparations.includes('loan-detail'))
+        document.querySelector<HTMLButtonElement>('.booth-loan-modal .ant-modal-close')?.click()
       cancelAnimationFrame(first)
       window.clearInterval(timer)
       window.removeEventListener('scroll', measure, true)
       window.removeEventListener('resize', measure)
     }
   }, [sel, text, note, fallbackSel, fallbackText, fallbackNote, preparationKey, key, padding])
-  return sel !== null && measured.key === key ? measured : { box: null, note, waiting: true }
+  return {
+    ...(sel !== null && measured.key === key ? measured : { box: null, note, waiting: true }),
+    part,
+    nextPart: () => nextPart.current?.() ?? false,
+  }
 }
 
 export function BoothTour() {
@@ -452,6 +486,10 @@ function BoothBar() {
       return
     }
     if (!step || (offset > 0 && spot && spotlight.waiting)) return
+    if (offset > 0 && spotlight.nextPart()) {
+      setPlaybackReset((reset) => reset + 1)
+      return
+    }
     const nextSpot = spotIndex + offset
     if (nextSpot >= 0 && nextSpot < spots.length) {
       save({ stepId: step.id, at: pathname, spot: nextSpot })
@@ -608,6 +646,9 @@ function BoothBar() {
                 · 박스 {spotIndex + 1}/{spots.length}
               </span>
             )}
+            {spot && spotlight.part > 1 && (
+              <span className="dw-booth-count-spot"> · 이어 보기 {spotlight.part}</span>
+            )}
             {spot && spotlight.waiting && (
               <span className="dw-booth-count-spot"> · 화면 준비 확인</span>
             )}
@@ -651,7 +692,7 @@ function BoothBar() {
                 ? '추가 설명 보는 중 (M)'
                 : playing
                   ? '기본 코스 · 자동 반복 (M)'
-                  : '기본 코스 · 전체 4~5분 (M)'}
+                  : '기본 코스 · 전체 이어 보기 (M)'}
             </button>
             <button type="button" onClick={toggleHidden}>
               숨기기 (H)

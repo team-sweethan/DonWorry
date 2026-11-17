@@ -1,5 +1,6 @@
 /** 읽기 전용 조작만 허용한다. 제출·판정·키 발급·AI 생성 버튼은 등록하지 않는다. */
 const controls = {
+  'loan-detail': '.booth-loan-modal .ant-modal-content',
   'settlement-list': '[data-booth-action="settlement-list"][aria-selected="true"]',
   'payout-kind': '[data-booth-action="payout-kind"][aria-selected="true"]',
   'completed-case': '[data-booth-action="completed-case"][aria-expanded="true"]',
