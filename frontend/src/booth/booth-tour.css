@@ -185,3 +185,26 @@ body.dw-booth-open {
     font-size: 20px;
   }
 }
+
+.dw-booth-playback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dw-booth-playback button {
+  padding: 5px 12px;
+  font-size: 13px;
+}
+
+.dw-booth-playback button[aria-pressed='true'] {
+  color: #fde68a;
+  border-color: #f59e0b;
+}
+
+.dw-booth-playback span {
+  font-size: 12px;
+  color: #cbd5e1;
+}

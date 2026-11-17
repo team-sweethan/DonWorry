@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { canOpenPath } from '../config/navigation'
@@ -25,6 +25,7 @@ import {
   type BoothBox,
 } from './boothSpotlight'
 import { prepareBoothSpot, type BoothPreparation } from './boothPreparation'
+import { boothPlaybackDelay, scheduleBoothPlayback } from './boothPlayback'
 import './booth-tour.css'
 
 /**
@@ -40,6 +41,7 @@ const CASE_KEY = 'dw.booth.case'
 const REPORT_CASE_KEY = 'dw.booth.reportCase'
 const ALL_KEY = 'dw.booth.all'
 const HIDDEN_KEY = 'dw.booth.hidden'
+const AUTOPLAY_KEY = 'dw.booth.autoplay'
 
 function read(storage: Storage, key: string) {
   try {
@@ -62,6 +64,8 @@ function write(storage: Storage, key: string, value: string | null) {
 function applyQuery() {
   const params = new URLSearchParams(window.location.search)
   const booth = params.get('booth')
+  if (params.has('autoplay'))
+    write(sessionStorage, AUTOPLAY_KEY, params.get('autoplay') === '1' ? '1' : null)
   if (booth === '1') {
     write(localStorage, ENABLED_KEY, '1')
     write(localStorage, FLOW_KEY, null)
@@ -84,6 +88,7 @@ function applyQuery() {
       write(sessionStorage, `dw.booth.position.${key}`, null)
     write(sessionStorage, HIDDEN_KEY, null)
     write(localStorage, ALL_KEY, null)
+    write(sessionStorage, AUTOPLAY_KEY, params.get('autoplay') === '0' ? null : '1')
     const security = boothAccount('security')
     if (security?.caseId && !params.has('boothCase'))
       write(localStorage, CASE_KEY, parseBoothCase(security.caseId))
@@ -355,6 +360,19 @@ function BoothBar() {
   const track = boothTrackOf(signedIn)
   const [all, setAll] = useState(() => read(localStorage, ALL_KEY) === '1')
   const [hidden, setHidden] = useState(() => read(sessionStorage, HIDDEN_KEY) === '1')
+  const [playing, setPlaying] = useState(() => read(sessionStorage, AUTOPLAY_KEY) === '1')
+  const [visible, setVisible] = useState(() => !document.hidden)
+  const [playbackRun, setPlaybackRun] = useState(1)
+  const [playbackReset, setPlaybackReset] = useState(0)
+  const advancePlayback = useRef<() => void>(() => {})
+  useEffect(() => {
+    write(sessionStorage, AUTOPLAY_KEY, playing ? '1' : null)
+  }, [playing])
+  useEffect(() => {
+    const update = () => setVisible(!document.hidden)
+    document.addEventListener('visibilitychange', update)
+    return () => document.removeEventListener('visibilitychange', update)
+  }, [])
   const [positions, setPositions] = useState<Record<string, BoothPosition>>({})
   // 역할을 바꾸는 중인 단계. error가 있으면 로그인에 실패한 것이다
   const [switching, setSwitching] = useState<{ stepId: string; error: boolean } | null>(null)
@@ -419,6 +437,7 @@ function BoothBar() {
       await navigate(target.path ?? trackHome[targetTrack])
       setSwitching(null)
     } catch {
+      setPlaying(false)
       setSwitching({ stepId: target.id, error: true })
     }
   }
@@ -452,30 +471,92 @@ function BoothBar() {
     save(next)
     if (target.path && target.path !== pathname) void navigate(target.path)
   }
+  // 수동 조작 뒤에는 자동 넘김을 멈춰 설명할 시간을 준다.
+  const manualGo = (offset: 1 | -1) => {
+    setPlaying(false)
+    go(offset)
+  }
+  const restart = (repeat = false) => {
+    if (switching) return
+    const first = steps[0]
+    if (!first) return
+    setPlaybackRun((run) => (repeat ? run + 1 : 1))
+    setPlaybackReset((reset) => reset + 1)
+    setAll(false)
+    write(localStorage, ALL_KEY, null)
+    setHidden(false)
+    write(sessionStorage, HIDDEN_KEY, null)
+    const next = { stepId: first.id, at: first.path ?? trackHome[first.track ?? track], spot: 0 }
+    const firstTrack = first.track ?? track
+    if (firstTrack !== track) {
+      void switchTo(first, firstTrack, next)
+      return
+    }
+    save(next)
+    if (next.at !== pathname) void navigate(next.at)
+  }
+  const playbackReady =
+    !onStart &&
+    status !== 'loading' &&
+    !switching &&
+    !hidden &&
+    visible &&
+    !!step &&
+    (!spot || (!spotlight.waiting && !!box))
+  const playbackDelay = boothPlaybackDelay(spot?.note ?? step?.detail ?? '', atEnd)
+  const playbackKey = `${positionKey}:${step?.id ?? ''}:${spotIndex}:${pathname}:${playbackReset}`
+  // 측정·스크롤 렌더링은 타이머를 다시 시작하지 않는다. 콜백만 최신 단계로 맞춘다.
+  useEffect(() => {
+    advancePlayback.current = () => {
+      if (atEnd) restart(true)
+      else go(1)
+    }
+  })
+  useEffect(
+    () =>
+      scheduleBoothPlayback({ playing, ready: playbackReady, delayMs: playbackDelay }, () =>
+        advancePlayback.current(),
+      ),
+    [playing, playbackReady, playbackDelay, playbackKey],
+  )
+
   const toggleAll = () => {
+    setPlaying(false)
     write(localStorage, ALL_KEY, all ? null : '1')
     setAll(!all)
   }
   const toggleHidden = () => {
+    setPlaying(false)
     write(sessionStorage, HIDDEN_KEY, hidden ? null : '1')
     setHidden(!hidden)
   }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || isTyping(event.target)) return
+      if (isTyping(event.target)) {
+        if (!switching) setPlaying(false)
+        return
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return
       // 발표용 리모컨은 PageDown · PageUp을 보낸다
       if (event.key === 'ArrowRight' || event.key === 'PageDown') {
         event.preventDefault()
-        go(1)
+        manualGo(1)
       } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
         event.preventDefault()
-        go(-1)
+        manualGo(-1)
       } else if (event.key === 'h' || event.key === 'H') toggleHidden()
       else if (event.key === 'm' || event.key === 'M') toggleAll()
     }
+    const onPointer = (event: PointerEvent) => {
+      if (isTyping(event.target)) setPlaying(false)
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointer)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointer)
+    }
   })
 
   // 로그인 확인 중에는 공개 단계가 잠깐 보이지 않게 기다린다
@@ -530,17 +611,37 @@ function BoothBar() {
             )}
           </span>
           <div className="dw-booth-buttons">
-            <button type="button" onClick={() => go(-1)} disabled={atStart} aria-label="이전">
+            <button type="button" onClick={() => manualGo(-1)} disabled={atStart} aria-label="이전">
               ←
             </button>
             <button
               type="button"
-              onClick={() => go(1)}
+              onClick={() => manualGo(1)}
               disabled={atEnd || (!!spot && spotlight.waiting)}
               aria-label="다음"
             >
               →
             </button>
+          </div>
+          <div className="dw-booth-playback">
+            <button
+              type="button"
+              onClick={() => setPlaying(!playing)}
+              aria-pressed={playing}
+              disabled={!!switching}
+            >
+              {playing ? '일시정지' : '자동 재생'}
+            </button>
+            <button type="button" onClick={() => restart()} disabled={!!switching}>
+              처음부터
+            </button>
+            <span role="status">
+              {playing
+                ? playbackReady
+                  ? `자동 재생 · ${playbackRun}회차 · ${playbackDelay / 1000}초`
+                  : '화면 준비 대기'
+                : '일시정지 중'}
+            </span>
           </div>
           <div className="dw-booth-options">
             <button type="button" onClick={toggleAll} aria-pressed={all}>
