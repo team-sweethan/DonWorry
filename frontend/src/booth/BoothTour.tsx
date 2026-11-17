@@ -30,7 +30,7 @@ import './booth-tour.css'
 /**
  * 부스 시연용 자막 바 (로컬 개발 시연용 · 통합 브랜치에 머지하지 않는다).
  * 이어 보기: /booth 를 열면 소개 → 사장님 → 보안 직원 → 관리자를 한 창에서 잇는다 (계정은 boothAccounts.local.ts).
- * 창별 보기: 주소 끝에 ?booth=1 (브라우저 프로필마다 한 번). 끄기: ?booth=0.
+ * /booth/public도 전체 이어 보기로 시작한다. /booth/<역할>은 그 역할부터 이어 본다. 끄기: ?booth=0.
  * 준비한 Case를 바로 열려면 ?boothCase=<Case ID>.
  */
 const ENABLED_KEY = 'dw.booth'
@@ -75,11 +75,11 @@ function applyQuery() {
   if (params.has('boothReportCase'))
     write(localStorage, REPORT_CASE_KEY, parseBoothCase(params.get('boothReportCase')))
   // 시작 주소로 들어오면 처음 단계부터 다시 시작한다.
-  // /booth 는 한 창 이어 보기, /booth/<역할> 은 그 역할만 보는 창별 보기다
+  // 모든 시작 주소는 한 창 이어 보기다. 역할 주소는 그 역할부터 시작한다.
   const path = window.location.pathname.replace(/\/+$/, '')
   if (path === START_PATH || path.startsWith(START_PATH + '/')) {
     write(localStorage, ENABLED_KEY, '1')
-    write(localStorage, FLOW_KEY, path === START_PATH ? '1' : null)
+    write(localStorage, FLOW_KEY, '1')
     for (const key of ['flow', 'public', 'owner', 'security', 'admin'])
       write(sessionStorage, `dw.booth.position.${key}`, null)
     write(sessionStorage, HIDDEN_KEY, null)
@@ -290,7 +290,7 @@ const startTracks: Record<string, BoothTrack> = {
 
 /**
  * 시작 주소. 남아 있는 로그인을 끊고 처음 단계로 보낸다.
- * /booth 는 소개 화면에서 이어 보기를, /booth/<owner|security|admin> 은 그 계정으로 로그인해 그 역할 화면을 연다.
+ * /booth와 /booth/public은 소개부터, /booth/<owner|security|admin>은 해당 계정으로 로그인해 그 역할부터 이어 본다.
  */
 export function BoothStart() {
   const { store } = useAuth()

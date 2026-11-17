@@ -3,7 +3,7 @@ import type { AuthUser } from '../types/auth.ts'
 
 /**
  * 부스 시연용 안내 단계 (로컬 개발 시연용 · 통합 브랜치에 머지하지 않는다).
- * 네 창을 소개 → 사장님 → 보안 직원 → 관리자 순서로 넘기며 4~5분 안에 설명한다.
+ * 한 창에서 소개 → 사장님 → 보안 직원 → 관리자 순서로 넘기며 4~5분 안에 설명한다.
  */
 export type BoothTrack = 'public' | 'owner' | 'security' | 'admin'
 
@@ -56,7 +56,7 @@ export const boothAudience: Record<BoothTrack, { label: string; customer: boolea
 export const boothHandoff: Record<BoothTrack, string> = {
   public: '다음은 사장님 창입니다. 쇼핑몰 연결부터 가게의 돈 흐름까지 봅니다.',
   owner: '다음은 보안 직원 창입니다. 사장님 대신 의심 결제를 조사하는 과정을 봅니다.',
-  security: '다음은 관리자 창입니다. 고객 정보를 다루는 직원도 감독합니다.',
+  security: '다음을 누르면 관리자 화면으로 이어집니다. 고객 정보를 다루는 직원도 감독합니다.',
   admin: '발표에서는 실제 결제와 공격 상황에서 이 기능들이 동작하는 모습을 보여 드립니다.',
 }
 
@@ -490,7 +490,7 @@ function securitySteps(
       core: true,
       headline: 'AI 요약이 이상하면 직원이 바로 정지합니다',
       detail: '정지해도 보고서는 정해진 문장으로 계속 나옵니다. 다시 켜기는 관리자만 합니다.',
-      action: '상태와 권한만 짚고 정지는 누르지 않습니다. 다음은 관리자 창입니다',
+      action: '상태와 권한만 짚고 정지는 누르지 않습니다. 다음을 누르면 관리자 화면으로 이어집니다',
     },
     {
       id: 'security-actions',
