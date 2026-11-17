@@ -1,8 +1,8 @@
 /** 한 박스를 읽을 시간. 긴 설명은 더 오래, 마지막 인사는 잠시 유지한 뒤 반복한다. */
 export function boothPlaybackDelay(note: string, ending = false) {
-  if (ending) return 7000
-  if (note.length > 75) return 8000
-  return note.length > 45 ? 6000 : 4000
+  if (ending) return 3500
+  if (note.length > 75) return 4000
+  return note.length > 45 ? 3000 : 2000
 }
 
 type Schedule = (callback: () => void, delayMs: number) => () => void

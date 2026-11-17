@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { boothPlaybackDelay, scheduleBoothPlayback } from '../src/booth/boothPlayback.ts'
 
 test('boothPlaybackDelay_givesLongerCaptionsTimeAndHoldsEnding', () => {
-  assert.equal(boothPlaybackDelay('짧은 안내'), 4000)
-  assert.equal(boothPlaybackDelay('가'.repeat(46)), 6000)
-  assert.equal(boothPlaybackDelay('가'.repeat(76)), 8000)
-  assert.equal(boothPlaybackDelay('마무리', true), 7000)
+  assert.equal(boothPlaybackDelay('짧은 안내'), 2000)
+  assert.equal(boothPlaybackDelay('가'.repeat(46)), 3000)
+  assert.equal(boothPlaybackDelay('가'.repeat(76)), 4000)
+  assert.equal(boothPlaybackDelay('마무리', true), 3500)
 })
 
 test('scheduleBoothPlayback_waitsDuringLoadingOrPause', () => {

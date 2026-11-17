@@ -1,5 +1,16 @@
 export type BoothBox = { top: number; left: number; width: number; height: number }
 
+// 카드 오른쪽 여백을 가리켜 제목·숫자와 박스 번호를 덜 가린다.
+// 작은 대상에서도 커서가 잘린 박스의 오른쪽·아래 경계를 넘지 않게 한다.
+export function boothPointerPosition(box: BoothBox) {
+  const scale = Math.min(1, box.width / 30, box.height / 36)
+  return {
+    left: box.left + Math.max(0, box.width - 44 * scale),
+    top: box.top + Math.max(0, Math.min(12 * scale, box.height - 36 * scale)),
+    scale,
+  }
+}
+
 // 강조 대상 자체가 details인 키 관리 기록도 자식 요소와 같은 방식으로 펼친다.
 export function revealBoothDetails(element: HTMLElement) {
   for (let current: HTMLElement | null = element; current; current = current.parentElement) {

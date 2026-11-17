@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   boothViewportBottom,
+  boothPointerPosition,
   clipBoothBox,
   observeBoothBar,
   revealBoothDetails,
@@ -99,4 +100,19 @@ test('clipBoothBox_withLargerPublicPadding_expandsAndClipsToViewport', () => {
     width: 1192,
     height: 632,
   })
+})
+
+// 자막 위로 잘린 작은 박스에서도 안내 포인터가 화면·자막 경계를 넘지 않는다.
+test('boothPointerPosition_staysInsideNormalAndClippedTargets', () => {
+  for (const box of [
+    { top: 100, left: 100, width: 400, height: 200 },
+    { top: 612, left: 4, width: 28, height: 24 },
+    { top: 4, left: 1168, width: 28, height: 100 },
+  ]) {
+    const point = boothPointerPosition(box)
+    assert.ok(point.scale > 0 && point.scale <= 1)
+    assert.ok(point.left >= box.left && point.top >= box.top)
+    assert.ok(point.left + 30 * point.scale <= box.left + box.width + 0.001)
+    assert.ok(point.top + 36 * point.scale <= box.top + box.height + 0.001)
+  }
 })

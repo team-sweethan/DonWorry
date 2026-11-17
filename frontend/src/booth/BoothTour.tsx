@@ -26,6 +26,7 @@ import {
 } from './boothSpotlight'
 import { prepareBoothSpot, type BoothPreparation } from './boothPreparation'
 import { boothPlaybackDelay, scheduleBoothPlayback } from './boothPlayback'
+import { BoothPointer } from './BoothPointer'
 import './booth-tour.css'
 
 /**
@@ -584,6 +585,7 @@ function BoothBar() {
           {spots.length > 1 && <span className="dw-booth-box-number">{spotIndex + 1}</span>}
         </div>
       )}
+      <BoothPointer box={box} cueKey={`${step.id}:${spotIndex}:${playbackReset}`} />
       <aside ref={barRef} className="dw-booth" aria-label="부스 시연 안내">
         <div className={`dw-booth-audience${audience.customer ? ' is-customer' : ''}`}>
           {audience.label}
@@ -645,7 +647,11 @@ function BoothBar() {
           </div>
           <div className="dw-booth-options">
             <button type="button" onClick={toggleAll} aria-pressed={all}>
-              {all ? '추가 설명 보는 중 (M)' : '기본 코스 · 전체 4~5분 (M)'}
+              {all
+                ? '추가 설명 보는 중 (M)'
+                : playing
+                  ? '기본 코스 · 자동 반복 (M)'
+                  : '기본 코스 · 전체 4~5분 (M)'}
             </button>
             <button type="button" onClick={toggleHidden}>
               숨기기 (H)

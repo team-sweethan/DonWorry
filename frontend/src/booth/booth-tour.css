@@ -208,3 +208,56 @@ body.dw-booth-open {
   font-size: 12px;
   color: #cbd5e1;
 }
+
+.dw-booth-pointer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1095;
+  width: 30px;
+  height: 36px;
+  pointer-events: none;
+  transform-origin: top left;
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+
+.dw-booth-pointer svg {
+  position: relative;
+  filter: drop-shadow(0 2px 3px rgb(15 23 42 / 35%));
+}
+
+.dw-booth-pointer-ring {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #f59e0b;
+  border-radius: 50%;
+  background: rgb(245 158 11 / 14%);
+  animation: dw-booth-pointer-arrive 1000ms ease-out both;
+}
+
+@keyframes dw-booth-pointer-arrive {
+  from {
+    opacity: 0.85;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dw-booth-pointer {
+    transition: none;
+  }
+
+  .dw-booth-pointer-ring {
+    animation: none;
+    opacity: 0.4;
+  }
+}
